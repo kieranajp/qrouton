@@ -1,27 +1,17 @@
 ---
 name: qrspi-research
-description: QRSPI phase R — spawn ticket-blind subagents to document how the system works today, using only the approved questions doc, then synthesise a research document. Use when a qrouton session has an approved *-questions.md but no research doc yet.
+description: Internally execute the Research part of qrouton's RPI workflow through a delegated research lead and ticket-blind specialists. Use after research questions are sufficiently framed.
 ---
 
-# QRSPI — Research
+# Run research
 
-You are running the **R** phase. Output: a research document capturing *what is* — no proposals, no critique, no "what we should build".
+Delegate the investigation; keep its exploratory output out of the orchestrator context.
 
-## Ticket-blind rule (load-bearing — do not violate)
+1. Read the approved `*-questions.md`. Do not include `qrouton.json`, a ticket, or solution framing in the delegated brief.
+2. Spawn a `qrspi-research-lead` when available, otherwise a general subagent. Give it only the questions artifact path/content, safe context pointers, the active/reference repo rules, and the required output path.
+3. Instruct the lead to split independent questions among ticket-blind research specialists, wait for them, verify important claims against live code, and synthesize one artifact. It may delegate recursively; it must not ask the orchestrator to carry worker details.
+4. Require `path:line` evidence, explicit separation of verified behavior from inference, and contradictions left visible. Research describes what is; it does not recommend a solution.
+5. Write `thoughts/shared/research/R<n>-<date>-<slug>.md` using its questions pair's number and slug. Include: Research Question, Summary, Detailed Findings, Code References, and Open Questions, plus existing research frontmatter conventions.
+6. Accept a compact return containing the outcome, artifact path, major findings, and unresolved questions. Present the useful conclusions naturally, then offer to Plan.
 
-Research subagents receive **only the content of the questions document**. Never pass them the `ticketUrl`, the ticket's contents, or any "what we're building" framing. Hiding is by construction: give them the questions, nothing else. If an agent asks what the work is for, it doesn't need to know.
-
-## Steps
-
-1. **Read the questions doc** fully (`thoughts/shared/research/R<n>-…-questions.md`). Reuse its `<n>` and `<slug>` for the research doc — do not allocate a new number.
-2. **Spawn parallel subagents**, one focused brief per question or cluster of questions. Each brief contains only that question and the relevant Key Context Pointers.
-   - Prefer onetech worker agents when loaded: `codebase-locator` (where things live), `codebase-analyzer` (how they work), `codebase-pattern-finder` (examples), `thoughts-locator`/`thoughts-analyzer` (prior docs). Prefer the ticket-blind `qrspi-researcher` agent for general read-only investigation.
-   - If none are available, spawn plain general-purpose subagents with a read-only, documentarian brief.
-3. **Wait for all**, then synthesise. Live code is the source of truth; prior thoughts docs are supplementary. Include concrete `path:line` references. Note contradictions rather than papering over them.
-4. **Write the doc** to `thoughts/shared/research/R<n>-<YYYY-MM-DD>-<slug>.md` (same `<n>`/`<slug>` as the questions). Match the frontmatter + section shape of existing research docs (see `thoughts/shared/research/R1-*.md`): `date`, `researcher` (git user), `git_commit`/`branch`/`repository` (per repo, or N/A), `topic`, `tags`, `status`. Sections: Research Question, Summary, Detailed Findings, Code References, Open Questions.
-5. **Present** a concise summary + key references. Propose moving to the spec (`qrspi-spec`).
-
-## Guardrails
-
-- Documentarian only: describe what exists and how it connects. No recommendations, no root-cause, no refactoring ideas.
-- Grep your own subagent prompts before sending — if a ticket URL or intent snuck in, strip it.
+Before spawning, inspect the exact brief for ticket or intended-solution leakage.

@@ -1,22 +1,27 @@
 ---
 name: qrspi-implement
-description: QRSPI phase I — execute an approved plan phase by phase, running each phase's verification before moving on and ticking off progress in the plan doc. Use when a session has a plan ready to build.
+description: Execute the Implement part of qrouton's RPI workflow through a delegated implementation lead that owns plan execution, specialist workers, verification, and progress artifacts. Use when an approved plan or sufficiently concrete request is ready to build.
 ---
 
-# QRSPI — Implement
+# Delegate implementation
 
-You are running **I**. You already know how to write code; this phase adds discipline — adhere to the plan and checkpoint honestly.
+Spawn one `qrspi-implementation-lead` when available, otherwise a capable general implementation agent. Give it:
 
-## Steps
+- the approved plan path or a bounded concrete request;
+- active and reference repository roles;
+- user decisions not already captured in the artifact;
+- the requirement to update durable progress and return a compact result.
 
-1. **Read the plan fully**, including any existing `- [x]` checkmarks, and read the files it names. Resume from the first unchecked item; trust completed work unless something looks off.
-2. **Work one phase at a time.** Implement a whole vertical phase, then run **its** Verify block before starting the next. Batch verification at the phase boundary — don't thrash it mid-phase.
-3. **Tick the plan as you go.** Check off items in the plan doc with an edit as they land, so a resumed session sees true state.
-4. **On a mismatch, stop.** If reality contradicts the plan, don't force it — surface it:
-   > **Issue in Phase N** — Expected: … / Found: … / Why it matters: … / How should I proceed?
-   The plan is a guide written earlier; the code in front of you wins ties, but the user decides direction.
+The lead owns the implementation context. It should read the plan fully, resume at the first incomplete item, and delegate independent exploration, implementation, tests, or review to specialist subagents where useful. It must coordinate shared-file edits to avoid collisions.
 
-## Guardrails
+For each plan phase, the lead must implement the vertical increment, run that phase's verification, and update its checkboxes. If code contradicts a binding decision or the plan needs a materially different direction, it returns a blocker for the orchestrator and user instead of forcing the plan.
 
-- Verification is not optional. A phase isn't done until its checks pass; report failures with the actual output, don't paper over them.
-- Match the surrounding code's style and conventions — you're editing real repos, not scaffolding.
+Require the final return to contain only:
+
+- completed phases and outcome;
+- changed repositories/files;
+- verification commands and results;
+- remaining risks, failures, or decisions;
+- plan artifact path and its updated status.
+
+Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
