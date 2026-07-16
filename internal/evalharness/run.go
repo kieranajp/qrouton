@@ -122,10 +122,14 @@ func buildMetadata(ctx context.Context, config Config, adapters []Adapter) Metad
 	if config.NoJudge {
 		judgeMode = "none"
 	}
+	gitSHA, err := commandOutput(ctx, config.RepoRoot, "git", "rev-parse", "HEAD")
+	if err != nil {
+		gitSHA = "" // omitted from the report rather than recording git's error text
+	}
 	return Metadata{
 		CreatedAt:       time.Now().UTC(),
 		AssetHash:       assetHash,
-		GitSHA:          commandOutput(ctx, config.RepoRoot, "git", "rev-parse", "HEAD"),
+		GitSHA:          gitSHA,
 		CLIVersions:     versions,
 		Models:          models,
 		ScenarioVersion: ScenarioVersion,
@@ -309,7 +313,11 @@ func initializeRepositories(workspace string) (map[string]string, error) {
 				return nil, fmt.Errorf("%s in %s: %w: %s", strings.Join(command, " "), repo, err, output)
 			}
 		}
-		baselines[entry.Name()] = commandOutput(context.Background(), repo, "git", "rev-parse", "HEAD")
+		head, err := commandOutput(context.Background(), repo, "git", "rev-parse", "HEAD")
+		if err != nil {
+			return nil, fmt.Errorf("resolve baseline in %s: %w: %s", repo, err, head)
+		}
+		baselines[entry.Name()] = head
 	}
 	return baselines, nil
 }
@@ -357,23 +365,26 @@ func collectDiffs(workspace string, baselines map[string]string) map[string]stri
 	for repo := range baselines {
 		repoDir := filepath.Join(workspace, "src", repo)
 		ctx := context.Background()
-		diffs[repo] = commandOutput(ctx, repoDir, "git", "diff", "--no-ext-diff", "HEAD")
-		untracked := commandOutput(ctx, repoDir, "git", "ls-files", "--others", "--exclude-standard")
-		if untracked != "" {
+		diff, err := commandOutput(ctx, repoDir, "git", "diff", "--no-ext-diff", "HEAD")
+		if err != nil {
+			// Fail loud: an error string trips repo_unchanged instead of
+			// letting a broken diff pass as "no changes".
+			diff = fmt.Sprintf("(git diff failed: %v)\n%s", err, diff)
+		}
+		diffs[repo] = diff
+		untracked, err := commandOutput(ctx, repoDir, "git", "ls-files", "--others", "--exclude-standard")
+		if err == nil && untracked != "" {
 			diffs[repo] += "\nUntracked files:\n" + untracked + "\n"
 		}
 	}
 	return diffs
 }
 
-func commandOutput(ctx context.Context, dir, name string, args ...string) string {
+func commandOutput(ctx context.Context, dir, name string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return strings.TrimSpace(string(output))
-	}
-	return strings.TrimSpace(string(output))
+	return strings.TrimSpace(string(output)), err
 }
 
 func writeCaseFiles(caseDir string, result CaseResult) error {

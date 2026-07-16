@@ -50,9 +50,10 @@ func gradeReferencesUnchanged(workspace string, baselines map[string]string) Ass
 			continue
 		}
 		repoDir := filepath.Join(workspace, "src", repo.Name)
-		status := commandOutput(context.Background(), repoDir, "git", "status", "--porcelain")
-		head := commandOutput(context.Background(), repoDir, "git", "rev-parse", "HEAD")
-		if status != "" || head != baselines[repo.Name] {
+		status, statusErr := commandOutput(context.Background(), repoDir, "git", "status", "--porcelain")
+		head, headErr := commandOutput(context.Background(), repoDir, "git", "rev-parse", "HEAD")
+		// Fail loud: a repo whose state cannot be read is not provably unchanged.
+		if statusErr != nil || headErr != nil || status != "" || head != baselines[repo.Name] {
 			changed = append(changed, repo.Name)
 		}
 	}
