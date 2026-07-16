@@ -34,20 +34,23 @@ done
 
 const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
-// notifyScript plays a short attention sound, picking whatever player the host has;
-// it backs both the notify MCP tool and the runner's completion hook, and falls back
-// to the terminal bell so it degrades to something rather than nothing.
+// notifyScript plays a short attention sound with whatever the host offers, trying
+// macOS, PulseAudio/PipeWire, ALSA, and Windows interop in turn and only using a
+// player when its sound file actually exists; it falls back to the terminal bell so
+// it degrades to something rather than nothing. It backs both the notify MCP tool and
+// the runner's Notification hook.
 const notifyScript = `#!/bin/sh
 # qrouton: cross-platform attention sound (generated; regenerated at every launch)
-if command -v afplay >/dev/null 2>&1; then
-  afplay /System/Library/Sounds/Glass.aiff >/dev/null 2>&1 &
-elif command -v paplay >/dev/null 2>&1; then
-  paplay /usr/share/sounds/freedesktop/stereo/complete.oga >/dev/null 2>&1 &
-elif command -v aplay >/dev/null 2>&1; then
-  aplay -q /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1 &
-else
-  printf '\a' > /dev/tty 2>/dev/null || printf '\a'
+play() { command -v "$1" >/dev/null 2>&1 && [ -r "$2" ] && { "$1" "$2" >/dev/null 2>&1 & exit 0; }; }
+play afplay /System/Library/Sounds/Glass.aiff
+for f in /usr/share/sounds/freedesktop/stereo/complete.oga /usr/share/sounds/freedesktop/stereo/bell.oga; do
+  play paplay "$f"
+done
+play aplay /usr/share/sounds/alsa/Front_Center.wav
+if command -v powershell.exe >/dev/null 2>&1; then
+  powershell.exe -c "[console]::beep(880,200)" >/dev/null 2>&1 & exit 0
 fi
+printf '\a' > /dev/tty 2>/dev/null || printf '\a'
 `
 
 const helpScript = `#!/bin/sh
