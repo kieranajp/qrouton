@@ -70,6 +70,7 @@ type assemblyEvent struct {
 }
 type assemblyEventMsg struct{ event assemblyEvent }
 type failedRetryMsg struct {
+	gen     int
 	repos   []github.Repo
 	results map[string]error
 }
@@ -192,6 +193,8 @@ func (m *appModel) retryFailed() tea.Cmd {
 	if m.refreshCancel != nil {
 		m.refreshCancel()
 	}
+	m.refreshGen++
+	gen := m.refreshGen
 	ctx, cancel := context.WithCancel(context.Background())
 	m.refreshCancel = cancel
 	m.refreshing = true
@@ -210,7 +213,7 @@ func (m *appModel) retryFailed() tea.Cmd {
 			for _, o := range owners {
 				results[o] = err
 			}
-			return failedRetryMsg{repos: cached, results: results}
+			return failedRetryMsg{gen: gen, repos: cached, results: results}
 		}
 		merged := cached
 		for _, o := range owners {
@@ -221,7 +224,7 @@ func (m *appModel) retryFailed() tea.Cmd {
 			}
 		}
 		github.SortReposByActivity(merged)
-		return failedRetryMsg{repos: merged, results: results}
+		return failedRetryMsg{gen: gen, repos: merged, results: results}
 	}
 }
 
@@ -247,7 +250,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.err != nil {
 			m.refreshing = false
 			m.err = v.err
-			if len(m.repos) == 0 {
+			// The loading screen has no failure rendering of its own; without
+			// this it would sit on "Loading repositories…" forever.
+			if len(m.repos) == 0 || m.screen == loadingScreen {
 				m.back, m.screen = landingScreen, errorScreen
 			}
 			return m, nil
@@ -338,6 +343,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.Update(*v.event.done)
 		}
 	case failedRetryMsg:
+		if v.gen != m.refreshGen {
+			return m, nil
+		}
 		m.refreshing = false
 		m.repos = v.repos
 		for owner, err := range v.results {
@@ -356,6 +364,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.screen == loadingScreen {
 				m.screen = landingScreen
 			}
+		} else if m.screen == loadingScreen {
+			m.back, m.screen = landingScreen, errorScreen
 		}
 		return m, nil
 	}

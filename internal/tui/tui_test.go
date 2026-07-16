@@ -243,6 +243,37 @@ func TestLandingUsesResponsiveCroutonLogo(t *testing.T) {
 	}
 }
 
+func TestStaleFailedRetryIsIgnored(t *testing.T) {
+	m := testApp()
+	m.refreshGen = 2
+	updated, _ := m.Update(failedRetryMsg{gen: 1, repos: []github.Repo{{Org: "stale", Name: "repo"}}})
+	got := updated.(appModel)
+	if got.repos[0].ID() != "acme/api" {
+		t.Fatalf("stale retry replaced repositories: %#v", got.repos)
+	}
+}
+
+func TestFailedRetryOnLoadingScreenShowsError(t *testing.T) {
+	m := testApp()
+	m.screen = loadingScreen
+	updated, _ := m.Update(failedRetryMsg{gen: m.refreshGen, repos: m.repos,
+		results: map[string]error{"acme": fmt.Errorf("still unavailable")}})
+	got := updated.(appModel)
+	if got.screen != errorScreen || got.back != landingScreen {
+		t.Fatalf("failed retry left screen=%v back=%v, want error screen", got.screen, got.back)
+	}
+}
+
+func TestTokenFailureOnLoadingScreenWithCachedReposShowsError(t *testing.T) {
+	m := testApp()
+	m.screen = loadingScreen
+	updated, _ := m.Update(refreshReadyMsg{gen: m.refreshGen, err: fmt.Errorf("no token")})
+	got := updated.(appModel)
+	if got.screen != errorScreen || got.back != landingScreen {
+		t.Fatalf("token failure left screen=%v back=%v, want error screen", got.screen, got.back)
+	}
+}
+
 func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 	m := testApp()
 	m.repos = nil
