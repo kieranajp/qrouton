@@ -39,4 +39,4 @@ GOCACHE=/tmp/qrouton-go-cache go build -o qrouton .
 git diff --check
 ```
 
-Do not discard unrelated worktree changes or edit generated session assets directly; change their source under `assets/`.
+Do not discard unrelated worktree changes or edit generated session assets directly; change their source under `internal/launch/assets/`.
