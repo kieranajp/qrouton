@@ -40,27 +40,20 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 	}
 }
 
-func TestChooseRequestedRunnerAndInitialPrompt(t *testing.T) {
-	old := findExecutable
-	t.Cleanup(func() { findExecutable = old })
-	findExecutable = func(name string) (string, error) { return "/bin/" + name, nil }
-
-	r, err := ChooseRunner(&config.Config{}, "codex")
-	if err != nil {
-		t.Fatal(err)
+func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
+	byID := make(map[string]Runner, len(builtinRunners))
+	for _, r := range builtinRunners {
+		byID[r.ID] = r
 	}
-	argv := runnerArgv(r, false)
+
+	argv := runnerArgv(byID["codex"], false)
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	open, err := ChooseRunner(&config.Config{}, "opencode")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if argv := runnerArgv(open, false); len(argv) != len(open.Command) {
+	if argv := runnerArgv(byID["opencode"], false); len(argv) != len(byID["opencode"].Command) {
 		t.Fatalf("unknown launch protocol should not receive a positional prompt: %#v", argv)
 	}
 }

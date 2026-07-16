@@ -42,9 +42,13 @@ func ensureMirror(root, org, repo, url string) error {
 		if err := gitLoud("clone", "--bare", url, mp); err != nil {
 			return err
 		}
-		if err := git("-C", mp, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
-			return err
-		}
+	}
+	// Set the remote-tracking-only refspec on every call, not just right after clone: a bare
+	// clone configures no fetch refspec, so an interrupted first run (or a failed config step)
+	// would otherwise leave a mirror that never populates refs/remotes/origin/* — worktree
+	// creation then fails on every resume and never self-heals. This is idempotent.
+	if err := git("-C", mp, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"); err != nil {
+		return err
 	}
 	fmt.Printf("qrouton: fetching %s/%s…\n", org, repo)
 	return gitLoud("-C", mp, "fetch", "--prune", "origin")

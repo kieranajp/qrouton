@@ -59,6 +59,37 @@ func TestRepositoryFiltersPreserveActivityOrder(t *testing.T) {
 	}
 }
 
+func TestOwnerSwitchClampsRepoCursorWithoutPanic(t *testing.T) {
+	m := testApp()
+	m.repos = append(m.repos,
+		github.Repo{Org: "acme", Name: "api2", DefaultBranch: "main", PushedAt: time.Now()},
+		github.Repo{Org: "acme", Name: "api3", DefaultBranch: "main", PushedAt: time.Now()},
+	)
+	m.screen = newScreen
+	m.form.focus = 4
+	m.form.cursor = 3 // valid while all four repositories are listed
+
+	// Narrow the organization filter to "other" (a single repository).
+	m.form.focus = 2
+	updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(appModel)
+
+	if got := len(m.filteredRepos()); got != 1 {
+		t.Fatalf("precondition: narrowed owner should list 1 repo, got %d", got)
+	}
+	if m.form.cursor >= len(m.filteredRepos()) {
+		t.Fatalf("cursor %d not clamped into %d filtered repos", m.form.cursor, len(m.filteredRepos()))
+	}
+
+	// Cycling a role must act on the visible repo, not panic on a stale index.
+	m.form.focus = 4
+	updated, _ = m.updateForm(tea.KeyMsg{Type: tea.KeySpace})
+	m = updated.(appModel)
+	if m.form.roles["other/web"] != active {
+		t.Fatalf("space did not cycle the narrowed repo to active: %v", m.form.roles)
+	}
+}
+
 func TestFormRendersLiveBranchAndReferencePreview(t *testing.T) {
 	m := testApp()
 	m.screen = newScreen

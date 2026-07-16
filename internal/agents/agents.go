@@ -32,11 +32,12 @@ type rolloutRecord struct {
 	} `json:"payload"`
 }
 
-// Status clears the terminal and redraws the session's subagent statuses every 2s, forever.
+// Status redraws the session's subagent statuses in place every 2s, forever. It overwrites the
+// previous frame (cursor home, erase-to-end-of-line per row, erase-to-end-of-screen at the bottom)
+// rather than clearing the whole screen first, so the pane never flashes blank between frames —
+// even while the per-tick background-agent lookup is still resolving.
 func Status(root, runner string) error {
 	for {
-		fmt.Print("\033[H\033[2J")
-		fmt.Println("\033[1magents\033[0m")
 		var statuses []agentStatus
 		var err error
 		if runner == "claude" {
@@ -44,14 +45,16 @@ func Status(root, runner string) error {
 		} else {
 			statuses, err = scanAgentStatuses(codexSessionsDir(), root)
 		}
+
+		lines := []string{"\033[1magents\033[0m"}
 		if err != nil {
-			fmt.Println("\033[2mCodex status unavailable\033[0m")
+			lines = append(lines, "\033[2mCodex status unavailable\033[0m")
 		} else if len(statuses) == 0 {
-			fmt.Println("\033[2mNo subagents yet\033[0m")
+			lines = append(lines, "\033[2mNo subagents yet\033[0m")
 		} else {
 			for i, status := range statuses {
 				if i == 4 {
-					fmt.Printf("\033[2m+%d more\033[0m\n", len(statuses)-i)
+					lines = append(lines, fmt.Sprintf("\033[2m+%d more\033[0m", len(statuses)-i))
 					break
 				}
 				mark, color := "✓", "32"
@@ -60,9 +63,19 @@ func Status(root, runner string) error {
 				} else if status.State == "failed" {
 					mark, color = "!", "31"
 				}
-				fmt.Printf("\033[%sm%s\033[0m %s  \033[2m%s\033[0m\n", color, mark, status.Name, status.State)
+				lines = append(lines, fmt.Sprintf("\033[%sm%s\033[0m %s  \033[2m%s\033[0m", color, mark, status.Name, status.State))
 			}
 		}
+
+		var frame strings.Builder
+		frame.WriteString("\033[H")
+		for _, line := range lines {
+			frame.WriteString(line)
+			frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
+		}
+		frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
+		fmt.Print(frame.String())
+
 		time.Sleep(2 * time.Second)
 	}
 }

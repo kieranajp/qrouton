@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
@@ -102,52 +101,6 @@ func withEnv(env []string, key, value string) []string {
 		}
 	}
 	return append(out, prefix+value)
-}
-
-func ChooseRunner(cfg *config.Config, requested string) (Runner, error) {
-	all := Runners(cfg)
-	if requested != "" {
-		for _, r := range all {
-			if r.ID == requested || r.Command[0] == requested {
-				if r.Path == "" {
-					return Runner{}, fmt.Errorf("runner %q is not installed (could not find %s)", r.ID, r.Command[0])
-				}
-				return r, nil
-			}
-		}
-		return Runner{}, fmt.Errorf("unknown runner %q", requested)
-	}
-
-	var available []huh.Option[string]
-	var unavailable []string
-	selected := ""
-	for _, r := range all {
-		if r.Path == "" {
-			unavailable = append(unavailable, r.Label)
-			continue
-		}
-		if selected == "" || r.ID == "claude" {
-			selected = r.ID
-		}
-		available = append(available, huh.NewOption(r.Label, r.ID))
-	}
-	if len(available) == 0 {
-		return Runner{}, fmt.Errorf("no supported coding agent is installed")
-	}
-	description := "Choose the coding agent for this launch"
-	if len(unavailable) > 0 {
-		description += ". Not installed: \x1b[2m" + strings.Join(unavailable, ", ") + "\x1b[0m"
-	}
-	if err := huh.NewSelect[string]().Title("Coding agent").Description(description).
-		Options(available...).Value(&selected).Run(); err != nil {
-		return Runner{}, err
-	}
-	for _, r := range all {
-		if r.ID == selected {
-			return r, nil
-		}
-	}
-	return Runner{}, fmt.Errorf("runner %q disappeared", selected)
 }
 
 func runnerArgv(r Runner, resume bool) []string {

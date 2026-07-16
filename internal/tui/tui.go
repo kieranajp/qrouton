@@ -469,6 +469,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "left":
 		if f.focus == 2 {
 			f.owner = (f.owner + len(m.cfg.Orgs)) % (len(m.cfg.Orgs) + 1)
+			m.clampRepoCursor()
 		}
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 5) % 6
@@ -477,6 +478,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "right":
 		if f.focus == 2 {
 			f.owner = (f.owner + 1) % (len(m.cfg.Orgs) + 1)
+			m.clampRepoCursor()
 		}
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 1) % 6

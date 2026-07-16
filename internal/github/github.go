@@ -54,8 +54,8 @@ type RefreshMsg struct {
 	Err   error
 }
 
-// CachedRepos is deliberately cache-first: unlike listRepos it returns usable
-// cached data even when stale. The bool reports whether a matching cache exists.
+// CachedRepos is deliberately cache-first: it returns usable cached data even
+// when stale. The bool reports whether a matching cache exists.
 func CachedRepos(orgs []string) ([]Repo, time.Time, bool) {
 	var c repoCache
 	b, err := os.ReadFile(config.CachePath())
@@ -142,33 +142,6 @@ func Token() (string, error) {
 	return "", errors.New("no GitHub token: run `gh auth login` or set GITHUB_TOKEN")
 }
 
-// listRepos returns all configured GitHub owners' repos, from cache unless stale (24h).
-func listRepos(orgs []string, refresh bool) ([]Repo, error) {
-	cached, fetchedAt, cacheOK := CachedRepos(orgs)
-	if cacheOK && !refresh && time.Since(fetchedAt) < 24*time.Hour {
-		return cached, nil
-	}
-
-	token, err := Token()
-	if err != nil {
-		return nil, err
-	}
-	var repos []Repo
-	var firstErr error
-	for msg := range RefreshRepos(context.Background(), http.DefaultClient, token, orgs, cached) {
-		if msg.State == RefreshFailed && firstErr == nil {
-			firstErr = msg.Err
-		}
-		if msg.State == RefreshComplete {
-			repos = msg.Repos
-		}
-	}
-	if firstErr != nil && len(repos) == 0 {
-		return nil, firstErr
-	}
-	return repos, nil
-}
-
 func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner string) ([]Repo, error) {
 	login := ""
 	return fetchOwnerReposContext(ctx, client, token, owner, &login)
@@ -241,10 +214,6 @@ func fetchOwnerReposContext(ctx context.Context, client *http.Client, token, own
 		}
 	}
 	return repos, nil
-}
-
-func githubJSON(client *http.Client, token, requestURL string, dst any) error {
-	return githubJSONContext(context.Background(), client, token, requestURL, dst)
 }
 
 func githubJSONContext(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
