@@ -9,9 +9,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\b(QRSPI|qrspi-[a-z-]+|agent depth|document numbering)\b`)
+
+// testsPassTimeout bounds a fixture repo's test run during grading.
+const testsPassTimeout = 5 * time.Minute
 
 func Grade(
 	scenario Scenario,
@@ -237,13 +241,20 @@ func testsPass(workspace, repo string) Assertion {
 		return Assertion{Name: "tests pass: " + repo, Evidence: "no supported test manifest"}
 	}
 
-	cmd := exec.Command(command[0], command[1:]...)
+	// Bound the run: a hung test suite must fail the assertion, not the harness.
+	ctx, cancel := context.WithTimeout(context.Background(), testsPassTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = repoDir
 	output, err := cmd.CombinedOutput()
+	evidence := strings.TrimSpace(string(output))
+	if ctx.Err() != nil {
+		evidence = "test run exceeded " + testsPassTimeout.String() + ": " + evidence
+	}
 	return Assertion{
 		Name:     "tests pass: " + repo,
 		Passed:   err == nil,
-		Evidence: strings.TrimSpace(string(output)),
+		Evidence: evidence,
 	}
 }
 
