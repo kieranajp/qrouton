@@ -2,6 +2,7 @@ package launch
 
 import (
 	"bufio"
+	_ "embed"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,24 +35,11 @@ done
 
 const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
-// notifyScript plays a short attention sound with whatever the host offers, trying
-// macOS, PulseAudio/PipeWire, ALSA, and Windows interop in turn and only using a
-// player when its sound file actually exists; it falls back to the terminal bell so
-// it degrades to something rather than nothing. It backs both the notify MCP tool and
-// the runner's Notification hook.
-const notifyScript = `#!/bin/sh
-# qrouton: cross-platform attention sound (generated; regenerated at every launch)
-play() { command -v "$1" >/dev/null 2>&1 && [ -r "$2" ] && { "$1" "$2" >/dev/null 2>&1 & exit 0; }; }
-play afplay /System/Library/Sounds/Glass.aiff
-for f in /usr/share/sounds/freedesktop/stereo/complete.oga /usr/share/sounds/freedesktop/stereo/bell.oga; do
-  play paplay "$f"
-done
-play aplay /usr/share/sounds/alsa/Front_Center.wav
-if command -v powershell.exe >/dev/null 2>&1; then
-  powershell.exe -c "[console]::beep(880,200)" >/dev/null 2>&1 & exit 0
-fi
-printf '\a' > /dev/tty 2>/dev/null || printf '\a'
-`
+// notifyScript plays a short cross-platform attention sound; it backs both the notify
+// MCP tool and the runner's Notification hook. See notify.sh for the player fallbacks.
+//
+//go:embed notify.sh
+var notifyScript string
 
 const helpScript = `#!/bin/sh
 clear
