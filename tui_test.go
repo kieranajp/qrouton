@@ -23,22 +23,22 @@ func testApp() appModel {
 
 func TestRepositoryInclusionAndRoles(t *testing.T) {
 	m := testApp()
-	m.toggleIncluded()
+	m.cycleRepoRole()
 	if got := m.form.roles["acme/api"]; got != active {
-		t.Fatalf("first included repository role = %v, want active", got)
+		t.Fatalf("first cycle role = %v, want active", got)
+	}
+	m.cycleRepoRole()
+	if got := m.form.roles["acme/api"]; got != reference {
+		t.Fatalf("second cycle role = %v, want reference", got)
+	}
+	m.cycleRepoRole()
+	if _, ok := m.form.roles["acme/api"]; ok {
+		t.Fatal("third cycle did not exclude repository")
 	}
 	m.form.cursor = 1
-	m.toggleIncluded()
-	if got := m.form.roles["other/web"]; got != reference {
-		t.Fatalf("additional repository role = %v, want reference", got)
-	}
-	m.toggleRole()
+	m.cycleRepoRole()
 	if got := m.form.roles["other/web"]; got != active {
-		t.Fatalf("toggled repository role = %v, want active", got)
-	}
-	m.toggleIncluded()
-	if _, ok := m.form.roles["other/web"]; ok {
-		t.Fatal("excluded repository retained a role")
+		t.Fatalf("each repository should independently cycle to active, got %v", got)
 	}
 }
 

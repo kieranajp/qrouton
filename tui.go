@@ -452,15 +452,11 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "tab":
-		if f.focus == 4 {
-			m.toggleRole()
-		} else {
-			f.focus = (f.focus + 1) % 7
-		}
+		f.focus = (f.focus + 1) % 7
 		return m, nil
 	case " ":
 		if f.focus == 4 {
-			m.toggleIncluded()
+			m.cycleRepoRole()
 			return m, nil
 		}
 		m.editField(false, " ")
@@ -560,36 +556,19 @@ func (m appModel) filteredRepos() []Repo {
 	return out
 }
 
-func (m *appModel) toggleIncluded() {
+func (m *appModel) cycleRepoRole() {
 	rs := m.filteredRepos()
 	if len(rs) == 0 {
 		return
 	}
 	id := repoID(rs[m.form.cursor])
-	if m.form.roles[id] != excluded {
-		delete(m.form.roles, id)
-		return
-	}
-	role := reference
-	for _, v := range m.form.roles {
-		if v == active {
-			m.form.roles[id] = role
-			return
-		}
-	}
-	m.form.roles[id] = active
-}
-
-func (m *appModel) toggleRole() {
-	rs := m.filteredRepos()
-	if len(rs) == 0 {
-		return
-	}
-	id := repoID(rs[m.form.cursor])
-	if m.form.roles[id] == active {
-		m.form.roles[id] = reference
-	} else if m.form.roles[id] == reference {
+	switch m.form.roles[id] {
+	case excluded:
 		m.form.roles[id] = active
+	case active:
+		m.form.roles[id] = reference
+	case reference:
+		delete(m.form.roles, id)
 	}
 }
 
@@ -844,7 +823,7 @@ func (m appModel) viewForm() string {
 		}
 		rows = append(rows, line)
 	}
-	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), fieldLine(f.focus == 6, "Ticket URL", f.ticket), "", dim.Render("↑↓ fields/repos   space include   tab toggle role   ←→ choice   enter continue   esc back"))
+	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), fieldLine(f.focus == 6, "Ticket URL", f.ticket), "", dim.Render("↑↓ fields/repos   space cycle role   tab next field   ←→ choice   enter continue   esc back"))
 	return strings.Join(rows, "\n")
 }
 
