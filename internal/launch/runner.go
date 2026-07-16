@@ -60,11 +60,11 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socket
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
 		b, _ := json.Marshal(mcp)
 		argv = append(argv, "--mcp-config", string(b))
-		hookCommand := fmt.Sprintf("%q agent-event --session-root %q", qroutonBin, dir)
+		hookCommand := shellQuote(qroutonBin) + " agent-event --session-root " + shellQuote(dir)
 		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
 		// Chime only when the agent asks for attention (not on every turn), so the user
 		// can step away; notify.sh is stamped into .qrouton by writeSupport.
-		soundCommand := fmt.Sprintf("%q", filepath.Join(dir, ".qrouton", "notify.sh"))
+		soundCommand := shellQuote(filepath.Join(dir, ".qrouton", "notify.sh"))
 		soundHook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": soundCommand}}}}
 		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
 			"SubagentStart": hook,
@@ -98,6 +98,12 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socket
 		return nil, nil, fmt.Errorf("unsupported runner %q", r.ID)
 	}
 	return argv, os.Environ(), nil
+}
+
+// shellQuote single-quotes s for the POSIX shell that runs hook commands. Go's
+// %q double-quoting left $, backticks, and backslashes live for the shell.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func withEnv(env []string, key, value string) []string {
