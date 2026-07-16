@@ -17,6 +17,10 @@ func main() {
 		die(runAgentStatus(os.Args[2:]))
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "agent-event" {
+		die(recordClaudeAgentEvent(os.Args[2:], os.Stdin))
+		return
+	}
 	refresh := flag.Bool("refresh", false, "refresh the cached org repo list")
 	runner := flag.String("runner", "", "coding agent to launch (claude, codex, or opencode)")
 	flag.Parse()

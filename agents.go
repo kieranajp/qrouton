@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -31,11 +33,14 @@ type rolloutRecord struct {
 }
 
 func runAgentStatus(args []string) error {
-	root := ""
+	root, runner := "", ""
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--session-root" && i+1 < len(args) {
 			i++
 			root = args[i]
+		} else if args[i] == "--runner" && i+1 < len(args) {
+			i++
+			runner = args[i]
 		}
 	}
 	if root == "" {
@@ -44,7 +49,13 @@ func runAgentStatus(args []string) error {
 	for {
 		fmt.Print("\033[H\033[2J")
 		fmt.Println("\033[1magents\033[0m")
-		statuses, err := scanAgentStatuses(codexSessionsDir(), root)
+		var statuses []agentStatus
+		var err error
+		if runner == "claude" {
+			statuses, err = scanClaudeAgentStatuses(root)
+		} else {
+			statuses, err = scanAgentStatuses(codexSessionsDir(), root)
+		}
 		if err != nil {
 			fmt.Println("\033[2mCodex status unavailable\033[0m")
 		} else if len(statuses) == 0 {
@@ -66,6 +77,123 @@ func runAgentStatus(args []string) error {
 		}
 		time.Sleep(2 * time.Second)
 	}
+}
+
+type claudeAgentEvent struct {
+	HookEventName string `json:"hook_event_name"`
+	AgentID       string `json:"agent_id"`
+	AgentType     string `json:"agent_type"`
+	Timestamp     string `json:"timestamp,omitempty"`
+}
+
+func recordClaudeAgentEvent(args []string, input io.Reader) error {
+	root := ""
+	for i := 0; i < len(args); i++ {
+		if args[i] == "--session-root" && i+1 < len(args) {
+			i++
+			root = args[i]
+		}
+	}
+	if root == "" {
+		return fmt.Errorf("agent-event requires --session-root")
+	}
+	var event claudeAgentEvent
+	if err := json.NewDecoder(input).Decode(&event); err != nil {
+		return err
+	}
+	if event.AgentID == "" || (event.HookEventName != "SubagentStart" && event.HookEventName != "SubagentStop") {
+		return nil
+	}
+	event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
+	b, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(filepath.Join(root, ".qrouton", "claude-agents.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(append(b, '\n'))
+	return err
+}
+
+func scanClaudeAgentStatuses(root string) ([]agentStatus, error) {
+	byID := make(map[string]agentStatus)
+	f, err := os.Open(filepath.Join(root, ".qrouton", "claude-agents.jsonl"))
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	if err == nil {
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			var event claudeAgentEvent
+			if json.Unmarshal(scanner.Bytes(), &event) != nil || event.AgentID == "" {
+				continue
+			}
+			updated, _ := time.Parse(time.RFC3339Nano, event.Timestamp)
+			state := "running"
+			if event.HookEventName == "SubagentStop" {
+				state = "done"
+			}
+			name := event.AgentType
+			if name == "" {
+				name = event.AgentID
+			}
+			byID[event.AgentID] = agentStatus{Name: name, Path: event.AgentID, State: state, UpdatedAt: updated}
+		}
+		closeErr := f.Close()
+		if scanner.Err() != nil {
+			return nil, scanner.Err()
+		}
+		if closeErr != nil {
+			return nil, closeErr
+		}
+	}
+	mergeClaudeBackgroundAgents(byID, root)
+	statuses := make([]agentStatus, 0, len(byID))
+	for _, status := range byID {
+		statuses = append(statuses, status)
+	}
+	sortAgentStatuses(statuses)
+	return statuses, nil
+}
+
+func mergeClaudeBackgroundAgents(byID map[string]agentStatus, root string) {
+	out, err := exec.Command("claude", "agents", "--json", "--all", "--cwd", root).Output()
+	if err != nil {
+		return
+	}
+	var agents []map[string]any
+	if json.Unmarshal(out, &agents) != nil {
+		return
+	}
+	for _, agent := range agents {
+		id := firstString(agent, "sessionId", "session_id", "id")
+		if id == "" {
+			continue
+		}
+		name := firstString(agent, "name", "title", "agent")
+		if name == "" {
+			name = id
+		}
+		state := strings.ToLower(firstString(agent, "status", "state"))
+		if state == "" || state == "active" || state == "working" {
+			state = "running"
+		} else if state == "completed" || state == "stopped" {
+			state = "done"
+		}
+		byID[id] = agentStatus{Name: name, Path: id, State: state, UpdatedAt: time.Now()}
+	}
+}
+
+func firstString(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := values[key].(string); ok && value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func codexSessionsDir() string {
@@ -100,13 +228,17 @@ func scanAgentStatuses(sessionsDir, sessionRoot string) ([]agentStatus, error) {
 	if err != nil {
 		return nil, err
 	}
+	sortAgentStatuses(statuses)
+	return statuses, nil
+}
+
+func sortAgentStatuses(statuses []agentStatus) {
 	sort.Slice(statuses, func(i, j int) bool {
 		if (statuses[i].State == "running") != (statuses[j].State == "running") {
 			return statuses[i].State == "running"
 		}
 		return statuses[i].UpdatedAt.After(statuses[j].UpdatedAt)
 	})
-	return statuses, nil
 }
 
 func readAgentStatus(path, sessionRoot string) (agentStatus, bool) {

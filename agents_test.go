@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -26,6 +27,29 @@ func TestScanAgentStatusesFindsRunningAndCompletedSubagents(t *testing.T) {
 	}
 	if len(statuses) != 2 || statuses[0].Name != "Ada" || statuses[0].State != "running" || statuses[1].Name != "Grace" || statuses[1].State != "done" {
 		t.Fatalf("unexpected statuses: %#v", statuses)
+	}
+}
+
+func TestClaudeAgentHooksRecordLifecycle(t *testing.T) {
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, ".qrouton"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, input := range []string{
+		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore"}`,
+		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
+	} {
+		if err := recordClaudeAgentEvent([]string{"--session-root", root}, bytes.NewBufferString(input)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", t.TempDir())
+	statuses, err := scanClaudeAgentStatuses(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].Name != "Explore" || statuses[0].State != "done" {
+		t.Fatalf("unexpected Claude statuses: %#v", statuses)
 	}
 }
 

@@ -60,6 +60,10 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand, socket
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
 		b, _ := json.Marshal(mcp)
 		argv = append(argv, "--mcp-config", string(b))
+		hookCommand := fmt.Sprintf("%q agent-event --session-root %q", qroutonBin, dir)
+		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
+		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{"SubagentStart": hook, "SubagentStop": hook}})
+		argv = append(argv, "--settings", string(settings))
 	case "codex":
 		command, _ := json.Marshal(qroutonBin)
 		args, _ := json.Marshal(mcpArgs)

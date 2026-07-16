@@ -93,6 +93,20 @@ func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 	}
 }
 
+func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
+	r := Runner{ID: "claude", Command: []string{"claude"}}
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", editorCommand{}, "/tmp/zellij", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	joined := strings.Join(argv, " ")
+	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event", "--session-root"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Claude launch missing %q: %v", want, argv)
+		}
+	}
+}
+
 func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"model":"test"}`)
 	for _, id := range []string{"claude", "codex", "opencode"} {

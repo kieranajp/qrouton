@@ -84,6 +84,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 		}
 		args = "\n            args " + strings.Join(quoted, " ")
 	}
+	runner := filepath.Base(argv[0])
 	kdl := fmt.Sprintf(`layout {
     pane size=1 borderless=true {
         plugin location="zellij:tab-bar"
@@ -101,7 +102,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 					args %q
 				}
 				pane name="agents" command=%q {
-					args "agents" "--session-root" %q
+					args "agents" "--session-root" %q "--runner" %q
 				}
 			}
         }
@@ -117,7 +118,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), qroutonBin, dir, filepath.Join(cd, "help.sh"), slug)
+`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
 }
