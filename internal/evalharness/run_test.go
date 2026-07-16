@@ -22,7 +22,8 @@ if [ "$1" = "--version" ]; then
   echo "fake 1.0"
   exit 0
 fi
-case "$*" in
+prompt=$(cat)
+case "$prompt" in
   *malformed*) echo "not json" ;;
   *)
     echo '{"type":"system","session_id":"fake-session"}'
@@ -85,12 +86,12 @@ func writeRunFixture(t *testing.T, root, id, prompt string) {
 func TestTimedOutCaseStillCollectsDiffs(t *testing.T) {
 	repoRoot := t.TempDir()
 	assets := filepath.Join(repoRoot, "assets")
-	writeTestFile(t, filepath.Join(assets, "CLAUDE.md"), "# Instructions\n")
+	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Instructions\n")
 	writeRunFixture(t, repoRoot, "slow", "healthy")
 
 	// Modifies the active repo, then outlives the case timeout so the
 	// per-case context is already expired when diffs are collected.
-	bin := filepath.Join(repoRoot, "fake-claude")
+	bin := filepath.Join(repoRoot, "fake-claude-slow")
 	writeTestFile(t, bin, `#!/bin/sh
 if [ "$1" = "--version" ]; then
   echo "fake 1.0"

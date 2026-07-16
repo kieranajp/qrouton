@@ -36,13 +36,17 @@ func (a Adapter) RunTurn(
 	session string,
 	turn int,
 ) ([]Event, string, string, error) {
-	args, err := a.args(workspace, mcpLog, prompt, session)
+	args, err := a.args(workspace, mcpLog, session)
 	if err != nil {
 		return nil, "", session, err
 	}
 
 	cmd := exec.CommandContext(ctx, a.Bin, args...)
 	cmd.Dir = workspace
+	// The prompt travels over stdin, not argv: judge prompts embed candidate
+	// artifacts and diffs, and a single exec argument caps out at ~128KiB on
+	// Linux (MAX_ARG_STRLEN), which large runs would exceed.
+	cmd.Stdin = strings.NewReader(prompt)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -75,22 +79,22 @@ func (a Adapter) RunTurn(
 	return events, final, newSession, nil
 }
 
-func (a Adapter) args(workspace, mcpLog, prompt, session string) ([]string, error) {
+func (a Adapter) args(workspace, mcpLog, session string) ([]string, error) {
 	if a.SelfPath == "" {
 		return nil, fmt.Errorf("eval executable path is empty")
 	}
 
 	switch a.Name {
 	case "claude":
-		return a.claudeArgs(workspace, mcpLog, prompt, session)
+		return a.claudeArgs(workspace, mcpLog, session)
 	case "codex":
-		return a.codexArgs(workspace, mcpLog, prompt, session)
+		return a.codexArgs(workspace, mcpLog, session)
 	default:
 		return nil, fmt.Errorf("unknown runner %q", a.Name)
 	}
 }
 
-func (a Adapter) claudeArgs(workspace, mcpLog, prompt, session string) ([]string, error) {
+func (a Adapter) claudeArgs(workspace, mcpLog, session string) ([]string, error) {
 	mcpConfig := map[string]any{
 		"mcpServers": map[string]any{
 			"qrouton": map[string]any{
@@ -120,13 +124,12 @@ func (a Adapter) claudeArgs(workspace, mcpLog, prompt, session string) ([]string
 	if session != "" {
 		args = append(args, "--resume", session)
 	}
-	// --mcp-config accepts a variadic list, so terminate option parsing before
-	// appending the positional prompt. Otherwise Claude treats the prompt as an
-	// additional MCP config path.
-	return append(args, "--", prompt), nil
+	// No positional prompt: --print reads it from stdin (see RunTurn). This also
+	// keeps the variadic --mcp-config from swallowing a trailing positional.
+	return args, nil
 }
 
-func (a Adapter) codexArgs(workspace, mcpLog, prompt, session string) ([]string, error) {
+func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) {
 	command, err := json.Marshal(a.SelfPath)
 	if err != nil {
 		return nil, fmt.Errorf("encode Codex MCP command: %w", err)
@@ -156,7 +159,8 @@ func (a Adapter) codexArgs(workspace, mcpLog, prompt, session string) ([]string,
 	if session != "" {
 		args = append(args, session)
 	}
-	return append(args, prompt), nil
+	// "-" makes codex exec read the prompt from stdin (see RunTurn).
+	return append(args, "-"), nil
 }
 
 func Normalize(provider string, data []byte, turn int) ([]Event, string, string, error) {
