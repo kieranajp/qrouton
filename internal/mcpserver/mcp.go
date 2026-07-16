@@ -44,12 +44,23 @@ type paneNameInput struct {
 	Name string `json:"name" jsonschema:"Name of a pane previously opened via run_command or open_file"`
 }
 
+type showDiffInput struct {
+	Repo   string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every session repo"`
+	Staged bool   `json:"staged,omitempty" jsonschema:"Show staged (index) changes instead of the working tree"`
+	Base   string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
+}
+
+type notifyInput struct {
+	Message string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
+}
+
 // paneGeometry is the floating-pane placement passed to zellij (x, y, width, height).
 type paneGeometry struct{ x, y, width, height string }
 
 var (
 	editorGeometry  = paneGeometry{x: "66%", y: "3%", width: "33%", height: "94%"}
 	commandGeometry = paneGeometry{x: "40%", y: "8%", width: "58%", height: "84%"}
+	toastGeometry   = paneGeometry{x: "25%", y: "5%", width: "50%", height: "18%"}
 )
 
 // paneManager owns qrouton's slice of the Zellij session: the editor pane plus any
@@ -191,6 +202,41 @@ func (m *paneManager) closePane(ctx context.Context, input paneNameInput) (strin
 	return fmt.Sprintf("Closed pane %q.", name), nil
 }
 
+func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string, error) {
+	repoAbs, scope, label := "", "all session repos", "diff"
+	if repo := strings.TrimSpace(input.Repo); repo != "" {
+		dir, err := launch.ResolveSessionDir(m.root, repo)
+		if err != nil {
+			return "", err
+		}
+		repoAbs, scope, label = dir, repo, "diff:"+filepath.Base(dir)
+	}
+	command := diffCommand(repoAbs, strings.TrimSpace(input.Base), input.Staged)
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.spawn(ctx, label, "◆ "+label, m.root, commandGeometry, false, []string{"sh", "-lc", command}); err != nil {
+		return "", fmt.Errorf("show diff: %w", err)
+	}
+	return fmt.Sprintf("Showing the diff for %s in pane %q (Alt-f to scroll it).", scope, label), nil
+}
+
+func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, error) {
+	message := strings.TrimSpace(input.Message)
+	if message == "" {
+		return "", fmt.Errorf("message is required")
+	}
+	// The toast rings the terminal bell, plays the generated cross-platform sound
+	// (best effort), shows the message, then closes itself.
+	script := filepath.Join(m.root, ".qrouton", "notify.sh")
+	command := fmt.Sprintf(`%s >/dev/null 2>&1 & printf '\a\n  🔔  %%s\n\n  (auto-closes; Alt-x to dismiss)\n' %s; sleep 8`, shellQuote(script), shellQuote(message))
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.spawn(ctx, "notify", "🔔 notification", m.root, toastGeometry, true, []string{"sh", "-lc", command}); err != nil {
+		return "", fmt.Errorf("notify: %w", err)
+	}
+	return fmt.Sprintf("Notified the user: %s", message), nil
+}
+
 func (m *paneManager) list() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -208,9 +254,34 @@ func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }
 
+// shellQuote wraps s so it survives as a single word inside an `sh -lc` string,
+// keeping caller-supplied paths, refs, and messages out of the command grammar.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// diffCommand builds the shell that show_diff runs in a pane. A single repo relies
+// on git's own pager/colour (the pane is a tty); the all-repos form forces colour
+// through an explicit pager as it walks the src/* worktrees. A trailing footer keeps
+// an empty diff from rendering as a blank pane.
+func diffCommand(repoAbs, base string, staged bool) string {
+	flags := ""
+	if staged {
+		flags += " --staged"
+	}
+	if base != "" {
+		flags += " " + shellQuote(base)
+	}
+	footer := `printf '\n[end of diff — Alt-x to close]\n'`
+	if repoAbs == "" {
+		return fmt.Sprintf(`for d in src/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; printf '\n=== %%s ===\n' "$d"; git -C "$d" -c color.ui=always diff%s; done | less -FRX; %s`, flags, footer)
+	}
+	return fmt.Sprintf(`git -C %s diff%s; %s`, shellQuote(repoAbs), flags, footer)
+}
+
 func newMCPServer(root string, editor launch.EditorCommand, zellij, session string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
-		Instructions: "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; close_pane/list_panes to manage them. All paths and working directories must belong to this session.",
+		Instructions: "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; close_pane/list_panes to manage them. All paths and working directories must belong to this session.",
 	})
 	pane := newPaneManager(root, editor, zellij, session)
 
@@ -245,6 +316,28 @@ func newMCPServer(root string, editor launch.EditorCommand, zellij, session stri
 			return nil, nil, err
 		}
 		return textResult(text), map[string]any{"output": text}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "show_diff",
+		Description: "Show a repo's git diff in a workspace pane for the user to review. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every session repo. Use base to compare against a ref (e.g. the default branch) or staged for index changes.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input showDiffInput) (*mcp.CallToolResult, any, error) {
+		message, err := pane.showDiff(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "notify",
+		Description: "Get the user's attention with an on-screen toast, the terminal bell, and a sound. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs.",
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input notifyInput) (*mcp.CallToolResult, any, error) {
+		message, err := pane.notify(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

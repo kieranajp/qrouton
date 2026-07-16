@@ -62,7 +62,16 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socket
 		argv = append(argv, "--mcp-config", string(b))
 		hookCommand := fmt.Sprintf("%q agent-event --session-root %q", qroutonBin, dir)
 		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
-		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{"SubagentStart": hook, "SubagentStop": hook}})
+		// Chime when the agent finishes a turn or asks for attention, so the user can
+		// step away while work runs; notify.sh is stamped into .qrouton by writeSupport.
+		soundCommand := fmt.Sprintf("%q", filepath.Join(dir, ".qrouton", "notify.sh"))
+		soundHook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": soundCommand}}}}
+		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
+			"SubagentStart": hook,
+			"SubagentStop":  hook,
+			"Stop":          soundHook,
+			"Notification":  soundHook,
+		}})
 		argv = append(argv, "--settings", string(settings))
 	case "codex":
 		command, _ := json.Marshal(qroutonBin)

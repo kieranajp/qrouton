@@ -34,6 +34,22 @@ done
 
 const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
+// notifyScript plays a short attention sound, picking whatever player the host has;
+// it backs both the notify MCP tool and the runner's completion hook, and falls back
+// to the terminal bell so it degrades to something rather than nothing.
+const notifyScript = `#!/bin/sh
+# qrouton: cross-platform attention sound (generated; regenerated at every launch)
+if command -v afplay >/dev/null 2>&1; then
+  afplay /System/Library/Sounds/Glass.aiff >/dev/null 2>&1 &
+elif command -v paplay >/dev/null 2>&1; then
+  paplay /usr/share/sounds/freedesktop/stereo/complete.oga >/dev/null 2>&1 &
+elif command -v aplay >/dev/null 2>&1; then
+  aplay -q /usr/share/sounds/alsa/Front_Center.wav >/dev/null 2>&1 &
+else
+  printf '\a' > /dev/tty 2>/dev/null || printf '\a'
+fi
+`
+
 const helpScript = `#!/bin/sh
 clear
 printf '\n  qrouton\n\n'
@@ -55,6 +71,9 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(cd, "status.sh"), []byte(statusScript), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(cd, "notify.sh"), []byte(notifyScript), 0o755); err != nil {
 		return "", err
 	}
 	warning := ""

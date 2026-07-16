@@ -80,3 +80,21 @@ func TestStatusScriptFindsSrcWorktrees(t *testing.T) {
 		t.Fatal("status script does not scan src worktrees")
 	}
 }
+
+func TestWriteSupportStampsNotifyScript(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filepath.Join(dir, ".qrouton", "notify.sh"))
+	if err != nil {
+		t.Fatal("notify script missing:", err)
+	}
+	if info.Mode().Perm()&0o100 == 0 {
+		t.Fatal("notify script is not executable")
+	}
+	if !strings.Contains(notifyScript, "afplay") || !strings.Contains(notifyScript, `printf '\a'`) {
+		t.Fatal("notify script lacks a player and bell fallback")
+	}
+}

@@ -154,6 +154,61 @@ func TestClosePaneRemovesFromRegistry(t *testing.T) {
 	}
 }
 
+func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
+	dir := t.TempDir()
+	repo := filepath.Join(dir, "src", "app")
+	if err := os.MkdirAll(repo, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	helper, log := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+
+	if _, err := p.showDiff(context.Background(), showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
+		t.Fatal(err)
+	}
+	realRepo, _ := filepath.EvalSymlinks(repo)
+	s := readLog(t, log)
+	for _, want := range []string{"--name ◆ diff:app", "git -C '" + realRepo + "' diff --staged 'main'", "--pinned true"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("single-repo diff missing %q:\n%s", want, s)
+		}
+	}
+	if got := p.list(); len(got) != 1 || got[0] != "diff:app" {
+		t.Fatalf("registry = %v, want [diff:app]", got)
+	}
+
+	if _, err := p.showDiff(context.Background(), showDiffInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if s := readLog(t, log); !strings.Contains(s, "for d in src/*/") || !strings.Contains(s, "less -FRX") {
+		t.Fatalf("all-repos diff should walk worktrees through a pager:\n%s", s)
+	}
+
+	if _, err := p.showDiff(context.Background(), showDiffInput{Repo: "../outside"}); err == nil {
+		t.Fatal("accepted a repo path outside the session")
+	}
+}
+
+func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
+	dir := t.TempDir()
+	helper, log := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+
+	if _, err := p.notify(context.Background(), notifyInput{Message: "build finished"}); err != nil {
+		t.Fatal(err)
+	}
+	s := readLog(t, log)
+	script := filepath.Join(dir, ".qrouton", "notify.sh")
+	for _, want := range []string{"--name 🔔 notification", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("notify toast missing %q:\n%s", want, s)
+		}
+	}
+	if _, err := p.notify(context.Background(), notifyInput{Message: "  "}); err == nil {
+		t.Fatal("accepted an empty notify message")
+	}
+}
+
 func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	ctx := context.Background()
 	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, "zellij", "test-session")
@@ -170,7 +225,7 @@ func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	}
 	defer cs.Close()
 
-	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "close_pane": false, "list_panes": false}
+	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)
