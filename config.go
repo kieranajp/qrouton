@@ -63,8 +63,12 @@ func loadConfig() (*Config, error) {
 func wizard() (*Config, error) {
 	root, org := "~/work", "lifesum"
 	err := huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title("Root directory (sessions live here)").Value(&root),
-		huh.NewInput().Title("GitHub org").Value(&org),
+		huh.NewInput().Title("Root directory").
+			Description("Sessions live flat under it; repo mirrors under <root>/.mirrors").
+			Value(&root),
+		huh.NewInput().Title("GitHub org").
+			Description("Org whose repos the session picker lists").
+			Value(&org),
 	)).Run()
 	if err != nil {
 		return nil, err

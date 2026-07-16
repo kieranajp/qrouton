@@ -58,7 +58,9 @@ func newSession(cfg *Config, refresh bool) (string, error) {
 		opts[i] = huh.NewOption(r.Name, r.Name)
 	}
 	form := huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title("Session name").Value(&name).Validate(func(s string) error {
+		huh.NewInput().Title("Session name").
+			Description("Slugified into the session directory and branch names").
+			Value(&name).Validate(func(s string) error {
 			if slugify(s) == "" {
 				return fmt.Errorf("need a name")
 			}
@@ -68,16 +70,23 @@ func newSession(cfg *Config, refresh bool) (string, error) {
 			return nil
 		}),
 		// bounded height — unbounded, the org repo list floods the viewport and the form degrades to field-by-field
-		huh.NewMultiSelect[string]().Title("Repos").Options(opts...).Filterable(true).Height(8).Value(&picked).
+		huh.NewMultiSelect[string]().Title("Repos").
+			Description("Each gets a worktree in the session — type to filter, space to select").
+			Options(opts...).Filterable(true).Height(8).Value(&picked).
 			Validate(func(v []string) error {
 				if len(v) == 0 {
 					return fmt.Errorf("pick at least one repo")
 				}
 				return nil
 			}),
-		huh.NewInput().Title("Description").Value(&desc),
-		huh.NewInput().Title("Ticket URL (optional)").Value(&ticket),
+		huh.NewInput().Title("Description").
+			Description("One line on what this session is for — shown in the resume list").
+			Value(&desc),
+		huh.NewInput().Title("Ticket URL (optional)").
+			Description("Informs the flow but stays hidden from research subagents").
+			Value(&ticket),
 		huh.NewSelect[string]().Title("Branch prefix").
+			Description("Branches are <prefix>/<session-slug> in every repo").
 			Options(huh.NewOptions("feat", "fix", "chore", "refactor", "docs", "test")...).
 			Value(&prefix),
 	))
