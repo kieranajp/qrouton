@@ -65,14 +65,6 @@ type Artifact struct {
 	Text   string `json:"text,omitempty"`
 }
 
-type JudgeResult struct {
-	Judge    string            `json:"judge"`
-	Scores   map[string]int    `json:"scores,omitempty"`
-	Evidence map[string]string `json:"evidence,omitempty"`
-	Raw      string            `json:"raw,omitempty"`
-	Error    string            `json:"error,omitempty"`
-}
-
 type PairwiseJudgment struct {
 	Judge    string `json:"judge"`
 	ARunner  string `json:"a_runner"`
@@ -108,7 +100,6 @@ type CaseResult struct {
 	Artifacts           []Artifact        `json:"artifacts,omitempty"`
 	Diffs               map[string]string `json:"diffs,omitempty"`
 	Assertions          []Assertion       `json:"assertions"`
-	Judge               *JudgeResult      `json:"judge,omitempty"`
 	InfrastructureError string            `json:"infrastructure_error,omitempty"`
 }
 
