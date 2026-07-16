@@ -36,6 +36,7 @@ const (
 type launchRequest struct {
 	dir    string
 	runner Runner
+	resume bool
 }
 
 type reposLoadedMsg struct {
@@ -319,7 +320,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err, m.back, m.screen = err, runnerScreen, errorScreen
 			return m, nil
 		}
-		m.result = &launchRequest{dir: v.dir, runner: r}
+		m.result = &launchRequest{dir: v.dir, runner: r, resume: m.resume != nil}
 		if m.refreshCancel != nil {
 			m.refreshCancel()
 		}

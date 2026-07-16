@@ -147,6 +147,18 @@ func TestResumeRequiresRunnerSelection(t *testing.T) {
 	}
 }
 
+func TestResumedAssemblyProducesResumeLaunchRequest(t *testing.T) {
+	m := testApp()
+	session := Manifest{Slug: "existing"}
+	m.resume = &session
+	m.runners = []Runner{{ID: "codex", Label: "Codex", Path: "/bin/codex", Command: []string{"codex"}}}
+	updated, _ := m.Update(assembledMsg{dir: "/tmp/existing"})
+	got := updated.(appModel)
+	if got.result == nil || !got.result.resume {
+		t.Fatalf("resume assembly launch request = %#v", got.result)
+	}
+}
+
 func TestStaleRefreshEventIsIgnored(t *testing.T) {
 	m := testApp()
 	m.refreshGen = 2

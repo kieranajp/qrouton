@@ -98,7 +98,7 @@ func execvEnv(bin string, argv []string, dir string, env []string) error {
 	return syscall.Exec(bin, argv, env)
 }
 
-func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCommand) error {
+func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCommand, resume bool) error {
 	bin, err := exec.LookPath("zellij")
 	if err != nil {
 		return fmt.Errorf("zellij 0.44 or newer is required; install Zellij and try again")
@@ -110,7 +110,7 @@ func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCom
 	if socketDir == "" {
 		socketDir = "/tmp/zellij"
 	}
-	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, socketDir)
+	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, socketDir, resume)
 	if err != nil {
 		return err
 	}

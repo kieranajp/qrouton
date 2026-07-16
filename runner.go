@@ -52,8 +52,8 @@ func runners(cfg *Config) []Runner {
 	return out
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand, socketDir string) ([]string, []string, error) {
-	argv := runnerArgv(r)
+func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand, socketDir string, resume bool) ([]string, []string, error) {
+	argv := runnerArgv(r, resume)
 	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
 	switch r.ID {
 	case "claude":
@@ -145,8 +145,18 @@ func chooseRunner(cfg *Config, requested string) (Runner, error) {
 	return Runner{}, fmt.Errorf("runner %q disappeared", selected)
 }
 
-func runnerArgv(r Runner) []string {
+func runnerArgv(r Runner, resume bool) []string {
 	argv := append([]string(nil), r.Command...)
+	if resume {
+		switch r.ID {
+		case "claude", "opencode":
+			return append(argv, "--continue")
+		case "codex":
+			return append(argv, "resume", "--last")
+		default:
+			return argv
+		}
+	}
 	switch r.ID {
 	case "claude", "codex":
 		argv = append(argv, "You have just been launched in a qrouton session. Read the session instructions, qrouton.json, and existing thoughts/shared documents; derive the current QRSPI phase, greet the user, propose the next step, then wait.")

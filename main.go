@@ -28,7 +28,7 @@ func main() {
 	if request == nil {
 		return
 	}
-	die(launchRunner(cfg, request.dir, request.runner))
+	die(launchRunner(cfg, request.dir, request.runner, request.resume))
 }
 
 func repoID(r Repo) string { return r.Org + "/" + r.Name }
@@ -42,10 +42,10 @@ func launch(cfg *Config, dir, requestedRunner string) error {
 	if err != nil {
 		return err
 	}
-	return launchRunner(cfg, dir, r)
+	return launchRunner(cfg, dir, r, false)
 }
 
-func launchRunner(cfg *Config, dir string, r Runner) error {
+func launchRunner(cfg *Config, dir string, r Runner, resume bool) error {
 	if err := stampAssets(dir); err != nil {
 		return err
 	}
@@ -57,7 +57,7 @@ func launchRunner(cfg *Config, dir string, r Runner) error {
 	if err != nil {
 		return err
 	}
-	return launchZellij(dir, r, bin, editor)
+	return launchZellij(dir, r, bin, editor, resume)
 }
 
 func die(err error) {

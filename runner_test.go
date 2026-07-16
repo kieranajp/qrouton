@@ -47,7 +47,7 @@ func TestChooseRequestedRunnerAndInitialPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	argv := runnerArgv(r)
+	argv := runnerArgv(r, false)
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
@@ -55,8 +55,38 @@ func TestChooseRequestedRunnerAndInitialPrompt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if argv := runnerArgv(open); len(argv) != len(open.Command) {
+	if argv := runnerArgv(open, false); len(argv) != len(open.Command) {
 		t.Fatalf("unknown launch protocol should not receive a positional prompt: %#v", argv)
+	}
+}
+
+func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
+	wants := map[string][]string{
+		"claude":   {"--continue"},
+		"codex":    {"resume", "--last"},
+		"opencode": {"--continue"},
+	}
+	for _, runner := range builtinRunners {
+		argv := runnerArgv(runner, true)
+		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
+			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
+		}
+		if strings.Contains(strings.Join(argv, " "), "just been launched") {
+			t.Errorf("%s resume argv included fresh-session greeting: %#v", runner.ID, argv)
+		}
+	}
+}
+
+func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
+	for _, runner := range builtinRunners {
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		joined := strings.Join(argv, " ") + " " + strings.Join(env, " ")
+		if !strings.Contains(joined, "qrouton") {
+			t.Errorf("%s resumed without qrouton MCP config", runner.ID)
+		}
 	}
 }
 
@@ -69,7 +99,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij")
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij", false)
 		if err != nil {
 			t.Fatal(err)
 		}
