@@ -43,7 +43,7 @@ func (p *editorPane) open(ctx context.Context, input openFileInput) (string, err
 		p.paneID = ""
 	}
 	editorArgs := p.editor.args(path, input.Line)
-	args := []string{"--session", p.session, "action", "new-pane", "--floating", "--close-on-exit", "--x", "65%", "--width", "35%", "--y", "0%", "--height", "100%", "--name", "Editor — exit editor or Alt-x to close", "--cwd", p.root, "--"}
+	args := []string{"--session", p.session, "action", "new-pane", "--floating", "--close-on-exit", "--x", "66%", "--width", "33%", "--y", "3%", "--height", "94%", "--name", "Editor — exit editor or Alt-x to close", "--cwd", p.root, "--"}
 	args = append(args, editorArgs...)
 	out, err := commandContext(ctx, p.zellij, args...).Output()
 	if err != nil {

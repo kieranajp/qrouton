@@ -27,7 +27,7 @@ func TestEditorPaneOpensInSidebarAndReplacesPreviousPane(t *testing.T) {
 	}
 	b, _ := os.ReadFile(log)
 	s := string(b)
-	for _, want := range []string{"--session test-session", "--x 65%", "--width 35%", "--height 100%", "Editor — exit editor or Alt-x to close", "close-pane --pane-id terminal_9"} {
+	for _, want := range []string{"--session test-session", "--x 66%", "--width 33%", "--y 3%", "--height 94%", "Editor — exit editor or Alt-x to close", "close-pane --pane-id terminal_9"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("calls missing %q:\n%s", want, s)
 		}
