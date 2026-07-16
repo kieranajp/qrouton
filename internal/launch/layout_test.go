@@ -28,10 +28,16 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal("help script missing:", err)
 	}
-	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press Enter to begin"} {
+	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press any key to begin"} {
 		if !strings.Contains(string(help), want) {
 			t.Fatalf("help panel missing %q", want)
 		}
+	}
+	if !strings.Contains(string(help), "stty -icanon") || !strings.Contains(string(help), "dd bs=1 count=1") {
+		t.Fatal("quick-start panel does not dismiss on a single raw keypress")
+	}
+	if strings.Contains(string(help), "read -r") {
+		t.Fatal("quick-start panel still requires Enter to dismiss")
 	}
 	if !strings.Contains(string(help), "agents.max_depth is under 2") || !strings.Contains(string(help), "Set it to 3") {
 		t.Fatal("Codex quick-start panel does not warn about shallow subagent nesting")
@@ -53,6 +59,9 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `floating_panes`) || !strings.Contains(string(b), `name="qrouton · quick start"`) || !strings.Contains(string(b), `close_on_exit=true`) {
 		t.Fatal("quick-start help is not a disposable floating pane")
+	}
+	if !strings.Contains(string(b), `close_on_exit=true focus=true`) {
+		t.Fatal("quick-start pane is not focused; startup keys would land in the agent pane")
 	}
 }
 

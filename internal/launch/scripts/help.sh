@@ -5,5 +5,12 @@ printf '  Coordinate here; delegate work to subagents.\n\n'
 @@WARNING@@
 printf '  Move   Alt + arrow keys\n'
 printf '  Quit   Ctrl-g, then Ctrl-q\n\n'
-printf '  Press Enter to begin\n'
-IFS= read -r _
+printf '  Press any key to begin\n'
+# Read one raw keypress so Enter, Esc, or anything else dismisses the panel.
+# A canonical-mode `read` only ever returned on Enter; every other key left
+# this floating pane lingering over the workspace, swallowing input.
+saved=$(stty -g 2>/dev/null)
+stty -icanon -echo 2>/dev/null
+dd bs=1 count=1 >/dev/null 2>&1
+[ -n "$saved" ] && stty "$saved" 2>/dev/null
+exit 0

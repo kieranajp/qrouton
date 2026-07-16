@@ -113,7 +113,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
         plugin location="zellij:status-bar"
     }
     floating_panes {
-        pane x="27%%" y="25%%" width="46%%" height="35%%" name="qrouton · quick start" command="sh" close_on_exit=true {
+        pane x="27%%" y="25%%" width="46%%" height="35%%" name="qrouton · quick start" command="sh" close_on_exit=true focus=true {
             args %q
         }
     }
