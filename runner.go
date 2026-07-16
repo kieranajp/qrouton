@@ -159,7 +159,7 @@ func runnerArgv(r Runner, resume bool) []string {
 	}
 	switch r.ID {
 	case "claude", "codex":
-		argv = append(argv, "You have just been launched in a qrouton session. Read the session instructions, qrouton.json, and existing thoughts/shared documents; derive the current QRSPI phase, greet the user, propose the next step, then wait.")
+		argv = append(argv, "You have just been launched in a qrouton session. Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, then respond naturally. Present the work as Research, Plan, or Implement; keep your own context lean by delegating execution wherever practical.")
 	}
 	return argv
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"os"
 	"os/exec"
@@ -37,11 +38,14 @@ const helpScript = `#!/bin/sh
 clear
 printf '\n  qrouton\n\n'
 printf '  Coordinate here; delegate work to subagents.\n\n'
+%s
 printf '  Move   Alt + arrow keys\n'
 printf '  Quit   Ctrl-g, then Ctrl-q\n\n'
 printf '  Press Enter to begin\n'
 IFS= read -r _
 `
+
+const codexDepthWarning = "printf '  WARNING  Codex agents.max_depth is under 2. Set it to 3\\n'\nprintf '           in ~/.codex/config.toml for nested subagents.\\n\\n'"
 
 // writeSupport writes .qrouton/{status.sh,layout.kdl,zellij-config.kdl} at launch time,
 // so old sessions pick up template changes on resume.
@@ -53,7 +57,15 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 	if err := os.WriteFile(filepath.Join(cd, "status.sh"), []byte(statusScript), 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(helpScript), 0o755); err != nil {
+	warning := ""
+	if filepath.Base(argv[0]) == "codex" && codexMaxDepth(argv) < 2 {
+		warning = codexDepthWarning
+	}
+	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(fmt.Sprintf(helpScript, warning)), 0o755); err != nil {
+		return "", err
+	}
+	qroutonBin, err := os.Executable()
+	if err != nil {
 		return "", err
 	}
 	config, err := assetsFS.ReadFile("assets/zellij-config.kdl")
@@ -84,9 +96,14 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 			pane name="shell" command="sh" {
 				args "-lc" %q
 			}
-            pane size=6 name="repos" command="sh" {
-                args %q
-            }
+			pane split_direction="vertical" size=6 {
+				pane name="repos" command="sh" {
+					args %q
+				}
+				pane name="agents" command=%q {
+					args "agents" "--session-root" %q
+				}
+			}
         }
     }
     pane size=2 borderless=true {
@@ -100,9 +117,61 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), filepath.Join(cd, "help.sh"), slug)
+`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), qroutonBin, dir, filepath.Join(cd, "help.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
+}
+
+// codexMaxDepth returns the configured nesting depth, or Codex's default of one.
+// Command-line overrides win over the base config, matching Codex's precedence.
+func codexMaxDepth(argv []string) int {
+	depth := 1
+	home := os.Getenv("CODEX_HOME")
+	if home == "" {
+		if userHome, err := os.UserHomeDir(); err == nil {
+			home = filepath.Join(userHome, ".codex")
+		}
+	}
+	if f, err := os.Open(filepath.Join(home, "config.toml")); err == nil {
+		defer f.Close()
+		section := ""
+		scanner := bufio.NewScanner(f)
+		for scanner.Scan() {
+			line := strings.TrimSpace(strings.SplitN(scanner.Text(), "#", 2)[0])
+			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
+				section = strings.TrimSpace(line[1 : len(line)-1])
+				continue
+			}
+			key, value, ok := strings.Cut(line, "=")
+			if !ok {
+				continue
+			}
+			key = strings.TrimSpace(key)
+			if (section == "agents" && key == "max_depth") || (section == "" && key == "agents.max_depth") {
+				if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+					depth = n
+				}
+			}
+		}
+	}
+	for i := 1; i < len(argv); i++ {
+		var override string
+		switch {
+		case argv[i] == "-c" || argv[i] == "--config":
+			if i+1 < len(argv) {
+				i++
+				override = argv[i]
+			}
+		case strings.HasPrefix(argv[i], "--config="):
+			override = strings.TrimPrefix(argv[i], "--config=")
+		}
+		if value, ok := strings.CutPrefix(override, "agents.max_depth="); ok {
+			if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
+				depth = n
+			}
+		}
+	}
+	return depth
 }
 
 func execv(bin string, argv []string, dir string) error {

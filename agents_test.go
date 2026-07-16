@@ -1,0 +1,35 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestScanAgentStatusesFindsRunningAndCompletedSubagents(t *testing.T) {
+	dir := t.TempDir()
+	root := t.TempDir()
+	writeRollout := func(name, events string) {
+		t.Helper()
+		content := `{"timestamp":"2026-07-16T12:00:00Z","type":"session_meta","payload":{"cwd":` + quoteJSON(root) + `,"parent_thread_id":"parent","agent_nickname":` + quoteJSON(name) + `,"agent_path":"/root/task"}}` + "\n" + events
+		if err := os.WriteFile(filepath.Join(dir, name+".jsonl"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	writeRollout("Ada", `{"timestamp":"2026-07-16T12:01:00Z","type":"event_msg","payload":{"type":"task_started"}}`+"\n")
+	writeRollout("Grace", `{"timestamp":"2026-07-16T12:02:00Z","type":"event_msg","payload":{"type":"task_started"}}`+"\n"+`{"timestamp":"2026-07-16T12:03:00Z","type":"event_msg","payload":{"type":"task_complete"}}`+"\n")
+
+	statuses, err := scanAgentStatuses(dir, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 2 || statuses[0].Name != "Ada" || statuses[0].State != "running" || statuses[1].Name != "Grace" || statuses[1].State != "done" {
+		t.Fatalf("unexpected statuses: %#v", statuses)
+	}
+}
+
+func quoteJSON(value string) string {
+	b, _ := json.Marshal(value)
+	return string(b)
+}

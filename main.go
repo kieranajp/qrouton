@@ -13,6 +13,10 @@ func main() {
 		die(runMCP(os.Args[2:]))
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "agents" {
+		die(runAgentStatus(os.Args[2:]))
+		return
+	}
 	refresh := flag.Bool("refresh", false, "refresh the cached org repo list")
 	runner := flag.String("runner", "", "coding agent to launch (claude, codex, or opencode)")
 	flag.Parse()

@@ -8,6 +8,7 @@ import (
 )
 
 func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
 	dir := t.TempDir()
 	layout, err := writeSupport(dir, "test-session", []string{"codex"})
 	if err != nil {
@@ -32,6 +33,9 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 			t.Fatalf("help panel missing %q", want)
 		}
 	}
+	if !strings.Contains(string(help), "agents.max_depth is under 2") || !strings.Contains(string(help), "Set it to 3") {
+		t.Fatal("Codex quick-start panel does not warn about shallow subagent nesting")
+	}
 	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
 	if err != nil {
 		t.Fatal(err)
@@ -41,11 +45,33 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
 	}
-	if !strings.Contains(string(b), `pane size=6 name="repos"`) {
-		t.Fatal("repo status pane is not fixed at six rows")
+	if !strings.Contains(string(b), `pane split_direction="vertical" size=6`) {
+		t.Fatal("status panes are not fixed at six rows")
+	}
+	if !strings.Contains(string(b), `pane name="repos"`) || !strings.Contains(string(b), `pane name="agents"`) {
+		t.Fatal("repo and agent status panes are not side by side")
 	}
 	if !strings.Contains(string(b), `floating_panes`) || !strings.Contains(string(b), `name="qrouton · quick start"`) || !strings.Contains(string(b), `close_on_exit=true`) {
 		t.Fatal("quick-start help is not a disposable floating pane")
+	}
+}
+
+func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[agents]\nmax_depth = 2\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+		t.Fatal(err)
+	}
+	help, err := os.ReadFile(filepath.Join(dir, ".qrouton", "help.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(help), "agents.max_depth is under 2") {
+		t.Fatal("Codex quick-start panel warns when max_depth is two")
 	}
 }
 
