@@ -3,6 +3,7 @@ package launch
 import (
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -98,6 +99,11 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event", "--session-root"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Claude launch missing %q: %v", want, argv)
+		}
+	}
+	for _, want := range []string{"Notification", filepath.Join(".qrouton", "notify.sh")} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("Claude launch missing sound hook %q: %v", want, argv)
 		}
 	}
 }

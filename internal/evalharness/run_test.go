@@ -12,7 +12,7 @@ import (
 func TestRunContinuesAfterMalformedCaseAndProducesReport(t *testing.T) {
 	repoRoot := t.TempDir()
 	assets := filepath.Join(repoRoot, "assets")
-	writeTestFile(t, filepath.Join(assets, "CLAUDE.md"), "# Instructions\n")
+	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Instructions\n")
 	writeRunFixture(t, repoRoot, "bad", "malformed")
 	writeRunFixture(t, repoRoot, "good", "healthy")
 

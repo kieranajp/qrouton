@@ -137,7 +137,7 @@ func markAsset(content []byte) []byte {
 }
 
 func assetDestination(workspace, canonical, rel string) (string, []assetLink) {
-	if rel == "CLAUDE.md" {
+	if rel == "AGENTS.md" {
 		destination := filepath.Join(canonical, "ORCHESTRATOR.md")
 		links := []assetLink{
 			{link: filepath.Join(workspace, "CLAUDE.md"), target: destination},
