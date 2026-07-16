@@ -110,8 +110,13 @@ func launchTmux(bin, dir string, argv []string) error {
 	if _, err := writeSupport(dir, slug, argv); err != nil {
 		return err
 	}
+	// argv becomes a shell command string — quote each word or a spaced arg (the initial prompt) splits
+	quoted := make([]string, len(argv))
+	for i, a := range argv {
+		quoted[i] = fmt.Sprintf("%q", a)
+	}
 	return execv(bin, []string{"tmux",
-		"new-session", "-s", slug, "-c", dir, strings.Join(argv, " "),
+		"new-session", "-s", slug, "-c", dir, strings.Join(quoted, " "),
 		";", "split-window", "-h", "-l", "35%", "-c", dir,
 		";", "split-window", "-v", "-c", dir, "sh .qrouton/status.sh",
 		";", "select-pane", "-L"}, dir)

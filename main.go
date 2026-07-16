@@ -130,6 +130,12 @@ func launch(cfg *Config, dir string) error {
 		}
 		argv = cfg.Launch[idx]
 	}
+	// claude takes an initial prompt as a positional arg — kick off the orchestrator greeting
+	// (CLAUDE.md carries the instructions; this just fires the first turn). Other runners: no-op.
+	if filepath.Base(argv[0]) == "claude" {
+		argv = append(append([]string{}, argv...),
+			"You have just been launched in a qrouton session. Orient per CLAUDE.md: read qrouton.json, derive the phase, greet, and propose the next step.")
+	}
 	if os.Getenv("QROUTON_PLAIN") == "" {
 		if p, err := exec.LookPath("zellij"); err == nil {
 			return launchZellij(p, dir, argv)
