@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -10,24 +12,22 @@ import (
 )
 
 type Runner struct {
-	ID      string
-	Label   string
-	Command []string
-	Path    string
+	ID       string
+	Label    string
+	Command  []string
+	Path     string
+	Override bool
 }
 
 var builtinRunners = []Runner{
-	{ID: "claude", Label: "Claude Code", Command: []string{"claude"}},
-	{ID: "codex", Label: "Codex CLI", Command: []string{"codex"}},
-	{ID: "opencode", Label: "OpenCode", Command: []string{"opencode"}},
-	{ID: "agy", Label: "Agy", Command: []string{"agy"}},
-	{ID: "pi", Label: "Pi", Command: []string{"pi"}},
+	{ID: "claude", Label: "Claude Code", Command: []string{"claude", "--dangerously-skip-permissions"}},
+	{ID: "codex", Label: "Codex CLI", Command: []string{"codex", "--dangerously-bypass-approvals-and-sandbox"}},
+	{ID: "opencode", Label: "OpenCode", Command: []string{"opencode", "--auto"}},
 }
 
 var findExecutable = exec.LookPath
 
-// runners combines qrouton's known adapters with legacy configured commands. A configured command
-// for a built-in runner supplies its arguments; other commands remain available as custom runners.
+// runners applies exact configured overrides to qrouton's supported, tool-capable runners.
 func runners(cfg *Config) []Runner {
 	out := make([]Runner, len(builtinRunners))
 	copy(out, builtinRunners)
@@ -42,15 +42,61 @@ func runners(cfg *Config) []Runner {
 		id := filepath.Base(command[0])
 		if i, ok := byID[id]; ok {
 			out[i].Command = append([]string(nil), command...)
+			out[i].Override = true
 			continue
 		}
-		byID[id] = len(out)
-		out = append(out, Runner{ID: id, Label: id + " (custom)", Command: append([]string(nil), command...)})
 	}
 	for i := range out {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
 	return out
+}
+
+func runnerLaunch(r Runner, qroutonBin, dir string) ([]string, []string, error) {
+	argv := runnerArgv(r)
+	mcpArgs := []string{"mcp", "--session-root", dir}
+	switch r.ID {
+	case "claude":
+		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
+		b, _ := json.Marshal(mcp)
+		argv = append(argv, "--mcp-config", string(b))
+	case "codex":
+		command, _ := json.Marshal(qroutonBin)
+		args, _ := json.Marshal(mcpArgs)
+		argv = append(argv, "-c", "mcp_servers.qrouton.command="+string(command), "-c", "mcp_servers.qrouton.args="+string(args))
+	case "opencode":
+		content := map[string]any{}
+		if existing := os.Getenv("OPENCODE_CONFIG_CONTENT"); existing != "" {
+			if err := json.Unmarshal([]byte(existing), &content); err != nil {
+				return nil, nil, fmt.Errorf("OPENCODE_CONFIG_CONTENT: %w", err)
+			}
+		}
+		servers, _ := content["mcp"].(map[string]any)
+		if servers == nil {
+			servers = map[string]any{}
+		}
+		servers["qrouton"] = map[string]any{"type": "local", "command": append([]string{qroutonBin}, mcpArgs...), "enabled": true}
+		content["mcp"] = servers
+		if !r.Override {
+			content["permission"] = "allow"
+		}
+		b, _ := json.Marshal(content)
+		return argv, withEnv(os.Environ(), "OPENCODE_CONFIG_CONTENT", string(b)), nil
+	default:
+		return nil, nil, fmt.Errorf("unsupported runner %q", r.ID)
+	}
+	return argv, os.Environ(), nil
+}
+
+func withEnv(env []string, key, value string) []string {
+	prefix := key + "="
+	out := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			out = append(out, item)
+		}
+	}
+	return append(out, prefix+value)
 }
 
 func chooseRunner(cfg *Config, requested string) (Runner, error) {

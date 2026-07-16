@@ -6,12 +6,15 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 )
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		die(runMCP(os.Args[2:]))
+		return
+	}
 	refresh := flag.Bool("refresh", false, "refresh the cached org repo list")
-	runner := flag.String("runner", "", "coding agent to launch (claude, codex, opencode, agy, pi, or configured command)")
+	runner := flag.String("runner", "", "coding agent to launch (claude, codex, or opencode)")
 	flag.Parse()
 
 	cfg, err := loadConfig()
@@ -39,32 +42,22 @@ func launch(cfg *Config, dir, requestedRunner string) error {
 	if err != nil {
 		return err
 	}
-	argv := runnerArgv(r)
-	if os.Getenv("QROUTON_PLAIN") == "" {
-		if p, err := exec.LookPath("zellij"); err == nil {
-			return launchZellij(p, dir, argv)
-		}
-		if p, err := exec.LookPath("tmux"); err == nil {
-			return launchTmux(p, dir, argv)
-		}
-	}
-	return execv(r.Path, argv, dir)
+	return launchRunner(cfg, dir, r)
 }
 
 func launchRunner(cfg *Config, dir string, r Runner) error {
 	if err := stampAssets(dir); err != nil {
 		return err
 	}
-	argv := runnerArgv(r)
-	if os.Getenv("QROUTON_PLAIN") == "" {
-		if p, err := exec.LookPath("zellij"); err == nil {
-			return launchZellij(p, dir, argv)
-		}
-		if p, err := exec.LookPath("tmux"); err == nil {
-			return launchTmux(p, dir, argv)
-		}
+	editor, err := resolveEditor(cfg.Editor)
+	if err != nil {
+		return err
 	}
-	return execv(r.Path, argv, dir)
+	bin, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return launchZellij(dir, r, bin, editor)
 }
 
 func die(err error) {

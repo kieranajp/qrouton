@@ -5,14 +5,14 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 
 	"github.com/charmbracelet/huh"
 )
 
-// Panels (S001 #8): the multi-panel workspace is a generated multiplexer layout, not a bespoke TUI.
-// zellij preferred, tmux fallback, plain exec if neither. QROUTON_PLAIN=1 forces plain.
+// Panels are an opinionated Zellij workspace rather than a bespoke TUI.
 
 const statusScript = `#!/bin/sh
 # qrouton: live per-repo branch + status (generated; regenerated at every launch)
@@ -22,9 +22,10 @@ while :; do
   for g in src/*/.git */.git; do
     [ -e "$g" ] || continue
     r=${g%/.git}
-    printf '\033[1m%s\033[0m  (%s)\n' "$r" "$(git -C "$r" branch --show-current)"
-    git -C "$r" status -s | head -6
-    echo
+    branch=$(git -C "$r" branch --show-current)
+    dirty=$(git -C "$r" status --porcelain | wc -l | tr -d ' ')
+    [ "$dirty" -eq 0 ] && state=clean || state="${dirty} changed"
+    printf '\033[1m%s\033[0m  %s · %s\n' "$r" "$branch" "$state"
   done
   sleep 3
 done
@@ -32,7 +33,7 @@ done
 
 const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
-// writeSupport writes .qrouton/{status.sh,layout.kdl} into the session dir at launch time,
+// writeSupport writes .qrouton/{status.sh,layout.kdl,zellij-config.kdl} at launch time,
 // so old sessions pick up template changes on resume.
 func writeSupport(dir, slug string, argv []string) (string, error) {
 	cd := filepath.Join(dir, ".qrouton")
@@ -40,6 +41,13 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(cd, "status.sh"), []byte(statusScript), 0o755); err != nil {
+		return "", err
+	}
+	config, err := assetsFS.ReadFile("assets/zellij-config.kdl")
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(cd, "zellij-config.kdl"), config, 0o644); err != nil {
 		return "", err
 	}
 
@@ -63,7 +71,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 			pane name="shell" command="sh" {
 				args "-lc" %q
 			}
-            pane name="repos" command="sh" {
+            pane size=6 name="repos" command="sh" {
                 args %q
             }
         }
@@ -80,18 +88,39 @@ attach_to_session true
 }
 
 func execv(bin string, argv []string, dir string) error {
+	return execvEnv(bin, argv, dir, os.Environ())
+}
+
+func execvEnv(bin string, argv []string, dir string, env []string) error {
 	if err := os.Chdir(dir); err != nil {
 		return err
 	}
-	return syscall.Exec(bin, argv, os.Environ())
+	return syscall.Exec(bin, argv, env)
 }
 
-func launchZellij(bin, dir string, argv []string) error {
+func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCommand) error {
+	bin, err := exec.LookPath("zellij")
+	if err != nil {
+		return fmt.Errorf("zellij 0.44 or newer is required; install Zellij and try again")
+	}
+	if err := requireZellij044(bin); err != nil {
+		return err
+	}
+	argv, env, err := runnerLaunch(runner, qroutonBin, dir)
+	if err != nil {
+		return err
+	}
+	env = withEnv(env, "QROUTON_EDITOR_JSON", editor.marshal())
 	slug := filepath.Base(dir)
+	lp, err := writeSupport(dir, slug, argv)
+	if err != nil {
+		return err
+	}
 	// macOS $TMPDIR is long enough that zellij's socket path ($TMPDIR/zellij-<uid>/…/<session>)
 	// exceeds the 104-byte unix-socket cap for real session names. Pin it somewhere short.
 	if os.Getenv("ZELLIJ_SOCKET_DIR") == "" {
-		os.Setenv("ZELLIJ_SOCKET_DIR", "/tmp/zellij")
+		env = withEnv(env, "ZELLIJ_SOCKET_DIR", "/tmp/zellij")
+		os.Setenv("ZELLIJ_SOCKET_DIR", "/tmp/zellij") // discovery commands below use this socket too
 	}
 	if out, err := exec.Command(bin, "list-sessions", "-n").Output(); err == nil {
 		for _, l := range strings.Split(string(out), "\n") {
@@ -102,7 +131,8 @@ func launchZellij(bin, dir string, argv []string) error {
 						return err
 					}
 					if attach {
-						return execv(bin, []string{"zellij", "attach", slug}, dir)
+						config := filepath.Join(dir, ".qrouton", "zellij-config.kdl")
+						return execvEnv(bin, []string{"zellij", "--config", config, "attach", slug}, dir, env)
 					}
 					if err := exec.Command(bin, "delete-session", "--force", slug).Run(); err != nil {
 						return err
@@ -116,41 +146,30 @@ func launchZellij(bin, dir string, argv []string) error {
 			}
 		}
 	}
-	lp, err := writeSupport(dir, slug, argv)
-	if err != nil {
-		return err
-	}
 	// 0.44: -s + -n conflict; the session is named via session_name in the layout itself
-	return execv(bin, []string{"zellij", "--new-session-with-layout", lp}, dir)
+	config := filepath.Join(dir, ".qrouton", "zellij-config.kdl")
+	return execvEnv(bin, []string{"zellij", "--config", config, "--new-session-with-layout", lp}, dir, env)
 }
 
-func launchTmux(bin, dir string, argv []string) error {
-	slug := filepath.Base(dir)
-	if exec.Command(bin, "has-session", "-t", "="+slug).Run() == nil {
-		attach, err := chooseExistingSession(filepath.Base(argv[0]))
-		if err != nil {
-			return err
-		}
-		if attach {
-			return execv(bin, []string{"tmux", "attach", "-t", "=" + slug}, dir)
-		}
-		if err := exec.Command(bin, "kill-session", "-t", "="+slug).Run(); err != nil {
-			return err
-		}
+func requireZellij044(bin string) error {
+	out, err := exec.Command(bin, "--version").Output()
+	if err != nil {
+		return fmt.Errorf("check zellij version: %w", err)
 	}
-	if _, err := writeSupport(dir, slug, argv); err != nil {
-		return err
+	parts := strings.Split(strings.TrimSpace(string(out)), " ")
+	if len(parts) != 2 {
+		return fmt.Errorf("unrecognized zellij version %q", strings.TrimSpace(string(out)))
 	}
-	// argv becomes a shell command string — quote each word or a spaced arg (the initial prompt) splits
-	quoted := make([]string, len(argv))
-	for i, a := range argv {
-		quoted[i] = fmt.Sprintf("%q", a)
+	nums := strings.Split(parts[1], ".")
+	major, _ := strconv.Atoi(nums[0])
+	minor := 0
+	if len(nums) > 1 {
+		minor, _ = strconv.Atoi(nums[1])
 	}
-	return execv(bin, []string{"tmux",
-		"new-session", "-s", slug, "-c", dir, strings.Join(quoted, " "),
-		";", "split-window", "-h", "-l", "35%", "-c", dir, fmt.Sprintf("sh -lc %q", shellIntro),
-		";", "split-window", "-v", "-c", dir, fmt.Sprintf("sh %q", filepath.Join(dir, ".qrouton", "status.sh")),
-		";", "select-pane", "-L"}, dir)
+	if major == 0 && minor < 44 {
+		return fmt.Errorf("zellij 0.44 or newer is required (found %s)", parts[1])
+	}
+	return nil
 }
 
 func chooseExistingSession(runner string) (bool, error) {

@@ -13,7 +13,8 @@ import (
 type Config struct {
 	Orgs   []string   `json:"orgs"`   // GitHub orgs for the repo picker
 	Root   string     `json:"root"`   // sessions live flat under it; mirrors under <root>/.mirrors
-	Launch [][]string `json:"launch"` // runner commands; default [["claude"]]; asked if >1
+	Launch [][]string `json:"launch"` // optional exact overrides for supported runner commands
+	Editor []string   `json:"editor,omitempty"`
 }
 
 // xdgDir: $XDG_x_HOME/qrouton, falling back to ~/.config|~/.cache per the spec (not os.UserConfigDir —
@@ -56,8 +57,10 @@ func loadConfig() (*Config, error) {
 	if len(cfg.Orgs) == 0 {
 		return nil, fmt.Errorf("%s: orgs must contain at least one GitHub organization", configPath())
 	}
-	if len(cfg.Launch) == 0 {
-		cfg.Launch = [][]string{{"claude"}}
+	// Older first-run wizards always wrote this value as the built-in default. Treat that exact
+	// shape as unset so existing installations receive current runner defaults.
+	if len(cfg.Launch) == 1 && len(cfg.Launch[0]) == 1 && cfg.Launch[0][0] == "claude" {
+		cfg.Launch = nil
 	}
 	cfg.Root = expandHome(cfg.Root)
 	return cfg, os.MkdirAll(cfg.Root, 0o755)
@@ -82,7 +85,7 @@ func wizard() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	cfg := &Config{Orgs: splitOrgs(orgs), Root: root, Launch: [][]string{{"claude"}}}
+	cfg := &Config{Orgs: splitOrgs(orgs), Root: root}
 	if err := os.MkdirAll(filepath.Dir(configPath()), 0o755); err != nil {
 		return nil, err
 	}

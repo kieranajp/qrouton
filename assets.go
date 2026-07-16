@@ -36,6 +36,9 @@ func stampAssets(dir string) error {
 			return err
 		}
 		rel := strings.TrimPrefix(p, "assets/")
+		if rel == "zellij-config.kdl" {
+			return nil // stamped by writeSupport without a Markdown ownership marker
+		}
 		var dst string
 		switch {
 		case rel == "CLAUDE.md":

@@ -23,6 +23,18 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); err != nil {
 		t.Fatal("status script missing:", err)
 	}
+	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`bind "Alt x"`, "mouse_mode true", "session_serialization false"} {
+		if !strings.Contains(string(config), want) {
+			t.Fatalf("Zellij config missing %q", want)
+		}
+	}
+	if !strings.Contains(string(b), `pane size=6 name="repos"`) {
+		t.Fatal("repo status pane is not fixed at six rows")
+	}
 }
 
 func TestStatusScriptFindsSrcWorktrees(t *testing.T) {

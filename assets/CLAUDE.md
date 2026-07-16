@@ -47,3 +47,4 @@ The manifest may carry a `ticketUrl`. **You** may read it and the ticket to info
 - Written under `thoughts/shared/{research,specs,plans}/`.
 - Sequence number = (max existing number for that type) + 1.
 - Names: research `R<n>-<YYYY-MM-DD>-<slug>.md`; its questions pair `R<n>-<YYYY-MM-DD>-<slug>-questions.md`; spec `S<n>-…`; plan `P<n>-…`. Use today's date and a short kebab-case slug of the topic.
+- The `open_file` tool opens a session file in the user's editor sidebar. Use it when showing a newly completed document would help; tell the user what you finished, then open it rather than only printing its path.
