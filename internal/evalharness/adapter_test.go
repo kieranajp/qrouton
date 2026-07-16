@@ -145,6 +145,9 @@ func TestCodexIgnoresUserConfig(t *testing.T) {
 	if !strings.Contains(joined, "--enable multi_agent") {
 		t.Fatalf("Codex multi-agent support is not enabled: %s", joined)
 	}
+	if !strings.Contains(joined, "--skip-git-repo-check") {
+		t.Fatalf("Codex cannot run in an isolated judge directory: %s", joined)
+	}
 }
 
 func TestAdapterHonorsContextTimeout(t *testing.T) {

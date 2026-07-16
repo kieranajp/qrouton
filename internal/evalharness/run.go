@@ -50,6 +50,13 @@ func Run(ctx context.Context, config Config) (Report, error) {
 			}
 		}
 	}
+	if !config.NoJudge {
+		if len(runners) != 2 {
+			report.Warnings = append(report.Warnings, "pairwise judging requires --runner all")
+		} else {
+			report.Pairwise = JudgePairs(ctx, config, scenarios, report.Cases, runners)
+		}
+	}
 	for _, result := range report.Cases {
 		if result.Model != "" {
 			report.Metadata.Models[result.Runner] = result.Model
@@ -111,6 +118,10 @@ func buildMetadata(ctx context.Context, config Config, adapters []Adapter) Metad
 	}
 
 	assetHash, _ := HashTree(config.AssetsDir)
+	judgeMode := "pairwise"
+	if config.NoJudge {
+		judgeMode = "none"
+	}
 	return Metadata{
 		CreatedAt:       time.Now().UTC(),
 		AssetHash:       assetHash,
@@ -124,6 +135,7 @@ func buildMetadata(ctx context.Context, config Config, adapters []Adapter) Metad
 			"samples":    config.Samples,
 			"assets_dir": config.AssetsDir,
 			"no_judge":   config.NoJudge,
+			"judge_mode": judgeMode,
 			"timeout":    config.Timeout.String(),
 		},
 	}
@@ -226,10 +238,6 @@ func runCase(
 	result.Diffs = collectDiffs(caseCtx, workspace, baselines)
 	result.Assertions = Grade(scenario, result, workspace, baselines)
 
-	if !config.NoJudge && result.InfrastructureError == "" {
-		judge := oppositeAdapter(adapter, config)
-		result.Judge = Judge(caseCtx, judge, scenario, result, workspace, filepath.Join(caseDir, "judge-mcp.jsonl"))
-	}
 	result.DurationMS = time.Since(started).Milliseconds()
 	if err := writeCaseFiles(caseDir, result); err != nil && result.InfrastructureError == "" {
 		result.InfrastructureError = fmt.Sprintf("write case files: %v", err)

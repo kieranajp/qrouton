@@ -73,6 +73,26 @@ type JudgeResult struct {
 	Error    string            `json:"error,omitempty"`
 }
 
+type PairwiseJudgment struct {
+	Judge    string `json:"judge"`
+	ARunner  string `json:"a_runner"`
+	BRunner  string `json:"b_runner"`
+	Choice   string `json:"choice,omitempty"`
+	Winner   string `json:"winner,omitempty"`
+	Evidence string `json:"evidence,omitempty"`
+	Raw      string `json:"raw,omitempty"`
+	Error    string `json:"error,omitempty"`
+}
+
+type PairwiseResult struct {
+	ID        string             `json:"id"`
+	Scenario  string             `json:"scenario"`
+	Sample    int                `json:"sample"`
+	Outcome   string             `json:"outcome"`
+	Agreement bool               `json:"agreement"`
+	Judgments []PairwiseJudgment `json:"judgments"`
+}
+
 type CaseResult struct {
 	ID                  string            `json:"id"`
 	ScenarioID          string            `json:"scenario_id"`
@@ -103,7 +123,8 @@ type Metadata struct {
 }
 
 type Report struct {
-	Metadata Metadata     `json:"metadata"`
-	Cases    []CaseResult `json:"cases"`
-	Warnings []string     `json:"warnings,omitempty"`
+	Metadata Metadata         `json:"metadata"`
+	Cases    []CaseResult     `json:"cases"`
+	Pairwise []PairwiseResult `json:"pairwise,omitempty"`
+	Warnings []string         `json:"warnings,omitempty"`
 }

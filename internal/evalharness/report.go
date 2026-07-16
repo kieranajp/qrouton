@@ -74,6 +74,27 @@ func renderMarkdown(report Report) string {
 			builder.WriteString("\n")
 		}
 	}
+
+	if len(report.Pairwise) > 0 {
+		builder.WriteString("\n## Pairwise judging\n\n")
+		wins := map[string]int{"claude": 0, "codex": 0, "tie": 0, "error": 0}
+		for _, pair := range report.Pairwise {
+			wins[pair.Outcome]++
+		}
+		fmt.Fprintf(&builder, "Claude wins: %d · Codex wins: %d · Ties/mixed: %d · Errors: %d\n\n", wins["claude"], wins["codex"], wins["tie"], wins["error"])
+		builder.WriteString("| Pair | Outcome | Agreement | Claude judge | Codex judge |\n")
+		builder.WriteString("| --- | --- | ---: | --- | --- |\n")
+		for _, pair := range report.Pairwise {
+			judgments := map[string]string{"claude": "—", "codex": "—"}
+			for _, judgment := range pair.Judgments {
+				judgments[judgment.Judge] = pairwiseJudgmentSummary(judgment)
+			}
+			fmt.Fprintf(&builder, "| `%s` | %s | %t | %s | %s |\n",
+				pair.ID, pair.Outcome, pair.Agreement,
+				escapeTable(judgments["claude"]), escapeTable(judgments["codex"]),
+			)
+		}
+	}
 	return builder.String()
 }
 
@@ -221,6 +242,13 @@ func judgeSummary(judge JudgeResult) string {
 		total += score
 	}
 	return fmt.Sprintf("%.1f/5", float64(total)/float64(len(judge.Scores)))
+}
+
+func pairwiseJudgmentSummary(judgment PairwiseJudgment) string {
+	if judgment.Error != "" {
+		return "error: " + judgment.Error
+	}
+	return fmt.Sprintf("%s→%s: %s", judgment.Choice, judgment.Winner, judgment.Evidence)
 }
 
 func assertionDelta(before, after CaseResult) string {

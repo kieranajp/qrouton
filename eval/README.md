@@ -3,8 +3,9 @@
 The evaluation harness runs qrouton's current prompt assets in isolated synthetic
 multi-repository sessions. It invokes installed Claude and Codex CLIs using their
 existing local authentication, records normalized observable traces, applies
-deterministic assertions, and optionally asks the other provider to judge each
-run.
+deterministic assertions, and by default runs blinded pairwise judging when both
+providers are selected. Claude and Codex each judge the pair with reversed A/B
+ordering; reports include consensus wins, ties, and judge disagreement.
 
 Run the complete suite:
 
@@ -24,6 +25,9 @@ go run ./cmd/qrouton-eval \
 Useful flags include `--samples`, `--assets-dir`, `--claude-model`,
 `--codex-model`, `--timeout`, and `--output`. Results default to a timestamped
 directory under `eval/results/`, which is ignored by Git.
+
+Pairwise judging requires `--runner all`. Use `--no-judge` for fast structural
+runs that apply only deterministic assertions.
 
 Compare two completed runs without invoking a model:
 

@@ -44,7 +44,7 @@ func run(args []string) error {
 	assetsDir := flags.String("assets-dir", filepath.Join(repoRoot, "internal", "launch", "assets"), "prompt assets directory")
 	claudeModel := flags.String("claude-model", "", "Claude model override")
 	codexModel := flags.String("codex-model", "", "Codex model override")
-	noJudge := flags.Bool("no-judge", false, "skip cross-provider judging")
+	noJudge := flags.Bool("no-judge", false, "skip blinded pairwise judging")
 	timeout := flags.Duration("timeout", 10*time.Minute, "timeout per scenario run")
 	output := flags.String("output", defaultOutput(repoRoot), "result directory")
 	if err := flags.Parse(args); err != nil {
