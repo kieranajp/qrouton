@@ -48,7 +48,11 @@ func Status(root, runner string) error {
 
 		lines := []string{"\033[1magents\033[0m"}
 		if err != nil {
-			lines = append(lines, "\033[2mCodex status unavailable\033[0m")
+			label := "Codex status unavailable"
+			if runner == "claude" {
+				label = "Claude status unavailable"
+			}
+			lines = append(lines, "\033[2m"+label+"\033[0m")
 		} else if len(statuses) == 0 {
 			lines = append(lines, "\033[2mNo subagents yet\033[0m")
 		} else {
