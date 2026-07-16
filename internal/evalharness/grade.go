@@ -90,6 +90,9 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 	case "repo_changed":
 		diff := result.Diffs[check.Repo]
 		return Assertion{Name: "repository changed: " + check.Repo, Passed: strings.TrimSpace(diff) != ""}
+	case "repo_unchanged":
+		diff := result.Diffs[check.Repo]
+		return Assertion{Name: "repository unchanged: " + check.Repo, Passed: strings.TrimSpace(diff) == "", Evidence: diff}
 	case "tests_pass":
 		return testsPass(workspace, check.Repo)
 	default:

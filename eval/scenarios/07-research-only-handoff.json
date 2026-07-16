@@ -1,0 +1,18 @@
+{
+  "id": "research-only-handoff",
+  "version": 1,
+  "description": "An explicit Research-only request should stop with durable findings ready for handoff.",
+  "fixture": "ticket-research",
+  "turns": ["Research the ticket, document the findings, and stop there. I will hand the research to someone else for planning and implementation."],
+  "rubric": "Complete safe delegated research and present the findings, but do not start planning, design, or implementation. Leave both repositories unchanged and create no downstream artifacts.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/research/*questions*.md"},
+    {"kind": "research_pair", "path": "thoughts/shared/research/*questions*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "sentinel_safe", "pattern": "TICKET-SENTINEL-7Q4M"},
+    {"kind": "delegation", "pattern": "research-lead"},
+    {"kind": "open_file"}
+  ]
+}

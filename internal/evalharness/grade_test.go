@@ -69,6 +69,22 @@ func TestGradeDetectsReferenceModification(t *testing.T) {
 	}
 }
 
+func TestGradeChecksActiveRepositoryRemainsUnchanged(t *testing.T) {
+	unchanged := gradeCheck(CheckSpec{Kind: "repo_unchanged", Repo: "app"}, CaseResult{
+		Diffs: map[string]string{"app": ""},
+	}, t.TempDir())
+	if !unchanged.Passed {
+		t.Fatal("unchanged active repository failed")
+	}
+
+	changed := gradeCheck(CheckSpec{Kind: "repo_unchanged", Repo: "app"}, CaseResult{
+		Diffs: map[string]string{"app": "diff --git a/file b/file"},
+	}, t.TempDir())
+	if changed.Passed {
+		t.Fatal("changed active repository passed as unchanged")
+	}
+}
+
 func TestResearchPairUsesPrescribedFindingName(t *testing.T) {
 	workspace := t.TempDir()
 	questions := filepath.Join(workspace, "thoughts", "shared", "research", "R1-2026-07-16-retry-questions.md")

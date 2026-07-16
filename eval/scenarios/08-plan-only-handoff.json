@@ -1,0 +1,18 @@
+{
+  "id": "plan-only-handoff",
+  "version": 1,
+  "description": "A user should be able to start at Plan from existing research and stop before implementation.",
+  "fixture": "plan-existing-research",
+  "turns": ["The retry research is already complete. Start at Plan, create the implementation plan, and stop before implementation so I can hand it off."],
+  "rubric": "Use the existing retry research without repeating Research, create and present the plan, and stop. Do not change product code or create a new research or design artifact.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/research/02-retry-research.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/research/R*.md"},
+    {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "delegation", "pattern": "planning-lead"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["QRSPI", "qrspi-plan", "document numbering"]}
+  ]
+}
