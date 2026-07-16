@@ -33,6 +33,16 @@ done
 
 const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
+const helpScript = `#!/bin/sh
+clear
+printf '\n  qrouton\n\n'
+printf '  Coordinate here; delegate work to subagents.\n\n'
+printf '  Move   Alt + arrow keys\n'
+printf '  Quit   Ctrl-g, then Ctrl-q\n\n'
+printf '  Press Enter to begin\n'
+IFS= read -r _
+`
+
 // writeSupport writes .qrouton/{status.sh,layout.kdl,zellij-config.kdl} at launch time,
 // so old sessions pick up template changes on resume.
 func writeSupport(dir, slug string, argv []string) (string, error) {
@@ -41,6 +51,9 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 		return "", err
 	}
 	if err := os.WriteFile(filepath.Join(cd, "status.sh"), []byte(statusScript), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(helpScript), 0o755); err != nil {
 		return "", err
 	}
 	config, err := assetsFS.ReadFile("assets/zellij-config.kdl")
@@ -79,10 +92,15 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
     pane size=2 borderless=true {
         plugin location="zellij:status-bar"
     }
+    floating_panes {
+        pane x="27%%" y="25%%" width="46%%" height="35%%" name="qrouton · quick start" command="sh" close_on_exit=true {
+            args %q
+        }
+    }
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), slug)
+`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), filepath.Join(cd, "help.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
 }

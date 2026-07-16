@@ -23,6 +23,15 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); err != nil {
 		t.Fatal("status script missing:", err)
 	}
+	help, err := os.ReadFile(filepath.Join(dir, ".qrouton", "help.sh"))
+	if err != nil {
+		t.Fatal("help script missing:", err)
+	}
+	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press Enter to begin"} {
+		if !strings.Contains(string(help), want) {
+			t.Fatalf("help panel missing %q", want)
+		}
+	}
 	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
 	if err != nil {
 		t.Fatal(err)
@@ -34,6 +43,9 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	}
 	if !strings.Contains(string(b), `pane size=6 name="repos"`) {
 		t.Fatal("repo status pane is not fixed at six rows")
+	}
+	if !strings.Contains(string(b), `floating_panes`) || !strings.Contains(string(b), `name="qrouton · quick start"`) || !strings.Contains(string(b), `close_on_exit=true`) {
+		t.Fatal("quick-start help is not a disposable floating pane")
 	}
 }
 
