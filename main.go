@@ -115,6 +115,9 @@ func resumeSession(cfg *Config, sessions []Manifest) (string, error) {
 
 // launch execs the configured runner (default claude) with cwd = session dir. No return on success.
 func launch(cfg *Config, dir string) error {
+	if err := stampAssets(dir); err != nil {
+		return err
+	}
 	argv := cfg.Launch[0]
 	if len(cfg.Launch) > 1 {
 		labels := make([]huh.Option[int], len(cfg.Launch))
