@@ -1,17 +1,17 @@
+// Package tui is the fullscreen Bubble Tea onboarding flow: pick or create a
+// session, choose a runner, watch assembly, then hand a LaunchRequest back to
+// main. The model and screen dispatch live here; the form, background refresh,
+// assembly, and rendering live in their own files.
 package tui
 
 import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
-	"path/filepath"
 	"sort"
-	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -43,40 +43,6 @@ type LaunchRequest struct {
 	Resume bool
 }
 
-type refreshReadyMsg struct {
-	gen   int
-	token string
-	err   error
-}
-
-type refreshEventMsg struct {
-	gen   int
-	event github.RefreshMsg
-}
-
-type assembledMsg struct {
-	dir string
-	err error
-}
-
-type assemblyEvent struct {
-	progress *session.Progress
-	done     *assembledMsg
-}
-type assemblyEventMsg struct{ event assemblyEvent }
-type failedRetryMsg struct {
-	gen     int
-	repos   []github.Repo
-	results map[string]error
-}
-
-type formState struct {
-	name, search, description, ticket string
-	owner, prefix                     int
-	focus, cursor                     int
-	roles                             map[string]repoRole
-}
-
 type appModel struct {
 	cfg             *config.Config
 	sessions        []session.Manifest
@@ -102,30 +68,6 @@ type appModel struct {
 	assemblySteps   []session.Progress
 	assemblyFailed  bool
 }
-
-var (
-	accent = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	good   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	bad    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	card   = lipgloss.NewStyle().Padding(0, 1).BorderLeft(true).BorderStyle(lipgloss.ThickBorder()).BorderForeground(lipgloss.Color("238"))
-	picked = card.Copy().BorderForeground(lipgloss.Color("39")).Background(lipgloss.Color("236"))
-)
-
-const fullLogo = `              __________
-             /  ·  *   /|
-            / *   ·   / |
-           /_________/  |
-           |  ·   *  |  |
-           | *     · |  /
-           |  ·   *  | /
-           |_________|/
-
-              qrouton`
-
-const compactLogo = `  ____
- /· *_/|
-|_* ·|/  qrouton`
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
 	m := newAppModel(cfg, sessions, requestedRunner)
@@ -157,71 +99,6 @@ func newAppModel(cfg *config.Config, sessions []session.Manifest, requested stri
 }
 
 func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }
-
-func refreshTokenCmd(gen int) tea.Cmd {
-	return func() tea.Msg {
-		token, err := github.Token()
-		return refreshReadyMsg{gen: gen, token: token, err: err}
-	}
-}
-
-func awaitRefresh(gen int, ch <-chan github.RefreshMsg) tea.Cmd {
-	return func() tea.Msg {
-		msg, ok := <-ch
-		if !ok {
-			return refreshEventMsg{gen: gen, event: github.RefreshMsg{State: github.RefreshComplete}}
-		}
-		return refreshEventMsg{gen: gen, event: msg}
-	}
-}
-
-func (m *appModel) beginRefresh() tea.Cmd {
-	if m.refreshCancel != nil {
-		m.refreshCancel()
-	}
-	m.refreshGen++
-	m.refreshing = true
-	return refreshTokenCmd(m.refreshGen)
-}
-
-func (m *appModel) retryFailed() tea.Cmd {
-	if m.refreshCancel != nil {
-		m.refreshCancel()
-	}
-	m.refreshGen++
-	gen := m.refreshGen
-	ctx, cancel := context.WithCancel(context.Background())
-	m.refreshCancel = cancel
-	m.refreshing = true
-	var owners []string
-	for _, owner := range m.cfg.Orgs {
-		if m.ownerErrors[owner] != nil {
-			owners = append(owners, owner)
-			m.ownerStatus[owner] = "fetching…"
-		}
-	}
-	cached := append([]github.Repo(nil), m.repos...)
-	return func() tea.Msg {
-		token, err := github.Token()
-		results := make(map[string]error)
-		if err != nil {
-			for _, o := range owners {
-				results[o] = err
-			}
-			return failedRetryMsg{gen: gen, repos: cached, results: results}
-		}
-		merged := cached
-		for _, o := range owners {
-			repos, e := github.RefreshOwnerRepos(ctx, http.DefaultClient, token, o)
-			results[o] = e
-			if e == nil {
-				merged = github.ReplaceOwnerRepos(merged, o, repos)
-			}
-		}
-		github.SortReposByActivity(merged)
-		return failedRetryMsg{gen: gen, repos: merged, results: results}
-	}
-}
 
 func availableRunners(cfg *config.Config) []launch.Runner {
 	var out []launch.Runner
@@ -419,180 +296,6 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	f := &m.form
-	switch k.String() {
-	case "esc":
-		m.screen = landingScreen
-		return m, nil
-	case "up":
-		if f.focus == 4 && f.cursor > 0 {
-			f.cursor--
-		} else if f.focus > 0 {
-			f.focus--
-		}
-		return m, nil
-	case "down":
-		if f.focus == 4 && f.cursor+1 < len(m.filteredRepos()) {
-			f.cursor++
-		} else if f.focus < 6 {
-			f.focus++
-		}
-		return m, nil
-	case "shift+tab":
-		if f.focus > 0 {
-			f.focus--
-		} else {
-			f.focus = 6
-		}
-		return m, nil
-	case "tab":
-		f.focus = (f.focus + 1) % 7
-		return m, nil
-	case " ":
-		if f.focus == 4 {
-			m.cycleRepoRole()
-			return m, nil
-		}
-		m.editField(false, " ")
-		return m, nil
-	case "left":
-		if f.focus == 2 {
-			f.owner = (f.owner + len(m.cfg.Orgs)) % (len(m.cfg.Orgs) + 1)
-			m.clampRepoCursor()
-		}
-		if f.focus == 5 {
-			f.prefix = (f.prefix + 5) % 6
-		}
-		return m, nil
-	case "right":
-		if f.focus == 2 {
-			f.owner = (f.owner + 1) % (len(m.cfg.Orgs) + 1)
-			m.clampRepoCursor()
-		}
-		if f.focus == 5 {
-			f.prefix = (f.prefix + 1) % 6
-		}
-		return m, nil
-	case "enter":
-		if f.focus < 6 {
-			f.focus++
-			return m, nil
-		}
-		if err := m.validateForm(); err != nil {
-			m.err, m.back, m.screen = err, newScreen, errorScreen
-			return m, nil
-		}
-		if m.requestedRunner != "" {
-			m.screen = assemblyScreen
-			return m, m.startAssembly()
-		}
-		if len(m.runners) == 0 {
-			m.err, m.back, m.screen = fmt.Errorf("no supported coding agent is installed"), newScreen, errorScreen
-			return m, nil
-		}
-		m.screen = runnerScreen
-		return m, nil
-	case "backspace":
-		m.editField(true, "")
-		return m, nil
-	}
-	if k.Type == tea.KeyRunes {
-		m.editField(false, string(k.Runes))
-		m.clampRepoCursor()
-	}
-	return m, nil
-}
-
-func (m *appModel) editField(backspace bool, text string) {
-	var p *string
-	switch m.form.focus {
-	case 0:
-		p = &m.form.name
-	case 1:
-		p = &m.form.description
-	case 3:
-		p = &m.form.search
-	case 6:
-		p = &m.form.ticket
-	}
-	if p == nil {
-		return
-	}
-	if backspace {
-		r := []rune(*p)
-		if len(r) > 0 {
-			*p = string(r[:len(r)-1])
-		}
-	} else {
-		*p += text
-	}
-}
-
-func (m *appModel) clampRepoCursor() {
-	n := len(m.filteredRepos())
-	if n == 0 {
-		m.form.cursor = 0
-	} else if m.form.cursor >= n {
-		m.form.cursor = n - 1
-	}
-}
-
-func (m appModel) filteredRepos() []github.Repo {
-	var out []github.Repo
-	q := strings.ToLower(m.form.search)
-	for _, r := range m.repos {
-		if m.form.owner > 0 && r.Org != m.cfg.Orgs[m.form.owner-1] {
-			continue
-		}
-		if q != "" && !strings.Contains(strings.ToLower(r.ID()), q) {
-			continue
-		}
-		out = append(out, r)
-	}
-	return out
-}
-
-func (m *appModel) cycleRepoRole() {
-	rs := m.filteredRepos()
-	if len(rs) == 0 {
-		return
-	}
-	id := rs[m.form.cursor].ID()
-	switch m.form.roles[id] {
-	case excluded:
-		m.form.roles[id] = active
-	case active:
-		m.form.roles[id] = reference
-	case reference:
-		delete(m.form.roles, id)
-	}
-}
-
-func (m appModel) validateForm() error {
-	slug := session.Slugify(m.form.name)
-	if slug == "" {
-		return fmt.Errorf("session name is required")
-	}
-	// An abandoned half-assembly (interrupted run) doesn't block the name;
-	// session.Create reclaims it.
-	if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
-		if _, err := os.Stat(dir); err == nil {
-			return fmt.Errorf("session %q already exists", slug)
-		}
-	}
-	available := make(map[string]bool, len(m.repos))
-	for _, r := range m.repos {
-		available[r.ID()] = true
-	}
-	for id, role := range m.form.roles {
-		if role == active && available[id] {
-			return nil
-		}
-	}
-	return fmt.Errorf("include at least one active repository")
-}
-
 func (m appModel) updateRunner(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "esc":
@@ -617,58 +320,6 @@ func (m appModel) updateRunner(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m appModel) selectedRunner() (launch.Runner, error) {
-	if m.requestedRunner != "" {
-		for _, r := range launch.Runners(m.cfg) {
-			if (r.ID == m.requestedRunner || r.Command[0] == m.requestedRunner) && r.Path != "" {
-				return r, nil
-			}
-		}
-		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
-	}
-	if len(m.runners) == 0 || m.runnerCursor >= len(m.runners) {
-		return launch.Runner{}, fmt.Errorf("no runner selected")
-	}
-	return m.runners[m.runnerCursor], nil
-}
-
-func (m *appModel) startAssembly() tea.Cmd {
-	m.assemblySteps = nil
-	ch := make(chan assemblyEvent, 128)
-	m.assembly = ch
-	go func() {
-		defer close(ch)
-		if m.resume != nil {
-			s := *m.resume
-			err := session.EnsureWorktrees(m.cfg, s)
-			ch <- assemblyEvent{done: &assembledMsg{dir: filepath.Join(m.cfg.Root, s.Slug), err: err}}
-			return
-		}
-		var selected []session.RepoSelection
-		for _, r := range m.repos {
-			role := m.form.roles[r.ID()]
-			if role == active {
-				selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleActive})
-			} else if role == reference {
-				selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleReference})
-			}
-		}
-		dir, err := session.Create(m.cfg, m.form.name, m.form.description, m.form.ticket, branchPrefixes[m.form.prefix], selected, func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
-		ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
-	}()
-	return awaitAssembly(ch)
-}
-
-func awaitAssembly(ch <-chan assemblyEvent) tea.Cmd {
-	return func() tea.Msg {
-		event, ok := <-ch
-		if !ok {
-			return assemblyEventMsg{}
-		}
-		return assemblyEventMsg{event: event}
-	}
-}
-
 func (m appModel) updateError(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "esc", "b":
@@ -691,246 +342,17 @@ func (m appModel) updateError(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-var branchPrefixes = []string{"feat", "fix", "chore", "refactor", "docs", "test"}
-
-func (m appModel) View() string {
-	var body string
-	switch m.screen {
-	case landingScreen:
-		body = m.viewLanding()
-	case loadingScreen:
-		body = "Loading repositories…\n\nFetching configured GitHub owners in the background.\n\nesc back"
-	case newScreen:
-		body = m.viewForm()
-	case runnerScreen:
-		body = m.viewRunners()
-	case assemblyScreen:
-		body = m.viewAssembly()
-	case errorScreen:
-		retry := "retry GitHub"
-		if m.assemblyFailed {
-			retry = "retry assembly"
-		}
-		body = bad.Render("Something needs attention") + "\n\n" + m.err.Error() + "\n\n[b] back  [r] " + retry + "  [q] quit"
-	}
-	w := m.width - 6
-	if w < 50 {
-		w = 50
-	}
-	if w > 100 {
-		w = 100
-	}
-	header := accent.Render("qrouton")
-	if m.screen == landingScreen {
-		logo := compactLogo
-		if m.height >= 30 {
-			logo = fullLogo
-		}
-		header = lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(accent.Render(logo))
-	}
-	return lipgloss.NewStyle().Width(w).Padding(1, 2).Render(header + "\n\n" + body)
-}
-
-func (m appModel) viewLanding() string {
-	status := "GitHub: "
-	if m.refreshing {
-		status += "refreshing…"
-	} else if m.err != nil {
-		status += "cached · refresh failed"
-	} else {
-		status += "connected"
-	}
-	status += fmt.Sprintf(" · %d repositories · %d owners", len(m.repos), len(m.cfg.Orgs))
-	if !m.cacheAt.IsZero() {
-		status += " · updated " + relativeTime(m.cacheAt)
-	}
-	lines := []string{dim.Render(status), ""}
-	if m.refreshing || len(m.ownerErrors) > 0 {
-		var statuses []string
-		for _, org := range m.cfg.Orgs {
-			if s := m.ownerStatus[org]; s != "" {
-				entry := org + " " + s
-				if err := m.ownerErrors[org]; err != nil {
-					entry += " (" + err.Error() + ")"
-				}
-				statuses = append(statuses, entry)
+func (m appModel) selectedRunner() (launch.Runner, error) {
+	if m.requestedRunner != "" {
+		for _, r := range launch.Runners(m.cfg) {
+			if (r.ID == m.requestedRunner || r.Command[0] == m.requestedRunner) && r.Path != "" {
+				return r, nil
 			}
 		}
-		if len(statuses) > 0 {
-			lines = append(lines, dim.Render(strings.Join(statuses, " · ")), "")
-		}
+		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
 	}
-	label := "  New session"
-	if m.landingCursor == 0 {
-		label = accent.Render("› New session")
+	if len(m.runners) == 0 || m.runnerCursor >= len(m.runners) {
+		return launch.Runner{}, fmt.Errorf("no runner selected")
 	}
-	lines = append(lines, label, "")
-	for i, s := range m.sessions {
-		repos := make([]string, 0, len(s.Repos))
-		for _, r := range s.Repos {
-			repos = append(repos, r.Org+"/"+r.Name)
-		}
-		title := fmt.Sprintf("%-42s %s", s.Slug, relativeTime(s.CreatedAt))
-		content := title + "\n" + emptyFallback(s.Description, "No description") + "\n" + strings.Join(repos, " · ")
-		st := card
-		if m.landingCursor == i+1 {
-			st = picked
-		}
-		lines = append(lines, st.Render(content), "")
-	}
-	lines = append(lines, dim.Render("↑↓ navigate   enter select   r refresh   q quit"))
-	return strings.Join(lines, "\n")
-}
-
-func (m appModel) viewForm() string {
-	f := m.form
-	slug := session.Slugify(f.name)
-	owner := "All organizations"
-	if f.owner > 0 {
-		owner = m.cfg.Orgs[f.owner-1]
-	}
-	included, activeN := 0, 0
-	for _, r := range f.roles {
-		if r != excluded {
-			included++
-		}
-		if r == active {
-			activeN++
-		}
-	}
-	rows := []string{fieldLine(f.focus == 0, "Name", f.name), fieldLine(f.focus == 1, "Description", f.description), "  Session slug   " + dim.Render(emptyFallback(slug, "—")), fieldLine(f.focus == 2, "Organization", owner), fieldLine(f.focus == 3, "Search", f.search), fmt.Sprintf("\n  Repositories   %d included · %d active", included, activeN)}
-	rs := m.filteredRepos()
-	start := 0
-	if f.cursor > 6 {
-		start = f.cursor - 6
-	}
-	end := min(len(rs), start+8)
-	for i := start; i < end; i++ {
-		r := rs[i]
-		role := f.roles[r.ID()]
-		marker, label := "○", "excluded"
-		detail := ""
-		if role == active {
-			marker, label, detail = "●", "active", " → "+branchPrefixes[f.prefix]+"/"+slug
-		}
-		if role == reference {
-			marker, label, detail = "◐", "reference", " → "+r.DefaultBranch+" · reference"
-		}
-		line := fmt.Sprintf("%s %-10s %-36s pushed %s%s", marker, label, r.ID(), relativeTime(r.PushedAt), detail)
-		if f.focus == 4 && i == f.cursor {
-			line = accent.Render("› " + line)
-		} else {
-			line = "  " + line
-		}
-		rows = append(rows, line)
-	}
-	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), fieldLine(f.focus == 6, "Ticket URL", f.ticket), "", dim.Render("↑↓ fields/repos   space cycle role   tab next field   ←→ choice   enter continue   esc back"))
-	return strings.Join(rows, "\n")
-}
-
-func (m appModel) viewRunners() string {
-	lines := []string{"Choose a coding agent", ""}
-	for i, r := range m.runners {
-		p := "  "
-		if i == m.runnerCursor {
-			p = "› "
-			lines = append(lines, accent.Render(p+r.Label))
-			continue
-		}
-		lines = append(lines, p+r.Label)
-	}
-	lines = append(lines, "", dim.Render("↑↓ navigate   enter create   esc back"))
-	return strings.Join(lines, "\n")
-}
-func (m appModel) viewAssembly() string {
-	name := session.Slugify(m.form.name)
-	if m.resume != nil {
-		name = m.resume.Slug
-	}
-	lines := []string{"Creating " + accent.Render(name), "", good.Render("✓ Session configuration")}
-	if m.resume != nil && len(m.assemblySteps) == 0 {
-		lines = append(lines, "◌ Restore missing worktrees")
-	}
-	latest := make(map[string]session.Progress)
-	var order []string
-	for _, p := range m.assemblySteps {
-		key := string(p.Step)
-		if p.Repo != nil {
-			key += "/" + p.Repo.ID()
-		}
-		if _, ok := latest[key]; !ok {
-			order = append(order, key)
-		}
-		latest[key] = p
-	}
-	for _, key := range order {
-		p := latest[key]
-		symbol := "◌"
-		if p.Status == session.ProgressCompleted {
-			symbol = "✓"
-		} else if p.Status == session.ProgressFailed {
-			symbol = "✗"
-		}
-		label := string(p.Step)
-		if p.Repo != nil {
-			label = p.Repo.ID() + " " + label
-		}
-		line := symbol + " " + label
-		if p.Err != nil {
-			line += " — " + p.Err.Error()
-		}
-		if p.Status == session.ProgressCompleted {
-			line = good.Render(line)
-		} else if p.Status == session.ProgressFailed {
-			line = bad.Render(line)
-		}
-		lines = append(lines, line)
-	}
-	lines = append(lines, "", dim.Render("Mirrors and worktrees are being assembled…"))
-	return strings.Join(lines, "\n")
-}
-
-func fieldLine(focused bool, label, value string) string {
-	p := "  "
-	if focused {
-		p = "› "
-	}
-	value = emptyFallback(value, "—")
-	line := fmt.Sprintf("%s%-15s %s", p, label, value)
-	if focused {
-		return accent.Render(line)
-	}
-	return line
-}
-func emptyFallback(s, f string) string {
-	if strings.TrimSpace(s) == "" {
-		return f
-	}
-	return s
-}
-func relativeTime(t time.Time) string {
-	if t.IsZero() {
-		return "unknown"
-	}
-	d := time.Since(t)
-	if d < 0 {
-		return "just now"
-	}
-	if d < time.Minute {
-		return "just now"
-	}
-	if d < time.Hour {
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	}
-	if d < 24*time.Hour {
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	}
-	days := int(d.Hours() / 24)
-	if days == 1 {
-		return "yesterday"
-	}
-	if days < 30 {
-		return fmt.Sprintf("%d days ago", days)
-	}
-	return t.Format("2006-01-02")
+	return m.runners[m.runnerCursor], nil
 }
