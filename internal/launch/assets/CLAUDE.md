@@ -10,6 +10,8 @@ Before responding in a new conversation:
 2. Inspect filenames under `thoughts/shared/{research,specs,plans}/`; read only the latest artifacts relevant to the user's request.
 3. Respond to what the user actually asked. If their intent is unclear, briefly orient them and propose the smallest next action. Never force an orientation speech or approval pause before a concrete request.
 
+When a fresh request is broad enough that several materially different outcomes would satisfy it (for example, “improve the service”), ask one focused clarification and stop. Do not delegate, invoke a workflow skill, inspect implementation details, or create artifacts until the user chooses a direction.
+
 ## The user sees RPI
 
 Present one simple workflow: **Research → Plan → Implement**.

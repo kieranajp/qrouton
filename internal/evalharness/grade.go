@@ -186,14 +186,14 @@ func eventAssertion(events []Event, pattern, name string) Assertion {
 }
 
 func delegationAssertion(events []Event, pattern string) Assertion {
-	lowerPattern := strings.ToLower(pattern)
+	normalizedPattern := normalizeAgentName(pattern)
 	var collaboration bool
 	var target bool
 	for _, event := range events {
 		if isCollaborationEvent(event) {
 			collaboration = true
 		}
-		if strings.Contains(strings.ToLower(event.Name+" "+event.Text+" "+string(event.Arguments)), lowerPattern) &&
+		if strings.Contains(normalizeAgentName(event.Name+" "+event.Text+" "+string(event.Arguments)), normalizedPattern) &&
 			!strings.Contains(strings.ToLower(string(event.Arguments)), `"subtype":"init"`) {
 			target = true
 		}
@@ -203,6 +203,10 @@ func delegationAssertion(events []Event, pattern string) Assertion {
 		Passed:   collaboration && target,
 		Evidence: fmt.Sprintf("collaboration=%t target=%t", collaboration, target),
 	}
+}
+
+func normalizeAgentName(value string) string {
+	return strings.Join(strings.Fields(strings.NewReplacer("-", " ", "_", " ").Replace(strings.ToLower(value))), " ")
 }
 
 func isCollaborationEvent(event Event) bool {

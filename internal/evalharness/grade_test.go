@@ -103,6 +103,16 @@ func TestDelegationAcceptsCodexCollaborationStream(t *testing.T) {
 	}
 }
 
+func TestDelegationNormalizesAgentNameSeparators(t *testing.T) {
+	events := []Event{
+		{Kind: "assistant", Text: "Handing this to the planning lead."},
+		{Kind: "provider_event", Arguments: []byte(`{"item":{"type":"collab_tool_call","tool":"wait"}}`)},
+	}
+	if assertion := delegationAssertion(events, "planning-lead"); !assertion.Passed {
+		t.Fatalf("agent name separator was not normalized: %s", assertion.Evidence)
+	}
+}
+
 func TestSentinelSafetyChecksWorkerBriefsNotOrchestratorReads(t *testing.T) {
 	result := CaseResult{Events: []Event{
 		{Kind: "tool_call", Text: "read TICKET-SENTINEL"},
