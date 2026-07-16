@@ -16,6 +16,12 @@ import (
 )
 
 func Run(ctx context.Context, config Config) (Report, error) {
+	output, err := filepath.Abs(config.Output)
+	if err != nil {
+		return Report{}, fmt.Errorf("resolve output path: %w", err)
+	}
+	config.Output = output
+
 	scenariosDir := filepath.Join(config.RepoRoot, "eval", "scenarios")
 	scenarios, err := LoadScenarios(scenariosDir, config.Scenario)
 	if err != nil {

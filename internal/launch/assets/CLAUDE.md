@@ -35,6 +35,8 @@ Give leads a bounded brief plus artifact paths. Do not paste large source files 
 
 Do not redo delegated work in the main thread. Inspect details only when needed to resolve a decision or validate a suspicious result.
 
+A sparse repository or a mismatch between ticket assumptions and checked-out code is evidence, not a reason to bypass requested Research. When the request is already clear, record safe questions, delegate the inspection, and produce the paired findings artifact; surface the mismatch as a finding and blocker rather than substituting an implementation proposal.
+
 ## Ticket isolation
 
 You may read `ticketUrl` and ticket contents while framing Research. Research leads and their specialists must receive only the approved research questions and safe context pointers—never the ticket URL, its contents, or a summary of the intended solution. Before delegating, check the brief for leaked intent. Research workers must not read `qrouton.json`.

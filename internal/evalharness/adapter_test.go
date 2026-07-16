@@ -138,8 +138,12 @@ func TestCodexIgnoresUserConfig(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(strings.Join(args, " "), "--ignore-user-config") {
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--ignore-user-config") {
 		t.Fatalf("Codex user configuration is not isolated: %s", strings.Join(args, " "))
+	}
+	if !strings.Contains(joined, "--enable multi_agent") {
+		t.Fatalf("Codex multi-agent support is not enabled: %s", joined)
 	}
 }
 

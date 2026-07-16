@@ -15,3 +15,4 @@ Delegate the investigation; keep its exploratory output out of the orchestrator 
 6. Accept a compact return containing the outcome, artifact path, major findings, and unresolved questions. Present the useful conclusions naturally, then offer to Plan.
 
 Before spawning, inspect the exact brief for ticket or intended-solution leakage.
+Sparse, contradictory, or unexpectedly minimal code is still a valid research finding. Complete the delegated investigation and artifacts so the evidence gap is durable; do not replace Research with an informal direct inspection or an implementation proposal.

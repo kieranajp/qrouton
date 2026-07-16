@@ -9,7 +9,7 @@
     {"kind": "repo_changed", "repo": "account-service"},
     {"kind": "tests_pass", "repo": "account-service"},
     {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add a unit test"},
-    {"kind": "delegation", "pattern": "test-verifier"},
+    {"kind": "delegation", "pattern": "implementation-lead"},
     {"kind": "response_excludes", "any": ["QRSPI", "agent depth"]}
   ]
 }

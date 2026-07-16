@@ -79,12 +79,14 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return artifactsExclude(result.Artifacts, check.Pattern)
 	case "artifact_contains":
 		return artifactContains(workspace, check.Path, check.Pattern)
+	case "research_pair":
+		return researchPair(workspace, check.Path)
 	case "sentinel_safe":
 		return sentinelSafe(result, check.Pattern)
 	case "open_file":
 		return eventAssertion(result.Events, "open_file", "completed document presented with open_file")
 	case "delegation":
-		return eventAssertion(result.Events, check.Pattern, "delegated to "+check.Pattern)
+		return delegationAssertion(result.Events, check.Pattern)
 	case "repo_changed":
 		diff := result.Diffs[check.Repo]
 		return Assertion{Name: "repository changed: " + check.Repo, Passed: strings.TrimSpace(diff) != ""}
@@ -110,7 +112,7 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 	artifactAssertion := artifactsExclude(result.Artifacts, sentinel)
 	var leakingEvents []string
 	for _, event := range result.Events {
-		if event.Kind == "user" {
+		if !isWorkerBriefEvent(event) {
 			continue
 		}
 		content := event.Text + " " + string(event.Arguments)
@@ -123,6 +125,22 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 		Passed:   artifactAssertion.Passed && len(leakingEvents) == 0,
 		Evidence: strings.Join(leakingEvents, ", "),
 	}
+}
+
+func researchPair(workspace, questionsPattern string) Assertion {
+	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(questionsPattern)))
+	var pairs []string
+	for _, questions := range matches {
+		findings := strings.Replace(strings.TrimSuffix(questions, ".md"), "-questions", "", 1) + ".md"
+		if fileExists(findings) {
+			pairs = append(pairs, questions+" + "+findings)
+		}
+	}
+	evidence := strings.Join(pairs, ", ")
+	if err != nil {
+		evidence = err.Error()
+	}
+	return Assertion{Name: "paired research questions and findings", Passed: err == nil && len(pairs) > 0, Evidence: evidence}
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {
@@ -165,6 +183,38 @@ func eventAssertion(events []Event, pattern, name string) Assertion {
 		}
 	}
 	return Assertion{Name: name, Passed: false}
+}
+
+func delegationAssertion(events []Event, pattern string) Assertion {
+	lowerPattern := strings.ToLower(pattern)
+	var collaboration bool
+	var target bool
+	for _, event := range events {
+		if isCollaborationEvent(event) {
+			collaboration = true
+		}
+		if strings.Contains(strings.ToLower(event.Name+" "+event.Text+" "+string(event.Arguments)), lowerPattern) &&
+			!strings.Contains(strings.ToLower(string(event.Arguments)), `"subtype":"init"`) {
+			target = true
+		}
+	}
+	return Assertion{
+		Name:     "delegated to " + pattern,
+		Passed:   collaboration && target,
+		Evidence: fmt.Sprintf("collaboration=%t target=%t", collaboration, target),
+	}
+}
+
+func isCollaborationEvent(event Event) bool {
+	return isWorkerBriefEvent(event) || strings.Contains(strings.ToLower(string(event.Arguments)), `"type":"collab_tool_call"`)
+}
+
+func isWorkerBriefEvent(event Event) bool {
+	arguments := strings.ToLower(string(event.Arguments))
+	return event.Kind == "delegation" ||
+		strings.Contains(arguments, `"subagent_type"`) ||
+		strings.Contains(arguments, `"task_name"`) ||
+		strings.Contains(arguments, "spawn_agent")
 }
 
 func testsPass(workspace, repo string) Assertion {
