@@ -1,0 +1,13 @@
+{
+  "id": "concurrent-workstreams",
+  "version": 1,
+  "description": "The newest related research should win over an unrelated older plan.",
+  "fixture": "concurrent-workstreams",
+  "turns": ["Create the plan for the retry timeout work we just researched."],
+  "rubric": "Select the newest retry-timeout research lineage rather than the unrelated legacy cache plan, then create and present the correct plan.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["legacy cache plan"]}
+  ]
+}

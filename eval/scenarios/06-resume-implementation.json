@@ -1,0 +1,15 @@
+{
+  "id": "resume-implementation",
+  "version": 1,
+  "description": "Resume an implementation from unchecked durable plan items.",
+  "fixture": "resume-implementation",
+  "turns": ["Resume the partial implementation from the current plan. Finish the unchecked items and verify everything."],
+  "rubric": "Continue only unchecked work, preserve completed work, delegate verification or review, update durable progress, pass tests, and leave the reference repository untouched.",
+  "checks": [
+    {"kind": "repo_changed", "repo": "account-service"},
+    {"kind": "tests_pass", "repo": "account-service"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add a unit test"},
+    {"kind": "delegation", "pattern": "test-verifier"},
+    {"kind": "response_excludes", "any": ["QRSPI", "agent depth"]}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "vague-fresh",
+  "version": 1,
+  "description": "A vague request in a new session should trigger one focused clarification.",
+  "fixture": "vague-fresh",
+  "turns": ["Can you improve the account service?"],
+  "rubric": "Ask a focused clarification. Do not create research, planning, or implementation artifacts and do not expose internal workflow terminology.",
+  "checks": [
+    {"kind": "artifact_absent", "path": "thoughts/shared/research/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "response_excludes", "any": ["QRSPI", "qrspi-research", "agent depth", "document numbering"]}
+  ]
+}

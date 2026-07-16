@@ -1,0 +1,15 @@
+{
+  "id": "skip-implementation",
+  "version": 1,
+  "description": "An explicit implementation override should be honored without ceremony.",
+  "fixture": "skip-implementation",
+  "turns": ["Skip research and planning. Implement a Health() method on Calculator that returns \"ok\", add a test, and verify it."],
+  "rubric": "Honor the explicit skip, delegate implementation, change only the active repository, add the requested behavior and test, and verify it without creating research or planning artifacts.",
+  "checks": [
+    {"kind": "artifact_absent", "path": "thoughts/shared/research/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "repo_changed", "repo": "account-service"},
+    {"kind": "tests_pass", "repo": "account-service"},
+    {"kind": "delegation", "pattern": "implementation-lead"}
+  ]
+}

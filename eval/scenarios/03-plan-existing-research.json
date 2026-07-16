@@ -1,0 +1,14 @@
+{
+  "id": "plan-existing-research",
+  "version": 1,
+  "description": "Planning should follow the relevant existing research lineage.",
+  "fixture": "plan-existing-research",
+  "turns": ["Turn the existing retry research into an implementation plan."],
+  "rubric": "Use the retry research lineage, delegate code inspection and drafting, create a planning document, keep mechanics invisible, and present it through open_file.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "delegation", "pattern": "planning-lead"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["QRSPI", "qrspi-plan", "document numbering"]}
+  ]
+}
