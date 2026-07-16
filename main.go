@@ -8,6 +8,7 @@ import (
 
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
+	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -23,7 +24,7 @@ func main() {
 			&cli.BoolFlag{Name: "refresh", Usage: "refresh the cached org repo list"},
 			&cli.StringFlag{Name: "runner", Usage: "coding agent to launch (claude, codex, or opencode)"},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {

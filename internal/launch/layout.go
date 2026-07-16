@@ -19,11 +19,6 @@ import (
 // and edit as real scripts; each is written into .qrouton at launch (or, for shellIntro
 // and codexDepthWarning, spliced into the generated layout).
 
-// statusScript renders the live per-repo branch/status pane.
-//
-//go:embed scripts/status.sh
-var statusScript string
-
 // shellIntro greets the shell pane with a shallow tree, then execs an interactive login shell.
 //
 //go:embed scripts/shell-intro.sh
@@ -45,16 +40,16 @@ var helpScript string
 //go:embed scripts/codex-warning.sh
 var codexDepthWarning string
 
-// writeSupport writes .qrouton/{status.sh,layout.kdl,zellij-config.kdl} at launch time,
-// so old sessions pick up template changes on resume.
+// writeSupport writes .qrouton/{help.sh,notify.sh,layout.kdl,zellij-config.kdl} at launch
+// time, so old sessions pick up template changes on resume.
 func writeSupport(dir, slug string, argv []string) (string, error) {
 	cd := filepath.Join(dir, ".qrouton")
 	if err := os.MkdirAll(cd, 0o755); err != nil {
 		return "", err
 	}
-	if err := os.WriteFile(filepath.Join(cd, "status.sh"), []byte(statusScript), 0o755); err != nil {
-		return "", err
-	}
+	// The repos pane used to be a generated status.sh; drop stale copies so
+	// resumed sessions don't keep an orphaned script around.
+	_ = os.Remove(filepath.Join(cd, "status.sh"))
 	if err := os.WriteFile(filepath.Join(cd, "notify.sh"), []byte(notifyScript), 0o755); err != nil {
 		return "", err
 	}
@@ -100,8 +95,8 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 				args "-lc" %q
 			}
 			pane split_direction="vertical" size=6 {
-				pane name="repos" command="sh" {
-					args %q
+				pane name="repos" command=%q {
+					args "repos" "--session-root" %q
 				}
 				pane name="agents" command=%q {
 					args "agents" "--session-root" %q "--runner" %q
@@ -120,7 +115,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, strings.TrimSpace(shellIntro), filepath.Join(cd, "status.sh"), qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
+`, argv[0], args, strings.TrimSpace(shellIntro), qroutonBin, dir, qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
 }

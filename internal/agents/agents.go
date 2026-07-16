@@ -67,17 +67,24 @@ func Status(root, runner string) error {
 			}
 		}
 
-		var frame strings.Builder
-		frame.WriteString("\033[H")
-		for _, line := range lines {
-			frame.WriteString(line)
-			frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
-		}
-		frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
-		fmt.Print(frame.String())
+		fmt.Print(Frame(lines))
 
 		time.Sleep(2 * time.Second)
 	}
+}
+
+// Frame renders lines as one in-place terminal frame: cursor home, erase to
+// end-of-line per row, erase-to-end-of-screen at the bottom. Redrawing this way
+// never flashes the pane blank; qrouton's watch panes share it.
+func Frame(lines []string) string {
+	var frame strings.Builder
+	frame.WriteString("\033[H")
+	for _, line := range lines {
+		frame.WriteString(line)
+		frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
+	}
+	frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
+	return frame.String()
 }
 
 type claudeAgentEvent struct {
