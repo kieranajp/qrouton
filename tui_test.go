@@ -170,6 +170,19 @@ func TestLandingCardIncludesDescriptionAndRepositories(t *testing.T) {
 	}
 }
 
+func TestLandingUsesResponsiveCroutonLogo(t *testing.T) {
+	m := testApp()
+	m.screen = landingScreen
+	m.width, m.height = 80, 40
+	if view := m.View(); !strings.Contains(view, "__________") || !strings.Contains(view, "|  ·   *  |") {
+		t.Fatalf("tall landing view missing full crouton cube:\n%s", view)
+	}
+	m.height = 24
+	if view := m.View(); !strings.Contains(view, "/· *_/|") || strings.Contains(view, "__________") {
+		t.Fatalf("short landing view should use compact cube:\n%s", view)
+	}
+}
+
 func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 	m := testApp()
 	m.repos = nil

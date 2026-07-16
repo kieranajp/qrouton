@@ -111,6 +111,21 @@ var (
 	picked = card.Copy().BorderForeground(lipgloss.Color("39")).Background(lipgloss.Color("236"))
 )
 
+const fullLogo = `              __________
+             /  ·  *   /|
+            / *   ·   / |
+           /_________/  |
+           |  ·   *  |  |
+           | *     · |  /
+           |  ·   *  | /
+           |_________|/
+
+              qrouton`
+
+const compactLogo = `  ____
+ /· *_/|
+|_* ·|/  qrouton`
+
 func runOnboarding(cfg *Config, sessions []Manifest, requestedRunner string, forceRefresh bool) (*launchRequest, error) {
 	m := newAppModel(cfg, sessions, requestedRunner)
 	if requestedRunner != "" {
@@ -725,7 +740,15 @@ func (m appModel) View() string {
 	if w > 100 {
 		w = 100
 	}
-	return lipgloss.NewStyle().Width(w).Padding(1, 2).Render(accent.Render("qrouton") + "\n\n" + body)
+	header := accent.Render("qrouton")
+	if m.screen == landingScreen {
+		logo := compactLogo
+		if m.height >= 30 {
+			logo = fullLogo
+		}
+		header = lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(accent.Render(logo))
+	}
+	return lipgloss.NewStyle().Width(w).Padding(1, 2).Render(header + "\n\n" + body)
 }
 
 func (m appModel) viewLanding() string {
