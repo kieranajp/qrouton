@@ -117,6 +117,32 @@ func TestCodexContinuationArguments(t *testing.T) {
 	}
 }
 
+func TestClaudePromptTerminatesVariadicMCPConfig(t *testing.T) {
+	adapter := Adapter{Name: "claude", Bin: "claude", SelfPath: "/tmp/qrouton-eval"}
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "do the work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := args[len(args)-2:]; got[0] != "--" || got[1] != "do the work" {
+		t.Fatalf("prompt arguments = %q, want option terminator followed by prompt", got)
+	}
+	joined := strings.Join(args, " ")
+	if !strings.Contains(joined, "--setting-sources project") || !strings.Contains(joined, "--strict-mcp-config") {
+		t.Fatalf("Claude user configuration is not isolated: %s", joined)
+	}
+}
+
+func TestCodexIgnoresUserConfig(t *testing.T) {
+	adapter := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval"}
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "do the work", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--ignore-user-config") {
+		t.Fatalf("Codex user configuration is not isolated: %s", strings.Join(args, " "))
+	}
+}
+
 func TestAdapterHonorsContextTimeout(t *testing.T) {
 	dir := t.TempDir()
 	script := filepath.Join(dir, "slow-claude")

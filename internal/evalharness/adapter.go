@@ -110,6 +110,8 @@ func (a Adapter) claudeArgs(workspace, mcpLog, prompt, session string) ([]string
 		"--output-format", "stream-json",
 		"--verbose",
 		"--dangerously-skip-permissions",
+		"--setting-sources", "project",
+		"--strict-mcp-config",
 		"--mcp-config", string(encodedConfig),
 	}
 	if a.Model != "" {
@@ -118,7 +120,10 @@ func (a Adapter) claudeArgs(workspace, mcpLog, prompt, session string) ([]string
 	if session != "" {
 		args = append(args, "--resume", session)
 	}
-	return append(args, prompt), nil
+	// --mcp-config accepts a variadic list, so terminate option parsing before
+	// appending the positional prompt. Otherwise Claude treats the prompt as an
+	// additional MCP config path.
+	return append(args, "--", prompt), nil
 }
 
 func (a Adapter) codexArgs(workspace, mcpLog, prompt, session string) ([]string, error) {
@@ -138,6 +143,7 @@ func (a Adapter) codexArgs(workspace, mcpLog, prompt, session string) ([]string,
 	args = append(args,
 		"--json",
 		"--ephemeral",
+		"--ignore-user-config",
 		"--dangerously-bypass-approvals-and-sandbox",
 		"-c", "mcp_servers.qrouton.command="+string(command),
 		"-c", "mcp_servers.qrouton.args="+string(mcpArgs),
