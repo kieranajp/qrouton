@@ -18,6 +18,21 @@ const manifestName = "qrouton.json"
 
 const manifestSchemaVersion = 2
 
+// assemblingMarker is written first during assembly and removed after the
+// manifest lands, so a directory it survives in was abandoned mid-assembly
+// (e.g. the process was killed) and is safe to reclaim.
+const assemblingMarker = ".qrouton-assembling"
+
+// Abandoned reports whether dir is a half-assembled session directory left
+// behind by an interrupted run: it carries the assembly marker but no manifest.
+func Abandoned(dir string) bool {
+	if _, err := os.Stat(filepath.Join(dir, manifestName)); err == nil {
+		return false
+	}
+	_, err := os.Stat(filepath.Join(dir, assemblingMarker))
+	return err == nil
+}
+
 type RepoRole string
 
 const (
@@ -73,6 +88,7 @@ type ManifestRepo struct {
 	DefaultBranch string   `json:"defaultBranch,omitempty"`
 	Revision      string   `json:"revision,omitempty"`
 	WorktreePath  string   `json:"worktreePath"`
+	SSHURL        string   `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
 func (r ManifestRepo) effectiveRole() RepoRole {
@@ -128,7 +144,17 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoS
 	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, 0o755); err != nil {
-		return "", err
+		// Reclaim only directories our own interrupted assembly left behind —
+		// never a user's directory that merely shares the slug.
+		if !os.IsExist(err) || !Abandoned(dir) {
+			return "", err
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			return "", err
+		}
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			return "", err
+		}
 	}
 	manifestComplete := false
 	defer func() {
@@ -136,6 +162,9 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoS
 			_ = os.RemoveAll(dir)
 		}
 	}()
+	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, 0o644); err != nil {
+		return "", err
+	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
 		TicketURL: ticket, CreatedAt: time.Now()}
@@ -159,14 +188,15 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoS
 		if nameCounts[r.Name] > 1 {
 			worktreePath = filepath.Join("src", Slugify(r.Org+"-"+r.Name))
 		}
+		url := sshURL(r.Org, r)
 		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
-		if err := ensureMirror(cfg.Root, r.Org, r.Name, sshURL(r.Org, r)); err != nil {
+		if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
 			emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 			return "", err
 		}
 		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &r, Role: role})
 		mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
-			DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath}
+			DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath, SSHURL: url}
 		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
 		if role == RepoRoleReference {
@@ -212,6 +242,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoS
 		return "", err
 	}
 	manifestComplete = true
+	_ = os.Remove(filepath.Join(dir, assemblingMarker))
 	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressCompleted})
 	return dir, nil
 }
@@ -226,8 +257,12 @@ func emitProgress(progress ProgressFunc, event Progress) {
 func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	for _, r := range m.Repos {
-		if err := ensureMirror(cfg.Root, r.Org, r.Name,
-			fmt.Sprintf("git@github.com:%s/%s.git", r.Org, r.Name)); err != nil {
+		url := r.SSHURL
+		if url == "" {
+			// Manifests written before the URL was recorded; assume github.com.
+			url = fmt.Sprintf("git@github.com:%s/%s.git", r.Org, r.Name)
+		}
+		if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
 			return err
 		}
 		wt := filepath.Join(dir, r.WorktreePath)

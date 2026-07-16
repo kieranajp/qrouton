@@ -594,8 +594,12 @@ func (m appModel) validateForm() error {
 	if slug == "" {
 		return fmt.Errorf("session name is required")
 	}
-	if _, err := os.Stat(filepath.Join(m.cfg.Root, slug)); err == nil {
-		return fmt.Errorf("session %q already exists", slug)
+	// An abandoned half-assembly (interrupted run) doesn't block the name;
+	// session.Create reclaims it.
+	if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
+		if _, err := os.Stat(dir); err == nil {
+			return fmt.Errorf("session %q already exists", slug)
+		}
 	}
 	available := make(map[string]bool, len(m.repos))
 	for _, r := range m.repos {

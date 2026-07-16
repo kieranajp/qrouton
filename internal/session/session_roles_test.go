@@ -122,6 +122,102 @@ func TestCreateFailureCleansNewSessionDirectoryAndAllowsRetry(t *testing.T) {
 	}
 }
 
+func TestCreateReclaimsAbandonedAssemblyDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, _ := makeOrigin(t, "reclaim")
+
+	// Simulate a run killed mid-assembly: marker written, manifest never reached.
+	dir := filepath.Join(root, "reclaim-me")
+	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := github.Repo{Name: "reclaim", Org: "org", SSHURL: origin, DefaultBranch: "main"}
+	created, err := createSessionWithRoles(&config.Config{Root: root}, "Reclaim me", "", "", "feat",
+		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}})
+	if err != nil {
+		t.Fatal("abandoned directory blocked its session name:", err)
+	}
+	if _, err := os.Stat(filepath.Join(created, manifestName)); err != nil {
+		t.Fatal("reclaimed session has no manifest:", err)
+	}
+	if _, err := os.Stat(filepath.Join(created, assemblingMarker)); !os.IsNotExist(err) {
+		t.Fatal("assembly marker survived a completed session")
+	}
+}
+
+func TestCreateRefusesToReclaimUnmarkedDirectory(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, _ := makeOrigin(t, "keep")
+
+	// A user directory that merely shares the slug must never be deleted.
+	dir := filepath.Join(root, "keep-me")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("mine"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := github.Repo{Name: "keep", Org: "org", SSHURL: origin, DefaultBranch: "main"}
+	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Keep me", "", "", "feat",
+		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}); err == nil {
+		t.Fatal("unmarked directory was silently taken over")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
+		t.Fatal("user file lost:", err)
+	}
+}
+
+func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, _ := makeOrigin(t, "custom")
+	cfg := &config.Config{Root: root}
+	dir, err := createSessionWithRoles(cfg, "Custom origin", "", "", "feat",
+		[]RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Repos[0].SSHURL != origin {
+		t.Fatalf("manifest sshUrl = %q, want %q", m.Repos[0].SSHURL, origin)
+	}
+
+	// Lose both the mirror and the worktree; resume must re-clone from the
+	// recorded URL, not a reconstructed github.com address.
+	if err := os.RemoveAll(mirrorPath(root, "org", "custom")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(filepath.Join(dir, "src", "custom")); err != nil {
+		t.Fatal(err)
+	}
+	if err := EnsureWorktrees(cfg, m); err != nil {
+		t.Fatal("resume with recorded URL failed:", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "src", "custom", "version")); err != nil {
+		t.Fatal("worktree not re-materialised:", err)
+	}
+}
+
 func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {
