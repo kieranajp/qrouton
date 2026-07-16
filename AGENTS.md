@@ -4,13 +4,17 @@ qrouton is a Go terminal app that assembles multi-repo workspaces from shared ba
 
 ## Architecture
 
-- `tui.go`: fullscreen Bubble Tea onboarding and async UI state.
-- `session.go`: manifest schema, active/reference roles, worktree lifecycle.
-- `github.go`: authenticated owner discovery, cache, concurrent refresh.
-- `runner.go`: Claude/Codex/OpenCode launch and resume arguments, MCP injection.
-- `layout.go`: generated Zellij layout, status pane, shell bootstrap.
-- `mcp.go`, `editor.go`: agent-driven file opening in the editor pane.
-- `assets/`, `assets.go`: canonical session instructions/skills and generated symlinks.
+Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, and `mcpserver` are leaves. Nothing imports `tui`.
+
+- `main.go`: urfave/cli app; root action runs the onboarding flow, subcommands come from `cmd/*`.
+- `cmd/mcp/`, `cmd/agents/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
+- `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
+- `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
+- `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
+- `internal/launch/`: runner launch/resume arguments, MCP injection, generated Zellij layout, editor resolution, and embedded session assets (`assets/`).
+- `internal/mcpserver/`, `internal/agents/`: agent-driven file opening in the editor pane; subagent status pane.
+- `internal/config/`: config file, XDG paths, first-run wizard.
+- `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 
 ## Invariants
 
@@ -35,4 +39,4 @@ GOCACHE=/tmp/qrouton-go-cache go build -o qrouton .
 git diff --check
 ```
 
-Do not discard unrelated worktree changes or edit generated session assets directly; change their source under `assets/`.
+Do not discard unrelated worktree changes or edit generated session assets directly; change their source under `internal/launch/assets/`.

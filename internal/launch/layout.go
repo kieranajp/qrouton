@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"bufio"
@@ -186,7 +186,7 @@ func execvEnv(bin string, argv []string, dir string, env []string) error {
 	return syscall.Exec(bin, argv, env)
 }
 
-func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCommand, resume bool) error {
+func Zellij(dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
 	bin, err := exec.LookPath("zellij")
 	if err != nil {
 		return fmt.Errorf("zellij 0.44 or newer is required; install Zellij and try again")
@@ -202,7 +202,7 @@ func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCom
 	if err != nil {
 		return err
 	}
-	env = withEnv(env, "QROUTON_EDITOR_JSON", editor.marshal())
+	env = withEnv(env, "QROUTON_EDITOR_JSON", editor.Marshal())
 	slug := filepath.Base(dir)
 	lp, err := writeSupport(dir, slug, argv)
 	if err != nil {

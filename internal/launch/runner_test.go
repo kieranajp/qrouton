@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"encoding/json"
@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/config"
 )
 
 func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
@@ -18,8 +20,8 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 		return "", fmt.Errorf("missing")
 	}
 
-	cfg := &Config{Launch: [][]string{{"codex", "--search"}, {"team-agent", "--fast"}}}
-	got := runners(cfg)
+	cfg := &config.Config{Launch: [][]string{{"codex", "--search"}, {"team-agent", "--fast"}}}
+	got := Runners(cfg)
 	byID := make(map[string]Runner)
 	for _, r := range got {
 		byID[r.ID] = r
@@ -43,7 +45,7 @@ func TestChooseRequestedRunnerAndInitialPrompt(t *testing.T) {
 	t.Cleanup(func() { findExecutable = old })
 	findExecutable = func(name string) (string, error) { return "/bin/" + name, nil }
 
-	r, err := chooseRunner(&Config{}, "codex")
+	r, err := ChooseRunner(&config.Config{}, "codex")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +56,7 @@ func TestChooseRequestedRunnerAndInitialPrompt(t *testing.T) {
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	open, err := chooseRunner(&Config{}, "opencode")
+	open, err := ChooseRunner(&config.Config{}, "opencode")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,7 +84,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 
 func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij", true)
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, "/tmp/zellij", true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -95,7 +97,7 @@ func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 
 func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
-	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", editorCommand{}, "/tmp/zellij", false)
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, "/tmp/zellij", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +118,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij", false)
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, "/tmp/zellij", false)
 		if err != nil {
 			t.Fatal(err)
 		}

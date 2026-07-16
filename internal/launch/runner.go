@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/kieranajp/qrouton/internal/config"
 )
 
 type Runner struct {
@@ -28,7 +29,7 @@ var builtinRunners = []Runner{
 var findExecutable = exec.LookPath
 
 // runners applies exact configured overrides to qrouton's supported, tool-capable runners.
-func runners(cfg *Config) []Runner {
+func Runners(cfg *config.Config) []Runner {
 	out := make([]Runner, len(builtinRunners))
 	copy(out, builtinRunners)
 	byID := make(map[string]int, len(out))
@@ -52,9 +53,9 @@ func runners(cfg *Config) []Runner {
 	return out
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand, socketDir string, resume bool) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socketDir string, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume)
-	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
+	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
 	switch r.ID {
 	case "claude":
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
@@ -103,8 +104,8 @@ func withEnv(env []string, key, value string) []string {
 	return append(out, prefix+value)
 }
 
-func chooseRunner(cfg *Config, requested string) (Runner, error) {
-	all := runners(cfg)
+func ChooseRunner(cfg *config.Config, requested string) (Runner, error) {
+	all := Runners(cfg)
 	if requested != "" {
 		for _, r := range all {
 			if r.ID == requested || r.Command[0] == requested {

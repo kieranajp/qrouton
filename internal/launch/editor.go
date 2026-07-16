@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"encoding/json"
@@ -10,48 +10,49 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+	"github.com/kieranajp/qrouton/internal/config"
 )
 
-type editorCommand struct {
+type EditorCommand struct {
 	Argv     []string `json:"argv"`
 	Template bool     `json:"template"`
 }
 
-func resolveEditor(configured []string) (editorCommand, error) {
+func ResolveEditor(configured []string) (EditorCommand, error) {
 	if len(configured) > 0 {
 		paths := 0
 		for _, arg := range configured {
 			paths += strings.Count(arg, "{path}")
 		}
 		if paths != 1 {
-			return editorCommand{}, fmt.Errorf("editor must contain exactly one {path} placeholder")
+			return EditorCommand{}, fmt.Errorf("editor must contain exactly one {path} placeholder")
 		}
 		if _, err := exec.LookPath(configured[0]); err != nil {
-			return editorCommand{}, fmt.Errorf("editor %q is not installed", configured[0])
+			return EditorCommand{}, fmt.Errorf("editor %q is not installed", configured[0])
 		}
-		return editorCommand{Argv: append([]string(nil), configured...), Template: true}, nil
+		return EditorCommand{Argv: append([]string(nil), configured...), Template: true}, nil
 	}
 	for _, key := range []string{"VISUAL", "EDITOR"} {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 			argv, err := shlex.Split(value)
 			if err != nil || len(argv) == 0 {
-				return editorCommand{}, fmt.Errorf("%s is not a valid editor command: %w", key, err)
+				return EditorCommand{}, fmt.Errorf("%s is not a valid editor command: %w", key, err)
 			}
 			if _, err := exec.LookPath(argv[0]); err != nil {
-				return editorCommand{}, fmt.Errorf("%s editor %q is not installed", key, argv[0])
+				return EditorCommand{}, fmt.Errorf("%s editor %q is not installed", key, argv[0])
 			}
-			return editorCommand{Argv: argv}, nil
+			return EditorCommand{Argv: argv}, nil
 		}
 	}
 	for _, name := range []string{"nvim", "vim", "vi"} {
 		if path, err := exec.LookPath(name); err == nil {
-			return editorCommand{Argv: []string{path, "+{line}", "{path}"}, Template: true}, nil
+			return EditorCommand{Argv: []string{path, "+{line}", "{path}"}, Template: true}, nil
 		}
 	}
-	return editorCommand{}, fmt.Errorf("no terminal editor found; set editor in %s, or set $VISUAL/$EDITOR", configPath())
+	return EditorCommand{}, fmt.Errorf("no terminal editor found; set editor in %s, or set $VISUAL/$EDITOR", config.Path())
 }
 
-func (e editorCommand) args(path string, line int) []string {
+func (e EditorCommand) Args(path string, line int) []string {
 	if line < 1 {
 		line = 1
 	}
@@ -65,9 +66,9 @@ func (e editorCommand) args(path string, line int) []string {
 	return out
 }
 
-func (e editorCommand) marshal() string { b, _ := json.Marshal(e); return string(b) }
+func (e EditorCommand) Marshal() string { b, _ := json.Marshal(e); return string(b) }
 
-func resolveSessionFile(root, name string) (string, error) {
+func ResolveSessionFile(root, name string) (string, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return "", err

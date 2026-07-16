@@ -1,4 +1,4 @@
-package main
+package agents
 
 import (
 	"bytes"
@@ -39,7 +39,7 @@ func TestClaudeAgentHooksRecordLifecycle(t *testing.T) {
 		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore"}`,
 		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
 	} {
-		if err := recordClaudeAgentEvent([]string{"--session-root", root}, bytes.NewBufferString(input)); err != nil {
+		if err := RecordEvent(root, bytes.NewBufferString(input)); err != nil {
 			t.Fatal(err)
 		}
 	}

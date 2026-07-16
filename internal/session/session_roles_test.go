@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"encoding/json"
@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 )
 
 func makeOrigin(t *testing.T, name string) (string, string) {
@@ -30,10 +33,10 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	}
 	activeOrigin, _ := makeOrigin(t, "active")
 	referenceOrigin, pinned := makeOrigin(t, "reference")
-	cfg := &Config{Root: root}
+	cfg := &config.Config{Root: root}
 	dir, err := createSessionWithRoles(cfg, "Role test", "", "", "feat", []RepoSelection{
-		{Repo: Repo{Name: "active", Org: "org", SSHURL: activeOrigin, DefaultBranch: "main"}, Role: RepoRoleActive},
-		{Repo: Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
+		{Repo: github.Repo{Name: "active", Org: "org", SSHURL: activeOrigin, DefaultBranch: "main"}, Role: RepoRoleActive},
+		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -64,7 +67,7 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	run(t, referenceOrigin, "add", ".")
 	run(t, referenceOrigin, "commit", "-m", "advance")
 	os.RemoveAll(filepath.Join(dir, "src", "reference"))
-	if err := ensureWorktrees(cfg, m); err != nil {
+	if err := EnsureWorktrees(cfg, m); err != nil {
 		t.Fatal(err)
 	}
 	out, err := exec.Command("git", "-C", filepath.Join(dir, "src", "reference"), "rev-parse", "HEAD").Output()
@@ -85,7 +88,7 @@ func TestMissingManifestRoleResumesAsActive(t *testing.T) {
 	m := Manifest{SchemaVersion: 1, Slug: "old", Repos: []ManifestRepo{{
 		Name: "legacy", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/legacy",
 	}}}
-	if err := ensureWorktrees(&Config{Root: root}, m); err != nil {
+	if err := EnsureWorktrees(&config.Config{Root: root}, m); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(root, "old", "src", "legacy")
@@ -104,16 +107,16 @@ func TestCreateFailureCleansNewSessionDirectoryAndAllowsRetry(t *testing.T) {
 		t.Fatal(err)
 	}
 	origin, _ := makeOrigin(t, "retry")
-	repo := Repo{Name: "retry", Org: "org", SSHURL: origin, DefaultBranch: "main"}
+	repo := github.Repo{Name: "retry", Org: "org", SSHURL: origin, DefaultBranch: "main"}
 	bad := []RepoSelection{{Repo: repo, Role: RepoRole("invalid")}}
-	if _, err := createSessionWithRoles(&Config{Root: root}, "Retry me", "", "", "feat", bad); err == nil {
+	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Retry me", "", "", "feat", bad); err == nil {
 		t.Fatal("invalid role unexpectedly succeeded")
 	}
 	dir := filepath.Join(root, "retry-me")
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("failed session directory was not cleaned up: %v", err)
 	}
-	if _, err := createSessionWithRoles(&Config{Root: root}, "Retry me", "", "", "feat",
+	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Retry me", "", "", "feat",
 		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}); err != nil {
 		t.Fatal("retry failed:", err)
 	}
@@ -125,21 +128,21 @@ func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 		t.Fatal(err)
 	}
 	origin, _ := makeOrigin(t, "progress")
-	var events []SessionProgress
-	_, err := createSessionWithRolesProgress(&Config{Root: root}, "Progress", "", "", "feat",
-		[]RepoSelection{{Repo: Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}},
-		func(event SessionProgress) { events = append(events, event) })
+	var events []Progress
+	_, err := Create(&config.Config{Root: root}, "Progress", "", "", "feat",
+		[]RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}},
+		func(event Progress) { events = append(events, event) })
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []struct {
-		step   SessionProgressStep
-		status SessionProgressStatus
+		step   ProgressStep
+		status ProgressStatus
 	}{
-		{SessionProgressMirror, SessionProgressStarted}, {SessionProgressMirror, SessionProgressCompleted},
-		{SessionProgressWorktree, SessionProgressStarted}, {SessionProgressWorktree, SessionProgressCompleted},
-		{SessionProgressScaffold, SessionProgressStarted}, {SessionProgressScaffold, SessionProgressCompleted},
-		{SessionProgressManifest, SessionProgressStarted}, {SessionProgressManifest, SessionProgressCompleted},
+		{ProgressMirror, ProgressStarted}, {ProgressMirror, ProgressCompleted},
+		{ProgressWorktree, ProgressStarted}, {ProgressWorktree, ProgressCompleted},
+		{ProgressScaffold, ProgressStarted}, {ProgressScaffold, ProgressCompleted},
+		{ProgressManifest, ProgressStarted}, {ProgressManifest, ProgressCompleted},
 	}
 	if len(events) != len(want) {
 		t.Fatalf("got %d events, want %d: %+v", len(events), len(want), events)

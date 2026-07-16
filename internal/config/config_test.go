@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"os"
@@ -22,17 +22,11 @@ func TestLoadConfigMigratesLegacyClaudeDefault(t *testing.T) {
 	dir := filepath.Join(configHome, "qrouton")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"orgs":["acme"],"root":"unused","launch":[["claude"]]}`), 0o644)
-	cfg, err := loadConfig()
+	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if cfg.Launch != nil {
 		t.Fatalf("legacy default was not migrated: %#v", cfg.Launch)
-	}
-}
-
-func TestRepoIDIncludesOrganization(t *testing.T) {
-	if got := repoID(Repo{Org: "acme", Name: "api"}); got != "acme/api" {
-		t.Fatalf("repoID() = %q", got)
 	}
 }

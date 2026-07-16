@@ -1,9 +1,8 @@
-package main
+package mcpserver
 
 import (
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -21,7 +21,7 @@ type openFileInput struct {
 
 type editorPane struct {
 	root, zellij, session string
-	editor                editorCommand
+	editor                launch.EditorCommand
 	mu                    sync.Mutex
 	paneID                string
 }
@@ -29,7 +29,7 @@ type editorPane struct {
 var commandContext = exec.CommandContext
 
 func (p *editorPane) open(ctx context.Context, input openFileInput) (string, error) {
-	path, err := resolveSessionFile(p.root, input.Path)
+	path, err := launch.ResolveSessionFile(p.root, input.Path)
 	if err != nil {
 		return "", err
 	}
@@ -42,7 +42,7 @@ func (p *editorPane) open(ctx context.Context, input openFileInput) (string, err
 		_ = commandContext(ctx, p.zellij, "--session", p.session, "action", "close-pane", "--pane-id", p.paneID).Run()
 		p.paneID = ""
 	}
-	editorArgs := p.editor.args(path, input.Line)
+	editorArgs := p.editor.Args(path, input.Line)
 	args := []string{"--session", p.session, "action", "new-pane", "--floating", "--close-on-exit", "--x", "66%", "--width", "33%", "--y", "3%", "--height", "94%", "--name", "Editor — exit editor or Alt-x to close", "--cwd", p.root, "--"}
 	args = append(args, editorArgs...)
 	out, err := commandContext(ctx, p.zellij, args...).Output()
@@ -54,7 +54,7 @@ func (p *editorPane) open(ctx context.Context, input openFileInput) (string, err
 	return fmt.Sprintf("Opened %s at line %d in the editor pane.", rel, input.Line), nil
 }
 
-func newMCPServer(root string, editor editorCommand, zellij, session string) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, zellij, session string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: "Open files for the user in qrouton's editor pane when doing so is useful, especially after creating a document. Paths must belong to this session.",
 	})
@@ -72,33 +72,17 @@ func newMCPServer(root string, editor editorCommand, zellij, session string) *mc
 	return server
 }
 
-func runMCP(args []string) error {
-	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
-	root := fs.String("session-root", "", "qrouton session root")
-	editorJSON := fs.String("editor-json", "", "resolved editor configuration")
-	zellijSession := fs.String("zellij-session", "", "target Zellij session")
-	socketDir := fs.String("socket-dir", "", "Zellij socket directory")
-	if err := fs.Parse(args); err != nil {
-		return err
-	}
-	if *root == "" {
-		return fmt.Errorf("mcp: --session-root is required")
-	}
-	if *zellijSession == "" || *socketDir == "" {
-		return fmt.Errorf("mcp: --zellij-session and --socket-dir are required")
-	}
-	os.Setenv("ZELLIJ_SOCKET_DIR", *socketDir)
-	var editor editorCommand
-	rawEditor := *editorJSON
-	if rawEditor == "" {
-		rawEditor = os.Getenv("QROUTON_EDITOR_JSON")
-	}
-	if err := json.Unmarshal([]byte(rawEditor), &editor); err != nil || len(editor.Argv) == 0 {
+// Run serves the qrouton MCP server over stdio. editorJSON is the resolved
+// EditorCommand marshalled by the launcher (or inherited via QROUTON_EDITOR_JSON).
+func Run(root, editorJSON, zellijSession, socketDir string) error {
+	os.Setenv("ZELLIJ_SOCKET_DIR", socketDir)
+	var editor launch.EditorCommand
+	if err := json.Unmarshal([]byte(editorJSON), &editor); err != nil || len(editor.Argv) == 0 {
 		return fmt.Errorf("mcp: invalid inherited editor configuration")
 	}
 	zellij, err := exec.LookPath("zellij")
 	if err != nil {
 		return fmt.Errorf("mcp: zellij is unavailable")
 	}
-	return newMCPServer(*root, editor, zellij, *zellijSession).Run(context.Background(), &mcp.StdioTransport{})
+	return newMCPServer(root, editor, zellij, zellijSession).Run(context.Background(), &mcp.StdioTransport{})
 }

@@ -3,61 +3,57 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"os"
+
+	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
+	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/tui"
+	"github.com/urfave/cli/v2"
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "mcp" {
-		die(runMCP(os.Args[2:]))
-		return
+	app := &cli.App{
+		Name:  "qrouton",
+		Usage: "assemble a multi-repo session and launch an agent runner in it",
+		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "refresh", Usage: "refresh the cached org repo list"},
+			&cli.StringFlag{Name: "runner", Usage: "coding agent to launch (claude, codex, or opencode)"},
+		},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand},
+		Action:   onboard,
 	}
-	if len(os.Args) > 1 && os.Args[1] == "agents" {
-		die(runAgentStatus(os.Args[2:]))
-		return
+	if err := app.Run(os.Args); err != nil {
+		fmt.Fprintln(os.Stderr, "qrouton:", err)
+		os.Exit(1)
 	}
-	if len(os.Args) > 1 && os.Args[1] == "agent-event" {
-		die(recordClaudeAgentEvent(os.Args[2:], os.Stdin))
-		return
-	}
-	refresh := flag.Bool("refresh", false, "refresh the cached org repo list")
-	runner := flag.String("runner", "", "coding agent to launch (claude, codex, or opencode)")
-	flag.Parse()
-
-	cfg, err := loadConfig()
-	die(err)
-
-	sessions, err := scanSessions(cfg.Root)
-	die(err)
-
-	request, err := runOnboarding(cfg, sessions, *runner, *refresh)
-	die(err)
-	if request == nil {
-		return
-	}
-	die(launchRunner(cfg, request.dir, request.runner, request.resume))
 }
 
-func repoID(r Repo) string { return r.Org + "/" + r.Name }
-
-// launch selects and execs a detected runner with cwd = session dir. No return on success.
-func launch(cfg *Config, dir, requestedRunner string) error {
-	if err := stampAssets(dir); err != nil {
-		return err
-	}
-	r, err := chooseRunner(cfg, requestedRunner)
+// onboard is the default action: pick or create a session in the TUI, then launch its runner.
+func onboard(c *cli.Context) error {
+	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
-	return launchRunner(cfg, dir, r, false)
-}
-
-func launchRunner(cfg *Config, dir string, r Runner, resume bool) error {
-	if err := stampAssets(dir); err != nil {
+	sessions, err := session.Scan(cfg.Root)
+	if err != nil {
 		return err
 	}
-	editor, err := resolveEditor(cfg.Editor)
+	request, err := tui.Run(cfg, sessions, c.String("runner"), c.Bool("refresh"))
+	if err != nil || request == nil {
+		return err
+	}
+	return launchRunner(cfg, request.Dir, request.Runner, request.Resume)
+}
+
+func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
+	if err := launch.StampAssets(dir); err != nil {
+		return err
+	}
+	editor, err := launch.ResolveEditor(cfg.Editor)
 	if err != nil {
 		return err
 	}
@@ -65,12 +61,5 @@ func launchRunner(cfg *Config, dir string, r Runner, resume bool) error {
 	if err != nil {
 		return err
 	}
-	return launchZellij(dir, r, bin, editor, resume)
-}
-
-func die(err error) {
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "qrouton:", err)
-		os.Exit(1)
-	}
+	return launch.Zellij(dir, r, bin, editor, resume)
 }

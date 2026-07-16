@@ -1,4 +1,4 @@
-package main
+package agents
 
 import (
 	"bufio"
@@ -32,20 +32,8 @@ type rolloutRecord struct {
 	} `json:"payload"`
 }
 
-func runAgentStatus(args []string) error {
-	root, runner := "", ""
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--session-root" && i+1 < len(args) {
-			i++
-			root = args[i]
-		} else if args[i] == "--runner" && i+1 < len(args) {
-			i++
-			runner = args[i]
-		}
-	}
-	if root == "" {
-		return fmt.Errorf("agents requires --session-root")
-	}
+// Status clears the terminal and redraws the session's subagent statuses every 2s, forever.
+func Status(root, runner string) error {
 	for {
 		fmt.Print("\033[H\033[2J")
 		fmt.Println("\033[1magents\033[0m")
@@ -86,17 +74,8 @@ type claudeAgentEvent struct {
 	Timestamp     string `json:"timestamp,omitempty"`
 }
 
-func recordClaudeAgentEvent(args []string, input io.Reader) error {
-	root := ""
-	for i := 0; i < len(args); i++ {
-		if args[i] == "--session-root" && i+1 < len(args) {
-			i++
-			root = args[i]
-		}
-	}
-	if root == "" {
-		return fmt.Errorf("agent-event requires --session-root")
-	}
+// RecordEvent appends one Claude subagent hook event read from input to the session's log.
+func RecordEvent(root string, input io.Reader) error {
 	var event claudeAgentEvent
 	if err := json.NewDecoder(input).Decode(&event); err != nil {
 		return err

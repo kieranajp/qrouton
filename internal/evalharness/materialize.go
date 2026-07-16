@@ -66,7 +66,7 @@ func copyFile(src, dst string) error {
 	return closeErr
 }
 
-// MaterializeAssets mirrors stampAssets' Claude and Codex discovery layout
+// MaterializeAssets mirrors launch.StampAssets' Claude and Codex discovery layout
 // using a caller-selected source directory rather than the embedded assets.
 func MaterializeAssets(assetsDir, workspace, snapshot string) (string, error) {
 	if err := CopyTree(assetsDir, snapshot); err != nil {
