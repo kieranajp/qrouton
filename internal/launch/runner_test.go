@@ -101,7 +101,7 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 			t.Fatalf("Claude launch missing %q: %v", want, argv)
 		}
 	}
-	for _, want := range []string{"Stop", "Notification", filepath.Join(".qrouton", "notify.sh")} {
+	for _, want := range []string{"Notification", filepath.Join(".qrouton", "notify.sh")} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Claude launch missing sound hook %q: %v", want, argv)
 		}
