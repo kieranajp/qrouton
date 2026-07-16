@@ -67,7 +67,8 @@ func newSession(cfg *Config, refresh bool) (string, error) {
 			}
 			return nil
 		}),
-		huh.NewMultiSelect[string]().Title("Repos").Options(opts...).Filterable(true).Value(&picked).
+		// bounded height — unbounded, the org repo list floods the viewport and the form degrades to field-by-field
+		huh.NewMultiSelect[string]().Title("Repos").Options(opts...).Filterable(true).Height(8).Value(&picked).
 			Validate(func(v []string) error {
 				if len(v) == 0 {
 					return fmt.Errorf("pick at least one repo")
