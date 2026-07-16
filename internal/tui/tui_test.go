@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"fmt"
@@ -7,12 +7,16 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/session"
 )
 
 func testApp() appModel {
 	return appModel{
-		cfg: &Config{Orgs: []string{"acme", "other"}, Root: "/tmp/sessions"},
-		repos: []Repo{
+		cfg: &config.Config{Orgs: []string{"acme", "other"}, Root: "/tmp/sessions"},
+		repos: []github.Repo{
 			{Org: "acme", Name: "api", DefaultBranch: "main", PushedAt: time.Now()},
 			{Org: "other", Name: "web", DefaultBranch: "trunk", PushedAt: time.Now().Add(-time.Hour)},
 		},
@@ -47,10 +51,10 @@ func TestRepositoryFiltersPreserveActivityOrder(t *testing.T) {
 	m.form.owner = 1
 	m.form.search = "AP"
 	got := m.filteredRepos()
-	if len(got) != 1 || repoID(got[0]) != "acme/api" {
+	if len(got) != 1 || got[0].ID() != "acme/api" {
 		t.Fatalf("filtered repositories = %#v", got)
 	}
-	if len(m.repos) != 2 || repoID(m.repos[0]) != "acme/api" {
+	if len(m.repos) != 2 || m.repos[0].ID() != "acme/api" {
 		t.Fatal("filter mutated the source activity ordering")
 	}
 }
@@ -134,9 +138,9 @@ func TestNavigationLettersAreEnteredInTextFields(t *testing.T) {
 
 func TestResumeRequiresRunnerSelection(t *testing.T) {
 	m := testApp()
-	m.sessions = []Manifest{{Slug: "existing"}}
+	m.sessions = []session.Manifest{{Slug: "existing"}}
 	m.landingCursor = 1
-	m.runners = []Runner{{ID: "codex", Label: "Codex"}}
+	m.runners = []launch.Runner{{ID: "codex", Label: "Codex"}}
 	updated, cmd := m.updateLanding(tea.KeyMsg{Type: tea.KeyEnter})
 	got := updated.(appModel)
 	if got.screen != runnerScreen || got.resume == nil {
@@ -149,12 +153,12 @@ func TestResumeRequiresRunnerSelection(t *testing.T) {
 
 func TestResumedAssemblyProducesResumeLaunchRequest(t *testing.T) {
 	m := testApp()
-	session := Manifest{Slug: "existing"}
-	m.resume = &session
-	m.runners = []Runner{{ID: "codex", Label: "Codex", Path: "/bin/codex", Command: []string{"codex"}}}
+	existingSession := session.Manifest{Slug: "existing"}
+	m.resume = &existingSession
+	m.runners = []launch.Runner{{ID: "codex", Label: "Codex", Path: "/bin/codex", Command: []string{"codex"}}}
 	updated, _ := m.Update(assembledMsg{dir: "/tmp/existing"})
 	got := updated.(appModel)
-	if got.result == nil || !got.result.resume {
+	if got.result == nil || !got.result.Resume {
 		t.Fatalf("resume assembly launch request = %#v", got.result)
 	}
 }
@@ -162,9 +166,9 @@ func TestResumedAssemblyProducesResumeLaunchRequest(t *testing.T) {
 func TestStaleRefreshEventIsIgnored(t *testing.T) {
 	m := testApp()
 	m.refreshGen = 2
-	updated, _ := m.Update(refreshEventMsg{gen: 1, event: repoRefreshMsg{State: repoRefreshSucceeded, Repos: []Repo{{Org: "stale", Name: "repo"}}}})
+	updated, _ := m.Update(refreshEventMsg{gen: 1, event: github.RefreshMsg{State: github.RefreshSucceeded, Repos: []github.Repo{{Org: "stale", Name: "repo"}}}})
 	got := updated.(appModel)
-	if repoID(got.repos[0]) != "acme/api" {
+	if got.repos[0].ID() != "acme/api" {
 		t.Fatalf("stale refresh replaced repositories: %#v", got.repos)
 	}
 }
@@ -176,7 +180,7 @@ func TestAssemblyProgressUpdatesVisibleSteps(t *testing.T) {
 	ch := make(chan assemblyEvent)
 	m.assembly = ch
 	repo := m.repos[0]
-	p := SessionProgress{Step: SessionProgressMirror, Status: SessionProgressCompleted, Repo: &repo}
+	p := session.Progress{Step: session.ProgressMirror, Status: session.ProgressCompleted, Repo: &repo}
 	updated, _ := m.Update(assemblyEventMsg{event: assemblyEvent{progress: &p}})
 	view := updated.(appModel).viewAssembly()
 	if !strings.Contains(view, "✓ acme/api mirror") {
@@ -186,7 +190,7 @@ func TestAssemblyProgressUpdatesVisibleSteps(t *testing.T) {
 
 func TestLandingCardIncludesDescriptionAndRepositories(t *testing.T) {
 	m := testApp()
-	m.sessions = []Manifest{{Slug: "fix-login", Description: "Refresh expired sessions", CreatedAt: time.Now(), Repos: []ManifestRepo{{Org: "acme", Name: "api"}, {Org: "other", Name: "web"}}}}
+	m.sessions = []session.Manifest{{Slug: "fix-login", Description: "Refresh expired sessions", CreatedAt: time.Now(), Repos: []session.ManifestRepo{{Org: "acme", Name: "api"}, {Org: "other", Name: "web"}}}}
 	view := m.viewLanding()
 	for _, want := range []string{"fix-login", "Refresh expired sessions", "acme/api · other/web"} {
 		if !strings.Contains(view, want) {
@@ -213,7 +217,7 @@ func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 	m.repos = nil
 	m.screen = loadingScreen
 	m.ownerErrors["acme"] = fmt.Errorf("unavailable")
-	updated, _ := m.Update(refreshEventMsg{gen: m.refreshGen, event: repoRefreshMsg{State: repoRefreshComplete}})
+	updated, _ := m.Update(refreshEventMsg{gen: m.refreshGen, event: github.RefreshMsg{State: github.RefreshComplete}})
 	got := updated.(appModel)
 	if got.screen != errorScreen || got.back != landingScreen {
 		t.Fatalf("all-owner failure screen=%v back=%v", got.screen, got.back)

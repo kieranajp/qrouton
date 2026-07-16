@@ -1,4 +1,4 @@
-package main
+package session
 
 import (
 	"encoding/json"
@@ -9,6 +9,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 )
 
 const manifestName = "qrouton.json"
@@ -24,33 +27,33 @@ const (
 
 // RepoSelection pairs repository metadata with its role in a session.
 type RepoSelection struct {
-	Repo Repo
+	Repo github.Repo
 	Role RepoRole
 }
 
-type SessionProgressStep string
-type SessionProgressStatus string
+type ProgressStep string
+type ProgressStatus string
 
 const (
-	SessionProgressMirror   SessionProgressStep = "mirror"
-	SessionProgressWorktree SessionProgressStep = "worktree"
-	SessionProgressScaffold SessionProgressStep = "scaffold"
-	SessionProgressManifest SessionProgressStep = "manifest"
+	ProgressMirror   ProgressStep = "mirror"
+	ProgressWorktree ProgressStep = "worktree"
+	ProgressScaffold ProgressStep = "scaffold"
+	ProgressManifest ProgressStep = "manifest"
 
-	SessionProgressStarted   SessionProgressStatus = "started"
-	SessionProgressCompleted SessionProgressStatus = "completed"
-	SessionProgressFailed    SessionProgressStatus = "failed"
+	ProgressStarted   ProgressStatus = "started"
+	ProgressCompleted ProgressStatus = "completed"
+	ProgressFailed    ProgressStatus = "failed"
 )
 
-type SessionProgress struct {
-	Step   SessionProgressStep
-	Status SessionProgressStatus
-	Repo   *Repo
+type Progress struct {
+	Step   ProgressStep
+	Status ProgressStatus
+	Repo   *github.Repo
 	Role   RepoRole
 	Err    error
 }
 
-type SessionProgressFunc func(SessionProgress)
+type ProgressFunc func(Progress)
 
 type Manifest struct {
 	SchemaVersion int            `json:"schemaVersion"`
@@ -82,12 +85,12 @@ func (r ManifestRepo) effectiveRole() RepoRole {
 
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
-func slugify(s string) string {
+func Slugify(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
 }
 
-// scanSessions: a session is any direct child of root containing a qrouton.json.
-func scanSessions(root string) ([]Manifest, error) {
+// Scan: a session is any direct child of root containing a qrouton.json.
+func Scan(root string) ([]Manifest, error) {
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -114,7 +117,7 @@ func scanSessions(root string) ([]Manifest, error) {
 
 // createSession assembles mirrors + worktrees, then writes the manifest last —
 // a half-assembled dir with no manifest never shows up in resume.
-func createSession(cfg *Config, name, desc, ticket, prefix string, repos []Repo) (string, error) {
+func createSession(cfg *config.Config, name, desc, ticket, prefix string, repos []github.Repo) (string, error) {
 	selected := make([]RepoSelection, len(repos))
 	for i, repo := range repos {
 		selected[i] = RepoSelection{Repo: repo, Role: RepoRoleActive}
@@ -124,14 +127,14 @@ func createSession(cfg *Config, name, desc, ticket, prefix string, repos []Repo)
 
 // createSessionWithRoles creates branches only for active repositories and pins
 // references to the default-branch revision resolved at creation time.
-func createSessionWithRoles(cfg *Config, name, desc, ticket, prefix string, repos []RepoSelection) (string, error) {
-	return createSessionWithRolesProgress(cfg, name, desc, ticket, prefix, repos, nil)
+func createSessionWithRoles(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection) (string, error) {
+	return Create(cfg, name, desc, ticket, prefix, repos, nil)
 }
 
-// createSessionWithRolesProgress is the role-aware assembly entry point. Progress
+// Create is the role-aware assembly entry point. Progress
 // reports the start and outcome of each real mirror, worktree, scaffold, and manifest operation.
-func createSessionWithRolesProgress(cfg *Config, name, desc, ticket, prefix string, repos []RepoSelection, progress SessionProgressFunc) (string, error) {
-	slug := slugify(name)
+func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection, progress ProgressFunc) (string, error) {
+	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, 0o755); err != nil {
 		return "", err
@@ -163,73 +166,73 @@ func createSessionWithRolesProgress(cfg *Config, name, desc, ticket, prefix stri
 		}
 		worktreePath := filepath.Join("src", r.Name)
 		if nameCounts[r.Name] > 1 {
-			worktreePath = filepath.Join("src", slugify(r.Org+"-"+r.Name))
+			worktreePath = filepath.Join("src", Slugify(r.Org+"-"+r.Name))
 		}
-		emitProgress(progress, SessionProgress{Step: SessionProgressMirror, Status: SessionProgressStarted, Repo: &r, Role: role})
+		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
 		if err := ensureMirror(cfg.Root, r.Org, r.Name, sshURL(r.Org, r)); err != nil {
-			emitProgress(progress, SessionProgress{Step: SessionProgressMirror, Status: SessionProgressFailed, Repo: &r, Role: role, Err: err})
+			emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 			return "", err
 		}
-		emitProgress(progress, SessionProgress{Step: SessionProgressMirror, Status: SessionProgressCompleted, Repo: &r, Role: role})
+		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &r, Role: role})
 		mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
 			DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath}
 		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-		emitProgress(progress, SessionProgress{Step: SessionProgressWorktree, Status: SessionProgressStarted, Repo: &r, Role: role})
+		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
 		if role == RepoRoleReference {
 			revision, err := resolveRevision(mirror, "origin/"+r.DefaultBranch)
 			if err != nil {
-				emitProgress(progress, SessionProgress{Step: SessionProgressWorktree, Status: SessionProgressFailed, Repo: &r, Role: role, Err: err})
+				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 				return "", err
 			}
 			mr.Revision = revision
 			if err := addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision); err != nil {
-				emitProgress(progress, SessionProgress{Step: SessionProgressWorktree, Status: SessionProgressFailed, Repo: &r, Role: role, Err: err})
+				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 				return "", err
 			}
 		} else {
 			mr.Branch = prefix + "/" + slug
 			if err := addWorktree(mirror, filepath.Join(dir, worktreePath), mr.Branch,
 				"origin/"+r.DefaultBranch); err != nil {
-				emitProgress(progress, SessionProgress{Step: SessionProgressWorktree, Status: SessionProgressFailed, Repo: &r, Role: role, Err: err})
+				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 				return "", err
 			}
 		}
-		emitProgress(progress, SessionProgress{Step: SessionProgressWorktree, Status: SessionProgressCompleted, Repo: &r, Role: role})
+		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressCompleted, Repo: &r, Role: role})
 		m.Repos = append(m.Repos, mr)
 	}
 
 	// doc scaffold the onetech RPI commands expect
-	emitProgress(progress, SessionProgress{Step: SessionProgressScaffold, Status: SessionProgressStarted})
+	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressStarted})
 	for _, d := range []string{"research", "plans", "specs"} {
 		if err := os.MkdirAll(filepath.Join(dir, "thoughts", "shared", d), 0o755); err != nil {
-			emitProgress(progress, SessionProgress{Step: SessionProgressScaffold, Status: SessionProgressFailed, Err: err})
+			emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
 			return "", err
 		}
 	}
-	emitProgress(progress, SessionProgress{Step: SessionProgressScaffold, Status: SessionProgressCompleted})
+	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressCompleted})
 
-	emitProgress(progress, SessionProgress{Step: SessionProgressManifest, Status: SessionProgressStarted})
+	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressStarted})
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err == nil {
 		err = os.WriteFile(filepath.Join(dir, manifestName), b, 0o644)
 	}
 	if err != nil {
-		emitProgress(progress, SessionProgress{Step: SessionProgressManifest, Status: SessionProgressFailed, Err: err})
+		emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressFailed, Err: err})
 		return "", err
 	}
 	manifestComplete = true
-	emitProgress(progress, SessionProgress{Step: SessionProgressManifest, Status: SessionProgressCompleted})
+	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressCompleted})
 	return dir, nil
 }
 
-func emitProgress(progress SessionProgressFunc, event SessionProgress) {
+func emitProgress(progress ProgressFunc, event Progress) {
 	if progress != nil {
 		progress(event)
 	}
 }
 
-// ensureWorktrees re-materialises any pruned worktrees on resume (fresh fetch either way).
-func ensureWorktrees(cfg *Config, m Manifest) error {
+// EnsureWorktrees re-materialises any pruned worktrees on resume (fresh fetch either way).
+func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	for _, r := range m.Repos {
 		if err := ensureMirror(cfg.Root, r.Org, r.Name,
@@ -272,7 +275,7 @@ func addDetachedWorktree(mirror, path, revision string) error {
 	return git("-C", mirror, "worktree", "add", "--detach", path, revision)
 }
 
-func sshURL(org string, r Repo) string {
+func sshURL(org string, r github.Repo) string {
 	if r.SSHURL != "" {
 		return r.SSHURL
 	}

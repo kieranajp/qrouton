@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"os"
@@ -10,7 +10,7 @@ import (
 func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := stampAssets(dir); err != nil {
+	if err := StampAssets(dir); err != nil {
 		t.Fatal(err)
 	}
 
@@ -79,7 +79,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	os.WriteFile(foreign, []byte(`{"user":true}`), 0o644)
 	os.WriteFile(claude, []byte("clobber me"), 0o644)
 
-	if err := stampAssets(dir); err != nil {
+	if err := StampAssets(dir); err != nil {
 		t.Fatal(err)
 	}
 	if fb, _ := os.ReadFile(foreign); string(fb) != `{"user":true}` {
@@ -95,7 +95,7 @@ func TestStampAssetsRefusesUserOwnedDiscoveryFile(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("user instructions"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := stampAssets(dir); err == nil || !strings.Contains(err.Error(), "user-owned") {
+	if err := StampAssets(dir); err == nil || !strings.Contains(err.Error(), "user-owned") {
 		t.Fatalf("expected user-owned conflict, got %v", err)
 	}
 }

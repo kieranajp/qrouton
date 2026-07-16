@@ -1,4 +1,4 @@
-package main
+package tui
 
 import (
 	"context"
@@ -12,6 +12,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/session"
 )
 
 type screen uint8
@@ -33,14 +37,14 @@ const (
 	reference
 )
 
-type launchRequest struct {
-	dir    string
-	runner Runner
-	resume bool
+type LaunchRequest struct {
+	Dir    string
+	Runner launch.Runner
+	Resume bool
 }
 
 type reposLoadedMsg struct {
-	repos []Repo
+	repos []github.Repo
 	err   error
 }
 
@@ -52,7 +56,7 @@ type refreshReadyMsg struct {
 
 type refreshEventMsg struct {
 	gen   int
-	event repoRefreshMsg
+	event github.RefreshMsg
 }
 
 type assembledMsg struct {
@@ -61,12 +65,12 @@ type assembledMsg struct {
 }
 
 type assemblyEvent struct {
-	progress *SessionProgress
+	progress *session.Progress
 	done     *assembledMsg
 }
 type assemblyEventMsg struct{ event assemblyEvent }
 type failedRetryMsg struct {
-	repos   []Repo
+	repos   []github.Repo
 	results map[string]error
 }
 
@@ -78,17 +82,17 @@ type formState struct {
 }
 
 type appModel struct {
-	cfg             *Config
-	sessions        []Manifest
-	repos           []Repo
-	runners         []Runner
+	cfg             *config.Config
+	sessions        []session.Manifest
+	repos           []github.Repo
+	runners         []launch.Runner
 	requestedRunner string
 	screen, back    screen
 	landingCursor   int
 	runnerCursor    int
 	width, height   int
 	refreshing      bool
-	refresh         <-chan repoRefreshMsg
+	refresh         <-chan github.RefreshMsg
 	refreshGen      int
 	refreshCancel   context.CancelFunc
 	ownerStatus     map[string]string
@@ -96,10 +100,10 @@ type appModel struct {
 	cacheAt         time.Time
 	form            formState
 	err             error
-	result          *launchRequest
-	resume          *Manifest
+	result          *LaunchRequest
+	resume          *session.Manifest
 	assembly        <-chan assemblyEvent
-	assemblySteps   []SessionProgress
+	assemblySteps   []session.Progress
 	assemblyFailed  bool
 }
 
@@ -127,7 +131,7 @@ const compactLogo = `  ____
  /· *_/|
 |_* ·|/  qrouton`
 
-func runOnboarding(cfg *Config, sessions []Manifest, requestedRunner string, forceRefresh bool) (*launchRequest, error) {
+func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
 	m := newAppModel(cfg, sessions, requestedRunner)
 	if requestedRunner != "" {
 		if _, err := m.selectedRunner(); err != nil {
@@ -147,8 +151,8 @@ func runOnboarding(cfg *Config, sessions []Manifest, requestedRunner string, for
 	return out.result, nil
 }
 
-func newAppModel(cfg *Config, sessions []Manifest, requested string) appModel {
-	repos, fetched, _ := cachedRepos(cfg.Orgs)
+func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string) appModel {
+	repos, fetched, _ := github.CachedRepos(cfg.Orgs)
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].CreatedAt.After(sessions[j].CreatedAt) })
 	return appModel{cfg: cfg, sessions: sessions, repos: repos, requestedRunner: requested,
 		runners: availableRunners(cfg), screen: landingScreen, refreshing: true, cacheAt: fetched,
@@ -160,16 +164,16 @@ func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }
 
 func refreshTokenCmd(gen int) tea.Cmd {
 	return func() tea.Msg {
-		token, err := githubToken()
+		token, err := github.Token()
 		return refreshReadyMsg{gen: gen, token: token, err: err}
 	}
 }
 
-func awaitRefresh(gen int, ch <-chan repoRefreshMsg) tea.Cmd {
+func awaitRefresh(gen int, ch <-chan github.RefreshMsg) tea.Cmd {
 	return func() tea.Msg {
 		msg, ok := <-ch
 		if !ok {
-			return refreshEventMsg{gen: gen, event: repoRefreshMsg{State: repoRefreshComplete}}
+			return refreshEventMsg{gen: gen, event: github.RefreshMsg{State: github.RefreshComplete}}
 		}
 		return refreshEventMsg{gen: gen, event: msg}
 	}
@@ -198,9 +202,9 @@ func (m *appModel) retryFailed() tea.Cmd {
 			m.ownerStatus[owner] = "fetching…"
 		}
 	}
-	cached := append([]Repo(nil), m.repos...)
+	cached := append([]github.Repo(nil), m.repos...)
 	return func() tea.Msg {
-		token, err := githubToken()
+		token, err := github.Token()
 		results := make(map[string]error)
 		if err != nil {
 			for _, o := range owners {
@@ -210,20 +214,20 @@ func (m *appModel) retryFailed() tea.Cmd {
 		}
 		merged := cached
 		for _, o := range owners {
-			repos, e := refreshOwnerRepos(ctx, http.DefaultClient, token, o)
+			repos, e := github.RefreshOwnerRepos(ctx, http.DefaultClient, token, o)
 			results[o] = e
 			if e == nil {
-				merged = replaceOwnerRepos(merged, o, repos)
+				merged = github.ReplaceOwnerRepos(merged, o, repos)
 			}
 		}
-		sortReposByActivity(merged)
+		github.SortReposByActivity(merged)
 		return failedRetryMsg{repos: merged, results: results}
 	}
 }
 
-func availableRunners(cfg *Config) []Runner {
-	var out []Runner
-	for _, r := range runners(cfg) {
+func availableRunners(cfg *config.Config) []launch.Runner {
+	var out []launch.Runner
+	for _, r := range launch.Runners(cfg) {
 		if r.Path != "" {
 			out = append(out, r)
 		}
@@ -250,7 +254,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		ctx, cancel := context.WithCancel(context.Background())
 		m.refreshCancel = cancel
-		m.refresh = refreshRepos(ctx, http.DefaultClient, v.token, m.cfg.Orgs, m.repos)
+		m.refresh = github.RefreshRepos(ctx, http.DefaultClient, v.token, m.cfg.Orgs, m.repos)
 		return m, awaitRefresh(v.gen, m.refresh)
 	case refreshEventMsg:
 		if v.gen != m.refreshGen {
@@ -258,20 +262,20 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		event := v.event
 		switch event.State {
-		case repoRefreshStarted:
+		case github.RefreshStarted:
 			m.ownerStatus[event.Owner] = "fetching…"
-		case repoRefreshSucceeded:
+		case github.RefreshSucceeded:
 			m.ownerStatus[event.Owner] = "updated"
 			delete(m.ownerErrors, event.Owner)
 			if event.Repos != nil {
 				m.repos = event.Repos
 				m.clampRepoCursor()
 			}
-		case repoRefreshFailed:
+		case github.RefreshFailed:
 			m.ownerStatus[event.Owner] = "failed"
 			m.ownerErrors[event.Owner] = event.Err
 			m.err = event.Err
-		case repoRefreshComplete:
+		case github.RefreshComplete:
 			m.refreshing = false
 			if len(m.ownerErrors) == 0 {
 				m.err = nil
@@ -320,7 +324,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err, m.back, m.screen = err, runnerScreen, errorScreen
 			return m, nil
 		}
-		m.result = &launchRequest{dir: v.dir, runner: r, resume: m.resume != nil}
+		m.result = &LaunchRequest{Dir: v.dir, Runner: r, Resume: m.resume != nil}
 		if m.refreshCancel != nil {
 			m.refreshCancel()
 		}
@@ -348,7 +352,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if len(m.ownerErrors) == 0 {
 			m.err = nil
-			writeRepoCache(m.cfg.Orgs, m.repos)
+			github.WriteRepoCache(m.cfg.Orgs, m.repos)
 			if m.screen == loadingScreen {
 				m.screen = landingScreen
 			}
@@ -542,14 +546,14 @@ func (m *appModel) clampRepoCursor() {
 	}
 }
 
-func (m appModel) filteredRepos() []Repo {
-	var out []Repo
+func (m appModel) filteredRepos() []github.Repo {
+	var out []github.Repo
 	q := strings.ToLower(m.form.search)
 	for _, r := range m.repos {
 		if m.form.owner > 0 && r.Org != m.cfg.Orgs[m.form.owner-1] {
 			continue
 		}
-		if q != "" && !strings.Contains(strings.ToLower(repoID(r)), q) {
+		if q != "" && !strings.Contains(strings.ToLower(r.ID()), q) {
 			continue
 		}
 		out = append(out, r)
@@ -562,7 +566,7 @@ func (m *appModel) cycleRepoRole() {
 	if len(rs) == 0 {
 		return
 	}
-	id := repoID(rs[m.form.cursor])
+	id := rs[m.form.cursor].ID()
 	switch m.form.roles[id] {
 	case excluded:
 		m.form.roles[id] = active
@@ -574,7 +578,7 @@ func (m *appModel) cycleRepoRole() {
 }
 
 func (m appModel) validateForm() error {
-	slug := slugify(m.form.name)
+	slug := session.Slugify(m.form.name)
 	if slug == "" {
 		return fmt.Errorf("session name is required")
 	}
@@ -583,7 +587,7 @@ func (m appModel) validateForm() error {
 	}
 	available := make(map[string]bool, len(m.repos))
 	for _, r := range m.repos {
-		available[repoID(r)] = true
+		available[r.ID()] = true
 	}
 	for id, role := range m.form.roles {
 		if role == active && available[id] {
@@ -617,17 +621,17 @@ func (m appModel) updateRunner(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m appModel) selectedRunner() (Runner, error) {
+func (m appModel) selectedRunner() (launch.Runner, error) {
 	if m.requestedRunner != "" {
-		for _, r := range runners(m.cfg) {
+		for _, r := range launch.Runners(m.cfg) {
 			if (r.ID == m.requestedRunner || r.Command[0] == m.requestedRunner) && r.Path != "" {
 				return r, nil
 			}
 		}
-		return Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
+		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
 	}
 	if len(m.runners) == 0 || m.runnerCursor >= len(m.runners) {
-		return Runner{}, fmt.Errorf("no runner selected")
+		return launch.Runner{}, fmt.Errorf("no runner selected")
 	}
 	return m.runners[m.runnerCursor], nil
 }
@@ -640,20 +644,20 @@ func (m *appModel) startAssembly() tea.Cmd {
 		defer close(ch)
 		if m.resume != nil {
 			s := *m.resume
-			err := ensureWorktrees(m.cfg, s)
+			err := session.EnsureWorktrees(m.cfg, s)
 			ch <- assemblyEvent{done: &assembledMsg{dir: filepath.Join(m.cfg.Root, s.Slug), err: err}}
 			return
 		}
-		var selected []RepoSelection
+		var selected []session.RepoSelection
 		for _, r := range m.repos {
-			role := m.form.roles[repoID(r)]
+			role := m.form.roles[r.ID()]
 			if role == active {
-				selected = append(selected, RepoSelection{Repo: r, Role: RepoRoleActive})
+				selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleActive})
 			} else if role == reference {
-				selected = append(selected, RepoSelection{Repo: r, Role: RepoRoleReference})
+				selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleReference})
 			}
 		}
-		dir, err := createSessionWithRolesProgress(m.cfg, m.form.name, m.form.description, m.form.ticket, branchPrefixes[m.form.prefix], selected, func(p SessionProgress) { copy := p; ch <- assemblyEvent{progress: &copy} })
+		dir, err := session.Create(m.cfg, m.form.name, m.form.description, m.form.ticket, branchPrefixes[m.form.prefix], selected, func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 		ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 	}()
 	return awaitAssembly(ch)
@@ -784,7 +788,7 @@ func (m appModel) viewLanding() string {
 
 func (m appModel) viewForm() string {
 	f := m.form
-	slug := slugify(f.name)
+	slug := session.Slugify(f.name)
 	owner := "All organizations"
 	if f.owner > 0 {
 		owner = m.cfg.Orgs[f.owner-1]
@@ -807,7 +811,7 @@ func (m appModel) viewForm() string {
 	end := min(len(rs), start+8)
 	for i := start; i < end; i++ {
 		r := rs[i]
-		role := f.roles[repoID(r)]
+		role := f.roles[r.ID()]
 		marker, label := "○", "excluded"
 		detail := ""
 		if role == active {
@@ -816,7 +820,7 @@ func (m appModel) viewForm() string {
 		if role == reference {
 			marker, label, detail = "◐", "reference", " → "+r.DefaultBranch+" · reference"
 		}
-		line := fmt.Sprintf("%s %-10s %-36s pushed %s%s", marker, label, repoID(r), relativeTime(r.PushedAt), detail)
+		line := fmt.Sprintf("%s %-10s %-36s pushed %s%s", marker, label, r.ID(), relativeTime(r.PushedAt), detail)
 		if f.focus == 4 && i == f.cursor {
 			line = accent.Render("› " + line)
 		} else {
@@ -843,7 +847,7 @@ func (m appModel) viewRunners() string {
 	return strings.Join(lines, "\n")
 }
 func (m appModel) viewAssembly() string {
-	name := slugify(m.form.name)
+	name := session.Slugify(m.form.name)
 	if m.resume != nil {
 		name = m.resume.Slug
 	}
@@ -851,12 +855,12 @@ func (m appModel) viewAssembly() string {
 	if m.resume != nil && len(m.assemblySteps) == 0 {
 		lines = append(lines, "◌ Restore missing worktrees")
 	}
-	latest := make(map[string]SessionProgress)
+	latest := make(map[string]session.Progress)
 	var order []string
 	for _, p := range m.assemblySteps {
 		key := string(p.Step)
 		if p.Repo != nil {
-			key += "/" + repoID(*p.Repo)
+			key += "/" + p.Repo.ID()
 		}
 		if _, ok := latest[key]; !ok {
 			order = append(order, key)
@@ -866,22 +870,22 @@ func (m appModel) viewAssembly() string {
 	for _, key := range order {
 		p := latest[key]
 		symbol := "◌"
-		if p.Status == SessionProgressCompleted {
+		if p.Status == session.ProgressCompleted {
 			symbol = "✓"
-		} else if p.Status == SessionProgressFailed {
+		} else if p.Status == session.ProgressFailed {
 			symbol = "✗"
 		}
 		label := string(p.Step)
 		if p.Repo != nil {
-			label = repoID(*p.Repo) + " " + label
+			label = p.Repo.ID() + " " + label
 		}
 		line := symbol + " " + label
 		if p.Err != nil {
 			line += " — " + p.Err.Error()
 		}
-		if p.Status == SessionProgressCompleted {
+		if p.Status == session.ProgressCompleted {
 			line = good.Render(line)
-		} else if p.Status == SessionProgressFailed {
+		} else if p.Status == session.ProgressFailed {
 			line = bad.Render(line)
 		}
 		lines = append(lines, line)

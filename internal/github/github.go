@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"context"
@@ -14,6 +14,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/config"
 )
 
 var githubAPIBase = "https://api.github.com"
@@ -33,45 +35,45 @@ type repoCache struct {
 	Repos         []Repo    `json:"repos"`
 }
 
-type repoRefreshState string
+type RefreshState string
 
 const (
-	repoRefreshStarted   repoRefreshState = "started"
-	repoRefreshSucceeded repoRefreshState = "succeeded"
-	repoRefreshFailed    repoRefreshState = "failed"
-	repoRefreshComplete  repoRefreshState = "complete"
+	RefreshStarted   RefreshState = "started"
+	RefreshSucceeded RefreshState = "succeeded"
+	RefreshFailed    RefreshState = "failed"
+	RefreshComplete  RefreshState = "complete"
 )
 
-// repoRefreshMsg is emitted by refreshRepos once when an owner starts and once
+// RefreshMsg is emitted by RefreshRepos once when an owner starts and once
 // when it finishes. Complete is the final message and contains the merged,
 // activity-sorted result (including cached data for owners which failed).
-type repoRefreshMsg struct {
+type RefreshMsg struct {
 	Owner string
-	State repoRefreshState
+	State RefreshState
 	Repos []Repo
 	Err   error
 }
 
-// cachedRepos is deliberately cache-first: unlike listRepos it returns usable
+// CachedRepos is deliberately cache-first: unlike listRepos it returns usable
 // cached data even when stale. The bool reports whether a matching cache exists.
-func cachedRepos(orgs []string) ([]Repo, time.Time, bool) {
+func CachedRepos(orgs []string) ([]Repo, time.Time, bool) {
 	var c repoCache
-	b, err := os.ReadFile(cachePath())
+	b, err := os.ReadFile(config.CachePath())
 	if err != nil || json.Unmarshal(b, &c) != nil || c.SchemaVersion != 2 || !slices.Equal(c.Orgs, orgs) {
 		return nil, time.Time{}, false
 	}
 	repos := slices.Clone(c.Repos)
-	sortReposByActivity(repos)
+	SortReposByActivity(repos)
 	return repos, c.FetchedAt, true
 }
 
-// refreshRepos fetches configured owners concurrently. Successful results are
+// RefreshRepos fetches configured owners concurrently. Successful results are
 // merged immediately; failures retain that owner's cached repositories. Calling
-// it again (or refreshOwnerRepos directly) provides owner-level retry.
-func refreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, cached []Repo) <-chan repoRefreshMsg {
+// it again (or RefreshOwnerRepos directly) provides owner-level retry.
+func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, cached []Repo) <-chan RefreshMsg {
 	// This is the maximum possible event count. A full buffer lets the
 	// coordinator and workers terminate even if the consumer stops reading.
-	out := make(chan repoRefreshMsg, 2*len(orgs)+1)
+	out := make(chan RefreshMsg, 2*len(orgs)+1)
 	go func() {
 		defer close(out)
 		type result struct {
@@ -82,9 +84,9 @@ func refreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		results := make(chan result, len(orgs))
 		for _, owner := range orgs {
 			owner := owner
-			out <- repoRefreshMsg{Owner: owner, State: repoRefreshStarted}
+			out <- RefreshMsg{Owner: owner, State: RefreshStarted}
 			go func() {
-				repos, err := refreshOwnerRepos(ctx, client, token, owner)
+				repos, err := RefreshOwnerRepos(ctx, client, token, owner)
 				results <- result{owner: owner, repos: repos, err: err}
 			}()
 		}
@@ -93,23 +95,23 @@ func refreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		for range orgs {
 			r := <-results
 			if r.err != nil {
-				out <- repoRefreshMsg{Owner: r.owner, State: repoRefreshFailed, Err: r.err}
+				out <- RefreshMsg{Owner: r.owner, State: RefreshFailed, Err: r.err}
 				continue
 			}
-			merged = replaceOwnerRepos(merged, r.owner, r.repos)
-			sortReposByActivity(merged)
-			out <- repoRefreshMsg{Owner: r.owner, State: repoRefreshSucceeded, Repos: slices.Clone(merged)}
+			merged = ReplaceOwnerRepos(merged, r.owner, r.repos)
+			SortReposByActivity(merged)
+			out <- RefreshMsg{Owner: r.owner, State: RefreshSucceeded, Repos: slices.Clone(merged)}
 		}
-		sortReposByActivity(merged)
+		SortReposByActivity(merged)
 		if ctx.Err() == nil {
-			writeRepoCache(orgs, merged)
+			WriteRepoCache(orgs, merged)
 		}
-		out <- repoRefreshMsg{State: repoRefreshComplete, Repos: merged}
+		out <- RefreshMsg{State: RefreshComplete, Repos: merged}
 	}()
 	return out
 }
 
-func replaceOwnerRepos(repos []Repo, owner string, replacement []Repo) []Repo {
+func ReplaceOwnerRepos(repos []Repo, owner string, replacement []Repo) []Repo {
 	merged := make([]Repo, 0, len(repos)+len(replacement))
 	for _, repo := range repos {
 		if !strings.EqualFold(repo.Org, owner) {
@@ -119,16 +121,16 @@ func replaceOwnerRepos(repos []Repo, owner string, replacement []Repo) []Repo {
 	return append(merged, replacement...)
 }
 
-func writeRepoCache(orgs []string, repos []Repo) {
-	_ = os.MkdirAll(filepath.Dir(cachePath()), 0o755)
+func WriteRepoCache(orgs []string, repos []Repo) {
+	_ = os.MkdirAll(filepath.Dir(config.CachePath()), 0o755)
 	b, err := json.MarshalIndent(repoCache{SchemaVersion: 2, FetchedAt: time.Now(), Orgs: orgs, Repos: repos}, "", "  ")
 	if err == nil {
-		_ = os.WriteFile(cachePath(), b, 0o644) // cache write failure is not fatal
+		_ = os.WriteFile(config.CachePath(), b, 0o644) // cache write failure is not fatal
 	}
 }
 
 // token: gh auth token → GITHUB_TOKEN → error. gh owns keychain/hosts.yml resolution.
-func githubToken() (string, error) {
+func Token() (string, error) {
 	if out, err := exec.Command("gh", "auth", "token").Output(); err == nil {
 		if t := strings.TrimSpace(string(out)); t != "" {
 			return t, nil
@@ -142,22 +144,22 @@ func githubToken() (string, error) {
 
 // listRepos returns all configured GitHub owners' repos, from cache unless stale (24h).
 func listRepos(orgs []string, refresh bool) ([]Repo, error) {
-	cached, fetchedAt, cacheOK := cachedRepos(orgs)
+	cached, fetchedAt, cacheOK := CachedRepos(orgs)
 	if cacheOK && !refresh && time.Since(fetchedAt) < 24*time.Hour {
 		return cached, nil
 	}
 
-	token, err := githubToken()
+	token, err := Token()
 	if err != nil {
 		return nil, err
 	}
 	var repos []Repo
 	var firstErr error
-	for msg := range refreshRepos(context.Background(), http.DefaultClient, token, orgs, cached) {
-		if msg.State == repoRefreshFailed && firstErr == nil {
+	for msg := range RefreshRepos(context.Background(), http.DefaultClient, token, orgs, cached) {
+		if msg.State == RefreshFailed && firstErr == nil {
 			firstErr = msg.Err
 		}
-		if msg.State == repoRefreshComplete {
+		if msg.State == RefreshComplete {
 			repos = msg.Repos
 		}
 	}
@@ -167,17 +169,17 @@ func listRepos(orgs []string, refresh bool) ([]Repo, error) {
 	return repos, nil
 }
 
-func refreshOwnerRepos(ctx context.Context, client *http.Client, token, owner string) ([]Repo, error) {
+func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner string) ([]Repo, error) {
 	login := ""
 	return fetchOwnerReposContext(ctx, client, token, owner, &login)
 }
 
-func sortReposByActivity(repos []Repo) {
+func SortReposByActivity(repos []Repo) {
 	sort.SliceStable(repos, func(i, j int) bool {
 		if !repos[i].PushedAt.Equal(repos[j].PushedAt) {
 			return repos[i].PushedAt.After(repos[j].PushedAt)
 		}
-		return repoID(repos[i]) < repoID(repos[j])
+		return repos[i].ID() < repos[j].ID()
 	})
 }
 
@@ -262,3 +264,5 @@ func githubJSONContext(ctx context.Context, client *http.Client, token, requestU
 	}
 	return json.NewDecoder(resp.Body).Decode(dst)
 }
+
+func (r Repo) ID() string { return r.Org + "/" + r.Name }

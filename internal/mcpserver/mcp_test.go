@@ -1,4 +1,4 @@
-package main
+package mcpserver
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -18,7 +19,7 @@ func TestEditorPaneOpensInSidebarAndReplacesPreviousPane(t *testing.T) {
 	helper := filepath.Join(dir, "zellij")
 	os.WriteFile(helper, []byte("#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALL_LOG\"\ncase \"$*\" in *new-pane*) echo terminal_9;; esac\n"), 0o755)
 	t.Setenv("CALL_LOG", log)
-	p := &editorPane{root: dir, zellij: helper, session: "test-session", editor: editorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}}
+	p := &editorPane{root: dir, zellij: helper, session: "test-session", editor: launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}}
 	if _, err := p.open(context.Background(), openFileInput{Path: "doc.md", Line: 7}); err != nil {
 		t.Fatal(err)
 	}
@@ -36,7 +37,7 @@ func TestEditorPaneOpensInSidebarAndReplacesPreviousPane(t *testing.T) {
 
 func TestMCPServerAdvertisesOpenFile(t *testing.T) {
 	ctx := context.Background()
-	server := newMCPServer(t.TempDir(), editorCommand{Argv: []string{"vi"}}, "zellij", "test-session")
+	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, "zellij", "test-session")
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)

@@ -1,4 +1,4 @@
-package main
+package config
 
 import (
 	"encoding/json"
@@ -28,14 +28,14 @@ func xdgDir(envVar, fallback string) string {
 	return filepath.Join(base, "qrouton")
 }
 
-func configPath() string { return filepath.Join(xdgDir("XDG_CONFIG_HOME", ".config"), "config.json") }
-func cachePath() string  { return filepath.Join(xdgDir("XDG_CACHE_HOME", ".cache"), "repos.json") }
+func Path() string      { return filepath.Join(xdgDir("XDG_CONFIG_HOME", ".config"), "config.json") }
+func CachePath() string { return filepath.Join(xdgDir("XDG_CACHE_HOME", ".cache"), "repos.json") }
 
-// loadConfig reads config.json, running the first-run wizard if it doesn't exist.
+// Load reads config.json, running the first-run wizard if it doesn't exist.
 // QROUTON_ROOT / QROUTON_ORGS override at runtime.
-func loadConfig() (*Config, error) {
+func Load() (*Config, error) {
 	cfg := &Config{}
-	b, err := os.ReadFile(configPath())
+	b, err := os.ReadFile(Path())
 	switch {
 	case os.IsNotExist(err):
 		if cfg, err = wizard(); err != nil {
@@ -45,7 +45,7 @@ func loadConfig() (*Config, error) {
 		return nil, err
 	default:
 		if err := json.Unmarshal(b, cfg); err != nil {
-			return nil, fmt.Errorf("%s: %w", configPath(), err)
+			return nil, fmt.Errorf("%s: %w", Path(), err)
 		}
 	}
 	if v := os.Getenv("QROUTON_ROOT"); v != "" {
@@ -55,7 +55,7 @@ func loadConfig() (*Config, error) {
 		cfg.Orgs = splitOrgs(v)
 	}
 	if len(cfg.Orgs) == 0 {
-		return nil, fmt.Errorf("%s: orgs must contain at least one GitHub organization", configPath())
+		return nil, fmt.Errorf("%s: orgs must contain at least one GitHub organization", Path())
 	}
 	// Older first-run wizards always wrote this value as the built-in default. Treat that exact
 	// shape as unset so existing installations receive current runner defaults.
@@ -86,11 +86,11 @@ func wizard() (*Config, error) {
 		return nil, err
 	}
 	cfg := &Config{Orgs: splitOrgs(orgs), Root: root}
-	if err := os.MkdirAll(filepath.Dir(configPath()), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(Path()), 0o755); err != nil {
 		return nil, err
 	}
 	b, _ := json.MarshalIndent(cfg, "", "  ")
-	return cfg, os.WriteFile(configPath(), b, 0o644)
+	return cfg, os.WriteFile(Path(), b, 0o644)
 }
 
 func splitOrgs(s string) []string {

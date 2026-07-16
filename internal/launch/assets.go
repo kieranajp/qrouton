@@ -1,4 +1,4 @@
-package main
+package launch
 
 import (
 	"embed"
@@ -22,9 +22,9 @@ type assetLink struct {
 	target string
 }
 
-// stampAssets refreshes qrouton's canonical, session-local assets and their runner adapters.
+// StampAssets refreshes qrouton's canonical, session-local assets and their runner adapters.
 // Existing generated regular files are migrated to links; user-authored files are never replaced.
-func stampAssets(dir string) error {
+func StampAssets(dir string) error {
 	canonical := filepath.Join(dir, ".qrouton", "qrspi")
 	var links []assetLink
 	err := fs.WalkDir(assetsFS, "assets", func(p string, d fs.DirEntry, err error) error {

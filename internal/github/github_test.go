@@ -1,4 +1,4 @@
-package main
+package github
 
 import (
 	"context"
@@ -27,21 +27,21 @@ func TestRefreshReposMergesPartialResultsAndRetainsFailedOwnerCache(t *testing.T
 		{Org: "good", Name: "stale", PushedAt: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)},
 		{Org: "bad", Name: "cached", PushedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
-	var complete repoRefreshMsg
-	states := map[string][]repoRefreshState{}
-	for msg := range refreshRepos(context.Background(), client, "token", []string{"good", "bad"}, cached) {
+	var complete RefreshMsg
+	states := map[string][]RefreshState{}
+	for msg := range RefreshRepos(context.Background(), client, "token", []string{"good", "bad"}, cached) {
 		states[msg.Owner] = append(states[msg.Owner], msg.State)
-		if msg.State == repoRefreshComplete {
+		if msg.State == RefreshComplete {
 			complete = msg
 		}
 	}
-	if !reflect.DeepEqual(states["good"], []repoRefreshState{repoRefreshStarted, repoRefreshSucceeded}) {
+	if !reflect.DeepEqual(states["good"], []RefreshState{RefreshStarted, RefreshSucceeded}) {
 		t.Fatalf("good states = %#v", states["good"])
 	}
-	if !reflect.DeepEqual(states["bad"], []repoRefreshState{repoRefreshStarted, repoRefreshFailed}) {
+	if !reflect.DeepEqual(states["bad"], []RefreshState{RefreshStarted, RefreshFailed}) {
 		t.Fatalf("bad states = %#v", states["bad"])
 	}
-	got := []string{repoID(complete.Repos[0]), repoID(complete.Repos[1])}
+	got := []string{complete.Repos[0].ID(), complete.Repos[1].ID()}
 	if want := []string{"good/fresh", "bad/cached"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("merged repos = %#v, want %#v", got, want)
 	}
@@ -63,14 +63,14 @@ func TestRefreshOwnerReposCanBeRetriedIndependently(t *testing.T) {
 	githubAPIBase = "https://api.test"
 	t.Cleanup(func() { githubAPIBase = oldBase })
 
-	if _, err := refreshOwnerRepos(context.Background(), client, "token", "owner"); err == nil {
+	if _, err := RefreshOwnerRepos(context.Background(), client, "token", "owner"); err == nil {
 		t.Fatal("first refresh unexpectedly succeeded")
 	}
-	repos, err := refreshOwnerRepos(context.Background(), client, "token", "owner")
+	repos, err := RefreshOwnerRepos(context.Background(), client, "token", "owner")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(repos) != 1 || repoID(repos[0]) != "owner/recovered" {
+	if len(repos) != 1 || repos[0].ID() != "owner/recovered" {
 		t.Fatalf("retry repos = %#v", repos)
 	}
 }
@@ -123,8 +123,8 @@ func TestSortReposByActivityNewestPushFirst(t *testing.T) {
 		{Org: "z", Name: "new", PushedAt: newest},
 		{Org: "a", Name: "also-new", PushedAt: newest},
 	}
-	sortReposByActivity(repos)
-	got := []string{repoID(repos[0]), repoID(repos[1]), repoID(repos[2])}
+	SortReposByActivity(repos)
+	got := []string{repos[0].ID(), repos[1].ID(), repos[2].ID()}
 	want := []string{"a/also-new", "z/new", "b/old"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("order = %#v, want %#v", got, want)
@@ -179,5 +179,11 @@ func TestFetchOwnerReposUsesOrganizationEndpoint(t *testing.T) {
 	gotPaths := paths.snapshot()
 	if !reflect.DeepEqual(gotPaths, want) {
 		t.Fatalf("requests = %#v, want %#v", gotPaths, want)
+	}
+}
+
+func TestRepoIDIncludesOrganization(t *testing.T) {
+	if got := (Repo{Org: "acme", Name: "api"}).ID(); got != "acme/api" {
+		t.Fatalf("Repo.ID() = %q", got)
 	}
 }
