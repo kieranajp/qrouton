@@ -52,9 +52,9 @@ func runners(cfg *Config) []Runner {
 	return out
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor editorCommand, socketDir string) ([]string, []string, error) {
 	argv := runnerArgv(r)
-	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.marshal()}
+	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
 	switch r.ID {
 	case "claude":
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}

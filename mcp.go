@@ -20,10 +20,10 @@ type openFileInput struct {
 }
 
 type editorPane struct {
-	root, zellij string
-	editor       editorCommand
-	mu           sync.Mutex
-	paneID       string
+	root, zellij, session string
+	editor                editorCommand
+	mu                    sync.Mutex
+	paneID                string
 }
 
 var commandContext = exec.CommandContext
@@ -36,17 +36,14 @@ func (p *editorPane) open(ctx context.Context, input openFileInput) (string, err
 	if input.Line < 1 {
 		input.Line = 1
 	}
-	if os.Getenv("ZELLIJ") == "" && os.Getenv("ZELLIJ_SESSION_NAME") == "" {
-		return "", fmt.Errorf("open_file is only available inside the qrouton Zellij workspace")
-	}
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.paneID != "" {
-		_ = commandContext(ctx, p.zellij, "action", "close-pane", "--pane-id", p.paneID).Run()
+		_ = commandContext(ctx, p.zellij, "--session", p.session, "action", "close-pane", "--pane-id", p.paneID).Run()
 		p.paneID = ""
 	}
 	editorArgs := p.editor.args(path, input.Line)
-	args := []string{"action", "new-pane", "--floating", "--close-on-exit", "--x", "65%", "--width", "35%", "--y", "0%", "--height", "100%", "--name", "Editor — exit editor or Alt-x to close", "--cwd", p.root, "--"}
+	args := []string{"--session", p.session, "action", "new-pane", "--floating", "--close-on-exit", "--x", "65%", "--width", "35%", "--y", "0%", "--height", "100%", "--name", "Editor — exit editor or Alt-x to close", "--cwd", p.root, "--"}
 	args = append(args, editorArgs...)
 	out, err := commandContext(ctx, p.zellij, args...).Output()
 	if err != nil {
@@ -57,11 +54,11 @@ func (p *editorPane) open(ctx context.Context, input openFileInput) (string, err
 	return fmt.Sprintf("Opened %s at line %d in the editor pane.", rel, input.Line), nil
 }
 
-func newMCPServer(root string, editor editorCommand, zellij string) *mcp.Server {
+func newMCPServer(root string, editor editorCommand, zellij, session string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: "Open files for the user in qrouton's editor pane when doing so is useful, especially after creating a document. Paths must belong to this session.",
 	})
-	pane := &editorPane{root: root, editor: editor, zellij: zellij}
+	pane := &editorPane{root: root, editor: editor, zellij: zellij, session: session}
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "open_file",
 		Description: "Open an existing session file in the user's configured terminal editor pane. Use this after creating a document when showing it to the user is helpful.",
@@ -79,12 +76,18 @@ func runMCP(args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	root := fs.String("session-root", "", "qrouton session root")
 	editorJSON := fs.String("editor-json", "", "resolved editor configuration")
+	zellijSession := fs.String("zellij-session", "", "target Zellij session")
+	socketDir := fs.String("socket-dir", "", "Zellij socket directory")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
 	if *root == "" {
 		return fmt.Errorf("mcp: --session-root is required")
 	}
+	if *zellijSession == "" || *socketDir == "" {
+		return fmt.Errorf("mcp: --zellij-session and --socket-dir are required")
+	}
+	os.Setenv("ZELLIJ_SOCKET_DIR", *socketDir)
 	var editor editorCommand
 	rawEditor := *editorJSON
 	if rawEditor == "" {
@@ -97,5 +100,5 @@ func runMCP(args []string) error {
 	if err != nil {
 		return fmt.Errorf("mcp: zellij is unavailable")
 	}
-	return newMCPServer(*root, editor, zellij).Run(context.Background(), &mcp.StdioTransport{})
+	return newMCPServer(*root, editor, zellij, *zellijSession).Run(context.Background(), &mcp.StdioTransport{})
 }

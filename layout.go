@@ -106,7 +106,11 @@ func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCom
 	if err := requireZellij044(bin); err != nil {
 		return err
 	}
-	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor)
+	socketDir := os.Getenv("ZELLIJ_SOCKET_DIR")
+	if socketDir == "" {
+		socketDir = "/tmp/zellij"
+	}
+	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, socketDir)
 	if err != nil {
 		return err
 	}
@@ -118,10 +122,8 @@ func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCom
 	}
 	// macOS $TMPDIR is long enough that zellij's socket path ($TMPDIR/zellij-<uid>/…/<session>)
 	// exceeds the 104-byte unix-socket cap for real session names. Pin it somewhere short.
-	if os.Getenv("ZELLIJ_SOCKET_DIR") == "" {
-		env = withEnv(env, "ZELLIJ_SOCKET_DIR", "/tmp/zellij")
-		os.Setenv("ZELLIJ_SOCKET_DIR", "/tmp/zellij") // discovery commands below use this socket too
-	}
+	env = withEnv(env, "ZELLIJ_SOCKET_DIR", socketDir)
+	os.Setenv("ZELLIJ_SOCKET_DIR", socketDir) // discovery commands below use this socket too
 	if out, err := exec.Command(bin, "list-sessions", "-n").Output(); err == nil {
 		for _, l := range strings.Split(string(out), "\n") {
 			if f := strings.Fields(l); len(f) > 0 && f[0] == slug {

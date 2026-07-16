@@ -69,7 +69,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}})
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}}, "/tmp/zellij")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -79,6 +79,9 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 		}
 		if id != "opencode" && !strings.Contains(joined, "editor-json") {
 			t.Fatalf("%s missing explicit editor config: %v", id, argv)
+		}
+		if id != "opencode" && (!strings.Contains(joined, "zellij-session") || !strings.Contains(joined, "socket-dir")) {
+			t.Fatalf("%s missing explicit Zellij target: %v", id, argv)
 		}
 		if id == "opencode" {
 			var raw string
