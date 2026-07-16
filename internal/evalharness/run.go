@@ -235,7 +235,7 @@ func runCase(
 	if err != nil && result.InfrastructureError == "" {
 		result.InfrastructureError = fmt.Sprintf("collect artifacts: %v", err)
 	}
-	result.Diffs = collectDiffs(caseCtx, workspace, baselines)
+	result.Diffs = collectDiffs(workspace, baselines)
 	result.Assertions = Grade(scenario, result, workspace, baselines)
 
 	result.DurationMS = time.Since(started).Milliseconds()
@@ -349,10 +349,14 @@ func collectArtifacts(workspace string) ([]Artifact, error) {
 	return artifacts, err
 }
 
-func collectDiffs(ctx context.Context, workspace string, baselines map[string]string) map[string]string {
+// collectDiffs deliberately ignores the case context: it runs after the turns,
+// where the per-case timeout may already have expired, and a timed-out case is
+// exactly the one whose diffs the report and judges must still see.
+func collectDiffs(workspace string, baselines map[string]string) map[string]string {
 	diffs := make(map[string]string, len(baselines))
 	for repo := range baselines {
 		repoDir := filepath.Join(workspace, "src", repo)
+		ctx := context.Background()
 		diffs[repo] = commandOutput(ctx, repoDir, "git", "diff", "--no-ext-diff", "HEAD")
 		untracked := commandOutput(ctx, repoDir, "git", "ls-files", "--others", "--exclude-standard")
 		if untracked != "" {
@@ -370,30 +374,6 @@ func commandOutput(ctx context.Context, dir, name string, args ...string) string
 		return strings.TrimSpace(string(output))
 	}
 	return strings.TrimSpace(string(output))
-}
-
-func oppositeAdapter(adapter Adapter, config Config) Adapter {
-	if adapter.Name == "claude" {
-		return Adapter{
-			Name:     "codex",
-			Bin:      valueOrDefault(config.CodexBin, "codex"),
-			Model:    config.CodexModel,
-			SelfPath: config.SelfPath,
-		}
-	}
-	return Adapter{
-		Name:     "claude",
-		Bin:      valueOrDefault(config.ClaudeBin, "claude"),
-		Model:    config.ClaudeModel,
-		SelfPath: config.SelfPath,
-	}
-}
-
-func valueOrDefault(value, fallback string) string {
-	if value != "" {
-		return value
-	}
-	return fallback
 }
 
 func writeCaseFiles(caseDir string, result CaseResult) error {
@@ -429,15 +409,6 @@ func writeCaseFiles(caseDir string, result CaseResult) error {
 		0o644,
 	); err != nil {
 		return err
-	}
-	if result.Judge != nil {
-		judge, err := json.MarshalIndent(result.Judge, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := os.WriteFile(filepath.Join(caseDir, "judge.json"), append(judge, '\n'), 0o644); err != nil {
-			return err
-		}
 	}
 	encoded, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
