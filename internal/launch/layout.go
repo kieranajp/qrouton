@@ -14,45 +14,36 @@ import (
 	"github.com/charmbracelet/huh"
 )
 
-// Panels are an opinionated Zellij workspace rather than a bespoke TUI.
+// Panels are an opinionated Zellij workspace rather than a bespoke TUI. The shell
+// scripts that drive its panes live under scripts/ and are embedded here so they read
+// and edit as real scripts; each is written into .qrouton at launch (or, for shellIntro
+// and codexDepthWarning, spliced into the generated layout).
 
-const statusScript = `#!/bin/sh
-# qrouton: live per-repo branch + status (generated; regenerated at every launch)
-cd "$(dirname "$0")/.." || exit 1
-while :; do
-  clear
-  for g in src/*/.git */.git; do
-    [ -e "$g" ] || continue
-    r=${g%/.git}
-    branch=$(git -C "$r" branch --show-current)
-    dirty=$(git -C "$r" status --porcelain | wc -l | tr -d ' ')
-    [ "$dirty" -eq 0 ] && state=clean || state="${dirty} changed"
-    printf '\033[1m%s\033[0m  %s · %s\n' "$r" "$branch" "$state"
-  done
-  sleep 3
-done
-`
+// statusScript renders the live per-repo branch/status pane.
+//
+//go:embed scripts/status.sh
+var statusScript string
 
-const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
+// shellIntro greets the shell pane with a shallow tree, then execs an interactive login shell.
+//
+//go:embed scripts/shell-intro.sh
+var shellIntro string
 
 // notifyScript plays a short cross-platform attention sound; it backs both the notify
-// MCP tool and the runner's Notification hook. See notify.sh for the player fallbacks.
+// MCP tool and the runner's Notification hook. See scripts/notify.sh for the fallbacks.
 //
-//go:embed notify.sh
+//go:embed scripts/notify.sh
 var notifyScript string
 
-const helpScript = `#!/bin/sh
-clear
-printf '\n  qrouton\n\n'
-printf '  Coordinate here; delegate work to subagents.\n\n'
-%s
-printf '  Move   Alt + arrow keys\n'
-printf '  Quit   Ctrl-g, then Ctrl-q\n\n'
-printf '  Press Enter to begin\n'
-IFS= read -r _
-`
+// helpScript is the quick-start panel; @@WARNING@@ is replaced with codexDepthWarning or "".
+//
+//go:embed scripts/help.sh
+var helpScript string
 
-const codexDepthWarning = "printf '  WARNING  Codex agents.max_depth is under 2. Set it to 3\\n'\nprintf '           in ~/.codex/config.toml for nested subagents.\\n\\n'"
+// codexDepthWarning warns when Codex's subagent nesting is too shallow.
+//
+//go:embed scripts/codex-warning.sh
+var codexDepthWarning string
 
 // writeSupport writes .qrouton/{status.sh,layout.kdl,zellij-config.kdl} at launch time,
 // so old sessions pick up template changes on resume.
@@ -69,9 +60,10 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 	}
 	warning := ""
 	if filepath.Base(argv[0]) == "codex" && codexMaxDepth(argv) < 2 {
-		warning = codexDepthWarning
+		warning = strings.TrimRight(codexDepthWarning, "\n")
 	}
-	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(fmt.Sprintf(helpScript, warning)), 0o755); err != nil {
+	help := strings.ReplaceAll(helpScript, "@@WARNING@@", warning)
+	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(help), 0o755); err != nil {
 		return "", err
 	}
 	qroutonBin, err := os.Executable()
@@ -128,7 +120,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
+`, argv[0], args, strings.TrimSpace(shellIntro), filepath.Join(cd, "status.sh"), qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
 }
