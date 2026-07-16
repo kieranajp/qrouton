@@ -43,11 +43,6 @@ type LaunchRequest struct {
 	Resume bool
 }
 
-type reposLoadedMsg struct {
-	repos []github.Repo
-	err   error
-}
-
 type refreshReadyMsg struct {
 	gen   int
 	token string
@@ -297,21 +292,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		return m, awaitRefresh(v.gen, m.refresh)
-	case reposLoadedMsg:
-		m.refreshing = false
-		if v.err != nil {
-			m.err = v.err
-			if len(m.repos) == 0 {
-				m.back, m.screen = landingScreen, errorScreen
-			}
-		} else {
-			m.repos, m.cacheAt, m.err = v.repos, time.Now(), nil
-			m.clampRepoCursor()
-			if m.screen == loadingScreen {
-				m.screen = newScreen
-			}
-		}
-		return m, nil
 	case assembledMsg:
 		if v.err != nil {
 			back := newScreen
