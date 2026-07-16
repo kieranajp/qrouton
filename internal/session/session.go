@@ -115,18 +115,9 @@ func Scan(root string) ([]Manifest, error) {
 	return out, nil
 }
 
-// createSession assembles mirrors + worktrees, then writes the manifest last —
-// a half-assembled dir with no manifest never shows up in resume.
-func createSession(cfg *config.Config, name, desc, ticket, prefix string, repos []github.Repo) (string, error) {
-	selected := make([]RepoSelection, len(repos))
-	for i, repo := range repos {
-		selected[i] = RepoSelection{Repo: repo, Role: RepoRoleActive}
-	}
-	return createSessionWithRoles(cfg, name, desc, ticket, prefix, selected)
-}
-
 // createSessionWithRoles creates branches only for active repositories and pins
-// references to the default-branch revision resolved at creation time.
+// references to the default-branch revision resolved at creation time. It writes the
+// manifest last, so a half-assembled directory without one never shows up in resume.
 func createSessionWithRoles(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection) (string, error) {
 	return Create(cfg, name, desc, ticket, prefix, repos, nil)
 }

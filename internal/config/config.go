@@ -63,6 +63,9 @@ func Load() (*Config, error) {
 		cfg.Launch = nil
 	}
 	cfg.Root = expandHome(cfg.Root)
+	if strings.TrimSpace(cfg.Root) == "" {
+		return nil, fmt.Errorf("%s: root must be set (or export QROUTON_ROOT)", Path())
+	}
 	return cfg, os.MkdirAll(cfg.Root, 0o755)
 }
 
