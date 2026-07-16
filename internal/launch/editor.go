@@ -69,6 +69,36 @@ func (e EditorCommand) Args(path string, line int) []string {
 func (e EditorCommand) Marshal() string { b, _ := json.Marshal(e); return string(b) }
 
 func ResolveSessionFile(root, name string) (string, error) {
+	real, err := resolveWithinSession(root, name)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(real)
+	if err != nil || !info.Mode().IsRegular() {
+		return "", fmt.Errorf("file %q is not a regular file", name)
+	}
+	return real, nil
+}
+
+// ResolveSessionDir resolves name to an existing directory confined to the session
+// root, applying the same symlink-escape guard as ResolveSessionFile. It backs the
+// cwd argument of pane-spawning MCP tools.
+func ResolveSessionDir(root, name string) (string, error) {
+	real, err := resolveWithinSession(root, name)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(real)
+	if err != nil || !info.IsDir() {
+		return "", fmt.Errorf("directory %q is not a directory", name)
+	}
+	return real, nil
+}
+
+// resolveWithinSession returns the real, absolute path for name (relative paths are
+// taken against root) only if it exists and resolves inside root after following
+// symlinks; otherwise it errors. It does not constrain the kind of file found.
+func resolveWithinSession(root, name string) (string, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
 		return "", err
@@ -87,15 +117,11 @@ func ResolveSessionFile(root, name string) (string, error) {
 	}
 	real, err := filepath.EvalSymlinks(p)
 	if err != nil {
-		return "", fmt.Errorf("file %q does not exist", name)
+		return "", fmt.Errorf("%q does not exist in the qrouton session", name)
 	}
 	rel, err := filepath.Rel(root, real)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("file %q is outside the qrouton session", name)
-	}
-	info, err := os.Stat(real)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("file %q is not a regular file", name)
+		return "", fmt.Errorf("%q is outside the qrouton session", name)
 	}
 	return real, nil
 }

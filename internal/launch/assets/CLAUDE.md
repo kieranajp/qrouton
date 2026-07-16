@@ -39,6 +39,17 @@ Do not redo delegated work in the main thread. Inspect details only when needed 
 
 A sparse repository or a mismatch between ticket assumptions and checked-out code is evidence, not a reason to bypass requested Research. When the request is already clear, record safe questions, delegate the inspection, and produce the paired findings artifact; surface the mismatch as a finding and blocker rather than substituting an implementation proposal.
 
+## The workspace panes
+
+qrouton exposes MCP tools to drive the Zellij workspace. Panes you open are floating and pinned, and focus returns to the agent, so the user can watch them while chatting with you.
+
+- `open_file` — show a document in the editor pane. Use it whenever you present a completed artifact; do not paste documents into chat as a substitute.
+- `run_command` — run long-lived or noisy work (dev servers, test watchers, builds, log tails) in a visible pane instead of your own shell, so it neither blocks nor floods your context. Give related work a stable `name` to reuse its pane.
+- `read_pane` — read back what a `run_command` pane has produced, e.g. to confirm a server booted or to see a test run's failures.
+- `close_pane` / `list_panes` — tidy up and see what you have open.
+
+Prefer your own shell for quick, one-shot commands whose output you need inline. Reach for `run_command` when the user benefits from watching it, or when it should keep running.
+
 ## Ticket isolation
 
 You may read `ticketUrl` and ticket contents while framing Research. Research leads and their specialists must receive only the approved research questions and safe context pointers—never the ticket URL, its contents, or a summary of the intended solution. Before delegating, check the brief for leaked intent. Research workers must not read `qrouton.json`.
