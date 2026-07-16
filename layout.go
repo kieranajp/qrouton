@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/charmbracelet/huh"
 )
 
 // Panels (S001 #8): the multi-panel workspace is a generated multiplexer layout, not a bespoke TUI.
@@ -17,7 +19,7 @@ const statusScript = `#!/bin/sh
 cd "$(dirname "$0")/.." || exit 1
 while :; do
   clear
-  for g in */.git; do
+  for g in src/*/.git */.git; do
     [ -e "$g" ] || continue
     r=${g%/.git}
     printf '\033[1m%s\033[0m  (%s)\n' "$r" "$(git -C "$r" branch --show-current)"
@@ -27,6 +29,8 @@ while :; do
   sleep 3
 done
 `
+
+const shellIntro = `if command -v tree >/dev/null 2>&1; then tree -L 2; else find . -maxdepth 2 -print; fi; exec "${SHELL:-/bin/sh}" -l`
 
 // writeSupport writes .qrouton/{status.sh,layout.kdl} into the session dir at launch time,
 // so old sessions pick up template changes on resume.
@@ -55,10 +59,12 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
         pane size="65%%" name="agent" {
             command %q%s
         }
-        pane split_direction="horizontal" size="35%%" {
-            pane name="shell"
+		pane split_direction="horizontal" size="35%%" {
+			pane name="shell" command="sh" {
+				args "-lc" %q
+			}
             pane name="repos" command="sh" {
-                args ".qrouton/status.sh"
+                args %q
             }
         }
     }
@@ -68,7 +74,7 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 }
 session_name %q
 attach_to_session true
-`, argv[0], args, slug)
+`, argv[0], args, shellIntro, filepath.Join(cd, "status.sh"), slug)
 	lp := filepath.Join(cd, "layout.kdl")
 	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
 }
@@ -87,10 +93,26 @@ func launchZellij(bin, dir string, argv []string) error {
 	if os.Getenv("ZELLIJ_SOCKET_DIR") == "" {
 		os.Setenv("ZELLIJ_SOCKET_DIR", "/tmp/zellij")
 	}
-	if out, err := exec.Command(bin, "list-sessions", "-s").Output(); err == nil {
+	if out, err := exec.Command(bin, "list-sessions", "-n").Output(); err == nil {
 		for _, l := range strings.Split(string(out), "\n") {
-			if strings.TrimSpace(l) == slug {
-				return execv(bin, []string{"zellij", "attach", slug}, dir)
+			if f := strings.Fields(l); len(f) > 0 && f[0] == slug {
+				if !strings.Contains(l, "EXITED") {
+					attach, err := chooseExistingSession(filepath.Base(argv[0]))
+					if err != nil {
+						return err
+					}
+					if attach {
+						return execv(bin, []string{"zellij", "attach", slug}, dir)
+					}
+					if err := exec.Command(bin, "delete-session", "--force", slug).Run(); err != nil {
+						return err
+					}
+					break
+				}
+				// dead session: attach would resurrect zellij's *recorded* state (stale layout,
+				// old paths) instead of applying the freshly-stamped one — delete and recreate
+				exec.Command(bin, "delete-session", slug).Run()
+				break
 			}
 		}
 	}
@@ -105,7 +127,16 @@ func launchZellij(bin, dir string, argv []string) error {
 func launchTmux(bin, dir string, argv []string) error {
 	slug := filepath.Base(dir)
 	if exec.Command(bin, "has-session", "-t", "="+slug).Run() == nil {
-		return execv(bin, []string{"tmux", "attach", "-t", "=" + slug}, dir)
+		attach, err := chooseExistingSession(filepath.Base(argv[0]))
+		if err != nil {
+			return err
+		}
+		if attach {
+			return execv(bin, []string{"tmux", "attach", "-t", "=" + slug}, dir)
+		}
+		if err := exec.Command(bin, "kill-session", "-t", "="+slug).Run(); err != nil {
+			return err
+		}
 	}
 	if _, err := writeSupport(dir, slug, argv); err != nil {
 		return err
@@ -117,7 +148,18 @@ func launchTmux(bin, dir string, argv []string) error {
 	}
 	return execv(bin, []string{"tmux",
 		"new-session", "-s", slug, "-c", dir, strings.Join(quoted, " "),
-		";", "split-window", "-h", "-l", "35%", "-c", dir,
-		";", "split-window", "-v", "-c", dir, "sh .qrouton/status.sh",
+		";", "split-window", "-h", "-l", "35%", "-c", dir, fmt.Sprintf("sh -lc %q", shellIntro),
+		";", "split-window", "-v", "-c", dir, fmt.Sprintf("sh %q", filepath.Join(dir, ".qrouton", "status.sh")),
 		";", "select-pane", "-L"}, dir)
+}
+
+func chooseExistingSession(runner string) (bool, error) {
+	action := "attach"
+	err := huh.NewSelect[string]().Title("Workspace is already running").
+		Description("Attach to its current agent, or restart all workspace panes with "+runner+".").
+		Options(
+			huh.NewOption("Attach existing workspace", "attach"),
+			huh.NewOption("Restart workspace", "restart"),
+		).Value(&action).Run()
+	return action == "attach", err
 }

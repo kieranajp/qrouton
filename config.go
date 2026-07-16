@@ -11,7 +11,7 @@ import (
 )
 
 type Config struct {
-	Org    string     `json:"org"`    // GitHub org for the repo picker
+	Orgs   []string   `json:"orgs"`   // GitHub orgs for the repo picker
 	Root   string     `json:"root"`   // sessions live flat under it; mirrors under <root>/.mirrors
 	Launch [][]string `json:"launch"` // runner commands; default [["claude"]]; asked if >1
 }
@@ -31,7 +31,7 @@ func configPath() string { return filepath.Join(xdgDir("XDG_CONFIG_HOME", ".conf
 func cachePath() string  { return filepath.Join(xdgDir("XDG_CACHE_HOME", ".cache"), "repos.json") }
 
 // loadConfig reads config.json, running the first-run wizard if it doesn't exist.
-// QROUTON_ROOT / QROUTON_ORG override at runtime.
+// QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func loadConfig() (*Config, error) {
 	cfg := &Config{}
 	b, err := os.ReadFile(configPath())
@@ -50,8 +50,11 @@ func loadConfig() (*Config, error) {
 	if v := os.Getenv("QROUTON_ROOT"); v != "" {
 		cfg.Root = v
 	}
-	if v := os.Getenv("QROUTON_ORG"); v != "" {
-		cfg.Org = v
+	if v := os.Getenv("QROUTON_ORGS"); v != "" {
+		cfg.Orgs = splitOrgs(v)
+	}
+	if len(cfg.Orgs) == 0 {
+		return nil, fmt.Errorf("%s: orgs must contain at least one GitHub organization", configPath())
 	}
 	if len(cfg.Launch) == 0 {
 		cfg.Launch = [][]string{{"claude"}}
@@ -61,24 +64,43 @@ func loadConfig() (*Config, error) {
 }
 
 func wizard() (*Config, error) {
-	root, org := "~/work", "lifesum"
+	root, orgs := "~/work", "lifesum"
 	err := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Root directory").
 			Description("Sessions live flat under it; repo mirrors under <root>/.mirrors").
 			Value(&root),
-		huh.NewInput().Title("GitHub org").
-			Description("Org whose repos the session picker lists").
-			Value(&org),
+		huh.NewInput().Title("GitHub orgs").
+			Description("Comma-separated organizations whose repos the session picker lists").
+			Value(&orgs).
+			Validate(func(s string) error {
+				if len(splitOrgs(s)) == 0 {
+					return fmt.Errorf("need at least one organization")
+				}
+				return nil
+			}),
 	)).Run()
 	if err != nil {
 		return nil, err
 	}
-	cfg := &Config{Org: org, Root: root, Launch: [][]string{{"claude"}}}
+	cfg := &Config{Orgs: splitOrgs(orgs), Root: root, Launch: [][]string{{"claude"}}}
 	if err := os.MkdirAll(filepath.Dir(configPath()), 0o755); err != nil {
 		return nil, err
 	}
 	b, _ := json.MarshalIndent(cfg, "", "  ")
 	return cfg, os.WriteFile(configPath(), b, 0o644)
+}
+
+func splitOrgs(s string) []string {
+	var out []string
+	seen := make(map[string]bool)
+	for _, org := range strings.Split(s, ",") {
+		org = strings.TrimSpace(org)
+		if org != "" && !seen[org] {
+			seen[org] = true
+			out = append(out, org)
+		}
+	}
+	return out
 }
 
 func expandHome(p string) string {

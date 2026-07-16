@@ -7,14 +7,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"sort"
-
-	"github.com/charmbracelet/huh"
 )
 
 func main() {
 	refresh := flag.Bool("refresh", false, "refresh the cached org repo list")
+	runner := flag.String("runner", "", "coding agent to launch (claude, codex, opencode, agy, pi, or configured command)")
 	flag.Parse()
 
 	cfg, err := loadConfig()
@@ -23,129 +20,26 @@ func main() {
 	sessions, err := scanSessions(cfg.Root)
 	die(err)
 
-	action := "new"
-	if len(sessions) > 0 {
-		die(huh.NewSelect[string]().
-			Title("qrouton").
-			Options(
-				huh.NewOption("New session", "new"),
-				huh.NewOption(fmt.Sprintf("Resume session (%d)", len(sessions)), "resume"),
-			).
-			Value(&action).Run())
-	}
-
-	var dir string
-	if action == "resume" {
-		dir, err = resumeSession(cfg, sessions)
-	} else {
-		dir, err = newSession(cfg, *refresh)
-	}
+	request, err := runOnboarding(cfg, sessions, *runner, *refresh)
 	die(err)
-
-	die(launch(cfg, dir))
+	if request == nil {
+		return
+	}
+	die(launchRunner(cfg, request.dir, request.runner))
 }
 
-func newSession(cfg *Config, refresh bool) (string, error) {
-	repos, err := listRepos(cfg.Org, refresh)
-	if err != nil {
-		return "", err
-	}
+func repoID(r Repo) string { return r.Org + "/" + r.Name }
 
-	var name, desc, ticket, prefix string
-	var picked []string
-	opts := make([]huh.Option[string], len(repos))
-	for i, r := range repos {
-		opts[i] = huh.NewOption(r.Name, r.Name)
-	}
-	form := huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title("Session name").
-			Description("Slugified into the session directory and branch names").
-			Value(&name).Validate(func(s string) error {
-			if slugify(s) == "" {
-				return fmt.Errorf("need a name")
-			}
-			if _, err := os.Stat(filepath.Join(cfg.Root, slugify(s))); err == nil {
-				return fmt.Errorf("session %q already exists", slugify(s))
-			}
-			return nil
-		}),
-		// bounded height — unbounded, the org repo list floods the viewport and the form degrades to field-by-field
-		huh.NewMultiSelect[string]().Title("Repos").
-			Description("Each gets a worktree in the session — type to filter, space to select").
-			Options(opts...).Filterable(true).Height(8).Value(&picked).
-			Validate(func(v []string) error {
-				if len(v) == 0 {
-					return fmt.Errorf("pick at least one repo")
-				}
-				return nil
-			}),
-		huh.NewInput().Title("Description").
-			Description("One line on what this session is for — shown in the resume list").
-			Value(&desc),
-		huh.NewInput().Title("Ticket URL (optional)").
-			Description("Informs the flow but stays hidden from research subagents").
-			Value(&ticket),
-		huh.NewSelect[string]().Title("Branch prefix").
-			Description("Branches are <prefix>/<session-slug> in every repo").
-			Options(huh.NewOptions("feat", "fix", "chore", "refactor", "docs", "test")...).
-			Value(&prefix),
-	))
-	if err := form.Run(); err != nil {
-		return "", err
-	}
-
-	byName := make(map[string]Repo, len(repos))
-	for _, r := range repos {
-		byName[r.Name] = r
-	}
-	var sel []Repo
-	for _, n := range picked {
-		sel = append(sel, byName[n])
-	}
-	return createSession(cfg, name, desc, ticket, prefix, sel)
-}
-
-func resumeSession(cfg *Config, sessions []Manifest) (string, error) {
-	sort.Slice(sessions, func(i, j int) bool { return sessions[i].CreatedAt.After(sessions[j].CreatedAt) })
-	opts := make([]huh.Option[string], len(sessions))
-	for i, s := range sessions {
-		opts[i] = huh.NewOption(fmt.Sprintf("%s — %s", s.Slug, s.Description), s.Slug)
-	}
-	var slug string
-	if err := huh.NewSelect[string]().Title("Resume").Options(opts...).Value(&slug).Run(); err != nil {
-		return "", err
-	}
-	for _, s := range sessions {
-		if s.Slug == slug {
-			return filepath.Join(cfg.Root, slug), ensureWorktrees(cfg, s)
-		}
-	}
-	return "", fmt.Errorf("session %q not found", slug)
-}
-
-// launch execs the configured runner (default claude) with cwd = session dir. No return on success.
-func launch(cfg *Config, dir string) error {
+// launch selects and execs a detected runner with cwd = session dir. No return on success.
+func launch(cfg *Config, dir, requestedRunner string) error {
 	if err := stampAssets(dir); err != nil {
 		return err
 	}
-	argv := cfg.Launch[0]
-	if len(cfg.Launch) > 1 {
-		labels := make([]huh.Option[int], len(cfg.Launch))
-		for i, c := range cfg.Launch {
-			labels[i] = huh.NewOption(fmt.Sprint(c), i)
-		}
-		var idx int
-		if err := huh.NewSelect[int]().Title("Launch").Options(labels...).Value(&idx).Run(); err != nil {
-			return err
-		}
-		argv = cfg.Launch[idx]
+	r, err := chooseRunner(cfg, requestedRunner)
+	if err != nil {
+		return err
 	}
-	// claude takes an initial prompt as a positional arg — kick off the orchestrator greeting
-	// (CLAUDE.md carries the instructions; this just fires the first turn). Other runners: no-op.
-	if filepath.Base(argv[0]) == "claude" {
-		argv = append(append([]string{}, argv...),
-			"You have just been launched in a qrouton session. Orient per CLAUDE.md: read qrouton.json, derive the phase, greet, and propose the next step.")
-	}
+	argv := runnerArgv(r)
 	if os.Getenv("QROUTON_PLAIN") == "" {
 		if p, err := exec.LookPath("zellij"); err == nil {
 			return launchZellij(p, dir, argv)
@@ -154,11 +48,23 @@ func launch(cfg *Config, dir string) error {
 			return launchTmux(p, dir, argv)
 		}
 	}
-	path, err := exec.LookPath(argv[0])
-	if err != nil {
+	return execv(r.Path, argv, dir)
+}
+
+func launchRunner(cfg *Config, dir string, r Runner) error {
+	if err := stampAssets(dir); err != nil {
 		return err
 	}
-	return execv(path, argv, dir)
+	argv := runnerArgv(r)
+	if os.Getenv("QROUTON_PLAIN") == "" {
+		if p, err := exec.LookPath("zellij"); err == nil {
+			return launchZellij(p, dir, argv)
+		}
+		if p, err := exec.LookPath("tmux"); err == nil {
+			return launchTmux(p, dir, argv)
+		}
+	}
+	return execv(r.Path, argv, dir)
 }
 
 func die(err error) {
