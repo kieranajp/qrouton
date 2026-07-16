@@ -119,6 +119,19 @@ func TestSpaceIsEnteredInTextFields(t *testing.T) {
 	}
 }
 
+func TestNavigationLettersAreEnteredInTextFields(t *testing.T) {
+	m := testApp()
+	m.screen = newScreen
+	m.form.focus = 0
+	for _, letter := range []rune("hello") {
+		updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}})
+		m = updated.(appModel)
+	}
+	if m.form.name != "hello" {
+		t.Fatalf("name = %q, want navigation letters preserved", m.form.name)
+	}
+}
+
 func TestResumeRequiresRunnerSelection(t *testing.T) {
 	m := testApp()
 	m.sessions = []Manifest{{Slug: "existing"}}

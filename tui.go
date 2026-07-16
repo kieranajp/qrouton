@@ -465,7 +465,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.editField(false, " ")
 		return m, nil
-	case "left", "h":
+	case "left":
 		if f.focus == 2 {
 			f.owner = (f.owner + len(m.cfg.Orgs)) % (len(m.cfg.Orgs) + 1)
 		}
@@ -473,7 +473,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			f.prefix = (f.prefix + 5) % 6
 		}
 		return m, nil
-	case "right", "l":
+	case "right":
 		if f.focus == 2 {
 			f.owner = (f.owner + 1) % (len(m.cfg.Orgs) + 1)
 		}
