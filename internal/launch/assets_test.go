@@ -99,3 +99,20 @@ func TestStampAssetsRefusesUserOwnedDiscoveryFile(t *testing.T) {
 		t.Fatalf("expected user-owned conflict, got %v", err)
 	}
 }
+
+func TestStampAssetsRefusesUserOwnedSymlink(t *testing.T) {
+	dir := t.TempDir()
+	mine := filepath.Join(dir, "my-instructions.md")
+	if err := os.WriteFile(mine, []byte("user instructions"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(mine, filepath.Join(dir, "AGENTS.md")); err != nil {
+		t.Fatal(err)
+	}
+	if err := StampAssets(dir); err == nil || !strings.Contains(err.Error(), "user-owned") {
+		t.Fatalf("expected user-owned conflict for user symlink, got %v", err)
+	}
+	if b, err := os.ReadFile(mine); err != nil || string(b) != "user instructions" {
+		t.Fatalf("user-linked content damaged: %q %v", b, err)
+	}
+}

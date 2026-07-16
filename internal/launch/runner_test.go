@@ -108,6 +108,39 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	}
 }
 
+func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
+	r := Runner{ID: "claude", Command: []string{"claude"}}
+	bin := "/opt/qro uton/$peculiar/qrouton"
+	dir := "/work/kieran's session"
+	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, "/tmp/zellij", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var raw string
+	for i, arg := range argv {
+		if arg == "--settings" && i+1 < len(argv) {
+			raw = argv[i+1]
+		}
+	}
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Command string `json:"command"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		t.Fatalf("settings not parseable: %v\n%s", err, raw)
+	}
+	want := `'/opt/qro uton/$peculiar/qrouton' agent-event --session-root '/work/kieran'\''s session'`
+	if got := settings.Hooks["SubagentStart"][0].Hooks[0].Command; got != want {
+		t.Fatalf("hook command = %s, want %s", got, want)
+	}
+	if got := settings.Hooks["Notification"][0].Hooks[0].Command; !strings.HasPrefix(got, `'/work/kieran'\''s session/`) {
+		t.Fatalf("notification command not shell-quoted: %s", got)
+	}
+}
+
 func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"model":"test"}`)
 	for _, id := range []string{"claude", "codex", "opencode"} {

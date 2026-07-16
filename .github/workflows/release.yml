@@ -19,12 +19,11 @@ jobs:
       - name: Build binaries
         run: |
           mkdir -p dist
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+          # No Windows artifact: the launch path is syscall.Exec + zellij, neither of which exists there.
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
             goos=${target%/*} goarch=${target#*/}
-            ext=""
-            [ "$goos" = windows ] && ext=".exe"
             CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch \
-              go build -trimpath -ldflags "-s -w" -o "dist/qrouton-${goos}-${goarch}${ext}" .
+              go build -trimpath -ldflags "-s -w" -o "dist/qrouton-${goos}-${goarch}" .
           done
           (cd dist && shasum -a 256 * > checksums.txt)
       - uses: softprops/action-gh-release@v2

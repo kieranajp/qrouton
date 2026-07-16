@@ -74,7 +74,15 @@ func wizard() (*Config, error) {
 	err := huh.NewForm(huh.NewGroup(
 		huh.NewInput().Title("Root directory").
 			Description("Sessions live flat under it; repo mirrors under <root>/.mirrors").
-			Value(&root),
+			Value(&root).
+			Validate(func(s string) error {
+				// An empty root would be written to disk and then fail Load on
+				// every subsequent start until the config is hand-edited.
+				if strings.TrimSpace(s) == "" {
+					return fmt.Errorf("root directory is required")
+				}
+				return nil
+			}),
 		huh.NewInput().Title("GitHub orgs").
 			Description("Comma-separated organizations whose repos the session picker lists").
 			Value(&orgs).

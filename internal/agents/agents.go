@@ -48,7 +48,11 @@ func Status(root, runner string) error {
 
 		lines := []string{"\033[1magents\033[0m"}
 		if err != nil {
-			lines = append(lines, "\033[2mCodex status unavailable\033[0m")
+			label := "Codex status unavailable"
+			if runner == "claude" {
+				label = "Claude status unavailable"
+			}
+			lines = append(lines, "\033[2m"+label+"\033[0m")
 		} else if len(statuses) == 0 {
 			lines = append(lines, "\033[2mNo subagents yet\033[0m")
 		} else {
@@ -67,17 +71,24 @@ func Status(root, runner string) error {
 			}
 		}
 
-		var frame strings.Builder
-		frame.WriteString("\033[H")
-		for _, line := range lines {
-			frame.WriteString(line)
-			frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
-		}
-		frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
-		fmt.Print(frame.String())
+		fmt.Print(Frame(lines))
 
 		time.Sleep(2 * time.Second)
 	}
+}
+
+// Frame renders lines as one in-place terminal frame: cursor home, erase to
+// end-of-line per row, erase-to-end-of-screen at the bottom. Redrawing this way
+// never flashes the pane blank; qrouton's watch panes share it.
+func Frame(lines []string) string {
+	var frame strings.Builder
+	frame.WriteString("\033[H")
+	for _, line := range lines {
+		frame.WriteString(line)
+		frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
+	}
+	frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
+	return frame.String()
 }
 
 type claudeAgentEvent struct {

@@ -22,12 +22,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
+        # No Windows target: the launch path execs zellij via syscall.Exec,
+        # which returns EWINDOWS at runtime, and zellij has no Windows build.
         target:
           - { goos: linux, goarch: amd64 }
           - { goos: linux, goarch: arm64 }
           - { goos: darwin, goarch: amd64 }
           - { goos: darwin, goarch: arm64 }
-          - { goos: windows, goarch: amd64 }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

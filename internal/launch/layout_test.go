@@ -21,17 +21,23 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if !strings.Contains(string(b), "tree -L 2") || !strings.Contains(string(b), `exec \"${SHELL:-/bin/sh}\" -l`) {
 		t.Fatalf("shell pane does not show a shallow tree and remain interactive:\n%s", b)
 	}
-	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); err != nil {
-		t.Fatal("status script missing:", err)
+	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); !os.IsNotExist(err) {
+		t.Fatal("stale status.sh still stamped; the repos pane is a qrouton subcommand now")
 	}
 	help, err := os.ReadFile(filepath.Join(dir, ".qrouton", "help.sh"))
 	if err != nil {
 		t.Fatal("help script missing:", err)
 	}
-	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press Enter to begin"} {
+	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press any key to begin"} {
 		if !strings.Contains(string(help), want) {
 			t.Fatalf("help panel missing %q", want)
 		}
+	}
+	if !strings.Contains(string(help), "stty -icanon") || !strings.Contains(string(help), "dd bs=1 count=1") {
+		t.Fatal("quick-start panel does not dismiss on a single raw keypress")
+	}
+	if strings.Contains(string(help), "read -r") {
+		t.Fatal("quick-start panel still requires Enter to dismiss")
 	}
 	if !strings.Contains(string(help), "agents.max_depth is under 2") || !strings.Contains(string(help), "Set it to 3") {
 		t.Fatal("Codex quick-start panel does not warn about shallow subagent nesting")
@@ -51,8 +57,14 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if !strings.Contains(string(b), `pane name="repos"`) || !strings.Contains(string(b), `pane name="agents"`) {
 		t.Fatal("repo and agent status panes are not side by side")
 	}
+	if !strings.Contains(string(b), `"repos" "--session-root"`) {
+		t.Fatal("repos pane does not run the qrouton repos subcommand")
+	}
 	if !strings.Contains(string(b), `floating_panes`) || !strings.Contains(string(b), `name="qrouton · quick start"`) || !strings.Contains(string(b), `close_on_exit=true`) {
 		t.Fatal("quick-start help is not a disposable floating pane")
+	}
+	if !strings.Contains(string(b), `close_on_exit=true focus=true`) {
+		t.Fatal("quick-start pane is not focused; startup keys would land in the agent pane")
 	}
 }
 
@@ -75,9 +87,21 @@ func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
 	}
 }
 
-func TestStatusScriptFindsSrcWorktrees(t *testing.T) {
-	if !strings.Contains(statusScript, "src/*/.git") {
-		t.Fatal("status script does not scan src worktrees")
+func TestWriteSupportRemovesStaleStatusScript(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	stale := filepath.Join(dir, ".qrouton", "status.sh")
+	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(stale, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Fatal("resumed session kept an orphaned status.sh")
 	}
 }
 

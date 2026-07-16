@@ -9,9 +9,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\b(QRSPI|qrspi-[a-z-]+|agent depth|document numbering)\b`)
+
+// testsPassTimeout bounds a fixture repo's test run during grading.
+const testsPassTimeout = 5 * time.Minute
 
 func Grade(
 	scenario Scenario,
@@ -50,9 +54,10 @@ func gradeReferencesUnchanged(workspace string, baselines map[string]string) Ass
 			continue
 		}
 		repoDir := filepath.Join(workspace, "src", repo.Name)
-		status := commandOutput(context.Background(), repoDir, "git", "status", "--porcelain")
-		head := commandOutput(context.Background(), repoDir, "git", "rev-parse", "HEAD")
-		if status != "" || head != baselines[repo.Name] {
+		status, statusErr := commandOutput(context.Background(), repoDir, "git", "status", "--porcelain")
+		head, headErr := commandOutput(context.Background(), repoDir, "git", "rev-parse", "HEAD")
+		// Fail loud: a repo whose state cannot be read is not provably unchanged.
+		if statusErr != nil || headErr != nil || status != "" || head != baselines[repo.Name] {
 			changed = append(changed, repo.Name)
 		}
 	}
@@ -236,13 +241,20 @@ func testsPass(workspace, repo string) Assertion {
 		return Assertion{Name: "tests pass: " + repo, Evidence: "no supported test manifest"}
 	}
 
-	cmd := exec.Command(command[0], command[1:]...)
+	// Bound the run: a hung test suite must fail the assertion, not the harness.
+	ctx, cancel := context.WithTimeout(context.Background(), testsPassTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = repoDir
 	output, err := cmd.CombinedOutput()
+	evidence := strings.TrimSpace(string(output))
+	if ctx.Err() != nil {
+		evidence = "test run exceeded " + testsPassTimeout.String() + ": " + evidence
+	}
 	return Assertion{
 		Name:     "tests pass: " + repo,
 		Passed:   err == nil,
-		Evidence: strings.TrimSpace(string(output)),
+		Evidence: evidence,
 	}
 }
 

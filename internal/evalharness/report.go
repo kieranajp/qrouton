@@ -36,25 +36,20 @@ func renderMarkdown(report Report) string {
 	}
 
 	builder.WriteString("## Results\n\n")
-	builder.WriteString("| Case | Assertions | Judge | Duration | Infrastructure |\n")
-	builder.WriteString("| --- | ---: | ---: | ---: | --- |\n")
+	builder.WriteString("| Case | Assertions | Duration | Infrastructure |\n")
+	builder.WriteString("| --- | ---: | ---: | --- |\n")
 	for _, result := range report.Cases {
 		passed, total := assertionCount(result.Assertions)
-		judge := "—"
-		if result.Judge != nil {
-			judge = judgeSummary(*result.Judge)
-		}
 		infra := result.InfrastructureError
 		if infra == "" {
 			infra = "ok"
 		}
 		fmt.Fprintf(
 			&builder,
-			"| `%s` | %d/%d | %s | %s | %s |\n",
+			"| `%s` | %d/%d | %s | %s |\n",
 			result.ID,
 			passed,
 			total,
-			judge,
 			formatDuration(result.DurationMS),
 			escapeTable(infra),
 		)
@@ -118,21 +113,20 @@ func Compare(leftDir, rightDir, output string) (string, error) {
 	for _, warning := range warnings {
 		fmt.Fprintf(&builder, "> Warning: %s\n\n", warning)
 	}
-	builder.WriteString("| Case | Assertions | Judge | Artifacts | Transcript |\n")
-	builder.WriteString("| --- | --- | --- | --- | --- |\n")
+	builder.WriteString("| Case | Assertions | Artifacts | Transcript |\n")
+	builder.WriteString("| --- | --- | --- | --- |\n")
 	for _, key := range keys {
 		before, beforeOK := leftCases[key]
 		after, afterOK := rightCases[key]
 		if !beforeOK || !afterOK {
-			fmt.Fprintf(&builder, "| `%s` | case added/removed | — | — | — |\n", key)
+			fmt.Fprintf(&builder, "| `%s` | case added/removed | — | — |\n", key)
 			continue
 		}
 		fmt.Fprintf(
 			&builder,
-			"| `%s` | %s | %s | %s | %s |\n",
+			"| `%s` | %s | %s | %s |\n",
 			key,
 			assertionDelta(before, after),
-			judgeDelta(before.Judge, after.Judge),
 			artifactDelta(before.Artifacts, after.Artifacts),
 			textDelta(before.FinalResponse, after.FinalResponse),
 		)
@@ -230,20 +224,6 @@ func assertionCount(assertions []Assertion) (int, int) {
 	return passed, len(assertions)
 }
 
-func judgeSummary(judge JudgeResult) string {
-	if judge.Error != "" {
-		return "error"
-	}
-	if len(judge.Scores) == 0 {
-		return "—"
-	}
-	total := 0
-	for _, score := range judge.Scores {
-		total += score
-	}
-	return fmt.Sprintf("%.1f/5", float64(total)/float64(len(judge.Scores)))
-}
-
 func pairwiseJudgmentSummary(judgment PairwiseJudgment) string {
 	if judgment.Error != "" {
 		return "error: " + judgment.Error
@@ -255,13 +235,6 @@ func assertionDelta(before, after CaseResult) string {
 	beforePassed, beforeTotal := assertionCount(before.Assertions)
 	afterPassed, afterTotal := assertionCount(after.Assertions)
 	return fmt.Sprintf("%d/%d → %d/%d", beforePassed, beforeTotal, afterPassed, afterTotal)
-}
-
-func judgeDelta(before, after *JudgeResult) string {
-	if before == nil || after == nil {
-		return "—"
-	}
-	return judgeSummary(*before) + " → " + judgeSummary(*after)
 }
 
 func artifactDelta(before, after []Artifact) string {

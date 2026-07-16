@@ -4,15 +4,15 @@ qrouton is a Go terminal app that assembles multi-repo workspaces from shared ba
 
 ## Architecture
 
-Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, and `mcpserver` are leaves. Nothing imports `tui`.
+Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, and `mcpserver` are leaves, and `repos` reads the manifest via `session`. Nothing imports `tui`.
 
 - `main.go`: urfave/cli app; root action runs the onboarding flow, subcommands come from `cmd/*`.
-- `cmd/mcp/`, `cmd/agents/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
+- `cmd/mcp/`, `cmd/agents/`, `cmd/repos/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
 - `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
 - `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
 - `internal/launch/`: runner launch/resume arguments, MCP injection, generated Zellij layout, editor resolution, and embedded session assets (`assets/`).
-- `internal/mcpserver/`, `internal/agents/`: agent-driven file opening in the editor pane; subagent status pane.
+- `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes.
 - `internal/config/`: config file, XDG paths, first-run wizard.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 

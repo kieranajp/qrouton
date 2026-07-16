@@ -76,7 +76,8 @@ func TestAdapterContinuesSession(t *testing.T) {
 	logPath := filepath.Join(dir, "args.log")
 	script := filepath.Join(dir, "fake-claude")
 	writeTestFile(t, script, `#!/bin/sh
-printf '%s\n' "$*" >> "`+logPath+`"
+printf 'args: %s\n' "$*" >> "`+logPath+`"
+printf 'stdin: %s\n' "$(cat)" >> "`+logPath+`"
 printf '%s\n' '{"type":"system","session_id":"session-42"}'
 printf '%s\n' '{"type":"result","result":"done"}'
 `)
@@ -100,11 +101,19 @@ printf '%s\n' '{"type":"result","result":"done"}'
 	if !strings.Contains(string(log), "--resume session-42") {
 		t.Fatalf("continuation args missing from log:\n%s", log)
 	}
+	if !strings.Contains(string(log), "stdin: first") || !strings.Contains(string(log), "stdin: second") {
+		t.Fatalf("prompts did not arrive over stdin:\n%s", log)
+	}
+	for _, line := range strings.Split(string(log), "\n") {
+		if strings.HasPrefix(line, "args: ") && (strings.Contains(line, "first") || strings.Contains(line, "second")) {
+			t.Fatalf("prompt leaked into argv: %s", line)
+		}
+	}
 }
 
 func TestCodexContinuationArguments(t *testing.T) {
 	adapter := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval"}
-	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "continue", "thread-42")
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "thread-42")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,29 +121,40 @@ func TestCodexContinuationArguments(t *testing.T) {
 	if !strings.HasPrefix(joined, "exec resume ") {
 		t.Fatalf("resume subcommand is misplaced: %s", joined)
 	}
-	if !strings.Contains(joined, "thread-42 continue") {
-		t.Fatalf("thread ID or prompt is missing: %s", joined)
+	if !strings.HasSuffix(joined, "thread-42 -") {
+		t.Fatalf("thread ID or stdin prompt marker is missing: %s", joined)
 	}
 }
 
-func TestClaudePromptTerminatesVariadicMCPConfig(t *testing.T) {
-	adapter := Adapter{Name: "claude", Bin: "claude", SelfPath: "/tmp/qrouton-eval"}
-	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "do the work", "")
+func TestPromptStaysOutOfArgv(t *testing.T) {
+	// Judge prompts embed candidate artifacts and diffs; a single argv element
+	// caps out at ~128KiB on Linux, so the prompt must never appear in args.
+	claude := Adapter{Name: "claude", Bin: "claude", SelfPath: "/tmp/qrouton-eval"}
+	args, err := claude.args("/tmp/workspace", "/tmp/mcp.log", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := args[len(args)-2:]; got[0] != "--" || got[1] != "do the work" {
-		t.Fatalf("prompt arguments = %q, want option terminator followed by prompt", got)
+	if last := args[len(args)-1]; strings.HasPrefix(last, "--mcp-config") {
+		t.Fatalf("variadic --mcp-config left dangling at end of argv: %q", args)
 	}
 	joined := strings.Join(args, " ")
 	if !strings.Contains(joined, "--setting-sources project") || !strings.Contains(joined, "--strict-mcp-config") {
 		t.Fatalf("Claude user configuration is not isolated: %s", joined)
 	}
+
+	codex := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval"}
+	args, err = codex.args("/tmp/workspace", "/tmp/mcp.log", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args[len(args)-1] != "-" {
+		t.Fatalf("codex argv does not end with the stdin marker: %q", args)
+	}
 }
 
 func TestCodexIgnoresUserConfig(t *testing.T) {
 	adapter := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval"}
-	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "do the work", "")
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "")
 	if err != nil {
 		t.Fatal(err)
 	}
