@@ -41,7 +41,7 @@ func StampAssets(dir string) error {
 		}
 		var dst string
 		switch {
-		case rel == "CLAUDE.md":
+		case rel == "AGENTS.md":
 			dst = filepath.Join(canonical, "ORCHESTRATOR.md")
 			links = append(links,
 				assetLink{filepath.Join(dir, "CLAUDE.md"), dst},

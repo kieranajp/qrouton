@@ -9,7 +9,7 @@ import (
 
 func TestMaterializeAssetsCreatesRunnerDiscoveryLayout(t *testing.T) {
 	assets := filepath.Join(t.TempDir(), "assets")
-	writeTestFile(t, filepath.Join(assets, "CLAUDE.md"), "# Orchestrator\n")
+	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Orchestrator\n")
 	writeTestFile(
 		t,
 		filepath.Join(assets, ".claude", "skills", "research", "SKILL.md"),
