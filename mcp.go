@@ -78,6 +78,7 @@ func newMCPServer(root string, editor editorCommand, zellij string) *mcp.Server 
 func runMCP(args []string) error {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	root := fs.String("session-root", "", "qrouton session root")
+	editorJSON := fs.String("editor-json", "", "resolved editor configuration")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -85,7 +86,11 @@ func runMCP(args []string) error {
 		return fmt.Errorf("mcp: --session-root is required")
 	}
 	var editor editorCommand
-	if err := json.Unmarshal([]byte(os.Getenv("QROUTON_EDITOR_JSON")), &editor); err != nil || len(editor.Argv) == 0 {
+	rawEditor := *editorJSON
+	if rawEditor == "" {
+		rawEditor = os.Getenv("QROUTON_EDITOR_JSON")
+	}
+	if err := json.Unmarshal([]byte(rawEditor), &editor); err != nil || len(editor.Argv) == 0 {
 		return fmt.Errorf("mcp: invalid inherited editor configuration")
 	}
 	zellij, err := exec.LookPath("zellij")

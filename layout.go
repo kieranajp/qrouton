@@ -106,7 +106,7 @@ func launchZellij(dir string, runner Runner, qroutonBin string, editor editorCom
 	if err := requireZellij044(bin); err != nil {
 		return err
 	}
-	argv, env, err := runnerLaunch(runner, qroutonBin, dir)
+	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor)
 	if err != nil {
 		return err
 	}

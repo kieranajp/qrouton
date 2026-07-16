@@ -69,13 +69,16 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session")
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", editorCommand{Argv: []string{"vi"}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		joined := strings.Join(argv, " ")
 		if id != "opencode" && !strings.Contains(joined, "qrouton") {
 			t.Fatalf("%s missing MCP config: %v", id, argv)
+		}
+		if id != "opencode" && !strings.Contains(joined, "editor-json") {
+			t.Fatalf("%s missing explicit editor config: %v", id, argv)
 		}
 		if id == "opencode" {
 			var raw string
