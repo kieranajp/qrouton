@@ -49,6 +49,8 @@ func (m appModel) View() string {
 		body = m.viewRunners()
 	case assemblyScreen:
 		body = m.viewAssembly()
+	case deleteScreen:
+		body = m.viewDelete()
 	case errorScreen:
 		retry := "retry GitHub"
 		if m.assemblyFailed {
@@ -114,24 +116,45 @@ func (m appModel) viewLanding() string {
 			repos = append(repos, r.Org+"/"+r.Name)
 		}
 		title := fmt.Sprintf("%-42s %s", s.Slug, relativeTime(s.CreatedAt))
-		content := title + "\n" + emptyFallback(s.Description, "No description") + "\n" + strings.Join(repos, " · ")
+		content := title + "\n" + emptyFallback(s.Description, "No description") + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
 		st := card
 		if m.landingCursor == i+1 {
 			st = picked
 		}
 		lines = append(lines, st.Render(content), "")
 	}
-	lines = append(lines, dim.Render("↑↓ navigate   enter select   r refresh   q quit"))
+	lines = append(lines, dim.Render("↑↓ navigate   enter select   d delete   r refresh   q quit"))
+	return strings.Join(lines, "\n")
+}
+
+func workflowLine(s session.WorkflowStatus) string {
+	mark := func(done bool) string {
+		if done {
+			return good.Render("✓")
+		}
+		return bad.Render("✗")
+	}
+	return fmt.Sprintf("R %s   P %s   I %s", mark(s.Research), mark(s.Plan), mark(s.Implement))
+}
+
+func (m appModel) viewDelete() string {
+	if m.deleteTarget == nil {
+		return "No session selected.\n\n[esc] back"
+	}
+	lines := []string{bad.Render("Delete " + m.deleteTarget.Slug + "?"), "", "This removes its worktrees and session files. Shared mirrors are kept."}
+	if len(m.deleteDirty) > 0 {
+		lines = append(lines, "", bad.Render("Uncommitted files will be lost in:"))
+		for _, repo := range m.deleteDirty {
+			lines = append(lines, "  • "+repo)
+		}
+	}
+	lines = append(lines, "", dim.Render("enter/y delete   esc/n cancel"))
 	return strings.Join(lines, "\n")
 }
 
 func (m appModel) viewForm() string {
 	f := m.form
 	slug := session.Slugify(f.name)
-	owner := "All organizations"
-	if f.owner > 0 {
-		owner = m.cfg.Orgs[f.owner-1]
-	}
 	included, activeN := 0, 0
 	for _, r := range f.roles {
 		if r != excluded {
@@ -141,7 +164,27 @@ func (m appModel) viewForm() string {
 			activeN++
 		}
 	}
-	rows := []string{fieldLine(f.focus == 0, "Name", f.name), fieldLine(f.focus == 1, "Description", f.description), "  Session slug   " + dim.Render(emptyFallback(slug, "—")), fieldLine(f.focus == 2, "Organization", owner), fieldLine(f.focus == 3, "Search", f.search), fmt.Sprintf("\n  Repositories   %d included · %d active", included, activeN)}
+	rows := []string{fieldLine(f.focus == 0, "Ticket URL", f.ticket)}
+	if f.ticketStatus != "" {
+		rows = append(rows, "  "+dim.Render(f.ticketStatus))
+	}
+	rows = append(rows, fieldLine(f.focus == 1, "Name", f.name), fieldLine(f.focus == 2, "Description", f.description), "  Session slug   "+dim.Render(emptyFallback(slug, "—")))
+	ownerLabels := make([]string, 0, len(m.cfg.Orgs))
+	for i, owner := range m.cfg.Orgs {
+		mark := "○"
+		if f.owners[owner] {
+			mark = "●"
+		}
+		label := mark + " " + owner
+		if f.focus == 3 && i == f.owner {
+			label = accent.Render("[" + label + "]")
+		}
+		ownerLabels = append(ownerLabels, label)
+	}
+	rows = append(rows, "  GitHub owners   "+strings.Join(ownerLabels, "  "), fmt.Sprintf("\n  Repositories   %d included · %d active", included, activeN))
+	if f.search != "" {
+		rows = append(rows, "  Filter         "+accent.Render(f.search))
+	}
 	rs := m.filteredRepos()
 	start := 0
 	if f.cursor > 6 {
@@ -167,7 +210,7 @@ func (m appModel) viewForm() string {
 		}
 		rows = append(rows, line)
 	}
-	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), fieldLine(f.focus == 6, "Ticket URL", f.ticket), "", dim.Render("↑↓ fields/repos   space cycle role   tab next field   ←→ choice   enter continue   esc back"))
+	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), "", dim.Render("type in repository list to filter · backspace clears filter\n↑↓ fields/repos   space select/cycle   tab next field   ←→ choice   enter continue   esc back"))
 	return strings.Join(rows, "\n")
 }
 

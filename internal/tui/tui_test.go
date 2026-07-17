@@ -21,7 +21,7 @@ func testApp() appModel {
 			{Org: "other", Name: "web", DefaultBranch: "trunk", PushedAt: time.Now().Add(-time.Hour)},
 		},
 		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error),
-		form: formState{roles: make(map[string]repoRole)},
+		form: formState{roles: make(map[string]repoRole), owners: selectedOwners([]string{"acme", "other"})},
 	}
 }
 
@@ -69,9 +69,10 @@ func TestOwnerSwitchClampsRepoCursorWithoutPanic(t *testing.T) {
 	m.form.focus = 4
 	m.form.cursor = 3 // valid while all four repositories are listed
 
-	// Narrow the organization filter to "other" (a single repository).
-	m.form.focus = 2
-	updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyLeft})
+	// Unselect acme, leaving only the other owner and its single repository.
+	m.form.focus = 3
+	m.form.owner = 0
+	updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeySpace})
 	m = updated.(appModel)
 
 	if got := len(m.filteredRepos()); got != 1 {
@@ -138,14 +139,14 @@ func TestValidateFormRejectsActiveRepoRemovedByRefresh(t *testing.T) {
 func TestSpaceIsEnteredInTextFields(t *testing.T) {
 	m := testApp()
 	m.screen = newScreen
-	m.form.focus = 0
+	m.form.focus = 1
 	m.form.name = "API"
 	updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeySpace})
 	got := updated.(appModel).form.name
 	if got != "API " {
 		t.Fatalf("name after space = %q", got)
 	}
-	m.form.focus = 1
+	m.form.focus = 2
 	m.form.description = "multi"
 	updated, _ = m.updateForm(tea.KeyMsg{Type: tea.KeySpace})
 	got = updated.(appModel).form.description
@@ -157,13 +158,41 @@ func TestSpaceIsEnteredInTextFields(t *testing.T) {
 func TestNavigationLettersAreEnteredInTextFields(t *testing.T) {
 	m := testApp()
 	m.screen = newScreen
-	m.form.focus = 0
+	m.form.focus = 1
 	for _, letter := range []rune("hello") {
 		updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}})
 		m = updated.(appModel)
 	}
 	if m.form.name != "hello" {
 		t.Fatalf("name = %q, want navigation letters preserved", m.form.name)
+	}
+}
+
+func TestTypingInRepositoryListFiltersAndBackspaceClears(t *testing.T) {
+	m := testApp()
+	m.screen = newScreen
+	m.form.focus = 4
+	for _, letter := range []rune("web") {
+		updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{letter}})
+		m = updated.(appModel)
+	}
+	if got := m.filteredRepos(); len(got) != 1 || got[0].ID() != "other/web" {
+		t.Fatalf("type-to-filter repositories = %#v", got)
+	}
+	updated, _ := m.updateForm(tea.KeyMsg{Type: tea.KeyBackspace})
+	m = updated.(appModel)
+	if m.form.search != "we" {
+		t.Fatalf("repository filter after backspace = %q", m.form.search)
+	}
+}
+
+func TestTicketResultPopulatesNameAndDescription(t *testing.T) {
+	m := testApp()
+	m.form.ticket = "https://github.com/acme/api/issues/42"
+	updated, _ := m.Update(ticketLoadedMsg{url: m.form.ticket, ticket: github.Ticket{Title: "Fix retries", Body: "Retry failed requests"}})
+	got := updated.(appModel)
+	if got.form.name != "Fix retries" || got.form.description != "Retry failed requests" || got.form.ticketStatus != "ticket loaded" {
+		t.Fatalf("ticket did not populate form: %#v", got.form)
 	}
 }
 

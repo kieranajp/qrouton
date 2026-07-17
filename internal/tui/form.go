@@ -5,7 +5,9 @@ package tui
 // order rendered by viewForm.
 
 import (
+	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,6 +22,22 @@ type formState struct {
 	owner, prefix                     int
 	focus, cursor                     int
 	roles                             map[string]repoRole
+	owners                            map[string]bool
+	ticketStatus                      string
+}
+
+type ticketLoadedMsg struct {
+	url    string
+	ticket github.Ticket
+	err    error
+}
+
+func selectedOwners(owners []string) map[string]bool {
+	selected := make(map[string]bool, len(owners))
+	for _, owner := range owners {
+		selected[owner] = true
+	}
+	return selected
 }
 
 var branchPrefixes = []string{"feat", "fix", "chore", "refactor", "docs", "test"}
@@ -38,50 +56,66 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "down":
+		previous := f.focus
 		if f.focus == 4 && f.cursor+1 < len(m.filteredRepos()) {
 			f.cursor++
-		} else if f.focus < 6 {
+		} else if f.focus < 5 {
 			f.focus++
+		}
+		if previous == 0 && f.focus != 0 {
+			return m, m.loadTicket()
 		}
 		return m, nil
 	case "shift+tab":
 		if f.focus > 0 {
 			f.focus--
 		} else {
-			f.focus = 6
+			f.focus = 5
 		}
 		return m, nil
 	case "tab":
-		f.focus = (f.focus + 1) % 7
+		previous := f.focus
+		f.focus = (f.focus + 1) % 6
+		if previous == 0 {
+			return m, m.loadTicket()
+		}
 		return m, nil
 	case " ":
 		if f.focus == 4 {
 			m.cycleRepoRole()
 			return m, nil
 		}
+		if f.focus == 3 && len(m.cfg.Orgs) > 0 {
+			owner := m.cfg.Orgs[f.owner]
+			f.owners[owner] = !f.owners[owner]
+			m.clampRepoCursor()
+			return m, nil
+		}
 		m.editField(false, " ")
 		return m, nil
 	case "left":
-		if f.focus == 2 {
-			f.owner = (f.owner + len(m.cfg.Orgs)) % (len(m.cfg.Orgs) + 1)
-			m.clampRepoCursor()
+		if f.focus == 3 && f.owner > 0 {
+			f.owner--
 		}
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 5) % 6
 		}
 		return m, nil
 	case "right":
-		if f.focus == 2 {
-			f.owner = (f.owner + 1) % (len(m.cfg.Orgs) + 1)
-			m.clampRepoCursor()
+		if f.focus == 3 && f.owner+1 < len(m.cfg.Orgs) {
+			f.owner++
 		}
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 1) % 6
 		}
 		return m, nil
 	case "enter":
-		if f.focus < 6 {
+		if f.focus < 5 {
+			previous := f.focus
 			f.focus++
+			if previous == 0 {
+				return m, m.loadTicket()
+			}
 			return m, nil
 		}
 		if err := m.validateForm(); err != nil {
@@ -103,7 +137,11 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if k.Type == tea.KeyRunes {
-		m.editField(false, string(k.Runes))
+		if f.focus == 4 {
+			f.search += string(k.Runes)
+		} else {
+			m.editField(false, string(k.Runes))
+		}
 		m.clampRepoCursor()
 	}
 	return m, nil
@@ -113,16 +151,19 @@ func (m *appModel) editField(backspace bool, text string) {
 	var p *string
 	switch m.form.focus {
 	case 0:
-		p = &m.form.name
-	case 1:
-		p = &m.form.description
-	case 3:
-		p = &m.form.search
-	case 6:
 		p = &m.form.ticket
+	case 1:
+		p = &m.form.name
+	case 2:
+		p = &m.form.description
+	case 4:
+		p = &m.form.search
 	}
 	if p == nil {
 		return
+	}
+	if m.form.focus == 0 {
+		m.form.ticketStatus = ""
 	}
 	if backspace {
 		r := []rune(*p)
@@ -131,6 +172,22 @@ func (m *appModel) editField(backspace bool, text string) {
 		}
 	} else {
 		*p += text
+	}
+}
+
+func (m *appModel) loadTicket() tea.Cmd {
+	url := strings.TrimSpace(m.form.ticket)
+	if url == "" {
+		return nil
+	}
+	m.form.ticketStatus = "loading ticket…"
+	return func() tea.Msg {
+		token, err := github.Token()
+		if err != nil {
+			return ticketLoadedMsg{url: url, err: err}
+		}
+		ticket, err := github.FetchTicket(context.Background(), http.DefaultClient, token, url)
+		return ticketLoadedMsg{url: url, ticket: ticket, err: err}
 	}
 }
 
@@ -147,7 +204,7 @@ func (m appModel) filteredRepos() []github.Repo {
 	var out []github.Repo
 	q := strings.ToLower(m.form.search)
 	for _, r := range m.repos {
-		if m.form.owner > 0 && r.Org != m.cfg.Orgs[m.form.owner-1] {
+		if !m.form.owners[r.Org] {
 			continue
 		}
 		if q != "" && !strings.Contains(strings.ToLower(r.ID()), q) {

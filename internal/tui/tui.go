@@ -26,6 +26,7 @@ const (
 	newScreen
 	runnerScreen
 	assemblyScreen
+	deleteScreen
 	errorScreen
 )
 
@@ -67,6 +68,8 @@ type appModel struct {
 	assembly        <-chan assemblyEvent
 	assemblySteps   []session.Progress
 	assemblyFailed  bool
+	deleteTarget    *session.Manifest
+	deleteDirty     []string
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
@@ -95,7 +98,7 @@ func newAppModel(cfg *config.Config, sessions []session.Manifest, requested stri
 	return appModel{cfg: cfg, sessions: sessions, repos: repos, requestedRunner: requested,
 		runners: availableRunners(cfg), screen: landingScreen, refreshing: true, cacheAt: fetched,
 		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error), refreshGen: 1,
-		form: formState{prefix: 0, roles: make(map[string]repoRole)}}
+		form: formState{prefix: 0, roles: make(map[string]repoRole), owners: selectedOwners(cfg.Orgs)}}
 }
 
 func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }
@@ -225,6 +228,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.back, m.screen = landingScreen, errorScreen
 		}
 		return m, nil
+	case ticketLoadedMsg:
+		if v.url != m.form.ticket {
+			return m, nil
+		}
+		if v.err != nil {
+			m.form.ticketStatus = v.err.Error()
+			return m, nil
+		}
+		m.form.name = v.ticket.Title
+		m.form.description = v.ticket.Body
+		m.form.ticketStatus = "ticket loaded"
+		return m, nil
 	}
 	k, ok := msg.(tea.KeyMsg)
 	if !ok {
@@ -248,6 +263,8 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateForm(k)
 	case runnerScreen:
 		return m.updateRunner(k)
+	case deleteScreen:
+		return m.updateDelete(k)
 	case errorScreen:
 		return m.updateError(k)
 	}
@@ -271,6 +288,18 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "r":
 		return m, m.beginRefresh()
+	case "d":
+		if m.landingCursor == 0 {
+			return m, nil
+		}
+		s := m.sessions[m.landingCursor-1]
+		dirty, err := session.DirtyWorktrees(m.cfg.Root, s)
+		if err != nil {
+			m.err, m.back, m.screen = err, landingScreen, errorScreen
+			return m, nil
+		}
+		m.deleteTarget, m.deleteDirty, m.screen = &s, dirty, deleteScreen
+		return m, nil
 	case "enter":
 		if m.landingCursor == 0 {
 			if len(m.repos) == 0 {
@@ -292,6 +321,35 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.screen = assemblyScreen
 		return m, m.startAssembly()
+	}
+	return m, nil
+}
+
+func (m appModel) updateDelete(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch k.String() {
+	case "esc", "n":
+		m.deleteTarget, m.deleteDirty, m.screen = nil, nil, landingScreen
+	case "enter", "y":
+		if m.deleteTarget == nil {
+			m.screen = landingScreen
+			return m, nil
+		}
+		if err := session.Delete(m.cfg.Root, *m.deleteTarget); err != nil {
+			m.err, m.back, m.screen = err, deleteScreen, errorScreen
+			return m, nil
+		}
+		deleted := m.deleteTarget.Slug
+		kept := m.sessions[:0]
+		for _, s := range m.sessions {
+			if s.Slug != deleted {
+				kept = append(kept, s)
+			}
+		}
+		m.sessions = kept
+		if m.landingCursor > len(m.sessions) {
+			m.landingCursor = len(m.sessions)
+		}
+		m.deleteTarget, m.deleteDirty, m.screen = nil, nil, landingScreen
 	}
 	return m, nil
 }
