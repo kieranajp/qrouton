@@ -11,7 +11,8 @@ Dependency direction: `config ← github ← session ← tui`; `launch`, `agents
 - `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
 - `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
-- `internal/launch/`: runner launch/resume arguments, MCP injection, generated Zellij layout, editor resolution, and embedded session assets (`assets/`).
+- `prompts/`: canonical workflow, skill, and agent prompts plus loader/provider rendering.
+- `internal/launch/`: runner launch/resume arguments, MCP injection, generated Zellij layout, editor resolution, and session asset stamping.
 - `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes.
 - `internal/config/`: config file, XDG paths, first-run wizard.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
@@ -39,4 +40,4 @@ GOCACHE=/tmp/qrouton-go-cache go build -o qrouton .
 git diff --check
 ```
 
-Do not discard unrelated worktree changes or edit generated session assets directly; change their source under `internal/launch/assets/`.
+Do not discard unrelated worktree changes or edit generated session assets directly; change prompt sources under `prompts/` or launch support assets under `internal/launch/assets/`.

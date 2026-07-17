@@ -41,7 +41,7 @@ func run(args []string) error {
 	runner := flags.String("runner", "all", "runner: claude, codex, or all")
 	scenario := flags.String("scenario", "all", "scenario ID or all")
 	samples := flags.Int("samples", 1, "samples per runner and scenario")
-	assetsDir := flags.String("assets-dir", filepath.Join(repoRoot, "internal", "launch", "assets"), "prompt assets directory")
+	assetsDir := flags.String("assets-dir", filepath.Join(repoRoot, "prompts"), "prompt source directory")
 	claudeModel := flags.String("claude-model", "", "Claude model override")
 	codexModel := flags.String("codex-model", "", "Codex model override")
 	noJudge := flags.Bool("no-judge", false, "skip blinded pairwise judging")

@@ -1,6 +1,6 @@
 # qrouton prompt evaluations
 
-The evaluation harness runs qrouton's current prompt assets in isolated synthetic
+The evaluation harness runs qrouton's canonical sources from `prompts/` in isolated synthetic
 multi-repository sessions. It invokes installed Claude and Codex CLIs using their
 existing local authentication, records normalized observable traces, applies
 deterministic assertions, and by default runs blinded pairwise judging when both

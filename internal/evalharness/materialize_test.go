@@ -8,14 +8,14 @@ import (
 )
 
 func TestMaterializeAssetsCreatesRunnerDiscoveryLayout(t *testing.T) {
-	assets := filepath.Join(t.TempDir(), "assets")
-	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Orchestrator\n")
+	assets := filepath.Join(t.TempDir(), "prompts")
+	writeTestFile(t, filepath.Join(assets, "orchestrator.md"), "# Orchestrator\n")
 	writeTestFile(
 		t,
-		filepath.Join(assets, ".claude", "skills", "research", "SKILL.md"),
+		filepath.Join(assets, "skills", "research", "SKILL.md"),
 		"---\nname: research\n---\nInstructions\n",
 	)
-	writeTestFile(t, filepath.Join(assets, ".codex", "agents", "lead.toml"), "name = \"lead\"\n")
+	writeTestFile(t, filepath.Join(assets, "agents", "lead.md"), "---\nname: lead\ndescription: Leads work.\n---\nLead instructions.\n")
 
 	root := t.TempDir()
 	snapshot := filepath.Join(t.TempDir(), "snapshot")

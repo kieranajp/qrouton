@@ -53,6 +53,12 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 		}
 		out, err := exec.Command("git", "-C", path, "status", "--porcelain").CombinedOutput()
 		if err != nil {
+			// A checkout can outlive its worktree metadata when a mirror was
+			// manually removed or corrupted. There is no useful dirty-state check
+			// left to perform, but the session must still remain deletable.
+			if strings.Contains(string(out), "not a git repository") {
+				continue
+			}
 			return nil, fmt.Errorf("check %s/%s for changes: %w\n%s", repo.Org, repo.Name, err, out)
 		}
 		if len(bytes.TrimSpace(out)) > 0 {
@@ -70,8 +76,14 @@ func Delete(root string, m Manifest) error {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
-		if err := git("-C", mirrorPath(root, repo.Org, repo.Name), "worktree", "remove", "--force", path); err != nil {
-			return fmt.Errorf("remove %s/%s worktree: %w", repo.Org, repo.Name, err)
+		mirror := mirrorPath(root, repo.Org, repo.Name)
+		if err := git("-C", mirror, "worktree", "remove", "--force", path); err != nil {
+			// Broken or missing worktree metadata should not strand a session.
+			// The user has already confirmed destructive deletion at this point.
+			if removeErr := os.RemoveAll(path); removeErr != nil {
+				return fmt.Errorf("remove %s/%s worktree after git cleanup failed: %w", repo.Org, repo.Name, removeErr)
+			}
+			_ = git("-C", mirror, "worktree", "prune")
 		}
 	}
 	if err := os.RemoveAll(dir); err != nil {

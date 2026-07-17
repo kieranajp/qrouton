@@ -11,8 +11,8 @@ import (
 
 func TestRunContinuesAfterMalformedCaseAndProducesReport(t *testing.T) {
 	repoRoot := t.TempDir()
-	assets := filepath.Join(repoRoot, "assets")
-	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Instructions\n")
+	assets := filepath.Join(repoRoot, "prompts")
+	writeTestFile(t, filepath.Join(assets, "orchestrator.md"), "# Instructions\n")
 	writeRunFixture(t, repoRoot, "bad", "malformed")
 	writeRunFixture(t, repoRoot, "good", "healthy")
 
@@ -85,8 +85,8 @@ func writeRunFixture(t *testing.T, root, id, prompt string) {
 
 func TestTimedOutCaseStillCollectsDiffs(t *testing.T) {
 	repoRoot := t.TempDir()
-	assets := filepath.Join(repoRoot, "assets")
-	writeTestFile(t, filepath.Join(assets, "AGENTS.md"), "# Instructions\n")
+	assets := filepath.Join(repoRoot, "prompts")
+	writeTestFile(t, filepath.Join(assets, "orchestrator.md"), "# Instructions\n")
 	writeRunFixture(t, repoRoot, "slow", "healthy")
 
 	// Modifies the active repo, then outlives the case timeout so the

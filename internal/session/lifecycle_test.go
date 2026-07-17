@@ -71,6 +71,33 @@ func TestDirtyWorktreesAndDelete(t *testing.T) {
 	}
 }
 
+func TestDeleteContinuesWhenWorktreeMetadataIsBroken(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "checkout")
+	worktree := filepath.Join(dir, "src", "api")
+	if err := os.MkdirAll(worktree, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, ".git"), []byte("gitdir: "+filepath.Join(root, ".mirrors", "acme", "api.git", "worktrees", "api")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(worktree, "unreadable-by-git.txt"), []byte("stale checkout\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Slug: "checkout", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: filepath.Join("src", "api")}}}
+
+	dirty, err := DirtyWorktrees(root, m)
+	if err != nil || len(dirty) != 0 {
+		t.Fatalf("broken worktree dirty check = %v, %v", dirty, err)
+	}
+	if err := Delete(root, m); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("session still exists after fallback delete: %v", err)
+	}
+}
+
 func runGitTest(t *testing.T, args ...string) {
 	t.Helper()
 	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {

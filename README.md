@@ -97,6 +97,19 @@ excluded → active → reference → excluded
 
 Active repositories are implementation targets. Reference repositories are available for inspection but are explicitly marked read-only for the coding agent.
 
+## Prompt sources 🧠
+
+The workflow prompts are first-class source files under [`prompts/`](./prompts):
+
+```text
+prompts/
+├── orchestrator.md
+├── skills/
+└── agents/
+```
+
+The `prompts.PromptLoader` interface supplies these sources to both session launching and prompt evaluations. The embedded loader ships them in the qrouton binary; the filesystem loader supports tests, eval snapshots, and alternate prompt directories. Provider discovery files such as Claude Markdown and Codex TOML are rendered from the same canonical agent prompts.
+
 ## Development 🤖
 
 ```sh
