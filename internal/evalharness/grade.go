@@ -286,12 +286,8 @@ func readManifest(path string) (fixtureManifest, error) {
 		return fixtureManifest{}, err
 	}
 	var manifest fixtureManifest
-	if err := jsonUnmarshal(content, &manifest); err != nil {
+	if err := json.Unmarshal(content, &manifest); err != nil {
 		return fixtureManifest{}, fmt.Errorf("parse manifest: %w", err)
 	}
 	return manifest, nil
-}
-
-var jsonUnmarshal = func(content []byte, destination any) error {
-	return json.Unmarshal(content, destination)
 }
