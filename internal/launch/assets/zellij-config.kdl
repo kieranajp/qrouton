@@ -154,6 +154,16 @@ keybinds clear-defaults=true {
         }
     }
     shared_among "normal" "locked" {
+        bind "Alt g" {
+            Run "sh" "-lc" "exec \"${SHELL:-/bin/sh}\" -l" {
+                floating true
+                x "5%"
+                y "5%"
+                width "90%"
+                height "90%"
+                name "qrouton · terminal"
+            }
+        }
         bind "Alt x" { CloseFocus; SwitchToMode "locked"; }
         bind "Alt left" { MoveFocusOrTab "left"; }
         bind "Alt down" { MoveFocus "down"; }
@@ -563,4 +573,3 @@ mouse_click_through false
 // typically work best. Set to 0 to use the number of (physical) CPU cores.
 // Note: This only applies to web clients at the moment.
 // client_async_worker_tasks 4
-

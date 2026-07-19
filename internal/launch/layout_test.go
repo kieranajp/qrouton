@@ -28,7 +28,7 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal("help script missing:", err)
 	}
-	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Ctrl-g, then Ctrl-q", "Press any key to begin"} {
+	for _, want := range []string{"delegate work to subagents", "Alt + arrow keys", "Alt-g (floating terminal)", "Ctrl-g, then Ctrl-q", "Press any key to begin"} {
 		if !strings.Contains(string(help), want) {
 			t.Fatalf("help panel missing %q", want)
 		}
@@ -46,7 +46,7 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt x"`, "mouse_mode true", "session_serialization false"} {
+	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
