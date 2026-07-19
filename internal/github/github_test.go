@@ -75,34 +75,6 @@ func TestRefreshOwnerReposCanBeRetriedIndependently(t *testing.T) {
 	}
 }
 
-func TestFetchTicketResolvesGitHubIssueURL(t *testing.T) {
-	var requested string
-	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
-		requested = r.URL.String()
-		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(`{"title":"Fix retries","body":"Retry failed requests"}`)), Header: make(http.Header)}, nil
-	})}
-	oldBase := githubAPIBase
-	githubAPIBase = "https://api.test"
-	t.Cleanup(func() { githubAPIBase = oldBase })
-
-	ticket, err := FetchTicket(context.Background(), client, "token", "https://github.com/acme/api/issues/42")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if requested != "https://api.test/repos/acme/api/issues/42" {
-		t.Fatalf("requested URL = %q", requested)
-	}
-	if ticket.Title != "Fix retries" || ticket.Body != "Retry failed requests" {
-		t.Fatalf("ticket = %#v", ticket)
-	}
-}
-
-func TestFetchTicketRejectsNonGitHubTicketURL(t *testing.T) {
-	if _, err := FetchTicket(context.Background(), http.DefaultClient, "token", "https://example.com/tickets/42"); err == nil {
-		t.Fatal("non-GitHub ticket URL was accepted")
-	}
-}
-
 type roundTripFunc func(*http.Request) (*http.Response, error)
 
 func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

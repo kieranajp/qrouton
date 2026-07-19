@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
 type formState struct {
@@ -28,7 +29,7 @@ type formState struct {
 
 type ticketLoadedMsg struct {
 	url    string
-	ticket github.Ticket
+	ticket ticket.Ticket
 	err    error
 }
 
@@ -182,12 +183,8 @@ func (m *appModel) loadTicket() tea.Cmd {
 	}
 	m.form.ticketStatus = "loading ticket…"
 	return func() tea.Msg {
-		token, err := github.Token()
-		if err != nil {
-			return ticketLoadedMsg{url: url, err: err}
-		}
-		ticket, err := github.FetchTicket(context.Background(), http.DefaultClient, token, url)
-		return ticketLoadedMsg{url: url, ticket: ticket, err: err}
+		loaded, err := ticket.Fetch(context.Background(), http.DefaultClient, url)
+		return ticketLoadedMsg{url: url, ticket: loaded, err: err}
 	}
 }
 
@@ -232,6 +229,11 @@ func (m *appModel) cycleRepoRole() {
 }
 
 func (m appModel) validateForm() error {
+	if strings.TrimSpace(m.form.ticket) != "" {
+		if _, err := ticket.ParseURL(m.form.ticket); err != nil {
+			return err
+		}
+	}
 	slug := session.Slugify(m.form.name)
 	if slug == "" {
 		return fmt.Errorf("session name is required")

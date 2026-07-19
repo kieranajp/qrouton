@@ -28,30 +28,6 @@ type Repo struct {
 	PushedAt      time.Time `json:"pushed_at"`
 }
 
-type Ticket struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
-}
-
-// FetchTicket resolves a GitHub issue or pull request URL. The browser URL is
-// deliberately validated before it is translated to an authenticated API call.
-func FetchTicket(ctx context.Context, client *http.Client, token, rawURL string) (Ticket, error) {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || !strings.EqualFold(u.Host, "github.com") {
-		return Ticket{}, fmt.Errorf("ticket must be a github.com issue or pull request URL")
-	}
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) != 4 || (parts[2] != "issues" && parts[2] != "pull") || parts[3] == "" {
-		return Ticket{}, fmt.Errorf("ticket must be a github.com issue or pull request URL")
-	}
-	var ticket Ticket
-	endpoint := githubAPIBase + "/repos/" + url.PathEscape(parts[0]) + "/" + url.PathEscape(parts[1]) + "/issues/" + url.PathEscape(parts[3])
-	if err := githubJSONContext(ctx, client, token, endpoint, &ticket); err != nil {
-		return Ticket{}, fmt.Errorf("github: loading ticket: %w", err)
-	}
-	return ticket, nil
-}
-
 type repoCache struct {
 	SchemaVersion int       `json:"schemaVersion"`
 	FetchedAt     time.Time `json:"fetchedAt"`

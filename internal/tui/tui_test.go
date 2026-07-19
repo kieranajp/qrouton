@@ -11,6 +11,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
 func testApp() appModel {
@@ -188,8 +189,8 @@ func TestTypingInRepositoryListFiltersAndBackspaceClears(t *testing.T) {
 
 func TestTicketResultPopulatesNameAndDescription(t *testing.T) {
 	m := testApp()
-	m.form.ticket = "https://github.com/acme/api/issues/42"
-	updated, _ := m.Update(ticketLoadedMsg{url: m.form.ticket, ticket: github.Ticket{Title: "Fix retries", Body: "Retry failed requests"}})
+	m.form.ticket = "https://linear.app/acme/issue/API-42/fix-retries"
+	updated, _ := m.Update(ticketLoadedMsg{url: m.form.ticket, ticket: ticket.Ticket{Title: "Fix retries", Body: "Retry failed requests"}})
 	got := updated.(appModel)
 	if got.form.name != "Fix retries" || got.form.description != "Retry failed requests" || got.form.ticketStatus != "ticket loaded" {
 		t.Fatalf("ticket did not populate form: %#v", got.form)

@@ -38,6 +38,7 @@ _Screenshots coming soon._
 - macOS or Linux.
 - Git.
 - [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`, or `GITHUB_TOKEN`.
+- `LINEAR_API_KEY` or `ASANA_ACCESS_TOKEN` to populate a new session's name and description from a linked ticket.
 - Zellij 0.44 or newer.
 - At least one supported coding agent: `claude`, `codex`, or `opencode`.
 - Go 1.26+ to build from source.
