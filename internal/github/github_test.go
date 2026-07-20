@@ -115,6 +115,40 @@ func githubTestClient(t *testing.T, responses map[string]string, paths *requestP
 	})}
 }
 
+func TestFetchRepoResolvesSingleRepository(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/repos/KieranAJP/qrouton": `{"name":"qrouton","ssh_url":"git@github.com:kieranajp/qrouton.git","default_branch":"main","pushed_at":"2026-03-02T00:00:00Z","owner":{"login":"kieranajp"}}`,
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	repo, err := FetchRepo(context.Background(), client, "token", "KieranAJP", "qrouton")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The canonical owner login from the payload wins over the typed casing.
+	if repo.Org != "kieranajp" || repo.Name != "qrouton" || repo.DefaultBranch != "main" {
+		t.Fatalf("repo = %+v", repo)
+	}
+	if repo.SSHURL != "git@github.com:kieranajp/qrouton.git" {
+		t.Fatalf("ssh url = %q", repo.SSHURL)
+	}
+}
+
+func TestFetchRepoReportsMissingRepository(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{}, &paths) // everything 404s
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	if _, err := FetchRepo(context.Background(), client, "token", "who", "what"); err == nil {
+		t.Fatal("expected error for a repository that does not resolve")
+	}
+}
+
 func TestSortReposByActivityNewestPushFirst(t *testing.T) {
 	oldest := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	newest := oldest.Add(24 * time.Hour)
