@@ -12,15 +12,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-var (
-	accent = lipgloss.NewStyle().Foreground(lipgloss.Color("39")).Bold(true)
-	dim    = lipgloss.NewStyle().Foreground(lipgloss.Color("244"))
-	good   = lipgloss.NewStyle().Foreground(lipgloss.Color("42"))
-	bad    = lipgloss.NewStyle().Foreground(lipgloss.Color("196"))
-	card   = lipgloss.NewStyle().Padding(0, 1).BorderLeft(true).BorderStyle(lipgloss.ThickBorder()).BorderForeground(lipgloss.Color("238"))
-	picked = card.Copy().BorderForeground(lipgloss.Color("39")).Background(lipgloss.Color("236"))
-)
-
 const fullLogo = `              __________
              /  ·  *   /|
             / *   ·   / |
@@ -121,7 +112,7 @@ func (m appModel) viewLanding() string {
 		if m.landingCursor == i+1 {
 			st = picked
 		}
-		lines = append(lines, st.Render(content), "")
+		lines = append(lines, st.Width(m.formWidth()).Render(content), "")
 	}
 	lines = append(lines, dim.Render("↑↓ navigate   enter select   d delete   r refresh   q quit"))
 	return strings.Join(lines, "\n")
@@ -155,6 +146,8 @@ func (m appModel) viewDelete() string {
 func (m appModel) viewForm() string {
 	f := m.form
 	slug := session.Slugify(f.name)
+	w := m.formWidth()
+
 	included, activeN := 0, 0
 	for _, r := range f.roles {
 		if r != excluded {
@@ -164,26 +157,35 @@ func (m appModel) viewForm() string {
 			activeN++
 		}
 	}
-	rows := []string{fieldLine(f.focus == 0, "Ticket URL", f.ticket)}
+
+	var boxes []string
+
+	ticket := []string{fieldValue(f.focus == 0, f.ticket)}
 	if f.ticketStatus != "" {
-		rows = append(rows, "  "+dim.Render(f.ticketStatus))
+		ticket = append(ticket, dim.Render(f.ticketStatus))
 	}
-	rows = append(rows, fieldLine(f.focus == 1, "Name", f.name), fieldLine(f.focus == 2, "Description", f.description), "  Session slug   "+dim.Render(emptyFallback(slug, "—")))
-	ownerLabels := make([]string, 0, len(m.cfg.Orgs))
+	boxes = append(boxes, labeledBox(f.focus == 0, "Ticket URL", w, ticket...))
+
+	boxes = append(boxes, labeledBox(f.focus == 1, "Name", w,
+		fieldValue(f.focus == 1, f.name),
+		dim.Render("slug · "+emptyFallback(slug, "—"))))
+
+	boxes = append(boxes, labeledBox(f.focus == 2, "Description", w,
+		fieldValue(f.focus == 2, f.description)))
+
+	ownerChips := make([]string, 0, len(m.cfg.Orgs))
 	for i, owner := range m.cfg.Orgs {
-		mark := "○"
-		if f.owners[owner] {
-			mark = "●"
-		}
-		label := mark + " " + owner
+		token := chip(owner, f.owners[owner])
 		if f.focus == 3 && i == f.owner {
-			label = accent.Render("[" + label + "]")
+			token = accent.Render("▸") + token
 		}
-		ownerLabels = append(ownerLabels, label)
+		ownerChips = append(ownerChips, token)
 	}
-	rows = append(rows, "  GitHub owners   "+strings.Join(ownerLabels, "  "), fmt.Sprintf("\n  Repositories   %d included · %d active", included, activeN))
+	boxes = append(boxes, labeledBox(f.focus == 3, "GitHub owners", w, strings.Join(ownerChips, " ")))
+
+	repoLines := []string{fmt.Sprintf("%d included · %d active", included, activeN)}
 	if f.search != "" {
-		rows = append(rows, "  Filter         "+accent.Render(f.search))
+		repoLines = append(repoLines, dim.Render("filter · ")+accent.Render(f.search))
 	}
 	rs := m.filteredRepos()
 	start := 0
@@ -194,40 +196,94 @@ func (m appModel) viewForm() string {
 	for i := start; i < end; i++ {
 		r := rs[i]
 		role := f.roles[r.ID()]
-		marker, label := "○", "excluded"
-		detail := ""
+		marker, label, detail, style := "○", "excluded", "", dim
 		if role == active {
-			marker, label, detail = "●", "active", " → "+branchPrefixes[f.prefix]+"/"+slug
+			marker, label, style = "●", "active", good
 		}
 		if role == reference {
-			marker, label, detail = "◐", "reference", " → "+r.DefaultBranch+" · reference"
+			marker, label, detail, style = "◐", "reference", " → "+r.DefaultBranch+" · reference", accent
 		}
-		line := fmt.Sprintf("%s %-10s %-36s pushed %s%s", marker, label, r.ID(), relativeTime(r.PushedAt), detail)
+		head := style.Render(fmt.Sprintf("%s %-9s", marker, label))
+		tail := fmt.Sprintf("%-26s %s", r.ID(), dim.Render("· "+relativeTime(r.PushedAt)+detail))
+		row := "  " + head + " " + tail
 		if f.focus == 4 && i == f.cursor {
-			line = accent.Render("› " + line)
-		} else {
-			line = "  " + line
+			row = accent.Render("▸ ") + head + " " + tail
 		}
-		rows = append(rows, line)
+		repoLines = append(repoLines, row)
 	}
-	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"))
-	rows = append(rows, "", fieldLine(f.focus == 6, "Mode", modeLabel(f.mode)), "  "+dim.Render(modeHint(f.mode)))
-	rows = append(rows, "", dim.Render("type in repository list to filter · backspace clears filter\n↑↓ fields/repos   space select/cycle   tab next field   ←→ choice   enter continue   esc back"))
-	return strings.Join(rows, "\n")
+	boxes = append(boxes, labeledBox(f.focus == 4, "Repositories", w, repoLines...))
+
+	prefixChips := make([]string, len(branchPrefixes))
+	for i, p := range branchPrefixes {
+		prefixChips[i] = chip(p, i == f.prefix)
+	}
+	boxes = append(boxes, labeledBox(f.focus == 5, "Branch prefix", w,
+		strings.Join(prefixChips, " "),
+		dim.Render("preview · "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+"  (active repos only)")))
+
+	modeChips := []string{
+		chip("RPI", f.mode != session.ModeAssistant),
+		chip("Assistant", f.mode == session.ModeAssistant),
+	}
+	boxes = append(boxes, labeledBox(f.focus == 6, "Mode", w,
+		strings.Join(modeChips, " "),
+		dim.Render(modeHint(f.mode))))
+
+	footer := dim.Render("type in the repository list to filter · backspace clears it\n↑↓ move · space select/cycle · tab next field · ←→ choice · enter continue · esc back")
+	return strings.Join(boxes, "\n") + "\n\n" + footer
+}
+
+// formWidth is the width passed to each box. View() wraps the body to its
+// Width minus horizontal padding (w-4); a lipgloss box renders 2 wider than its
+// Width (the border sits outside it), so w-6 makes a box total exactly w-4 and
+// fill the content area without overflowing into a wrap.
+func (m appModel) formWidth() int {
+	w := m.width - 6
+	if w < 50 {
+		w = 50
+	}
+	if w > 100 {
+		w = 100
+	}
+	return w - 6
+}
+
+// labeledBox draws one form field as a titled cube: the label heads the box
+// (accent when focused), the value lines sit below.
+func labeledBox(focused bool, label string, width int, lines ...string) string {
+	title := dim.Render(label)
+	if focused {
+		title = accent.Render(label)
+	}
+	content := append([]string{title}, lines...)
+	return box(focused).Width(width).Render(strings.Join(content, "\n"))
+}
+
+// fieldValue renders a text field's value: a dim placeholder when empty, accent
+// when the field has focus, quiet body text otherwise.
+func fieldValue(focused bool, value string) string {
+	if strings.TrimSpace(value) == "" {
+		return dim.Render("—")
+	}
+	if focused {
+		return accent.Render(value)
+	}
+	return body.Render(value)
 }
 
 func (m appModel) viewRunners() string {
-	lines := []string{"Choose a coding agent", ""}
+	lines := []string{accent.Render("Choose a coding agent"), ""}
+	w := m.formWidth()
 	for i, r := range m.runners {
-		p := "  "
+		st := card
+		label := body.Render(r.Label)
 		if i == m.runnerCursor {
-			p = "› "
-			lines = append(lines, accent.Render(p+r.Label))
-			continue
+			st = picked
+			label = accent.Render("▸ " + r.Label)
 		}
-		lines = append(lines, p+r.Label)
+		lines = append(lines, st.Width(w).Render(label))
 	}
-	lines = append(lines, "", dim.Render("↑↓ navigate   enter create   esc back"))
+	lines = append(lines, "", dim.Render("↑↓ navigate · enter create · esc back"))
 	return strings.Join(lines, "\n")
 }
 
@@ -279,31 +335,11 @@ func (m appModel) viewAssembly() string {
 	return strings.Join(lines, "\n")
 }
 
-func modeLabel(mode session.SessionMode) string {
-	if mode == session.ModeAssistant {
-		return "Assistant"
-	}
-	return "RPI (default)"
-}
-
 func modeHint(mode session.SessionMode) string {
 	if mode == session.ModeAssistant {
 		return "open-ended coding session · escalate to RPI anytime"
 	}
 	return "orchestrated Research → Plan → Implement workflow"
-}
-
-func fieldLine(focused bool, label, value string) string {
-	p := "  "
-	if focused {
-		p = "› "
-	}
-	value = emptyFallback(value, "—")
-	line := fmt.Sprintf("%s%-15s %s", p, label, value)
-	if focused {
-		return accent.Render(line)
-	}
-	return line
 }
 
 func emptyFallback(s, f string) string {

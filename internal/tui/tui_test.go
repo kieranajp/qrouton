@@ -49,12 +49,13 @@ func TestRepositoryInclusionAndRoles(t *testing.T) {
 
 func TestModeFieldTogglesAndRenders(t *testing.T) {
 	m := testApp()
+	m.width = 100
 	m.screen = newScreen
 	m.form.mode = session.ModeRPI
 	m.form.focus = 6
 
 	view := m.viewForm()
-	if !strings.Contains(view, "RPI (default)") || !strings.Contains(view, "Research → Plan → Implement") {
+	if !strings.Contains(view, "RPI") || !strings.Contains(view, "Research → Plan → Implement") {
 		t.Fatalf("form should render the RPI mode field:\n%s", view)
 	}
 
@@ -123,6 +124,7 @@ func TestOwnerSwitchClampsRepoCursorWithoutPanic(t *testing.T) {
 
 func TestFormRendersLiveBranchAndReferencePreview(t *testing.T) {
 	m := testApp()
+	m.width = 100
 	m.screen = newScreen
 	m.form.name = "API Cleanup!"
 	m.form.prefix = 1
