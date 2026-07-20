@@ -47,6 +47,35 @@ func TestRepositoryInclusionAndRoles(t *testing.T) {
 	}
 }
 
+func TestModeFieldTogglesAndRenders(t *testing.T) {
+	m := testApp()
+	m.screen = newScreen
+	m.form.mode = session.ModeRPI
+	m.form.focus = 6
+
+	view := m.viewForm()
+	if !strings.Contains(view, "RPI (default)") || !strings.Contains(view, "Research → Plan → Implement") {
+		t.Fatalf("form should render the RPI mode field:\n%s", view)
+	}
+
+	// space, left, and right all cycle the two-option mode field.
+	for _, key := range []tea.KeyMsg{{Type: tea.KeySpace}, {Type: tea.KeyLeft}, {Type: tea.KeyRight}} {
+		before := m.form.mode
+		updated, _ := m.updateForm(key)
+		m = updated.(appModel)
+		if m.form.mode == before {
+			t.Fatalf("%v did not toggle mode from %q", key, before)
+		}
+	}
+	// Odd number of toggles from RPI lands on Assistant.
+	if m.form.mode != session.ModeAssistant {
+		t.Fatalf("mode after three toggles = %q, want assistant", m.form.mode)
+	}
+	if v := m.viewForm(); !strings.Contains(v, "Assistant") || !strings.Contains(v, "escalate to RPI") {
+		t.Fatalf("form should render the assistant mode field:\n%s", v)
+	}
+}
+
 func TestRepositoryFiltersPreserveActivityOrder(t *testing.T) {
 	m := testApp()
 	m.form.owner = 1

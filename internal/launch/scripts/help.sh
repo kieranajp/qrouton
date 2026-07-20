@@ -1,7 +1,7 @@
 #!/bin/sh
 clear
 printf '\n  qrouton\n\n'
-printf '  Coordinate here; delegate work to subagents.\n\n'
+printf '  @@TAGLINE@@\n\n'
 @@WARNING@@
 printf '  Move   Alt + arrow keys\n'
 printf '  Term   Alt-g (floating terminal)\n'

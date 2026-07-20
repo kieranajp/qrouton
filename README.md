@@ -32,6 +32,7 @@ _Screenshots coming soon._
 - Launches Claude Code, Codex CLI, or OpenCode in Zellij.
 - Resumes the agent conversation when the workspace is resumed.
 - Gives agents session-aware instructions, skills, and an MCP-powered editor pane.
+- Starts sessions in **RPI** (orchestrated Research → Plan → Implement) or **Assistant** (open-ended) mode.
 
 ## Requirements 🧰
 
@@ -98,13 +99,25 @@ excluded → active → reference → excluded
 
 Active repositories are implementation targets. Reference repositories are available for inspection but are explicitly marked read-only for the coding agent.
 
+## Session mode 🎛️
+
+Each session starts in one of two modes, chosen on the new-session form (`RPI` is the default):
+
+- **RPI** — the orchestrated Research → Plan → Implement workflow, with research/planning/implementation leads, ticket-blind specialists, and durable specs and plans.
+- **Assistant** — an open-ended coding session: help directly, no forced workflow or artifacts.
+
+RPI is qrouton's take on [loop engineering](https://newsletter.pragmaticengineer.com/p/what-is-loop-engineering): the interesting part isn't the prompt, it's the loop around it — the topology (leads fanning out to specialists), the verifier (review and test gates), and the stop rules (phased plans). Assistant mode is the honest other half of that idea: loops have preconditions, and plenty of work doesn't clear them. So you pick the loop when it earns its keep, and skip it when you're the verifier.
+
+The mode only swaps the runner's starting system prompt and opening message; the Zellij panes, MCP tools, and skills are identical either way. The choice is stored in `qrouton.json` and preserved on resume. Both prompts are always stamped under `.qrouton/qrspi/`, so an Assistant session can **escalate to RPI mid-conversation** just by asking the agent — no relaunch needed.
+
 ## Prompt sources 🧠
 
 The workflow prompts are first-class source files under [`prompts/`](./prompts):
 
 ```text
 prompts/
-├── orchestrator.md
+├── orchestrator.md   # RPI mode
+├── assistant.md      # Assistant mode
 ├── skills/
 └── agents/
 ```

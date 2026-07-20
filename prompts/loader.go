@@ -12,7 +12,10 @@ import (
 
 type ID string
 
-const Orchestrator ID = "orchestrator"
+const (
+	Orchestrator ID = "orchestrator"
+	Assistant    ID = "assistant"
+)
 
 func Skill(name string) ID { return ID("skills/" + name) }
 func Agent(name string) ID { return ID("agents/" + name) }
@@ -31,7 +34,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md agents/*.md skills/*/SKILL.md
+//go:embed orchestrator.md assistant.md agents/*.md skills/*/SKILL.md
 var embedded embed.FS
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
@@ -83,6 +86,8 @@ func pathForID(id ID) (string, error) {
 	switch {
 	case id == Orchestrator:
 		return "orchestrator.md", nil
+	case id == Assistant:
+		return "assistant.md", nil
 	case strings.HasPrefix(value, "skills/") && fs.ValidPath(value):
 		return value + "/SKILL.md", nil
 	case strings.HasPrefix(value, "agents/") && fs.ValidPath(value):
@@ -96,6 +101,8 @@ func idForPath(path string) (ID, bool) {
 	switch {
 	case path == "orchestrator.md":
 		return Orchestrator, true
+	case path == "assistant.md":
+		return Assistant, true
 	case strings.HasPrefix(path, "skills/") && strings.HasSuffix(path, "/SKILL.md"):
 		return ID(strings.TrimSuffix(path, "/SKILL.md")), true
 	case strings.HasPrefix(path, "agents/") && strings.HasSuffix(path, ".md"):

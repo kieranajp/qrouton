@@ -53,7 +53,7 @@ func Runners(cfg *config.Config) []Runner {
 }
 
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socketDir string, resume bool) ([]string, []string, error) {
-	argv := runnerArgv(r, resume)
+	argv := runnerArgv(r, resume, sessionMode(dir))
 	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
 	switch r.ID {
 	case "claude":
@@ -117,7 +117,7 @@ func withEnv(env []string, key, value string) []string {
 	return append(out, prefix+value)
 }
 
-func runnerArgv(r Runner, resume bool) []string {
+func runnerArgv(r Runner, resume bool, mode string) []string {
 	argv := append([]string(nil), r.Command...)
 	if resume {
 		switch r.ID {
@@ -131,7 +131,17 @@ func runnerArgv(r Runner, resume bool) []string {
 	}
 	switch r.ID {
 	case "claude", "codex":
-		argv = append(argv, "You have just been launched in a qrouton session. Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, then respond naturally. Present the work as Research, Plan, or Implement; keep your own context lean by delegating execution wherever practical.")
+		argv = append(argv, openingMessage(mode))
 	}
 	return argv
+}
+
+// openingMessage is the fresh-session greeting injected as the runner's first
+// prompt. RPI presents the orchestrated workflow; Assistant stays open-ended
+// while pointing at the workflow the user can escalate into.
+func openingMessage(mode string) string {
+	if mode == modeAssistant {
+		return "You have just been launched in a qrouton session. Read the session instructions and manifest, skim relevant thoughts/shared artifacts, then help with whatever the user asks — work directly and keep your own context lean. A structured Research → Plan → Implement workflow is available if the user wants it."
+	}
+	return "You have just been launched in a qrouton session. Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, then respond naturally. Present the work as Research, Plan, or Implement; keep your own context lean by delegating execution wherever practical."
 }

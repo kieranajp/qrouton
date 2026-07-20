@@ -18,6 +18,8 @@ func Render(prompt Prompt) ([]Rendered, error) {
 	switch {
 	case prompt.ID == Orchestrator:
 		return []Rendered{{Path: "ORCHESTRATOR.md", Content: prompt.Content}}, nil
+	case prompt.ID == Assistant:
+		return []Rendered{{Path: "ASSISTANT.md", Content: prompt.Content}}, nil
 	case strings.HasPrefix(id, "skills/"):
 		return []Rendered{{Path: id + "/SKILL.md", Content: prompt.Content}}, nil
 	case strings.HasPrefix(id, "agents/"):

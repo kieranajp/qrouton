@@ -90,6 +90,49 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	}
 }
 
+func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
+	// Default (no manifest) points discovery at the RPI orchestrator, and the
+	// assistant prompt is still stamped for later escalation.
+	rpi := t.TempDir()
+	if err := StampAssets(rpi); err != nil {
+		t.Fatal(err)
+	}
+	assertLinkTargetContains(t, filepath.Join(rpi, "CLAUDE.md"), "ORCHESTRATOR.md")
+	if _, err := os.Stat(filepath.Join(rpi, ".qrouton", "qrspi", "ASSISTANT.md")); err != nil {
+		t.Fatalf("assistant prompt not stamped for escalation: %v", err)
+	}
+
+	// An assistant manifest flips CLAUDE.md/AGENTS.md to the assistant prompt
+	// while the orchestrator stays available under .qrouton.
+	asst := t.TempDir()
+	if err := os.WriteFile(filepath.Join(asst, "qrouton.json"), []byte(`{"mode":"assistant"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := StampAssets(asst); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
+		assertLinkTargetContains(t, filepath.Join(asst, name), "ASSISTANT.md")
+	}
+	if _, err := os.Stat(filepath.Join(asst, ".qrouton", "qrspi", "ORCHESTRATOR.md")); err != nil {
+		t.Fatalf("orchestrator prompt not stamped for escalation: %v", err)
+	}
+	if b, err := os.ReadFile(filepath.Join(asst, "CLAUDE.md")); err != nil || !strings.Contains(string(b), "qrouton assistant") {
+		t.Fatalf("assistant discovery not resolving to assistant prompt: %v\n%s", err, b)
+	}
+}
+
+func assertLinkTargetContains(t *testing.T, link, want string) {
+	t.Helper()
+	target, err := os.Readlink(link)
+	if err != nil {
+		t.Fatalf("%s is not a symlink: %v", link, err)
+	}
+	if !strings.Contains(target, want) {
+		t.Fatalf("%s links to %q, want it to contain %q", link, target, want)
+	}
+}
+
 func TestStampAssetsRefusesUserOwnedDiscoveryFile(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "AGENTS.md"), []byte("user instructions"), 0o644); err != nil {

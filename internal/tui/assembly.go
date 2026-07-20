@@ -44,7 +44,7 @@ func (m *appModel) startAssembly() tea.Cmd {
 				selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleReference})
 			}
 		}
-		dir, err := session.Create(m.cfg, m.form.name, m.form.description, m.form.ticket, branchPrefixes[m.form.prefix], selected, func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
+		dir, err := session.Create(m.cfg, m.form.name, m.form.description, m.form.ticket, branchPrefixes[m.form.prefix], m.form.mode, selected, func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 		ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 	}()
 	return awaitAssembly(ch)

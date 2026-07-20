@@ -40,6 +40,26 @@ const (
 	RepoRoleReference RepoRole = "reference"
 )
 
+// SessionMode selects the system prompt (and opening message) the runner starts
+// under. RPI is the default orchestrated Research→Plan→Implement workflow;
+// Assistant is a lighter, open-ended coding session that can escalate to RPI
+// on request. Both modes stamp the same panes, skills, and MCP tools.
+type SessionMode string
+
+const (
+	ModeRPI       SessionMode = "rpi"
+	ModeAssistant SessionMode = "assistant"
+)
+
+// effective treats an unset or unknown mode as RPI, keeping manifests written
+// before the field existed on the default workflow.
+func (m SessionMode) effective() SessionMode {
+	if m == ModeAssistant {
+		return ModeAssistant
+	}
+	return ModeRPI
+}
+
 // RepoSelection pairs repository metadata with its role in a session.
 type RepoSelection struct {
 	Repo github.Repo
@@ -76,9 +96,14 @@ type Manifest struct {
 	Slug          string         `json:"slug"`
 	Description   string         `json:"description"`
 	TicketURL     string         `json:"ticketUrl,omitempty"`
+	Mode          SessionMode    `json:"mode,omitempty"`
 	CreatedAt     time.Time      `json:"createdAt"`
 	Repos         []ManifestRepo `json:"repos"`
 }
+
+// EffectiveMode is the session's runner mode, defaulting to RPI for manifests
+// written before the field existed.
+func (m Manifest) EffectiveMode() SessionMode { return m.Mode.effective() }
 
 type ManifestRepo struct {
 	Name          string   `json:"name"`
@@ -135,12 +160,13 @@ func Scan(root string) ([]Manifest, error) {
 // references to the default-branch revision resolved at creation time. It writes the
 // manifest last, so a half-assembled directory without one never shows up in resume.
 func createSessionWithRoles(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection) (string, error) {
-	return Create(cfg, name, desc, ticket, prefix, repos, nil)
+	return Create(cfg, name, desc, ticket, prefix, ModeRPI, repos, nil)
 }
 
-// Create is the role-aware assembly entry point. Progress
-// reports the start and outcome of each real mirror, worktree, scaffold, and manifest operation.
-func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection, progress ProgressFunc) (string, error) {
+// Create is the role-aware assembly entry point. mode selects the runner's
+// starting system prompt. Progress reports the start and outcome of each real
+// mirror, worktree, scaffold, and manifest operation.
+func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, repos []RepoSelection, progress ProgressFunc) (string, error) {
 	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, 0o755); err != nil {
@@ -167,7 +193,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoS
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
-		TicketURL: ticket, CreatedAt: time.Now()}
+		TicketURL: ticket, Mode: mode.effective(), CreatedAt: time.Now()}
 	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
 		return "", err
 	}

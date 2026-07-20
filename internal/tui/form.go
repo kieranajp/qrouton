@@ -22,9 +22,23 @@ type formState struct {
 	name, search, description, ticket string
 	owner, prefix                     int
 	focus, cursor                     int
+	mode                              session.SessionMode
 	roles                             map[string]repoRole
 	owners                            map[string]bool
 	ticketStatus                      string
+}
+
+// sessionModes are the mode field's cycle order; RPI leads so it is the default.
+var sessionModes = []session.SessionMode{session.ModeRPI, session.ModeAssistant}
+
+func (f *formState) cycleMode() {
+	current := 0
+	for i, m := range sessionModes {
+		if m == f.mode {
+			current = i
+		}
+	}
+	f.mode = sessionModes[(current+1)%len(sessionModes)]
 }
 
 type ticketLoadedMsg struct {
@@ -60,7 +74,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		previous := f.focus
 		if f.focus == 4 && f.cursor+1 < len(m.filteredRepos()) {
 			f.cursor++
-		} else if f.focus < 5 {
+		} else if f.focus < 6 {
 			f.focus++
 		}
 		if previous == 0 && f.focus != 0 {
@@ -71,12 +85,12 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if f.focus > 0 {
 			f.focus--
 		} else {
-			f.focus = 5
+			f.focus = 6
 		}
 		return m, nil
 	case "tab":
 		previous := f.focus
-		f.focus = (f.focus + 1) % 6
+		f.focus = (f.focus + 1) % 7
 		if previous == 0 {
 			return m, m.loadTicket()
 		}
@@ -92,6 +106,10 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.clampRepoCursor()
 			return m, nil
 		}
+		if f.focus == 6 {
+			f.cycleMode()
+			return m, nil
+		}
 		m.editField(false, " ")
 		return m, nil
 	case "left":
@@ -101,6 +119,9 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 5) % 6
 		}
+		if f.focus == 6 {
+			f.cycleMode()
+		}
 		return m, nil
 	case "right":
 		if f.focus == 3 && f.owner+1 < len(m.cfg.Orgs) {
@@ -109,9 +130,12 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if f.focus == 5 {
 			f.prefix = (f.prefix + 1) % 6
 		}
+		if f.focus == 6 {
+			f.cycleMode()
+		}
 		return m, nil
 	case "enter":
-		if f.focus < 5 {
+		if f.focus < 6 {
 			previous := f.focus
 			f.focus++
 			if previous == 0 {

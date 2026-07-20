@@ -57,7 +57,12 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 	if filepath.Base(argv[0]) == "codex" && codexMaxDepth(argv) < 2 {
 		warning = strings.TrimRight(codexDepthWarning, "\n")
 	}
+	tagline := "Coordinate here; delegate work to subagents."
+	if sessionMode(dir) == modeAssistant {
+		tagline = "Open-ended session; ask to switch to RPI anytime."
+	}
 	help := strings.ReplaceAll(helpScript, "@@WARNING@@", warning)
+	help = strings.ReplaceAll(help, "@@TAGLINE@@", tagline)
 	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(help), 0o755); err != nil {
 		return "", err
 	}
