@@ -147,6 +147,31 @@ func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner st
 	return fetchOwnerReposContext(ctx, client, token, owner, &login)
 }
 
+// FetchRepo resolves a single owner/repo directly, so an ad-hoc launch can name
+// any repository the token can see — including ones outside the configured
+// owners the picker lists.
+func FetchRepo(ctx context.Context, client *http.Client, token, owner, name string) (Repo, error) {
+	var payload struct {
+		Name          string    `json:"name"`
+		SSHURL        string    `json:"ssh_url"`
+		DefaultBranch string    `json:"default_branch"`
+		PushedAt      time.Time `json:"pushed_at"`
+		Owner         struct {
+			Login string `json:"login"`
+		} `json:"owner"`
+	}
+	endpoint := githubAPIBase + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name)
+	if err := githubJSONContext(ctx, client, token, endpoint, &payload); err != nil {
+		return Repo{}, fmt.Errorf("github: fetching %s/%s: %w", owner, name, err)
+	}
+	// Prefer GitHub's canonical owner casing; fall back to what the caller typed.
+	org := payload.Owner.Login
+	if org == "" {
+		org = owner
+	}
+	return Repo{Name: payload.Name, Org: org, SSHURL: payload.SSHURL, DefaultBranch: payload.DefaultBranch, PushedAt: payload.PushedAt}, nil
+}
+
 func SortReposByActivity(repos []Repo) {
 	sort.SliceStable(repos, func(i, j int) bool {
 		if !repos[i].PushedAt.Equal(repos[j].PushedAt) {

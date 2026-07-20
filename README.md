@@ -77,6 +77,17 @@ Useful flags:
 ./qrouton --runner codex     # preselect a supported coding agent
 ```
 
+## Quick ad-hoc session ⚡
+
+Skip the picker entirely by naming repositories on the command line:
+
+```sh
+./qrouton kieranajp/qrouton              # one repo, ad-hoc
+./qrouton lifesum/api lifesum/web        # several, all active
+```
+
+This launches (or resumes) an **Assistant**-mode session with those repos checked out active — handy when you just want to poke at a repo without curating a multi-repo workspace. The repos need not be in your configured `orgs`; anything your GitHub token can see resolves. The session is named after the repositories, so re-running the same command drops you back into it. Ask the agent to switch to RPI whenever the work grows into something bigger.
+
 ## Session shape 🗂️
 
 ```text
