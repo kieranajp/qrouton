@@ -3,6 +3,7 @@ package launch
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +11,38 @@ import (
 
 	"github.com/kieranajp/qrouton/prompts"
 )
+
+// Runner modes mirror session.SessionMode; launch stays a leaf and reads the
+// value straight from the manifest rather than importing the session package.
+const (
+	modeRPI       = "rpi"
+	modeAssistant = "assistant"
+)
+
+// sessionMode reads the session's runner mode from its manifest, defaulting to
+// RPI when the manifest is absent, unreadable, or predates the field.
+func sessionMode(dir string) string {
+	b, err := os.ReadFile(filepath.Join(dir, "qrouton.json"))
+	if err != nil {
+		return modeRPI
+	}
+	var m struct {
+		Mode string `json:"mode"`
+	}
+	if json.Unmarshal(b, &m) == nil && m.Mode == modeAssistant {
+		return modeAssistant
+	}
+	return modeRPI
+}
+
+// primaryDiscovery is the rendered prompt filename that CLAUDE.md/AGENTS.md link
+// to for the given mode; the other prompt is still stamped for escalation.
+func primaryDiscovery(mode string) string {
+	if mode == modeAssistant {
+		return "ASSISTANT.md"
+	}
+	return "ORCHESTRATOR.md"
+}
 
 //go:embed all:assets
 var assetsFS embed.FS
@@ -30,6 +63,7 @@ func StampAssets(dir string) error {
 // StampAssetsWithLoader allows callers and tests to supply a prompt source.
 func StampAssetsWithLoader(ctx context.Context, dir string, loader prompts.PromptLoader) error {
 	canonical := filepath.Join(dir, ".qrouton", "qrspi")
+	primary := primaryDiscovery(sessionMode(dir))
 	var links []assetLink
 	loaded, err := loader.List(ctx)
 	if err != nil {
@@ -43,11 +77,15 @@ func StampAssetsWithLoader(ctx context.Context, dir string, loader prompts.Promp
 		for _, asset := range rendered {
 			dst := filepath.Join(dir, filepath.FromSlash(asset.Path))
 			switch {
-			case asset.Path == "ORCHESTRATOR.md":
+			case asset.Path == "ORCHESTRATOR.md" || asset.Path == "ASSISTANT.md":
+				// Both prompts are always stamped so escalation needs no relaunch;
+				// only the one matching the session mode owns CLAUDE.md/AGENTS.md.
 				dst = filepath.Join(canonical, asset.Path)
-				links = append(links,
-					assetLink{filepath.Join(dir, "CLAUDE.md"), dst},
-					assetLink{filepath.Join(dir, "AGENTS.md"), dst})
+				if asset.Path == primary {
+					links = append(links,
+						assetLink{filepath.Join(dir, "CLAUDE.md"), dst},
+						assetLink{filepath.Join(dir, "AGENTS.md"), dst})
+				}
 			case strings.HasPrefix(asset.Path, "skills/"):
 				dst = filepath.Join(canonical, filepath.FromSlash(asset.Path))
 				skillRel := strings.TrimPrefix(asset.Path, "skills/")

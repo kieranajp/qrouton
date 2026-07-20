@@ -140,6 +140,11 @@ func assetDestination(workspace, canonical, rel string) (string, []assetLink) {
 		}
 		return destination, links
 	}
+	// The assistant prompt is stored alongside the orchestrator but never linked
+	// as discovery here: eval exercises the RPI workflow.
+	if rel == "ASSISTANT.md" {
+		return filepath.Join(canonical, "ASSISTANT.md"), nil
+	}
 
 	skillsPrefix := "skills" + string(filepath.Separator)
 	if strings.HasPrefix(rel, skillsPrefix) {

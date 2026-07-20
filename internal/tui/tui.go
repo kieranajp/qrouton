@@ -98,7 +98,7 @@ func newAppModel(cfg *config.Config, sessions []session.Manifest, requested stri
 	return appModel{cfg: cfg, sessions: sessions, repos: repos, requestedRunner: requested,
 		runners: availableRunners(cfg), screen: landingScreen, refreshing: true, cacheAt: fetched,
 		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error), refreshGen: 1,
-		form: formState{prefix: 0, roles: make(map[string]repoRole), owners: selectedOwners(cfg.Orgs)}}
+		form: formState{prefix: 0, mode: session.ModeRPI, roles: make(map[string]repoRole), owners: selectedOwners(cfg.Orgs)}}
 }
 
 func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }

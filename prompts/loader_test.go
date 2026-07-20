@@ -26,7 +26,7 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 16 {
-		t.Fatalf("embedded prompt count = %d, want 16", len(all))
+	if len(all) != 17 {
+		t.Fatalf("embedded prompt count = %d, want 17", len(all))
 	}
 }

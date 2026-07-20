@@ -210,7 +210,9 @@ func (m appModel) viewForm() string {
 		}
 		rows = append(rows, line)
 	}
-	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"), "", dim.Render("type in repository list to filter · backspace clears filter\n↑↓ fields/repos   space select/cycle   tab next field   ←→ choice   enter continue   esc back"))
+	rows = append(rows, "", fieldLine(f.focus == 5, "Branch prefix", branchPrefixes[f.prefix]), "  Branch preview "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+dim.Render("  active repos only"))
+	rows = append(rows, "", fieldLine(f.focus == 6, "Mode", modeLabel(f.mode)), "  "+dim.Render(modeHint(f.mode)))
+	rows = append(rows, "", dim.Render("type in repository list to filter · backspace clears filter\n↑↓ fields/repos   space select/cycle   tab next field   ←→ choice   enter continue   esc back"))
 	return strings.Join(rows, "\n")
 }
 
@@ -275,6 +277,20 @@ func (m appModel) viewAssembly() string {
 	}
 	lines = append(lines, "", dim.Render("Mirrors and worktrees are being assembled…"))
 	return strings.Join(lines, "\n")
+}
+
+func modeLabel(mode session.SessionMode) string {
+	if mode == session.ModeAssistant {
+		return "Assistant"
+	}
+	return "RPI (default)"
+}
+
+func modeHint(mode session.SessionMode) string {
+	if mode == session.ModeAssistant {
+		return "open-ended coding session · escalate to RPI anytime"
+	}
+	return "orchestrated Research → Plan → Implement workflow"
 }
 
 func fieldLine(focused bool, label, value string) string {

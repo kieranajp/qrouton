@@ -26,6 +26,37 @@ func makeOrigin(t *testing.T, name string) (string, string) {
 	return origin, strings.TrimSpace(string(out))
 }
 
+func TestCreatePersistsSessionMode(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, _ := makeOrigin(t, "svc")
+	repos := []RepoSelection{{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}}
+	dir, err := Create(&config.Config{Root: root}, "Assistant sesh", "", "", "feat", ModeAssistant, repos, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m Manifest
+	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	if m.Mode != ModeAssistant || m.EffectiveMode() != ModeAssistant {
+		t.Fatalf("assistant mode not persisted: %q", m.Mode)
+	}
+	if !strings.Contains(string(b), `"mode": "assistant"`) {
+		t.Fatalf("manifest missing mode field:\n%s", b)
+	}
+	// An unset mode (legacy manifests) reads as the RPI default.
+	if (Manifest{}).EffectiveMode() != ModeRPI {
+		t.Fatal("empty mode should default to RPI")
+	}
+}
+
 func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {
@@ -225,7 +256,7 @@ func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "progress")
 	var events []Progress
-	_, err := Create(&config.Config{Root: root}, "Progress", "", "", "feat",
+	_, err := Create(&config.Config{Root: root}, "Progress", "", "", "feat", ModeRPI,
 		[]RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}},
 		func(event Progress) { events = append(events, event) })
 	if err != nil {

@@ -47,15 +47,31 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["codex"], false)
+	argv := runnerArgv(byID["codex"], false, modeRPI)
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := runnerArgv(byID["opencode"], false); len(argv) != len(byID["opencode"].Command) {
+	if argv := runnerArgv(byID["opencode"], false, modeRPI); len(argv) != len(byID["opencode"].Command) {
 		t.Fatalf("unknown launch protocol should not receive a positional prompt: %#v", argv)
+	}
+}
+
+func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.T) {
+	byID := make(map[string]Runner, len(builtinRunners))
+	for _, r := range builtinRunners {
+		byID[r.ID] = r
+	}
+
+	argv := runnerArgv(byID["claude"], false, modeAssistant)
+	msg := argv[len(argv)-1]
+	if strings.Contains(msg, "Present the work as Research, Plan, or Implement") {
+		t.Fatalf("assistant opening should not mandate the RPI presentation: %q", msg)
+	}
+	if !strings.Contains(msg, "help with whatever the user asks") || !strings.Contains(msg, "Research → Plan → Implement workflow is available") {
+		t.Fatalf("assistant opening should stay open-ended and offer escalation: %q", msg)
 	}
 }
 
@@ -66,7 +82,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"opencode": {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, true)
+		argv := runnerArgv(runner, true, modeRPI)
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
