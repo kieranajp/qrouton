@@ -144,7 +144,7 @@ func Token() (string, error) {
 
 func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner string) ([]Repo, error) {
 	login := ""
-	return fetchOwnerReposContext(ctx, client, token, owner, &login)
+	return fetchOwnerRepos(ctx, client, token, owner, &login)
 }
 
 // FetchRepo resolves a single owner/repo directly, so an ad-hoc launch can name
@@ -161,7 +161,7 @@ func FetchRepo(ctx context.Context, client *http.Client, token, owner, name stri
 		} `json:"owner"`
 	}
 	endpoint := githubAPIBase + "/repos/" + url.PathEscape(owner) + "/" + url.PathEscape(name)
-	if err := githubJSONContext(ctx, client, token, endpoint, &payload); err != nil {
+	if err := githubJSON(ctx, client, token, endpoint, &payload); err != nil {
 		return Repo{}, fmt.Errorf("github: fetching %s/%s: %w", owner, name, err)
 	}
 	// Prefer GitHub's canonical owner casing; fall back to what the caller typed.
@@ -181,16 +181,12 @@ func SortReposByActivity(repos []Repo) {
 	})
 }
 
-func fetchOwnerRepos(client *http.Client, token, owner string, authenticatedLogin *string) ([]Repo, error) {
-	return fetchOwnerReposContext(context.Background(), client, token, owner, authenticatedLogin)
-}
-
-func fetchOwnerReposContext(ctx context.Context, client *http.Client, token, owner string, authenticatedLogin *string) ([]Repo, error) {
+func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner string, authenticatedLogin *string) ([]Repo, error) {
 	var identity struct {
 		Login string `json:"login"`
 		Type  string `json:"type"`
 	}
-	if err := githubJSONContext(ctx, client, token, githubAPIBase+"/users/"+url.PathEscape(owner), &identity); err != nil {
+	if err := githubJSON(ctx, client, token, githubAPIBase+"/users/"+url.PathEscape(owner), &identity); err != nil {
 		return nil, fmt.Errorf("github: identifying %s: %w", owner, err)
 	}
 
@@ -203,7 +199,7 @@ func fetchOwnerReposContext(ctx context.Context, client *http.Client, token, own
 			var me struct {
 				Login string `json:"login"`
 			}
-			if err := githubJSONContext(ctx, client, token, githubAPIBase+"/user", &me); err != nil {
+			if err := githubJSON(ctx, client, token, githubAPIBase+"/user", &me); err != nil {
 				return nil, fmt.Errorf("github: identifying authenticated user: %w", err)
 			}
 			*authenticatedLogin = me.Login
@@ -227,7 +223,7 @@ func fetchOwnerReposContext(ctx context.Context, client *http.Client, token, own
 		}
 		var batch []Repo
 		requestURL := fmt.Sprintf("%s%sper_page=100&page=%d", endpoint, separator, page)
-		if err := githubJSONContext(ctx, client, token, requestURL, &batch); err != nil {
+		if err := githubJSON(ctx, client, token, requestURL, &batch); err != nil {
 			return nil, fmt.Errorf("github: listing %s repos (page %d): %w", owner, page, err)
 		}
 		for i := range batch {
@@ -241,7 +237,7 @@ func fetchOwnerReposContext(ctx context.Context, client *http.Client, token, own
 	return repos, nil
 }
 
-func githubJSONContext(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
+func githubJSON(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", requestURL, nil)
 	if err != nil {
 		return err

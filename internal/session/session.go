@@ -156,13 +156,6 @@ func Scan(root string) ([]Manifest, error) {
 	return out, nil
 }
 
-// createSessionWithRoles creates branches only for active repositories and pins
-// references to the default-branch revision resolved at creation time. It writes the
-// manifest last, so a half-assembled directory without one never shows up in resume.
-func createSessionWithRoles(cfg *config.Config, name, desc, ticket, prefix string, repos []RepoSelection) (string, error) {
-	return Create(cfg, name, desc, ticket, prefix, ModeRPI, repos, nil)
-}
-
 // Create is the role-aware assembly entry point. mode selects the runner's
 // starting system prompt. Progress reports the start and outcome of each real
 // mirror, worktree, scaffold, and manifest operation.

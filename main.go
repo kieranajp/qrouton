@@ -1,5 +1,5 @@
 // qrouton — assemble a multi-repo session (worktrees off local mirrors) and launch an agent runner in it.
-// Spec: thoughts/shared/specs/S001-2026-07-15-workspace-harness.md
+// See AGENTS.md for the package layout and the invariants a change must hold.
 package main
 
 import (
