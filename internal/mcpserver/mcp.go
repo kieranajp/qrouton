@@ -7,11 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -52,11 +51,11 @@ func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }
 
-func newMCPServer(root string, editor launch.EditorCommand, zellij, session string) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; close_pane/list_panes to manage them. All paths and working directories must belong to this session.",
 	})
-	pane := newPaneManager(root, editor, zellij, session)
+	pane := newPaneManager(root, editor, host)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "open_file",
@@ -140,16 +139,20 @@ func newMCPServer(root string, editor launch.EditorCommand, zellij, session stri
 }
 
 // Run serves the qrouton MCP server over stdio. editorJSON is the resolved
-// EditorCommand marshalled by the launcher (or inherited via QROUTON_EDITOR_JSON).
-func Run(root, editorJSON, zellijSession, socketDir string) error {
-	os.Setenv("ZELLIJ_SOCKET_DIR", socketDir)
+// EditorCommand marshalled by the launcher (or inherited via QROUTON_EDITOR_JSON);
+// muxJSON is the multiplexer Handle the launcher stamped into our arguments.
+func Run(root, editorJSON, muxJSON string) error {
 	var editor launch.EditorCommand
 	if err := json.Unmarshal([]byte(editorJSON), &editor); err != nil || len(editor.Argv) == 0 {
 		return fmt.Errorf("mcp: invalid inherited editor configuration")
 	}
-	zellij, err := exec.LookPath("zellij")
+	handle, err := mux.ParseHandle(muxJSON)
 	if err != nil {
-		return fmt.Errorf("mcp: zellij is unavailable")
+		return fmt.Errorf("mcp: %w", err)
 	}
-	return newMCPServer(root, editor, zellij, zellijSession).Run(context.Background(), &mcp.StdioTransport{})
+	host, err := handle.PaneHost()
+	if err != nil {
+		return fmt.Errorf("mcp: %w", err)
+	}
+	return newMCPServer(root, editor, host).Run(context.Background(), &mcp.StdioTransport{})
 }

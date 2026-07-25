@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/mux"
 )
 
 type Runner struct {
@@ -52,9 +53,9 @@ func Runners(cfg *config.Config) []Runner {
 	return out
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, socketDir string, resume bool) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle mux.Handle, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume, sessionMode(dir))
-	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--zellij-session", filepath.Base(dir), "--socket-dir", socketDir}
+	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--mux-json", handle.Marshal()}
 	switch r.ID {
 	case "claude":
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
