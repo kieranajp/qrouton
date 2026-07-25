@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -33,7 +34,7 @@ func fakeZellij(t *testing.T, dir string) (helper, log string) {
 
 func testManager(t *testing.T, dir, helper string) *paneManager {
 	t.Helper()
-	return newPaneManager(dir, launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}, helper, "test-session")
+	return newPaneManager(dir, launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}, mux.NewZellijHost(helper, "test-session"))
 }
 
 func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
@@ -211,7 +212,7 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 
 func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	ctx := context.Background()
-	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, "zellij", "test-session")
+	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, mux.NewZellijHost("zellij", "test-session"))
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)

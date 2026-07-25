@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/mux"
 )
 
 func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
@@ -94,7 +95,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 
 func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, "/tmp/zellij", true)
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), true)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -107,7 +108,7 @@ func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 
 func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
-	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, "/tmp/zellij", false)
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -128,7 +129,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
 	bin := "/opt/qro uton/$peculiar/qrouton"
 	dir := "/work/kieran's session"
-	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, "/tmp/zellij", false)
+	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, testHandle(), false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +167,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, "/tmp/zellij", false)
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -177,8 +178,8 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 		if id != "opencode" && !strings.Contains(joined, "editor-json") {
 			t.Fatalf("%s missing explicit editor config: %v", id, argv)
 		}
-		if id != "opencode" && (!strings.Contains(joined, "zellij-session") || !strings.Contains(joined, "socket-dir")) {
-			t.Fatalf("%s missing explicit Zellij target: %v", id, argv)
+		if id != "opencode" && (!strings.Contains(joined, "mux-json") || !strings.Contains(joined, "zellij")) {
+			t.Fatalf("%s missing explicit multiplexer handle: %v", id, argv)
 		}
 		if id == "opencode" {
 			var raw string
@@ -196,4 +197,9 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 			}
 		}
 	}
+}
+
+// testHandle is the multiplexer identity runnerLaunch threads into MCP args.
+func testHandle() mux.Handle {
+	return mux.Handle{Kind: "zellij", Session: "session", SocketDir: "/tmp/zellij"}
 }

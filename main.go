@@ -16,6 +16,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/tui"
 	"github.com/urfave/cli/v2"
@@ -208,5 +209,9 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return launch.Zellij(dir, r, bin, editor, resume)
+	lp, err := mux.New(cfg.Multiplexer)
+	if err != nil {
+		return err
+	}
+	return launch.Launch(lp, dir, r, bin, editor, resume)
 }

@@ -5,21 +5,34 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/mux"
 )
 
-func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
+// stageWorkspace runs the launch-side stamping plus the Zellij adapter's
+// staging, mirroring what Launch does before entering the session, and
+// returns the rendered layout.
+func stageWorkspace(t *testing.T, dir string, argv []string) string {
+	t.Helper()
+	if err := writeSupport(dir, argv); err != nil {
+		t.Fatal(err)
+	}
+	if err := mux.NewZellij("zellij", "/tmp/zellij").Stage(workspace(dir, "test-session", argv, "/bin/qrouton")); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, ".qrouton", "layout.kdl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	t.Setenv("CODEX_HOME", t.TempDir())
 	dir := t.TempDir()
-	layout, err := writeSupport(dir, "test-session", []string{"codex"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	b, err := os.ReadFile(layout)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(b), "tree -L 2") || !strings.Contains(string(b), `exec \"${SHELL:-/bin/sh}\" -l`) {
-		t.Fatalf("shell pane does not show a shallow tree and remain interactive:\n%s", b)
+	layout := stageWorkspace(t, dir, []string{"codex"})
+	if !strings.Contains(layout, "tree -L 2") || !strings.Contains(layout, `exec \"${SHELL:-/bin/sh}\" -l`) {
+		t.Fatalf("shell pane does not show a shallow tree and remain interactive:\n%s", layout)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); !os.IsNotExist(err) {
 		t.Fatal("stale status.sh still stamped; the repos pane is a qrouton subcommand now")
@@ -51,20 +64,23 @@ func TestWriteSupportStartsShellWithShallowTree(t *testing.T) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
 	}
-	if !strings.Contains(string(b), `pane split_direction="vertical" size=6`) {
+	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")
 	}
-	if !strings.Contains(string(b), `pane name="repos"`) || !strings.Contains(string(b), `pane name="agents"`) {
+	if !strings.Contains(layout, `pane name="repos"`) || !strings.Contains(layout, `pane name="agents"`) {
 		t.Fatal("repo and agent status panes are not side by side")
 	}
-	if !strings.Contains(string(b), `"repos" "--session-root"`) {
+	if !strings.Contains(layout, `"repos" "--session-root"`) {
 		t.Fatal("repos pane does not run the qrouton repos subcommand")
 	}
-	if !strings.Contains(string(b), `floating_panes`) || !strings.Contains(string(b), `name="qrouton · quick start"`) || !strings.Contains(string(b), `close_on_exit=true`) {
+	if !strings.Contains(layout, `floating_panes`) || !strings.Contains(layout, `name="qrouton · quick start"`) || !strings.Contains(layout, `close_on_exit=true`) {
 		t.Fatal("quick-start help is not a disposable floating pane")
 	}
-	if !strings.Contains(string(b), `close_on_exit=true focus=true`) {
+	if !strings.Contains(layout, `close_on_exit=true focus=true`) {
 		t.Fatal("quick-start pane is not focused; startup keys would land in the agent pane")
+	}
+	if !strings.Contains(layout, "session_name \"test-session\"") || !strings.Contains(layout, "attach_to_session true") {
+		t.Fatal("layout does not name and self-attach the session")
 	}
 }
 
@@ -75,7 +91,7 @@ func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+	if err := writeSupport(dir, []string{"codex"}); err != nil {
 		t.Fatal(err)
 	}
 	help, err := os.ReadFile(filepath.Join(dir, ".qrouton", "help.sh"))
@@ -97,7 +113,7 @@ func TestWriteSupportRemovesStaleStatusScript(t *testing.T) {
 	if err := os.WriteFile(stale, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+	if err := writeSupport(dir, []string{"codex"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(stale); !os.IsNotExist(err) {
@@ -108,7 +124,7 @@ func TestWriteSupportRemovesStaleStatusScript(t *testing.T) {
 func TestWriteSupportStampsNotifyScript(t *testing.T) {
 	t.Setenv("CODEX_HOME", t.TempDir())
 	dir := t.TempDir()
-	if _, err := writeSupport(dir, "test-session", []string{"codex"}); err != nil {
+	if err := writeSupport(dir, []string{"codex"}); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(dir, ".qrouton", "notify.sh"))

@@ -3,21 +3,19 @@ package launch
 import (
 	"bufio"
 	_ "embed"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/charmbracelet/huh"
+	"github.com/kieranajp/qrouton/internal/mux"
 )
 
-// Panels are an opinionated Zellij workspace rather than a bespoke TUI. The shell
-// scripts that drive its panes live under scripts/ and are embedded here so they read
-// and edit as real scripts; each is written into .qrouton at launch (or, for shellIntro
-// and codexDepthWarning, spliced into the generated layout).
+// Panels are an opinionated multiplexer workspace rather than a bespoke TUI. The
+// shell scripts that drive its panes live under scripts/ and are embedded here so
+// they read and edit as real scripts; each is written into .qrouton at launch (or,
+// for shellIntro and codexDepthWarning, spliced into the generated layout).
 
 // shellIntro greets the shell pane with a shallow tree, then execs an interactive login shell.
 //
@@ -40,18 +38,19 @@ var helpScript string
 //go:embed scripts/codex-warning.sh
 var codexDepthWarning string
 
-// writeSupport writes .qrouton/{help.sh,notify.sh,layout.kdl,zellij-config.kdl} at launch
-// time, so old sessions pick up template changes on resume.
-func writeSupport(dir, slug string, argv []string) (string, error) {
+// writeSupport writes .qrouton/{help.sh,notify.sh} at launch time, so old
+// sessions pick up template changes on resume. Backend layout files are the
+// multiplexer adapter's business, staged separately.
+func writeSupport(dir string, argv []string) error {
 	cd := filepath.Join(dir, ".qrouton")
 	if err := os.MkdirAll(cd, 0o755); err != nil {
-		return "", err
+		return err
 	}
 	// The repos pane used to be a generated status.sh; drop stale copies so
 	// resumed sessions don't keep an orphaned script around.
 	_ = os.Remove(filepath.Join(cd, "status.sh"))
 	if err := os.WriteFile(filepath.Join(cd, "notify.sh"), []byte(notifyScript), 0o755); err != nil {
-		return "", err
+		return err
 	}
 	warning := ""
 	if filepath.Base(argv[0]) == "codex" && codexMaxDepth(argv) < 2 {
@@ -63,66 +62,35 @@ func writeSupport(dir, slug string, argv []string) (string, error) {
 	}
 	help := strings.ReplaceAll(helpScript, "@@WARNING@@", warning)
 	help = strings.ReplaceAll(help, "@@TAGLINE@@", tagline)
-	if err := os.WriteFile(filepath.Join(cd, "help.sh"), []byte(help), 0o755); err != nil {
-		return "", err
-	}
-	qroutonBin, err := os.Executable()
-	if err != nil {
-		return "", err
-	}
-	config, err := assetsFS.ReadFile("assets/zellij-config.kdl")
-	if err != nil {
-		return "", err
-	}
-	if err := os.WriteFile(filepath.Join(cd, "zellij-config.kdl"), config, 0o644); err != nil {
-		return "", err
-	}
-
-	var args string
-	if len(argv) > 1 {
-		quoted := make([]string, len(argv)-1)
-		for i, a := range argv[1:] {
-			quoted[i] = fmt.Sprintf("%q", a)
-		}
-		args = "\n            args " + strings.Join(quoted, " ")
-	}
-	runner := filepath.Base(argv[0])
-	kdl := fmt.Sprintf(`layout {
-    pane size=1 borderless=true {
-        plugin location="zellij:tab-bar"
-    }
-    pane split_direction="vertical" {
-        pane size="65%%" name="agent" {
-            command %q%s
-        }
-		pane split_direction="horizontal" size="35%%" {
-			pane name="shell" command="sh" {
-				args "-lc" %q
-			}
-			pane split_direction="vertical" size=6 {
-				pane name="repos" command=%q {
-					args "repos" "--session-root" %q
-				}
-				pane name="agents" command=%q {
-					args "agents" "--session-root" %q "--runner" %q
-				}
-			}
-        }
-    }
-    pane size=2 borderless=true {
-        plugin location="zellij:status-bar"
-    }
-    floating_panes {
-        pane x="27%%" y="25%%" width="46%%" height="35%%" name="qrouton · quick start" command="sh" close_on_exit=true focus=true {
-            args %q
-        }
-    }
+	return os.WriteFile(filepath.Join(cd, "help.sh"), []byte(help), 0o755)
 }
-session_name %q
-attach_to_session true
-`, argv[0], args, strings.TrimSpace(shellIntro), qroutonBin, dir, qroutonBin, dir, runner, filepath.Join(cd, "help.sh"), slug)
-	lp := filepath.Join(cd, "layout.kdl")
-	return lp, os.WriteFile(lp, []byte(kdl), 0o644)
+
+// workspace describes qrouton's session layout in backend-neutral terms: the
+// agent beside a shell and the repo/agent status panes, with the quick-start
+// help floating on top.
+func workspace(dir, slug string, argv []string, qroutonBin string) mux.Workspace {
+	runner := filepath.Base(argv[0])
+	return mux.Workspace{
+		Slug: slug,
+		Dir:  dir,
+		Tiled: mux.Node{
+			Split: "vertical",
+			Children: []mux.Node{
+				{Size: "65%", Pane: &mux.Pane{Name: "agent", Command: argv}},
+				{Split: "horizontal", Size: "35%", Children: []mux.Node{
+					{Pane: &mux.Pane{Name: "shell", Command: []string{"sh", "-lc", strings.TrimSpace(shellIntro)}}},
+					{Split: "vertical", Size: "6", Children: []mux.Node{
+						{Pane: &mux.Pane{Name: "repos", Command: []string{qroutonBin, "repos", "--session-root", dir}}},
+						{Pane: &mux.Pane{Name: "agents", Command: []string{qroutonBin, "agents", "--session-root", dir, "--runner", runner}}},
+					}},
+				}},
+			},
+		},
+		Floating: []mux.Floating{{
+			Pane:     mux.Pane{Name: "qrouton · quick start", Command: []string{"sh", filepath.Join(dir, ".qrouton", "help.sh")}, CloseOnExit: true, Focus: true},
+			Geometry: mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"},
+		}},
+	}
 }
 
 // codexMaxDepth returns the configured nesting depth, or Codex's default of one.
@@ -177,91 +145,46 @@ func codexMaxDepth(argv []string) int {
 	return depth
 }
 
-func execv(bin string, argv []string, dir string) error {
-	return execvEnv(bin, argv, dir, os.Environ())
-}
-
-func execvEnv(bin string, argv []string, dir string, env []string) error {
-	if err := os.Chdir(dir); err != nil {
-		return err
-	}
-	return syscall.Exec(bin, argv, env)
-}
-
-func Zellij(dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
-	bin, err := exec.LookPath("zellij")
-	if err != nil {
-		return fmt.Errorf("zellij 0.44 or newer is required; install Zellij and try again")
-	}
-	if err := requireZellij044(bin); err != nil {
-		return err
-	}
-	socketDir := os.Getenv("ZELLIJ_SOCKET_DIR")
-	if socketDir == "" {
-		socketDir = "/tmp/zellij"
-	}
-	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, socketDir, resume)
+// Launch stamps the session's support files and workspace, then enters it
+// through the configured multiplexer: attaching to (or replacing) an existing
+// session, or starting a fresh one. On success the process is replaced by the
+// multiplexer and Launch never returns.
+func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
+	slug := filepath.Base(dir)
+	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, lp.Handle(slug), resume)
 	if err != nil {
 		return err
 	}
 	env = withEnv(env, "QROUTON_EDITOR_JSON", editor.Marshal())
-	slug := filepath.Base(dir)
-	lp, err := writeSupport(dir, slug, argv)
+	if err := writeSupport(dir, argv); err != nil {
+		return err
+	}
+	ws := workspace(dir, slug, argv, qroutonBin)
+	if err := lp.Stage(ws); err != nil {
+		return err
+	}
+	state, err := lp.Lookup(slug)
 	if err != nil {
 		return err
 	}
-	// macOS $TMPDIR is long enough that zellij's socket path ($TMPDIR/zellij-<uid>/…/<session>)
-	// exceeds the 104-byte unix-socket cap for real session names. Pin it somewhere short.
-	env = withEnv(env, "ZELLIJ_SOCKET_DIR", socketDir)
-	os.Setenv("ZELLIJ_SOCKET_DIR", socketDir) // discovery commands below use this socket too
-	if out, err := exec.Command(bin, "list-sessions", "-n").Output(); err == nil {
-		for _, l := range strings.Split(string(out), "\n") {
-			if f := strings.Fields(l); len(f) > 0 && f[0] == slug {
-				if !strings.Contains(l, "EXITED") {
-					attach, err := chooseExistingSession(filepath.Base(argv[0]))
-					if err != nil {
-						return err
-					}
-					if attach {
-						config := filepath.Join(dir, ".qrouton", "zellij-config.kdl")
-						return execvEnv(bin, []string{"zellij", "--config", config, "attach", slug}, dir, env)
-					}
-					if err := exec.Command(bin, "delete-session", "--force", slug).Run(); err != nil {
-						return err
-					}
-					break
-				}
-				// dead session: attach would resurrect zellij's *recorded* state (stale layout,
-				// old paths) instead of applying the freshly-stamped one — delete and recreate
-				exec.Command(bin, "delete-session", slug).Run()
-				break
-			}
+	switch state {
+	case mux.SessionLive:
+		attach, err := chooseExistingSession(filepath.Base(argv[0]))
+		if err != nil {
+			return err
 		}
+		if attach {
+			return lp.Attach(ws, env)
+		}
+		if err := lp.Kill(slug, true); err != nil {
+			return err
+		}
+	case mux.SessionDead:
+		// dead session: attach would resurrect the multiplexer's *recorded* state
+		// (stale layout, old paths) instead of the freshly-staged one — delete and recreate
+		_ = lp.Kill(slug, false)
 	}
-	// 0.44: -s + -n conflict; the session is named via session_name in the layout itself
-	config := filepath.Join(dir, ".qrouton", "zellij-config.kdl")
-	return execvEnv(bin, []string{"zellij", "--config", config, "--new-session-with-layout", lp}, dir, env)
-}
-
-func requireZellij044(bin string) error {
-	out, err := exec.Command(bin, "--version").Output()
-	if err != nil {
-		return fmt.Errorf("check zellij version: %w", err)
-	}
-	parts := strings.Split(strings.TrimSpace(string(out)), " ")
-	if len(parts) != 2 {
-		return fmt.Errorf("unrecognized zellij version %q", strings.TrimSpace(string(out)))
-	}
-	nums := strings.Split(parts[1], ".")
-	major, _ := strconv.Atoi(nums[0])
-	minor := 0
-	if len(nums) > 1 {
-		minor, _ = strconv.Atoi(nums[1])
-	}
-	if major == 0 && minor < 44 {
-		return fmt.Errorf("zellij 0.44 or newer is required (found %s)", parts[1])
-	}
-	return nil
+	return lp.Start(ws, env)
 }
 
 func chooseExistingSession(runner string) (bool, error) {

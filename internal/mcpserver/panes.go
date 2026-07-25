@@ -1,21 +1,21 @@
 package mcpserver
 
 // paneManager is the engine behind the MCP tools: it owns qrouton's slice of
-// the Zellij session — the editor pane plus any command panes the agent opens.
-// Panes are floating and pinned so they stay visible while the user keeps
-// typing to the agent, and every open returns focus to the tiled agent pane.
-// The registry maps a logical name to the live Zellij pane id.
+// the multiplexer session — the editor pane plus any command panes the agent
+// opens. Panes stay visible while the user keeps typing to the agent, and
+// every open returns focus to the agent pane (the mux.PaneHost contract).
+// The registry maps a logical name to the live backend pane id.
 
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/mux"
 )
 
 // editorPaneName is the reserved registry key for the single editor pane; other
@@ -26,61 +26,40 @@ const editorPaneName = "editor"
 // is kept because that is where fresh command output lands.
 const readPaneLimit = 20000
 
-// paneGeometry is the floating-pane placement passed to zellij (x, y, width, height).
-type paneGeometry struct{ x, y, width, height string }
-
 var (
-	editorGeometry  = paneGeometry{x: "66%", y: "3%", width: "33%", height: "94%"}
-	commandGeometry = paneGeometry{x: "40%", y: "8%", width: "58%", height: "84%"}
-	toastGeometry   = paneGeometry{x: "25%", y: "5%", width: "50%", height: "18%"}
+	editorGeometry  = mux.Geometry{X: "66%", Y: "3%", Width: "33%", Height: "94%"}
+	commandGeometry = mux.Geometry{X: "40%", Y: "8%", Width: "58%", Height: "84%"}
+	toastGeometry   = mux.Geometry{X: "25%", Y: "5%", Width: "50%", Height: "18%"}
 )
 
 type paneManager struct {
-	root, zellij, session string
-	editor                launch.EditorCommand
-	mu                    sync.Mutex
-	panes                 map[string]string
+	root   string
+	editor launch.EditorCommand
+	host   mux.PaneHost
+	mu     sync.Mutex
+	panes  map[string]string
 }
 
-var commandContext = exec.CommandContext
-
-func newPaneManager(root string, editor launch.EditorCommand, zellij, session string) *paneManager {
-	return &paneManager{root: root, editor: editor, zellij: zellij, session: session, panes: map[string]string{}}
+func newPaneManager(root string, editor launch.EditorCommand, host mux.PaneHost) *paneManager {
+	return &paneManager{root: root, editor: editor, host: host, panes: map[string]string{}}
 }
 
-// action runs a zellij action against this session and returns its stdout.
-func (m *paneManager) action(ctx context.Context, args ...string) ([]byte, error) {
-	return commandContext(ctx, m.zellij, append([]string{"--session", m.session, "action"}, args...)...).Output()
-}
-
-// spawn replaces any pane registered under name with a fresh floating, pinned pane
-// running command, then returns focus to the tiled agent pane. Callers hold m.mu.
-func (m *paneManager) spawn(ctx context.Context, name, label, cwd string, geom paneGeometry, closeOnExit bool, command []string) (string, error) {
+// spawn replaces any pane registered under name with a fresh pane running
+// command; the host leaves focus on the agent pane. Callers hold m.mu.
+func (m *paneManager) spawn(ctx context.Context, name, label, cwd string, geom mux.Geometry, closeOnExit bool, command []string) (string, error) {
 	m.closeLocked(ctx, name)
-	args := []string{"new-pane", "--floating", "--pinned", "true",
-		"--x", geom.x, "--y", geom.y, "--width", geom.width, "--height", geom.height,
-		"--name", label, "--cwd", cwd}
-	if closeOnExit {
-		args = append(args, "--close-on-exit")
-	}
-	args = append(args, "--")
-	args = append(args, command...)
-	out, err := m.action(ctx, args...)
+	id, err := m.host.Spawn(ctx, mux.SpawnOptions{Label: label, Cwd: cwd, Geometry: geom, CloseOnExit: closeOnExit, Command: command})
 	if err != nil {
 		return "", err
 	}
-	id := strings.TrimSpace(string(out))
 	m.panes[name] = id
-	// The new pane is floating and focused; toggling the floating layer off returns
-	// focus to the agent while pinned panes stay rendered on top for reference.
-	_, _ = m.action(ctx, "toggle-floating-panes")
 	return id, nil
 }
 
 // closeLocked closes and forgets the pane registered under name, if any. Callers hold m.mu.
 func (m *paneManager) closeLocked(ctx context.Context, name string) {
 	if id := m.panes[name]; id != "" {
-		_, _ = m.action(ctx, "close-pane", "--pane-id", id)
+		_ = m.host.Close(ctx, id)
 		delete(m.panes, name)
 	}
 }
@@ -141,15 +120,11 @@ func (m *paneManager) read(ctx context.Context, input readPaneInput) (string, er
 	if id == "" {
 		return "", fmt.Errorf("no open pane named %q", name)
 	}
-	args := []string{"dump-screen", "--pane-id", id}
-	if input.Full {
-		args = append(args, "--full")
-	}
-	out, err := m.action(ctx, args...)
+	out, err := m.host.Capture(ctx, id, input.Full)
 	if err != nil {
 		return "", fmt.Errorf("read pane %q: %w", name, err)
 	}
-	text := strings.TrimRight(string(out), "\n")
+	text := strings.TrimRight(out, "\n")
 	if strings.TrimSpace(text) == "" {
 		return fmt.Sprintf("Pane %q has produced no output yet.", name), nil
 	}
