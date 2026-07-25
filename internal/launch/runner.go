@@ -29,8 +29,12 @@ var builtinRunners = []Runner{
 
 var findExecutable = exec.LookPath
 
-// runners applies exact configured overrides to qrouton's supported, tool-capable runners.
-func Runners(cfg *config.Config) []Runner {
+// Runners applies configured overrides to qrouton's supported, tool-capable
+// runners and reports which of them are installed. An override naming something
+// qrouton cannot wire up is an error rather than a no-op: the MCP and hook
+// injection in runnerLaunch is per-runner, so an unrecognised command would be
+// launched without any of it.
+func Runners(cfg *config.Config) ([]Runner, error) {
 	out := make([]Runner, len(builtinRunners))
 	copy(out, builtinRunners)
 	byID := make(map[string]int, len(out))
@@ -42,16 +46,25 @@ func Runners(cfg *config.Config) []Runner {
 			continue
 		}
 		id := filepath.Base(command[0])
-		if i, ok := byID[id]; ok {
-			out[i].Command = append([]string(nil), command...)
-			out[i].Override = true
-			continue
+		i, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("%w: %q (supported: %s)", ErrUnsupportedOverride, command[0], strings.Join(builtinIDs(), ", "))
 		}
+		out[i].Command = append([]string(nil), command...)
+		out[i].Override = true
 	}
 	for i := range out {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
-	return out
+	return out, nil
+}
+
+func builtinIDs() []string {
+	ids := make([]string, len(builtinRunners))
+	for i, runner := range builtinRunners {
+		ids[i] = runner.ID
+	}
+	return ids
 }
 
 // ByID returns the installed runner matching id, which may be a runner
@@ -59,7 +72,11 @@ func Runners(cfg *config.Config) []Runner {
 // to it). An uninstalled or unknown runner is an error: the caller asked for
 // something specific, so silently substituting another would be wrong.
 func ByID(cfg *config.Config, id string) (Runner, error) {
-	for _, runner := range Runners(cfg) {
+	runners, err := Runners(cfg)
+	if err != nil {
+		return Runner{}, err
+	}
+	for _, runner := range runners {
 		if runner.Path == "" {
 			continue
 		}
@@ -73,7 +90,11 @@ func ByID(cfg *config.Config, id string) (Runner, error) {
 // FirstInstalled returns the first supported runner present on the system, for
 // callers that did not ask for a particular one.
 func FirstInstalled(cfg *config.Config) (Runner, error) {
-	for _, runner := range Runners(cfg) {
+	runners, err := Runners(cfg)
+	if err != nil {
+		return Runner{}, err
+	}
+	for _, runner := range runners {
 		if runner.Path != "" {
 			return runner, nil
 		}

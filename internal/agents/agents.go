@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/codex"
+	"github.com/kieranajp/qrouton/internal/paneui"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -43,55 +44,60 @@ func Status(root, runner string) error {
 	for {
 		var statuses []agentStatus
 		var err error
-		if runner == "claude" {
+		if runner == runnerClaude {
 			statuses, err = scanClaudeAgentStatuses(root)
 		} else {
 			statuses, err = scanAgentStatuses(codex.SessionsDir(), root)
 		}
 
-		lines := []string{"\033[1magents\033[0m"}
-		if err != nil {
-			label := "Codex status unavailable"
-			if runner == "claude" {
-				label = "Claude status unavailable"
-			}
-			lines = append(lines, "\033[2m"+label+"\033[0m")
-		} else if len(statuses) == 0 {
-			lines = append(lines, "\033[2mNo subagents yet\033[0m")
-		} else {
-			for i, status := range statuses {
-				if i == 4 {
-					lines = append(lines, fmt.Sprintf("\033[2m+%d more\033[0m", len(statuses)-i))
-					break
-				}
-				mark, color := "✓", "32"
-				if status.State == "running" {
-					mark, color = "●", "36"
-				} else if status.State == "failed" {
-					mark, color = "!", "31"
-				}
-				lines = append(lines, fmt.Sprintf("\033[%sm%s\033[0m %s  \033[2m%s\033[0m", color, mark, status.Name, status.State))
-			}
+		lines := []string{paneui.Title(paneTitle)}
+		switch {
+		case err != nil:
+			lines = append(lines, paneui.Muted(unavailableLabel(runner)))
+		case len(statuses) == 0:
+			lines = append(lines, paneui.Muted(noSubagentsLabel))
+		default:
+			lines = append(lines, statusLines(statuses)...)
 		}
 
-		fmt.Print(Frame(lines))
+		fmt.Print(paneui.Frame(lines))
 
-		time.Sleep(2 * time.Second)
+		time.Sleep(refreshInterval)
 	}
 }
 
-// Frame renders lines as one in-place terminal frame: cursor home, erase to
-// end-of-line per row, erase-to-end-of-screen at the bottom. Redrawing this way
-// never flashes the pane blank; qrouton's watch panes share it.
-func Frame(lines []string) string {
-	var frame strings.Builder
-	frame.WriteString("\033[H")
-	for _, line := range lines {
-		frame.WriteString(line)
-		frame.WriteString("\033[K\r\n") // erase to end of line, then CRLF to column 0
+// unavailableLabel names the runner whose status could not be read, so the pane
+// says which integration is broken rather than just "unavailable".
+func unavailableLabel(runner string) string {
+	if runner == runnerClaude {
+		return claudeUnavailableLabel
 	}
-	frame.WriteString("\033[J") // clear any rows the previous (longer) frame left below
-	return frame.String()
+	return codexUnavailableLabel
+}
+
+// statusLines renders at most maxVisibleAgents subagents, then a count of the
+// rest: the pane is a few rows tall.
+func statusLines(statuses []agentStatus) []string {
+	lines := make([]string, 0, maxVisibleAgents+1)
+	for i, status := range statuses {
+		if i == maxVisibleAgents {
+			lines = append(lines, paneui.Muted(fmt.Sprintf(moreAgentsFormat, len(statuses)-i)))
+			break
+		}
+		lines = append(lines, fmt.Sprintf(agentLineFormat, stateMarker(status.State), status.Name, paneui.Muted(status.State)))
+	}
+	return lines
+}
+
+func stateMarker(state string) string {
+	switch state {
+	case stateRunning:
+		return paneui.Running(markerRunning)
+	case stateFailed:
+		return paneui.Failed(markerFailed)
+	default:
+		return paneui.Done(markerDone)
+	}
 }
 
 type claudeAgentEvent struct {
@@ -107,7 +113,7 @@ func RecordEvent(root string, input io.Reader) error {
 	if err := json.NewDecoder(input).Decode(&event); err != nil {
 		return err
 	}
-	if event.AgentID == "" || (event.HookEventName != "SubagentStart" && event.HookEventName != "SubagentStop") {
+	if event.AgentID == "" || (event.HookEventName != hookSubagentStart && event.HookEventName != hookSubagentStop) {
 		return nil
 	}
 	event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
@@ -138,9 +144,9 @@ func scanClaudeAgentStatuses(root string) ([]agentStatus, error) {
 				continue
 			}
 			updated, _ := time.Parse(time.RFC3339Nano, event.Timestamp)
-			state := "running"
-			if event.HookEventName == "SubagentStop" {
-				state = "done"
+			state := stateRunning
+			if event.HookEventName == hookSubagentStop {
+				state = stateDone
 			}
 			name := event.AgentType
 			if name == "" {
@@ -183,12 +189,7 @@ func mergeClaudeBackgroundAgents(byID map[string]agentStatus, root string) {
 		if name == "" {
 			name = id
 		}
-		state := strings.ToLower(firstString(agent, "status", "state"))
-		if state == "" || state == "active" || state == "working" {
-			state = "running"
-		} else if state == "completed" || state == "stopped" {
-			state = "done"
-		}
+		state := normalizeClaudeState(strings.ToLower(firstString(agent, "status", "state")))
 		byID[id] = agentStatus{Name: name, Path: id, State: state, UpdatedAt: time.Now()}
 	}
 }
@@ -196,6 +197,19 @@ func mergeClaudeBackgroundAgents(byID map[string]agentStatus, root string) {
 // firstString returns the first key holding a non-empty string. The eval
 // harness keeps an identical copy, deliberately: it does not import qrouton's
 // packages.
+// normalizeClaudeState maps the `claude agents` vocabulary onto the three states
+// the pane draws.
+func normalizeClaudeState(state string) string {
+	switch state {
+	case "", "active", "working":
+		return stateRunning
+	case "completed", "stopped":
+		return stateDone
+	default:
+		return state
+	}
+}
+
 func firstString(values map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if value, ok := values[key].(string); ok && value != "" {
@@ -233,8 +247,8 @@ func scanAgentStatuses(sessionsDir, sessionRoot string) ([]agentStatus, error) {
 
 func sortAgentStatuses(statuses []agentStatus) {
 	sort.Slice(statuses, func(i, j int) bool {
-		if (statuses[i].State == "running") != (statuses[j].State == "running") {
-			return statuses[i].State == "running"
+		if (statuses[i].State == stateRunning) != (statuses[j].State == stateRunning) {
+			return statuses[i].State == stateRunning
 		}
 		return statuses[i].UpdatedAt.After(statuses[j].UpdatedAt)
 	})
@@ -247,17 +261,17 @@ func readAgentStatus(path, sessionRoot string) (agentStatus, bool) {
 	}
 	defer f.Close()
 
-	status := agentStatus{State: "done"}
+	status := agentStatus{State: stateDone}
 	metaSeen := false
 	scanner := bufio.NewScanner(f)
 	// Rollout records can contain large instruction payloads.
-	scanner.Buffer(make([]byte, 64*1024), 8*1024*1024)
+	scanner.Buffer(make([]byte, rolloutBufferInitial), rolloutBufferMax)
 	for scanner.Scan() {
 		var record rolloutRecord
 		if json.Unmarshal(scanner.Bytes(), &record) != nil {
 			continue
 		}
-		if record.Type == "session_meta" {
+		if record.Type == rolloutSessionMeta {
 			cwd, _ := filepath.Abs(record.Payload.CWD)
 			if record.Payload.ParentThreadID == "" || cwd != sessionRoot {
 				return agentStatus{}, false
@@ -270,18 +284,18 @@ func readAgentStatus(path, sessionRoot string) (agentStatus, bool) {
 			metaSeen = true
 			continue
 		}
-		if !metaSeen || record.Type != "event_msg" {
+		if !metaSeen || record.Type != rolloutEventMsg {
 			continue
 		}
 		switch record.Payload.Type {
-		case "task_started":
-			status.State = "running"
+		case rolloutTaskStarted:
+			status.State = stateRunning
 			status.UpdatedAt = record.Timestamp
-		case "task_complete":
-			status.State = "done"
+		case rolloutTaskComplete:
+			status.State = stateDone
 			status.UpdatedAt = record.Timestamp
-		case "turn_aborted":
-			status.State = "failed"
+		case rolloutTurnAborted:
+			status.State = stateFailed
 			status.UpdatedAt = record.Timestamp
 		}
 	}

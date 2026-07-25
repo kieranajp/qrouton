@@ -31,10 +31,6 @@ const (
 	notifyScriptName   = "notify.sh"
 	helpScriptName     = "help.sh"
 	claudeAgentLogName = "claude-agents.jsonl"
-
-	// legacyStatusScriptName was a generated repo-status pane script, replaced
-	// by the repos subcommand.
-	legacyStatusScriptName = "status.sh"
 )
 
 // Dir is the session-private directory inside a session root.
@@ -71,10 +67,4 @@ func HelpScript(root string) string {
 // ClaudeAgentLog records Claude subagent lifecycle hook events.
 func ClaudeAgentLog(root string) string {
 	return filepath.Join(Dir(root), claudeAgentLogName)
-}
-
-// LegacyStatusScript is removed on launch so resumed sessions do not keep an
-// orphaned script around.
-func LegacyStatusScript(root string) string {
-	return filepath.Join(Dir(root), legacyStatusScriptName)
 }

@@ -58,11 +58,6 @@ func Load() (*Config, error) {
 	if len(cfg.Orgs) == 0 {
 		return nil, fmt.Errorf("%s: orgs must contain at least one GitHub organization", Path())
 	}
-	// Older first-run wizards always wrote this value as the built-in default. Treat that exact
-	// shape as unset so existing installations receive current runner defaults.
-	if len(cfg.Launch) == 1 && len(cfg.Launch[0]) == 1 && cfg.Launch[0][0] == "claude" {
-		cfg.Launch = nil
-	}
 	cfg.Root = expandHome(cfg.Root)
 	if strings.TrimSpace(cfg.Root) == "" {
 		return nil, fmt.Errorf("%s: root must be set (or export QROUTON_ROOT)", Path())

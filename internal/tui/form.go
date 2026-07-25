@@ -29,6 +29,21 @@ type formState struct {
 	ticketStatus                      string
 }
 
+// Focus indices, in the order viewForm renders the fields. lastField bounds
+// navigation, so adding a field means adding it here and nowhere else.
+const (
+	focusTicket = iota
+	focusName
+	focusDescription
+	focusOwners
+	focusRepos
+	focusPrefix
+	focusMode
+
+	lastField  = focusMode
+	fieldCount = lastField + 1
+)
+
 // sessionModes are the mode field's cycle order; RPI leads so it is the default.
 var sessionModes = []session.SessionMode{session.ModeRPI, session.ModeAssistant}
 
@@ -65,81 +80,84 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = landingScreen
 		return m, nil
 	case "up":
-		if f.focus == 4 && f.cursor > 0 {
+		if f.focus == focusRepos && f.cursor > 0 {
 			f.cursor--
-		} else if f.focus > 0 {
+		} else if f.focus > focusTicket {
 			f.focus--
 		}
 		return m, nil
 	case "down":
 		previous := f.focus
-		if f.focus == 4 && f.cursor+1 < len(m.filteredRepos()) {
+		if f.focus == focusRepos && f.cursor+1 < len(m.filteredRepos()) {
 			f.cursor++
-		} else if f.focus < 6 {
+		} else if f.focus < lastField {
 			f.focus++
 		}
-		if previous == 0 && f.focus != 0 {
+		if previous == focusTicket && f.focus != focusTicket {
 			return m, m.loadTicket()
 		}
 		return m, nil
 	case "shift+tab":
-		if f.focus > 0 {
+		if f.focus > focusTicket {
 			f.focus--
 		} else {
-			f.focus = 6
+			f.focus = lastField
 		}
 		return m, nil
 	case "tab":
 		previous := f.focus
-		f.focus = (f.focus + 1) % 7
-		if previous == 0 {
+		f.focus = (f.focus + 1) % fieldCount
+		if previous == focusTicket {
 			return m, m.loadTicket()
 		}
 		return m, nil
 	case " ":
-		if f.focus == 4 {
+		switch f.focus {
+		case focusRepos:
 			m.cycleRepoRole()
 			return m, nil
-		}
-		if f.focus == 3 && len(m.cfg.Orgs) > 0 {
-			owner := m.cfg.Orgs[f.owner]
-			f.owners[owner] = !f.owners[owner]
-			m.clampRepoCursor()
-			return m, nil
-		}
-		if f.focus == 6 {
+		case focusOwners:
+			if len(m.cfg.Orgs) > 0 {
+				owner := m.cfg.Orgs[f.owner]
+				f.owners[owner] = !f.owners[owner]
+				m.clampRepoCursor()
+				return m, nil
+			}
+		case focusMode:
 			f.cycleMode()
 			return m, nil
 		}
 		m.editField(false, " ")
 		return m, nil
 	case "left":
-		if f.focus == 3 && f.owner > 0 {
-			f.owner--
-		}
-		if f.focus == 5 {
-			f.prefix = (f.prefix + 5) % 6
-		}
-		if f.focus == 6 {
+		switch f.focus {
+		case focusOwners:
+			if f.owner > 0 {
+				f.owner--
+			}
+		case focusPrefix:
+			f.prefix = (f.prefix + len(branchPrefixes) - 1) % len(branchPrefixes)
+		case focusMode:
 			f.cycleMode()
 		}
 		return m, nil
 	case "right":
-		if f.focus == 3 && f.owner+1 < len(m.cfg.Orgs) {
-			f.owner++
-		}
-		if f.focus == 5 {
-			f.prefix = (f.prefix + 1) % 6
-		}
-		if f.focus == 6 {
+		switch f.focus {
+		case focusOwners:
+			if f.owner+1 < len(m.cfg.Orgs) {
+				f.owner++
+			}
+		case focusPrefix:
+			f.prefix = (f.prefix + 1) % len(branchPrefixes)
+		case focusMode:
 			f.cycleMode()
 		}
 		return m, nil
 	case "enter":
-		if f.focus < 6 {
+		if f.focus < lastField {
 			previous := f.focus
 			f.focus++
-			if previous == 0 {
+			if previous == focusTicket {
 				return m, m.loadTicket()
 			}
 			return m, nil
@@ -163,7 +181,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if k.Type == tea.KeyRunes {
-		if f.focus == 4 {
+		if f.focus == focusRepos {
 			f.search += string(k.Runes)
 		} else {
 			m.editField(false, string(k.Runes))
@@ -176,19 +194,19 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m *appModel) editField(backspace bool, text string) {
 	var p *string
 	switch m.form.focus {
-	case 0:
+	case focusTicket:
 		p = &m.form.ticket
-	case 1:
+	case focusName:
 		p = &m.form.name
-	case 2:
+	case focusDescription:
 		p = &m.form.description
-	case 4:
+	case focusRepos:
 		p = &m.form.search
 	}
 	if p == nil {
 		return
 	}
-	if m.form.focus == 0 {
+	if m.form.focus == focusTicket {
 		m.form.ticketStatus = ""
 	}
 	if backspace {

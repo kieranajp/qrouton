@@ -72,7 +72,11 @@ type appModel struct {
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
-	m := newAppModel(cfg, sessions, requestedRunner)
+	runners, err := launch.Runners(cfg)
+	if err != nil {
+		return nil, err
+	}
+	m := newAppModel(cfg, sessions, requestedRunner, installed(runners))
 	if requestedRunner != "" {
 		if _, err := m.selectedRunner(); err != nil {
 			return nil, err
@@ -91,22 +95,23 @@ func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string
 	return out.result, nil
 }
 
-func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string) appModel {
+func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string, runners []launch.Runner) appModel {
 	repos, fetched, _ := github.CachedRepos(cfg.Orgs)
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].CreatedAt.After(sessions[j].CreatedAt) })
 	return appModel{cfg: cfg, sessions: sessions, repos: repos, requestedRunner: requested,
-		runners: availableRunners(cfg), screen: landingScreen, refreshing: true, cacheAt: fetched,
+		runners: runners, screen: landingScreen, refreshing: true, cacheAt: fetched,
 		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error), refreshGen: 1,
 		form: formState{prefix: 0, mode: session.ModeRPI, roles: make(map[string]repoRole), owners: selectedOwners(cfg.Orgs)}}
 }
 
 func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }
 
-func availableRunners(cfg *config.Config) []launch.Runner {
+// installed keeps the runners the picker can actually offer.
+func installed(runners []launch.Runner) []launch.Runner {
 	var out []launch.Runner
-	for _, r := range launch.Runners(cfg) {
-		if r.Path != "" {
-			out = append(out, r)
+	for _, runner := range runners {
+		if runner.Path != "" {
+			out = append(out, runner)
 		}
 	}
 	return out

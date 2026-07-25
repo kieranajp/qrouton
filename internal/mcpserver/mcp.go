@@ -45,8 +45,8 @@ type notifyInput struct {
 	Message string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
 }
 
-// textResult wraps a message as both an MCP text block and a structured payload,
-// matching the shape callers already expect from open_file.
+// textResult wraps a message as an MCP text block. Each tool pairs it with its
+// own structured payload, which is the second value AddTool handlers return.
 func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }

@@ -154,28 +154,28 @@ func (m appModel) viewForm() string {
 
 	var boxes []string
 
-	ticket := []string{fieldValue(f.focus == 0, f.ticket)}
+	ticket := []string{fieldValue(f.focus == focusTicket, f.ticket)}
 	if f.ticketStatus != "" {
 		ticket = append(ticket, dim.Render(f.ticketStatus))
 	}
-	boxes = append(boxes, labeledBox(f.focus == 0, "Ticket URL", w, ticket...))
+	boxes = append(boxes, labeledBox(f.focus == focusTicket, "Ticket URL", w, ticket...))
 
-	boxes = append(boxes, labeledBox(f.focus == 1, "Name", w,
-		fieldValue(f.focus == 1, f.name),
+	boxes = append(boxes, labeledBox(f.focus == focusName, "Name", w,
+		fieldValue(f.focus == focusName, f.name),
 		dim.Render("slug · "+emptyFallback(slug, "—"))))
 
-	boxes = append(boxes, labeledBox(f.focus == 2, "Description", w,
-		fieldValue(f.focus == 2, f.description)))
+	boxes = append(boxes, labeledBox(f.focus == focusDescription, "Description", w,
+		fieldValue(f.focus == focusDescription, f.description)))
 
 	ownerChips := make([]string, 0, len(m.cfg.Orgs))
 	for i, owner := range m.cfg.Orgs {
 		token := chip(owner, f.owners[owner])
-		if f.focus == 3 && i == f.owner {
+		if f.focus == focusOwners && i == f.owner {
 			token = accent.Render("▸") + token
 		}
 		ownerChips = append(ownerChips, token)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 3, "GitHub owners", w, strings.Join(ownerChips, " ")))
+	boxes = append(boxes, labeledBox(f.focus == focusOwners, "GitHub owners", w, strings.Join(ownerChips, " ")))
 
 	repoLines := []string{fmt.Sprintf("%d included · %d active", included, activeN)}
 	if f.search != "" {
@@ -183,10 +183,10 @@ func (m appModel) viewForm() string {
 	}
 	rs := m.filteredRepos()
 	start := 0
-	if f.cursor > 6 {
-		start = f.cursor - 6
+	if f.cursor > repoListLead {
+		start = f.cursor - repoListLead
 	}
-	end := min(len(rs), start+8)
+	end := min(len(rs), start+repoListWindow)
 	for i := start; i < end; i++ {
 		r := rs[i]
 		role := f.roles[r.ID()]
@@ -200,18 +200,18 @@ func (m appModel) viewForm() string {
 		head := style.Render(fmt.Sprintf("%s %-9s", marker, label))
 		tail := fmt.Sprintf("%-26s %s", r.ID(), dim.Render("· "+relativeTime(r.PushedAt)+detail))
 		row := "  " + head + " " + tail
-		if f.focus == 4 && i == f.cursor {
+		if f.focus == focusRepos && i == f.cursor {
 			row = accent.Render("▸ ") + head + " " + tail
 		}
 		repoLines = append(repoLines, row)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 4, "Repositories", w, repoLines...))
+	boxes = append(boxes, labeledBox(f.focus == focusRepos, "Repositories", w, repoLines...))
 
 	prefixChips := make([]string, len(branchPrefixes))
 	for i, p := range branchPrefixes {
 		prefixChips[i] = chip(p, i == f.prefix)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 5, "Branch prefix", w,
+	boxes = append(boxes, labeledBox(f.focus == focusPrefix, "Branch prefix", w,
 		strings.Join(prefixChips, " "),
 		dim.Render("preview · "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+"  (active repos only)")))
 
@@ -219,7 +219,7 @@ func (m appModel) viewForm() string {
 		chip("RPI", f.mode != session.ModeAssistant),
 		chip("Assistant", f.mode == session.ModeAssistant),
 	}
-	boxes = append(boxes, labeledBox(f.focus == 6, "Mode", w,
+	boxes = append(boxes, labeledBox(f.focus == focusMode, "Mode", w,
 		strings.Join(modeChips, " "),
 		dim.Render(modeHint(f.mode))))
 

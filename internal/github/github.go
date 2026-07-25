@@ -83,7 +83,6 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		}
 		results := make(chan result, len(orgs))
 		for _, owner := range orgs {
-			owner := owner
 			out <- RefreshMsg{Owner: owner, State: RefreshStarted}
 			go func() {
 				repos, err := RefreshOwnerRepos(ctx, client, token, owner)
@@ -102,7 +101,6 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 			SortReposByActivity(merged)
 			out <- RefreshMsg{Owner: r.owner, State: RefreshSucceeded, Repos: slices.Clone(merged)}
 		}
-		SortReposByActivity(merged)
 		if ctx.Err() == nil {
 			WriteRepoCache(orgs, merged)
 		}

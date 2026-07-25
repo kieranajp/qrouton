@@ -110,25 +110,45 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	}
 }
 
-func TestMissingManifestRoleResumesAsActive(t *testing.T) {
+// A repo with no explicit role resumes on its session branch: Create only ever
+// writes "active" or "reference", so an empty role means a hand-edited manifest
+// and active is the safe reading.
+func TestManifestRepoWithoutRoleResumesOnItsBranch(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
-	origin, _ := makeOrigin(t, "legacy")
-	if err := ensureMirror(root, "org", "legacy", origin); err != nil {
+	origin, _ := makeOrigin(t, "unroled")
+	if err := ensureMirror(root, "org", "unroled", origin); err != nil {
 		t.Fatal(err)
 	}
-	m := Manifest{SchemaVersion: 1, Slug: "old", Repos: []ManifestRepo{{
-		Name: "legacy", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/legacy",
+	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
+		Name: "unroled", Org: "org", Branch: "feat/old", DefaultBranch: "main",
+		WorktreePath: "src/unroled", SSHURL: origin,
 	}}}
 	if err := EnsureWorktrees(&config.Config{Root: root}, m); err != nil {
 		t.Fatal(err)
 	}
-	wt := filepath.Join(root, "old", "src", "legacy")
+	wt := filepath.Join(root, "old", "src", "unroled")
 	out, err := exec.Command("git", "-C", wt, "branch", "--show-current").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.TrimSpace(string(out)); got != "feat/old" {
-		t.Fatalf("legacy checkout branch = %q", got)
+		t.Fatalf("checkout branch = %q", got)
+	}
+}
+
+// Create always records a clone URL. A manifest without one cannot be resumed,
+// and guessing github.com for it would mirror the wrong repository in silence.
+func TestEnsureWorktreesRejectsManifestWithoutCloneURL(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
+		Name: "urlless", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/urlless",
+	}}}
+	err := EnsureWorktrees(&config.Config{Root: root}, m)
+	if err == nil {
+		t.Fatal("manifest without a clone URL was resumed")
+	}
+	if !strings.Contains(err.Error(), "urlless") {
+		t.Fatalf("error does not name the repository: %v", err)
 	}
 }
 

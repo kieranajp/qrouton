@@ -116,14 +116,6 @@ type ManifestRepo struct {
 	SSHURL        string   `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
-func (r ManifestRepo) effectiveRole() RepoRole {
-	// Schema 1 did not record roles; every repository had a session branch.
-	if r.Role == "" {
-		return RepoRoleActive
-	}
-	return r.Role
-}
-
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 func Slugify(s string) string {
@@ -276,12 +268,10 @@ func emitProgress(progress ProgressFunc, event Progress) {
 func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	for _, r := range m.Repos {
-		url := r.SSHURL
-		if url == "" {
-			// Manifests written before the URL was recorded; assume github.com.
-			url = fmt.Sprintf("git@github.com:%s/%s.git", r.Org, r.Name)
+		if r.SSHURL == "" {
+			return fmt.Errorf("%s: %s/%s records no clone URL", manifestName, r.Org, r.Name)
 		}
-		if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
+		if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL); err != nil {
 			return err
 		}
 		wt := filepath.Join(dir, r.WorktreePath)
@@ -290,7 +280,7 @@ func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 		}
 		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 		var err error
-		if r.effectiveRole() == RepoRoleReference {
+		if r.Role == RepoRoleReference {
 			if r.Revision == "" {
 				return fmt.Errorf("reference %s/%s has no pinned revision", r.Org, r.Name)
 			}

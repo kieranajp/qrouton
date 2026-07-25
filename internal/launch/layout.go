@@ -45,9 +45,6 @@ func writeSupport(dir string, argv []string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err
 	}
-	// The repos pane used to be a generated status.sh; drop stale copies so
-	// resumed sessions don't keep an orphaned script around.
-	_ = os.Remove(sessionpaths.LegacyStatusScript(dir))
 	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), 0o755); err != nil {
 		return err
 	}

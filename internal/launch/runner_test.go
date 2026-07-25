@@ -2,6 +2,7 @@ package launch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"reflect"
@@ -22,8 +23,11 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 		return "", fmt.Errorf("missing")
 	}
 
-	cfg := &config.Config{Launch: [][]string{{"codex", "--search"}, {"team-agent", "--fast"}}}
-	got := Runners(cfg)
+	cfg := &config.Config{Launch: [][]string{{"codex", "--search"}}}
+	got, err := Runners(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
 	byID := make(map[string]Runner)
 	for _, r := range got {
 		byID[r.ID] = r
@@ -34,11 +38,24 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 	if byID["opencode"].Path != "" {
 		t.Fatal("missing runner reported installed")
 	}
-	if _, ok := byID["team-agent"]; ok {
-		t.Fatal("unsupported custom runner was retained")
-	}
 	if !byID["codex"].Override {
 		t.Fatal("configured built-in not marked as an override")
+	}
+}
+
+// An override qrouton cannot wire up used to be dropped in silence, so a user
+// who configured one got the built-in default and no explanation.
+func TestRunnersRejectUnsupportedOverride(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) { return "/bin/" + name, nil }
+
+	_, err := Runners(&config.Config{Launch: [][]string{{"team-agent", "--fast"}}})
+	if !errors.Is(err, ErrUnsupportedOverride) {
+		t.Fatalf("unsupported override error = %v, want ErrUnsupportedOverride", err)
+	}
+	if !strings.Contains(err.Error(), "team-agent") {
+		t.Fatalf("error does not name the offending command: %v", err)
 	}
 }
 
