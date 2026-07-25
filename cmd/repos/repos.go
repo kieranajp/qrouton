@@ -6,12 +6,12 @@ import (
 )
 
 var Command = &cli.Command{
-	Name:  "repos",
-	Usage: "Watch a session's repo branches and dirty state (redraws forever; used by the zellij layout)",
+	Name:  commandName,
+	Usage: commandUsage,
 	Flags: []cli.Flag{
-		&cli.StringFlag{Name: "session-root", Usage: "qrouton session root", Required: true},
+		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		return repos.Status(c.String("session-root"))
+		return repos.Status(c.String(sessionRootFlag))
 	},
 }

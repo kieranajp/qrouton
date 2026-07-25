@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 func TestMaterializeAssetsCreatesRunnerDiscoveryLayout(t *testing.T) {
@@ -49,7 +51,9 @@ func TestMaterializeAssetsCreatesRunnerDiscoveryLayout(t *testing.T) {
 	if !strings.HasPrefix(string(skill), "---\n") {
 		t.Fatal("generated marker broke YAML frontmatter")
 	}
-	if !strings.Contains(string(skill), marker) {
+	// The marker is the launch-time one: eval stamps through prompts.Stamp, so a
+	// graded workspace is byte-identical to a real session's.
+	if !strings.Contains(string(skill), prompts.MarkerText) {
 		t.Fatal("skill is missing generated marker")
 	}
 }

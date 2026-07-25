@@ -80,7 +80,7 @@ type Pane struct {
 // fixed row count like "6"; empty means share evenly.
 type Node struct {
 	Pane     *Pane
-	Split    string // "vertical" or "horizontal" when Children is set
+	Split    string // SplitVertical or SplitHorizontal when Children is set
 	Size     string
 	Children []Node
 }
@@ -118,7 +118,7 @@ func ParseHandle(s string) (Handle, error) {
 		return Handle{}, fmt.Errorf("multiplexer handle: %w", err)
 	}
 	if h.Kind == "" || h.Session == "" {
-		return Handle{}, fmt.Errorf("multiplexer handle missing kind or session: %q", s)
+		return Handle{}, fmt.Errorf("%w: %q", ErrHandleIncomplete, s)
 	}
 	return h, nil
 }
@@ -126,20 +126,34 @@ func ParseHandle(s string) (Handle, error) {
 // PaneHost resolves the handle to a live pane driver for its backend.
 func (h Handle) PaneHost() (PaneHost, error) {
 	switch h.Kind {
-	case "zellij":
+	case KindZellij:
 		return zellijHostFromHandle(h)
 	default:
-		return nil, fmt.Errorf("unsupported multiplexer %q", h.Kind)
+		return nil, unsupportedBackend(h.Kind)
 	}
+}
+
+// WithEnv returns env with key set to value, replacing any existing entry. It
+// builds the environment slices Launcher.Attach and Launcher.Start carry into
+// the multiplexer.
+func WithEnv(env []string, key, value string) []string {
+	prefix := key + envKeyValueSep
+	out := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			out = append(out, item)
+		}
+	}
+	return append(out, prefix+value)
 }
 
 // New returns the configured Launcher, verifying the backend is usable. An
 // empty kind selects the default (Zellij).
 func New(kind string) (Launcher, error) {
 	switch strings.TrimSpace(kind) {
-	case "", "zellij":
+	case "", KindZellij:
 		return newZellijLauncher()
 	default:
-		return nil, fmt.Errorf("unsupported multiplexer %q in config (supported: zellij)", kind)
+		return nil, unsupportedBackend(kind)
 	}
 }

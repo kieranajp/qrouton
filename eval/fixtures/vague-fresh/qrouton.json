@@ -1,1 +1,27 @@
-{"goal":"Improve the account service","repositories":[{"name":"account-service","role":"active"},{"name":"shared-lib","role":"reference"}]}
+{
+  "schemaVersion": 2,
+  "name": "Improve the account service",
+  "slug": "improve-the-account-service",
+  "description": "Improve the account service",
+  "mode": "rpi",
+  "createdAt": "2026-07-16T00:00:00Z",
+  "repos": [
+    {
+      "name": "account-service",
+      "org": "qrouton-eval",
+      "role": "active",
+      "branch": "feat/improve-the-account-service",
+      "defaultBranch": "main",
+      "worktreePath": "src/account-service",
+      "sshUrl": "git@github.com:qrouton-eval/account-service.git"
+    },
+    {
+      "name": "shared-lib",
+      "org": "qrouton-eval",
+      "role": "reference",
+      "defaultBranch": "main",
+      "worktreePath": "src/shared-lib",
+      "sshUrl": "git@github.com:qrouton-eval/shared-lib.git"
+    }
+  ]
+}

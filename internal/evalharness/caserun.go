@@ -36,9 +36,9 @@ func runCase(
 		result.DurationMS = time.Since(started).Milliseconds()
 	}()
 
-	caseDir := filepath.Join(config.Output, "cases", caseID)
-	workspace := filepath.Join(caseDir, "workspace")
-	fixture := filepath.Join(config.RepoRoot, "eval", "fixtures", scenario.Fixture)
+	caseDir := filepath.Join(config.Output, casesDirName, caseID)
+	workspace := filepath.Join(caseDir, workspaceDirName)
+	fixture := filepath.Join(config.RepoRoot, evalDirName, fixturesDirName, scenario.Fixture)
 	if err := CopyTree(fixture, workspace); err != nil {
 		result.InfrastructureError = fmt.Sprintf("materialize fixture: %v", err)
 		return result
@@ -72,9 +72,9 @@ func runCase(
 		turn := turnIndex + 1
 		result.Events = append(result.Events, Event{
 			Time: time.Now().UTC(),
-			Kind: "user",
+			Kind: kindUser,
 			Turn: turn,
-			Role: "user",
+			Role: roleUser,
 			Text: prompt,
 		})
 
@@ -126,7 +126,7 @@ func detectedModel(events []Event) string {
 		if err := json.Unmarshal(event.Arguments, &value); err != nil {
 			continue
 		}
-		if model := findStringField(value, "model"); model != "" {
+		if model := findStringField(value, modelField); model != "" {
 			return model
 		}
 	}
@@ -169,7 +169,7 @@ func writeCaseFiles(caseDir string, result CaseResult) error {
 		return err
 	}
 	for repo, diff := range result.Diffs {
-		path := filepath.Join(caseDir, "diffs", repo+".diff")
+		path := filepath.Join(caseDir, diffsDirName, repo+diffFileExt)
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return err
 		}

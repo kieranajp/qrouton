@@ -15,12 +15,6 @@
 
 qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are active work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the terminal layout. 🧊✨
 
-## Screenshots 📸
-
-<!-- Add onboarding, workspace, and editor-pane screenshots here. -->
-
-_Screenshots coming soon._
-
 ## What it does 🥖
 
 - Creates and resumes named multi-repo sessions.
@@ -133,7 +127,9 @@ prompts/
 └── agents/
 ```
 
-The `prompts.PromptLoader` interface supplies these sources to both session launching and prompt evaluations. The embedded loader ships them in the qrouton binary; the filesystem loader supports tests, eval snapshots, and alternate prompt directories. Provider discovery files such as Claude Markdown and Codex TOML are rendered from the same canonical agent prompts.
+A `prompts.PromptLoader` supplies these sources: the embedded loader ships them inside the qrouton binary, and the filesystem loader reads them from a directory, for tests, eval snapshots, and alternate prompt sets. Provider discovery files — Claude Markdown, Codex TOML — are rendered from the same canonical agent prompts.
+
+Laying those rendered assets out on disk is `prompts.Stamp`, and both a session launch and a prompt eval call it. That is deliberate: an eval that graded a different discovery tree than sessions actually get would be grading the wrong thing.
 
 ## Development 🤖
 

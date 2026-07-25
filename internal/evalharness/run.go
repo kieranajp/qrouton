@@ -19,7 +19,7 @@ func Run(ctx context.Context, config Config) (Report, error) {
 	}
 	config.Output = output
 
-	scenariosDir := filepath.Join(config.RepoRoot, "eval", "scenarios")
+	scenariosDir := filepath.Join(config.RepoRoot, evalDirName, scenariosDirName)
 	scenarios, err := LoadScenarios(scenariosDir, config.Scenario)
 	if err != nil {
 		return Report{}, err
@@ -30,9 +30,9 @@ func Run(ctx context.Context, config Config) (Report, error) {
 		return Report{}, err
 	}
 	if config.Samples < 1 {
-		return Report{}, fmt.Errorf("samples must be at least 1")
+		return Report{}, ErrSamplesTooFew
 	}
-	if err := os.MkdirAll(config.Output, 0o755); err != nil {
+	if err := os.MkdirAll(config.Output, outputDirMode); err != nil {
 		return Report{}, err
 	}
 
@@ -49,7 +49,7 @@ func Run(ctx context.Context, config Config) (Report, error) {
 	}
 	if !config.NoJudge {
 		if len(runners) != 2 {
-			report.Warnings = append(report.Warnings, "pairwise judging requires --runner all")
+			report.Warnings = append(report.Warnings, warnPairwiseNeedsBoth)
 		} else {
 			report.Pairwise = JudgePairs(ctx, config, scenarios, report.Cases, runners)
 		}
@@ -68,14 +68,14 @@ func Run(ctx context.Context, config Config) (Report, error) {
 
 func selectedAdapters(config Config) ([]Adapter, error) {
 	adapters := map[string]Adapter{
-		"claude": {
-			Name:     "claude",
+		runnerClaude: {
+			Name:     runnerClaude,
 			Bin:      config.ClaudeBin,
 			Model:    config.ClaudeModel,
 			SelfPath: config.SelfPath,
 		},
-		"codex": {
-			Name:     "codex",
+		runnerCodex: {
+			Name:     runnerCodex,
 			Bin:      config.CodexBin,
 			Model:    config.CodexModel,
 			SelfPath: config.SelfPath,
@@ -84,12 +84,12 @@ func selectedAdapters(config Config) ([]Adapter, error) {
 
 	var names []string
 	switch config.Runner {
-	case "", "all":
-		names = []string{"claude", "codex"}
-	case "claude", "codex":
+	case "", runnerAll:
+		names = []string{runnerClaude, runnerCodex}
+	case runnerClaude, runnerCodex:
 		names = []string{config.Runner}
 	default:
-		return nil, fmt.Errorf("runner must be claude, codex, or all")
+		return nil, ErrUnknownRunner
 	}
 
 	selected := make([]Adapter, 0, len(names))
@@ -99,7 +99,7 @@ func selectedAdapters(config Config) ([]Adapter, error) {
 			adapter.Bin = name
 		}
 		if _, err := exec.LookPath(adapter.Bin); err != nil {
-			return nil, fmt.Errorf("runner %s is unavailable: %w", name, err)
+			return nil, fmt.Errorf("%w: %s: %w", ErrRunnerUnavailable, name, err)
 		}
 		selected = append(selected, adapter)
 	}
@@ -115,11 +115,11 @@ func buildMetadata(ctx context.Context, config Config, adapters []Adapter) Metad
 	}
 
 	assetHash, _ := HashTree(config.AssetsDir)
-	judgeMode := "pairwise"
+	judgeMode := judgeModePairwise
 	if config.NoJudge {
-		judgeMode = "none"
+		judgeMode = judgeModeNone
 	}
-	gitSHA, err := commandOutput(ctx, config.RepoRoot, "git", "rev-parse", "HEAD")
+	gitSHA, err := commandOutput(ctx, config.RepoRoot, gitBin, gitRevParseCmd, gitHeadRef)
 	if err != nil {
 		gitSHA = "" // omitted from the report rather than recording git's error text
 	}
@@ -131,13 +131,13 @@ func buildMetadata(ctx context.Context, config Config, adapters []Adapter) Metad
 		Models:          models,
 		ScenarioVersion: ScenarioVersion,
 		Invocation: map[string]any{
-			"runner":     config.Runner,
-			"scenario":   config.Scenario,
-			"samples":    config.Samples,
-			"assets_dir": config.AssetsDir,
-			"no_judge":   config.NoJudge,
-			"judge_mode": judgeMode,
-			"timeout":    config.Timeout.String(),
+			metaRunnerKey:    config.Runner,
+			metaScenarioKey:  config.Scenario,
+			metaSamplesKey:   config.Samples,
+			metaAssetsDirKey: config.AssetsDir,
+			metaNoJudgeKey:   config.NoJudge,
+			metaJudgeModeKey: judgeMode,
+			metaTimeoutKey:   config.Timeout.String(),
 		},
 	}
 }

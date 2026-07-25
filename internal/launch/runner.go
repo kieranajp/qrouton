@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type Runner struct {
@@ -21,15 +22,19 @@ type Runner struct {
 }
 
 var builtinRunners = []Runner{
-	{ID: "claude", Label: "Claude Code", Command: []string{"claude", "--dangerously-skip-permissions"}},
-	{ID: "codex", Label: "Codex CLI", Command: []string{"codex", "--dangerously-bypass-approvals-and-sandbox"}},
-	{ID: "opencode", Label: "OpenCode", Command: []string{"opencode", "--auto"}},
+	{ID: runnerIDClaude, Label: runnerLabelClaude, Command: []string{runnerIDClaude, claudeSkipPermissionsFlag}},
+	{ID: runnerIDCodex, Label: runnerLabelCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}},
+	{ID: runnerIDOpenCode, Label: runnerLabelOpenCode, Command: []string{runnerIDOpenCode, openCodeAutoFlag}},
 }
 
 var findExecutable = exec.LookPath
 
-// runners applies exact configured overrides to qrouton's supported, tool-capable runners.
-func Runners(cfg *config.Config) []Runner {
+// Runners applies configured overrides to qrouton's supported, tool-capable
+// runners and reports which of them are installed. An override naming something
+// qrouton cannot wire up is an error rather than a no-op: the MCP and hook
+// injection in runnerLaunch is per-runner, so an unrecognised command would be
+// launched without any of it.
+func Runners(cfg *config.Config) ([]Runner, error) {
 	out := make([]Runner, len(builtinRunners))
 	copy(out, builtinRunners)
 	byID := make(map[string]int, len(out))
@@ -41,108 +46,143 @@ func Runners(cfg *config.Config) []Runner {
 			continue
 		}
 		id := filepath.Base(command[0])
-		if i, ok := byID[id]; ok {
-			out[i].Command = append([]string(nil), command...)
-			out[i].Override = true
-			continue
+		i, ok := byID[id]
+		if !ok {
+			return nil, fmt.Errorf("%w: %q (supported: %s)", ErrUnsupportedOverride, command[0], strings.Join(builtinIDs(), ", "))
 		}
+		out[i].Command = append([]string(nil), command...)
+		out[i].Override = true
 	}
 	for i := range out {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
-	return out
+	return out, nil
+}
+
+func builtinIDs() []string {
+	ids := make([]string, len(builtinRunners))
+	for i, runner := range builtinRunners {
+		ids[i] = runner.ID
+	}
+	return ids
+}
+
+// ByID returns the installed runner matching id, which may be a runner
+// identifier ("claude") or the command qrouton would run ("claude", or a path
+// to it). An uninstalled or unknown runner is an error: the caller asked for
+// something specific, so silently substituting another would be wrong.
+func ByID(cfg *config.Config, id string) (Runner, error) {
+	runners, err := Runners(cfg)
+	if err != nil {
+		return Runner{}, err
+	}
+	for _, runner := range runners {
+		if runner.Path == "" {
+			continue
+		}
+		if runner.ID == id || runner.Command[0] == id || filepath.Base(runner.Command[0]) == id {
+			return runner, nil
+		}
+	}
+	return Runner{}, fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
+}
+
+// FirstInstalled returns the first supported runner present on the system, for
+// callers that did not ask for a particular one.
+func FirstInstalled(cfg *config.Config) (Runner, error) {
+	runners, err := Runners(cfg)
+	if err != nil {
+		return Runner{}, err
+	}
+	for _, runner := range runners {
+		if runner.Path != "" {
+			return runner, nil
+		}
+	}
+	return Runner{}, ErrNoRunnerInstalled
 }
 
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle mux.Handle, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume, sessionMode(dir))
-	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--mux-json", handle.Marshal()}
+	mcpArgs := []string{mcpSubcommand, sessionRootFlag, dir, editorJSONFlag, editor.Marshal(), muxJSONFlag, handle.Marshal()}
 	switch r.ID {
-	case "claude":
-		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
+	case runnerIDClaude:
+		mcp := map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
+			claudeTypeKey: claudeStdioType, claudeCommandKey: qroutonBin, claudeArgsKey: mcpArgs}}}
 		b, _ := json.Marshal(mcp)
-		argv = append(argv, "--mcp-config", string(b))
-		hookCommand := shellQuote(qroutonBin) + " agent-event --session-root " + shellQuote(dir)
-		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
+		argv = append(argv, claudeMCPConfigFlag, string(b))
+		hookCommand := ShellQuote(qroutonBin) + " " + agentEventSubcommand + " " + sessionRootFlag + " " + ShellQuote(dir)
+		hook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: hookCommand}}}}
 		// Chime only when the agent asks for attention (not on every turn), so the user
 		// can step away; notify.sh is stamped into .qrouton by writeSupport.
-		soundCommand := shellQuote(filepath.Join(dir, ".qrouton", "notify.sh"))
-		soundHook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": soundCommand}}}}
-		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
-			"SubagentStart": hook,
-			"SubagentStop":  hook,
-			"Notification":  soundHook,
+		soundCommand := ShellQuote(sessionpaths.NotifyScript(dir))
+		soundHook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: soundCommand}}}}
+		settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
+			claudeSubagentStartHook: hook,
+			claudeSubagentStopHook:  hook,
+			claudeNotificationHook:  soundHook,
 		}})
-		argv = append(argv, "--settings", string(settings))
-	case "codex":
+		argv = append(argv, claudeSettingsFlag, string(settings))
+	case runnerIDCodex:
 		command, _ := json.Marshal(qroutonBin)
 		args, _ := json.Marshal(mcpArgs)
-		argv = append(argv, "-c", "mcp_servers.qrouton.command="+string(command), "-c", "mcp_servers.qrouton.args="+string(args))
-	case "opencode":
+		argv = append(argv, codexConfigFlag, codexMCPCommandKey+string(command), codexConfigFlag, codexMCPArgsKey+string(args))
+	case runnerIDOpenCode:
 		content := map[string]any{}
-		if existing := os.Getenv("OPENCODE_CONFIG_CONTENT"); existing != "" {
+		if existing := os.Getenv(openCodeConfigEnvVar); existing != "" {
 			if err := json.Unmarshal([]byte(existing), &content); err != nil {
-				return nil, nil, fmt.Errorf("OPENCODE_CONFIG_CONTENT: %w", err)
+				return nil, nil, fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
 			}
 		}
-		servers, _ := content["mcp"].(map[string]any)
+		servers, _ := content[openCodeMCPKey].(map[string]any)
 		if servers == nil {
 			servers = map[string]any{}
 		}
-		servers["qrouton"] = map[string]any{"type": "local", "command": append([]string{qroutonBin}, mcpArgs...), "enabled": true}
-		content["mcp"] = servers
+		servers[serverName] = map[string]any{
+			claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{qroutonBin}, mcpArgs...), openCodeEnabledKey: true}
+		content[openCodeMCPKey] = servers
 		if !r.Override {
-			content["permission"] = "allow"
+			content[openCodePermissionKey] = openCodeAllowValue
 		}
 		b, _ := json.Marshal(content)
-		return argv, withEnv(os.Environ(), "OPENCODE_CONFIG_CONTENT", string(b)), nil
+		return argv, mux.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
 	default:
-		return nil, nil, fmt.Errorf("unsupported runner %q", r.ID)
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
 	return argv, os.Environ(), nil
 }
 
-// shellQuote single-quotes s for the POSIX shell that runs hook commands. Go's
-// %q double-quoting left $, backticks, and backslashes live for the shell.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func withEnv(env []string, key, value string) []string {
-	prefix := key + "="
-	out := make([]string, 0, len(env)+1)
-	for _, item := range env {
-		if !strings.HasPrefix(item, prefix) {
-			out = append(out, item)
-		}
-	}
-	return append(out, prefix+value)
+// ShellQuote single-quotes s so it survives as one word in the POSIX shell that
+// runs hook commands and pane commands. Go's %q double-quoting would leave $,
+// backticks, and backslashes live for the shell.
+func ShellQuote(s string) string {
+	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
 func runnerArgv(r Runner, resume bool, mode string) []string {
 	argv := append([]string(nil), r.Command...)
 	if resume {
 		switch r.ID {
-		case "claude", "opencode":
-			return append(argv, "--continue")
-		case "codex":
-			return append(argv, "resume", "--last")
+		case runnerIDClaude, runnerIDOpenCode:
+			return append(argv, claudeContinueFlag)
+		case runnerIDCodex:
+			return append(argv, codexResumeCmd, codexResumeLast)
 		default:
 			return argv
 		}
 	}
 	switch r.ID {
-	case "claude", "codex":
+	case runnerIDClaude, runnerIDCodex:
 		argv = append(argv, openingMessage(mode))
 	}
 	return argv
 }
 
 // openingMessage is the fresh-session greeting injected as the runner's first
-// prompt. RPI presents the orchestrated workflow; Assistant stays open-ended
-// while pointing at the workflow the user can escalate into.
+// prompt.
 func openingMessage(mode string) string {
 	if mode == modeAssistant {
-		return "You have just been launched in a qrouton session. Read the session instructions and manifest, skim relevant thoughts/shared artifacts, then help with whatever the user asks — work directly and keep your own context lean. A structured Research → Plan → Implement workflow is available if the user wants it."
+		return openingMessageAssistant
 	}
-	return "You have just been launched in a qrouton session. Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, then respond naturally. Present the work as Research, Plan, or Implement; keep your own context lean by delegating execution wherever practical."
+	return openingMessageRPI
 }

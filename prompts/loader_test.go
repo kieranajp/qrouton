@@ -8,7 +8,7 @@ import (
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	loader := NewEmbeddedLoader()
-	prompt, err := loader.Load(context.Background(), Agent("qrspi-research-lead"))
+	prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+"qrspi-research-lead"))
 	if err != nil {
 		t.Fatal(err)
 	}

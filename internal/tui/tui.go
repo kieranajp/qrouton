@@ -6,7 +6,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -73,7 +72,11 @@ type appModel struct {
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
-	m := newAppModel(cfg, sessions, requestedRunner)
+	runners, err := launch.Runners(cfg)
+	if err != nil {
+		return nil, err
+	}
+	m := newAppModel(cfg, sessions, requestedRunner, installed(runners))
 	if requestedRunner != "" {
 		if _, err := m.selectedRunner(); err != nil {
 			return nil, err
@@ -92,22 +95,23 @@ func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string
 	return out.result, nil
 }
 
-func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string) appModel {
+func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string, runners []launch.Runner) appModel {
 	repos, fetched, _ := github.CachedRepos(cfg.Orgs)
 	sort.Slice(sessions, func(i, j int) bool { return sessions[i].CreatedAt.After(sessions[j].CreatedAt) })
 	return appModel{cfg: cfg, sessions: sessions, repos: repos, requestedRunner: requested,
-		runners: availableRunners(cfg), screen: landingScreen, refreshing: true, cacheAt: fetched,
+		runners: runners, screen: landingScreen, refreshing: true, cacheAt: fetched,
 		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error), refreshGen: 1,
 		form: formState{prefix: 0, mode: session.ModeRPI, roles: make(map[string]repoRole), owners: selectedOwners(cfg.Orgs)}}
 }
 
 func (m appModel) Init() tea.Cmd { return refreshTokenCmd(m.refreshGen) }
 
-func availableRunners(cfg *config.Config) []launch.Runner {
+// installed keeps the runners the picker can actually offer.
+func installed(runners []launch.Runner) []launch.Runner {
 	var out []launch.Runner
-	for _, r := range launch.Runners(cfg) {
-		if r.Path != "" {
-			out = append(out, r)
+	for _, runner := range runners {
+		if runner.Path != "" {
+			out = append(out, runner)
 		}
 	}
 	return out
@@ -143,16 +147,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := v.event
 		switch event.State {
 		case github.RefreshStarted:
-			m.ownerStatus[event.Owner] = "fetching…"
+			m.ownerStatus[event.Owner] = statusFetching
 		case github.RefreshSucceeded:
-			m.ownerStatus[event.Owner] = "updated"
+			m.ownerStatus[event.Owner] = statusUpdated
 			delete(m.ownerErrors, event.Owner)
 			if event.Repos != nil {
 				m.repos = event.Repos
 				m.clampRepoCursor()
 			}
 		case github.RefreshFailed:
-			m.ownerStatus[event.Owner] = "failed"
+			m.ownerStatus[event.Owner] = statusFailed
 			m.ownerErrors[event.Owner] = event.Err
 			m.err = event.Err
 		case github.RefreshComplete:
@@ -211,11 +215,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for owner, err := range v.results {
 			if err != nil {
 				m.ownerErrors[owner] = err
-				m.ownerStatus[owner] = "failed"
+				m.ownerStatus[owner] = statusFailed
 				m.err = err
 			} else {
 				delete(m.ownerErrors, owner)
-				m.ownerStatus[owner] = "updated"
+				m.ownerStatus[owner] = statusUpdated
 			}
 		}
 		if len(m.ownerErrors) == 0 {
@@ -313,7 +317,7 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.resume = &s
 		if m.requestedRunner == "" {
 			if len(m.runners) == 0 {
-				m.err, m.back, m.screen = fmt.Errorf("no supported coding agent is installed"), landingScreen, errorScreen
+				m.err, m.back, m.screen = launch.ErrNoRunnerInstalled, landingScreen, errorScreen
 				return m, nil
 			}
 			m.screen = runnerScreen
@@ -402,15 +406,10 @@ func (m appModel) updateError(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m appModel) selectedRunner() (launch.Runner, error) {
 	if m.requestedRunner != "" {
-		for _, r := range launch.Runners(m.cfg) {
-			if (r.ID == m.requestedRunner || r.Command[0] == m.requestedRunner) && r.Path != "" {
-				return r, nil
-			}
-		}
-		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
+		return launch.ByID(m.cfg, m.requestedRunner)
 	}
 	if len(m.runners) == 0 || m.runnerCursor >= len(m.runners) {
-		return launch.Runner{}, fmt.Errorf("no runner selected")
+		return launch.Runner{}, errNoRunnerSelected
 	}
 	return m.runners[m.runnerCursor], nil
 }

@@ -65,10 +65,10 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	activeOrigin, _ := makeOrigin(t, "active")
 	referenceOrigin, pinned := makeOrigin(t, "reference")
 	cfg := &config.Config{Root: root}
-	dir, err := createSessionWithRoles(cfg, "Role test", "", "", "feat", []RepoSelection{
+	dir, err := Create(cfg, "Role test", "", "", "feat", ModeRPI, []RepoSelection{
 		{Repo: github.Repo{Name: "active", Org: "org", SSHURL: activeOrigin, DefaultBranch: "main"}, Role: RepoRoleActive},
 		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,25 +110,45 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	}
 }
 
-func TestMissingManifestRoleResumesAsActive(t *testing.T) {
+// A repo with no explicit role resumes on its session branch: Create only ever
+// writes "active" or "reference", so an empty role means a hand-edited manifest
+// and active is the safe reading.
+func TestManifestRepoWithoutRoleResumesOnItsBranch(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
-	origin, _ := makeOrigin(t, "legacy")
-	if err := ensureMirror(root, "org", "legacy", origin); err != nil {
+	origin, _ := makeOrigin(t, "unroled")
+	if err := ensureMirror(root, "org", "unroled", origin); err != nil {
 		t.Fatal(err)
 	}
-	m := Manifest{SchemaVersion: 1, Slug: "old", Repos: []ManifestRepo{{
-		Name: "legacy", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/legacy",
+	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
+		Name: "unroled", Org: "org", Branch: "feat/old", DefaultBranch: "main",
+		WorktreePath: "src/unroled", SSHURL: origin,
 	}}}
 	if err := EnsureWorktrees(&config.Config{Root: root}, m); err != nil {
 		t.Fatal(err)
 	}
-	wt := filepath.Join(root, "old", "src", "legacy")
+	wt := filepath.Join(root, "old", "src", "unroled")
 	out, err := exec.Command("git", "-C", wt, "branch", "--show-current").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.TrimSpace(string(out)); got != "feat/old" {
-		t.Fatalf("legacy checkout branch = %q", got)
+		t.Fatalf("checkout branch = %q", got)
+	}
+}
+
+// Create always records a clone URL. A manifest without one cannot be resumed,
+// and guessing github.com for it would mirror the wrong repository in silence.
+func TestEnsureWorktreesRejectsManifestWithoutCloneURL(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
+		Name: "urlless", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/urlless",
+	}}}
+	err := EnsureWorktrees(&config.Config{Root: root}, m)
+	if err == nil {
+		t.Fatal("manifest without a clone URL was resumed")
+	}
+	if !strings.Contains(err.Error(), "urlless") {
+		t.Fatalf("error does not name the repository: %v", err)
 	}
 }
 
@@ -140,15 +160,15 @@ func TestCreateFailureCleansNewSessionDirectoryAndAllowsRetry(t *testing.T) {
 	origin, _ := makeOrigin(t, "retry")
 	repo := github.Repo{Name: "retry", Org: "org", SSHURL: origin, DefaultBranch: "main"}
 	bad := []RepoSelection{{Repo: repo, Role: RepoRole("invalid")}}
-	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Retry me", "", "", "feat", bad); err == nil {
+	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI, bad, nil); err == nil {
 		t.Fatal("invalid role unexpectedly succeeded")
 	}
 	dir := filepath.Join(root, "retry-me")
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("failed session directory was not cleaned up: %v", err)
 	}
-	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Retry me", "", "", "feat",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}); err != nil {
+	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI,
+		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}, nil); err != nil {
 		t.Fatal("retry failed:", err)
 	}
 }
@@ -170,8 +190,8 @@ func TestCreateReclaimsAbandonedAssemblyDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "reclaim", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	created, err := createSessionWithRoles(&config.Config{Root: root}, "Reclaim me", "", "", "feat",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}})
+	created, err := Create(&config.Config{Root: root}, "Reclaim me", "", "", "feat", ModeRPI,
+		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}, nil)
 	if err != nil {
 		t.Fatal("abandoned directory blocked its session name:", err)
 	}
@@ -200,8 +220,8 @@ func TestCreateRefusesToReclaimUnmarkedDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "keep", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	if _, err := createSessionWithRoles(&config.Config{Root: root}, "Keep me", "", "", "feat",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}); err == nil {
+	if _, err := Create(&config.Config{Root: root}, "Keep me", "", "", "feat", ModeRPI,
+		[]RepoSelection{{Repo: repo, Role: RepoRoleActive}}, nil); err == nil {
 		t.Fatal("unmarked directory was silently taken over")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
@@ -216,8 +236,8 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "custom")
 	cfg := &config.Config{Root: root}
-	dir, err := createSessionWithRoles(cfg, "Custom origin", "", "", "feat",
-		[]RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}})
+	dir, err := Create(cfg, "Custom origin", "", "", "feat", ModeRPI,
+		[]RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

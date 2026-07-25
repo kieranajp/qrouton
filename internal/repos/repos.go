@@ -9,28 +9,27 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/agents"
+	"github.com/kieranajp/qrouton/internal/paneui"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-// Status redraws the session's per-repo branch and dirty state every 3s, forever.
-// It replaces the generated status.sh pane: manifest-driven, so it knows roles
-// and exact worktree paths (a detached reference renders as its pinned revision
-// instead of a blank branch), and drawn in place via agents.Frame so the pane
-// never flashes blank between ticks.
+// Status redraws the session's per-repo branch and dirty state forever. It is
+// manifest-driven, so it knows roles and exact worktree paths — a detached
+// reference renders as its pinned revision instead of a blank branch.
 func Status(root string) error {
 	for {
-		fmt.Print(agents.Frame(statusLines(root)))
-		time.Sleep(3 * time.Second)
+		fmt.Print(paneui.Frame(statusLines(root)))
+		time.Sleep(refreshInterval)
 	}
 }
 
 func statusLines(root string) []string {
-	lines := []string{"\033[1mrepos\033[0m"}
-	b, err := os.ReadFile(filepath.Join(root, "qrouton.json"))
+	lines := []string{paneui.Title(paneTitle)}
+	b, err := os.ReadFile(sessionpaths.Manifest(root))
 	var m session.Manifest
 	if err != nil || json.Unmarshal(b, &m) != nil || len(m.Repos) == 0 {
-		return append(lines, "\033[2mNo session manifest\033[0m")
+		return append(lines, paneui.Muted(noManifestLabel))
 	}
 	for _, r := range m.Repos {
 		lines = append(lines, repoLine(root, r))
@@ -42,27 +41,29 @@ func repoLine(root string, r session.ManifestRepo) string {
 	name := r.WorktreePath
 	wt := filepath.Join(root, r.WorktreePath)
 	if _, err := os.Stat(wt); err != nil {
-		return fmt.Sprintf("\033[1m%s\033[0m  \033[2mmissing — resume to restore\033[0m", name)
+		return fmt.Sprintf(repoStateFormat, paneui.Bold(name), paneui.Muted(stateMissing))
 	}
 	ref, err := gitOutput(wt, "branch", "--show-current")
 	if err == nil && ref == "" {
 		// detached HEAD — a pinned reference checkout
-		ref, err = gitOutput(wt, "rev-parse", "--short", "HEAD")
-		ref = "@ " + ref
+		var revision string
+		if revision, err = gitOutput(wt, "rev-parse", "--short", "HEAD"); err == nil {
+			ref = detachedPrefix + revision
+		}
 	}
 	if err != nil {
-		return fmt.Sprintf("\033[1m%s\033[0m  \033[2munavailable\033[0m", name)
+		return fmt.Sprintf(repoStateFormat, paneui.Bold(name), paneui.Muted(stateUnavailable))
 	}
-	state := "clean"
+	state := stateClean
 	if status, err := gitOutput(wt, "status", "--porcelain"); err != nil {
-		state = "unavailable"
+		state = stateUnavailable
 	} else if dirty := countLines(status); dirty > 0 {
-		state = fmt.Sprintf("%d changed", dirty)
+		state = fmt.Sprintf(changedFormat, dirty)
 	}
 	if r.Role == session.RepoRoleReference {
-		state = "reference · " + state
+		state = referencePrefix + state
 	}
-	return fmt.Sprintf("\033[1m%s\033[0m  %s · %s", name, ref, state)
+	return fmt.Sprintf(repoLineFormat, paneui.Bold(name), ref, state)
 }
 
 func gitOutput(dir string, args ...string) (string, error) {

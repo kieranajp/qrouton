@@ -15,10 +15,18 @@ type ID string
 const (
 	Orchestrator ID = "orchestrator"
 	Assistant    ID = "assistant"
-)
 
-func Skill(name string) ID { return ID("skills/" + name) }
-func Agent(name string) ID { return ID("agents/" + name) }
+	// Skills and agents are addressed by their directory prefix; pathForID and
+	// idForPath are the mapping between an ID and its file.
+	skillIDPrefix = "skills/"
+	agentIDPrefix = "agents/"
+
+	skillFileName = "SKILL.md"
+	promptFileExt = ".md"
+
+	orchestratorFileName = string(Orchestrator) + promptFileExt
+	assistantFileName    = string(Assistant) + promptFileExt
+)
 
 type Prompt struct {
 	ID      ID
@@ -85,28 +93,28 @@ func pathForID(id ID) (string, error) {
 	value := string(id)
 	switch {
 	case id == Orchestrator:
-		return "orchestrator.md", nil
+		return orchestratorFileName, nil
 	case id == Assistant:
-		return "assistant.md", nil
-	case strings.HasPrefix(value, "skills/") && fs.ValidPath(value):
-		return value + "/SKILL.md", nil
-	case strings.HasPrefix(value, "agents/") && fs.ValidPath(value):
-		return value + ".md", nil
+		return assistantFileName, nil
+	case strings.HasPrefix(value, skillIDPrefix) && fs.ValidPath(value):
+		return value + "/" + skillFileName, nil
+	case strings.HasPrefix(value, agentIDPrefix) && fs.ValidPath(value):
+		return value + promptFileExt, nil
 	default:
-		return "", fmt.Errorf("invalid prompt id %q", id)
+		return "", fmt.Errorf("%w: %q", ErrInvalidPromptID, id)
 	}
 }
 
 func idForPath(path string) (ID, bool) {
 	switch {
-	case path == "orchestrator.md":
+	case path == orchestratorFileName:
 		return Orchestrator, true
-	case path == "assistant.md":
+	case path == assistantFileName:
 		return Assistant, true
-	case strings.HasPrefix(path, "skills/") && strings.HasSuffix(path, "/SKILL.md"):
-		return ID(strings.TrimSuffix(path, "/SKILL.md")), true
-	case strings.HasPrefix(path, "agents/") && strings.HasSuffix(path, ".md"):
-		return ID(strings.TrimSuffix(path, ".md")), true
+	case strings.HasPrefix(path, skillIDPrefix) && strings.HasSuffix(path, "/"+skillFileName):
+		return ID(strings.TrimSuffix(path, "/"+skillFileName)), true
+	case strings.HasPrefix(path, agentIDPrefix) && strings.HasSuffix(path, promptFileExt):
+		return ID(strings.TrimSuffix(path, promptFileExt)), true
 	default:
 		return "", false
 	}

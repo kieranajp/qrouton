@@ -17,7 +17,7 @@ import (
 
 func Normalize(provider string, data []byte, turn int) ([]Event, string, string, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(data))
-	scanner.Buffer(make([]byte, 64*1024), 4*1024*1024)
+	scanner.Buffer(make([]byte, streamBufferInitial), streamBufferMax)
 
 	var events []Event
 	var final string
@@ -45,14 +45,14 @@ func Normalize(provider string, data []byte, turn int) ([]Event, string, string,
 		}
 		value = sanitized.(map[string]any)
 
-		typeName := firstString(value, "type", "event", "kind")
-		if id := firstString(value, "session_id", "thread_id"); id != "" {
+		typeName := firstString(value, eventTypeKeys...)
+		if id := firstString(value, sessionIDKeys...); id != "" {
 			session = id
 		}
 		text := extractText(value)
-		name := firstString(value, "tool_name", "name")
+		name := firstString(value, toolNameKeys...)
 		kind := normalizedKind(typeName, name)
-		if text != "" && (kind == "assistant" || kind == "result") {
+		if text != "" && (kind == kindAssistant || kind == kindResult) {
 			final = text
 		}
 
@@ -75,7 +75,7 @@ func Normalize(provider string, data []byte, turn int) ([]Event, string, string,
 		return events, final, session, err
 	}
 	if lineNumber == 0 {
-		return nil, "", session, fmt.Errorf("%s produced no JSON events", provider)
+		return nil, "", session, fmt.Errorf("%w: %s", ErrNoEvents, provider)
 	}
 	return events, final, session, nil
 }
@@ -85,13 +85,13 @@ func sanitizeObservable(value any) (any, bool) {
 	case map[string]any:
 		typeName, _ := typed["type"].(string)
 		lowerType := strings.ToLower(typeName)
-		if strings.Contains(lowerType, "thinking") || strings.Contains(lowerType, "reasoning") {
+		if strings.Contains(lowerType, hiddenThinking) || strings.Contains(lowerType, hiddenReasoning) {
 			return nil, false
 		}
 		cleaned := make(map[string]any, len(typed))
 		for key, nested := range typed {
 			item, visible := sanitizeObservable(nested)
-			if key == "item" && !visible {
+			if key == itemKey && !visible {
 				return nil, false
 			}
 			if visible {
@@ -117,21 +117,25 @@ func normalizedKind(typeName, name string) string {
 	value := strings.ToLower(typeName + " " + name)
 	switch {
 	case strings.Contains(value, "tool"), strings.Contains(value, "function"):
-		return "tool_call"
+		return kindToolCall
 	case strings.Contains(value, "agent"), strings.Contains(value, "task"):
-		return "delegation"
+		return delegationKind
 	case strings.Contains(value, "assistant"), strings.Contains(value, "message"):
-		return "assistant"
+		return kindAssistant
 	case strings.Contains(value, "result"), strings.Contains(value, "completed"):
-		return "result"
+		return kindResult
 	default:
-		return "provider_event"
+		return kindProviderEvent
 	}
 }
 
+// firstString returns the first key holding a non-empty string. The harness
+// deliberately does not import qrouton's own packages, so internal/agents keeps
+// its own copy of this; both skip empty values, because a present-but-empty
+// session id or tool name is no more useful than an absent one.
 func firstString(value map[string]any, keys ...string) string {
 	for _, key := range keys {
-		if text, ok := value[key].(string); ok {
+		if text, ok := value[key].(string); ok && text != "" {
 			return text
 		}
 	}
@@ -149,7 +153,7 @@ func extractText(value any) string {
 			}
 		}
 	case map[string]any:
-		keys := []string{"result", "final_output", "text", "content", "message", "item"}
+		keys := textKeys
 		for _, key := range keys {
 			item, ok := typed[key]
 			if !ok {
@@ -185,10 +189,10 @@ func ReadMCPEvents(path string, turn int) []Event {
 }
 
 func AppendJSONL(path string, value any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), outputDirMode); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, outputFileMode)
 	if err != nil {
 		return err
 	}

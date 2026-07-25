@@ -33,7 +33,7 @@ func (m appModel) View() string {
 	case landingScreen:
 		body = m.viewLanding()
 	case loadingScreen:
-		body = "Loading repositories…\n\nFetching configured GitHub owners in the background.\n\nesc back"
+		body = loadingBody
 	case newScreen:
 		body = m.viewForm()
 	case runnerScreen:
@@ -43,20 +43,14 @@ func (m appModel) View() string {
 	case deleteScreen:
 		body = m.viewDelete()
 	case errorScreen:
-		retry := "retry GitHub"
+		retry := errorRetryGitHub
 		if m.assemblyFailed {
-			retry = "retry assembly"
+			retry = errorRetryAssemb
 		}
-		body = bad.Render("Something needs attention") + "\n\n" + m.err.Error() + "\n\n[b] back  [r] " + retry + "  [q] quit"
+		body = bad.Render(errorTitle) + "\n\n" + m.err.Error() + "\n\n" + errorKeyHints + retry + errorKeyQuit
 	}
-	w := m.width - 6
-	if w < 50 {
-		w = 50
-	}
-	if w > 100 {
-		w = 100
-	}
-	header := accent.Render("qrouton")
+	w := m.bodyWidth()
+	header := accent.Render(appName)
 	if m.screen == landingScreen {
 		logo := compactLogo
 		if m.height >= 30 {
@@ -68,17 +62,17 @@ func (m appModel) View() string {
 }
 
 func (m appModel) viewLanding() string {
-	status := "GitHub: "
+	status := githubStatusPrefix
 	if m.refreshing {
-		status += "refreshing…"
+		status += githubStatusRefreshing
 	} else if m.err != nil {
-		status += "cached · refresh failed"
+		status += githubStatusStale
 	} else {
-		status += "connected"
+		status += githubStatusConnected
 	}
-	status += fmt.Sprintf(" · %d repositories · %d owners", len(m.repos), len(m.cfg.Orgs))
+	status += fmt.Sprintf(repoOwnerCountFormat, len(m.repos), len(m.cfg.Orgs))
 	if !m.cacheAt.IsZero() {
-		status += " · updated " + relativeTime(m.cacheAt)
+		status += updatedPrefix + relativeTime(m.cacheAt)
 	}
 	lines := []string{dim.Render(status), ""}
 	if m.refreshing || len(m.ownerErrors) > 0 {
@@ -96,9 +90,9 @@ func (m appModel) viewLanding() string {
 			lines = append(lines, dim.Render(strings.Join(statuses, " · ")), "")
 		}
 	}
-	label := "  New session"
+	label := "  " + newSessionLabel
 	if m.landingCursor == 0 {
-		label = accent.Render("› New session")
+		label = accent.Render(glyphSelected + " " + newSessionLabel)
 	}
 	lines = append(lines, label, "")
 	for i, s := range m.sessions {
@@ -106,40 +100,40 @@ func (m appModel) viewLanding() string {
 		for _, r := range s.Repos {
 			repos = append(repos, r.Org+"/"+r.Name)
 		}
-		title := fmt.Sprintf("%-42s %s", s.Slug, relativeTime(s.CreatedAt))
-		content := title + "\n" + emptyFallback(s.Description, "No description") + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
+		title := fmt.Sprintf(sessionTitleFormat, s.Slug, relativeTime(s.CreatedAt))
+		content := title + "\n" + emptyFallback(s.Description, noDescriptionLabel) + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
 		st := card
 		if m.landingCursor == i+1 {
 			st = picked
 		}
 		lines = append(lines, st.Width(m.formWidth()).Render(content), "")
 	}
-	lines = append(lines, dim.Render("↑↓ navigate   enter select   d delete   r refresh   q quit"))
+	lines = append(lines, dim.Render(landingKeyHints))
 	return strings.Join(lines, "\n")
 }
 
 func workflowLine(s session.WorkflowStatus) string {
 	mark := func(done bool) string {
 		if done {
-			return good.Render("✓")
+			return good.Render(glyphDone)
 		}
-		return bad.Render("✗")
+		return bad.Render(glyphFailed)
 	}
-	return fmt.Sprintf("R %s   P %s   I %s", mark(s.Research), mark(s.Plan), mark(s.Implement))
+	return fmt.Sprintf(workflowLineFormat, mark(s.Research), mark(s.Plan), mark(s.Implement))
 }
 
 func (m appModel) viewDelete() string {
 	if m.deleteTarget == nil {
-		return "No session selected.\n\n[esc] back"
+		return deleteNoTarget
 	}
-	lines := []string{bad.Render("Delete " + m.deleteTarget.Slug + "?"), "", "This removes its worktrees and session files. Shared mirrors are kept."}
+	lines := []string{bad.Render(fmt.Sprintf(deleteTitleFormat, m.deleteTarget.Slug)), "", deleteBody}
 	if len(m.deleteDirty) > 0 {
-		lines = append(lines, "", bad.Render("Uncommitted files will be lost in:"))
+		lines = append(lines, "", bad.Render(deleteDirtyBody))
 		for _, repo := range m.deleteDirty {
 			lines = append(lines, "  • "+repo)
 		}
 	}
-	lines = append(lines, "", dim.Render("enter/y delete   esc/n cancel"))
+	lines = append(lines, "", dim.Render(deleteKeyHints))
 	return strings.Join(lines, "\n")
 }
 
@@ -160,92 +154,99 @@ func (m appModel) viewForm() string {
 
 	var boxes []string
 
-	ticket := []string{fieldValue(f.focus == 0, f.ticket)}
+	ticket := []string{fieldValue(f.focus == focusTicket, f.ticket)}
 	if f.ticketStatus != "" {
 		ticket = append(ticket, dim.Render(f.ticketStatus))
 	}
-	boxes = append(boxes, labeledBox(f.focus == 0, "Ticket URL", w, ticket...))
+	boxes = append(boxes, labeledBox(f.focus == focusTicket, labelTicket, w, ticket...))
 
-	boxes = append(boxes, labeledBox(f.focus == 1, "Name", w,
-		fieldValue(f.focus == 1, f.name),
-		dim.Render("slug · "+emptyFallback(slug, "—"))))
+	boxes = append(boxes, labeledBox(f.focus == focusName, labelName, w,
+		fieldValue(f.focus == focusName, f.name),
+		dim.Render(slugPrefix+emptyFallback(slug, emptyFieldLabel))))
 
-	boxes = append(boxes, labeledBox(f.focus == 2, "Description", w,
-		fieldValue(f.focus == 2, f.description)))
+	boxes = append(boxes, labeledBox(f.focus == focusDescription, labelDescription, w,
+		fieldValue(f.focus == focusDescription, f.description)))
 
 	ownerChips := make([]string, 0, len(m.cfg.Orgs))
 	for i, owner := range m.cfg.Orgs {
 		token := chip(owner, f.owners[owner])
-		if f.focus == 3 && i == f.owner {
-			token = accent.Render("▸") + token
+		if f.focus == focusOwners && i == f.owner {
+			token = accent.Render(glyphCursor) + token
 		}
 		ownerChips = append(ownerChips, token)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 3, "GitHub owners", w, strings.Join(ownerChips, " ")))
+	boxes = append(boxes, labeledBox(f.focus == focusOwners, labelOwners, w, strings.Join(ownerChips, " ")))
 
-	repoLines := []string{fmt.Sprintf("%d included · %d active", included, activeN)}
+	repoLines := []string{fmt.Sprintf(repoCountFormat, included, activeN)}
 	if f.search != "" {
-		repoLines = append(repoLines, dim.Render("filter · ")+accent.Render(f.search))
+		repoLines = append(repoLines, dim.Render(filterPrefix)+accent.Render(f.search))
 	}
 	rs := m.filteredRepos()
 	start := 0
-	if f.cursor > 6 {
-		start = f.cursor - 6
+	if f.cursor > repoListLead {
+		start = f.cursor - repoListLead
 	}
-	end := min(len(rs), start+8)
+	end := min(len(rs), start+repoListWindow)
 	for i := start; i < end; i++ {
 		r := rs[i]
 		role := f.roles[r.ID()]
-		marker, label, detail, style := "○", "excluded", "", dim
+		marker, label, detail, style := glyphExcluded, roleLabelExcluded, "", dim
 		if role == active {
-			marker, label, style = "●", "active", good
+			marker, label, style = glyphActive, roleLabelActive, good
 		}
 		if role == reference {
-			marker, label, detail, style = "◐", "reference", " → "+r.DefaultBranch+" · reference", accent
+			marker, label, detail, style = glyphReference, roleLabelReference,
+				fmt.Sprintf(referenceDetailFormat, r.DefaultBranch), accent
 		}
-		head := style.Render(fmt.Sprintf("%s %-9s", marker, label))
-		tail := fmt.Sprintf("%-26s %s", r.ID(), dim.Render("· "+relativeTime(r.PushedAt)+detail))
+		head := style.Render(fmt.Sprintf(roleColumnFormat, marker, label))
+		tail := fmt.Sprintf(repoColumnFormat, r.ID(), dim.Render(bulletPrefix+relativeTime(r.PushedAt)+detail))
 		row := "  " + head + " " + tail
-		if f.focus == 4 && i == f.cursor {
-			row = accent.Render("▸ ") + head + " " + tail
+		if f.focus == focusRepos && i == f.cursor {
+			row = accent.Render(glyphCursor+" ") + head + " " + tail
 		}
 		repoLines = append(repoLines, row)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 4, "Repositories", w, repoLines...))
+	boxes = append(boxes, labeledBox(f.focus == focusRepos, labelRepos, w, repoLines...))
 
 	prefixChips := make([]string, len(branchPrefixes))
 	for i, p := range branchPrefixes {
 		prefixChips[i] = chip(p, i == f.prefix)
 	}
-	boxes = append(boxes, labeledBox(f.focus == 5, "Branch prefix", w,
+	boxes = append(boxes, labeledBox(f.focus == focusPrefix, labelPrefix, w,
 		strings.Join(prefixChips, " "),
-		dim.Render("preview · "+branchPrefixes[f.prefix]+"/"+emptyFallback(slug, "—")+"  (active repos only)")))
+		dim.Render(fmt.Sprintf(branchPreviewFormat, branchPrefixes[f.prefix], emptyFallback(slug, emptyFieldLabel)))))
 
 	modeChips := []string{
-		chip("RPI", f.mode != session.ModeAssistant),
-		chip("Assistant", f.mode == session.ModeAssistant),
+		chip(modeLabelRPI, f.mode != session.ModeAssistant),
+		chip(modeLabelAssistant, f.mode == session.ModeAssistant),
 	}
-	boxes = append(boxes, labeledBox(f.focus == 6, "Mode", w,
+	boxes = append(boxes, labeledBox(f.focus == focusMode, labelMode, w,
 		strings.Join(modeChips, " "),
 		dim.Render(modeHint(f.mode))))
 
-	footer := dim.Render("type in the repository list to filter · backspace clears it\n↑↓ move · space select/cycle · tab next field · ←→ choice · enter continue · esc back")
+	footer := dim.Render(formKeyHints)
 	return strings.Join(boxes, "\n") + "\n\n" + footer
 }
 
-// formWidth is the width passed to each box. View() wraps the body to its
-// Width minus horizontal padding (w-4); a lipgloss box renders 2 wider than its
-// Width (the border sits outside it), so w-6 makes a box total exactly w-4 and
-// fill the content area without overflowing into a wrap.
+// bodyWidth is the width View() wraps the whole body to, clamped so a narrow
+// terminal stays readable and a wide one does not stretch into unreadable lines.
+func (m appModel) bodyWidth() int {
+	w := m.width - bodyWidthInset
+	if w < minBodyWidth {
+		return minBodyWidth
+	}
+	if w > maxBodyWidth {
+		return maxBodyWidth
+	}
+	return w
+}
+
+// formWidth is the width passed to each box. View() wraps the body to its Width
+// minus horizontal padding (w-4); a lipgloss box renders 2 wider than its Width
+// (the border sits outside it), so w-6 makes a box total exactly w-4 and fill
+// the content area without overflowing into a wrap.
 func (m appModel) formWidth() int {
-	w := m.width - 6
-	if w < 50 {
-		w = 50
-	}
-	if w > 100 {
-		w = 100
-	}
-	return w - 6
+	return m.bodyWidth() - boxWidthInset
 }
 
 // labeledBox draws one form field as a titled cube: the label heads the box
@@ -263,7 +264,7 @@ func labeledBox(focused bool, label string, width int, lines ...string) string {
 // when the field has focus, quiet body text otherwise.
 func fieldValue(focused bool, value string) string {
 	if strings.TrimSpace(value) == "" {
-		return dim.Render("—")
+		return dim.Render(emptyFieldLabel)
 	}
 	if focused {
 		return accent.Render(value)
@@ -272,18 +273,18 @@ func fieldValue(focused bool, value string) string {
 }
 
 func (m appModel) viewRunners() string {
-	lines := []string{accent.Render("Choose a coding agent"), ""}
+	lines := []string{accent.Render(runnerTitle), ""}
 	w := m.formWidth()
 	for i, r := range m.runners {
 		st := card
 		label := body.Render(r.Label)
 		if i == m.runnerCursor {
 			st = picked
-			label = accent.Render("▸ " + r.Label)
+			label = accent.Render(glyphCursor + " " + r.Label)
 		}
 		lines = append(lines, st.Width(w).Render(label))
 	}
-	lines = append(lines, "", dim.Render("↑↓ navigate · enter create · esc back"))
+	lines = append(lines, "", dim.Render(runnerKeyHints))
 	return strings.Join(lines, "\n")
 }
 
@@ -292,9 +293,9 @@ func (m appModel) viewAssembly() string {
 	if m.resume != nil {
 		name = m.resume.Slug
 	}
-	lines := []string{"Creating " + accent.Render(name), "", good.Render("✓ Session configuration")}
+	lines := []string{assemblyCreatingPrefix + accent.Render(name), "", good.Render(assemblyConfigured)}
 	if m.resume != nil && len(m.assemblySteps) == 0 {
-		lines = append(lines, "◌ Restore missing worktrees")
+		lines = append(lines, assemblyRestoring)
 	}
 	latest := make(map[string]session.Progress)
 	var order []string
@@ -310,11 +311,11 @@ func (m appModel) viewAssembly() string {
 	}
 	for _, key := range order {
 		p := latest[key]
-		symbol := "◌"
+		symbol := glyphPending
 		if p.Status == session.ProgressCompleted {
-			symbol = "✓"
+			symbol = glyphDone
 		} else if p.Status == session.ProgressFailed {
-			symbol = "✗"
+			symbol = glyphFailed
 		}
 		label := string(p.Step)
 		if p.Repo != nil {
@@ -331,15 +332,15 @@ func (m appModel) viewAssembly() string {
 		}
 		lines = append(lines, line)
 	}
-	lines = append(lines, "", dim.Render("Mirrors and worktrees are being assembled…"))
+	lines = append(lines, "", dim.Render(assemblyFooter))
 	return strings.Join(lines, "\n")
 }
 
 func modeHint(mode session.SessionMode) string {
 	if mode == session.ModeAssistant {
-		return "open-ended coding session · escalate to RPI anytime"
+		return modeHintAssistant
 	}
-	return "orchestrated Research → Plan → Implement workflow"
+	return modeHintRPI
 }
 
 func emptyFallback(s, f string) string {
@@ -351,7 +352,7 @@ func emptyFallback(s, f string) string {
 
 func relativeTime(t time.Time) string {
 	if t.IsZero() {
-		return "unknown"
+		return timeUnknown
 	}
 	d := time.Since(t)
 	if d < 0 {
@@ -361,17 +362,17 @@ func relativeTime(t time.Time) string {
 		return "just now"
 	}
 	if d < time.Hour {
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+		return fmt.Sprintf(minutesAgoFormat, int(d.Minutes()))
 	}
 	if d < 24*time.Hour {
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
+		return fmt.Sprintf(hoursAgoFormat, int(d.Hours()))
 	}
 	days := int(d.Hours() / 24)
 	if days == 1 {
-		return "yesterday"
+		return timeYesterday
 	}
 	if days < 30 {
-		return fmt.Sprintf("%d days ago", days)
+		return fmt.Sprintf(daysAgoFormat, days)
 	}
-	return t.Format("2006-01-02")
+	return t.Format(timeDateLayout)
 }

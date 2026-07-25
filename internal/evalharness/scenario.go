@@ -9,7 +9,7 @@ import (
 )
 
 func LoadScenarios(dir, selected string) ([]Scenario, error) {
-	paths, err := filepath.Glob(filepath.Join(dir, "*.json"))
+	paths, err := filepath.Glob(filepath.Join(dir, scenarioGlob))
 	if err != nil {
 		return nil, err
 	}
@@ -21,13 +21,13 @@ func LoadScenarios(dir, selected string) ([]Scenario, error) {
 		if err != nil {
 			return nil, err
 		}
-		if selected == "" || selected == "all" || selected == scenario.ID {
+		if selected == "" || selected == scenarioAll || selected == scenario.ID {
 			scenarios = append(scenarios, scenario)
 		}
 	}
 
 	if len(scenarios) == 0 {
-		return nil, fmt.Errorf("scenario %q not found in %s", selected, dir)
+		return nil, fmt.Errorf("%w: %q in %s", ErrScenarioNotFound, selected, dir)
 	}
 	return scenarios, nil
 }
@@ -43,7 +43,7 @@ func loadScenario(path string) (Scenario, error) {
 		return Scenario{}, fmt.Errorf("%s: %w", path, err)
 	}
 	if scenario.ID == "" || scenario.Fixture == "" || len(scenario.Turns) == 0 {
-		return Scenario{}, fmt.Errorf("%s: id, fixture, and turns are required", path)
+		return Scenario{}, fmt.Errorf("%s: %w", path, ErrScenarioIncomplete)
 	}
 	if scenario.Version == 0 {
 		scenario.Version = ScenarioVersion

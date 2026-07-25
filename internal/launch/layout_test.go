@@ -35,7 +35,7 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 		t.Fatalf("shell pane does not show a shallow tree and remain interactive:\n%s", layout)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); !os.IsNotExist(err) {
-		t.Fatal("stale status.sh still stamped; the repos pane is a qrouton subcommand now")
+		t.Fatal("status.sh stamped; the repos pane is a qrouton subcommand")
 	}
 	help, err := os.ReadFile(filepath.Join(dir, ".qrouton", "help.sh"))
 	if err != nil {
@@ -100,24 +100,6 @@ func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
 	}
 	if strings.Contains(string(help), "agents.max_depth is under 2") {
 		t.Fatal("Codex quick-start panel warns when max_depth is two")
-	}
-}
-
-func TestWriteSupportRemovesStaleStatusScript(t *testing.T) {
-	t.Setenv("CODEX_HOME", t.TempDir())
-	dir := t.TempDir()
-	stale := filepath.Join(dir, ".qrouton", "status.sh")
-	if err := os.MkdirAll(filepath.Dir(stale), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(stale, []byte("#!/bin/sh\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := writeSupport(dir, []string{"codex"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(stale); !os.IsNotExist(err) {
-		t.Fatal("resumed session kept an orphaned status.sh")
 	}
 }
 

@@ -8,24 +8,24 @@ import (
 )
 
 var Command = &cli.Command{
-	Name:  "agents",
-	Usage: "Watch a session's subagent statuses (redraws forever; used by the zellij layout)",
+	Name:  commandName,
+	Usage: commandUsage,
 	Flags: []cli.Flag{
-		&cli.StringFlag{Name: "session-root", Usage: "qrouton session root", Required: true},
-		&cli.StringFlag{Name: "runner", Usage: "runner whose agents to scan (claude scans the session log, otherwise codex)"},
+		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
+		&cli.StringFlag{Name: runnerFlag, Usage: runnerUsage},
 	},
 	Action: func(c *cli.Context) error {
-		return agents.Status(c.String("session-root"), c.String("runner"))
+		return agents.Status(c.String(sessionRootFlag), c.String(runnerFlag))
 	},
 }
 
 var EventCommand = &cli.Command{
-	Name:  "agent-event",
-	Usage: "Record a Claude subagent hook event from stdin",
+	Name:  eventCommandName,
+	Usage: eventCommandUsage,
 	Flags: []cli.Flag{
-		&cli.StringFlag{Name: "session-root", Usage: "qrouton session root", Required: true},
+		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		return agents.RecordEvent(c.String("session-root"), os.Stdin)
+		return agents.RecordEvent(c.String(sessionRootFlag), os.Stdin)
 	},
 }

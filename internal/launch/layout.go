@@ -1,15 +1,15 @@
 package launch
 
 import (
-	"bufio"
 	_ "embed"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/huh"
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // Panels are an opinionated multiplexer workspace rather than a bespoke TUI. The
@@ -42,28 +42,27 @@ var codexDepthWarning string
 // sessions pick up template changes on resume. Backend layout files are the
 // multiplexer adapter's business, staged separately.
 func writeSupport(dir string, argv []string) error {
-	cd := filepath.Join(dir, ".qrouton")
-	if err := os.MkdirAll(cd, 0o755); err != nil {
+	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err
 	}
-	// The repos pane used to be a generated status.sh; drop stale copies so
-	// resumed sessions don't keep an orphaned script around.
-	_ = os.Remove(filepath.Join(cd, "status.sh"))
-	if err := os.WriteFile(filepath.Join(cd, "notify.sh"), []byte(notifyScript), 0o755); err != nil {
+	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode); err != nil {
 		return err
 	}
 	warning := ""
-	if filepath.Base(argv[0]) == "codex" && codexMaxDepth(argv) < 2 {
+	if filepath.Base(argv[0]) == codex.Binary && codex.MaxDepth(argv) < codex.RequiredMaxDepth {
 		warning = strings.TrimRight(codexDepthWarning, "\n")
 	}
-	tagline := "Coordinate here; delegate work to subagents."
+	tagline := rpiTagline
 	if sessionMode(dir) == modeAssistant {
-		tagline = "Open-ended session; ask to switch to RPI anytime."
+		tagline = assistantTagline
 	}
-	help := strings.ReplaceAll(helpScript, "@@WARNING@@", warning)
-	help = strings.ReplaceAll(help, "@@TAGLINE@@", tagline)
-	return os.WriteFile(filepath.Join(cd, "help.sh"), []byte(help), 0o755)
+	help := strings.ReplaceAll(helpScript, warningPlaceholder, warning)
+	help = strings.ReplaceAll(help, taglinePlaceholder, tagline)
+	return os.WriteFile(sessionpaths.HelpScript(dir), []byte(help), scriptMode)
 }
+
+// helpGeometry floats the quick-start panel over the middle of the workspace.
+var helpGeometry = mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"}
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
 // agent beside a shell and the repo/agent status panes, with the quick-start
@@ -74,75 +73,23 @@ func workspace(dir, slug string, argv []string, qroutonBin string) mux.Workspace
 		Slug: slug,
 		Dir:  dir,
 		Tiled: mux.Node{
-			Split: "vertical",
+			Split: mux.SplitVertical,
 			Children: []mux.Node{
-				{Size: "65%", Pane: &mux.Pane{Name: "agent", Command: argv}},
-				{Split: "horizontal", Size: "35%", Children: []mux.Node{
-					{Pane: &mux.Pane{Name: "shell", Command: []string{"sh", "-lc", strings.TrimSpace(shellIntro)}}},
-					{Split: "vertical", Size: "6", Children: []mux.Node{
-						{Pane: &mux.Pane{Name: "repos", Command: []string{qroutonBin, "repos", "--session-root", dir}}},
-						{Pane: &mux.Pane{Name: "agents", Command: []string{qroutonBin, "agents", "--session-root", dir, "--runner", runner}}},
+				{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: argv}},
+				{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
+					{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
+					{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
+						{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
+						{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},
 					}},
 				}},
 			},
 		},
 		Floating: []mux.Floating{{
-			Pane:     mux.Pane{Name: "qrouton · quick start", Command: []string{"sh", filepath.Join(dir, ".qrouton", "help.sh")}, CloseOnExit: true, Focus: true},
-			Geometry: mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"},
+			Pane:     mux.Pane{Name: helpPaneName, Command: []string{shellBin, sessionpaths.HelpScript(dir)}, CloseOnExit: true, Focus: true},
+			Geometry: helpGeometry,
 		}},
 	}
-}
-
-// codexMaxDepth returns the configured nesting depth, or Codex's default of one.
-// Command-line overrides win over the base config, matching Codex's precedence.
-func codexMaxDepth(argv []string) int {
-	depth := 1
-	home := os.Getenv("CODEX_HOME")
-	if home == "" {
-		if userHome, err := os.UserHomeDir(); err == nil {
-			home = filepath.Join(userHome, ".codex")
-		}
-	}
-	if f, err := os.Open(filepath.Join(home, "config.toml")); err == nil {
-		defer f.Close()
-		section := ""
-		scanner := bufio.NewScanner(f)
-		for scanner.Scan() {
-			line := strings.TrimSpace(strings.SplitN(scanner.Text(), "#", 2)[0])
-			if strings.HasPrefix(line, "[") && strings.HasSuffix(line, "]") {
-				section = strings.TrimSpace(line[1 : len(line)-1])
-				continue
-			}
-			key, value, ok := strings.Cut(line, "=")
-			if !ok {
-				continue
-			}
-			key = strings.TrimSpace(key)
-			if (section == "agents" && key == "max_depth") || (section == "" && key == "agents.max_depth") {
-				if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
-					depth = n
-				}
-			}
-		}
-	}
-	for i := 1; i < len(argv); i++ {
-		var override string
-		switch {
-		case argv[i] == "-c" || argv[i] == "--config":
-			if i+1 < len(argv) {
-				i++
-				override = argv[i]
-			}
-		case strings.HasPrefix(argv[i], "--config="):
-			override = strings.TrimPrefix(argv[i], "--config=")
-		}
-		if value, ok := strings.CutPrefix(override, "agents.max_depth="); ok {
-			if n, err := strconv.Atoi(strings.TrimSpace(value)); err == nil {
-				depth = n
-			}
-		}
-	}
-	return depth
 }
 
 // Launch stamps the session's support files and workspace, then enters it
@@ -155,7 +102,7 @@ func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, edito
 	if err != nil {
 		return err
 	}
-	env = withEnv(env, "QROUTON_EDITOR_JSON", editor.Marshal())
+	env = mux.WithEnv(env, EditorEnvVar, editor.Marshal())
 	if err := writeSupport(dir, argv); err != nil {
 		return err
 	}

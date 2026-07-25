@@ -1,1 +1,27 @@
-{"goal":"Implement calculator health","repositories":[{"name":"account-service","role":"active"},{"name":"shared-lib","role":"reference"}]}
+{
+  "schemaVersion": 2,
+  "name": "Implement calculator health",
+  "slug": "implement-calculator-health",
+  "description": "Implement calculator health",
+  "mode": "rpi",
+  "createdAt": "2026-07-16T00:00:00Z",
+  "repos": [
+    {
+      "name": "account-service",
+      "org": "qrouton-eval",
+      "role": "active",
+      "branch": "feat/implement-calculator-health",
+      "defaultBranch": "main",
+      "worktreePath": "src/account-service",
+      "sshUrl": "git@github.com:qrouton-eval/account-service.git"
+    },
+    {
+      "name": "shared-lib",
+      "org": "qrouton-eval",
+      "role": "reference",
+      "defaultBranch": "main",
+      "worktreePath": "src/shared-lib",
+      "sshUrl": "git@github.com:qrouton-eval/shared-lib.git"
+    }
+  ]
+}

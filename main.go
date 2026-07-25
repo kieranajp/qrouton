@@ -1,5 +1,5 @@
 // qrouton — assemble a multi-repo session (worktrees off local mirrors) and launch an agent runner in it.
-// Spec: thoughts/shared/specs/S001-2026-07-15-workspace-harness.md
+// See AGENTS.md for the package layout and the invariants a change must hold.
 package main
 
 import (
@@ -22,28 +22,21 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-// adhocBranchPrefix names the branch of an ad-hoc session's active repos. These
-// sessions start without a ticket, so "chore" reads more honestly than "feat".
-const adhocBranchPrefix = "chore"
-
 func main() {
 	app := &cli.App{
-		Name:      "qrouton",
-		Usage:     "assemble a multi-repo session and launch an agent runner in it",
-		ArgsUsage: "[owner/repo ...]",
-		Description: "With no arguments, qrouton opens the session picker.\n" +
-			"Given one or more owner/repo arguments, it skips the picker and launches\n" +
-			"(or resumes) an ad-hoc Assistant-mode session with those repos active —\n" +
-			"e.g. `qrouton kieranajp/qrouton`. Ask the agent to switch to RPI anytime.",
+		Name:        appName,
+		Usage:       appUsage,
+		ArgsUsage:   appArgsUsage,
+		Description: appDescription,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: "refresh", Usage: "refresh the cached org repo list"},
-			&cli.StringFlag{Name: "runner", Usage: "coding agent to launch (claude, codex, or opencode)"},
+			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
+			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
 		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {
-		fmt.Fprintln(os.Stderr, "qrouton:", err)
+		fmt.Fprintln(os.Stderr, logPrefix, err)
 		os.Exit(1)
 	}
 }
@@ -60,9 +53,9 @@ func onboard(c *cli.Context) error {
 		return err
 	}
 	if specs := c.Args().Slice(); len(specs) > 0 {
-		return launchAdhoc(cfg, sessions, specs, c.String("runner"))
+		return launchAdhoc(cfg, sessions, specs, c.String(runnerFlag))
 	}
-	request, err := tui.Run(cfg, sessions, c.String("runner"), c.Bool("refresh"))
+	request, err := tui.Run(cfg, sessions, c.String(runnerFlag), c.Bool(refreshFlag))
 	if err != nil || request == nil {
 		return err
 	}
@@ -85,7 +78,7 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 		if err := session.EnsureWorktrees(cfg, m); err != nil {
 			return err
 		}
-		fmt.Fprintf(os.Stderr, "qrouton: resuming %s\n", slug)
+		fmt.Fprintf(os.Stderr, resumingFormat, slug)
 		return launchRunner(cfg, filepath.Join(cfg.Root, slug), runner, true)
 	}
 	selections := make([]session.RepoSelection, len(repos))
@@ -95,7 +88,7 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 	dir, err := session.Create(cfg, adhocName(repos), "", "", adhocBranchPrefix, session.ModeAssistant, selections,
 		func(p session.Progress) {
 			if p.Status == session.ProgressCompleted && p.Repo != nil {
-				fmt.Fprintf(os.Stderr, "qrouton: %s %s\n", p.Repo.ID(), p.Step)
+				fmt.Fprintf(os.Stderr, progressFormat, p.Repo.ID(), p.Step)
 			}
 		})
 	if err != nil {
@@ -105,23 +98,12 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 }
 
 // pickRunner resolves the runner headlessly: the requested one if given and
-// installed, otherwise the first installed built-in (claude, codex, opencode).
+// installed, otherwise the first installed built-in.
 func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
-	runners := launch.Runners(cfg)
 	if id != "" {
-		for _, r := range runners {
-			if (r.ID == id || filepath.Base(r.Command[0]) == id) && r.Path != "" {
-				return r, nil
-			}
-		}
-		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", id)
+		return launch.ByID(cfg, id)
 	}
-	for _, r := range runners {
-		if r.Path != "" {
-			return r, nil
-		}
-	}
-	return launch.Runner{}, fmt.Errorf("no supported coding agent is installed")
+	return launch.FirstInstalled(cfg)
 }
 
 // resolveRepos turns owner/repo specs into repositories, preferring the local
@@ -136,7 +118,7 @@ func resolveRepos(cfg *config.Config, specs []string) ([]github.Repo, error) {
 		if err != nil {
 			return nil, err
 		}
-		id := strings.ToLower(owner + "/" + name)
+		id := strings.ToLower(owner + repoSpecSeparator + name)
 		if seen[id] {
 			continue
 		}
@@ -155,7 +137,7 @@ func resolveRepos(cfg *config.Config, specs []string) ([]github.Repo, error) {
 		repos = append(repos, repo)
 	}
 	if len(repos) == 0 {
-		return nil, fmt.Errorf("no repositories given")
+		return nil, errNoRepositories
 	}
 	return repos, nil
 }
@@ -180,11 +162,11 @@ func findSession(sessions []session.Manifest, slug string) (session.Manifest, bo
 
 // parseRepoSpec accepts "owner/repo" (tolerating a trailing slash or ".git").
 func parseRepoSpec(spec string) (string, string, error) {
-	parts := strings.Split(strings.Trim(strings.TrimSpace(spec), "/"), "/")
-	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("expected owner/repo, got %q", spec)
+	parts := strings.Split(strings.Trim(strings.TrimSpace(spec), repoSpecSeparator), repoSpecSeparator)
+	if len(parts) != repoSpecParts || parts[0] == "" || parts[1] == "" {
+		return "", "", fmt.Errorf("%w, got %q", errRepoSpecShape, spec)
 	}
-	return parts[0], strings.TrimSuffix(parts[1], ".git"), nil
+	return parts[0], strings.TrimSuffix(parts[1], gitDirSuffix), nil
 }
 
 // adhocName derives a session name from its repositories: the repo name for a
@@ -194,7 +176,7 @@ func adhocName(repos []github.Repo) string {
 	for i, r := range repos {
 		names[i] = r.Name
 	}
-	return strings.Join(names, "-")
+	return strings.Join(names, adhocNameSeparator)
 }
 
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {

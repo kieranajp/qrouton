@@ -177,7 +177,7 @@ func TestFetchOwnerReposUsesAuthenticatedEndpointForPersonalOwner(t *testing.T) 
 	githubAPIBase = "https://api.test"
 	t.Cleanup(func() { githubAPIBase = oldBase })
 	login := ""
-	repos, err := fetchOwnerRepos(client, "token", "kieranajp", &login)
+	repos, err := fetchOwnerRepos(context.Background(), client, "token", "kieranajp", &login)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +206,7 @@ func TestFetchOwnerReposUsesOrganizationEndpoint(t *testing.T) {
 	githubAPIBase = "https://api.test"
 	t.Cleanup(func() { githubAPIBase = oldBase })
 	login := ""
-	if _, err := fetchOwnerRepos(client, "token", "lifesum", &login); err != nil {
+	if _, err := fetchOwnerRepos(context.Background(), client, "token", "lifesum", &login); err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"/users/lifesum", "/orgs/lifesum/repos?type=all&per_page=100&page=1"}

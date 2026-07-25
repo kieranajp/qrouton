@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,9 +12,16 @@ import (
 	"strings"
 )
 
+// Overridable in tests.
 var (
-	linearAPI = "https://api.linear.app/graphql"
-	asanaAPI  = "https://app.asana.com/api/1.0"
+	linearAPI = linearAPIDefault
+	asanaAPI  = asanaAPIDefault
+)
+
+// Provider names, used to prefix errors the user sees.
+const (
+	linearProvider = "linear"
+	asanaProvider  = "asana"
 )
 
 type Ticket struct {
@@ -28,7 +36,7 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, err
 		return Ticket{}, err
 	}
 	switch strings.ToLower(u.Hostname()) {
-	case "linear.app":
+	case linearHost:
 		return fetchLinear(ctx, client, u)
 	default:
 		return fetchAsana(ctx, client, u)
@@ -38,39 +46,48 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, err
 // ParseURL validates the ticket providers and browser URL shapes accepted by qrouton.
 func ParseURL(rawURL string) (*url.URL, error) {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil || u.Scheme != "https" {
-		return nil, fmt.Errorf("ticket must be a Linear or Asana URL")
+	if err != nil || u.Scheme != httpsScheme {
+		return nil, ErrUnsupportedProvider
 	}
 	switch strings.ToLower(u.Hostname()) {
-	case "linear.app":
-		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-		if len(parts) < 3 || parts[1] != "issue" || parts[2] == "" {
-			return nil, fmt.Errorf("ticket must be a Linear issue URL")
+	case linearHost:
+		parts := pathSegments(u)
+		if len(parts) < linearMinSegments || parts[1] != linearIssueSegment || parts[linearIssueIndex] == "" {
+			return nil, ErrNotLinearIssue
 		}
-	case "app.asana.com":
-		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-		if len(parts) < 3 || parts[0] != "0" || parts[len(parts)-1] == "" {
-			return nil, fmt.Errorf("ticket must be an Asana task URL")
+	case asanaHost:
+		parts := pathSegments(u)
+		if len(parts) < asanaMinSegments || parts[0] != asanaRootSegment || parts[len(parts)-1] == "" {
+			return nil, ErrNotAsanaTask
 		}
 	default:
-		return nil, fmt.Errorf("ticket must be a Linear or Asana URL")
+		return nil, ErrUnsupportedProvider
 	}
 	return u, nil
 }
 
+// pathSegments splits a ticket URL's path, which both providers address
+// positionally. ParseURL has already validated the segment count.
+func pathSegments(u *url.URL) []string {
+	return strings.Split(strings.Trim(u.Path, pathSeparator), pathSeparator)
+}
+
 func fetchLinear(ctx context.Context, client *http.Client, u *url.URL) (Ticket, error) {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	token := strings.TrimSpace(os.Getenv("LINEAR_API_KEY"))
+	parts := pathSegments(u)
+	token := strings.TrimSpace(os.Getenv(linearTokenEnvVar))
 	if token == "" {
-		return Ticket{}, fmt.Errorf("set LINEAR_API_KEY to load ticket details")
+		return Ticket{}, ErrNoLinearToken
 	}
-	payload, _ := json.Marshal(map[string]any{"query": `query Ticket($id: String!) { issue(id: $id) { title description } }`, "variables": map[string]string{"id": parts[2]}})
+	payload, _ := json.Marshal(map[string]any{
+		linearQueryKey: linearIssueQuery,
+		linearVarsKey:  map[string]string{linearIDVar: parts[linearIssueIndex]},
+	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, linearAPI, bytes.NewReader(payload))
 	if err != nil {
 		return Ticket{}, err
 	}
-	req.Header.Set("Authorization", token)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(authorizationHeader, token)
+	req.Header.Set(contentTypeHeader, contentTypeJSON)
 	var response struct {
 		Data struct {
 			Issue struct {
@@ -83,29 +100,29 @@ func fetchLinear(ctx context.Context, client *http.Client, u *url.URL) (Ticket, 
 		} `json:"errors"`
 	}
 	if err := doJSON(client, req, &response); err != nil {
-		return Ticket{}, fmt.Errorf("linear: loading ticket: %w", err)
+		return Ticket{}, providerError(linearProvider, err)
 	}
 	if len(response.Errors) > 0 {
-		return Ticket{}, fmt.Errorf("linear: loading ticket: %s", response.Errors[0].Message)
+		return Ticket{}, providerError(linearProvider, errors.New(response.Errors[0].Message))
 	}
 	if response.Data.Issue.Title == "" {
-		return Ticket{}, fmt.Errorf("linear: ticket not found")
+		return Ticket{}, notFound(linearProvider)
 	}
 	return Ticket{Title: response.Data.Issue.Title, Body: response.Data.Issue.Description}, nil
 }
 
 func fetchAsana(ctx context.Context, client *http.Client, u *url.URL) (Ticket, error) {
-	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	token := strings.TrimSpace(os.Getenv("ASANA_ACCESS_TOKEN"))
+	parts := pathSegments(u)
+	token := strings.TrimSpace(os.Getenv(asanaTokenEnvVar))
 	if token == "" {
-		return Ticket{}, fmt.Errorf("set ASANA_ACCESS_TOKEN to load ticket details")
+		return Ticket{}, ErrNoAsanaToken
 	}
-	endpoint := asanaAPI + "/tasks/" + url.PathEscape(parts[len(parts)-1]) + "?opt_fields=name,notes"
+	endpoint := asanaAPI + asanaTasksPath + url.PathEscape(parts[len(parts)-1]) + asanaTaskFields
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return Ticket{}, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set(authorizationHeader, bearerPrefix+token)
 	var response struct {
 		Data struct {
 			Name  string `json:"name"`
@@ -113,10 +130,10 @@ func fetchAsana(ctx context.Context, client *http.Client, u *url.URL) (Ticket, e
 		} `json:"data"`
 	}
 	if err := doJSON(client, req, &response); err != nil {
-		return Ticket{}, fmt.Errorf("asana: loading ticket: %w", err)
+		return Ticket{}, providerError(asanaProvider, err)
 	}
 	if response.Data.Name == "" {
-		return Ticket{}, fmt.Errorf("asana: ticket not found")
+		return Ticket{}, notFound(asanaProvider)
 	}
 	return Ticket{Title: response.Data.Name, Body: response.Data.Notes}, nil
 }

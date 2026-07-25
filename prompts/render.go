@@ -17,65 +17,65 @@ func Render(prompt Prompt) ([]Rendered, error) {
 	id := string(prompt.ID)
 	switch {
 	case prompt.ID == Orchestrator:
-		return []Rendered{{Path: "ORCHESTRATOR.md", Content: prompt.Content}}, nil
+		return []Rendered{{Path: OrchestratorAsset, Content: prompt.Content}}, nil
 	case prompt.ID == Assistant:
-		return []Rendered{{Path: "ASSISTANT.md", Content: prompt.Content}}, nil
-	case strings.HasPrefix(id, "skills/"):
-		return []Rendered{{Path: id + "/SKILL.md", Content: prompt.Content}}, nil
-	case strings.HasPrefix(id, "agents/"):
+		return []Rendered{{Path: AssistantAsset, Content: prompt.Content}}, nil
+	case strings.HasPrefix(id, skillIDPrefix):
+		return []Rendered{{Path: id + "/" + skillFileName, Content: prompt.Content}}, nil
+	case strings.HasPrefix(id, agentIDPrefix):
 		name := path.Base(id)
 		codex, err := renderCodexAgent(prompt.Content)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", prompt.ID, err)
 		}
 		return []Rendered{
-			{Path: ".claude/agents/" + name + ".md", Content: prompt.Content},
-			{Path: ".codex/agents/" + name + ".toml", Content: codex},
+			{Path: claudeAgentsDir + name + promptFileExt, Content: prompt.Content},
+			{Path: codexAgentsDir + name + tomlExtension, Content: codex},
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported prompt id %q", prompt.ID)
+		return nil, fmt.Errorf("%w: %q", ErrUnsupportedPrompt, prompt.ID)
 	}
 }
 
 func renderCodexAgent(content []byte) ([]byte, error) {
 	text := string(content)
-	if !strings.HasPrefix(text, "---\n") {
-		return nil, fmt.Errorf("agent prompt has no frontmatter")
+	if !strings.HasPrefix(text, frontmatterFence) {
+		return nil, ErrNoFrontmatter
 	}
-	end := strings.Index(text[4:], "\n---\n")
+	end := strings.Index(text[len(frontmatterFence):], frontmatterClose)
 	if end < 0 {
-		return nil, fmt.Errorf("agent prompt has unterminated frontmatter")
+		return nil, ErrUnterminatedFrontmatter
 	}
-	end += 4
+	end += len(frontmatterFence)
 	metadata := make(map[string]string)
-	for _, line := range strings.Split(text[4:end], "\n") {
-		key, value, ok := strings.Cut(line, ":")
+	for _, line := range strings.Split(text[len(frontmatterFence):end], "\n") {
+		key, value, ok := strings.Cut(line, frontmatterKeySep)
 		if ok {
 			metadata[strings.TrimSpace(key)] = strings.TrimSpace(value)
 		}
 	}
-	name, description := metadata["name"], metadata["description"]
+	name, description := metadata[frontmatterNameKey], metadata[frontmatterDescriptionKey]
 	if name == "" || description == "" {
-		return nil, fmt.Errorf("agent prompt requires name and description")
+		return nil, ErrIncompleteAgentPrompt
 	}
-	body := strings.TrimSpace(text[end+len("\n---\n"):])
+	body := strings.TrimSpace(text[end+len(frontmatterClose):])
 	var out strings.Builder
-	fmt.Fprintf(&out, "name = %s\ndescription = %s\n", strconv.Quote(name), strconv.Quote(description))
+	fmt.Fprintf(&out, codexNameFormat, strconv.Quote(name), strconv.Quote(description))
 	if sandbox := codexSandbox(name); sandbox != "" {
-		fmt.Fprintf(&out, "sandbox_mode = %s\n", strconv.Quote(sandbox))
+		fmt.Fprintf(&out, codexSandboxFormat, strconv.Quote(sandbox))
 	}
-	out.WriteString("developer_instructions = \"\"\"\n")
-	out.WriteString(strings.ReplaceAll(body, "\"\"\"", "\\\"\\\"\\\""))
-	out.WriteString("\n\"\"\"\n")
+	out.WriteString(codexInstructionsOpen)
+	out.WriteString(strings.ReplaceAll(body, tomlTripleQuote, tomlEscapedTripleQuote))
+	out.WriteString(codexInstructionsClose)
 	return []byte(out.String()), nil
 }
 
 func codexSandbox(name string) string {
-	switch name {
-	case "code-reviewer", "codebase-researcher", "external-researcher", "pattern-finder", "qrspi-researcher", "thoughts-researcher":
-		return "read-only"
-	case "qrspi-research-lead", "test-verifier":
-		return "workspace-write"
+	switch {
+	case readOnlyAgents[name]:
+		return sandboxReadOnly
+	case workspaceWriteAgents[name]:
+		return sandboxWorkspaceWrite
 	default:
 		return ""
 	}

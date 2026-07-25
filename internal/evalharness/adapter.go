@@ -22,7 +22,7 @@ type Adapter struct {
 }
 
 func (a Adapter) Version(ctx context.Context) string {
-	output, err := exec.CommandContext(ctx, a.Bin, "--version").CombinedOutput()
+	output, err := exec.CommandContext(ctx, a.Bin, versionFlag).CombinedOutput()
 	if err != nil {
 		return err.Error()
 	}
@@ -73,7 +73,7 @@ func (a Adapter) RunTurn(
 
 	events = append(events, Event{
 		Time: time.Now().UTC(),
-		Kind: "duration",
+		Kind: kindDuration,
 		Turn: turn,
 		Text: time.Since(started).String(),
 	})
@@ -82,26 +82,26 @@ func (a Adapter) RunTurn(
 
 func (a Adapter) args(workspace, mcpLog, session string) ([]string, error) {
 	if a.SelfPath == "" {
-		return nil, fmt.Errorf("eval executable path is empty")
+		return nil, ErrNoSelfPath
 	}
 
 	switch a.Name {
-	case "claude":
+	case runnerClaude:
 		return a.claudeArgs(workspace, mcpLog, session)
-	case "codex":
+	case runnerCodex:
 		return a.codexArgs(workspace, mcpLog, session)
 	default:
-		return nil, fmt.Errorf("unknown runner %q", a.Name)
+		return nil, fmt.Errorf("%w: %q", ErrUnknownRunner, a.Name)
 	}
 }
 
 func (a Adapter) claudeArgs(workspace, mcpLog, session string) ([]string, error) {
 	mcpConfig := map[string]any{
-		"mcpServers": map[string]any{
-			"qrouton": map[string]any{
-				"type":    "stdio",
-				"command": a.SelfPath,
-				"args":    []string{"mock-mcp", "--log", mcpLog, "--root", workspace},
+		mcpServersKey: map[string]any{
+			mcpServerName: map[string]any{
+				mcpTypeKey:    mcpStdioType,
+				mcpCommandKey: a.SelfPath,
+				mcpArgsKey:    mockMCPArgs(mcpLog, workspace),
 			},
 		},
 	}
@@ -110,20 +110,12 @@ func (a Adapter) claudeArgs(workspace, mcpLog, session string) ([]string, error)
 		return nil, fmt.Errorf("encode Claude MCP config: %w", err)
 	}
 
-	args := []string{
-		"--print",
-		"--output-format", "stream-json",
-		"--verbose",
-		"--dangerously-skip-permissions",
-		"--setting-sources", "project",
-		"--strict-mcp-config",
-		"--mcp-config", string(encodedConfig),
-	}
+	args := append(append([]string(nil), claudeBaseArgs...), claudeMCPConfigFlag, string(encodedConfig))
 	if a.Model != "" {
-		args = append(args, "--model", a.Model)
+		args = append(args, modelFlag, a.Model)
 	}
 	if session != "" {
-		args = append(args, "--resume", session)
+		args = append(args, claudeResumeFlag, session)
 	}
 	// No positional prompt: --print reads it from stdin (see RunTurn). This also
 	// keeps the variadic --mcp-config from swallowing a trailing positional.
@@ -135,31 +127,31 @@ func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) 
 	if err != nil {
 		return nil, fmt.Errorf("encode Codex MCP command: %w", err)
 	}
-	mcpArgs, err := json.Marshal([]string{"mock-mcp", "--log", mcpLog, "--root", workspace})
+	mcpArgs, err := json.Marshal(mockMCPArgs(mcpLog, workspace))
 	if err != nil {
 		return nil, fmt.Errorf("encode Codex MCP args: %w", err)
 	}
 
-	args := []string{"exec"}
+	args := []string{codexExecCmd}
 	if session != "" {
-		args = append(args, "resume")
+		args = append(args, codexResumeCmd)
 	}
+	args = append(args, codexBaseArgs...)
 	args = append(args,
-		"--json",
-		"--ephemeral",
-		"--ignore-user-config",
-		"--enable", "multi_agent",
-		"--skip-git-repo-check",
-		"--dangerously-bypass-approvals-and-sandbox",
-		"-c", "mcp_servers.qrouton.command="+string(command),
-		"-c", "mcp_servers.qrouton.args="+string(mcpArgs),
+		codexConfigFlag, codexMCPCommandKey+string(command),
+		codexConfigFlag, codexMCPArgsKey+string(mcpArgs),
 	)
 	if a.Model != "" {
-		args = append(args, "--model", a.Model)
+		args = append(args, modelFlag, a.Model)
 	}
 	if session != "" {
 		args = append(args, session)
 	}
 	// "-" makes codex exec read the prompt from stdin (see RunTurn).
 	return append(args, "-"), nil
+}
+
+// mockMCPArgs invokes the harness binary as the mock qrouton MCP server.
+func mockMCPArgs(mcpLog, workspace string) []string {
+	return []string{mockMCPSubcommand, mockMCPLogFlag, mcpLog, mockMCPRootFlag, workspace}
 }

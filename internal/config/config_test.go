@@ -15,18 +15,21 @@ func TestSplitOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
 	}
 }
 
-func TestLoadConfigMigratesLegacyClaudeDefault(t *testing.T) {
+func TestLoadReadsLaunchOverridesVerbatim(t *testing.T) {
 	configHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("QROUTON_ROOT", t.TempDir())
 	dir := filepath.Join(configHome, "qrouton")
 	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"orgs":["acme"],"root":"unused","launch":[["claude"]]}`), 0o644)
+	os.WriteFile(filepath.Join(dir, "config.json"),
+		[]byte(`{"orgs":["acme"],"root":"unused","launch":[["claude","--verbose"]]}`), 0o644)
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Launch != nil {
-		t.Fatalf("legacy default was not migrated: %#v", cfg.Launch)
+	want := [][]string{{"claude", "--verbose"}}
+	if !reflect.DeepEqual(cfg.Launch, want) {
+		t.Fatalf("launch = %#v, want %#v", cfg.Launch, want)
 	}
 }
