@@ -4,17 +4,20 @@ qrouton is a Go terminal app that assembles multi-repo workspaces from shared ba
 
 ## Architecture
 
-Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, and `mcpserver` are leaves, and `repos` reads the manifest via `session`. Nothing imports `tui`. `mux` is the deepest leaf: `launch` and `mcpserver` drive the terminal multiplexer only through its `Launcher`/`PaneHost` ports, and the Zellij adapter behind them is the sole backend today.
+Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, `repos`, and `mcpserver` sit above the shared leaves. Nothing imports `tui`. `mux` carries the multiplexer ports: `launch` and `mcpserver` drive the terminal only through `Launcher`/`PaneHost`, and the Zellij adapter behind them is the sole backend today.
+
+The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's own files), `paneui` (in-place terminal frames for the watch panes), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
 
 - `main.go`: urfave/cli app; root action runs the onboarding flow, subcommands come from `cmd/*`.
 - `cmd/mcp/`, `cmd/agents/`, `cmd/repos/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
 - `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
 - `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
-- `prompts/`: canonical workflow, skill, and agent prompts plus loader/provider rendering.
-- `internal/launch/`: runner launch/resume arguments, MCP injection, the backend-neutral workspace layout, editor resolution, and session asset stamping.
+- `prompts/`: canonical workflow, skill, and agent prompts, provider rendering, and `Stamp` — the one implementation of the runner discovery tree, shared by launches and evals.
+- `internal/launch/`: runner launch/resume arguments, MCP injection, the backend-neutral workspace layout, and editor resolution. Asset stamping delegates to `prompts.Stamp`; only the mode-to-discovery-file decision lives here.
 - `internal/mux/`: multiplexer ports (`Launcher`, `PaneHost`), the `Handle` that carries backend identity into the MCP child, and the Zellij adapter (KDL rendering, session lifecycle, pane actions).
-- `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes.
+- `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes (both drawn via `paneui`).
+- `internal/sessionpaths/`, `internal/codex/`, `internal/paneui/`: the shared leaves above.
 - `internal/config/`: config file, XDG paths, first-run wizard.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 
@@ -24,12 +27,15 @@ Dependency direction: `config ← github ← session ← tui`; `launch`, `agents
 - Mirrors live under `<root>/.mirrors`; session worktrees live under `<session>/src`.
 - Write `qrouton.json` last. A directory without it must not appear resumable.
 - Never silently overwrite user-owned agent files; only replace qrouton-marked assets.
+- One owner per fact: a path convention, a helper, or a piece of copy lives in exactly one place. `sessionpaths` owns the session layout, `codex` owns Codex's, and each package keeps its literals in `strings.go` and its sentinel errors in `errors.go` rather than inline.
+- Eval and launch must stamp identical trees. Both go through `prompts.Stamp`; fixtures carry real `session.Manifest` documents, and the fixture-schema test fails if they drift.
 - Preserve cache-first startup, cancellable refreshes, and runner conversation resume.
 
 ## Working agreement
 
 - Keep changes small and match existing package-level style.
-- Use `apply_patch` for edits and `gofmt` changed Go files.
+- New user-facing text goes in the package's `strings.go`; new failure modes get a sentinel in its `errors.go`, wrapped with `%w` at the call site.
+- `gofmt` changed Go files.
 - Add focused tests for behavior changes.
 - Before handoff run:
 
