@@ -49,13 +49,7 @@ func (m appModel) View() string {
 		}
 		body = bad.Render("Something needs attention") + "\n\n" + m.err.Error() + "\n\n[b] back  [r] " + retry + "  [q] quit"
 	}
-	w := m.width - 6
-	if w < 50 {
-		w = 50
-	}
-	if w > 100 {
-		w = 100
-	}
+	w := m.bodyWidth()
 	header := accent.Render("qrouton")
 	if m.screen == landingScreen {
 		logo := compactLogo
@@ -233,19 +227,25 @@ func (m appModel) viewForm() string {
 	return strings.Join(boxes, "\n") + "\n\n" + footer
 }
 
-// formWidth is the width passed to each box. View() wraps the body to its
-// Width minus horizontal padding (w-4); a lipgloss box renders 2 wider than its
-// Width (the border sits outside it), so w-6 makes a box total exactly w-4 and
-// fill the content area without overflowing into a wrap.
+// bodyWidth is the width View() wraps the whole body to, clamped so a narrow
+// terminal stays readable and a wide one does not stretch into unreadable lines.
+func (m appModel) bodyWidth() int {
+	w := m.width - bodyWidthInset
+	if w < minBodyWidth {
+		return minBodyWidth
+	}
+	if w > maxBodyWidth {
+		return maxBodyWidth
+	}
+	return w
+}
+
+// formWidth is the width passed to each box. View() wraps the body to its Width
+// minus horizontal padding (w-4); a lipgloss box renders 2 wider than its Width
+// (the border sits outside it), so w-6 makes a box total exactly w-4 and fill
+// the content area without overflowing into a wrap.
 func (m appModel) formWidth() int {
-	w := m.width - 6
-	if w < 50 {
-		w = 50
-	}
-	if w > 100 {
-		w = 100
-	}
-	return w - 6
+	return m.bodyWidth() - boxWidthInset
 }
 
 // labeledBox draws one form field as a titled cube: the label heads the box

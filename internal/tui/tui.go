@@ -6,7 +6,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"sort"
 	"time"
@@ -313,7 +312,7 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.resume = &s
 		if m.requestedRunner == "" {
 			if len(m.runners) == 0 {
-				m.err, m.back, m.screen = fmt.Errorf("no supported coding agent is installed"), landingScreen, errorScreen
+				m.err, m.back, m.screen = launch.ErrNoRunnerInstalled, landingScreen, errorScreen
 				return m, nil
 			}
 			m.screen = runnerScreen
@@ -402,15 +401,10 @@ func (m appModel) updateError(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m appModel) selectedRunner() (launch.Runner, error) {
 	if m.requestedRunner != "" {
-		for _, r := range launch.Runners(m.cfg) {
-			if (r.ID == m.requestedRunner || r.Command[0] == m.requestedRunner) && r.Path != "" {
-				return r, nil
-			}
-		}
-		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", m.requestedRunner)
+		return launch.ByID(m.cfg, m.requestedRunner)
 	}
 	if len(m.runners) == 0 || m.runnerCursor >= len(m.runners) {
-		return launch.Runner{}, fmt.Errorf("no runner selected")
+		return launch.Runner{}, errNoRunnerSelected
 	}
 	return m.runners[m.runnerCursor], nil
 }

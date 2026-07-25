@@ -133,6 +133,20 @@ func (h Handle) PaneHost() (PaneHost, error) {
 	}
 }
 
+// WithEnv returns env with key set to value, replacing any existing entry. It
+// builds the environment slices Launcher.Attach and Launcher.Start carry into
+// the multiplexer.
+func WithEnv(env []string, key, value string) []string {
+	prefix := key + envKeyValueSep
+	out := make([]string, 0, len(env)+1)
+	for _, item := range env {
+		if !strings.HasPrefix(item, prefix) {
+			out = append(out, item)
+		}
+	}
+	return append(out, prefix+value)
+}
+
 // New returns the configured Launcher, verifying the backend is usable. An
 // empty kind selects the default (Zellij).
 func New(kind string) (Launcher, error) {

@@ -12,6 +12,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // Asset names Render produces for the two mode prompts. Callers choose which of
@@ -22,11 +24,6 @@ const (
 )
 
 const (
-	// canonicalDir holds every stamped asset; the discovery files are symlinks
-	// into it. ownAssetLink recognises our own links by this path segment.
-	sessionDirName   = ".qrouton"
-	canonicalDirName = "qrspi"
-
 	claudeDiscoveryName = "CLAUDE.md"
 	agentsDiscoveryName = "AGENTS.md"
 
@@ -69,7 +66,7 @@ type assetLink struct {
 // that does not carry the qrouton marker is an error, not something to
 // overwrite.
 func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string) error {
-	canonical := filepath.Join(dir, sessionDirName, canonicalDirName)
+	canonical := sessionpaths.CanonicalPrompts(dir)
 	loaded, err := loader.List(ctx)
 	if err != nil {
 		return err
@@ -171,7 +168,7 @@ func ownAssetLink(link string) bool {
 		destination = filepath.Join(filepath.Dir(link), destination)
 	}
 	separator := string(filepath.Separator)
-	return strings.Contains(filepath.Clean(destination), separator+sessionDirName+separator)
+	return strings.Contains(filepath.Clean(destination), separator+sessionpaths.DirName+separator)
 }
 
 // mark prefixes content with the generated-by marker in the comment syntax the

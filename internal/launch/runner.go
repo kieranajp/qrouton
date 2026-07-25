@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type Runner struct {
@@ -53,6 +54,33 @@ func Runners(cfg *config.Config) []Runner {
 	return out
 }
 
+// ByID returns the installed runner matching id, which may be a runner
+// identifier ("claude") or the command qrouton would run ("claude", or a path
+// to it). An uninstalled or unknown runner is an error: the caller asked for
+// something specific, so silently substituting another would be wrong.
+func ByID(cfg *config.Config, id string) (Runner, error) {
+	for _, runner := range Runners(cfg) {
+		if runner.Path == "" {
+			continue
+		}
+		if runner.ID == id || runner.Command[0] == id || filepath.Base(runner.Command[0]) == id {
+			return runner, nil
+		}
+	}
+	return Runner{}, fmt.Errorf("runner %q is unavailable", id)
+}
+
+// FirstInstalled returns the first supported runner present on the system, for
+// callers that did not ask for a particular one.
+func FirstInstalled(cfg *config.Config) (Runner, error) {
+	for _, runner := range Runners(cfg) {
+		if runner.Path != "" {
+			return runner, nil
+		}
+	}
+	return Runner{}, ErrNoRunnerInstalled
+}
+
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle mux.Handle, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume, sessionMode(dir))
 	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--mux-json", handle.Marshal()}
@@ -61,11 +89,11 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
 		b, _ := json.Marshal(mcp)
 		argv = append(argv, "--mcp-config", string(b))
-		hookCommand := shellQuote(qroutonBin) + " agent-event --session-root " + shellQuote(dir)
+		hookCommand := ShellQuote(qroutonBin) + " agent-event --session-root " + ShellQuote(dir)
 		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
 		// Chime only when the agent asks for attention (not on every turn), so the user
 		// can step away; notify.sh is stamped into .qrouton by writeSupport.
-		soundCommand := shellQuote(filepath.Join(dir, ".qrouton", "notify.sh"))
+		soundCommand := ShellQuote(sessionpaths.NotifyScript(dir))
 		soundHook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": soundCommand}}}}
 		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
 			"SubagentStart": hook,
@@ -94,28 +122,18 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 			content["permission"] = "allow"
 		}
 		b, _ := json.Marshal(content)
-		return argv, withEnv(os.Environ(), "OPENCODE_CONFIG_CONTENT", string(b)), nil
+		return argv, mux.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
 	default:
 		return nil, nil, fmt.Errorf("unsupported runner %q", r.ID)
 	}
 	return argv, os.Environ(), nil
 }
 
-// shellQuote single-quotes s for the POSIX shell that runs hook commands. Go's
-// %q double-quoting left $, backticks, and backslashes live for the shell.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
-func withEnv(env []string, key, value string) []string {
-	prefix := key + "="
-	out := make([]string, 0, len(env)+1)
-	for _, item := range env {
-		if !strings.HasPrefix(item, prefix) {
-			out = append(out, item)
-		}
-	}
-	return append(out, prefix+value)
+// ShellQuote single-quotes s so it survives as one word in the POSIX shell that
+// runs hook commands and pane commands. Go's %q double-quoting would leave $,
+// backticks, and backslashes live for the shell.
+func ShellQuote(s string) string {
+	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
 func runnerArgv(r Runner, resume bool, mode string) []string {

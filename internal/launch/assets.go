@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
@@ -16,12 +16,10 @@ const (
 	modeAssistant = "assistant"
 )
 
-const manifestName = "qrouton.json"
-
 // sessionMode reads the session's runner mode from its manifest, defaulting to
 // RPI when the manifest is absent or unreadable.
 func sessionMode(dir string) string {
-	content, err := os.ReadFile(filepath.Join(dir, manifestName))
+	content, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		return modeRPI
 	}

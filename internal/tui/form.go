@@ -14,6 +14,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
@@ -152,7 +153,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.startAssembly()
 		}
 		if len(m.runners) == 0 {
-			m.err, m.back, m.screen = fmt.Errorf("no supported coding agent is installed"), newScreen, errorScreen
+			m.err, m.back, m.screen = launch.ErrNoRunnerInstalled, newScreen, errorScreen
 			return m, nil
 		}
 		m.screen = runnerScreen
@@ -260,7 +261,7 @@ func (m appModel) validateForm() error {
 	}
 	slug := session.Slugify(m.form.name)
 	if slug == "" {
-		return fmt.Errorf("session name is required")
+		return errSessionNameEmpty
 	}
 	// An abandoned half-assembly (interrupted run) doesn't block the name;
 	// session.Create reclaims it.
@@ -278,5 +279,5 @@ func (m appModel) validateForm() error {
 			return nil
 		}
 	}
-	return fmt.Errorf("include at least one active repository")
+	return errNoActiveRepo
 }

@@ -16,6 +16,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // editorPaneName is the reserved registry key for the single editor pane; other
@@ -170,8 +171,8 @@ func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, er
 	}
 	// The toast rings the terminal bell, plays the generated cross-platform sound
 	// (best effort), shows the message, then closes itself.
-	script := filepath.Join(m.root, ".qrouton", "notify.sh")
-	command := fmt.Sprintf(`%s >/dev/null 2>&1 & printf '\a\n  🔔  %%s\n\n  (auto-closes; Alt-x to dismiss)\n' %s; sleep 8`, shellQuote(script), shellQuote(message))
+	script := sessionpaths.NotifyScript(m.root)
+	command := fmt.Sprintf(`%s >/dev/null 2>&1 & printf '\a\n  🔔  %%s\n\n  (auto-closes; Alt-x to dismiss)\n' %s; sleep 8`, launch.ShellQuote(script), launch.ShellQuote(message))
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.spawn(ctx, "notify", "🔔 notification", m.root, toastGeometry, true, []string{"sh", "-lc", command}); err != nil {
@@ -191,12 +192,6 @@ func (m *paneManager) list() []string {
 	return names
 }
 
-// shellQuote wraps s so it survives as a single word inside an `sh -lc` string,
-// keeping caller-supplied paths, refs, and messages out of the command grammar.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // diffCommand builds the shell that show_diff runs in a pane. A single repo relies
 // on git's own pager/colour (the pane is a tty); the all-repos form forces colour
 // through an explicit pager as it walks the src/* worktrees. A trailing footer keeps
@@ -207,11 +202,11 @@ func diffCommand(repoAbs, base string, staged bool) string {
 		flags += " --staged"
 	}
 	if base != "" {
-		flags += " " + shellQuote(base)
+		flags += " " + launch.ShellQuote(base)
 	}
 	footer := `printf '\n[end of diff — Alt-x to close]\n'`
 	if repoAbs == "" {
 		return fmt.Sprintf(`for d in src/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; printf '\n=== %%s ===\n' "$d"; git -C "$d" -c color.ui=always diff%s; done | less -FRX; %s`, flags, footer)
 	}
-	return fmt.Sprintf(`git -C %s diff%s; %s`, shellQuote(repoAbs), flags, footer)
+	return fmt.Sprintf(`git -C %s diff%s; %s`, launch.ShellQuote(repoAbs), flags, footer)
 }

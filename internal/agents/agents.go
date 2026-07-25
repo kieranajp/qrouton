@@ -11,6 +11,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/codex"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type agentStatus struct {
@@ -43,7 +46,7 @@ func Status(root, runner string) error {
 		if runner == "claude" {
 			statuses, err = scanClaudeAgentStatuses(root)
 		} else {
-			statuses, err = scanAgentStatuses(codexSessionsDir(), root)
+			statuses, err = scanAgentStatuses(codex.SessionsDir(), root)
 		}
 
 		lines := []string{"\033[1magents\033[0m"}
@@ -112,7 +115,7 @@ func RecordEvent(root string, input io.Reader) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(filepath.Join(root, ".qrouton", "claude-agents.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(sessionpaths.ClaudeAgentLog(root), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
@@ -123,7 +126,7 @@ func RecordEvent(root string, input io.Reader) error {
 
 func scanClaudeAgentStatuses(root string) ([]agentStatus, error) {
 	byID := make(map[string]agentStatus)
-	f, err := os.Open(filepath.Join(root, ".qrouton", "claude-agents.jsonl"))
+	f, err := os.Open(sessionpaths.ClaudeAgentLog(root))
 	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
@@ -190,6 +193,9 @@ func mergeClaudeBackgroundAgents(byID map[string]agentStatus, root string) {
 	}
 }
 
+// firstString returns the first key holding a non-empty string. The eval
+// harness keeps an identical copy, deliberately: it does not import qrouton's
+// packages.
 func firstString(values map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if value, ok := values[key].(string); ok && value != "" {
@@ -197,16 +203,6 @@ func firstString(values map[string]any, keys ...string) string {
 		}
 	}
 	return ""
-}
-
-func codexSessionsDir() string {
-	home := os.Getenv("CODEX_HOME")
-	if home == "" {
-		if userHome, err := os.UserHomeDir(); err == nil {
-			home = filepath.Join(userHome, ".codex")
-		}
-	}
-	return filepath.Join(home, "sessions")
 }
 
 func scanAgentStatuses(sessionsDir, sessionRoot string) ([]agentStatus, error) {
@@ -219,7 +215,7 @@ func scanAgentStatuses(sessionsDir, sessionRoot string) ([]agentStatus, error) {
 		if walkErr != nil {
 			return nil
 		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".jsonl") {
+		if entry.IsDir() || !codex.IsSessionLog(entry.Name()) {
 			return nil
 		}
 		status, ok := readAgentStatus(path, wantRoot)

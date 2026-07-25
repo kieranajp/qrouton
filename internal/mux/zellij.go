@@ -15,6 +15,8 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 //go:embed assets/zellij-config.kdl
@@ -44,11 +46,11 @@ func newZellijLauncher() (*Zellij, error) {
 	}
 	// macOS $TMPDIR is long enough that zellij's socket path ($TMPDIR/zellij-<uid>/…/<session>)
 	// exceeds the 104-byte unix-socket cap for real session names. Pin it somewhere short.
-	socketDir := os.Getenv("ZELLIJ_SOCKET_DIR")
+	socketDir := os.Getenv(socketDirEnvVar)
 	if socketDir == "" {
 		socketDir = "/tmp/zellij"
 	}
-	os.Setenv("ZELLIJ_SOCKET_DIR", socketDir) // Lookup/Kill below must hit the same socket
+	os.Setenv(socketDirEnvVar, socketDir) // Lookup/Kill below must hit the same socket
 	return NewZellij(bin, socketDir), nil
 }
 
@@ -80,17 +82,17 @@ func (z *Zellij) Handle(slug string) Handle {
 }
 
 func zellijConfigPath(dir string) string {
-	return filepath.Join(dir, ".qrouton", "zellij-config.kdl")
+	return filepath.Join(sessionpaths.Dir(dir), zellijConfigName)
 }
 
 func zellijLayoutPath(dir string) string {
-	return filepath.Join(dir, ".qrouton", "layout.kdl")
+	return filepath.Join(sessionpaths.Dir(dir), zellijLayoutName)
 }
 
 // Stage writes the session's zellij config and rendered layout on every
 // launch, so resumed sessions pick up template changes.
 func (z *Zellij) Stage(ws Workspace) error {
-	if err := os.MkdirAll(filepath.Join(ws.Dir, ".qrouton"), 0o755); err != nil {
+	if err := os.MkdirAll(sessionpaths.Dir(ws.Dir), 0o755); err != nil {
 		return err
 	}
 	config, err := zellijAssets.ReadFile("assets/zellij-config.kdl")
@@ -128,12 +130,12 @@ func (z *Zellij) Kill(slug string, force bool) error {
 }
 
 func (z *Zellij) Attach(ws Workspace, env []string) error {
-	env = withEnv(env, "ZELLIJ_SOCKET_DIR", z.socketDir)
+	env = WithEnv(env, socketDirEnvVar, z.socketDir)
 	return execvEnv(z.bin, []string{"zellij", "--config", zellijConfigPath(ws.Dir), "attach", ws.Slug}, ws.Dir, env)
 }
 
 func (z *Zellij) Start(ws Workspace, env []string) error {
-	env = withEnv(env, "ZELLIJ_SOCKET_DIR", z.socketDir)
+	env = WithEnv(env, socketDirEnvVar, z.socketDir)
 	// 0.44: -s + -n conflict; the session is named via session_name in the layout itself
 	return execvEnv(z.bin, []string{"zellij", "--config", zellijConfigPath(ws.Dir), "--new-session-with-layout", zellijLayoutPath(ws.Dir)}, ws.Dir, env)
 }
@@ -239,7 +241,7 @@ func zellijHostFromHandle(h Handle) (PaneHost, error) {
 		return nil, fmt.Errorf("zellij is unavailable")
 	}
 	if h.SocketDir != "" {
-		os.Setenv("ZELLIJ_SOCKET_DIR", h.SocketDir)
+		os.Setenv(socketDirEnvVar, h.SocketDir)
 	}
 	return NewZellijHost(bin, h.Session), nil
 }
@@ -293,15 +295,4 @@ func execvEnv(bin string, argv []string, dir string, env []string) error {
 		return err
 	}
 	return syscall.Exec(bin, argv, env)
-}
-
-func withEnv(env []string, key, value string) []string {
-	prefix := key + "="
-	out := make([]string, 0, len(env)+1)
-	for _, item := range env {
-		if !strings.HasPrefix(item, prefix) {
-			out = append(out, item)
-		}
-	}
-	return append(out, prefix+value)
 }

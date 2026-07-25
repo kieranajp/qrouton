@@ -11,6 +11,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/agents"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // Status redraws the session's per-repo branch and dirty state every 3s, forever.
@@ -27,7 +28,7 @@ func Status(root string) error {
 
 func statusLines(root string) []string {
 	lines := []string{"\033[1mrepos\033[0m"}
-	b, err := os.ReadFile(filepath.Join(root, "qrouton.json"))
+	b, err := os.ReadFile(sessionpaths.Manifest(root))
 	var m session.Manifest
 	if err != nil || json.Unmarshal(b, &m) != nil || len(m.Repos) == 0 {
 		return append(lines, "\033[2mNo session manifest\033[0m")

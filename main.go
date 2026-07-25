@@ -105,23 +105,12 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 }
 
 // pickRunner resolves the runner headlessly: the requested one if given and
-// installed, otherwise the first installed built-in (claude, codex, opencode).
+// installed, otherwise the first installed built-in.
 func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
-	runners := launch.Runners(cfg)
 	if id != "" {
-		for _, r := range runners {
-			if (r.ID == id || filepath.Base(r.Command[0]) == id) && r.Path != "" {
-				return r, nil
-			}
-		}
-		return launch.Runner{}, fmt.Errorf("runner %q is unavailable", id)
+		return launch.ByID(cfg, id)
 	}
-	for _, r := range runners {
-		if r.Path != "" {
-			return r, nil
-		}
-	}
-	return launch.Runner{}, fmt.Errorf("no supported coding agent is installed")
+	return launch.FirstInstalled(cfg)
 }
 
 // resolveRepos turns owner/repo specs into repositories, preferring the local
