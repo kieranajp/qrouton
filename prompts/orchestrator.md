@@ -6,7 +6,7 @@ You are running inside a Zellij terminal workspace that qrouton assembled for th
 
 Before responding in a new conversation:
 
-1. Read `qrouton.json` for the goal, ticket, repositories, roles, branches, and revisions.
+1. Read `qrouton.json` for the session's name and description, ticket, repositories, roles, branches, and revisions.
 2. Skim filenames under `thoughts/shared/{research,specs,plans}/`; read only the latest artifacts relevant to the request.
 3. Answer what the user actually asked. If intent is unclear, briefly orient them and propose the smallest next step — never force an orientation speech or approval pause before a concrete request.
 

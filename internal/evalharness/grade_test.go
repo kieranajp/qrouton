@@ -1,20 +1,43 @@
 package evalharness
 
 import (
+	"fmt"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
 
+// writeSessionManifest writes a qrouton.json in the schema a real launch
+// produces, so grading exercises the same keys production writes.
+func writeSessionManifest(t *testing.T, workspace string, roles map[string]string) {
+	t.Helper()
+	var repos []string
+	for _, name := range sortedKeys(roles) {
+		repos = append(repos, fmt.Sprintf(
+			`{"name":%q,"org":"qrouton-eval","role":%q,"defaultBranch":"main","worktreePath":"src/%s"}`,
+			name, roles[name], name))
+	}
+	manifest := fmt.Sprintf(
+		`{"schemaVersion":2,"name":"Grade test","slug":"grade-test","description":"Grade test",`+
+			`"mode":"rpi","createdAt":"2026-07-16T00:00:00Z","repos":[%s]}`,
+		strings.Join(repos, ","))
+	writeTestFile(t, filepath.Join(workspace, "qrouton.json"), manifest)
+}
+
+func sortedKeys(values map[string]string) []string {
+	keys := make([]string, 0, len(values))
+	for key := range values {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func TestGradeChecksSentinelLeakAndObservableEvents(t *testing.T) {
 	workspace := t.TempDir()
-	writeTestFile(t, filepath.Join(workspace, "qrouton.json"), `{
-  "repositories": [
-    {"name":"active","role":"active"},
-    {"name":"reference","role":"reference"}
-  ]
-}`)
+	writeSessionManifest(t, workspace, map[string]string{"active": "active", "reference": "reference"})
 	for _, repo := range []string{"active", "reference"} {
 		repoDir := filepath.Join(workspace, "src", repo)
 		writeTestFile(t, filepath.Join(repoDir, "README.md"), repo)
@@ -54,9 +77,7 @@ func TestGradeChecksSentinelLeakAndObservableEvents(t *testing.T) {
 
 func TestGradeDetectsReferenceModification(t *testing.T) {
 	workspace := t.TempDir()
-	writeTestFile(t, filepath.Join(workspace, "qrouton.json"), `{
-  "repositories": [{"name":"reference","role":"reference"}]
-}`)
+	writeSessionManifest(t, workspace, map[string]string{"reference": "reference"})
 	repoDir := filepath.Join(workspace, "src", "reference")
 	writeTestFile(t, filepath.Join(repoDir, "README.md"), "baseline")
 	initializeTestRepo(t, repoDir)

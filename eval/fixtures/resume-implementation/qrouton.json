@@ -1,1 +1,27 @@
-{"goal":"Resume calculator health implementation","repositories":[{"name":"account-service","role":"active"},{"name":"shared-lib","role":"reference"}]}
+{
+  "schemaVersion": 2,
+  "name": "Resume calculator health implementation",
+  "slug": "resume-calculator-health-implementation",
+  "description": "Resume calculator health implementation",
+  "mode": "rpi",
+  "createdAt": "2026-07-16T00:00:00Z",
+  "repos": [
+    {
+      "name": "account-service",
+      "org": "qrouton-eval",
+      "role": "active",
+      "branch": "feat/resume-calculator-health-implementation",
+      "defaultBranch": "main",
+      "worktreePath": "src/account-service",
+      "sshUrl": "git@github.com:qrouton-eval/account-service.git"
+    },
+    {
+      "name": "shared-lib",
+      "org": "qrouton-eval",
+      "role": "reference",
+      "defaultBranch": "main",
+      "worktreePath": "src/shared-lib",
+      "sshUrl": "git@github.com:qrouton-eval/shared-lib.git"
+    }
+  ]
+}

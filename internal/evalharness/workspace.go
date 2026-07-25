@@ -17,7 +17,7 @@ import (
 )
 
 func initializeRepositories(workspace string) (map[string]string, error) {
-	root := filepath.Join(workspace, "src")
+	root := filepath.Join(workspace, srcDirName)
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -93,7 +93,7 @@ func collectArtifacts(workspace string) ([]Artifact, error) {
 func collectDiffs(workspace string, baselines map[string]string) map[string]string {
 	diffs := make(map[string]string, len(baselines))
 	for repo := range baselines {
-		repoDir := filepath.Join(workspace, "src", repo)
+		repoDir := repoDir(workspace, repo)
 		ctx := context.Background()
 		diff, err := commandOutput(ctx, repoDir, "git", "diff", "--no-ext-diff", "HEAD")
 		if err != nil {

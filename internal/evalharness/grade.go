@@ -49,13 +49,13 @@ func gradeReferencesUnchanged(workspace string, baselines map[string]string) Ass
 	}
 
 	var changed []string
-	for _, repo := range manifest.Repositories {
-		if repo.Role != "reference" {
+	for _, repo := range manifest.Repos {
+		if repo.Role != roleReference {
 			continue
 		}
-		repoDir := filepath.Join(workspace, "src", repo.Name)
-		status, statusErr := commandOutput(context.Background(), repoDir, "git", "status", "--porcelain")
-		head, headErr := commandOutput(context.Background(), repoDir, "git", "rev-parse", "HEAD")
+		repoDir := repo.dir(workspace)
+		status, statusErr := commandOutput(context.Background(), repoDir, gitBin, "status", "--porcelain")
+		head, headErr := commandOutput(context.Background(), repoDir, gitBin, "rev-parse", "HEAD")
 		// Fail loud: a repo whose state cannot be read is not provably unchanged.
 		if statusErr != nil || headErr != nil || status != "" || head != baselines[repo.Name] {
 			changed = append(changed, repo.Name)
@@ -230,7 +230,7 @@ func isWorkerBriefEvent(event Event) bool {
 }
 
 func testsPass(workspace, repo string) Assertion {
-	repoDir := filepath.Join(workspace, "src", repo)
+	repoDir := repoDir(workspace, repo)
 	var command []string
 	switch {
 	case fileExists(filepath.Join(repoDir, "go.mod")):
@@ -273,21 +273,43 @@ func firstContained(text string, values []string) string {
 	return ""
 }
 
-type fixtureManifest struct {
-	Repositories []struct {
-		Name string `json:"name"`
-		Role string `json:"role"`
-	} `json:"repositories"`
+// sessionManifest is the slice of qrouton.json the harness reads. Its JSON keys
+// mirror session.Manifest, the schema a real launch writes; TestFixtureManifests-
+// MatchSessionSchema fails if a fixture and that schema ever drift apart.
+type sessionManifest struct {
+	Repos []manifestRepo `json:"repos"`
 }
 
-func readManifest(path string) (fixtureManifest, error) {
+type manifestRepo struct {
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	WorktreePath string `json:"worktreePath"`
+}
+
+// dir resolves the repository's checkout inside a workspace. Manifests record
+// the worktree path explicitly, because a session with two same-named repos
+// disambiguates them by owner.
+func (r manifestRepo) dir(workspace string) string {
+	if r.WorktreePath == "" {
+		return repoDir(workspace, r.Name)
+	}
+	return filepath.Join(workspace, filepath.FromSlash(r.WorktreePath))
+}
+
+// repoDir locates a repository named by a scenario check, which addresses
+// fixture repositories by name rather than by worktree path.
+func repoDir(workspace, name string) string {
+	return filepath.Join(workspace, srcDirName, name)
+}
+
+func readManifest(path string) (sessionManifest, error) {
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return fixtureManifest{}, err
+		return sessionManifest{}, err
 	}
-	var manifest fixtureManifest
+	var manifest sessionManifest
 	if err := json.Unmarshal(content, &manifest); err != nil {
-		return fixtureManifest{}, fmt.Errorf("parse manifest: %w", err)
+		return sessionManifest{}, fmt.Errorf("parse manifest: %w", err)
 	}
 	return manifest, nil
 }
