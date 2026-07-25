@@ -12,9 +12,10 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-const manifestName = "qrouton.json"
+const manifestName = sessionpaths.ManifestName
 
 const manifestSchemaVersion = 2
 
@@ -119,7 +120,7 @@ type ManifestRepo struct {
 var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 func Slugify(s string) string {
-	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), "-"), "-")
+	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), slugSeparator), slugSeparator)
 }
 
 // Scan: a session is any direct child of root containing a qrouton.json.
@@ -154,7 +155,7 @@ func Scan(root string) ([]Manifest, error) {
 func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, repos []RepoSelection, progress ProgressFunc) (string, error) {
 	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
-	if err := os.Mkdir(dir, 0o755); err != nil {
+	if err := os.Mkdir(dir, dirMode); err != nil {
 		// Reclaim only directories our own interrupted assembly left behind —
 		// never a user's directory that merely shares the slug.
 		if !os.IsExist(err) || !Abandoned(dir) {
@@ -163,7 +164,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 		if err := os.RemoveAll(dir); err != nil {
 			return "", err
 		}
-		if err := os.Mkdir(dir, 0o755); err != nil {
+		if err := os.Mkdir(dir, dirMode); err != nil {
 			return "", err
 		}
 	}
@@ -173,13 +174,13 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 			_ = os.RemoveAll(dir)
 		}
 	}()
-	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, fileMode); err != nil {
 		return "", err
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
 		TicketURL: ticket, Mode: mode.effective(), CreatedAt: time.Now()}
-	if err := os.MkdirAll(filepath.Join(dir, "src"), 0o755); err != nil {
+	if err := os.MkdirAll(sessionpaths.Src(dir), dirMode); err != nil {
 		return "", err
 	}
 	nameCounts := make(map[string]int, len(repos))
@@ -193,11 +194,11 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 			role = RepoRoleActive
 		}
 		if role != RepoRoleActive && role != RepoRoleReference {
-			return "", fmt.Errorf("invalid role %q for %s/%s", role, r.Org, r.Name)
+			return "", invalidRole(role, r.Org, r.Name)
 		}
-		worktreePath := filepath.Join("src", r.Name)
+		worktreePath := filepath.Join(sessionpaths.SrcDirName, r.Name)
 		if nameCounts[r.Name] > 1 {
-			worktreePath = filepath.Join("src", Slugify(r.Org+"-"+r.Name))
+			worktreePath = filepath.Join(sessionpaths.SrcDirName, Slugify(r.Org+slugSeparator+r.Name))
 		}
 		url := sshURL(r.Org, r)
 		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
@@ -211,7 +212,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
 		if role == RepoRoleReference {
-			revision, err := resolveRevision(mirror, "origin/"+r.DefaultBranch)
+			revision, err := resolveRevision(mirror, remoteRefPrefix+r.DefaultBranch)
 			if err != nil {
 				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 				return "", err
@@ -222,9 +223,9 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 				return "", err
 			}
 		} else {
-			mr.Branch = prefix + "/" + slug
+			mr.Branch = prefix + branchSeparator + slug
 			if err := addWorktree(mirror, filepath.Join(dir, worktreePath), mr.Branch,
-				"origin/"+r.DefaultBranch); err != nil {
+				remoteRefPrefix+r.DefaultBranch); err != nil {
 				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 				return "", err
 			}
@@ -233,10 +234,10 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 		m.Repos = append(m.Repos, mr)
 	}
 
-	// doc scaffold the onetech RPI commands expect
+	// The durable-artifact scaffold the RPI workflow writes into.
 	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressStarted})
-	for _, d := range []string{"research", "plans", "specs"} {
-		if err := os.MkdirAll(filepath.Join(dir, "thoughts", "shared", d), 0o755); err != nil {
+	for _, d := range scaffoldDirs {
+		if err := os.MkdirAll(filepath.Join(sessionpaths.Thoughts(dir), d), dirMode); err != nil {
 			emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
 			return "", err
 		}
@@ -246,7 +247,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressStarted})
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err == nil {
-		err = os.WriteFile(filepath.Join(dir, manifestName), b, 0o644)
+		err = os.WriteFile(sessionpaths.Manifest(dir), b, fileMode)
 	}
 	if err != nil {
 		emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressFailed, Err: err})
@@ -269,7 +270,7 @@ func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	for _, r := range m.Repos {
 		if r.SSHURL == "" {
-			return fmt.Errorf("%s: %s/%s records no clone URL", manifestName, r.Org, r.Name)
+			return fmt.Errorf("%s: %w: %s/%s", manifestName, ErrNoCloneURL, r.Org, r.Name)
 		}
 		if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL); err != nil {
 			return err
@@ -282,11 +283,11 @@ func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 		var err error
 		if r.Role == RepoRoleReference {
 			if r.Revision == "" {
-				return fmt.Errorf("reference %s/%s has no pinned revision", r.Org, r.Name)
+				return fmt.Errorf("%w: %s/%s", ErrNoPinnedRevision, r.Org, r.Name)
 			}
 			err = addDetachedWorktree(mirror, wt, r.Revision)
 		} else {
-			err = addWorktree(mirror, wt, r.Branch, "origin/"+r.DefaultBranch)
+			err = addWorktree(mirror, wt, r.Branch, remoteRefPrefix+r.DefaultBranch)
 		}
 		if err != nil {
 			return err
@@ -296,7 +297,7 @@ func EnsureWorktrees(cfg *config.Config, m Manifest) error {
 }
 
 func resolveRevision(mirror, ref string) (string, error) {
-	out, err := exec.Command("git", "-C", mirror, "rev-parse", "--verify", ref+"^{commit}").CombinedOutput()
+	out, err := exec.Command(gitBin, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix).CombinedOutput()
 	if err != nil {
 		return "", fmt.Errorf("resolve %s: %w\n%s", ref, err, out)
 	}
@@ -304,15 +305,15 @@ func resolveRevision(mirror, ref string) (string, error) {
 }
 
 func addDetachedWorktree(mirror, path, revision string) error {
-	if err := git("-C", mirror, "worktree", "prune"); err != nil {
+	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err
 	}
-	return git("-C", mirror, "worktree", "add", "--detach", path, revision)
+	return git(dirFlag, mirror, worktreeCmd, worktreeAdd, detachFlag, path, revision)
 }
 
 func sshURL(org string, r github.Repo) string {
 	if r.SSHURL != "" {
 		return r.SSHURL
 	}
-	return fmt.Sprintf("git@github.com:%s/%s.git", org, r.Name)
+	return fmt.Sprintf(sshURLFormat, org, r.Name)
 }

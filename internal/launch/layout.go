@@ -45,21 +45,24 @@ func writeSupport(dir string, argv []string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), 0o755); err != nil {
+	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode); err != nil {
 		return err
 	}
 	warning := ""
 	if filepath.Base(argv[0]) == codex.Binary && codex.MaxDepth(argv) < codex.RequiredMaxDepth {
 		warning = strings.TrimRight(codexDepthWarning, "\n")
 	}
-	tagline := "Coordinate here; delegate work to subagents."
+	tagline := rpiTagline
 	if sessionMode(dir) == modeAssistant {
-		tagline = "Open-ended session; ask to switch to RPI anytime."
+		tagline = assistantTagline
 	}
-	help := strings.ReplaceAll(helpScript, "@@WARNING@@", warning)
-	help = strings.ReplaceAll(help, "@@TAGLINE@@", tagline)
-	return os.WriteFile(sessionpaths.HelpScript(dir), []byte(help), 0o755)
+	help := strings.ReplaceAll(helpScript, warningPlaceholder, warning)
+	help = strings.ReplaceAll(help, taglinePlaceholder, tagline)
+	return os.WriteFile(sessionpaths.HelpScript(dir), []byte(help), scriptMode)
 }
+
+// helpGeometry floats the quick-start panel over the middle of the workspace.
+var helpGeometry = mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"}
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
 // agent beside a shell and the repo/agent status panes, with the quick-start
@@ -70,21 +73,21 @@ func workspace(dir, slug string, argv []string, qroutonBin string) mux.Workspace
 		Slug: slug,
 		Dir:  dir,
 		Tiled: mux.Node{
-			Split: "vertical",
+			Split: mux.SplitVertical,
 			Children: []mux.Node{
-				{Size: "65%", Pane: &mux.Pane{Name: "agent", Command: argv}},
-				{Split: "horizontal", Size: "35%", Children: []mux.Node{
-					{Pane: &mux.Pane{Name: "shell", Command: []string{"sh", "-lc", strings.TrimSpace(shellIntro)}}},
-					{Split: "vertical", Size: "6", Children: []mux.Node{
-						{Pane: &mux.Pane{Name: "repos", Command: []string{qroutonBin, "repos", "--session-root", dir}}},
-						{Pane: &mux.Pane{Name: "agents", Command: []string{qroutonBin, "agents", "--session-root", dir, "--runner", runner}}},
+				{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: argv}},
+				{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
+					{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
+					{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
+						{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
+						{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},
 					}},
 				}},
 			},
 		},
 		Floating: []mux.Floating{{
-			Pane:     mux.Pane{Name: "qrouton · quick start", Command: []string{shellBin, sessionpaths.HelpScript(dir)}, CloseOnExit: true, Focus: true},
-			Geometry: mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"},
+			Pane:     mux.Pane{Name: helpPaneName, Command: []string{shellBin, sessionpaths.HelpScript(dir)}, CloseOnExit: true, Focus: true},
+			Geometry: helpGeometry,
 		}},
 	}
 }

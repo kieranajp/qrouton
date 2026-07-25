@@ -13,7 +13,25 @@ var (
 	// qrouton has no runner wiring for.
 	ErrUnsupportedOverride = errors.New("launch override is not a supported runner")
 
+	// ErrRunnerUnavailable means the requested runner is not installed, or is
+	// not one qrouton supports.
+	ErrRunnerUnavailable = errors.New("runner is unavailable")
+
+	// ErrUnsupportedRunner means a Runner reached the launch path without the
+	// per-runner MCP and hook wiring runnerLaunch needs.
+	ErrUnsupportedRunner = errors.New("unsupported runner")
+
 	// ErrEditorPlaceholder means a configured editor command cannot be used
 	// because qrouton cannot tell where to substitute the file path.
-	ErrEditorPlaceholder = errors.New("editor must contain exactly one {path} placeholder")
+	ErrEditorPlaceholder = errors.New("editor must contain exactly one " + pathPlaceholder + " placeholder")
+
+	// ErrNoEditor means qrouton found no terminal editor to open files with.
+	ErrNoEditor = errors.New("no terminal editor found")
+
+	// Errors resolving a path an agent asked qrouton to open. All of them mean
+	// the path is not a usable thing inside this session.
+	ErrNotRegularFile        = errors.New("not a regular file")
+	ErrNotDirectory          = errors.New("not a directory")
+	ErrOutsideSession        = errors.New("path is outside the qrouton session")
+	ErrOutsideSessionMissing = errors.New("path does not exist in the qrouton session")
 )

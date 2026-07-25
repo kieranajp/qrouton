@@ -22,17 +22,17 @@ func ResolveEditor(configured []string) (EditorCommand, error) {
 	if len(configured) > 0 {
 		paths := 0
 		for _, arg := range configured {
-			paths += strings.Count(arg, "{path}")
+			paths += strings.Count(arg, pathPlaceholder)
 		}
 		if paths != 1 {
-			return EditorCommand{}, fmt.Errorf("editor must contain exactly one {path} placeholder")
+			return EditorCommand{}, ErrEditorPlaceholder
 		}
 		if _, err := exec.LookPath(configured[0]); err != nil {
 			return EditorCommand{}, fmt.Errorf("editor %q is not installed", configured[0])
 		}
 		return EditorCommand{Argv: append([]string(nil), configured...), Template: true}, nil
 	}
-	for _, key := range []string{"VISUAL", "EDITOR"} {
+	for _, key := range editorEnvVars {
 		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
 			argv, err := shlex.Split(value)
 			if err != nil || len(argv) == 0 {
@@ -44,24 +44,25 @@ func ResolveEditor(configured []string) (EditorCommand, error) {
 			return EditorCommand{Argv: argv}, nil
 		}
 	}
-	for _, name := range []string{"nvim", "vim", "vi"} {
+	for _, name := range fallbackEditors {
 		if path, err := exec.LookPath(name); err == nil {
-			return EditorCommand{Argv: []string{path, "+{line}", "{path}"}, Template: true}, nil
+			return EditorCommand{Argv: []string{path, linePlaceholderArg, pathPlaceholder}, Template: true}, nil
 		}
 	}
-	return EditorCommand{}, fmt.Errorf("no terminal editor found; set editor in %s, or set $VISUAL/$EDITOR", config.Path())
+	return EditorCommand{}, fmt.Errorf("%w; set editor in %s, or set $%s/$%s",
+		ErrNoEditor, config.Path(), editorEnvVars[0], editorEnvVars[1])
 }
 
 func (e EditorCommand) Args(path string, line int) []string {
-	if line < 1 {
-		line = 1
+	if line < firstLine {
+		line = firstLine
 	}
 	if !e.Template {
 		return append(append([]string(nil), e.Argv...), path)
 	}
 	out := make([]string, len(e.Argv))
 	for i, arg := range e.Argv {
-		out[i] = strings.ReplaceAll(strings.ReplaceAll(arg, "{path}", path), "{line}", strconv.Itoa(line))
+		out[i] = strings.ReplaceAll(strings.ReplaceAll(arg, pathPlaceholder, path), linePlaceholder, strconv.Itoa(line))
 	}
 	return out
 }
@@ -75,7 +76,7 @@ func ResolveSessionFile(root, name string) (string, error) {
 	}
 	info, err := os.Stat(real)
 	if err != nil || !info.Mode().IsRegular() {
-		return "", fmt.Errorf("file %q is not a regular file", name)
+		return "", fmt.Errorf("%w: %q", ErrNotRegularFile, name)
 	}
 	return real, nil
 }
@@ -90,7 +91,7 @@ func ResolveSessionDir(root, name string) (string, error) {
 	}
 	info, err := os.Stat(real)
 	if err != nil || !info.IsDir() {
-		return "", fmt.Errorf("directory %q is not a directory", name)
+		return "", fmt.Errorf("%w: %q", ErrNotDirectory, name)
 	}
 	return real, nil
 }
@@ -117,11 +118,11 @@ func resolveWithinSession(root, name string) (string, error) {
 	}
 	real, err := filepath.EvalSymlinks(p)
 	if err != nil {
-		return "", fmt.Errorf("%q does not exist in the qrouton session", name)
+		return "", fmt.Errorf("%w: %q", ErrOutsideSessionMissing, name)
 	}
 	rel, err := filepath.Rel(root, real)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%q is outside the qrouton session", name)
+		return "", fmt.Errorf("%w: %q", ErrOutsideSession, name)
 	}
 	return real, nil
 }

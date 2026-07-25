@@ -22,9 +22,9 @@ type Runner struct {
 }
 
 var builtinRunners = []Runner{
-	{ID: "claude", Label: "Claude Code", Command: []string{"claude", "--dangerously-skip-permissions"}},
-	{ID: "codex", Label: "Codex CLI", Command: []string{"codex", "--dangerously-bypass-approvals-and-sandbox"}},
-	{ID: "opencode", Label: "OpenCode", Command: []string{"opencode", "--auto"}},
+	{ID: runnerIDClaude, Label: runnerLabelClaude, Command: []string{runnerIDClaude, claudeSkipPermissionsFlag}},
+	{ID: runnerIDCodex, Label: runnerLabelCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}},
+	{ID: runnerIDOpenCode, Label: runnerLabelOpenCode, Command: []string{runnerIDOpenCode, openCodeAutoFlag}},
 }
 
 var findExecutable = exec.LookPath
@@ -84,7 +84,7 @@ func ByID(cfg *config.Config, id string) (Runner, error) {
 			return runner, nil
 		}
 	}
-	return Runner{}, fmt.Errorf("runner %q is unavailable", id)
+	return Runner{}, fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
 }
 
 // FirstInstalled returns the first supported runner present on the system, for
@@ -104,48 +104,50 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 
 func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle mux.Handle, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume, sessionMode(dir))
-	mcpArgs := []string{"mcp", "--session-root", dir, "--editor-json", editor.Marshal(), "--mux-json", handle.Marshal()}
+	mcpArgs := []string{mcpSubcommand, sessionRootFlag, dir, editorJSONFlag, editor.Marshal(), muxJSONFlag, handle.Marshal()}
 	switch r.ID {
-	case "claude":
-		mcp := map[string]any{"mcpServers": map[string]any{"qrouton": map[string]any{"type": "stdio", "command": qroutonBin, "args": mcpArgs}}}
+	case runnerIDClaude:
+		mcp := map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
+			claudeTypeKey: claudeStdioType, claudeCommandKey: qroutonBin, claudeArgsKey: mcpArgs}}}
 		b, _ := json.Marshal(mcp)
-		argv = append(argv, "--mcp-config", string(b))
-		hookCommand := ShellQuote(qroutonBin) + " agent-event --session-root " + ShellQuote(dir)
-		hook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": hookCommand}}}}
+		argv = append(argv, claudeMCPConfigFlag, string(b))
+		hookCommand := ShellQuote(qroutonBin) + " " + agentEventSubcommand + " " + sessionRootFlag + " " + ShellQuote(dir)
+		hook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: hookCommand}}}}
 		// Chime only when the agent asks for attention (not on every turn), so the user
 		// can step away; notify.sh is stamped into .qrouton by writeSupport.
 		soundCommand := ShellQuote(sessionpaths.NotifyScript(dir))
-		soundHook := []map[string]any{{"hooks": []map[string]string{{"type": "command", "command": soundCommand}}}}
-		settings, _ := json.Marshal(map[string]any{"hooks": map[string]any{
-			"SubagentStart": hook,
-			"SubagentStop":  hook,
-			"Notification":  soundHook,
+		soundHook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: soundCommand}}}}
+		settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
+			claudeSubagentStartHook: hook,
+			claudeSubagentStopHook:  hook,
+			claudeNotificationHook:  soundHook,
 		}})
-		argv = append(argv, "--settings", string(settings))
-	case "codex":
+		argv = append(argv, claudeSettingsFlag, string(settings))
+	case runnerIDCodex:
 		command, _ := json.Marshal(qroutonBin)
 		args, _ := json.Marshal(mcpArgs)
-		argv = append(argv, "-c", "mcp_servers.qrouton.command="+string(command), "-c", "mcp_servers.qrouton.args="+string(args))
-	case "opencode":
+		argv = append(argv, codexConfigFlag, codexMCPCommandKey+string(command), codexConfigFlag, codexMCPArgsKey+string(args))
+	case runnerIDOpenCode:
 		content := map[string]any{}
-		if existing := os.Getenv("OPENCODE_CONFIG_CONTENT"); existing != "" {
+		if existing := os.Getenv(openCodeConfigEnvVar); existing != "" {
 			if err := json.Unmarshal([]byte(existing), &content); err != nil {
-				return nil, nil, fmt.Errorf("OPENCODE_CONFIG_CONTENT: %w", err)
+				return nil, nil, fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
 			}
 		}
-		servers, _ := content["mcp"].(map[string]any)
+		servers, _ := content[openCodeMCPKey].(map[string]any)
 		if servers == nil {
 			servers = map[string]any{}
 		}
-		servers["qrouton"] = map[string]any{"type": "local", "command": append([]string{qroutonBin}, mcpArgs...), "enabled": true}
-		content["mcp"] = servers
+		servers[serverName] = map[string]any{
+			claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{qroutonBin}, mcpArgs...), openCodeEnabledKey: true}
+		content[openCodeMCPKey] = servers
 		if !r.Override {
-			content["permission"] = "allow"
+			content[openCodePermissionKey] = openCodeAllowValue
 		}
 		b, _ := json.Marshal(content)
 		return argv, mux.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
 	default:
-		return nil, nil, fmt.Errorf("unsupported runner %q", r.ID)
+		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
 	return argv, os.Environ(), nil
 }
@@ -161,27 +163,26 @@ func runnerArgv(r Runner, resume bool, mode string) []string {
 	argv := append([]string(nil), r.Command...)
 	if resume {
 		switch r.ID {
-		case "claude", "opencode":
-			return append(argv, "--continue")
-		case "codex":
-			return append(argv, "resume", "--last")
+		case runnerIDClaude, runnerIDOpenCode:
+			return append(argv, claudeContinueFlag)
+		case runnerIDCodex:
+			return append(argv, codexResumeCmd, codexResumeLast)
 		default:
 			return argv
 		}
 	}
 	switch r.ID {
-	case "claude", "codex":
+	case runnerIDClaude, runnerIDCodex:
 		argv = append(argv, openingMessage(mode))
 	}
 	return argv
 }
 
 // openingMessage is the fresh-session greeting injected as the runner's first
-// prompt. RPI presents the orchestrated workflow; Assistant stays open-ended
-// while pointing at the workflow the user can escalate into.
+// prompt.
 func openingMessage(mode string) string {
 	if mode == modeAssistant {
-		return "You have just been launched in a qrouton session. Read the session instructions and manifest, skim relevant thoughts/shared artifacts, then help with whatever the user asks — work directly and keep your own context lean. A structured Research → Plan → Implement workflow is available if the user wants it."
+		return openingMessageAssistant
 	}
-	return "You have just been launched in a qrouton session. Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, then respond naturally. Present the work as Research, Plan, or Implement; keep your own context lean by delegating execution wherever practical."
+	return openingMessageRPI
 }
