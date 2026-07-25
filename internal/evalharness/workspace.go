@@ -30,11 +30,11 @@ func initializeRepositories(workspace string) (map[string]string, error) {
 		}
 		repo := filepath.Join(root, entry.Name())
 		commands := [][]string{
-			{"git", "init", "-q"},
-			{"git", "config", "user.email", "eval@qrouton.local"},
-			{"git", "config", "user.name", "qrouton eval"},
-			{"git", "add", "."},
-			{"git", "commit", "-qm", "fixture baseline"},
+			{gitBin, gitInitCmd, gitQuietFlag},
+			{gitBin, gitConfigCmd, gitUserEmailKey, fixtureUserEmail},
+			{gitBin, gitConfigCmd, gitUserNameKey, fixtureUserName},
+			{gitBin, gitAddCmd, gitAllPathspec},
+			{gitBin, gitCommitCmd, gitQuietMsgFlag, fixtureCommitMessage},
 		}
 		for _, command := range commands {
 			cmd := exec.Command(command[0], command[1:]...)
@@ -43,7 +43,7 @@ func initializeRepositories(workspace string) (map[string]string, error) {
 				return nil, fmt.Errorf("%s in %s: %w: %s", strings.Join(command, " "), repo, err, output)
 			}
 		}
-		head, err := commandOutput(context.Background(), repo, "git", "rev-parse", "HEAD")
+		head, err := commandOutput(context.Background(), repo, gitBin, gitRevParseCmd, gitHeadRef)
 		if err != nil {
 			return nil, fmt.Errorf("resolve baseline in %s: %w: %s", repo, err, head)
 		}
@@ -53,7 +53,7 @@ func initializeRepositories(workspace string) (map[string]string, error) {
 }
 
 func collectArtifacts(workspace string) ([]Artifact, error) {
-	thoughts := filepath.Join(workspace, "thoughts", "shared")
+	thoughts := filepath.Join(workspace, thoughtsDirName, sharedDirName)
 	var artifacts []Artifact
 	err := filepath.WalkDir(thoughts, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -95,16 +95,16 @@ func collectDiffs(workspace string, baselines map[string]string) map[string]stri
 	for repo := range baselines {
 		repoDir := repoDir(workspace, repo)
 		ctx := context.Background()
-		diff, err := commandOutput(ctx, repoDir, "git", "diff", "--no-ext-diff", "HEAD")
+		diff, err := commandOutput(ctx, repoDir, gitBin, gitDiffCmd, gitNoExtDiffFlag, gitHeadRef)
 		if err != nil {
 			// Fail loud: an error string trips repo_unchanged instead of
 			// letting a broken diff pass as "no changes".
-			diff = fmt.Sprintf("(git diff failed: %v)\n%s", err, diff)
+			diff = fmt.Sprintf(diffFailedFormat, err, diff)
 		}
 		diffs[repo] = diff
-		untracked, err := commandOutput(ctx, repoDir, "git", "ls-files", "--others", "--exclude-standard")
+		untracked, err := commandOutput(ctx, repoDir, gitBin, gitLsFilesCmd, gitOthersFlag, gitExcludeStdFlag)
 		if err == nil && untracked != "" {
-			diffs[repo] += "\nUntracked files:\n" + untracked + "\n"
+			diffs[repo] += fmt.Sprintf(untrackedFormat, untracked)
 		}
 	}
 	return diffs

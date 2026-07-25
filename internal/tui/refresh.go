@@ -69,7 +69,7 @@ func (m *appModel) retryFailed() tea.Cmd {
 	for _, owner := range m.cfg.Orgs {
 		if m.ownerErrors[owner] != nil {
 			owners = append(owners, owner)
-			m.ownerStatus[owner] = "fetching…"
+			m.ownerStatus[owner] = statusFetching
 		}
 	}
 	cached := append([]github.Repo(nil), m.repos...)

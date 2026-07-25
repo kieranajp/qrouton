@@ -36,16 +36,16 @@ func Grade(
 func gradeNoInternalLeak(result CaseResult) Assertion {
 	matched := internalLeakPattern.FindString(result.FinalResponse)
 	return Assertion{
-		Name:     "no internal workflow terminology in final response",
+		Name:     assertNoInternalLeak,
 		Passed:   matched == "",
 		Evidence: matched,
 	}
 }
 
 func gradeReferencesUnchanged(workspace string, baselines map[string]string) Assertion {
-	manifest, err := readManifest(filepath.Join(workspace, "qrouton.json"))
+	manifest, err := readManifest(filepath.Join(workspace, manifestName))
 	if err != nil {
-		return Assertion{Name: "reference repositories unchanged", Evidence: err.Error()}
+		return Assertion{Name: assertReferencesClean, Evidence: err.Error()}
 	}
 
 	var changed []string
@@ -54,64 +54,64 @@ func gradeReferencesUnchanged(workspace string, baselines map[string]string) Ass
 			continue
 		}
 		repoDir := repo.dir(workspace)
-		status, statusErr := commandOutput(context.Background(), repoDir, gitBin, "status", "--porcelain")
-		head, headErr := commandOutput(context.Background(), repoDir, gitBin, "rev-parse", "HEAD")
+		status, statusErr := commandOutput(context.Background(), repoDir, gitBin, gitStatusCmd, gitPorcelainFlag)
+		head, headErr := commandOutput(context.Background(), repoDir, gitBin, gitRevParseCmd, gitHeadRef)
 		// Fail loud: a repo whose state cannot be read is not provably unchanged.
 		if statusErr != nil || headErr != nil || status != "" || head != baselines[repo.Name] {
 			changed = append(changed, repo.Name)
 		}
 	}
 	return Assertion{
-		Name:     "reference repositories unchanged",
+		Name:     assertReferencesClean,
 		Passed:   len(changed) == 0,
-		Evidence: strings.Join(changed, ", "),
+		Evidence: strings.Join(changed, evidenceJoiner),
 	}
 }
 
 func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion {
 	switch check.Kind {
-	case "artifact_exists":
+	case checkArtifactExists:
 		return fileAssertion(workspace, check.Path, true)
-	case "artifact_absent":
+	case checkArtifactAbsent:
 		return fileAssertion(workspace, check.Path, false)
-	case "response_contains":
+	case checkResponseContains:
 		passed := strings.Contains(strings.ToLower(result.FinalResponse), strings.ToLower(check.Pattern))
-		return Assertion{Name: "response contains " + check.Pattern, Passed: passed}
-	case "response_excludes":
+		return Assertion{Name: assertResponseContains + check.Pattern, Passed: passed}
+	case checkResponseExcludes:
 		matched := firstContained(result.FinalResponse, append(check.Any, check.Pattern))
-		return Assertion{Name: "response excludes internal terms", Passed: matched == "", Evidence: matched}
-	case "artifact_excludes":
+		return Assertion{Name: assertResponseExcludes, Passed: matched == "", Evidence: matched}
+	case checkArtifactExcludes:
 		return artifactsExclude(result.Artifacts, check.Pattern)
-	case "artifact_contains":
+	case checkArtifactContains:
 		return artifactContains(workspace, check.Path, check.Pattern)
-	case "research_pair":
+	case checkResearchPair:
 		return researchPair(workspace, check.Path)
-	case "sentinel_safe":
+	case checkSentinelSafe:
 		return sentinelSafe(result, check.Pattern)
-	case "open_file":
-		return eventAssertion(result.Events, "open_file", "completed document presented with open_file")
-	case "delegation":
+	case checkOpenFile:
+		return eventAssertion(result.Events, checkOpenFile, assertOpenFile)
+	case checkDelegation:
 		return delegationAssertion(result.Events, check.Pattern)
-	case "repo_changed":
+	case checkRepoChanged:
 		diff := result.Diffs[check.Repo]
-		return Assertion{Name: "repository changed: " + check.Repo, Passed: strings.TrimSpace(diff) != ""}
-	case "repo_unchanged":
+		return Assertion{Name: assertRepoChanged + check.Repo, Passed: strings.TrimSpace(diff) != ""}
+	case checkRepoUnchanged:
 		diff := result.Diffs[check.Repo]
-		return Assertion{Name: "repository unchanged: " + check.Repo, Passed: strings.TrimSpace(diff) == "", Evidence: diff}
-	case "tests_pass":
+		return Assertion{Name: assertRepoUnchanged + check.Repo, Passed: strings.TrimSpace(diff) == "", Evidence: diff}
+	case checkTestsPass:
 		return testsPass(workspace, check.Repo)
 	default:
-		return Assertion{Name: "unknown check: " + check.Kind, Evidence: "unsupported check kind"}
+		return Assertion{Name: assertUnknownCheck + check.Kind, Evidence: evidenceUnsupportedCheck}
 	}
 }
 
 func artifactContains(workspace, path, pattern string) Assertion {
 	content, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(path)))
 	if err != nil {
-		return Assertion{Name: "artifact contains progress: " + path, Evidence: err.Error()}
+		return Assertion{Name: assertArtifactContains + path, Evidence: err.Error()}
 	}
 	return Assertion{
-		Name:   "artifact contains progress: " + path,
+		Name:   assertArtifactContains + path,
 		Passed: strings.Contains(string(content), pattern),
 	}
 }
@@ -129,9 +129,9 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 		}
 	}
 	return Assertion{
-		Name:     "ticket sentinel absent from research briefs and artifacts",
+		Name:     assertSentinelSafe,
 		Passed:   artifactAssertion.Passed && len(leakingEvents) == 0,
-		Evidence: strings.Join(leakingEvents, ", "),
+		Evidence: strings.Join(leakingEvents, evidenceJoiner),
 	}
 }
 
@@ -139,26 +139,26 @@ func researchPair(workspace, questionsPattern string) Assertion {
 	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(questionsPattern)))
 	var pairs []string
 	for _, questions := range matches {
-		findings := strings.Replace(strings.TrimSuffix(questions, ".md"), "-questions", "", 1) + ".md"
+		findings := strings.Replace(strings.TrimSuffix(questions, markdownExt), researchQuestionsSuffix, "", 1) + markdownExt
 		if fileExists(findings) {
 			pairs = append(pairs, questions+" + "+findings)
 		}
 	}
-	evidence := strings.Join(pairs, ", ")
+	evidence := strings.Join(pairs, evidenceJoiner)
 	if err != nil {
 		evidence = err.Error()
 	}
-	return Assertion{Name: "paired research questions and findings", Passed: err == nil && len(pairs) > 0, Evidence: evidence}
+	return Assertion{Name: assertResearchPair, Passed: err == nil && len(pairs) > 0, Evidence: evidence}
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {
 	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
 	passed := err == nil && (len(matches) > 0) == expected
-	name := "artifact exists: " + pattern
+	name := assertArtifactExists + pattern
 	if !expected {
-		name = "artifact absent: " + pattern
+		name = assertArtifactAbsent + pattern
 	}
-	evidence := strings.Join(matches, ", ")
+	evidence := strings.Join(matches, evidenceJoiner)
 	if err != nil {
 		evidence = err.Error()
 	}
@@ -168,7 +168,7 @@ func fileAssertion(workspace, pattern string, expected bool) Assertion {
 func artifactsExclude(artifacts []Artifact, pattern string) Assertion {
 	var matches []string
 	for _, artifact := range artifacts {
-		if !strings.Contains(artifact.Path, "/research/") {
+		if !strings.Contains(artifact.Path, researchPathSegment) {
 			continue
 		}
 		if strings.Contains(artifact.Text, pattern) {
@@ -176,9 +176,9 @@ func artifactsExclude(artifacts []Artifact, pattern string) Assertion {
 		}
 	}
 	return Assertion{
-		Name:     "artifacts exclude sentinel",
+		Name:     assertArtifactsExclude,
 		Passed:   len(matches) == 0,
-		Evidence: strings.Join(matches, ", "),
+		Evidence: strings.Join(matches, evidenceJoiner),
 	}
 }
 
@@ -202,14 +202,14 @@ func delegationAssertion(events []Event, pattern string) Assertion {
 			collaboration = true
 		}
 		if strings.Contains(normalizeAgentName(event.Name+" "+event.Text+" "+string(event.Arguments)), normalizedPattern) &&
-			!strings.Contains(strings.ToLower(string(event.Arguments)), `"subtype":"init"`) {
+			!strings.Contains(strings.ToLower(string(event.Arguments)), initSubtype) {
 			target = true
 		}
 	}
 	return Assertion{
-		Name:     "delegated to " + pattern,
+		Name:     assertDelegatedTo + pattern,
 		Passed:   collaboration && target,
-		Evidence: fmt.Sprintf("collaboration=%t target=%t", collaboration, target),
+		Evidence: fmt.Sprintf(evidenceCollaboration, collaboration, target),
 	}
 }
 
@@ -218,27 +218,27 @@ func normalizeAgentName(value string) string {
 }
 
 func isCollaborationEvent(event Event) bool {
-	return isWorkerBriefEvent(event) || strings.Contains(strings.ToLower(string(event.Arguments)), `"type":"collab_tool_call"`)
+	return isWorkerBriefEvent(event) || strings.Contains(strings.ToLower(string(event.Arguments)), collabToolCall)
 }
 
 func isWorkerBriefEvent(event Event) bool {
 	arguments := strings.ToLower(string(event.Arguments))
-	return event.Kind == "delegation" ||
-		strings.Contains(arguments, `"subagent_type"`) ||
-		strings.Contains(arguments, `"task_name"`) ||
-		strings.Contains(arguments, "spawn_agent")
+	return event.Kind == delegationKind ||
+		strings.Contains(arguments, subagentTypeKey) ||
+		strings.Contains(arguments, taskNameKey) ||
+		strings.Contains(arguments, spawnAgentMarker)
 }
 
 func testsPass(workspace, repo string) Assertion {
 	repoDir := repoDir(workspace, repo)
 	var command []string
 	switch {
-	case fileExists(filepath.Join(repoDir, "go.mod")):
-		command = []string{"go", "test", "./..."}
-	case fileExists(filepath.Join(repoDir, "package.json")):
-		command = []string{"npm", "test", "--", "--runInBand"}
+	case fileExists(filepath.Join(repoDir, goModFile)):
+		command = goTestCommand
+	case fileExists(filepath.Join(repoDir, packageJSONFile)):
+		command = npmTestCommand
 	default:
-		return Assertion{Name: "tests pass: " + repo, Evidence: "no supported test manifest"}
+		return Assertion{Name: assertTestsPass + repo, Evidence: evidenceNoTestManifest}
 	}
 
 	// Bound the run: a hung test suite must fail the assertion, not the harness.
@@ -249,10 +249,10 @@ func testsPass(workspace, repo string) Assertion {
 	output, err := cmd.CombinedOutput()
 	evidence := strings.TrimSpace(string(output))
 	if ctx.Err() != nil {
-		evidence = "test run exceeded " + testsPassTimeout.String() + ": " + evidence
+		evidence = fmt.Sprintf(evidenceTimeoutFormat, testsPassTimeout, evidence)
 	}
 	return Assertion{
-		Name:     "tests pass: " + repo,
+		Name:     assertTestsPass + repo,
 		Passed:   err == nil,
 		Evidence: evidence,
 	}

@@ -50,6 +50,9 @@ const (
 
 	frontmatterFence = "---\n"
 	frontmatterClose = "\n---\n"
+
+	dirMode  = 0o755
+	fileMode = 0o644
 )
 
 type assetLink struct {
@@ -81,10 +84,10 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 		for _, asset := range rendered {
 			destination, assetLinks := assetDestination(dir, canonical, asset.Path, primary)
 			links = append(links, assetLinks...)
-			if err := os.MkdirAll(filepath.Dir(destination), 0o755); err != nil {
+			if err := os.MkdirAll(filepath.Dir(destination), dirMode); err != nil {
 				return err
 			}
-			if err := os.WriteFile(destination, mark(destination, asset.Content), 0o644); err != nil {
+			if err := os.WriteFile(destination, mark(destination, asset.Content), fileMode); err != nil {
 				return err
 			}
 		}
@@ -127,7 +130,7 @@ func assetDestination(dir, canonical, assetPath, primary string) (string, []asse
 }
 
 func ensureAssetLink(link assetLink) error {
-	if err := os.MkdirAll(filepath.Dir(link.link), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(link.link), dirMode); err != nil {
 		return err
 	}
 	if info, err := os.Lstat(link.link); err == nil {
@@ -138,7 +141,7 @@ func ensureAssetLink(link assetLink) error {
 		if !ours {
 			content, readErr := os.ReadFile(link.link)
 			if readErr != nil || !strings.Contains(string(content), markerNeedle) {
-				return fmt.Errorf("refusing to replace user-owned asset %s", link.link)
+				return fmt.Errorf("%w: %s", ErrUserOwnedAsset, link.link)
 			}
 		}
 		if err := os.Remove(link.link); err != nil {

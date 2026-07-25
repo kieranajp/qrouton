@@ -285,7 +285,7 @@ func (m appModel) validateForm() error {
 	// session.Create reclaims it.
 	if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
 		if _, err := os.Stat(dir); err == nil {
-			return fmt.Errorf("session %q already exists", slug)
+			return fmt.Errorf("%w: %q", errSessionExists, slug)
 		}
 	}
 	available := make(map[string]bool, len(m.repos))

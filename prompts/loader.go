@@ -101,7 +101,7 @@ func pathForID(id ID) (string, error) {
 	case strings.HasPrefix(value, agentIDPrefix) && fs.ValidPath(value):
 		return value + promptFileExt, nil
 	default:
-		return "", fmt.Errorf("invalid prompt id %q", id)
+		return "", fmt.Errorf("%w: %q", ErrInvalidPromptID, id)
 	}
 }
 

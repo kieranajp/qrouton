@@ -108,3 +108,30 @@ const (
 	timeYesterday  = "yesterday"
 	timeDateLayout = "2006-01-02"
 )
+
+// Format strings the views lay their columns out with.
+const (
+	deleteTitleFormat = "Delete %s?"
+
+	repoCountFormat = "%d included · %d active"
+	filterPrefix    = "filter · "
+	slugPrefix      = "slug · "
+	bulletPrefix    = "· "
+	updatedPrefix   = " · updated "
+
+	referenceDetailFormat = " → %s · " + roleLabelReference
+	roleColumnFormat      = "%s %-9s"
+	repoColumnFormat      = "%-26s %s"
+	sessionTitleFormat    = "%-42s %s"
+
+	branchPreviewFormat = "preview · %s/%s  (active repos only)"
+
+	repoOwnerCountFormat = " · %d repositories · %d owners"
+	workflowLineFormat   = "R %s   P %s   I %s"
+
+	assemblyCreatingPrefix = "Creating "
+
+	minutesAgoFormat = "%dm ago"
+	hoursAgoFormat   = "%dh ago"
+	daysAgoFormat    = "%d days ago"
+)

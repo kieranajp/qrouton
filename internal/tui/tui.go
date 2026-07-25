@@ -147,16 +147,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		event := v.event
 		switch event.State {
 		case github.RefreshStarted:
-			m.ownerStatus[event.Owner] = "fetching…"
+			m.ownerStatus[event.Owner] = statusFetching
 		case github.RefreshSucceeded:
-			m.ownerStatus[event.Owner] = "updated"
+			m.ownerStatus[event.Owner] = statusUpdated
 			delete(m.ownerErrors, event.Owner)
 			if event.Repos != nil {
 				m.repos = event.Repos
 				m.clampRepoCursor()
 			}
 		case github.RefreshFailed:
-			m.ownerStatus[event.Owner] = "failed"
+			m.ownerStatus[event.Owner] = statusFailed
 			m.ownerErrors[event.Owner] = event.Err
 			m.err = event.Err
 		case github.RefreshComplete:
@@ -215,11 +215,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		for owner, err := range v.results {
 			if err != nil {
 				m.ownerErrors[owner] = err
-				m.ownerStatus[owner] = "failed"
+				m.ownerStatus[owner] = statusFailed
 				m.err = err
 			} else {
 				delete(m.ownerErrors, owner)
-				m.ownerStatus[owner] = "updated"
+				m.ownerStatus[owner] = statusUpdated
 			}
 		}
 		if len(m.ownerErrors) == 0 {

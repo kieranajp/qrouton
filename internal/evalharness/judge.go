@@ -29,9 +29,9 @@ func JudgePairs(
 		if pairs[key] == nil {
 			pairs[key] = &pair{}
 		}
-		if result.Runner == "claude" {
+		if result.Runner == runnerClaude {
 			pairs[key].claude = result
-		} else if result.Runner == "codex" {
+		} else if result.Runner == runnerCodex {
 			pairs[key].codex = result
 		}
 	}
@@ -50,7 +50,7 @@ func JudgePairs(
 			}
 			result := PairwiseResult{ID: key, Scenario: scenario.ID, Sample: sample}
 			firstClaude := sha256.Sum256([]byte(key))[0]%2 == 0
-			for index, judgeName := range []string{"claude", "codex"} {
+			for index, judgeName := range []string{runnerClaude, runnerCodex} {
 				a, b := current.codex, current.claude
 				if firstClaude == (index == 0) {
 					a, b = current.claude, current.codex
@@ -103,7 +103,7 @@ func PairwiseJudge(ctx context.Context, adapter Adapter, scenario Scenario, a, b
 	case "B":
 		judgment.Winner = b.Runner
 	case "TIE":
-		judgment.Winner = "tie"
+		judgment.Winner = outcomeTie
 	default:
 		judgment.Error = fmt.Sprintf("invalid pairwise choice %q", response.Choice)
 	}
