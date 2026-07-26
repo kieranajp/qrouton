@@ -11,11 +11,10 @@ import (
 )
 
 type Config struct {
-	Orgs        []string   `json:"orgs"`   // GitHub orgs for the repo picker
-	Root        string     `json:"root"`   // sessions live flat under it; mirrors under <root>/.mirrors
-	Launch      [][]string `json:"launch"` // optional exact overrides for supported runner commands
-	Editor      []string   `json:"editor,omitempty"`
-	Multiplexer string     `json:"multiplexer,omitempty"` // workspace backend; empty selects Zellij
+	Orgs   []string   `json:"orgs"`   // GitHub orgs for the repo picker
+	Root   string     `json:"root"`   // sessions live flat under it; mirrors under <root>/.mirrors
+	Launch [][]string `json:"launch"` // optional exact overrides for supported runner commands
+	Editor []string   `json:"editor,omitempty"`
 }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.

@@ -28,12 +28,12 @@ func TestParseHandleRejectsGarbageAndMissingIdentity(t *testing.T) {
 	}
 }
 
-func TestUnknownBackendsAreRejectedByNameAndHandle(t *testing.T) {
-	if _, err := New("tmux"); err == nil || !strings.Contains(err.Error(), "tmux") {
-		t.Fatalf("New should name the unsupported backend, got %v", err)
-	}
-	if _, err := (Handle{Kind: "tmux", Session: "s"}).PaneHost(); err == nil {
-		t.Fatal("PaneHost accepted an unsupported backend")
+// A Handle crosses the exec boundary as JSON, so it stays validated even though
+// Zellij is the only backend New can hand back.
+func TestUnknownBackendsAreRejectedByHandle(t *testing.T) {
+	_, err := (Handle{Kind: "tmux", Session: "s"}).PaneHost()
+	if err == nil || !strings.Contains(err.Error(), "tmux") {
+		t.Fatalf("PaneHost should name the unsupported backend, got %v", err)
 	}
 }
 

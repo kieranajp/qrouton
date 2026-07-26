@@ -191,7 +191,7 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	lp, err := mux.New(cfg.Multiplexer)
+	lp, err := mux.New()
 	if err != nil {
 		return err
 	}

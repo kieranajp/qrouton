@@ -147,13 +147,9 @@ func WithEnv(env []string, key, value string) []string {
 	return append(out, prefix+value)
 }
 
-// New returns the configured Launcher, verifying the backend is usable. An
-// empty kind selects the default (Zellij).
-func New(kind string) (Launcher, error) {
-	switch strings.TrimSpace(kind) {
-	case "", KindZellij:
-		return newZellijLauncher()
-	default:
-		return nil, unsupportedBackend(kind)
-	}
+// New returns the Launcher, verifying the backend is usable. Zellij is the only
+// backend: these ports exist to quarantine its KDL/socket mechanics and to give
+// the MCP pane tools something fakeable in tests, not to support a second one.
+func New() (Launcher, error) {
+	return newZellijLauncher()
 }
