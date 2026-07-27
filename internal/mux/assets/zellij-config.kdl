@@ -164,6 +164,20 @@ keybinds clear-defaults=true {
                 name "qrouton · terminal"
             }
         }
+        // Escalation: float the repository picker over the live session at
+        // generous geometry, keeping focus — the one deliberate exception to
+        // spawn-returns-focus. @@SESSION_DIR@@ is substituted at stage time.
+        bind "Alt e" {
+            Run "qrouton" "pick" "--session-root" "@@SESSION_DIR@@" {
+                floating true
+                x "20%"
+                y "3%"
+                width "60%"
+                height "94%"
+                name "escalate"
+                close_on_exit true
+            }
+        }
         bind "Alt x" { CloseFocus; SwitchToMode "locked"; }
         bind "Alt left" { MoveFocusOrTab "left"; }
         bind "Alt down" { MoveFocus "down"; }

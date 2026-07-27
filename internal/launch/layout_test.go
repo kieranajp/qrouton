@@ -59,7 +59,7 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
+	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}

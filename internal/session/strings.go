@@ -42,6 +42,10 @@ const (
 	// notARepositoryMessage appears in git's output when a checkout has outlived
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
+
+	// manifestTmpSuffix names WriteManifest's staging file, renamed over the
+	// manifest so its writes are atomic.
+	manifestTmpSuffix = ".tmp"
 )
 
 // Git subcommands, in the order the lifecycle uses them.

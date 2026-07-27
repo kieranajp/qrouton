@@ -99,7 +99,10 @@ func (z *Zellij) Stage(ws Workspace) error {
 	if err != nil {
 		return err
 	}
-	if err := os.WriteFile(zellijConfigPath(ws.Dir), config, 0o644); err != nil {
+	// Run-block keybindings (the picker behind Alt-e) need the session
+	// directory baked in; the config is already written per-session.
+	staged := strings.ReplaceAll(string(config), sessionDirPlaceholder, ws.Dir)
+	if err := os.WriteFile(zellijConfigPath(ws.Dir), []byte(staged), 0o644); err != nil {
 		return err
 	}
 	return os.WriteFile(zellijLayoutPath(ws.Dir), []byte(renderKDL(ws)), 0o644)

@@ -12,6 +12,7 @@ import (
 
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
+	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
@@ -32,7 +33,7 @@ func main() {
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {

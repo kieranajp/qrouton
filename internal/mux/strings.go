@@ -82,6 +82,10 @@ const (
 
 	// configAssetPath is the vendored Zellij config staged into every session.
 	configAssetPath = "assets/zellij-config.kdl"
+
+	// sessionDirPlaceholder marks where Stage substitutes the session directory
+	// into the vendored config's Run-block keybindings.
+	sessionDirPlaceholder = "@@SESSION_DIR@@"
 )
 
 // KDL fragments the layout renderer emits. Zellij layouts are indented KDL, so
