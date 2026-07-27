@@ -5,7 +5,7 @@ package mcpserver
 // only guide to when a pane is the right move — so they live together where
 // they can be read and revised as a set.
 
-const serverInstructions = "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; close_pane/list_panes to manage them. All paths and working directories must belong to this session."
+const serverInstructions = "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; close_pane/list_panes to manage them; escalate to hand a piece of work off to the full RPI workflow once you've drafted a brief. All paths and working directories must belong to this session."
 
 // Tool names, as the agent calls them and as qrouton reports them back in its
 // own messages.
@@ -17,6 +17,7 @@ const (
 	toolNotify     = "notify"
 	toolClosePane  = "close_pane"
 	toolListPanes  = "list_panes"
+	toolEscalate   = "escalate"
 )
 
 // Tool descriptions.
@@ -34,4 +35,6 @@ const (
 	descClosePane = "Close a pane previously opened with run_command or open_file, by name."
 
 	descListPanes = "List the panes qrouton is currently managing for you, by name."
+
+	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
 )

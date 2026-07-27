@@ -20,30 +20,38 @@ const (
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
 
-	// Pane names in the generated workspace layout.
+	// Pane names in the generated workspace layout. A pane's title carries a
+	// chord only where a real binding operates that pane; movement and the
+	// rest of the key list are stated once, in the strip and in Alt-?.
 	agentPaneName  = "agent"
-	shellPaneName  = "shell"
+	shellPaneName  = "shell · Alt-g"
 	reposPaneName  = "repos"
 	agentsPaneName = "agents"
-	helpPaneName   = "qrouton · quick start"
+	statusPaneName = "status"
+	helpPaneName   = "keys · press any key to close"
 
 	// Subcommands qrouton launches against itself to drive its own panes.
 	mcpSubcommand        = "mcp"
 	reposSubcommand      = "repos"
 	agentsSubcommand     = "agents"
+	statusSubcommand     = "status"
 	agentEventSubcommand = "agent-event"
+	agentSubcommand      = "agent"
 
 	sessionRootFlag = "--session-root"
 	runnerFlag      = "--runner"
 	editorJSONFlag  = "--editor-json"
 	muxJSONFlag     = "--mux-json"
+	resumeFlag      = "--resume"
 
-	// Placeholders the embedded help script substitutes at stamp time.
-	warningPlaceholder = "@@WARNING@@"
-	taglinePlaceholder = "@@TAGLINE@@"
-
-	rpiTagline       = "Coordinate here; delegate work to subagents."
-	assistantTagline = "Open-ended session; ask to switch to RPI anytime."
+	// codexDepthWarning is passed as help.sh's $1 on the startup invocation
+	// only, when Codex's subagent nesting is too shallow; the Alt-? route
+	// omits it (a launch-time-only concern). The one-shot splash's mode
+	// tagline moved into the script itself, which reads ./qrouton.json at
+	// runtime — mode-correct per session, including immediately after an
+	// escalation, from a single global copy.
+	codexDepthWarning = "Codex agents.max_depth is under 2. Set it to 3 " +
+		"in ~/.codex/config.toml for nested subagents."
 )
 
 // Sizes and geometry of the generated workspace. Percentages are the
@@ -54,6 +62,7 @@ const (
 	agentColumnSize = "65%"
 	reposColumnSize = "35%"
 	watchPaneRows   = "6"
+	stripPaneRows   = "1"
 )
 
 // scriptMode is the permission bit the generated pane scripts need.

@@ -45,6 +45,13 @@ type notifyInput struct {
 	Message string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
 }
 
+// escalateInput's branch_prefix values are the picker's own list: anything else
+// is silently ignored and the picker falls back to its first entry.
+type escalateInput struct {
+	Name         string `json:"name" jsonschema:"the name for this piece of work"`
+	BranchPrefix string `json:"branch_prefix,omitempty" jsonschema:"one of feat, fix, chore, refactor, docs, test"`
+}
+
 // textResult wraps a message as an MCP text block. Each tool pairs it with its
 // own structured payload, which is the second value AddTool handlers return.
 func textResult(message string) *mcp.CallToolResult {
@@ -133,6 +140,17 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 			message = openPanesPrefix + strings.Join(names, paneNameJoiner) + openPanesSuffix
 		}
 		return textResult(message), map[string]any{"panes": names}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolEscalate,
+		Description: descEscalate,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input escalateInput) (*mcp.CallToolResult, any, error) {
+		message, err := pane.escalate(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
 	})
 
 	return server

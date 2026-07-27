@@ -8,12 +8,13 @@ import "errors"
 const (
 	appName      = "qrouton"
 	appUsage     = "assemble a multi-repo session and launch an agent runner in it"
-	appArgsUsage = "[owner/repo ...]"
+	appArgsUsage = "[dir | owner/repo ...]"
 
-	appDescription = "With no arguments, qrouton opens the session picker.\n" +
-		"Given one or more owner/repo arguments, it skips the picker and launches\n" +
-		"(or resumes) an ad-hoc Assistant-mode session with those repos active —\n" +
-		"e.g. `qrouton kieranajp/qrouton`. Ask the agent to switch to RPI anytime."
+	appDescription = "With no arguments, qrouton opens the session list. Given a directory,\n" +
+		"it drops straight into a fresh zero-repo scratch session in Assistant\n" +
+		"mode, named after it — no picker, no network. Given one or more\n" +
+		"owner/repo arguments, it launches (or resumes) an ad-hoc Assistant-mode\n" +
+		"session with those repos active — e.g. `qrouton kieranajp/qrouton`."
 
 	refreshFlag      = "refresh"
 	refreshFlagUsage = "refresh the cached org repo list"

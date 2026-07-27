@@ -124,7 +124,8 @@ const (
 	repoColumnFormat      = "%-26s %s"
 	sessionTitleFormat    = "%-42s %s"
 
-	branchPreviewFormat = "preview · %s/%s  (active repos only)"
+	branchFormat        = "%s/%s"
+	branchPreviewFormat = "preview · " + branchFormat + "  (active repos only)"
 
 	repoOwnerCountFormat = " · %d repositories · %d owners"
 	workflowLineFormat   = "R %s   P %s   I %s"

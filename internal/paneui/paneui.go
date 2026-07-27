@@ -14,6 +14,7 @@ const (
 	cursorHome     = "\033[H"
 	eraseToLineEnd = "\033[K"
 	eraseBelow     = "\033[J"
+	autowrapOff    = "\033[?7l"
 	crlf           = "\r\n"
 
 	reset = "\033[0m"
@@ -31,12 +32,20 @@ const (
 // Frame renders lines as one in-place terminal frame: cursor home, erase to
 // end-of-line per row, erase-to-end-of-screen at the bottom. Redrawing this way
 // never flashes the pane blank.
+//
+// Nothing here may scroll the pane, or the top row leaves the viewport and
+// never comes back: hence no newline after the final line (a frame as tall as
+// the pane would scroll on it — fatal for the one-row strip) and autowrap off,
+// so an over-long line is clipped at the right margin instead of wrapping onto
+// a row that isn't there.
 func Frame(lines []string) string {
 	var frame strings.Builder
-	frame.WriteString(cursorHome)
-	for _, line := range lines {
-		frame.WriteString(line)
-		frame.WriteString(eraseToLineEnd + crlf)
+	frame.WriteString(autowrapOff + cursorHome)
+	for i, line := range lines {
+		if i > 0 {
+			frame.WriteString(crlf)
+		}
+		frame.WriteString(line + eraseToLineEnd)
 	}
 	// Clear any rows a previous, longer frame left below this one.
 	frame.WriteString(eraseBelow)

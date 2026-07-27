@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -345,6 +347,96 @@ func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 	if got.screen != errorScreen || got.back != landingScreen {
 		t.Fatalf("all-owner failure screen=%v back=%v", got.screen, got.back)
 	}
+}
+
+func TestPickerPrefillsNameAndPrefix(t *testing.T) {
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	m := newPickerModel(cfg, "/tmp/session", session.Manifest{Slug: "session"}, "Webhook retry backoff", "fix")
+	if m.screen != newScreen {
+		t.Fatalf("picker starts on screen %v, want the form", m.screen)
+	}
+	if m.form.name != "Webhook retry backoff" {
+		t.Fatalf("picker name = %q", m.form.name)
+	}
+	if branchPrefixes[m.form.prefix] != "fix" {
+		t.Fatalf("picker prefix = %q, want fix", branchPrefixes[m.form.prefix])
+	}
+	if len(m.form.roles) != 0 {
+		t.Fatalf("picker pre-selected repositories: %v", m.form.roles)
+	}
+}
+
+func TestPickerCancelWritesCancelledStanzaOnly(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "")
+	_, cmd := m.updateForm(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("cancel did not quit the picker")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("cancel command produced %T, want quit", cmd())
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Escalation == nil || got.Escalation.Status != session.EscalationCancelled || got.Escalation.At.IsZero() {
+		t.Fatalf("cancelled stanza = %+v", got.Escalation)
+	}
+	if got.EffectiveMode() != session.ModeAssistant || len(got.Repos) != 0 {
+		t.Fatalf("cancel touched the session beyond the stanza: %+v", got)
+	}
+}
+
+func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Orgs: []string{"org"}, Root: root}
+	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sels := []session.RepoSelection{{
+		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
+		Role: session.RepoRoleActive,
+	}}
+	if err := confirmEscalation(cfg, dir, manifest, sels, "Webhook retry backoff", "fix", nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != session.ModeRPI || got.Name != "Webhook retry backoff" {
+		t.Fatalf("escalated manifest = mode %q name %q", got.Mode, got.Name)
+	}
+	if len(got.Repos) != 1 || got.Repos[0].Branch != "fix/webhook-retry-backoff" {
+		t.Fatalf("escalated repos = %+v", got.Repos)
+	}
+	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed || got.Escalation.At.IsZero() {
+		t.Fatalf("confirmed stanza = %+v", got.Escalation)
+	}
+}
+
+func makeTestOrigin(t *testing.T) string {
+	t.Helper()
+	origin := filepath.Join(t.TempDir(), "svc")
+	for _, args := range [][]string{
+		{"init", "-b", "main", origin},
+		{"-C", origin, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	return origin
 }
 
 func TestAssemblyFailureBackTargetIsUsable(t *testing.T) {

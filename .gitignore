@@ -1,2 +1,5 @@
 /qrouton
 eval/results/
+
+# Riptide artifacts (cloud-synced)
+.humanlayer/tasks/

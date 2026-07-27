@@ -1,6 +1,8 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -92,14 +94,31 @@ type Progress struct {
 type ProgressFunc func(Progress)
 
 type Manifest struct {
-	SchemaVersion int            `json:"schemaVersion"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	Description   string         `json:"description"`
-	TicketURL     string         `json:"ticketUrl,omitempty"`
-	Mode          SessionMode    `json:"mode,omitempty"`
-	CreatedAt     time.Time      `json:"createdAt"`
-	Repos         []ManifestRepo `json:"repos"`
+	SchemaVersion int                `json:"schemaVersion"`
+	Name          string             `json:"name"`
+	Slug          string             `json:"slug"`
+	Description   string             `json:"description"`
+	TicketURL     string             `json:"ticketUrl,omitempty"`
+	Mode          SessionMode        `json:"mode,omitempty"`
+	CreatedAt     time.Time          `json:"createdAt"`
+	Repos         []ManifestRepo     `json:"repos"`
+	Escalation    *EscalationOutcome `json:"escalation,omitempty"`
+}
+
+// EscalationStatus is how a picker-driven escalation attempt ended.
+type EscalationStatus string
+
+const (
+	EscalationConfirmed EscalationStatus = "confirmed"
+	EscalationCancelled EscalationStatus = "cancelled"
+)
+
+// EscalationOutcome records the most recent escalation attempt. The picker
+// writes it as part of its single atomic manifest write; the escalate MCP tool
+// polls At to notice an outcome newer than the picker it spawned.
+type EscalationOutcome struct {
+	Status EscalationStatus `json:"status"`
+	At     time.Time        `json:"at"`
 }
 
 // EffectiveMode is the session's runner mode, defaulting to RPI for manifests
@@ -121,6 +140,24 @@ var nonSlug = regexp.MustCompile(`[^a-z0-9]+`)
 
 func Slugify(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), slugSeparator), slugSeparator)
+}
+
+// ScratchName names a zero-repo scratch session after the directory qrouton
+// was invoked from, plus entropy to dodge collisions: running from
+// ~/Work/lifesum yields "lifesum-4f3a". A basename that slugifies to nothing
+// (e.g. "/") falls back to "scratch-<hex>".
+func ScratchName(cwd string) string {
+	base := Slugify(filepath.Base(cwd))
+	if base == "" {
+		base = scratchFallbackName
+	}
+	return base + slugSeparator + entropySuffix()
+}
+
+func entropySuffix() string {
+	b := make([]byte, scratchEntropyBytes)
+	_, _ = rand.Read(b) // crypto/rand never fails
+	return hex.EncodeToString(b)
 }
 
 // Scan: a session is any direct child of root containing a qrouton.json.
@@ -180,76 +217,32 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
 		TicketURL: ticket, Mode: mode.effective(), CreatedAt: time.Now()}
-	if err := os.MkdirAll(sessionpaths.Src(dir), dirMode); err != nil {
+	var err error
+	if m, err = ComposeRepos(cfg, m, repos, prefix+branchSeparator+slug, progress); err != nil {
 		return "", err
 	}
-	nameCounts := make(map[string]int, len(repos))
-	for _, selected := range repos {
-		nameCounts[selected.Repo.Name]++
-	}
-	for _, selected := range repos {
-		r := selected.Repo
-		role := selected.Role
-		if role == "" {
-			role = RepoRoleActive
-		}
-		if role != RepoRoleActive && role != RepoRoleReference {
-			return "", invalidRole(role, r.Org, r.Name)
-		}
-		worktreePath := filepath.Join(sessionpaths.SrcDirName, r.Name)
-		if nameCounts[r.Name] > 1 {
-			worktreePath = filepath.Join(sessionpaths.SrcDirName, Slugify(r.Org+slugSeparator+r.Name))
-		}
-		url := sshURL(r.Org, r)
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
-		if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
-			emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-			return "", err
-		}
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &r, Role: role})
-		mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
-			DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath, SSHURL: url}
-		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
-		if role == RepoRoleReference {
-			revision, err := resolveRevision(mirror, remoteRefPrefix+r.DefaultBranch)
-			if err != nil {
-				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-				return "", err
-			}
-			mr.Revision = revision
-			if err := addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision); err != nil {
-				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-				return "", err
-			}
-		} else {
-			mr.Branch = prefix + branchSeparator + slug
-			if err := addWorktree(mirror, filepath.Join(dir, worktreePath), mr.Branch,
-				remoteRefPrefix+r.DefaultBranch); err != nil {
-				emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-				return "", err
-			}
-		}
-		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressCompleted, Repo: &r, Role: role})
-		m.Repos = append(m.Repos, mr)
-	}
 
-	// The durable-artifact scaffold the RPI workflow writes into.
+	// The durable-artifact scaffold the RPI workflow writes into. Documents
+	// live under <root>/thoughts/<slug> and the session reaches them through
+	// a relative symlink, so Delete's RemoveAll (which does not follow links)
+	// keeps them when the session directory goes.
 	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressStarted})
+	home := thoughtsHome(cfg.Root, slug)
 	for _, d := range scaffoldDirs {
-		if err := os.MkdirAll(filepath.Join(sessionpaths.Thoughts(dir), d), dirMode); err != nil {
+		if err := os.MkdirAll(filepath.Join(home, sessionpaths.SharedDirName, d), dirMode); err != nil {
 			emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
 			return "", err
 		}
 	}
+	if err := os.Symlink(filepath.Join("..", sessionpaths.ThoughtsDirName, slug),
+		filepath.Join(dir, sessionpaths.ThoughtsDirName)); err != nil {
+		emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
+		return "", err
+	}
 	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressCompleted})
 
 	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressStarted})
-	b, err := json.MarshalIndent(m, "", "  ")
-	if err == nil {
-		err = os.WriteFile(sessionpaths.Manifest(dir), b, fileMode)
-	}
-	if err != nil {
+	if err := WriteManifest(dir, m); err != nil {
 		emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressFailed, Err: err})
 		return "", err
 	}
@@ -257,6 +250,139 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 	_ = os.Remove(filepath.Join(dir, assemblingMarker))
 	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressCompleted})
 	return dir, nil
+}
+
+// thoughtsHome is where a session's documents actually live: under the root,
+// outside the session directory, so deleting the session keeps them.
+func thoughtsHome(root, slug string) string {
+	return filepath.Join(root, sessionpaths.ThoughtsDirName, slug)
+}
+
+// materialise mirrors and checks out one selected repository for the session
+// at dir, returning its manifest entry — the shared per-repo body of Create
+// and ComposeRepos. branch names the session branch an active repository is
+// cut on; worktreePath is the checkout's location relative to dir.
+func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
+	r := sel.Repo
+	role := sel.Role
+	if role == "" {
+		role = RepoRoleActive
+	}
+	if role != RepoRoleActive && role != RepoRoleReference {
+		return ManifestRepo{}, invalidRole(role, r.Org, r.Name)
+	}
+	url := sshURL(r.Org, r)
+	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
+	if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
+		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
+		return ManifestRepo{}, err
+	}
+	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &r, Role: role})
+	mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
+		DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath, SSHURL: url}
+	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
+	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
+	if role == RepoRoleReference {
+		revision, err := resolveRevision(mirror, remoteRefPrefix+r.DefaultBranch)
+		if err != nil {
+			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
+			return ManifestRepo{}, err
+		}
+		mr.Revision = revision
+		if err := addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision); err != nil {
+			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
+			return ManifestRepo{}, err
+		}
+	} else {
+		mr.Branch = branch
+		if err := addWorktree(mirror, filepath.Join(dir, worktreePath), branch,
+			remoteRefPrefix+r.DefaultBranch); err != nil {
+			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
+			return ManifestRepo{}, err
+		}
+	}
+	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressCompleted, Repo: &r, Role: role})
+	return mr, nil
+}
+
+// ComposeRepos materialises the selected repositories into m — mirrors,
+// worktrees, manifest entries — without writing the manifest, so a caller can
+// fold repos, mode, and an escalation outcome into one atomic write. branch is
+// the session branch active repositories are cut on. A repository sharing its
+// name with another (in the batch, or already in m) gets an org-qualified
+// worktree path.
+func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
+	dir := filepath.Join(cfg.Root, m.Slug)
+	if err := os.MkdirAll(sessionpaths.Src(dir), dirMode); err != nil {
+		return m, err
+	}
+	nameCounts := make(map[string]int, len(m.Repos)+len(sels))
+	for _, r := range m.Repos {
+		nameCounts[r.Name]++
+	}
+	for _, sel := range sels {
+		nameCounts[sel.Repo.Name]++
+	}
+	for _, sel := range sels {
+		worktreePath := filepath.Join(sessionpaths.SrcDirName, sel.Repo.Name)
+		if nameCounts[sel.Repo.Name] > 1 {
+			worktreePath = filepath.Join(sessionpaths.SrcDirName, Slugify(sel.Repo.Org+slugSeparator+sel.Repo.Name))
+		}
+		mr, err := materialise(cfg, dir, sel, branch, worktreePath, progress)
+		if err != nil {
+			return m, err
+		}
+		m.Repos = append(m.Repos, mr)
+	}
+	return m, nil
+}
+
+// AddRepos is the brownfield verb: ComposeRepos plus the manifest write, for
+// adding repositories to a session that already exists.
+func AddRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
+	m, err := ComposeRepos(cfg, m, sels, branch, progress)
+	if err != nil {
+		return m, err
+	}
+	return m, WriteManifest(filepath.Join(cfg.Root, m.Slug), m)
+}
+
+// SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
+// assistant — so the next launch stamps the new prompt instead of reverting.
+func SetMode(dir string, mode SessionMode) error {
+	m, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	m.Mode = mode.effective()
+	return WriteManifest(dir, m)
+}
+
+// Load reads one session directory's manifest.
+func Load(dir string) (Manifest, error) {
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
+	if err != nil {
+		return Manifest{}, err
+	}
+	var m Manifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		return Manifest{}, err
+	}
+	return m, nil
+}
+
+// WriteManifest atomically replaces a session's manifest — temp file plus
+// rename — so pollers re-reading it every few seconds never see a torn write.
+func WriteManifest(dir string, m Manifest) error {
+	b, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	tmp := sessionpaths.Manifest(dir) + manifestTmpSuffix
+	if err := os.WriteFile(tmp, b, fileMode); err != nil {
+		return err
+	}
+	return os.Rename(tmp, sessionpaths.Manifest(dir))
 }
 
 func emitProgress(progress ProgressFunc, event Progress) {

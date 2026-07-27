@@ -42,6 +42,10 @@ const (
 	// notARepositoryMessage appears in git's output when a checkout has outlived
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
+
+	// manifestTmpSuffix names WriteManifest's staging file, renamed over the
+	// manifest so its writes are atomic.
+	manifestTmpSuffix = ".tmp"
 )
 
 // Git subcommands, in the order the lifecycle uses them.
@@ -89,8 +93,17 @@ const (
 	checkingOutFormat = "qrouton: checking out %s on %s…\n"
 )
 
+// Scratch sessions (a bare `qrouton`) are named after the invoking directory
+// plus entropy, falling back when the basename slugifies to nothing.
+const (
+	scratchFallbackName = "scratch"
+	scratchEntropyBytes = 2 // 4 hex characters
+)
+
 // The durable-artifact directories every session starts with, under
-// thoughts/shared. Status reads the first two to infer workflow state.
+// thoughts/shared — a symlink into <root>/thoughts/<slug>/shared, so documents
+// outlive the session directory. Status reads the first two to infer workflow
+// state.
 const (
 	scaffoldResearch = "research"
 	scaffoldPlans    = "plans"

@@ -164,6 +164,20 @@ keybinds clear-defaults=true {
                 name "qrouton · terminal"
             }
         }
+        // Escalation: float the repository picker over the live session at
+        // generous geometry, keeping focus — the one deliberate exception to
+        // spawn-returns-focus. @@SESSION_DIR@@ is substituted at stage time.
+        bind "Alt e" {
+            Run "qrouton" "pick" "--session-root" "@@SESSION_DIR@@" {
+                floating true
+                x "20%"
+                y "3%"
+                width "60%"
+                height "94%"
+                name "escalate"
+                close_on_exit true
+            }
+        }
         bind "Alt x" { CloseFocus; SwitchToMode "locked"; }
         bind "Alt left" { MoveFocusOrTab "left"; }
         bind "Alt down" { MoveFocus "down"; }
@@ -180,10 +194,44 @@ keybinds clear-defaults=true {
         bind "Alt j" { MoveFocus "down"; }
         bind "Alt k" { MoveFocus "up"; }
         bind "Alt l" { MoveFocusOrTab "right"; }
-        bind "Alt n" { NewPane; }
+        // De-escalation: flip the session back to assistant; the supervisor
+        // relaunches the runner with the conversation intact. NewPane comes
+        // off the single-chord set (still Ctrl-g → pane mode → n). Flags come
+        // before the positional mode so the CLI parses them.
+        bind "Alt n" {
+            Run "qrouton" "mode" "--session-root" "@@SESSION_DIR@@" "assistant" {
+                floating true
+                x "25%"
+                y "5%"
+                width "50%"
+                height "18%"
+                name "de-escalate"
+                close_on_exit true
+            }
+        }
         bind "Alt o" { MoveTab "right"; }
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" { ToggleGroupMarking; }
+        // Cheap focus cycle: Zellij has no focus-by-name/index action.
+        bind "Alt tab" { SwitchFocus; }
+        // Re-summons the quick-reference panel that greets the session at
+        // startup — same global script, no Codex warning argument (that's a
+        // launch-time-only concern). help.sh reads ./qrouton.json itself for
+        // the mode tagline, so its cwd must be the session directory
+        // explicitly: a Run block's default cwd follows the focused pane,
+        // which may have wandered elsewhere in the shell.
+        bind "Alt ?" {
+            Run "sh" "@@HELP_SCRIPT@@" {
+                cwd "@@SESSION_DIR@@"
+                floating true
+                x "15%"
+                y "8%"
+                width "70%"
+                height "80%"
+                name "keys · press any key to close"
+                close_on_exit true
+            }
+        }
     }
     shared_except "locked" "renametab" "renamepane" {
         bind "Ctrl g" { SwitchToMode "locked"; }

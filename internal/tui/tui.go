@@ -69,6 +69,12 @@ type appModel struct {
 	assemblyFailed  bool
 	deleteTarget    *session.Manifest
 	deleteDirty     []string
+
+	// Picker mode (qrouton pick): a non-nil manifest scopes the model to the
+	// form alone — confirming assembles into the live session at pickerDir
+	// instead of producing a LaunchRequest.
+	pickerDir      string
+	pickerManifest *session.Manifest
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
@@ -93,6 +99,39 @@ func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string
 	}
 	out := final.(appModel)
 	return out.result, nil
+}
+
+// RunPicker runs just the new-session form against a live session: name and
+// prefix arrive pre-filled and editable, repositories are chosen fresh, and
+// confirming assembles into the session — one atomic manifest write carrying
+// repos, mode, name, and the escalation stanza — rather than returning a
+// LaunchRequest. Esc records a cancelled outcome and leaves the session as it
+// was.
+func RunPicker(cfg *config.Config, dir, name, prefix string) error {
+	manifest, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
+	_, err = tea.NewProgram(newPickerModel(cfg, dir, manifest, name, prefix), tea.WithAltScreen()).Run()
+	return err
+}
+
+// newPickerModel seeds the shared appModel at the form screen, in picker mode:
+// the landing, runner, and delete screens are unreachable from it, and
+// repositories are never pre-selected.
+func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, name, prefix string) appModel {
+	m := newAppModel(cfg, nil, "", nil)
+	m.screen = newScreen
+	m.pickerDir = dir
+	m.pickerManifest = &manifest
+	m.form.name = name
+	m.form.focus = focusName
+	for i, p := range branchPrefixes {
+		if p == prefix {
+			m.form.prefix = i
+		}
+	}
+	return m
 }
 
 func newAppModel(cfg *config.Config, sessions []session.Manifest, requested string, runners []launch.Runner) appModel {
@@ -133,6 +172,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// this it would sit on "Loading repositories…" forever.
 			if len(m.repos) == 0 || m.screen == loadingScreen {
 				m.back, m.screen = landingScreen, errorScreen
+				if m.pickerManifest != nil {
+					m.back = newScreen // the picker has no landing to go back to
+				}
 			}
 			return m, nil
 		}
@@ -179,15 +221,25 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case assembledMsg:
 		if v.err != nil {
 			back := newScreen
-			if m.requestedRunner == "" {
-				back = runnerScreen
-			} else if m.resume != nil {
-				back = landingScreen
+			if m.pickerManifest == nil {
+				if m.requestedRunner == "" {
+					back = runnerScreen
+				} else if m.resume != nil {
+					back = landingScreen
+				}
 			}
 			m.err, m.assemblyFailed, m.back, m.screen = v.err, true, back, errorScreen
 			return m, nil
 		}
 		m.assemblyFailed = false
+		if m.pickerManifest != nil {
+			// The picker's single write is done; there is nothing to launch —
+			// the session is already live.
+			if m.refreshCancel != nil {
+				m.refreshCancel()
+			}
+			return m, tea.Quit
+		}
 		r, err := m.selectedRunner()
 		if err != nil {
 			m.err, m.back, m.screen = err, runnerScreen, errorScreen

@@ -80,6 +80,15 @@ func TestStatusLinesRenderBranchRoleAndDirtyState(t *testing.T) {
 	}
 }
 
+func TestStatusLinesRenderEmptyStateForZeroRepoManifest(t *testing.T) {
+	root := t.TempDir()
+	writeManifest(t, root, session.Manifest{Slug: "scratch-4f3a"})
+	lines := statusLines(root)
+	if len(lines) != 3 || !strings.Contains(lines[1], "no repositories yet") || !strings.Contains(lines[2], "Alt-e to escalate") {
+		t.Fatalf("zero-repo lines = %#v", lines)
+	}
+}
+
 func TestStatusLinesWithoutManifest(t *testing.T) {
 	lines := statusLines(t.TempDir())
 	if len(lines) != 2 || !strings.Contains(lines[1], "No session manifest") {

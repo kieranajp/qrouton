@@ -51,6 +51,12 @@ const (
 	frontmatterFence = "---\n"
 	frontmatterClose = "\n---\n"
 
+	// handoffHeader introduces the assistant's escalation brief when Stamp
+	// appends it to the primary mode prompt. Because assets are re-stamped on
+	// every launch, the brief stays in the system prompt for the session's
+	// life — the assistant prompt tells it to keep the brief short.
+	handoffHeader = "\n\n## Handoff brief\n\n"
+
 	dirMode  = 0o755
 	fileMode = 0o644
 )
@@ -65,6 +71,11 @@ type assetLink struct {
 // mode prompt is still written under the canonical directory, so a session can
 // escalate between modes without relaunching.
 //
+// When the session holds an escalation brief (sessionpaths.Handoff), its
+// content is appended to the stamped primary as a trailing section — the
+// mechanism that puts the brief in a fresh runner's system prompt on all three
+// runners, with no argv work. The non-primary mode prompt stays pristine.
+//
 // User-authored files are never replaced: an existing discovery file or symlink
 // that does not carry the qrouton marker is an error, not something to
 // overwrite.
@@ -74,6 +85,7 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 	if err != nil {
 		return err
 	}
+	handoff := handoffSection(dir)
 
 	var links []assetLink
 	for _, prompt := range loaded {
@@ -87,7 +99,11 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 			if err := os.MkdirAll(filepath.Dir(destination), dirMode); err != nil {
 				return err
 			}
-			if err := os.WriteFile(destination, mark(destination, asset.Content), fileMode); err != nil {
+			content := mark(destination, asset.Content)
+			if asset.Path == primary {
+				content = append(content, handoff...)
+			}
+			if err := os.WriteFile(destination, content, fileMode); err != nil {
 				return err
 			}
 		}
@@ -99,6 +115,17 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 		}
 	}
 	return nil
+}
+
+// handoffSection is the assistant's escalation brief, formatted as a trailing
+// section for the stamped primary mode prompt. Nil when no brief exists or it
+// is blank.
+func handoffSection(dir string) []byte {
+	content, err := os.ReadFile(sessionpaths.Handoff(dir))
+	if err != nil || len(strings.TrimSpace(string(content))) == 0 {
+		return nil
+	}
+	return append([]byte(handoffHeader), content...)
 }
 
 // assetDestination places one rendered asset and reports the discovery links

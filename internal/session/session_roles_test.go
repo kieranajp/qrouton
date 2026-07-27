@@ -269,6 +269,70 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 }
 
+func TestAddReposAssemblesIntoZeroRepoSession(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Root: root}
+	dir, err := Create(cfg, "Scratch pad", "", "", "", ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	activeOrigin, _ := makeOrigin(t, "active")
+	referenceOrigin, pinned := makeOrigin(t, "reference")
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AddRepos(cfg, m, []RepoSelection{
+		{Repo: github.Repo{Name: "active", Org: "org", SSHURL: activeOrigin, DefaultBranch: "main"}, Role: RepoRoleActive},
+		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
+	}, "fix/webhook-retry", nil); err != nil {
+		t.Fatal(err)
+	}
+	if !gitOK("-C", mirrorPath(root, "org", "active"), "show-ref", "--verify", "--quiet", "refs/heads/fix/webhook-retry") {
+		t.Fatal("session branch missing from the mirror after AddRepos")
+	}
+	if gitOK("-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
+		t.Fatal("reference checkout is not detached")
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 2 {
+		t.Fatalf("manifest repos after AddRepos = %+v", got.Repos)
+	}
+	if r := got.Repos[0]; r.Role != RepoRoleActive || r.Branch != "fix/webhook-retry" {
+		t.Fatalf("active manifest repo = %+v", r)
+	}
+	if r := got.Repos[1]; r.Role != RepoRoleReference || r.Revision != pinned {
+		t.Fatalf("reference manifest repo = %+v", r)
+	}
+}
+
+func TestSetModePersistsAcrossReread(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := SetMode(dir, ModeRPI); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Mode != ModeRPI {
+		t.Fatalf("mode after SetMode = %q, want rpi", got.Mode)
+	}
+}
+
 func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {

@@ -47,14 +47,15 @@ const (
 	versionFlag = "--version"
 	configFlag  = "--config"
 
-	listSessionsCmd    = "list-sessions"
-	listSessionsNoFmt  = "-n"
-	deleteSessionCmd   = "delete-session"
-	forceFlag          = "--force"
-	attachCmd          = "attach"
-	newSessionWithFlag = "--new-session-with-layout"
-	sessionFlag        = "--session"
-	actionCmd          = "action"
+	listSessionsCmd   = "list-sessions"
+	listSessionsNoFmt = "-n"
+	deleteSessionCmd  = "delete-session"
+	forceFlag         = "--force"
+	attachCmd         = "attach"
+	layoutFlag        = "--layout"
+	createBackground  = "--create-background"
+	sessionFlag       = "--session"
+	actionCmd         = "action"
 
 	newPaneAction        = "new-pane"
 	closePaneAction      = "close-pane"
@@ -82,6 +83,16 @@ const (
 
 	// configAssetPath is the vendored Zellij config staged into every session.
 	configAssetPath = "assets/zellij-config.kdl"
+
+	// sessionDirPlaceholder marks where Stage substitutes the session directory
+	// into the vendored config's Run-block keybindings.
+	sessionDirPlaceholder = "@@SESSION_DIR@@"
+
+	// helpScriptPlaceholder marks where Stage substitutes the global
+	// quick-reference panel's path into the Alt-? Run-block keybinding. mux
+	// deliberately doesn't know qrouton's config layout — the caller resolves
+	// the path and hands it in via Workspace.HelpScript.
+	helpScriptPlaceholder = "@@HELP_SCRIPT@@"
 )
 
 // KDL fragments the layout renderer emits. Zellij layouts are indented KDL, so
@@ -92,7 +103,6 @@ const (
 	kdlLayoutOpen   = "layout {\n"
 	kdlBlockClose   = "}\n"
 	kdlTabBar       = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:tab-bar\"\n" + kdlIndent + "}\n"
-	kdlStatusBar    = kdlIndent + "pane size=2 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:status-bar\"\n" + kdlIndent + "}\n"
 	kdlFloatingOpen = kdlIndent + "floating_panes {\n"
 
 	kdlPaneKeyword   = "pane"
@@ -101,6 +111,7 @@ const (
 	kdlSizeAttr      = " size="
 	kdlNameAttr      = " name=%q"
 	kdlCloseOnExit   = " close_on_exit=true"
+	kdlBorderless    = " borderless=true"
 	kdlFocus         = " focus=true"
 	kdlSplitAttr     = "split_direction=%q"
 	kdlGeometryAttrs = "x=%q y=%q width=%q height=%q name=%q"

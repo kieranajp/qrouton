@@ -77,6 +77,9 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	f := &m.form
 	switch k.String() {
 	case "esc":
+		if m.pickerManifest != nil {
+			return m.cancelPicker()
+		}
 		m.screen = landingScreen
 		return m, nil
 	case "up":
@@ -166,7 +169,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err, m.back, m.screen = err, newScreen, errorScreen
 			return m, nil
 		}
-		if m.requestedRunner != "" {
+		if m.pickerManifest != nil || m.requestedRunner != "" {
 			m.screen = assemblyScreen
 			return m, m.startAssembly()
 		}
@@ -282,10 +285,13 @@ func (m appModel) validateForm() error {
 		return errSessionNameEmpty
 	}
 	// An abandoned half-assembly (interrupted run) doesn't block the name;
-	// session.Create reclaims it.
-	if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
-		if _, err := os.Stat(dir); err == nil {
-			return fmt.Errorf("%w: %q", errSessionExists, slug)
+	// session.Create reclaims it. The picker names work inside an existing
+	// session — its slug only shapes the branch — so no directory check there.
+	if m.pickerManifest == nil {
+		if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
+			if _, err := os.Stat(dir); err == nil {
+				return fmt.Errorf("%w: %q", errSessionExists, slug)
+			}
 		}
 	}
 	available := make(map[string]bool, len(m.repos))
