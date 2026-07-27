@@ -9,6 +9,11 @@ const (
 	configFileName = "config.json"
 	cacheFileName  = "repos.json"
 
+	// helpScriptFileName is the quick-reference panel Alt-? and the startup
+	// floating pane run. One copy under the config dir, not one per session —
+	// restaged idempotently at every launch so template changes propagate.
+	helpScriptFileName = "help.sh"
+
 	// XDG bases, with the fallbacks the design pinned. Not os.UserConfigDir: on
 	// darwin that is ~/Library/Application Support, and qrouton follows XDG on
 	// every platform so one config path documents them all.

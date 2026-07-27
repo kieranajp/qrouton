@@ -47,7 +47,7 @@ const (
 // Pane labels, as they appear in the pane's title bar. Each names the keys that
 // act on it, since the pane is the only place the user sees them.
 const (
-	editorPaneLabel  = "Editor — Alt-f to view · Alt-x to close"
+	editorPaneLabel  = "Editor · Alt-f to view · Alt-x to close"
 	commandPaneLabel = "▶ "
 	diffPaneLabel    = "◆ "
 	notifyPaneLabel  = "🔔 notification"

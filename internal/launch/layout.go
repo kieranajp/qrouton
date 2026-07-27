@@ -8,14 +8,16 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/kieranajp/qrouton/internal/codex"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // Panels are an opinionated multiplexer workspace rather than a bespoke TUI. The
 // shell scripts that drive its panes live under scripts/ and are embedded here so
-// they read and edit as real scripts; each is written into .qrouton at launch (or,
-// for shellIntro and codexDepthWarning, spliced into the generated layout).
+// they read and edit as real scripts; notify.sh is written into .qrouton at
+// launch, help.sh under the config dir instead (one global copy), and
+// shellIntro is spliced straight into the generated layout.
 
 // shellIntro greets the shell pane with a shallow tree, then execs an interactive login shell.
 //
@@ -28,41 +30,45 @@ var shellIntro string
 //go:embed scripts/notify.sh
 var notifyScript string
 
-// helpScript is the quick-start panel; @@WARNING@@ is replaced with codexDepthWarning or "".
+// helpScript is the quick-reference panel, staged once under the config dir
+// rather than per session. It reads ./qrouton.json itself for the mode
+// tagline; $1, when the caller passes it, is the Codex depth warning.
 //
 //go:embed scripts/help.sh
 var helpScript string
 
-// codexDepthWarning warns when Codex's subagent nesting is too shallow.
-//
-//go:embed scripts/codex-warning.sh
-var codexDepthWarning string
-
-// writeSupport writes .qrouton/{help.sh,notify.sh} at launch time, so old
-// sessions pick up template changes on resume. Backend layout files are the
-// multiplexer adapter's business, staged separately.
-func writeSupport(dir string, argv []string) error {
+// writeSupport writes .qrouton/notify.sh at launch time (per-session) and
+// help.sh under the config dir (one global copy, restaged idempotently so old
+// sessions still pick up template changes). It returns the Codex depth
+// warning text for the startup pane to pass along as help.sh's $1; "" means
+// no warning. Backend layout files are the multiplexer adapter's business,
+// staged separately.
+func writeSupport(dir string, argv []string) (string, error) {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
-		return err
+		return "", err
 	}
 	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode); err != nil {
-		return err
+		return "", err
+	}
+	helpPath := config.HelpScriptPath()
+	if err := os.MkdirAll(filepath.Dir(helpPath), 0o755); err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(helpPath, []byte(helpScript), scriptMode); err != nil {
+		return "", err
 	}
 	warning := ""
 	if filepath.Base(argv[0]) == codex.Binary && codex.MaxDepth(argv) < codex.RequiredMaxDepth {
-		warning = strings.TrimRight(codexDepthWarning, "\n")
+		warning = codexDepthWarning
 	}
-	tagline := rpiTagline
-	if sessionMode(dir) == modeAssistant {
-		tagline = assistantTagline
-	}
-	help := strings.ReplaceAll(helpScript, warningPlaceholder, warning)
-	help = strings.ReplaceAll(help, taglinePlaceholder, tagline)
-	return os.WriteFile(sessionpaths.HelpScript(dir), []byte(help), scriptMode)
+	return warning, nil
 }
 
-// helpGeometry floats the quick-start panel over the middle of the workspace.
-var helpGeometry = mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"}
+// helpGeometry floats the quick-reference panel over the middle of the
+// workspace; sized for the full key list, not the old three-line splash. The
+// Alt-? binding in zellij-config.kdl mirrors these dimensions exactly, so
+// both routes look identical.
+var helpGeometry = mux.Geometry{X: "15%", Y: "8%", Width: "70%", Height: "80%"}
 
 // superviseArgv is the agent pane's command: the supervisor that stamps the
 // session's assets and launches (and, when signalled, relaunches) the runner.
@@ -79,11 +85,20 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle mux.Handle, editor E
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
 // agent beside a shell and the repo/agent status panes, a full-width one-row
-// mode/phase strip along the bottom, and the quick-start help floating on top.
-func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) mux.Workspace {
+// mode/phase strip along the bottom, and the quick-reference panel floating
+// on top. warning, when non-empty, is the Codex depth warning passed to
+// help.sh as $1 — only the startup route carries one; Alt-? re-summons the
+// same script bare.
+func workspace(dir, slug string, agentArgv []string, runner, qroutonBin, warning string) mux.Workspace {
+	helpPath := config.HelpScriptPath()
+	helpCommand := []string{shellBin, helpPath}
+	if warning != "" {
+		helpCommand = append(helpCommand, warning)
+	}
 	return mux.Workspace{
-		Slug: slug,
-		Dir:  dir,
+		Slug:       slug,
+		Dir:        dir,
+		HelpScript: helpPath,
 		Tiled: mux.Node{
 			Split: mux.SplitHorizontal,
 			Children: []mux.Node{
@@ -102,7 +117,7 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) 
 			},
 		},
 		Floating: []mux.Floating{{
-			Pane:     mux.Pane{Name: helpPaneName, Command: []string{shellBin, sessionpaths.HelpScript(dir)}, CloseOnExit: true, Focus: true},
+			Pane:     mux.Pane{Name: helpPaneName, Command: helpCommand, CloseOnExit: true, Focus: true},
 			Geometry: helpGeometry,
 		}},
 	}
@@ -116,12 +131,13 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) 
 // manifest at each (re)launch.
 func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
 	slug := filepath.Base(dir)
-	if err := writeSupport(dir, runner.Command); err != nil {
+	warning, err := writeSupport(dir, runner.Command)
+	if err != nil {
 		return err
 	}
 	argv := superviseArgv(qroutonBin, dir, runner, lp.Handle(slug), editor, resume)
 	env := mux.WithEnv(os.Environ(), EditorEnvVar, editor.Marshal())
-	ws := workspace(dir, slug, argv, runner.ID, qroutonBin)
+	ws := workspace(dir, slug, argv, runner.ID, qroutonBin, warning)
 	if err := lp.Stage(ws); err != nil {
 		return err
 	}

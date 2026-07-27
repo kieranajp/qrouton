@@ -212,6 +212,26 @@ keybinds clear-defaults=true {
         bind "Alt o" { MoveTab "right"; }
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" { ToggleGroupMarking; }
+        // Cheap focus cycle: Zellij has no focus-by-name/index action.
+        bind "Alt tab" { SwitchFocus; }
+        // Re-summons the quick-reference panel that greets the session at
+        // startup — same global script, no Codex warning argument (that's a
+        // launch-time-only concern). help.sh reads ./qrouton.json itself for
+        // the mode tagline, so its cwd must be the session directory
+        // explicitly: a Run block's default cwd follows the focused pane,
+        // which may have wandered elsewhere in the shell.
+        bind "Alt ?" {
+            Run "sh" "@@HELP_SCRIPT@@" {
+                cwd "@@SESSION_DIR@@"
+                floating true
+                x "15%"
+                y "8%"
+                width "70%"
+                height "80%"
+                name "keys · press any key to close"
+                close_on_exit true
+            }
+        }
     }
     shared_except "locked" "renametab" "renamepane" {
         bind "Ctrl g" { SwitchToMode "locked"; }

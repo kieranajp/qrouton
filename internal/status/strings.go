@@ -19,9 +19,9 @@ const (
 	phasePlan      = "Plan"
 	phaseImplement = "Implement"
 
-	// Only chords that exist are advertised; Alt-? joins when its binding lands.
-	assistantChords = "Alt-e escalate · Alt-g terminal"
-	rpiChords       = "Alt-n de-escalate · Alt-g terminal"
+	// Only chords that exist are advertised.
+	assistantChords = "Alt-e escalate · Alt-g terminal · Alt-? keys"
+	rpiChords       = "Alt-n de-escalate · Alt-g terminal · Alt-? keys"
 
 	labelSeparator = " · "
 	fieldSeparator = "   "

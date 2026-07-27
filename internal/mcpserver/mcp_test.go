@@ -65,7 +65,7 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"--session test-session",
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
-		"Editor — Alt-f to view · Alt-x to close",
+		"Editor · Alt-f to view · Alt-x to close",
 		"toggle-floating-panes",
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {

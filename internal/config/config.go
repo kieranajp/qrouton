@@ -35,6 +35,12 @@ func CachePath() string {
 	return filepath.Join(xdgDir(cacheHomeEnvVar, cacheHomeFallback), cacheFileName)
 }
 
+// HelpScriptPath is where the quick-reference panel lives — one global copy,
+// not one per session.
+func HelpScriptPath() string {
+	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), helpScriptFileName)
+}
+
 // Load reads config.json, running the first-run wizard if it doesn't exist.
 // QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {

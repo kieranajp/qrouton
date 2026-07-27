@@ -100,10 +100,11 @@ type Floating struct {
 
 // Workspace is the backend-neutral description of a qrouton session's layout.
 type Workspace struct {
-	Slug     string // session name
-	Dir      string // session root; panes start here
-	Tiled    Node
-	Floating []Floating
+	Slug       string // session name
+	Dir        string // session root; panes start here
+	HelpScript string // path to the global quick-reference panel, for Run-block keybindings
+	Tiled      Node
+	Floating   []Floating
 }
 
 // Handle identifies a backend session across the exec boundary; the launcher

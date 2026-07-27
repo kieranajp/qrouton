@@ -29,7 +29,6 @@ const (
 	canonicalPromptsDirName = "qrspi"
 
 	notifyScriptName   = "notify.sh"
-	helpScriptName     = "help.sh"
 	claudeAgentLogName = "claude-agents.jsonl"
 	handoffName        = "handoff.md"
 	agentPIDName       = "agent.pid"
@@ -59,11 +58,6 @@ func CanonicalPrompts(root string) string {
 // runner's notification hook.
 func NotifyScript(root string) string {
 	return filepath.Join(Dir(root), notifyScriptName)
-}
-
-// HelpScript renders the quick-start panel.
-func HelpScript(root string) string {
-	return filepath.Join(Dir(root), helpScriptName)
 }
 
 // ClaudeAgentLog records Claude subagent lifecycle hook events.

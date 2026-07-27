@@ -87,6 +87,12 @@ const (
 	// sessionDirPlaceholder marks where Stage substitutes the session directory
 	// into the vendored config's Run-block keybindings.
 	sessionDirPlaceholder = "@@SESSION_DIR@@"
+
+	// helpScriptPlaceholder marks where Stage substitutes the global
+	// quick-reference panel's path into the Alt-? Run-block keybinding. mux
+	// deliberately doesn't know qrouton's config layout — the caller resolves
+	// the path and hands it in via Workspace.HelpScript.
+	helpScriptPlaceholder = "@@HELP_SCRIPT@@"
 )
 
 // KDL fragments the layout renderer emits. Zellij layouts are indented KDL, so
