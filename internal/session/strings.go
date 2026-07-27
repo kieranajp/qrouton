@@ -89,8 +89,17 @@ const (
 	checkingOutFormat = "qrouton: checking out %s on %s…\n"
 )
 
+// Scratch sessions (a bare `qrouton`) are named after the invoking directory
+// plus entropy, falling back when the basename slugifies to nothing.
+const (
+	scratchFallbackName = "scratch"
+	scratchEntropyBytes = 2 // 4 hex characters
+)
+
 // The durable-artifact directories every session starts with, under
-// thoughts/shared. Status reads the first two to infer workflow state.
+// thoughts/shared — a symlink into <root>/thoughts/<slug>/shared, so documents
+// outlive the session directory. Status reads the first two to infer workflow
+// state.
 const (
 	scaffoldResearch = "research"
 	scaffoldPlans    = "plans"

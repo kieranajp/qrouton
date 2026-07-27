@@ -41,25 +41,60 @@ func main() {
 	}
 }
 
-// onboard is the default action. With owner/repo arguments it launches an ad-hoc
-// session directly; otherwise it opens the TUI to pick or create one.
+// onboard is the default action. With no arguments it opens the landing list.
+// A single argument naming an existing directory drops into a fresh zero-repo
+// scratch session named after it; owner/repo arguments launch an ad-hoc
+// session directly.
 func onboard(c *cli.Context) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
 	}
+	args := c.Args().Slice()
+	if len(args) == 0 {
+		return list(cfg, c.String(runnerFlag), c.Bool(refreshFlag))
+	}
+	if len(args) == 1 {
+		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
+			return launchScratch(cfg, args[0], c.String(runnerFlag))
+		}
+	}
 	sessions, err := session.Scan(cfg.Root)
 	if err != nil {
 		return err
 	}
-	if specs := c.Args().Slice(); len(specs) > 0 {
-		return launchAdhoc(cfg, sessions, specs, c.String(runnerFlag))
+	return launchAdhoc(cfg, sessions, args, c.String(runnerFlag))
+}
+
+// list opens the landing list: resume, create, or delete sessions.
+func list(cfg *config.Config, runnerID string, refresh bool) error {
+	sessions, err := session.Scan(cfg.Root)
+	if err != nil {
+		return err
 	}
-	request, err := tui.Run(cfg, sessions, c.String(runnerFlag), c.Bool(refreshFlag))
+	request, err := tui.Run(cfg, sessions, runnerID, refresh)
 	if err != nil || request == nil {
 		return err
 	}
 	return launchRunner(cfg, request.Dir, request.Runner, request.Resume)
+}
+
+// launchScratch is the directory-argument path: a zero-repo Assistant session
+// named after the given directory, with no picker and no network.
+func launchScratch(cfg *config.Config, target, runnerID string) error {
+	runner, err := pickRunner(cfg, runnerID)
+	if err != nil {
+		return err
+	}
+	abs, err := filepath.Abs(target)
+	if err != nil {
+		return err
+	}
+	dir, err := session.Create(cfg, session.ScratchName(abs), "", "", "", session.ModeAssistant, nil, nil)
+	if err != nil {
+		return err
+	}
+	return launchRunner(cfg, dir, runner, false)
 }
 
 // launchAdhoc skips the picker: it launches an Assistant-mode session with the

@@ -1,6 +1,8 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -123,6 +125,24 @@ func Slugify(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), slugSeparator), slugSeparator)
 }
 
+// ScratchName names a zero-repo scratch session after the directory qrouton
+// was invoked from, plus entropy to dodge collisions: running from
+// ~/Work/lifesum yields "lifesum-4f3a". A basename that slugifies to nothing
+// (e.g. "/") falls back to "scratch-<hex>".
+func ScratchName(cwd string) string {
+	base := Slugify(filepath.Base(cwd))
+	if base == "" {
+		base = scratchFallbackName
+	}
+	return base + slugSeparator + entropySuffix()
+}
+
+func entropySuffix() string {
+	b := make([]byte, scratchEntropyBytes)
+	_, _ = rand.Read(b) // crypto/rand never fails
+	return hex.EncodeToString(b)
+}
+
 // Scan: a session is any direct child of root containing a qrouton.json.
 func Scan(root string) ([]Manifest, error) {
 	entries, err := os.ReadDir(root)
@@ -234,13 +254,22 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 		m.Repos = append(m.Repos, mr)
 	}
 
-	// The durable-artifact scaffold the RPI workflow writes into.
+	// The durable-artifact scaffold the RPI workflow writes into. Documents
+	// live under <root>/thoughts/<slug> and the session reaches them through
+	// a relative symlink, so Delete's RemoveAll (which does not follow links)
+	// keeps them when the session directory goes.
 	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressStarted})
+	home := thoughtsHome(cfg.Root, slug)
 	for _, d := range scaffoldDirs {
-		if err := os.MkdirAll(filepath.Join(sessionpaths.Thoughts(dir), d), dirMode); err != nil {
+		if err := os.MkdirAll(filepath.Join(home, sessionpaths.SharedDirName, d), dirMode); err != nil {
 			emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
 			return "", err
 		}
+	}
+	if err := os.Symlink(filepath.Join("..", sessionpaths.ThoughtsDirName, slug),
+		filepath.Join(dir, sessionpaths.ThoughtsDirName)); err != nil {
+		emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
+		return "", err
 	}
 	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressCompleted})
 
@@ -257,6 +286,12 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 	_ = os.Remove(filepath.Join(dir, assemblingMarker))
 	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressCompleted})
 	return dir, nil
+}
+
+// thoughtsHome is where a session's documents actually live: under the root,
+// outside the session directory, so deleting the session keeps them.
+func thoughtsHome(root, slug string) string {
+	return filepath.Join(root, sessionpaths.ThoughtsDirName, slug)
 }
 
 func emitProgress(progress ProgressFunc, event Progress) {
