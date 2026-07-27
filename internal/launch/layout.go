@@ -64,18 +64,30 @@ func writeSupport(dir string, argv []string) error {
 // helpGeometry floats the quick-start panel over the middle of the workspace.
 var helpGeometry = mux.Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"}
 
+// superviseArgv is the agent pane's command: the supervisor that stamps the
+// session's assets and launches (and, when signalled, relaunches) the runner.
+// The handle and editor cross the exec boundary as flags, the same vocabulary
+// the MCP subcommand uses.
+func superviseArgv(qroutonBin, dir string, r Runner, handle mux.Handle, editor EditorCommand, resume bool) []string {
+	argv := []string{qroutonBin, agentSubcommand, sessionRootFlag, dir, runnerFlag, r.ID,
+		muxJSONFlag, handle.Marshal(), editorJSONFlag, editor.Marshal()}
+	if resume {
+		argv = append(argv, resumeFlag)
+	}
+	return argv
+}
+
 // workspace describes qrouton's session layout in backend-neutral terms: the
 // agent beside a shell and the repo/agent status panes, with the quick-start
 // help floating on top.
-func workspace(dir, slug string, argv []string, qroutonBin string) mux.Workspace {
-	runner := filepath.Base(argv[0])
+func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) mux.Workspace {
 	return mux.Workspace{
 		Slug: slug,
 		Dir:  dir,
 		Tiled: mux.Node{
 			Split: mux.SplitVertical,
 			Children: []mux.Node{
-				{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: argv}},
+				{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: agentArgv}},
 				{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
 					{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
 					{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
@@ -95,18 +107,17 @@ func workspace(dir, slug string, argv []string, qroutonBin string) mux.Workspace
 // Launch stamps the session's support files and workspace, then enters it
 // through the configured multiplexer: attaching to (or replacing) an existing
 // session, or starting a fresh one. On success the process is replaced by the
-// multiplexer and Launch never returns.
+// multiplexer and Launch never returns. The runner's own argv is not built
+// here: the agent pane runs the supervisor, which constructs it from the
+// manifest at each (re)launch.
 func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
 	slug := filepath.Base(dir)
-	argv, env, err := runnerLaunch(runner, qroutonBin, dir, editor, lp.Handle(slug), resume)
-	if err != nil {
+	if err := writeSupport(dir, runner.Command); err != nil {
 		return err
 	}
-	env = mux.WithEnv(env, EditorEnvVar, editor.Marshal())
-	if err := writeSupport(dir, argv); err != nil {
-		return err
-	}
-	ws := workspace(dir, slug, argv, qroutonBin)
+	argv := superviseArgv(qroutonBin, dir, runner, lp.Handle(slug), editor, resume)
+	env := mux.WithEnv(os.Environ(), EditorEnvVar, editor.Marshal())
+	ws := workspace(dir, slug, argv, runner.ID, qroutonBin)
 	if err := lp.Stage(ws); err != nil {
 		return err
 	}
@@ -116,7 +127,7 @@ func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, edito
 	}
 	switch state {
 	case mux.SessionLive:
-		attach, err := chooseExistingSession(filepath.Base(argv[0]))
+		attach, err := chooseExistingSession(runner.ID)
 		if err != nil {
 			return err
 		}

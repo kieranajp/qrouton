@@ -146,6 +146,40 @@ func TestStampAssetsFollowsModeRewrittenAfterCreation(t *testing.T) {
 	assertLinkTargetContains(t, filepath.Join(dir, "CLAUDE.md"), "ORCHESTRATOR.md")
 }
 
+// The escalation handoff: a brief at .qrouton/handoff.md rides into the
+// stamped primary discovery file, so a fresh orchestrator starts holding it.
+func TestStampAssetsAppendsHandoffBriefToPrimaryDiscovery(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".qrouton"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	brief := "the webhook retry brief: shared backoff clock, consumer ack deadline ruled out"
+	if err := os.WriteFile(filepath.Join(dir, ".qrouton", "handoff.md"), []byte(brief), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := StampAssets(dir); err != nil {
+		t.Fatal(err)
+	}
+	// CLAUDE.md still resolves to the primary (no manifest → orchestrator)…
+	assertLinkTargetContains(t, filepath.Join(dir, "CLAUDE.md"), "ORCHESTRATOR.md")
+	// …and the brief is genuinely inside what the runner discovers.
+	b, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), brief) {
+		t.Fatal("handoff brief not appended to the stamped primary discovery file")
+	}
+	// The non-primary mode prompt stays pristine.
+	ab, err := os.ReadFile(filepath.Join(dir, ".qrouton", "qrspi", "ASSISTANT.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(ab), brief) {
+		t.Fatal("handoff brief leaked into the non-primary mode prompt")
+	}
+}
+
 func assertLinkTargetContains(t *testing.T, link, want string) {
 	t.Helper()
 	target, err := os.Readlink(link)

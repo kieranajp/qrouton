@@ -31,6 +31,8 @@ const (
 	notifyScriptName   = "notify.sh"
 	helpScriptName     = "help.sh"
 	claudeAgentLogName = "claude-agents.jsonl"
+	handoffName        = "handoff.md"
+	agentPIDName       = "agent.pid"
 )
 
 // Dir is the session-private directory inside a session root.
@@ -67,4 +69,17 @@ func HelpScript(root string) string {
 // ClaudeAgentLog records Claude subagent lifecycle hook events.
 func ClaudeAgentLog(root string) string {
 	return filepath.Join(Dir(root), claudeAgentLogName)
+}
+
+// Handoff is the assistant's escalation brief. When it exists, the prompt
+// stamper appends it to the primary mode prompt, so a fresh orchestrator
+// starts with the brief in its system prompt.
+func Handoff(root string) string {
+	return filepath.Join(Dir(root), handoffName)
+}
+
+// AgentPID records the agent supervisor's pid, so the picker and
+// `qrouton mode` can signal it to relaunch the runner.
+func AgentPID(root string) string {
+	return filepath.Join(Dir(root), agentPIDName)
 }

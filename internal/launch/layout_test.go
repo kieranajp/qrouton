@@ -11,13 +11,17 @@ import (
 
 // stageWorkspace runs the launch-side stamping plus the Zellij adapter's
 // staging, mirroring what Launch does before entering the session, and
-// returns the rendered layout.
-func stageWorkspace(t *testing.T, dir string, argv []string) string {
+// returns the rendered layout. command is the runner's base command; the
+// agent pane itself runs the supervisor, as Launch now builds it.
+func stageWorkspace(t *testing.T, dir string, command []string) string {
 	t.Helper()
-	if err := writeSupport(dir, argv); err != nil {
+	if err := writeSupport(dir, command); err != nil {
 		t.Fatal(err)
 	}
-	if err := mux.NewZellij("zellij", "/tmp/zellij").Stage(workspace(dir, "test-session", argv, "/bin/qrouton")); err != nil {
+	runner := Runner{ID: filepath.Base(command[0]), Command: command}
+	agentArgv := superviseArgv("/bin/qrouton", dir, runner,
+		mux.Handle{Kind: "zellij", Session: "test-session"}, EditorCommand{Argv: []string{"vi"}}, false)
+	if err := mux.NewZellij("zellij", "/tmp/zellij").Stage(workspace(dir, "test-session", agentArgv, runner.ID, "/bin/qrouton")); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, ".qrouton", "layout.kdl"))
@@ -59,10 +63,13 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
+	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
+	}
+	if strings.Contains(string(config), `bind "Alt n" { NewPane; }`) {
+		t.Fatal("NewPane still holds the Alt-n chord; it belongs to de-escalation")
 	}
 	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")
@@ -72,6 +79,12 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	}
 	if !strings.Contains(layout, `"repos" "--session-root"`) {
 		t.Fatal("repos pane does not run the qrouton repos subcommand")
+	}
+	if !strings.Contains(layout, `"agent" "--session-root" "`+dir+`"`) || !strings.Contains(layout, `"--runner" "codex"`) {
+		t.Fatal("agent pane does not run the qrouton agent supervisor")
+	}
+	if !strings.Contains(layout, `"--mux-json"`) || !strings.Contains(layout, `"--editor-json"`) {
+		t.Fatal("supervisor argv lacks the handle/editor exec-boundary flags")
 	}
 	if !strings.Contains(layout, `floating_panes`) || !strings.Contains(layout, `name="qrouton · quick start"`) || !strings.Contains(layout, `close_on_exit=true`) {
 		t.Fatal("quick-start help is not a disposable floating pane")

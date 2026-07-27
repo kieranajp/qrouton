@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	agentcmd "github.com/kieranajp/qrouton/cmd/agent"
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
+	modecmd "github.com/kieranajp/qrouton/cmd/mode"
 	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -33,7 +35,7 @@ func main() {
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {
@@ -215,10 +217,10 @@ func adhocName(repos []github.Repo) string {
 	return strings.Join(names, adhocNameSeparator)
 }
 
+// launchRunner enters the session workspace. Prompt stamping is not done here:
+// the agent pane's supervisor stamps on every (re)launch, from the manifest as
+// it then stands.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
-	if err := launch.StampAssets(dir); err != nil {
-		return err
-	}
 	editor, err := launch.ResolveEditor(cfg.Editor)
 	if err != nil {
 		return err

@@ -12,6 +12,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -84,7 +85,13 @@ func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels 
 	out.Name = name
 	out.Mode = session.ModeRPI
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
-	return session.WriteManifest(dir, out)
+	if err := session.WriteManifest(dir, out); err != nil {
+		return err
+	}
+	// Best-effort: the supervisor replaces the assistant with a fresh
+	// orchestrator; with no supervisor, the mode takes effect next launch.
+	launch.SignalSupervisor(dir)
+	return nil
 }
 
 // cancelPicker records the cancelled outcome — the stanza alone, mode and

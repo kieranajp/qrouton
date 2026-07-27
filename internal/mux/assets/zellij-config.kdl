@@ -194,7 +194,21 @@ keybinds clear-defaults=true {
         bind "Alt j" { MoveFocus "down"; }
         bind "Alt k" { MoveFocus "up"; }
         bind "Alt l" { MoveFocusOrTab "right"; }
-        bind "Alt n" { NewPane; }
+        // De-escalation: flip the session back to assistant; the supervisor
+        // relaunches the runner with the conversation intact. NewPane comes
+        // off the single-chord set (still Ctrl-g → pane mode → n). Flags come
+        // before the positional mode so the CLI parses them.
+        bind "Alt n" {
+            Run "qrouton" "mode" "--session-root" "@@SESSION_DIR@@" "assistant" {
+                floating true
+                x "25%"
+                y "5%"
+                width "50%"
+                height "18%"
+                name "de-escalate"
+                close_on_exit true
+            }
+        }
         bind "Alt o" { MoveTab "right"; }
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" { ToggleGroupMarking; }

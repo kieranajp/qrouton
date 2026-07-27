@@ -32,11 +32,13 @@ const (
 	reposSubcommand      = "repos"
 	agentsSubcommand     = "agents"
 	agentEventSubcommand = "agent-event"
+	agentSubcommand      = "agent"
 
 	sessionRootFlag = "--session-root"
 	runnerFlag      = "--runner"
 	editorJSONFlag  = "--editor-json"
 	muxJSONFlag     = "--mux-json"
+	resumeFlag      = "--resume"
 
 	// Placeholders the embedded help script substitutes at stamp time.
 	warningPlaceholder = "@@WARNING@@"
