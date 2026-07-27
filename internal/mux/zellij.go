@@ -137,20 +137,42 @@ func (z *Zellij) Attach(ws Workspace, env []string) error {
 	return execvEnv(z.bin, []string{zellijBin, configFlag, zellijConfigPath(ws.Dir), attachCmd, ws.Slug}, ws.Dir, env)
 }
 
+// Start creates the session detached and then attaches to it. Handing the layout
+// to a session we are simultaneously attaching to loses it: the client parses the
+// layout and sends it to a server that is still booting, and when the terminal
+// answers zellij's startup queries in that window the layout instruction lands in
+// the server's retry queue — the session comes up with zellij's default layout
+// (one pane, both plugin bars) and none of our panes. Creating it detached leaves
+// no client traffic to race with, so the layout always lands.
 func (z *Zellij) Start(ws Workspace, env []string) error {
 	env = WithEnv(env, socketDirEnvVar, z.socketDir)
-	// 0.44: -s + -n conflict; the session is named via session_name in the layout itself
-	return execvEnv(z.bin, []string{zellijBin, configFlag, zellijConfigPath(ws.Dir), newSessionWithFlag, zellijLayoutPath(ws.Dir)}, ws.Dir, env)
+	create := exec.Command(z.bin, createArgv(zellijConfigPath(ws.Dir), zellijLayoutPath(ws.Dir), ws.Slug)...)
+	create.Env, create.Dir = env, ws.Dir
+	if out, err := create.CombinedOutput(); err != nil {
+		// Creation refuses a name that is already taken (a session the caller's
+		// delete could not remove). That one is not a failure — attach to it.
+		if state, lookupErr := z.Lookup(ws.Slug); lookupErr != nil || state == SessionMissing {
+			return fmt.Errorf("create session %q: %w: %s", ws.Slug, err, strings.TrimSpace(string(out)))
+		}
+	}
+	return z.Attach(ws, env)
 }
 
-// renderKDL serialises the workspace into a Zellij layout, wrapped in the
-// tab-bar/status-bar chrome and named so the new session self-attaches.
+// createArgv builds the detached-creation arguments. The session is named by
+// session_name in the layout; -b creates it without attaching.
+func createArgv(config, layout, slug string) []string {
+	return []string{configFlag, config, layoutFlag, layout, attachCmd, createBackground, slug}
+}
+
+// renderKDL serialises the workspace into a Zellij layout, topped with the
+// tab-bar and named so the new session self-attaches. Zellij's status-bar is
+// deliberately absent: it advertises modes the vendored config deleted, and
+// qrouton's own strip pane holds the bottom row.
 func renderKDL(ws Workspace) string {
 	var b strings.Builder
 	b.WriteString(kdlLayoutOpen)
 	b.WriteString(kdlTabBar)
 	renderNode(&b, ws.Tiled, 1)
-	b.WriteString(kdlStatusBar)
 	if len(ws.Floating) > 0 {
 		b.WriteString(kdlFloatingOpen)
 		for _, f := range ws.Floating {
@@ -189,6 +211,9 @@ func renderNode(b *strings.Builder, n Node, depth int) {
 	attrs := ""
 	if s := kdlSize(n.Size); s != "" {
 		attrs += kdlSizeAttr + s
+	}
+	if n.Pane.Borderless {
+		attrs += kdlBorderless
 	}
 	attrs += fmt.Sprintf(kdlNameAttr, n.Pane.Name)
 	if n.Pane.CloseOnExit {
@@ -255,7 +280,8 @@ func (z *zellijHost) action(ctx context.Context, args ...string) ([]byte, error)
 }
 
 // Spawn opens a floating, pinned pane so it stays visible while the user keeps
-// typing to the agent, then returns focus to the tiled agent pane.
+// typing to the agent, then returns focus to the tiled agent pane — unless
+// opts.Focus asks to keep it on the new pane instead.
 func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, error) {
 	args := []string{newPaneAction, floatingFlag, pinnedFlag, trueValue,
 		xFlag, opts.Geometry.X, yFlag, opts.Geometry.Y, widthFlag, opts.Geometry.Width, heightFlag, opts.Geometry.Height,
@@ -270,9 +296,11 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 		return "", err
 	}
 	id := strings.TrimSpace(string(out))
-	// The new pane is floating and focused; toggling the floating layer off returns
-	// focus to the agent while pinned panes stay rendered on top for reference.
-	_, _ = z.action(ctx, toggleFloatingAction)
+	if !opts.Focus {
+		// The new pane is floating and focused; toggling the floating layer off returns
+		// focus to the agent while pinned panes stay rendered on top for reference.
+		_, _ = z.action(ctx, toggleFloatingAction)
+	}
 	return id, nil
 }
 

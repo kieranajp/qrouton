@@ -19,6 +19,13 @@ const (
 
 	notifyPaneName = "notify"
 
+	// escalatePaneName is the reserved registry key for the picker pane the
+	// escalate tool spawns; a second escalate call replaces a stale picker,
+	// matching how a second open_file replaces the previous editor pane. It
+	// also matches the pane name the Alt-e keybinding gives its own picker.
+	escalatePaneName  = "escalate"
+	escalatePaneLabel = "escalate"
+
 	// readPaneLimit caps how much pane output read_pane returns to the agent. The
 	// tail is kept, because that is where fresh command output lands.
 	readPaneLimit = 20000
@@ -27,6 +34,14 @@ const (
 	shellLoginFlag = "-lc"
 
 	currentDir = "."
+
+	// The picker subcommand and flags escalate spawns, resolved against the
+	// running qrouton binary (os.Executable()) rather than a bare "qrouton" on
+	// PATH — the same self-exec convention internal/launch/supervise.go uses.
+	pickSubcommand = "pick"
+	sessionRootArg = "--session-root"
+	nameArg        = "--name"
+	prefixArg      = "--prefix"
 )
 
 // Pane labels, as they appear in the pane's title bar. Each names the keys that
@@ -61,6 +76,16 @@ const (
 	openPanesPrefix = "Open panes: "
 	openPanesSuffix = "."
 	paneNameJoiner  = ", "
+
+	// escalationConfirmedMessage is the confirm-path return. In practice the
+	// agent supervisor replaces this process before the poll below ever
+	// observes a confirmed outcome, so this string exists for completeness
+	// and for tests, not because the agent is expected to read it.
+	escalationConfirmedMessage = "Escalated: the session is now in RPI mode."
+
+	escalationCancelledMessage = "The picker was cancelled. Still Assistant — carry on."
+
+	escalationTimeoutMessage = "The picker is still open; the user hasn't confirmed or cancelled yet."
 )
 
 // The toast notify opens: it rings the bell, plays the generated cross-platform

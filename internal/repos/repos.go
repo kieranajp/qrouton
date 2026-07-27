@@ -28,8 +28,12 @@ func statusLines(root string) []string {
 	lines := []string{paneui.Title(paneTitle)}
 	b, err := os.ReadFile(sessionpaths.Manifest(root))
 	var m session.Manifest
-	if err != nil || json.Unmarshal(b, &m) != nil || len(m.Repos) == 0 {
+	if err != nil || json.Unmarshal(b, &m) != nil {
 		return append(lines, paneui.Muted(noManifestLabel))
+	}
+	if len(m.Repos) == 0 {
+		// A scratch session: point at the way repositories arrive.
+		return append(lines, paneui.Muted(emptyStateLabel), paneui.Muted(emptyStateHint))
 	}
 	for _, r := range m.Repos {
 		lines = append(lines, repoLine(root, r))

@@ -58,21 +58,28 @@ type Geometry struct {
 	X, Y, Width, Height string
 }
 
-// SpawnOptions describes a runtime pane opened through a PaneHost.
+// SpawnOptions describes a runtime pane opened through a PaneHost. Focus keeps
+// keyboard focus on the spawned pane instead of the default
+// spawn-returns-focus-to-the-agent behaviour — the escalation picker is the
+// one caller that wants it, since no agent is waiting for the terminal back.
 type SpawnOptions struct {
 	Label       string
 	Cwd         string
 	Geometry    Geometry
 	CloseOnExit bool
+	Focus       bool
 	Command     []string
 }
 
-// Pane is one terminal in a workspace layout, running Command.
+// Pane is one terminal in a workspace layout, running Command. Borderless
+// drops the pane's frame — how a one-row strip renders as a bar rather than a
+// framed pane.
 type Pane struct {
 	Name        string
 	Command     []string
 	CloseOnExit bool
 	Focus       bool
+	Borderless  bool
 }
 
 // Node is an element of the tiled layout tree: a leaf Pane, or a split with

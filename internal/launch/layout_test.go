@@ -97,6 +97,24 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	}
 }
 
+func TestStagedWorkspaceCarriesTheStatusStrip(t *testing.T) {
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	layout := stageWorkspace(t, dir, []string{"codex"})
+	if !strings.Contains(layout, `pane size=1 borderless=true name="status"`) {
+		t.Fatalf("layout lacks the one-row borderless strip pane:\n%s", layout)
+	}
+	if !strings.Contains(layout, `"status" "--session-root" "`+dir+`"`) {
+		t.Fatal("strip pane does not run the qrouton status subcommand")
+	}
+	if strings.Contains(layout, "zellij:status-bar") {
+		t.Fatal("Zellij's status-bar survived; the strip owns the bottom row")
+	}
+	if !strings.Contains(layout, "zellij:tab-bar") {
+		t.Fatal("tab-bar dropped; only the status-bar was meant to go")
+	}
+}
+
 func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)

@@ -16,6 +16,7 @@ import (
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
 	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
+	statuscmd "github.com/kieranajp/qrouton/cmd/status"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -35,7 +36,7 @@ func main() {
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, reposcmd.Command, statuscmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {

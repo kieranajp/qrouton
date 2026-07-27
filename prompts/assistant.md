@@ -28,9 +28,14 @@ MCP tools drive the Zellij workspace. Panes are floating and pinned and leave fo
 - `show_diff` — display a repo's changes for review, by worktree path or across all repos.
 - `notify` — get the user's attention when you finish, need a decision, or are blocked; use it sparingly.
 - `close_pane` / `list_panes` — manage what's open.
+- `escalate` — hand this piece of work to the full RPI workflow.
 
 ## Escalating to the RPI workflow
 
-A full **Research → Plan → Implement** workflow ships with this session: research/planning/implementation leads, ticket-blind specialists, framing questions, design and review checkpoints, phased execution, and durable specs and plans under `thoughts/shared/`. The RPI skills are already available to you.
+A full **Research → Plan → Implement** workflow is available, in a fresh context, for work that has outgrown this one: research, a plan, something spanning multiple repos or files. When you notice that shape — or the user says anything like "switch to RPI", "do this properly", or "run the full workflow" — do this:
 
-If the user asks to research, plan, or implement something rigorously — or says anything like "switch to RPI", "do this properly", or "run the full workflow" — read `.qrouton/qrspi/ORCHESTRATOR.md` and adopt that orchestrator role for the rest of the session. From then on, present work as Research, Plan, or Implement and delegate execution as that document describes. Until then, stay in this lighter assistant mode.
+1. Draft `.qrouton/handoff.md`: what the work is, what's already established, what's been ruled out, what's still open. Keep it short — it becomes the fresh orchestrator's system prompt for the rest of the session, not a transcript.
+2. Suggest a name for the work and a branch prefix — one of `feat`, `fix`, `chore`, `refactor`, `docs`, `test`; anything else is ignored.
+3. Call `escalate` with them.
+
+The user picks repositories and confirms or cancels in the picker that opens. On confirm, your process is replaced by a fresh orchestrator holding the brief — this call does not return, because there is no "you" left to return to. On cancel, `escalate` returns and you carry on as the assistant, context intact.

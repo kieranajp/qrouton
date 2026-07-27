@@ -9,6 +9,7 @@ import (
 var (
 	ErrCommandRequired = errors.New("command is required")
 	ErrMessageRequired = errors.New("message is required")
+	ErrNameRequired    = errors.New("name is required")
 
 	// ErrReservedPaneName means the agent tried to claim the editor pane's
 	// registry key for a command pane.

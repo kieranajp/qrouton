@@ -78,23 +78,27 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle mux.Handle, editor E
 }
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
-// agent beside a shell and the repo/agent status panes, with the quick-start
-// help floating on top.
+// agent beside a shell and the repo/agent status panes, a full-width one-row
+// mode/phase strip along the bottom, and the quick-start help floating on top.
 func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) mux.Workspace {
 	return mux.Workspace{
 		Slug: slug,
 		Dir:  dir,
 		Tiled: mux.Node{
-			Split: mux.SplitVertical,
+			Split: mux.SplitHorizontal,
 			Children: []mux.Node{
-				{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: agentArgv}},
-				{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
-					{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
-					{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
-						{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
-						{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},
+				{Split: mux.SplitVertical, Children: []mux.Node{
+					{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: agentArgv}},
+					{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
+						{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
+						{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
+							{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
+							{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},
+						}},
 					}},
 				}},
+				{Size: stripPaneRows, Pane: &mux.Pane{Name: statusPaneName, Borderless: true,
+					Command: []string{qroutonBin, statusSubcommand, sessionRootFlag, dir}}},
 			},
 		},
 		Floating: []mux.Floating{{

@@ -25,12 +25,14 @@ const (
 	shellPaneName  = "shell"
 	reposPaneName  = "repos"
 	agentsPaneName = "agents"
+	statusPaneName = "status"
 	helpPaneName   = "qrouton · quick start"
 
 	// Subcommands qrouton launches against itself to drive its own panes.
 	mcpSubcommand        = "mcp"
 	reposSubcommand      = "repos"
 	agentsSubcommand     = "agents"
+	statusSubcommand     = "status"
 	agentEventSubcommand = "agent-event"
 	agentSubcommand      = "agent"
 
@@ -56,6 +58,7 @@ const (
 	agentColumnSize = "65%"
 	reposColumnSize = "35%"
 	watchPaneRows   = "6"
+	stripPaneRows   = "1"
 )
 
 // scriptMode is the permission bit the generated pane scripts need.

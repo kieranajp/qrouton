@@ -6,11 +6,22 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// shortEscalatePoll shrinks escalate's poll interval and timeout for the
+// duration of a test, restoring them on cleanup.
+func shortEscalatePoll(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	originalTimeout, originalInterval := escalateTimeout, escalatePollInterval
+	escalateTimeout, escalatePollInterval = timeout, 5*time.Millisecond
+	t.Cleanup(func() { escalateTimeout, escalatePollInterval = originalTimeout, originalInterval })
+}
 
 // fakeZellij writes a script that logs every invocation to $CALL_LOG, hands out a
 // fresh pane id for each new-pane, and echoes canned output for dump-screen.
@@ -210,6 +221,126 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 }
 
+func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
+	dir := t.TempDir()
+	helper, log := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	shortEscalatePoll(t, 200*time.Millisecond)
+
+	// A cancelled stanza lets escalate return promptly once its poll notices
+	// it, so the test doesn't wait out the full timeout to inspect the argv.
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+		})
+	}()
+
+	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry", BranchPrefix: "fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message != escalationCancelledMessage {
+		t.Fatalf("message = %q, want the cancelled message", message)
+	}
+
+	bin, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := readLog(t, log)
+	for _, want := range []string{
+		"new-pane --floating --pinned true",
+		"--x 20% --y 3% --width 60% --height 94%",
+		"--name escalate",
+		"-- " + bin + " pick --session-root " + dir + " --name webhook retry --prefix fix",
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("calls missing %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "toggle-floating-panes") {
+		t.Fatalf("escalate must keep focus on the picker, not return it to the agent:\n%s", s)
+	}
+}
+
+func TestEscalateRejectsBlankName(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+
+	if _, err := p.escalate(context.Background(), escalateInput{Name: "   "}); err == nil {
+		t.Fatal("accepted a blank name")
+	}
+}
+
+func TestEscalateBlocksUntilConfirmed(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	shortEscalatePoll(t, time.Second)
+
+	start := time.Now()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Escalation: &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()},
+		})
+	}()
+
+	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 40*time.Millisecond {
+		t.Fatalf("escalate returned after %s, before the confirmed stanza landed", elapsed)
+	}
+	if message != escalationConfirmedMessage {
+		t.Fatalf("message = %q, want the confirmed message", message)
+	}
+}
+
+func TestEscalateBlocksUntilCancelled(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	shortEscalatePoll(t, time.Second)
+
+	start := time.Now()
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+		})
+	}()
+
+	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed < 40*time.Millisecond {
+		t.Fatalf("escalate returned after %s, before the cancelled stanza landed", elapsed)
+	}
+	if message != escalationCancelledMessage {
+		t.Fatalf("message = %q, want the cancelled message", message)
+	}
+}
+
+func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	shortEscalatePoll(t, 20*time.Millisecond)
+
+	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message != escalationTimeoutMessage {
+		t.Fatalf("message = %q, want the timeout message", message)
+	}
+}
+
 func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	ctx := context.Background()
 	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, mux.NewZellijHost("zellij", "test-session"))
@@ -226,7 +357,7 @@ func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	}
 	defer cs.Close()
 
-	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false}
+	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false, "escalate": false}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)
