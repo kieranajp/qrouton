@@ -56,7 +56,7 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	for _, want := range []string{
 		"delegate work to subagents", // the fallback RPI tagline; the script resolves the real one at runtime
 		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
-		"Alt-g", "floating shell", "Alt-f", "show / hide", "Ctrl-g x", "Dismiss a panel", "Alt-+ / Alt--", "Alt-?",
+		"Alt-g", "floating shell", "Alt-f", "show / hide", "Ctrl-g p x", "Dismiss a panel", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
 		"Ctrl-g Ctrl-q", "Press any key to close",
 		// The richer panel also explains the workspace itself, not just its keys.
 		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "checkout state and subagent activity",

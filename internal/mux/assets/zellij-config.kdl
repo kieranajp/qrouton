@@ -180,7 +180,7 @@ keybinds clear-defaults=true {
         }
         // No bare close chord: CloseFocus cannot tell the agent pane from a
         // popup, and one stray Alt-x took the agent down. It lives in pane mode
-        // (Ctrl-g x) instead, where closing a workspace pane is deliberate.
+        // (Ctrl-g p x) instead, where closing a workspace pane is deliberate.
         bind "Alt left" { MoveFocusOrTab "left"; }
         bind "Alt down" { MoveFocus "down"; }
         bind "Alt up" { MoveFocus "up"; }

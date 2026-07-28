@@ -53,7 +53,7 @@ const (
 // act on it, since the pane is the only place the user sees them.
 const (
 	// The editor pane keeps Esc for the editor itself, so it names the chord.
-	editorPaneLabel  = "Editor · Alt-f to view · Ctrl-g x to close"
+	editorPaneLabel  = "Editor · Alt-f to view · Ctrl-g p x to close"
 	commandPaneLabel = "▶ "
 	diffPaneLabel    = "◆ "
 	notifyPaneLabel  = "🔔 notification"
