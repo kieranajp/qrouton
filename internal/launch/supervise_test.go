@@ -130,6 +130,39 @@ func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
 	}
 }
 
+// The escalation can land while no supervisor is watching the transition — a
+// workspace restart between the picker's confirm and the next launch, or a
+// signal that never arrived. The launcher then passes resume, the manifest
+// already reads "rpi", and there is no change left to observe: the handoff used
+// to silently resume the assistant's conversation into the fresh orchestrator.
+func TestSuperviseStartsFreshWhenEscalationPrecedesTheLaunch(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeAssistant)
+	if err := session.SetMode(dir, session.ModeRPI); err != nil {
+		t.Fatal(err)
+	}
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		return false, nil
+	})
+
+	// resume: true, as the launcher's resume path passes on a restart.
+	if err := Supervise(dir, testRunner(), mux.Handle{Kind: "zellij", Session: "s"}, EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 1 {
+		t.Fatalf("expected one launch, got %d", len(argvs))
+	}
+	for _, arg := range argvs[0] {
+		if arg == claudeContinueFlag {
+			t.Fatalf("handoff resumed the assistant's conversation: %v", argvs[0])
+		}
+	}
+	if _, err := os.Stat(sessionpaths.HandoffPending(dir)); !os.IsNotExist(err) {
+		t.Fatal("handoff marker outlived the launch that used it; a later restart would clear the context again")
+	}
+}
+
 // The panel greets the session, not every runner the supervisor launches: an
 // escalation relaunch must not float it over the fresh orchestrator.
 func TestSuperviseFloatsTheHelpPanelOnceAtStartup(t *testing.T) {

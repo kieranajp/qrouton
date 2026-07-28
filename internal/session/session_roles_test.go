@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func makeOrigin(t *testing.T, name string) (string, string) {
@@ -338,6 +339,47 @@ func TestSetModePersistsAcrossReread(t *testing.T) {
 	}
 	if got.Mode != ModeRPI {
 		t.Fatalf("mode after SetMode = %q, want rpi", got.Mode)
+	}
+}
+
+// Escalating out of assistant mode owes the next runner a fresh conversation,
+// and that debt is recorded on disk so a restart cannot lose it. Every other
+// mode write must leave no marker, or a later launch would discard a
+// conversation it was meant to keep.
+func TestWriteManifestMarksOnlyTheEscalationHandoff(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marker := sessionpaths.HandoffPending(dir)
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Fatal("a freshly created session already owes a handoff")
+	}
+
+	for _, tc := range []struct {
+		name string
+		to   SessionMode
+		want bool
+	}{
+		{"assistant to rpi is a handoff", ModeRPI, true},
+		{"rpi to rpi only adds repositories", ModeRPI, false},
+		{"rpi to assistant is de-escalation", ModeAssistant, false},
+		{"assistant to assistant is a no-op", ModeAssistant, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			os.Remove(marker)
+			if err := SetMode(dir, tc.to); err != nil {
+				t.Fatal(err)
+			}
+			_, err := os.Stat(marker)
+			if got := err == nil; got != tc.want {
+				t.Fatalf("marker present = %v, want %v", got, tc.want)
+			}
+		})
 	}
 }
 

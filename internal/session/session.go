@@ -409,11 +409,32 @@ func WriteManifest(dir string, m Manifest) error {
 	if err != nil {
 		return err
 	}
+	// Read before the write: it compares m against what is still on disk.
+	handoff := escalatesToRPI(dir, m)
 	tmp := sessionpaths.Manifest(dir) + manifestTmpSuffix
 	if err := os.WriteFile(tmp, b, fileMode); err != nil {
 		return err
 	}
-	return os.Rename(tmp, sessionpaths.Manifest(dir))
+	if err := os.Rename(tmp, sessionpaths.Manifest(dir)); err != nil {
+		return err
+	}
+	if handoff {
+		// The session-private directory need not exist yet: a manifest can be
+		// written before the launcher stages anything. Best-effort beyond that —
+		// losing the marker costs the fresh context, not the escalation itself.
+		_ = os.MkdirAll(sessionpaths.Dir(dir), dirMode)
+		_ = os.WriteFile(sessionpaths.HandoffPending(dir), nil, fileMode)
+	}
+	return nil
+}
+
+// escalatesToRPI reports whether writing m turns an assistant session into an
+// RPI one. That transition alone hands the next runner a fresh conversation, so
+// it is marked here — the one place every mode change passes through, rather
+// than in each caller that happens to set a mode.
+func escalatesToRPI(dir string, m Manifest) bool {
+	prev, err := Load(dir)
+	return err == nil && prev.Mode.effective() == ModeAssistant && m.Mode.effective() == ModeRPI
 }
 
 func emitProgress(progress ProgressFunc, event Progress) {

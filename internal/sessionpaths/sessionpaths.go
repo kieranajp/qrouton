@@ -31,6 +31,7 @@ const (
 	notifyScriptName   = "notify.sh"
 	claudeAgentLogName = "claude-agents.jsonl"
 	handoffName        = "handoff.md"
+	handoffPendingName = "handoff.pending"
 	agentPIDName       = "agent.pid"
 )
 
@@ -76,4 +77,11 @@ func Handoff(root string) string {
 // `qrouton mode` can signal it to relaunch the runner.
 func AgentPID(root string) string {
 	return filepath.Join(Dir(root), agentPIDName)
+}
+
+// HandoffPending marks an escalation that still owes the next runner a fresh
+// conversation. On disk rather than in the supervisor's memory, so a restart
+// between the escalation and the next launch still honours the handoff.
+func HandoffPending(root string) string {
+	return filepath.Join(Dir(root), handoffPendingName)
 }

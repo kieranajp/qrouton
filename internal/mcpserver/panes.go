@@ -220,10 +220,13 @@ func (m *paneManager) help(ctx context.Context) (string, error) {
 // up. It then blocks until the manifest records an escalation outcome newer
 // than the spawn.
 //
-// On confirm, the agent supervisor kills and re-execs this MCP server's
-// parent process before the poll below would ever observe the outcome, so in
-// practice this call never returns on that path — the handoff *is* the
-// caller disappearing. Only cancel and timeout are ever actually seen.
+// On confirm, the agent supervisor kills and relaunches this MCP server's
+// parent process, so usually the handoff *is* the caller disappearing and this
+// call never returns. It is a race, not a guarantee: if the relaunch is slow or
+// never happens (a lost signal), the poll does observe the confirmed outcome and
+// the caller reads the message below. The escalation still holds either way —
+// the fresh context is owed by a marker on disk, not by this process dying. See
+// sessionpaths.HandoffPending.
 func (m *paneManager) escalate(ctx context.Context, input escalateInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
