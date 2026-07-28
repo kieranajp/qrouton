@@ -169,9 +169,8 @@ func createArgv(config, layout, slug string) []string {
 }
 
 // renderKDL serialises the workspace into a Zellij layout, topped with the
-// compact bar and named so the new session self-attaches. Zellij's status-bar is
-// deliberately absent: it advertises modes the vendored config deleted, and
-// qrouton's own strip pane holds the bottom row.
+// status bar and named so the new session self-attaches. The bar goes on top
+// because qrouton's own strip pane holds the bottom row.
 func renderKDL(ws Workspace) string {
 	var b strings.Builder
 	b.WriteString(kdlLayoutOpen)

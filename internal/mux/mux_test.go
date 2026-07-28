@@ -88,7 +88,7 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 	}
 	kdl := renderKDL(ws)
 	for _, want := range []string{
-		`plugin location="zellij:compact-bar"`,
+		`plugin location="zellij:status-bar"`,
 		`pane split_direction="vertical" {`,
 		`pane split_direction="horizontal" size="35%" {`, // percentages stay quoted
 		`pane size=6 name="status" {`,                    // row counts render bare
@@ -108,10 +108,10 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 	if strings.Contains(kdl, "floating_panes") {
 		t.Fatalf("rendered layout floats a pane; geometry would resolve pre-attach:\n%s", kdl)
 	}
-	// Zellij's own status-bar advertises modes the vendored config deleted;
-	// qrouton's strip pane owns the bottom row instead.
-	if strings.Contains(kdl, "zellij:status-bar") {
-		t.Fatalf("rendered layout still carries zellij:status-bar:\n%s", kdl)
+	// The bar goes on top: qrouton's own strip pane owns the bottom row, and two
+	// bars stacked there would cost a row of the repos column for nothing.
+	if !strings.HasPrefix(kdl, "layout {\n"+kdlIndent+"pane size=1 borderless=true {\n") {
+		t.Fatalf("status bar is not the layout's first pane:\n%s", kdl)
 	}
 }
 

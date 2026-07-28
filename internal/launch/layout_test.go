@@ -194,16 +194,11 @@ func TestStagedWorkspaceCarriesTheStatusStrip(t *testing.T) {
 	if !strings.Contains(layout, `"status" "--session-root" "`+dir+`"`) {
 		t.Fatal("strip pane does not run the qrouton status subcommand")
 	}
-	if strings.Contains(layout, "zellij:status-bar") {
-		t.Fatal("Zellij's status-bar survived; the strip owns the bottom row")
-	}
-	// compact-bar carries the mode indicator the plain tab-bar lacked; status-bar
-	// stays out, since it lists keybindings this config does not have.
-	if !strings.Contains(layout, "zellij:compact-bar") {
-		t.Fatal("compact-bar dropped; the mode indicator goes with it")
-	}
-	if strings.Contains(layout, "zellij:status-bar") {
-		t.Fatal("status-bar is back; it advertises keybindings the config deleted")
+	// status-bar, for the keybinding hints; compact-bar showed the mode alone,
+	// which told the user nothing about what the mode could do. It sits at the
+	// top — qrouton's own strip still owns the bottom row.
+	if !strings.Contains(layout, "zellij:status-bar") {
+		t.Fatal("status-bar dropped; the keybinding hints go with it")
 	}
 }
 

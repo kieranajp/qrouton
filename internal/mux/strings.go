@@ -114,10 +114,12 @@ const (
 
 	kdlLayoutOpen = "layout {\n"
 	kdlBlockClose = "}\n"
-	// compact-bar rather than tab-bar: same single row, but it also shows the
-	// current mode, so Ctrl-g leads somewhere visible. Unlike status-bar it does
-	// not enumerate keybindings, so it cannot advertise ones this config dropped.
-	kdlBar = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:compact-bar\"\n" + kdlIndent + "}\n"
+	// status-bar, for the keybinding hints after Ctrl-g: compact-bar showed the
+	// mode but nothing about what the mode could do, which made it useless in
+	// practice. It renders from the live keybind set, so it reflects this config
+	// rather than Zellij's defaults. One row, as stock; the tab strip stays out
+	// since a qrouton session has a single tab.
+	kdlBar = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:status-bar\"\n" + kdlIndent + "}\n"
 
 	kdlPaneKeyword   = "pane"
 	kdlCommandFormat = "command %q\n"
