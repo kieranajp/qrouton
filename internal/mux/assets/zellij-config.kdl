@@ -185,7 +185,7 @@ keybinds clear-defaults=true {
         bind "Alt down" { MoveFocus "down"; }
         bind "Alt up" { MoveFocus "up"; }
         bind "Alt right" { MoveFocusOrTab "right"; }
-        bind "Alt +" { Resize "Increase"; }
+        bind "Alt +" "Alt Shift =" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
         bind "Alt =" { Resize "Increase"; }
         bind "Alt [" { PreviousSwapLayout; }
@@ -213,7 +213,7 @@ keybinds clear-defaults=true {
         }
         bind "Alt o" { MoveTab "right"; }
         bind "Alt p" { TogglePaneInGroup; }
-        bind "Alt Shift p" { ToggleGroupMarking; }
+        bind "Alt Shift p" "Alt P" { ToggleGroupMarking; }
         // Cheap focus cycle: Zellij has no focus-by-name/index action.
         bind "Alt tab" { SwitchFocus; }
         // Re-summons the quick-reference panel that greets the session at
@@ -222,7 +222,11 @@ keybinds clear-defaults=true {
         // the mode tagline, so its cwd must be the session directory
         // explicitly: a Run block's default cwd follows the focused pane,
         // which may have wandered elsewhere in the shell.
-        bind "Alt ?" {
+        // Both spellings of the same chord: a terminal speaking the Kitty
+        // keyboard protocol (Ghostty, Kitty, WezTerm) reports the unshifted
+        // keycap plus Shift, so ? arrives as "Alt Shift /" and "Alt ?" alone
+        // never fires. Every shifted Alt chord below needs the pair.
+        bind "Alt ?" "Alt Shift /" {
             Run "sh" "@@HELP_SCRIPT@@" {
                 cwd "@@SESSION_DIR@@"
                 floating true

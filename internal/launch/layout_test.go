@@ -76,7 +76,10 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `bind "Alt tab"`, `bind "Alt ?"`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
+	for _, want := range []string{`bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `bind "Alt tab"`,
+		// Shifted Alt chords carry both spellings; a Kitty-protocol terminal
+		// reports the unshifted keycap plus Shift.
+		`bind "Alt ?" "Alt Shift /"`, `bind "Alt +" "Alt Shift ="`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
