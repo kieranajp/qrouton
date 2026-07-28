@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type EditorCommand struct {
@@ -96,9 +97,10 @@ func ResolveSessionDir(root, name string) (string, error) {
 	return real, nil
 }
 
-// resolveWithinSession returns the real, absolute path for name (relative paths are
-// taken against root) only if it exists and resolves inside root after following
-// symlinks; otherwise it errors. It does not constrain the kind of file found.
+// resolveWithinSession returns the real, absolute path for name (relative paths
+// are taken against root) only if it exists and resolves inside the session:
+// under root, or under the artifact home its thoughts symlink points at. It does
+// not constrain the kind of file found.
 func resolveWithinSession(root, name string) (string, error) {
 	root, err := filepath.Abs(root)
 	if err != nil {
@@ -120,9 +122,19 @@ func resolveWithinSession(root, name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %q", ErrOutsideSessionMissing, name)
 	}
-	rel, err := filepath.Rel(root, real)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("%w: %q", ErrOutsideSession, name)
+	if within(root, real) {
+		return real, nil
 	}
-	return real, nil
+	// session.Create parks documents outside the session dir so Delete keeps them.
+	if home, err := filepath.EvalSymlinks(filepath.Join(root, sessionpaths.ThoughtsDirName)); err == nil && within(home, real) {
+		return real, nil
+	}
+	return "", fmt.Errorf("%w: %q", ErrOutsideSession, name)
+}
+
+// within reports whether real is base or sits underneath it; both absolute and
+// already symlink-resolved.
+func within(base, real string) bool {
+	rel, err := filepath.Rel(base, real)
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }

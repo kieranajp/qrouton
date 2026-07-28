@@ -47,3 +47,42 @@ func TestResolveSessionFileRejectsEscapes(t *testing.T) {
 		t.Fatal("accepted symlink escape")
 	}
 }
+
+func TestResolveSessionFileFollowsThoughtsLink(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "session")
+	home := filepath.Join(parent, "thoughts", "session", "shared", "plans")
+	if err := os.MkdirAll(home, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "thoughts", "session"),
+		filepath.Join(root, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	plan := filepath.Join(home, "plan.md")
+	if err := os.WriteFile(plan, []byte("# plan"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	realPlan, _ := filepath.EvalSymlinks(plan)
+
+	if got, err := ResolveSessionFile(root, "thoughts/shared/plans/plan.md"); err != nil || got != realPlan {
+		t.Fatalf("relative = %q, %v", got, err)
+	}
+	if got, err := ResolveSessionFile(root, filepath.Join(root, "thoughts/shared/plans/plan.md")); err != nil || got != realPlan {
+		t.Fatalf("absolute = %q, %v", got, err)
+	}
+	if _, err := ResolveSessionDir(root, "thoughts/shared/plans"); err != nil {
+		t.Fatalf("dir: %v", err)
+	}
+
+	sibling := filepath.Join(parent, "thoughts", "other-session")
+	if err := os.MkdirAll(sibling, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ResolveSessionDir(root, sibling); err == nil {
+		t.Fatal("accepted another session's thoughts")
+	}
+}
