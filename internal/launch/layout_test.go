@@ -15,14 +15,13 @@ import (
 // agent pane itself runs the supervisor, as Launch now builds it.
 func stageWorkspace(t *testing.T, dir string, command []string) string {
 	t.Helper()
-	warning, err := writeSupport(dir, command)
-	if err != nil {
+	if err := writeSupport(dir); err != nil {
 		t.Fatal(err)
 	}
 	runner := Runner{ID: filepath.Base(command[0]), Command: command}
 	agentArgv := superviseArgv("/bin/qrouton", dir, runner,
 		mux.Handle{Kind: "zellij", Session: "test-session"}, EditorCommand{Argv: []string{"vi"}}, false)
-	if err := mux.NewZellij("zellij", "/tmp/zellij").Stage(workspace(dir, "test-session", agentArgv, runner.ID, "/bin/qrouton", warning)); err != nil {
+	if err := mux.NewZellij("zellij", "/tmp/zellij").Stage(workspace(dir, "test-session", agentArgv, runner.ID, "/bin/qrouton")); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(filepath.Join(dir, ".qrouton", "layout.kdl"))
@@ -56,9 +55,12 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	}
 	for _, want := range []string{
 		"delegate work to subagents", // the fallback RPI tagline; the script resolves the real one at runtime
-		"Move focus", "Alt-Tab", "Alt-e", "open the picker", "Alt-n", "back to assistant",
+		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
 		"Alt-g", "floating shell", "Alt-f", "show / hide", "Alt-x", "Alt-+ / Alt--", "Alt-?",
-		"Ctrl-g, then Ctrl-q", "Press any key to close",
+		"Ctrl-g Ctrl-q", "Press any key to close",
+		// The richer panel also explains the workspace itself, not just its keys.
+		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "checkout state and subagent activity",
+		"run it in a pane", "qrouton.json", "src/<repo>", "thoughts/shared",
 	} {
 		if !strings.Contains(string(help), want) {
 			t.Fatalf("help panel missing %q", want)
@@ -97,28 +99,38 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if !strings.Contains(layout, `"--mux-json"`) || !strings.Contains(layout, `"--editor-json"`) {
 		t.Fatal("supervisor argv lacks the handle/editor exec-boundary flags")
 	}
-	if !strings.Contains(layout, `floating_panes`) || !strings.Contains(layout, `name="keys · press any key to close"`) || !strings.Contains(layout, `close_on_exit=true`) {
-		t.Fatal("quick-reference panel is not a disposable floating pane")
-	}
-	if !strings.Contains(layout, `close_on_exit=true focus=true`) {
-		t.Fatal("quick-reference pane is not focused; startup keys would land in the agent pane")
+	// A floating pane declared in the layout is sized against the clientless
+	// server's default viewport, which is what made the panel come up squished.
+	// The supervisor spawns it from inside the attached session instead.
+	if strings.Contains(layout, `floating_panes`) || strings.Contains(layout, helpPaneName) {
+		t.Fatalf("quick-reference panel is back in the staged layout; it would come up squished:\n%s", layout)
 	}
 	if !strings.Contains(layout, "session_name \"test-session\"") || !strings.Contains(layout, "attach_to_session true") {
 		t.Fatal("layout does not name and self-attach the session")
 	}
 }
 
-// TestStagedWorkspacePassesTheCodexWarningOnlyAtStartup covers both directions
-// of the argument that replaced @@WARNING@@: the startup invocation carries it
-// for a shallow-depth Codex argv, and the Alt-? binding never does — that's a
-// launch-time-only concern, not something to re-warn about on every re-summon.
-func TestStagedWorkspacePassesTheCodexWarningOnlyAtStartup(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+// TestHelpSpawnCarriesTheCodexWarningOnlyAtStartup covers both directions of
+// help.sh's $1: the startup panel carries it for a shallow-depth Codex argv,
+// and the Alt-? binding never does — that's a launch-time-only concern, not
+// something to re-warn about on every re-summon.
+func TestHelpSpawnCarriesTheCodexWarningOnlyAtStartup(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("CODEX_HOME", t.TempDir()) // no config.toml: Codex's own default (1) is under the required depth
 	dir := t.TempDir()
-	layout := stageWorkspace(t, dir, []string{"codex"})
-	if !strings.Contains(layout, "agents.max_depth is under 2") || !strings.Contains(layout, "Set it to 3") {
-		t.Fatalf("startup pane does not carry the Codex depth warning as an argument:\n%s", layout)
+	stageWorkspace(t, dir, []string{"codex"})
+
+	warning := codexWarning([]string{"codex"})
+	if !strings.Contains(warning, "agents.max_depth is under 2") || !strings.Contains(warning, "Set it to 3") {
+		t.Fatalf("shallow Codex argv produced no depth warning: %q", warning)
+	}
+	startup := HelpSpawn(dir, warning)
+	if len(startup.Command) != 3 || startup.Command[2] != warning {
+		t.Fatalf("startup panel does not carry the warning as help.sh's $1: %v", startup.Command)
+	}
+	if resummoned := HelpSpawn(dir, ""); len(resummoned.Command) != 2 {
+		t.Fatalf("re-summoned panel carries an argument; the warning is launch-time only: %v", resummoned.Command)
 	}
 	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
 	if err != nil {
@@ -126,6 +138,37 @@ func TestStagedWorkspacePassesTheCodexWarningOnlyAtStartup(t *testing.T) {
 	}
 	if strings.Contains(string(config), "agents.max_depth is under 2") {
 		t.Fatal("Alt-? binding carries the Codex warning; it is a launch-time-only concern")
+	}
+}
+
+// TestHelpSpawnMirrorsTheAltQuestionBinding is the drift guard between the two
+// routes to the panel: the keybinding's geometry and pane name are written by
+// hand in the vendored config, and HelpSpawn's are Go values.
+func TestHelpSpawnMirrorsTheAltQuestionBinding(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	stageWorkspace(t, dir, []string{"codex"})
+	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := HelpSpawn(dir, "")
+	for _, want := range []string{
+		`x "` + opts.Geometry.X + `"`, `y "` + opts.Geometry.Y + `"`,
+		`width "` + opts.Geometry.Width + `"`, `height "` + opts.Geometry.Height + `"`,
+		`name "` + opts.Label + `"`,
+	} {
+		if !strings.Contains(string(config), want) {
+			t.Fatalf("Alt-? binding has drifted from HelpSpawn; missing %q", want)
+		}
+	}
+	if opts.Cwd != dir {
+		t.Fatalf("panel cwd is %q, not the session root; help.sh reads ./qrouton.json for the mode tagline", opts.Cwd)
+	}
+	if !opts.Focus || !opts.CloseOnExit {
+		t.Fatal("panel must take focus and close itself; it is dismissed with a keypress")
 	}
 }
 
@@ -148,20 +191,17 @@ func TestStagedWorkspaceCarriesTheStatusStrip(t *testing.T) {
 	}
 }
 
-func TestWriteSupportHidesCodexDepthWarningAtTwo(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+func TestCodexWarningHiddenAtDepthTwo(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", home)
 	if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte("[agents]\nmax_depth = 2\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	dir := t.TempDir()
-	warning, err := writeSupport(dir, []string{"codex"})
-	if err != nil {
-		t.Fatal(err)
+	if warning := codexWarning([]string{"codex"}); warning != "" {
+		t.Fatalf("Codex depth warning returned at max_depth 2: %q", warning)
 	}
-	if warning != "" {
-		t.Fatalf("writeSupport returned a Codex depth warning at max_depth 2: %q", warning)
+	if warning := codexWarning([]string{"claude"}); warning != "" {
+		t.Fatalf("non-Codex runner warned about Codex depth: %q", warning)
 	}
 }
 
@@ -170,10 +210,10 @@ func TestWriteSupportStampsHelpScriptUnderTheConfigDir(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("CODEX_HOME", t.TempDir())
 	dirA, dirB := t.TempDir(), t.TempDir()
-	if _, err := writeSupport(dirA, []string{"codex"}); err != nil {
+	if err := writeSupport(dirA); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := writeSupport(dirB, []string{"codex"}); err != nil {
+	if err := writeSupport(dirB); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(configHome, "qrouton", "help.sh")); err != nil {
@@ -188,7 +228,7 @@ func TestWriteSupportStampsNotifyScript(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("CODEX_HOME", t.TempDir())
 	dir := t.TempDir()
-	if _, err := writeSupport(dir, []string{"codex"}); err != nil {
+	if err := writeSupport(dir); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(filepath.Join(dir, ".qrouton", "notify.sh"))

@@ -39,29 +39,31 @@ var helpScript string
 
 // writeSupport writes .qrouton/notify.sh at launch time (per-session) and
 // help.sh under the config dir (one global copy, restaged idempotently so old
-// sessions still pick up template changes). It returns the Codex depth
-// warning text for the startup pane to pass along as help.sh's $1; "" means
-// no warning. Backend layout files are the multiplexer adapter's business,
-// staged separately.
-func writeSupport(dir string, argv []string) (string, error) {
+// sessions still pick up template changes). Backend layout files are the
+// multiplexer adapter's business, staged separately.
+func writeSupport(dir string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
-		return "", err
+		return err
 	}
 	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode); err != nil {
-		return "", err
+		return err
 	}
 	helpPath := config.HelpScriptPath()
 	if err := os.MkdirAll(filepath.Dir(helpPath), 0o755); err != nil {
-		return "", err
+		return err
 	}
-	if err := os.WriteFile(helpPath, []byte(helpScript), scriptMode); err != nil {
-		return "", err
-	}
-	warning := ""
+	return os.WriteFile(helpPath, []byte(helpScript), scriptMode)
+}
+
+// codexWarning is the caveat help.sh shows as $1 when the runner is a Codex
+// too shallow to nest subagents; "" means there is nothing to warn about. Only
+// the startup panel carries it — Alt-? and the help tool re-summon the panel
+// bare, since it is a launch-time concern and not worth repeating.
+func codexWarning(argv []string) string {
 	if filepath.Base(argv[0]) == codex.Binary && codex.MaxDepth(argv) < codex.RequiredMaxDepth {
-		warning = codexDepthWarning
+		return codexDepthWarning
 	}
-	return warning, nil
+	return ""
 }
 
 // helpGeometry floats the quick-reference panel over the middle of the
@@ -69,6 +71,30 @@ func writeSupport(dir string, argv []string) (string, error) {
 // Alt-? binding in zellij-config.kdl mirrors these dimensions exactly, so
 // both routes look identical.
 var helpGeometry = mux.Geometry{X: "15%", Y: "8%", Width: "70%", Height: "80%"}
+
+// HelpSpawn describes the quick-reference panel as a runtime pane, so the
+// startup route, Alt-?, and the help MCP tool all float the same thing. It is
+// deliberately not part of the staged layout: Zellij resolves a floating
+// pane's percentages against the viewport as it creates the pane, and the
+// layout is applied to a session created detached (see mux.Zellij.Start for
+// why), whose clientless server reports a ~50x50 default — which is what made
+// the startup panel come up squished into a corner of a real terminal.
+// Spawning it from inside the session, once someone is attached, sizes it
+// against the terminal the user is actually looking at.
+func HelpSpawn(dir, warning string) mux.SpawnOptions {
+	command := []string{shellBin, config.HelpScriptPath()}
+	if warning != "" {
+		command = append(command, warning)
+	}
+	return mux.SpawnOptions{
+		Label:       helpPaneName,
+		Cwd:         dir,
+		Geometry:    helpGeometry,
+		CloseOnExit: true,
+		Focus:       true,
+		Command:     command,
+	}
+}
 
 // superviseArgv is the agent pane's command: the supervisor that stamps the
 // session's assets and launches (and, when signalled, relaunches) the runner.
@@ -84,21 +110,15 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle mux.Handle, editor E
 }
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
-// agent beside a shell and the repo/agent status panes, a full-width one-row
-// mode/phase strip along the bottom, and the quick-reference panel floating
-// on top. warning, when non-empty, is the Codex depth warning passed to
-// help.sh as $1 — only the startup route carries one; Alt-? re-summons the
-// same script bare.
-func workspace(dir, slug string, agentArgv []string, runner, qroutonBin, warning string) mux.Workspace {
-	helpPath := config.HelpScriptPath()
-	helpCommand := []string{shellBin, helpPath}
-	if warning != "" {
-		helpCommand = append(helpCommand, warning)
-	}
+// agent beside a shell and the repo/agent status panes, and a full-width
+// one-row mode/phase strip along the bottom. The quick-reference panel is not
+// here — the supervisor floats it from inside the session instead, for the
+// sizing reason HelpSpawn explains.
+func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) mux.Workspace {
 	return mux.Workspace{
 		Slug:       slug,
 		Dir:        dir,
-		HelpScript: helpPath,
+		HelpScript: config.HelpScriptPath(),
 		Binary:     qroutonBin,
 		Tiled: mux.Node{
 			Split: mux.SplitHorizontal,
@@ -117,10 +137,6 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin, warning
 					Command: []string{qroutonBin, statusSubcommand, sessionRootFlag, dir}}},
 			},
 		},
-		Floating: []mux.Floating{{
-			Pane:     mux.Pane{Name: helpPaneName, Command: helpCommand, CloseOnExit: true, Focus: true},
-			Geometry: helpGeometry,
-		}},
 	}
 }
 
@@ -132,13 +148,12 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin, warning
 // manifest at each (re)launch.
 func Launch(lp mux.Launcher, dir string, runner Runner, qroutonBin string, editor EditorCommand, resume bool) error {
 	slug := filepath.Base(dir)
-	warning, err := writeSupport(dir, runner.Command)
-	if err != nil {
+	if err := writeSupport(dir); err != nil {
 		return err
 	}
 	argv := superviseArgv(qroutonBin, dir, runner, lp.Handle(slug), editor, resume)
 	env := mux.WithEnv(os.Environ(), EditorEnvVar, editor.Marshal())
-	ws := workspace(dir, slug, argv, runner.ID, qroutonBin, warning)
+	ws := workspace(dir, slug, argv, runner.ID, qroutonBin)
 	if err := lp.Stage(ws); err != nil {
 		return err
 	}

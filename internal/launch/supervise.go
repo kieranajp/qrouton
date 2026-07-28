@@ -8,6 +8,7 @@ package launch
 // while de-escalation keeps the conversation with the runner's continue flag.
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -23,6 +24,41 @@ import (
 // terminateGrace is how long a signalled runner gets to exit on SIGTERM before
 // it is killed outright.
 const terminateGrace = 3 * time.Second
+
+// How long the quick-reference panel waits for someone to be looking before it
+// floats anyway. The launcher creates the session detached and only then
+// attaches, so at supervisor start the client is usually a beat away; vars so
+// tests need not wait out the ceiling.
+var (
+	clientPollInterval = 100 * time.Millisecond
+	clientWaitTimeout  = 5 * time.Second
+)
+
+// showHelp floats the quick-reference panel over a freshly attached session; a
+// package variable so tests can stub the pane driver out, as they do runAgent.
+var showHelp = spawnHelp
+
+// spawnHelp waits for a client and then floats the panel. Every failure here is
+// swallowed: a missing greeting is not a reason to fail the session it greets.
+func spawnHelp(dir string, h mux.Handle, warning string) {
+	host, err := h.PaneHost()
+	if err != nil {
+		return
+	}
+	deadline := time.Now().Add(clientWaitTimeout)
+	for !attached(host) && time.Now().Before(deadline) {
+		time.Sleep(clientPollInterval)
+	}
+	// Past the deadline it floats regardless: squished beats absent.
+	_, _ = host.Spawn(context.Background(), HelpSpawn(dir, warning))
+}
+
+func attached(host mux.PaneHost) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), clientWaitTimeout)
+	defer cancel()
+	yes, err := host.Attached(ctx)
+	return err == nil && yes
+}
 
 // Supervise owns the agent pane: it stamps the session's assets, launches the
 // runner, and on SIGUSR1 kills it and relaunches from the manifest as it now
@@ -44,6 +80,9 @@ func Supervise(dir string, r Runner, handle mux.Handle, editor EditorCommand, re
 	signal.Notify(relaunch, syscall.SIGUSR1)
 	defer signal.Stop(relaunch)
 	mode := sessionMode(dir)
+	// Greet the session once, in the background: the panel waits for a client
+	// and must not hold the agent's own launch up while it does.
+	go showHelp(dir, handle, codexWarning(r.Command))
 	for {
 		if err := StampAssets(dir); err != nil {
 			return err

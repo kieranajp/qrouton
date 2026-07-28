@@ -221,6 +221,40 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 }
 
+func TestHelpFloatsTheSharedPanelWithFocus(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
+	helper, log := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+
+	if _, err := p.help(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	s := readLog(t, log)
+	opts := launch.HelpSpawn(dir, "")
+	for _, want := range []string{
+		"--x " + opts.Geometry.X + " --y " + opts.Geometry.Y +
+			" --width " + opts.Geometry.Width + " --height " + opts.Geometry.Height,
+		"--name " + opts.Label,
+		"--close-on-exit",
+		"-- sh " + filepath.Join(dir, "config", "qrouton", "help.sh"),
+	} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("help panel missing %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "toggle-floating-panes") {
+		t.Fatalf("help must keep focus on the panel; a keypress is what dismisses it:\n%s", s)
+	}
+	// A second call replaces the panel rather than stacking another on top.
+	if _, err := p.help(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(readLog(t, log), "close-pane --pane-id") {
+		t.Fatal("a second help call did not replace the panel already open")
+	}
+}
+
 func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
 	dir := t.TempDir()
 	helper, log := fakeZellij(t, dir)
@@ -357,7 +391,7 @@ func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	}
 	defer cs.Close()
 
-	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false, "escalate": false}
+	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false, "escalate": false, "help": false}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)

@@ -177,22 +177,6 @@ func renderKDL(ws Workspace) string {
 	b.WriteString(kdlLayoutOpen)
 	b.WriteString(kdlTabBar)
 	renderNode(&b, ws.Tiled, 1)
-	if len(ws.Floating) > 0 {
-		b.WriteString(kdlFloatingOpen)
-		for _, f := range ws.Floating {
-			attrs := fmt.Sprintf(kdlGeometryAttrs, f.Geometry.X, f.Geometry.Y, f.Geometry.Width, f.Geometry.Height, f.Name)
-			if f.CloseOnExit {
-				attrs += kdlCloseOnExit
-			}
-			if f.Focus {
-				attrs += kdlFocus
-			}
-			b.WriteString(kdlIndent + kdlIndent + kdlPaneKeyword + " " + attrs + " {\n")
-			renderCommand(&b, f.Command, 3)
-			b.WriteString(kdlIndent + kdlIndent + kdlBlockClose)
-		}
-		b.WriteString(kdlIndent + kdlBlockClose)
-	}
 	b.WriteString(kdlBlockClose)
 	b.WriteString(fmt.Sprintf(kdlSessionName, ws.Slug))
 	return b.String()
@@ -306,6 +290,21 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 		_, _ = z.action(ctx, toggleFloatingAction)
 	}
 	return id, nil
+}
+
+// Attached reports whether a client is viewing the session: list-clients
+// prints its column header either way, so attachment is a row beyond it.
+func (z *zellijHost) Attached(ctx context.Context) (bool, error) {
+	out, err := z.action(ctx, listClientsAction)
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		if line = strings.TrimSpace(line); line != "" && !strings.HasPrefix(line, listClientsHeader) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 func (z *zellijHost) Close(ctx context.Context, id string) error {

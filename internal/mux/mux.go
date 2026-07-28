@@ -51,6 +51,11 @@ type PaneHost interface {
 	Close(ctx context.Context, id string) error
 	// Capture returns the pane's current output; full includes scrollback.
 	Capture(ctx context.Context, id string, full bool) (string, error)
+	// Attached reports whether a user's client is viewing the session. A
+	// floating pane's percentage geometry is resolved against the attached
+	// client's viewport at spawn time, so a pane opened before anyone is
+	// looking comes up sized for the server's own default instead.
+	Attached(ctx context.Context) (bool, error)
 }
 
 // Geometry places a floating pane, in the backend's units (percent strings).
@@ -92,20 +97,17 @@ type Node struct {
 	Children []Node
 }
 
-// Floating is a pane layered over the tiled layout.
-type Floating struct {
-	Pane
-	Geometry Geometry
-}
-
 // Workspace is the backend-neutral description of a qrouton session's layout.
+// Tiled panes only: a floating pane's geometry is resolved against the viewport
+// as the backend creates it, and the layout is applied to a session with no
+// client attached yet, so anything floated from here comes up sized for the
+// backend's own default. Float panes at runtime through a PaneHost instead.
 type Workspace struct {
 	Slug       string // session name
 	Dir        string // session root; panes start here
 	HelpScript string // path to the global quick-reference panel, for Run-block keybindings
 	Binary     string // qrouton's own executable, for Run-block keybindings that call a subcommand
 	Tiled      Node
-	Floating   []Floating
 }
 
 // Handle identifies a backend session across the exec boundary; the launcher

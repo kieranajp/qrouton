@@ -196,6 +196,22 @@ func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, er
 	return fmt.Sprintf(notifiedFormat, message), nil
 }
 
+// help floats the same quick-reference panel the session opens with and Alt-?
+// re-summons — the launcher owns its script, geometry and label, so the three
+// routes cannot drift apart. It keeps focus, like the picker: the user is
+// about to read it and dismiss it with a keypress. No Codex warning here;
+// that one belongs to the startup panel alone.
+func (m *paneManager) help(ctx context.Context) (string, error) {
+	opts := launch.HelpSpawn(m.root, "")
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.spawnFocus(ctx, helpPaneName, opts.Label, opts.Cwd, opts.Geometry,
+		opts.CloseOnExit, opts.Focus, opts.Command); err != nil {
+		return "", fmt.Errorf("help: %w", err)
+	}
+	return helpShownMessage, nil
+}
+
 // escalate spawns the picker pre-filled with name (and, if given, prefix),
 // keeping keyboard focus on it — the deliberate exception to spawn-returns-
 // focus, since no agent is waiting for the terminal back once the picker is

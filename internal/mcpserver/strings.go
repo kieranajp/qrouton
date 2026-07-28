@@ -19,6 +19,11 @@ const (
 
 	notifyPaneName = "notify"
 
+	// helpPaneName is the registry key for the quick-reference panel, so a
+	// second help call replaces a panel the user left open rather than
+	// stacking another on top of it.
+	helpPaneName = "help"
+
 	// escalatePaneName is the reserved registry key for the picker pane the
 	// escalate tool spawns; a second escalate call replaces a stale picker,
 	// matching how a second open_file replaces the previous editor pane. It
@@ -71,6 +76,9 @@ const (
 	sessionRootScope  = "the session root"
 
 	notifiedFormat = "Notified the user: %s"
+
+	helpShownMessage = "Floated the workspace quick-reference panel; it has keyboard focus " +
+		"and closes on any keypress. Answer the user's question too."
 
 	noPanesOpen     = "No qrouton-managed panes are open."
 	openPanesPrefix = "Open panes: "

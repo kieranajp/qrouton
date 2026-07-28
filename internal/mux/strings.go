@@ -61,6 +61,11 @@ const (
 	closePaneAction      = "close-pane"
 	dumpScreenAction     = "dump-screen"
 	toggleFloatingAction = "toggle-floating-panes"
+	listClientsAction    = "list-clients"
+
+	// listClientsHeader is the column header list-clients prints even when no
+	// client is attached; a row after it is a real client.
+	listClientsHeader = "CLIENT_ID"
 
 	floatingFlag    = "--floating"
 	pinnedFlag      = "--pinned"
@@ -107,10 +112,9 @@ const (
 const (
 	kdlIndent = "    "
 
-	kdlLayoutOpen   = "layout {\n"
-	kdlBlockClose   = "}\n"
-	kdlTabBar       = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:tab-bar\"\n" + kdlIndent + "}\n"
-	kdlFloatingOpen = kdlIndent + "floating_panes {\n"
+	kdlLayoutOpen = "layout {\n"
+	kdlBlockClose = "}\n"
+	kdlTabBar     = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:tab-bar\"\n" + kdlIndent + "}\n"
 
 	kdlPaneKeyword   = "pane"
 	kdlCommandFormat = "command %q\n"
@@ -121,7 +125,6 @@ const (
 	kdlBorderless    = " borderless=true"
 	kdlFocus         = " focus=true"
 	kdlSplitAttr     = "split_direction=%q"
-	kdlGeometryAttrs = "x=%q y=%q width=%q height=%q name=%q"
 
 	// kdlSessionName makes the generated session self-attaching, which is how a
 	// fresh launch lands the user inside it.

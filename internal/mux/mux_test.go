@@ -1,6 +1,7 @@
 package mux
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -84,10 +85,6 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 				{Size: "1", Pane: &Pane{Name: "strip", Borderless: true, Command: []string{"qrouton", "status"}}},
 			}},
 		}},
-		Floating: []Floating{{
-			Pane:     Pane{Name: "quick start", Command: []string{"sh", "/work/demo/.qrouton/help.sh"}, CloseOnExit: true, Focus: true},
-			Geometry: Geometry{X: "27%", Y: "25%", Width: "46%", Height: "35%"},
-		}},
 	}
 	kdl := renderKDL(ws)
 	for _, want := range []string{
@@ -99,18 +96,59 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 		`pane size="65%" name="agent" {`,
 		"command \"claude\"\n",
 		`args "--flag" "tricky \"quote\""`, // args survive KDL quoting
-		`pane x="27%" y="25%" width="46%" height="35%" name="quick start" close_on_exit=true focus=true {`,
 		"session_name \"demo\"\nattach_to_session true\n",
 	} {
 		if !strings.Contains(kdl, want) {
 			t.Fatalf("rendered layout missing %q:\n%s", want, kdl)
 		}
 	}
+	// A layout is applied to a clientless session, whose viewport is the
+	// backend's ~50x50 default — anything floated from here is sized against
+	// that and comes up squished in a real terminal. Runtime spawns only.
+	if strings.Contains(kdl, "floating_panes") {
+		t.Fatalf("rendered layout floats a pane; geometry would resolve pre-attach:\n%s", kdl)
+	}
 	// Zellij's own status-bar advertises modes the vendored config deleted;
 	// qrouton's strip pane owns the bottom row instead.
 	if strings.Contains(kdl, "zellij:status-bar") {
 		t.Fatalf("rendered layout still carries zellij:status-bar:\n%s", kdl)
 	}
+}
+
+// Attached is what keeps a runtime-spawned floating pane from being sized
+// against the clientless server's default viewport. list-clients prints its
+// column header whether or not anyone is looking, so only a row past it counts.
+func TestAttachedReadsClientRowsNotTheHeader(t *testing.T) {
+	for _, tc := range []struct {
+		name, out string
+		want      bool
+	}{
+		{"detached", "CLIENT_ID ZELLIJ_PANE_ID RUNNING_COMMAND\n", false},
+		{"blank", "", false},
+		{"attached", "CLIENT_ID ZELLIJ_PANE_ID RUNNING_COMMAND\n1         terminal_0     claude\n", true},
+		{"trailing blank lines", "CLIENT_ID PANE\n\n  \n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bin := filepath.Join(dir, "zellij")
+			script := "#!/bin/sh\nprintf '%s' " + shellQuote(tc.out) + "\n"
+			if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			got, err := NewZellijHost(bin, "s").Attached(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("Attached() = %v, want %v for output %q", got, tc.want, tc.out)
+			}
+		})
+	}
+}
+
+// shellQuote wraps s for the /bin/sh stub above.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // Start must create the session detached before attaching: handing the layout to a

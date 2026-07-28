@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -11,11 +12,22 @@ import (
 )
 
 // swapRunAgent replaces the exec seam with a scripted closure and restores it.
+// It also stubs out the quick-reference panel, which would otherwise shell out
+// to a zellij session no test has: the panel's own test swaps it deliberately.
 func swapRunAgent(t *testing.T, fake func(argv, env []string, dir string, relaunch <-chan os.Signal) (bool, error)) {
 	t.Helper()
 	original := runAgent
 	runAgent = fake
 	t.Cleanup(func() { runAgent = original })
+	swapShowHelp(t, func(string, mux.Handle, string) {})
+}
+
+// swapShowHelp replaces the quick-reference panel's spawn and restores it.
+func swapShowHelp(t *testing.T, fake func(dir string, h mux.Handle, warning string)) {
+	t.Helper()
+	original := showHelp
+	showHelp = fake
+	t.Cleanup(func() { showHelp = original })
 }
 
 func testRunner() Runner {
@@ -115,6 +127,43 @@ func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(argvs[1], " "), claudeContinueFlag) {
 		t.Fatalf("adding repos within RPI dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
+	}
+}
+
+// The panel greets the session, not every runner the supervisor launches: an
+// escalation relaunch must not float it over the fresh orchestrator.
+func TestSuperviseFloatsTheHelpPanelOnceAtStartup(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeAssistant)
+	var argvs int
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs++
+		if argvs == 1 {
+			if err := session.SetMode(dir, session.ModeRPI); err != nil {
+				t.Fatal(err)
+			}
+			return true, nil
+		}
+		return false, nil
+	})
+	shown := make(chan string, 4)
+	swapShowHelp(t, func(d string, h mux.Handle, warning string) { shown <- d + "|" + warning })
+
+	if err := Supervise(dir, testRunner(), mux.Handle{Kind: "zellij", Session: "s"}, EditorCommand{Argv: []string{"vi"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-shown:
+		// Claude, not Codex: no depth warning to pass along as help.sh's $1.
+		if got != dir+"|" {
+			t.Fatalf("panel spawned with %q, want the session root and no warning", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("the session came up without its quick-reference panel")
+	}
+	select {
+	case got := <-shown:
+		t.Fatalf("panel floated a second time (%q); it greets the session, not each relaunch", got)
+	case <-time.After(50 * time.Millisecond):
 	}
 }
 

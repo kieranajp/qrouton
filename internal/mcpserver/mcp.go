@@ -143,6 +143,17 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolHelp,
+		Description: descHelp,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		message, err := pane.help(ctx)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolEscalate,
 		Description: descEscalate,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input escalateInput) (*mcp.CallToolResult, any, error) {
