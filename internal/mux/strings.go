@@ -114,7 +114,10 @@ const (
 
 	kdlLayoutOpen = "layout {\n"
 	kdlBlockClose = "}\n"
-	kdlTabBar     = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:tab-bar\"\n" + kdlIndent + "}\n"
+	// compact-bar rather than tab-bar: same single row, but it also shows the
+	// current mode, so Ctrl-g leads somewhere visible. Unlike status-bar it does
+	// not enumerate keybindings, so it cannot advertise ones this config dropped.
+	kdlBar = kdlIndent + "pane size=1 borderless=true {\n" + kdlIndent + kdlIndent + "plugin location=\"zellij:compact-bar\"\n" + kdlIndent + "}\n"
 
 	kdlPaneKeyword   = "pane"
 	kdlCommandFormat = "command %q\n"

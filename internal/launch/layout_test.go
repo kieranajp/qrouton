@@ -197,8 +197,13 @@ func TestStagedWorkspaceCarriesTheStatusStrip(t *testing.T) {
 	if strings.Contains(layout, "zellij:status-bar") {
 		t.Fatal("Zellij's status-bar survived; the strip owns the bottom row")
 	}
-	if !strings.Contains(layout, "zellij:tab-bar") {
-		t.Fatal("tab-bar dropped; only the status-bar was meant to go")
+	// compact-bar carries the mode indicator the plain tab-bar lacked; status-bar
+	// stays out, since it lists keybindings this config does not have.
+	if !strings.Contains(layout, "zellij:compact-bar") {
+		t.Fatal("compact-bar dropped; the mode indicator goes with it")
+	}
+	if strings.Contains(layout, "zellij:status-bar") {
+		t.Fatal("status-bar is back; it advertises keybindings the config deleted")
 	}
 }
 

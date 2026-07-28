@@ -88,7 +88,7 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 	}
 	kdl := renderKDL(ws)
 	for _, want := range []string{
-		`plugin location="zellij:tab-bar"`,
+		`plugin location="zellij:compact-bar"`,
 		`pane split_direction="vertical" {`,
 		`pane split_direction="horizontal" size="35%" {`, // percentages stay quoted
 		`pane size=6 name="status" {`,                    // row counts render bare
