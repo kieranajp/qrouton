@@ -9,9 +9,13 @@ var (
 	// ErrNoRunnerInstalled means none of the supported coding agents is on PATH.
 	ErrNoRunnerInstalled = errors.New("no supported coding agent is installed")
 
-	// ErrUnsupportedOverride means the config's launch list names a command
-	// qrouton has no runner wiring for.
+	// ErrUnsupportedOverride means the config's launch map is keyed by a runner
+	// qrouton has no wiring for.
 	ErrUnsupportedOverride = errors.New("launch override is not a supported runner")
+
+	// ErrEmptyOverride means a launch override supplied no command, which would
+	// otherwise report the runner as not installed rather than misconfigured.
+	ErrEmptyOverride = errors.New("launch override has no command")
 
 	// ErrRunnerUnavailable means the requested runner is not installed, or is
 	// not one qrouton supports.

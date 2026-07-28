@@ -23,7 +23,7 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 		return "", fmt.Errorf("missing")
 	}
 
-	cfg := &config.Config{Launch: [][]string{{"codex", "--search"}}}
+	cfg := &config.Config{Launch: map[string][]string{"codex": {"codex", "--search"}}}
 	got, err := Runners(cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -50,7 +50,7 @@ func TestRunnersRejectUnsupportedOverride(t *testing.T) {
 	t.Cleanup(func() { findExecutable = old })
 	findExecutable = func(name string) (string, error) { return "/bin/" + name, nil }
 
-	_, err := Runners(&config.Config{Launch: [][]string{{"team-agent", "--fast"}}})
+	_, err := Runners(&config.Config{Launch: map[string][]string{"team-agent": {"team-agent", "--fast"}}})
 	if !errors.Is(err, ErrUnsupportedOverride) {
 		t.Fatalf("unsupported override error = %v, want ErrUnsupportedOverride", err)
 	}
@@ -219,4 +219,48 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 // testHandle is the multiplexer identity runnerLaunch threads into MCP args.
 func testHandle() mux.Handle {
 	return mux.Handle{Kind: "zellij", Session: "session", SocketDir: "/tmp/zellij"}
+}
+
+// The old shape keyed an override by argv[0], so `[["claude"]]` read as "my
+// runner is claude" while meaning "run claude with no flags" — silently
+// dropping --dangerously-skip-permissions. Keyed by runner id, dropping flags
+// is something you can only do on purpose.
+func TestRunnersOverrideReplacesArgvForTheKeyedRunnerOnly(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) { return "/bin/" + filepath.Base(name), nil }
+
+	got, err := Runners(&config.Config{Launch: map[string][]string{"claude": {"/opt/beta/claude", "--flag"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := make(map[string]Runner)
+	for _, r := range got {
+		byID[r.ID] = r
+	}
+	// The key is the identity, so argv need not name the runner at all: an
+	// override may point somewhere else entirely and still be claude.
+	if !reflect.DeepEqual(byID["claude"].Command, []string{"/opt/beta/claude", "--flag"}) {
+		t.Fatalf("claude command = %#v", byID["claude"].Command)
+	}
+	// Untouched runners keep their built-in flags.
+	if !reflect.DeepEqual(byID["codex"].Command, []string{"codex", codexBypassSandboxFlag}) {
+		t.Fatalf("codex lost its built-in flags: %#v", byID["codex"].Command)
+	}
+	if byID["codex"].Override {
+		t.Fatal("untouched runner marked as an override")
+	}
+}
+
+// An override with no command would report the runner as not installed, which
+// sends you looking at PATH instead of at your config.
+func TestRunnersRejectEmptyOverride(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) { return "/bin/" + name, nil }
+
+	_, err := Runners(&config.Config{Launch: map[string][]string{"claude": {}}})
+	if !errors.Is(err, ErrEmptyOverride) {
+		t.Fatalf("empty override error = %v, want ErrEmptyOverride", err)
+	}
 }

@@ -66,6 +66,14 @@ Example:
 
 `orgs` accepts both organizations and personal GitHub accounts. `editor` is optional; qrouton otherwise uses `$VISUAL`, `$EDITOR`, or a detected editor.
 
+`launch` is optional too, and overrides a runner's command — keyed by runner id, with the exact argv to run:
+
+```json
+"launch": { "claude": ["claude", "--dangerously-skip-permissions", "--verbose"] }
+```
+
+It **replaces** the built-in command rather than adding to it, so an override that omits a flag removes it. The argv need not name the runner, which is how you point at a different build: `"claude": ["/opt/claude-beta/claude", "--dangerously-skip-permissions"]`. Omit the key entirely to get the default.
+
 Useful flags:
 
 ```sh

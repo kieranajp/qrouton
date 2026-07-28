@@ -41,14 +41,15 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 	for i := range out {
 		byID[out[i].ID] = i
 	}
-	for _, command := range cfg.Launch {
-		if len(command) == 0 {
-			continue
-		}
-		id := filepath.Base(command[0])
+	for id, command := range cfg.Launch {
 		i, ok := byID[id]
 		if !ok {
-			return nil, fmt.Errorf("%w: %q (supported: %s)", ErrUnsupportedOverride, command[0], strings.Join(builtinIDs(), ", "))
+			return nil, fmt.Errorf("%w: %q (supported: %s)", ErrUnsupportedOverride, id, strings.Join(builtinIDs(), ", "))
+		}
+		// An empty override would otherwise leave Command[0] to be looked up as
+		// "", reporting the runner as simply not installed.
+		if len(command) == 0 {
+			return nil, fmt.Errorf("%w: %q", ErrEmptyOverride, id)
 		}
 		out[i].Command = append([]string(nil), command...)
 		out[i].Override = true

@@ -11,10 +11,18 @@ import (
 )
 
 type Config struct {
-	Orgs   []string   `json:"orgs"`   // GitHub orgs for the repo picker
-	Root   string     `json:"root"`   // sessions live flat under it; mirrors under <root>/.mirrors
-	Launch [][]string `json:"launch"` // optional exact overrides for supported runner commands
-	Editor []string   `json:"editor,omitempty"`
+	Orgs []string `json:"orgs"` // GitHub orgs for the repo picker
+	Root string   `json:"root"` // sessions live flat under it; mirrors under <root>/.mirrors
+
+	// Launch overrides a supported runner's command, keyed by runner id
+	// ("claude", "codex", "opencode"). The value is the exact argv to run, so
+	// it may also point at a different binary than the id would find on PATH.
+	// Keyed rather than a list of argv: the runner being overridden is the
+	// identity, and burying it in argv[0] made an override that dropped a flag
+	// look like one that merely named a runner.
+	Launch map[string][]string `json:"launch,omitempty"`
+
+	Editor []string `json:"editor,omitempty"`
 }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.

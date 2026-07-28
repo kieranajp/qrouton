@@ -63,13 +63,13 @@ func TestLoadReadsLaunchOverridesVerbatim(t *testing.T) {
 	dir := filepath.Join(configHome, "qrouton")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "config.json"),
-		[]byte(`{"orgs":["acme"],"root":"unused","launch":[["claude","--verbose"]]}`), 0o644)
+		[]byte(`{"orgs":["acme"],"root":"unused","launch":{"claude":["claude","--verbose"]}}`), 0o644)
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := [][]string{{"claude", "--verbose"}}
+	want := map[string][]string{"claude": {"claude", "--verbose"}}
 	if !reflect.DeepEqual(cfg.Launch, want) {
 		t.Fatalf("launch = %#v, want %#v", cfg.Launch, want)
 	}
