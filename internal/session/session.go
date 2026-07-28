@@ -343,6 +343,16 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 		nameCounts[sel.Repo.Name]++
 	}
 	for _, sel := range sels {
+		// A repository already in the session is left exactly as it stands —
+		// same worktree, same branch, same uncommitted work. Escalating a
+		// session that has been worked in must not disturb what it was working
+		// on, and the collision handling below cannot tell a repository from
+		// itself: it counts names, so it would dutifully org-qualify a second
+		// checkout of the same repo and clone it alongside the first, on a
+		// different branch.
+		if hasRepo(m.Repos, sel.Repo.Org, sel.Repo.Name) {
+			continue
+		}
 		worktreePath := filepath.Join(sessionpaths.SrcDirName, sel.Repo.Name)
 		if nameCounts[sel.Repo.Name] > 1 {
 			worktreePath = filepath.Join(sessionpaths.SrcDirName, Slugify(sel.Repo.Org+slugSeparator+sel.Repo.Name))
@@ -354,6 +364,18 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 		m.Repos = append(m.Repos, mr)
 	}
 	return m, nil
+}
+
+// hasRepo reports whether the session already holds this repository. Identity is
+// owner and name together, case-insensitively — the same reckoning the ad-hoc
+// path uses when it dedupes command-line arguments.
+func hasRepo(repos []ManifestRepo, org, name string) bool {
+	for _, r := range repos {
+		if strings.EqualFold(r.Org, org) && strings.EqualFold(r.Name, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation

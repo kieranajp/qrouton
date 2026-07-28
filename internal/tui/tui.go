@@ -126,8 +126,9 @@ func RunPicker(cfg *config.Config, dir, name, prefix string) error {
 }
 
 // newPickerModel seeds the shared appModel at the form screen, in picker mode:
-// the landing, runner, and delete screens are unreachable from it, and
-// repositories are never pre-selected.
+// the landing, runner, and delete screens are unreachable from it. Everything
+// the session already knows is filled in — a session that has been worked in
+// should not be asked what it is called or which repositories it holds.
 func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, name, prefix string) appModel {
 	m := newAppModel(cfg, nil, "", nil)
 	m.screen = newScreen
@@ -138,6 +139,19 @@ func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, n
 	m.form.name = name
 	if strings.TrimSpace(name) == "" {
 		m.form.name = manifest.Name
+	}
+	m.form.description, m.form.ticket = manifest.Description, manifest.TicketURL
+	// Repositories already in the session show with the role they actually
+	// have. Without this the list rendered every one of them as excluded,
+	// including the repo being worked in, so selecting it again looked like the
+	// only sensible move — which is what produced a second checkout of it.
+	for _, r := range manifest.Repos {
+		role := active
+		if r.Role == session.RepoRoleReference {
+			role = reference
+		}
+		// github.Repo.ID owns the key format the roles map is keyed by.
+		m.form.roles[(github.Repo{Org: r.Org, Name: r.Name}).ID()] = role
 	}
 	m.form.focus = focusName
 	for i, p := range branchPrefixes {

@@ -29,7 +29,7 @@ type formState struct {
 	ticketStatus                      string
 }
 
-// Focus indices, in the order viewForm renders the fields. lastField bounds
+// Focus indices, in the order viewForm renders the fields. lastFormField bounds
 // navigation, so adding a field means adding it here and nowhere else.
 const (
 	focusTicket = iota
@@ -39,10 +39,32 @@ const (
 	focusRepos
 	focusPrefix
 	focusMode
-
-	lastField  = focusMode
-	fieldCount = lastField + 1
 )
+
+// lastFormField is the final reachable field. The mode selector is absent in
+// picker mode: escalation *is* the move to RPI, so offering the choice would
+// collect an answer confirmEscalation then overrides.
+func (m appModel) lastFormField() int {
+	if m.pickerManifest != nil {
+		return focusPrefix
+	}
+	return focusMode
+}
+
+// inSession reports whether the session being escalated already holds this
+// repository, which fixes its row: qrouton assembles what is missing and leaves
+// what is there, uncommitted work included.
+func (m appModel) inSession(id string) bool {
+	if m.pickerManifest == nil {
+		return false
+	}
+	for _, r := range m.pickerManifest.Repos {
+		if strings.EqualFold((github.Repo{Org: r.Org, Name: r.Name}).ID(), id) {
+			return true
+		}
+	}
+	return false
+}
 
 // sessionModes are the mode field's cycle order; RPI leads so it is the default.
 var sessionModes = []session.SessionMode{session.ModeRPI, session.ModeAssistant}
@@ -93,7 +115,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		previous := f.focus
 		if f.focus == focusRepos && f.cursor+1 < len(m.filteredRepos()) {
 			f.cursor++
-		} else if f.focus < lastField {
+		} else if f.focus < m.lastFormField() {
 			f.focus++
 		}
 		if previous == focusTicket && f.focus != focusTicket {
@@ -104,12 +126,12 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if f.focus > focusTicket {
 			f.focus--
 		} else {
-			f.focus = lastField
+			f.focus = m.lastFormField()
 		}
 		return m, nil
 	case "tab":
 		previous := f.focus
-		f.focus = (f.focus + 1) % fieldCount
+		f.focus = (f.focus + 1) % (m.lastFormField() + 1)
 		if previous == focusTicket {
 			return m, m.loadTicket()
 		}
@@ -157,7 +179,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case "enter":
-		if f.focus < lastField {
+		if f.focus < m.lastFormField() {
 			previous := f.focus
 			f.focus++
 			if previous == focusTicket {
@@ -264,6 +286,12 @@ func (m *appModel) cycleRepoRole() {
 		return
 	}
 	id := rs[m.form.cursor].ID()
+	// A repository the session already holds is fixed. Neither removing one nor
+	// changing its role is implemented, so letting the row cycle would offer a
+	// choice that silently did nothing.
+	if m.inSession(id) {
+		return
+	}
 	switch m.form.roles[id] {
 	case excluded:
 		m.form.roles[id] = active

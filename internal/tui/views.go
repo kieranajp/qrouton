@@ -198,6 +198,11 @@ func (m appModel) viewForm() string {
 			marker, label, detail, style = glyphReference, roleLabelReference,
 				fmt.Sprintf(referenceDetailFormat, r.DefaultBranch), accent
 		}
+		// Say so in words rather than leaving the role glyph to imply it: the
+		// row looks selected either way, and only one of the two can be changed.
+		if m.inSession(r.ID()) {
+			detail += repoInSessionDetail
+		}
 		head := style.Render(fmt.Sprintf(roleColumnFormat, marker, label))
 		tail := fmt.Sprintf(repoColumnFormat, r.ID(), dim.Render(bulletPrefix+relativeTime(r.PushedAt)+detail))
 		row := "  " + head + " " + tail
@@ -216,13 +221,16 @@ func (m appModel) viewForm() string {
 		strings.Join(prefixChips, " "),
 		dim.Render(fmt.Sprintf(branchPreviewFormat, branchPrefixes[f.prefix], emptyFallback(slug, emptyFieldLabel)))))
 
-	modeChips := []string{
-		chip(modeLabelRPI, f.mode != session.ModeAssistant),
-		chip(modeLabelAssistant, f.mode == session.ModeAssistant),
+	// No mode selector when escalating: the answer is RPI by definition.
+	if m.pickerManifest == nil {
+		modeChips := []string{
+			chip(modeLabelRPI, f.mode != session.ModeAssistant),
+			chip(modeLabelAssistant, f.mode == session.ModeAssistant),
+		}
+		boxes = append(boxes, labeledBox(f.focus == focusMode, labelMode, w,
+			strings.Join(modeChips, " "),
+			dim.Render(modeHint(f.mode))))
 	}
-	boxes = append(boxes, labeledBox(f.focus == focusMode, labelMode, w,
-		strings.Join(modeChips, " "),
-		dim.Render(modeHint(f.mode))))
 
 	footer := dim.Render(formKeyHints)
 	return strings.Join(boxes, "\n") + "\n\n" + footer

@@ -34,11 +34,12 @@ func (m *appModel) startAssembly() tea.Cmd {
 	m.assembly = ch
 	if m.pickerManifest != nil {
 		cfg, dir, manifest := m.cfg, m.pickerDir, *m.pickerManifest
-		name, prefix := m.form.name, branchPrefixes[m.form.prefix]
+		details := escalationDetails{name: m.form.name, description: m.form.description,
+			ticket: m.form.ticket, prefix: branchPrefixes[m.form.prefix]}
 		selected := m.selectedRepos()
 		go func() {
 			defer close(ch)
-			err := confirmEscalation(cfg, dir, manifest, selected, name, prefix,
+			err := confirmEscalation(cfg, dir, manifest, selected, details,
 				func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 			ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 		}()
@@ -95,17 +96,32 @@ func (m *appModel) selectedRepos() []session.RepoSelection {
 	return selected
 }
 
-// confirmEscalation is the picker's confirm path: the composed repositories,
-// the work's name, RPI mode, and the confirmed stanza land in one atomic
-// manifest write, so a polling reader never sees repos added while the mode
-// still says assistant. Active repositories are cut on <prefix>/<slug-of-name>.
-func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels []session.RepoSelection, name, prefix string, progress session.ProgressFunc) error {
-	branch := fmt.Sprintf(branchFormat, prefix, session.Slugify(name))
+// escalationDetails is what the picker's form contributes to the manifest.
+// Grouped so the write below cannot quietly drop one of them, which is how the
+// description and ticket came to be fields that collected input and discarded it.
+type escalationDetails struct {
+	name        string
+	description string
+	ticket      string
+	prefix      string
+}
+
+// confirmEscalation is the picker's confirm path: the composed repositories, the
+// work's details, RPI mode, and the confirmed stanza land in one atomic manifest
+// write, so a polling reader never sees repos added while the mode still says
+// assistant.
+//
+// The branch applies only to repositories being newly added. Anything already in
+// the session keeps its worktree and its branch, uncommitted work included:
+// escalating is how work that started small acquires the full workflow, so the
+// checkout it started in is the last thing that should move.
+func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels []session.RepoSelection, d escalationDetails, progress session.ProgressFunc) error {
+	branch := fmt.Sprintf(branchFormat, d.prefix, session.Slugify(d.name))
 	out, err := session.ComposeRepos(cfg, m, sels, branch, progress)
 	if err != nil {
 		return err
 	}
-	out.Name = name
+	out.Name, out.Description, out.TicketURL = d.name, d.description, d.ticket
 	out.Mode = session.ModeRPI
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
 	if err := session.WriteManifest(dir, out); err != nil {

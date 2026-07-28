@@ -375,3 +375,53 @@ func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 		t.Fatalf("repo progress lacks context: %+v", events[0])
 	}
 }
+
+// The guard lives in ComposeRepos rather than in the picker, so every route into
+// it is covered — the collision handling below it counts names, and cannot tell a
+// repository from itself.
+func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Root: root}
+	origin, _ := makeOrigin(t, "repo123")
+	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: origin, DefaultBranch: "main"}
+	dir, err := Create(cfg, "repo123", "", "", "feat",
+		ModeAssistant, []RepoSelection{{Repo: repo, Role: RepoRoleActive}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Owner and name identify a repository, whatever case they arrive in.
+	shouty := github.Repo{Name: "REPO123", Org: "KieranAJP", SSHURL: origin, DefaultBranch: "main"}
+	out, err := ComposeRepos(cfg, m, []RepoSelection{{Repo: shouty, Role: RepoRoleActive}}, "fix/other", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Repos) != 1 {
+		t.Fatalf("repository re-materialised: %+v", out.Repos)
+	}
+	if r := out.Repos[0]; r.Branch != "feat/repo123" {
+		t.Fatalf("existing branch changed to %q", r.Branch)
+	}
+
+	// A different owner sharing the name is still a different repository, and
+	// still gets an org-qualified path.
+	otherOrigin, _ := makeOrigin(t, "other-repo123")
+	other := github.Repo{Name: "repo123", Org: "lifesum", SSHURL: otherOrigin, DefaultBranch: "main"}
+	out, err = ComposeRepos(cfg, out, []RepoSelection{{Repo: other, Role: RepoRoleActive}}, "fix/other", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out.Repos) != 2 {
+		t.Fatalf("a distinct owner's repo was skipped: %+v", out.Repos)
+	}
+	if got := out.Repos[1].WorktreePath; got != filepath.Join("src", "lifesum-repo123") {
+		t.Fatalf("second owner's worktree = %q", got)
+	}
+}

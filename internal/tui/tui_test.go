@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -407,7 +408,7 @@ func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
 		Role: session.RepoRoleActive,
 	}}
-	if err := confirmEscalation(cfg, dir, manifest, sels, "Webhook retry backoff", "fix", nil); err != nil {
+	if err := confirmEscalation(cfg, dir, manifest, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -490,5 +491,130 @@ func TestProgressBarClampsAndFills(t *testing.T) {
 		if got != tc.wantFull {
 			t.Fatalf("progressBar(%d) filled %d cells, want %d", tc.percent, got, tc.wantFull)
 		}
+	}
+}
+
+// Escalating a session that has already been worked in must not disturb the
+// checkout the work is in. Selecting the repo you are working on is the obvious
+// move in the picker, and it used to produce a second clone of it on a second
+// branch, leaving the original's commits behind on the old one.
+func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: makeTestOrigin(t), DefaultBranch: "main"}
+	dir, err := session.Create(cfg, "repo123", "", "", "feat", session.ModeAssistant,
+		[]session.RepoSelection{{Repo: repo, Role: session.RepoRoleActive}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Uncommitted work in the original checkout.
+	stub := filepath.Join(dir, "src", "repo123", "stub.go")
+	if err := os.WriteFile(stub, []byte("package stub\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sels := []session.RepoSelection{{Repo: repo, Role: session.RepoRoleActive}}
+	if err := confirmEscalation(cfg, dir, manifest, sels,
+		escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repository duplicated on escalation: %+v", got.Repos)
+	}
+	if r := got.Repos[0]; r.Branch != "feat/repo123" || r.WorktreePath != "src/repo123" {
+		t.Fatalf("existing checkout was moved: branch=%q worktree=%q", r.Branch, r.WorktreePath)
+	}
+	if entries, err := os.ReadDir(filepath.Join(dir, "src")); err != nil || len(entries) != 1 {
+		t.Fatalf("src/ holds %d checkouts, want 1 (err %v)", len(entries), err)
+	}
+	if _, err := os.Stat(stub); err != nil {
+		t.Fatal("uncommitted work lost from the original checkout:", err)
+	}
+	if got.EffectiveMode() != session.ModeRPI {
+		t.Fatalf("mode = %q, want rpi", got.Mode)
+	}
+}
+
+// The picker used to render every repository as excluded, including ones the
+// session already held — which is what made selecting the worked-in repo look
+// necessary. It also asked again for a name and description it already had.
+func TestPickerSeedsFormFromTheSessionItIsEscalating(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"kieranajp"}}
+	manifest := session.Manifest{Name: "Existing work", Description: "already known",
+		TicketURL: "https://linear.app/x/issue/ABC-1", Repos: []session.ManifestRepo{
+			{Name: "repo123", Org: "kieranajp", Role: session.RepoRoleActive},
+			{Name: "shared", Org: "kieranajp", Role: session.RepoRoleReference},
+		}}
+
+	m := newPickerModel(cfg, "/tmp/session", manifest, "", "")
+
+	if m.form.name != "Existing work" || m.form.description != "already known" {
+		t.Fatalf("form not seeded: name=%q description=%q", m.form.name, m.form.description)
+	}
+	if m.form.ticket != manifest.TicketURL {
+		t.Fatalf("ticket not seeded: %q", m.form.ticket)
+	}
+	if got := m.form.roles["kieranajp/repo123"]; got != active {
+		t.Fatalf("present active repo seeded as %v, want active", got)
+	}
+	if got := m.form.roles["kieranajp/shared"]; got != reference {
+		t.Fatalf("present reference repo seeded as %v, want reference", got)
+	}
+	// Escalation is the move to RPI, so the mode selector is not offered.
+	if m.lastFormField() != focusPrefix {
+		t.Fatalf("mode field reachable in picker mode (last = %d)", m.lastFormField())
+	}
+}
+
+// The role glyph alone could not distinguish "you selected this" from "the
+// session already has this", and the second cannot be changed: removing a repo
+// from a live session, or re-roling one, is not implemented.
+func TestPickerMarksAndLocksRepositoriesAlreadyInTheSession(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"kieranajp"}}
+	manifest := session.Manifest{Name: "Work", Repos: []session.ManifestRepo{
+		{Name: "repo123", Org: "kieranajp", Role: session.RepoRoleActive},
+	}}
+	m := newPickerModel(cfg, "/tmp/session", manifest, "", "")
+	m.width = 200
+	m.repos = []github.Repo{
+		{Name: "repo123", Org: "kieranajp", DefaultBranch: "main"},
+		{Name: "other", Org: "kieranajp", DefaultBranch: "main"},
+	}
+	m.form.focus = focusRepos
+
+	rendered := m.viewForm()
+	for _, line := range strings.Split(rendered, "\n") {
+		if strings.Contains(line, "kieranajp/other") && strings.Contains(line, "in session") {
+			t.Fatalf("a repo not in the session was marked as in it: %q", line)
+		}
+	}
+	if !strings.Contains(rendered, "in session") {
+		t.Fatalf("no in-session marker rendered:\n%s", rendered)
+	}
+
+	// Space on the in-session row does nothing; on a free row it still cycles.
+	m.form.cursor = 0
+	m.cycleRepoRole()
+	if got := m.form.roles["kieranajp/repo123"]; got != active {
+		t.Fatalf("in-session row cycled to %v; it cannot be changed", got)
+	}
+	m.form.cursor = 1
+	m.cycleRepoRole()
+	if got := m.form.roles["kieranajp/other"]; got != active {
+		t.Fatalf("free row did not cycle: %v", got)
+	}
+
+	// A plain new-session form locks nothing.
+	if newAppModel(cfg, nil, "", nil).inSession("kieranajp/repo123") {
+		t.Fatal("non-picker form reports a repo as in-session")
 	}
 }

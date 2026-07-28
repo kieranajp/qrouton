@@ -127,9 +127,15 @@ const (
 	updatedPrefix   = " · updated "
 
 	referenceDetailFormat = " → %s · " + roleLabelReference
-	roleColumnFormat      = "%s %-9s"
-	repoColumnFormat      = "%-26s %s"
-	sessionTitleFormat    = "%-42s %s"
+
+	// repoInSessionDetail marks a row the escalation picker cannot change: the
+	// session already holds it, and it stays exactly as it is. Terse because it
+	// shares the detail column with the role and the push time, and the role
+	// column to its left already names the role.
+	repoInSessionDetail = " " + bulletPrefix + "in session"
+	roleColumnFormat    = "%s %-9s"
+	repoColumnFormat    = "%-26s %s"
+	sessionTitleFormat  = "%-42s %s"
 
 	branchFormat        = "%s/%s"
 	branchPreviewFormat = "preview · " + branchFormat + "  (active repos only)"
