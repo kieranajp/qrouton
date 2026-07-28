@@ -52,7 +52,8 @@ const (
 // Pane labels, as they appear in the pane's title bar. Each names the keys that
 // act on it, since the pane is the only place the user sees them.
 const (
-	editorPaneLabel  = "Editor · Alt-f to view · Alt-x to close"
+	// The editor pane keeps Esc for the editor itself, so it names the chord.
+	editorPaneLabel  = "Editor · Alt-f to view · Ctrl-g x to close"
 	commandPaneLabel = "▶ "
 	diffPaneLabel    = "◆ "
 	notifyPaneLabel  = "🔔 notification"
@@ -99,8 +100,17 @@ const (
 // The toast notify opens: it rings the bell, plays the generated cross-platform
 // sound (best effort), shows the message, then closes itself.
 const (
-	toastCommandFormat = `%s >/dev/null 2>&1 & printf '\a\n  🔔  %%s\n\n  (auto-closes; Alt-x to dismiss)\n' %s; sleep %d`
+	toastCommandFormat = `%s >/dev/null 2>&1 & printf '\a\n  🔔  %%s\n\n  (Esc dismisses; auto-closes)\n' %s; ` + waitKeyTimed
 	toastSeconds       = 8
+	toastTenths        = toastSeconds * 10
+)
+
+// One raw keypress, so Esc dismisses a panel; a canonical-mode read only ever
+// returns on Enter. help.sh does the same for the quick-reference panel.
+// waitKeyTimed takes its timeout in tenths of a second, per stty.
+const (
+	waitKey      = `stty -icanon -echo 2>/dev/null; dd bs=1 count=1 >/dev/null 2>&1`
+	waitKeyTimed = `stty -icanon -echo min 0 time %d 2>/dev/null; dd bs=1 count=1 >/dev/null 2>&1`
 )
 
 // The shell show_diff runs. A single repo relies on git's own pager and colour
@@ -108,7 +118,7 @@ const (
 // pager as it walks the worktrees. The footer keeps an empty diff from rendering
 // as a blank pane.
 const (
-	diffFooter = `printf '\n[end of diff — Alt-x to close]\n'`
+	diffFooter = `printf '\n[end of diff — Esc to close]\n'; ` + waitKey
 
 	allReposDiffFormat = `for d in %s/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; ` +
 		`printf '\n=== %%s ===\n' "$d"; git -C "$d" -c color.ui=always diff%s; done | less -FRX; %s`

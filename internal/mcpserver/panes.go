@@ -175,7 +175,9 @@ func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string
 	command := diffCommand(repoAbs, strings.TrimSpace(input.Base), input.Staged)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, label, diffPaneLabel+label, m.root, commandGeometry, false, []string{shellBin, shellLoginFlag, command}); err != nil {
+	// close_on_exit: the footer's keypress wait is what ends the command, so Esc
+	// has to take the pane with it.
+	if _, err := m.spawn(ctx, label, diffPaneLabel+label, m.root, commandGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
 	return fmt.Sprintf(showingDiffFormat, scope, label), nil
@@ -187,7 +189,7 @@ func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, er
 		return "", ErrMessageRequired
 	}
 	script := sessionpaths.NotifyScript(m.root)
-	command := fmt.Sprintf(toastCommandFormat, launch.ShellQuote(script), launch.ShellQuote(message), toastSeconds)
+	command := fmt.Sprintf(toastCommandFormat, launch.ShellQuote(script), launch.ShellQuote(message), toastTenths)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.spawn(ctx, notifyPaneName, notifyPaneLabel, m.root, toastGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {

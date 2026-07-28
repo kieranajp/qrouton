@@ -56,7 +56,7 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	for _, want := range []string{
 		"delegate work to subagents", // the fallback RPI tagline; the script resolves the real one at runtime
 		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
-		"Alt-g", "floating shell", "Alt-f", "show / hide", "Alt-x", "Alt-+ / Alt--", "Alt-?",
+		"Alt-g", "floating shell", "Alt-f", "show / hide", "Ctrl-g x", "Dismiss a panel", "Alt-+ / Alt--", "Alt-?",
 		"Ctrl-g Ctrl-q", "Press any key to close",
 		// The richer panel also explains the workspace itself, not just its keys.
 		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "checkout state and subagent activity",
@@ -76,13 +76,21 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt x"`, `bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `bind "Alt tab"`, `bind "Alt ?"`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
+	for _, want := range []string{`bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `bind "Alt tab"`, `bind "Alt ?"`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
 	}
 	if strings.Contains(string(config), `bind "Alt n" { NewPane; }`) {
 		t.Fatal("NewPane still holds the Alt-n chord; it belongs to de-escalation")
+	}
+	// CloseFocus cannot tell the agent pane from a popup, so no single chord may
+	// reach it: closing is Ctrl-g x, two deliberate steps.
+	if strings.Contains(string(config), `bind "Alt x"`) {
+		t.Fatal("CloseFocus is back on a bare Alt chord; one keypress can kill the agent pane")
+	}
+	if !strings.Contains(string(config), `bind "x" { CloseFocus; SwitchToMode "locked"; }`) {
+		t.Fatal("pane mode has no close binding; there is now no way to close a pane")
 	}
 	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")

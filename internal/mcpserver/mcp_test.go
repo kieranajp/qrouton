@@ -65,7 +65,7 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"--session test-session",
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
-		"Editor · Alt-f to view · Alt-x to close",
+		"Editor · Alt-f to view · Ctrl-g x to close",
 		"toggle-floating-panes",
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {
@@ -180,7 +180,10 @@ func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
 	}
 	realRepo, _ := filepath.EvalSymlinks(repo)
 	s := readLog(t, log)
-	for _, want := range []string{"--name ◆ diff:app", "git -C '" + realRepo + "' diff --staged 'main'", "--pinned true"} {
+	for _, want := range []string{"--name ◆ diff:app", "git -C '" + realRepo + "' diff --staged 'main'", "--pinned true",
+		// Esc ends the footer's keypress wait, and close-on-exit turns that into a
+		// dismissed pane.
+		"Esc to close", "stty -icanon", "--close-on-exit"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("single-repo diff missing %q:\n%s", want, s)
 		}
@@ -211,7 +214,8 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 	s := readLog(t, log)
 	script := filepath.Join(dir, ".qrouton", "notify.sh")
-	for _, want := range []string{"--name 🔔 notification", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes"} {
+	for _, want := range []string{"--name 🔔 notification", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes",
+		"time 80"} { // dismissable on Esc, still self-closing after toastSeconds
 		if !strings.Contains(s, want) {
 			t.Fatalf("notify toast missing %q:\n%s", want, s)
 		}
