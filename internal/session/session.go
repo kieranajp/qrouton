@@ -81,6 +81,11 @@ const (
 	ProgressStarted   ProgressStatus = "started"
 	ProgressCompleted ProgressStatus = "completed"
 	ProgressFailed    ProgressStatus = "failed"
+
+	// ProgressAdvanced is an update within a step that is still running — git's
+	// own clone and fetch progress. Consumers that only report outcomes ignore
+	// it; the assembly screen draws it as a bar.
+	ProgressAdvanced ProgressStatus = "advanced"
 )
 
 type Progress struct {
@@ -89,6 +94,11 @@ type Progress struct {
 	Repo   *github.Repo
 	Role   RepoRole
 	Err    error
+
+	// Phase and Percent carry git's own reckoning on a ProgressAdvanced event,
+	// e.g. "Receiving objects" at 47.
+	Phase   string
+	Percent int
 }
 
 type ProgressFunc func(Progress)
@@ -273,7 +283,16 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	}
 	url := sshURL(r.Org, r)
 	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
-	if err := ensureMirror(cfg.Root, r.Org, r.Name, url); err != nil {
+	// git's clone/fetch progress, forwarded per repository so several
+	// assembling at once each draw their own bar instead of interleaving lines.
+	var onProgress func(string, int)
+	if progress != nil {
+		onProgress = func(phase string, percent int) {
+			progress(Progress{Step: ProgressMirror, Status: ProgressAdvanced, Repo: &r, Role: role,
+				Phase: phase, Percent: percent})
+		}
+	}
+	if err := ensureMirror(cfg.Root, r.Org, r.Name, url, onProgress); err != nil {
 		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
 		return ManifestRepo{}, err
 	}
@@ -337,16 +356,6 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 	return m, nil
 }
 
-// AddRepos is the brownfield verb: ComposeRepos plus the manifest write, for
-// adding repositories to a session that already exists.
-func AddRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
-	m, err := ComposeRepos(cfg, m, sels, branch, progress)
-	if err != nil {
-		return m, err
-	}
-	return m, WriteManifest(filepath.Join(cfg.Root, m.Slug), m)
-}
-
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
 // assistant — so the next launch stamps the new prompt instead of reverting.
 func SetMode(dir string, mode SessionMode) error {
@@ -391,16 +400,29 @@ func emitProgress(progress ProgressFunc, event Progress) {
 	}
 }
 
-// EnsureWorktrees re-materialises any pruned worktrees on resume (fresh fetch either way).
-func EnsureWorktrees(cfg *config.Config, m Manifest) error {
+// EnsureWorktrees re-materialises any pruned worktrees on resume (fresh fetch
+// either way). progress reports the fetch — and, if a mirror has been deleted,
+// a full re-clone — so a slow resume is not silent.
+func EnsureWorktrees(cfg *config.Config, m Manifest, progress ProgressFunc) error {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	for _, r := range m.Repos {
 		if r.SSHURL == "" {
 			return fmt.Errorf("%s: %w: %s/%s", manifestName, ErrNoCloneURL, r.Org, r.Name)
 		}
-		if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL); err != nil {
+		repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
+		var onProgress func(string, int)
+		if progress != nil {
+			onProgress = func(phase string, percent int) {
+				progress(Progress{Step: ProgressMirror, Status: ProgressAdvanced, Repo: &repo,
+					Role: r.Role, Phase: phase, Percent: percent})
+			}
+		}
+		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &repo, Role: r.Role})
+		if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, onProgress); err != nil {
+			emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &repo, Role: r.Role, Err: err})
 			return err
 		}
+		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &repo, Role: r.Role})
 		wt := filepath.Join(dir, r.WorktreePath)
 		if _, err := os.Stat(wt); err == nil {
 			continue

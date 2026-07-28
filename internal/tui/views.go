@@ -322,6 +322,9 @@ func (m appModel) viewAssembly() string {
 			label = p.Repo.ID() + " " + label
 		}
 		line := symbol + " " + label
+		if p.Status == session.ProgressAdvanced {
+			line += " " + dim.Render(p.Phase) + " " + progressBar(p.Percent)
+		}
 		if p.Err != nil {
 			line += " — " + p.Err.Error()
 		}
@@ -334,6 +337,17 @@ func (m appModel) viewAssembly() string {
 	}
 	lines = append(lines, "", dim.Render(assemblyFooter))
 	return strings.Join(lines, "\n")
+}
+
+// progressBar draws one repository's clone or fetch progress. Hand-drawn rather
+// than bubbles/progress: that model animates and holds state per bar, and these
+// come and go per repository with a percentage already in hand.
+func progressBar(percent int) string {
+	percent = min(max(percent, 0), 100)
+	filled := percent * progressBarWidth / 100
+	return accent.Render(strings.Repeat(progressBarFull, filled)) +
+		dim.Render(strings.Repeat(progressBarEmpty, progressBarWidth-filled)) +
+		fmt.Sprintf(progressPercentFormat, percent)
 }
 
 func modeHint(mode session.SessionMode) string {

@@ -36,7 +36,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - `internal/mux/`: multiplexer ports (`Launcher`, `PaneHost`), the `Handle` that carries backend identity into the MCP child, and the Zellij adapter (KDL rendering, session lifecycle, pane actions).
 - `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes (both drawn via `paneui`).
 - `internal/sessionpaths/`, `internal/codex/`, `internal/paneui/`: the shared leaves above.
-- `internal/config/`: config file, XDG paths, first-run wizard.
+- `internal/config/`: config file, XDG paths, and the on-demand owner prompt. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and `EnsureOrgs` asks at the first repository search.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 
 ## Invariants

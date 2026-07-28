@@ -48,7 +48,7 @@ func (m *appModel) startAssembly() tea.Cmd {
 		defer close(ch)
 		if m.resume != nil {
 			s := *m.resume
-			err := session.EnsureWorktrees(m.cfg, s)
+			err := session.EnsureWorktrees(m.cfg, s, func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 			ch <- assemblyEvent{done: &assembledMsg{dir: filepath.Join(m.cfg.Root, s.Slug), err: err}}
 			return
 		}
@@ -56,6 +56,29 @@ func (m *appModel) startAssembly() tea.Cmd {
 		ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 	}()
 	return awaitAssembly(ch)
+}
+
+// recordStep folds a progress event into the step list. Clone and fetch report
+// repeatedly for the same step, and the view only ever draws the latest of
+// each, so a repeated update overwrites its predecessor instead of growing a
+// slice the render walks every frame.
+func recordStep(steps []session.Progress, p session.Progress) []session.Progress {
+	if n := len(steps); n > 0 && p.Status == session.ProgressAdvanced && sameStep(steps[n-1], p) {
+		steps[n-1] = p
+		return steps
+	}
+	return append(steps, p)
+}
+
+// sameStep reports whether two events describe one operation on one repository.
+func sameStep(a, b session.Progress) bool {
+	if a.Step != b.Step || a.Status != b.Status {
+		return false
+	}
+	if a.Repo == nil || b.Repo == nil {
+		return a.Repo == b.Repo
+	}
+	return a.Repo.ID() == b.Repo.ID()
 }
 
 // selectedRepos translates the form's role map into session selections.

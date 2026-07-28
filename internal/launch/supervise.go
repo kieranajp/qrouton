@@ -43,6 +43,7 @@ func Supervise(dir string, r Runner, handle mux.Handle, editor EditorCommand, re
 	relaunch := make(chan os.Signal, 1)
 	signal.Notify(relaunch, syscall.SIGUSR1)
 	defer signal.Stop(relaunch)
+	mode := sessionMode(dir)
 	for {
 		if err := StampAssets(dir); err != nil {
 			return err
@@ -56,9 +57,12 @@ func Supervise(dir string, r Runner, handle mux.Handle, editor EditorCommand, re
 		if err != nil || !signalled {
 			return err
 		}
-		// De-escalation keeps the conversation; escalation is a handoff to a
-		// fresh context, so anything but assistant relaunches without resume.
-		resume = sessionMode(dir) == modeAssistant
+		// Only a *change* into RPI is a handoff to a fresh context, where the
+		// brief carries over and the conversation does not. Everything else
+		// keeps it: de-escalation, and a second trip through the picker that
+		// merely adds repositories to a session already in RPI.
+		next := sessionMode(dir)
+		resume, mode = !(mode == modeAssistant && next == modeRPI), next
 	}
 }
 

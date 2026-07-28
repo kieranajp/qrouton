@@ -15,6 +15,47 @@ func TestSplitOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
 	}
 }
 
+// A zero-repo session needs neither a configured root nor GitHub owners, so
+// Load must succeed with no config file at all and without prompting. If this
+// regresses, `qrouton <dir>` stops being a no-configuration entry point.
+func TestLoadWithoutConfigFileDefaultsInsteadOfPrompting(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	t.Setenv("QROUTON_ROOT", root)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal("Load failed with no config file:", err)
+	}
+	if len(cfg.Orgs) != 0 {
+		t.Fatalf("orgs invented from nowhere: %#v", cfg.Orgs)
+	}
+	if cfg.Root != root {
+		t.Fatalf("root = %q, want %q", cfg.Root, root)
+	}
+	if _, err := os.Stat(Path()); !os.IsNotExist(err) {
+		t.Fatal("Load wrote a config file; nothing was configured yet")
+	}
+}
+
+// With no root anywhere, sessions still get somewhere to live.
+func TestLoadDefaultsRootWhenUnset(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", "")
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Root == "" || cfg.Root == defaultRoot {
+		t.Fatalf("root not resolved to an absolute default: %q", cfg.Root)
+	}
+	if _, err := os.Stat(cfg.Root); err != nil {
+		t.Fatal("default root not created:", err)
+	}
+}
+
 func TestLoadReadsLaunchOverridesVerbatim(t *testing.T) {
 	configHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)

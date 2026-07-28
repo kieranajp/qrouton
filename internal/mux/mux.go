@@ -103,6 +103,7 @@ type Workspace struct {
 	Slug       string // session name
 	Dir        string // session root; panes start here
 	HelpScript string // path to the global quick-reference panel, for Run-block keybindings
+	Binary     string // qrouton's own executable, for Run-block keybindings that call a subcommand
 	Tiled      Node
 	Floating   []Floating
 }

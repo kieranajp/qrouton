@@ -35,11 +35,11 @@ const (
 	fileMode = 0o644
 )
 
-// First-run wizard copy and defaults.
+// Owner-prompt copy and defaults.
 const (
-	wizardRootTitle       = "Root directory"
-	wizardRootDescription = "Sessions live flat under it; repo mirrors under <root>/.mirrors"
-	wizardRootDefault     = "~/work"
+	// defaultRoot is where sessions live when config.json names no root, so a
+	// launch never has to stop and ask. Mirrors go under <root>/.mirrors.
+	defaultRoot = "~/work"
 
 	wizardOrgsTitle       = "GitHub orgs"
 	wizardOrgsDescription = "Comma-separated organizations whose repos the session picker lists"

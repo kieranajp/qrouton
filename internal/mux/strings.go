@@ -93,6 +93,13 @@ const (
 	// deliberately doesn't know qrouton's config layout — the caller resolves
 	// the path and hands it in via Workspace.HelpScript.
 	helpScriptPlaceholder = "@@HELP_SCRIPT@@"
+
+	// binaryPlaceholder marks where Stage substitutes qrouton's own executable
+	// into the Run-block keybindings that invoke a subcommand (Alt-e, Alt-n).
+	// An absolute path, not a bare name: a locally built binary is usually not
+	// on PATH, and a chord that works only after `make install` is a chord
+	// that looks broken.
+	binaryPlaceholder = "@@QROUTON_BIN@@"
 )
 
 // KDL fragments the layout renderer emits. Zellij layouts are indented KDL, so

@@ -99,12 +99,13 @@ func (z *Zellij) Stage(ws Workspace) error {
 	if err != nil {
 		return err
 	}
-	// Run-block keybindings (the picker behind Alt-e, the quick-reference
-	// panel behind Alt-?) need the session directory and, for the latter, the
-	// global help script's path baked in; the config is already written
-	// per-session.
+	// Run-block keybindings (the picker behind Alt-e, de-escalation behind
+	// Alt-n, the quick-reference panel behind Alt-?) need the session
+	// directory, qrouton's own path, and the global help script's path baked
+	// in; the config is already written per-session.
 	staged := strings.ReplaceAll(string(config), sessionDirPlaceholder, ws.Dir)
 	staged = strings.ReplaceAll(staged, helpScriptPlaceholder, ws.HelpScript)
+	staged = strings.ReplaceAll(staged, binaryPlaceholder, ws.Binary)
 	if err := os.WriteFile(zellijConfigPath(ws.Dir), []byte(staged), 0o644); err != nil {
 		return err
 	}

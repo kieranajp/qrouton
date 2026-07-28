@@ -31,7 +31,7 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 	run(t, origin, "branch", "doomed")
 
 	root := filepath.Join(tmp, "root")
-	if err := ensureMirror(root, "org", "repo", origin); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
 		t.Fatal(err)
 	}
 	mp := mirrorPath(root, "org", "repo")
@@ -41,7 +41,7 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 
 	// origin deletes a branch; our prune-fetch must drop its remote ref but keep the session branch
 	run(t, origin, "branch", "-D", "doomed")
-	if err := ensureMirror(root, "org", "repo", origin); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -63,7 +63,7 @@ func TestWorktreeRematerialisesOnExistingBranch(t *testing.T) {
 	run(t, origin, "commit", "-m", "init")
 
 	root := filepath.Join(tmp, "root")
-	if err := ensureMirror(root, "org", "repo", origin); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
 		t.Fatal(err)
 	}
 	mp := mirrorPath(root, "org", "repo")

@@ -41,7 +41,9 @@ func TestUnknownBackendsAreRejectedByHandle(t *testing.T) {
 
 func TestStageSubstitutesSessionDirIntoRunBlocks(t *testing.T) {
 	dir := t.TempDir()
-	ws := Workspace{Slug: "demo", Dir: dir, Tiled: Node{Pane: &Pane{Name: "agent", Command: []string{"sh"}}}}
+	bin := "/opt/build/qrouton"
+	ws := Workspace{Slug: "demo", Dir: dir, Binary: bin, HelpScript: "/cfg/help.sh",
+		Tiled: Node{Pane: &Pane{Name: "agent", Command: []string{"sh"}}}}
 	if err := NewZellij("zellij", "/tmp/zellij").Stage(ws); err != nil {
 		t.Fatal(err)
 	}
@@ -56,8 +58,17 @@ func TestStageSubstitutesSessionDirIntoRunBlocks(t *testing.T) {
 	if !strings.Contains(config, `"pick" "--session-root" "`+dir+`"`) {
 		t.Fatalf("staged config does not target this session's directory:\n%s", config)
 	}
-	if strings.Contains(config, sessionDirPlaceholder) {
-		t.Fatal("session-dir placeholder survived staging")
+	// The chords must run this binary, not whatever "qrouton" PATH resolves to
+	// — a locally built one usually is not on PATH at all.
+	for _, want := range []string{`Run "` + bin + `" "pick"`, `Run "` + bin + `" "mode"`} {
+		if !strings.Contains(config, want) {
+			t.Fatalf("staged config missing %q:\n%s", want, config)
+		}
+	}
+	for _, placeholder := range []string{sessionDirPlaceholder, binaryPlaceholder, helpScriptPlaceholder} {
+		if strings.Contains(config, placeholder) {
+			t.Fatalf("%s survived staging", placeholder)
+		}
 	}
 }
 

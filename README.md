@@ -41,11 +41,13 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 ## Build and run 🚀
 
 ```sh
-go build -o qrouton .
+make build          # or: go build -o qrouton .
 ./qrouton
 ```
 
-On first run, qrouton asks for a workspace root and GitHub owners. Configuration is stored at:
+`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: the in-session escalation chords shell out to `qrouton`, so they need it somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
+
+qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work` and the owners are prompted for the first time you open the repository picker. Configuration is stored at:
 
 ```text
 $XDG_CONFIG_HOME/qrouton/config.json

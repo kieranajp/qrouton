@@ -96,6 +96,13 @@ const (
 	glyphActive    = "●"
 	glyphReference = "◐"
 
+	// The per-repository clone/fetch bar on the assembly screen. Narrow on
+	// purpose: it sits after the repository name and the phase git reports.
+	progressBarWidth      = 16
+	progressBarFull       = "█"
+	progressBarEmpty      = "░"
+	progressPercentFormat = " %3d%%"
+
 	roleLabelExcluded  = "excluded"
 	roleLabelActive    = "active"
 	roleLabelReference = "reference"

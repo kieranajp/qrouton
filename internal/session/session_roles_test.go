@@ -98,7 +98,7 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 	run(t, referenceOrigin, "add", ".")
 	run(t, referenceOrigin, "commit", "-m", "advance")
 	os.RemoveAll(filepath.Join(dir, "src", "reference"))
-	if err := EnsureWorktrees(cfg, m); err != nil {
+	if err := EnsureWorktrees(cfg, m, nil); err != nil {
 		t.Fatal(err)
 	}
 	out, err := exec.Command("git", "-C", filepath.Join(dir, "src", "reference"), "rev-parse", "HEAD").Output()
@@ -116,14 +116,14 @@ func TestCreateSessionWithActiveAndPinnedReference(t *testing.T) {
 func TestManifestRepoWithoutRoleResumesOnItsBranch(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	origin, _ := makeOrigin(t, "unroled")
-	if err := ensureMirror(root, "org", "unroled", origin); err != nil {
+	if err := ensureMirror(root, "org", "unroled", origin, nil); err != nil {
 		t.Fatal(err)
 	}
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
 		Name: "unroled", Org: "org", Branch: "feat/old", DefaultBranch: "main",
 		WorktreePath: "src/unroled", SSHURL: origin,
 	}}}
-	if err := EnsureWorktrees(&config.Config{Root: root}, m); err != nil {
+	if err := EnsureWorktrees(&config.Config{Root: root}, m, nil); err != nil {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(root, "old", "src", "unroled")
@@ -143,7 +143,7 @@ func TestEnsureWorktreesRejectsManifestWithoutCloneURL(t *testing.T) {
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
 		Name: "urlless", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/urlless",
 	}}}
-	err := EnsureWorktrees(&config.Config{Root: root}, m)
+	err := EnsureWorktrees(&config.Config{Root: root}, m, nil)
 	if err == nil {
 		t.Fatal("manifest without a clone URL was resumed")
 	}
@@ -261,7 +261,7 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(dir, "src", "custom")); err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureWorktrees(cfg, m); err != nil {
+	if err := EnsureWorktrees(cfg, m, nil); err != nil {
 		t.Fatal("resume with recorded URL failed:", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "src", "custom", "version")); err != nil {
@@ -269,7 +269,10 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 }
 
-func TestAddReposAssemblesIntoZeroRepoSession(t *testing.T) {
+// Assembling into a session that already exists is what escalation does: the
+// picker composes repositories into the loaded manifest and folds them into one
+// atomic write alongside the mode and the escalation stanza.
+func TestComposeReposAssemblesIntoZeroRepoSession(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
@@ -285,14 +288,19 @@ func TestAddReposAssemblesIntoZeroRepoSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := AddRepos(cfg, m, []RepoSelection{
+	out, err := ComposeRepos(cfg, m, []RepoSelection{
 		{Repo: github.Repo{Name: "active", Org: "org", SSHURL: activeOrigin, DefaultBranch: "main"}, Role: RepoRoleActive},
 		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
-	}, "fix/webhook-retry", nil); err != nil {
+	}, "fix/webhook-retry", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out.Mode = ModeRPI
+	if err := WriteManifest(dir, out); err != nil {
 		t.Fatal(err)
 	}
 	if !gitOK("-C", mirrorPath(root, "org", "active"), "show-ref", "--verify", "--quiet", "refs/heads/fix/webhook-retry") {
-		t.Fatal("session branch missing from the mirror after AddRepos")
+		t.Fatal("session branch missing from the mirror after assembly")
 	}
 	if gitOK("-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
 		t.Fatal("reference checkout is not detached")
@@ -302,7 +310,7 @@ func TestAddReposAssemblesIntoZeroRepoSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	if len(got.Repos) != 2 {
-		t.Fatalf("manifest repos after AddRepos = %+v", got.Repos)
+		t.Fatalf("manifest repos after assembly = %+v", got.Repos)
 	}
 	if r := got.Repos[0]; r.Role != RepoRoleActive || r.Branch != "fix/webhook-retry" {
 		t.Fatalf("active manifest repo = %+v", r)

@@ -41,16 +41,16 @@ func HelpScriptPath() string {
 	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), helpScriptFileName)
 }
 
-// Load reads config.json, running the first-run wizard if it doesn't exist.
+// Load reads config.json if it exists, and otherwise starts from defaults —
+// deliberately without prompting. A session with no repositories needs neither
+// a configured root nor GitHub owners, so nothing may block a launch here; the
+// owners are prompted for by EnsureOrgs, at the first repository search.
 // QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {
 	cfg := &Config{}
 	b, err := os.ReadFile(Path())
 	switch {
 	case os.IsNotExist(err):
-		if cfg, err = wizard(); err != nil {
-			return nil, err
-		}
 	case err != nil:
 		return nil, err
 	default:
@@ -64,47 +64,48 @@ func Load() (*Config, error) {
 	if v := os.Getenv(orgsEnvVar); v != "" {
 		cfg.Orgs = splitOrgs(v)
 	}
-	if len(cfg.Orgs) == 0 {
-		return nil, fmt.Errorf("%s: %w", Path(), ErrNoOrgs)
+	if strings.TrimSpace(cfg.Root) == "" {
+		cfg.Root = defaultRoot
 	}
 	cfg.Root = expandHome(cfg.Root)
-	if strings.TrimSpace(cfg.Root) == "" {
-		return nil, fmt.Errorf("%s: %w", Path(), ErrNoRoot)
-	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
 
-func wizard() (*Config, error) {
-	root, orgs := wizardRootDefault, wizardOrgsDefault
-	err := huh.NewForm(huh.NewGroup(
-		huh.NewInput().Title(wizardRootTitle).
-			Description(wizardRootDescription).
-			Value(&root).
-			Validate(func(s string) error {
-				if strings.TrimSpace(s) == "" {
-					return errRootRequired
-				}
-				return nil
-			}),
-		huh.NewInput().Title(wizardOrgsTitle).
-			Description(wizardOrgsDescription).
-			Value(&orgs).
-			Validate(func(s string) error {
-				if len(splitOrgs(s)) == 0 {
-					return errOrgsRequired
-				}
-				return nil
-			}),
-	)).Run()
+// EnsureOrgs prompts for GitHub owners and persists them, the first time
+// something actually needs them — which is the repository picker, not qrouton
+// itself. A no-op once they are known, so the ordinary path never prompts.
+func EnsureOrgs(cfg *Config) error {
+	if len(cfg.Orgs) > 0 {
+		return nil
+	}
+	orgs := wizardOrgsDefault
+	err := huh.NewInput().Title(wizardOrgsTitle).
+		Description(wizardOrgsDescription).
+		Value(&orgs).
+		Validate(func(s string) error {
+			if len(splitOrgs(s)) == 0 {
+				return errOrgsRequired
+			}
+			return nil
+		}).Run()
 	if err != nil {
-		return nil, err
+		return err
 	}
-	cfg := &Config{Orgs: splitOrgs(orgs), Root: root}
+	cfg.Orgs = splitOrgs(orgs)
+	return Save(cfg)
+}
+
+// Save writes the whole config back to disk, creating its directory. It is how
+// the owners EnsureOrgs collected survive to the next launch.
+func Save(cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {
-		return nil, err
+		return err
 	}
-	b, _ := json.MarshalIndent(cfg, "", "  ")
-	return cfg, os.WriteFile(Path(), b, fileMode)
+	b, err := json.MarshalIndent(cfg, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(Path(), b, fileMode)
 }
 
 func splitOrgs(s string) []string {

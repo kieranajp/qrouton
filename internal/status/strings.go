@@ -19,9 +19,11 @@ const (
 	phasePlan      = "Plan"
 	phaseImplement = "Implement"
 
-	// Only chords that exist are advertised.
+	// Only chords that exist are advertised, named for what they do in this
+	// mode: Alt-e is bound in both, but in RPI the work is already assembled,
+	// so a second trip through the picker adds repositories to it.
 	assistantChords = "Alt-e escalate · Alt-g terminal · Alt-? keys"
-	rpiChords       = "Alt-n de-escalate · Alt-g terminal · Alt-? keys"
+	rpiChords       = "Alt-n de-escalate · Alt-e add repos · Alt-g terminal · Alt-? keys"
 
 	labelSeparator = " · "
 	fieldSeparator = "   "

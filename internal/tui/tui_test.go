@@ -448,3 +448,47 @@ func TestAssemblyFailureBackTargetIsUsable(t *testing.T) {
 		t.Fatalf("assembly failure screen=%v back=%v failed=%v", got.screen, got.back, got.assemblyFailed)
 	}
 }
+
+// Clone and fetch report repeatedly for one step, and the view draws only the
+// latest of each; without collapsing them the slice the render walks every
+// frame would grow for the whole clone.
+func TestRecordStepCollapsesRepeatedProgressPerRepo(t *testing.T) {
+	svc := github.Repo{Name: "svc", Org: "org"}
+	web := github.Repo{Name: "web", Org: "org"}
+	var steps []session.Progress
+
+	steps = recordStep(steps, session.Progress{Step: session.ProgressMirror, Status: session.ProgressStarted, Repo: &svc})
+	for percent := 10; percent <= 90; percent += 10 {
+		steps = recordStep(steps, session.Progress{Step: session.ProgressMirror, Status: session.ProgressAdvanced,
+			Repo: &svc, Phase: "Receiving objects", Percent: percent})
+	}
+	if len(steps) != 2 {
+		t.Fatalf("nine updates for one repo produced %d steps, want 2", len(steps))
+	}
+	if last := steps[1]; last.Percent != 90 {
+		t.Fatalf("collapsed step kept %d%%, want the newest (90%%)", last.Percent)
+	}
+
+	// A different repository is a different row, not an overwrite.
+	steps = recordStep(steps, session.Progress{Step: session.ProgressMirror, Status: session.ProgressAdvanced,
+		Repo: &web, Phase: "Receiving objects", Percent: 5})
+	if len(steps) != 3 {
+		t.Fatalf("a second repository was collapsed into the first: %d steps", len(steps))
+	}
+	// Outcomes are never collapsed away — they are what the view colours.
+	steps = recordStep(steps, session.Progress{Step: session.ProgressMirror, Status: session.ProgressCompleted, Repo: &web})
+	if len(steps) != 4 {
+		t.Fatalf("completion overwrote a progress row: %d steps", len(steps))
+	}
+}
+
+func TestProgressBarClampsAndFills(t *testing.T) {
+	for _, tc := range []struct{ percent, wantFull int }{
+		{-5, 0}, {0, 0}, {50, progressBarWidth / 2}, {100, progressBarWidth}, {150, progressBarWidth},
+	} {
+		got := strings.Count(progressBar(tc.percent), progressBarFull)
+		if got != tc.wantFull {
+			t.Fatalf("progressBar(%d) filled %d cells, want %d", tc.percent, got, tc.wantFull)
+		}
+	}
+}

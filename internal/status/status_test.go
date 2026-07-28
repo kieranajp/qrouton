@@ -55,12 +55,15 @@ func TestStatusLinesEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 
 	// No documents yet: freshly escalated means Research.
 	line := statusLines(dir)[0]
-	for _, want := range []string{"RPI", "Research", "webhook retry backoff", "fix/webhook-retry-backoff", "Alt-n de-escalate"} {
+	for _, want := range []string{"RPI", "Research", "webhook retry backoff", "fix/webhook-retry-backoff",
+		"Alt-n de-escalate", "Alt-e add repos"} {
 		if !strings.Contains(line, want) {
 			t.Fatalf("strip missing %q: %q", want, line)
 		}
 	}
-	if strings.Contains(line, "Alt-e") {
+	// Alt-e stays bound in RPI, but the work is already assembled: it must not
+	// read as an offer to escalate again.
+	if strings.Contains(line, "Alt-e escalate") {
 		t.Fatalf("escalated strip still advertises escalation: %q", line)
 	}
 

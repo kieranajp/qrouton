@@ -114,7 +114,7 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 	}
 	slug := session.Slugify(adhocName(repos))
 	if m, ok := findSession(sessions, slug); ok {
-		if err := session.EnsureWorktrees(cfg, m); err != nil {
+		if err := session.EnsureWorktrees(cfg, m, printProgress); err != nil {
 			return err
 		}
 		fmt.Fprintf(os.Stderr, resumingFormat, slug)
@@ -124,16 +124,20 @@ func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string
 	for i, r := range repos {
 		selections[i] = session.RepoSelection{Repo: r, Role: session.RepoRoleActive}
 	}
-	dir, err := session.Create(cfg, adhocName(repos), "", "", adhocBranchPrefix, session.ModeAssistant, selections,
-		func(p session.Progress) {
-			if p.Status == session.ProgressCompleted && p.Repo != nil {
-				fmt.Fprintf(os.Stderr, progressFormat, p.Repo.ID(), p.Step)
-			}
-		})
+	dir, err := session.Create(cfg, adhocName(repos), "", "", adhocBranchPrefix, session.ModeAssistant, selections, printProgress)
 	if err != nil {
 		return err
 	}
 	return launchRunner(cfg, dir, runner, false)
+}
+
+// printProgress reports assembly on the paths that have no TUI to draw into.
+// Outcomes only: git's own clone and fetch progress arrives as ProgressAdvanced
+// many times a second, which is a bar in the TUI and a wall of text here.
+func printProgress(p session.Progress) {
+	if p.Status == session.ProgressCompleted && p.Repo != nil {
+		fmt.Fprintf(os.Stderr, progressFormat, p.Repo.ID(), p.Step)
+	}
 }
 
 // pickRunner resolves the runner headlessly: the requested one if given and

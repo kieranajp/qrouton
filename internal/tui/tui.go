@@ -8,6 +8,7 @@ import (
 	"context"
 	"net/http"
 	"sort"
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -78,6 +79,11 @@ type appModel struct {
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
+	// The first repository search is where owners stop being optional, so this
+	// is where they are asked for rather than at config load.
+	if err := config.EnsureOrgs(cfg); err != nil {
+		return nil, err
+	}
 	runners, err := launch.Runners(cfg)
 	if err != nil {
 		return nil, err
@@ -108,6 +114,9 @@ func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string
 // LaunchRequest. Esc records a cancelled outcome and leaves the session as it
 // was.
 func RunPicker(cfg *config.Config, dir, name, prefix string) error {
+	if err := config.EnsureOrgs(cfg); err != nil {
+		return err
+	}
 	manifest, err := session.Load(dir)
 	if err != nil {
 		return err
@@ -124,7 +133,12 @@ func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, n
 	m.screen = newScreen
 	m.pickerDir = dir
 	m.pickerManifest = &manifest
+	// The keybinding route passes no name; fall back to the session's own so a
+	// bare Alt-e adds repositories without renaming the work.
 	m.form.name = name
+	if strings.TrimSpace(name) == "" {
+		m.form.name = manifest.Name
+	}
 	m.form.focus = focusName
 	for i, p := range branchPrefixes {
 		if p == prefix {
@@ -252,7 +266,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case assemblyEventMsg:
 		if v.event.progress != nil {
-			m.assemblySteps = append(m.assemblySteps, *v.event.progress)
+			m.assemblySteps = recordStep(m.assemblySteps, *v.event.progress)
 			return m, awaitAssembly(m.assembly)
 		}
 		if v.event.done != nil {

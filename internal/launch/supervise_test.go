@@ -89,6 +89,35 @@ func TestSuperviseRelaunchesWithContinueAfterDeescalation(t *testing.T) {
 	assertLinkTargetContains(t, dir+"/CLAUDE.md", "ASSISTANT.md")
 }
 
+// A second trip through the picker on a session already in RPI adds
+// repositories; it is not a handoff, so the conversation must survive it.
+// Reading the mode alone cannot tell the two apart — only the change can.
+func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if len(argvs) == 1 {
+			// The picker's confirm rewrites the manifest with the same mode.
+			if err := session.SetMode(dir, session.ModeRPI); err != nil {
+				t.Fatal(err)
+			}
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err := Supervise(dir, testRunner(), mux.Handle{Kind: "zellij", Session: "s"}, EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("expected the runner relaunched once, got %d launches", len(argvs))
+	}
+	if !strings.Contains(strings.Join(argvs[1], " "), claudeContinueFlag) {
+		t.Fatalf("adding repos within RPI dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
+	}
+}
+
 func TestSuperviseLeavesThePaneOnUnsignalledExit(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)
 	calls := 0

@@ -168,7 +168,7 @@ keybinds clear-defaults=true {
         // generous geometry, keeping focus — the one deliberate exception to
         // spawn-returns-focus. @@SESSION_DIR@@ is substituted at stage time.
         bind "Alt e" {
-            Run "qrouton" "pick" "--session-root" "@@SESSION_DIR@@" {
+            Run "@@QROUTON_BIN@@" "pick" "--session-root" "@@SESSION_DIR@@" {
                 floating true
                 x "20%"
                 y "3%"
@@ -199,7 +199,7 @@ keybinds clear-defaults=true {
         // off the single-chord set (still Ctrl-g → pane mode → n). Flags come
         // before the positional mode so the CLI parses them.
         bind "Alt n" {
-            Run "qrouton" "mode" "--session-root" "@@SESSION_DIR@@" "assistant" {
+            Run "@@QROUTON_BIN@@" "mode" "--session-root" "@@SESSION_DIR@@" "assistant" {
                 floating true
                 x "25%"
                 y "5%"

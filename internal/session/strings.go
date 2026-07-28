@@ -3,6 +3,8 @@ package session
 // Git plumbing and path fragments the session lifecycle depends on, plus the
 // scaffold a fresh session starts with.
 
+import "time"
+
 const (
 	// slugSeparator joins and pads slug components; branchSeparator divides a
 	// branch prefix from its slug.
@@ -75,6 +77,10 @@ const (
 
 	quietLongFlag = "--quiet"
 
+	// progressFlag is not optional once stderr is a pipe: git reports progress
+	// only to a terminal unless asked in so many words.
+	progressFlag = "--progress"
+
 	// fetchRefspecKey and fetchRefspec map origin's heads to remote-tracking refs
 	// only. A literal --mirror refspec (+refs/*:refs/*) would let --prune delete
 	// session branches under refs/heads/*.
@@ -85,12 +91,23 @@ const (
 	localBranchRef = "refs/heads/"
 )
 
-// Progress messages printed while assembling a session. Mirroring and fetching
-// are slow enough that silence reads as a hang.
+// Reading git's progress off a pipe. Nothing is printed from here any more:
+// mirroring and fetching are slow enough that silence reads as a hang, so they
+// report through Progress events and the caller draws them.
 const (
-	mirroringFormat   = "qrouton: mirroring %s/%s (first use, may take a while)…\n"
-	fetchingFormat    = "qrouton: fetching %s/%s…\n"
-	checkingOutFormat = "qrouton: checking out %s on %s…\n"
+	// progressChunkBytes is one read of git's stderr. Its updates are a few
+	// dozen bytes each, so this holds several and the newest is the one drawn.
+	progressChunkBytes = 4096
+
+	// progressTailLimit caps what is retained to explain a failure — enough for
+	// a host-key or auth message, not a whole clone's chatter.
+	progressTailLimit = 4096
+
+	// progressEmitInterval rate-limits reports to something an eye can follow;
+	// a small repository otherwise produces a few hundred in a fraction of a
+	// second. Phase changes and 100% ignore it.
+	progressEmitInterval = 100 * time.Millisecond
+	progressComplete     = 100
 )
 
 // Scratch sessions (a bare `qrouton`) are named after the invoking directory

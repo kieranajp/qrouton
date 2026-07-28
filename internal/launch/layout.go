@@ -99,6 +99,7 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin, warning
 		Slug:       slug,
 		Dir:        dir,
 		HelpScript: helpPath,
+		Binary:     qroutonBin,
 		Tiled: mux.Node{
 			Split: mux.SplitHorizontal,
 			Children: []mux.Node{
