@@ -6,7 +6,6 @@ import "time"
 // rollout event names it reads them from, and the pane's copy.
 
 const (
-	// paneTitle heads the pane. refreshInterval is how often it redraws.
 	paneTitle       = "agents"
 	refreshInterval = 2 * time.Second
 
