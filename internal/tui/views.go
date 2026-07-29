@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -101,7 +102,8 @@ func (m appModel) viewLanding() string {
 			repos = append(repos, r.Org+"/"+r.Name)
 		}
 		title := fmt.Sprintf(sessionTitleFormat, s.Slug, relativeTime(s.CreatedAt))
-		content := title + "\n" + emptyFallback(s.Description, noDescriptionLabel) + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
+		description := dim.Render(landingDescription(s.Description, m.formWidth()-2))
+		content := title + "\n" + description + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
 		st := card
 		if m.landingCursor == i+1 {
 			st = picked
@@ -110,6 +112,15 @@ func (m appModel) viewLanding() string {
 	}
 	lines = append(lines, dim.Render(landingKeyHints))
 	return strings.Join(lines, "\n")
+}
+
+// landingDescription keeps every session card at a predictable four lines.
+// Ticket bodies commonly contain paragraphs; the landing screen only needs a
+// compact preview and the full description remains in the session manifest.
+func landingDescription(description string, width int) string {
+	description = strings.Join(strings.Fields(description), " ")
+	description = emptyFallback(description, noDescriptionLabel)
+	return ansi.Truncate(description, width, descriptionTail)
 }
 
 func workflowLine(s session.WorkflowStatus) string {

@@ -67,6 +67,7 @@ const (
 
 	newSessionLabel    = "New session"
 	noDescriptionLabel = "No description"
+	descriptionTail    = "…"
 	emptyFieldLabel    = "—"
 
 	runnerTitle = "Choose a coding agent"

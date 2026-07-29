@@ -294,6 +294,26 @@ func TestLandingCardIncludesDescriptionAndRepositories(t *testing.T) {
 	}
 }
 
+func TestLandingDescriptionIsSingleLineAndTruncated(t *testing.T) {
+	got := landingDescription("A long Linear ticket\n\nwith several paragraphs and extra detail", 30)
+	if strings.Contains(got, "\n") {
+		t.Fatalf("landing description contains a newline: %q", got)
+	}
+	if got != "A long Linear ticket with sev…" {
+		t.Fatalf("landing description = %q", got)
+	}
+}
+
+func TestLandingDescriptionIsDimmed(t *testing.T) {
+	m := testApp()
+	m.sessions = []session.Manifest{{Slug: "fix-login", Description: "Refresh expired sessions"}}
+
+	view := m.viewLanding()
+	if !strings.Contains(view, dim.Render("Refresh expired sessions")) {
+		t.Fatalf("landing description is not dimmed:\n%s", view)
+	}
+}
+
 func TestLandingUsesResponsiveCroutonLogo(t *testing.T) {
 	m := testApp()
 	m.screen = landingScreen
