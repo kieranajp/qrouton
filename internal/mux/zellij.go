@@ -8,6 +8,7 @@ package mux
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -106,10 +107,10 @@ func (z *Zellij) Stage(ws Workspace) error {
 	if err != nil {
 		return err
 	}
-	// Run-block keybindings (the picker behind Alt-e, de-escalation behind
-	// Alt-n, the quick-reference panel behind Alt-?) need the session
-	// directory, qrouton's own path, and the global help script's path baked
-	// in; the config is already written per-session.
+	// Run-block keybindings (the shell behind Alt-g, picker behind Alt-e,
+	// de-escalation behind Alt-n, and quick-reference panel behind Alt-?)
+	// need the session directory, qrouton's own path, and the global help
+	// script's path baked in; the config is already written per-session.
 	staged := strings.ReplaceAll(string(config), sessionDirPlaceholder, ws.Dir)
 	staged = strings.ReplaceAll(staged, helpScriptPlaceholder, ws.HelpScript)
 	staged = strings.ReplaceAll(staged, binaryPlaceholder, ws.Binary)
@@ -191,7 +192,12 @@ func renderKDL(ws Workspace) string {
 func renderNode(b *strings.Builder, n Node, depth int) {
 	pad := strings.Repeat(kdlIndent, depth)
 	if n.Pane == nil {
-		attrs := fmt.Sprintf(kdlSplitAttr, n.Split)
+		attrs := ""
+		if n.Stacked {
+			attrs = kdlStackedAttr
+		} else if n.Split != "" {
+			attrs = fmt.Sprintf(kdlSplitAttr, n.Split)
+		}
 		if s := kdlSize(n.Size); s != "" {
 			attrs += kdlSizeAttr + s
 		}
@@ -279,6 +285,133 @@ func zellijHostFromHandle(h Handle) (PaneHost, error) {
 		os.Setenv(socketDirEnvVar, h.SocketDir)
 	}
 	return NewZellijHost(bin, h.Session), nil
+}
+
+// CurrentShellStack returns pane control for the shell command running inside a
+// Zellij pane. Unlike agent pane tools, this command does not need a marshalled
+// handle: Zellij itself supplies the current session and pane IDs.
+func CurrentShellStack() (ShellStack, error) {
+	session := os.Getenv(zellijSessionEnvVar)
+	paneID := terminalPaneID(os.Getenv(zellijPaneIDEnvVar))
+	if session == "" || paneID == "" {
+		return nil, ErrShellContext
+	}
+	bin, err := exec.LookPath(zellijBin)
+	if err != nil {
+		return nil, fmt.Errorf("zellij is unavailable")
+	}
+	return &zellijShellStack{
+		zellijHost: zellijHost{bin: bin, session: session},
+		currentID:  paneID,
+	}, nil
+}
+
+type zellijShellStack struct {
+	zellijHost
+	currentID string
+}
+
+type zellijPane struct {
+	ID         int    `json:"id"`
+	IsPlugin   bool   `json:"is_plugin"`
+	IsFloating bool   `json:"is_floating"`
+	Title      string `json:"title"`
+	Exited     bool   `json:"exited"`
+}
+
+func (z *zellijShellStack) panes(ctx context.Context) ([]zellijPane, error) {
+	out, err := z.action(ctx, listPanesAction, allFlag, jsonFlag)
+	if err != nil {
+		return nil, err
+	}
+	var panes []zellijPane
+	if err := json.Unmarshal(out, &panes); err != nil {
+		return nil, fmt.Errorf("parse zellij panes: %w", err)
+	}
+	return panes, nil
+}
+
+// JoinCurrent names this shell and stacks it with every existing shell pane.
+// Existing IDs stay in Zellij's layout order so the original shell remains the
+// stable anchor for the right-hand region when a shell was initially spawned
+// beside the agent.
+func (z *zellijShellStack) JoinCurrent(ctx context.Context, titlePrefix, titleSuffix string) (int, error) {
+	panes, err := z.panes(ctx)
+	if err != nil {
+		return 0, err
+	}
+	next := 1
+	var shellIDs []string
+	for _, pane := range panes {
+		if pane.IsPlugin || pane.IsFloating || pane.Exited {
+			continue
+		}
+		id := terminalPaneID(strconv.Itoa(pane.ID))
+		if id == z.currentID {
+			continue
+		}
+		number, ok := shellNumber(pane.Title, titlePrefix)
+		if !ok {
+			continue
+		}
+		if number >= next {
+			next = number + 1
+		}
+		shellIDs = append(shellIDs, id)
+	}
+	title := fmt.Sprintf("%s %d%s", titlePrefix, next, titleSuffix)
+	if len(shellIDs) > 0 {
+		shellIDs = append(shellIDs, z.currentID)
+		if _, err := z.action(ctx, append([]string{stackPanesAction, endOfFlags}, shellIDs...)...); err != nil {
+			return 0, err
+		}
+	}
+	// Stack first: Zellij can redraw a newly-stacked pane with the name from its
+	// Run action. Renaming last makes the numbered title and its controls the
+	// final state the user sees.
+	if _, err := z.action(ctx, renamePaneAction, paneIDFlag, z.currentID, title); err != nil {
+		return 0, err
+	}
+	return next, nil
+}
+
+func (z *zellijShellStack) Count(ctx context.Context, titlePrefix string) (int, error) {
+	panes, err := z.panes(ctx)
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for _, pane := range panes {
+		if pane.IsPlugin || pane.IsFloating || pane.Exited {
+			continue
+		}
+		if _, ok := shellNumber(pane.Title, titlePrefix); ok {
+			count++
+		}
+	}
+	return count, nil
+}
+
+func shellNumber(title, prefix string) (int, bool) {
+	// Attached sessions can outlive the binary and staged layout that created
+	// them. Before the shell-stack refactor the permanent pane was named
+	// "shell · Alt-g"; the first stack-aware launch begins as plain "shell"
+	// until this method renames it. Treat either as shell 1 so a freshly-staged
+	// Alt-g can migrate into the old right-hand region instead of stacking with
+	// whichever pane currently has focus.
+	if title == prefix || strings.HasPrefix(title, prefix+" ·") {
+		return 1, true
+	}
+	rest, ok := strings.CutPrefix(title, prefix+" ")
+	if !ok {
+		return 0, false
+	}
+	field := strings.Fields(rest)
+	if len(field) == 0 {
+		return 0, false
+	}
+	number, err := strconv.Atoi(field[0])
+	return number, err == nil && number > 0
 }
 
 // action runs a zellij action against this session and returns its stdout.

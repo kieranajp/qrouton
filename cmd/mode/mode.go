@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/urfave/cli/v2"
 )
@@ -17,6 +18,7 @@ var Command = &cli.Command{
 	ArgsUsage: commandArgsUsage,
 	Flags: []cli.Flag{
 		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
+		&cli.BoolFlag{Name: shellStackFlag, Usage: shellStackUsage, Hidden: true},
 	},
 	Action: func(c *cli.Context) error {
 		var mode session.SessionMode
@@ -27,6 +29,15 @@ var Command = &cli.Command{
 			mode = session.ModeRPI
 		default:
 			return fmt.Errorf("%w: %q", errUnknownMode, c.Args().First())
+		}
+		if c.Bool(shellStackFlag) {
+			stack, err := mux.CurrentShellStack()
+			if err != nil {
+				return err
+			}
+			if _, err := launch.JoinShellStack(c.Context, stack, deescalatingPaneSuffix); err != nil {
+				return err
+			}
 		}
 		dir := c.String(sessionRootFlag)
 		if err := session.SetMode(dir, mode); err != nil {

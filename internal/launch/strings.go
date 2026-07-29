@@ -12,10 +12,8 @@ const (
 	// openCodeConfigEnvVar is how OpenCode accepts inline configuration.
 	openCodeConfigEnvVar = "OPENCODE_CONFIG_CONTENT"
 
-	// shellBin runs the generated pane scripts and hook commands. Panes use a
-	// login shell so the user's PATH and aliases apply.
-	shellBin       = "sh"
-	shellLoginFlag = "-lc"
+	// shellBin runs the generated quick-reference script.
+	shellBin = "sh"
 
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
@@ -23,18 +21,20 @@ const (
 	// Pane names in the generated workspace layout. A pane's title carries a
 	// chord only where a real binding operates that pane; movement and the
 	// rest of the key list are stated once, in the strip and in Alt-?.
-	agentPaneName  = "agent"
-	shellPaneName  = "shell · Alt-g"
-	reposPaneName  = "repos"
-	agentsPaneName = "agents"
-	statusPaneName = "status"
-	helpPaneName   = "keys · press any key to close"
+	agentPaneName        = "agent"
+	shellPaneName        = "shell"
+	shellPaneTitleSuffix = " · Alt-g new · Alt-↑↓ switch · Ctrl-d close"
+	reposPaneName        = "repos"
+	agentsPaneName       = "agents"
+	statusPaneName       = "status"
+	helpPaneName         = "keys · press any key to close"
 
 	// Subcommands qrouton launches against itself to drive its own panes.
 	mcpSubcommand        = "mcp"
 	reposSubcommand      = "repos"
 	agentsSubcommand     = "agents"
 	statusSubcommand     = "status"
+	shellSubcommand      = "shell"
 	agentEventSubcommand = "agent-event"
 	agentSubcommand      = "agent"
 
@@ -67,6 +67,27 @@ const (
 
 // scriptMode is the permission bit the generated pane scripts need.
 const scriptMode = 0o755
+
+const (
+	shellEnvVar    = "SHELL"
+	defaultShell   = "/bin/sh"
+	loginShellFlag = "-l"
+
+	treeCommand    = "tree"
+	treeDepthFlag  = "-L"
+	treeDepth      = "2"
+	treeColourFlag = "-C"
+
+	findCommand   = "find"
+	findRoot      = "."
+	findDepthFlag = "-maxdepth"
+	findDepth     = "2"
+	findPrintFlag = "-print"
+
+	lastShellMessage = "qrouton: the shell area always keeps one shell; starting a fresh one"
+	joinShellError   = "join shell stack"
+	countShellError  = "count shell panes"
+)
 
 // Runner identifiers, labels, and the arguments qrouton launches each with.
 // The permission-bypass flags are deliberate: a qrouton session is an

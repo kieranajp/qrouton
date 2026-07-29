@@ -34,7 +34,7 @@ func TestStatusLinesScratchAssistant(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("strip = %d lines, want one:\n%s", len(lines), strings.Join(lines, "\n"))
 	}
-	for _, want := range []string{"ASSISTANT", "scratch", "lifesum-4f3a", "Alt-e escalate", "Alt-g terminal"} {
+	for _, want := range []string{"ASSISTANT", "scratch", "lifesum-4f3a", "Alt-e escalate", "Alt-g +shell", "Alt-↑↓ switch", "Ctrl-d close"} {
 		if !strings.Contains(lines[0], want) {
 			t.Fatalf("strip missing %q: %q", want, lines[0])
 		}

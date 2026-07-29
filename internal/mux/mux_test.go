@@ -2,6 +2,7 @@ package mux
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -80,7 +81,9 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 		Tiled: Node{Split: "vertical", Children: []Node{
 			{Size: "65%", Pane: &Pane{Name: "agent", Command: []string{"claude", "--flag", `tricky "quote"`}}},
 			{Split: "horizontal", Size: "35%", Children: []Node{
-				{Pane: &Pane{Name: "shell", Command: []string{"sh", "-lc", "echo hi"}}},
+				{Stacked: true, Children: []Node{
+					{Pane: &Pane{Name: "shell", Command: []string{"sh", "-lc", "echo hi"}}},
+				}},
 				{Size: "6", Pane: &Pane{Name: "status", Command: []string{"qrouton", "repos"}}},
 				{Size: "1", Pane: &Pane{Name: "strip", Borderless: true, Command: []string{"qrouton", "status"}}},
 			}},
@@ -91,8 +94,9 @@ func TestRenderKDLShapesSplitsSizesAndFloats(t *testing.T) {
 		`plugin location="zellij:status-bar"`,
 		`pane split_direction="vertical" {`,
 		`pane split_direction="horizontal" size="35%" {`, // percentages stay quoted
-		`pane size=6 name="status" {`,                    // row counts render bare
-		`pane size=1 borderless=true name="strip" {`,     // borderless leaves render frameless
+		`pane stacked=true {`,
+		`pane size=6 name="status" {`,                // row counts render bare
+		`pane size=1 borderless=true name="strip" {`, // borderless leaves render frameless
 		`pane size="65%" name="agent" {`,
 		"command \"claude\"\n",
 		`args "--flag" "tricky \"quote\""`, // args survive KDL quoting
@@ -209,6 +213,127 @@ func TestParseClientFocusIgnoresHeaderAndCommands(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("client %d = %#v, want %#v", i, got[i], want[i])
 		}
+	}
+}
+
+func TestShellStackJoinsCurrentPaneToExistingNumberedShells(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "zellij")
+	log := filepath.Join(dir, "calls")
+	panes := `[
+		{"id":0,"is_plugin":true,"title":"status"},
+		{"id":2,"title":"shell 1 · keys"},
+		{"id":5,"title":"shell 3 · keys"},
+		{"id":7,"title":"shell 8 · keys","is_floating":true},
+		{"id":8,"title":"shell 9 · keys","exited":true},
+		{"id":9,"title":"shell"}
+	]`
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n" +
+		"if [ \"$4\" = list-panes ]; then printf '%s' \"$PANES_JSON\"; fi\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CALL_LOG", log)
+	t.Setenv("PANES_JSON", panes)
+	stack := &zellijShellStack{
+		zellijHost: zellijHost{bin: bin, session: "s"},
+		currentID:  "terminal_9",
+	}
+
+	number, err := stack.JoinCurrent(context.Background(), "shell", " · keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if number != 4 {
+		t.Fatalf("new shell number = %d, want 4", number)
+	}
+	count, err := stack.Count(context.Background(), "shell")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 3 {
+		t.Fatalf("shell count = %d, want 3 active tiled managed shells", count)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(calls)
+	for _, want := range []string{
+		"action rename-pane --pane-id terminal_9 shell 4 · keys",
+		"action stack-panes -- terminal_2 terminal_5 terminal_9",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("calls missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestShellStackUsesThePreRefactorShellAsItsLiveSessionAnchor(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "zellij")
+	log := filepath.Join(dir, "calls")
+	panes := `[
+		{"id":0,"title":"agent"},
+		{"id":2,"title":"shell · Alt-g"},
+		{"id":13,"title":"shell"}
+	]`
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n" +
+		"if [ \"$4\" = list-panes ]; then printf '%s' \"$PANES_JSON\"; fi\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CALL_LOG", log)
+	t.Setenv("PANES_JSON", panes)
+	stack := &zellijShellStack{
+		zellijHost: zellijHost{bin: bin, session: "multipane"},
+		currentID:  "terminal_13",
+	}
+
+	number, err := stack.JoinCurrent(context.Background(), "shell", " · keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if number != 2 {
+		t.Fatalf("new shell number = %d, want 2 after the legacy shell", number)
+	}
+	calls, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(calls); !strings.Contains(got, "action stack-panes -- terminal_2 terminal_13") {
+		t.Fatalf("legacy shell was not used as the stack anchor:\n%s", got)
+	}
+}
+
+func TestShellNumberRecognizesManagedAndLegacyTitles(t *testing.T) {
+	for _, tc := range []struct {
+		title string
+		want  int
+		ok    bool
+	}{
+		{"shell 1 · keys", 1, true},
+		{"shell 12", 12, true},
+		{"shell", 1, true},
+		{"shell · Alt-g", 1, true},
+		{"shellfish 2", 0, false},
+		{"shell nope", 0, false},
+		{"shell 0", 0, false},
+	} {
+		got, ok := shellNumber(tc.title, "shell")
+		if got != tc.want || ok != tc.ok {
+			t.Errorf("shellNumber(%q) = (%d,%v), want (%d,%v)", tc.title, got, ok, tc.want, tc.ok)
+		}
+	}
+}
+
+func TestCurrentShellStackRequiresZellijPaneIdentity(t *testing.T) {
+	t.Setenv(zellijSessionEnvVar, "")
+	t.Setenv(zellijPaneIDEnvVar, "")
+	if _, err := CurrentShellStack(); !errors.Is(err, ErrShellContext) {
+		t.Fatalf("CurrentShellStack() error = %v, want ErrShellContext", err)
 	}
 }
 

@@ -31,17 +31,18 @@ func stageWorkspace(t *testing.T, dir string, command []string) string {
 	return string(b)
 }
 
-func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
+func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 	configHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)
 	t.Setenv("CODEX_HOME", t.TempDir())
 	dir := t.TempDir()
 	layout := stageWorkspace(t, dir, []string{"codex"})
-	if !strings.Contains(layout, "tree -L 2") || !strings.Contains(layout, `exec \"${SHELL:-/bin/sh}\" -l`) {
-		t.Fatalf("shell pane does not show a shallow tree and remain interactive:\n%s", layout)
+	if !strings.Contains(layout, `pane stacked=true`) {
+		t.Fatalf("shell region is not a stack:\n%s", layout)
 	}
-	if !strings.Contains(layout, `name="shell · Alt-g"`) {
-		t.Fatal("shell pane is not retitled with the chord that opens a floating terminal")
+	if !strings.Contains(layout, `name="shell" close_on_exit=true`) ||
+		!strings.Contains(layout, `"shell" "--session-root" "`+dir+`"`) {
+		t.Fatal("initial shell does not run qrouton's stack-aware shell command")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); !os.IsNotExist(err) {
 		t.Fatal("status.sh stamped; the repos pane is a qrouton subcommand")
@@ -56,10 +57,12 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	for _, want := range []string{
 		"delegate work to subagents", // the fallback RPI tagline; the script resolves the real one at runtime
 		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
-		"Alt-g", "floating shell", "Alt-f", "show / hide", "Dismiss a popup", "agent-opened panes", "Permanent panes", "protected", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
+		"Alt-g", "New shell", "Switch shells", "Alt-up/down", "Close shell", "Ctrl-d", "Alt-f", "show / hide the overlay layer",
+		"User popups", "the picker and this reference are the two exceptions",
+		"Dismiss a popup", "agent-opened panes", "Workspace layout", "protected", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
 		"Ctrl-g Ctrl-q", "Press any key to close",
 		// The richer panel also explains the workspace itself, not just its keys.
-		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "checkout state and subagent activity",
+		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "shell stack", "checkout state and subagent activity",
 		"run it in a pane", "qrouton.json", "src/<repo>", "thoughts/shared",
 	} {
 		if !strings.Contains(string(help), want) {
@@ -76,16 +79,22 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`bind "Alt g"`, `bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "assistant"`, `bind "Alt tab"`,
+	for _, want := range []string{`bind "Alt g"`, `Run "/bin/qrouton" "shell" "--session-root" "` + dir + `"`, `stacked true`, `close_on_exit true`,
+		`bind "Alt e"`, `"pick" "--session-root" "` + dir + `"`, `bind "Alt n"`, `"mode" "--session-root" "` + dir + `" "--shell-stack" "assistant"`, `bind "Alt tab"`,
 		// Shifted Alt chords carry both spellings; a Kitty-protocol terminal
 		// reports the unshifted keycap plus Shift.
-		`bind "Alt ?" "Alt Shift /"`, `bind "Alt +" "Alt Shift ="`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, `name "qrouton · terminal"`, `width "90%"`, `height "90%"`, "mouse_mode true", "session_serialization false"} {
+		`bind "Alt ?" "Alt Shift /"`, `bind "Alt +" "Alt Shift ="`, `"sh" "` + filepath.Join(configHome, "qrouton", "help.sh") + `"`, "mouse_mode true", "session_serialization false"} {
 		if !strings.Contains(string(config), want) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
 	}
-	if strings.Contains(string(config), `bind "Alt n" { NewPane; }`) {
-		t.Fatal("NewPane still holds the Alt-n chord; it belongs to de-escalation")
+	for _, forbidden := range []string{"NewPane", "NewTab", "BreakPane", "MovePane", `name "qrouton · terminal"`} {
+		if strings.Contains(string(config), forbidden) {
+			t.Fatalf("Zellij config still exposes layout-changing action %q", forbidden)
+		}
+	}
+	if got := strings.Count(string(config), "floating true"); got != 2 {
+		t.Fatalf("user keybindings create %d floating panes, want only quick reference and escalation picker", got)
 	}
 	// normal is reserved for a focused MCP pane. Permanent layout panes cannot
 	// reach it through the keyboard, and no generic pane-mode close remains.

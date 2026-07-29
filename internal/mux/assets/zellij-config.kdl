@@ -14,50 +14,15 @@ keybinds clear-defaults=true {
         bind "down" { MoveFocus "down"; }
         bind "up" { MoveFocus "up"; }
         bind "right" { MoveFocus "right"; }
-        bind "c" { SwitchToMode "renamepane"; PaneNameInput 0; }
-        bind "d" { NewPane "down"; SwitchToMode "locked"; }
-        bind "e" { TogglePaneEmbedOrFloating; SwitchToMode "locked"; }
         bind "f" { ToggleFocusFullscreen; SwitchToMode "locked"; }
         bind "h" { MoveFocus "left"; }
-        bind "i" { TogglePanePinned; SwitchToMode "locked"; }
         bind "j" { MoveFocus "down"; }
         bind "k" { MoveFocus "up"; }
         bind "l" { MoveFocus "right"; }
-        bind "n" { NewPane; SwitchToMode "locked"; }
         bind "p" { SwitchToMode "locked"; }
-        bind "r" { NewPane "right"; SwitchToMode "locked"; }
-        bind "s" { NewPane "stacked"; SwitchToMode "locked"; }
         bind "w" { ToggleFloatingPanes; SwitchToMode "locked"; }
         bind "z" { TogglePaneFrames; SwitchToMode "locked"; }
         bind "tab" { SwitchFocus; }
-    }
-    tab {
-        bind "left" { GoToPreviousTab; }
-        bind "down" { GoToNextTab; }
-        bind "up" { GoToPreviousTab; }
-        bind "right" { GoToNextTab; }
-        bind "1" { GoToTab 1; SwitchToMode "locked"; }
-        bind "2" { GoToTab 2; SwitchToMode "locked"; }
-        bind "3" { GoToTab 3; SwitchToMode "locked"; }
-        bind "4" { GoToTab 4; SwitchToMode "locked"; }
-        bind "5" { GoToTab 5; SwitchToMode "locked"; }
-        bind "6" { GoToTab 6; SwitchToMode "locked"; }
-        bind "7" { GoToTab 7; SwitchToMode "locked"; }
-        bind "8" { GoToTab 8; SwitchToMode "locked"; }
-        bind "9" { GoToTab 9; SwitchToMode "locked"; }
-        bind "[" { BreakPaneLeft; SwitchToMode "locked"; }
-        bind "]" { BreakPaneRight; SwitchToMode "locked"; }
-        bind "b" { BreakPane; SwitchToMode "locked"; }
-        bind "h" { GoToPreviousTab; }
-        bind "j" { GoToNextTab; }
-        bind "k" { GoToPreviousTab; }
-        bind "l" { GoToNextTab; }
-        bind "n" { NewTab; SwitchToMode "locked"; }
-        bind "r" { SwitchToMode "renametab"; TabNameInput 0; }
-        bind "s" { ToggleActiveSyncTab; SwitchToMode "locked"; }
-        bind "t" { SwitchToMode "locked"; }
-        bind "x" { CloseTab; SwitchToMode "locked"; }
-        bind "tab" { ToggleTab; }
     }
     resize {
         bind "left" { Resize "Increase left"; }
@@ -76,20 +41,6 @@ keybinds clear-defaults=true {
         bind "k" { Resize "Increase up"; }
         bind "l" { Resize "Increase right"; }
         bind "r" { SwitchToMode "locked"; }
-    }
-    move {
-        bind "left" { MovePane "left"; }
-        bind "down" { MovePane "down"; }
-        bind "up" { MovePane "up"; }
-        bind "right" { MovePane "right"; }
-        bind "h" { MovePane "left"; }
-        bind "j" { MovePane "down"; }
-        bind "k" { MovePane "up"; }
-        bind "l" { MovePane "right"; }
-        bind "m" { SwitchToMode "locked"; }
-        bind "n" { MovePane; }
-        bind "p" { MovePaneBackwards; }
-        bind "tab" { MovePane; }
     }
     scroll {
         bind "Alt left" { MoveFocusOrTab "left"; SwitchToMode "locked"; }
@@ -112,60 +63,21 @@ keybinds clear-defaults=true {
         bind "w" { SearchToggleOption "Wrap"; }
     }
     session {
-        bind "a" {
-            LaunchOrFocusPlugin "zellij:about" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
-        bind "c" {
-            LaunchOrFocusPlugin "configuration" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
         bind "d" { Detach; }
-        bind "l" {
-            LaunchOrFocusPlugin "zellij:layout-manager" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
         bind "o" { SwitchToMode "locked"; }
-        bind "p" {
-            LaunchOrFocusPlugin "plugin-manager" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
-        bind "s" {
-            LaunchOrFocusPlugin "zellij:share" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
-        bind "w" {
-            LaunchOrFocusPlugin "session-manager" {
-                floating true
-                move_to_focused_tab true
-            }
-            SwitchToMode "locked"
-        }
     }
     shared_among "normal" "locked" {
+        // User-created terminals stay inside the permanent shell stack. Run
+        // initially places the pane near the current focus; `qrouton shell`
+        // immediately joins it to the canonical right-hand stack using its
+        // own ZELLIJ_PANE_ID, then starts the login shell.
         bind "Alt g" {
-            Run "sh" "-lc" "exec \"${SHELL:-/bin/sh}\" -l" {
-                floating true
-                x "5%"
-                y "5%"
-                width "90%"
-                height "90%"
-                name "qrouton · terminal"
+            Run "@@QROUTON_BIN@@" "shell" "--session-root" "@@SESSION_DIR@@" {
+                cwd "@@SESSION_DIR@@"
+                floating false
+                stacked true
+                name "shell"
+                close_on_exit true
             }
         }
         // Escalation: float the repository picker over the live session at
@@ -192,32 +104,23 @@ keybinds clear-defaults=true {
         bind "Alt +" "Alt Shift =" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
         bind "Alt =" { Resize "Increase"; }
-        bind "Alt [" { PreviousSwapLayout; }
-        bind "Alt ]" { NextSwapLayout; }
         bind "Alt f" { ToggleFloatingPanes; SwitchToMode "locked"; }
         bind "Alt h" { MoveFocusOrTab "left"; SwitchToMode "locked"; }
-        bind "Alt i" { MoveTab "left"; }
         bind "Alt j" { MoveFocus "down"; SwitchToMode "locked"; }
         bind "Alt k" { MoveFocus "up"; SwitchToMode "locked"; }
         bind "Alt l" { MoveFocusOrTab "right"; SwitchToMode "locked"; }
         // De-escalation: flip the session back to assistant; the supervisor
-        // relaunches the runner with the conversation intact. NewPane comes
-        // off the single-chord set (still Ctrl-g → pane mode → n). Flags come
-        // before the positional mode so the CLI parses them.
+        // relaunches the runner with the conversation intact. Flags come before
+        // the positional mode so the CLI parses them.
         bind "Alt n" {
-            Run "@@QROUTON_BIN@@" "mode" "--session-root" "@@SESSION_DIR@@" "assistant" {
-                floating true
-                x "25%"
-                y "5%"
-                width "50%"
-                height "18%"
-                name "de-escalate"
+            Run "@@QROUTON_BIN@@" "mode" "--session-root" "@@SESSION_DIR@@" "--shell-stack" "assistant" {
+                cwd "@@SESSION_DIR@@"
+                floating false
+                stacked true
+                name "shell"
                 close_on_exit true
             }
         }
-        bind "Alt o" { MoveTab "right"; }
-        bind "Alt p" { TogglePaneInGroup; }
-        bind "Alt Shift p" "Alt P" { ToggleGroupMarking; }
         // Cheap focus cycle: Zellij has no focus-by-name/index action.
         bind "Alt tab" { SwitchFocus; SwitchToMode "locked"; }
         // Re-summons the quick-reference panel that greets the session at
@@ -253,22 +156,16 @@ keybinds clear-defaults=true {
     shared_except "normal" "locked" "entersearch" "renametab" "renamepane" {
         bind "esc" { SwitchToMode "locked"; }
     }
-    shared_except "locked" "entersearch" "renametab" "renamepane" "move" {
-        bind "m" { SwitchToMode "move"; }
-    }
     shared_except "locked" "entersearch" "search" "renametab" "renamepane" "session" {
         bind "o" { SwitchToMode "session"; }
     }
-    shared_except "locked" "tab" "entersearch" "renametab" "renamepane" {
-        bind "t" { SwitchToMode "tab"; }
-    }
-    shared_among "normal" "resize" "tab" "scroll" "prompt" "tmux" {
+    shared_among "normal" "resize" "scroll" "prompt" "tmux" {
         bind "p" { SwitchToMode "pane"; }
     }
-    shared_among "normal" "resize" "search" "move" "prompt" "tmux" {
+    shared_among "normal" "resize" "search" "prompt" "tmux" {
         bind "s" { SwitchToMode "scroll"; }
     }
-    shared_except "locked" "resize" "pane" "tab" "entersearch" "renametab" "renamepane" {
+    shared_except "locked" "resize" "pane" "entersearch" "renametab" "renamepane" {
         bind "r" { SwitchToMode "resize"; }
     }
     shared_among "scroll" "search" {

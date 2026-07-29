@@ -58,6 +58,16 @@ type PaneHost interface {
 	Attached(ctx context.Context) (bool, error)
 }
 
+// ShellStack is the small piece of pane control used by qrouton's interactive
+// shell command. A new shell begins wherever Zellij's Run action can place it,
+// then joins the canonical shell stack before handing the pane to the user's
+// login shell. Count lets the final shell preserve the permanent right-hand
+// region instead of closing it.
+type ShellStack interface {
+	JoinCurrent(ctx context.Context, titlePrefix, titleSuffix string) (number int, err error)
+	Count(ctx context.Context, titlePrefix string) (int, error)
+}
+
 // Geometry places a floating pane, in the backend's units (percent strings).
 type Geometry struct {
 	X, Y, Width, Height string
@@ -95,6 +105,7 @@ type Pane struct {
 type Node struct {
 	Pane     *Pane
 	Split    string // SplitVertical or SplitHorizontal when Children is set
+	Stacked  bool   // children share one region; one is expanded and the rest are title rows
 	Size     string
 	Children []Node
 }

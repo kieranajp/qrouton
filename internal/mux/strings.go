@@ -11,8 +11,9 @@ const (
 
 	// socketDirEnvVar pins Zellij's socket directory. Lookup, Kill, Attach, and
 	// the MCP child must all agree on it or they address different servers.
-	socketDirEnvVar    = "ZELLIJ_SOCKET_DIR"
-	zellijPaneIDEnvVar = "ZELLIJ_PANE_ID"
+	socketDirEnvVar     = "ZELLIJ_SOCKET_DIR"
+	zellijPaneIDEnvVar  = "ZELLIJ_PANE_ID"
+	zellijSessionEnvVar = "ZELLIJ_SESSION_NAME"
 
 	// defaultSocketDir is short on purpose: macOS $TMPDIR is long enough that
 	// Zellij's socket path exceeds the 104-byte unix-socket cap for real session
@@ -61,6 +62,9 @@ const (
 	newPaneAction        = "new-pane"
 	closePaneAction      = "close-pane"
 	dumpScreenAction     = "dump-screen"
+	listPanesAction      = "list-panes"
+	renamePaneAction     = "rename-pane"
+	stackPanesAction     = "stack-panes"
 	toggleFloatingAction = "toggle-floating-panes"
 	listClientsAction    = "list-clients"
 	switchModeAction     = "switch-mode"
@@ -80,6 +84,8 @@ const (
 	closeOnExitFlag = "--close-on-exit"
 	paneIDFlag      = "--pane-id"
 	fullFlag        = "--full"
+	allFlag         = "--all"
+	jsonFlag        = "--json"
 	endOfFlags      = "--"
 
 	trueValue          = "true"
@@ -110,7 +116,8 @@ const (
 	helpScriptPlaceholder = "@@HELP_SCRIPT@@"
 
 	// binaryPlaceholder marks where Stage substitutes qrouton's own executable
-	// into the Run-block keybindings that invoke a subcommand (Alt-e, Alt-n).
+	// into the Run-block keybindings that invoke a subcommand (Alt-g, Alt-e,
+	// Alt-n).
 	// An absolute path, not a bare name: a locally built binary is usually not
 	// on PATH, and a chord that works only after `make install` is a chord
 	// that looks broken.
@@ -140,6 +147,7 @@ const (
 	kdlBorderless    = " borderless=true"
 	kdlFocus         = " focus=true"
 	kdlSplitAttr     = "split_direction=%q"
+	kdlStackedAttr   = "stacked=true"
 
 	// kdlSessionName makes the generated session self-attaching, which is how a
 	// fresh launch lands the user inside it.

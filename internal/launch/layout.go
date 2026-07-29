@@ -4,7 +4,6 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/charmbracelet/huh"
 	"github.com/kieranajp/qrouton/internal/codex"
@@ -14,15 +13,9 @@ import (
 )
 
 // Panels are an opinionated multiplexer workspace rather than a bespoke TUI. The
-// shell scripts that drive its panes live under scripts/ and are embedded here so
-// they read and edit as real scripts; notify.sh is written into .qrouton at
-// launch, help.sh under the config dir instead (one global copy), and
-// shellIntro is spliced straight into the generated layout.
-
-// shellIntro greets the shell pane with a shallow tree, then execs an interactive login shell.
-//
-//go:embed scripts/shell-intro.sh
-var shellIntro string
+// shell scripts that drive its panes live under scripts/ and are embedded here
+// so they read and edit as real scripts; notify.sh is written into .qrouton at
+// launch and help.sh under the config dir instead (one global copy).
 
 // notifyScript plays a short cross-platform attention sound; it backs both the notify
 // MCP tool and the runner's Notification hook. See scripts/notify.sh for the fallbacks.
@@ -126,7 +119,10 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) 
 				{Split: mux.SplitVertical, Children: []mux.Node{
 					{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: agentArgv}},
 					{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
-						{Pane: &mux.Pane{Name: shellPaneName, Command: []string{shellBin, shellLoginFlag, strings.TrimSpace(shellIntro)}}},
+						{Stacked: true, Children: []mux.Node{
+							{Pane: &mux.Pane{Name: shellPaneName, CloseOnExit: true,
+								Command: []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}}},
+						}},
 						{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
 							{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
 							{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},

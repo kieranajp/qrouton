@@ -13,6 +13,10 @@ var ErrZellijRequired = fmt.Errorf("zellij %d.%d or newer is required", minZelli
 // without the identity a pane driver needs.
 var ErrHandleIncomplete = errors.New("multiplexer handle missing kind or session")
 
+// ErrShellContext means the internal shell command was run outside the Zellij
+// pane environment that identifies the current pane and session.
+var ErrShellContext = errors.New("shell command is not running inside a Zellij pane")
+
 // unsupportedBackend reports a multiplexer qrouton has no adapter for, naming
 // the ones it does.
 func unsupportedBackend(kind string) error {
