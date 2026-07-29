@@ -14,13 +14,20 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 //go:embed assets/zellij-config.kdl
 var zellijAssets embed.FS
+
+const (
+	dismissFocusPollInterval = 200 * time.Millisecond
+	dismissFocusPollTimeout  = 2 * time.Second
+)
 
 // commandContext is swapped by tests to intercept pane-driver invocations.
 var commandContext = exec.CommandContext
@@ -243,11 +250,24 @@ func kdlSize(size string) string {
 // zellijHost implements PaneHost via `zellij --session <s> action …`.
 type zellijHost struct {
 	bin, session string
+
+	dismissMu       sync.Mutex
+	dismissible     map[string]struct{}
+	dismissWatch    sync.Once
+	clientID        string
+	ownerPaneID     string
+	lastDismissMode string
 }
 
 // NewZellijHost wires a pane driver to a session; the seam for tests.
 func NewZellijHost(bin, session string) PaneHost {
-	return &zellijHost{bin: bin, session: session}
+	return &zellijHost{
+		bin:             bin,
+		session:         session,
+		dismissible:     map[string]struct{}{},
+		ownerPaneID:     terminalPaneID(os.Getenv(zellijPaneIDEnvVar)),
+		lastDismissMode: lockedMode,
+	}
 }
 
 func zellijHostFromHandle(h Handle) (PaneHost, error) {
@@ -288,7 +308,119 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 		// focus to the agent while pinned panes stay rendered on top for reference.
 		_, _ = z.action(ctx, toggleFloatingAction)
 	}
+	if opts.DismissOnEsc {
+		z.addDismissible(id)
+	}
 	return id, nil
+}
+
+// addDismissible starts one focus watcher per MCP host. Zellij keybindings do
+// not expose pane predicates: CloseFocus alone cannot tell a transient pane
+// from the agent or shell. The watcher reserves normal mode for a managed
+// pane while it has this client's focus; the staged normal-mode Esc binding
+// can then close that pane without making Esc dangerous in the tiled layout.
+func (z *zellijHost) addDismissible(id string) {
+	z.dismissMu.Lock()
+	z.dismissible[id] = struct{}{}
+	z.dismissMu.Unlock()
+	z.dismissWatch.Do(func() { go z.watchDismissibleFocus() })
+}
+
+func (z *zellijHost) watchDismissibleFocus() {
+	ticker := time.NewTicker(dismissFocusPollInterval)
+	defer ticker.Stop()
+	for range ticker.C {
+		ctx, cancel := context.WithTimeout(context.Background(), dismissFocusPollTimeout)
+		_ = z.syncDismissMode(ctx)
+		cancel()
+	}
+}
+
+// syncDismissMode changes mode only when the desired state changes. That keeps
+// a deliberate Ctrl-g mode entered by the user intact until focus moves, and
+// avoids sending redundant switch-mode actions on every watcher tick.
+func (z *zellijHost) syncDismissMode(ctx context.Context) error {
+	focused, err := z.focusedPane(ctx)
+	if err != nil {
+		return err
+	}
+	z.dismissMu.Lock()
+	_, dismissible := z.dismissible[focused]
+	mode := lockedMode
+	if dismissible {
+		mode = normalMode
+	}
+	if mode == z.lastDismissMode {
+		z.dismissMu.Unlock()
+		return nil
+	}
+	z.dismissMu.Unlock()
+	_, err = z.action(ctx, switchModeAction, mode)
+	if err == nil {
+		z.dismissMu.Lock()
+		z.lastDismissMode = mode
+		z.dismissMu.Unlock()
+	}
+	return err
+}
+
+// focusedPane follows the attached client that owned the agent pane when the
+// watcher started. list-clients reports the client's actual focused layer,
+// unlike list-panes where tiled and floating layers each retain a focused pane.
+func (z *zellijHost) focusedPane(ctx context.Context) (string, error) {
+	out, err := z.action(ctx, listClientsAction)
+	if err != nil {
+		return "", err
+	}
+	clients := parseClientFocus(string(out))
+	// switch-mode applies to every connected client. With more than one human
+	// attached it cannot safely reserve normal mode for just this client's
+	// transient pane, so prefer keeping every permanent pane protected.
+	if len(clients) != 1 {
+		return "", fmt.Errorf("dismissible pane focus requires one attached zellij client")
+	}
+	z.dismissMu.Lock()
+	defer z.dismissMu.Unlock()
+	if z.clientID == "" {
+		for _, client := range clients {
+			if client.paneID == z.ownerPaneID {
+				z.clientID = client.id
+				break
+			}
+		}
+		if z.clientID == "" && len(clients) == 1 {
+			z.clientID = clients[0].id
+		}
+	}
+	for _, client := range clients {
+		if client.id == z.clientID {
+			return client.paneID, nil
+		}
+	}
+	return "", fmt.Errorf("owning zellij client is not attached")
+}
+
+type clientFocus struct {
+	id, paneID string
+}
+
+func parseClientFocus(output string) []clientFocus {
+	var clients []clientFocus
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] == listClientsHeader {
+			continue
+		}
+		clients = append(clients, clientFocus{id: fields[0], paneID: fields[1]})
+	}
+	return clients
+}
+
+func terminalPaneID(id string) string {
+	if id == "" || strings.HasPrefix(id, terminalPanePrefix) {
+		return id
+	}
+	return terminalPanePrefix + id
 }
 
 // Attached reports whether a client is viewing the session: list-clients
@@ -307,6 +439,9 @@ func (z *zellijHost) Attached(ctx context.Context) (bool, error) {
 }
 
 func (z *zellijHost) Close(ctx context.Context, id string) error {
+	z.dismissMu.Lock()
+	delete(z.dismissible, id)
+	z.dismissMu.Unlock()
 	_, err := z.action(ctx, closePaneAction, paneIDFlag, id)
 	return err
 }

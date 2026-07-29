@@ -2,7 +2,12 @@
 
 keybinds clear-defaults=true {
     locked {
-        bind "Ctrl g" { SwitchToMode "normal"; }
+        // tmux is qrouton's deliberate Ctrl-g gateway. normal is reserved for
+        // a focused MCP pane, where Esc closes that pane.
+        bind "Ctrl g" { SwitchToMode "tmux"; }
+    }
+    normal {
+        bind "esc" { CloseFocus; SwitchToMode "locked"; }
     }
     pane {
         bind "left" { MoveFocus "left"; }
@@ -19,11 +24,10 @@ keybinds clear-defaults=true {
         bind "k" { MoveFocus "up"; }
         bind "l" { MoveFocus "right"; }
         bind "n" { NewPane; SwitchToMode "locked"; }
-        bind "p" { SwitchToMode "normal"; }
+        bind "p" { SwitchToMode "locked"; }
         bind "r" { NewPane "right"; SwitchToMode "locked"; }
         bind "s" { NewPane "stacked"; SwitchToMode "locked"; }
         bind "w" { ToggleFloatingPanes; SwitchToMode "locked"; }
-        bind "x" { CloseFocus; SwitchToMode "locked"; }
         bind "z" { TogglePaneFrames; SwitchToMode "locked"; }
         bind "tab" { SwitchFocus; }
     }
@@ -51,7 +55,7 @@ keybinds clear-defaults=true {
         bind "n" { NewTab; SwitchToMode "locked"; }
         bind "r" { SwitchToMode "renametab"; TabNameInput 0; }
         bind "s" { ToggleActiveSyncTab; SwitchToMode "locked"; }
-        bind "t" { SwitchToMode "normal"; }
+        bind "t" { SwitchToMode "locked"; }
         bind "x" { CloseTab; SwitchToMode "locked"; }
         bind "tab" { ToggleTab; }
     }
@@ -71,7 +75,7 @@ keybinds clear-defaults=true {
         bind "j" { Resize "Increase down"; }
         bind "k" { Resize "Increase up"; }
         bind "l" { Resize "Increase right"; }
-        bind "r" { SwitchToMode "normal"; }
+        bind "r" { SwitchToMode "locked"; }
     }
     move {
         bind "left" { MovePane "left"; }
@@ -82,7 +86,7 @@ keybinds clear-defaults=true {
         bind "j" { MovePane "down"; }
         bind "k" { MovePane "up"; }
         bind "l" { MovePane "right"; }
-        bind "m" { SwitchToMode "normal"; }
+        bind "m" { SwitchToMode "locked"; }
         bind "n" { MovePane; }
         bind "p" { MovePaneBackwards; }
         bind "tab" { MovePane; }
@@ -98,7 +102,7 @@ keybinds clear-defaults=true {
         bind "Alt j" { MoveFocus "down"; SwitchToMode "locked"; }
         bind "Alt k" { MoveFocus "up"; SwitchToMode "locked"; }
         bind "Alt l" { MoveFocusOrTab "right"; SwitchToMode "locked"; }
-        bind "s" { SwitchToMode "normal"; }
+        bind "s" { SwitchToMode "locked"; }
     }
     search {
         bind "c" { SearchToggleOption "CaseSensitivity"; }
@@ -130,7 +134,7 @@ keybinds clear-defaults=true {
             }
             SwitchToMode "locked"
         }
-        bind "o" { SwitchToMode "normal"; }
+        bind "o" { SwitchToMode "locked"; }
         bind "p" {
             LaunchOrFocusPlugin "plugin-manager" {
                 floating true
@@ -174,28 +178,28 @@ keybinds clear-defaults=true {
                 y "3%"
                 width "60%"
                 height "94%"
-                name "escalate"
+                name "escalate · Esc to cancel"
                 close_on_exit true
             }
         }
-        // No bare close chord: CloseFocus cannot tell the agent pane from a
-        // popup, and one stray Alt-x took the agent down. It lives in pane mode
-        // (Ctrl-g p x) instead, where closing a workspace pane is deliberate.
-        bind "Alt left" { MoveFocusOrTab "left"; }
-        bind "Alt down" { MoveFocus "down"; }
-        bind "Alt up" { MoveFocus "up"; }
-        bind "Alt right" { MoveFocusOrTab "right"; }
+        // Focus movement always restores locked mode. That makes leaving a
+        // dismissible MCP pane safe before its background focus watcher's
+        // next observation.
+        bind "Alt left" { MoveFocusOrTab "left"; SwitchToMode "locked"; }
+        bind "Alt down" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "Alt up" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "Alt right" { MoveFocusOrTab "right"; SwitchToMode "locked"; }
         bind "Alt +" "Alt Shift =" { Resize "Increase"; }
         bind "Alt -" { Resize "Decrease"; }
         bind "Alt =" { Resize "Increase"; }
         bind "Alt [" { PreviousSwapLayout; }
         bind "Alt ]" { NextSwapLayout; }
-        bind "Alt f" { ToggleFloatingPanes; }
-        bind "Alt h" { MoveFocusOrTab "left"; }
+        bind "Alt f" { ToggleFloatingPanes; SwitchToMode "locked"; }
+        bind "Alt h" { MoveFocusOrTab "left"; SwitchToMode "locked"; }
         bind "Alt i" { MoveTab "left"; }
-        bind "Alt j" { MoveFocus "down"; }
-        bind "Alt k" { MoveFocus "up"; }
-        bind "Alt l" { MoveFocusOrTab "right"; }
+        bind "Alt j" { MoveFocus "down"; SwitchToMode "locked"; }
+        bind "Alt k" { MoveFocus "up"; SwitchToMode "locked"; }
+        bind "Alt l" { MoveFocusOrTab "right"; SwitchToMode "locked"; }
         // De-escalation: flip the session back to assistant; the supervisor
         // relaunches the runner with the conversation intact. NewPane comes
         // off the single-chord set (still Ctrl-g → pane mode → n). Flags come
@@ -215,7 +219,7 @@ keybinds clear-defaults=true {
         bind "Alt p" { TogglePaneInGroup; }
         bind "Alt Shift p" "Alt P" { ToggleGroupMarking; }
         // Cheap focus cycle: Zellij has no focus-by-name/index action.
-        bind "Alt tab" { SwitchFocus; }
+        bind "Alt tab" { SwitchFocus; SwitchToMode "locked"; }
         // Re-summons the quick-reference panel that greets the session at
         // startup — same global script, no Codex warning argument (that's a
         // launch-time-only concern). help.sh reads ./qrouton.json itself for
@@ -246,7 +250,7 @@ keybinds clear-defaults=true {
     shared_except "locked" "entersearch" {
         bind "enter" { SwitchToMode "locked"; }
     }
-    shared_except "locked" "entersearch" "renametab" "renamepane" {
+    shared_except "normal" "locked" "entersearch" "renametab" "renamepane" {
         bind "esc" { SwitchToMode "locked"; }
     }
     shared_except "locked" "entersearch" "renametab" "renamepane" "move" {

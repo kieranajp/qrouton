@@ -65,7 +65,7 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"--session test-session",
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
-		"Editor · Alt-f to view · Ctrl-g p x to close",
+		"Editor · Alt-f to view · Esc to close",
 		"toggle-floating-panes",
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {
@@ -91,7 +91,8 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 	s := readLog(t, log)
 	for _, want := range []string{
 		"new-pane --floating --pinned true",
-		"--name ▶ dev",
+		"--x 48% --y 8% --width 50% --height 84%",
+		"--name ▶ dev · Esc to close",
 		"--cwd " + realRepo,
 		"-- sh -lc npm run dev",
 		"toggle-floating-panes",
@@ -214,7 +215,7 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 	s := readLog(t, log)
 	script := filepath.Join(dir, ".qrouton", "notify.sh")
-	for _, want := range []string{"--name 🔔 notification", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes",
+	for _, want := range []string{"--name 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes",
 		"time 80"} { // dismissable on Esc, still self-closing after toastSeconds
 		if !strings.Contains(s, want) {
 			t.Fatalf("notify toast missing %q:\n%s", want, s)
@@ -290,7 +291,7 @@ func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
 	for _, want := range []string{
 		"new-pane --floating --pinned true",
 		"--x 20% --y 3% --width 60% --height 94%",
-		"--name escalate",
+		"--name escalate · Esc to cancel",
 		"-- " + bin + " pick --session-root " + dir + " --name webhook retry --prefix fix",
 	} {
 		if !strings.Contains(s, want) {

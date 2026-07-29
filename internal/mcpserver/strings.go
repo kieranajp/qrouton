@@ -29,7 +29,7 @@ const (
 	// matching how a second open_file replaces the previous editor pane. It
 	// also matches the pane name the Alt-e keybinding gives its own picker.
 	escalatePaneName  = "escalate"
-	escalatePaneLabel = "escalate"
+	escalatePaneLabel = "escalate · Esc to cancel"
 
 	// readPaneLimit caps how much pane output read_pane returns to the agent. The
 	// tail is kept, because that is where fresh command output lands.
@@ -52,11 +52,11 @@ const (
 // Pane labels, as they appear in the pane's title bar. Each names the keys that
 // act on it, since the pane is the only place the user sees them.
 const (
-	// The editor pane keeps Esc for the editor itself, so it names the chord.
-	editorPaneLabel  = "Editor · Alt-f to view · Ctrl-g p x to close"
+	editorPaneLabel  = "Editor · Alt-f to view · Esc to close"
 	commandPaneLabel = "▶ "
 	diffPaneLabel    = "◆ "
-	notifyPaneLabel  = "🔔 notification"
+	notifyPaneLabel  = "🔔 notification · Esc to close"
+	dismissPaneLabel = " · Esc to close"
 )
 
 // Messages returned to the agent.
@@ -64,8 +64,9 @@ const (
 	openedFileFormat = "Opened %s at line %d in the editor pane " +
 		"(stays open for reference; focus is back on the agent)."
 
-	runningFormat = "Running in pane %q (cwd %s). Call " + toolReadPane +
-		" with name %q to see its output; " + toolClosePane + " %q to dismiss it."
+	runningFormat = "Running in pane %q (cwd %s). Focus it and press Esc to dismiss it, " +
+		"or call " + toolReadPane + " with name %q to see its output and " + toolClosePane +
+		" %q to close it."
 
 	noOutputFormat  = "Pane %q has produced no output yet."
 	truncatedPrefix = "…(earlier output truncated)…\n"

@@ -24,7 +24,7 @@ import (
 
 var (
 	editorGeometry  = mux.Geometry{X: "66%", Y: "3%", Width: "33%", Height: "94%"}
-	commandGeometry = mux.Geometry{X: "40%", Y: "8%", Width: "58%", Height: "84%"}
+	commandGeometry = mux.Geometry{X: "48%", Y: "8%", Width: "50%", Height: "84%"}
 	toastGeometry   = mux.Geometry{X: "25%", Y: "5%", Width: "50%", Height: "18%"}
 
 	// pickerGeometry mirrors the Alt-e keybinding's floating picker exactly, so
@@ -66,7 +66,15 @@ func (m *paneManager) spawn(ctx context.Context, name, label, cwd string, geom m
 // for the terminal back once the picker floats. Callers hold m.mu.
 func (m *paneManager) spawnFocus(ctx context.Context, name, label, cwd string, geom mux.Geometry, closeOnExit, focus bool, command []string) (string, error) {
 	m.closeLocked(ctx, name)
-	id, err := m.host.Spawn(ctx, mux.SpawnOptions{Label: label, Cwd: cwd, Geometry: geom, CloseOnExit: closeOnExit, Focus: focus, Command: command})
+	id, err := m.host.Spawn(ctx, mux.SpawnOptions{
+		Label:        label,
+		Cwd:          cwd,
+		Geometry:     geom,
+		CloseOnExit:  closeOnExit,
+		Focus:        focus,
+		DismissOnEsc: !focus,
+		Command:      command,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +128,7 @@ func (m *paneManager) run(ctx context.Context, input runCommandInput) (string, e
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, name, commandPaneLabel+name, cwd, commandGeometry, input.CloseOnExit, []string{shellBin, shellLoginFlag, input.Command}); err != nil {
+	if _, err := m.spawn(ctx, name, commandPaneLabel+name+dismissPaneLabel, cwd, commandGeometry, input.CloseOnExit, []string{shellBin, shellLoginFlag, input.Command}); err != nil {
 		return "", fmt.Errorf("run command: %w", err)
 	}
 	where := sessionRootScope
@@ -177,7 +185,7 @@ func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string
 	defer m.mu.Unlock()
 	// close_on_exit: the footer's keypress wait is what ends the command, so Esc
 	// has to take the pane with it.
-	if _, err := m.spawn(ctx, label, diffPaneLabel+label, m.root, commandGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {
+	if _, err := m.spawn(ctx, label, diffPaneLabel+label+dismissPaneLabel, m.root, commandGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
 	return fmt.Sprintf(showingDiffFormat, scope, label), nil

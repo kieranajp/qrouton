@@ -65,15 +65,17 @@ type Geometry struct {
 
 // SpawnOptions describes a runtime pane opened through a PaneHost. Focus keeps
 // keyboard focus on the spawned pane instead of the default
-// spawn-returns-focus-to-the-agent behaviour — the escalation picker is the
-// one caller that wants it, since no agent is waiting for the terminal back.
+// spawn-returns-focus-to-the-agent behaviour. DismissOnEsc marks reference
+// panes whose Esc key should close them without exposing the same easy close
+// action to the workspace's permanent tiled panes.
 type SpawnOptions struct {
-	Label       string
-	Cwd         string
-	Geometry    Geometry
-	CloseOnExit bool
-	Focus       bool
-	Command     []string
+	Label        string
+	Cwd          string
+	Geometry     Geometry
+	CloseOnExit  bool
+	Focus        bool
+	DismissOnEsc bool
+	Command      []string
 }
 
 // Pane is one terminal in a workspace layout, running Command. Borderless

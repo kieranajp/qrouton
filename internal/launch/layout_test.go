@@ -56,7 +56,7 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	for _, want := range []string{
 		"delegate work to subagents", // the fallback RPI tagline; the script resolves the real one at runtime
 		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
-		"Alt-g", "floating shell", "Alt-f", "show / hide", "Ctrl-g p x", "Dismiss a panel", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
+		"Alt-g", "floating shell", "Alt-f", "show / hide", "Dismiss a popup", "agent-opened panes", "Permanent panes", "protected", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
 		"Ctrl-g Ctrl-q", "Press any key to close",
 		// The richer panel also explains the workspace itself, not just its keys.
 		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "checkout state and subagent activity",
@@ -87,13 +87,17 @@ func TestStagedWorkspaceStartsShellWithShallowTree(t *testing.T) {
 	if strings.Contains(string(config), `bind "Alt n" { NewPane; }`) {
 		t.Fatal("NewPane still holds the Alt-n chord; it belongs to de-escalation")
 	}
-	// CloseFocus cannot tell the agent pane from a popup, so no single chord may
-	// reach it: closing is Ctrl-g x, two deliberate steps.
-	if strings.Contains(string(config), `bind "Alt x"`) {
-		t.Fatal("CloseFocus is back on a bare Alt chord; one keypress can kill the agent pane")
+	// normal is reserved for a focused MCP pane. Permanent layout panes cannot
+	// reach it through the keyboard, and no generic pane-mode close remains.
+	if !strings.Contains(string(config), `bind "esc" { CloseFocus; SwitchToMode "locked"; }`) {
+		t.Fatal("normal mode does not dismiss a focused MCP pane with Esc")
 	}
-	if !strings.Contains(string(config), `bind "x" { CloseFocus; SwitchToMode "locked"; }`) {
-		t.Fatal("pane mode has no close binding; there is now no way to close a pane")
+	if strings.Count(string(config), "CloseFocus") != 1 {
+		t.Fatal("CloseFocus is reachable outside the MCP-only normal mode")
+	}
+	if !strings.Contains(string(config), `bind "Ctrl g" { SwitchToMode "tmux"; }`) ||
+		strings.Contains(string(config), `SwitchToMode "normal"`) {
+		t.Fatal("a permanent pane can still enter the MCP-only normal mode from the keyboard")
 	}
 	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")

@@ -11,7 +11,8 @@ const (
 
 	// socketDirEnvVar pins Zellij's socket directory. Lookup, Kill, Attach, and
 	// the MCP child must all agree on it or they address different servers.
-	socketDirEnvVar = "ZELLIJ_SOCKET_DIR"
+	socketDirEnvVar    = "ZELLIJ_SOCKET_DIR"
+	zellijPaneIDEnvVar = "ZELLIJ_PANE_ID"
 
 	// defaultSocketDir is short on purpose: macOS $TMPDIR is long enough that
 	// Zellij's socket path exceeds the 104-byte unix-socket cap for real session
@@ -62,6 +63,7 @@ const (
 	dumpScreenAction     = "dump-screen"
 	toggleFloatingAction = "toggle-floating-panes"
 	listClientsAction    = "list-clients"
+	switchModeAction     = "switch-mode"
 
 	// listClientsHeader is the column header list-clients prints even when no
 	// client is attached; a row after it is a real client.
@@ -80,7 +82,15 @@ const (
 	fullFlag        = "--full"
 	endOfFlags      = "--"
 
-	trueValue = "true"
+	trueValue          = "true"
+	terminalPanePrefix = "terminal_"
+
+	// normalMode is reserved for a focused dismissible MCP pane: the staged
+	// config binds Esc to CloseFocus there. Permanent workspace panes stay in
+	// lockedMode (or one of the deliberate Ctrl-g gateway modes), where Esc
+	// cannot close them.
+	normalMode = "normal"
+	lockedMode = "locked"
 
 	// exitedMarker appears in list-sessions output for a session that has been
 	// recorded but has exited.
