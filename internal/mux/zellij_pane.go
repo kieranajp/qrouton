@@ -5,9 +5,11 @@ package mux
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -15,13 +17,23 @@ import (
 var commandContext = exec.CommandContext
 
 // zellijHost implements PaneHost via `zellij --session <s> action …`.
+//
+// ownerPaneID is the pane this driver was constructed inside — the agent pane,
+// since the MCP server runs as a child of the runner. Spawn focuses it by id to
+// hand the keyboard back, which is why a driver built outside a pane (no
+// ZELLIJ_PANE_ID) falls back to toggling the floating layer instead.
 type zellijHost struct {
 	bin, session string
+	ownerPaneID  string
 }
 
 // NewZellijHost wires a pane driver to a session; the seam for tests.
 func NewZellijHost(bin, session string) PaneHost {
-	return &zellijHost{bin: bin, session: session}
+	return &zellijHost{
+		bin:         bin,
+		session:     session,
+		ownerPaneID: terminalPaneID(os.Getenv(zellijPaneIDEnvVar)),
+	}
 }
 
 func zellijHostFromHandle(h Handle) (PaneHost, error) {
@@ -58,11 +70,81 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 	}
 	id := strings.TrimSpace(string(out))
 	if !opts.Focus {
-		// The new pane is floating and focused; toggling the floating layer off returns
-		// focus to the agent while pinned panes stay rendered on top for reference.
-		_, _ = z.action(ctx, toggleFloatingAction)
+		z.returnFocus(ctx)
 	}
 	return id, nil
+}
+
+// returnFocus hands the keyboard back to the pane this driver lives in, leaving
+// the pinned floating pane rendered on top for reference.
+//
+// Focusing the owner by id rather than toggling the floating layer off: the
+// toggle is a flip, so it depends on the layer's current state, and a user who
+// had already hidden the layer with Alt-f got it *shown* by the agent opening a
+// pane. Naming the destination has no such coupling. The toggle remains the
+// fallback for a driver with no owning pane to name.
+func (z *zellijHost) returnFocus(ctx context.Context) {
+	if z.ownerPaneID == "" {
+		_, _ = z.action(ctx, toggleFloatingAction)
+		return
+	}
+	if _, err := z.action(ctx, focusPaneIDAction, z.ownerPaneID); err != nil {
+		_, _ = z.action(ctx, toggleFloatingAction)
+	}
+}
+
+func (z *zellijHost) Reposition(ctx context.Context, id string, geom Geometry) error {
+	// pinned and borderless are deliberately not restated: the pane was created
+	// with the ones it wants, and this call is about geometry alone.
+	_, err := z.action(ctx, repositionAction, paneIDFlag, id,
+		xFlag, geom.X, yFlag, geom.Y, widthFlag, geom.Width, heightFlag, geom.Height)
+	return err
+}
+
+func (z *zellijHost) Exists(ctx context.Context, id string) (bool, error) {
+	panes, err := z.panes(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, pane := range panes {
+		if pane.paneID() == id && !pane.Exited {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// zellijPane is one entry of `list-panes --all --json`, the adapter's only view
+// of what the session currently holds. Both the pane registry's liveness check
+// and the shell stack's numbering read it.
+type zellijPane struct {
+	ID         int    `json:"id"`
+	IsPlugin   bool   `json:"is_plugin"`
+	IsFloating bool   `json:"is_floating"`
+	Title      string `json:"title"`
+	Exited     bool   `json:"exited"`
+}
+
+// paneID renders the entry's id the way every pane-addressing action spells it.
+// The prefix is the discriminator: pane 3 as a terminal and pane 3 as a plugin
+// are different panes.
+func (p zellijPane) paneID() string {
+	if p.IsPlugin {
+		return pluginPanePrefix + strconv.Itoa(p.ID)
+	}
+	return terminalPaneID(strconv.Itoa(p.ID))
+}
+
+func (z *zellijHost) panes(ctx context.Context) ([]zellijPane, error) {
+	out, err := z.action(ctx, listPanesAction, allFlag, jsonFlag)
+	if err != nil {
+		return nil, err
+	}
+	var panes []zellijPane
+	if err := json.Unmarshal(out, &panes); err != nil {
+		return nil, fmt.Errorf("parse zellij panes: %w", err)
+	}
+	return panes, nil
 }
 
 func terminalPaneID(id string) string {

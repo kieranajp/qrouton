@@ -125,7 +125,10 @@ keybinds clear-defaults=true {
                 close_on_exit true
             }
         }
-        // Cheap focus cycle: Zellij has no focus-by-name/index action.
+        // Cheap focus cycle. Panes are addressable by id (focus-pane-id), but
+        // not by name, and a keybinding cannot run a CLI action without also
+        // opening a pane for it — so a chord that jumps to "the agent" needs
+        // the plugin API, not this file. Cycling is what a chord can do.
         bind "Alt tab" { SwitchFocus; SwitchToMode "locked"; }
         // Re-summons the quick-reference panel that greets the session at
         // startup — same global script, no Codex warning argument (that's a

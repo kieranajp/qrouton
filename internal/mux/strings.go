@@ -68,6 +68,23 @@ const (
 	toggleFloatingAction = "toggle-floating-panes"
 	listClientsAction    = "list-clients"
 
+	// focusPaneIDAction focuses a pane by id. There is no focus-by-*name*
+	// action, which is why qrouton keeps its own name-to-id registry, but ids
+	// it already holds are directly addressable.
+	//
+	// Added in Zellij 0.44.1, one patch above qrouton's floor — and the floor
+	// check only reads the minor. Rather than reject 0.44.0 over a nicety,
+	// zellijHost.returnFocus treats a failure here as "not available" and falls
+	// back to toggling the floating layer.
+	focusPaneIDAction = "focus-pane-id"
+
+	// repositionAction re-resolves a floating pane's coordinates against the
+	// current viewport. Its x/y/width/height take the same bare-integer or
+	// percent values new-pane does, so one Geometry serves both, and the pinned
+	// and borderless flags it also accepts are Option<bool> — omitting them
+	// leaves the pane's own settings alone. Present since 0.44.0.
+	repositionAction = "change-floating-pane-coordinates"
+
 	// listClientsHeader is the column header list-clients prints even when no
 	// client is attached; a row after it is a real client.
 	listClientsHeader = "CLIENT_ID"
@@ -89,6 +106,7 @@ const (
 
 	trueValue          = "true"
 	terminalPanePrefix = "terminal_"
+	pluginPanePrefix   = "plugin_"
 
 	// exitedMarker appears in list-sessions output for a session that has been
 	// recorded but has exited.

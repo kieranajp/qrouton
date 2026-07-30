@@ -152,11 +152,9 @@ func (m *paneManager) run(ctx context.Context, input runCommandInput) (string, e
 
 func (m *paneManager) read(ctx context.Context, input readPaneInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
-	m.mu.Lock()
-	id := m.panes[name]
-	m.mu.Unlock()
-	if id == "" {
-		return "", noSuchPane(name)
+	id, err := m.livePane(ctx, name)
+	if err != nil {
+		return "", err
 	}
 	out, err := m.host.Capture(ctx, id, input.Full)
 	if err != nil {
@@ -174,13 +172,41 @@ func (m *paneManager) read(ctx context.Context, input readPaneInput) (string, er
 
 func (m *paneManager) closePane(ctx context.Context, input paneNameInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
+	if _, err := m.livePane(ctx, name); err != nil {
+		return "", err
+	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if m.panes[name] == "" {
-		return "", noSuchPane(name)
-	}
 	m.closeLocked(ctx, name)
 	return fmt.Sprintf(closedFormat, name), nil
+}
+
+// livePane resolves a registered pane name to an id that still exists, pruning
+// the entry and saying so if it does not.
+//
+// The registry is qrouton's own map, and nothing in it learns that the user
+// closed a pane by hand (Ctrl-g x, or Esc on a dismissible one). Without this
+// the agent's next read of that name reached a dead id and surfaced a raw
+// backend failure, which reads like a qrouton bug rather than "that pane is
+// gone". Checking costs one list-panes on a path the agent takes deliberately.
+func (m *paneManager) livePane(ctx context.Context, name string) (string, error) {
+	m.mu.Lock()
+	id := m.panes[name]
+	m.mu.Unlock()
+	if id == "" {
+		return "", noSuchPane(name)
+	}
+	// A failing check is not evidence of absence: keep the pane and let the
+	// caller's own action report whatever is actually wrong.
+	if live, err := m.host.Exists(ctx, id); err == nil && !live {
+		m.mu.Lock()
+		if m.panes[name] == id {
+			delete(m.panes, name)
+		}
+		m.mu.Unlock()
+		return "", paneClosedByUser(name)
+	}
+	return id, nil
 }
 
 func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string, error) {

@@ -23,3 +23,9 @@ var ErrInvalidEditor = errors.New("mcp: invalid inherited editor configuration")
 func noSuchPane(name string) error {
 	return fmt.Errorf("no open pane named %q", name)
 }
+
+// paneClosedByUser distinguishes a pane the user dismissed from one that never
+// existed, so the agent reopens it rather than treating the name as wrong.
+func paneClosedByUser(name string) error {
+	return fmt.Errorf("pane %q was closed by the user; open it again if you still need it", name)
+}

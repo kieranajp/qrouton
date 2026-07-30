@@ -26,31 +26,65 @@ import (
 const terminateGrace = 3 * time.Second
 
 // How long the quick-reference panel waits for someone to be looking before it
-// floats anyway. The launcher creates the session detached and only then
+// floats anyway, and how long it then keeps waiting to correct the geometry it
+// floated with. The launcher creates the session detached and only then
 // attaches, so at supervisor start the client is usually a beat away; vars so
 // tests need not wait out the ceiling.
 var (
 	clientPollInterval = 100 * time.Millisecond
 	clientWaitTimeout  = 5 * time.Second
+	lateClientTimeout  = 2 * time.Minute
 )
 
 // showHelp floats the quick-reference panel over a freshly attached session; a
 // package variable so tests can stub the pane driver out, as they do runAgent.
 var showHelp = spawnHelp
 
+// helpPaneHost resolves the driver spawnHelp floats the panel through. A
+// package variable for the same reason as showHelp: the real one needs zellij
+// on PATH and a live session, and spawnHelp's own logic is worth testing
+// without either.
+var helpPaneHost = func(h mux.Handle) (mux.PaneHost, error) { return h.PaneHost() }
+
 // spawnHelp waits for a client and then floats the panel. Every failure here is
 // swallowed: a missing greeting is not a reason to fail the session it greets.
+//
+// Waiting first, rather than floating first and correcting after, keeps the
+// common case flicker-free: the client is normally a beat away, and a panel
+// sized correctly from birth never visibly snaps.
 func spawnHelp(dir string, h mux.Handle, warning string) {
-	host, err := h.PaneHost()
+	host, err := helpPaneHost(h)
 	if err != nil {
 		return
 	}
-	deadline := time.Now().Add(clientWaitTimeout)
-	for !attached(host) && time.Now().Before(deadline) {
+	onTime := waitAttached(host, clientWaitTimeout)
+	opts := HelpSpawn(dir, warning)
+	id, err := host.Spawn(context.Background(), opts)
+	if err != nil || onTime {
+		return
+	}
+	// Floated with nobody looking, so its percentages resolved against the
+	// server's own default viewport rather than a real terminal. That used to be
+	// permanent, which is why this settled for "squished beats absent"; now the
+	// geometry is re-applied the moment someone does attach.
+	if waitAttached(host, lateClientTimeout) {
+		_ = host.Reposition(context.Background(), id, opts.Geometry)
+	}
+}
+
+// waitAttached polls until a client is viewing the session, reporting whether
+// one arrived inside the timeout.
+func waitAttached(host mux.PaneHost, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if attached(host) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
 		time.Sleep(clientPollInterval)
 	}
-	// Past the deadline it floats regardless: squished beats absent.
-	_, _ = host.Spawn(context.Background(), HelpSpawn(dir, warning))
 }
 
 func attached(host mux.PaneHost) bool {

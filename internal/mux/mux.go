@@ -56,6 +56,14 @@ type PaneHost interface {
 	// client's viewport at spawn time, so a pane opened before anyone is
 	// looking comes up sized for the server's own default instead.
 	Attached(ctx context.Context) (bool, error)
+	// Reposition re-resolves a floating pane's geometry against the viewport as
+	// it stands now. It is the repair for a pane spawned while nobody was
+	// looking, whose percentages resolved against the server's own default.
+	Reposition(ctx context.Context, id string, geom Geometry) error
+	// Exists reports whether a pane id is still live in the session. A pane the
+	// user closed by hand leaves a registry entry behind otherwise, and the
+	// agent's next read of it fails with a backend error rather than a reason.
+	Exists(ctx context.Context, id string) (bool, error)
 }
 
 // ShellStack is the small piece of pane control used by qrouton's interactive
