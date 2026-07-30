@@ -16,6 +16,15 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
+// assemblyState is one assembly run as the progress screen sees it: the event
+// channel, the steps recorded so far, and whether it ended in a failure the
+// error screen can offer to retry.
+type assemblyState struct {
+	ch     <-chan assemblyEvent
+	steps  []session.Progress
+	failed bool
+}
+
 type assembledMsg struct {
 	dir string
 	err error
@@ -29,11 +38,11 @@ type assemblyEvent struct {
 type assemblyEventMsg struct{ event assemblyEvent }
 
 func (m *appModel) startAssembly() tea.Cmd {
-	m.assemblySteps = nil
+	m.assembly.steps = nil
 	ch := make(chan assemblyEvent, 128)
-	m.assembly = ch
-	if m.pickerManifest != nil {
-		cfg, dir, manifest := m.cfg, m.pickerDir, *m.pickerManifest
+	m.assembly.ch = ch
+	if m.picker.manifest != nil {
+		cfg, dir, manifest := m.cfg, m.picker.dir, *m.picker.manifest
 		details := escalationDetails{name: m.form.name, description: m.form.description,
 			ticket: m.form.ticket, prefix: branchPrefixes[m.form.prefix]}
 		selected := m.selectedRepos()
@@ -136,14 +145,14 @@ func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels 
 // cancelPicker records the cancelled outcome — the stanza alone, mode and
 // repositories untouched — and closes the picker.
 func (m appModel) cancelPicker() (tea.Model, tea.Cmd) {
-	out := *m.pickerManifest
+	out := *m.picker.manifest
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
-	if err := session.WriteManifest(m.pickerDir, out); err != nil {
+	if err := session.WriteManifest(m.picker.dir, out); err != nil {
 		m.err, m.back, m.screen = err, newScreen, errorScreen
 		return m, nil
 	}
-	if m.refreshCancel != nil {
-		m.refreshCancel()
+	if m.refresh.cancel != nil {
+		m.refresh.cancel()
 	}
 	return m, tea.Quit
 }
@@ -156,4 +165,54 @@ func awaitAssembly(ch <-chan assemblyEvent) tea.Cmd {
 		}
 		return assemblyEventMsg{event: event}
 	}
+}
+
+// onAssembled ends an assembly run: the picker's write is already the whole
+// job, every other path hands a LaunchRequest back to main.
+func (m appModel) onAssembled(v assembledMsg) (tea.Model, tea.Cmd) {
+	if v.err != nil {
+		back := newScreen
+		if m.picker.manifest == nil {
+			if m.requestedRunner == "" {
+				back = runnerScreen
+			} else if m.resume != nil {
+				back = landingScreen
+			}
+		}
+		m.err, m.assembly.failed, m.back, m.screen = v.err, true, back, errorScreen
+		return m, nil
+	}
+	m.assembly.failed = false
+	if m.picker.manifest != nil {
+		// The picker's single write is done; there is nothing to launch —
+		// the session is already live.
+		if m.refresh.cancel != nil {
+			m.refresh.cancel()
+		}
+		return m, tea.Quit
+	}
+	r, err := m.selectedRunner()
+	if err != nil {
+		m.err, m.back, m.screen = err, runnerScreen, errorScreen
+		return m, nil
+	}
+	m.result = &LaunchRequest{Dir: v.dir, Runner: r, Resume: m.resume != nil}
+	if m.refresh.cancel != nil {
+		m.refresh.cancel()
+	}
+	return m, tea.Quit
+}
+
+// onAssemblyEvent records a progress step, or finishes the run when the event
+// carries the terminal message. A zero event means the channel closed without
+// one, which leaves the model untouched.
+func (m appModel) onAssemblyEvent(v assemblyEventMsg) (tea.Model, tea.Cmd) {
+	if v.event.progress != nil {
+		m.assembly.steps = recordStep(m.assembly.steps, *v.event.progress)
+		return m, awaitAssembly(m.assembly.ch)
+	}
+	if v.event.done != nil {
+		return m.onAssembled(*v.event.done)
+	}
+	return m, nil
 }

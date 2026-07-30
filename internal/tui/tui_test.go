@@ -24,8 +24,8 @@ func testApp() appModel {
 			{Org: "acme", Name: "api", DefaultBranch: "main", PushedAt: time.Now()},
 			{Org: "other", Name: "web", DefaultBranch: "trunk", PushedAt: time.Now().Add(-time.Hour)},
 		},
-		ownerStatus: make(map[string]string), ownerErrors: make(map[string]error),
-		form: formState{roles: make(map[string]repoRole), owners: selectedOwners([]string{"acme", "other"})},
+		refresh: refreshState{status: make(map[string]string), errs: make(map[string]error)},
+		form:    formState{roles: make(map[string]repoRole), owners: selectedOwners([]string{"acme", "other"})},
 	}
 }
 
@@ -260,7 +260,7 @@ func TestResumedAssemblyProducesResumeLaunchRequest(t *testing.T) {
 
 func TestStaleRefreshEventIsIgnored(t *testing.T) {
 	m := testApp()
-	m.refreshGen = 2
+	m.refresh.gen = 2
 	updated, _ := m.Update(refreshEventMsg{gen: 1, event: github.RefreshMsg{State: github.RefreshSucceeded, Repos: []github.Repo{{Org: "stale", Name: "repo"}}}})
 	got := updated.(appModel)
 	if got.repos[0].ID() != "acme/api" {
@@ -273,7 +273,7 @@ func TestAssemblyProgressUpdatesVisibleSteps(t *testing.T) {
 	m.screen = assemblyScreen
 	m.form.name = "Cleanup"
 	ch := make(chan assemblyEvent)
-	m.assembly = ch
+	m.assembly.ch = ch
 	repo := m.repos[0]
 	p := session.Progress{Step: session.ProgressMirror, Status: session.ProgressCompleted, Repo: &repo}
 	updated, _ := m.Update(assemblyEventMsg{event: assemblyEvent{progress: &p}})
@@ -329,7 +329,7 @@ func TestLandingUsesResponsiveCroutonLogo(t *testing.T) {
 
 func TestStaleFailedRetryIsIgnored(t *testing.T) {
 	m := testApp()
-	m.refreshGen = 2
+	m.refresh.gen = 2
 	updated, _ := m.Update(failedRetryMsg{gen: 1, repos: []github.Repo{{Org: "stale", Name: "repo"}}})
 	got := updated.(appModel)
 	if got.repos[0].ID() != "acme/api" {
@@ -340,7 +340,7 @@ func TestStaleFailedRetryIsIgnored(t *testing.T) {
 func TestFailedRetryOnLoadingScreenShowsError(t *testing.T) {
 	m := testApp()
 	m.screen = loadingScreen
-	updated, _ := m.Update(failedRetryMsg{gen: m.refreshGen, repos: m.repos,
+	updated, _ := m.Update(failedRetryMsg{gen: m.refresh.gen, repos: m.repos,
 		results: map[string]error{"acme": fmt.Errorf("still unavailable")}})
 	got := updated.(appModel)
 	if got.screen != errorScreen || got.back != landingScreen {
@@ -351,7 +351,7 @@ func TestFailedRetryOnLoadingScreenShowsError(t *testing.T) {
 func TestTokenFailureOnLoadingScreenWithCachedReposShowsError(t *testing.T) {
 	m := testApp()
 	m.screen = loadingScreen
-	updated, _ := m.Update(refreshReadyMsg{gen: m.refreshGen, err: fmt.Errorf("no token")})
+	updated, _ := m.Update(refreshReadyMsg{gen: m.refresh.gen, err: fmt.Errorf("no token")})
 	got := updated.(appModel)
 	if got.screen != errorScreen || got.back != landingScreen {
 		t.Fatalf("token failure left screen=%v back=%v, want error screen", got.screen, got.back)
@@ -362,8 +362,8 @@ func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 	m := testApp()
 	m.repos = nil
 	m.screen = loadingScreen
-	m.ownerErrors["acme"] = fmt.Errorf("unavailable")
-	updated, _ := m.Update(refreshEventMsg{gen: m.refreshGen, event: github.RefreshMsg{State: github.RefreshComplete}})
+	m.refresh.errs["acme"] = fmt.Errorf("unavailable")
+	updated, _ := m.Update(refreshEventMsg{gen: m.refresh.gen, event: github.RefreshMsg{State: github.RefreshComplete}})
 	got := updated.(appModel)
 	if got.screen != errorScreen || got.back != landingScreen {
 		t.Fatalf("all-owner failure screen=%v back=%v", got.screen, got.back)
@@ -465,8 +465,8 @@ func TestAssemblyFailureBackTargetIsUsable(t *testing.T) {
 	m.screen = assemblyScreen
 	updated, _ := m.Update(assembledMsg{err: fmt.Errorf("git failed")})
 	got := updated.(appModel)
-	if got.screen != errorScreen || got.back != runnerScreen || !got.assemblyFailed {
-		t.Fatalf("assembly failure screen=%v back=%v failed=%v", got.screen, got.back, got.assemblyFailed)
+	if got.screen != errorScreen || got.back != runnerScreen || !got.assembly.failed {
+		t.Fatalf("assembly failure screen=%v back=%v failed=%v", got.screen, got.back, got.assembly.failed)
 	}
 }
 
