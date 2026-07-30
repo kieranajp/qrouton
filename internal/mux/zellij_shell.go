@@ -6,7 +6,6 @@ package mux
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -38,26 +37,6 @@ type zellijShellStack struct {
 	currentID string
 }
 
-type zellijPane struct {
-	ID         int    `json:"id"`
-	IsPlugin   bool   `json:"is_plugin"`
-	IsFloating bool   `json:"is_floating"`
-	Title      string `json:"title"`
-	Exited     bool   `json:"exited"`
-}
-
-func (z *zellijShellStack) panes(ctx context.Context) ([]zellijPane, error) {
-	out, err := z.action(ctx, listPanesAction, allFlag, jsonFlag)
-	if err != nil {
-		return nil, err
-	}
-	var panes []zellijPane
-	if err := json.Unmarshal(out, &panes); err != nil {
-		return nil, fmt.Errorf("parse zellij panes: %w", err)
-	}
-	return panes, nil
-}
-
 // JoinCurrent names this shell and stacks it with every existing shell pane.
 // Existing IDs stay in Zellij's layout order so the original shell remains the
 // stable anchor for the right-hand region when a shell was initially spawned
@@ -73,7 +52,7 @@ func (z *zellijShellStack) JoinCurrent(ctx context.Context, titlePrefix, titleSu
 		if pane.IsPlugin || pane.IsFloating || pane.Exited {
 			continue
 		}
-		id := terminalPaneID(strconv.Itoa(pane.ID))
+		id := pane.paneID()
 		if id == z.currentID {
 			continue
 		}

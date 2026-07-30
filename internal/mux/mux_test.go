@@ -291,3 +291,150 @@ func TestCreateArgvCreatesDetachedWithTheLayout(t *testing.T) {
 		}
 	}
 }
+
+// loggingZellij writes a stub that logs every invocation to $CALL_LOG, echoes
+// $PANES_JSON for list-panes, and fails any action named in $FAIL_ACTION.
+func loggingZellij(t *testing.T, dir string) (bin, log string) {
+	t.Helper()
+	bin, log = filepath.Join(dir, "zellij"), filepath.Join(dir, "calls")
+	script := "#!/bin/sh\n" +
+		"printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n" +
+		"if [ -n \"$FAIL_ACTION\" ] && [ \"$4\" = \"$FAIL_ACTION\" ]; then exit 1; fi\n" +
+		"case \"$4\" in\n" +
+		"  new-pane) echo terminal_4;;\n" +
+		"  list-panes) printf '%s' \"$PANES_JSON\";;\n" +
+		"esac\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CALL_LOG", log)
+	return bin, log
+}
+
+// Reposition is the repair for a floating pane whose percentages resolved
+// against the wrong viewport; it must carry the same geometry vocabulary Spawn
+// uses, and must not restate pinned or borderless.
+func TestRepositionReappliesGeometryByPaneID(t *testing.T) {
+	dir := t.TempDir()
+	bin, log := loggingZellij(t, dir)
+	geom := Geometry{X: "15%", Y: "8%", Width: "70%", Height: "80%"}
+
+	if err := NewZellijHost(bin, "s").Reposition(context.Background(), "terminal_4", geom); err != nil {
+		t.Fatal(err)
+	}
+	got := readCalls(t, log)
+	want := "action change-floating-pane-coordinates --pane-id terminal_4 --x 15% --y 8% --width 70% --height 80%"
+	if !strings.Contains(got, want) {
+		t.Fatalf("calls missing %q:\n%s", want, got)
+	}
+	for _, forbidden := range []string{"--pinned", "--borderless"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("Reposition restated %s; the pane was created with the one it wants:\n%s", forbidden, got)
+		}
+	}
+}
+
+func TestExistsDistinguishesLiveExitedAndPluginPanes(t *testing.T) {
+	panes := `[
+		{"id":4,"title":"diff"},
+		{"id":6,"title":"gone","exited":true},
+		{"id":7,"is_plugin":true,"title":"status-bar"}
+	]`
+	for _, tc := range []struct {
+		id   string
+		want bool
+	}{
+		{"terminal_4", true},
+		{"terminal_6", false}, // exited: the id is still listed, the pane is not usable
+		{"terminal_7", false}, // plugin 7 is not terminal 7
+		{"plugin_7", true},
+		{"terminal_99", false},
+	} {
+		t.Run(tc.id, func(t *testing.T) {
+			dir := t.TempDir()
+			bin, _ := loggingZellij(t, dir)
+			t.Setenv("PANES_JSON", panes)
+			got, err := NewZellijHost(bin, "s").Exists(context.Background(), tc.id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("Exists(%q) = %v, want %v", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
+// Returning focus by naming the owner pane, not by flipping the floating layer:
+// the flip depends on the layer's current state, so a user who had hidden it
+// with Alt-f got it shown again by the agent opening a pane.
+func TestSpawnReturnsFocusToTheOwningPaneByID(t *testing.T) {
+	dir := t.TempDir()
+	bin, log := loggingZellij(t, dir)
+	t.Setenv(zellijPaneIDEnvVar, "1")
+
+	if _, err := NewZellijHost(bin, "s").Spawn(context.Background(), SpawnOptions{Command: []string{"ls"}}); err != nil {
+		t.Fatal(err)
+	}
+	got := readCalls(t, log)
+	if !strings.Contains(got, "action focus-pane-id terminal_1") {
+		t.Fatalf("spawn did not focus the owning pane by id:\n%s", got)
+	}
+	if strings.Contains(got, "toggle-floating-panes") {
+		t.Fatalf("spawn still flipped the floating layer:\n%s", got)
+	}
+}
+
+// Two fallbacks to the layer toggle: a driver built outside a pane has no owner
+// to name, and a focus that fails should still hand the keyboard back.
+func TestSpawnFallsBackToTheLayerToggleWithoutAUsableOwner(t *testing.T) {
+	t.Run("no owning pane", func(t *testing.T) {
+		dir := t.TempDir()
+		bin, log := loggingZellij(t, dir)
+		t.Setenv(zellijPaneIDEnvVar, "")
+		if _, err := NewZellijHost(bin, "s").Spawn(context.Background(), SpawnOptions{Command: []string{"ls"}}); err != nil {
+			t.Fatal(err)
+		}
+		got := readCalls(t, log)
+		if !strings.Contains(got, "toggle-floating-panes") || strings.Contains(got, "focus-pane-id") {
+			t.Fatalf("no-owner spawn should toggle the layer:\n%s", got)
+		}
+	})
+	t.Run("focus fails", func(t *testing.T) {
+		dir := t.TempDir()
+		bin, log := loggingZellij(t, dir)
+		t.Setenv(zellijPaneIDEnvVar, "1")
+		t.Setenv("FAIL_ACTION", "focus-pane-id")
+		if _, err := NewZellijHost(bin, "s").Spawn(context.Background(), SpawnOptions{Command: []string{"ls"}}); err != nil {
+			t.Fatal(err)
+		}
+		got := readCalls(t, log)
+		if !strings.Contains(got, "focus-pane-id") || !strings.Contains(got, "toggle-floating-panes") {
+			t.Fatalf("a failed focus should fall back to the layer toggle:\n%s", got)
+		}
+	})
+}
+
+// Spawn must keep focus on the new pane when asked, touching neither route.
+func TestSpawnWithFocusLeavesTheKeyboardOnTheNewPane(t *testing.T) {
+	dir := t.TempDir()
+	bin, log := loggingZellij(t, dir)
+	t.Setenv(zellijPaneIDEnvVar, "1")
+
+	if _, err := NewZellijHost(bin, "s").Spawn(context.Background(), SpawnOptions{Focus: true, Command: []string{"ls"}}); err != nil {
+		t.Fatal(err)
+	}
+	got := readCalls(t, log)
+	if strings.Contains(got, "focus-pane-id") || strings.Contains(got, "toggle-floating-panes") {
+		t.Fatalf("focus=true spawn moved focus away from the new pane:\n%s", got)
+	}
+}
+
+func readCalls(t *testing.T, log string) string {
+	t.Helper()
+	b, err := os.ReadFile(log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}

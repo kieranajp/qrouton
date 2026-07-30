@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,13 +35,29 @@ func fakeZellij(t *testing.T, dir string) (helper, log string) {
 		"case \"$4\" in\n" +
 		"  new-pane) n=$(cat \"$ID_SEQ\" 2>/dev/null || echo 0); n=$((n+1)); echo \"$n\" > \"$ID_SEQ\"; echo \"terminal_$n\";;\n" +
 		"  dump-screen) printf 'listening on :3000\\n';;\n" +
+		"  list-panes) printf '%s' \"$PANES_JSON\";;\n" +
 		"esac\n"
 	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("CALL_LOG", log)
 	t.Setenv("ID_SEQ", filepath.Join(dir, "idseq"))
+	// The real MCP server runs as a child of the runner in the agent pane, so
+	// the driver always has an owning pane to hand focus back to. Without this
+	// every test here would exercise the no-owner fallback instead.
+	t.Setenv("ZELLIJ_PANE_ID", "0")
 	return helper, log
+}
+
+// livePanes makes list-panes report every id as a live terminal pane, which is
+// what the pane registry's liveness check expects to see for a pane it opened.
+func livePanes(t *testing.T, ids ...int) {
+	t.Helper()
+	entries := make([]string, 0, len(ids))
+	for _, id := range ids {
+		entries = append(entries, fmt.Sprintf(`{"id":%d,"title":"pane"}`, id))
+	}
+	t.Setenv("PANES_JSON", "["+strings.Join(entries, ",")+"]")
 }
 
 func testManager(t *testing.T, dir, helper string) *paneManager {
@@ -66,7 +83,7 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
 		"Editor · Alt-f to view · quit to close",
-		"toggle-floating-panes",
+		"focus-pane-id terminal_0",        // focus goes back to the agent pane by name, not by flipping the layer
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {
 		if !strings.Contains(s, want) {
@@ -107,7 +124,7 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 		// Always self-closing: the shared wait is what holds the pane open, so
 		// Esc ending that wait has to take the pane with it.
 		"--close-on-exit",
-		"toggle-floating-panes",
+		"focus-pane-id terminal_0",
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("calls missing %q:\n%s", want, s)
@@ -273,7 +290,7 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 	s := readLog(t, log)
 	script := filepath.Join(dir, ".qrouton", "notify.sh")
-	for _, want := range []string{"--name 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes",
+	for _, want := range []string{"--name 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "focus-pane-id terminal_0",
 		// Dismissable on Esc through the same shared wait as every other pane,
 		// and still self-closing after toastSeconds.
 		launch.DismissCommand(toastSeconds)} {
@@ -308,8 +325,8 @@ func TestHelpFloatsTheSharedPanelWithFocus(t *testing.T) {
 			t.Fatalf("help panel missing %q:\n%s", want, s)
 		}
 	}
-	if strings.Contains(s, "toggle-floating-panes") {
-		t.Fatalf("help must keep focus on the panel; a keypress is what dismisses it:\n%s", s)
+	if strings.Contains(s, "toggle-floating-panes") || strings.Contains(s, "focus-pane-id") {
+		t.Fatalf("help must keep focus on the panel; Esc is what dismisses it:\n%s", s)
 	}
 	// A second call replaces the panel rather than stacking another on top.
 	if _, err := p.help(context.Background()); err != nil {
@@ -358,7 +375,7 @@ func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
 			t.Fatalf("calls missing %q:\n%s", want, s)
 		}
 	}
-	if strings.Contains(s, "toggle-floating-panes") {
+	if strings.Contains(s, "toggle-floating-panes") || strings.Contains(s, "focus-pane-id") {
 		t.Fatalf("escalate must keep focus on the picker, not return it to the agent:\n%s", s)
 	}
 }
@@ -479,4 +496,89 @@ func readLog(t *testing.T, path string) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// The registry is qrouton's own map and nothing in it learns that the user
+// dismissed a pane. Reading a name whose pane is gone must say so — and forget
+// it — rather than passing a dead id to the backend and surfacing its failure.
+func TestReadAndClosePruneAPaneTheUserDismissed(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		call func(*paneManager) error
+	}{
+		{"read_pane", func(p *paneManager) error {
+			_, err := p.read(context.Background(), readPaneInput{Name: "server"})
+			return err
+		}},
+		{"close_pane", func(p *paneManager) error {
+			_, err := p.closePane(context.Background(), paneNameInput{Name: "server"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			helper, _ := fakeZellij(t, dir)
+			p := testManager(t, dir, helper)
+			if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
+				t.Fatal(err)
+			}
+			// The user closes it by hand: the pane is gone from the session, but
+			// still registered here.
+			livePanes(t, 99)
+
+			err := tc.call(p)
+			if err == nil {
+				t.Fatal("addressing a pane the user dismissed should fail")
+			}
+			if !strings.Contains(err.Error(), "closed by the user") {
+				t.Fatalf("error does not explain the pane is gone: %v", err)
+			}
+			if got := p.list(); len(got) != 0 {
+				t.Fatalf("registry still holds a dismissed pane: %v", got)
+			}
+		})
+	}
+}
+
+// A pane that is still there stays addressable, and the liveness check must not
+// cost the caller anything when it passes.
+func TestReadPaneKeepsALivePane(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
+		t.Fatal(err)
+	}
+	livePanes(t, 1)
+
+	out, err := p.read(context.Background(), readPaneInput{Name: "server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "listening on :3000") {
+		t.Fatalf("read output = %q", out)
+	}
+	if got := p.list(); len(got) != 1 {
+		t.Fatalf("live pane was pruned: %v", got)
+	}
+}
+
+// An unreadable pane list is not evidence the pane is gone. Guessing "closed"
+// from a backend hiccup would have the agent reopen panes that are fine, so the
+// pane is kept and the real action reports whatever is actually wrong.
+func TestReadPaneKeepsThePaneWhenLivenessCannotBeChecked(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PANES_JSON", "not json")
+
+	if _, err := p.read(context.Background(), readPaneInput{Name: "server"}); err != nil {
+		t.Fatalf("an unparseable pane list should not fail the read: %v", err)
+	}
+	if got := p.list(); len(got) != 1 {
+		t.Fatalf("pane pruned on an unreadable pane list: %v", got)
+	}
 }
