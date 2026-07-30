@@ -2,10 +2,13 @@ package launch
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/mux"
 )
 
@@ -60,7 +63,8 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 		"Alt-g", "New shell", "Switch shells", "Alt-up/down", "Close shell", "Ctrl-d", "Alt-f", "show / hide the overlay layer",
 		"User popups", "the picker and this reference are the two exceptions",
 		"Dismiss a popup", "agent-opened panes", "Workspace layout", "protected", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
-		"Ctrl-g Ctrl-q", "Press any key to close",
+		"Close a pane", "Ctrl-g x", // the deliberate chord for a pane too busy to reach its own Esc wait
+		"Ctrl-g Ctrl-q", "Press Esc to close",
 		// The richer panel also explains the workspace itself, not just its keys.
 		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "shell stack", "checkout state and subagent activity",
 		"run it in a pane", "qrouton.json", "src/<repo>", "thoughts/shared",
@@ -69,11 +73,13 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 			t.Fatalf("help panel missing %q", want)
 		}
 	}
-	if !strings.Contains(string(help), "stty -icanon") || !strings.Contains(string(help), "dd bs=1 count=1") {
-		t.Fatal("quick-reference panel does not dismiss on a single raw keypress")
+	// The panel owns no wait of its own: it hands off to the shared script, by
+	// $0's directory, which is the whole reason the two are staged together.
+	if !strings.Contains(string(help), `exec sh "$(dirname "$0")/dismiss.sh"`) {
+		t.Fatal("quick-reference panel does not hand its dismissal to the shared Esc wait")
 	}
-	if strings.Contains(string(help), "read -r") {
-		t.Fatal("quick-reference panel still requires Enter to dismiss")
+	if strings.Contains(string(help), "dd bs=1 count=1") {
+		t.Fatal("quick-reference panel still reads keys itself; the shared script owns that")
 	}
 	config, err := os.ReadFile(filepath.Join(dir, ".qrouton", "zellij-config.kdl"))
 	if err != nil {
@@ -96,17 +102,24 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 	if got := strings.Count(string(config), "floating true"); got != 2 {
 		t.Fatalf("user keybindings create %d floating panes, want only quick reference and escalation picker", got)
 	}
-	// normal is reserved for a focused MCP pane. Permanent layout panes cannot
-	// reach it through the keyboard, and no generic pane-mode close remains.
-	if !strings.Contains(string(config), `bind "esc" { CloseFocus; SwitchToMode "locked"; }`) {
-		t.Fatal("normal mode does not dismiss a focused MCP pane with Esc")
+	// Esc belongs to the pane, not to Zellij: no binding may close the focused
+	// pane on Esc, or the editor pane loses its own modal Esc and a permanent
+	// pane becomes one keystroke from gone. Closing a pane is the deliberate
+	// two-key chord instead, and it is the only route to CloseFocus.
+	if strings.Contains(string(config), `bind "esc" { CloseFocus`) {
+		t.Fatal("Esc still closes the focused pane; that is the editor pane's own key")
+	}
+	if !strings.Contains(string(config), `bind "x" { CloseFocus; SwitchToMode "locked"; }`) {
+		t.Fatal("no deliberate chord closes a pane that never reaches its own Esc wait")
 	}
 	if strings.Count(string(config), "CloseFocus") != 1 {
-		t.Fatal("CloseFocus is reachable outside the MCP-only normal mode")
+		t.Fatal("CloseFocus is reachable by more than the deliberate Ctrl-g x chord")
 	}
+	// Nothing switches input mode on qrouton's behalf any more: the modes are
+	// the user's Ctrl-g gateway, not a per-pane state register a poller drives.
 	if !strings.Contains(string(config), `bind "Ctrl g" { SwitchToMode "tmux"; }`) ||
 		strings.Contains(string(config), `SwitchToMode "normal"`) {
-		t.Fatal("a permanent pane can still enter the MCP-only normal mode from the keyboard")
+		t.Fatal("the keyboard can still reach normal mode, which no longer means anything")
 	}
 	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")
@@ -245,6 +258,89 @@ func TestWriteSupportStampsHelpScriptUnderTheConfigDir(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dirA, ".qrouton", "help.sh")); !os.IsNotExist(err) {
 		t.Fatal("help.sh stamped into a session directory; one global copy was the point")
+	}
+}
+
+// The shared Esc wait is staged beside the help panel, executable, and in the
+// same directory — help.sh reaches it by $0's dirname, so "beside" is load
+// bearing rather than tidy.
+func TestWriteSupportStampsDismissScriptBesideTheHelpPanel(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	dir := t.TempDir()
+	if err := writeSupport(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(config.DismissScriptPath())
+	if err != nil {
+		t.Fatal("dismiss script missing from the config dir:", err)
+	}
+	if info.Mode().Perm()&0o111 == 0 {
+		t.Fatalf("dismiss script is not executable: %v", info.Mode())
+	}
+	if got, want := filepath.Dir(config.DismissScriptPath()), filepath.Dir(config.HelpScriptPath()); got != want {
+		t.Fatalf("dismiss script lives in %q, not beside help.sh in %q; help.sh finds it by $0", got, want)
+	}
+	body, err := os.ReadFile(config.DismissScriptPath())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"033",                // Esc, and only Esc, ends the wait
+		"od -An -b",          // octal, so an empty read stays distinct from a key that is not Esc
+		"min 1 time 0",       // an indefinite wait blocks rather than polling
+		"min 0 time 5",       // a timed one ticks, so the deadline is checked
+		`[ -z "$rest" ]`,     // an arrow key is Esc plus more bytes, and must not dismiss
+		`[ -z "$deadline" ]`, // a closed stdin must not strand the pane
+	} {
+		if !strings.Contains(string(body), want) {
+			t.Fatalf("dismiss script missing %q", want)
+		}
+	}
+}
+
+// Esc dismisses; the script exits so close_on_exit can take the pane with it.
+// This runs the real script over a pipe rather than a tty, which is enough to
+// pin that an Esc byte ends the wait and that the exit status is clean.
+func TestDismissScriptExitsOnEsc(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	if err := writeSupport(t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command(shellBin, config.DismissScriptPath(), "600")
+	cmd.Stdin = strings.NewReader("\033")
+	done := make(chan error, 1)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("dismiss script exited non-zero on Esc: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("dismiss script did not exit on Esc; it waited out its timeout instead")
+	}
+}
+
+// DismissCommand is the single fragment every dismissible pane ends with, so
+// the callers in mcpserver cannot each grow their own dialect of "Esc closes
+// this".
+func TestDismissCommandNamesTheSharedScriptAndItsTimeout(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	indefinite := DismissCommand(0)
+	if !strings.Contains(indefinite, ShellQuote(config.DismissScriptPath())) {
+		t.Fatalf("DismissCommand does not run the staged script: %q", indefinite)
+	}
+	if strings.HasSuffix(indefinite, " 0") {
+		t.Fatalf("an indefinite wait passed a zero timeout: %q", indefinite)
+	}
+	if timed := DismissCommand(8); !strings.HasSuffix(timed, " 8") {
+		t.Fatalf("DismissCommand(8) does not pass the timeout in seconds: %q", timed)
 	}
 }
 

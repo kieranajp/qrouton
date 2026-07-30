@@ -65,13 +65,22 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"--session test-session",
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
-		"Editor · Alt-f to view · Esc to close",
+		"Editor · Alt-f to view · quit to close",
 		"toggle-floating-panes",
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("calls missing %q:\n%s", want, s)
 		}
+	}
+	// The editor pane is the one floated pane Esc must not touch: it holds the
+	// user's real editor, where Esc leaves insert mode. So no shared wait is
+	// appended to its command, and its title promises no Esc.
+	if strings.Contains(s, "dismiss.sh") {
+		t.Fatalf("the editor pane ends in the shared Esc wait; Esc there belongs to the editor:\n%s", s)
+	}
+	if strings.Contains(s, "Editor") && strings.Contains(s, "Editor · Alt-f to view · Esc") {
+		t.Fatalf("the editor pane's title still offers Esc to close:\n%s", s)
 	}
 }
 
@@ -94,7 +103,10 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 		"--x 48% --y 8% --width 50% --height 84%",
 		"--name ▶ dev · Esc to close",
 		"--cwd " + realRepo,
-		"-- sh -lc npm run dev",
+		"-- sh -lc npm run dev; " + launch.DismissCommand(0),
+		// Always self-closing: the shared wait is what holds the pane open, so
+		// Esc ending that wait has to take the pane with it.
+		"--close-on-exit",
 		"toggle-floating-panes",
 	} {
 		if !strings.Contains(s, want) {
@@ -103,6 +115,52 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 	}
 	if got := p.list(); len(got) != 1 || got[0] != "dev" {
 		t.Fatalf("registry = %v, want [dev]", got)
+	}
+}
+
+// Every pane the user is told to dismiss with Esc ends in the identical wait,
+// and every one of them closes when that wait returns. This is the guard
+// against the four routes drifting back into four dialects of "Esc closes
+// this" — which is how the editor pane ended up promising an Esc that belonged
+// to nvim.
+func TestEveryDismissiblePaneEndsInTheSameEscWait(t *testing.T) {
+	footer := launch.DismissCommand(0)
+	for _, tc := range []struct {
+		name   string
+		open   func(*paneManager) error
+		footer string
+	}{
+		{"run_command", func(p *paneManager) error {
+			_, err := p.run(context.Background(), runCommandInput{Command: "ls", Name: "cmd"})
+			return err
+		}, footer},
+		{"show_diff", func(p *paneManager) error {
+			_, err := p.showDiff(context.Background(), showDiffInput{})
+			return err
+		}, footer},
+		{"notify", func(p *paneManager) error {
+			_, err := p.notify(context.Background(), notifyInput{Message: "done"})
+			return err
+		}, launch.DismissCommand(toastSeconds)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			helper, log := fakeZellij(t, dir)
+			p := testManager(t, dir, helper)
+			if err := tc.open(p); err != nil {
+				t.Fatal(err)
+			}
+			s := readLog(t, log)
+			if !strings.Contains(s, tc.footer) {
+				t.Fatalf("pane does not end in the shared Esc wait %q:\n%s", tc.footer, s)
+			}
+			if !strings.Contains(s, "--close-on-exit") {
+				t.Fatalf("pane survives its own Esc wait returning; Esc would not close it:\n%s", s)
+			}
+			if !strings.Contains(s, "Esc to close") {
+				t.Fatalf("pane title does not tell the user which key dismisses it:\n%s", s)
+			}
+		})
 	}
 }
 
@@ -182,9 +240,9 @@ func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
 	realRepo, _ := filepath.EvalSymlinks(repo)
 	s := readLog(t, log)
 	for _, want := range []string{"--name ◆ diff:app", "git -C '" + realRepo + "' diff --staged 'main'", "--pinned true",
-		// Esc ends the footer's keypress wait, and close-on-exit turns that into a
+		// Esc ends the footer's wait, and close-on-exit turns that into a
 		// dismissed pane.
-		"Esc to close", "stty -icanon", "--close-on-exit"} {
+		"Esc to close", launch.DismissCommand(0), "--close-on-exit"} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("single-repo diff missing %q:\n%s", want, s)
 		}
@@ -216,7 +274,9 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	s := readLog(t, log)
 	script := filepath.Join(dir, ".qrouton", "notify.sh")
 	for _, want := range []string{"--name 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "toggle-floating-panes",
-		"time 80"} { // dismissable on Esc, still self-closing after toastSeconds
+		// Dismissable on Esc through the same shared wait as every other pane,
+		// and still self-closing after toastSeconds.
+		launch.DismissCommand(toastSeconds)} {
 		if !strings.Contains(s, want) {
 			t.Fatalf("notify toast missing %q:\n%s", want, s)
 		}

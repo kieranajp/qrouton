@@ -2,12 +2,16 @@
 
 keybinds clear-defaults=true {
     locked {
-        // tmux is qrouton's deliberate Ctrl-g gateway. normal is reserved for
-        // a focused MCP pane, where Esc closes that pane.
+        // tmux is qrouton's deliberate Ctrl-g gateway, and the only way in.
         bind "Ctrl g" { SwitchToMode "tmux"; }
     }
-    normal {
-        bind "esc" { CloseFocus; SwitchToMode "locked"; }
+    tmux {
+        // The deliberate way to close a pane Esc will not dismiss, because
+        // something is still running in it. Esc belongs to the pane itself
+        // (see scripts/dismiss.sh); this chord is the escape hatch for a pane
+        // that never reaches its own wait, and it is two keys deep precisely
+        // because it can also close a permanent one.
+        bind "x" { CloseFocus; SwitchToMode "locked"; }
     }
     pane {
         bind "left" { MoveFocus "left"; }
@@ -94,9 +98,9 @@ keybinds clear-defaults=true {
                 close_on_exit true
             }
         }
-        // Focus movement always restores locked mode. That makes leaving a
-        // dismissible MCP pane safe before its background focus watcher's
-        // next observation.
+        // Focus movement always restores locked mode, so wandering out of one
+        // of the Ctrl-g gateway modes cannot leave the next keystroke bound to
+        // something the user has forgotten about.
         bind "Alt left" { MoveFocusOrTab "left"; SwitchToMode "locked"; }
         bind "Alt down" { MoveFocus "down"; SwitchToMode "locked"; }
         bind "Alt up" { MoveFocus "up"; SwitchToMode "locked"; }
@@ -141,7 +145,7 @@ keybinds clear-defaults=true {
                 y "8%"
                 width "70%"
                 height "80%"
-                name "keys · press any key to close"
+                name "keys · Esc to close"
                 close_on_exit true
             }
         }
@@ -153,7 +157,7 @@ keybinds clear-defaults=true {
     shared_except "locked" "entersearch" {
         bind "enter" { SwitchToMode "locked"; }
     }
-    shared_except "normal" "locked" "entersearch" "renametab" "renamepane" {
+    shared_except "locked" "entersearch" "renametab" "renamepane" {
         bind "esc" { SwitchToMode "locked"; }
     }
     shared_except "locked" "entersearch" "search" "renametab" "renamepane" "session" {

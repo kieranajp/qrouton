@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"strings"
-	"sync"
 )
 
 // commandContext is swapped by tests to intercept pane-driver invocations.
@@ -18,24 +17,11 @@ var commandContext = exec.CommandContext
 // zellijHost implements PaneHost via `zellij --session <s> action …`.
 type zellijHost struct {
 	bin, session string
-
-	dismissMu       sync.Mutex
-	dismissible     map[string]struct{}
-	dismissWatch    sync.Once
-	clientID        string
-	ownerPaneID     string
-	lastDismissMode string
 }
 
 // NewZellijHost wires a pane driver to a session; the seam for tests.
 func NewZellijHost(bin, session string) PaneHost {
-	return &zellijHost{
-		bin:             bin,
-		session:         session,
-		dismissible:     map[string]struct{}{},
-		ownerPaneID:     terminalPaneID(os.Getenv(zellijPaneIDEnvVar)),
-		lastDismissMode: lockedMode,
-	}
+	return &zellijHost{bin: bin, session: session}
 }
 
 func zellijHostFromHandle(h Handle) (PaneHost, error) {
@@ -76,9 +62,6 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 		// focus to the agent while pinned panes stay rendered on top for reference.
 		_, _ = z.action(ctx, toggleFloatingAction)
 	}
-	if opts.DismissOnEsc {
-		z.addDismissible(id)
-	}
 	return id, nil
 }
 
@@ -105,9 +88,6 @@ func (z *zellijHost) Attached(ctx context.Context) (bool, error) {
 }
 
 func (z *zellijHost) Close(ctx context.Context, id string) error {
-	z.dismissMu.Lock()
-	delete(z.dismissible, id)
-	z.dismissMu.Unlock()
 	_, err := z.action(ctx, closePaneAction, paneIDFlag, id)
 	return err
 }

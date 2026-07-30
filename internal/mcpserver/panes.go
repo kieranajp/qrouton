@@ -67,19 +67,31 @@ func (m *paneManager) spawn(ctx context.Context, name, label, cwd string, geom m
 func (m *paneManager) spawnFocus(ctx context.Context, name, label, cwd string, geom mux.Geometry, closeOnExit, focus bool, command []string) (string, error) {
 	m.closeLocked(ctx, name)
 	id, err := m.host.Spawn(ctx, mux.SpawnOptions{
-		Label:        label,
-		Cwd:          cwd,
-		Geometry:     geom,
-		CloseOnExit:  closeOnExit,
-		Focus:        focus,
-		DismissOnEsc: !focus,
-		Command:      command,
+		Label:       label,
+		Cwd:         cwd,
+		Geometry:    geom,
+		CloseOnExit: closeOnExit,
+		Focus:       focus,
+		Command:     command,
 	})
 	if err != nil {
 		return "", err
 	}
 	m.panes[name] = id
 	return id, nil
+}
+
+// dismissible turns a pane payload into the command for a pane the user
+// dismisses with Esc: the payload, then the shared Esc wait. Every such pane
+// goes through here — the toast, diffs, and the commands the agent runs — which
+// is what keeps "Esc to close" meaning one thing across all of them. seconds,
+// when positive, also auto-dismisses the pane after that long.
+//
+// The editor pane deliberately does not come through here. Esc there belongs to
+// the editor, and quitting it is what closes the pane. The quick-reference
+// panel reaches the same wait from inside help.sh instead.
+func dismissible(payload string, seconds int) []string {
+	return []string{shellBin, shellLoginFlag, fmt.Sprintf(dismissibleFormat, payload, launch.DismissCommand(seconds))}
 }
 
 // closeLocked closes and forgets the pane registered under name, if any. Callers hold m.mu.
@@ -128,7 +140,7 @@ func (m *paneManager) run(ctx context.Context, input runCommandInput) (string, e
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, name, commandPaneLabel+name+dismissPaneLabel, cwd, commandGeometry, input.CloseOnExit, []string{shellBin, shellLoginFlag, input.Command}); err != nil {
+	if _, err := m.spawn(ctx, name, commandPaneLabel+name+dismissPaneLabel, cwd, commandGeometry, true, dismissible(input.Command, 0)); err != nil {
 		return "", fmt.Errorf("run command: %w", err)
 	}
 	where := sessionRootScope
@@ -183,9 +195,9 @@ func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string
 	command := diffCommand(repoAbs, strings.TrimSpace(input.Base), input.Staged)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// close_on_exit: the footer's keypress wait is what ends the command, so Esc
-	// has to take the pane with it.
-	if _, err := m.spawn(ctx, label, diffPaneLabel+label+dismissPaneLabel, m.root, commandGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {
+	// close_on_exit: the shared Esc wait is what ends the command, so Esc has to
+	// take the pane with it.
+	if _, err := m.spawn(ctx, label, diffPaneLabel+label+dismissPaneLabel, m.root, commandGeometry, true, dismissible(command, 0)); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
 	return fmt.Sprintf(showingDiffFormat, scope, label), nil
@@ -197,10 +209,10 @@ func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, er
 		return "", ErrMessageRequired
 	}
 	script := sessionpaths.NotifyScript(m.root)
-	command := fmt.Sprintf(toastCommandFormat, launch.ShellQuote(script), launch.ShellQuote(message), toastTenths)
+	command := fmt.Sprintf(toastCommandFormat, launch.ShellQuote(script), launch.ShellQuote(message))
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, notifyPaneName, notifyPaneLabel, m.root, toastGeometry, true, []string{shellBin, shellLoginFlag, command}); err != nil {
+	if _, err := m.spawn(ctx, notifyPaneName, notifyPaneLabel, m.root, toastGeometry, true, dismissible(command, toastSeconds)); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}
 	return fmt.Sprintf(notifiedFormat, message), nil
@@ -306,10 +318,11 @@ func (m *paneManager) list() []string {
 	return names
 }
 
-// diffCommand builds the shell that show_diff runs in a pane. A single repo relies
-// on git's own pager/colour (the pane is a tty); the all-repos form forces colour
-// through an explicit pager as it walks the src/* worktrees. A trailing footer keeps
-// an empty diff from rendering as a blank pane.
+// diffCommand builds the diff payload show_diff runs in a pane; dismissible
+// appends the Esc wait. A single repo relies on git's own pager/colour (the pane
+// is a tty); the all-repos form forces colour through an explicit pager as it
+// walks the src/* worktrees. A trailing footer keeps an empty diff from
+// rendering as a blank pane.
 func diffCommand(repoAbs, base string, staged bool) string {
 	flags := ""
 	if staged {
