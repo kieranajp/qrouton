@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/charmbracelet/huh"
 	"github.com/kieranajp/qrouton/internal/codex"
@@ -25,15 +26,25 @@ var notifyScript string
 
 // helpScript is the quick-reference panel, staged once under the config dir
 // rather than per session. It reads ./qrouton.json itself for the mode
-// tagline; $1, when the caller passes it, is the Codex depth warning.
+// tagline; $1, when the caller passes it, is the Codex depth warning. It ends
+// by exec'ing dismissScript out of its own directory, which is why the two are
+// staged together.
 //
 //go:embed scripts/help.sh
 var helpScript string
 
-// writeSupport writes .qrouton/notify.sh at launch time (per-session) and
-// help.sh under the config dir (one global copy, restaged idempotently so old
-// sessions still pick up template changes). Backend layout files are the
-// multiplexer adapter's business, staged separately.
+// dismissScript is the shared Esc wait every floated pane ends with. See
+// scripts/dismiss.sh for why the wait lives in the pane rather than in a
+// Zellij keybinding.
+//
+//go:embed scripts/dismiss.sh
+var dismissScript string
+
+// writeSupport writes .qrouton/notify.sh at launch time (per-session) and the
+// two global scripts — help.sh and dismiss.sh — under the config dir (one copy
+// each, restaged idempotently so old sessions still pick up template changes).
+// Backend layout files are the multiplexer adapter's business, staged
+// separately.
 func writeSupport(dir string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err
@@ -41,11 +52,36 @@ func writeSupport(dir string) error {
 	if err := os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode); err != nil {
 		return err
 	}
-	helpPath := config.HelpScriptPath()
-	if err := os.MkdirAll(filepath.Dir(helpPath), 0o755); err != nil {
-		return err
+	global := map[string]string{
+		config.HelpScriptPath():    helpScript,
+		config.DismissScriptPath(): dismissScript,
 	}
-	return os.WriteFile(helpPath, []byte(helpScript), scriptMode)
+	for path, content := range global {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, []byte(content), scriptMode); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// DismissCommand is the shell fragment that turns a floated pane into one the
+// user dismisses with Esc: the pane's command ends with it, and close_on_exit
+// closes the pane when it returns. seconds, when positive, also auto-dismisses
+// the pane after that long — the toast's behaviour.
+//
+// Every dismissible pane ends with this exact fragment, so "Esc to close"
+// means one thing everywhere. The quick-reference panel reaches the same
+// script from help.sh instead, since a standalone script can find a sibling
+// without a path being threaded to it.
+func DismissCommand(seconds int) string {
+	command := shellBin + " " + ShellQuote(config.DismissScriptPath())
+	if seconds > 0 {
+		command += " " + strconv.Itoa(seconds)
+	}
+	return command
 }
 
 // codexWarning is the caveat help.sh shows as $1 when the runner is a Codex

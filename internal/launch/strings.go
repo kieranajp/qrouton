@@ -27,7 +27,7 @@ const (
 	reposPaneName        = "repos"
 	agentsPaneName       = "agents"
 	statusPaneName       = "status"
-	helpPaneName         = "keys · press any key to close"
+	helpPaneName         = "keys · Esc to close"
 
 	// Subcommands qrouton launches against itself to drive its own panes.
 	mcpSubcommand        = "mcp"

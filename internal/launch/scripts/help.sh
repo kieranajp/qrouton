@@ -57,6 +57,7 @@ key "New shell" "Alt-g" "adds and focuses one in the stack on the right"
 key "Switch shells" "Alt-up/down" "while in the stack, or click a shell title"
 key "Close shell" "Ctrl-d" "when focused; the final shell resets instead"
 key "Dismiss a popup" "Esc" "agent-opened panes carry the same hint"
+key "Close a pane" "Ctrl-g x" "for one still busy, that Esc will not dismiss"
 key "Workspace layout" "protected" "only the shell stack can grow"
 key "Resize" "Alt-+ / Alt--"
 key "Scroll a pane" "Ctrl-g s" "then PageUp / PageDown; Esc when done"
@@ -83,12 +84,9 @@ key "qrouton.json" "" "the manifest: repos, roles, branches, mode"
 key "src/<repo>" "" "worktrees; active ones are yours to change"
 key "thoughts/shared" "" "research, specs, and plans that outlive the chat"
 
-printf '\n  %sPress any key to close%s\n' "$dim" "$rst"
-# Read one raw keypress so Enter, Esc, or anything else dismisses the panel.
-# A canonical-mode `read` only ever returned on Enter; every other key left
-# this floating pane lingering over the workspace, swallowing input.
-saved=$(stty -g 2>/dev/null)
-stty -icanon -echo 2>/dev/null
-dd bs=1 count=1 >/dev/null 2>&1
-[ -n "$saved" ] && stty "$saved" 2>/dev/null
-exit 0
+printf '\n  %sPress Esc to close%s\n' "$dim" "$rst"
+# Hand the wait to the shared Esc script, so this panel dismisses exactly the
+# way every other floated pane does. It sits in this script's own directory
+# (both are staged into the config dir together), which is how it is found
+# without a path being threaded through Go and the staged keybindings.
+exec sh "$(dirname "$0")/dismiss.sh"
