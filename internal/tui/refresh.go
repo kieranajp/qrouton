@@ -8,10 +8,24 @@ package tui
 import (
 	"context"
 	"net/http"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kieranajp/qrouton/internal/github"
 )
+
+// refreshState is the background refresh's own state. gen is the live
+// generation — every async message carries the one it belongs to, and a message
+// from an older generation is dropped rather than applied.
+type refreshState struct {
+	active  bool
+	ch      <-chan github.RefreshMsg
+	gen     int
+	cancel  context.CancelFunc
+	status  map[string]string
+	errs    map[string]error
+	cacheAt time.Time
+}
 
 type refreshReadyMsg struct {
 	gen   int
@@ -48,28 +62,28 @@ func awaitRefresh(gen int, ch <-chan github.RefreshMsg) tea.Cmd {
 }
 
 func (m *appModel) beginRefresh() tea.Cmd {
-	if m.refreshCancel != nil {
-		m.refreshCancel()
+	if m.refresh.cancel != nil {
+		m.refresh.cancel()
 	}
-	m.refreshGen++
-	m.refreshing = true
-	return refreshTokenCmd(m.refreshGen)
+	m.refresh.gen++
+	m.refresh.active = true
+	return refreshTokenCmd(m.refresh.gen)
 }
 
 func (m *appModel) retryFailed() tea.Cmd {
-	if m.refreshCancel != nil {
-		m.refreshCancel()
+	if m.refresh.cancel != nil {
+		m.refresh.cancel()
 	}
-	m.refreshGen++
-	gen := m.refreshGen
+	m.refresh.gen++
+	gen := m.refresh.gen
 	ctx, cancel := context.WithCancel(context.Background())
-	m.refreshCancel = cancel
-	m.refreshing = true
+	m.refresh.cancel = cancel
+	m.refresh.active = true
 	var owners []string
 	for _, owner := range m.cfg.Orgs {
-		if m.ownerErrors[owner] != nil {
+		if m.refresh.errs[owner] != nil {
 			owners = append(owners, owner)
-			m.ownerStatus[owner] = statusFetching
+			m.refresh.status[owner] = statusFetching
 		}
 	}
 	cached := append([]github.Repo(nil), m.repos...)
@@ -93,4 +107,98 @@ func (m *appModel) retryFailed() tea.Cmd {
 		github.SortReposByActivity(merged)
 		return failedRetryMsg{gen: gen, repos: merged, results: results}
 	}
+}
+
+// onRefreshReady turns a token lookup into the concurrent per-owner fetch.
+func (m appModel) onRefreshReady(v refreshReadyMsg) (tea.Model, tea.Cmd) {
+	if v.gen != m.refresh.gen {
+		return m, nil
+	}
+	if v.err != nil {
+		m.refresh.active = false
+		m.err = v.err
+		// The loading screen has no failure rendering of its own; without
+		// this it would sit on "Loading repositories…" forever.
+		if len(m.repos) == 0 || m.screen == loadingScreen {
+			m.back, m.screen = landingScreen, errorScreen
+			if m.picker.manifest != nil {
+				m.back = newScreen // the picker has no landing to go back to
+			}
+		}
+		return m, nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.refresh.cancel = cancel
+	m.refresh.ch = github.RefreshRepos(ctx, http.DefaultClient, v.token, m.cfg.Orgs, m.repos)
+	return m, awaitRefresh(v.gen, m.refresh.ch)
+}
+
+// onRefreshEvent folds one owner's progress into the model and waits for the
+// next, until RefreshComplete closes the run out.
+func (m appModel) onRefreshEvent(v refreshEventMsg) (tea.Model, tea.Cmd) {
+	if v.gen != m.refresh.gen {
+		return m, nil
+	}
+	event := v.event
+	switch event.State {
+	case github.RefreshStarted:
+		m.refresh.status[event.Owner] = statusFetching
+	case github.RefreshSucceeded:
+		m.refresh.status[event.Owner] = statusUpdated
+		delete(m.refresh.errs, event.Owner)
+		if event.Repos != nil {
+			m.repos = event.Repos
+			m.clampRepoCursor()
+		}
+	case github.RefreshFailed:
+		m.refresh.status[event.Owner] = statusFailed
+		m.refresh.errs[event.Owner] = event.Err
+		m.err = event.Err
+	case github.RefreshComplete:
+		m.refresh.active = false
+		if len(m.refresh.errs) == 0 {
+			m.err = nil
+		}
+		if event.Repos != nil {
+			m.repos = event.Repos
+		}
+		m.refresh.cacheAt = time.Now()
+		if m.screen == loadingScreen && len(m.repos) > 0 {
+			m.screen = newScreen
+		} else if m.screen == loadingScreen && len(m.refresh.errs) > 0 {
+			m.back, m.screen = landingScreen, errorScreen
+		}
+		return m, nil
+	}
+	return m, awaitRefresh(v.gen, m.refresh.ch)
+}
+
+// onFailedRetry applies a retry of only the owners that had failed, and caches
+// the merged list once every one of them has come back clean.
+func (m appModel) onFailedRetry(v failedRetryMsg) (tea.Model, tea.Cmd) {
+	if v.gen != m.refresh.gen {
+		return m, nil
+	}
+	m.refresh.active = false
+	m.repos = v.repos
+	for owner, err := range v.results {
+		if err != nil {
+			m.refresh.errs[owner] = err
+			m.refresh.status[owner] = statusFailed
+			m.err = err
+		} else {
+			delete(m.refresh.errs, owner)
+			m.refresh.status[owner] = statusUpdated
+		}
+	}
+	if len(m.refresh.errs) == 0 {
+		m.err = nil
+		github.WriteRepoCache(m.cfg.Orgs, m.repos)
+		if m.screen == loadingScreen {
+			m.screen = landingScreen
+		}
+	} else if m.screen == loadingScreen {
+		m.back, m.screen = landingScreen, errorScreen
+	}
+	return m, nil
 }

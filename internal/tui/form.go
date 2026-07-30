@@ -45,7 +45,7 @@ const (
 // picker mode: escalation *is* the move to RPI, so offering the choice would
 // collect an answer confirmEscalation then overrides.
 func (m appModel) lastFormField() int {
-	if m.pickerManifest != nil {
+	if m.picker.manifest != nil {
 		return focusPrefix
 	}
 	return focusMode
@@ -55,10 +55,10 @@ func (m appModel) lastFormField() int {
 // repository, which fixes its row: qrouton assembles what is missing and leaves
 // what is there, uncommitted work included.
 func (m appModel) inSession(id string) bool {
-	if m.pickerManifest == nil {
+	if m.picker.manifest == nil {
 		return false
 	}
-	for _, r := range m.pickerManifest.Repos {
+	for _, r := range m.picker.manifest.Repos {
 		if strings.EqualFold((github.Repo{Org: r.Org, Name: r.Name}).ID(), id) {
 			return true
 		}
@@ -99,7 +99,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	f := &m.form
 	switch k.String() {
 	case "esc":
-		if m.pickerManifest != nil {
+		if m.picker.manifest != nil {
 			return m.cancelPicker()
 		}
 		m.screen = landingScreen
@@ -191,7 +191,7 @@ func (m appModel) updateForm(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.err, m.back, m.screen = err, newScreen, errorScreen
 			return m, nil
 		}
-		if m.pickerManifest != nil || m.requestedRunner != "" {
+		if m.picker.manifest != nil || m.requestedRunner != "" {
 			m.screen = assemblyScreen
 			return m, m.startAssembly()
 		}
@@ -315,7 +315,7 @@ func (m appModel) validateForm() error {
 	// An abandoned half-assembly (interrupted run) doesn't block the name;
 	// session.Create reclaims it. The picker names work inside an existing
 	// session — its slug only shapes the branch — so no directory check there.
-	if m.pickerManifest == nil {
+	if m.picker.manifest == nil {
 		if dir := filepath.Join(m.cfg.Root, slug); !session.Abandoned(dir) {
 			if _, err := os.Stat(dir); err == nil {
 				return fmt.Errorf("%w: %q", errSessionExists, slug)
@@ -332,4 +332,20 @@ func (m appModel) validateForm() error {
 		}
 	}
 	return errNoActiveRepo
+}
+
+// onTicketLoaded fills name and description from a fetched ticket, ignoring a
+// result for a URL the field has since moved off.
+func (m appModel) onTicketLoaded(v ticketLoadedMsg) (tea.Model, tea.Cmd) {
+	if v.url != m.form.ticket {
+		return m, nil
+	}
+	if v.err != nil {
+		m.form.ticketStatus = v.err.Error()
+		return m, nil
+	}
+	m.form.name = v.ticket.Title
+	m.form.description = v.ticket.Body
+	m.form.ticketStatus = statusTicketLoaded
+	return m, nil
 }

@@ -45,7 +45,7 @@ func (m appModel) View() string {
 		body = m.viewDelete()
 	case errorScreen:
 		retry := errorRetryGitHub
-		if m.assemblyFailed {
+		if m.assembly.failed {
 			retry = errorRetryAssemb
 		}
 		body = bad.Render(errorTitle) + "\n\n" + m.err.Error() + "\n\n" + errorKeyHints + retry + errorKeyQuit
@@ -64,7 +64,7 @@ func (m appModel) View() string {
 
 func (m appModel) viewLanding() string {
 	status := githubStatusPrefix
-	if m.refreshing {
+	if m.refresh.active {
 		status += githubStatusRefreshing
 	} else if m.err != nil {
 		status += githubStatusStale
@@ -72,16 +72,16 @@ func (m appModel) viewLanding() string {
 		status += githubStatusConnected
 	}
 	status += fmt.Sprintf(repoOwnerCountFormat, len(m.repos), len(m.cfg.Orgs))
-	if !m.cacheAt.IsZero() {
-		status += updatedPrefix + relativeTime(m.cacheAt)
+	if !m.refresh.cacheAt.IsZero() {
+		status += updatedPrefix + relativeTime(m.refresh.cacheAt)
 	}
 	lines := []string{dim.Render(status), ""}
-	if m.refreshing || len(m.ownerErrors) > 0 {
+	if m.refresh.active || len(m.refresh.errs) > 0 {
 		var statuses []string
 		for _, org := range m.cfg.Orgs {
-			if s := m.ownerStatus[org]; s != "" {
+			if s := m.refresh.status[org]; s != "" {
 				entry := org + " " + s
-				if err := m.ownerErrors[org]; err != nil {
+				if err := m.refresh.errs[org]; err != nil {
 					entry += " (" + err.Error() + ")"
 				}
 				statuses = append(statuses, entry)
@@ -134,13 +134,13 @@ func workflowLine(s session.WorkflowStatus) string {
 }
 
 func (m appModel) viewDelete() string {
-	if m.deleteTarget == nil {
+	if m.pendingDelete.target == nil {
 		return deleteNoTarget
 	}
-	lines := []string{bad.Render(fmt.Sprintf(deleteTitleFormat, m.deleteTarget.Slug)), "", deleteBody}
-	if len(m.deleteDirty) > 0 {
+	lines := []string{bad.Render(fmt.Sprintf(deleteTitleFormat, m.pendingDelete.target.Slug)), "", deleteBody}
+	if len(m.pendingDelete.dirty) > 0 {
 		lines = append(lines, "", bad.Render(deleteDirtyBody))
-		for _, repo := range m.deleteDirty {
+		for _, repo := range m.pendingDelete.dirty {
 			lines = append(lines, "  • "+repo)
 		}
 	}
@@ -233,7 +233,7 @@ func (m appModel) viewForm() string {
 		dim.Render(fmt.Sprintf(branchPreviewFormat, branchPrefixes[f.prefix], emptyFallback(slug, emptyFieldLabel)))))
 
 	// No mode selector when escalating: the answer is RPI by definition.
-	if m.pickerManifest == nil {
+	if m.picker.manifest == nil {
 		modeChips := []string{
 			chip(modeLabelRPI, f.mode != session.ModeAssistant),
 			chip(modeLabelAssistant, f.mode == session.ModeAssistant),
@@ -313,12 +313,12 @@ func (m appModel) viewAssembly() string {
 		name = m.resume.Slug
 	}
 	lines := []string{assemblyCreatingPrefix + accent.Render(name), "", good.Render(assemblyConfigured)}
-	if m.resume != nil && len(m.assemblySteps) == 0 {
+	if m.resume != nil && len(m.assembly.steps) == 0 {
 		lines = append(lines, assemblyRestoring)
 	}
 	latest := make(map[string]session.Progress)
 	var order []string
-	for _, p := range m.assemblySteps {
+	for _, p := range m.assembly.steps {
 		key := string(p.Step)
 		if p.Repo != nil {
 			key += "/" + p.Repo.ID()

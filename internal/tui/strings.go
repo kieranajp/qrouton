@@ -38,6 +38,8 @@ const (
 	statusFetching = "fetching…"
 	statusUpdated  = "updated"
 	statusFailed   = "failed"
+
+	statusTicketLoaded = "ticket loaded"
 )
 
 // Mode names as the form renders them.
