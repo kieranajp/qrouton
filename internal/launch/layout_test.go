@@ -93,7 +93,7 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 			t.Fatalf("Zellij config missing %q", want)
 		}
 	}
-	for _, forbidden := range []string{"NewPane", "NewTab", "BreakPane", "MovePane", `name "qrouton · terminal"`} {
+	for _, forbidden := range []string{"NewPane", "NewTab", "BreakPane", "MovePane", `name "qrouton · terminal"`, "\n    zellij:link"} {
 		if strings.Contains(string(config), forbidden) {
 			t.Fatalf("Zellij config still exposes layout-changing action %q", forbidden)
 		}

@@ -226,12 +226,10 @@ plugins {
     }
 }
 
-// Plugins to load in the background when a new session starts
-// eg. "file:/path/to/my-plugin.wasm"
-// eg. "https://example.com/my-plugin.wasm"
-load_plugins {
-    zellij:link
-}
+// Do not preload zellij:link. In Zellij 0.44.3 it serially times out while
+// querying every pane's cwd, which blocks runtime pane actions long enough for
+// NewFloatingPane itself to hit Zellij's one-second server timeout.
+load_plugins {}
 web_client {
     font "monospace"
 }

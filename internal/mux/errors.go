@@ -22,6 +22,11 @@ var ErrShellContext = errors.New("shell command is not running inside a Zellij p
 // after Zellij starts the session, so title lookup is the stable bridge.
 var ErrPaneNotFound = errors.New("multiplexer pane not found")
 
+// ErrPaneIDUnavailable prevents a timed-out Zellij new-pane action from
+// entering qrouton's registry as an empty id and becoming an orphan that later
+// operations cannot read, replace, dock, or close.
+var ErrPaneIDUnavailable = errors.New("multiplexer returned no pane id")
+
 // unsupportedBackend reports a multiplexer qrouton has no adapter for, naming
 // the ones it does.
 func unsupportedBackend(kind string) error {

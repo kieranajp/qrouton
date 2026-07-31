@@ -68,7 +68,10 @@ func (z *zellijHost) Spawn(ctx context.Context, opts SpawnOptions) (string, erro
 	if err != nil {
 		return "", err
 	}
-	id := strings.TrimSpace(string(out))
+	id := terminalPaneID(strings.TrimSpace(string(out)))
+	if id == "" {
+		return "", ErrPaneIDUnavailable
+	}
 	if !opts.Focus {
 		z.returnFocus(ctx)
 	}

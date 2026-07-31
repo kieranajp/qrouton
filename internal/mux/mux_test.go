@@ -427,6 +427,23 @@ func TestSpawnReturnsFocusToTheOwningPaneByID(t *testing.T) {
 	}
 }
 
+func TestSpawnRejectsEmptyPaneID(t *testing.T) {
+	dir := t.TempDir()
+	bin, log := filepath.Join(dir, "zellij"), filepath.Join(dir, "calls")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n"
+	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CALL_LOG", log)
+
+	if _, err := NewZellijHost(bin, "s").Spawn(context.Background(), SpawnOptions{Focus: true, Command: []string{"sleep", "30"}}); !errors.Is(err, ErrPaneIDUnavailable) {
+		t.Fatalf("Spawn error = %v, want ErrPaneIDUnavailable", err)
+	}
+	if got := readCalls(t, log); !strings.Contains(got, "action new-pane") || !strings.Contains(got, "sleep 30") {
+		t.Fatalf("new-pane action missing from log:\n%s", got)
+	}
+}
+
 // Two fallbacks to the layer toggle: a driver built outside a pane has no owner
 // to name, and a focus that fails should still hand the keyboard back.
 func TestSpawnFallsBackToTheLayerToggleWithoutAUsableOwner(t *testing.T) {
