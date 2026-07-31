@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -324,6 +325,59 @@ func TestLandingUsesResponsiveCroutonLogo(t *testing.T) {
 	m.height = 24
 	if view := m.View(); !strings.Contains(view, "/· *_/|") || strings.Contains(view, "__________") {
 		t.Fatalf("short landing view should use compact cube:\n%s", view)
+	}
+}
+
+func TestLandingSessionListScrollsWithinTerminalHeight(t *testing.T) {
+	m := testApp()
+	m.screen = landingScreen
+	m.width, m.height = 80, 24
+	for i := 1; i <= 6; i++ {
+		m.sessions = append(m.sessions, session.Manifest{Slug: fmt.Sprintf("session-%d", i)})
+	}
+
+	view := m.View()
+	if !strings.Contains(view, "session-1") || strings.Contains(view, "session-6") {
+		t.Fatalf("initial landing window does not show the first page:\n%s", view)
+	}
+	if got := lipgloss.Height(view); got > m.height {
+		t.Fatalf("landing view is %d lines in a %d-line terminal", got, m.height)
+	}
+
+	for range 6 {
+		updated, _ := m.updateLanding(tea.KeyMsg{Type: tea.KeyDown})
+		m = updated.(appModel)
+	}
+	if m.landingOffset == 0 {
+		t.Fatal("landing window did not scroll as the cursor moved")
+	}
+	view = m.View()
+	if !strings.Contains(view, "session-6") || strings.Contains(view, "session-1") {
+		t.Fatalf("landing window did not follow the cursor:\n%s", view)
+	}
+	if !strings.Contains(view, "↑ 5 earlier sessions") {
+		t.Fatalf("landing window is missing its scroll indicator:\n%s", view)
+	}
+}
+
+func TestLandingPageKeysMoveByVisibleWindow(t *testing.T) {
+	m := testApp()
+	m.screen = landingScreen
+	m.width, m.height = 80, 40
+	for i := 1; i <= 10; i++ {
+		m.sessions = append(m.sessions, session.Manifest{Slug: fmt.Sprintf("session-%d", i)})
+	}
+	window := m.landingSessionWindow()
+
+	updated, _ := m.updateLanding(tea.KeyMsg{Type: tea.KeyPgDown})
+	m = updated.(appModel)
+	if m.landingCursor != window {
+		t.Fatalf("page down cursor = %d, want %d", m.landingCursor, window)
+	}
+	updated, _ = m.updateLanding(tea.KeyMsg{Type: tea.KeyPgUp})
+	m = updated.(appModel)
+	if m.landingCursor != 0 || m.landingOffset != 0 {
+		t.Fatalf("page up did not return to new session: cursor=%d offset=%d", m.landingCursor, m.landingOffset)
 	}
 }
 

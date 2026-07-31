@@ -53,6 +53,7 @@ type appModel struct {
 	requestedRunner string
 	screen, back    screen
 	landingCursor   int
+	landingOffset   int
 	runnerCursor    int
 	width, height   int
 	err             error
@@ -194,6 +195,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch v := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = v.Width, v.Height
+		m.revealLandingCursor()
 		return m, nil
 	case refreshReadyMsg:
 		return m.onRefreshReady(v)
@@ -259,6 +261,10 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.landingCursor < len(m.sessions) {
 			m.landingCursor++
 		}
+	case "pgup":
+		m.landingCursor = max(0, m.landingCursor-m.landingSessionWindow())
+	case "pgdown":
+		m.landingCursor = min(len(m.sessions), m.landingCursor+m.landingSessionWindow())
 	case "r":
 		return m, m.beginRefresh()
 	case "d":
@@ -295,6 +301,7 @@ func (m appModel) updateLanding(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.screen = assemblyScreen
 		return m, m.startAssembly()
 	}
+	m.revealLandingCursor()
 	return m, nil
 }
 
@@ -324,6 +331,7 @@ func (m appModel) updateDelete(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.pendingDelete.target, m.pendingDelete.dirty, m.screen = nil, nil, landingScreen
 	}
+	m.revealLandingCursor()
 	return m, nil
 }
 

@@ -61,10 +61,11 @@ const (
 	errorKeyHints    = "[b] back  [r] "
 	errorKeyQuit     = "  [q] quit"
 
-	landingKeyHints = "↑↓ navigate   enter select   d delete   r refresh   q quit"
-	runnerKeyHints  = "↑↓ navigate · enter create · esc back"
-	deleteKeyHints  = "enter/y delete   esc/n cancel"
-	formKeyHints    = "type in the repository list to filter · backspace clears it\n" +
+	landingKeyHints = "↑↓ navigate · pgup/pgdn page · enter select\n" +
+		"d delete · r refresh · q quit"
+	runnerKeyHints = "↑↓ navigate · enter create · esc back"
+	deleteKeyHints = "enter/y delete   esc/n cancel"
+	formKeyHints   = "type in the repository list to filter · backspace clears it\n" +
 		"↑↓ move · space select/cycle · tab next field · ←→ choice · enter continue · esc back"
 
 	newSessionLabel    = "New session"
@@ -135,10 +136,12 @@ const (
 	// session already holds it, and it stays exactly as it is. Terse because it
 	// shares the detail column with the role and the push time, and the role
 	// column to its left already names the role.
-	repoInSessionDetail = " " + bulletPrefix + "in session"
-	roleColumnFormat    = "%s %-9s"
-	repoColumnFormat    = "%-26s %s"
-	sessionTitleFormat  = "%-42s %s"
+	repoInSessionDetail  = " " + bulletPrefix + "in session"
+	roleColumnFormat     = "%s %-9s"
+	repoColumnFormat     = "%-26s %s"
+	sessionTitleFormat   = "%-42s %s"
+	landingEarlierFormat = "↑ %d earlier sessions"
+	landingMoreFormat    = "↓ %d more sessions"
 
 	branchFormat        = "%s/%s"
 	branchPreviewFormat = "preview · " + branchFormat + "  (active repos only)"

@@ -51,18 +51,42 @@ func (m appModel) View() string {
 		body = bad.Render(errorTitle) + "\n\n" + m.err.Error() + "\n\n" + errorKeyHints + retry + errorKeyQuit
 	}
 	w := m.bodyWidth()
-	header := accent.Render(appName)
-	if m.screen == landingScreen {
-		logo := compactLogo
-		if m.height >= 30 {
-			logo = fullLogo
-		}
-		header = lipgloss.NewStyle().Width(w).Align(lipgloss.Center).Render(accent.Render(logo))
-	}
+	header := m.viewHeader(w)
 	return lipgloss.NewStyle().Width(w).Padding(1, 2).Render(header + "\n\n" + body)
 }
 
+func (m appModel) viewHeader(width int) string {
+	if m.screen != landingScreen {
+		return accent.Render(appName)
+	}
+	return m.landingHeader(width)
+}
+
+func (m appModel) landingHeader(width int) string {
+	logo := compactLogo
+	if m.height >= 30 {
+		logo = fullLogo
+	}
+	return lipgloss.NewStyle().Width(width).Align(lipgloss.Center).Render(accent.Render(logo))
+}
+
 func (m appModel) viewLanding() string {
+	lines := m.landingTopLines()
+	start, end := m.landingSessionRange()
+	if start > 0 {
+		lines[len(lines)-1] = dim.Render(fmt.Sprintf(landingEarlierFormat, start))
+	}
+	for i := start; i < end; i++ {
+		lines = append(lines, m.landingSessionCard(i), "")
+	}
+	if end < len(m.sessions) {
+		lines[len(lines)-1] = dim.Render(fmt.Sprintf(landingMoreFormat, len(m.sessions)-end))
+	}
+	lines = append(lines, dim.Render(landingKeyHints))
+	return strings.Join(lines, "\n")
+}
+
+func (m appModel) landingTopLines() []string {
 	status := githubStatusPrefix
 	if m.refresh.active {
 		status += githubStatusRefreshing
@@ -95,23 +119,60 @@ func (m appModel) viewLanding() string {
 	if m.landingCursor == 0 {
 		label = accent.Render(glyphSelected + " " + newSessionLabel)
 	}
-	lines = append(lines, label, "")
-	for i, s := range m.sessions {
-		repos := make([]string, 0, len(s.Repos))
-		for _, r := range s.Repos {
-			repos = append(repos, r.Org+"/"+r.Name)
-		}
-		title := fmt.Sprintf(sessionTitleFormat, s.Slug, relativeTime(s.CreatedAt))
-		description := dim.Render(landingDescription(s.Description, m.formWidth()-2))
-		content := title + "\n" + description + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
-		st := card
-		if m.landingCursor == i+1 {
-			st = picked
-		}
-		lines = append(lines, st.Width(m.formWidth()).Render(content), "")
+	return append(lines, label, "")
+}
+
+func (m appModel) landingSessionCard(i int) string {
+	s := m.sessions[i]
+	repos := make([]string, 0, len(s.Repos))
+	for _, r := range s.Repos {
+		repos = append(repos, r.Org+"/"+r.Name)
 	}
-	lines = append(lines, dim.Render(landingKeyHints))
-	return strings.Join(lines, "\n")
+	title := fmt.Sprintf(sessionTitleFormat, s.Slug, relativeTime(s.CreatedAt))
+	description := dim.Render(landingDescription(s.Description, m.formWidth()-2))
+	content := title + "\n" + description + "\n" + strings.Join(repos, " · ") + "\n" + workflowLine(session.Status(m.cfg.Root, s))
+	st := card
+	if m.landingCursor == i+1 {
+		st = picked
+	}
+	return st.Width(m.formWidth()).Render(content)
+}
+
+// landingSessionWindow returns the number of fixed-height session cards that
+// fit between the landing controls and footer. A zero height means Bubble Tea
+// has not delivered its first WindowSizeMsg yet, so the initial render keeps
+// the complete list rather than guessing at a terminal size.
+func (m appModel) landingSessionWindow() int {
+	if len(m.sessions) == 0 || m.height == 0 {
+		return len(m.sessions)
+	}
+	frameHeight := lipgloss.Height(m.landingHeader(m.bodyWidth())) + 4
+	baseBody := strings.Join(append(m.landingTopLines(), dim.Render(landingKeyHints)), "\n")
+	available := m.height - frameHeight - lipgloss.Height(baseBody)
+	cardHeight := lipgloss.Height(m.landingSessionCard(0)) + 1
+	return min(len(m.sessions), max(1, available/cardHeight))
+}
+
+func (m appModel) landingSessionRange() (int, int) {
+	window := m.landingSessionWindow()
+	if window >= len(m.sessions) {
+		return 0, len(m.sessions)
+	}
+	start := min(m.landingOffset, len(m.sessions)-window)
+	if m.landingCursor > 0 {
+		selected := m.landingCursor - 1
+		if selected < start {
+			start = selected
+		} else if selected >= start+window {
+			start = selected - window + 1
+		}
+	}
+	return start, start + window
+}
+
+func (m *appModel) revealLandingCursor() {
+	start, _ := m.landingSessionRange()
+	m.landingOffset = start
 }
 
 // landingDescription keeps every session card at a predictable four lines.
