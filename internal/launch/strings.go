@@ -24,14 +24,13 @@ const (
 	agentPaneName        = "agent"
 	shellPaneName        = "shell"
 	shellPaneTitleSuffix = " · Alt-g new · Alt-↑↓ switch · Ctrl-d close"
-	reposPaneName        = "repos"
 	agentsPaneName       = "agents"
 	statusPaneName       = "status"
 	helpPaneName         = "keys · Esc to close"
 
 	// Subcommands qrouton launches against itself to drive its own panes.
 	mcpSubcommand        = "mcp"
-	reposSubcommand      = "repos"
+	dockSubcommand       = "dock"
 	agentsSubcommand     = "agents"
 	statusSubcommand     = "status"
 	shellSubcommand      = "shell"
@@ -55,12 +54,12 @@ const (
 )
 
 // Sizes and geometry of the generated workspace. Percentages are the
-// multiplexer's own units; watchPaneRows is a fixed row count, since the repo
+// multiplexer's own units; watchPaneRows is a fixed row count, since the dock
 // and subagent readouts need a known few lines rather than a share of the
 // column.
 const (
 	agentColumnSize = "65%"
-	reposColumnSize = "35%"
+	sideColumnSize  = "35%"
 	watchPaneRows   = "6"
 	stripPaneRows   = "1"
 )

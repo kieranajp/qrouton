@@ -254,6 +254,11 @@ func (h *recordingHost) Capture(context.Context, string, bool) (string, error) {
 	return "", nil
 }
 func (h *recordingHost) Exists(context.Context, string) (bool, error) { return true, nil }
+func (h *recordingHost) FindPane(context.Context, string) (string, error) {
+	return "terminal_8", nil
+}
+func (h *recordingHost) Stack(context.Context, ...string) error { return nil }
+func (h *recordingHost) Float(context.Context, string) error    { return nil }
 
 func swapHelpPaneHost(t *testing.T, host mux.PaneHost) {
 	t.Helper()

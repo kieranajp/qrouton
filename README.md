@@ -26,6 +26,7 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 - Launches Claude Code, Codex CLI, or OpenCode in Zellij.
 - Resumes the agent conversation when the workspace is resumed.
 - Gives agents session-aware instructions, skills, and an MCP-powered editor pane.
+- Keeps agent-run panes in a right-hand overlay lane and lets the agent minimise them into a persistent dock without stopping their processes.
 - Starts sessions in **RPI** (orchestrated Research → Plan → Implement) or **Assistant** (open-ended) mode.
 
 ## Requirements 🧰

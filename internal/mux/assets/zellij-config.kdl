@@ -6,12 +6,11 @@ keybinds clear-defaults=true {
         bind "Ctrl g" { SwitchToMode "tmux"; }
     }
     tmux {
-        // The deliberate way to close a pane Esc will not dismiss, because
-        // something is still running in it. Esc belongs to the pane itself
-        // (see scripts/dismiss.sh); this chord is the escape hatch for a pane
-        // that never reaches its own wait, and it is two keys deep precisely
-        // because it can also close a permanent one.
-        bind "x" { CloseFocus; SwitchToMode "locked"; }
+        // There is deliberately no generic close binding. Zellij cannot make it
+        // conditional on pane ownership, so exposing one would also let the
+        // permanent agent, shell, dock, agent-status, or status panes be
+        // removed. Transient panes own their own dismissal; shells close with
+        // Ctrl-d, and quitting the configured editor closes its pane.
     }
     pane {
         bind "left" { MoveFocus "left"; }

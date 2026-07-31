@@ -48,7 +48,7 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 		t.Fatal("initial shell does not run qrouton's stack-aware shell command")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "status.sh")); !os.IsNotExist(err) {
-		t.Fatal("status.sh stamped; the repos pane is a qrouton subcommand")
+		t.Fatal("status.sh stamped; utility panes are qrouton subcommands")
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".qrouton", "help.sh")); !os.IsNotExist(err) {
 		t.Fatal("help.sh stamped into the session; it belongs to the config dir now, one copy globally")
@@ -62,11 +62,10 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 		"Move focus", "Alt-Tab", "Alt-e", "Research → Plan → Implement", "Alt-n", "open-ended assistant",
 		"Alt-g", "New shell", "Switch shells", "Alt-up/down", "Close shell", "Ctrl-d", "Alt-f", "show / hide the overlay layer",
 		"User popups", "the picker and this reference are the two exceptions",
-		"Dismiss a popup", "agent-opened panes", "Workspace layout", "protected", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
-		"Close a pane", "Ctrl-g x", // the deliberate chord for a pane too busy to reach its own Esc wait
+		"Dismiss a popup", "agent-opened panes", "Workspace layout", "protected", "only the shell and dock stacks can grow", "Detach", "Ctrl-g o d", "Alt-+ / Alt--", "Alt-?",
 		"Ctrl-g Ctrl-q", "Press Esc to close",
 		// The richer panel also explains the workspace itself, not just its keys.
-		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "shell stack", "checkout state and subagent activity",
+		"Scroll a pane", "Ctrl-g s", "the agent you are talking to", "shell stack", "minimised agent panes and subagent activity",
 		"run it in a pane", "qrouton.json", "src/<repo>", "thoughts/shared",
 	} {
 		if !strings.Contains(string(help), want) {
@@ -102,18 +101,15 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 	if got := strings.Count(string(config), "floating true"); got != 2 {
 		t.Fatalf("user keybindings create %d floating panes, want only quick reference and escalation picker", got)
 	}
-	// Esc belongs to the pane, not to Zellij: no binding may close the focused
-	// pane on Esc, or the editor pane loses its own modal Esc and a permanent
-	// pane becomes one keystroke from gone. Closing a pane is the deliberate
-	// two-key chord instead, and it is the only route to CloseFocus.
+	// Pane closure belongs to the pane, not to Zellij: a session-wide
+	// CloseFocus action cannot distinguish a dismissible overlay from one of
+	// qrouton's permanent panes. Esc belongs to transient panes themselves,
+	// Ctrl-d to shells, and the editor closes when its process exits.
 	if strings.Contains(string(config), `bind "esc" { CloseFocus`) {
 		t.Fatal("Esc still closes the focused pane; that is the editor pane's own key")
 	}
-	if !strings.Contains(string(config), `bind "x" { CloseFocus; SwitchToMode "locked"; }`) {
-		t.Fatal("no deliberate chord closes a pane that never reaches its own Esc wait")
-	}
-	if strings.Count(string(config), "CloseFocus") != 1 {
-		t.Fatal("CloseFocus is reachable by more than the deliberate Ctrl-g x chord")
+	if strings.Contains(string(config), "CloseFocus") {
+		t.Fatal("a session-wide binding can still close a permanent workspace pane")
 	}
 	// Nothing switches input mode on qrouton's behalf any more: the modes are
 	// the user's Ctrl-g gateway, not a per-pane state register a poller drives.
@@ -124,11 +120,14 @@ func TestStagedWorkspaceStartsPermanentShellStack(t *testing.T) {
 	if !strings.Contains(layout, `pane split_direction="vertical" size=6`) {
 		t.Fatal("status panes are not fixed at six rows")
 	}
-	if !strings.Contains(layout, `pane name="repos"`) || !strings.Contains(layout, `pane name="agents"`) {
-		t.Fatal("repo and agent status panes are not side by side")
+	if !strings.Contains(layout, `pane name="dock"`) || !strings.Contains(layout, `pane name="agents"`) {
+		t.Fatal("dock and agent status panes are not side by side")
 	}
-	if !strings.Contains(layout, `"repos" "--session-root"`) {
-		t.Fatal("repos pane does not run the qrouton repos subcommand")
+	if !strings.Contains(layout, `command "/bin/qrouton"`) || !strings.Contains(layout, `args "dock"`) {
+		t.Fatal("dock pane does not run the qrouton dock subcommand")
+	}
+	if strings.Contains(layout, `pane name="repos"`) || strings.Contains(layout, `args "repos"`) {
+		t.Fatal("retired repos watcher is still in the workspace layout")
 	}
 	if !strings.Contains(layout, `"agent" "--session-root" "`+dir+`"`) || !strings.Contains(layout, `"--runner" "codex"`) {
 		t.Fatal("agent pane does not run the qrouton agent supervisor")

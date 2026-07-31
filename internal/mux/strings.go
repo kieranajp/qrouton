@@ -65,6 +65,7 @@ const (
 	listPanesAction      = "list-panes"
 	renamePaneAction     = "rename-pane"
 	stackPanesAction     = "stack-panes"
+	toggleEmbedAction    = "toggle-pane-embed-or-floating"
 	toggleFloatingAction = "toggle-floating-panes"
 	listClientsAction    = "list-clients"
 

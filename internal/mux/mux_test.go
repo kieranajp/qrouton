@@ -365,6 +365,48 @@ func TestExistsDistinguishesLiveExitedAndPluginPanes(t *testing.T) {
 	}
 }
 
+func TestFindStackAndFloatPaneByID(t *testing.T) {
+	dir := t.TempDir()
+	bin, log := loggingZellij(t, dir)
+	t.Setenv("PANES_JSON", `[
+		{"id":3,"title":"dock"},
+		{"id":4,"title":"dock","exited":true},
+		{"id":5,"title":"dock","is_plugin":true}
+	]`)
+	host := NewZellijHost(bin, "s")
+	dockID, err := host.FindPane(context.Background(), "dock")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if dockID != "terminal_3" {
+		t.Fatalf("dock id = %q, want terminal_3", dockID)
+	}
+	if err := host.Stack(context.Background(), dockID, "terminal_9"); err != nil {
+		t.Fatal(err)
+	}
+	if err := host.Float(context.Background(), "terminal_9"); err != nil {
+		t.Fatal(err)
+	}
+	got := readCalls(t, log)
+	for _, want := range []string{
+		"action stack-panes -- terminal_3 terminal_9",
+		"action toggle-pane-embed-or-floating --pane-id terminal_9",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("calls missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFindPaneReportsMissingTitle(t *testing.T) {
+	dir := t.TempDir()
+	bin, _ := loggingZellij(t, dir)
+	t.Setenv("PANES_JSON", `[{"id":3,"title":"agents"}]`)
+	if _, err := NewZellijHost(bin, "s").FindPane(context.Background(), "dock"); !errors.Is(err, ErrPaneNotFound) {
+		t.Fatalf("FindPane error = %v, want ErrPaneNotFound", err)
+	}
+}
+
 // Returning focus by naming the owner pane, not by flipping the floating layer:
 // the flip depends on the layer's current state, so a user who had hidden it
 // with Alt-f got it shown again by the agent opening a pane.

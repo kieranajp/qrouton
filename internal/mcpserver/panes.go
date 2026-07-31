@@ -4,7 +4,8 @@ package mcpserver
 // the multiplexer session — the editor pane plus any command panes the agent
 // opens. Panes stay visible while the user keeps typing to the agent, and
 // every open returns focus to the agent pane (the mux.PaneHost contract).
-// The registry maps a logical name to the live backend pane id.
+// The registry maps a logical name to the live backend pane, its restore
+// geometry, and whether Zellij currently has it stacked in the dock.
 
 import (
 	"context"
@@ -16,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/dock"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -23,9 +25,12 @@ import (
 )
 
 var (
-	editorGeometry  = mux.Geometry{X: "66%", Y: "3%", Width: "33%", Height: "94%"}
-	commandGeometry = mux.Geometry{X: "48%", Y: "8%", Width: "50%", Height: "84%"}
-	toastGeometry   = mux.Geometry{X: "25%", Y: "5%", Width: "50%", Height: "18%"}
+	// agentPaneGeometry is the one lane for panes the agent opens on the
+	// user's behalf. The tiled agent owns the left 65% of the workspace, so a
+	// one-percent gutter followed by this right-hand overlay keeps tool output
+	// visible without ever painting over the conversation.
+	agentPaneGeometry  = mux.Geometry{X: "66%", Y: "3%", Width: "33%", Height: "94%"}
+	agentToastGeometry = mux.Geometry{X: "66%", Y: "3%", Width: "33%", Height: "18%"}
 
 	// pickerGeometry mirrors the Alt-e keybinding's floating picker exactly, so
 	// the tool-driven and keyboard-driven routes look identical to the user.
@@ -44,15 +49,22 @@ var (
 )
 
 type paneManager struct {
-	root   string
-	editor launch.EditorCommand
-	host   mux.PaneHost
-	mu     sync.Mutex
-	panes  map[string]string
+	root      string
+	editor    launch.EditorCommand
+	host      mux.PaneHost
+	mu        sync.Mutex
+	panes     map[string]managedPane
+	dockOrder []string
+}
+
+type managedPane struct {
+	id        string
+	geometry  mux.Geometry
+	minimized bool
 }
 
 func newPaneManager(root string, editor launch.EditorCommand, host mux.PaneHost) *paneManager {
-	return &paneManager{root: root, editor: editor, host: host, panes: map[string]string{}}
+	return &paneManager{root: root, editor: editor, host: host, panes: map[string]managedPane{}}
 }
 
 // spawn replaces any pane registered under name with a fresh pane running
@@ -77,15 +89,17 @@ func (m *paneManager) spawnFocus(ctx context.Context, name, label, cwd string, g
 	if err != nil {
 		return "", err
 	}
-	m.panes[name] = id
+	m.panes[name] = managedPane{id: id, geometry: geom}
 	return id, nil
 }
 
 // dismissible turns a pane payload into the command for a pane the user
-// dismisses with Esc: the payload, then the shared Esc wait. Every such pane
-// goes through here — the toast, diffs, and the commands the agent runs — which
-// is what keeps "Esc to close" meaning one thing across all of them. seconds,
-// when positive, also auto-dismisses the pane after that long.
+// dismisses with Esc. The payload runs in the background with no access to
+// terminal input while the shared Esc wait owns the foreground; dismissing
+// stops a still-running payload before close_on_exit removes the pane. Every
+// such pane goes through here — the toast, diffs, and the commands the agent
+// runs — which is what keeps "Esc to close" meaning one thing across all of
+// them. seconds, when positive, also auto-dismisses the pane after that long.
 //
 // The editor pane deliberately does not come through here. Esc there belongs to
 // the editor, and quitting it is what closes the pane. The quick-reference
@@ -96,9 +110,19 @@ func dismissible(payload string, seconds int) []string {
 
 // closeLocked closes and forgets the pane registered under name, if any. Callers hold m.mu.
 func (m *paneManager) closeLocked(ctx context.Context, name string) {
-	if id := m.panes[name]; id != "" {
-		_ = m.host.Close(ctx, id)
+	if pane, ok := m.panes[name]; ok {
+		_ = m.host.Close(ctx, pane.id)
 		delete(m.panes, name)
+		m.removeFromDock(name)
+	}
+}
+
+func (m *paneManager) removeFromDock(name string) {
+	for i, docked := range m.dockOrder {
+		if docked == name {
+			m.dockOrder = append(m.dockOrder[:i], m.dockOrder[i+1:]...)
+			return
+		}
 	}
 }
 
@@ -112,7 +136,7 @@ func (m *paneManager) openFile(ctx context.Context, input openFileInput) (string
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, editorPaneName, editorPaneLabel, m.root, editorGeometry, true, m.editor.Args(path, input.Line)); err != nil {
+	if _, err := m.spawn(ctx, editorPaneName, editorPaneLabel, m.root, agentPaneGeometry, true, m.editor.Args(path, input.Line)); err != nil {
 		return "", fmt.Errorf("open editor pane: %w", err)
 	}
 	rel, _ := filepath.Rel(m.root, path)
@@ -140,7 +164,7 @@ func (m *paneManager) run(ctx context.Context, input runCommandInput) (string, e
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, name, commandPaneLabel+name+dismissPaneLabel, cwd, commandGeometry, true, dismissible(input.Command, 0)); err != nil {
+	if _, err := m.spawn(ctx, name, commandPaneLabel+name+dismissPaneLabel, cwd, agentPaneGeometry, true, dismissible(input.Command, 0)); err != nil {
 		return "", fmt.Errorf("run command: %w", err)
 	}
 	where := sessionRootScope
@@ -185,28 +209,108 @@ func (m *paneManager) closePane(ctx context.Context, input paneNameInput) (strin
 // the entry and saying so if it does not.
 //
 // The registry is qrouton's own map, and nothing in it learns that the user
-// closed a pane by hand (Ctrl-g x, or Esc on a dismissible one). Without this
-// the agent's next read of that name reached a dead id and surfaced a raw
-// backend failure, which reads like a qrouton bug rather than "that pane is
-// gone". Checking costs one list-panes on a path the agent takes deliberately.
+// closed a pane by hand (Esc on a dismissible one, or by quitting the editor).
+// Without this the agent's next read of that name reached a dead id and
+// surfaced a raw backend failure, which reads like a qrouton bug rather than
+// "that pane is gone". Checking costs one list-panes on a path the agent takes
+// deliberately.
 func (m *paneManager) livePane(ctx context.Context, name string) (string, error) {
 	m.mu.Lock()
-	id := m.panes[name]
+	pane, ok := m.panes[name]
 	m.mu.Unlock()
-	if id == "" {
+	if !ok {
 		return "", noSuchPane(name)
 	}
 	// A failing check is not evidence of absence: keep the pane and let the
 	// caller's own action report whatever is actually wrong.
-	if live, err := m.host.Exists(ctx, id); err == nil && !live {
+	if live, err := m.host.Exists(ctx, pane.id); err == nil && !live {
 		m.mu.Lock()
-		if m.panes[name] == id {
+		if current, exists := m.panes[name]; exists && current.id == pane.id {
 			delete(m.panes, name)
+			m.removeFromDock(name)
 		}
 		m.mu.Unlock()
 		return "", paneClosedByUser(name)
 	}
-	return id, nil
+	return pane.id, nil
+}
+
+func (m *paneManager) minimizePane(ctx context.Context, input paneNameInput) (string, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == helpPaneName || name == escalatePaneName || name == notifyPaneName {
+		return "", fmt.Errorf("%w: %q", ErrPaneNotDockable, name)
+	}
+	id, err := m.livePane(ctx, name)
+	if err != nil {
+		return "", err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	pane, ok := m.panes[name]
+	if !ok || pane.id != id {
+		return "", noSuchPane(name)
+	}
+	if pane.minimized {
+		return fmt.Sprintf(alreadyMinimizedFormat, name), nil
+	}
+	anchor, err := m.host.FindPane(ctx, dock.PaneName)
+	if err != nil {
+		return "", fmt.Errorf("minimize pane %q: %w", name, err)
+	}
+	ids := []string{anchor}
+	keptDockOrder := make([]string, 0, len(m.dockOrder)+1)
+	for _, dockedName := range m.dockOrder {
+		docked, exists := m.panes[dockedName]
+		if !exists || !docked.minimized {
+			continue
+		}
+		// A pane dismissed directly from the dock is no longer usable. Prune it
+		// before rebuilding the stack; a failed liveness check is not proof of
+		// absence, so keep it and let Stack report the backend error instead.
+		if live, existsErr := m.host.Exists(ctx, docked.id); existsErr == nil && !live {
+			delete(m.panes, dockedName)
+			continue
+		}
+		ids = append(ids, docked.id)
+		keptDockOrder = append(keptDockOrder, dockedName)
+	}
+	ids = append(ids, id)
+	if err := m.host.Stack(ctx, ids...); err != nil {
+		return "", fmt.Errorf("minimize pane %q: %w", name, err)
+	}
+	pane.minimized = true
+	m.panes[name] = pane
+	m.dockOrder = append(keptDockOrder, name)
+	return fmt.Sprintf(minimizedFormat, name), nil
+}
+
+func (m *paneManager) restorePane(ctx context.Context, input paneNameInput) (string, error) {
+	name := strings.TrimSpace(input.Name)
+	id, err := m.livePane(ctx, name)
+	if err != nil {
+		return "", err
+	}
+
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	pane, ok := m.panes[name]
+	if !ok || pane.id != id {
+		return "", noSuchPane(name)
+	}
+	if !pane.minimized {
+		return fmt.Sprintf(alreadyVisibleFormat, name), nil
+	}
+	if err := m.host.Float(ctx, id); err != nil {
+		return "", fmt.Errorf("restore pane %q: %w", name, err)
+	}
+	pane.minimized = false
+	m.panes[name] = pane
+	m.removeFromDock(name)
+	if err := m.host.Reposition(ctx, id, pane.geometry); err != nil {
+		return "", fmt.Errorf("restore pane %q geometry: %w", name, err)
+	}
+	return fmt.Sprintf(restoredFormat, name), nil
 }
 
 func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string, error) {
@@ -221,9 +325,9 @@ func (m *paneManager) showDiff(ctx context.Context, input showDiffInput) (string
 	command := diffCommand(repoAbs, strings.TrimSpace(input.Base), input.Staged)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	// close_on_exit: the shared Esc wait is what ends the command, so Esc has to
-	// take the pane with it.
-	if _, err := m.spawn(ctx, label, diffPaneLabel+label+dismissPaneLabel, m.root, commandGeometry, true, dismissible(command, 0)); err != nil {
+	// close_on_exit: the shared Esc wait ends the wrapper, so Esc has to take
+	// the pane with it even while the diff command is still producing output.
+	if _, err := m.spawn(ctx, label, diffPaneLabel+label+dismissPaneLabel, m.root, agentPaneGeometry, true, dismissible(command, 0)); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
 	return fmt.Sprintf(showingDiffFormat, scope, label), nil
@@ -238,7 +342,7 @@ func (m *paneManager) notify(ctx context.Context, input notifyInput) (string, er
 	command := fmt.Sprintf(toastCommandFormat, launch.ShellQuote(script), launch.ShellQuote(message))
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if _, err := m.spawn(ctx, notifyPaneName, notifyPaneLabel, m.root, toastGeometry, true, dismissible(command, toastSeconds)); err != nil {
+	if _, err := m.spawn(ctx, notifyPaneName, notifyPaneLabel, m.root, agentToastGeometry, true, dismissible(command, toastSeconds)); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}
 	return fmt.Sprintf(notifiedFormat, message), nil
@@ -344,11 +448,10 @@ func (m *paneManager) list() []string {
 	return names
 }
 
-// diffCommand builds the diff payload show_diff runs in a pane; dismissible
-// appends the Esc wait. A single repo relies on git's own pager/colour (the pane
-// is a tty); the all-repos form forces colour through an explicit pager as it
-// walks the src/* worktrees. A trailing footer keeps an empty diff from
-// rendering as a blank pane.
+// diffCommand builds the non-interactive diff payload show_diff runs in a pane.
+// Git's pager stays off so dismissible owns terminal input; the all-repos form
+// forces colour as it walks the src/* worktrees. A trailing footer keeps an
+// empty diff from rendering as a blank pane.
 func diffCommand(repoAbs, base string, staged bool) string {
 	flags := ""
 	if staged {

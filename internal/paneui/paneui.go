@@ -1,8 +1,8 @@
-// Package paneui draws qrouton's always-on watch panes — the repo and subagent
-// status readouts. Those panes redraw forever, so they repaint in place rather
-// than clearing the screen: a full clear makes the pane flash blank between
-// frames. The escape sequences that achieve that, and the small vocabulary of
-// styles the panes use, live here so neither watcher writes raw ANSI.
+// Package paneui draws qrouton's always-on utility panes — the dock, status,
+// repo, and subagent readouts. Those panes redraw forever, so they repaint in
+// place rather than clearing the screen: a full clear makes the pane flash
+// blank between frames. The escape sequences that achieve that, and the small
+// vocabulary of styles the panes use, live here so no watcher writes raw ANSI.
 package paneui
 
 import (

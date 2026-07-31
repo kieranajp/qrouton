@@ -2,13 +2,16 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -60,6 +63,15 @@ func livePanes(t *testing.T, ids ...int) {
 	t.Setenv("PANES_JSON", "["+strings.Join(entries, ",")+"]")
 }
 
+func livePanesWithDock(t *testing.T, ids ...int) {
+	t.Helper()
+	entries := []string{`{"id":8,"title":"dock"}`}
+	for _, id := range ids {
+		entries = append(entries, fmt.Sprintf(`{"id":%d,"title":"agent pane"}`, id))
+	}
+	t.Setenv("PANES_JSON", "["+strings.Join(entries, ",")+"]")
+}
+
 func testManager(t *testing.T, dir, helper string) *paneManager {
 	t.Helper()
 	return newPaneManager(dir, launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}, mux.NewZellijHost(helper, "test-session"))
@@ -82,7 +94,7 @@ func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
 		"--session test-session",
 		"new-pane --floating --pinned true",
 		"--x 66% --y 3% --width 33% --height 94%",
-		"Editor · Alt-f to view · quit to close",
+		"agent · Editor · Alt-f to view · quit to close",
 		"focus-pane-id terminal_0",        // focus goes back to the agent pane by name, not by flipping the layer
 		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
 	} {
@@ -117,10 +129,11 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 	s := readLog(t, log)
 	for _, want := range []string{
 		"new-pane --floating --pinned true",
-		"--x 48% --y 8% --width 50% --height 84%",
-		"--name ▶ dev · Esc to close",
+		"--x 66% --y 3% --width 33% --height 94%",
+		"--name agent · ▶ dev · Esc to close",
 		"--cwd " + realRepo,
-		"-- sh -lc npm run dev; " + launch.DismissCommand(0),
+		"-- sh -lc (npm run dev) </dev/null & qrouton_payload_pid=$!; " + launch.DismissCommand(0),
+		`kill "$qrouton_payload_pid" 2>/dev/null`,
 		// Always self-closing: the shared wait is what holds the pane open, so
 		// Esc ending that wait has to take the pane with it.
 		"--close-on-exit",
@@ -132,6 +145,61 @@ func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
 	}
 	if got := p.list(); len(got) != 1 || got[0] != "dev" {
 		t.Fatalf("registry = %v, want [dev]", got)
+	}
+}
+
+func TestDismissibleStopsARunningPayloadWhenDismissed(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	dismiss := config.DismissScriptPath()
+	if err := os.MkdirAll(filepath.Dir(dismiss), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// The real dismiss script's byte handling is covered in launch. This stub
+	// makes the wrapper test about concurrency and payload teardown only.
+	if err := os.WriteFile(dismiss, []byte("#!/bin/sh\ndd bs=1 count=1 >/dev/null 2>&1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	stateDir := t.TempDir()
+	ready, stopped := filepath.Join(stateDir, "ready"), filepath.Join(stateDir, "stopped")
+	payload := "trap 'printf stopped > " + launch.ShellQuote(stopped) + "; exit 0' TERM; " +
+		"printf ready > " + launch.ShellQuote(ready) + "; while :; do sleep 1; done"
+	argv := dismissible(payload, 0)
+	cmd := exec.Command(argv[0], argv[1:]...)
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for {
+		if _, err := os.Stat(ready); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			_ = cmd.Process.Kill()
+			t.Fatal("payload never started")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if _, err := stdin.Write([]byte{0x1b}); err != nil {
+		t.Fatal(err)
+	}
+	_ = stdin.Close()
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		_ = cmd.Process.Kill()
+		t.Fatal("dismissible pane did not stop its running payload on Esc")
+	}
+	if got, err := os.ReadFile(stopped); err != nil || string(got) != "stopped" {
+		t.Fatalf("payload did not receive TERM: content=%q err=%v", got, err)
 	}
 }
 
@@ -242,6 +310,81 @@ func TestClosePaneRemovesFromRegistry(t *testing.T) {
 	}
 }
 
+func TestMinimizeStacksManagedPanesInDockAndRestoreFloatsThemBack(t *testing.T) {
+	dir := t.TempDir()
+	helper, log := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.run(context.Background(), runCommandInput{Command: "watch", Name: "tests"}); err != nil {
+		t.Fatal(err)
+	}
+	livePanesWithDock(t, 1, 2)
+
+	message, err := p.minimizePane(context.Background(), paneNameInput{Name: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(message, `Minimized pane "dev" into the dock`) {
+		t.Fatalf("minimize message = %q", message)
+	}
+	if _, err := p.minimizePane(context.Background(), paneNameInput{Name: "tests"}); err != nil {
+		t.Fatal(err)
+	}
+	message, err = p.minimizePane(context.Background(), paneNameInput{Name: "dev"})
+	if err != nil || !strings.Contains(message, "already minimized") {
+		t.Fatalf("second minimize = %q, %v", message, err)
+	}
+
+	message, err = p.restorePane(context.Background(), paneNameInput{Name: "dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message != `Restored pane "dev" from the dock.` {
+		t.Fatalf("restore message = %q", message)
+	}
+	message, err = p.restorePane(context.Background(), paneNameInput{Name: "dev"})
+	if err != nil || !strings.Contains(message, "already visible") {
+		t.Fatalf("second restore = %q, %v", message, err)
+	}
+
+	calls := readLog(t, log)
+	for _, want := range []string{
+		"action stack-panes -- terminal_8 terminal_1",
+		"action stack-panes -- terminal_8 terminal_1 terminal_2",
+		"action toggle-pane-embed-or-floating --pane-id terminal_1",
+		"action change-floating-pane-coordinates --pane-id terminal_1 --x 66% --y 3% --width 33% --height 94%",
+	} {
+		if !strings.Contains(calls, want) {
+			t.Fatalf("calls missing %q:\n%s", want, calls)
+		}
+	}
+}
+
+func TestMinimizeAndRestoreRejectUnknownPanes(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	if _, err := p.minimizePane(context.Background(), paneNameInput{Name: "missing"}); err == nil {
+		t.Fatal("minimized an unknown pane")
+	}
+	if _, err := p.restorePane(context.Background(), paneNameInput{Name: "missing"}); err == nil {
+		t.Fatal("restored an unknown pane")
+	}
+}
+
+func TestMinimizeKeepsHelpEscalateAndNotificationsOutOfTheDock(t *testing.T) {
+	dir := t.TempDir()
+	helper, _ := fakeZellij(t, dir)
+	p := testManager(t, dir, helper)
+	for _, name := range []string{helpPaneName, escalatePaneName, notifyPaneName} {
+		if _, err := p.minimizePane(context.Background(), paneNameInput{Name: name}); !errors.Is(err, ErrPaneNotDockable) {
+			t.Errorf("minimize %q error = %v, want ErrPaneNotDockable", name, err)
+		}
+	}
+}
+
 func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
 	dir := t.TempDir()
 	repo := filepath.Join(dir, "src", "app")
@@ -256,7 +399,8 @@ func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
 	}
 	realRepo, _ := filepath.EvalSymlinks(repo)
 	s := readLog(t, log)
-	for _, want := range []string{"--name ◆ diff:app", "git -C '" + realRepo + "' diff --staged 'main'", "--pinned true",
+	for _, want := range []string{"--name agent · ◆ diff:app", "git -C '" + realRepo + "' --no-pager diff --staged 'main'", "--pinned true",
+		"--x 66% --y 3% --width 33% --height 94%",
 		// Esc ends the footer's wait, and close-on-exit turns that into a
 		// dismissed pane.
 		"Esc to close", launch.DismissCommand(0), "--close-on-exit"} {
@@ -271,8 +415,8 @@ func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
 	if _, err := p.showDiff(context.Background(), showDiffInput{}); err != nil {
 		t.Fatal(err)
 	}
-	if s := readLog(t, log); !strings.Contains(s, "for d in src/*/") || !strings.Contains(s, "less -FRX") {
-		t.Fatalf("all-repos diff should walk worktrees through a pager:\n%s", s)
+	if s := readLog(t, log); !strings.Contains(s, "for d in src/*/") || !strings.Contains(s, "--no-pager diff") || strings.Contains(s, "less -FRX") {
+		t.Fatalf("all-repos diff should walk worktrees without competing for terminal input:\n%s", s)
 	}
 
 	if _, err := p.showDiff(context.Background(), showDiffInput{Repo: "../outside"}); err == nil {
@@ -290,7 +434,8 @@ func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
 	}
 	s := readLog(t, log)
 	script := filepath.Join(dir, ".qrouton", "notify.sh")
-	for _, want := range []string{"--name 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "focus-pane-id terminal_0",
+	for _, want := range []string{"--name agent · 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "focus-pane-id terminal_0",
+		"--x 66% --y 3% --width 33% --height 18%",
 		// Dismissable on Esc through the same shared wait as every other pane,
 		// and still self-closing after toastSeconds.
 		launch.DismissCommand(toastSeconds)} {
@@ -473,7 +618,7 @@ func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	}
 	defer cs.Close()
 
-	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "list_panes": false, "escalate": false, "help": false}
+	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "minimize_pane": false, "restore_pane": false, "list_panes": false, "escalate": false, "help": false}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)

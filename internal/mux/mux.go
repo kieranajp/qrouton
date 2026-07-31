@@ -64,6 +64,18 @@ type PaneHost interface {
 	// user closed by hand leaves a registry entry behind otherwise, and the
 	// agent's next read of it fails with a backend error rather than a reason.
 	Exists(ctx context.Context, id string) (bool, error)
+	// FindPane returns the live terminal pane whose title exactly matches title.
+	// The permanent dock anchor is resolved this way because its backend id is
+	// assigned only when the staged layout starts.
+	FindPane(ctx context.Context, title string) (string, error)
+	// Stack moves the named panes into one tiled stack, in order. Zellij can
+	// pull a floating pane into a tiled stack without restarting its process;
+	// that is qrouton's minimise primitive.
+	Stack(ctx context.Context, ids ...string) error
+	// Float moves an embedded pane back to the floating layer. Reposition is a
+	// separate call so the caller can restore the geometry it registered when
+	// it originally spawned the pane.
+	Float(ctx context.Context, id string) error
 }
 
 // ShellStack is the small piece of pane control used by qrouton's interactive

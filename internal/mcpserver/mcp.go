@@ -20,12 +20,12 @@ type openFileInput struct {
 }
 
 // runCommandInput has no close-on-exit knob: the pane holds its output until
-// the user presses Esc, and Esc closes it. Both halves of that are the shared
-// dismiss wait appended to the command, so neither is the agent's to choose —
-// and a pane that closed itself the instant the command exited would take the
-// output the user was meant to read with it.
+// the user presses Esc, and Esc stops and closes it. Both halves of that are
+// the shared dismiss wrapper around the command, so neither is the agent's to
+// choose — and a pane that closed itself the instant the command exited would
+// take the output the user was meant to read with it.
 type runCommandInput struct {
-	Command string `json:"command" jsonschema:"Shell command to run in a workspace pane the user can watch"`
+	Command string `json:"command" jsonschema:"Non-interactive shell command to run in a workspace pane the user can watch"`
 	Name    string `json:"name,omitempty" jsonschema:"Pane label; reusing a name replaces that pane. Defaults to \"command\""`
 	Cwd     string `json:"cwd,omitempty" jsonschema:"Working directory within the session; defaults to the session root"`
 }
@@ -128,6 +128,28 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 		Description: descClosePane,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
 		message, err := pane.closePane(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolMinimize,
+		Description: descMinimizePane,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
+		message, err := pane.minimizePane(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolRestore,
+		Description: descRestorePane,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
+		message, err := pane.restorePane(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}

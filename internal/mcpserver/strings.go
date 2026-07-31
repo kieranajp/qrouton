@@ -56,10 +56,10 @@ const (
 // real editor, whose own Esc means what that editor says it means. Quitting it
 // is what closes the pane.
 const (
-	editorPaneLabel  = "Editor · Alt-f to view · quit to close"
-	commandPaneLabel = "▶ "
-	diffPaneLabel    = "◆ "
-	notifyPaneLabel  = "🔔 notification · Esc to close"
+	editorPaneLabel  = "agent · Editor · Alt-f to view · quit to close"
+	commandPaneLabel = "agent · ▶ "
+	diffPaneLabel    = "agent · ◆ "
+	notifyPaneLabel  = "agent · 🔔 notification · Esc to close"
 	dismissPaneLabel = " · Esc to close"
 )
 
@@ -68,14 +68,19 @@ const (
 	openedFileFormat = "Opened %s at line %d in the editor pane " +
 		"(stays open for reference until the user quits the editor; focus is back on the agent)."
 
-	runningFormat = "Running in pane %q (cwd %s). Once the command finishes the user can " +
-		"press Esc to dismiss the pane, or call " + toolReadPane + " with name %q to see its " +
+	runningFormat = "Running in pane %q (cwd %s). The user can press Esc to stop and dismiss " +
+		"the pane, or call " + toolReadPane + " with name %q to see its " +
 		"output and " + toolClosePane + " %q to close it."
 
 	noOutputFormat  = "Pane %q has produced no output yet."
 	truncatedPrefix = "…(earlier output truncated)…\n"
 
-	closedFormat = "Closed pane %q."
+	closedFormat    = "Closed pane %q."
+	minimizedFormat = "Minimized pane %q into the dock; it is still running. " +
+		"Use " + toolRestore + " to return it to the right-hand overlay."
+	restoredFormat         = "Restored pane %q from the dock."
+	alreadyMinimizedFormat = "Pane %q is already minimized in the dock."
+	alreadyVisibleFormat   = "Pane %q is already visible in the right-hand overlay."
 
 	showingDiffFormat = "Showing the diff for %s in pane %q (Alt-f to scroll it)."
 	allReposScope     = "all session repos"
@@ -110,22 +115,24 @@ const (
 	toastSeconds       = 8
 )
 
-// The shell show_diff runs. A single repo relies on git's own pager and colour
-// (the pane is a tty); the all-repos form forces colour through an explicit
-// pager as it walks the worktrees. The footer keeps an empty diff from
-// rendering as a blank pane; dismissible supplies the wait after it.
+// The shell show_diff runs. Both forms disable Git's pager so the shared Esc
+// wait owns terminal input; the all-repos form forces colour as it walks the
+// worktrees, and Zellij owns scrolling. The footer keeps an empty diff from
+// rendering as a blank pane; dismissible keeps the output up until dismissal.
 const (
 	diffFooter = `printf '\n[end of diff — Esc to close]\n'`
 
 	allReposDiffFormat = `for d in %s/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; ` +
-		`printf '\n=== %%s ===\n' "$d"; git -C "$d" -c color.ui=always diff%s; done | less -FRX; %s`
+		`printf '\n=== %%s ===\n' "$d"; git -C "$d" -c color.ui=always --no-pager diff%s; done; %s`
 
-	singleRepoDiffFormat = `git -C %s diff%s; %s`
+	singleRepoDiffFormat = `git -C %s --no-pager diff%s; %s`
 
 	stagedFlag = " --staged"
 
-	// dismissibleFormat joins a pane's payload to the shared Esc wait. The wait
-	// runs regardless of the payload's exit status: a pane that vanished on
-	// failure would take the error message with it.
-	dismissibleFormat = `%s; %s`
+	// dismissibleFormat runs a pane's non-interactive payload beside the shared
+	// Esc wait. The wait owns terminal input from the moment the pane appears,
+	// and the wrapper stops and reaps a payload that is still alive when the
+	// user dismisses it. A completed payload's output remains until then.
+	dismissibleFormat = `(%s) </dev/null & qrouton_payload_pid=$!; %s; ` +
+		`kill "$qrouton_payload_pid" 2>/dev/null; wait "$qrouton_payload_pid" 2>/dev/null || :`
 )

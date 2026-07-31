@@ -32,11 +32,12 @@ A sparse repo, or a mismatch between ticket assumptions and checked-out code, is
 
 ## The workspace panes
 
-MCP tools drive the Zellij workspace. Panes are floating and pinned and leave focus on the agent, so the user can watch them while chatting.
+MCP tools drive the Zellij workspace. Panes are floating and pinned over the right-hand column and leave focus on the agent, so the user can watch them without losing the conversation. Help and escalation are the two deliberate full-workspace overlays.
 
 - `open_file` — show a document. Always use qrouton's `open_file` MCP tool for finished artifacts rather than pasting them into chat.
 - `run_command` — run long-lived or noisy work (servers, watchers, builds, logs) in a visible pane instead of your own shell; reuse a `name` to replace its pane.
 - `read_pane` — read back what a pane has produced.
+- `minimize_pane` / `restore_pane` — move an agent pane into the dock beside the agents pane without stopping it, or float it back over the right-hand column.
 - `show_diff` — display a repo's changes for review, by worktree path or across all repos.
 - `notify` — get the user's attention when you finish, need a decision, or are blocked; use it sparingly.
 - `close_pane` / `list_panes` — manage what's open.

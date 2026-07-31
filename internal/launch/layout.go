@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/dock"
 	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -68,14 +69,14 @@ func writeSupport(dir string) error {
 }
 
 // DismissCommand is the shell fragment that turns a floated pane into one the
-// user dismisses with Esc: the pane's command ends with it, and close_on_exit
-// closes the pane when it returns. seconds, when positive, also auto-dismisses
-// the pane after that long — the toast's behaviour.
+// user dismisses with Esc: the pane's foreground wrapper runs it, and
+// close_on_exit closes the pane when it returns. seconds, when positive, also
+// auto-dismisses the pane after that long — the toast's behaviour.
 //
-// Every dismissible pane ends with this exact fragment, so "Esc to close"
-// means one thing everywhere. The quick-reference panel reaches the same
-// script from help.sh instead, since a standalone script can find a sibling
-// without a path being threaded to it.
+// Every dismissible pane runs this exact fragment, so "Esc to close" means one
+// thing everywhere. The quick-reference panel reaches the same script from
+// help.sh instead, since a standalone script can find a sibling without a path
+// being threaded to it.
 func DismissCommand(seconds int) string {
 	command := shellBin + " " + ShellQuote(config.DismissScriptPath())
 	if seconds > 0 {
@@ -139,10 +140,10 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle mux.Handle, editor E
 }
 
 // workspace describes qrouton's session layout in backend-neutral terms: the
-// agent beside a shell and the repo/agent status panes, and a full-width
-// one-row mode/phase strip along the bottom. The quick-reference panel is not
-// here — the supervisor floats it from inside the session instead, for the
-// sizing reason HelpSpawn explains.
+// agent beside a shell, the minimised-pane dock and agent status pane, and a
+// full-width one-row mode/phase strip along the bottom. The quick-reference
+// panel is not here — the supervisor floats it from inside the session
+// instead, for the sizing reason HelpSpawn explains.
 func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) mux.Workspace {
 	return mux.Workspace{
 		Slug:       slug,
@@ -154,13 +155,13 @@ func workspace(dir, slug string, agentArgv []string, runner, qroutonBin string) 
 			Children: []mux.Node{
 				{Split: mux.SplitVertical, Children: []mux.Node{
 					{Size: agentColumnSize, Pane: &mux.Pane{Name: agentPaneName, Command: agentArgv}},
-					{Split: mux.SplitHorizontal, Size: reposColumnSize, Children: []mux.Node{
+					{Split: mux.SplitHorizontal, Size: sideColumnSize, Children: []mux.Node{
 						{Stacked: true, Children: []mux.Node{
 							{Pane: &mux.Pane{Name: shellPaneName, CloseOnExit: true,
 								Command: []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}}},
 						}},
 						{Split: mux.SplitVertical, Size: watchPaneRows, Children: []mux.Node{
-							{Pane: &mux.Pane{Name: reposPaneName, Command: []string{qroutonBin, reposSubcommand, sessionRootFlag, dir}}},
+							{Pane: &mux.Pane{Name: dock.PaneName, Command: []string{qroutonBin, dockSubcommand}}},
 							{Pane: &mux.Pane{Name: agentsPaneName, Command: []string{qroutonBin, agentsSubcommand, sessionRootFlag, dir, runnerFlag, runner}}},
 						}},
 					}},

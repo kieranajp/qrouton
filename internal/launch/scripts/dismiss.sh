@@ -1,10 +1,10 @@
 #!/bin/sh
 # The one Esc-to-dismiss wait, shared by every pane qrouton floats over the
 # workspace: the quick-reference panel, the notification toast, diffs, and the
-# commands the agent runs on the user's behalf. Each of those pane commands
-# ends with this script and each of those panes carries close_on_exit, so "this
-# script returned" is precisely what closes a pane. One global copy under the
-# config dir, beside help.sh.
+# commands the agent runs on the user's behalf. It runs in the foreground while
+# command/diff payloads run without terminal input, and each pane carries
+# close_on_exit, so "this script returned" is precisely what closes a pane. One
+# global copy under the config dir, beside help.sh.
 #
 # Why a script and not a Zellij keybinding: Zellij's bindings cannot express
 # "close this pane, but only if it is one of qrouton's transient ones" — they

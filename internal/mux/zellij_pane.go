@@ -114,6 +114,29 @@ func (z *zellijHost) Exists(ctx context.Context, id string) (bool, error) {
 	return false, nil
 }
 
+func (z *zellijHost) FindPane(ctx context.Context, title string) (string, error) {
+	panes, err := z.panes(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, pane := range panes {
+		if !pane.IsPlugin && !pane.Exited && pane.Title == title {
+			return pane.paneID(), nil
+		}
+	}
+	return "", fmt.Errorf("%w: %q", ErrPaneNotFound, title)
+}
+
+func (z *zellijHost) Stack(ctx context.Context, ids ...string) error {
+	_, err := z.action(ctx, append([]string{stackPanesAction, endOfFlags}, ids...)...)
+	return err
+}
+
+func (z *zellijHost) Float(ctx context.Context, id string) error {
+	_, err := z.action(ctx, toggleEmbedAction, paneIDFlag, id)
+	return err
+}
+
 // zellijPane is one entry of `list-panes --all --json`, the adapter's only view
 // of what the session currently holds. Both the pane registry's liveness check
 // and the shell stack's numbering read it.

@@ -22,19 +22,19 @@ The invariants below are mechanical rules. These are the reasons they exist; whe
 
 ## Architecture
 
-Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, `repos`, and `mcpserver` sit above the shared leaves. Nothing imports `tui`. `mux` carries the multiplexer ports: `launch` and `mcpserver` drive the terminal only through `Launcher`/`PaneHost`, and the Zellij adapter behind them is the only backend there will be — the ports exist to quarantine Zellij's mechanics and to give the pane tools a fakeable seam, not to admit a second backend.
+Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, `dock`, `repos`, and `mcpserver` sit above the shared leaves. Nothing imports `tui`. `mux` carries the multiplexer ports: `launch` and `mcpserver` drive the terminal only through `Launcher`/`PaneHost`, and the Zellij adapter behind them is the only backend there will be — the ports exist to quarantine Zellij's mechanics and to give the pane tools a fakeable seam, not to admit a second backend.
 
 The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's own files), `paneui` (in-place terminal frames for the watch panes), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
 
 - `main.go`: urfave/cli app; root action runs the onboarding flow, subcommands come from `cmd/*`.
-- `cmd/mcp/`, `cmd/agents/`, `cmd/repos/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
+- `cmd/mcp/`, `cmd/agents/`, `cmd/dock/`, `cmd/repos/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
 - `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
 - `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
 - `prompts/`: canonical workflow, skill, and agent prompts, provider rendering, and `Stamp` — the one implementation of the runner discovery tree, shared by launches and evals.
 - `internal/launch/`: runner launch/resume arguments, MCP injection, the backend-neutral workspace layout, and editor resolution. Asset stamping delegates to `prompts.Stamp`; only the mode-to-discovery-file decision lives here.
 - `internal/mux/`: multiplexer ports (`Launcher`, `PaneHost`), the `Handle` that carries backend identity into the MCP child, and the Zellij adapter (KDL rendering, session lifecycle, pane actions).
-- `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: agent-driven file opening in the editor pane; subagent and repo status panes (both drawn via `paneui`).
+- `internal/mcpserver/`, `internal/agents/`, `internal/dock/`, `internal/repos/`: agent-driven panes and their minimised-pane dock; subagent and legacy repo status panes (drawn via `paneui`).
 - `internal/sessionpaths/`, `internal/codex/`, `internal/paneui/`: the shared leaves above.
 - `internal/config/`: config file, XDG paths, and the on-demand owner prompt. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and `EnsureOrgs` asks at the first repository search.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.

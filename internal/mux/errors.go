@@ -17,6 +17,11 @@ var ErrHandleIncomplete = errors.New("multiplexer handle missing kind or session
 // pane environment that identifies the current pane and session.
 var ErrShellContext = errors.New("shell command is not running inside a Zellij pane")
 
+// ErrPaneNotFound means a runtime pane lookup by exact title found no live
+// terminal pane. Layout-owned panes such as the dock receive their ids only
+// after Zellij starts the session, so title lookup is the stable bridge.
+var ErrPaneNotFound = errors.New("multiplexer pane not found")
+
 // unsupportedBackend reports a multiplexer qrouton has no adapter for, naming
 // the ones it does.
 func unsupportedBackend(kind string) error {

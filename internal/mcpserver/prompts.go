@@ -5,7 +5,7 @@ package mcpserver
 // only guide to when a pane is the right move — so they live together where
 // they can be read and revised as a set.
 
-const serverInstructions = "Drive the user's qrouton workspace. Panes you open are floating, pinned, and leave focus on the agent, so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, logs) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; help to float the workspace's own key/pane reference when the user sounds lost in it; close_pane/list_panes to manage them; escalate to hand a piece of work off to the full RPI workflow once you've drafted a brief. All paths and working directories must belong to this session."
+const serverInstructions = "Drive the user's qrouton workspace. Panes you open are floating and pinned in the right-hand overlay lane, never over the main agent pane, and leave focus on the agent so the user can watch them while chatting. Use open_file to show a document (especially after creating one); run_command to run long-lived or noisy work (dev servers, watchers, builds, log tails) in a visible pane instead of your own shell; read_pane to inspect that output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; minimize_pane to move a managed pane into the permanent dock beside the agents pane without stopping it, and restore_pane to float it back; help to float the workspace's own key/pane reference when the user sounds lost in it; close_pane/list_panes to manage panes; escalate to hand a piece of work off to the full RPI workflow once you've drafted a brief. Help and escalate are the two deliberate full-workspace overlays. All paths and working directories must belong to this session."
 
 // Tool names, as the agent calls them and as qrouton reports them back in its
 // own messages.
@@ -16,6 +16,8 @@ const (
 	toolShowDiff   = "show_diff"
 	toolNotify     = "notify"
 	toolClosePane  = "close_pane"
+	toolMinimize   = "minimize_pane"
+	toolRestore    = "restore_pane"
 	toolListPanes  = "list_panes"
 	toolEscalate   = "escalate"
 	toolHelp       = "help"
@@ -25,7 +27,7 @@ const (
 const (
 	descOpenFile = "Open an existing session file in the user's configured terminal editor pane. The pane stays open for reference while the user keeps chatting with the agent. Use this after creating a document when showing it to the user is helpful."
 
-	descRunCommand = "Run a shell command in a visible workspace pane instead of your own shell. Ideal for long-running or noisy processes (dev servers, test watchers, builds, log tails) the user should see live. The pane is floating and pinned, focus stays on the agent, and reusing a name replaces that pane. Read its output later with read_pane."
+	descRunCommand = "Run a non-interactive shell command in a visible workspace pane instead of your own shell. Ideal for long-running or noisy processes (dev servers, test watchers, builds, log tails) the user should see live. The pane is floating and pinned over the right-hand workspace column, focus stays on the agent, Esc stops and dismisses it, and reusing a name replaces that pane. Read its output later with read_pane."
 
 	descReadPane = "Capture the current output of a pane opened with run_command (or open_file) and return it as text. Use this to check on a command you started — for example to confirm a dev server booted or to read a test run's failures. Set full to include the scrollback."
 
@@ -34,6 +36,10 @@ const (
 	descNotify = "Get the user's attention with an on-screen toast, the terminal bell, and a sound. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs."
 
 	descClosePane = "Close a pane previously opened with run_command or open_file, by name."
+
+	descMinimizePane = "Minimize a pane previously opened with run_command or open_file into the permanent dock beside the agents pane. Its process keeps running, multiple minimized panes form a clickable stack, and the main agent pane remains unobstructed."
+
+	descRestorePane = "Restore a minimized pane from the dock to its original floating geometry over the right-hand workspace column."
 
 	descListPanes = "List the panes qrouton is currently managing for you, by name."
 
