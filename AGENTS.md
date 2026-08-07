@@ -53,6 +53,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 ## Working agreement
 
 - Keep changes small and match existing package-level style.
+- Comments default to absent. A comment earns its place by saying something the code cannot — a trap where the obvious reading is wrong, or why a non-obvious choice was made. One line where earned, two for a real trap, never a file-header paragraph: when every comment is big, they all cry wolf and none get read. State what *is*, not the debugging journey or what the code used to be. Never point at another file, symbol or line number — those move, comments do not.
 - New user-facing text goes in the package's `strings.go`; new failure modes get a sentinel in its `errors.go`, wrapped with `%w` at the call site.
 - `gofmt` changed Go files.
 - Add focused tests for behavior changes.
