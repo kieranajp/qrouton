@@ -28,8 +28,8 @@ check: test race vet build
 	@test -z "$$(gofmt -l .)" || { echo "gofmt:"; gofmt -l .; exit 1; }
 	git diff --check
 
-# The Alt-g, Alt-e, and Alt-n chords in the vendored Zellij config run the
-# installed `qrouton`, so keyboard workspace actions need an up-to-date binary.
+# The session shells out to the installed `qrouton` for its own subcommands, so
+# workspace actions need an up-to-date binary.
 install: build
 	mkdir -p $(BINDIR)
 	install -m 755 $(BIN) $(BINDIR)/$(BIN)

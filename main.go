@@ -12,19 +12,18 @@ import (
 
 	agentcmd "github.com/kieranajp/qrouton/cmd/agent"
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
-	dockcmd "github.com/kieranajp/qrouton/cmd/dock"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
 	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
-	statuscmd "github.com/kieranajp/qrouton/cmd/status"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/desktop"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
-	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/tui"
+	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
 
@@ -38,7 +37,7 @@ func main() {
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.Command, agentscmd.EventCommand, dockcmd.Command, reposcmd.Command, statuscmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {
@@ -224,9 +223,10 @@ func adhocName(repos []github.Repo) string {
 	return strings.Join(names, adhocNameSeparator)
 }
 
-// launchRunner enters the session workspace. Prompt stamping is not done here:
-// the agent pane's supervisor stamps on every (re)launch, from the manifest as
-// it then stands.
+// launchRunner opens the workbench on the session and blocks until its window
+// closes. Prompt stamping is not done here: the supervisor running in the
+// conversation terminal stamps on every (re)launch, from the manifest as it
+// then stands.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	editor, err := launch.ResolveEditor(cfg.Editor)
 	if err != nil {
@@ -236,9 +236,13 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	lp, err := mux.New()
+	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		return err
 	}
-	return launch.Launch(lp, dir, r, bin, editor, resume)
+	argv, env, err := launch.Launch(dir, r, bin, socket, editor, resume)
+	if err != nil {
+		return err
+	}
+	return desktop.Run(desktop.Options{SessionRoot: dir, Socket: socket, Argv: argv, Env: env})
 }

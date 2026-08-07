@@ -10,23 +10,22 @@ var (
 	ErrCommandRequired = errors.New("command is required")
 	ErrMessageRequired = errors.New("message is required")
 	ErrNameRequired    = errors.New("name is required")
-	ErrPaneNotDockable = errors.New("pane cannot be minimized")
 
-	// ErrReservedPaneName means the agent tried to claim the editor pane's
-	// registry key for a command pane.
-	ErrReservedPaneName = fmt.Errorf("%q is reserved for the editor pane; pick another name", editorPaneName)
+	// ErrReservedWindowName means the agent tried to claim the editor window's
+	// registry key for a command window.
+	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
 
 // ErrInvalidEditor means the editor configuration the launcher marshalled into
 // this process is missing or unusable.
 var ErrInvalidEditor = errors.New("mcp: invalid inherited editor configuration")
 
-func noSuchPane(name string) error {
-	return fmt.Errorf("no open pane named %q", name)
+func noSuchWindow(name string) error {
+	return fmt.Errorf("no open window named %q", name)
 }
 
-// paneClosedByUser distinguishes a pane the user dismissed from one that never
+// windowGone distinguishes a window that has closed from a name that never
 // existed, so the agent reopens it rather than treating the name as wrong.
-func paneClosedByUser(name string) error {
-	return fmt.Errorf("pane %q was closed by the user; open it again if you still need it", name)
+func windowGone(name string) error {
+	return fmt.Errorf("window %q is no longer open (the user closed it, or its command finished); open it again if you still need it", name)
 }

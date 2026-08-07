@@ -9,16 +9,6 @@ const (
 	configFileName = "config.json"
 	cacheFileName  = "repos.json"
 
-	// helpScriptFileName is the quick-reference panel Alt-? and the startup
-	// floating pane run. One copy under the config dir, not one per session —
-	// restaged idempotently at every launch so template changes propagate.
-	helpScriptFileName = "help.sh"
-
-	// dismissScriptFileName is the shared Esc wait every floated pane ends
-	// with. It sits beside help.sh, which finds it by $0's directory rather
-	// than having a path threaded through Go and the staged keybindings.
-	dismissScriptFileName = "dismiss.sh"
-
 	// XDG bases, with the fallbacks the design pinned. Not os.UserConfigDir: on
 	// darwin that is ~/Library/Application Support, and qrouton follows XDG on
 	// every platform so one config path documents them all.

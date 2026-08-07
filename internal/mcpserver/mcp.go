@@ -1,7 +1,7 @@
 package mcpserver
 
 // The MCP tool surface served to the agent over stdio: tool schemas,
-// descriptions, and registration. The pane mechanics live in panes.go.
+// descriptions, and registration.
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/launch"
-	"github.com/kieranajp/qrouton/internal/mux"
+	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -19,24 +19,19 @@ type openFileInput struct {
 	Line int    `json:"line,omitempty" jsonschema:"One-based line number; defaults to 1"`
 }
 
-// runCommandInput has no close-on-exit knob: the pane holds its output until
-// the user presses Esc, and Esc stops and closes it. Both halves of that are
-// the shared dismiss wrapper around the command, so neither is the agent's to
-// choose — and a pane that closed itself the instant the command exited would
-// take the output the user was meant to read with it.
 type runCommandInput struct {
-	Command string `json:"command" jsonschema:"Non-interactive shell command to run in a workspace pane the user can watch"`
-	Name    string `json:"name,omitempty" jsonschema:"Pane label; reusing a name replaces that pane. Defaults to \"command\""`
+	Command string `json:"command" jsonschema:"Shell command to run in a window the user can watch"`
+	Name    string `json:"name,omitempty" jsonschema:"Window name; reusing a name replaces that window. Defaults to \"command\""`
 	Cwd     string `json:"cwd,omitempty" jsonschema:"Working directory within the session; defaults to the session root"`
 }
 
-type readPaneInput struct {
-	Name string `json:"name" jsonschema:"Name of a pane previously opened via run_command or open_file"`
-	Full bool   `json:"full,omitempty" jsonschema:"Include the full scrollback instead of just the visible screen"`
+type readWindowInput struct {
+	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
+	Full bool   `json:"full,omitempty" jsonschema:"Include the full scrollback instead of just the last screenful"`
 }
 
-type paneNameInput struct {
-	Name string `json:"name" jsonschema:"Name of a pane previously opened via run_command or open_file"`
+type windowNameInput struct {
+	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
 }
 
 type showDiffInput struct {
@@ -62,17 +57,17 @@ func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }
 
-func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,
 	})
-	pane := newPaneManager(root, editor, host)
+	windows := newWindowManager(root, editor, host)
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolOpenFile,
 		Description: descOpenFile,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input openFileInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.openFile(ctx, input)
+		message, err := windows.openFile(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -83,7 +78,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 		Name:        toolRunCommand,
 		Description: descRunCommand,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input runCommandInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.run(ctx, input)
+		message, err := windows.run(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -91,10 +86,10 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolReadPane,
-		Description: descReadPane,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input readPaneInput) (*mcp.CallToolResult, any, error) {
-		text, err := pane.read(ctx, input)
+		Name:        toolReadWindow,
+		Description: descReadWindow,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input readWindowInput) (*mcp.CallToolResult, any, error) {
+		text, err := windows.read(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -105,7 +100,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 		Name:        toolShowDiff,
 		Description: descShowDiff,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input showDiffInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.showDiff(ctx, input)
+		message, err := windows.showDiff(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -116,7 +111,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 		Name:        toolNotify,
 		Description: descNotify,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input notifyInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.notify(ctx, input)
+		message, err := windows.notify(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -124,10 +119,10 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolClosePane,
-		Description: descClosePane,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.closePane(ctx, input)
+		Name:        toolCloseWindow,
+		Description: descCloseWindow,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input windowNameInput) (*mcp.CallToolResult, any, error) {
+		message, err := windows.closeWindow(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -135,55 +130,22 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolMinimize,
-		Description: descMinimizePane,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.minimizePane(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolRestore,
-		Description: descRestorePane,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input paneNameInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.restorePane(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolListPanes,
-		Description: descListPanes,
+		Name:        toolListWindows,
+		Description: descListWindows,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		names := pane.list()
-		message := noPanesOpen
+		names := windows.list(ctx)
+		message := noWindowsOpen
 		if len(names) > 0 {
-			message = openPanesPrefix + strings.Join(names, paneNameJoiner) + openPanesSuffix
+			message = openWindowsPrefix + strings.Join(names, windowNameJoiner) + openWindowsSuffix
 		}
-		return textResult(message), map[string]any{"panes": names}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolHelp,
-		Description: descHelp,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
-		message, err := pane.help(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
+		return textResult(message), map[string]any{"windows": names}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolEscalate,
 		Description: descEscalate,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input escalateInput) (*mcp.CallToolResult, any, error) {
-		message, err := pane.escalate(ctx, input)
+		message, err := windows.escalate(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -195,17 +157,17 @@ func newMCPServer(root string, editor launch.EditorCommand, host mux.PaneHost) *
 
 // Run serves the qrouton MCP server over stdio. editorJSON is the resolved
 // EditorCommand marshalled by the launcher (or inherited via QROUTON_EDITOR_JSON);
-// muxJSON is the multiplexer Handle the launcher stamped into our arguments.
-func Run(root, editorJSON, muxJSON string) error {
+// workbenchJSON is the Handle the launcher stamped into our arguments.
+func Run(root, editorJSON, workbenchJSON string) error {
 	var editor launch.EditorCommand
 	if err := json.Unmarshal([]byte(editorJSON), &editor); err != nil || len(editor.Argv) == 0 {
 		return ErrInvalidEditor
 	}
-	handle, err := mux.ParseHandle(muxJSON)
+	handle, err := workbench.ParseHandle(workbenchJSON)
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
-	host, err := handle.PaneHost()
+	host, err := handle.WindowHost()
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}

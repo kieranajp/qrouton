@@ -12,9 +12,9 @@ var Command = &cli.Command{
 	Flags: []cli.Flag{
 		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
 		&cli.StringFlag{Name: editorJSONFlag, Usage: editorJSONUsage, EnvVars: []string{launch.EditorEnvVar}},
-		&cli.StringFlag{Name: muxJSONFlag, Usage: muxJSONUsage, Required: true},
+		&cli.StringFlag{Name: workbenchJSONFlag, Usage: workbenchJSONUsage, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		return mcpserver.Run(c.String(sessionRootFlag), c.String(editorJSONFlag), c.String(muxJSONFlag))
+		return mcpserver.Run(c.String(sessionRootFlag), c.String(editorJSONFlag), c.String(workbenchJSONFlag))
 	},
 }

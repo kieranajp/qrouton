@@ -2,7 +2,7 @@ package session
 
 // The on-disk contract: the manifest schema and the reads and writes that
 // maintain it. qrouton.json is what makes a directory a session and what every
-// other process — the launcher, the status pane, the escalate tool — polls, so
+// other process — the launcher, the window chrome, the escalate tool — polls, so
 // the schema and its atomic write live together, apart from the assembly
 // behaviour that produces them.
 
@@ -30,7 +30,7 @@ const (
 // SessionMode selects the system prompt (and opening message) the runner starts
 // under. RPI is the default orchestrated Research→Plan→Implement workflow;
 // Assistant is a lighter, open-ended coding session that can escalate to RPI
-// on request. Both modes stamp the same panes, skills, and MCP tools.
+// on request. Both modes stamp the same prompts, skills, and MCP tools.
 type SessionMode string
 
 const (

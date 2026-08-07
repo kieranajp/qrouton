@@ -1,16 +1,9 @@
 package status
 
-import "time"
-
-// The strip's copy: mode and phase labels, the chords each mode advertises,
-// and the separators that lay the single line out.
+// The chrome's copy: mode and phase labels, and the separator that joins a
+// name to its branch.
 
 const (
-	// refreshInterval bounds how stale the strip can be after an escalation.
-	refreshInterval = 2 * time.Second
-
-	manifestUnavailable = "no session manifest"
-
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"
 
@@ -19,12 +12,5 @@ const (
 	phasePlan      = "Plan"
 	phaseImplement = "Implement"
 
-	// Only chords that exist are advertised, named for what they do in this
-	// mode: Alt-e is bound in both, but in RPI the work is already assembled,
-	// so a second trip through the picker adds repositories to it.
-	assistantChords = "Alt-e escalate · Alt-g +shell · in shell: Alt-↑↓ switch / Ctrl-d close · Alt-? keys"
-	rpiChords       = "Alt-n de-escalate · Alt-e add repos · Alt-g +shell · in shell: Alt-↑↓ switch / Ctrl-d close · Alt-? keys"
-
 	labelSeparator = " · "
-	fieldSeparator = "   "
 )

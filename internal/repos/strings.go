@@ -2,11 +2,11 @@ package repos
 
 import "time"
 
-// The repo watcher's copy: pane title, the states a worktree can be in, and the
-// line formats that lay them out.
+// The repo watcher's copy: its heading, the states a worktree can be in, and
+// the line formats that lay them out.
 
 const (
-	paneTitle       = "repos"
+	heading         = "repos"
 	refreshInterval = 3 * time.Second
 
 	noManifestLabel = "No session manifest"

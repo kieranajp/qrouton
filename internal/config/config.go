@@ -43,18 +43,6 @@ func CachePath() string {
 	return filepath.Join(xdgDir(cacheHomeEnvVar, cacheHomeFallback), cacheFileName)
 }
 
-// HelpScriptPath is where the quick-reference panel lives — one global copy,
-// not one per session.
-func HelpScriptPath() string {
-	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), helpScriptFileName)
-}
-
-// DismissScriptPath is where the shared Esc wait lives, in the same directory
-// as the help panel that execs it.
-func DismissScriptPath() string {
-	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), dismissScriptFileName)
-}
-
 // Load reads config.json if it exists, and otherwise starts from defaults —
 // deliberately without prompting. A session with no repositories needs neither
 // a configured root nor GitHub owners, so nothing may block a launch here; the

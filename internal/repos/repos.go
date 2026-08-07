@@ -9,31 +9,32 @@ import (
 	"strings"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/paneui"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-// Status redraws the session's per-repo branch and dirty state forever. It is
+// Status reprints the session's per-repo branch and dirty state forever. It is
 // manifest-driven, so it knows roles and exact worktree paths — a detached
 // reference renders as its pinned revision instead of a blank branch.
 func Status(root string) error {
 	for {
-		fmt.Print(paneui.Frame(statusLines(root)))
+		for _, line := range statusLines(root) {
+			fmt.Println(line)
+		}
 		time.Sleep(refreshInterval)
 	}
 }
 
 func statusLines(root string) []string {
-	lines := []string{paneui.Title(paneTitle)}
+	lines := []string{heading}
 	b, err := os.ReadFile(sessionpaths.Manifest(root))
 	var m session.Manifest
 	if err != nil || json.Unmarshal(b, &m) != nil {
-		return append(lines, paneui.Muted(noManifestLabel))
+		return append(lines, noManifestLabel)
 	}
 	if len(m.Repos) == 0 {
 		// A scratch session: point at the way repositories arrive.
-		return append(lines, paneui.Muted(emptyStateLabel), paneui.Muted(emptyStateHint))
+		return append(lines, emptyStateLabel, emptyStateHint)
 	}
 	for _, r := range m.Repos {
 		lines = append(lines, repoLine(root, r))
@@ -45,7 +46,7 @@ func repoLine(root string, r session.ManifestRepo) string {
 	name := r.WorktreePath
 	wt := filepath.Join(root, r.WorktreePath)
 	if _, err := os.Stat(wt); err != nil {
-		return fmt.Sprintf(repoStateFormat, paneui.Bold(name), paneui.Muted(stateMissing))
+		return fmt.Sprintf(repoStateFormat, name, stateMissing)
 	}
 	ref, err := gitOutput(wt, "branch", "--show-current")
 	if err == nil && ref == "" {
@@ -56,7 +57,7 @@ func repoLine(root string, r session.ManifestRepo) string {
 		}
 	}
 	if err != nil {
-		return fmt.Sprintf(repoStateFormat, paneui.Bold(name), paneui.Muted(stateUnavailable))
+		return fmt.Sprintf(repoStateFormat, name, stateUnavailable)
 	}
 	state := stateClean
 	if status, err := gitOutput(wt, "status", "--porcelain"); err != nil {
@@ -67,7 +68,7 @@ func repoLine(root string, r session.ManifestRepo) string {
 	if r.Role == session.RepoRoleReference {
 		state = referencePrefix + state
 	}
-	return fmt.Sprintf(repoLineFormat, paneui.Bold(name), ref, state)
+	return fmt.Sprintf(repoLineFormat, name, ref, state)
 }
 
 func gitOutput(dir string, args ...string) (string, error) {

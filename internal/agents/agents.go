@@ -3,7 +3,6 @@ package agents
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -13,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/codex"
-	"github.com/kieranajp/qrouton/internal/paneui"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -34,70 +32,6 @@ type rolloutRecord struct {
 		AgentNickname  string `json:"agent_nickname"`
 		AgentPath      string `json:"agent_path"`
 	} `json:"payload"`
-}
-
-// Status redraws the session's subagent statuses in place every 2s, forever. It overwrites the
-// previous frame (cursor home, erase-to-end-of-line per row, erase-to-end-of-screen at the bottom)
-// rather than clearing the whole screen first, so the pane never flashes blank between frames —
-// even while the per-tick background-agent lookup is still resolving.
-func Status(root, runner string) error {
-	for {
-		var statuses []agentStatus
-		var err error
-		if runner == runnerClaude {
-			statuses, err = scanClaudeAgentStatuses(root)
-		} else {
-			statuses, err = scanAgentStatuses(codex.SessionsDir(), root)
-		}
-
-		lines := []string{paneui.Title(paneTitle)}
-		switch {
-		case err != nil:
-			lines = append(lines, paneui.Muted(unavailableLabel(runner)))
-		case len(statuses) == 0:
-			lines = append(lines, paneui.Muted(noSubagentsLabel))
-		default:
-			lines = append(lines, statusLines(statuses)...)
-		}
-
-		fmt.Print(paneui.Frame(lines))
-
-		time.Sleep(refreshInterval)
-	}
-}
-
-// unavailableLabel names the runner whose status could not be read, so the pane
-// says which integration is broken rather than just "unavailable".
-func unavailableLabel(runner string) string {
-	if runner == runnerClaude {
-		return claudeUnavailableLabel
-	}
-	return codexUnavailableLabel
-}
-
-// statusLines renders at most maxVisibleAgents subagents, then a count of the
-// rest: the pane is a few rows tall.
-func statusLines(statuses []agentStatus) []string {
-	lines := make([]string, 0, maxVisibleAgents+1)
-	for i, status := range statuses {
-		if i == maxVisibleAgents {
-			lines = append(lines, paneui.Muted(fmt.Sprintf(moreAgentsFormat, len(statuses)-i)))
-			break
-		}
-		lines = append(lines, fmt.Sprintf(agentLineFormat, stateMarker(status.State), status.Name, paneui.Muted(status.State)))
-	}
-	return lines
-}
-
-func stateMarker(state string) string {
-	switch state {
-	case stateRunning:
-		return paneui.Running(markerRunning)
-	case stateFailed:
-		return paneui.Failed(markerFailed)
-	default:
-		return paneui.Done(markerDone)
-	}
 }
 
 type claudeAgentEvent struct {
@@ -194,11 +128,8 @@ func mergeClaudeBackgroundAgents(byID map[string]agentStatus, root string) {
 	}
 }
 
-// firstString returns the first key holding a non-empty string. The eval
-// harness keeps an identical copy, deliberately: it does not import qrouton's
-// packages.
 // normalizeClaudeState maps the `claude agents` vocabulary onto the three states
-// the pane draws.
+// this package reports.
 func normalizeClaudeState(state string) string {
 	switch state {
 	case "", "active", "working":
@@ -210,6 +141,9 @@ func normalizeClaudeState(state string) string {
 	}
 }
 
+// firstString returns the first key holding a non-empty string. The eval
+// harness keeps an identical copy, deliberately: it does not import qrouton's
+// packages.
 func firstString(values map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if value, ok := values[key].(string); ok && value != "" {

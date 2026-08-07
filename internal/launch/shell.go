@@ -3,11 +3,8 @@ package launch
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
-
-	"github.com/kieranajp/qrouton/internal/mux"
 )
 
 // The seams below keep the interactive shell loop testable without starting a
@@ -17,14 +14,9 @@ var (
 	runLoginShell = startLoginShell
 )
 
-// Shell runs one member of the permanent right-hand shell stack. The pane
-// joins that stack before becoming interactive, which is what lets Alt-g work
-// from the agent or any other tiled pane without changing the workspace
-// geometry. The final shell restarts after exit so the region never disappears.
-func Shell(ctx context.Context, dir string, stack mux.ShellStack) error {
-	if _, err := JoinShellStack(ctx, stack, shellPaneTitleSuffix); err != nil {
-		return fmt.Errorf("%s: %w", joinShellError, err)
-	}
+// Shell runs the session's user shell. It restarts after the shell exits,
+// because the affordance that matters is having a shell at all.
+func Shell(ctx context.Context, dir string) error {
 	showShellTree(dir)
 	for {
 		err := runLoginShell(ctx, dir)
@@ -35,22 +27,7 @@ func Shell(ctx context.Context, dir string, stack mux.ShellStack) error {
 		if err != nil && !errors.As(err, &exitErr) {
 			return err
 		}
-		count, err := stack.Count(ctx, shellPaneName)
-		if err != nil {
-			return fmt.Errorf("%s: %w", countShellError, err)
-		}
-		if count > 1 {
-			return nil
-		}
-		fmt.Fprintln(os.Stdout, lastShellMessage)
 	}
-}
-
-// JoinShellStack is shared with the short-lived de-escalation command: it also
-// runs in the permanent shell region so quick reference and the escalation
-// picker remain the only user-driven floating panes.
-func JoinShellStack(ctx context.Context, stack mux.ShellStack, titleSuffix string) (int, error) {
-	return stack.JoinCurrent(ctx, shellPaneName, titleSuffix)
 }
 
 func printShellTree(dir string) {
