@@ -2,7 +2,7 @@ package shell
 
 const (
 	commandName  = "shell"
-	commandUsage = "run an interactive member of the workspace shell stack"
+	commandUsage = "Run the session's user shell (used by the workbench)"
 
 	sessionRootFlag  = "session-root"
 	sessionRootUsage = "qrouton session root"

@@ -7,22 +7,30 @@ import (
 	"context"
 	"io/fs"
 	"path/filepath"
+	"sync"
 	"sync/atomic"
 
+	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // Options is the session the workbench opens on.
 type Options struct {
+	// SessionRoot is empty when no session has been chosen yet: onboarding runs
+	// in the conversation terminal and adopts one over the control socket.
 	SessionRoot string
 	Socket      string
 	Argv        []string
 	Env         []string
+	// Shell builds the user shell window's command for a session root, which is
+	// why it is a function rather than an argv.
+	Shell func(sessionRoot string) []string
 }
 
-// Run opens the workbench and blocks until the conversation window closes.
-// Closing that window ends the session — there is no detached server and
-// nothing survives in the background.
+// Run opens the workbench and blocks until the session ends: closing the
+// conversation window and the agent exiting are the same ending reached from
+// either side. There is no detached server and nothing survives in the
+// background.
 func Run(opts Options) error {
 	if len(opts.Argv) == 0 {
 		return ErrNoAgentCommand
@@ -52,29 +60,75 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	root.Store(&opts.SessionRoot)
 	go watchChrome(ctx, func() string { return *root.Load() }, r.Emit)
 
-	server, err := serveControl(opts.Socket, windows, func(adopted string) { root.Store(&adopted) })
+	// Closing the conversation window and the agent exiting are the same ending
+	// reached from either side, and either may arrive first.
+	quit := sync.OnceFunc(func() {
+		windows.stopAll()
+		term.Stop()
+		r.Quit()
+	})
+	// A supervisor that failed keeps its window, so the reason stays readable.
+	term.whenChildExits(func(code int) {
+		if code == 0 {
+			quit()
+		}
+	})
+
+	shell := &shellWindow{windows: windows, argv: opts.Shell}
+	server, err := serveControl(opts.Socket, windows, func(adopted string) {
+		root.Store(&adopted)
+		r.Retitle(mainWindowName, windowTitle(adopted))
+		shell.open(adopted)
+	})
 	if err != nil {
 		return err
 	}
 	defer server.Close()
 
-	err = r.Open(windowSpec{
-		Name:   mainWindowName,
-		Title:  mainWindowTitle + titleSeparator + filepath.Base(opts.SessionRoot),
-		URL:    frontendRoot,
-		Width:  mainWindowWidth,
-		Height: mainWindowHeight,
-		Focus:  true,
-		OnClose: func() {
-			windows.stopAll()
-			term.Stop()
-			r.Quit()
-		},
-	})
-	if err != nil {
+	if err := r.Open(windowSpec{
+		Name:    mainWindowName,
+		Title:   windowTitle(opts.SessionRoot),
+		URL:     frontendRoot,
+		Width:   mainWindowWidth,
+		Height:  mainWindowHeight,
+		Focus:   true,
+		OnClose: quit,
+	}); err != nil {
 		return err
 	}
+	shell.open(opts.SessionRoot)
 	return r.Run()
+}
+
+// shellWindow is the session's user shell: exactly one, opened as soon as the
+// session is known, which onboarding may only decide after the workbench opens.
+type shellWindow struct {
+	windows *Windows
+	argv    func(string) []string
+	opened  atomic.Bool
+}
+
+func (s *shellWindow) open(root string) {
+	if root == "" || s.argv == nil || !s.opened.CompareAndSwap(false, true) {
+		return
+	}
+	if _, err := s.windows.openWindow(workbench.WindowOptions{
+		Kind:    workbench.KindTerminal,
+		Label:   shellWindowLabel,
+		Cwd:     root,
+		Command: s.argv(root),
+	}); err != nil {
+		s.opened.Store(false)
+	}
+}
+
+// windowTitle names the session in the conversation's title bar; onboarding has
+// not chosen one yet.
+func windowTitle(root string) string {
+	if root == "" {
+		return mainWindowTitle
+	}
+	return mainWindowTitle + titleSeparator + filepath.Base(root)
 }
 
 // frontend is the embedded page tree the webview serves.

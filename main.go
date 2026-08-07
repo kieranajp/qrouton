@@ -14,6 +14,7 @@ import (
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
+	onboardcmd "github.com/kieranajp/qrouton/cmd/onboard"
 	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
@@ -22,7 +23,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/tui"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
@@ -37,7 +37,7 @@ func main() {
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command, onboardcmd.Command},
 		Action:   onboard,
 	}
 	if err := app.Run(os.Args); err != nil {
@@ -51,13 +51,13 @@ func main() {
 // scratch session named after it; owner/repo arguments launch an ad-hoc
 // session directly.
 func onboard(c *cli.Context) error {
+	args := c.Args().Slice()
+	if len(args) == 0 {
+		return list(c.String(runnerFlag), c.Bool(refreshFlag))
+	}
 	cfg, err := config.Load()
 	if err != nil {
 		return err
-	}
-	args := c.Args().Slice()
-	if len(args) == 0 {
-		return list(cfg, c.String(runnerFlag), c.Bool(refreshFlag))
 	}
 	if len(args) == 1 {
 		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
@@ -71,17 +71,23 @@ func onboard(c *cli.Context) error {
 	return launchAdhoc(cfg, sessions, args, c.String(runnerFlag))
 }
 
-// list opens the landing list: resume, create, or delete sessions.
-func list(cfg *config.Config, runnerID string, refresh bool) error {
-	sessions, err := session.Scan(cfg.Root)
+// list opens the workbench on the landing list: the window comes up first and
+// onboarding draws in its terminal, then hands that same terminal to the agent.
+func list(runnerID string, refresh bool) error {
+	bin, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	request, err := tui.Run(cfg, sessions, runnerID, refresh)
-	if err != nil || request == nil {
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
 		return err
 	}
-	return launchRunner(cfg, request.Dir, request.Runner, request.Resume)
+	return desktop.Run(desktop.Options{
+		Socket: socket,
+		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
+		Env:    os.Environ(),
+		Shell:  shellArgv(bin),
+	})
 }
 
 // launchScratch is the directory-argument path: a zero-repo Assistant session
@@ -244,5 +250,11 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return desktop.Run(desktop.Options{SessionRoot: dir, Socket: socket, Argv: argv, Env: env})
+	return desktop.Run(desktop.Options{SessionRoot: dir, Socket: socket, Argv: argv, Env: env, Shell: shellArgv(bin)})
+}
+
+// shellArgv builds the user shell's command for whichever session the workbench
+// settles on, which the landing-list path does not know when it opens.
+func shellArgv(bin string) func(string) []string {
+	return func(dir string) []string { return launch.ShellArgv(bin, dir) }
 }

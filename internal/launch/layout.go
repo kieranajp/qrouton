@@ -33,6 +33,26 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, ed
 	return argv
 }
 
+// OnboardArgv is the conversation terminal's first command when no session has
+// been chosen yet: the landing list runs in the PTY and replaces itself with the
+// supervisor there, so a session has one long-lived terminal rather than two.
+func OnboardArgv(qroutonBin, socket, runnerID string, refresh bool) []string {
+	argv := []string{qroutonBin, onboardSubcommand, socketFlag, socket}
+	if runnerID != "" {
+		argv = append(argv, runnerFlag, runnerID)
+	}
+	if refresh {
+		argv = append(argv, refreshFlag)
+	}
+	return argv
+}
+
+// ShellArgv is the user shell window's command: one shell, rooted in the
+// session.
+func ShellArgv(qroutonBin, dir string) []string {
+	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
+}
+
 // Launch stamps the session's support files and returns what the workbench runs
 // in its conversation terminal: the supervisor's argv, and the environment it
 // inherits. socket is the control socket the desktop process will serve, and

@@ -79,7 +79,11 @@
         for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
         term.write(buffer);
       });
-      Events.On("pty:exit", () => term.write("\r\n\x1b[2m[session ended]\x1b[0m\r\n"));
+      // A clean exit takes the window with it, so this is only ever read after
+      // a failure.
+      Events.On("pty:exit", (event) => {
+        term.write("\r\n\x1b[2m[session ended — status " + event.data + "]\x1b[0m\r\n");
+      });
 
       Events.On("chrome:update", (event) => {
         const fields = event.data || {};

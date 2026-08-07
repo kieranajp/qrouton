@@ -19,6 +19,8 @@ type Term struct {
 	dir  string
 	emit emitter
 
+	exited func(code int)
+
 	mu      sync.Mutex
 	process *ptyProcess
 }
@@ -32,6 +34,10 @@ func newTerm(opts Options, emit emitter) *Term {
 		emit: emit,
 	}
 }
+
+// whenChildExits registers what happens once the conversation's process ends.
+// Set it before the page can call Start.
+func (t *Term) whenChildExits(f func(code int)) { t.exited = f }
 
 // Start launches the supervisor under a PTY sized to the terminal displaying
 // it. The page calls it on load, so a reload must not fork a second agent.
@@ -50,9 +56,16 @@ func (t *Term) Start(cols, rows int) error {
 	// JSON marshalling corrupts it.
 	go process.pump(
 		func(b []byte) { t.emit(ptyDataEvent, base64.StdEncoding.EncodeToString(b)) },
-		func(int) { t.emit(ptyExitEvent, "") },
+		t.childExited,
 	)
 	return nil
+}
+
+func (t *Term) childExited(code int) {
+	t.emit(ptyExitEvent, code)
+	if t.exited != nil {
+		t.exited(code)
+	}
 }
 
 func (t *Term) Write(encoded string) error {

@@ -63,6 +63,14 @@ func (r *wailsRenderer) Close(name string) {
 	})
 }
 
+func (r *wailsRenderer) Retitle(name, title string) {
+	r.onMain(func() {
+		if window, ok := r.app.Window.Get(name); ok {
+			window.SetTitle(title)
+		}
+	})
+}
+
 func (r *wailsRenderer) Emit(event string, payload any) {
 	r.app.Event.Emit(event, payload)
 }

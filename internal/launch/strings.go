@@ -22,12 +22,16 @@ const (
 	mcpSubcommand        = "mcp"
 	agentEventSubcommand = "agent-event"
 	agentSubcommand      = "agent"
+	onboardSubcommand    = "onboard"
+	shellSubcommand      = "shell"
 
 	sessionRootFlag   = "--session-root"
 	runnerFlag        = "--runner"
 	editorJSONFlag    = "--editor-json"
 	workbenchJSONFlag = "--workbench-json"
 	resumeFlag        = "--resume"
+	socketFlag        = "--socket"
+	refreshFlag       = "--refresh"
 )
 
 // scriptMode is the permission bit the generated support scripts need.

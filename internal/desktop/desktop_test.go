@@ -19,6 +19,7 @@ type fakeRenderer struct {
 	opened chan windowSpec
 	closed []string
 	specs  map[string]windowSpec
+	titles map[string]string
 	events map[string]any
 	quit   bool
 	block  chan struct{}
@@ -28,9 +29,16 @@ func newFakeRenderer() *fakeRenderer {
 	return &fakeRenderer{
 		opened: make(chan windowSpec, 8),
 		specs:  map[string]windowSpec{},
+		titles: map[string]string{},
 		events: map[string]any{},
 		block:  make(chan struct{}),
 	}
+}
+
+func (f *fakeRenderer) Retitle(name, title string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.titles[name] = title
 }
 
 func (f *fakeRenderer) Open(spec windowSpec) error {
@@ -136,6 +144,162 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	defer r.mu.Unlock()
 	if !r.quit {
 		t.Fatal("closing the conversation window left the application running")
+	}
+}
+
+// Exiting the agent is the other way out of a session: the conversation window
+// closes itself and takes the workbench with it, as closing it by hand does.
+func TestACleanAgentExitEndsTheSession(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Argv = []string{"/bin/sh", "-c", "exit 0"}
+	term := newTerm(opts, r.Emit)
+
+	done := make(chan error, 1)
+	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	<-r.opened
+
+	if err := term.Start(80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.quit {
+		t.Fatal("the agent exited and the workbench stayed open")
+	}
+}
+
+// Onboarding execs the supervisor rather than spawning it, so a session has one
+// terminal: the PTY, the page it draws on and the exit that ends the session all
+// survive the child replacing itself. A shell's own exec stands in for
+// syscall.Exec, which a test cannot perform on itself.
+func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Argv = []string{"/bin/sh", "-c", `printf 'landing list\n'; exec /bin/sh -c "printf 'the agent\n'; exit 0"`}
+	rec := &recorder{}
+	term := newTerm(opts, rec.emit)
+
+	done := make(chan error, 1)
+	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	<-r.opened
+	if err := term.Start(80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+
+	output := rec.output()
+	if !strings.Contains(output, "landing list") || !strings.Contains(output, "the agent") {
+		t.Fatalf("the terminal lost half the session across the handover: %q", output)
+	}
+}
+
+// A supervisor that failed has something to say, and quitting would take it off
+// the screen before anyone read it.
+func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Argv = []string{"/bin/sh", "-c", "exit 3"}
+	term := newTerm(opts, r.Emit)
+
+	go func() { _ = run(r, term, newWindows(r, r.Emit), opts) }()
+	<-r.opened
+	if err := term.Start(80, 24); err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "the exit to reach the page", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		code, reported := r.events[ptyExitEvent]
+		return reported && code == 3
+	})
+	r.mu.Lock()
+	quit := r.quit
+	r.mu.Unlock()
+	if quit {
+		t.Fatal("a failed agent took its window and its error with it")
+	}
+	r.Quit()
+}
+
+// Decision 10: one shell, always available — opened by the workbench rather than
+// asked for, and never a stack.
+func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	windows := newWindows(r, r.Emit)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+
+	spec := <-r.opened
+	if spec.Title != shellWindowLabel {
+		t.Fatalf("second window is %q, want the user shell", spec.Title)
+	}
+	if spec.Focus {
+		t.Fatal("the shell window took focus from the conversation")
+	}
+	window, ok := windows.window(spec.Name)
+	if !ok {
+		t.Fatalf("the shell window %q is not registered", spec.Name)
+	}
+	if window.opts.Cwd != opts.SessionRoot {
+		t.Fatalf("the shell is rooted at %q, not the session", window.opts.Cwd)
+	}
+	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat "+opts.SessionRoot {
+		t.Fatalf("shell command = %q", got)
+	}
+	if window.opts.CloseOnExit {
+		t.Fatal("the shell window closes on exit; qrouton shell restarts the shell instead")
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d further windows opened; there is one shell, not a stack", len(r.opened))
+	}
+}
+
+// On the landing-list path the workbench opens before a session exists, so the
+// shell and the title bar wait for onboarding to adopt one.
+func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.SessionRoot = ""
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	adopted := t.TempDir()
+	windows := newWindows(r, r.Emit)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	if spec := <-r.opened; spec.Title != mainWindowTitle {
+		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
+	}
+	if len(r.opened) != 0 {
+		t.Fatal("a shell window opened before onboarding chose a session")
+	}
+
+	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: adopted}).WindowHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := host.Adopt(context.Background(), adopted); err != nil {
+		t.Fatal(err)
+	}
+
+	waitFor(t, "the shell window", func() bool { return len(r.opened) == 1 })
+	spec := <-r.opened
+	window, ok := windows.window(spec.Name)
+	if !ok || window.opts.Cwd != adopted {
+		t.Fatalf("the shell is not rooted in the adopted session: %+v", window)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if title := r.titles[mainWindowName]; !strings.Contains(title, filepath.Base(adopted)) {
+		t.Fatalf("conversation title = %q, want the adopted session's name", title)
 	}
 }
 

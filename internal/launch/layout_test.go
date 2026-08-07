@@ -61,6 +61,26 @@ func TestLaunchAsksTheSupervisorToResume(t *testing.T) {
 	}
 }
 
+// Onboarding runs as the conversation terminal's own child, so the socket it
+// adopts the chosen session on has to reach it through this argv.
+func TestOnboardArgvCarriesTheSocketAndTheLaunchFlags(t *testing.T) {
+	socket := "/tmp/qrouton-sock/501/deadbeef.sock"
+	argv := OnboardArgv("/bin/qrouton", socket, "codex", true)
+	if joined := strings.Join(argv, " "); joined != "/bin/qrouton onboard --socket "+socket+" --runner codex --refresh" {
+		t.Fatalf("onboard argv = %q", joined)
+	}
+	bare := strings.Join(OnboardArgv("/bin/qrouton", socket, "", false), " ")
+	if strings.Contains(bare, "--runner") || strings.Contains(bare, "--refresh") {
+		t.Fatalf("onboard argv invents flags nobody asked for: %q", bare)
+	}
+}
+
+func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
+	if joined := strings.Join(ShellArgv("/bin/qrouton", "/sessions/octopus"), " "); joined != "/bin/qrouton shell --session-root /sessions/octopus" {
+		t.Fatalf("shell argv = %q", joined)
+	}
+}
+
 func flagValue(argv []string, flag string) int {
 	for i, arg := range argv {
 		if arg == flag && i+1 < len(argv) {
