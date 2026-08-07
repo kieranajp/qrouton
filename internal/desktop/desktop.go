@@ -58,11 +58,16 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 
 	var root atomic.Pointer[string]
 	root.Store(&opts.SessionRoot)
-	go watchChrome(ctx, func() string { return *root.Load() }, r.Emit)
+	sessionRoot := func() string { return *root.Load() }
+	go watchChrome(ctx, sessionRoot, r.Emit)
+
+	record := &windowRecorder{root: sessionRoot, windows: windows}
+	windows.observe(record.save)
 
 	// Closing the conversation window and the agent exiting are the same ending
 	// reached from either side, and either may arrive first.
 	quit := sync.OnceFunc(func() {
+		windows.observe(nil)
 		windows.stopAll()
 		term.Stop()
 		r.Quit()
@@ -79,6 +84,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 		root.Store(&adopted)
 		r.Retitle(mainWindowName, windowTitle(adopted))
 		shell.open(adopted)
+		// A resumed session's manifest still lists the last run's windows, and
+		// none of them are open.
+		record.save()
 	})
 	if err != nil {
 		return err
@@ -97,6 +105,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 		return err
 	}
 	shell.open(opts.SessionRoot)
+	record.save()
 	return r.Run()
 }
 
@@ -112,7 +121,7 @@ func (s *shellWindow) open(root string) {
 	if root == "" || s.argv == nil || !s.opened.CompareAndSwap(false, true) {
 		return
 	}
-	if _, err := s.windows.openWindow(workbench.WindowOptions{
+	if _, err := s.windows.openStructural(workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
 		Label:   shellWindowLabel,
 		Cwd:     root,

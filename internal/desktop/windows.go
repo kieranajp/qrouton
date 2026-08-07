@@ -19,16 +19,21 @@ type Windows struct {
 	renderer renderer
 	emit     emitter
 
-	mu   sync.Mutex
-	seq  int
-	open map[string]*agentWindow
+	mu      sync.Mutex
+	seq     int
+	open    map[string]*agentWindow
+	changed func()
 }
 
 type agentWindow struct {
 	opts    workbench.WindowOptions
+	seq     int
 	buffer  *ring
 	process *ptyProcess
 	timer   *time.Timer
+	// recorded excludes the windows the workbench opens for itself from the
+	// manifest's record, since a resume rebuilds those without being told to.
+	recorded bool
 }
 
 func newWindows(r renderer, emit emitter) *Windows {
@@ -36,13 +41,22 @@ func newWindows(r renderer, emit emitter) *Windows {
 }
 
 func (w *Windows) openWindow(opts workbench.WindowOptions) (string, error) {
+	return w.spawn(opts, true)
+}
+
+// openStructural opens a window the workbench owns rather than the agent.
+func (w *Windows) openStructural(opts workbench.WindowOptions) (string, error) {
+	return w.spawn(opts, false)
+}
+
+func (w *Windows) spawn(opts workbench.WindowOptions, recorded bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
 	w.mu.Lock()
 	w.seq++
 	id := fmt.Sprintf(windowIDFormat, w.seq)
-	window := &agentWindow{opts: opts}
+	window := &agentWindow{opts: opts, seq: w.seq, recorded: recorded}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
 	}
@@ -68,6 +82,7 @@ func (w *Windows) openWindow(opts workbench.WindowOptions) (string, error) {
 		}
 		w.mu.Unlock()
 	}
+	w.announce()
 	return id, nil
 }
 
@@ -224,7 +239,45 @@ func (w *Windows) discard(id string) bool {
 	if process != nil {
 		process.stop()
 	}
+	w.announce()
 	return true
+}
+
+// observe registers what to tell when the open set changes. Clearing it before
+// teardown keeps the session's own ending out of the record: the manifest is
+// meant to say which windows were open, not that closing the conversation
+// closed them.
+func (w *Windows) observe(changed func()) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.changed = changed
+}
+
+func (w *Windows) announce() {
+	w.mu.Lock()
+	changed := w.changed
+	w.mu.Unlock()
+	if changed != nil {
+		changed()
+	}
+}
+
+// snapshot describes the agent's open windows, oldest first.
+func (w *Windows) snapshot() []workbench.WindowOptions {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	live := make([]*agentWindow, 0, len(w.open))
+	for _, window := range w.open {
+		if window.recorded {
+			live = append(live, window)
+		}
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
+	out := make([]workbench.WindowOptions, 0, len(live))
+	for _, window := range live {
+		out = append(out, window.opts)
+	}
+	return out
 }
 
 // stopAll tears every window down, so closing the conversation leaves nothing
