@@ -6,36 +6,20 @@ on:
     branches: [main]
 
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  # The workbench is a WebKit window, so the binary links cgo and a Mac is the
+  # only host that can build or test it. There is nothing to cross-compile to.
+  check:
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test ./...
-      - run: go build ./...
-
-  cross-compile:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # No Windows target: the launch path execs zellij via syscall.Exec,
-        # which returns EWINDOWS at runtime, and zellij has no Windows build.
-        target:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: go build .
+      # The pre-handoff gate from AGENTS.md, so CI and a developer's last command
+      # are the same thing.
+      - run: make check
+      # Intel Macs are still a release target; Go hands clang the arch itself.
+      - run: go build -o /dev/null .
         env:
-          GOOS: ${{ matrix.target.goos }}
-          GOARCH: ${{ matrix.target.goarch }}
-          CGO_ENABLED: "0"
+          GOARCH: amd64
+          CGO_ENABLED: "1"
