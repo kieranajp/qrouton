@@ -32,6 +32,17 @@ var (
 	// ErrNoEditor means qrouton found no terminal editor to open files with.
 	ErrNoEditor = errors.New("no terminal editor found")
 
+	// ErrWorkbenchSpecIncomplete means a detached workbench was started without
+	// a socket to serve or a conversation command to run.
+	ErrWorkbenchSpecIncomplete = errors.New("workbench spec missing socket or command")
+
+	// ErrWorkbenchExited means the detached workbench died before it served its
+	// control socket, so there is no window and the reason is in its log.
+	ErrWorkbenchExited = errors.New("workbench exited before it opened")
+
+	// ErrWorkbenchNotReady means it never answered at all.
+	ErrWorkbenchNotReady = errors.New("workbench did not open in time")
+
 	// Errors resolving a path an agent asked qrouton to open. All of them mean
 	// the path is not a usable thing inside this session.
 	ErrNotRegularFile        = errors.New("not a regular file")

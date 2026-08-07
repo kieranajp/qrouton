@@ -26,13 +26,13 @@ Dependency direction: `config ← github ← session ← tui`; `launch`, `agents
 
 The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's own files), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
 
-- `main.go`: urfave/cli app; the root action opens the workbench, subcommands come from `cmd/*`. `cmd/onboard` is hidden: it runs the onboarding TUI inside the conversation PTY and then execs the supervisor in place, so a session has one long-lived terminal.
+- `main.go`: urfave/cli app; the root action assembles the session in the terminal it was run from and then re-execs the binary behind a hidden marker flag, so the workbench owns a process of its own and the prompt comes back. Subcommands come from `cmd/*`. `cmd/onboard` is hidden: it runs the onboarding TUI inside the conversation PTY and then execs the supervisor in place, so a session has one long-lived terminal.
 - `cmd/mcp/`, `cmd/agents/`, `cmd/repos/`, `cmd/shell/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
 - `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
 - `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
 - `prompts/`: canonical workflow, skill, and agent prompts, provider rendering, and `Stamp` — the one implementation of the runner discovery tree, shared by launches and evals.
-- `internal/launch/`: runner launch/resume arguments, MCP injection, the conversation and shell argv, the supervisor and its signal path, and editor resolution. Asset stamping delegates to `prompts.Stamp`; only the mode-to-discovery-file decision lives here.
+- `internal/launch/`: runner launch/resume arguments, MCP injection, the conversation and shell argv, the supervisor and its signal path, the workbench detach and its readiness wait, and editor resolution. Asset stamping delegates to `prompts.Stamp`; only the mode-to-discovery-file decision lives here.
 - `internal/workbench/`: the window port (`WindowHost`, `WindowOptions`), the `Handle` that carries the control socket into the MCP child, and the socket client. No webview.
 - `internal/desktop/`: the Wails application — the conversation PTY, the window registry and its lifecycle rules, the control-socket server, and the embedded xterm.js pages. Window construction sits behind a `renderer` seam so everything else is testable without a display.
 - `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: the agent's window tools; subagent event collection, whose own surface is deferred; legacy repo status.

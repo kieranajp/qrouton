@@ -27,6 +27,7 @@ const (
 	canonicalPromptsDirName = "qrspi"
 
 	notifyScriptName   = "notify.sh"
+	workbenchLogName   = "workbench.log"
 	claudeAgentLogName = "claude-agents.jsonl"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
@@ -57,6 +58,13 @@ func CanonicalPrompts(root string) string {
 // runner's notification hook.
 func NotifyScript(root string) string {
 	return filepath.Join(Dir(root), notifyScriptName)
+}
+
+// WorkbenchLog collects the detached workbench process's stdio. It has no
+// terminal to fail into, so a crash after it started answering is only ever
+// read here.
+func WorkbenchLog(root string) string {
+	return filepath.Join(Dir(root), workbenchLogName)
 }
 
 // ClaudeAgentLog records Claude subagent lifecycle hook events.

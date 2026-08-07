@@ -25,6 +25,7 @@ const (
 	// binary conventionally lands, and a file there would block every mkdir.
 	socketRoot       = "/tmp/qrouton-sock"
 	socketSuffix     = ".sock"
+	logSuffix        = ".log"
 	socketTokenBytes = 6
 	socketDirMode    = 0o700
 

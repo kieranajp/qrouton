@@ -21,10 +21,21 @@ const (
 	runnerFlag       = "runner"
 	runnerFlagUsage  = "coding agent to launch (claude, codex, or opencode)"
 
+	// workbenchSpecFlag is the marker the detached workbench process is started
+	// with. Hidden: it is qrouton talking to itself, and the spec behind it is
+	// not something a user composes. Its literal is duplicated in
+	// internal/launch, which builds the argv that carries it.
+	workbenchSpecFlag = "workbench-spec"
+
 	// The ad-hoc path has no TUI, so it narrates to stderr.
 	logPrefix      = appName + ":"
 	resumingFormat = logPrefix + " resuming %s\n"
 	progressFormat = logPrefix + " %s %s\n"
+
+	// openedFormat is the whole of the successful result: the terminal is free
+	// again, and the log is where to look if the windows vanish.
+	openedFormat       = "opened %s — log: %s\n"
+	sessionListSubject = "the session list"
 
 	// adhocBranchPrefix names the branch of an ad-hoc session's active repos.
 	// These sessions start without a ticket, so "chore" reads more honestly

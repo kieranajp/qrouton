@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -47,6 +48,13 @@ func NewSocketPath() (string, error) {
 		return "", err
 	}
 	return filepath.Join(dir, hex.EncodeToString(token)+socketSuffix), nil
+}
+
+// ProcessLog is where a workbench process's stdio lands before it belongs to a
+// session, keyed on the same process token as its socket. A session that has
+// been chosen owns its own log inside it.
+func ProcessLog(socket string) string {
+	return strings.TrimSuffix(socket, socketSuffix) + logSuffix
 }
 
 type client struct {

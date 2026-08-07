@@ -23,6 +23,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
@@ -36,6 +37,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
+			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
 		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command, onboardcmd.Command},
 		Action:   onboard,
@@ -49,8 +51,12 @@ func main() {
 // onboard is the default action. With no arguments it opens the landing list.
 // A single argument naming an existing directory drops into a fresh zero-repo
 // scratch session named after it; owner/repo arguments launch an ad-hoc
-// session directly.
+// session directly. Each of those assembles in the terminal the user ran and
+// then hands the workbench to a process of its own.
 func onboard(c *cli.Context) error {
+	if spec := c.String(workbenchSpecFlag); spec != "" {
+		return workbenchProcess(spec)
+	}
 	args := c.Args().Slice()
 	if len(args) == 0 {
 		return list(c.String(runnerFlag), c.Bool(refreshFlag))
@@ -82,12 +88,10 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
-	return desktop.Run(desktop.Options{
+	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
-		Env:    os.Environ(),
-		Shell:  shellArgv(bin),
-	})
+	}, os.Environ())
 }
 
 // launchScratch is the directory-argument path: a zero-repo Assistant session
@@ -229,10 +233,9 @@ func adhocName(repos []github.Repo) string {
 	return strings.Join(names, adhocNameSeparator)
 }
 
-// launchRunner opens the workbench on the session and blocks until its window
-// closes. Prompt stamping is not done here: the supervisor running in the
-// conversation terminal stamps on every (re)launch, from the manifest as it
-// then stands.
+// launchRunner opens the workbench on the session. Prompt stamping is not done
+// here: the supervisor running in the conversation terminal stamps on every
+// (re)launch, from the manifest as it then stands.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	editor, err := launch.ResolveEditor(cfg.Editor)
 	if err != nil {
@@ -250,7 +253,63 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return desktop.Run(desktop.Options{SessionRoot: dir, Socket: socket, Argv: argv, Env: env, Shell: shellArgv(bin)})
+	return detach(launch.WorkbenchSpec{SessionRoot: dir, Socket: socket, Argv: argv}, env)
+}
+
+// detach hands the workbench to a process of its own and returns as soon as it
+// is serving, so the terminal comes back with the windows still up. Assembly has
+// already narrated to this terminal by the time we get here; the workbench's own
+// output has nowhere to go but its log.
+func detach(spec launch.WorkbenchSpec, env []string) error {
+	bin, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	log := workbenchLog(spec)
+	if err := launch.Detach(launch.WorkbenchArgv(bin, spec), env, spec.Socket, log); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stdout, openedFormat, subject(spec.SessionRoot), log)
+	return nil
+}
+
+// workbenchProcess is the detached process's own entry: it runs the event loop
+// and lives until the session ends. Nothing is re-derived — the parent assembled
+// the session and put everything this needs in the spec.
+func workbenchProcess(marshalled string) error {
+	spec, err := launch.ParseWorkbenchSpec(marshalled)
+	if err != nil {
+		return err
+	}
+	bin, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	return desktop.Run(desktop.Options{
+		SessionRoot: spec.SessionRoot,
+		Socket:      spec.Socket,
+		Argv:        spec.Argv,
+		Env:         os.Environ(),
+		Shell:       shellArgv(bin),
+	})
+}
+
+// workbenchLog is where the detached process's stdio lands: inside the session
+// when there is one, and beside its control socket on the landing-list path,
+// which has not chosen a session yet.
+func workbenchLog(spec launch.WorkbenchSpec) string {
+	if spec.SessionRoot == "" {
+		return workbench.ProcessLog(spec.Socket)
+	}
+	return sessionpaths.WorkbenchLog(spec.SessionRoot)
+}
+
+// subject names what was opened in the one line the user gets back.
+func subject(sessionRoot string) string {
+	if sessionRoot == "" {
+		return sessionListSubject
+	}
+	return filepath.Base(sessionRoot)
 }
 
 // shellArgv builds the user shell's command for whichever session the workbench
