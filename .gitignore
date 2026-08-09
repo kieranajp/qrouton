@@ -9,3 +9,6 @@ internal/desktop/frontend/node_modules/
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
 .qrouton/
+
+# Riptide machine-local override (workspace.json is shared)
+.humanlayer/workspace.local.json

@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import TerminalPane from "./shell/TerminalPane.svelte";
   import { Call, Events } from "./wails.js";
   import { decode, encode, mount, watchSize } from "./xterm.js";
 
@@ -36,19 +37,13 @@
 
 <!-- Hidden rather than unmounted: a tab you switch away from keeps running, and
      tearing down its terminal would lose the scrollback with it. -->
-<div class="pane" class:active bind:this={host}></div>
+<TerminalPane style="display: {active ? 'flex' : 'none'}">
+  <div class="host" bind:this={host}></div>
+</TerminalPane>
 
 <style>
-  .pane {
-    display: none;
+  .host {
     flex: 1;
     min-height: 0;
-    background: var(--surface-terminal);
-    padding: 12px 14px;
-    box-sizing: border-box;
-  }
-
-  .active {
-    display: block;
   }
 </style>

@@ -12,6 +12,7 @@ var (
 
 	ErrNoWindowOptions = errors.New("open request carries no window options")
 	ErrNoWindowCommand = errors.New("a terminal window needs a command")
+	ErrNotATerminal    = errors.New("window is not a terminal")
 	ErrNoSessionRoot   = errors.New("adopt request carries no session root")
 	ErrNoShellCommand  = errors.New("workbench has no shell command to run")
 )

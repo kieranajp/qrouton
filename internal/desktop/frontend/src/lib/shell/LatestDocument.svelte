@@ -12,13 +12,20 @@
   {#if !latest}
     <span class="nothing">nothing yet</span>
   {:else}
-    <button class="chip" class:lit={open || unseen} onclick={onToggle}>
+    {#snippet summary()}
       <span class="tag" class:plan={latest.tag === "PLAN"}>{latest.tag}</span>
       <span class="name">{latest.name}</span>
       <span class="age">{latest.age}</span>
       {#if count > 1}<span class="age">+{count - 1}</span>{/if}
-      <span class="caret">&#9662;</span>
-    </button>
+    {/snippet}
+    {#if onToggle}
+      <button class="chip" class:lit={open || unseen} onclick={onToggle}>
+        {@render summary()}
+        <span class="caret">&#9662;</span>
+      </button>
+    {:else}
+      <span class="chip inert" class:lit={unseen}>{@render summary()}</span>
+    {/if}
     {#if open}{@render children?.()}{/if}
   {/if}
 </div>
@@ -51,6 +58,12 @@
 
   .lit {
     border-color: var(--accent-action);
+  }
+
+  /* A readout, not a control: no caret promising a menu, no cursor promising a
+     press. */
+  .inert {
+    cursor: default;
   }
 
   .tag {

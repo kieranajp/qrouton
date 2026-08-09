@@ -8,29 +8,8 @@ body {
   color: var(--text-primary);
 }
 
+/* On its own page a row carries the gutter itself, so a diff's backgrounds
+   reach the window edge rather than stopping at a padded container. */
 .row {
   padding: 0 var(--space-7);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.add {
-  background: var(--diff-add-bg);
-  color: var(--diff-add-fg);
-}
-
-.del {
-  background: var(--diff-del-bg);
-  color: var(--diff-del-fg);
-}
-
-.hunk {
-  background: var(--diff-hunk-bg);
-  color: var(--text-muted);
-}
-
-.file {
-  color: var(--diff-file-fg);
-  font-weight: 600;
-  padding-top: var(--space-4);
 }

@@ -70,6 +70,28 @@ func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 	}
 }
 
+// A document has no command to run, so Start on one would index an empty argv
+// and take the whole workbench with it. Under dock the agent's documents become
+// tabs, which is exactly what the terminal page calls Start on.
+func TestStartRefusesADocumentWindow(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(id, 80, 24); err != ErrNotATerminal {
+		t.Fatalf("Start on a document returned %v, want ErrNotATerminal", err)
+	}
+	if !w.exists(id) {
+		t.Fatal("the refusal took the document with it")
+	}
+}
+
 func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 	w, r := testWindows(t)
 	id, err := w.openWindow(workbench.WindowOptions{

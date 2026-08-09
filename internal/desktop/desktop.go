@@ -5,6 +5,7 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"path/filepath"
 	"sync"
@@ -124,6 +125,9 @@ type shellWindow struct {
 
 	mu sync.Mutex
 	id string
+	// opened counts the shells the session has had rather than the ones still
+	// open: a number freed by a close would name two terminals at once.
+	opened int
 }
 
 // open gives the session a shell without being asked. Adoption may call it
@@ -143,19 +147,33 @@ func (s *shellWindow) open(root string) {
 
 // another is the tab strip's + button.
 func (s *shellWindow) another() (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.spawn(s.root())
 }
 
+// spawn is called with mu held, so the numbering matches the order the tabs
+// open in.
 func (s *shellWindow) spawn(root string) (string, error) {
 	if root == "" || s.argv == nil {
 		return "", ErrNoShellCommand
 	}
+	s.opened++
 	return s.windows.openStructural(workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
-		Label:   shellWindowLabel,
+		Label:   shellLabel(s.opened),
 		Cwd:     root,
 		Command: s.argv(root),
 	})
+}
+
+// shellLabel leaves the first shell unnumbered, so a session with one reads as
+// it always did.
+func shellLabel(n int) string {
+	if n <= 1 {
+		return shellWindowLabel
+	}
+	return fmt.Sprintf(shellWindowLabelNumbers, n)
 }
 
 // windowTitle names the session in the conversation's title bar; onboarding has

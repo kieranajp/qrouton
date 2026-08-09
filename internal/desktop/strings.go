@@ -15,7 +15,8 @@ const (
 	agentWindowWidth  = 900
 	agentWindowHeight = 620
 
-	shellWindowLabel = "$ shell"
+	shellWindowLabel        = "$ shell"
+	shellWindowLabelNumbers = "$ shell %d"
 
 	// The page URLs are directories: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.

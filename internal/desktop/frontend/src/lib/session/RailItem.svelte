@@ -31,7 +31,9 @@
   } = $props();
 
   let mark = $derived(marker(activity, unseen));
-  let modeLabel = $derived(mode === "RPI" ? "Guided" : "Open-ended");
+  // Mode reads as one word: the reason line has ~19 monospace characters before
+  // it truncates, and unlike the name above it, it is short enough not to.
+  let modeLabel = $derived(mode === "RPI" ? "Guided" : "Open");
   let reason = $derived(
     activity === "waiting"
       ? "Waiting for you"

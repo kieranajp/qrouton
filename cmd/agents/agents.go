@@ -25,12 +25,11 @@ var EventCommand = &cli.Command{
 		&cli.StringFlag{Name: workbenchJSONFlag, Usage: workbenchJSONUsage},
 	},
 	Action: func(c *cli.Context) error {
+		// A log that could not be written must not also cost the window the
+		// only signal it gets: the hook name survives the failure.
 		hook, err := agents.RecordEvent(c.String(sessionRootFlag), os.Stdin)
-		if err != nil {
-			return err
-		}
 		signal(c.String(workbenchJSONFlag), attention[hook])
-		return nil
+		return err
 	},
 }
 

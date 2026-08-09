@@ -285,6 +285,41 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	}
 }
 
+// Tabs that all read "$ shell" are tabs nobody can tell apart. The number goes
+// in the label the registry stores, so read_window and the manifest's record
+// agree with the tab strip.
+func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	for range 2 {
+		if _, err := windows.OpenShell(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tabs := windows.tabs()
+	want := []string{shellWindowLabel, "$ shell 2", "$ shell 3"}
+	if len(tabs) != len(want) {
+		t.Fatalf("tabs = %+v", tabs)
+	}
+	for i, label := range want {
+		if tabs[i].Label != label {
+			t.Fatalf("tab %d reads %q, want %q", i, tabs[i].Label, label)
+		}
+		window, ok := windows.window(tabs[i].ID)
+		if !ok || window.opts.Label != label {
+			t.Fatalf("the registry stores %q for the tab reading %q", window.opts.Label, label)
+		}
+	}
+}
+
 // On the landing-list path the workbench opens before a session exists, so the
 // shell and the title bar wait for onboarding to adopt one.
 func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {

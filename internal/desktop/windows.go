@@ -118,6 +118,12 @@ func (w *Windows) Start(id string, cols, rows int) error {
 		w.mu.Unlock()
 		return noSuchWindow(id)
 	}
+	// A document has no command, and a page that asks anyway must not take the
+	// workbench down with it.
+	if window.opts.Kind != workbench.KindTerminal {
+		w.mu.Unlock()
+		return ErrNotATerminal
+	}
 	if window.process != nil {
 		w.mu.Unlock()
 		return nil

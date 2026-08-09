@@ -7,11 +7,11 @@
   import StatusDot from "./lib/core/StatusDot.svelte";
   import RailItem from "./lib/session/RailItem.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
-  import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
   import TerminalPane from "./lib/shell/TerminalPane.svelte";
   import WindowTray from "./lib/shell/WindowTray.svelte";
+  import DockedDocument from "./lib/DockedDocument.svelte";
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { attach } from "./lib/conversation.js";
@@ -28,7 +28,6 @@
   const session = chrome();
   const open = surfaces();
   let host;
-  let docsOpen = $state(false);
   // The focused tab is held by id, so a window docking behind it cannot shift
   // the selection the way an index would.
   let focused = $state("");
@@ -47,9 +46,6 @@
         }
       : undefined,
   );
-  let documentItems = $derived(
-    fields.documents.map((d) => ({ tag: d.kind, label: d.name, meta: age(d.at) })),
-  );
   let commits = $derived(fields.repos.reduce((total, repo) => total + repo.commits, 0));
 </script>
 
@@ -59,7 +55,7 @@
     <span class="name">{fields.identity}</span>
     {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
     <span class="tools">
-      <Button variant="ghost" size="sm">Settings</Button>
+      <Button variant="ghost" size="sm" disabled>Settings</Button>
     </span>
   </div>
 
@@ -112,17 +108,7 @@
         {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
         <span class="badge" class:quiet={fields.activity === "idle"} style:--tone={activity.fill}
           >{activity.label}</span>
-        <LatestDocument
-          {latest}
-          count={fields.documents.length}
-          open={docsOpen}
-          onToggle={() => (docsOpen = !docsOpen)}>
-          <Menu
-            style="left: 52px"
-            label="thoughts/shared"
-            width={330}
-            items={documentItems} />
-        </LatestDocument>
+        <LatestDocument {latest} count={fields.documents.length} />
       </PaneHeader>
       <TerminalPane>
         <div class="host" bind:this={host}></div>
@@ -138,7 +124,12 @@
         onNew={async () => (focused = await openShell())}
         newLabel="Shell" />
       {#each open.tabs as tab, i (tab.id)}
-        <DockedTerminal id={tab.id} active={i === selected} />
+        <!-- Only a terminal may be Started; a document tab has no process behind it. -->
+        {#if tab.kind === "terminal"}
+          <DockedTerminal id={tab.id} active={i === selected} />
+        {:else}
+          <DockedDocument id={tab.id} active={i === selected} />
+        {/if}
       {/each}
     </div>
   </div>
