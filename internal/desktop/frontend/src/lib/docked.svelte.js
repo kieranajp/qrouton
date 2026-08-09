@@ -7,9 +7,17 @@ const NONE = { tabs: [], floating: [] };
 /** surfaces is where each window the workbench has open is drawn. */
 export function surfaces() {
   let open = $state(NONE);
+  let live = false;
   const apply = (value) => (open = { ...NONE, ...(value || {}) });
-  Events.On("window:open", (event) => apply(event.data));
-  Call.ByName(WINDOWS_SERVICE + ".Surfaces").then(apply);
+  Events.On("window:open", (event) => {
+    live = true;
+    apply(event.data);
+  });
+  // The initial pull can resolve after an event has already landed; a stale
+  // snapshot must not overwrite it.
+  Call.ByName(WINDOWS_SERVICE + ".Surfaces").then((value) => {
+    if (!live) apply(value);
+  });
   return {
     get tabs() {
       return open.tabs;

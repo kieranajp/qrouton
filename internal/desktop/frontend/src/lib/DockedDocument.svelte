@@ -26,7 +26,7 @@
        plain document that quotes a diff as one. -->
   <div class="body">
     {#each lines as line, i (i)}
-      <div class="row {format === 'diff' ? diffClass(line) : ''}">{line === "" ? " " : line}</div>
+      <div class="diff-row {format === 'diff' ? diffClass(line) : ''}">{line === "" ? " " : line}</div>
     {/each}
   </div>
 </TerminalPane>

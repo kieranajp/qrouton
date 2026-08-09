@@ -19,9 +19,9 @@ const META = [
  * @returns {string}
  */
 export function diffClass(line) {
-  if (META.some((prefix) => line.startsWith(prefix))) return "file";
-  if (line.startsWith("@@")) return "hunk";
-  if (line.startsWith("+")) return "add";
-  if (line.startsWith("-")) return "del";
+  if (META.some((prefix) => line.startsWith(prefix))) return "diff-file";
+  if (line.startsWith("@@")) return "diff-hunk";
+  if (line.startsWith("+")) return "diff-add";
+  if (line.startsWith("-")) return "diff-del";
   return "";
 }

@@ -14,11 +14,21 @@ const NOTHING = {
   activity: "idle",
 };
 
+// Spreading over the defaults is not enough: a slice Go leaves nil arrives as
+// an explicit null, which fills the key rather than leaving it absent, and the
+// first .length on it unwinds the render before the rest of the fields draw.
+const observed = (data) =>
+  /** @type {typeof NOTHING} */ (
+    Object.fromEntries(
+      Object.entries(NOTHING).map(([key, fallback]) => [key, data?.[key] ?? fallback]),
+    )
+  );
+
 /** chrome is the last thing the workbench said it could observe. */
 export function chrome() {
   let fields = $state(NOTHING);
   Events.On("chrome:update", (event) => {
-    fields = { ...NOTHING, ...(event.data || {}) };
+    fields = observed(event.data);
   });
   return {
     get fields() {

@@ -45,8 +45,8 @@ const (
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
 
-	// manifestTmpSuffix names WriteManifest's staging file, renamed over the
-	// manifest so its writes are atomic.
+	// manifestTmpSuffix ends the name of WriteManifest's staging file, which is
+	// created uniquely so two processes staging at once cannot share one.
 	manifestTmpSuffix = ".tmp"
 )
 
@@ -84,10 +84,13 @@ const (
 	revListCmd         = "rev-list"
 	diffCmd            = "diff"
 	countFlag          = "--count"
-	shortstatFlag      = "--shortstat"
+	numstatFlag        = "--numstat"
 	headRef            = "HEAD"
 	rangeSeparator     = ".."
 	mergeBaseSeparator = "..."
+
+	// binaryMarker is --numstat's placeholder for a binary file's line counts.
+	binaryMarker = "-"
 
 	// progressFlag is not optional once stderr is a pipe: git reports progress
 	// only to a terminal unless asked in so many words.
@@ -121,6 +124,10 @@ const (
 	progressEmitInterval = 100 * time.Millisecond
 	progressComplete     = 100
 )
+
+// repoStatTimeout bounds one git invocation inside RepoStats, so a wedged git
+// cannot hang the caller.
+const repoStatTimeout = 5 * time.Second
 
 // Scratch sessions (a bare `qrouton`) are named after the invoking directory
 // plus entropy, falling back when the basename slugifies to nothing.

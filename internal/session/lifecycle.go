@@ -2,11 +2,11 @@ package session
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 
@@ -96,12 +96,6 @@ func Delete(root string, m Manifest) error {
 	return nil
 }
 
-// git drops either clause from --shortstat when its count is zero.
-var (
-	shortstatInsertions = regexp.MustCompile(`(\d+) insertion`)
-	shortstatDeletions  = regexp.MustCompile(`(\d+) deletion`)
-)
-
 // RepoStat is how far one repository has moved since it was branched.
 // Uncommitted work is left out; the commit and diff figures answer the question.
 type RepoStat struct {
@@ -110,11 +104,13 @@ type RepoStat struct {
 	Commits    int
 	Insertions int
 	Deletions  int
+	Measured   bool
 }
 
 // RepoStats measures each repository against the branch it was cut from. A
-// reference repository is pinned, so it has nothing to be ahead of.
-func RepoStats(root string, m Manifest) []RepoStat {
+// reference repository is pinned, so it has nothing to be ahead of, and a
+// blank default branch is left unmeasured rather than built into a bad ref.
+func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	dir := filepath.Join(root, m.Slug)
 	stats := make([]RepoStat, 0, len(m.Repos))
 	for _, repo := range m.Repos {
@@ -122,46 +118,81 @@ func RepoStats(root string, m Manifest) []RepoStat {
 		if stat.Role == "" {
 			stat.Role = RepoRoleActive
 		}
-		if stat.Role == RepoRoleActive {
+		if stat.Role == RepoRoleActive && repo.DefaultBranch != "" {
 			base := remoteRefPrefix + repo.DefaultBranch
 			path := filepath.Join(dir, repo.WorktreePath)
-			stat.Commits = countCommits(path, base)
-			stat.Insertions, stat.Deletions = countLines(path, base)
+			measure(ctx, path, base, &stat)
 		}
 		stats = append(stats, stat)
 	}
 	return stats
 }
 
-// countCommits counts what the session branch has that its base does not. A
-// worktree whose base ref has gone reports nothing rather than guessing.
-func countCommits(path, base string) int {
-	out, err := exec.Command(gitBin, dirFlag, path, revListCmd, countFlag, base+rangeSeparator+headRef).Output()
+func measure(ctx context.Context, path, base string, stat *RepoStat) {
+	commits, ok := countCommits(ctx, path, base)
+	if !ok {
+		return
+	}
+	insertions, deletions, ok := countLines(ctx, path, base)
+	if !ok {
+		return
+	}
+	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
+}
+
+// countCommits counts what the session branch has that its base does not.
+func countCommits(ctx context.Context, path, base string) (int, bool) {
+	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, revListCmd, countFlag, base+rangeSeparator+headRef).Output()
 	if err != nil {
-		return 0
+		return 0, false
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	if err != nil {
-		return 0
-	}
-	return count
+	return count, err == nil
 }
 
 // countLines totals the diff since the merge base, so a base branch that has
 // moved on does not count as the session's own work.
-func countLines(path, base string) (int, int) {
-	out, err := exec.Command(gitBin, dirFlag, path, diffCmd, shortstatFlag, base+mergeBaseSeparator+headRef).Output()
+func countLines(ctx context.Context, path, base string) (int, int, bool) {
+	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, diffCmd, numstatFlag, base+mergeBaseSeparator+headRef).Output()
 	if err != nil {
-		return 0, 0
+		return 0, 0, false
 	}
-	return firstNumber(shortstatInsertions, string(out)), firstNumber(shortstatDeletions, string(out))
+	return sumNumstat(string(out))
 }
 
-func firstNumber(pattern *regexp.Regexp, text string) int {
-	match := pattern.FindStringSubmatch(text)
-	if match == nil {
-		return 0
+// sumNumstat totals --numstat's tab-separated columns; binaryMarker replaces
+// both counts for a file git cannot diff by line.
+func sumNumstat(text string) (int, int, bool) {
+	insertions, deletions := 0, 0
+	for _, line := range strings.Split(strings.TrimSpace(text), "\n") {
+		if line == "" {
+			continue
+		}
+		added, rest, ok := strings.Cut(line, "\t")
+		if !ok {
+			return 0, 0, false
+		}
+		removed, _, ok := strings.Cut(rest, "\t")
+		if !ok {
+			return 0, 0, false
+		}
+		if added == binaryMarker || removed == binaryMarker {
+			continue
+		}
+		a, err := strconv.Atoi(added)
+		if err != nil {
+			return 0, 0, false
+		}
+		d, err := strconv.Atoi(removed)
+		if err != nil {
+			return 0, 0, false
+		}
+		insertions += a
+		deletions += d
 	}
-	n, _ := strconv.Atoi(match[1])
-	return n
+	return insertions, deletions, true
 }

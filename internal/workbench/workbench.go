@@ -29,7 +29,8 @@ const FormatDiff DocumentFormat = "diff"
 // WindowOptions describes a window the agent opens. Command belongs to a
 // terminal window and Content to a document one. CloseOnExit closes a terminal
 // window whose process exits zero; a non-zero exit keeps it open regardless.
-// TTL expires a document window.
+// TTL expires a document window. Attention marks a window that needs the
+// user's eye without taking focus.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
@@ -38,6 +39,7 @@ type WindowOptions struct {
 	Content     string         `json:"content,omitempty"`
 	Format      DocumentFormat `json:"format,omitempty"`
 	Focus       bool           `json:"focus,omitempty"`
+	Attention   bool           `json:"attention,omitempty"`
 	CloseOnExit bool           `json:"close_on_exit,omitempty"`
 	TTL         time.Duration  `json:"ttl,omitempty"`
 }

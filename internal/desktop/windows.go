@@ -98,7 +98,7 @@ func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (st
 			return "", err
 		}
 	}
-	if opts.Kind == workbench.KindDocument && opts.TTL > 0 {
+	if !docked && opts.Kind == workbench.KindDocument && opts.TTL > 0 {
 		w.mu.Lock()
 		if _, live := w.open[id]; live {
 			window.timer = time.AfterFunc(opts.TTL, func() { w.dismiss(id) })
@@ -210,7 +210,9 @@ func (w *Windows) processExited(id string, code int) {
 	w.announce()
 }
 
-func (w *Windows) closeWindow(id string) error {
+// Close serves the agent's window tool and the tab strip's close control. Wails
+// binds exported methods only, so unexporting this silently breaks the tab.
+func (w *Windows) Close(id string) error {
 	if _, ok := w.window(id); !ok {
 		return noSuchWindow(id)
 	}
@@ -247,8 +249,11 @@ func (w *Windows) list() []string {
 
 // dismiss tears the window down and takes it off the screen.
 func (w *Windows) dismiss(id string) {
-	window, docked := w.window(id)
-	if w.discard(id) && !(docked && window.docked) {
+	window, ok := w.window(id)
+	if !ok {
+		return
+	}
+	if w.discard(id) && !window.docked {
 		w.renderer.Close(id)
 	}
 }
@@ -298,8 +303,8 @@ func (w *Windows) announce() {
 	}
 }
 
-// openWindow is one window as its surface draws it.
-type openWindow struct {
+// drawnWindow is one window as its surface draws it.
+type drawnWindow struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
 	Kind   string `json:"kind"`
@@ -309,8 +314,8 @@ type openWindow struct {
 // surfaces splits the open windows by where they are drawn, oldest first so the
 // shell stays leftmost.
 type surfaces struct {
-	Tabs     []openWindow `json:"tabs"`
-	Floating []openWindow `json:"floating"`
+	Tabs     []drawnWindow `json:"tabs"`
+	Floating []drawnWindow `json:"floating"`
 }
 
 func (w *Windows) surfaces() surfaces {
@@ -321,9 +326,9 @@ func (w *Windows) surfaces() surfaces {
 		live = append(live, window)
 	}
 	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
-	out := surfaces{Tabs: []openWindow{}, Floating: []openWindow{}}
+	out := surfaces{Tabs: []drawnWindow{}, Floating: []drawnWindow{}}
 	for _, window := range live {
-		drawn := openWindow{
+		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
 			Kind: string(window.opts.Kind), Status: tabStatus(window),
 		}
@@ -336,7 +341,7 @@ func (w *Windows) surfaces() surfaces {
 	return out
 }
 
-func (w *Windows) tabs() []openWindow { return w.surfaces().Tabs }
+func (w *Windows) tabs() []drawnWindow { return w.surfaces().Tabs }
 
 // Surfaces answers the page on load: the event only fires on a change, and the
 // shell opens before anything is subscribed.
@@ -344,6 +349,8 @@ func (w *Windows) Surfaces() surfaces { return w.surfaces() }
 
 func tabStatus(window *agentWindow) string {
 	switch {
+	case window.opts.Attention:
+		return tabStatusWaiting
 	case window.opts.Kind != workbench.KindTerminal:
 		return ""
 	case window.exit == nil:

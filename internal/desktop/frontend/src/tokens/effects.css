@@ -8,8 +8,8 @@
   --shadow-offset: 3px 3px 0;
   --shadow-offset-lg: 5px 5px 0;
   --shadow-cube: 3px 3px 0 var(--ctp-surface-0);
-  --shadow-focus: 3px 3px 0 rgba(138, 173, 244, 0.16);
-  --shadow-focus-lg: 5px 5px 0 rgba(138, 173, 244, 0.16);
+  --shadow-focus: 3px 3px 0 color-mix(in srgb, var(--ctp-blue) 16%, transparent);
+  --shadow-focus-lg: 5px 5px 0 color-mix(in srgb, var(--ctp-blue) 16%, transparent);
   --shadow-menu: 6px 6px 0 rgba(0, 0, 0, 0.45);
   --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.5);
   --shadow-window-agent: 0 30px 80px rgba(0, 0, 0, 0.7);
@@ -18,11 +18,15 @@
   --border-selected-width: 2px;
 
   /* the mark's hatch, reusable as a texture */
-  --hatch: repeating-linear-gradient(45deg, rgba(24, 25, 38, 0.45) 0 1.5px, transparent 1.5px 4px);
+  --hatch: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--ctp-crust) 45%, transparent) 0 1.5px,
+    transparent 1.5px 4px
+  );
 
   /* selection wash behind an active tab */
-  --wash-selected: rgba(138, 173, 244, 0.07);
-  --wash-guided: rgba(198, 160, 246, 0.09);
+  --wash-selected: color-mix(in srgb, var(--ctp-blue) 7%, transparent);
+  --wash-guided: color-mix(in srgb, var(--ctp-mauve) 9%, transparent);
 
   /* no easing curves are defined on purpose — the content that moves here is
      terminal output, and animated chrome around it reads as lag */

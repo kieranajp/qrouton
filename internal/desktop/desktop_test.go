@@ -262,7 +262,7 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
 	}
 
-	if err := windows.closeWindow(tab.ID); err != nil {
+	if err := windows.Close(tab.ID); err != nil {
 		t.Fatal(err)
 	}
 	if len(windows.tabs()) != 0 {
@@ -384,8 +384,8 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
-	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "octopus" {
-		t.Fatalf("chrome = %+v, want the session's mode, phase and slug", fields)
+	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "Octopus" {
+		t.Fatalf("chrome = %+v, want the session's mode, phase and name", fields)
 	}
 }
 
@@ -436,6 +436,6 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 		r.mu.Lock()
 		defer r.mu.Unlock()
 		fields, ok := r.events[chromeEvent].(status.Fields)
-		return ok && fields.Identity == "adopted"
+		return ok && fields.Identity == "Adopted"
 	})
 }

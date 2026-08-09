@@ -474,15 +474,11 @@ func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest, err := session.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	sels := []session.RepoSelection{{
 		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
 		Role: session.RepoRoleActive,
 	}}
-	if err := confirmEscalation(cfg, dir, manifest, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+	if err := confirmEscalation(cfg, dir, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -497,6 +493,66 @@ func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	}
 	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed || got.Escalation.At.IsZero() {
 		t.Fatalf("confirmed stanza = %+v", got.Escalation)
+	}
+}
+
+// The picker can sit open for the escalate tool's full ~30 minutes while the
+// workbench keeps rewriting Windows underneath it. Confirm used to write back
+// the manifest snapshot the picker loaded on open, discarding any Windows
+// written since.
+func TestPickerConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Orgs: []string{"org"}, Root: root}
+	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
+	if err := session.SetWindows(dir, windows); err != nil {
+		t.Fatal(err)
+	}
+	sels := []session.RepoSelection{{
+		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
+		Role: session.RepoRoleActive,
+	}}
+	if err := confirmEscalation(cfg, dir, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
+		t.Fatalf("confirm discarded Windows written after the picker opened: %+v", got.Windows)
+	}
+}
+
+// Same staleness risk on the cancel path: it must not overwrite Windows the
+// workbench wrote while the picker was up with the picker's own load-time copy.
+func TestPickerCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "")
+	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
+	if err := session.SetWindows(dir, windows); err != nil {
+		t.Fatal(err)
+	}
+	_, cmd := m.updateForm(tea.KeyMsg{Type: tea.KeyEsc})
+	if cmd == nil {
+		t.Fatal("cancel did not quit the picker")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatalf("cancel command produced %T, want quit", cmd())
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
+		t.Fatalf("cancel discarded Windows written after the picker opened: %+v", got.Windows)
 	}
 }
 
@@ -587,12 +643,8 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	manifest, err := session.Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
 	sels := []session.RepoSelection{{Repo: repo, Role: session.RepoRoleActive}}
-	if err := confirmEscalation(cfg, dir, manifest, sels,
+	if err := confirmEscalation(cfg, dir, sels,
 		escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
 		t.Fatal(err)
 	}

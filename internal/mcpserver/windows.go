@@ -216,10 +216,11 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.open(ctx, notifyWindowName, workbench.WindowOptions{
-		Kind:    workbench.KindDocument,
-		Label:   notifyWindowLabel,
-		Content: fmt.Sprintf(toastFormat, message),
-		TTL:     toastLifetime,
+		Kind:      workbench.KindDocument,
+		Label:     notifyWindowLabel,
+		Content:   fmt.Sprintf(toastFormat, message),
+		Attention: true,
+		TTL:       toastLifetime,
 	}); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}

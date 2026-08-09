@@ -58,12 +58,12 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]RepoStat{
-		"svc":   {Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 2, Insertions: 2, Deletions: 1},
-		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleActive, Commits: 1},
-		"level": {Org: "org", Name: "level", Role: RepoRoleActive},
+		"svc":   {Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 2, Insertions: 2, Deletions: 1, Measured: true},
+		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleActive, Commits: 1, Measured: true},
+		"level": {Org: "org", Name: "level", Role: RepoRoleActive, Measured: true},
 		"docs":  {Org: "org", Name: "docs", Role: RepoRoleReference},
 	}
-	stats := RepoStats(root, m)
+	stats := RepoStats(t.Context(), root, m)
 	if len(stats) != len(want) {
 		t.Fatalf("measured %d repositories, want %d: %#v", len(stats), len(want), stats)
 	}
@@ -108,9 +108,32 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if base, _ := resolveRevision(worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
 		t.Fatal("the fetch on resume left the base branch where it was")
 	}
-	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 1, Insertions: 2}
-	if stats := RepoStats(root, m); len(stats) != 1 || stats[0] != want {
+	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 1, Insertions: 2, Measured: true}
+	if stats := RepoStats(t.Context(), root, m); len(stats) != 1 || stats[0] != want {
 		t.Fatalf("stats = %#v, want %#v", stats, want)
+	}
+}
+
+// An older manifest's blank default branch must never reach git as "origin/".
+func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
+	requireGit(t)
+	root := sessionsRoot(t)
+	cfg := &config.Config{Root: root}
+	dir, err := Create(cfg, "No base branch", "", "", "fix", ModeRPI, []RepoSelection{
+		selection(t, "svc", RepoRoleActive),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Repos[0].DefaultBranch = ""
+
+	stats := RepoStats(t.Context(), root, m)
+	if len(stats) != 1 || stats[0].Measured {
+		t.Fatalf("stats = %#v, want an unmeasured repository", stats)
 	}
 }
 

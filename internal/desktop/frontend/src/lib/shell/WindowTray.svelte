@@ -8,7 +8,8 @@
   {#each windows as window (window.id ?? window.label)}
     <div class="window">
       <span class="name">{window.kind === "document" ? "◆" : "▶"} {window.label}</span>
-      <span class="close" role="presentation" onclick={() => onClose?.(window)}>&#10005;</span>
+      <button type="button" class="close" aria-label="Close window" onclick={() => onClose?.(window)}
+        >&#10005;</button>
     </div>
   {/each}
   {#if right}<span class="right">{right}</span>{/if}
@@ -52,6 +53,9 @@
     font-size: 10.5px;
     color: var(--text-faint);
     cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 0;
   }
 
   .right {

@@ -170,6 +170,29 @@ func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
 	}
 }
 
+// A docked toast is a tab the user dismisses, not a clock the way a floating
+// one is.
+func TestADockedAttentionWindowReportsWaitingAndOutlivesItsTTL(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
+		Attention: true, TTL: 20 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.tabs()[0].Status; got != tabStatusWaiting {
+		t.Fatalf("an attention tab reports %q, want waiting", got)
+	}
+	time.Sleep(60 * time.Millisecond)
+	if !w.exists(id) {
+		t.Fatal("a docked attention window expired on its TTL")
+	}
+}
+
 // A command that succeeds takes its window with it; one that fails leaves the
 // error on screen for the user to read.
 func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
@@ -287,7 +310,7 @@ func TestAWindowTheUserClosedLeavesTheRegistry(t *testing.T) {
 
 func TestCloseWindowRejectsAnUnknownID(t *testing.T) {
 	w, _ := testWindows(t)
-	if err := w.closeWindow("window-99"); err == nil {
+	if err := w.Close("window-99"); err == nil {
 		t.Fatal("closed a window that was never open")
 	}
 }
@@ -362,7 +385,7 @@ func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
 				text, _ := w.readWindow(id, true)
 				return strings.Contains(text, "docked")
 			})
-			if err := w.closeWindow(id); err != nil {
+			if err := w.Close(id); err != nil {
 				t.Fatal(err)
 			}
 			if w.exists(id) {

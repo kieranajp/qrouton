@@ -16,14 +16,28 @@ func watchChrome(ctx context.Context, root func() string, activity func() string
 	stats := time.NewTicker(repoStatInterval)
 	defer stats.Stop()
 
-	repos := status.Repos(root())
+	repos := []status.RepoStat{}
+	result := make(chan []status.RepoStat, 1)
+	// A refresh runs off this loop so a wedged git cannot stall the 2s field
+	// ticker; pending guards against a second one starting before it answers.
+	pending := false
+	refresh := func() {
+		if !pending {
+			pending = true
+			go func(root string) { result <- status.Repos(ctx, root) }(root())
+		}
+	}
+
+	refresh()
 	pushChrome(root(), activity(), repos, emit)
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case repos = <-result:
+			pending = false
 		case <-stats.C:
-			repos = status.Repos(root())
+			refresh()
 		case <-fields.C:
 		}
 		pushChrome(root(), activity(), repos, emit)

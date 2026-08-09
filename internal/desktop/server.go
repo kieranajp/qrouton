@@ -9,8 +9,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// control serves the workbench port over a unix socket: one request per
-// connection, newline-delimited JSON.
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
@@ -18,6 +16,8 @@ type controlHooks struct {
 	attention func(activity string)
 }
 
+// control serves the workbench port over a unix socket: one request per
+// connection, newline-delimited JSON.
 type control struct {
 	listener net.Listener
 	socket   string
@@ -82,7 +82,7 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		}
 		return workbench.Response{ID: id}
 	case workbench.OpClose:
-		if err := c.windows.closeWindow(req.ID); err != nil {
+		if err := c.windows.Close(req.ID); err != nil {
 			return workbench.Response{Error: err.Error()}
 		}
 		return workbench.Response{ID: req.ID}
@@ -100,7 +100,9 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		if req.Root == "" {
 			return workbench.Response{Error: ErrNoSessionRoot.Error()}
 		}
-		c.hooks.adopt(req.Root)
+		if c.hooks.adopt != nil {
+			c.hooks.adopt(req.Root)
+		}
 		return workbench.Response{}
 	case workbench.OpAttention:
 		if c.hooks.attention != nil {

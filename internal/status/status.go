@@ -4,6 +4,7 @@
 package status
 
 import (
+	"context"
 	"io/fs"
 	"path/filepath"
 	"regexp"
@@ -18,6 +19,10 @@ import (
 // Fields is the session the workbench window draws around its terminal. Read
 // leaves Repos and Activity empty: one costs subprocesses, the other needs a
 // live PTY, so their owners fill them.
+//
+// No slice here may be nil. A nil one marshals as JSON null, and the page's
+// defaults only fill keys the payload omits, so null reaches a .length and
+// takes the whole window down with it.
 type Fields struct {
 	Mode      string       `json:"mode"`
 	Phase     string       `json:"phase"`
@@ -53,6 +58,7 @@ type RepoStat struct {
 	Commits    int    `json:"commits"`
 	Insertions int    `json:"insertions"`
 	Deletions  int    `json:"deletions"`
+	Measured   bool   `json:"measured"`
 }
 
 // Read reports everything a file read can answer, or false when the manifest
@@ -65,29 +71,35 @@ func Read(root string) (Fields, bool) {
 	fields := Fields{
 		Mode:      modeAssistantLabel,
 		Phase:     phase(root, m),
-		Identity:  m.Slug,
+		Identity:  displayName(m),
 		Branch:    activeBranch(m),
 		Sessions:  sessions(root),
 		Documents: documents(root),
 	}
 	if m.EffectiveMode() == session.ModeRPI {
 		fields.Mode = modeRPILabel
-		if m.Name != "" {
-			fields.Identity = m.Name
-		}
 	}
 	return fields, true
 }
 
+// displayName is the one owner of a session's human name: its Name if set,
+// else its Slug.
+func displayName(m session.Manifest) string {
+	if m.Name != "" {
+		return m.Name
+	}
+	return m.Slug
+}
+
 // Repos measures the session's repositories against the branches they were cut
 // from. Apart from Read because it shells git, and so polls more slowly.
-func Repos(root string) []RepoStat {
+func Repos(ctx context.Context, root string) []RepoStat {
 	m, err := session.Load(root)
 	if err != nil {
-		return nil
+		return []RepoStat{}
 	}
 	out := make([]RepoStat, 0, len(m.Repos))
-	for _, stat := range session.RepoStats(filepath.Dir(root), m) {
+	for _, stat := range session.RepoStats(ctx, filepath.Dir(root), m) {
 		role := roleEditing
 		if stat.Role == session.RepoRoleReference {
 			role = roleReference
@@ -98,6 +110,7 @@ func Repos(root string) []RepoStat {
 			Commits:    stat.Commits,
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
+			Measured:   stat.Measured,
 		})
 	}
 	return out
@@ -136,15 +149,12 @@ func activeBranch(m session.Manifest) string {
 func sessions(root string) []SessionRow {
 	found, err := session.Scan(filepath.Dir(root))
 	if err != nil {
-		return nil
+		return []SessionRow{}
 	}
 	live := filepath.Base(root)
 	rows := make([]SessionRow, 0, len(found))
 	for _, m := range found {
-		name := m.Name
-		if name == "" {
-			name = m.Slug
-		}
+		name := displayName(m)
 		mode := modeAssistantLabel
 		if m.EffectiveMode() == session.ModeRPI {
 			mode = modeRPILabel
@@ -184,7 +194,7 @@ var nonLetter = regexp.MustCompile(`[^a-z0-9]+`)
 // documents lists what the session has written, newest first.
 func documents(root string) []Document {
 	dir := sessionpaths.Thoughts(root)
-	var out []Document
+	out := []Document{}
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
 			return nil

@@ -42,13 +42,13 @@ func (m *appModel) startAssembly() tea.Cmd {
 	ch := make(chan assemblyEvent, 128)
 	m.assembly.ch = ch
 	if m.picker.manifest != nil {
-		cfg, dir, manifest := m.cfg, m.picker.dir, *m.picker.manifest
+		cfg, dir := m.cfg, m.picker.dir
 		details := escalationDetails{name: m.form.name, description: m.form.description,
 			ticket: m.form.ticket, prefix: branchPrefixes[m.form.prefix]}
 		selected := m.selectedRepos()
 		go func() {
 			defer close(ch)
-			err := confirmEscalation(cfg, dir, manifest, selected, details,
+			err := confirmEscalation(cfg, dir, selected, details,
 				func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 			ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 		}()
@@ -124,7 +124,13 @@ type escalationDetails struct {
 // the session keeps its worktree and its branch, uncommitted work included:
 // escalating is how work that started small acquires the full workflow, so the
 // checkout it started in is the last thing that should move.
-func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels []session.RepoSelection, d escalationDetails, progress session.ProgressFunc) error {
+func confirmEscalation(cfg *config.Config, dir string, sels []session.RepoSelection, d escalationDetails, progress session.ProgressFunc) error {
+	// Loaded here, not carried in: a picker can sit open for half an hour while
+	// the workbench keeps rewriting the manifest underneath it.
+	m, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
 	branch := fmt.Sprintf(branchFormat, d.prefix, session.Slugify(d.name))
 	out, err := session.ComposeRepos(cfg, m, sels, branch, progress)
 	if err != nil {
@@ -145,7 +151,11 @@ func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels 
 // cancelPicker records the cancelled outcome — the stanza alone, mode and
 // repositories untouched — and closes the picker.
 func (m appModel) cancelPicker() (tea.Model, tea.Cmd) {
-	out := *m.picker.manifest
+	out, err := session.Load(m.picker.dir)
+	if err != nil {
+		m.err, m.back, m.screen = err, newScreen, errorScreen
+		return m, nil
+	}
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
 	if err := session.WriteManifest(m.picker.dir, out); err != nil {
 		m.err, m.back, m.screen = err, newScreen, errorScreen

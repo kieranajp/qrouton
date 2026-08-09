@@ -46,7 +46,9 @@
         }
       : undefined,
   );
-  let commits = $derived(fields.repos.reduce((total, repo) => total + repo.commits, 0));
+  let commits = $derived(
+    fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
+  );
 </script>
 
 <div class="session">
@@ -86,6 +88,8 @@
               <div class="repo-stat">
                 {#if repo.role === "reference"}
                   read-only
+                {:else if repo.measured === false}
+                  unmeasured
                 {:else}
                   {repo.commits} commit{repo.commits === 1 ? "" : "s"}
                   {#if repo.insertions || repo.deletions}
@@ -199,7 +203,7 @@
     padding: 14px 12px;
     background: var(--surface-chrome);
     border-right: 1px solid var(--border-subtle);
-    overflow: hidden;
+    overflow: hidden auto;
   }
 
   .repos {

@@ -11,11 +11,19 @@ const shade = (name) => getComputedStyle(document.documentElement).getPropertyVa
 const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
 
 const encoder = new TextEncoder();
+const CHUNK = 0x8000;
 
-/** Base64 encodes text, because a raw PTY frame is not valid JSON. */
-export const encode = (text) => btoa(String.fromCharCode(...encoder.encode(text)));
+// String.fromCharCode(...bytes) spreads the array as call arguments, which
+// throws past ~128KB; chunking keeps every paste size working.
+export const encode = (text) => {
+  const bytes = encoder.encode(text);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += CHUNK) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
+  }
+  return btoa(binary);
+};
 
-/** decode turns one base64 PTY frame back into the bytes xterm expects. */
 export function decode(encoded) {
   const raw = atob(encoded);
   const buffer = new Uint8Array(raw.length);
@@ -24,10 +32,6 @@ export function decode(encoded) {
 }
 
 /**
- * mount attaches a terminal to host and wires its input to write. It returns
- * the terminal and a refit callback the caller reports to its own Go service:
- * the two window kinds name different services for the same three methods.
- *
  * @param {HTMLElement} host
  * @param {{write: (text: string) => void, background?: string}} options
  */
@@ -71,11 +75,15 @@ export function mount(host, { write, background = "--ctp-base" }) {
     fit.fit();
     report(term.cols, term.rows);
   };
-  return { term, fit, refit };
+  return { term, fit, refit, dispose: () => term.dispose() };
 }
 
-/** watchSize refits the terminal whenever its host or the window changes size. */
 export function watchSize(host, resize) {
-  new ResizeObserver(resize).observe(host);
+  const observer = new ResizeObserver(resize);
+  observer.observe(host);
   window.addEventListener("resize", resize);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener("resize", resize);
+  };
 }

@@ -1,14 +1,6 @@
 <script>
   import StatusDot from "../core/StatusDot.svelte";
 
-  /**
-   * Rank, highest first:
-   *   waiting  — blocked on you. Peach, filled. The only marker that pulls.
-   *   unseen   — the agent opened windows you have not looked at. Quiet mauve diamond.
-   *   working  — running. Teal outline.
-   *   idle     — cold. No accent at all, or the live session stops standing out.
-   * Selection is orthogonal and always blue.
-   */
   /** @returns {{kind: 'dot', state: 'waiting'|'running', filled: boolean}|{kind: 'unseen'}|null} */
   function marker(activity, unseen) {
     if (activity === "waiting") return { kind: "dot", state: "waiting", filled: true };
@@ -43,7 +35,7 @@
   );
 </script>
 
-<div class="item" class:selected class:cold={!selected && !live} role="presentation" {...rest}>
+<div class="item" class:selected class:cold={!selected && !live} {...rest}>
   <div class="avatar">
     {initials}
     {#if mark?.kind === "dot"}
@@ -82,7 +74,7 @@
   .selected {
     border-color: var(--accent-action);
     background: var(--surface-raised);
-    box-shadow: 3px 3px 0 rgba(138, 173, 244, 0.18);
+    box-shadow: var(--shadow-focus);
   }
 
   .avatar {

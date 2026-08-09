@@ -14,7 +14,7 @@ const doc = await Call.ByName(WINDOWS_SERVICE + ".Content", id);
 const body = document.getElementById("document");
 for (const line of doc.text.split("\n")) {
   const row = document.createElement("div");
-  row.className = doc.format === "diff" ? "row " + diffClass(line) : "row";
+  row.className = "row diff-row" + (doc.format === "diff" ? " " + diffClass(line) : "");
   row.textContent = line;
   body.appendChild(row);
 }

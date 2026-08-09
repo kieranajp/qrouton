@@ -1,26 +1,26 @@
 /* How a unified diff paints, shared by the document window and the docked pane.
    Padding is not here: each surface sits in different chrome. */
-.row {
+.diff-row {
   white-space: pre-wrap;
   word-break: break-word;
 }
 
-.add {
+.diff-add {
   background: var(--diff-add-bg);
   color: var(--diff-add-fg);
 }
 
-.del {
+.diff-del {
   background: var(--diff-del-bg);
   color: var(--diff-del-fg);
 }
 
-.hunk {
+.diff-hunk {
   background: var(--diff-hunk-bg);
   color: var(--text-muted);
 }
 
-.file {
+.diff-file {
   color: var(--diff-file-fg);
   font-weight: 600;
   padding-top: var(--space-4);

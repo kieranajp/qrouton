@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
 )
@@ -34,8 +36,17 @@ func TestReadScratchAssistant(t *testing.T) {
 	if !ok {
 		t.Fatal("Read reported no manifest")
 	}
-	if got.Mode != "ASSISTANT" || got.Phase != "scratch" || got.Identity != "lifesum-4f3a" {
-		t.Fatalf("fields = %#v", got)
+	want := Fields{
+		Mode:     "ASSISTANT",
+		Phase:    "scratch",
+		Identity: "lifesum-4f3a",
+		Sessions: []SessionRow{
+			{Name: "lifesum-4f3a", Slug: "lifesum-4f3a", Initials: "l4", Mode: "ASSISTANT", Live: true},
+		},
+		Documents: []Document{},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("fields = %#v, want %#v", got, want)
 	}
 }
 
@@ -87,7 +98,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 
 func TestReadWithoutManifest(t *testing.T) {
 	got, ok := Read(t.TempDir())
-	if ok || got.Mode != "" {
+	if ok || !reflect.DeepEqual(got, Fields{}) {
 		t.Fatalf("missing manifest = %#v, %v", got, ok)
 	}
 }
@@ -96,35 +107,42 @@ func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "webhook"})
 	shared := filepath.Join(dir, "thoughts", "shared")
-	for path, want := range map[string]string{
-		"plans/P006-design-system.md":    "PLAN",
-		"specs/S006-gui-workbench.md":    "SPEC",
-		"research/R7-editor.md":          "RESEARCH",
-		"research/parity-checklist.md":   "NOTE",
-		"readme.md":                      "NOTE",
-		"plans/p002-orchestrated.md":     "PLAN",
-		"research/questions-about-p1.md": "NOTE",
-	} {
-		full := filepath.Join(shared, path)
+	kinds := []struct{ path, want string }{
+		{"readme.md", "NOTE"},
+		{"research/questions-about-p1.md", "NOTE"},
+		{"research/parity-checklist.md", "NOTE"},
+		{"research/R7-editor.md", "RESEARCH"},
+		{"plans/p002-orchestrated.md", "PLAN"},
+		{"specs/S006-gui-workbench.md", "SPEC"},
+		{"plans/P006-design-system.md", "PLAN"},
+	}
+	base := time.Now().Add(-time.Hour)
+	for i, doc := range kinds {
+		full := filepath.Join(shared, doc.path)
 		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 			t.Fatal(err)
 		}
 		if err := os.WriteFile(full, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		if got := kind(filepath.Base(path)); got != want {
-			t.Errorf("kind(%q) = %q, want %q", path, got, want)
+		mtime := base.Add(time.Duration(i) * time.Minute)
+		if err := os.Chtimes(full, mtime, mtime); err != nil {
+			t.Fatal(err)
+		}
+		if got := kind(filepath.Base(doc.path)); got != doc.want {
+			t.Errorf("kind(%q) = %q, want %q", doc.path, got, doc.want)
 		}
 	}
 
 	fields, _ := Read(dir)
-	if len(fields.Documents) != 7 {
-		t.Fatalf("found %d documents, want 7: %#v", len(fields.Documents), fields.Documents)
+	if len(fields.Documents) != len(kinds) {
+		t.Fatalf("found %d documents, want %d: %#v", len(fields.Documents), len(kinds), fields.Documents)
 	}
 	// Newest first: the header announces exactly one.
-	for i := 1; i < len(fields.Documents); i++ {
-		if fields.Documents[i].At.After(fields.Documents[i-1].At) {
-			t.Fatalf("documents are not newest-first: %#v", fields.Documents)
+	for i, got := range fields.Documents {
+		want := filepath.Base(kinds[len(kinds)-1-i].path)
+		if got.Name != want {
+			t.Fatalf("document %d = %q, want %q (not newest-first): %#v", i, got.Name, want, fields.Documents)
 		}
 	}
 }
@@ -189,14 +207,14 @@ func TestReposMeasuresActiveRepositoriesAndSkipsReferences(t *testing.T) {
 	docs := fixtureRepo(t, filepath.Join(dir, "src", "docs"))
 	git(t, docs, "checkout", "--detach")
 
-	stats := Repos(dir)
+	stats := Repos(t.Context(), dir)
 	if len(stats) != 3 {
 		t.Fatalf("measured %d repositories, want 3", len(stats))
 	}
-	if stats[0] != (RepoStat{Name: "org/svc", Role: "editing", Commits: 1, Insertions: 1}) {
+	if stats[0] != (RepoStat{Name: "org/svc", Role: "editing", Commits: 1, Insertions: 1, Measured: true}) {
 		t.Errorf("svc = %#v", stats[0])
 	}
-	if stats[1] != (RepoStat{Name: "org/quiet", Role: "editing", Commits: 1}) {
+	if stats[1] != (RepoStat{Name: "org/quiet", Role: "editing", Commits: 1, Measured: true}) {
 		t.Errorf("quiet = %#v", stats[1])
 	}
 	if stats[2] != (RepoStat{Name: "org/docs", Role: "reference"}) {
@@ -204,13 +222,17 @@ func TestReposMeasuresActiveRepositoriesAndSkipsReferences(t *testing.T) {
 	}
 }
 
+// An older manifest's blank default branch must never reach git as "origin/".
 func TestReposReportsNothingWithoutABaseBranch(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "webhook", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{{Name: "svc", Org: "org", Role: session.RepoRoleActive,
-			DefaultBranch: "main", WorktreePath: "src/svc"}}})
-	if stats := Repos(dir); len(stats) != 1 || stats[0].Commits != 0 {
-		t.Fatalf("stats = %#v", stats)
+			WorktreePath: "src/svc"}}})
+	fixtureRepo(t, filepath.Join(dir, "src", "svc"))
+
+	stats := Repos(t.Context(), dir)
+	if len(stats) != 1 || stats[0].Measured {
+		t.Fatalf("stats = %#v, want an unmeasured repository", stats)
 	}
 }
 
@@ -243,5 +265,38 @@ func git(t *testing.T, dir string, args ...string) {
 	cmd.Dir = dir
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// A nil slice marshals as null, which the page's defaults do not defend against
+// — it reaches a .length, throws, and unwinds the render before the fields
+// registered after it ever run.
+func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "bare", Mode: session.ModeAssistant})
+
+	fields, ok := Read(dir)
+	if !ok {
+		t.Fatal("Read reported no manifest")
+	}
+	fields.Repos = Repos(t.Context(), dir)
+
+	b, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyed map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keyed); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"sessions", "documents", "repos"} {
+		if string(keyed[key]) == "null" {
+			t.Errorf("%q marshalled as null", key)
+		}
+	}
+
+	// The failure paths are the ones that reach for a bare nil.
+	if got := Repos(t.Context(), t.TempDir()); got == nil {
+		t.Error("Repos returned nil for a directory with no manifest")
 	}
 }

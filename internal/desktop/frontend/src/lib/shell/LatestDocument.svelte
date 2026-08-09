@@ -62,7 +62,7 @@
 
   /* A readout, not a control: no caret promising a menu, no cursor promising a
      press. */
-  .inert {
+  .chip.inert {
     cursor: default;
   }
 

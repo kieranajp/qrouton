@@ -54,6 +54,7 @@ const (
 	tabStatusRunning   = "running"
 	tabStatusSucceeded = "succeeded"
 	tabStatusFailed    = "failed"
+	tabStatusWaiting   = "waiting"
 )
 
 const (

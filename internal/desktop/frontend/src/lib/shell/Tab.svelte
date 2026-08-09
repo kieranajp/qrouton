@@ -7,27 +7,23 @@
   let { label, status, selected = false, closable = true, onSelect, onClose, ...rest } = $props();
 </script>
 
-<div class="tab" class:selected role="presentation" onclick={onSelect} {...rest}>
-  {#if status}<StatusDot state={status === "succeeded" ? "success" : status} size={7} />{/if}
-  <span class="label">{label}</span>
+<div class="tab" class:selected {...rest}>
+  <button type="button" class="select" onclick={onSelect}>
+    {#if status}<StatusDot state={status === "succeeded" ? "success" : status} size={7} />{/if}
+    <span class="label">{label}</span>
+  </button>
   {#if closable}
-    <span
-      class="close"
-      role="presentation"
-      onclick={(event) => {
-        event.stopPropagation();
-        onClose?.();
-      }}>&#10005;</span>
+    <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}
+      >&#10005;</button>
   {/if}
 </div>
 
 <style>
   .tab {
     display: flex;
-    align-items: center;
+    align-items: stretch;
     gap: 9px;
     padding: 0 14px;
-    cursor: pointer;
     border-right: 1px solid var(--border-subtle);
     border-bottom: 2px solid transparent;
     background: transparent;
@@ -37,6 +33,23 @@
   .selected {
     border-bottom-color: var(--accent-action);
     background: var(--wash-selected);
+  }
+
+  .select,
+  .close {
+    display: flex;
+    align-items: center;
+    background: none;
+    border: 0;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .select {
+    gap: 9px;
   }
 
   .label {

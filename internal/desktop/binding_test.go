@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -8,45 +9,61 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// The pages call these services by their fully qualified Go names, which Wails
-// derives from the package path and type name. Nothing checks those strings at
-// build time: get one wrong and the window renders empty with no error
-// anywhere. The bundle only rewrites what surrounds these literals, so the
-// source is what is read.
-func TestThePagesNameTheirServicesExactly(t *testing.T) {
+// builtBundle concatenates every file frontend() serves — the tree the
+// binary actually embeds — so callers grep what shipped, not what fed it.
+func builtBundle(t *testing.T) string {
+	t.Helper()
+	assets, err := frontend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var all strings.Builder
+	if err := fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		b, err := fs.ReadFile(assets, path)
+		if err != nil {
+			return err
+		}
+		all.Write(b)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return all.String()
+}
+
+// A page names its Go service by the fully qualified name Wails derives from
+// the package path and type name. The bundle is read rather than the source
+// because a rename and a tree-shaken-away call both render an empty window,
+// and only one of the two is visible before the build.
+func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
+	bundle := builtBundle(t)
 	for _, tc := range []struct {
 		service any
-		module  string
 		methods []string
 	}{
-		{Term{}, "lib/conversation.js", []string{"Start", "Write", "Resize"}},
-		{Windows{}, "window-terminal.js", []string{"Start", "Write", "Resize"}},
-		{Windows{}, "window-document.js", []string{"Content"}},
+		{Term{}, []string{"Start", "Write", "Resize"}},
+		{Windows{}, []string{"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell"}},
 	} {
-		t.Run(tc.module, func(t *testing.T) {
-			typ := reflect.TypeOf(tc.service)
-			want := typ.PkgPath() + "." + typ.Name()
-
-			source, err := os.ReadFile(frontendSource + tc.module)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !strings.Contains(string(source), `"`+want+`"`) {
-				t.Fatalf("the page does not bind %q", want)
-			}
-			for _, method := range tc.methods {
+		typ := reflect.TypeOf(tc.service)
+		qualified := typ.PkgPath() + "." + typ.Name()
+		for _, method := range tc.methods {
+			t.Run(typ.Name()+"."+method, func(t *testing.T) {
 				if _, ok := reflect.PointerTo(typ).MethodByName(method); !ok {
-					t.Fatalf("the page calls %s.%s, which is not an exported method", typ.Name(), method)
+					t.Fatalf("a page calls %s.%s, which is not an exported method", typ.Name(), method)
 				}
-				if !strings.Contains(string(source), "."+method) {
-					t.Fatalf("the page never calls %s.%s", typ.Name(), method)
+				if !strings.Contains(bundle, qualified+"."+method) {
+					t.Fatalf("the built pages no longer call %s.%s", typ.Name(), method)
 				}
-			}
-		})
+			})
+		}
 	}
 }
 
@@ -125,7 +142,8 @@ func TestEveryPageLinksThePalette(t *testing.T) {
 }
 
 // The format the page branches on is the port's value, spelled again in
-// JavaScript. Nothing checks that at build time.
+// JavaScript. Nothing checks that at build time. The source is enough here:
+// the page is its own build entry, so only its spelling can drift.
 func TestTheDocumentPageKnowsTheDiffFormat(t *testing.T) {
 	source, err := os.ReadFile(frontendSource + "window-document.js")
 	if err != nil {
@@ -133,5 +151,25 @@ func TestTheDocumentPageKnowsTheDiffFormat(t *testing.T) {
 	}
 	if !strings.Contains(string(source), `=== "`+string(workbench.FormatDiff)+`"`) {
 		t.Fatalf("the document page does not branch on the %q format", workbench.FormatDiff)
+	}
+}
+
+// The page's NOTHING supplies one default per status.Fields key, and a field
+// added without one drops off the pane silently rather than erroring. Nested
+// structs render through their own components, so only the direct keys count.
+func TestTheChromePageDefaultsEveryField(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/chrome.svelte.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	typ := reflect.TypeOf(status.Fields{})
+	for i := 0; i < typ.NumField(); i++ {
+		tag, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
+		if tag == "" || tag == "-" {
+			continue
+		}
+		if !strings.Contains(string(source), tag+":") {
+			t.Fatalf("chrome.svelte.js's NOTHING has no default for status.Fields.%s (json %q)", typ.Field(i).Name, tag)
+		}
 	}
 }
