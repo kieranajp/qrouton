@@ -18,11 +18,12 @@ import (
 
 // Request is one call on the control socket.
 type Request struct {
-	Op      string         `json:"op"`
-	ID      string         `json:"id,omitempty"`
-	Full    bool           `json:"full,omitempty"`
-	Root    string         `json:"root,omitempty"`
-	Options *WindowOptions `json:"options,omitempty"`
+	Op       string         `json:"op"`
+	ID       string         `json:"id,omitempty"`
+	Full     bool           `json:"full,omitempty"`
+	Root     string         `json:"root,omitempty"`
+	Activity string         `json:"activity,omitempty"`
+	Options  *WindowOptions `json:"options,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -55,6 +56,13 @@ func NewSocketPath() (string, error) {
 // been chosen owns its own log inside it.
 func ProcessLog(socket string) string {
 	return strings.TrimSuffix(socket, socketSuffix) + logSuffix
+}
+
+// Attention carries what the runner's own hooks said about its state. No tool
+// exposes it, so nothing reads model output to work it out.
+func (h Handle) Attention(ctx context.Context, activity string) error {
+	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpAttention, Activity: activity})
+	return err
 }
 
 type client struct {

@@ -14,10 +14,11 @@ type emitter func(event string, payload any)
 // over the Wails bridge by their fully qualified names. Its child is the agent
 // supervisor, whose stdio is therefore the PTY the runner inherits.
 type Term struct {
-	argv []string
-	env  []string
-	dir  string
-	emit emitter
+	argv     []string
+	env      []string
+	dir      string
+	emit     emitter
+	activity *activity
 
 	exited func(code int)
 
@@ -28,10 +29,11 @@ type Term struct {
 func newTerm(opts Options, emit emitter) *Term {
 	env := workbench.WithEnv(opts.Env, termEnvVar, termValue)
 	return &Term{
-		argv: opts.Argv,
-		env:  workbench.WithEnv(env, colorTermEnvVar, colorTermValue),
-		dir:  opts.SessionRoot,
-		emit: emit,
+		argv:     opts.Argv,
+		env:      workbench.WithEnv(env, colorTermEnvVar, colorTermValue),
+		dir:      opts.SessionRoot,
+		emit:     emit,
+		activity: &activity{},
 	}
 }
 
@@ -55,7 +57,10 @@ func (t *Term) Start(cols, rows int) error {
 	// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and
 	// JSON marshalling corrupts it.
 	go process.pump(
-		func(b []byte) { t.emit(ptyDataEvent, base64.StdEncoding.EncodeToString(b)) },
+		func(b []byte) {
+			t.activity.wrote()
+			t.emit(ptyDataEvent, base64.StdEncoding.EncodeToString(b))
+		},
 		t.childExited,
 	)
 	return nil
@@ -73,6 +78,7 @@ func (t *Term) Write(encoded string) error {
 	if err != nil {
 		return err
 	}
+	t.activity.answered()
 	t.mu.Lock()
 	process := t.process
 	t.mu.Unlock()

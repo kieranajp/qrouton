@@ -88,9 +88,14 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
 	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
+		Dock:   cfg.Dock(),
 	}, os.Environ())
 }
 
@@ -253,7 +258,7 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return detach(launch.WorkbenchSpec{SessionRoot: dir, Socket: socket, Argv: argv}, env)
+	return detach(launch.WorkbenchSpec{SessionRoot: dir, Socket: socket, Argv: argv, Dock: cfg.Dock()}, env)
 }
 
 // detach hands the workbench to a process of its own and returns as soon as it
@@ -291,6 +296,7 @@ func workbenchProcess(marshalled string) error {
 		Argv:        spec.Argv,
 		Env:         os.Environ(),
 		Shell:       shellArgv(bin),
+		Dock:        spec.Dock,
 	})
 }
 

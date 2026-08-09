@@ -30,7 +30,7 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 
 ## Requirements 🧰
 
-- macOS or Linux. The workbench is a WebKit window, so the binary links cgo; there is no Windows build. macOS is what qrouton is developed and run on. Linux builds and passes its tests in CI but has not yet been driven on a desktop, and needs WebKitGTK 6 — `pacman -S webkitgtk-6.0` on Arch, `apt install libgtk-4-dev libwebkitgtk-6.0-dev` on Debian or Ubuntu. GTK4 only, so a distro new enough to carry it.
+- macOS or Linux. The workbench is a WebKit window, so the binary links cgo; there is no Windows build. Linux needs WebKitGTK 6 — `pacman -S webkitgtk-6.0` on Arch, `apt install libgtk-4-dev libwebkitgtk-6.0-dev` on Debian or Ubuntu. GTK4 only, so a distro new enough to carry it.
 - Git.
 - [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`, or `GITHUB_TOKEN`.
 - `LINEAR_API_KEY` or `ASANA_ACCESS_TOKEN` to populate a new session's name and description from a linked ticket.

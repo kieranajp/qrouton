@@ -166,12 +166,21 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
-	want := `'/opt/qro uton/$peculiar/qrouton' agent-event --session-root '/work/kieran'\''s session'`
-	if got := settings.Hooks["SubagentStart"][0].Hooks[0].Command; got != want {
-		t.Fatalf("hook command = %s, want %s", got, want)
+	want := `'/opt/qro uton/$peculiar/qrouton' agent-event --session-root '/work/kieran'\''s session' --workbench-json`
+	if got := settings.Hooks["SubagentStart"][0].Hooks[0].Command; !strings.HasPrefix(got, want) {
+		t.Fatalf("hook command = %s, want %s...", got, want)
 	}
-	if got := settings.Hooks["Notification"][0].Hooks[0].Command; !strings.HasPrefix(got, `'/work/kieran'\''s session/`) {
-		t.Fatalf("notification command not shell-quoted: %s", got)
+	// Notification runs the sound and then the callback that turns the header
+	// peach; losing either leaves an agent blocked on the user saying nothing.
+	notification := settings.Hooks["Notification"][0].Hooks
+	if len(notification) != 2 {
+		t.Fatalf("Notification carries %d commands, want the sound and the callback", len(notification))
+	}
+	if !strings.HasPrefix(notification[0].Command, `'/work/kieran'\''s session/`) {
+		t.Fatalf("notification sound not shell-quoted: %s", notification[0].Command)
+	}
+	if notification[1].Command != settings.Hooks["SubagentStart"][0].Hooks[0].Command {
+		t.Fatalf("notification callback = %s", notification[1].Command)
 	}
 }
 

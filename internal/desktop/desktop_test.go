@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -108,7 +109,7 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	opts := testOptions(t)
 	term := newTerm(opts, r.Emit)
 
-	go func() { _ = run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { _ = run(r, term, newWindows(r, r.Emit, false), opts) }()
 
 	spec := <-r.opened
 	if spec.URL != frontendRoot {
@@ -133,7 +134,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	term := newTerm(opts, r.Emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 
 	(<-r.opened).OnClose()
 
@@ -156,7 +157,7 @@ func TestACleanAgentExitEndsTheSession(t *testing.T) {
 	term := newTerm(opts, r.Emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 
 	if err := term.Start(80, 24); err != nil {
@@ -184,7 +185,7 @@ func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
 	term := newTerm(opts, rec.emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 	if err := term.Start(80, 24); err != nil {
 		t.Fatal(err)
@@ -207,7 +208,7 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	opts.Argv = []string{"/bin/sh", "-c", "exit 3"}
 	term := newTerm(opts, r.Emit)
 
-	go func() { _ = run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { _ = run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 	if err := term.Start(80, 24); err != nil {
 		t.Fatal(err)
@@ -228,27 +229,25 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	r.Quit()
 }
 
-// Decision 10: one shell, always available — opened by the workbench rather than
-// asked for, and never a stack.
+// Decision 10: a shell is always available, opened by the workbench rather than
+// asked for. Asking gets you another; adoption running twice does not.
 func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	r := newFakeRenderer()
 	opts := testOptions(t)
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	<-r.opened
 
-	spec := <-r.opened
-	if spec.Title != shellWindowLabel {
-		t.Fatalf("second window is %q, want the user shell", spec.Title)
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+	tab := windows.tabs()[0]
+	if tab.Label != shellWindowLabel {
+		t.Fatalf("first tab is %q, want the user shell", tab.Label)
 	}
-	if spec.Focus {
-		t.Fatal("the shell window took focus from the conversation")
-	}
-	window, ok := windows.window(spec.Name)
+	window, ok := windows.window(tab.ID)
 	if !ok {
-		t.Fatalf("the shell window %q is not registered", spec.Name)
+		t.Fatalf("the shell %q is not registered", tab.ID)
 	}
 	if window.opts.Cwd != opts.SessionRoot {
 		t.Fatalf("the shell is rooted at %q, not the session", window.opts.Cwd)
@@ -257,10 +256,32 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 		t.Fatalf("shell command = %q", got)
 	}
 	if window.opts.CloseOnExit {
-		t.Fatal("the shell window closes on exit; qrouton shell restarts the shell instead")
+		t.Fatal("the shell closes on exit; qrouton shell restarts the shell instead")
 	}
 	if len(r.opened) != 0 {
-		t.Fatalf("%d further windows opened; there is one shell, not a stack", len(r.opened))
+		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
+	}
+
+	if err := windows.closeWindow(tab.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(windows.tabs()) != 0 {
+		t.Fatal("the shell tab survived being closed")
+	}
+	for want := 1; want <= 2; want++ {
+		id, err := windows.OpenShell()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tabs := windows.tabs()
+		if len(tabs) != want {
+			t.Fatalf("%d tabs after asking %d times: %+v", len(tabs), want, tabs)
+		}
+		// The page selects the tab by the id it gets back, so a wrong one
+		// focuses a terminal the user did not ask for.
+		if tabs[len(tabs)-1].ID != id {
+			t.Fatalf("OpenShell returned %q, newest tab is %q", id, tabs[len(tabs)-1].ID)
+		}
 	}
 }
 
@@ -272,14 +293,14 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 	opts.SessionRoot = ""
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	adopted := t.TempDir()
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	if spec := <-r.opened; spec.Title != mainWindowTitle {
 		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
 	}
-	if len(r.opened) != 0 {
-		t.Fatal("a shell window opened before onboarding chose a session")
+	if len(windows.tabs()) != 0 {
+		t.Fatal("a shell opened before onboarding chose a session")
 	}
 
 	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: adopted}).WindowHost()
@@ -290,17 +311,16 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	waitFor(t, "the shell window", func() bool { return len(r.opened) == 1 })
-	spec := <-r.opened
-	window, ok := windows.window(spec.Name)
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+	window, ok := windows.window(windows.tabs()[0].ID)
 	if !ok || window.opts.Cwd != adopted {
 		t.Fatalf("the shell is not rooted in the adopted session: %+v", window)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if title := r.titles[mainWindowName]; !strings.Contains(title, filepath.Base(adopted)) {
-		t.Fatalf("conversation title = %q, want the adopted session's name", title)
-	}
+	waitFor(t, "the retitled conversation", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return strings.Contains(r.titles[mainWindowName], filepath.Base(adopted))
+	})
 }
 
 func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
@@ -321,11 +341,11 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pushChrome(dir, r.Emit)
+	pushChrome(dir, status.ActivityIdle, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(chromeFields)
+	fields, ok := r.events[chromeEvent].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
@@ -336,7 +356,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 func TestChromeStaysSilentWithoutAManifest(t *testing.T) {
 	r := newFakeRenderer()
-	pushChrome(t.TempDir(), r.Emit)
+	pushChrome(t.TempDir(), status.ActivityIdle, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, pushed := r.events[chromeEvent]; pushed {
@@ -350,7 +370,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	dir := t.TempDir()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, func() string { return dir }, func(string, any) {})
+		watchChrome(ctx, func() string { return dir }, func() string { return "" }, func(string, any) {})
 		close(done)
 	}()
 	<-done
@@ -365,7 +385,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 	if err := session.WriteManifest(adopted, session.Manifest{Slug: "adopted", Name: "Adopted", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	<-r.opened
 
@@ -380,7 +400,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 	waitFor(t, "the adopted session's chrome", func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		fields, ok := r.events[chromeEvent].(chromeFields)
+		fields, ok := r.events[chromeEvent].(status.Fields)
 		return ok && fields.Identity == "adopted"
 	})
 }

@@ -26,6 +26,13 @@ const (
 
 	assetRoot = "assets"
 
+	// frontendSource is where the pages are written, not where they are built.
+	frontendSource = "frontend/src/"
+
+	// rootPath is the mux pattern the embedded tree is served under.
+	rootPath          = "/"
+	contentTypeHeader = "Content-Type"
+
 	windowIDFormat = "window-%d"
 )
 
@@ -38,6 +45,14 @@ const (
 
 	windowDataEvent = "window:data:"
 	windowExitEvent = "window:exit:"
+	windowsEvent    = "window:open"
+)
+
+// A tab may only stand in for a window if it reports its process's state.
+const (
+	tabStatusRunning   = "running"
+	tabStatusSucceeded = "succeeded"
+	tabStatusFailed    = "failed"
 )
 
 const (
@@ -63,6 +78,13 @@ const (
 	// chromeInterval bounds how stale the window chrome can be after an
 	// escalation.
 	chromeInterval = 2 * time.Second
+
+	// repoStatInterval paces the git stats: two subprocesses per active repo.
+	repoStatInterval = 15 * time.Second
+
+	// activityQuiet is how long the conversation PTY has to stay silent before
+	// the agent counts as idle. A runner redraws its spinner far faster.
+	activityQuiet = 3 * time.Second
 
 	// terminateGrace is how long a process tree gets to exit on SIGTERM before
 	// it is killed outright.

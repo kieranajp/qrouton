@@ -11,7 +11,7 @@ import (
 func testWindows(t *testing.T) (*Windows, *fakeRenderer) {
 	t.Helper()
 	r := newFakeRenderer()
-	w := newWindows(r, r.Emit)
+	w := newWindows(r, r.Emit, false)
 	t.Cleanup(w.stopAll)
 	return w, r
 }
@@ -140,9 +140,11 @@ func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-r.opened
-	waitFor(t, "the toast to expire", func() bool { return !w.exists(id) })
-	if !r.wasClosed(id) {
-		t.Fatal("the toast expired without leaving the screen")
+	// Leaving the registry and leaving the screen are two steps, so waiting on
+	// the first and asserting the second is a race the loaded machine loses.
+	waitFor(t, "the toast to leave the screen", func() bool { return r.wasClosed(id) })
+	if w.exists(id) {
+		t.Fatal("the toast left the screen but stayed in the registry")
 	}
 }
 
@@ -283,5 +285,112 @@ func TestStopAllTearsDownEveryWindow(t *testing.T) {
 	w.stopAll()
 	if got := w.list(); len(got) != 0 {
 		t.Fatalf("windows survived the session: %v", got)
+	}
+}
+
+func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dock bool
+	}{
+		{"float", false},
+		{"dock", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := newFakeRenderer()
+			w := newWindows(r, r.Emit, tc.dock)
+			t.Cleanup(w.stopAll)
+
+			id, err := w.openWindow(workbench.WindowOptions{
+				Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(),
+				Command: []string{"/bin/sh", "-c", "echo docked"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !w.exists(id) || len(w.list()) != 1 {
+				t.Fatalf("registry = %v", w.list())
+			}
+			drawn := w.surfaces()
+			if tc.dock {
+				if len(drawn.Tabs) != 1 || drawn.Tabs[0].ID != id || drawn.Tabs[0].Label != "▶ dev" {
+					t.Fatalf("tabs = %+v, want the window", drawn.Tabs)
+				}
+				if len(drawn.Floating) != 0 {
+					t.Fatalf("a docked window also reached the tray: %+v", drawn.Floating)
+				}
+				select {
+				case spec := <-r.opened:
+					t.Fatalf("a docked window opened an OS window: %+v", spec)
+				default:
+				}
+			} else {
+				if spec := <-r.opened; spec.Name != id {
+					t.Fatalf("window name = %q, want %q", spec.Name, id)
+				}
+				if len(drawn.Floating) != 1 || len(drawn.Tabs) != 0 {
+					t.Fatalf("surfaces = %+v, want the tray only", drawn)
+				}
+			}
+
+			if err := w.Start(id, 80, 24); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the command's output", func() bool {
+				text, _ := w.readWindow(id, true)
+				return strings.Contains(text, "docked")
+			})
+			if err := w.closeWindow(id); err != nil {
+				t.Fatal(err)
+			}
+			if w.exists(id) {
+				t.Fatal("close left the window in the registry")
+			}
+		})
+	}
+}
+
+// A tab reports the state of its process, which is what AGENTS.md requires
+// before a tab may stand in for a window.
+func TestADockedTabReportsItsProcessWithoutBeingFocused(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "go test", Cwd: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "exit 3"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := w.tabs()[0].Status; got != tabStatusRunning {
+		t.Fatalf("a fresh tab reports %q, want running", got)
+	}
+	if err := w.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the failure to reach the tab", func() bool {
+		tabs := w.tabs()
+		return len(tabs) == 1 && tabs[0].Status == tabStatusFailed
+	})
+}
+
+func TestAFocusedWindowFloatsEvenWhenDocking(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+
+	if _, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "escalate", Cwd: t.TempDir(),
+		Command: []string{"/bin/cat"}, Focus: true,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if spec := <-r.opened; !spec.Focus {
+		t.Fatal("the picker opened without focus")
+	}
+	if drawn := w.surfaces(); len(drawn.Tabs) != 0 || len(drawn.Floating) != 1 {
+		t.Fatalf("surfaces = %+v, want the picker on screen", drawn)
 	}
 }

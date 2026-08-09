@@ -7,34 +7,34 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-// chromeFields is the session identity the main window draws around its
-// terminal.
-type chromeFields struct {
-	Mode     string `json:"mode"`
-	Phase    string `json:"phase"`
-	Identity string `json:"identity"`
-}
+// watchChrome pushes what the window can observe until the context is
+// cancelled. Escalation rewrites the manifest, so re-reading it on a poll is
+// what keeps the window agreeing with the session.
+func watchChrome(ctx context.Context, root func() string, activity func() string, emit emitter) {
+	fields := time.NewTicker(chromeInterval)
+	defer fields.Stop()
+	stats := time.NewTicker(repoStatInterval)
+	defer stats.Stop()
 
-// watchChrome pushes the manifest's mode, phase and name at the window until
-// the context is cancelled. Escalation rewrites the manifest, so re-reading it
-// on a poll is what keeps the window agreeing with the session.
-func watchChrome(ctx context.Context, root func() string, emit emitter) {
-	ticker := time.NewTicker(chromeInterval)
-	defer ticker.Stop()
+	repos := status.Repos(root())
+	pushChrome(root(), activity(), repos, emit)
 	for {
-		pushChrome(root(), emit)
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-stats.C:
+			repos = status.Repos(root())
+		case <-fields.C:
 		}
+		pushChrome(root(), activity(), repos, emit)
 	}
 }
 
-func pushChrome(root string, emit emitter) {
+func pushChrome(root, activity string, repos []status.RepoStat, emit emitter) {
 	fields, ok := status.Read(root)
 	if !ok {
 		return
 	}
-	emit(chromeEvent, chromeFields{Mode: fields.Mode, Phase: fields.Phase, Identity: fields.Identity})
+	fields.Repos, fields.Activity = repos, activity
+	emit(chromeEvent, fields)
 }

@@ -34,6 +34,7 @@ type WorkbenchSpec struct {
 	SessionRoot string   `json:"session_root,omitempty"`
 	Socket      string   `json:"socket"`
 	Argv        []string `json:"argv"`
+	Dock        bool     `json:"dock,omitempty"`
 }
 
 func (s WorkbenchSpec) Marshal() string {

@@ -77,6 +77,18 @@ const (
 
 	quietLongFlag = "--quiet"
 
+	// Measuring a session branch against the branch it was cut from. Two dots
+	// asks what one ref has that the other does not; three asks the same since
+	// their merge base, so a base branch that has moved on is not counted as
+	// the session's work.
+	revListCmd         = "rev-list"
+	diffCmd            = "diff"
+	countFlag          = "--count"
+	shortstatFlag      = "--shortstat"
+	headRef            = "HEAD"
+	rangeSeparator     = ".."
+	mergeBaseSeparator = "..."
+
 	// progressFlag is not optional once stderr is a pipe: git reports progress
 	// only to a terminal unless asked in so many words.
 	progressFlag = "--progress"

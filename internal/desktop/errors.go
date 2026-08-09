@@ -13,6 +13,7 @@ var (
 	ErrNoWindowOptions = errors.New("open request carries no window options")
 	ErrNoWindowCommand = errors.New("a terminal window needs a command")
 	ErrNoSessionRoot   = errors.New("adopt request carries no session root")
+	ErrNoShellCommand  = errors.New("workbench has no shell command to run")
 )
 
 func noSuchWindow(id string) error {

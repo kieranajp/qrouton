@@ -1,0 +1,5 @@
+/* Self-hosted rather than loaded from Google Fonts: a desktop app must draw
+   its own labels offline. */
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/instrument-sans";
+@import "@fontsource-variable/jetbrains-mono";

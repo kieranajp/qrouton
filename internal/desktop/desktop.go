@@ -25,6 +25,8 @@ type Options struct {
 	// Shell builds the user shell window's command for a session root, which is
 	// why it is a function rather than an argv.
 	Shell func(sessionRoot string) []string
+	// Dock sends the agent's windows to the tab strip rather than the screen.
+	Dock bool
 }
 
 // Run opens the workbench and blocks until the session ends: closing the
@@ -44,7 +46,7 @@ func Run(opts Options) error {
 	}
 	r := newWailsRenderer(assets)
 	term := newTerm(opts, r.Emit)
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, opts.Dock)
 	r.register(application.NewService(term))
 	r.register(application.NewService(windows))
 	return run(r, term, windows, opts)
@@ -59,7 +61,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	var root atomic.Pointer[string]
 	root.Store(&opts.SessionRoot)
 	sessionRoot := func() string { return *root.Load() }
-	go watchChrome(ctx, sessionRoot, r.Emit)
+	go watchChrome(ctx, sessionRoot, term.activity.state, r.Emit)
 
 	record := &windowRecorder{root: sessionRoot, windows: windows}
 	windows.observe(record.save)
@@ -79,14 +81,18 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 		}
 	})
 
-	shell := &shellWindow{windows: windows, argv: opts.Shell}
-	server, err := serveControl(opts.Socket, windows, func(adopted string) {
-		root.Store(&adopted)
-		r.Retitle(mainWindowName, windowTitle(adopted))
-		shell.open(adopted)
-		// A resumed session's manifest still lists the last run's windows, and
-		// none of them are open.
-		record.save()
+	shell := &shellWindow{windows: windows, argv: opts.Shell, root: sessionRoot}
+	windows.newShell = shell.another
+	server, err := serveControl(opts.Socket, windows, controlHooks{
+		adopt: func(adopted string) {
+			root.Store(&adopted)
+			r.Retitle(mainWindowName, windowTitle(adopted))
+			shell.open(adopted)
+			// A resumed session's manifest still lists the last run's windows,
+			// and none of them are open.
+			record.save()
+		},
+		attention: term.activity.hook,
 	})
 	if err != nil {
 		return err
@@ -109,26 +115,47 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	return r.Run()
 }
 
-// shellWindow is the session's user shell: exactly one, opened as soon as the
-// session is known, which onboarding may only decide after the workbench opens.
+// shellWindow is the session's user shell: one opened unasked, and however many
+// more the user asks for.
 type shellWindow struct {
 	windows *Windows
 	argv    func(string) []string
-	opened  atomic.Bool
+	root    func() string
+
+	mu sync.Mutex
+	id string
 }
 
+// open gives the session a shell without being asked. Adoption may call it
+// again once the session is known, which must not leave two.
 func (s *shellWindow) open(root string) {
-	if root == "" || s.argv == nil || !s.opened.CompareAndSwap(false, true) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.id != "" && s.windows.exists(s.id) {
 		return
 	}
-	if _, err := s.windows.openStructural(workbench.WindowOptions{
+	id, err := s.spawn(root)
+	if err != nil {
+		return
+	}
+	s.id = id
+}
+
+// another is the tab strip's + button.
+func (s *shellWindow) another() (string, error) {
+	return s.spawn(s.root())
+}
+
+func (s *shellWindow) spawn(root string) (string, error) {
+	if root == "" || s.argv == nil {
+		return "", ErrNoShellCommand
+	}
+	return s.windows.openStructural(workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
 		Label:   shellWindowLabel,
 		Cwd:     root,
 		Command: s.argv(root),
-	}); err != nil {
-		s.opened.Store(false)
-	}
+	})
 }
 
 // windowTitle names the session in the conversation's title bar; onboarding has

@@ -112,16 +112,16 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 			claudeTypeKey: claudeStdioType, claudeCommandKey: qroutonBin, claudeArgsKey: mcpArgs}}}
 		b, _ := json.Marshal(mcp)
 		argv = append(argv, claudeMCPConfigFlag, string(b))
-		hookCommand := ShellQuote(qroutonBin) + " " + agentEventSubcommand + " " + sessionRootFlag + " " + ShellQuote(dir)
-		hook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: hookCommand}}}}
+		hookCommand := ShellQuote(qroutonBin) + " " + agentEventSubcommand +
+			" " + sessionRootFlag + " " + ShellQuote(dir) +
+			" " + workbenchJSONFlag + " " + ShellQuote(handle.Marshal())
 		// Chime only when the agent asks for attention (not on every turn), so the user
 		// can step away; notify.sh is stamped into .qrouton by writeSupport.
 		soundCommand := ShellQuote(sessionpaths.NotifyScript(dir))
-		soundHook := []map[string]any{{claudeHooksKey: []map[string]string{{claudeTypeKey: claudeCommandType, claudeCommandKey: soundCommand}}}}
 		settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
-			claudeSubagentStartHook: hook,
-			claudeSubagentStopHook:  hook,
-			claudeNotificationHook:  soundHook,
+			claudeSubagentStartHook: commandHook(hookCommand),
+			claudeSubagentStopHook:  commandHook(hookCommand),
+			claudeNotificationHook:  commandHook(soundCommand, hookCommand),
 		}})
 		argv = append(argv, claudeSettingsFlag, string(settings))
 	case runnerIDCodex:
@@ -151,6 +151,16 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
 	return argv, os.Environ(), nil
+}
+
+// commandHook is one Claude hook entry running the given shell commands in
+// order.
+func commandHook(commands ...string) []map[string]any {
+	entries := make([]map[string]string, len(commands))
+	for i, command := range commands {
+		entries[i] = map[string]string{claudeTypeKey: claudeCommandType, claudeCommandKey: command}
+	}
+	return []map[string]any{{claudeHooksKey: entries}}
 }
 
 // ShellQuote single-quotes s so it survives as one word in the POSIX shell that

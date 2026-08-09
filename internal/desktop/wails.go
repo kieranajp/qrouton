@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"io/fs"
-	"net/http"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -19,7 +18,7 @@ func newWailsRenderer(assets fs.FS) *wailsRenderer {
 	r.app = application.New(application.Options{
 		Name:        applicationName,
 		Description: applicationDescription,
-		Assets:      application.AssetOptions{Handler: http.FileServerFS(assets)},
+		Assets:      application.AssetOptions{Handler: assetHandler(assets)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 	r.app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {

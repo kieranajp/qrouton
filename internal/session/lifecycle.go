@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -92,4 +94,74 @@ func Delete(root string, m Manifest) error {
 		return fmt.Errorf("remove session %q: %w", m.Slug, err)
 	}
 	return nil
+}
+
+// git drops either clause from --shortstat when its count is zero.
+var (
+	shortstatInsertions = regexp.MustCompile(`(\d+) insertion`)
+	shortstatDeletions  = regexp.MustCompile(`(\d+) deletion`)
+)
+
+// RepoStat is how far one repository has moved since it was branched.
+// Uncommitted work is left out; the commit and diff figures answer the question.
+type RepoStat struct {
+	Org, Name  string
+	Role       RepoRole
+	Commits    int
+	Insertions int
+	Deletions  int
+}
+
+// RepoStats measures each repository against the branch it was cut from. A
+// reference repository is pinned, so it has nothing to be ahead of.
+func RepoStats(root string, m Manifest) []RepoStat {
+	dir := filepath.Join(root, m.Slug)
+	stats := make([]RepoStat, 0, len(m.Repos))
+	for _, repo := range m.Repos {
+		stat := RepoStat{Org: repo.Org, Name: repo.Name, Role: repo.Role}
+		if stat.Role == "" {
+			stat.Role = RepoRoleActive
+		}
+		if stat.Role == RepoRoleActive {
+			base := remoteRefPrefix + repo.DefaultBranch
+			path := filepath.Join(dir, repo.WorktreePath)
+			stat.Commits = countCommits(path, base)
+			stat.Insertions, stat.Deletions = countLines(path, base)
+		}
+		stats = append(stats, stat)
+	}
+	return stats
+}
+
+// countCommits counts what the session branch has that its base does not. A
+// worktree whose base ref has gone reports nothing rather than guessing.
+func countCommits(path, base string) int {
+	out, err := exec.Command(gitBin, dirFlag, path, revListCmd, countFlag, base+rangeSeparator+headRef).Output()
+	if err != nil {
+		return 0
+	}
+	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
+	if err != nil {
+		return 0
+	}
+	return count
+}
+
+// countLines totals the diff since the merge base, so a base branch that has
+// moved on does not count as the session's own work.
+func countLines(path, base string) (int, int) {
+	out, err := exec.Command(gitBin, dirFlag, path, diffCmd, shortstatFlag, base+mergeBaseSeparator+headRef).Output()
+	if err != nil {
+		return 0, 0
+	}
+	return firstNumber(shortstatInsertions, string(out)), firstNumber(shortstatDeletions, string(out))
+}
+
+func firstNumber(pattern *regexp.Regexp, text string) int {
+	match := pattern.FindStringSubmatch(text)
+	if match == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(match[1])
+	return n
 }

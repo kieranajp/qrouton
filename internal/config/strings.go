@@ -23,6 +23,10 @@ const (
 
 	orgSeparator = ","
 
+	// Values for Config.Windows.
+	WindowsFloat = "float"
+	WindowsDock  = "dock"
+
 	homePrefix = "~"
 	homeSlash  = homePrefix + "/"
 
