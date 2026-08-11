@@ -1,4 +1,6 @@
 <script>
+  import StatusDot from "../core/StatusDot.svelte";
+
   /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
   let { label, items = [], width = 212, align = "left", offsetY = 32, onSelect, ...rest } = $props();
 </script>
@@ -16,6 +18,9 @@
       <div class="rule"></div>
     {:else}
       <button class="item" class:active={item.active} onclick={() => onSelect?.(item, i)}>
+        {#if item.status}
+          <StatusDot state={item.status === "succeeded" ? "success" : item.status} size={7} />
+        {/if}
         {#if item.tag}
           <span class="tag" class:plan={item.tag === "PLAN"}>{item.tag}</span>
         {/if}

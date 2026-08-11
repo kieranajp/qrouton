@@ -532,6 +532,54 @@ func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 	}
 }
 
+// The final write must merge into what is on disk after a long clone, rather
+// than restoring the mode and window record from before it began.
+func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Orgs: []string{"org"}, Root: root}
+	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sels := []session.RepoSelection{{
+		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
+		Role: session.RepoRoleActive,
+	}}
+	windows := []session.WindowRecord{{Kind: "terminal", Label: "tests", Cwd: "src/svc"}}
+	wrote := false
+	progress := func(p session.Progress) {
+		if wrote || p.Step != session.ProgressWorktree || p.Status != session.ProgressCompleted {
+			return
+		}
+		wrote = true
+		if err := session.SetMode(dir, session.ModeRPI); err != nil {
+			t.Fatal(err)
+		}
+		if err := session.SetWindows(dir, windows); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := confirmPicker(cfg, dir, sels, assemblyDetails{name: "scratch", branch: "feat/scratch"}, false, progress); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !wrote {
+		t.Fatal("test did not update the manifest during assembly")
+	}
+	if got.EffectiveMode() != session.ModeRPI {
+		t.Fatalf("mode = %q, want the mode written during assembly", got.Mode)
+	}
+	if len(got.Windows) != 1 || got.Windows[0].Label != "tests" {
+		t.Fatalf("windows written during assembly were lost: %+v", got.Windows)
+	}
+	if len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
+		t.Fatalf("assembled repository was lost: %+v", got.Repos)
+	}
+}
+
 // A second trip through the picker used to derive a branch from the form's
 // prefix, which defaults to feat — so a fix/… session's fourth repository
 // landed on a branch of its own.

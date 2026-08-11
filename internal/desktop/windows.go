@@ -24,6 +24,8 @@ type Windows struct {
 	newShell    func() (string, error)
 	newDocument func(name string) (string, error)
 	newPicker   func() (string, error)
+	// sourceMu serialises the check and open for windows with a Source.
+	sourceMu sync.Mutex
 
 	mu      sync.Mutex
 	seq     int
@@ -53,6 +55,13 @@ func newWindows(r renderer, emit emitter, dock bool) *Windows {
 // A picker nobody can see is a session that hangs, so anything asking for focus
 // gets a real window.
 func (w *Windows) openWindow(opts workbench.WindowOptions) (string, error) {
+	if opts.Source != "" {
+		w.sourceMu.Lock()
+		defer w.sourceMu.Unlock()
+		if id, ok := w.showing(opts.Source); ok {
+			w.dismiss(id)
+		}
+	}
 	return w.spawn(opts, true, w.dock && !opts.Focus)
 }
 
@@ -74,6 +83,8 @@ func (w *Windows) OpenShell() (string, error) {
 // OpenPicker opens the repository picker in the right pane, or selects the one
 // already open: two pickers writing the same manifest is a lost selection.
 func (w *Windows) OpenPicker() (string, error) {
+	w.sourceMu.Lock()
+	defer w.sourceMu.Unlock()
 	if id, ok := w.showing(pickerSource); ok {
 		return id, nil
 	}
@@ -89,7 +100,10 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	if name == "" {
 		return "", ErrNoDocumentName
 	}
+	w.sourceMu.Lock()
+	defer w.sourceMu.Unlock()
 	if id, ok := w.showing(name); ok {
+		w.emit(selectEvent, id)
 		return id, nil
 	}
 	if w.newDocument == nil {

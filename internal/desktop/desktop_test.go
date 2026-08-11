@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -395,6 +396,47 @@ func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
 	}
 }
 
+func TestConcurrentAddReposClicksOpenOnePicker(t *testing.T) {
+	w, _ := testWindows(t)
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	w.newPicker = func() (string, error) {
+		entered <- struct{}{}
+		<-release
+		return w.openStructural(workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: pickerWindowLabel, Source: pickerSource,
+			Command: []string{"/bin/cat"},
+		})
+	}
+
+	type result struct {
+		id  string
+		err error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			id, err := w.OpenPicker()
+			results <- result{id: id, err: err}
+		}()
+	}
+	<-entered
+	select {
+	case <-entered:
+		close(release)
+		t.Fatal("both clicks started a picker")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("picker errors = %v, %v", first.err, second.err)
+	}
+	if first.id != second.id || len(w.tabs()) != 1 {
+		t.Fatalf("concurrent clicks returned %q and %q with tabs %+v", first.id, second.id, w.tabs())
+	}
+}
+
 // The agent opens documents too, through its file tool. The chip has to find
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
@@ -417,6 +459,61 @@ func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
 	}
 	if got != id {
 		t.Fatalf("the chip returned %q, not the editor window %q", got, id)
+	}
+}
+
+func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+	const doc = "thoughts/shared/plans/P006.md"
+	old, err := w.openStructural(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ old", Source: doc, Content: "old",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ fresh", Source: doc, Content: "fresh",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old == fresh || w.exists(old) {
+		t.Fatalf("old document %q survived replacement by %q", old, fresh)
+	}
+	if ids := w.list(); len(ids) != 1 || ids[0] != fresh {
+		t.Fatalf("open windows = %v, want only %q", ids, fresh)
+	}
+	content, err := w.Content(fresh)
+	if err != nil || content.Text != "fresh" {
+		t.Fatalf("replacement content = %+v, %v", content, err)
+	}
+}
+
+func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+	const doc = "thoughts/shared/plans/P006.md"
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ P006", Source: doc, Content: "plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	delete(r.events, selectEvent)
+	r.mu.Unlock()
+	got, err := w.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	selected := r.events[selectEvent]
+	r.mu.Unlock()
+	if got != id || selected != id {
+		t.Fatalf("OpenDocument returned %q and selected %v, want %q", got, selected, id)
 	}
 }
 

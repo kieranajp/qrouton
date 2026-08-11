@@ -130,10 +130,15 @@ func confirmPicker(cfg *config.Config, dir string, sels []session.RepoSelection,
 	if err != nil {
 		return err
 	}
-	out, err := session.ComposeRepos(cfg, m, sels, d.branch, progress)
+	composed, err := session.ComposeRepos(cfg, m, sels, d.branch, progress)
 	if err != nil {
 		return err
 	}
+	out, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
+	out = session.MergeRepos(out, composed.Repos)
 	out.Name, out.Description, out.TicketURL = d.name, d.description, d.ticket
 	if !escalate {
 		// Adding repositories is not a mode change, and the running agent reads

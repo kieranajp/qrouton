@@ -1,9 +1,10 @@
 <script>
   import Button from "../core/Button.svelte";
+  import StatusDot from "../core/StatusDot.svelte";
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
-  import { split } from "./tabs.js";
+  import { dominantStatus, split } from "./tabs.js";
 
   /** @type {{tabs?: {id?: string, label: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let { tabs = [], selected = 0, onSelect, onClose, onNew, newLabel = "New ▾", ...rest } = $props();
@@ -24,6 +25,7 @@
     overflowing ? Math.max(1, Math.floor((room - chip) / MIN_TAB)) : tabs.length,
   );
   let drawn = $derived(split(tabs, selected, capacity));
+  let hiddenStatus = $derived(dominantStatus(drawn.hidden.map(({ tab }) => tab)));
 
   function reveal(index) {
     listing = false;
@@ -47,14 +49,19 @@
         variant="ghost"
         size="sm"
         onclick={() => (listing = !listing)}
-        aria-label="{drawn.hidden.length} more tabs">{drawn.hidden.length} ▾</Button>
+        aria-label="{drawn.hidden.length} more tabs{hiddenStatus ? `, ${hiddenStatus}` : ''}">
+        {#if hiddenStatus}
+          <StatusDot state={hiddenStatus === "succeeded" ? "success" : hiddenStatus} size={7} />
+        {/if}
+        {drawn.hidden.length} ▾
+      </Button>
       {#if listing}
         <Menu
           label="Also open"
           width={260}
           align="right"
           offsetY={36}
-          items={drawn.hidden.map(({ tab }) => ({ label: tab.label }))}
+          items={drawn.hidden.map(({ tab }) => ({ label: tab.label, status: tab.status }))}
           onSelect={(_, i) => reveal(drawn.hidden[i].index)} />
       {/if}
     </span>

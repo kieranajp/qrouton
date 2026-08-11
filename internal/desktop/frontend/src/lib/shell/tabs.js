@@ -16,3 +16,13 @@ export function split(tabs, selected, capacity) {
   const drawn = new Set(shown.map((entry) => entry.index));
   return { shown, hidden: all.filter((entry) => !drawn.has(entry.index)) };
 }
+
+/** @typedef {"waiting" | "failed" | "running" | "succeeded" | "success" | "idle"} TabStatus */
+
+/** @type {TabStatus[]} */
+const STATUS_PRIORITY = ["waiting", "failed", "running", "succeeded", "success", "idle"];
+
+/** @param {{status?: TabStatus}[]} tabs @returns {TabStatus | ""} */
+export function dominantStatus(tabs) {
+  return STATUS_PRIORITY.find((status) => tabs.some((tab) => tab.status === status)) ?? "";
+}

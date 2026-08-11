@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { split } from "./tabs.js";
+import { dominantStatus, split } from "./tabs.js";
 
 const strip = ["shell", "plan", "shell 2", "shell 3", "research"];
 
@@ -48,4 +48,14 @@ test("room for one tab is room for the selected one", () => {
     [3],
   );
   assert.equal(hidden.length, 4);
+});
+
+test("hidden tabs surface the state that most needs attention", () => {
+  assert.equal(
+    dominantStatus([{ status: "running" }, { status: "failed" }, { status: "waiting" }]),
+    "waiting",
+  );
+  assert.equal(dominantStatus([{ status: "succeeded" }, { status: "failed" }]), "failed");
+  assert.equal(dominantStatus([{}, { status: "succeeded" }]), "succeeded");
+  assert.equal(dominantStatus([{}, {}]), "");
 });
