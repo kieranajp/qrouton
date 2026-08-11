@@ -71,9 +71,14 @@ export function mount(host, { write, background = "--ctp-base" }) {
   });
   term.onData((data) => write(data));
 
+  let { cols, rows } = term;
+  // Reporting is a SIGWINCH to the child, and a drag fires far more often than
+  // it crosses a cell.
   const refit = (report) => {
     fit.fit();
-    report(term.cols, term.rows);
+    if (term.cols === cols && term.rows === rows) return;
+    ({ cols, rows } = term);
+    report(cols, rows);
   };
   return { term, fit, refit, dispose: () => term.dispose() };
 }

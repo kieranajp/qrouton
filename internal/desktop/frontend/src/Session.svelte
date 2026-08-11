@@ -8,6 +8,7 @@
   import RailItem from "./lib/session/RailItem.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
+  import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
   import TerminalPane from "./lib/shell/TerminalPane.svelte";
   import WindowTray from "./lib/shell/WindowTray.svelte";
@@ -25,9 +26,49 @@
     idle: { label: "Idle", tone: "idle", fill: "var(--ctp-surface-2)" },
   };
 
+  // Neither pane is worth having below these; the divider stops rather than
+  // letting one of them become a strip.
+  const MIN_HUMAN = 320;
+  const MIN_AGENT = 360;
+  const WIDTH_KEY = "qrouton.human-pane";
+
+  // A page served from a custom scheme has an origin the webview may call
+  // opaque, where storage throws rather than coming back empty.
+  const remembered = () => {
+    try {
+      return Number(localStorage.getItem(WIDTH_KEY)) || 0;
+    } catch {
+      return 0;
+    }
+  };
+  const remember = (value) => {
+    try {
+      if (value) localStorage.setItem(WIDTH_KEY, String(value));
+      else localStorage.removeItem(WIDTH_KEY);
+    } catch {}
+  };
+
   const session = chrome();
   const open = surfaces();
   let host;
+  // Zero is untouched, which leaves the starting width the token's to own.
+  let width = $state(remembered());
+  let panels = $state(0);
+  let rail = $state(0);
+  let measured = $state(0);
+  let room = $derived(panels ? Math.max(MIN_HUMAN, panels - rail - MIN_AGENT) : Infinity);
+  let human = $derived(width ? Math.min(Math.max(width, MIN_HUMAN), room) : 0);
+
+  function resize(next) {
+    width = next;
+    remember(next);
+  }
+
+  function reset() {
+    width = 0;
+    remember(0);
+  }
+
   // The focused tab is held by id, so a window docking behind it cannot shift
   // the selection the way an index would.
   let focused = $state("");
@@ -68,8 +109,8 @@
     </span>
   </div>
 
-  <div class="panels">
-    <div class="rail">
+  <div class="panels" bind:clientWidth={panels}>
+    <div class="rail" bind:clientWidth={rail}>
       <CapsLabel>Sessions</CapsLabel>
       {#each fields.sessions as row (row.slug)}
         <RailItem
@@ -126,7 +167,15 @@
       </TerminalPane>
     </div>
 
-    <div class="human">
+    <Splitter
+      size={human || measured}
+      min={MIN_HUMAN}
+      max={room}
+      onResize={resize}
+      onReset={reset}
+      label="Resize the shell pane" />
+
+    <div class="human" style:width={human ? human + "px" : null} bind:clientWidth={measured}>
       <TabStrip
         tabs={open.tabs}
         {selected}
@@ -264,7 +313,6 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid var(--border-subtle);
   }
 
   .badge {
