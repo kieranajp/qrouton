@@ -140,9 +140,14 @@ func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
 	}
 	// Newest first: the header announces exactly one.
 	for i, got := range fields.Documents {
-		want := filepath.Base(kinds[len(kinds)-1-i].path)
-		if got.Name != want {
-			t.Fatalf("document %d = %q, want %q (not newest-first): %#v", i, got.Name, want, fields.Documents)
+		doc := kinds[len(kinds)-1-i].path
+		if got.Name != filepath.Base(doc) {
+			t.Fatalf("document %d = %q, want %q (not newest-first): %#v", i, got.Name, doc, fields.Documents)
+		}
+		// The path is resolved against the session root, so an absolute one gets
+		// past the escape guard.
+		if want := filepath.Join("thoughts", "shared", doc); got.Path != want {
+			t.Fatalf("document %d is at %q, want %q", i, got.Path, want)
 		}
 	}
 }

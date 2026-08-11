@@ -92,10 +92,13 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
+	// A missing editor costs the document chip, and must not keep the list shut.
+	editor, _ := launch.ResolveEditor(cfg.Editor)
 	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
 		Dock:   cfg.Dock(),
+		Editor: editor,
 	}, os.Environ())
 }
 
@@ -258,7 +261,9 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return detach(launch.WorkbenchSpec{SessionRoot: dir, Socket: socket, Argv: argv, Dock: cfg.Dock()}, env)
+	return detach(launch.WorkbenchSpec{
+		SessionRoot: dir, Socket: socket, Argv: argv, Dock: cfg.Dock(), Editor: editor,
+	}, env)
 }
 
 // detach hands the workbench to a process of its own and returns as soon as it
@@ -296,8 +301,24 @@ func workbenchProcess(marshalled string) error {
 		Argv:        spec.Argv,
 		Env:         os.Environ(),
 		Shell:       shellArgv(bin),
+		Document:    documentArgv(spec.Editor),
 		Dock:        spec.Dock,
 	})
+}
+
+// documentArgv opens a document in the user's editor, under the same escape
+// guard as the agent's file tool.
+func documentArgv(editor launch.EditorCommand) func(string, string) ([]string, error) {
+	return func(sessionRoot, name string) ([]string, error) {
+		if len(editor.Argv) == 0 {
+			return nil, launch.ErrNoEditor
+		}
+		path, err := launch.ResolveSessionFile(sessionRoot, name)
+		if err != nil {
+			return nil, err
+		}
+		return editor.Args(path, 1), nil
+	}
 }
 
 // workbenchLog is where the detached process's stdio lands: inside the session

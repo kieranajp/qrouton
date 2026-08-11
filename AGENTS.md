@@ -37,7 +37,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - `internal/desktop/`: the Wails application — the conversation PTY, the window registry and its lifecycle rules, the control-socket server, and the embedded pages. Window construction sits behind a `renderer` seam so everything else is testable without a display. One registry serves both surfaces: a docked window skips `renderer.Open` and reaches the session's tab strip instead, so the window tools cannot tell the two apart. The pages are a Vite + Svelte project under `frontend/`, built into `assets/` by `make front`; that tree is generated and is not in git.
 - `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: the agent's window tools; subagent event collection, whose own surface is deferred; legacy repo status.
 - `internal/sessionpaths/`, `internal/codex/`, `internal/theme/`: the shared leaves above.
-- `internal/config/`: config file, XDG paths, the `windows` preference (`float` or `dock`), and the on-demand owner prompt. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and `EnsureOrgs` asks at the first repository search.
+- `internal/config/`: config file, XDG paths, the `windows` preference (`dock` by default, `float` for OS windows), and the on-demand owner prompt. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and `EnsureOrgs` asks at the first repository search.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 
 ## Invariants

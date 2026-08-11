@@ -30,10 +30,13 @@ const FormatDiff DocumentFormat = "diff"
 // terminal window and Content to a document one. CloseOnExit closes a terminal
 // window whose process exits zero; a non-zero exit keeps it open regardless.
 // TTL expires a document window. Attention marks a window that needs the
-// user's eye without taking focus.
+// user's eye without taking focus. Source names the session file the window
+// shows, relative to the session root, so a second request for that file
+// selects this window instead of opening another.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
+	Source      string         `json:"source,omitempty"`
 	Cwd         string         `json:"cwd,omitempty"`
 	Command     []string       `json:"command,omitempty"`
 	Content     string         `json:"content,omitempty"`

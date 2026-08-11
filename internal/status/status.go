@@ -44,9 +44,11 @@ type SessionRow struct {
 	Live     bool   `json:"live"`
 }
 
-// Document is one durable artifact under thoughts/shared.
+// Document is one durable artifact under thoughts/shared, its Path relative to
+// the session root.
 type Document struct {
 	Name string    `json:"name"`
+	Path string    `json:"path"`
 	Kind string    `json:"kind"`
 	At   time.Time `json:"at"`
 }
@@ -203,7 +205,13 @@ func documents(root string) []Document {
 		if err != nil {
 			return nil
 		}
-		out = append(out, Document{Name: entry.Name(), Kind: kind(entry.Name()), At: info.ModTime()})
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return nil
+		}
+		out = append(out, Document{
+			Name: entry.Name(), Path: rel, Kind: kind(entry.Name()), At: info.ModTime(),
+		})
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })

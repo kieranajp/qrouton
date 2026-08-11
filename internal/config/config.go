@@ -24,13 +24,13 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
-	// "float" for an OS window, "dock" for a tab in the session's right pane.
-	// Tiling window managers are the motivating case.
+	// "dock" (the default) for a tab in the session's right pane, "float" for an
+	// OS window.
 	Windows string `json:"windows,omitempty"`
 }
 
-// Anything but the docked value floats, so a misspelling still gives windows.
-func (c *Config) Dock() bool { return c.Windows == WindowsDock }
+// Only the floating value floats, so a misspelling still gives the default.
+func (c *Config) Dock() bool { return c.Windows != WindowsFloat }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.
 func xdgDir(envVar, fallback string) string {

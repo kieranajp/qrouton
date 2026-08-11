@@ -50,7 +50,9 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 		methods []string
 	}{
 		{Term{}, []string{"Start", "Write", "Resize"}},
-		{Windows{}, []string{"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell"}},
+		{Windows{}, []string{
+			"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell", "OpenDocument",
+		}},
 	} {
 		typ := reflect.TypeOf(tc.service)
 		qualified := typ.PkgPath() + "." + typ.Name()

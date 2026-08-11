@@ -69,18 +69,19 @@ func (m *windowManager) openFile(ctx context.Context, input openFileInput) (stri
 	if input.Line < 1 {
 		input.Line = 1
 	}
+	rel, _ := filepath.Rel(m.root, path)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.open(ctx, editorWindowName, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
 		Label:       editorWindowLabel,
+		Source:      rel,
 		Cwd:         m.root,
 		Command:     m.editor.Args(path, input.Line),
 		CloseOnExit: true,
 	}); err != nil {
 		return "", fmt.Errorf("open editor window: %w", err)
 	}
-	rel, _ := filepath.Rel(m.root, path)
 	return fmt.Sprintf(openedFileFormat, rel, input.Line), nil
 }
 

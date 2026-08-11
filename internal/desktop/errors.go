@@ -15,6 +15,8 @@ var (
 	ErrNotATerminal    = errors.New("window is not a terminal")
 	ErrNoSessionRoot   = errors.New("adopt request carries no session root")
 	ErrNoShellCommand  = errors.New("workbench has no shell command to run")
+	ErrNoDocumentName  = errors.New("open request names no document")
+	ErrNoEditorCommand = errors.New("workbench has no editor command to open a document with")
 )
 
 func noSuchWindow(id string) error {

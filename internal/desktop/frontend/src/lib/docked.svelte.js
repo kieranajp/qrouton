@@ -30,3 +30,6 @@ export function surfaces() {
 
 export const closeWindow = (id) => Call.ByName(WINDOWS_SERVICE + ".Close", id);
 export const openShell = () => Call.ByName(WINDOWS_SERVICE + ".OpenShell");
+
+/** openDocument opens a session document, or selects the tab already on it. */
+export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocument", path);

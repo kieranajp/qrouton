@@ -15,7 +15,7 @@
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { attach } from "./lib/conversation.js";
-  import { closeWindow, openShell, surfaces } from "./lib/docked.svelte.js";
+  import { closeWindow, openDocument, openShell, surfaces } from "./lib/docked.svelte.js";
 
   /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
   const ACTIVITY = {
@@ -46,6 +46,13 @@
         }
       : undefined,
   );
+
+  // A session with no editor has nothing to open and no room here to say so.
+  async function readLatest() {
+    try {
+      focused = await openDocument(fields.documents[0].path);
+    } catch {}
+  }
   let commits = $derived(
     fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
   );
@@ -112,7 +119,7 @@
         {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
         <span class="badge" class:quiet={fields.activity === "idle"} style:--tone={activity.fill}
           >{activity.label}</span>
-        <LatestDocument {latest} count={fields.documents.length} />
+        <LatestDocument {latest} count={fields.documents.length} onOpen={readLatest} />
       </PaneHeader>
       <TerminalPane>
         <div class="host" bind:this={host}></div>

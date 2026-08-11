@@ -3,8 +3,8 @@
 
   // An agent window never steals focus, so this line is the whole attention
   // mechanism: tag, name and age, never a bare count.
-  /** @type {{latest?: {tag: string, name: string, age: string}, count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
-  let { latest, count = 0, open = false, unseen = false, onToggle, children, ...rest } = $props();
+  /** @type {{latest?: {tag: string, name: string, age: string}, count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, onOpen?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  let { latest, count = 0, open = false, unseen = false, onToggle, onOpen, children, ...rest } = $props();
 </script>
 
 <div class="latest" {...rest}>
@@ -18,10 +18,11 @@
       <span class="age">{latest.age}</span>
       {#if count > 1}<span class="age">+{count - 1}</span>{/if}
     {/snippet}
-    {#if onToggle}
-      <button class="chip" class:lit={open || unseen} onclick={onToggle}>
+    {#if onToggle || onOpen}
+      <button class="chip" class:lit={open || unseen} onclick={onToggle ?? onOpen}>
         {@render summary()}
-        <span class="caret">&#9662;</span>
+        <!-- A caret promises a menu, which onOpen is not. -->
+        {#if onToggle}<span class="caret">&#9662;</span>{/if}
       </button>
     {:else}
       <span class="chip inert" class:lit={unseen}>{@render summary()}</span>

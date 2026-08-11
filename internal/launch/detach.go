@@ -35,6 +35,8 @@ type WorkbenchSpec struct {
 	Socket      string   `json:"socket"`
 	Argv        []string `json:"argv"`
 	Dock        bool     `json:"dock,omitempty"`
+	// Empty on the landing list, which has not resolved one yet.
+	Editor EditorCommand `json:"editor"`
 }
 
 func (s WorkbenchSpec) Marshal() string {

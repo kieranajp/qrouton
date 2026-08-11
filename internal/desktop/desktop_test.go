@@ -285,6 +285,88 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	}
 }
 
+// The header's document chip is one control for two states: nothing open yet,
+// and the window already showing it. A second tab on the same document is the
+// failure the user sees.
+func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts.Document = func(root, name string) ([]string, error) {
+		return []string{"/bin/cat", filepath.Join(root, name)}, nil
+	}
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	const doc = "thoughts/shared/research/R7-editor-surfaces.md"
+	id, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.tabs()
+	if len(tabs) != 2 || tabs[1].ID != id {
+		t.Fatalf("the document is not the newest tab: %+v", tabs)
+	}
+	if tabs[1].Label != "R7-editor-surfaces.md" {
+		t.Fatalf("the document tab reads %q", tabs[1].Label)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; a document the user asked for is a tab", len(r.opened))
+	}
+
+	again, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != id {
+		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
+	}
+	if got := len(windows.tabs()); got != 2 {
+		t.Fatalf("%d tabs after clicking twice", got)
+	}
+
+	// Dismissing it is what makes the chip open one again.
+	if err := windows.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened == id {
+		t.Fatal("the dismissed document came back with its old id")
+	}
+}
+
+// The agent opens documents too, through its file tool. The chip has to find
+// that window rather than stack a second copy beside it.
+func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
+	w, _ := testWindows(t)
+	w.newDocument = func(string) (string, error) {
+		t.Fatal("the chip opened a second window on a document already up")
+		return "", nil
+	}
+
+	const doc = "thoughts/shared/plans/P006.md"
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "Editor", Source: doc, Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := w.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != id {
+		t.Fatalf("the chip returned %q, not the editor window %q", got, id)
+	}
+}
+
 // Tabs that all read "$ shell" are tabs nobody can tell apart. The number goes
 // in the label the registry stores, so read_window and the manifest's record
 // agree with the tab strip.

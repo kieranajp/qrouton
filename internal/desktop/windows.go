@@ -21,7 +21,8 @@ type Windows struct {
 	// dock sends the agent's windows to the tab strip instead of the screen.
 	dock bool
 	// newShell reopens the shell after the user closes its tab.
-	newShell func() (string, error)
+	newShell    func() (string, error)
+	newDocument func(name string) (string, error)
 
 	mu      sync.Mutex
 	seq     int
@@ -67,6 +68,35 @@ func (w *Windows) OpenShell() (string, error) {
 		return "", ErrNoShellCommand
 	}
 	return w.newShell()
+}
+
+// OpenDocument returns the window already showing the named document, or opens
+// one — so a single click both opens and selects. The name is session-relative.
+func (w *Windows) OpenDocument(name string) (string, error) {
+	if name == "" {
+		return "", ErrNoDocumentName
+	}
+	if id, ok := w.showing(name); ok {
+		return id, nil
+	}
+	if w.newDocument == nil {
+		return "", ErrNoEditorCommand
+	}
+	return w.newDocument(name)
+}
+
+func (w *Windows) showing(source string) (string, bool) {
+	if source == "" {
+		return "", false
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for id, window := range w.open {
+		if window.opts.Source == source {
+			return id, true
+		}
+	}
+	return "", false
 }
 
 func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (string, error) {

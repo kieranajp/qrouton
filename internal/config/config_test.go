@@ -90,9 +90,12 @@ func TestWindowsPreferenceRoundTrips(t *testing.T) {
 	if cfg.Windows != WindowsDock || !cfg.Dock() {
 		t.Fatalf("windows = %q, Dock() = %v", cfg.Windows, cfg.Dock())
 	}
-	for _, value := range []string{"", WindowsFloat, "tiled"} {
-		if (&Config{Windows: value}).Dock() {
-			t.Errorf("Windows=%q docked; anything but %q floats", value, WindowsDock)
+	if (&Config{Windows: WindowsFloat}).Dock() {
+		t.Errorf("Windows=%q docked", WindowsFloat)
+	}
+	for _, value := range []string{"", "tiled"} {
+		if !(&Config{Windows: value}).Dock() {
+			t.Errorf("Windows=%q floated; anything but %q docks", value, WindowsFloat)
 		}
 	}
 }
