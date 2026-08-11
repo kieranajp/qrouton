@@ -149,6 +149,13 @@ const (
 	firstLine = 1
 )
 
+// How a session file's window is named.
+const (
+	editorWindowLabel   = "Editor"
+	documentLabelFormat = "◆ %s"
+	frontMatterFence    = "---"
+)
+
 var (
 	// editorEnvVars are consulted in order when no editor is configured.
 	editorEnvVars = []string{"VISUAL", "EDITOR"}

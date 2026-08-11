@@ -56,6 +56,9 @@ const (
 	openedFileFormat = "Opened %s at line %d in an editor window " +
 		"(it stays open until the user quits the editor; the conversation keeps focus)."
 
+	renderedFileFormat = "Showing %s rendered in a pane the user can read and scroll " +
+		"(it stays open until they close it; the conversation keeps focus)."
+
 	runningFormat = "Running in window %q (cwd %s). The user can close the window, " +
 		"or call " + toolReadWindow + " with name %q to see its " +
 		"output and " + toolCloseWindow + " %q to close it."

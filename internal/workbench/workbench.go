@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -24,7 +25,22 @@ const (
 // declares it; empty is plain text, and nothing infers it from the content.
 type DocumentFormat string
 
-const FormatDiff DocumentFormat = "diff"
+const (
+	FormatDiff     DocumentFormat = "diff"
+	FormatMarkdown DocumentFormat = "markdown"
+)
+
+// panes name the pane a file opens in. A file with no pane opens in the editor.
+var panes = map[string]DocumentFormat{
+	".md":       FormatMarkdown,
+	".markdown": FormatMarkdown,
+}
+
+// FormatFor names the pane a filename opens in.
+func FormatFor(name string) (DocumentFormat, bool) {
+	format, ok := panes[strings.ToLower(filepath.Ext(name))]
+	return format, ok
+}
 
 // WindowOptions describes a window the agent opens. Command belongs to a
 // terminal window and Content to a document one. CloseOnExit closes a terminal

@@ -207,10 +207,12 @@ func (w *Windows) Resize(id string, cols, rows int) error {
 	return process.resize(cols, rows)
 }
 
-// document is a document window's text and how its page should render it.
+// document is a document window's text, how its page should render it, and the
+// session file it came from, if it came from one.
 type document struct {
 	Text   string `json:"text"`
 	Format string `json:"format"`
+	Source string `json:"source"`
 }
 
 // Content is a document window's text, fetched by its page on load.
@@ -219,7 +221,11 @@ func (w *Windows) Content(id string) (document, error) {
 	if !ok {
 		return document{}, noSuchWindow(id)
 	}
-	return document{Text: window.opts.Content, Format: string(window.opts.Format)}, nil
+	return document{
+		Text:   window.opts.Content,
+		Format: string(window.opts.Format),
+		Source: window.opts.Source,
+	}, nil
 }
 
 // processExited applies the lifecycle rule: a clean exit closes the window, a

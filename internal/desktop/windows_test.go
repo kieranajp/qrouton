@@ -147,8 +147,29 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 		t.Fatal(err)
 	}
 	<-r.opened
-	if page, err := w.Content(plain); err != nil || page.Format != "" {
-		t.Fatalf("a plain document declared format %q", page.Format)
+	if page, err := w.Content(plain); err != nil || page.Format != "" || page.Source != "" {
+		t.Fatalf("a plain document declared format %q from %q", page.Format, page.Source)
+	}
+}
+
+// A pane draws the path its document came from, and only the registry knows the
+// window it is drawing.
+func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
+	w, r := testWindows(t)
+	const source = "thoughts/shared/plans/P007-2026-08-11-document-panes.md"
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "P007", Source: source, Content: "# Document panes",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-r.opened
+	page, err := w.Content(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if page.Source != source {
+		t.Fatalf("Content source = %q, want %q", page.Source, source)
 	}
 }
 

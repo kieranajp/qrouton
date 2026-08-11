@@ -26,9 +26,9 @@ type Options struct {
 	// Shell builds the user shell window's command for a session root, which is
 	// why it is a function rather than an argv.
 	Shell func(sessionRoot string) []string
-	// Document opens one of the session's documents, named relative to its root;
-	// it errors on a name resolving outside the session.
-	Document func(sessionRoot, name string) ([]string, error)
+	// Document is the window one of the session's own files opens in, named
+	// relative to its root; it errors on a name resolving outside the session.
+	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
 	// Dock sends the agent's windows to the tab strip rather than the screen.
 	Dock bool
 }
@@ -175,21 +175,15 @@ func (s *shellWindow) spawn(root string) (string, error) {
 
 // openDocument puts a document in the right pane. The user asked for it, so it
 // is a tab under either windows preference, and unrecorded like the shell.
-func openDocument(windows *Windows, argv func(string, string) ([]string, error), root, name string) (string, error) {
-	if argv == nil {
+func openDocument(windows *Windows, window func(string, string) (workbench.WindowOptions, error), root, name string) (string, error) {
+	if window == nil {
 		return "", ErrNoEditorCommand
 	}
-	command, err := argv(root, name)
+	opts, err := window(root, name)
 	if err != nil {
 		return "", err
 	}
-	return windows.openStructural(workbench.WindowOptions{
-		Kind:    workbench.KindTerminal,
-		Label:   filepath.Base(name),
-		Source:  name,
-		Cwd:     root,
-		Command: command,
-	})
+	return windows.openStructural(opts)
 }
 
 // shellLabel leaves the first shell unnumbered, so a session with one reads as

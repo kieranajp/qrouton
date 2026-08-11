@@ -8,3 +8,7 @@ export declare const Call: {
 export declare const Events: {
   On(event: string, handler: (event: { data: any }) => void): () => void;
 };
+
+export declare const Browser: {
+  OpenURL(url: string): Promise<void>;
+};

@@ -48,11 +48,10 @@ func main() {
 	}
 }
 
-// onboard is the default action. With no arguments it opens the landing list.
-// A single argument naming an existing directory drops into a fresh zero-repo
-// scratch session named after it; owner/repo arguments launch an ad-hoc
-// session directly. Each of those assembles in the terminal the user ran and
-// then hands the workbench to a process of its own.
+// onboard is the default action. No arguments opens the landing list; a single
+// argument naming an existing directory drops into a fresh zero-repo scratch
+// session named after it; owner/repo arguments launch an ad-hoc session. Each
+// assembles in the user's terminal, then hands the workbench its own process.
 func onboard(c *cli.Context) error {
 	if spec := c.String(workbenchSpecFlag); spec != "" {
 		return workbenchProcess(spec)
@@ -301,23 +300,15 @@ func workbenchProcess(marshalled string) error {
 		Argv:        spec.Argv,
 		Env:         os.Environ(),
 		Shell:       shellArgv(bin),
-		Document:    documentArgv(spec.Editor),
+		Document:    documentWindow(spec.Editor),
 		Dock:        spec.Dock,
 	})
 }
 
-// documentArgv opens a document in the user's editor, under the same escape
-// guard as the agent's file tool.
-func documentArgv(editor launch.EditorCommand) func(string, string) ([]string, error) {
-	return func(sessionRoot, name string) ([]string, error) {
-		if len(editor.Argv) == 0 {
-			return nil, launch.ErrNoEditor
-		}
-		path, err := launch.ResolveSessionFile(sessionRoot, name)
-		if err != nil {
-			return nil, err
-		}
-		return editor.Args(path, 1), nil
+// documentWindow reaches the same decision the agent's file tool does.
+func documentWindow(editor launch.EditorCommand) func(string, string) (workbench.WindowOptions, error) {
+	return func(sessionRoot, name string) (workbench.WindowOptions, error) {
+		return launch.DocumentWindow(sessionRoot, name, editor, 1)
 	}
 }
 

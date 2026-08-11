@@ -143,16 +143,18 @@ func TestEveryPageLinksThePalette(t *testing.T) {
 	}
 }
 
-// The format the page branches on is the port's value, spelled again in
-// JavaScript. Nothing checks that at build time. The source is enough here:
-// the page is its own build entry, so only its spelling can drift.
-func TestTheDocumentPageKnowsTheDiffFormat(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "window-document.js")
+// The formats the pane registry keys on are the port's values, spelled again in
+// JavaScript. Nothing checks that at build time, and a format no pane claims
+// draws as plain text rather than erroring.
+func TestThePaneRegistryDrawsEveryDocumentFormat(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/panes/index.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(source), `=== "`+string(workbench.FormatDiff)+`"`) {
-		t.Fatalf("the document page does not branch on the %q format", workbench.FormatDiff)
+	for _, format := range []workbench.DocumentFormat{workbench.FormatDiff, workbench.FormatMarkdown} {
+		if !strings.Contains(string(source), string(format)+":") {
+			t.Errorf("the pane registry has no pane for the %q format", format)
+		}
 	}
 }
 

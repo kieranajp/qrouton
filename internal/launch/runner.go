@@ -29,11 +29,10 @@ var builtinRunners = []Runner{
 
 var findExecutable = exec.LookPath
 
-// Runners applies configured overrides to qrouton's supported, tool-capable
-// runners and reports which of them are installed. An override naming something
-// qrouton cannot wire up is an error rather than a no-op: the MCP and hook
-// injection in runnerLaunch is per-runner, so an unrecognised command would be
-// launched without any of it.
+// Runners applies configured overrides to qrouton's supported runners and
+// reports which are installed. An override naming something qrouton cannot wire
+// up is an error rather than a no-op: MCP and hook injection is per-runner, so
+// an unrecognised command would launch without any of it.
 func Runners(cfg *config.Config) ([]Runner, error) {
 	out := make([]Runner, len(builtinRunners))
 	copy(out, builtinRunners)

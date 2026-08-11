@@ -22,7 +22,7 @@ const (
 
 // Tool descriptions.
 const (
-	descOpenFile = "Open an existing session file in the user's configured terminal editor, in its own window. The window stays open for reference while the user keeps chatting with the agent, and closes when they quit the editor. Use this after creating a document when showing it to the user is helpful."
+	descOpenFile = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists and highlighted code — and anything else opens in their configured terminal editor at the given line. Either way it stays open for reference while the user keeps chatting, and the conversation keeps focus. Use this after writing a document when showing it to the user is helpful."
 
 	descRunCommand = "Run a shell command in its own window instead of your own shell. Ideal for long-running or noisy processes (dev servers, test watchers, builds, log tails) the user should see live: the window is interactive, so Ctrl-C there reaches the process. The conversation keeps focus, reusing a name replaces that window, and a command that succeeds closes its window while one that fails leaves it open. Read its output later with read_window."
 

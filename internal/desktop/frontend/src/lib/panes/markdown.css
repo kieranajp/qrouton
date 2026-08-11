@@ -1,0 +1,165 @@
+/* Global: the body is html the pipeline made, out of scoped styles' reach. */
+.markdown {
+  font: var(--machine-lg);
+  color: var(--text-secondary);
+  text-wrap: pretty;
+}
+
+.markdown > :first-child {
+  margin-top: 0;
+}
+
+.markdown p {
+  margin: 0 0 16px;
+}
+
+.markdown h1,
+.markdown h2 {
+  font: var(--display-xs);
+  letter-spacing: var(--display-tracking);
+  color: var(--text-primary);
+  margin: 26px 0 12px;
+}
+
+.markdown h3,
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font: var(--machine-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent-label);
+  margin: 22px 0 10px;
+}
+
+.markdown a {
+  color: var(--accent-action);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border-default);
+  cursor: pointer;
+}
+
+.markdown strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.markdown ul,
+.markdown ol {
+  margin: 0 0 16px;
+  padding-left: 22px;
+}
+
+.markdown li {
+  margin: 0 0 7px;
+  font: var(--machine-md);
+}
+
+.markdown blockquote {
+  border-left: 3px solid var(--state-guided);
+  padding: 2px 0 2px 14px;
+  margin: 0 0 18px;
+  color: var(--state-guided);
+  font: var(--machine-md);
+  line-height: 1.7;
+}
+
+.markdown blockquote p {
+  margin: 0;
+  color: inherit;
+}
+
+.markdown hr {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 22px 0;
+}
+
+.markdown .contains-task-list {
+  list-style: none;
+  padding-left: 0;
+}
+
+.markdown .task-list-item {
+  display: flex;
+  gap: 11px;
+  align-items: flex-start;
+}
+
+.markdown input[type="checkbox"] {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  flex: none;
+  margin: 4px 0 0;
+  border: 1px solid var(--border-default);
+  background: transparent;
+}
+
+.markdown input[type="checkbox"]:checked {
+  border: none;
+  background: var(--state-success);
+}
+
+.markdown code {
+  font: var(--terminal-sm);
+  color: var(--accent-label);
+}
+
+.markdown pre {
+  background: var(--surface-terminal);
+  border: 1px solid var(--border-subtle);
+  padding: 12px 14px;
+  margin: 0 0 18px;
+  overflow-x: auto;
+}
+
+.markdown pre code {
+  color: var(--text-secondary);
+  white-space: pre;
+}
+
+.markdown table {
+  border-collapse: collapse;
+  margin: 0 0 18px;
+  font: var(--machine-md);
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--border-subtle);
+  padding: 6px 11px;
+  text-align: left;
+}
+
+.markdown th {
+  color: var(--accent-label);
+  font: var(--machine-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.markdown .sh__token--keyword {
+  color: var(--state-guided);
+}
+
+.markdown .sh__token--class,
+.markdown .sh__token--property {
+  color: var(--accent-label);
+}
+
+.markdown .sh__token--string {
+  color: var(--state-success);
+}
+
+.markdown .sh__token--comment {
+  color: var(--text-faint);
+}
+
+.markdown .sh__token--entity {
+  color: var(--accent-action);
+}
+
+.markdown .sh__token--sign {
+  color: var(--text-muted);
+}

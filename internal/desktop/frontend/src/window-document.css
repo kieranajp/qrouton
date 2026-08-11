@@ -10,6 +10,6 @@ body {
 
 /* On its own page a row carries the gutter itself, so a diff's backgrounds
    reach the window edge rather than stopping at a padded container. */
-.row {
+#document .diff-row {
   padding: 0 var(--space-7);
 }

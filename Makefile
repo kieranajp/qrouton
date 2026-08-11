@@ -42,7 +42,7 @@ fmt:
 # A component's props are a contract with the screen that draws it, and a
 # bundler will happily ship a page that passes the wrong ones.
 front-check: $(FRONTEND)/node_modules
-	cd $(FRONTEND) && npm run check
+	cd $(FRONTEND) && npm run check && npm test
 
 check: test race vet build front-check
 	@test -z "$$(gofmt -l .)" || { echo "gofmt:"; gofmt -l .; exit 1; }

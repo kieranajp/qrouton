@@ -131,21 +131,21 @@ func shortEscalatePoll(t *testing.T, timeout time.Duration) {
 
 func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("hello"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	if _, err := m.openFile(ctx, openFileInput{Path: "doc.md", Line: 7}); err != nil {
+	if _, err := m.openFile(ctx, openFileInput{Path: "main.go", Line: 7}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.openFile(ctx, openFileInput{Path: "doc.md"}); err != nil {
+	if _, err := m.openFile(ctx, openFileInput{Path: "main.go"}); err != nil {
 		t.Fatal(err)
 	}
 	realDir, err := filepath.EvalSymlinks(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	path := filepath.Join(realDir, "doc.md")
+	path := filepath.Join(realDir, "main.go")
 
 	if len(host.opens) != 2 {
 		t.Fatalf("opened %d windows, want 2", len(host.opens))
@@ -168,6 +168,36 @@ func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{editorWindowName}) {
 		t.Fatalf("registry = %v, want [%s]", got, editorWindowName)
+	}
+}
+
+// Showing the user a plan is the common case, and an editor is not how they read
+// one. The line number goes with it: a rendered pane has no lines.
+func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	body := "# Document panes\n\nThe pane is a tab.\n"
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	message, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(host.opens) != 1 {
+		t.Fatalf("opened %d windows, want 1", len(host.opens))
+	}
+	opts := host.opens[0]
+	if opts.Kind != workbench.KindDocument || opts.Format != workbench.FormatMarkdown {
+		t.Fatalf("markdown opened as a %q/%q", opts.Kind, opts.Format)
+	}
+	if opts.Content != body || opts.Source != "P007.md" {
+		t.Fatalf("pane content = %q from %q", opts.Content, opts.Source)
+	}
+	if opts.Label != "◆ Document panes" {
+		t.Fatalf("pane label = %q", opts.Label)
+	}
+	if strings.Contains(message, "line") {
+		t.Fatalf("the agent was told about a line in a rendered pane: %q", message)
 	}
 }
 

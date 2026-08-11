@@ -6,12 +6,21 @@
     "checkJs": true,
     "allowJs": true,
     "strict": false,
-    "types": ["vite/client"],
+    "types": [
+      "vite/client",
+      "node"
+    ],
     "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
-      "/wails/runtime.js": ["src/types/wails-runtime.d.ts"]
+      "/wails/runtime.js": [
+        "src/types/wails-runtime.d.ts"
+      ]
     }
   },
-  "include": ["src/**/*.js", "src/**/*.d.ts", "src/**/*.svelte"]
+  "include": [
+    "src/**/*.js",
+    "src/**/*.d.ts",
+    "src/**/*.svelte"
+  ]
 }

@@ -292,8 +292,11 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	r := newFakeRenderer()
 	opts := testOptions(t)
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	opts.Document = func(root, name string) ([]string, error) {
-		return []string{"/bin/cat", filepath.Join(root, name)}, nil
+	opts.Document = func(root, name string) (workbench.WindowOptions, error) {
+		return workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "◆ " + filepath.Base(name),
+			Source: name, Content: "# " + name, Format: workbench.FormatMarkdown,
+		}, nil
 	}
 	windows := newWindows(r, r.Emit, false)
 	t.Cleanup(windows.stopAll)
@@ -311,8 +314,11 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	if len(tabs) != 2 || tabs[1].ID != id {
 		t.Fatalf("the document is not the newest tab: %+v", tabs)
 	}
-	if tabs[1].Label != "R7-editor-surfaces.md" {
+	if tabs[1].Label != "◆ R7-editor-surfaces.md" {
 		t.Fatalf("the document tab reads %q", tabs[1].Label)
+	}
+	if tabs[1].Kind != string(workbench.KindDocument) {
+		t.Fatalf("the document tab is a %q; a rendered pane runs no process", tabs[1].Kind)
 	}
 	if len(r.opened) != 0 {
 		t.Fatalf("%d OS windows opened; a document the user asked for is a tab", len(r.opened))
