@@ -17,7 +17,7 @@ var Command = &cli.Command{
 		&cli.StringFlag{Name: prefixFlag, Usage: prefixUsage},
 	},
 	Action: func(c *cli.Context) error {
-		// Unlike the other pane subcommands, the picker needs the configured
+		// Unlike the other window subcommands, the picker needs the configured
 		// owners for its repository list, so it loads config like onboard does.
 		cfg, err := config.Load()
 		if err != nil {

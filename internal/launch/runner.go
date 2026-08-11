@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 type Runner struct {
@@ -103,9 +103,9 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle mux.Handle, resume bool) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, resume bool) ([]string, []string, error) {
 	argv := runnerArgv(r, resume, sessionMode(dir))
-	mcpArgs := []string{mcpSubcommand, sessionRootFlag, dir, editorJSONFlag, editor.Marshal(), muxJSONFlag, handle.Marshal()}
+	mcpArgs := []string{mcpSubcommand, sessionRootFlag, dir, editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()}
 	switch r.ID {
 	case runnerIDClaude:
 		mcp := map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
@@ -146,7 +146,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 			content[openCodePermissionKey] = openCodeAllowValue
 		}
 		b, _ := json.Marshal(content)
-		return argv, mux.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
+		return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
 	default:
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
@@ -154,7 +154,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 }
 
 // ShellQuote single-quotes s so it survives as one word in the POSIX shell that
-// runs hook commands and pane commands. Go's %q double-quoting would leave $,
+// runs hook commands and window commands. Go's %q double-quoting would leave $,
 // backticks, and backslashes live for the shell.
 func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar

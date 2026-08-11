@@ -1,42 +1,37 @@
-// Package status draws the session strip — the one-line bottom pane that says
-// which mode the session is in, which macro-phase it has reached, and which
-// chords operate it. It re-reads the manifest every tick, so the picker's
-// escalation write flips the strip within one poll: that repaint is the
-// escalation confirmation.
+// Package status derives the session identity the workbench chrome shows —
+// which mode the session is in, which macro-phase it has reached, and what the
+// work is called. It only reads the manifest, so the picker's escalation write
+// shows up on the next read: that is the escalation confirmation.
 package status
 
 import (
-	"fmt"
 	"path/filepath"
-	"time"
 
-	"github.com/kieranajp/qrouton/internal/paneui"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-// Status redraws the strip forever (redraws in place; used by the workspace
-// layout as a full-width one-row borderless pane).
-func Status(root string) error {
-	for {
-		fmt.Print(paneui.Frame(statusLines(root)))
-		time.Sleep(refreshInterval)
-	}
+// Fields is the session identity the workbench chrome shows.
+type Fields struct {
+	Mode     string
+	Phase    string
+	Identity string
 }
 
-func statusLines(root string) []string {
+// Read reports the session's identity, or false when the manifest cannot be
+// loaded — the caller decides what to render in its place.
+func Read(root string) (Fields, bool) {
 	m, err := session.Load(root)
 	if err != nil {
-		return []string{paneui.Muted(manifestUnavailable)}
+		return Fields{}, false
 	}
-	mode, identity, chords := modeAssistantLabel, m.Slug, assistantChords
+	fields := Fields{Mode: modeAssistantLabel, Phase: phase(root, m), Identity: m.Slug}
 	if m.EffectiveMode() == session.ModeRPI {
-		mode, identity, chords = modeRPILabel, m.Name, rpiChords
+		fields.Mode, fields.Identity = modeRPILabel, m.Name
 		if branch := activeBranch(m); branch != "" {
-			identity += labelSeparator + branch
+			fields.Identity += labelSeparator + branch
 		}
 	}
-	return []string{paneui.Bold(mode+labelSeparator+phase(root, m)) + fieldSeparator +
-		identity + fieldSeparator + paneui.Muted(chords)}
+	return fields, true
 }
 
 // phase is the macro-phase only: scratch until repositories exist, then the

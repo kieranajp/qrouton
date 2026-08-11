@@ -1,9 +1,7 @@
 // Package sessionpaths owns the on-disk layout of a qrouton session: the
 // manifest, the session-private directory, and everything qrouton generates
-// inside it. Five packages write into that directory — the launcher, the
-// multiplexer adapter, the MCP server, the prompt stamper, and the subagent
-// watcher — and before this package each of them spelled ".qrouton" out for
-// itself. A path convention with five authors is a path convention that drifts.
+// inside it. Several packages write into that directory, and a path convention
+// with several authors is a path convention that drifts.
 package sessionpaths
 
 import "path/filepath"
@@ -29,6 +27,7 @@ const (
 	canonicalPromptsDirName = "qrspi"
 
 	notifyScriptName   = "notify.sh"
+	workbenchLogName   = "workbench.log"
 	claudeAgentLogName = "claude-agents.jsonl"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
@@ -59,6 +58,13 @@ func CanonicalPrompts(root string) string {
 // runner's notification hook.
 func NotifyScript(root string) string {
 	return filepath.Join(Dir(root), notifyScriptName)
+}
+
+// WorkbenchLog collects the detached workbench process's stdio. It has no
+// terminal to fail into, so a crash after it started answering is only ever
+// read here.
+func WorkbenchLog(root string) string {
+	return filepath.Join(Dir(root), workbenchLogName)
 }
 
 // ClaudeAgentLog records Claude subagent lifecycle hook events.

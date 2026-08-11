@@ -2,7 +2,7 @@ package session
 
 // The on-disk contract: the manifest schema and the reads and writes that
 // maintain it. qrouton.json is what makes a directory a session and what every
-// other process — the launcher, the status pane, the escalate tool — polls, so
+// other process — the launcher, the window chrome, the escalate tool — polls, so
 // the schema and its atomic write live together, apart from the assembly
 // behaviour that produces them.
 
@@ -30,7 +30,7 @@ const (
 // SessionMode selects the system prompt (and opening message) the runner starts
 // under. RPI is the default orchestrated Research→Plan→Implement workflow;
 // Assistant is a lighter, open-ended coding session that can escalate to RPI
-// on request. Both modes stamp the same panes, skills, and MCP tools.
+// on request. Both modes stamp the same prompts, skills, and MCP tools.
 type SessionMode string
 
 const (
@@ -97,6 +97,17 @@ type Manifest struct {
 	CreatedAt     time.Time          `json:"createdAt"`
 	Repos         []ManifestRepo     `json:"repos"`
 	Escalation    *EscalationOutcome `json:"escalation,omitempty"`
+	Windows       []WindowRecord     `json:"windows,omitempty"`
+}
+
+// WindowRecord is one window the agent had open when the manifest was last
+// written. Nothing replays these yet; they are here so a resume can rebuild the
+// workspace, and so what was on screen is legible from the file afterwards.
+type WindowRecord struct {
+	Kind    string   `json:"kind"`
+	Label   string   `json:"label"`
+	Cwd     string   `json:"cwd,omitempty"`
+	Command []string `json:"command,omitempty"`
 }
 
 // EscalationStatus is how a picker-driven escalation attempt ended.
@@ -164,6 +175,18 @@ func SetMode(dir string, mode SessionMode) error {
 		return err
 	}
 	m.Mode = mode.effective()
+	return WriteManifest(dir, m)
+}
+
+// SetWindows rewrites the manifest's record of open windows. The workbench calls
+// it whenever a window opens or closes, so the file keeps agreeing with the
+// screen.
+func SetWindows(dir string, windows []WindowRecord) error {
+	m, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	m.Windows = windows
 	return WriteManifest(dir, m)
 }
 

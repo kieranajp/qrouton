@@ -1,31 +1,9 @@
 package agents
 
-import "time"
+// The subagent readers' vocabulary: the states they report, and the runner and
+// rollout event names they read them from.
 
-// The subagent watcher's vocabulary: the states it renders, the runner and
-// rollout event names it reads them from, and the pane's copy.
-
-const (
-	paneTitle       = "agents"
-	refreshInterval = 2 * time.Second
-
-	// maxVisibleAgents is how many subagents fit before the pane summarises the
-	// remainder as a count.
-	maxVisibleAgents = 4
-
-	noSubagentsLabel       = "No subagents yet"
-	claudeUnavailableLabel = "Claude status unavailable"
-	codexUnavailableLabel  = "Codex status unavailable"
-
-	moreAgentsFormat = "+%d more"
-	agentLineFormat  = "%s %s  %s"
-
-	markerRunning = "●"
-	markerDone    = "✓"
-	markerFailed  = "!"
-)
-
-// The three states the pane draws, whichever runner reported them.
+// The three states a subagent is reported in, whichever runner reported it.
 const (
 	stateRunning = "running"
 	stateDone    = "done"

@@ -184,7 +184,7 @@ const (
 )
 
 // The mock MCP server the harness points each runner at, so a graded run
-// exercises the qrouton tool surface without a real multiplexer.
+// exercises the qrouton tool surface without a real workbench.
 const (
 	mockMCPSubcommand = "mock-mcp"
 	mockMCPLogFlag    = "--log"

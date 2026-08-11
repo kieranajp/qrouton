@@ -6,36 +6,16 @@ on:
     branches: [main]
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go vet ./...
-      - run: go test ./...
-      - run: go build ./...
-
-  cross-compile:
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        # No Windows target: the launch path execs zellij via syscall.Exec,
-        # which returns EWINDOWS at runtime, and zellij has no Windows build.
-        target:
-          - { goos: linux, goarch: amd64 }
-          - { goos: linux, goarch: arm64 }
-          - { goos: darwin, goarch: amd64 }
-          - { goos: darwin, goarch: arm64 }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-      - run: go build .
-        env:
-          GOOS: ${{ matrix.target.goos }}
-          GOARCH: ${{ matrix.target.goarch }}
-          CGO_ENABLED: "0"
+      # The workbench is a WebKit window, so the binary links cgo. GTK4 only:
+      # Wails also has a GTK3 backend behind a build tag, which we do not ship.
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      # The pre-handoff gate from AGENTS.md, so CI and a developer's last command
+      # are the same thing.
+      - run: make check

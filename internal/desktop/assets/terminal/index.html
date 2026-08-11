@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>qrouton</title>
+    <link rel="stylesheet" href="/vendor/xterm.css" />
+    <style>
+      :root { --bg: #24273a; --fg: #cad3f5; }
+      html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+      #term { height: 100%; padding: 4px 6px; box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <div id="term"></div>
+
+    <script src="/vendor/xterm.js"></script>
+    <script src="/vendor/addon-fit.js"></script>
+    <script src="/vendor/addon-webgl.js"></script>
+    <script type="module">
+      import { Call, Events } from "/wails/runtime.js";
+
+      const SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
+      const id = new URLSearchParams(location.search).get("id");
+
+      const term = new Terminal({
+        fontFamily: "Menlo, ui-monospace, monospace",
+        fontSize: 13,
+        allowProposedApi: true,
+        macOptionIsMeta: true,
+        theme: { background: "#24273a", foreground: "#cad3f5", cursor: "#f4dbd6" },
+      });
+      const fit = new FitAddon.FitAddon();
+      term.loadAddon(fit);
+      term.open(document.getElementById("term"));
+      try { term.loadAddon(new WebglAddon.WebglAddon()); } catch (e) { console.warn("webgl", e); }
+      fit.fit();
+
+      const encoder = new TextEncoder();
+      const write = (s) => Call.ByName(SERVICE + ".Write", id, btoa(String.fromCharCode(...encoder.encode(s))));
+
+      term.onData((data) => write(data));
+      term.onBinary((data) => Call.ByName(SERVICE + ".Write", id, btoa(data)));
+
+      // Emit(name, one) delivers the value itself; indexing it would take the
+      // first character of the base64 string and fail silently in here.
+      Events.On("window:data:" + id, (event) => {
+        const raw = atob(event.data);
+        const buffer = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
+        term.write(buffer);
+      });
+      Events.On("window:exit:" + id, (event) => {
+        term.write("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n");
+      });
+
+      const resize = () => {
+        fit.fit();
+        Call.ByName(SERVICE + ".Resize", id, term.cols, term.rows);
+      };
+      new ResizeObserver(resize).observe(document.getElementById("term"));
+      window.addEventListener("resize", resize);
+
+      await Call.ByName(SERVICE + ".Start", id, term.cols, term.rows);
+      term.focus();
+    </script>
+  </body>
+</html>

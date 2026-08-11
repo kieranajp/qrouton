@@ -9,24 +9,24 @@ permissions:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    # cgo links WebKit, so both artifacts are built on a Mac. Go hands clang the
+    # arch, which is why one arm64 runner can produce the amd64 slice too.
+    runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - run: go test ./...
       - name: Build binaries
         run: |
           mkdir -p dist
-          # No Windows artifact: the launch path is syscall.Exec + zellij, neither of which exists there.
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
-            goos=${target%/*} goarch=${target#*/}
-            CGO_ENABLED=0 GOOS=$goos GOARCH=$goarch \
-              go build -trimpath -ldflags "-s -w" -o "dist/qrouton-${goos}-${goarch}" .
+          for goarch in arm64 amd64; do
+            CGO_ENABLED=1 GOOS=darwin GOARCH=$goarch \
+              go build -trimpath -ldflags "-s -w" -o "dist/qrouton-darwin-${goarch}" .
           done
           (cd dist && shasum -a 256 * > checksums.txt)
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           files: dist/*
           generate_release_notes: true

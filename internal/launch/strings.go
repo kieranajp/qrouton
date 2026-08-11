@@ -1,8 +1,8 @@
 package launch
 
 // Literals the launch path depends on: runner identifiers and their arguments,
-// the environment variables and shell fragments qrouton injects, and the pane
-// names the generated workspace uses.
+// the environment variables and shell fragments qrouton injects, and the
+// subcommands qrouton launches against itself.
 
 const (
 	// EditorEnvVar carries the resolved editor into the MCP child, which the
@@ -12,59 +12,42 @@ const (
 	// openCodeConfigEnvVar is how OpenCode accepts inline configuration.
 	openCodeConfigEnvVar = "OPENCODE_CONFIG_CONTENT"
 
-	// shellBin runs the generated quick-reference script.
+	// shellBin runs the generated support scripts.
 	shellBin = "sh"
 
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
 
-	// Pane names in the generated workspace layout. A pane's title carries a
-	// chord only where a real binding operates that pane; movement and the
-	// rest of the key list are stated once, in the strip and in Alt-?.
-	agentPaneName        = "agent"
-	shellPaneName        = "shell"
-	shellPaneTitleSuffix = " · Alt-g new · Alt-↑↓ switch · Ctrl-d close"
-	agentsPaneName       = "agents"
-	statusPaneName       = "status"
-	helpPaneName         = "keys · Esc to close"
-
-	// Subcommands qrouton launches against itself to drive its own panes.
+	// Subcommands qrouton launches against itself.
 	mcpSubcommand        = "mcp"
-	dockSubcommand       = "dock"
-	agentsSubcommand     = "agents"
-	statusSubcommand     = "status"
-	shellSubcommand      = "shell"
 	agentEventSubcommand = "agent-event"
 	agentSubcommand      = "agent"
+	onboardSubcommand    = "onboard"
+	shellSubcommand      = "shell"
 
-	sessionRootFlag = "--session-root"
-	runnerFlag      = "--runner"
-	editorJSONFlag  = "--editor-json"
-	muxJSONFlag     = "--mux-json"
-	resumeFlag      = "--resume"
+	sessionRootFlag   = "--session-root"
+	runnerFlag        = "--runner"
+	editorJSONFlag    = "--editor-json"
+	workbenchJSONFlag = "--workbench-json"
+	resumeFlag        = "--resume"
+	socketFlag        = "--socket"
+	refreshFlag       = "--refresh"
 
-	// codexDepthWarning is passed as help.sh's $1 on the startup invocation
-	// only, when Codex's subagent nesting is too shallow; the Alt-? route
-	// omits it (a launch-time-only concern). The one-shot splash's mode
-	// tagline moved into the script itself, which reads ./qrouton.json at
-	// runtime — mode-correct per session, including immediately after an
-	// escalation, from a single global copy.
-	codexDepthWarning = "Codex agents.max_depth is under 2. Set it to 3 " +
-		"in ~/.codex/config.toml for nested subagents."
+	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
+	// loop rather than assemble a session. Its literal is duplicated in main,
+	// which defines the flag it names.
+	workbenchSpecFlag = "--workbench-spec"
 )
 
-// Sizes and geometry of the generated workspace. Percentages are the
-// multiplexer's own units; watchPaneRows is a fixed row count, since the dock
-// and subagent readouts need a known few lines rather than a share of the
-// column.
+// The detached workbench's own plumbing: how a failure to start names the log
+// that explains it, and the socket's network.
 const (
-	agentColumnSize = "65%"
-	sideColumnSize  = "35%"
-	watchPaneRows   = "6"
-	stripPaneRows   = "1"
+	workbenchFailureFormat = "%w: see %s"
+	specParseError         = "parse workbench spec"
+	socketNetwork          = "unix"
 )
 
-// scriptMode is the permission bit the generated pane scripts need.
+// scriptMode is the permission bit the generated support scripts need.
 const scriptMode = 0o755
 
 const (
@@ -82,10 +65,6 @@ const (
 	findDepthFlag = "-maxdepth"
 	findDepth     = "2"
 	findPrintFlag = "-print"
-
-	lastShellMessage = "qrouton: the shell area always keeps one shell; starting a fresh one"
-	joinShellError   = "join shell stack"
-	countShellError  = "count shell panes"
 )
 
 // Runner identifiers, labels, and the arguments qrouton launches each with.
@@ -128,8 +107,8 @@ const (
 	claudeHooksKey      = "hooks"
 	claudeCommandType   = "command"
 
-	// Claude hook events qrouton subscribes to: the subagent pair drives the
-	// agents pane, and Notification chimes only when the agent asks for
+	// Claude hook events qrouton subscribes to: the subagent pair feeds the
+	// event log, and Notification chimes only when the agent asks for
 	// attention, so the user can step away.
 	claudeSubagentStartHook = "SubagentStart"
 	claudeSubagentStopHook  = "SubagentStop"

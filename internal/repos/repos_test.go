@@ -71,12 +71,17 @@ func TestStatusLinesRenderBranchRoleAndDirtyState(t *testing.T) {
 		t.Fatalf("active repo line = %q", lines[1])
 	}
 	// The old status.sh printed a blank branch for detached references; the
-	// pane must show the pinned revision and the role instead.
+	// output must show the pinned revision and the role instead.
 	if !strings.Contains(lines[2], "@ ") || !strings.Contains(lines[2], "reference · clean") {
 		t.Fatalf("reference repo line = %q", lines[2])
 	}
 	if !strings.Contains(lines[3], "src/gone") || !strings.Contains(lines[3], "missing") {
 		t.Fatalf("missing worktree line = %q", lines[3])
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "\x1b") {
+			t.Fatalf("line carries escape sequences: %q", line)
+		}
 	}
 }
 

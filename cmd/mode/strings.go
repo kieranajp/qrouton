@@ -7,9 +7,4 @@ const (
 
 	sessionRootFlag  = "session-root"
 	sessionRootUsage = "qrouton session root"
-
-	shellStackFlag  = "shell-stack"
-	shellStackUsage = "place this internal action in the workspace shell stack"
-
-	deescalatingPaneSuffix = " · switching to assistant"
 )

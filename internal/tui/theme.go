@@ -1,10 +1,8 @@
 package tui
 
-// The onboarding TUI runs outside Zellij, so its palette is defined here to
-// match the Zellij theme the session launches into (catppuccin-macchiato, set
-// in internal/mux/assets/zellij-config.kdl). Keeping one source of truth means
-// qrouton reads as one product from picker to pane. If the Zellij theme
-// changes, change these hexes to match.
+// The onboarding TUI's palette is Catppuccin Macchiato, the same one the
+// workbench window draws in, so qrouton reads as one product from picker to
+// conversation.
 //
 // Only the shades the views actually draw with are declared; the rest of
 // Catppuccin Macchiato is a lookup away if a new one is needed.
@@ -30,8 +28,8 @@ var (
 	good   = lipgloss.NewStyle().Foreground(ctpGreen)
 	bad    = lipgloss.NewStyle().Foreground(ctpRed)
 
-	// A crouton is a cube; Zellij is squares; the logo is a cube. Everything
-	// qrouton draws is a box with square corners in that same design language.
+	// A crouton is a cube and the logo is a cube. Everything qrouton draws is
+	// a box with square corners in that same design language.
 	card = box(false)
 
 	picked = box(true).Background(ctpSurface0)

@@ -13,7 +13,7 @@
               qrouton
 ```
 
-qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are active work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the terminal layout. 🧊✨
+qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are active work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the desktop workbench it all runs in. 🧊✨
 
 ## What it does 🥖
 
@@ -23,19 +23,17 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 - Pins reference repos as detached, read-only context.
 - Discovers repositories across several GitHub organizations or user accounts.
 - Starts from cached GitHub data, then refreshes owners concurrently.
-- Launches Claude Code, Codex CLI, or OpenCode in Zellij.
+- Opens a desktop window and runs Claude Code, Codex CLI, or OpenCode in it, with a shell window alongside.
 - Resumes the agent conversation when the workspace is resumed.
-- Gives agents session-aware instructions, skills, and an MCP-powered editor pane.
-- Keeps agent-run panes in a right-hand overlay lane and lets the agent minimise them into a persistent dock without stopping their processes.
+- Gives agents session-aware instructions, skills, and MCP tools that open real OS windows — an editor, a live command, a diff — while the conversation keeps the keyboard.
 - Starts sessions in **RPI** (orchestrated Research → Plan → Implement) or **Assistant** (open-ended) mode.
 
 ## Requirements 🧰
 
-- macOS or Linux.
+- macOS or Linux. The workbench is a WebKit window, so the binary links cgo; there is no Windows build. macOS is what qrouton is developed and run on. Linux builds and passes its tests in CI but has not yet been driven on a desktop, and needs WebKitGTK 6 — `pacman -S webkitgtk-6.0` on Arch, `apt install libgtk-4-dev libwebkitgtk-6.0-dev` on Debian or Ubuntu. GTK4 only, so a distro new enough to carry it.
 - Git.
 - [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`, or `GITHUB_TOKEN`.
 - `LINEAR_API_KEY` or `ASANA_ACCESS_TOKEN` to populate a new session's name and description from a linked ticket.
-- Zellij 0.44 or newer.
 - At least one supported coding agent: `claude`, `codex`, or `opencode`.
 - Go 1.26+ to build from source.
 
@@ -46,7 +44,7 @@ make build          # or: go build -o qrouton .
 ./qrouton
 ```
 
-`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: the in-session escalation chords shell out to `qrouton`, so they need it somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
+`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell window, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
 
 qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work` and the owners are prompted for the first time you open the repository picker. Configuration is stored at:
 
@@ -124,7 +122,7 @@ Each session starts in one of two modes, chosen on the new-session form (`RPI` i
 
 RPI is qrouton's take on [loop engineering](https://newsletter.pragmaticengineer.com/p/what-is-loop-engineering): the interesting part isn't the prompt, it's the loop around it — the topology (leads fanning out to specialists), the verifier (review and test gates), and the stop rules (phased plans). Assistant mode is the honest other half of that idea: loops have preconditions, and plenty of work doesn't clear them. So you pick the loop when it earns its keep, and skip it when you're the verifier.
 
-The mode only swaps the runner's starting system prompt and opening message; the Zellij panes, MCP tools, and skills are identical either way. The choice is stored in `qrouton.json` and preserved on resume. Both prompts are always stamped under `.qrouton/qrspi/`, so an Assistant session can **escalate to RPI mid-conversation** just by asking the agent — no relaunch needed.
+The mode only swaps the runner's starting system prompt and opening message; the workbench, MCP tools, and skills are identical either way. The choice is stored in `qrouton.json` and preserved on resume. Both prompts are always stamped under `.qrouton/qrspi/`, so an Assistant session can **escalate to RPI mid-conversation** just by asking the agent — no relaunch needed.
 
 ## Prompt sources 🧠
 

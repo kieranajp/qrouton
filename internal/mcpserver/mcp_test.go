@@ -5,18 +5,120 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
-	"github.com/kieranajp/qrouton/internal/mux"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+var testEditor = launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}
+
+type readCall struct {
+	id   string
+	full bool
+}
+
+// fakeHost stands in for the desktop process: it records what the window
+// manager asked of it, and lets a test script the answers, failures included.
+type fakeHost struct {
+	mu sync.Mutex
+
+	opens  []workbench.WindowOptions
+	ids    []string
+	closes []string
+	reads  []readCall
+	checks []string
+	lists  int
+
+	live map[string]bool
+
+	text      string
+	readErr   error
+	existsErr error
+	listIDs   []string
+	listErr   error
+}
+
+func (h *fakeHost) Open(_ context.Context, opts workbench.WindowOptions) (string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	id := fmt.Sprintf("window-%d", len(h.opens)+1)
+	h.opens = append(h.opens, opts)
+	h.ids = append(h.ids, id)
+	if h.live == nil {
+		h.live = map[string]bool{}
+	}
+	h.live[id] = true
+	return id, nil
+}
+
+func (h *fakeHost) Close(_ context.Context, id string) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.closes = append(h.closes, id)
+	delete(h.live, id)
+	return nil
+}
+
+func (h *fakeHost) Read(_ context.Context, id string, full bool) (string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.reads = append(h.reads, readCall{id: id, full: full})
+	return h.text, h.readErr
+}
+
+func (h *fakeHost) Exists(_ context.Context, id string) (bool, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.checks = append(h.checks, id)
+	if h.existsErr != nil {
+		return false, h.existsErr
+	}
+	return h.live[id], nil
+}
+
+func (h *fakeHost) List(_ context.Context) ([]string, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.lists++
+	if h.listErr != nil {
+		return nil, h.listErr
+	}
+	if h.listIDs != nil {
+		return slices.Clone(h.listIDs), nil
+	}
+	ids := make([]string, 0, len(h.live))
+	for id := range h.live {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids, nil
+}
+
+func (h *fakeHost) Adopt(context.Context, string) error { return nil }
+
+// drop takes a window away behind the manager's back, the way a user closing a
+// window by hand does.
+func (h *fakeHost) drop(id string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.live, id)
+}
+
+func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
+	t.Helper()
+	dir := t.TempDir()
+	host := &fakeHost{}
+	return newWindowManager(dir, testEditor, host), host, dir
+}
 
 // shortEscalatePoll shrinks escalate's poll interval and timeout for the
 // duration of a test, restoring them on cleanup.
@@ -27,469 +129,356 @@ func shortEscalatePoll(t *testing.T, timeout time.Duration) {
 	t.Cleanup(func() { escalateTimeout, escalatePollInterval = originalTimeout, originalInterval })
 }
 
-// fakeZellij writes a script that logs every invocation to $CALL_LOG, hands out a
-// fresh pane id for each new-pane, and echoes canned output for dump-screen.
-func fakeZellij(t *testing.T, dir string) (helper, log string) {
-	t.Helper()
-	log = filepath.Join(dir, "calls")
-	helper = filepath.Join(dir, "zellij")
-	script := "#!/bin/sh\n" +
-		"printf '%s\\n' \"$*\" >> \"$CALL_LOG\"\n" +
-		"case \"$4\" in\n" +
-		"  new-pane) n=$(cat \"$ID_SEQ\" 2>/dev/null || echo 0); n=$((n+1)); echo \"$n\" > \"$ID_SEQ\"; echo \"terminal_$n\";;\n" +
-		"  dump-screen) printf 'listening on :3000\\n';;\n" +
-		"  list-panes) printf '%s' \"$PANES_JSON\";;\n" +
-		"esac\n"
-	if err := os.WriteFile(helper, []byte(script), 0o755); err != nil {
+func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(dir, "doc.md"), []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CALL_LOG", log)
-	t.Setenv("ID_SEQ", filepath.Join(dir, "idseq"))
-	// The real MCP server runs as a child of the runner in the agent pane, so
-	// the driver always has an owning pane to hand focus back to. Without this
-	// every test here would exercise the no-owner fallback instead.
-	t.Setenv("ZELLIJ_PANE_ID", "0")
-	return helper, log
-}
-
-// livePanes makes list-panes report every id as a live terminal pane, which is
-// what the pane registry's liveness check expects to see for a pane it opened.
-func livePanes(t *testing.T, ids ...int) {
-	t.Helper()
-	entries := make([]string, 0, len(ids))
-	for _, id := range ids {
-		entries = append(entries, fmt.Sprintf(`{"id":%d,"title":"pane"}`, id))
-	}
-	t.Setenv("PANES_JSON", "["+strings.Join(entries, ",")+"]")
-}
-
-func livePanesWithDock(t *testing.T, ids ...int) {
-	t.Helper()
-	entries := []string{`{"id":8,"title":"dock"}`}
-	for _, id := range ids {
-		entries = append(entries, fmt.Sprintf(`{"id":%d,"title":"agent pane"}`, id))
-	}
-	t.Setenv("PANES_JSON", "["+strings.Join(entries, ",")+"]")
-}
-
-func testManager(t *testing.T, dir, helper string) *paneManager {
-	t.Helper()
-	return newPaneManager(dir, launch.EditorCommand{Argv: []string{"vi", "+{line}", "{path}"}, Template: true}, mux.NewZellijHost(helper, "test-session"))
-}
-
-func TestOpenFilePinsPaneReturnsFocusAndReplacesPrevious(t *testing.T) {
-	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "doc.md"), []byte("hello"), 0o644)
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.openFile(context.Background(), openFileInput{Path: "doc.md", Line: 7}); err != nil {
+	ctx := context.Background()
+	if _, err := m.openFile(ctx, openFileInput{Path: "doc.md", Line: 7}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.openFile(context.Background(), openFileInput{Path: "doc.md"}); err != nil {
+	if _, err := m.openFile(ctx, openFileInput{Path: "doc.md"}); err != nil {
 		t.Fatal(err)
 	}
-	s := readLog(t, log)
-	for _, want := range []string{
-		"--session test-session",
-		"new-pane --floating --pinned true",
-		"--x 66% --y 3% --width 33% --height 94%",
-		"agent · Editor · Alt-f to view · quit to close",
-		"focus-pane-id terminal_0",        // focus goes back to the agent pane by name, not by flipping the layer
-		"close-pane --pane-id terminal_1", // second open replaces the first editor pane
-	} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("calls missing %q:\n%s", want, s)
-		}
+	realDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
 	}
-	// The editor pane is the one floated pane Esc must not touch: it holds the
-	// user's real editor, where Esc leaves insert mode. So no shared wait is
-	// appended to its command, and its title promises no Esc.
-	if strings.Contains(s, "dismiss.sh") {
-		t.Fatalf("the editor pane ends in the shared Esc wait; Esc there belongs to the editor:\n%s", s)
+	path := filepath.Join(realDir, "doc.md")
+
+	if len(host.opens) != 2 {
+		t.Fatalf("opened %d windows, want 2", len(host.opens))
 	}
-	if strings.Contains(s, "Editor") && strings.Contains(s, "Editor · Alt-f to view · Esc") {
-		t.Fatalf("the editor pane's title still offers Esc to close:\n%s", s)
+	first := host.opens[0]
+	if first.Kind != workbench.KindTerminal {
+		t.Fatalf("editor window kind = %q, want %q", first.Kind, workbench.KindTerminal)
+	}
+	if want := testEditor.Args(path, 7); !slices.Equal(first.Command, want) {
+		t.Fatalf("editor command = %v, want %v", first.Command, want)
+	}
+	if !first.CloseOnExit {
+		t.Fatal("the editor window outlives the editor process")
+	}
+	if want := testEditor.Args(path, 1); !slices.Equal(host.opens[1].Command, want) {
+		t.Fatalf("second editor command = %v, want %v", host.opens[1].Command, want)
+	}
+	if !slices.Equal(host.closes, []string{host.ids[0]}) {
+		t.Fatalf("closed %v, want the first editor window %q", host.closes, host.ids[0])
+	}
+	if got := m.list(ctx); !slices.Equal(got, []string{editorWindowName}) {
+		t.Fatalf("registry = %v, want [%s]", got, editorWindowName)
 	}
 }
 
-func TestRunCommandOpensPaneWithResolvedCwd(t *testing.T) {
-	dir := t.TempDir()
+func TestRunCommandOpensATerminalWindowInTheResolvedCwd(t *testing.T) {
+	m, host, dir := newTestManager(t)
 	repo := filepath.Join(dir, "src", "app")
 	if err := os.MkdirAll(repo, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.run(context.Background(), runCommandInput{Command: "npm run dev", Name: "dev", Cwd: "src/app"}); err != nil {
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "npm run dev", Name: "dev", Cwd: "src/app"}); err != nil {
 		t.Fatal(err)
 	}
-	realRepo, _ := filepath.EvalSymlinks(repo)
-	s := readLog(t, log)
-	for _, want := range []string{
-		"new-pane --floating --pinned true",
-		"--x 66% --y 3% --width 33% --height 94%",
-		"--name agent · ▶ dev · Esc to close",
-		"--cwd " + realRepo,
-		"-- sh -lc (npm run dev) </dev/null & qrouton_payload_pid=$!; " + launch.DismissCommand(0),
-		`kill "$qrouton_payload_pid" 2>/dev/null`,
-		// Always self-closing: the shared wait is what holds the pane open, so
-		// Esc ending that wait has to take the pane with it.
-		"--close-on-exit",
-		"focus-pane-id terminal_0",
-	} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("calls missing %q:\n%s", want, s)
-		}
+	realRepo, err := filepath.EvalSymlinks(repo)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if got := p.list(); len(got) != 1 || got[0] != "dev" {
+
+	if len(host.opens) != 1 {
+		t.Fatalf("opened %d windows, want 1", len(host.opens))
+	}
+	opts := host.opens[0]
+	if opts.Kind != workbench.KindTerminal {
+		t.Fatalf("command window kind = %q, want %q", opts.Kind, workbench.KindTerminal)
+	}
+	if opts.Cwd != realRepo {
+		t.Fatalf("cwd = %q, want %q", opts.Cwd, realRepo)
+	}
+	if want := []string{shellBin, shellLoginFlag, "npm run dev"}; !slices.Equal(opts.Command, want) {
+		t.Fatalf("command = %v, want %v", opts.Command, want)
+	}
+	if !opts.CloseOnExit {
+		t.Fatal("the command window survives its own command")
+	}
+	if got := m.list(ctx); !slices.Equal(got, []string{"dev"}) {
 		t.Fatalf("registry = %v, want [dev]", got)
 	}
 }
 
-func TestDismissibleStopsARunningPayloadWhenDismissed(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	dismiss := config.DismissScriptPath()
-	if err := os.MkdirAll(filepath.Dir(dismiss), 0o755); err != nil {
-		t.Fatal(err)
+func TestRunCommandRejectsCwdEscapeReservedNameAndEmptyCommand(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	for _, tc := range []struct {
+		name  string
+		input runCommandInput
+		want  error
+	}{
+		{"a cwd outside the session", runCommandInput{Command: "ls", Cwd: "../"}, nil},
+		{"the reserved editor name", runCommandInput{Command: "ls", Name: editorWindowName}, ErrReservedWindowName},
+		{"an empty command", runCommandInput{Command: "   "}, ErrCommandRequired},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := m.run(context.Background(), tc.input)
+			if err == nil {
+				t.Fatalf("accepted %s", tc.name)
+			}
+			if tc.want != nil && !errors.Is(err, tc.want) {
+				t.Fatalf("error = %v, want %v", err, tc.want)
+			}
+		})
 	}
-	// The real dismiss script's byte handling is covered in launch. This stub
-	// makes the wrapper test about concurrency and payload teardown only.
-	if err := os.WriteFile(dismiss, []byte("#!/bin/sh\ndd bs=1 count=1 >/dev/null 2>&1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	stateDir := t.TempDir()
-	ready, stopped := filepath.Join(stateDir, "ready"), filepath.Join(stateDir, "stopped")
-	payload := "trap 'printf stopped > " + launch.ShellQuote(stopped) + "; exit 0' TERM; " +
-		"printf ready > " + launch.ShellQuote(ready) + "; while :; do sleep 1; done"
-	argv := dismissible(payload, 0)
-	cmd := exec.Command(argv[0], argv[1:]...)
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := cmd.Start(); err != nil {
-		t.Fatal(err)
-	}
-	deadline := time.Now().Add(time.Second)
-	for {
-		if _, err := os.Stat(ready); err == nil {
-			break
-		}
-		if time.Now().After(deadline) {
-			_ = cmd.Process.Kill()
-			t.Fatal("payload never started")
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-	if _, err := stdin.Write([]byte{0x1b}); err != nil {
-		t.Fatal(err)
-	}
-	_ = stdin.Close()
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case err := <-done:
-		if err != nil {
-			t.Fatal(err)
-		}
-	case <-time.After(2 * time.Second):
-		_ = cmd.Process.Kill()
-		t.Fatal("dismissible pane did not stop its running payload on Esc")
-	}
-	if got, err := os.ReadFile(stopped); err != nil || string(got) != "stopped" {
-		t.Fatalf("payload did not receive TERM: content=%q err=%v", got, err)
+	if len(host.opens) != 0 {
+		t.Fatalf("rejected calls opened %d windows", len(host.opens))
 	}
 }
 
-// Every pane the user is told to dismiss with Esc ends in the identical wait,
-// and every one of them closes when that wait returns. This is the guard
-// against the four routes drifting back into four dialects of "Esc closes
-// this" — which is how the editor pane ended up promising an Esc that belonged
-// to nvim.
-func TestEveryDismissiblePaneEndsInTheSameEscWait(t *testing.T) {
-	footer := launch.DismissCommand(0)
+func TestReadWindowReturnsTheHostsText(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.text = "listening on :3000\n"
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := m.read(ctx, readWindowInput{Name: "server", Full: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "listening on :3000" {
+		t.Fatalf("read output = %q", out)
+	}
+	want := readCall{id: host.ids[0], full: true}
+	if len(host.reads) != 1 || host.reads[0] != want {
+		t.Fatalf("reads = %v, want [%v]", host.reads, want)
+	}
+	if _, err := m.read(ctx, readWindowInput{Name: "missing"}); err == nil {
+		t.Fatal("read of an unregistered window should error")
+	}
+}
+
+func TestReadWindowKeepsTheTailOfALongWindow(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.text = "HEAD" + strings.Repeat("x", readWindowLimit) + "TAIL"
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := m.read(ctx, readWindowInput{Name: "server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(out) != len(truncatedPrefix)+readWindowLimit {
+		t.Fatalf("read returned %d bytes, want %d", len(out), len(truncatedPrefix)+readWindowLimit)
+	}
+	if !strings.HasPrefix(out, truncatedPrefix) {
+		t.Fatalf("truncated output does not say so: %q", out[:len(truncatedPrefix)])
+	}
+	if strings.Contains(out, "HEAD") || !strings.HasSuffix(out, "TAIL") {
+		t.Fatal("read kept the head of the output rather than the tail")
+	}
+}
+
+func TestReadWindowReportsAWindowWithNoOutput(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.text = "\n  \n"
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := m.read(ctx, readWindowInput{Name: "server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := fmt.Sprintf(noOutputFormat, "server"); out != want {
+		t.Fatalf("read output = %q, want %q", out, want)
+	}
+}
+
+func TestCloseWindowClosesItAndDropsItFromTheRegistry(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "tail -f log", Name: "logs"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := m.closeWindow(ctx, windowNameInput{Name: "logs"}); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(host.closes, []string{host.ids[0]}) {
+		t.Fatalf("closed %v, want [%s]", host.closes, host.ids[0])
+	}
+	if got := m.list(ctx); len(got) != 0 {
+		t.Fatalf("registry = %v, want empty", got)
+	}
+	if _, err := m.closeWindow(ctx, windowNameInput{Name: "logs"}); err == nil {
+		t.Fatal("closing an unknown window should error")
+	}
+}
+
+// The registry is qrouton's own map and nothing in it learns that the user
+// closed a window. Addressing a name whose window is gone must say so — and
+// forget it — rather than handing a dead id to the workbench and surfacing that
+// failure instead of a reason.
+func TestReadAndClosePruneAWindowTheUserClosed(t *testing.T) {
 	for _, tc := range []struct {
-		name   string
-		open   func(*paneManager) error
-		footer string
+		name string
+		call func(*windowManager) error
 	}{
-		{"run_command", func(p *paneManager) error {
-			_, err := p.run(context.Background(), runCommandInput{Command: "ls", Name: "cmd"})
+		{toolReadWindow, func(m *windowManager) error {
+			_, err := m.read(context.Background(), readWindowInput{Name: "server"})
 			return err
-		}, footer},
-		{"show_diff", func(p *paneManager) error {
-			_, err := p.showDiff(context.Background(), showDiffInput{})
+		}},
+		{toolCloseWindow, func(m *windowManager) error {
+			_, err := m.closeWindow(context.Background(), windowNameInput{Name: "server"})
 			return err
-		}, footer},
-		{"notify", func(p *paneManager) error {
-			_, err := p.notify(context.Background(), notifyInput{Message: "done"})
-			return err
-		}, launch.DismissCommand(toastSeconds)},
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			helper, log := fakeZellij(t, dir)
-			p := testManager(t, dir, helper)
-			if err := tc.open(p); err != nil {
+			m, host, _ := newTestManager(t)
+			ctx := context.Background()
+			if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
 				t.Fatal(err)
 			}
-			s := readLog(t, log)
-			if !strings.Contains(s, tc.footer) {
-				t.Fatalf("pane does not end in the shared Esc wait %q:\n%s", tc.footer, s)
+			host.drop(host.ids[0])
+
+			err := tc.call(m)
+			if err == nil {
+				t.Fatal("addressing a window the user closed should fail")
 			}
-			if !strings.Contains(s, "--close-on-exit") {
-				t.Fatalf("pane survives its own Esc wait returning; Esc would not close it:\n%s", s)
+			if err.Error() != windowGone("server").Error() {
+				t.Fatalf("error does not explain the window is gone: %v", err)
 			}
-			if !strings.Contains(s, "Esc to close") {
-				t.Fatalf("pane title does not tell the user which key dismisses it:\n%s", s)
+			if got := m.list(ctx); len(got) != 0 {
+				t.Fatalf("registry still holds a closed window: %v", got)
 			}
 		})
 	}
 }
 
-func TestRunCommandRejectsCwdEscapeReservedNameAndEmpty(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.run(context.Background(), runCommandInput{Command: "ls", Cwd: "../"}); err == nil {
-		t.Fatal("accepted cwd outside the session")
-	}
-	if _, err := p.run(context.Background(), runCommandInput{Command: "ls", Name: editorPaneName}); err == nil {
-		t.Fatal("accepted reserved editor name")
-	}
-	if _, err := p.run(context.Background(), runCommandInput{Command: "   "}); err == nil {
-		t.Fatal("accepted empty command")
-	}
-}
-
-func TestReadPaneDumpsScreenForNamedPane(t *testing.T) {
-	dir := t.TempDir()
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
+func TestReadWindowKeepsALiveWindow(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.text = "listening on :3000"
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
 		t.Fatal(err)
 	}
-	out, err := p.read(context.Background(), readPaneInput{Name: "server", Full: true})
+
+	out, err := m.read(ctx, readWindowInput{Name: "server"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "listening on :3000") {
+	if out != "listening on :3000" {
 		t.Fatalf("read output = %q", out)
 	}
-	if s := readLog(t, log); !strings.Contains(s, "dump-screen --pane-id terminal_1 --full") {
-		t.Fatalf("dump-screen not targeted by id:\n%s", s)
+	if !slices.Equal(host.checks, []string{host.ids[0]}) {
+		t.Fatalf("liveness checks = %v, want [%s]", host.checks, host.ids[0])
 	}
-	if _, err := p.read(context.Background(), readPaneInput{Name: "missing"}); err == nil {
-		t.Fatal("read of unknown pane should error")
-	}
-}
-
-func TestClosePaneRemovesFromRegistry(t *testing.T) {
-	dir := t.TempDir()
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.run(context.Background(), runCommandInput{Command: "tail -f log", Name: "logs"}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := p.closePane(context.Background(), paneNameInput{Name: "logs"}); err != nil {
-		t.Fatal(err)
-	}
-	if got := p.list(); len(got) != 0 {
-		t.Fatalf("registry = %v, want empty", got)
-	}
-	if s := readLog(t, log); !strings.Contains(s, "close-pane --pane-id terminal_1") {
-		t.Fatalf("close-pane not issued:\n%s", s)
-	}
-	if _, err := p.closePane(context.Background(), paneNameInput{Name: "logs"}); err == nil {
-		t.Fatal("closing an unknown pane should error")
+	if got := m.list(ctx); !slices.Equal(got, []string{"server"}) {
+		t.Fatalf("live window was pruned: %v", got)
 	}
 }
 
-func TestMinimizeStacksManagedPanesInDockAndRestoreFloatsThemBack(t *testing.T) {
-	dir := t.TempDir()
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "dev"}); err != nil {
+// A failing liveness check is not evidence of absence. Reading "closed" out of a
+// workbench hiccup would have the agent reopen windows that are fine, so the
+// window stays and the caller's own action reports whatever is actually wrong.
+func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.text = "listening on :3000"
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "server"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := p.run(context.Background(), runCommandInput{Command: "watch", Name: "tests"}); err != nil {
-		t.Fatal(err)
-	}
-	livePanesWithDock(t, 1, 2)
+	host.existsErr = errors.New("workbench unreachable")
 
-	message, err := p.minimizePane(context.Background(), paneNameInput{Name: "dev"})
-	if err != nil {
-		t.Fatal(err)
+	if _, err := m.read(ctx, readWindowInput{Name: "server"}); err != nil {
+		t.Fatalf("an unanswerable liveness check should not fail the read: %v", err)
 	}
-	if !strings.Contains(message, `Minimized pane "dev" into the dock`) {
-		t.Fatalf("minimize message = %q", message)
-	}
-	if _, err := p.minimizePane(context.Background(), paneNameInput{Name: "tests"}); err != nil {
-		t.Fatal(err)
-	}
-	message, err = p.minimizePane(context.Background(), paneNameInput{Name: "dev"})
-	if err != nil || !strings.Contains(message, "already minimized") {
-		t.Fatalf("second minimize = %q, %v", message, err)
-	}
-
-	message, err = p.restorePane(context.Background(), paneNameInput{Name: "dev"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if message != `Restored pane "dev" from the dock.` {
-		t.Fatalf("restore message = %q", message)
-	}
-	message, err = p.restorePane(context.Background(), paneNameInput{Name: "dev"})
-	if err != nil || !strings.Contains(message, "already visible") {
-		t.Fatalf("second restore = %q, %v", message, err)
-	}
-
-	calls := readLog(t, log)
-	for _, want := range []string{
-		"action stack-panes -- terminal_8 terminal_1",
-		"action stack-panes -- terminal_8 terminal_1 terminal_2",
-		"action toggle-pane-embed-or-floating --pane-id terminal_1",
-		"action change-floating-pane-coordinates --pane-id terminal_1 --x 66% --y 3% --width 33% --height 94%",
-	} {
-		if !strings.Contains(calls, want) {
-			t.Fatalf("calls missing %q:\n%s", want, calls)
-		}
+	if got := m.list(ctx); !slices.Equal(got, []string{"server"}) {
+		t.Fatalf("window pruned on a failed liveness check: %v", got)
 	}
 }
 
-func TestMinimizeAndRestoreRejectUnknownPanes(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-	if _, err := p.minimizePane(context.Background(), paneNameInput{Name: "missing"}); err == nil {
-		t.Fatal("minimized an unknown pane")
-	}
-	if _, err := p.restorePane(context.Background(), paneNameInput{Name: "missing"}); err == nil {
-		t.Fatal("restored an unknown pane")
-	}
-}
-
-func TestMinimizeKeepsHelpEscalateAndNotificationsOutOfTheDock(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-	for _, name := range []string{helpPaneName, escalatePaneName, notifyPaneName} {
-		if _, err := p.minimizePane(context.Background(), paneNameInput{Name: name}); !errors.Is(err, ErrPaneNotDockable) {
-			t.Errorf("minimize %q error = %v, want ErrPaneNotDockable", name, err)
-		}
-	}
-}
-
-func TestShowDiffOpensPaneForRepoAndAllRepos(t *testing.T) {
-	dir := t.TempDir()
-	repo := filepath.Join(dir, "src", "app")
-	if err := os.MkdirAll(repo, 0o755); err != nil {
+func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	if err := os.MkdirAll(filepath.Join(dir, "src", "app"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+	ctx := context.Background()
 
-	if _, err := p.showDiff(context.Background(), showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
 		t.Fatal(err)
 	}
-	realRepo, _ := filepath.EvalSymlinks(repo)
-	s := readLog(t, log)
-	for _, want := range []string{"--name agent · ◆ diff:app", "git -C '" + realRepo + "' --no-pager diff --staged 'main'", "--pinned true",
-		"--x 66% --y 3% --width 33% --height 94%",
-		// Esc ends the footer's wait, and close-on-exit turns that into a
-		// dismissed pane.
-		"Esc to close", launch.DismissCommand(0), "--close-on-exit"} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("single-repo diff missing %q:\n%s", want, s)
-		}
+	single := host.opens[0]
+	if single.Kind != workbench.KindDocument {
+		t.Fatalf("diff window kind = %q, want %q", single.Kind, workbench.KindDocument)
 	}
-	if got := p.list(); len(got) != 1 || got[0] != "diff:app" {
+	if strings.TrimSpace(single.Content) == "" {
+		t.Fatal("diff window opened with no captured diff")
+	}
+	if single.Format != workbench.FormatDiff {
+		t.Fatalf("diff window format = %q, want %q; its page would render it as grey text", single.Format, workbench.FormatDiff)
+	}
+	if got := m.list(ctx); !slices.Equal(got, []string{"diff:app"}) {
 		t.Fatalf("registry = %v, want [diff:app]", got)
 	}
 
-	if _, err := p.showDiff(context.Background(), showDiffInput{}); err != nil {
+	if _, err := m.showDiff(ctx, showDiffInput{}); err != nil {
 		t.Fatal(err)
 	}
-	if s := readLog(t, log); !strings.Contains(s, "for d in src/*/") || !strings.Contains(s, "--no-pager diff") || strings.Contains(s, "less -FRX") {
-		t.Fatalf("all-repos diff should walk worktrees without competing for terminal input:\n%s", s)
+	all := host.opens[1]
+	if all.Kind != workbench.KindDocument || all.Format != workbench.FormatDiff || strings.TrimSpace(all.Content) == "" {
+		t.Fatalf("all-repos diff window = %+v", all)
+	}
+	if got := m.list(ctx); !slices.Equal(got, []string{diffWindowName, "diff:app"}) {
+		t.Fatalf("registry = %v, want [%s diff:app]", got, diffWindowName)
 	}
 
-	if _, err := p.showDiff(context.Background(), showDiffInput{Repo: "../outside"}); err == nil {
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "../outside"}); err == nil {
 		t.Fatal("accepted a repo path outside the session")
 	}
 }
 
-func TestNotifyOpensSelfClosingToastWithSound(t *testing.T) {
-	dir := t.TempDir()
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+func TestNotifyOpensAnExpiringToastAndRingsTheSessionSound(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	var played string
+	original := playSound
+	playSound = func(script string) { played = script }
+	t.Cleanup(func() { playSound = original })
+	ctx := context.Background()
 
-	if _, err := p.notify(context.Background(), notifyInput{Message: "build finished"}); err != nil {
+	if _, err := m.notify(ctx, notifyInput{Message: "build finished"}); err != nil {
 		t.Fatal(err)
 	}
-	s := readLog(t, log)
-	script := filepath.Join(dir, ".qrouton", "notify.sh")
-	for _, want := range []string{"--name agent · 🔔 notification · Esc to close", "--close-on-exit", "'" + script + "'", "build finished", "focus-pane-id terminal_0",
-		"--x 66% --y 3% --width 33% --height 18%",
-		// Dismissable on Esc through the same shared wait as every other pane,
-		// and still self-closing after toastSeconds.
-		launch.DismissCommand(toastSeconds)} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("notify toast missing %q:\n%s", want, s)
-		}
+	opts := host.opens[0]
+	if opts.Kind != workbench.KindDocument {
+		t.Fatalf("toast kind = %q, want %q", opts.Kind, workbench.KindDocument)
 	}
-	if _, err := p.notify(context.Background(), notifyInput{Message: "  "}); err == nil {
-		t.Fatal("accepted an empty notify message")
+	if opts.TTL != toastLifetime {
+		t.Fatalf("toast TTL = %s, want %s", opts.TTL, toastLifetime)
+	}
+	if !strings.Contains(opts.Content, "build finished") {
+		t.Fatalf("toast content = %q", opts.Content)
+	}
+	if opts.Format != "" {
+		t.Fatalf("the toast declared the %q format; only show_diff does", opts.Format)
+	}
+	if want := sessionpaths.NotifyScript(dir); played != want {
+		t.Fatalf("played %q, want %q", played, want)
+	}
+	if _, err := m.notify(ctx, notifyInput{Message: "  "}); !errors.Is(err, ErrMessageRequired) {
+		t.Fatalf("empty message error = %v, want ErrMessageRequired", err)
 	}
 }
 
-func TestHelpFloatsTheSharedPanelWithFocus(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", filepath.Join(dir, "config"))
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.help(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	s := readLog(t, log)
-	opts := launch.HelpSpawn(dir, "")
-	for _, want := range []string{
-		"--x " + opts.Geometry.X + " --y " + opts.Geometry.Y +
-			" --width " + opts.Geometry.Width + " --height " + opts.Geometry.Height,
-		"--name " + opts.Label,
-		"--close-on-exit",
-		"-- sh " + filepath.Join(dir, "config", "qrouton", "help.sh"),
-	} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("help panel missing %q:\n%s", want, s)
-		}
-	}
-	if strings.Contains(s, "toggle-floating-panes") || strings.Contains(s, "focus-pane-id") {
-		t.Fatalf("help must keep focus on the panel; Esc is what dismisses it:\n%s", s)
-	}
-	// A second call replaces the panel rather than stacking another on top.
-	if _, err := p.help(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(readLog(t, log), "close-pane --pane-id") {
-		t.Fatal("a second help call did not replace the panel already open")
-	}
-}
-
-func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
-	dir := t.TempDir()
-	helper, log := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+func TestEscalateOpensTheFocusedPicker(t *testing.T) {
+	m, host, dir := newTestManager(t)
 	shortEscalatePoll(t, 200*time.Millisecond)
 
-	// A cancelled stanza lets escalate return promptly once its poll notices
-	// it, so the test doesn't wait out the full timeout to inspect the argv.
+	// A cancelled stanza lets escalate return promptly once its poll notices it,
+	// so the test doesn't wait out the full timeout to inspect the window.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
@@ -497,7 +486,7 @@ func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
 		})
 	}()
 
-	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry", BranchPrefix: "fix"})
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry", BranchPrefix: "fix"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -509,36 +498,31 @@ func TestEscalateSpawnsPickerFocusedAtPickerGeometry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := readLog(t, log)
-	for _, want := range []string{
-		"new-pane --floating --pinned true",
-		"--x 20% --y 3% --width 60% --height 94%",
-		"--name escalate · Esc to cancel",
-		"-- " + bin + " pick --session-root " + dir + " --name webhook retry --prefix fix",
-	} {
-		if !strings.Contains(s, want) {
-			t.Fatalf("calls missing %q:\n%s", want, s)
-		}
+	opts := host.opens[0]
+	if opts.Kind != workbench.KindTerminal {
+		t.Fatalf("picker kind = %q, want %q", opts.Kind, workbench.KindTerminal)
 	}
-	if strings.Contains(s, "toggle-floating-panes") || strings.Contains(s, "focus-pane-id") {
-		t.Fatalf("escalate must keep focus on the picker, not return it to the agent:\n%s", s)
+	want := []string{bin, pickSubcommand, sessionRootArg, dir, nameArg, "webhook retry", prefixArg, "fix"}
+	if !slices.Equal(opts.Command, want) {
+		t.Fatalf("picker command = %v, want %v", opts.Command, want)
+	}
+	if !opts.Focus {
+		t.Fatal("the picker opened without keyboard focus; no agent is waiting for the keyboard back")
+	}
+	if !opts.CloseOnExit {
+		t.Fatal("the picker window outlives the picker")
 	}
 }
 
 func TestEscalateRejectsBlankName(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-
-	if _, err := p.escalate(context.Background(), escalateInput{Name: "   "}); err == nil {
-		t.Fatal("accepted a blank name")
+	m, _, _ := newTestManager(t)
+	if _, err := m.escalate(context.Background(), escalateInput{Name: "   "}); !errors.Is(err, ErrNameRequired) {
+		t.Fatalf("blank name error = %v, want ErrNameRequired", err)
 	}
 }
 
 func TestEscalateBlocksUntilConfirmed(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+	m, _, dir := newTestManager(t)
 	shortEscalatePoll(t, time.Second)
 
 	start := time.Now()
@@ -549,7 +533,7 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 		})
 	}()
 
-	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -562,9 +546,7 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 }
 
 func TestEscalateBlocksUntilCancelled(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+	m, _, dir := newTestManager(t)
 	shortEscalatePoll(t, time.Second)
 
 	start := time.Now()
@@ -575,7 +557,7 @@ func TestEscalateBlocksUntilCancelled(t *testing.T) {
 		})
 	}()
 
-	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -588,12 +570,10 @@ func TestEscalateBlocksUntilCancelled(t *testing.T) {
 }
 
 func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
+	m, _, _ := newTestManager(t)
 	shortEscalatePoll(t, 20*time.Millisecond)
 
-	message, err := p.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -602,9 +582,45 @@ func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
 	}
 }
 
-func TestMCPServerAdvertisesAllTools(t *testing.T) {
+func TestListWindowsSortsNamesAndDropsClosedOnes(t *testing.T) {
+	m, host, _ := newTestManager(t)
 	ctx := context.Background()
-	server := newMCPServer(t.TempDir(), launch.EditorCommand{Argv: []string{"vi"}}, mux.NewZellijHost("zellij", "test-session"))
+	for _, name := range []string{"tests", "dev"} {
+		if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: name}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if got := m.list(ctx); !slices.Equal(got, []string{"dev", "tests"}) {
+		t.Fatalf("list = %v, want [dev tests]", got)
+	}
+	host.drop(host.ids[0])
+	if got := m.list(ctx); !slices.Equal(got, []string{"dev"}) {
+		t.Fatalf("list = %v, want [dev] once the tests window is gone", got)
+	}
+}
+
+// An unreadable window list is not evidence any window is gone, so the registry
+// stands rather than emptying itself on a workbench hiccup.
+func TestListWindowsKeepsEverythingWhenTheHostCannotList(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	host.listErr = errors.New("workbench unreachable")
+
+	if got := m.list(ctx); !slices.Equal(got, []string{"dev"}) {
+		t.Fatalf("list = %v, want [dev]", got)
+	}
+	if host.lists != 1 {
+		t.Fatalf("host asked for its window list %d times, want 1", host.lists)
+	}
+}
+
+func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
+	ctx := context.Background()
+	server := newMCPServer(t.TempDir(), testEditor, &fakeHost{})
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
@@ -618,112 +634,23 @@ func TestMCPServerAdvertisesAllTools(t *testing.T) {
 	}
 	defer cs.Close()
 
-	want := map[string]bool{"open_file": false, "run_command": false, "read_pane": false, "show_diff": false, "notify": false, "close_pane": false, "minimize_pane": false, "restore_pane": false, "list_panes": false, "escalate": false, "help": false}
+	advertised := map[string]bool{}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, ok := want[tool.Name]; ok {
-			want[tool.Name] = true
-		}
+		advertised[tool.Name] = true
 	}
-	for name, seen := range want {
-		if !seen {
+	for _, name := range []string{
+		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolNotify, toolCloseWindow, toolListWindows, toolEscalate,
+	} {
+		if !advertised[name] {
 			t.Errorf("tool %q was not advertised", name)
 		}
+		delete(advertised, name)
 	}
-}
-
-func readLog(t *testing.T, path string) string {
-	t.Helper()
-	b, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(b)
-}
-
-// The registry is qrouton's own map and nothing in it learns that the user
-// dismissed a pane. Reading a name whose pane is gone must say so — and forget
-// it — rather than passing a dead id to the backend and surfacing its failure.
-func TestReadAndClosePruneAPaneTheUserDismissed(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		call func(*paneManager) error
-	}{
-		{"read_pane", func(p *paneManager) error {
-			_, err := p.read(context.Background(), readPaneInput{Name: "server"})
-			return err
-		}},
-		{"close_pane", func(p *paneManager) error {
-			_, err := p.closePane(context.Background(), paneNameInput{Name: "server"})
-			return err
-		}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			dir := t.TempDir()
-			helper, _ := fakeZellij(t, dir)
-			p := testManager(t, dir, helper)
-			if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
-				t.Fatal(err)
-			}
-			// The user closes it by hand: the pane is gone from the session, but
-			// still registered here.
-			livePanes(t, 99)
-
-			err := tc.call(p)
-			if err == nil {
-				t.Fatal("addressing a pane the user dismissed should fail")
-			}
-			if !strings.Contains(err.Error(), "closed by the user") {
-				t.Fatalf("error does not explain the pane is gone: %v", err)
-			}
-			if got := p.list(); len(got) != 0 {
-				t.Fatalf("registry still holds a dismissed pane: %v", got)
-			}
-		})
-	}
-}
-
-// A pane that is still there stays addressable, and the liveness check must not
-// cost the caller anything when it passes.
-func TestReadPaneKeepsALivePane(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
-		t.Fatal(err)
-	}
-	livePanes(t, 1)
-
-	out, err := p.read(context.Background(), readPaneInput{Name: "server"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(out, "listening on :3000") {
-		t.Fatalf("read output = %q", out)
-	}
-	if got := p.list(); len(got) != 1 {
-		t.Fatalf("live pane was pruned: %v", got)
-	}
-}
-
-// An unreadable pane list is not evidence the pane is gone. Guessing "closed"
-// from a backend hiccup would have the agent reopen panes that are fine, so the
-// pane is kept and the real action reports whatever is actually wrong.
-func TestReadPaneKeepsThePaneWhenLivenessCannotBeChecked(t *testing.T) {
-	dir := t.TempDir()
-	helper, _ := fakeZellij(t, dir)
-	p := testManager(t, dir, helper)
-	if _, err := p.run(context.Background(), runCommandInput{Command: "serve", Name: "server"}); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PANES_JSON", "not json")
-
-	if _, err := p.read(context.Background(), readPaneInput{Name: "server"}); err != nil {
-		t.Fatalf("an unparseable pane list should not fail the read: %v", err)
-	}
-	if got := p.list(); len(got) != 1 {
-		t.Fatalf("pane pruned on an unreadable pane list: %v", got)
+	for name := range advertised {
+		t.Errorf("tool %q is advertised but no longer part of the surface", name)
 	}
 }

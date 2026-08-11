@@ -84,7 +84,7 @@ func ResolveSessionFile(root, name string) (string, error) {
 
 // ResolveSessionDir resolves name to an existing directory confined to the session
 // root, applying the same symlink-escape guard as ResolveSessionFile. It backs the
-// cwd argument of pane-spawning MCP tools.
+// cwd argument of the window-opening MCP tools.
 func ResolveSessionDir(root, name string) (string, error) {
 	real, err := resolveWithinSession(root, name)
 	if err != nil {
