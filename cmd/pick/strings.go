@@ -2,7 +2,7 @@ package pick
 
 const (
 	commandName  = "pick"
-	commandUsage = "Choose repositories to assemble into a live session, escalating it to RPI (used by the Alt-e binding and the escalate tool)"
+	commandUsage = "Choose repositories to assemble into a live session (used by the workbench's add-repos button and the escalate tool)"
 
 	sessionRootFlag  = "session-root"
 	sessionRootUsage = "qrouton session root"
@@ -12,4 +12,7 @@ const (
 
 	prefixFlag  = "prefix"
 	prefixUsage = "pre-filled branch prefix (feat, fix, chore, refactor, docs, test)"
+
+	escalateFlag  = "escalate"
+	escalateUsage = "also move the session to RPI mode on confirmation"
 )

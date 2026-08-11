@@ -285,15 +285,19 @@ func (m appModel) viewForm() string {
 	}
 	boxes = append(boxes, labeledBox(f.focus == focusRepos, labelRepos, w, repoLines...))
 
-	prefixChips := make([]string, len(branchPrefixes))
-	for i, p := range branchPrefixes {
-		prefixChips[i] = chip(p, i == f.prefix)
+	if branch := m.picker.existingBranch(); branch != "" {
+		boxes = append(boxes, labeledBox(false, labelBranch, w, accent.Render(branch),
+			dim.Render(branchJoinedHint)))
+	} else {
+		prefixChips := make([]string, len(branchPrefixes))
+		for i, p := range branchPrefixes {
+			prefixChips[i] = chip(p, i == f.prefix)
+		}
+		boxes = append(boxes, labeledBox(f.focus == focusPrefix, labelPrefix, w,
+			strings.Join(prefixChips, " "),
+			dim.Render(fmt.Sprintf(branchPreviewFormat, branchPrefixes[f.prefix], emptyFallback(slug, emptyFieldLabel)))))
 	}
-	boxes = append(boxes, labeledBox(f.focus == focusPrefix, labelPrefix, w,
-		strings.Join(prefixChips, " "),
-		dim.Render(fmt.Sprintf(branchPreviewFormat, branchPrefixes[f.prefix], emptyFallback(slug, emptyFieldLabel)))))
 
-	// No mode selector when escalating: the answer is RPI by definition.
 	if m.picker.manifest == nil {
 		modeChips := []string{
 			chip(modeLabelRPI, f.mode != session.ModeAssistant),

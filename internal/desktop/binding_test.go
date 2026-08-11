@@ -52,6 +52,7 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 		{Term{}, []string{"Start", "Write", "Resize"}},
 		{Windows{}, []string{
 			"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell", "OpenDocument",
+			"OpenPicker",
 		}},
 	} {
 		typ := reflect.TypeOf(tc.service)

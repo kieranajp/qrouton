@@ -17,6 +17,7 @@ var (
 	ErrNoShellCommand  = errors.New("workbench has no shell command to run")
 	ErrNoDocumentName  = errors.New("open request names no document")
 	ErrNoEditorCommand = errors.New("workbench has no editor command to open a document with")
+	ErrNoPickerCommand = errors.New("workbench has no repository picker to run")
 )
 
 func noSuchWindow(id string) error {

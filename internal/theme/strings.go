@@ -4,6 +4,7 @@ package theme
 const (
 	RoleAccentAction  = "accent-action"
 	RoleAccentLabel   = "accent-label"
+	RoleAccentLiteral = "accent-literal"
 	RoleStateSelected = "state-selected"
 	RoleStateSuccess  = "state-success"
 	RoleStateRunning  = "state-running"

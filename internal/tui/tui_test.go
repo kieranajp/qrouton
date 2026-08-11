@@ -15,6 +15,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
@@ -426,7 +427,7 @@ func TestAllOwnerFailureLeavesLoadingForActionableError(t *testing.T) {
 
 func TestPickerPrefillsNameAndPrefix(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
-	m := newPickerModel(cfg, "/tmp/session", session.Manifest{Slug: "session"}, "Webhook retry backoff", "fix")
+	m := newPickerModel(cfg, "/tmp/session", session.Manifest{Slug: "session"}, "Webhook retry backoff", "fix", true)
 	if m.screen != newScreen {
 		t.Fatalf("picker starts on screen %v, want the form", m.screen)
 	}
@@ -447,7 +448,7 @@ func TestPickerCancelWritesCancelledStanzaOnly(t *testing.T) {
 	if err := session.WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)
 	}
-	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "")
+	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "", true)
 	_, cmd := m.updateForm(tea.KeyMsg{Type: tea.KeyEsc})
 	if cmd == nil {
 		t.Fatal("cancel did not quit the picker")
@@ -478,7 +479,7 @@ func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
 		Role: session.RepoRoleActive,
 	}}
-	if err := confirmEscalation(cfg, dir, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+	if err := confirmPicker(cfg, dir, sels, assemblyDetails{name: "Webhook retry backoff", branch: "fix/webhook-retry-backoff"}, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -493,6 +494,60 @@ func TestPickerConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	}
 	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed || got.Escalation.At.IsZero() {
 		t.Fatalf("confirmed stanza = %+v", got.Escalation)
+	}
+}
+
+// The workbench's button adds repositories to the session as it stands. Moving
+// it to RPI would also hand the next launch a fresh conversation, so an
+// assistant session would lose its chat to a button that promised repositories.
+func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Orgs: []string{"org"}, Root: root}
+	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sels := []session.RepoSelection{{
+		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
+		Role: session.RepoRoleActive,
+	}}
+	if err := confirmPicker(cfg, dir, sels, assemblyDetails{name: "scratch", branch: "feat/scratch"}, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.EffectiveMode() != session.ModeAssistant {
+		t.Fatalf("mode = %q, want assistant", got.Mode)
+	}
+	if got.Escalation != nil {
+		t.Fatalf("adding repositories recorded an escalation: %+v", got.Escalation)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos = %+v", got.Repos)
+	}
+	if _, err := os.Stat(sessionpaths.HandoffPending(dir)); !os.IsNotExist(err) {
+		t.Fatal("adding repositories owed the next launch a fresh conversation")
+	}
+}
+
+// A second trip through the picker used to derive a branch from the form's
+// prefix, which defaults to feat — so a fix/… session's fourth repository
+// landed on a branch of its own.
+func TestAddedReposJoinTheSessionBranch(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"org"}}
+	manifest := session.Manifest{Name: "Webhook retry", Repos: []session.ManifestRepo{
+		{Name: "svc", Org: "org", Role: session.RepoRoleActive, Branch: "fix/webhook-retry"},
+	}}
+	m := newPickerModel(cfg, "/tmp/session", manifest, "", "", false)
+
+	if got := m.picker.branch(branchPrefixes[m.form.prefix], m.form.name); got != "fix/webhook-retry" {
+		t.Fatalf("added repos would go on %q, want the session's own branch", got)
+	}
+	// With the branch settled there is nothing for the prefix field to do.
+	if m.lastFormField() != focusRepos {
+		t.Fatalf("prefix field reachable with a branch already cut (last = %d)", m.lastFormField())
 	}
 }
 
@@ -515,7 +570,7 @@ func TestPickerConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 		Repo: github.Repo{Name: "svc", Org: "org", SSHURL: makeTestOrigin(t), DefaultBranch: "main"},
 		Role: session.RepoRoleActive,
 	}}
-	if err := confirmEscalation(cfg, dir, sels, escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+	if err := confirmPicker(cfg, dir, sels, assemblyDetails{name: "Webhook retry backoff", branch: "fix/webhook-retry-backoff"}, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -535,7 +590,7 @@ func TestPickerCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	if err := session.WriteManifest(dir, manifest); err != nil {
 		t.Fatal(err)
 	}
-	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "")
+	m := newPickerModel(&config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}, dir, manifest, "", "", true)
 	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
 	if err := session.SetWindows(dir, windows); err != nil {
 		t.Fatal(err)
@@ -644,8 +699,8 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	}
 
 	sels := []session.RepoSelection{{Repo: repo, Role: session.RepoRoleActive}}
-	if err := confirmEscalation(cfg, dir, sels,
-		escalationDetails{name: "Webhook retry backoff", prefix: "fix"}, nil); err != nil {
+	if err := confirmPicker(cfg, dir, sels,
+		assemblyDetails{name: "Webhook retry backoff", branch: "fix/webhook-retry-backoff"}, true, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -681,7 +736,7 @@ func TestPickerSeedsFormFromTheSessionItIsEscalating(t *testing.T) {
 			{Name: "shared", Org: "kieranajp", Role: session.RepoRoleReference},
 		}}
 
-	m := newPickerModel(cfg, "/tmp/session", manifest, "", "")
+	m := newPickerModel(cfg, "/tmp/session", manifest, "", "", true)
 
 	if m.form.name != "Existing work" || m.form.description != "already known" {
 		t.Fatalf("form not seeded: name=%q description=%q", m.form.name, m.form.description)
@@ -709,7 +764,7 @@ func TestPickerMarksAndLocksRepositoriesAlreadyInTheSession(t *testing.T) {
 	manifest := session.Manifest{Name: "Work", Repos: []session.ManifestRepo{
 		{Name: "repo123", Org: "kieranajp", Role: session.RepoRoleActive},
 	}}
-	m := newPickerModel(cfg, "/tmp/session", manifest, "", "")
+	m := newPickerModel(cfg, "/tmp/session", manifest, "", "", true)
 	m.width = 200
 	m.repos = []github.Repo{
 		{Name: "repo123", Org: "kieranajp", DefaultBranch: "main"},

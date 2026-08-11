@@ -30,12 +30,13 @@ const (
 	Mauve    = "#c6a0f6"
 )
 
-// Roles give each accent its one job: blue acts, butter names, the rest report.
-// Reusing one for a second job is how a field label and a warning end up the
-// same colour and neither can be trusted.
+// Roles give each accent its one job: blue acts, butter names, cyan quotes the
+// machine, the rest report. Reusing one for a second job is how a field label
+// and a warning end up the same colour and neither can be trusted.
 var Roles = map[string]string{
 	RoleAccentAction:  Blue,
 	RoleAccentLabel:   Yellow,
+	RoleAccentLiteral: Sapphire,
 	RoleStateSelected: Blue,
 	RoleStateSuccess:  Green,
 	RoleStateRunning:  Teal,
@@ -49,7 +50,7 @@ var Roles = map[string]string{
 
 // roleOrder fixes the render order; ranging Roles would reshuffle it each time.
 var roleOrder = []string{
-	RoleAccentAction, RoleAccentLabel,
+	RoleAccentAction, RoleAccentLabel, RoleAccentLiteral,
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,

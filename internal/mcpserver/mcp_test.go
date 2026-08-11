@@ -532,7 +532,7 @@ func TestEscalateOpensTheFocusedPicker(t *testing.T) {
 	if opts.Kind != workbench.KindTerminal {
 		t.Fatalf("picker kind = %q, want %q", opts.Kind, workbench.KindTerminal)
 	}
-	want := []string{bin, pickSubcommand, sessionRootArg, dir, nameArg, "webhook retry", prefixArg, "fix"}
+	want := []string{bin, pickSubcommand, sessionRootArg, dir, escalateArg, nameArg, "webhook retry", prefixArg, "fix"}
 	if !slices.Equal(opts.Command, want) {
 		t.Fatalf("picker command = %v, want %v", opts.Command, want)
 	}

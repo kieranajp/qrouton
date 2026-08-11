@@ -21,6 +21,7 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 - Reuses local bare mirrors instead of cloning everything repeatedly.
 - Checks active repos out on `<prefix>/<session-slug>` branches.
 - Pins reference repos as detached, read-only context.
+- Adds repositories to a live session from the workbench, on the branch it is already on.
 - Discovers repositories across several GitHub organizations or user accounts.
 - Starts from cached GitHub data, then refreshes owners concurrently.
 - Opens a desktop window and runs Claude Code, Codex CLI, or OpenCode in it, with a shell window alongside.

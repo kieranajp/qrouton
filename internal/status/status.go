@@ -74,7 +74,7 @@ func Read(root string) (Fields, bool) {
 		Mode:      modeAssistantLabel,
 		Phase:     phase(root, m),
 		Identity:  displayName(m),
-		Branch:    activeBranch(m),
+		Branch:    m.Branch(),
 		Sessions:  sessions(root),
 		Documents: documents(root),
 	}
@@ -134,16 +134,6 @@ func phase(root string, m session.Manifest) string {
 	default:
 		return phaseResearch
 	}
-}
-
-// activeBranch is the session branch: the first active repo's branch.
-func activeBranch(m session.Manifest) string {
-	for _, r := range m.Repos {
-		if r.Branch != "" {
-			return r.Branch
-		}
-	}
-	return ""
 }
 
 // sessions lists every session under the same root, the live one first. A rail

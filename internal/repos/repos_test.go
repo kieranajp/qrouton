@@ -89,7 +89,7 @@ func TestStatusLinesRenderEmptyStateForZeroRepoManifest(t *testing.T) {
 	root := t.TempDir()
 	writeManifest(t, root, session.Manifest{Slug: "scratch-4f3a"})
 	lines := statusLines(root)
-	if len(lines) != 3 || !strings.Contains(lines[1], "no repositories yet") || !strings.Contains(lines[2], "Alt-e to escalate") {
+	if len(lines) != 3 || !strings.Contains(lines[1], "no repositories yet") || !strings.Contains(lines[2], "add them from the workbench") {
 		t.Fatalf("zero-repo lines = %#v", lines)
 	}
 }

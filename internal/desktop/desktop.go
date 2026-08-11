@@ -29,6 +29,8 @@ type Options struct {
 	// Document is the window one of the session's own files opens in, named
 	// relative to its root; it errors on a name resolving outside the session.
 	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
+	// Picker builds the repository picker's command, as Shell does.
+	Picker func(sessionRoot string) []string
 	// Dock sends the agent's windows to the tab strip rather than the screen.
 	Dock bool
 }
@@ -89,6 +91,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	windows.newShell = shell.another
 	windows.newDocument = func(name string) (string, error) {
 		return openDocument(windows, opts.Document, sessionRoot(), name)
+	}
+	windows.newPicker = func() (string, error) {
+		return openPicker(windows, opts.Picker, sessionRoot())
 	}
 	server, err := serveControl(opts.Socket, windows, controlHooks{
 		adopt: func(adopted string) {
@@ -184,6 +189,22 @@ func openDocument(windows *Windows, window func(string, string) (workbench.Windo
 		return "", err
 	}
 	return windows.openStructural(opts)
+}
+
+// openPicker puts the repository picker in the right pane. A tab, not a window
+// of its own: adding a repository is not worth losing sight of the conversation.
+func openPicker(windows *Windows, argv func(string) []string, root string) (string, error) {
+	if root == "" || argv == nil {
+		return "", ErrNoPickerCommand
+	}
+	return windows.openStructural(workbench.WindowOptions{
+		Kind:        workbench.KindTerminal,
+		Label:       pickerWindowLabel,
+		Cwd:         root,
+		Command:     argv(root),
+		Source:      pickerSource,
+		CloseOnExit: true,
+	})
 }
 
 // shellLabel leaves the first shell unnumbered, so a session with one reads as

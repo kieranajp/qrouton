@@ -1,8 +1,11 @@
 /* Global: the body is html the pipeline made, out of scoped styles' reach. */
 .markdown {
   font: var(--machine-lg);
+  line-height: 1.75;
   color: var(--text-secondary);
   text-wrap: pretty;
+  /* Mono prose runs out of legs long before the pane runs out of width. */
+  max-inline-size: 78ch;
 }
 
 .markdown > :first-child {
@@ -13,23 +16,46 @@
   margin: 0 0 16px;
 }
 
-.markdown h1,
-.markdown h2 {
-  font: var(--display-xs);
+/* The break falls between h2 and h3: display is the document's voice, machine
+   is its machinery. Size ranks the levels, colour only confirms the rank. */
+.markdown h1 {
+  font: var(--display-md);
   letter-spacing: var(--display-tracking);
   color: var(--text-primary);
-  margin: 26px 0 12px;
+  margin: 40px 0 14px;
 }
 
-.markdown h3,
-.markdown h4,
-.markdown h5,
-.markdown h6 {
+.markdown h2 {
+  font: var(--display-sm);
+  letter-spacing: var(--display-tracking);
+  color: var(--text-primary);
+  margin: 38px 0 14px;
+  padding-top: 18px;
+  border-top: 1px solid color-mix(in srgb, var(--accent-action) 50%, var(--border-subtle));
+}
+
+.markdown > h2:first-child {
+  padding-top: 0;
+  border-top: none;
+}
+
+.markdown h3 {
   font: var(--machine-bold);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--accent-label);
-  margin: 22px 0 10px;
+  margin: 28px 0 10px;
+}
+
+.markdown h4,
+.markdown h5,
+.markdown h6 {
+  font: var(--machine-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-muted);
+  margin: 22px 0 8px;
 }
 
 .markdown a {
@@ -41,7 +67,7 @@
 
 .markdown strong {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown ul,
@@ -51,8 +77,16 @@
 }
 
 .markdown li {
-  margin: 0 0 7px;
-  font: var(--machine-md);
+  margin: 0 0 6px;
+}
+
+.markdown li > ul,
+.markdown li > ol {
+  margin: 6px 0 0;
+}
+
+.markdown li::marker {
+  color: color-mix(in srgb, var(--accent-action) 65%, transparent);
 }
 
 .markdown blockquote {
@@ -60,7 +94,6 @@
   padding: 2px 0 2px 14px;
   margin: 0 0 18px;
   color: var(--state-guided);
-  font: var(--machine-md);
   line-height: 1.7;
 }
 
@@ -102,20 +135,28 @@
 }
 
 .markdown code {
-  font: var(--terminal-sm);
-  color: var(--accent-label);
+  font: var(--machine-sm);
+  color: var(--accent-literal);
+  background: var(--surface-terminal);
+  border: 1px solid color-mix(in srgb, var(--accent-literal) 22%, var(--border-subtle));
+  padding: 1px 5px;
 }
 
 .markdown pre {
   background: var(--surface-terminal);
   border: 1px solid var(--border-subtle);
-  padding: 12px 14px;
-  margin: 0 0 18px;
+  padding: 14px 16px;
+  margin: 0 0 20px;
   overflow-x: auto;
 }
 
+/* The block is already a quoted surface; a chip inside it quotes twice. */
 .markdown pre code {
+  font: var(--terminal-sm);
   color: var(--text-secondary);
+  background: none;
+  border: none;
+  padding: 0;
   white-space: pre;
 }
 

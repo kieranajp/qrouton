@@ -24,6 +24,7 @@ const (
 	agentSubcommand      = "agent"
 	onboardSubcommand    = "onboard"
 	shellSubcommand      = "shell"
+	pickSubcommand       = "pick"
 
 	sessionRootFlag   = "--session-root"
 	runnerFlag        = "--runner"

@@ -243,7 +243,7 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	if err != nil {
 		return "", fmt.Errorf("escalate: %w", err)
 	}
-	command := []string{bin, pickSubcommand, sessionRootArg, m.root, nameArg, name}
+	command := []string{bin, pickSubcommand, sessionRootArg, m.root, escalateArg, nameArg, name}
 	if prefix := strings.TrimSpace(input.BranchPrefix); prefix != "" {
 		command = append(command, prefixArg, prefix)
 	}

@@ -40,6 +40,7 @@ const (
 	sessionRootArg = "--session-root"
 	nameArg        = "--name"
 	prefixArg      = "--prefix"
+	escalateArg    = "--escalate"
 )
 
 // Window titles, as they appear in the title bar.

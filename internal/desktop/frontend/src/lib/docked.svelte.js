@@ -33,3 +33,6 @@ export const openShell = () => Call.ByName(WINDOWS_SERVICE + ".OpenShell");
 
 /** openDocument opens a session document, or selects the tab already on it. */
 export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocument", path);
+
+/** openPicker opens the repository picker, or selects the one already open. */
+export const openPicker = () => Call.ByName(WINDOWS_SERVICE + ".OpenPicker");

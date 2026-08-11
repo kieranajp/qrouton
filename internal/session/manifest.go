@@ -130,6 +130,16 @@ type EscalationOutcome struct {
 // written before the field existed.
 func (m Manifest) EffectiveMode() SessionMode { return m.Mode.effective() }
 
+// Branch is the session branch: the first active repo's branch.
+func (m Manifest) Branch() string {
+	for _, r := range m.Repos {
+		if r.Branch != "" {
+			return r.Branch
+		}
+	}
+	return ""
+}
+
 type ManifestRepo struct {
 	Name          string   `json:"name"`
 	Org           string   `json:"org"`

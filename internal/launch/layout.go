@@ -52,6 +52,12 @@ func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
 }
 
+// PickerArgv is the repository picker's command. No --escalate: the workbench's
+// button adds repositories to the session as it stands, whatever mode that is.
+func PickerArgv(qroutonBin, dir string) []string {
+	return []string{qroutonBin, pickSubcommand, sessionRootFlag, dir}
+}
+
 // Launch stamps the session's support files and returns what the workbench runs
 // in its conversation terminal: the supervisor's argv, and the environment it
 // inherits. socket is the control socket the desktop process will serve, and

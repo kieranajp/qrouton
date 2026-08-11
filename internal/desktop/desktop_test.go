@@ -348,6 +348,53 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 }
 
+// The rail's add-repos button. The old terminal picker took the whole screen,
+// which is what made adding a repository feel like leaving the conversation;
+// here it is a tab, and a second click selects the one already open rather than
+// racing a second picker at the same manifest.
+func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts.Picker = func(dir string) []string { return []string{"/bin/cat", "pick", dir} }
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	id, err := windows.OpenPicker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.tabs()
+	if len(tabs) != 2 || tabs[1].ID != id {
+		t.Fatalf("the picker is not the newest tab: %+v", tabs)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; the picker is a tab", len(r.opened))
+	}
+	window, ok := windows.window(id)
+	if !ok {
+		t.Fatalf("the picker %q is not registered", id)
+	}
+	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat pick "+opts.SessionRoot {
+		t.Fatalf("picker command = %q", got)
+	}
+	if !window.opts.CloseOnExit {
+		t.Fatal("the picker tab outlives the picker")
+	}
+
+	again, err := windows.OpenPicker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != id || len(windows.tabs()) != 2 {
+		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
+	}
+}
+
 // The agent opens documents too, through its file tool. The chip has to find
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {

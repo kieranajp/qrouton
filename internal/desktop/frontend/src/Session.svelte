@@ -16,7 +16,7 @@
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { attach } from "./lib/conversation.js";
-  import { closeWindow, openDocument, openShell, surfaces } from "./lib/docked.svelte.js";
+  import { closeWindow, openDocument, openPicker, openShell, surfaces } from "./lib/docked.svelte.js";
 
   /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
   const ACTIVITY = {
@@ -94,6 +94,13 @@
       focused = await openDocument(fields.documents[0].path);
     } catch {}
   }
+  // The picker writes the manifest and the chrome poll notices, so nothing here
+  // waits on it.
+  async function addRepos() {
+    try {
+      focused = await openPicker();
+    } catch {}
+  }
   let commits = $derived(
     fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
   );
@@ -124,32 +131,35 @@
           style="cursor: default" />
       {/each}
 
-      {#if fields.repos.length}
-        <div class="repos">
-          <CapsLabel tone="dim">This session</CapsLabel>
-          {#each fields.repos as repo (repo.name)}
-            <div class="repo">
-              <div class="repo-name {repo.role}">
-                {repo.role === "editing" ? "●" : "◐"}
-                {repo.name}
-              </div>
-              <div class="repo-stat">
-                {#if repo.role === "reference"}
-                  read-only
-                {:else if repo.measured === false}
-                  unmeasured
-                {:else}
-                  {repo.commits} commit{repo.commits === 1 ? "" : "s"}
-                  {#if repo.insertions || repo.deletions}
-                    · <span class="added">+{repo.insertions}</span>
-                    <span class="removed">−{repo.deletions}</span>
-                  {/if}
-                {/if}
-              </div>
+      <div class="repos">
+        <CapsLabel tone="dim">This session</CapsLabel>
+        {#if !fields.repos.length}
+          <div class="empty">no repositories yet</div>
+        {/if}
+        {#each fields.repos as repo (repo.name)}
+          <div class="repo">
+            <div class="repo-name {repo.role}">
+              {repo.role === "editing" ? "●" : "◐"}
+              {repo.name}
             </div>
-          {/each}
-        </div>
-      {/if}
+            <div class="repo-stat">
+              {#if repo.role === "reference"}
+                read-only
+              {:else if repo.measured === false}
+                unmeasured
+              {:else}
+                {repo.commits} commit{repo.commits === 1 ? "" : "s"}
+                {#if repo.insertions || repo.deletions}
+                  · <span class="added">+{repo.insertions}</span>
+                  <span class="removed">−{repo.deletions}</span>
+                {/if}
+              {/if}
+            </div>
+          </div>
+        {/each}
+        <Button variant="dashed" size="sm" glyph="+" onclick={addRepos} style="margin-top: 6px"
+          >Add repos</Button>
+      </div>
     </div>
 
     <div class="agent">
@@ -275,6 +285,13 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+    padding: 5px 0;
+  }
+
+  .empty {
+    font: var(--machine-xs);
+    font-size: 10.5px;
+    color: var(--text-faint);
     padding: 5px 0;
   }
 

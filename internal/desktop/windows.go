@@ -23,6 +23,7 @@ type Windows struct {
 	// newShell reopens the shell after the user closes its tab.
 	newShell    func() (string, error)
 	newDocument func(name string) (string, error)
+	newPicker   func() (string, error)
 
 	mu      sync.Mutex
 	seq     int
@@ -68,6 +69,18 @@ func (w *Windows) OpenShell() (string, error) {
 		return "", ErrNoShellCommand
 	}
 	return w.newShell()
+}
+
+// OpenPicker opens the repository picker in the right pane, or selects the one
+// already open: two pickers writing the same manifest is a lost selection.
+func (w *Windows) OpenPicker() (string, error) {
+	if id, ok := w.showing(pickerSource); ok {
+		return id, nil
+	}
+	if w.newPicker == nil {
+		return "", ErrNoPickerCommand
+	}
+	return w.newPicker()
 }
 
 // OpenDocument returns the window already showing the named document, or opens

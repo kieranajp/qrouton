@@ -300,6 +300,7 @@ func workbenchProcess(marshalled string) error {
 		Argv:        spec.Argv,
 		Env:         os.Environ(),
 		Shell:       shellArgv(bin),
+		Picker:      pickerArgv(bin),
 		Document:    documentWindow(spec.Editor),
 		Dock:        spec.Dock,
 	})
@@ -334,4 +335,8 @@ func subject(sessionRoot string) string {
 // settles on, which the landing-list path does not know when it opens.
 func shellArgv(bin string) func(string) []string {
 	return func(dir string) []string { return launch.ShellArgv(bin, dir) }
+}
+
+func pickerArgv(bin string) func(string) []string {
+	return func(dir string) []string { return launch.PickerArgv(bin, dir) }
 }

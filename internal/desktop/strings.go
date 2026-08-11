@@ -18,6 +18,11 @@ const (
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
+	pickerWindowLabel = "+ repos"
+	// Source is the manifest's own name for a window; the picker has no file
+	// behind it, so this stands in as the key OpenPicker deduplicates on.
+	pickerSource = "qrouton:pick"
+
 	// The page URLs are directories: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot  = "/"
