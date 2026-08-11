@@ -24,6 +24,7 @@ const (
 	agentSubcommand      = "agent"
 	onboardSubcommand    = "onboard"
 	shellSubcommand      = "shell"
+	pickSubcommand       = "pick"
 
 	sessionRootFlag   = "--session-root"
 	runnerFlag        = "--runner"
@@ -147,6 +148,13 @@ const (
 	linePlaceholderArg = "+" + linePlaceholder
 
 	firstLine = 1
+)
+
+// How a session file's window is named.
+const (
+	editorWindowLabel   = "Editor"
+	documentLabelFormat = "◆ %s"
+	frontMatterFence    = "---"
 )
 
 var (

@@ -5,6 +5,7 @@
 package tui
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 	"time"
@@ -80,6 +81,23 @@ type deleteState struct {
 type pickerState struct {
 	dir      string
 	manifest *session.Manifest
+	escalate bool
+}
+
+func (p pickerState) existingBranch() string {
+	if p.manifest == nil {
+		return ""
+	}
+	return p.manifest.Branch()
+}
+
+// branch is the branch newly added repositories join. A session that already
+// has one keeps it; only the first assembly derives one from the form.
+func (p pickerState) branch(prefix, name string) string {
+	if b := p.existingBranch(); b != "" {
+		return b
+	}
+	return fmt.Sprintf(branchFormat, prefix, session.Slugify(name))
 }
 
 func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string, forceRefresh bool) (*LaunchRequest, error) {
@@ -113,11 +131,10 @@ func Run(cfg *config.Config, sessions []session.Manifest, requestedRunner string
 
 // RunPicker runs just the new-session form against a live session: name and
 // prefix arrive pre-filled and editable, repositories are chosen fresh, and
-// confirming assembles into the session — one atomic manifest write carrying
-// repos, mode, name, and the escalation stanza — rather than returning a
-// LaunchRequest. Esc records a cancelled outcome and leaves the session as it
-// was.
-func RunPicker(cfg *config.Config, dir, name, prefix string) error {
+// confirming assembles into the session rather than returning a LaunchRequest.
+// escalate additionally moves the session to RPI; without it the mode and the
+// running conversation are left alone.
+func RunPicker(cfg *config.Config, dir, name, prefix string, escalate bool) error {
 	if err := config.EnsureOrgs(cfg); err != nil {
 		return err
 	}
@@ -125,7 +142,7 @@ func RunPicker(cfg *config.Config, dir, name, prefix string) error {
 	if err != nil {
 		return err
 	}
-	_, err = tea.NewProgram(newPickerModel(cfg, dir, manifest, name, prefix), tea.WithAltScreen()).Run()
+	_, err = tea.NewProgram(newPickerModel(cfg, dir, manifest, name, prefix, escalate), tea.WithAltScreen()).Run()
 	return err
 }
 
@@ -133,13 +150,14 @@ func RunPicker(cfg *config.Config, dir, name, prefix string) error {
 // the landing, runner, and delete screens are unreachable from it. Everything
 // the session already knows is filled in — a session that has been worked in
 // should not be asked what it is called or which repositories it holds.
-func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, name, prefix string) appModel {
+func newPickerModel(cfg *config.Config, dir string, manifest session.Manifest, name, prefix string, escalate bool) appModel {
 	m := newAppModel(cfg, nil, "", nil)
 	m.screen = newScreen
 	m.picker.dir = dir
 	m.picker.manifest = &manifest
-	// The keybinding route passes no name; fall back to the session's own so a
-	// bare Alt-e adds repositories without renaming the work.
+	m.picker.escalate = escalate
+	// The workbench's add-repos button passes no name; fall back to the
+	// session's own so it adds repositories without renaming the work.
 	m.form.name = name
 	if strings.TrimSpace(name) == "" {
 		m.form.name = manifest.Name

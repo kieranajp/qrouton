@@ -7,8 +7,10 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -108,7 +110,7 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	opts := testOptions(t)
 	term := newTerm(opts, r.Emit)
 
-	go func() { _ = run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { _ = run(r, term, newWindows(r, r.Emit, false), opts) }()
 
 	spec := <-r.opened
 	if spec.URL != frontendRoot {
@@ -133,7 +135,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	term := newTerm(opts, r.Emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 
 	(<-r.opened).OnClose()
 
@@ -156,7 +158,7 @@ func TestACleanAgentExitEndsTheSession(t *testing.T) {
 	term := newTerm(opts, r.Emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 
 	if err := term.Start(80, 24); err != nil {
@@ -184,7 +186,7 @@ func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
 	term := newTerm(opts, rec.emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { done <- run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 	if err := term.Start(80, 24); err != nil {
 		t.Fatal(err)
@@ -207,7 +209,7 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	opts.Argv = []string{"/bin/sh", "-c", "exit 3"}
 	term := newTerm(opts, r.Emit)
 
-	go func() { _ = run(r, term, newWindows(r, r.Emit), opts) }()
+	go func() { _ = run(r, term, newWindows(r, r.Emit, false), opts) }()
 	<-r.opened
 	if err := term.Start(80, 24); err != nil {
 		t.Fatal(err)
@@ -228,27 +230,25 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	r.Quit()
 }
 
-// Decision 10: one shell, always available — opened by the workbench rather than
-// asked for, and never a stack.
+// Decision 10: a shell is always available, opened by the workbench rather than
+// asked for. Asking gets you another; adoption running twice does not.
 func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	r := newFakeRenderer()
 	opts := testOptions(t)
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	<-r.opened
 
-	spec := <-r.opened
-	if spec.Title != shellWindowLabel {
-		t.Fatalf("second window is %q, want the user shell", spec.Title)
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+	tab := windows.tabs()[0]
+	if tab.Label != shellWindowLabel {
+		t.Fatalf("first tab is %q, want the user shell", tab.Label)
 	}
-	if spec.Focus {
-		t.Fatal("the shell window took focus from the conversation")
-	}
-	window, ok := windows.window(spec.Name)
+	window, ok := windows.window(tab.ID)
 	if !ok {
-		t.Fatalf("the shell window %q is not registered", spec.Name)
+		t.Fatalf("the shell %q is not registered", tab.ID)
 	}
 	if window.opts.Cwd != opts.SessionRoot {
 		t.Fatalf("the shell is rooted at %q, not the session", window.opts.Cwd)
@@ -257,10 +257,298 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 		t.Fatalf("shell command = %q", got)
 	}
 	if window.opts.CloseOnExit {
-		t.Fatal("the shell window closes on exit; qrouton shell restarts the shell instead")
+		t.Fatal("the shell closes on exit; qrouton shell restarts the shell instead")
 	}
 	if len(r.opened) != 0 {
-		t.Fatalf("%d further windows opened; there is one shell, not a stack", len(r.opened))
+		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
+	}
+
+	if err := windows.Close(tab.ID); err != nil {
+		t.Fatal(err)
+	}
+	if len(windows.tabs()) != 0 {
+		t.Fatal("the shell tab survived being closed")
+	}
+	for want := 1; want <= 2; want++ {
+		id, err := windows.OpenShell()
+		if err != nil {
+			t.Fatal(err)
+		}
+		tabs := windows.tabs()
+		if len(tabs) != want {
+			t.Fatalf("%d tabs after asking %d times: %+v", len(tabs), want, tabs)
+		}
+		// The page selects the tab by the id it gets back, so a wrong one
+		// focuses a terminal the user did not ask for.
+		if tabs[len(tabs)-1].ID != id {
+			t.Fatalf("OpenShell returned %q, newest tab is %q", id, tabs[len(tabs)-1].ID)
+		}
+	}
+}
+
+// The header's document chip is one control for two states: nothing open yet,
+// and the window already showing it. A second tab on the same document is the
+// failure the user sees.
+func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts.Document = func(root, name string) (workbench.WindowOptions, error) {
+		return workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "◆ " + filepath.Base(name),
+			Source: name, Content: "# " + name, Format: workbench.FormatMarkdown,
+		}, nil
+	}
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	const doc = "thoughts/shared/research/R7-editor-surfaces.md"
+	id, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.tabs()
+	if len(tabs) != 2 || tabs[1].ID != id {
+		t.Fatalf("the document is not the newest tab: %+v", tabs)
+	}
+	if tabs[1].Label != "◆ R7-editor-surfaces.md" {
+		t.Fatalf("the document tab reads %q", tabs[1].Label)
+	}
+	if tabs[1].Kind != string(workbench.KindDocument) {
+		t.Fatalf("the document tab is a %q; a rendered pane runs no process", tabs[1].Kind)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; a document the user asked for is a tab", len(r.opened))
+	}
+
+	again, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != id {
+		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
+	}
+	if got := len(windows.tabs()); got != 2 {
+		t.Fatalf("%d tabs after clicking twice", got)
+	}
+
+	// Dismissing it is what makes the chip open one again.
+	if err := windows.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := windows.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened == id {
+		t.Fatal("the dismissed document came back with its old id")
+	}
+}
+
+// The rail's add-repos button. The old terminal picker took the whole screen,
+// which is what made adding a repository feel like leaving the conversation;
+// here it is a tab, and a second click selects the one already open rather than
+// racing a second picker at the same manifest.
+func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts.Picker = func(dir string) []string { return []string{"/bin/cat", "pick", dir} }
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	id, err := windows.OpenPicker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.tabs()
+	if len(tabs) != 2 || tabs[1].ID != id {
+		t.Fatalf("the picker is not the newest tab: %+v", tabs)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; the picker is a tab", len(r.opened))
+	}
+	window, ok := windows.window(id)
+	if !ok {
+		t.Fatalf("the picker %q is not registered", id)
+	}
+	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat pick "+opts.SessionRoot {
+		t.Fatalf("picker command = %q", got)
+	}
+	if !window.opts.CloseOnExit {
+		t.Fatal("the picker tab outlives the picker")
+	}
+
+	again, err := windows.OpenPicker()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != id || len(windows.tabs()) != 2 {
+		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
+	}
+}
+
+func TestConcurrentAddReposClicksOpenOnePicker(t *testing.T) {
+	w, _ := testWindows(t)
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	w.newPicker = func() (string, error) {
+		entered <- struct{}{}
+		<-release
+		return w.openStructural(workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: pickerWindowLabel, Source: pickerSource,
+			Command: []string{"/bin/cat"},
+		})
+	}
+
+	type result struct {
+		id  string
+		err error
+	}
+	results := make(chan result, 2)
+	for range 2 {
+		go func() {
+			id, err := w.OpenPicker()
+			results <- result{id: id, err: err}
+		}()
+	}
+	<-entered
+	select {
+	case <-entered:
+		close(release)
+		t.Fatal("both clicks started a picker")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	first, second := <-results, <-results
+	if first.err != nil || second.err != nil {
+		t.Fatalf("picker errors = %v, %v", first.err, second.err)
+	}
+	if first.id != second.id || len(w.tabs()) != 1 {
+		t.Fatalf("concurrent clicks returned %q and %q with tabs %+v", first.id, second.id, w.tabs())
+	}
+}
+
+// The agent opens documents too, through its file tool. The chip has to find
+// that window rather than stack a second copy beside it.
+func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
+	w, _ := testWindows(t)
+	w.newDocument = func(string) (string, error) {
+		t.Fatal("the chip opened a second window on a document already up")
+		return "", nil
+	}
+
+	const doc = "thoughts/shared/plans/P006.md"
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "Editor", Source: doc, Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := w.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != id {
+		t.Fatalf("the chip returned %q, not the editor window %q", got, id)
+	}
+}
+
+func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+	const doc = "thoughts/shared/plans/P006.md"
+	old, err := w.openStructural(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ old", Source: doc, Content: "old",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ fresh", Source: doc, Content: "fresh",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old == fresh || w.exists(old) {
+		t.Fatalf("old document %q survived replacement by %q", old, fresh)
+	}
+	if ids := w.list(); len(ids) != 1 || ids[0] != fresh {
+		t.Fatalf("open windows = %v, want only %q", ids, fresh)
+	}
+	content, err := w.Content(fresh)
+	if err != nil || content.Text != "fresh" {
+		t.Fatalf("replacement content = %+v, %v", content, err)
+	}
+}
+
+func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+	const doc = "thoughts/shared/plans/P006.md"
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ P006", Source: doc, Content: "plan",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	delete(r.events, selectEvent)
+	r.mu.Unlock()
+	got, err := w.OpenDocument(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	selected := r.events[selectEvent]
+	r.mu.Unlock()
+	if got != id || selected != id {
+		t.Fatalf("OpenDocument returned %q and selected %v, want %q", got, selected, id)
+	}
+}
+
+// Tabs that all read "$ shell" are tabs nobody can tell apart. The number goes
+// in the label the registry stores, so read_window and the manifest's record
+// agree with the tab strip.
+func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
+	r := newFakeRenderer()
+	opts := testOptions(t)
+	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	windows := newWindows(r, r.Emit, false)
+	t.Cleanup(windows.stopAll)
+
+	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
+	<-r.opened
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+
+	for range 2 {
+		if _, err := windows.OpenShell(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	tabs := windows.tabs()
+	want := []string{shellWindowLabel, "$ shell 2", "$ shell 3"}
+	if len(tabs) != len(want) {
+		t.Fatalf("tabs = %+v", tabs)
+	}
+	for i, label := range want {
+		if tabs[i].Label != label {
+			t.Fatalf("tab %d reads %q, want %q", i, tabs[i].Label, label)
+		}
+		window, ok := windows.window(tabs[i].ID)
+		if !ok || window.opts.Label != label {
+			t.Fatalf("the registry stores %q for the tab reading %q", window.opts.Label, label)
+		}
 	}
 }
 
@@ -272,14 +560,14 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 	opts.SessionRoot = ""
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	adopted := t.TempDir()
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	if spec := <-r.opened; spec.Title != mainWindowTitle {
 		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
 	}
-	if len(r.opened) != 0 {
-		t.Fatal("a shell window opened before onboarding chose a session")
+	if len(windows.tabs()) != 0 {
+		t.Fatal("a shell opened before onboarding chose a session")
 	}
 
 	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: adopted}).WindowHost()
@@ -290,17 +578,16 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	waitFor(t, "the shell window", func() bool { return len(r.opened) == 1 })
-	spec := <-r.opened
-	window, ok := windows.window(spec.Name)
+	waitFor(t, "the shell tab", func() bool { return len(windows.tabs()) == 1 })
+	window, ok := windows.window(windows.tabs()[0].ID)
 	if !ok || window.opts.Cwd != adopted {
 		t.Fatalf("the shell is not rooted in the adopted session: %+v", window)
 	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if title := r.titles[mainWindowName]; !strings.Contains(title, filepath.Base(adopted)) {
-		t.Fatalf("conversation title = %q, want the adopted session's name", title)
-	}
+	waitFor(t, "the retitled conversation", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return strings.Contains(r.titles[mainWindowName], filepath.Base(adopted))
+	})
 }
 
 func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
@@ -321,22 +608,22 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	pushChrome(dir, r.Emit)
+	pushChrome(dir, status.ActivityIdle, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(chromeFields)
+	fields, ok := r.events[chromeEvent].(status.Fields)
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
-	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "octopus" {
-		t.Fatalf("chrome = %+v, want the session's mode, phase and slug", fields)
+	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "Octopus" {
+		t.Fatalf("chrome = %+v, want the session's mode, phase and name", fields)
 	}
 }
 
 func TestChromeStaysSilentWithoutAManifest(t *testing.T) {
 	r := newFakeRenderer()
-	pushChrome(t.TempDir(), r.Emit)
+	pushChrome(t.TempDir(), status.ActivityIdle, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if _, pushed := r.events[chromeEvent]; pushed {
@@ -350,7 +637,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	dir := t.TempDir()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, func() string { return dir }, func(string, any) {})
+		watchChrome(ctx, func() string { return dir }, func() string { return "" }, func(string, any) {})
 		close(done)
 	}()
 	<-done
@@ -365,7 +652,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 	if err := session.WriteManifest(adopted, session.Manifest{Slug: "adopted", Name: "Adopted", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 	go func() { _ = run(r, newTerm(opts, r.Emit), windows, opts) }()
 	<-r.opened
 
@@ -380,7 +667,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 	waitFor(t, "the adopted session's chrome", func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
-		fields, ok := r.events[chromeEvent].(chromeFields)
-		return ok && fields.Identity == "adopted"
+		fields, ok := r.events[chromeEvent].(status.Fields)
+		return ok && fields.Identity == "Adopted"
 	})
 }

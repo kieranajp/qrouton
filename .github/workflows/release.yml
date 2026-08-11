@@ -17,6 +17,15 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/desktop/frontend/package-lock.json
+      # This job drives go directly rather than through make, so the embedded
+      # pages have to be built explicitly — without them the test job fails on
+      # an empty embed and the release ships stale ones.
+      - run: make front
       - run: go test ./...
       - name: Build binaries
         run: |

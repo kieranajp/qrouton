@@ -41,14 +41,18 @@ const (
 	focusMode
 )
 
-// lastFormField is the final reachable field. The mode selector is absent in
-// picker mode: escalation *is* the move to RPI, so offering the choice would
-// collect an answer confirmEscalation then overrides.
+// lastFormField is the final reachable field. Picker mode drops the mode
+// selector — escalation *is* the move to RPI, and adding repositories is no mode
+// change at all — and drops the prefix too once the session has a branch of its
+// own for new repositories to join.
 func (m appModel) lastFormField() int {
-	if m.picker.manifest != nil {
-		return focusPrefix
+	if m.picker.manifest == nil {
+		return focusMode
 	}
-	return focusMode
+	if m.picker.existingBranch() != "" {
+		return focusRepos
+	}
+	return focusPrefix
 }
 
 // inSession reports whether the session being escalated already holds this

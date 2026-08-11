@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -146,7 +148,8 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
 	bin := "/opt/qro uton/$peculiar/qrouton"
 	dir := "/work/kieran's session"
-	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, testHandle(), false)
+	handle := workbench.Handle{Socket: "/tmp/qr outon/it's.sock", SessionRoot: dir}
+	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, handle, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,13 +169,35 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
-	want := `'/opt/qro uton/$peculiar/qrouton' agent-event --session-root '/work/kieran'\''s session'`
-	if got := settings.Hooks["SubagentStart"][0].Hooks[0].Command; got != want {
-		t.Fatalf("hook command = %s, want %s", got, want)
+	callback := settings.Hooks["SubagentStart"][0].Hooks[0].Command
+	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal()}
+	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
+		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
-	if got := settings.Hooks["Notification"][0].Hooks[0].Command; !strings.HasPrefix(got, `'/work/kieran'\''s session/`) {
-		t.Fatalf("notification command not shell-quoted: %s", got)
+	// Notification runs the sound and then the callback that turns the header
+	// peach; losing either leaves an agent blocked on the user saying nothing.
+	notification := settings.Hooks["Notification"][0].Hooks
+	if len(notification) != 2 {
+		t.Fatalf("Notification carries %d commands, want the sound and the callback", len(notification))
 	}
+	if got := shellWords(t, notification[0].Command); !reflect.DeepEqual(got, []string{sessionpaths.NotifyScript(dir)}) {
+		t.Fatalf("notification sound splits to %q", got)
+	}
+	if notification[1].Command != callback {
+		t.Fatalf("notification callback = %s", notification[1].Command)
+	}
+}
+
+// shellWords is what /bin/sh makes of a hook command. Asserting on the string
+// stops at the first thing left unquoted; asserting on the words the real shell
+// recovers is the property ShellQuote exists for.
+func shellWords(t *testing.T, command string) []string {
+	t.Helper()
+	out, err := exec.Command("/bin/sh", "-c", `printf '%s\n' `+command).Output()
+	if err != nil {
+		t.Fatalf("sh could not parse %s: %v", command, err)
+	}
+	return strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")
 }
 
 func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {

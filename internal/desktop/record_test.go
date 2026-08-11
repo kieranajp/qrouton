@@ -27,12 +27,11 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	if err := session.WriteManifest(opts.SessionRoot, session.Manifest{Slug: "recorded", Name: "Recorded"}); err != nil {
 		t.Fatal(err)
 	}
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 
 	done := make(chan error, 1)
 	go func() { done <- run(r, newTerm(opts, r.Emit), windows, opts) }()
 	conversation := <-r.opened
-	<-r.opened
 
 	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
 	if err != nil {
@@ -82,7 +81,7 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 // write, and must not treat that as a failure.
 func TestRecordingWaitsForASession(t *testing.T) {
 	r := newFakeRenderer()
-	windows := newWindows(r, r.Emit)
+	windows := newWindows(r, r.Emit, false)
 	root := ""
 	record := &windowRecorder{root: func() string { return root }, windows: windows}
 	windows.observe(record.save)

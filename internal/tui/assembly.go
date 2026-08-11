@@ -2,11 +2,10 @@ package tui
 
 // Session assembly runs in a goroutine so the TUI stays responsive: progress
 // events stream over a channel and the final assembledMsg carries the session
-// directory (or the failure). The picker's escalation branch lives here too:
-// confirm assembles into the live session, cancel records the outcome alone.
+// directory (or the failure). The picker's branch lives here too: confirm
+// assembles into the live session, escalating it if that is what was asked for.
 
 import (
-	"fmt"
 	"path/filepath"
 	"time"
 
@@ -42,13 +41,13 @@ func (m *appModel) startAssembly() tea.Cmd {
 	ch := make(chan assemblyEvent, 128)
 	m.assembly.ch = ch
 	if m.picker.manifest != nil {
-		cfg, dir, manifest := m.cfg, m.picker.dir, *m.picker.manifest
-		details := escalationDetails{name: m.form.name, description: m.form.description,
-			ticket: m.form.ticket, prefix: branchPrefixes[m.form.prefix]}
+		cfg, dir, escalate := m.cfg, m.picker.dir, m.picker.escalate
+		details := assemblyDetails{name: m.form.name, description: m.form.description,
+			ticket: m.form.ticket, branch: m.picker.branch(branchPrefixes[m.form.prefix], m.form.name)}
 		selected := m.selectedRepos()
 		go func() {
 			defer close(ch)
-			err := confirmEscalation(cfg, dir, manifest, selected, details,
+			err := confirmPicker(cfg, dir, selected, details, escalate,
 				func(p session.Progress) { copy := p; ch <- assemblyEvent{progress: &copy} })
 			ch <- assemblyEvent{done: &assembledMsg{dir: dir, err: err}}
 		}()
@@ -105,32 +104,48 @@ func (m *appModel) selectedRepos() []session.RepoSelection {
 	return selected
 }
 
-// escalationDetails is what the picker's form contributes to the manifest.
+// assemblyDetails is what the picker's form contributes to the manifest.
 // Grouped so the write below cannot quietly drop one of them, which is how the
 // description and ticket came to be fields that collected input and discarded it.
-type escalationDetails struct {
+type assemblyDetails struct {
 	name        string
 	description string
 	ticket      string
-	prefix      string
+	branch      string
 }
 
-// confirmEscalation is the picker's confirm path: the composed repositories, the
-// work's details, RPI mode, and the confirmed stanza land in one atomic manifest
-// write, so a polling reader never sees repos added while the mode still says
-// assistant.
+// confirmPicker is the picker's confirm path: the composed repositories and the
+// work's details land in one atomic manifest write. Escalating adds RPI mode and
+// the confirmed stanza to that same write, so a polling reader never sees repos
+// added while the mode still says assistant.
 //
 // The branch applies only to repositories being newly added. Anything already in
-// the session keeps its worktree and its branch, uncommitted work included:
-// escalating is how work that started small acquires the full workflow, so the
-// checkout it started in is the last thing that should move.
-func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels []session.RepoSelection, d escalationDetails, progress session.ProgressFunc) error {
-	branch := fmt.Sprintf(branchFormat, d.prefix, session.Slugify(d.name))
-	out, err := session.ComposeRepos(cfg, m, sels, branch, progress)
+// the session keeps its worktree and its branch, uncommitted work included: this
+// is how work that started small acquires more of the codebase, so the checkout
+// it started in is the last thing that should move.
+func confirmPicker(cfg *config.Config, dir string, sels []session.RepoSelection, d assemblyDetails, escalate bool, progress session.ProgressFunc) error {
+	// Loaded here, not carried in: a picker can sit open for half an hour while
+	// the workbench keeps rewriting the manifest underneath it.
+	m, err := session.Load(dir)
 	if err != nil {
 		return err
 	}
+	composed, err := session.ComposeRepos(cfg, m, sels, d.branch, progress)
+	if err != nil {
+		return err
+	}
+	out, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
+	out = session.MergeRepos(out, composed.Repos)
 	out.Name, out.Description, out.TicketURL = d.name, d.description, d.ticket
+	if !escalate {
+		// Adding repositories is not a mode change, and the running agent reads
+		// the manifest for itself — relaunching it would cost the user a
+		// conversation to tell it something it can already see.
+		return session.WriteManifest(dir, out)
+	}
 	out.Mode = session.ModeRPI
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
 	if err := session.WriteManifest(dir, out); err != nil {
@@ -143,9 +158,20 @@ func confirmEscalation(cfg *config.Config, dir string, m session.Manifest, sels 
 }
 
 // cancelPicker records the cancelled outcome — the stanza alone, mode and
-// repositories untouched — and closes the picker.
+// repositories untouched — and closes the picker. Only an escalation has a
+// caller waiting on that stanza; the button's cancel is nobody's business.
 func (m appModel) cancelPicker() (tea.Model, tea.Cmd) {
-	out := *m.picker.manifest
+	if !m.picker.escalate {
+		if m.refresh.cancel != nil {
+			m.refresh.cancel()
+		}
+		return m, tea.Quit
+	}
+	out, err := session.Load(m.picker.dir)
+	if err != nil {
+		m.err, m.back, m.screen = err, newScreen, errorScreen
+		return m, nil
+	}
 	out.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
 	if err := session.WriteManifest(m.picker.dir, out); err != nil {
 		m.err, m.back, m.screen = err, newScreen, errorScreen

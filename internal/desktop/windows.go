@@ -18,6 +18,14 @@ import (
 type Windows struct {
 	renderer renderer
 	emit     emitter
+	// dock sends the agent's windows to the tab strip instead of the screen.
+	dock bool
+	// newShell reopens the shell after the user closes its tab.
+	newShell    func() (string, error)
+	newDocument func(name string) (string, error)
+	newPicker   func() (string, error)
+	// sourceMu serialises the check and open for windows with a Source.
+	sourceMu sync.Mutex
 
 	mu      sync.Mutex
 	seq     int
@@ -34,48 +42,120 @@ type agentWindow struct {
 	// recorded excludes the windows the workbench opens for itself from the
 	// manifest's record, since a resume rebuilds those without being told to.
 	recorded bool
+	// docked windows live in the tab strip, so no renderer window backs them.
+	docked bool
+	// exit is nil while the process is still running.
+	exit *int
 }
 
-func newWindows(r renderer, emit emitter) *Windows {
-	return &Windows{renderer: r, emit: emit, open: map[string]*agentWindow{}}
+func newWindows(r renderer, emit emitter, dock bool) *Windows {
+	return &Windows{renderer: r, emit: emit, dock: dock, open: map[string]*agentWindow{}}
 }
 
+// A picker nobody can see is a session that hangs, so anything asking for focus
+// gets a real window.
 func (w *Windows) openWindow(opts workbench.WindowOptions) (string, error) {
-	return w.spawn(opts, true)
+	if opts.Source != "" {
+		w.sourceMu.Lock()
+		defer w.sourceMu.Unlock()
+		if id, ok := w.showing(opts.Source); ok {
+			w.dismiss(id)
+		}
+	}
+	return w.spawn(opts, true, w.dock && !opts.Focus)
 }
 
-// openStructural opens a window the workbench owns rather than the agent.
+// openStructural opens a window the workbench owns rather than the agent: the
+// session shell, always a tab.
 func (w *Windows) openStructural(opts workbench.WindowOptions) (string, error) {
-	return w.spawn(opts, false)
+	return w.spawn(opts, false, true)
 }
 
-func (w *Windows) spawn(opts workbench.WindowOptions, recorded bool) (string, error) {
+// OpenShell opens another terminal in the session's right pane and returns its
+// id, so the page can select the tab the user just asked for.
+func (w *Windows) OpenShell() (string, error) {
+	if w.newShell == nil {
+		return "", ErrNoShellCommand
+	}
+	return w.newShell()
+}
+
+// OpenPicker opens the repository picker in the right pane, or selects the one
+// already open: two pickers writing the same manifest is a lost selection.
+func (w *Windows) OpenPicker() (string, error) {
+	w.sourceMu.Lock()
+	defer w.sourceMu.Unlock()
+	if id, ok := w.showing(pickerSource); ok {
+		return id, nil
+	}
+	if w.newPicker == nil {
+		return "", ErrNoPickerCommand
+	}
+	return w.newPicker()
+}
+
+// OpenDocument returns the window already showing the named document, or opens
+// one — so a single click both opens and selects. The name is session-relative.
+func (w *Windows) OpenDocument(name string) (string, error) {
+	if name == "" {
+		return "", ErrNoDocumentName
+	}
+	w.sourceMu.Lock()
+	defer w.sourceMu.Unlock()
+	if id, ok := w.showing(name); ok {
+		w.emit(selectEvent, id)
+		return id, nil
+	}
+	if w.newDocument == nil {
+		return "", ErrNoEditorCommand
+	}
+	return w.newDocument(name)
+}
+
+func (w *Windows) showing(source string) (string, bool) {
+	if source == "" {
+		return "", false
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	for id, window := range w.open {
+		if window.opts.Source == source {
+			return id, true
+		}
+	}
+	return "", false
+}
+
+func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
 	w.mu.Lock()
 	w.seq++
 	id := fmt.Sprintf(windowIDFormat, w.seq)
-	window := &agentWindow{opts: opts, seq: w.seq, recorded: recorded}
+	window := &agentWindow{opts: opts, seq: w.seq, recorded: recorded, docked: docked}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
 	}
 	w.open[id] = window
 	w.mu.Unlock()
 
-	if err := w.renderer.Open(windowSpec{
-		Name:    id,
-		Title:   opts.Label,
-		URL:     pageURL(opts.Kind, id),
-		Width:   agentWindowWidth,
-		Height:  agentWindowHeight,
-		Focus:   opts.Focus,
-		OnClose: func() { w.discard(id) },
-	}); err != nil {
-		w.discard(id)
-		return "", err
+	// A docked window's surface is the tab strip, so nothing is opened here.
+	if !docked {
+		if err := w.renderer.Open(windowSpec{
+			Name:    id,
+			Title:   opts.Label,
+			URL:     pageURL(opts.Kind, id),
+			Width:   agentWindowWidth,
+			Height:  agentWindowHeight,
+			Focus:   opts.Focus,
+			OnClose: func() { w.discard(id) },
+		}); err != nil {
+			w.discard(id)
+			return "", err
+		}
 	}
-	if opts.Kind == workbench.KindDocument && opts.TTL > 0 {
+	if !docked && opts.Kind == workbench.KindDocument && opts.TTL > 0 {
 		w.mu.Lock()
 		if _, live := w.open[id]; live {
 			window.timer = time.AfterFunc(opts.TTL, func() { w.dismiss(id) })
@@ -83,6 +163,12 @@ func (w *Windows) spawn(opts workbench.WindowOptions, recorded bool) (string, er
 		w.mu.Unlock()
 	}
 	w.announce()
+	// A document the agent opened behind the shell tab is a document nobody
+	// reads. Terminals are left where they are: the tab strip focuses the
+	// terminal it selects, which would take the keyboard off the conversation.
+	if docked && opts.Kind == workbench.KindDocument {
+		w.emit(selectEvent, id)
+	}
 	return id, nil
 }
 
@@ -94,6 +180,12 @@ func (w *Windows) Start(id string, cols, rows int) error {
 	if !ok {
 		w.mu.Unlock()
 		return noSuchWindow(id)
+	}
+	// A document has no command, and a page that asks anyway must not take the
+	// workbench down with it.
+	if window.opts.Kind != workbench.KindTerminal {
+		w.mu.Unlock()
+		return ErrNotATerminal
 	}
 	if window.process != nil {
 		w.mu.Unlock()
@@ -148,10 +240,12 @@ func (w *Windows) Resize(id string, cols, rows int) error {
 	return process.resize(cols, rows)
 }
 
-// document is a document window's text and how its page should render it.
+// document is a document window's text, how its page should render it, and the
+// session file it came from, if it came from one.
 type document struct {
 	Text   string `json:"text"`
 	Format string `json:"format"`
+	Source string `json:"source"`
 }
 
 // Content is a document window's text, fetched by its page on load.
@@ -160,7 +254,11 @@ func (w *Windows) Content(id string) (document, error) {
 	if !ok {
 		return document{}, noSuchWindow(id)
 	}
-	return document{Text: window.opts.Content, Format: string(window.opts.Format)}, nil
+	return document{
+		Text:   window.opts.Content,
+		Format: string(window.opts.Format),
+		Source: window.opts.Source,
+	}, nil
 }
 
 // processExited applies the lifecycle rule: a clean exit closes the window, a
@@ -171,12 +269,19 @@ func (w *Windows) processExited(id string, code int) {
 	if !ok {
 		return
 	}
+	w.mu.Lock()
+	window.exit = &code
+	w.mu.Unlock()
 	if code == 0 && window.opts.CloseOnExit {
 		w.dismiss(id)
+		return
 	}
+	w.announce()
 }
 
-func (w *Windows) closeWindow(id string) error {
+// Close serves the agent's window tool and the tab strip's close control. Wails
+// binds exported methods only, so unexporting this silently breaks the tab.
+func (w *Windows) Close(id string) error {
 	if _, ok := w.window(id); !ok {
 		return noSuchWindow(id)
 	}
@@ -213,7 +318,11 @@ func (w *Windows) list() []string {
 
 // dismiss tears the window down and takes it off the screen.
 func (w *Windows) dismiss(id string) {
-	if w.discard(id) {
+	window, ok := w.window(id)
+	if !ok {
+		return
+	}
+	if w.discard(id) && !window.docked {
 		w.renderer.Close(id)
 	}
 }
@@ -257,8 +366,68 @@ func (w *Windows) announce() {
 	w.mu.Lock()
 	changed := w.changed
 	w.mu.Unlock()
+	w.emit(windowsEvent, w.surfaces())
 	if changed != nil {
 		changed()
+	}
+}
+
+// drawnWindow is one window as its surface draws it.
+type drawnWindow struct {
+	ID     string `json:"id"`
+	Label  string `json:"label"`
+	Kind   string `json:"kind"`
+	Status string `json:"status,omitempty"`
+}
+
+// surfaces splits the open windows by where they are drawn, oldest first so the
+// shell stays leftmost.
+type surfaces struct {
+	Tabs     []drawnWindow `json:"tabs"`
+	Floating []drawnWindow `json:"floating"`
+}
+
+func (w *Windows) surfaces() surfaces {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	live := make([]*agentWindow, 0, len(w.open))
+	for _, window := range w.open {
+		live = append(live, window)
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
+	out := surfaces{Tabs: []drawnWindow{}, Floating: []drawnWindow{}}
+	for _, window := range live {
+		drawn := drawnWindow{
+			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
+			Kind: string(window.opts.Kind), Status: tabStatus(window),
+		}
+		if window.docked {
+			out.Tabs = append(out.Tabs, drawn)
+		} else {
+			out.Floating = append(out.Floating, drawn)
+		}
+	}
+	return out
+}
+
+func (w *Windows) tabs() []drawnWindow { return w.surfaces().Tabs }
+
+// Surfaces answers the page on load: the event only fires on a change, and the
+// shell opens before anything is subscribed.
+func (w *Windows) Surfaces() surfaces { return w.surfaces() }
+
+func tabStatus(window *agentWindow) string {
+	switch {
+	case window.opts.Attention:
+		return tabStatusWaiting
+	case window.opts.Kind != workbench.KindTerminal:
+		return ""
+	case window.exit == nil:
+		return tabStatusRunning
+	case *window.exit == 0:
+		return tabStatusSucceeded
+	default:
+		return tabStatusFailed
 	}
 }
 

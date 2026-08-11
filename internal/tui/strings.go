@@ -30,6 +30,7 @@ const (
 	labelOwners      = "GitHub owners"
 	labelRepos       = "Repositories"
 	labelPrefix      = "Branch prefix"
+	labelBranch      = "Branch"
 	labelMode        = "Mode"
 )
 
@@ -145,6 +146,7 @@ const (
 
 	branchFormat        = "%s/%s"
 	branchPreviewFormat = "preview · " + branchFormat + "  (active repos only)"
+	branchJoinedHint    = "the session's branch · repositories added here join it"
 
 	repoOwnerCountFormat = " · %d repositories · %d owners"
 	workflowLineFormat   = "R %s   P %s   I %s"

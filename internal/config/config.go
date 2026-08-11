@@ -14,16 +14,20 @@ type Config struct {
 	Orgs []string `json:"orgs"` // GitHub orgs for the repo picker
 	Root string   `json:"root"` // sessions live flat under it; mirrors under <root>/.mirrors
 
-	// Launch overrides a supported runner's command, keyed by runner id
-	// ("claude", "codex", "opencode"). The value is the exact argv to run, so
-	// it may also point at a different binary than the id would find on PATH.
-	// Keyed rather than a list of argv: the runner being overridden is the
-	// identity, and burying it in argv[0] made an override that dropped a flag
-	// look like one that merely named a runner.
+	// Keyed by runner id rather than a bare argv list: with the runner buried in
+	// argv[0], an override that dropped a flag looked like one that merely named
+	// a runner.
 	Launch map[string][]string `json:"launch,omitempty"`
 
 	Editor []string `json:"editor,omitempty"`
+
+	// "dock" (the default) for a tab in the session's right pane, "float" for an
+	// OS window.
+	Windows string `json:"windows,omitempty"`
 }
+
+// Only the floating value floats, so a misspelling still gives the default.
+func (c *Config) Dock() bool { return c.Windows != WindowsFloat }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.
 func xdgDir(envVar, fallback string) string {
@@ -44,10 +48,9 @@ func CachePath() string {
 }
 
 // Load reads config.json if it exists, and otherwise starts from defaults —
-// deliberately without prompting. A session with no repositories needs neither
-// a configured root nor GitHub owners, so nothing may block a launch here; the
-// owners are prompted for by EnsureOrgs, at the first repository search.
-// QROUTON_ROOT / QROUTON_ORGS override at runtime.
+// deliberately without prompting. A zero-repo session needs neither a root nor
+// owners, so nothing may block a launch here; EnsureOrgs asks at the first
+// repository search. QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {
 	cfg := &Config{}
 	b, err := os.ReadFile(Path())

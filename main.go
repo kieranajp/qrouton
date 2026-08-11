@@ -48,11 +48,10 @@ func main() {
 	}
 }
 
-// onboard is the default action. With no arguments it opens the landing list.
-// A single argument naming an existing directory drops into a fresh zero-repo
-// scratch session named after it; owner/repo arguments launch an ad-hoc
-// session directly. Each of those assembles in the terminal the user ran and
-// then hands the workbench to a process of its own.
+// onboard is the default action. No arguments opens the landing list; a single
+// argument naming an existing directory drops into a fresh zero-repo scratch
+// session named after it; owner/repo arguments launch an ad-hoc session. Each
+// assembles in the user's terminal, then hands the workbench its own process.
 func onboard(c *cli.Context) error {
 	if spec := c.String(workbenchSpecFlag); spec != "" {
 		return workbenchProcess(spec)
@@ -88,9 +87,17 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	// A missing editor costs the document chip, and must not keep the list shut.
+	editor, _ := launch.ResolveEditor(cfg.Editor)
 	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
+		Dock:   cfg.Dock(),
+		Editor: editor,
 	}, os.Environ())
 }
 
@@ -253,7 +260,9 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	return detach(launch.WorkbenchSpec{SessionRoot: dir, Socket: socket, Argv: argv}, env)
+	return detach(launch.WorkbenchSpec{
+		SessionRoot: dir, Socket: socket, Argv: argv, Dock: cfg.Dock(), Editor: editor,
+	}, env)
 }
 
 // detach hands the workbench to a process of its own and returns as soon as it
@@ -291,7 +300,17 @@ func workbenchProcess(marshalled string) error {
 		Argv:        spec.Argv,
 		Env:         os.Environ(),
 		Shell:       shellArgv(bin),
+		Picker:      pickerArgv(bin),
+		Document:    documentWindow(spec.Editor),
+		Dock:        spec.Dock,
 	})
+}
+
+// documentWindow reaches the same decision the agent's file tool does.
+func documentWindow(editor launch.EditorCommand) func(string, string) (workbench.WindowOptions, error) {
+	return func(sessionRoot, name string) (workbench.WindowOptions, error) {
+		return launch.DocumentWindow(sessionRoot, name, editor, 1)
+	}
 }
 
 // workbenchLog is where the detached process's stdio lands: inside the session
@@ -316,4 +335,8 @@ func subject(sessionRoot string) string {
 // settles on, which the landing-list path does not know when it opens.
 func shellArgv(bin string) func(string) []string {
 	return func(dir string) []string { return launch.ShellArgv(bin, dir) }
+}
+
+func pickerArgv(bin string) func(string) []string {
+	return func(dir string) []string { return launch.PickerArgv(bin, dir) }
 }

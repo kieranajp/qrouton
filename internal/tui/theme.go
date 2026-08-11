@@ -1,54 +1,56 @@
 package tui
 
-// The onboarding TUI's palette is Catppuccin Macchiato, the same one the
-// workbench window draws in, so qrouton reads as one product from picker to
-// conversation.
-//
-// Only the shades the views actually draw with are declared; the rest of
-// Catppuccin Macchiato is a lookup away if a new one is needed.
-// https://github.com/catppuccin/catppuccin
-import "github.com/charmbracelet/lipgloss"
+// The onboarding TUI draws in the same palette as the workbench window, so
+// qrouton reads as one product from picker to conversation. internal/theme owns
+// the shades and what each accent is for; only the lipgloss styles live here.
+import (
+	"github.com/charmbracelet/lipgloss"
+	"github.com/kieranajp/qrouton/internal/theme"
+)
 
-const (
-	ctpBase     = lipgloss.Color("#24273a")
-	ctpSurface0 = lipgloss.Color("#363a4f")
-	ctpSurface2 = lipgloss.Color("#5b6078")
-	ctpOverlay1 = lipgloss.Color("#8087a2")
-	ctpSubtext0 = lipgloss.Color("#a5adcb")
-	ctpText     = lipgloss.Color("#cad3f5")
-	ctpBlue     = lipgloss.Color("#8aadf4")
-	ctpGreen    = lipgloss.Color("#a6da95")
-	ctpRed      = lipgloss.Color("#ed8796")
+func shade(hex string) lipgloss.Color { return lipgloss.Color(hex) }
+
+var (
+	backdrop = shade(theme.Base)
+	raised   = shade(theme.Surface0)
+	rule     = shade(theme.Surface2)
+	quiet    = shade(theme.Overlay1)
+	label    = shade(theme.Subtext0)
+	prose    = shade(theme.Text)
+
+	action  = shade(theme.Roles[theme.RoleAccentAction])
+	success = shade(theme.Roles[theme.RoleStateSuccess])
+	failure = shade(theme.Roles[theme.RoleStateFailed])
 )
 
 var (
-	accent = lipgloss.NewStyle().Foreground(ctpBlue).Bold(true)
-	body   = lipgloss.NewStyle().Foreground(ctpText)
-	dim    = lipgloss.NewStyle().Foreground(ctpOverlay1)
-	good   = lipgloss.NewStyle().Foreground(ctpGreen)
-	bad    = lipgloss.NewStyle().Foreground(ctpRed)
+	accent = lipgloss.NewStyle().Foreground(action).Bold(true)
+	body   = lipgloss.NewStyle().Foreground(prose)
+	dim    = lipgloss.NewStyle().Foreground(quiet)
+	good   = lipgloss.NewStyle().Foreground(success)
+	bad    = lipgloss.NewStyle().Foreground(failure)
 
 	// A crouton is a cube and the logo is a cube. Everything qrouton draws is
 	// a box with square corners in that same design language.
 	card = box(false)
 
-	picked = box(true).Background(ctpSurface0)
+	picked = box(true).Background(raised)
 )
 
 // box frames one unit of the UI. Focused boxes take the accent border so the
 // cursor reads as a lit-up cube in the grid; the rest sit quietly in surface2.
 func box(focused bool) lipgloss.Style {
-	border := ctpSurface2
+	border := rule
 	if focused {
-		border = ctpBlue
+		border = action
 	}
 	return lipgloss.NewStyle().Padding(0, 1).Border(lipgloss.NormalBorder()).BorderForeground(border)
 }
 
 // chip renders one selectable token: filled/accented when picked, quiet when not.
-func chip(label string, selected bool) string {
+func chip(text string, selected bool) string {
 	if selected {
-		return lipgloss.NewStyle().Foreground(ctpBase).Background(ctpBlue).Bold(true).Padding(0, 1).Render(label)
+		return lipgloss.NewStyle().Foreground(backdrop).Background(action).Bold(true).Padding(0, 1).Render(text)
 	}
-	return lipgloss.NewStyle().Foreground(ctpSubtext0).Background(ctpSurface0).Padding(0, 1).Render(label)
+	return lipgloss.NewStyle().Foreground(label).Background(raised).Padding(0, 1).Render(text)
 }

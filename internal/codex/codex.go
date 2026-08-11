@@ -1,8 +1,7 @@
-// Package codex owns what qrouton knows about the Codex CLI's own files: where
-// it keeps its home, its rollout session logs, and its configuration, plus the
-// one setting qrouton has to reason about (subagent nesting depth). Both the
-// launcher and the subagent watcher need these facts; keeping them here stops
-// the two from drifting on where CODEX_HOME points.
+// Package codex owns what qrouton knows about the Codex CLI's own files: its
+// home, its rollout session logs, its configuration, and the one setting qrouton
+// reasons about (subagent nesting depth). The launcher and the subagent watcher
+// share it so the two cannot drift on where CODEX_HOME points.
 package codex
 
 import (

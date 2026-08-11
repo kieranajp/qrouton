@@ -8,14 +8,16 @@ const (
 	handleParseError = "parse session handle"
 )
 
-// Operations the control socket understands, one per WindowHost method.
+// Operations the control socket understands: one per WindowHost method, plus
+// the attention signal the runner's own hooks raise.
 const (
-	OpOpen   = "open"
-	OpClose  = "close"
-	OpRead   = "read"
-	OpExists = "exists"
-	OpList   = "list"
-	OpAdopt  = "adopt"
+	OpOpen      = "open"
+	OpClose     = "close"
+	OpRead      = "read"
+	OpExists    = "exists"
+	OpList      = "list"
+	OpAdopt     = "adopt"
+	OpAttention = "attention"
 )
 
 const (

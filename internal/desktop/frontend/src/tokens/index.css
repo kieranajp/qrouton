@@ -1,0 +1,15 @@
+/* The token layer, minus colours: internal/theme renders those and the
+   workbench serves them, so no copy is checked in here to drift from it. */
+@import "./fonts.css";
+@import "./typography.css";
+@import "./spacing.css";
+@import "./effects.css";
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--surface-app);
+  color: var(--text-primary);
+  overflow: hidden;
+}

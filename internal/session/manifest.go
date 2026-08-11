@@ -130,6 +130,16 @@ type EscalationOutcome struct {
 // written before the field existed.
 func (m Manifest) EffectiveMode() SessionMode { return m.Mode.effective() }
 
+// Branch is the session branch: the first active repo's branch.
+func (m Manifest) Branch() string {
+	for _, r := range m.Repos {
+		if r.Branch != "" {
+			return r.Branch
+		}
+	}
+	return ""
+}
+
 type ManifestRepo struct {
 	Name          string   `json:"name"`
 	Org           string   `json:"org"`
@@ -205,6 +215,8 @@ func Load(dir string) (Manifest, error) {
 
 // WriteManifest atomically replaces a session's manifest — temp file plus
 // rename — so pollers re-reading it every few seconds never see a torn write.
+// Several processes write this file, so the temp name is unique per call: a
+// shared one lets a short write land inside a long one and be renamed over.
 func WriteManifest(dir string, m Manifest) error {
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -212,11 +224,27 @@ func WriteManifest(dir string, m Manifest) error {
 	}
 	// Read before the write: it compares m against what is still on disk.
 	handoff := escalatesToRPI(dir, m)
-	tmp := sessionpaths.Manifest(dir) + manifestTmpSuffix
-	if err := os.WriteFile(tmp, b, fileMode); err != nil {
+	f, err := os.CreateTemp(dir, manifestName+".*"+manifestTmpSuffix)
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	if _, err := f.Write(b); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Chmod(fileMode); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	if err := os.Rename(tmp, sessionpaths.Manifest(dir)); err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	if handoff {

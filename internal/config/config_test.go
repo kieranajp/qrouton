@@ -74,3 +74,28 @@ func TestLoadReadsLaunchOverridesVerbatim(t *testing.T) {
 		t.Fatalf("launch = %#v, want %#v", cfg.Launch, want)
 	}
 }
+
+func TestWindowsPreferenceRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("QROUTON_ROOT", filepath.Join(dir, "sessions"))
+
+	if err := Save(&Config{Root: filepath.Join(dir, "sessions"), Windows: WindowsDock}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Windows != WindowsDock || !cfg.Dock() {
+		t.Fatalf("windows = %q, Dock() = %v", cfg.Windows, cfg.Dock())
+	}
+	if (&Config{Windows: WindowsFloat}).Dock() {
+		t.Errorf("Windows=%q docked", WindowsFloat)
+	}
+	for _, value := range []string{"", "tiled"} {
+		if !(&Config{Windows: value}).Dock() {
+			t.Errorf("Windows=%q floated; anything but %q docks", value, WindowsFloat)
+		}
+	}
+}

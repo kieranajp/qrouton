@@ -19,7 +19,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	adopted := make(chan string, 1)
-	server, err := serveControl(socket, windows, func(root string) { adopted <- root })
+	server, err := serveControl(socket, windows, controlHooks{adopt: func(root string) { adopted <- root }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, func(string) {})
+	server, err := serveControl(socket, windows, controlHooks{adopt: func(string) {}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,7 +120,7 @@ func TestServeControlReplacesAStaleSocket(t *testing.T) {
 	if err := os.WriteFile(socket, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, func(string) {})
+	server, err := serveControl(socket, windows, controlHooks{adopt: func(string) {}})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,27 @@
+/* Loose 4px grid. Window padding is deliberately generous;
+   density lives inside the panes, not around them. */
+:root {
+  --space-1: 4px;
+  --space-2: 6px;
+  --space-3: 8px;
+  --space-4: 10px;
+  --space-5: 12px;
+  --space-6: 14px;
+  --space-7: 16px;
+  --space-8: 18px;
+  --space-9: 22px;
+  --space-10: 26px;
+  --space-11: 34px;
+  --space-12: 44px;
+
+  /* fixed chrome heights */
+  --h-titlebar: 44px;
+  --h-pane-header: 46px;
+  --h-footer: 36px;
+  --h-form-footer: 52px;
+  --h-tray: 40px;
+
+  /* fixed widths; the human pane's is where its divider starts, not where it stays */
+  --w-rail: 176px;
+  --w-human-pane: 500px;
+}

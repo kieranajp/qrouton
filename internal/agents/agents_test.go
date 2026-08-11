@@ -39,7 +39,7 @@ func TestClaudeAgentHooksRecordLifecycle(t *testing.T) {
 		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore"}`,
 		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
 	} {
-		if err := RecordEvent(root, bytes.NewBufferString(input)); err != nil {
+		if _, err := RecordEvent(root, bytes.NewBufferString(input)); err != nil {
 			t.Fatal(err)
 		}
 	}

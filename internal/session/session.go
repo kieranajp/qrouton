@@ -225,6 +225,16 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 	return m, nil
 }
 
+// MergeRepos appends repositories missing from a freshly loaded manifest.
+func MergeRepos(m Manifest, repos []ManifestRepo) Manifest {
+	for _, repo := range repos {
+		if !hasRepo(m.Repos, repo.Org, repo.Name) {
+			m.Repos = append(m.Repos, repo)
+		}
+	}
+	return m
+}
+
 // hasRepo reports whether the session already holds this repository. Identity is
 // owner and name together, case-insensitively — the same reckoning the ad-hoc
 // path uses when it dedupes command-line arguments.

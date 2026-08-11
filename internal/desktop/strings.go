@@ -15,7 +15,13 @@ const (
 	agentWindowWidth  = 900
 	agentWindowHeight = 620
 
-	shellWindowLabel = "$ shell"
+	shellWindowLabel        = "$ shell"
+	shellWindowLabelNumbers = "$ shell %d"
+
+	pickerWindowLabel = "+ repos"
+	// Source is the manifest's own name for a window; the picker has no file
+	// behind it, so this stands in as the key OpenPicker deduplicates on.
+	pickerSource = "qrouton:pick"
 
 	// The page URLs are directories: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
@@ -25,6 +31,13 @@ const (
 	windowIDQuery = "?id="
 
 	assetRoot = "assets"
+
+	// frontendSource is where the pages are written, not where they are built.
+	frontendSource = "frontend/src/"
+
+	// rootPath is the mux pattern the embedded tree is served under.
+	rootPath          = "/"
+	contentTypeHeader = "Content-Type"
 
 	windowIDFormat = "window-%d"
 )
@@ -38,6 +51,16 @@ const (
 
 	windowDataEvent = "window:data:"
 	windowExitEvent = "window:exit:"
+	windowsEvent    = "window:open"
+	selectEvent     = "window:select"
+)
+
+// A tab may only stand in for a window if it reports its process's state.
+const (
+	tabStatusRunning   = "running"
+	tabStatusSucceeded = "succeeded"
+	tabStatusFailed    = "failed"
+	tabStatusWaiting   = "waiting"
 )
 
 const (
@@ -63,6 +86,13 @@ const (
 	// chromeInterval bounds how stale the window chrome can be after an
 	// escalation.
 	chromeInterval = 2 * time.Second
+
+	// repoStatInterval paces the git stats: two subprocesses per active repo.
+	repoStatInterval = 15 * time.Second
+
+	// activityQuiet is how long the conversation PTY has to stay silent before
+	// the agent counts as idle. A runner redraws its spinner far faster.
+	activityQuiet = 3 * time.Second
 
 	// terminateGrace is how long a process tree gets to exit on SIGTERM before
 	// it is killed outright.

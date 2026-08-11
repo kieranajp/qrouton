@@ -9,16 +9,23 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
+// controlHooks is what the socket may change about the running session that is
+// not a window.
+type controlHooks struct {
+	adopt     func(sessionRoot string)
+	attention func(activity string)
+}
+
 // control serves the workbench port over a unix socket: one request per
 // connection, newline-delimited JSON.
 type control struct {
 	listener net.Listener
 	socket   string
 	windows  *Windows
-	adopt    func(string)
+	hooks    controlHooks
 }
 
-func serveControl(socket string, windows *Windows, adopt func(string)) (*control, error) {
+func serveControl(socket string, windows *Windows, hooks controlHooks) (*control, error) {
 	// A stale socket from a process that died without unlinking would otherwise
 	// make every later run fail to bind.
 	_ = os.Remove(socket)
@@ -26,7 +33,7 @@ func serveControl(socket string, windows *Windows, adopt func(string)) (*control
 	if err != nil {
 		return nil, err
 	}
-	c := &control{listener: listener, socket: socket, windows: windows, adopt: adopt}
+	c := &control{listener: listener, socket: socket, windows: windows, hooks: hooks}
 	go c.accept()
 	return c, nil
 }
@@ -75,7 +82,7 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		}
 		return workbench.Response{ID: id}
 	case workbench.OpClose:
-		if err := c.windows.closeWindow(req.ID); err != nil {
+		if err := c.windows.Close(req.ID); err != nil {
 			return workbench.Response{Error: err.Error()}
 		}
 		return workbench.Response{ID: req.ID}
@@ -93,7 +100,14 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		if req.Root == "" {
 			return workbench.Response{Error: ErrNoSessionRoot.Error()}
 		}
-		c.adopt(req.Root)
+		if c.hooks.adopt != nil {
+			c.hooks.adopt(req.Root)
+		}
+		return workbench.Response{}
+	case workbench.OpAttention:
+		if c.hooks.attention != nil {
+			c.hooks.attention(req.Activity)
+		}
 		return workbench.Response{}
 	default:
 		return workbench.Response{Error: unknownOperation(req.Op).Error()}

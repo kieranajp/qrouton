@@ -1,0 +1,34 @@
+/* Three voices, three jobs. Never swap them.
+   Display speaks for the product. Instruction names a field or region.
+   Machine is anything the computer said or that you could paste into a shell. */
+:root {
+  --font-display: "Space Grotesk Variable", system-ui, sans-serif;
+  --font-instruction: "Instrument Sans Variable", system-ui, sans-serif;
+  --font-machine: "JetBrains Mono Variable", ui-monospace, Menlo, monospace;
+  --font-terminal: Menlo, ui-monospace, "JetBrains Mono Variable", monospace;
+
+  /* display — headings only, always tight */
+  --display-lg: 700 31px/1.05 var(--font-display);
+  --display-md: 700 26px/1.06 var(--font-display);
+  --display-sm: 700 21px/1.1 var(--font-display);
+  --display-xs: 700 15px/1.15 var(--font-display);
+  --display-tracking: -0.03em;
+
+  /* instruction — ALWAYS uppercase, always tracked, never a sentence */
+  --instruction: 600 10px/1 var(--font-instruction);
+  --instruction-sm: 600 9.5px/1 var(--font-instruction);
+  --instruction-tracking: 0.14em;
+  --instruction-tracking-sm: 0.12em;
+
+  /* machine — body copy, values, buttons, everything else */
+  --machine-lg: 400 13.5px/1.7 var(--font-machine);
+  --machine-md: 400 12.5px/1.6 var(--font-machine);
+  --machine-sm: 400 11.5px/1.55 var(--font-machine);
+  --machine-xs: 400 10.5px/1.5 var(--font-machine);
+  --machine-bold: 700 12px/1.4 var(--font-machine);
+  --button: 700 11.5px/1 var(--font-machine);
+
+  /* terminal — inside xterm panes and code blocks */
+  --terminal: 13px/1.55 var(--font-terminal);
+  --terminal-sm: 12.5px/1.5 var(--font-terminal);
+}

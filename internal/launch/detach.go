@@ -1,10 +1,9 @@
 package launch
 
-// The workbench runs in a process of its own so the terminal qrouton was
-// started from comes straight back. Assembly stays in the foreground, where its
-// progress is worth watching; only the event loop is handed over, and the parent
-// does not return until the child answers on its control socket, because a
-// prompt with no window behind it is worse than a blocked terminal.
+// The workbench runs in a process of its own so the terminal comes straight
+// back. Only the event loop is handed over; the parent does not return until the
+// child answers on its control socket, because a prompt with no window behind it
+// is worse than a blocked terminal.
 
 import (
 	"encoding/json"
@@ -34,6 +33,9 @@ type WorkbenchSpec struct {
 	SessionRoot string   `json:"session_root,omitempty"`
 	Socket      string   `json:"socket"`
 	Argv        []string `json:"argv"`
+	Dock        bool     `json:"dock,omitempty"`
+	// Empty on the landing list, which has not resolved one yet.
+	Editor EditorCommand `json:"editor"`
 }
 
 func (s WorkbenchSpec) Marshal() string {

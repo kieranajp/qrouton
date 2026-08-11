@@ -62,26 +62,22 @@ func (m *windowManager) closeLocked(ctx context.Context, name string) {
 }
 
 func (m *windowManager) openFile(ctx context.Context, input openFileInput) (string, error) {
-	path, err := launch.ResolveSessionFile(m.root, input.Path)
+	opts, err := launch.DocumentWindow(m.root, input.Path, m.editor, input.Line)
 	if err != nil {
 		return "", err
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, err := m.open(ctx, editorWindowName, opts); err != nil {
+		return "", fmt.Errorf("open file window: %w", err)
+	}
+	if opts.Kind == workbench.KindDocument {
+		return fmt.Sprintf(renderedFileFormat, opts.Source), nil
 	}
 	if input.Line < 1 {
 		input.Line = 1
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, err := m.open(ctx, editorWindowName, workbench.WindowOptions{
-		Kind:        workbench.KindTerminal,
-		Label:       editorWindowLabel,
-		Cwd:         m.root,
-		Command:     m.editor.Args(path, input.Line),
-		CloseOnExit: true,
-	}); err != nil {
-		return "", fmt.Errorf("open editor window: %w", err)
-	}
-	rel, _ := filepath.Rel(m.root, path)
-	return fmt.Sprintf(openedFileFormat, rel, input.Line), nil
+	return fmt.Sprintf(openedFileFormat, opts.Source, input.Line), nil
 }
 
 func (m *windowManager) run(ctx context.Context, input runCommandInput) (string, error) {
@@ -216,10 +212,11 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, err := m.open(ctx, notifyWindowName, workbench.WindowOptions{
-		Kind:    workbench.KindDocument,
-		Label:   notifyWindowLabel,
-		Content: fmt.Sprintf(toastFormat, message),
-		TTL:     toastLifetime,
+		Kind:      workbench.KindDocument,
+		Label:     notifyWindowLabel,
+		Content:   fmt.Sprintf(toastFormat, message),
+		Attention: true,
+		TTL:       toastLifetime,
 	}); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}
@@ -246,7 +243,7 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	if err != nil {
 		return "", fmt.Errorf("escalate: %w", err)
 	}
-	command := []string{bin, pickSubcommand, sessionRootArg, m.root, nameArg, name}
+	command := []string{bin, pickSubcommand, sessionRootArg, m.root, escalateArg, nameArg, name}
 	if prefix := strings.TrimSpace(input.BranchPrefix); prefix != "" {
 		command = append(command, prefixArg, prefix)
 	}

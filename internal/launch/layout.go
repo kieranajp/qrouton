@@ -47,10 +47,15 @@ func OnboardArgv(qroutonBin, socket, runnerID string, refresh bool) []string {
 	return argv
 }
 
-// ShellArgv is the user shell window's command: one shell, rooted in the
-// session.
+// ShellArgv is a user shell window's command, rooted in the session.
 func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
+}
+
+// PickerArgv is the repository picker's command. No --escalate: the workbench's
+// button adds repositories to the session as it stands, whatever mode that is.
+func PickerArgv(qroutonBin, dir string) []string {
+	return []string{qroutonBin, pickSubcommand, sessionRootFlag, dir}
 }
 
 // Launch stamps the session's support files and returns what the workbench runs

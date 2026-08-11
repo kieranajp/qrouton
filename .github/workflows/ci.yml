@@ -13,6 +13,14 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      # The embedded pages are built, not checked in, so Node comes before any
+      # Go step: //go:embed fails to compile against a directory with nothing
+      # in it.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/desktop/frontend/package-lock.json
       # The workbench is a WebKit window, so the binary links cgo. GTK4 only:
       # Wails also has a GTK3 backend behind a build tag, which we do not ship.
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libwebkitgtk-6.0-dev

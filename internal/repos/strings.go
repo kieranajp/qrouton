@@ -11,9 +11,9 @@ const (
 
 	noManifestLabel = "No session manifest"
 
-	// The zero-repo empty state a scratch session shows until escalation.
+	// The zero-repo empty state a scratch session shows until repos are added.
 	emptyStateLabel = "no repositories yet"
-	emptyStateHint  = "Alt-e to escalate"
+	emptyStateHint  = "add them from the workbench"
 
 	stateClean       = "clean"
 	stateMissing     = "missing — resume to restore"
