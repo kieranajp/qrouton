@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -82,11 +83,27 @@ func sessionRelative(root, path, name string) string {
 	if real, err := filepath.EvalSymlinks(root); err == nil {
 		root = real
 	}
-	rel, err := filepath.Rel(root, path)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return name
+	if rel, ok := under(root, path); ok {
+		return rel
 	}
-	return rel
+	// thoughts/ is a symlink out of the session, so every document resolves
+	// outside root. Name it the way the session refers to it anyway, rather than
+	// falling back to whatever absolute path the caller happened to pass.
+	thoughts := filepath.Join(root, sessionpaths.ThoughtsDirName)
+	if real, err := filepath.EvalSymlinks(thoughts); err == nil {
+		if rel, ok := under(real, path); ok {
+			return filepath.Join(sessionpaths.ThoughtsDirName, rel)
+		}
+	}
+	return name
+}
+
+func under(dir, path string) (string, bool) {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return "", false
+	}
+	return rel, true
 }
 
 func frontMatter(text string) string {

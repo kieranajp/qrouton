@@ -36,3 +36,10 @@ export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocume
 
 /** openPicker opens the repository picker, or selects the one already open. */
 export const openPicker = () => Call.ByName(WINDOWS_SERVICE + ".OpenPicker");
+
+/**
+ * whenSelected runs on a window the Go side wants shown — a document the agent
+ * opened, which would otherwise render behind whatever tab is up.
+ * @param {(id: string) => void} select
+ */
+export const whenSelected = (select) => Events.On("window:select", (event) => select(event.data));

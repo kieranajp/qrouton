@@ -48,6 +48,40 @@ func TestOpenTerminalWindowCarriesItsIDInThePageURL(t *testing.T) {
 	}
 }
 
+// A document the agent opened used to render behind whatever tab was up, which
+// for most of a session is the shell. Terminals stay put: the tab strip focuses
+// the terminal it selects, and the keyboard belongs to the conversation.
+func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) {
+	r := newFakeRenderer()
+	w := newWindows(r, r.Emit, true)
+	t.Cleanup(w.stopAll)
+
+	if _, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	_, selected := r.events[selectEvent]
+	r.mu.Unlock()
+	if selected {
+		t.Fatal("a docked terminal pulled the right pane over to itself")
+	}
+
+	id, err := w.openWindow(workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md",
+		Content: "# P006\n", Format: workbench.FormatMarkdown,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if got := r.events[selectEvent]; got != id {
+		t.Fatalf("selected %v, want the document %q", got, id)
+	}
+}
+
 // escalate is the one caller that asks for focus: no agent is waiting for the
 // keyboard back once the picker is up.
 func TestOpenHonoursAFocusRequest(t *testing.T) {

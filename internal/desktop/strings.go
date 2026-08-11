@@ -52,6 +52,7 @@ const (
 	windowDataEvent = "window:data:"
 	windowExitEvent = "window:exit:"
 	windowsEvent    = "window:open"
+	selectEvent     = "window:select"
 )
 
 // A tab may only stand in for a window if it reports its process's state.

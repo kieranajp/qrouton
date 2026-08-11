@@ -149,6 +149,12 @@ func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (st
 		w.mu.Unlock()
 	}
 	w.announce()
+	// A document the agent opened behind the shell tab is a document nobody
+	// reads. Terminals are left where they are: the tab strip focuses the
+	// terminal it selects, which would take the keyboard off the conversation.
+	if docked && opts.Kind == workbench.KindDocument {
+		w.emit(selectEvent, id)
+	}
 	return id, nil
 }
 

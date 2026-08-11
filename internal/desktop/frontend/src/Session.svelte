@@ -7,6 +7,7 @@
   import StatusDot from "./lib/core/StatusDot.svelte";
   import RailItem from "./lib/session/RailItem.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
+  import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
@@ -16,7 +17,14 @@
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { attach } from "./lib/conversation.js";
-  import { closeWindow, openDocument, openPicker, openShell, surfaces } from "./lib/docked.svelte.js";
+  import {
+    closeWindow,
+    openDocument,
+    openPicker,
+    openShell,
+    surfaces,
+    whenSelected,
+  } from "./lib/docked.svelte.js";
 
   /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
   const ACTIVITY = {
@@ -75,6 +83,7 @@
   let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === focused)));
 
   onMount(() => attach(host));
+  onMount(() => whenSelected((id) => (focused = id)));
 
   let fields = $derived(session.fields);
   let activity = $derived(ACTIVITY[fields.activity] ?? ACTIVITY.idle);
@@ -87,11 +96,16 @@
         }
       : undefined,
   );
+  let written = $derived(
+    fields.documents.map((doc) => ({ tag: doc.kind, label: doc.name, meta: age(doc.at) })),
+  );
+  let listing = $state(false);
 
   // A session with no editor has nothing to open and no room here to say so.
-  async function readLatest() {
+  async function read(path) {
+    listing = false;
     try {
-      focused = await openDocument(fields.documents[0].path);
+      focused = await openDocument(path);
     } catch {}
   }
   // The picker writes the manifest and the chrome poll notices, so nothing here
@@ -170,7 +184,18 @@
         {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
         <span class="badge" class:quiet={fields.activity === "idle"} style:--tone={activity.fill}
           >{activity.label}</span>
-        <LatestDocument {latest} count={fields.documents.length} onOpen={readLatest} />
+        <LatestDocument
+          {latest}
+          count={fields.documents.length}
+          open={listing}
+          onToggle={() => (listing = !listing)}>
+          <Menu
+            label="Written this session"
+            items={written}
+            align="right"
+            width={320}
+            onSelect={(_, i) => read(fields.documents[i].path)} />
+        </LatestDocument>
       </PaneHeader>
       <TerminalPane>
         <div class="host" bind:this={host}></div>

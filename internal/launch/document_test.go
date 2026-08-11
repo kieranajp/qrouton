@@ -65,6 +65,36 @@ func TestDocumentWindowRendersMarkdownAndEditsEverythingElse(t *testing.T) {
 	}
 }
 
+// A session's thoughts/ is a symlink out of the session, so every document
+// resolves outside the root and the relative name used to fall back to whatever
+// the caller passed — an absolute path, when the agent had one to hand, which
+// the pane then printed above the title.
+func TestDocumentWindowNamesAParkedDocumentRelativeToTheSession(t *testing.T) {
+	root := documentRoot(t, map[string]string{"qrouton.json": "{}"})
+	parked := filepath.Join(t.TempDir(), "session-slug")
+	if err := os.MkdirAll(filepath.Join(parked, "shared", "plans"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doc := filepath.Join(parked, "shared", "plans", "P007.md")
+	if err := os.WriteFile(doc, []byte("# Document panes\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(parked, filepath.Join(root, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+
+	want := filepath.Join("thoughts", "shared", "plans", "P007.md")
+	for _, name := range []string{want, doc} {
+		opts, err := DocumentWindow(root, name, testDocumentEditor, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if opts.Source != want {
+			t.Errorf("opening %q sourced the pane at %q, want %q", name, opts.Source, want)
+		}
+	}
+}
+
 // The tab has room for a title, not a path — and a document's own first heading
 // is the title it chose.
 func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {

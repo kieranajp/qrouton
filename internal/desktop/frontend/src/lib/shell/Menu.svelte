@@ -1,6 +1,6 @@
 <script>
-  /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, [attribute: string]: any}} */
-  let { label, items = [], width = 212, align = "left", offsetY = 32, ...rest } = $props();
+  /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
+  let { label, items = [], width = 212, align = "left", offsetY = 32, onSelect, ...rest } = $props();
 </script>
 
 <div
@@ -15,13 +15,13 @@
     {#if item === "-"}
       <div class="rule"></div>
     {:else}
-      <div class="item" class:active={item.active}>
+      <button class="item" class:active={item.active} onclick={() => onSelect?.(item, i)}>
         {#if item.tag}
           <span class="tag" class:plan={item.tag === "PLAN"}>{item.tag}</span>
         {/if}
         <span class="label">{item.label}</span>
         {#if item.meta}<span class="meta">{item.meta}</span>{/if}
-      </div>
+      </button>
     {/if}
   {/each}
 </div>
@@ -59,6 +59,9 @@
     gap: 10px;
     cursor: pointer;
     background: transparent;
+    border: 0;
+    text-align: left;
+    width: 100%;
     font: var(--machine-sm);
     color: var(--text-secondary);
   }

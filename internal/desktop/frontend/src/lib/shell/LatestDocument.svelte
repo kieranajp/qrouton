@@ -1,13 +1,16 @@
 <script>
   import CapsLabel from "../core/CapsLabel.svelte";
+  import { dismissible } from "../core/dismiss.js";
 
   // An agent window never steals focus, so this line is the whole attention
   // mechanism: tag, name and age, never a bare count.
   /** @type {{latest?: {tag: string, name: string, age: string}, count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, onOpen?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
   let { latest, count = 0, open = false, unseen = false, onToggle, onOpen, children, ...rest } = $props();
+
+  const dismiss = () => open && onToggle?.();
 </script>
 
-<div class="latest" {...rest}>
+<div class="latest" use:dismissible={dismiss} {...rest}>
   <CapsLabel tone="dim">Wrote</CapsLabel>
   {#if !latest}
     <span class="nothing">nothing yet</span>
