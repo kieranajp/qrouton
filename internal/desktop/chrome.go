@@ -85,7 +85,7 @@ func pushChrome(reg *Sessions, root string, measured map[string][]status.RepoSta
 	if shown.slug() != "" {
 		// A terminal id and an activity are this workbench's own knowledge, so only
 		// the sessions it has booted carry them.
-		fields.Sessions = status.Sessions(root)
+		fields.Sessions = reg.railOrder(status.Sessions(root))
 		for i, row := range fields.Sessions {
 			if state := reg.bySlug(row.Slug); state != nil {
 				fields.Sessions[i].Terminal = state.terminal

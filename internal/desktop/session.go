@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -167,6 +168,10 @@ type Sessions struct {
 	// history is the order sessions were shown in, most recent last, so a
 	// supervisor exiting can hand the window back to the one before it.
 	history []*sessionState
+	// rail is the order the rail draws in, fixed by the first poll and only ever
+	// appended to. A row's position addresses it from the keyboard, so a position
+	// that moved would rename every shortcut under the user's fingers.
+	rail []string
 }
 
 func newSessions() *Sessions {
@@ -389,6 +394,43 @@ func without(history []*sessionState, state *sessionState) []*sessionState {
 		}
 	}
 	return kept
+}
+
+// railOrder puts a poll's rows in the order the rail was first drawn in. A session
+// assembled since then goes to the front, because it is the most recent and that
+// is the rule the rest of the list follows; nothing else moves a row.
+func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
+	found := make(map[string]status.SessionRow, len(rows))
+	for _, row := range rows {
+		found[row.Slug] = row
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	placed := make(map[string]bool, len(s.rail))
+	for _, slug := range s.rail {
+		placed[slug] = true
+	}
+	// rows arrive most recent first, so prepending the batch whole keeps them in
+	// that order rather than reversing it.
+	var fresh []string
+	for _, row := range rows {
+		if !placed[row.Slug] {
+			placed[row.Slug] = true
+			fresh = append(fresh, row.Slug)
+		}
+	}
+	if len(fresh) > 0 {
+		s.rail = append(fresh, s.rail...)
+	}
+	out := make([]status.SessionRow, 0, len(rows))
+	for _, slug := range s.rail {
+		// A session deleted from disk keeps its place in the sequence, so it
+		// returns to the same position rather than landing at the end.
+		if row, ok := found[slug]; ok {
+			out = append(out, row)
+		}
+	}
+	return out
 }
 
 // slugFor is a session's key: the name of its directory. The landing path has no

@@ -12,9 +12,10 @@
   // The rail has room for three repository names, and counts the rest.
   const NAMED = 3;
 
-  /** @type {{initials?: string, name?: string, repos?: {name: string, role: string}[], live?: boolean, activity?: 'working'|'waiting'|'idle', unseen?: number, selected?: boolean, [attribute: string]: any}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string, role: string}[], live?: boolean, activity?: 'working'|'waiting'|'idle', unseen?: number, selected?: boolean, [attribute: string]: any}} */
   let {
     initials,
+    shortcut = "",
     name,
     repos = [],
     live = false,
@@ -34,8 +35,8 @@
 </script>
 
 <button type="button" class="item" class:selected class:cold={!selected && !live} {...rest}>
-  <div class="avatar">
-    {initials}
+  <div class="avatar" class:keyed={shortcut}>
+    {shortcut || initials}
     {#if mark?.kind === "dot"}
       <StatusDot
         state={mark.state}
@@ -85,6 +86,15 @@
     opacity: 0.78;
   }
 
+  .item:hover:not(.selected) {
+    border-color: var(--border-default);
+    background: var(--surface-raised);
+  }
+
+  .item:hover .name {
+    color: var(--text-primary);
+  }
+
   .selected {
     border-color: var(--accent-action);
     background: var(--surface-raised);
@@ -109,6 +119,12 @@
     background: var(--accent-action);
     border: none;
     color: var(--text-on-accent);
+  }
+
+  /* A shortcut is punctuation, not a word: the initials' weight makes it shout. */
+  .keyed {
+    font: var(--machine-md);
+    font-size: 11px;
   }
 
   .unseen {

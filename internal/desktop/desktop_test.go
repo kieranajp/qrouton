@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -1727,5 +1728,108 @@ func TestAHandoverAdoptWithoutALandingSessionRefuses(t *testing.T) {
 	}
 	if state := reg.current(); state == nil || state.slug() != "octopus" {
 		t.Fatalf("the session on screen is %v, want the one already up", state)
+	}
+}
+
+// railSlugs is the order the rail would draw a poll's rows in.
+func railSlugs(reg *Sessions, rows []status.SessionRow) []string {
+	out := make([]string, 0, len(rows))
+	for _, row := range reg.railOrder(rows) {
+		out = append(out, row.Slug)
+	}
+	return out
+}
+
+// polled is what status.Sessions returns: most recently opened first.
+func polled(slugs ...string) []status.SessionRow {
+	rows := make([]status.SessionRow, 0, len(slugs))
+	for _, slug := range slugs {
+		rows = append(rows, status.SessionRow{Slug: slug, Name: slug})
+	}
+	return rows
+}
+
+// A row's position is how the keyboard addresses it, so re-sorting a poll would
+// rename every shortcut under the user's fingers. Showing a session stamps it,
+// which is exactly what would move it.
+func TestTheRailKeepsTheOrderItWasFirstDrawnIn(t *testing.T) {
+	reg := newSessions()
+	launch := polled("kraken", "octopus", "webhook")
+	if got := railSlugs(reg, launch); !reflect.DeepEqual(got, []string{"kraken", "octopus", "webhook"}) {
+		t.Fatalf("the rail's first draw = %v, want the poll's own order", got)
+	}
+	// A later poll with octopus now the most recently opened.
+	for _, rows := range [][]status.SessionRow{
+		polled("octopus", "kraken", "webhook"),
+		polled("webhook", "octopus", "kraken"),
+	} {
+		if got := railSlugs(reg, rows); !reflect.DeepEqual(got, []string{"kraken", "octopus", "webhook"}) {
+			t.Fatalf("a poll reordered the rail to %v", got)
+		}
+	}
+}
+
+// Creating a session is a deliberate act and it is the most recent thing there
+// is, so it takes the first row and the numbers below it shift.
+func TestASessionAssembledMidLifetimeTakesTheFirstRow(t *testing.T) {
+	reg := newSessions()
+	railSlugs(reg, polled("kraken", "octopus"))
+
+	if got := railSlugs(reg, polled("fresh", "kraken", "octopus")); !reflect.DeepEqual(got, []string{"fresh", "kraken", "octopus"}) {
+		t.Fatalf("a new session landed at %v, want the front", got)
+	}
+	// Two at once keep the order they were polled in rather than reversing.
+	if got := railSlugs(reg, polled("newest", "second", "fresh", "kraken", "octopus")); !reflect.DeepEqual(got, []string{"newest", "second", "fresh", "kraken", "octopus"}) {
+		t.Fatalf("a batch of new sessions landed as %v", got)
+	}
+}
+
+// Nothing in the app deletes a session, so this only follows an rm -rf. Keeping
+// the slug's place means it comes back where it was rather than at the front.
+func TestASessionGoneFromDiskKeepsItsPlaceForWhenItReturns(t *testing.T) {
+	reg := newSessions()
+	railSlugs(reg, polled("kraken", "octopus", "webhook"))
+
+	if got := railSlugs(reg, polled("kraken", "webhook")); !reflect.DeepEqual(got, []string{"kraken", "webhook"}) {
+		t.Fatalf("rail without octopus = %v", got)
+	}
+	if got := railSlugs(reg, polled("octopus", "kraken", "webhook")); !reflect.DeepEqual(got, []string{"kraken", "octopus", "webhook"}) {
+		t.Fatalf("octopus came back at %v, not the place it held", got)
+	}
+}
+
+// The rail draws selection from the session on screen, so the top row is only
+// selected while it is the one being shown.
+func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	sessionDir(t, opts.Root, "kraken")
+	go func() { _ = run(r, term, windows, opts) }()
+	<-r.opened
+	shownSession(t, reg)
+
+	// The rail freezes on the first poll, with the session the workbench opened on
+	// at the top because showing it stamped it.
+	pushChrome(reg, opts.Root, nil, nil, r.Emit)
+	if err := reg.Show("kraken"); err != nil {
+		t.Fatal(err)
+	}
+	pushChrome(reg, opts.Root, nil, nil, r.Emit)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fields, ok := r.events[chromeEvent].(status.Fields)
+	if !ok {
+		t.Fatalf("no chrome pushed: %v", r.events)
+	}
+	if fields.Slug != "kraken" {
+		t.Fatalf("chrome names %q as shown, want the session Show revealed", fields.Slug)
+	}
+	if len(fields.Sessions) < 2 {
+		t.Fatalf("rail has %d rows, want both sessions", len(fields.Sessions))
+	}
+	if fields.Sessions[0].Slug == fields.Slug {
+		t.Fatal("switching moved the session to the top row; the rail's order is not frozen")
 	}
 }

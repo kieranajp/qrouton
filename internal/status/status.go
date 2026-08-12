@@ -151,8 +151,9 @@ func phase(root string, m session.Manifest) string {
 	}
 }
 
-// Sessions lists every session under the sessions root, most recently shown
-// first. It is drawn before any session is on screen, so it takes no session.
+// Sessions lists every session under the sessions root, most recently opened
+// first and never-opened ones last by name. That order seeds the rail once; what
+// the rail then draws is the caller's, because a row's position addresses it.
 func Sessions(root string) []SessionRow {
 	found, err := session.Scan(root)
 	if err != nil {

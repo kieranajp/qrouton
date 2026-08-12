@@ -18,6 +18,7 @@
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
   import { show } from "./lib/sessions.js";
+  import { position, shortcut } from "./lib/shortcuts.js";
   import {
     closeWindow,
     openDocument,
@@ -91,6 +92,20 @@
 
   onMount(() => whenSelected(() => fields.slug, select));
 
+  // A rail row's number is its position, so it moves when showing a session
+  // re-sorts the list. Nothing here reaches a floating window's own page.
+  onMount(() => {
+    const onKey = (event) => {
+      const at = position(event);
+      const row = at && fields.sessions[at - 1];
+      if (!row) return;
+      event.preventDefault();
+      show(row.slug);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+
   let activity = $derived(ACTIVITY[fields.activity] ?? ACTIVITY.idle);
   let latest = $derived(
     fields.documents.length
@@ -145,9 +160,10 @@
   <div class="panels" bind:clientWidth={panels}>
     <div class="rail" bind:clientWidth={rail}>
       <CapsLabel>Sessions</CapsLabel>
-      {#each fields.sessions as row (row.slug)}
+      {#each fields.sessions as row, i (row.slug)}
         <RailItem
           initials={row.initials}
+          shortcut={shortcut(i)}
           name={row.name}
           repos={row.repos}
           live={!!row.terminal}
