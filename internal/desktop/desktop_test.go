@@ -1303,10 +1303,14 @@ func TestShowingASessionStampsOnlyThatOne(t *testing.T) {
 	<-r.opened
 	shownSession(t, reg)
 
-	first, ok := session.LastOpened(opts.SessionRoot)
-	if !ok {
-		t.Fatal("the session the workbench opened on was never stamped")
-	}
+	// The stamp lands inside the shown hook, which the session reaching the
+	// screen does not order against.
+	var first time.Time
+	waitFor(t, "the workbench to stamp the session it opened on", func() bool {
+		var ok bool
+		first, ok = session.LastOpened(opts.SessionRoot)
+		return ok
+	})
 
 	kraken := sessionDir(t, opts.Root, "kraken")
 	if err := reg.Show("kraken"); err != nil {
