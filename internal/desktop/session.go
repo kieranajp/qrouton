@@ -145,8 +145,11 @@ type booting struct {
 	agent func(sessionRoot, socket string, resume bool) (argv, env []string, err error)
 	serve func(state *sessionState, socket string) (io.Closer, error)
 	// shown puts a session on screen: its title, its shell, its record.
-	shown    func(state *sessionState)
-	teardown func(state *sessionState)
+	shown       func(state *sessionState)
+	teardown    func(state *sessionState)
+	uncommitted func(sessionRoot string) ([]string, error)
+	cleanup     func(sessionRoot string) error
+	reveal      func(sessionRoot string) error
 }
 
 // Sessions is the workbench's sessions, which of them is on screen, and the
@@ -200,6 +203,58 @@ func (s *Sessions) Show(slug string) error {
 		state = booted
 	}
 	s.reveal(state)
+	return nil
+}
+
+// Reveal shows a session's directory in the file manager. It takes no lock and
+// wakes nothing: which session is on screen and what the rail draws are both
+// unchanged by it.
+func (s *Sessions) Reveal(slug string) error {
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	return s.boot.reveal(root)
+}
+
+// Uncommitted names the repositories a cleanup would take changes from. It is a
+// git status per repository, so it answers a click and never a poll.
+func (s *Sessions) Uncommitted(slug string) ([]string, error) {
+	root := s.boot.root(slug)
+	if root == "" {
+		return nil, unknownSession(slug)
+	}
+	dirty, err := s.boot.uncommitted(root)
+	if err != nil {
+		return nil, err
+	}
+	if dirty == nil {
+		// A nil slice marshals as JSON null, which reaches a .length on the page.
+		return []string{}, nil
+	}
+	return dirty, nil
+}
+
+// Cleanup ends a session and removes it from disk: its worktrees and its
+// directory go, and the mirrors, its branch inside them and its documents stay.
+func (s *Sessions) Cleanup(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	// Retiring first is what stops a supervisor running on an unlinked directory
+	// and what stops the window recorder writing the manifest back after removal.
+	if state := s.bySlug(slug); state != nil {
+		s.retire(state)
+	} else if pid, alive := session.AgentAlive(root); alive {
+		return agentAlreadyRunning(filepath.Base(root), pid)
+	}
+	if err := s.boot.cleanup(root); err != nil {
+		return err
+	}
+	s.touch()
 	return nil
 }
 
@@ -424,7 +479,7 @@ func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	}
 	out := make([]status.SessionRow, 0, len(rows))
 	for _, slug := range s.rail {
-		// A session deleted from disk keeps its place in the sequence, so it
+		// A session gone from disk keeps its place in the sequence, so it
 		// returns to the same position rather than landing at the end.
 		if row, ok := found[slug]; ok {
 			out = append(out, row)

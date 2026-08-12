@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -50,7 +51,7 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 		methods []string
 	}{
 		{Term{}, []string{"Start", "Write", "Resize"}},
-		{Sessions{}, []string{"Show"}},
+		{Sessions{}, []string{"Show", "Reveal", "Uncommitted", "Cleanup"}},
 		{Windows{}, []string{
 			"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell", "OpenDocument",
 			"OpenPicker", "OpenOnboard",
@@ -124,7 +125,7 @@ func TestTheHandlerServesThePaletteBesideTheEmbeddedTree(t *testing.T) {
 	if got := recorder.Header().Get(contentTypeHeader); got != theme.MediaType {
 		t.Fatalf("served the palette as %q, not %q", got, theme.MediaType)
 	}
-	for _, name := range []string{theme.RoleAccentAction, theme.RoleStateWaiting} {
+	for _, name := range []string{theme.RoleAccentAction, theme.RoleStateWaiting, theme.RoleActionDestructive} {
 		if !strings.Contains(recorder.Body.String(), "--"+name+":") {
 			t.Fatalf("the served palette declares no --%s", name)
 		}
@@ -142,6 +143,33 @@ func TestEveryPageLinksThePalette(t *testing.T) {
 		if !strings.Contains(recorder.Body.String(), theme.Path) {
 			t.Fatalf("%s does not link %s", url, theme.Path)
 		}
+	}
+}
+
+// Enter confirms, which only holds while the dialog puts the keyboard on the
+// button that confirms. Focus is wiring the page owns and no harness here can
+// observe, so the wiring is what is read.
+func TestTheConfirmDialogFocusesTheButtonThatConfirms(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/shell/Confirm.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	if !strings.Contains(body, `querySelector("[data-confirm]")`) {
+		t.Fatal("the dialog does not focus the button carrying the confirm hook")
+	}
+	buttons := regexp.MustCompile(`(?s)<Button[^>]*>`).FindAllString(body, -1)
+	var hooked []string
+	for _, button := range buttons {
+		if strings.Contains(button, "data-confirm") {
+			hooked = append(hooked, button)
+		}
+	}
+	if len(hooked) != 1 {
+		t.Fatalf("%d of the dialog's buttons carry the confirm hook, want exactly the confirming one", len(hooked))
+	}
+	if !strings.Contains(hooked[0], `variant="destructive"`) {
+		t.Fatalf("the confirm hook sits on %q, not on the destructive button", hooked[0])
 	}
 }
 

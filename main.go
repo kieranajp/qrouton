@@ -342,6 +342,7 @@ func workbenchProcess(marshalled string) error {
 		Agent:       agentCommand(cfg, bin, spec.Runner, spec.Editor),
 		Shell:       shellArgv(bin),
 		Picker:      pickerArgv(bin),
+		Reveal:      launch.RevealArgv,
 		Onboarding:  func(socket string) []string { return launch.OnboardPaneArgv(bin, socket) },
 		Document:    documentWindow(spec.Editor),
 		Dock:        spec.Dock,

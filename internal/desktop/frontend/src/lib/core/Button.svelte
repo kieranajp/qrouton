@@ -35,6 +35,12 @@
     box-shadow: var(--shadow-cube);
   }
 
+  .destructive {
+    background: var(--action-destructive);
+    color: var(--text-on-accent);
+    box-shadow: var(--shadow-cube);
+  }
+
   .secondary,
   .ghost,
   .dashed {
@@ -70,7 +76,8 @@
     color: var(--text-primary);
   }
 
-  .primary:hover:not(:disabled) {
+  .primary:hover:not(:disabled),
+  .destructive:hover:not(:disabled) {
     color: var(--text-on-accent);
   }
 
@@ -78,7 +85,8 @@
     transform: translate(2px, 2px);
   }
 
-  .primary:active:not(:disabled) {
+  .primary:active:not(:disabled),
+  .destructive:active:not(:disabled) {
     box-shadow: 1px 1px 0 var(--ctp-surface-0);
   }
 

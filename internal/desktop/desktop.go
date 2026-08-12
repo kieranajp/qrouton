@@ -9,6 +9,7 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -49,6 +50,9 @@ type Options struct {
 	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
 	// Picker builds the repository picker's command, as Shell does.
 	Picker func(sessionRoot string) []string
+	// Reveal builds the command that shows a session's directory in the file
+	// manager, and is a function for the same reason Shell is.
+	Reveal func(sessionRoot string) []string
 	// Onboarding builds the command that assembles a new session. It takes the
 	// control socket, not a root: it names the session it makes by adopting it.
 	Onboarding func(socket string) []string
@@ -121,6 +125,37 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 			record.save(state)
 		},
 		teardown: windows.stop,
+		// The destructive path addresses a session by the sessions root and the
+		// manifest's slug, so opts.Root is what it takes and not the session's own.
+		uncommitted: func(root string) ([]string, error) {
+			m, err := session.Load(root)
+			if err != nil {
+				return nil, err
+			}
+			return session.DirtyWorktrees(opts.Root, m)
+		},
+		cleanup: func(root string) error {
+			m, err := session.Load(root)
+			if err != nil {
+				return err
+			}
+			if dir := filepath.Base(root); m.Slug != dir {
+				return mismatchedManifest(dir, m.Slug)
+			}
+			return session.Delete(opts.Root, m)
+		},
+		reveal: func(root string) error {
+			if opts.Reveal == nil {
+				return ErrNoRevealCommand
+			}
+			argv := opts.Reveal(root)
+			if len(argv) == 0 {
+				return ErrNoRevealCommand
+			}
+			// open(1) hands the request to the desktop and exits, so waiting on it
+			// costs nothing and turns a bad path into an error the page can show.
+			return exec.Command(argv[0], argv[1:]...).Run()
+		},
 	}
 	go watchChrome(ctx, reg, opts.Root, r.Emit)
 

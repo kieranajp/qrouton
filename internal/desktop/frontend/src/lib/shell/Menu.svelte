@@ -17,7 +17,11 @@
     {#if item === "-"}
       <div class="rule"></div>
     {:else}
-      <button class="item" class:active={item.active} onclick={() => onSelect?.(item, i)}>
+      <button
+        class="item"
+        class:active={item.active}
+        class:destructive={item.tone === "destructive"}
+        onclick={() => onSelect?.(item, i)}>
         {#if item.status}
           <StatusDot state={item.status === "succeeded" ? "success" : item.status} size={7} />
         {/if}
@@ -75,6 +79,15 @@
   .item:hover {
     background: var(--surface-raised);
     color: var(--text-primary);
+  }
+
+  .item.destructive,
+  .item.destructive:hover {
+    color: var(--action-destructive);
+  }
+
+  .item.destructive:hover {
+    background: color-mix(in srgb, var(--action-destructive) 14%, var(--surface-raised));
   }
 
   .tag {
