@@ -1824,6 +1824,10 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	<-r.opened
 	shownSession(t, reg)
 
+	waitFor(t, "the workbench to stamp the session it opened on", func() bool {
+		_, stamped := session.LastOpened(opts.SessionRoot)
+		return stamped
+	})
 	// The rail freezes on the first poll, with the session the workbench opened on
 	// at the top because showing it stamped it.
 	pushChrome(reg, opts.Root, nil, nil, r.Emit)
