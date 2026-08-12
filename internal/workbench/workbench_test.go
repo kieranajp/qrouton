@@ -266,7 +266,10 @@ func TestPickerCarriesItsSessionAndDeadlineOverTheSocket(t *testing.T) {
 	if got.Op != OpPicker || got.Root != "/sessions/octopus" || got.Picker == nil {
 		t.Fatalf("picker request = %+v", got)
 	}
-	if *got.Picker != req {
+	// A round-tripped time answers to a different location than the one that
+	// made it, so the instant is what carries, not the struct.
+	if got.Picker.SessionRoot != req.SessionRoot || got.Picker.Name != req.Name ||
+		got.Picker.Prefix != req.Prefix || !got.Picker.Deadline.Equal(req.Deadline) {
 		t.Fatalf("picker request = %+v, want %+v", *got.Picker, req)
 	}
 }
