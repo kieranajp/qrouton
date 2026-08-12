@@ -97,9 +97,7 @@ func TestRecordingWaitsForASession(t *testing.T) {
 	t.Cleanup(windows.stopAll)
 
 	dir := t.TempDir()
-	if err := reg.adopt(dir, false); err != nil {
-		t.Fatal(err)
-	}
+	reg.reveal(reg.add(dir, []string{"/bin/cat"}, nil))
 	record.save(owner)
 	if _, err := session.Load(dir); err == nil {
 		t.Fatal("recording invented a manifest for a directory that is not a session")

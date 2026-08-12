@@ -54,8 +54,11 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 		{Sessions{}, []string{"Show", "Reveal", "Uncommitted", "Cleanup"}},
 		{Windows{}, []string{
 			"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell", "OpenDocument",
-			"OpenPicker", "OpenOnboard",
 		}},
+		{Assembly{}, []string{"Prefixes", "Runners", "Check", "CheckSlug", "Preview", "Fetch", "Create"}},
+		{Repositories{}, []string{"Cached", "Refresh"}},
+		{Orgs{}, []string{"List"}},
+		{Picker{}, []string{"Load", "Confirm", "Cancel"}},
 	} {
 		typ := reflect.TypeOf(tc.service)
 		qualified := typ.PkgPath() + "." + typ.Name()

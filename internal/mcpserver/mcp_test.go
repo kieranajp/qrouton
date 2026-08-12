@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -39,6 +41,9 @@ type fakeHost struct {
 	lists  int
 
 	live map[string]bool
+
+	pickers   []workbench.PickerRequest
+	pickerErr error
 
 	text      string
 	readErr   error
@@ -104,6 +109,13 @@ func (h *fakeHost) List(_ context.Context) ([]string, error) {
 }
 
 func (h *fakeHost) Adopt(context.Context, string, bool) error { return nil }
+
+func (h *fakeHost) Picker(_ context.Context, req workbench.PickerRequest) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.pickers = append(h.pickers, req)
+	return h.pickerErr
+}
 
 // drop takes a window away behind the manager's back, the way a user closing a
 // window by hand does.
@@ -503,12 +515,15 @@ func TestNotifyOpensAnExpiringToastAndRingsTheSessionSound(t *testing.T) {
 	}
 }
 
-func TestEscalateOpensTheFocusedPicker(t *testing.T) {
+// The picker is the running workbench's to draw, over the session escalate
+// names. Nothing is spawned and nothing takes the keyboard, so the tool opens no
+// window at all.
+func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	shortEscalatePoll(t, 200*time.Millisecond)
 
 	// A cancelled stanza lets escalate return promptly once its poll notices it,
-	// so the test doesn't wait out the full timeout to inspect the window.
+	// so the test doesn't wait out the full timeout.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
@@ -516,6 +531,7 @@ func TestEscalateOpensTheFocusedPicker(t *testing.T) {
 		})
 	}()
 
+	before := time.Now()
 	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry", BranchPrefix: "fix"})
 	if err != nil {
 		t.Fatal(err)
@@ -523,24 +539,29 @@ func TestEscalateOpensTheFocusedPicker(t *testing.T) {
 	if message != escalationCancelledMessage {
 		t.Fatalf("message = %q, want the cancelled message", message)
 	}
+	if len(host.opens) != 0 {
+		t.Fatalf("escalate opened %+v; the workbench draws the picker itself", host.opens)
+	}
+	if len(host.pickers) != 1 || host.pickers[0].SessionRoot != dir {
+		t.Fatalf("escalate queued %+v, want one request for its own session", host.pickers)
+	}
+	// A session with no repositories yet has no branch, so the picker needs the
+	// name and prefix the agent proposed to cut one.
+	if got := host.pickers[0]; got.Name != "webhook retry" || got.Prefix != "fix" {
+		t.Fatalf("queued request = %+v, want the name and prefix escalate was given", got)
+	}
+	// The deadline travels with the request, so the workbench never draws a picker
+	// whose answer nothing is waiting for.
+	if got := host.pickers[0].Deadline; !got.After(before) {
+		t.Fatalf("queued deadline = %s, want one ahead of the request", got)
+	}
+}
 
-	bin, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	opts := host.opens[0]
-	if opts.Kind != workbench.KindTerminal {
-		t.Fatalf("picker kind = %q, want %q", opts.Kind, workbench.KindTerminal)
-	}
-	want := []string{bin, pickSubcommand, sessionRootArg, dir, escalateArg, nameArg, "webhook retry", prefixArg, "fix"}
-	if !slices.Equal(opts.Command, want) {
-		t.Fatalf("picker command = %v, want %v", opts.Command, want)
-	}
-	if !opts.Focus {
-		t.Fatal("the picker opened without keyboard focus; no agent is waiting for the keyboard back")
-	}
-	if !opts.CloseOnExit {
-		t.Fatal("the picker window outlives the picker")
+func TestEscalateReportsAWorkbenchThatCannotDrawThePicker(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.pickerErr = errors.New("unreachable")
+	if _, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"}); err == nil {
+		t.Fatal("escalate succeeded with no workbench to draw the picker")
 	}
 }
 
@@ -682,5 +703,20 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	}
 	for name := range advertised {
 		t.Errorf("tool %q is advertised but no longer part of the surface", name)
+	}
+}
+
+// A struct tag cannot interpolate a slice, so the escalate tool's prefix
+// vocabulary is written out by hand. This is what holds it to the one list the
+// picker actually offers.
+func TestEscalatePrefixSchemaEnumeratesTheAssemblyPrefixes(t *testing.T) {
+	field, ok := reflect.TypeFor[escalateInput]().FieldByName("BranchPrefix")
+	if !ok {
+		t.Fatal("escalateInput has no BranchPrefix field")
+	}
+	description := field.Tag.Get("jsonschema")
+	prefixes := assembly.Prefixes()
+	if want := "one of " + strings.Join(prefixes, ", "); description != want {
+		t.Fatalf("branch_prefix description = %q, want %q", description, want)
 	}
 }

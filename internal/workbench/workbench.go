@@ -75,9 +75,22 @@ type WindowHost interface {
 	// tell "you closed it" from a transport failure.
 	Exists(ctx context.Context, id string) (bool, error)
 	List(ctx context.Context) ([]string, error)
-	// Adopt names the session onboarding chose after the process started. boot asks
-	// the workbench to start its agent, since the caller hands over no terminal.
-	Adopt(ctx context.Context, sessionRoot string, boot bool) error
+	// Picker asks for the repository picker over a session. It queues on that
+	// session rather than raising anything, so a background agent's escalation
+	// does not take the screen from whatever the user is watching.
+	Picker(ctx context.Context, req PickerRequest) error
+}
+
+// PickerRequest is an escalation waiting on a session. Name is what the agent
+// proposes to call the work and Prefix the prefix a branch is cut with, both of
+// which a session with repositories already has answers for. Deadline travels
+// with the request because the workbench never learns that the caller gave up
+// waiting: past it, drawing the picker asks for an answer nobody is polling for.
+type PickerRequest struct {
+	SessionRoot string    `json:"session_root"`
+	Name        string    `json:"name,omitempty"`
+	Prefix      string    `json:"prefix,omitempty"`
+	Deadline    time.Time `json:"deadline,omitempty"`
 }
 
 // Handle identifies a running desktop process across the exec boundary.

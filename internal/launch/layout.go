@@ -33,35 +33,9 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, ed
 	return argv
 }
 
-// OnboardArgv is the conversation terminal's first command when no session has
-// been chosen yet: the landing list runs in the PTY and replaces itself with the
-// supervisor there, so a session has one long-lived terminal rather than two.
-func OnboardArgv(qroutonBin, socket, runnerID string, refresh bool) []string {
-	argv := []string{qroutonBin, onboardSubcommand, socketFlag, socket}
-	if runnerID != "" {
-		argv = append(argv, runnerFlag, runnerID)
-	}
-	if refresh {
-		argv = append(argv, refreshFlag)
-	}
-	return argv
-}
-
-// OnboardPaneArgv assembles a session in a pane. There is no terminal here worth
-// handing over, so it adopts and exits and the workbench boots the agent.
-func OnboardPaneArgv(qroutonBin, socket string) []string {
-	return []string{qroutonBin, onboardSubcommand, socketFlag, socket, adoptOnlyFlag}
-}
-
 // ShellArgv is a user shell window's command, rooted in the session.
 func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
-}
-
-// PickerArgv is the repository picker's command. No --escalate: the workbench's
-// button adds repositories to the session as it stands, whatever mode that is.
-func PickerArgv(qroutonBin, dir string) []string {
-	return []string{qroutonBin, pickSubcommand, sessionRootFlag, dir}
 }
 
 // RevealArgv shows a directory in Finder. Revealing rather than opening leaves

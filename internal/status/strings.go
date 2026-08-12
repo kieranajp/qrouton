@@ -1,6 +1,6 @@
 package status
 
-// The window's copy: mode, phase, document-kind and repo-role labels.
+// The window's copy: mode, phase and document-kind labels.
 
 const (
 	modeAssistantLabel = "ASSISTANT"
@@ -10,10 +10,6 @@ const (
 	phaseResearch  = "Research"
 	phasePlan      = "Plan"
 	phaseImplement = "Implement"
-
-	// Roles say what the agent may do, not what the file mode is.
-	roleEditing   = "editing"
-	roleReference = "reference"
 
 	kindPlan     = "PLAN"
 	kindSpec     = "SPEC"

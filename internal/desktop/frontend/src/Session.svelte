@@ -16,6 +16,9 @@
   import DockedDocument from "./lib/DockedDocument.svelte";
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import SessionTerminal from "./lib/SessionTerminal.svelte";
+  import Overlay from "./lib/assembly/Overlay.svelte";
+  import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
+  import { pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
@@ -25,8 +28,6 @@
   import {
     closeWindow,
     openDocument,
-    openOnboard,
-    openPicker,
     openShell,
     surfaces,
     whenSelected,
@@ -86,8 +87,8 @@
   let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === focused)));
   const select = (id) => (focus = focusIn(focus, fields.slug, id));
 
-  // The session on screen may have no rail row yet: onboarding names the session
-  // it assembles only once the window is already up.
+  // The session on screen may have no rail row yet: a session is named by
+  // adopting it, which happens once the window is already up.
   let mounted = $derived([
     ...(fields.terminal ? [{ terminal: fields.terminal, slug: fields.slug }] : []),
     ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
@@ -128,20 +129,6 @@
     listing = false;
     try {
       select(await openDocument(path));
-    } catch {}
-  }
-  // The picker writes the manifest and the chrome poll notices, so nothing here
-  // waits on it.
-  async function addRepos() {
-    try {
-      select(await openPicker());
-    } catch {}
-  }
-  // Onboarding names the session it assembles by adopting it, and the workbench
-  // switches to it then; nothing here waits.
-  async function newSession() {
-    try {
-      select(await openOnboard());
     } catch {}
   }
   const ROW_MENU = [
@@ -218,6 +205,24 @@
     keyboard++;
   }
 
+  let assembling = $state(false);
+  // An escalation is the shown session's own pending request, so switching
+  // session takes its picker with it. Add-repos is this page's, and belongs to
+  // the session it was pressed on for the same reason.
+  let added = $state("");
+  let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
+
+  // An overlay covering the terminal hands the keyboard back when it goes, the
+  // same way the rail's menu and its confirm do. Watching the state rather than
+  // the dismissal catches the picker the backend closes, which no handler here
+  // ever sees.
+  let covered = $derived(assembling || picker);
+  let wasCovered = false;
+  $effect(() => {
+    if (wasCovered && !covered) keyboard++;
+    wasCovered = covered;
+  });
+
   let commits = $derived(
     fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
   );
@@ -250,7 +255,8 @@
           oncontextmenu={(event) => openMenu(event, row)} />
       {/each}
 
-      <Button variant="dashed" size="sm" glyph="+" onclick={newSession}>New session</Button>
+      <Button variant="dashed" size="sm" glyph="+" onclick={() => (assembling = true)}
+        >New session</Button>
 
       <div class="repos">
         <CapsLabel tone="dim">This session</CapsLabel>
@@ -278,8 +284,12 @@
             </div>
           </div>
         {/each}
-        <Button variant="dashed" size="sm" glyph="+" onclick={addRepos} style="margin-top: 6px"
-          >Add repos</Button>
+        <Button
+          variant="dashed"
+          size="sm"
+          glyph="+"
+          onclick={() => (added = fields.slug)}
+          style="margin-top: 6px">Add repos</Button>
       </div>
     </div>
 
@@ -394,6 +404,16 @@
     1
       ? ''
       : 's'}" />
+
+  {#if assembling}
+    <Overlay onClose={() => (assembling = false)} />
+  {:else if picker}
+    <!-- Keyed on the session, so arriving at another one draws that session's
+         picker rather than keeping this one over it. -->
+    {#key fields.slug}
+      <PickerOverlay slug={fields.slug} onClose={() => (added = "")} />
+    {/key}
+  {/if}
 </div>
 
 <style>

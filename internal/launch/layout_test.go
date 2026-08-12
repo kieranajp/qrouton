@@ -61,30 +61,6 @@ func TestLaunchAsksTheSupervisorToResume(t *testing.T) {
 	}
 }
 
-// Onboarding runs as the conversation terminal's own child, so the socket it
-// adopts the chosen session on has to reach it through this argv.
-func TestOnboardArgvCarriesTheSocketAndTheLaunchFlags(t *testing.T) {
-	socket := "/tmp/qrouton-sock/501/deadbeef.sock"
-	argv := OnboardArgv("/bin/qrouton", socket, "codex", true)
-	if joined := strings.Join(argv, " "); joined != "/bin/qrouton onboard --socket "+socket+" --runner codex --refresh" {
-		t.Fatalf("onboard argv = %q", joined)
-	}
-	bare := strings.Join(OnboardArgv("/bin/qrouton", socket, "", false), " ")
-	if strings.Contains(bare, "--runner") || strings.Contains(bare, "--refresh") {
-		t.Fatalf("onboard argv invents flags nobody asked for: %q", bare)
-	}
-}
-
-// Onboarding in a pane has no terminal to hand over, so it has to be told to
-// stop at adoption and let the workbench boot the agent.
-func TestOnboardPaneArgvAdoptsWithoutHandingOver(t *testing.T) {
-	socket := "/tmp/qrouton-sock/501/deadbeef.sock"
-	joined := strings.Join(OnboardPaneArgv("/bin/qrouton", socket), " ")
-	if joined != "/bin/qrouton onboard --socket "+socket+" --adopt-only" {
-		t.Fatalf("onboard pane argv = %q", joined)
-	}
-}
-
 func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 	if joined := strings.Join(ShellArgv("/bin/qrouton", "/sessions/octopus"), " "); joined != "/bin/qrouton shell --session-root /sessions/octopus" {
 		t.Fatalf("shell argv = %q", joined)

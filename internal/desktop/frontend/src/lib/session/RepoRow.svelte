@@ -1,14 +1,16 @@
 <script>
   import RoleToggle from "../forms/RoleToggle.svelte";
 
-  /** @type {{name?: string, pushed?: string, role?: 'off'|'editing'|'reference', onRoleChange?: (role: string) => void, [attribute: string]: any}} */
-  let { name, pushed, role = "off", onRoleChange, ...rest } = $props();
+  /** @type {{name?: string, meta?: string, role?: 'off'|'editing'|'reference', locked?: boolean, onRoleChange?: (role: string) => void, [attribute: string]: any}} */
+  let { name, meta, role = "off", locked = false, onRoleChange, ...rest } = $props();
+
+  let chosen = $derived(role !== "off");
 </script>
 
-<div class="row" class:editing={role === "editing"} {...rest}>
-  <span class="name" class:on={role !== "off"}>{name}</span>
-  {#if pushed}<span class="pushed">pushed {pushed}</span>{/if}
-  <RoleToggle value={role} onChange={onRoleChange} />
+<div class="row" class:chosen {...rest}>
+  <span class="name" class:on={chosen}>{name}</span>
+  {#if meta}<span class="meta">{meta}</span>{/if}
+  <RoleToggle value={role} disabled={locked} onChange={onRoleChange} />
 </div>
 
 <style>
@@ -21,7 +23,7 @@
     border-bottom: 1px solid var(--border-subtle);
   }
 
-  .editing {
+  .chosen {
     background: var(--surface-raised);
   }
 
@@ -36,7 +38,7 @@
     color: var(--text-primary);
   }
 
-  .pushed {
+  .meta {
     font: var(--machine-sm);
     font-size: 10.5px;
     color: var(--text-faint);

@@ -1,9 +1,9 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -12,70 +12,11 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
-
-func TestParseRepoSpec(t *testing.T) {
-	cases := []struct {
-		in          string
-		owner, name string
-		wantErr     bool
-	}{
-		{in: "kieranajp/qrouton", owner: "kieranajp", name: "qrouton"},
-		{in: "  lifesum/lifesum-ios  ", owner: "lifesum", name: "lifesum-ios"},
-		{in: "kieranajp/qrouton.git", owner: "kieranajp", name: "qrouton"},
-		{in: "kieranajp/qrouton/", owner: "kieranajp", name: "qrouton"},
-		{in: "qrouton", wantErr: true},
-		{in: "a/b/c", wantErr: true},
-		{in: "/qrouton", wantErr: true},
-		{in: "kieranajp/", wantErr: true},
-		{in: "", wantErr: true},
-	}
-	for _, tc := range cases {
-		owner, name, err := parseRepoSpec(tc.in)
-		if tc.wantErr {
-			if err == nil {
-				t.Errorf("parseRepoSpec(%q) = (%q,%q), want error", tc.in, owner, name)
-			}
-			continue
-		}
-		if err != nil || owner != tc.owner || name != tc.name {
-			t.Errorf("parseRepoSpec(%q) = (%q,%q,%v), want (%q,%q,nil)", tc.in, owner, name, err, tc.owner, tc.name)
-		}
-	}
-}
-
-// Assembly happens before the workbench is handed over, so its progress has to
-// reach the terminal the user is still watching.
-func TestProgressReachesTheParentsTerminal(t *testing.T) {
-	read, write, err := os.Pipe()
-	if err != nil {
-		t.Fatal(err)
-	}
-	saved := os.Stderr
-	os.Stderr = write
-	printProgress(session.Progress{Status: session.ProgressCompleted, Step: "cloned",
-		Repo: &github.Repo{Org: "kieranajp", Name: "qrouton"}})
-	printProgress(session.Progress{Status: session.ProgressAdvanced, Step: "fetching",
-		Repo: &github.Repo{Org: "kieranajp", Name: "qrouton"}})
-	os.Stderr = saved
-	_ = write.Close()
-
-	out, err := io.ReadAll(read)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(out), "kieranajp/qrouton cloned") {
-		t.Fatalf("stderr = %q, want the completed step", out)
-	}
-	if strings.Contains(string(out), "fetching") {
-		t.Fatalf("stderr = %q, want outcomes only", out)
-	}
-}
 
 // The one line the user gets back has to name something they recognise and a log
 // they can open.
@@ -86,10 +27,10 @@ func TestOpenedLineNamesTheSessionAndItsLog(t *testing.T) {
 		t.Fatalf("line = %q, want the session name and its log", line)
 	}
 
-	landing := launch.WorkbenchSpec{Socket: "/tmp/qrouton-sock/501/ab.sock"}
-	line = fmt.Sprintf(openedFormat, subject(landing.SessionRoot), workbenchLog(landing))
-	if !strings.Contains(line, sessionListSubject) || !strings.Contains(line, "/tmp/qrouton-sock/501/ab.log") {
-		t.Fatalf("line = %q, want the session list and a log beside its socket", line)
+	empty := launch.WorkbenchSpec{Socket: "/tmp/qrouton-sock/501/ab.sock"}
+	line = fmt.Sprintf(openedFormat, subject(empty.SessionRoot), workbenchLog(empty))
+	if !strings.Contains(line, noSessionSubject) || !strings.Contains(line, "/tmp/qrouton-sock/501/ab.log") {
+		t.Fatalf("line = %q, want an empty workbench and a log beside its socket", line)
 	}
 }
 
@@ -103,7 +44,7 @@ func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 	for _, slug := range []string{"alpha", "beta"} {
 		root := t.TempDir()
 		socket := "/tmp/qrouton-sock/501/" + slug + ".sock"
-		argv, _, err := agent(root, socket, false)
+		argv, _, err := agent(root, socket, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,16 +81,21 @@ func TestOpeningASessionRefusesWhileAWorkbenchIsUp(t *testing.T) {
 	}
 	answerOnAWorkbenchSocket(t)
 
-	// A repository nobody can resolve, so a broken guard fails this test rather
-	// than assembling a session.
-	for _, args := range [][]string{{}, {"kieranajp/qrouton-no-such-repo"}, {t.TempDir()}} {
-		err := onboard(rootContext(t, args...))
-		if err == nil {
-			t.Fatalf("qrouton %v opened a session with a workbench already open", args)
-		}
-		if !strings.Contains(err.Error(), "+ New session") {
-			t.Fatalf("refusal %q for qrouton %v does not point at the button in the running window", err, args)
-		}
+	err := open(rootContext(t))
+	if err == nil {
+		t.Fatal("qrouton opened a session with a workbench already open")
+	}
+	if !strings.Contains(err.Error(), "+ New session") {
+		t.Fatalf("refusal %q does not point at the button in the running window", err)
+	}
+}
+
+// The binary's session-facing surface is qrouton alone, so an argument left over
+// from the paths that took one has to say so rather than opening a window.
+func TestArgumentsAreRefusedRatherThanIgnored(t *testing.T) {
+	err := open(rootContext(t, "lifesum/api"))
+	if !errors.Is(err, errNoSessionArguments) {
+		t.Fatalf("qrouton lifesum/api = %v, want %v", err, errNoSessionArguments)
 	}
 }
 
@@ -221,7 +167,6 @@ func answerOnAWorkbenchSocket(t *testing.T) {
 func rootContext(t *testing.T, args ...string) *cli.Context {
 	t.Helper()
 	set := flag.NewFlagSet(appName, flag.ContinueOnError)
-	set.Bool(refreshFlag, false, "")
 	set.String(runnerFlag, "", "")
 	set.String(workbenchSpecFlag, "", "")
 	if err := set.Parse(args); err != nil {
@@ -241,13 +186,18 @@ func flagValue(t *testing.T, argv []string, flag string) string {
 	return ""
 }
 
-func TestAdhocName(t *testing.T) {
-	single := adhocName([]github.Repo{{Name: "qrouton"}})
-	if single != "qrouton" {
-		t.Fatalf("single repo name = %q, want qrouton", single)
+// A session recorded against an agent that has since left the machine must say
+// so. Substituting whatever is installed would run the work under a runner the
+// session was never assembled for, silently.
+func TestTheAgentCommandRefusesARunnerThatIsGone(t *testing.T) {
+	cfg := &config.Config{Launch: map[string][]string{"codex": {"/bin/echo"}}}
+	agent := agentCommand(cfg, "/bin/qrouton", "codex", launch.EditorCommand{Argv: []string{"vi"}})
+
+	_, _, err := agent(t.TempDir(), "/tmp/s.sock", "no-such-agent", false)
+	if !errors.Is(err, launch.ErrRunnerUnavailable) {
+		t.Fatalf("booting a session against a missing agent = %v, want %v", err, launch.ErrRunnerUnavailable)
 	}
-	multi := adhocName([]github.Repo{{Name: "api"}, {Name: "web"}})
-	if multi != "api-web" {
-		t.Fatalf("multi repo name = %q, want api-web", multi)
+	if err != nil && !strings.Contains(err.Error(), "no-such-agent") {
+		t.Fatalf("refusal %q does not name the agent the session recorded", err)
 	}
 }

@@ -8,30 +8,38 @@
     failed: "var(--state-failed)",
   };
 
-  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', focused?: boolean, mono?: boolean, trailing?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpLiteral?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', icon?: string, multiline?: boolean, valueVoice?: 'prose'|'literal', trailing?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
     label,
-    value,
+    value = $bindable(""),
     placeholder,
     help,
+    helpLiteral,
     helpTone = "muted",
-    focused = false,
-    mono = false,
+    icon,
+    multiline = false,
+    valueVoice = "prose",
     trailing,
     ...rest
   } = $props();
 </script>
 
-<div class="field" {...rest}>
+<div class="field">
   {#if label}<CapsLabel>{label}</CapsLabel>{/if}
   <div class="row">
-    <div class="input" class:focused class:mono class:empty={!value}>
-      {value || placeholder}
-      {#if focused}<span class="caret">&#9612;</span>{/if}
+    <div class="input" class:literal={valueVoice === "literal"}>
+      {#if icon}<span class="icon" aria-hidden="true">{icon}</span>{/if}
+      {#if multiline}
+        <textarea bind:value {placeholder} {...rest}></textarea>
+      {:else}
+        <input type="text" bind:value {placeholder} {...rest} />
+      {/if}
     </div>
     {@render trailing?.()}
   </div>
-  {#if help}<span class="help" style:color={HELP_TONES[helpTone]}>{help}</span>{/if}
+  {#if help}<span class="help" style:color={HELP_TONES[helpTone]}>{help}{#if helpLiteral}&nbsp;<code
+        >{helpLiteral}</code
+      >{/if}</span>{/if}
 </div>
 
 <style>
@@ -48,33 +56,61 @@
 
   .input {
     flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 9px;
     border: 1px solid var(--border-default);
     background: var(--surface-chrome);
     padding: 9px 12px;
-    font: var(--machine-md);
-    color: var(--text-primary);
   }
 
-  .mono {
-    font: var(--terminal-sm);
-  }
-
-  .empty {
-    color: var(--text-faint);
-  }
-
-  /* Focus draws as selection does; in a keyboard-heavy app they are one idea. */
-  .focused {
+  .input:focus-within {
     border-color: var(--accent-action);
     box-shadow: var(--shadow-focus);
   }
 
-  .caret {
-    color: var(--caret);
+  .icon {
+    flex: none;
+    font-size: 12px;
+    color: var(--text-faint);
+  }
+
+  input,
+  textarea {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    font: var(--machine-md);
+    color: var(--text-primary);
+    caret-color: var(--caret);
+  }
+
+  .literal input,
+  .literal textarea {
+    font: var(--literal);
+    color: var(--text-secondary);
+  }
+
+  textarea {
+    min-height: 52px;
+    resize: none;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--text-faint);
   }
 
   .help {
     font: var(--machine-sm);
     font-size: 11px;
+  }
+
+  code {
+    font: var(--literal);
+    color: var(--text-secondary);
   }
 </style>

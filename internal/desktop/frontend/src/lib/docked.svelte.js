@@ -47,13 +47,6 @@ export const openShell = () => Call.ByName(WINDOWS_SERVICE + ".OpenShell");
 /** openDocument opens a session document, or selects the tab already on it. */
 export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocument", path);
 
-/** openPicker opens the repository picker, or selects the one already open. */
-export const openPicker = () => Call.ByName(WINDOWS_SERVICE + ".OpenPicker");
-
-/** openOnboard assembles a new session in a pane, or selects the one already
- * assembling. */
-export const openOnboard = () => Call.ByName(WINDOWS_SERVICE + ".OpenOnboard");
-
 /**
  * whenSelected runs on a window the Go side wants shown — a document the agent
  * opened, which would otherwise render behind whatever tab is up.

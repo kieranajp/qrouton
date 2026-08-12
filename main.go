@@ -3,25 +3,20 @@
 package main
 
 import (
-	"context"
 	"fmt"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	agentcmd "github.com/kieranajp/qrouton/cmd/agent"
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
-	onboardcmd "github.com/kieranajp/qrouton/cmd/onboard"
-	pickcmd "github.com/kieranajp/qrouton/cmd/pick"
 	reposcmd "github.com/kieranajp/qrouton/cmd/repos"
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/desktop"
-	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -33,15 +28,13 @@ func main() {
 	app := &cli.App{
 		Name:        appName,
 		Usage:       appUsage,
-		ArgsUsage:   appArgsUsage,
 		Description: appDescription,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{Name: refreshFlag, Usage: refreshFlagUsage},
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, pickcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command, onboardcmd.Command},
-		Action:   onboard,
+		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Action:   open,
 	}
 	if err := app.Run(os.Args); err != nil {
 		fmt.Fprintln(os.Stderr, logPrefix, err)
@@ -49,42 +42,20 @@ func main() {
 	}
 }
 
-// onboard is the default action. No arguments opens the landing list; a single
-// argument naming an existing directory drops into a fresh zero-repo scratch
-// session named after it; owner/repo arguments launch an ad-hoc session. Each
-// assembles in the user's terminal, then hands the workbench its own process.
-func onboard(c *cli.Context) error {
+// open is the default action: the workbench, on the session last shown or on no
+// session at all. Assembling one is the window's own job.
+func open(c *cli.Context) error {
 	if spec := c.String(workbenchSpecFlag); spec != "" {
 		return workbenchProcess(spec)
 	}
-	// There is one workbench, and every path below opens on a session: two of them
-	// would each believe they were the only one holding that session's supervisor.
+	if arg := c.Args().First(); arg != "" {
+		return fmt.Errorf("%w: %q", errNoSessionArguments, arg)
+	}
+	// There is one workbench, and it opens on a session: two of them would each
+	// believe they were the only one holding that session's supervisor.
 	if workbench.Running() {
 		return errWorkbenchRunning
 	}
-	args := c.Args().Slice()
-	if len(args) == 0 {
-		return list(c.String(runnerFlag), c.Bool(refreshFlag))
-	}
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
-	if len(args) == 1 {
-		if info, err := os.Stat(args[0]); err == nil && info.IsDir() {
-			return launchScratch(cfg, args[0], c.String(runnerFlag))
-		}
-	}
-	sessions, err := session.Scan(cfg.Root)
-	if err != nil {
-		return err
-	}
-	return launchAdhoc(cfg, sessions, args, c.String(runnerFlag))
-}
-
-// list opens the workbench on the session the user was last in, or on the landing
-// list when there are none, which draws in the conversation and hands it over.
-func list(runnerID string, refresh bool) error {
 	cfg, err := config.Load()
 	if err != nil {
 		return err
@@ -93,31 +64,24 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
-	// Refreshing the cache is something only the landing list does, so asking for
-	// it asks for the list.
-	if resume, ok := lastShown(cfg.Root, sessions); ok && !refresh {
-		runner, err := pickRunner(cfg, runnerID)
+	if last, ok := lastShown(cfg.Root, sessions); ok {
+		runner, err := pickRunner(cfg, c.String(runnerFlag))
 		if err != nil {
 			return err
 		}
-		return launchRunner(cfg, filepath.Join(cfg.Root, resume.Slug), runner, true)
-	}
-	bin, err := os.Executable()
-	if err != nil {
-		return err
+		return launchRunner(cfg, filepath.Join(cfg.Root, last.Slug), runner, true)
 	}
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		return err
 	}
-	// A missing editor costs the document chip, and must not keep the list shut.
+	// A missing editor costs the document chip, and must not keep the window shut.
 	editor, _ := launch.ResolveEditor(cfg.Editor)
 	return detach(launch.WorkbenchSpec{
-		Socket:  socket,
-		Runner:  runnerID,
-		Onboard: launch.OnboardArgv(bin, socket, runnerID, refresh),
-		Dock:    cfg.Dock(),
-		Editor:  editor,
+		Socket: socket,
+		Runner: c.String(runnerFlag),
+		Dock:   cfg.Dock(),
+		Editor: editor,
 	}, os.Environ())
 }
 
@@ -143,63 +107,6 @@ func lastShown(root string, sessions []session.Manifest) (session.Manifest, bool
 	return best, best.Slug != ""
 }
 
-// launchScratch is the directory-argument path: a zero-repo Assistant session
-// named after the given directory, with no picker and no network.
-func launchScratch(cfg *config.Config, target, runnerID string) error {
-	runner, err := pickRunner(cfg, runnerID)
-	if err != nil {
-		return err
-	}
-	abs, err := filepath.Abs(target)
-	if err != nil {
-		return err
-	}
-	dir, err := session.Create(cfg, session.ScratchName(abs), "", "", "", session.ModeAssistant, nil, nil)
-	if err != nil {
-		return err
-	}
-	return launchRunner(cfg, dir, runner, false)
-}
-
-// launchAdhoc skips the picker: it launches an Assistant-mode session with the
-// given owner/repo specs active, resuming an existing session of the same name.
-func launchAdhoc(cfg *config.Config, sessions []session.Manifest, specs []string, runnerID string) error {
-	runner, err := pickRunner(cfg, runnerID)
-	if err != nil {
-		return err
-	}
-	repos, err := resolveRepos(cfg, specs)
-	if err != nil {
-		return err
-	}
-	slug := session.Slugify(adhocName(repos))
-	if m, ok := findSession(sessions, slug); ok {
-		if err := session.EnsureWorktrees(cfg, m, printProgress); err != nil {
-			return err
-		}
-		fmt.Fprintf(os.Stderr, resumingFormat, slug)
-		return launchRunner(cfg, filepath.Join(cfg.Root, slug), runner, true)
-	}
-	selections := make([]session.RepoSelection, len(repos))
-	for i, r := range repos {
-		selections[i] = session.RepoSelection{Repo: r, Role: session.RepoRoleActive}
-	}
-	dir, err := session.Create(cfg, adhocName(repos), "", "", adhocBranchPrefix, session.ModeAssistant, selections, printProgress)
-	if err != nil {
-		return err
-	}
-	return launchRunner(cfg, dir, runner, false)
-}
-
-// printProgress reports assembly on the paths that have no TUI to draw into.
-// Outcomes only: git's own clone and fetch progress arrives as ProgressAdvanced
-// many times a second, which is a bar in the TUI and a wall of text here.
-func printProgress(p session.Progress) {
-	if p.Status == session.ProgressCompleted && p.Repo != nil {
-		fmt.Fprintf(os.Stderr, progressFormat, p.Repo.ID(), p.Step)
-	}
-}
-
 // pickRunner resolves the runner headlessly: the requested one if given and
 // installed, otherwise the first installed built-in.
 func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
@@ -207,79 +114,6 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 		return launch.ByID(cfg, id)
 	}
 	return launch.FirstInstalled(cfg)
-}
-
-// resolveRepos turns owner/repo specs into repositories, preferring the local
-// cache and falling back to a direct GitHub lookup for anything not cached.
-func resolveRepos(cfg *config.Config, specs []string) ([]github.Repo, error) {
-	cached, _, _ := github.CachedRepos(cfg.Orgs)
-	var token string
-	var repos []github.Repo
-	seen := make(map[string]bool)
-	for _, spec := range specs {
-		owner, name, err := parseRepoSpec(spec)
-		if err != nil {
-			return nil, err
-		}
-		id := strings.ToLower(owner + repoSpecSeparator + name)
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		repo, ok := findCachedRepo(cached, owner, name)
-		if !ok {
-			if token == "" {
-				if token, err = github.Token(); err != nil {
-					return nil, err
-				}
-			}
-			if repo, err = github.FetchRepo(context.Background(), http.DefaultClient, token, owner, name); err != nil {
-				return nil, err
-			}
-		}
-		repos = append(repos, repo)
-	}
-	if len(repos) == 0 {
-		return nil, errNoRepositories
-	}
-	return repos, nil
-}
-
-func findCachedRepo(cached []github.Repo, owner, name string) (github.Repo, bool) {
-	for _, r := range cached {
-		if strings.EqualFold(r.Org, owner) && strings.EqualFold(r.Name, name) {
-			return r, true
-		}
-	}
-	return github.Repo{}, false
-}
-
-func findSession(sessions []session.Manifest, slug string) (session.Manifest, bool) {
-	for _, m := range sessions {
-		if m.Slug == slug {
-			return m, true
-		}
-	}
-	return session.Manifest{}, false
-}
-
-// parseRepoSpec accepts "owner/repo" (tolerating a trailing slash or ".git").
-func parseRepoSpec(spec string) (string, string, error) {
-	parts := strings.Split(strings.Trim(strings.TrimSpace(spec), repoSpecSeparator), repoSpecSeparator)
-	if len(parts) != repoSpecParts || parts[0] == "" || parts[1] == "" {
-		return "", "", fmt.Errorf("%w, got %q", errRepoSpecShape, spec)
-	}
-	return parts[0], strings.TrimSuffix(parts[1], gitDirSuffix), nil
-}
-
-// adhocName derives a session name from its repositories: the repo name for a
-// single repo, or the names joined for several.
-func adhocName(repos []github.Repo) string {
-	names := make([]string, len(repos))
-	for i, r := range repos {
-		names[i] = r.Name
-	}
-	return strings.Join(names, adhocNameSeparator)
 }
 
 // launchRunner opens the workbench on the session. The workbench builds the
@@ -337,27 +171,48 @@ func workbenchProcess(marshalled string) error {
 		Resume:      spec.Resume,
 		Root:        cfg.Root,
 		Socket:      spec.Socket,
-		Onboard:     spec.Onboard,
 		Env:         os.Environ(),
 		Agent:       agentCommand(cfg, bin, spec.Runner, spec.Editor),
 		Shell:       shellArgv(bin),
-		Picker:      pickerArgv(bin),
 		Reveal:      launch.RevealArgv,
-		Onboarding:  func(socket string) []string { return launch.OnboardPaneArgv(bin, socket) },
 		Document:    documentWindow(spec.Editor),
 		Dock:        spec.Dock,
+		Config:      cfg,
+		Runners:     assemblyRunners(cfg),
+		Signal:      launch.SignalSupervisor,
 	})
 }
 
 // agentCommand builds a session's supervisor command when the workbench boots it,
 // so the socket it is served on and the manifest it reads are the current ones.
-func agentCommand(cfg *config.Config, bin, runnerID string, editor launch.EditorCommand) func(string, string, bool) ([]string, []string, error) {
-	return func(sessionRoot, socket string, resume bool) ([]string, []string, error) {
+// A session assembled in the overlay names its own agent; anything else takes the
+// workbench's.
+func agentCommand(cfg *config.Config, bin, workbenchRunner string, editor launch.EditorCommand) func(string, string, string, bool) ([]string, []string, error) {
+	return func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
+		if runnerID == "" {
+			runnerID = workbenchRunner
+		}
 		runner, err := pickRunner(cfg, runnerID)
 		if err != nil {
 			return nil, nil, err
 		}
 		return launch.Launch(sessionRoot, runner, bin, socket, editor, resume)
+	}
+}
+
+// assemblyRunners maps launch's runners onto the row the overlay draws, which is
+// how desktop offers agents without importing launch.
+func assemblyRunners(cfg *config.Config) func() ([]assembly.Runner, error) {
+	return func() ([]assembly.Runner, error) {
+		runners, err := launch.Runners(cfg)
+		if err != nil {
+			return nil, err
+		}
+		out := make([]assembly.Runner, len(runners))
+		for i, r := range runners {
+			out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+		}
+		return out, nil
 	}
 }
 
@@ -381,7 +236,7 @@ func workbenchLog(spec launch.WorkbenchSpec) string {
 // subject names what was opened in the one line the user gets back.
 func subject(sessionRoot string) string {
 	if sessionRoot == "" {
-		return sessionListSubject
+		return noSessionSubject
 	}
 	return filepath.Base(sessionRoot)
 }
@@ -390,8 +245,4 @@ func subject(sessionRoot string) string {
 // settles on, which the landing-list path does not know when it opens.
 func shellArgv(bin string) func(string) []string {
 	return func(dir string) []string { return launch.ShellArgv(bin, dir) }
-}
-
-func pickerArgv(bin string) func(string) []string {
-	return func(dir string) []string { return launch.PickerArgv(bin, dir) }
 }

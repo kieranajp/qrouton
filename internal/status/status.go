@@ -36,6 +36,9 @@ type Fields struct {
 	Documents []Document   `json:"documents"`
 	Repos     []RepoStat   `json:"repos"`
 	Activity  string       `json:"activity"`
+	// Picker means the shown session has an escalation waiting on it. It is
+	// workbench-side knowledge, so a file read never sets it.
+	Picker bool `json:"picker"`
 }
 
 // SessionRow is one session under the sessions root. A Terminal means this
@@ -92,20 +95,11 @@ func Read(root string) Fields {
 		fields.Mode = modeRPILabel
 	}
 	fields.Phase = phase(root, m)
-	fields.Identity = displayName(m)
+	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
 	fields.Documents = documents(root)
 	return fields
-}
-
-// displayName is the one owner of a session's human name: its Name if set,
-// else its Slug.
-func displayName(m session.Manifest) string {
-	if m.Name != "" {
-		return m.Name
-	}
-	return m.Slug
 }
 
 // Repos measures the session's repositories against the branches they were cut
@@ -117,13 +111,9 @@ func Repos(ctx context.Context, root string) []RepoStat {
 	}
 	out := make([]RepoStat, 0, len(m.Repos))
 	for _, stat := range session.RepoStats(ctx, filepath.Dir(root), m) {
-		role := roleEditing
-		if stat.Role == session.RepoRoleReference {
-			role = roleReference
-		}
 		out = append(out, RepoStat{
 			Name:       stat.Org + repoSeparator + stat.Name,
-			Role:       role,
+			Role:       string(stat.Role),
 			Commits:    stat.Commits,
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
@@ -161,7 +151,7 @@ func Sessions(root string) []SessionRow {
 	}
 	rows := make([]SessionRow, 0, len(found))
 	for _, m := range found {
-		name := displayName(m)
+		name := m.DisplayName()
 		mode := modeAssistantLabel
 		if m.EffectiveMode() == session.ModeRPI {
 			mode = modeRPILabel
@@ -227,11 +217,7 @@ func writtenSince(root string, since time.Time) int {
 func sessionRepos(m session.Manifest) []SessionRepo {
 	out := make([]SessionRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
-		role := roleEditing
-		if r.Role == session.RepoRoleReference {
-			role = roleReference
-		}
-		out = append(out, SessionRepo{Name: r.Name, Role: role})
+		out = append(out, SessionRepo{Name: r.Name, Role: string(r.Role.Effective())})
 	}
 	return out
 }

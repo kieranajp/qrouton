@@ -22,9 +22,9 @@ type Request struct {
 	ID       string         `json:"id,omitempty"`
 	Full     bool           `json:"full,omitempty"`
 	Root     string         `json:"root,omitempty"`
-	Boot     bool           `json:"boot,omitempty"`
 	Activity string         `json:"activity,omitempty"`
 	Options  *WindowOptions `json:"options,omitempty"`
+	Picker   *PickerRequest `json:"picker,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -152,8 +152,8 @@ func (c *client) List(ctx context.Context) ([]string, error) {
 	return res.IDs, nil
 }
 
-func (c *client) Adopt(ctx context.Context, sessionRoot string, boot bool) error {
-	_, err := c.call(ctx, Request{Op: OpAdopt, Root: sessionRoot, Boot: boot})
+func (c *client) Picker(ctx context.Context, req PickerRequest) error {
+	_, err := c.call(ctx, Request{Op: OpPicker, Root: req.SessionRoot, Picker: &req})
 	return err
 }
 

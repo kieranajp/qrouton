@@ -123,7 +123,7 @@ func TestWaitReadyReportsWhatWentWrong(t *testing.T) {
 // the round trip is a workbench that opens on nothing.
 func TestWorkbenchSpecRoundTrips(t *testing.T) {
 	spec := WorkbenchSpec{SessionRoot: "/sessions/api", Socket: "/tmp/qrouton-sock/501/ab.sock",
-		Runner: "codex", Resume: true, Onboard: []string{"/bin/qrouton", "onboard"}}
+		Runner: "codex", Resume: true}
 
 	argv := WorkbenchArgv("/bin/qrouton", spec)
 	if argv[0] != "/bin/qrouton" || argv[1] != "--workbench-spec" || len(argv) != 3 {
@@ -134,30 +134,24 @@ func TestWorkbenchSpecRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	if parsed.SessionRoot != spec.SessionRoot || parsed.Socket != spec.Socket ||
-		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume ||
-		strings.Join(parsed.Onboard, " ") != strings.Join(spec.Onboard, " ") {
+		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume {
 		t.Fatalf("parsed spec = %#v, want %#v", parsed, spec)
 	}
 }
 
 func TestParseWorkbenchSpecRejectsAnIncompleteOne(t *testing.T) {
-	// A spec naming a session needs no conversation command, since the workbench
-	// builds one as it boots it; the landing list has no session and needs one.
+	// A workbench with no session is the ordinary case — that window's content is
+	// the assembly overlay — so the socket is the only thing it cannot open without.
 	for _, spec := range []WorkbenchSpec{
 		{SessionRoot: "/sessions/api", Socket: "/tmp/a.sock"},
-		{Socket: "/tmp/a.sock", Onboard: []string{"/bin/qrouton", "onboard"}},
+		{Socket: "/tmp/a.sock"},
 	} {
 		if _, err := ParseWorkbenchSpec(spec.Marshal()); err != nil {
 			t.Fatalf("ParseWorkbenchSpec(%#v) = %v, want it accepted", spec, err)
 		}
 	}
-	for _, spec := range []WorkbenchSpec{
-		{Onboard: []string{"/bin/qrouton", "onboard"}},
-		{Socket: "/tmp/a.sock"},
-	} {
-		if _, err := ParseWorkbenchSpec(spec.Marshal()); !errors.Is(err, ErrWorkbenchSpecIncomplete) {
-			t.Fatalf("ParseWorkbenchSpec(%#v) = %v, want %v", spec, err, ErrWorkbenchSpecIncomplete)
-		}
+	if _, err := ParseWorkbenchSpec(WorkbenchSpec{SessionRoot: "/sessions/api"}.Marshal()); !errors.Is(err, ErrWorkbenchSpecIncomplete) {
+		t.Fatalf("a spec with no socket = %v, want %v", err, ErrWorkbenchSpecIncomplete)
 	}
 	if _, err := ParseWorkbenchSpec("not json"); err == nil {
 		t.Fatal("ParseWorkbenchSpec accepted a non-JSON spec")

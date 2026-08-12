@@ -22,9 +22,7 @@ const (
 	mcpSubcommand        = "mcp"
 	agentEventSubcommand = "agent-event"
 	agentSubcommand      = "agent"
-	onboardSubcommand    = "onboard"
 	shellSubcommand      = "shell"
-	pickSubcommand       = "pick"
 
 	sessionRootFlag   = "--session-root"
 	runnerFlag        = "--runner"
@@ -32,8 +30,6 @@ const (
 	workbenchJSONFlag = "--workbench-json"
 	resumeFlag        = "--resume"
 	socketFlag        = "--socket"
-	refreshFlag       = "--refresh"
-	adoptOnlyFlag     = "--adopt-only"
 
 	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
 	// loop rather than assemble a session. Its literal is duplicated in main,

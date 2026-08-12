@@ -1,0 +1,78 @@
+package assembly
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/ticket"
+)
+
+// Field names the control a problem belongs under, so the footer status can be
+// read against the thing that has to change.
+type Field string
+
+const (
+	FieldName   Field = "name"
+	FieldTicket Field = "ticket"
+	FieldRepos  Field = "repos"
+)
+
+// Problem is one reason a draft cannot be assembled yet, carrying its own copy.
+type Problem struct {
+	Field   Field  `json:"field"`
+	Message string `json:"message"`
+}
+
+// Check is everything a draft can be judged on without touching disk, so it can
+// run on every keystroke.
+func Check(d Draft) []Problem {
+	var problems []Problem
+	if url := strings.TrimSpace(d.Ticket); url != "" {
+		if _, err := ticket.ParseURL(url); err != nil {
+			problems = append(problems, Problem{Field: FieldTicket, Message: err.Error()})
+		}
+	}
+	if session.Slugify(d.Name) == "" {
+		problems = append(problems, Problem{Field: FieldName, Message: msgNameRequired})
+	}
+	return append(problems, CheckRepos(d)...)
+}
+
+// CheckRepos is the only one of these rules the picker shares. A session that
+// exists has already been named and branched, so its name and ticket are not the
+// picker's to judge again — only the selection is still in question.
+func CheckRepos(d Draft) []Problem {
+	if hasEditingRepo(d) {
+		return nil
+	}
+	return []Problem{{Field: FieldRepos, Message: msgNoEditingRepo}}
+}
+
+// CheckSlug is the half that stats the disk, so it runs on advance rather than
+// on every keystroke. An abandoned half-assembly does not block the name;
+// session.Create reclaims it.
+func (a Assembler) CheckSlug(d Draft) []Problem {
+	slug := session.Slugify(d.Name)
+	if slug == "" {
+		return []Problem{{Field: FieldName, Message: msgNameRequired}}
+	}
+	dir := filepath.Join(a.Cfg.Root, slug)
+	if session.Abandoned(dir) {
+		return nil
+	}
+	if _, err := os.Stat(dir); err == nil {
+		return []Problem{{Field: FieldName, Message: msgSessionExists}}
+	}
+	return nil
+}
+
+func hasEditingRepo(d Draft) bool {
+	for _, sel := range d.Repos {
+		if sel.Role.Effective() == session.RepoRoleEditing {
+			return true
+		}
+	}
+	return false
+}

@@ -3,7 +3,7 @@ import { Events } from "./wails.js";
 /** @type {{mode: string, phase: string, identity: string, branch: string,
  *   slug: string, terminal: string,
  *   sessions: any[], documents: any[], repos: any[],
- *   activity: 'working'|'waiting'|'idle'}} */
+ *   activity: 'working'|'waiting'|'idle', picker: boolean}} */
 const NOTHING = {
   mode: "",
   phase: "",
@@ -15,6 +15,7 @@ const NOTHING = {
   documents: [],
   repos: [],
   activity: "idle",
+  picker: false,
 };
 
 // Spreading over the defaults is not enough: a slice Go leaves nil arrives as

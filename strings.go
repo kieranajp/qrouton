@@ -2,24 +2,17 @@ package main
 
 import "errors"
 
-// CLI identity and help text, and the messages the headless ad-hoc path prints
-// while it works.
+// CLI identity and help text, and what the launcher prints once the window is up.
 
 const (
-	appName      = "qrouton"
-	appUsage     = "assemble a multi-repo session and launch an agent runner in it"
-	appArgsUsage = "[dir | owner/repo ...]"
+	appName  = "qrouton"
+	appUsage = "assemble a multi-repo session and launch an agent runner in it"
 
-	appDescription = "With no arguments, qrouton opens the session list. Given a directory,\n" +
-		"it drops straight into a fresh zero-repo scratch session in Assistant\n" +
-		"mode, named after it — no picker, no network. Given one or more\n" +
-		"owner/repo arguments, it launches (or resumes) an ad-hoc Assistant-mode\n" +
-		"session with those repos active — e.g. `qrouton kieranajp/qrouton`."
+	appDescription = "qrouton opens the workbench on the session you were last in, and on an\n" +
+		"empty one when there are none. Sessions are assembled in the window."
 
-	refreshFlag      = "refresh"
-	refreshFlagUsage = "refresh the cached org repo list"
-	runnerFlag       = "runner"
-	runnerFlagUsage  = "coding agent to launch (claude, codex, or opencode)"
+	runnerFlag      = "runner"
+	runnerFlagUsage = "coding agent to launch (claude, codex, or opencode)"
 
 	// workbenchSpecFlag is the marker the detached workbench process is started
 	// with. Hidden: it is qrouton talking to itself, and the spec behind it is
@@ -27,31 +20,15 @@ const (
 	// internal/launch, which builds the argv that carries it.
 	workbenchSpecFlag = "workbench-spec"
 
-	// The ad-hoc path has no TUI, so it narrates to stderr.
-	logPrefix      = appName + ":"
-	resumingFormat = logPrefix + " resuming %s\n"
-	progressFormat = logPrefix + " %s %s\n"
+	logPrefix = appName + ":"
 
 	// openedFormat is the whole of the successful result: the terminal is free
-	// again, and the log is where to look if the windows vanish.
-	openedFormat       = "opened %s — log: %s\n"
-	sessionListSubject = "the session list"
-
-	// adhocBranchPrefix names the branch of an ad-hoc session's active repos.
-	// These sessions start without a ticket, so "chore" reads more honestly
-	// than "feat".
-	adhocBranchPrefix = "chore"
-
-	// adhocNameSeparator joins repository names into a session name.
-	adhocNameSeparator = "-"
-
-	repoSpecSeparator = "/"
-	repoSpecParts     = 2
-	gitDirSuffix      = ".git"
+	// again, and the log is where to look if the window vanishes.
+	openedFormat     = "opened %s — log: %s\n"
+	noSessionSubject = "an empty workbench"
 )
 
 var (
-	errNoRepositories   = errors.New("no repositories given")
-	errWorkbenchRunning = errors.New(`a qrouton workbench is already open — use "+ New session" in it`)
-	errRepoSpecShape    = errors.New("expected owner/repo")
+	errWorkbenchRunning   = errors.New(`a qrouton workbench is already open — use "+ New session" in it`)
+	errNoSessionArguments = errors.New("qrouton takes no arguments; assemble a session in the window")
 )

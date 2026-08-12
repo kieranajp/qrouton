@@ -31,4 +31,7 @@
   /* terminal — inside xterm panes and code blocks */
   --terminal: 13px/1.55 var(--font-terminal);
   --terminal-sm: 12.5px/1.5 var(--font-terminal);
+
+  /* literal — a URL, branch, path or binary name quoted inside prose */
+  --literal: 400 12px/1.5 var(--font-terminal);
 }

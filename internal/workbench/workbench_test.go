@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHandleRoundTripsAcrossExecBoundary(t *testing.T) {
@@ -102,9 +103,6 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 	if err != nil || len(ids) != 2 {
 		t.Fatalf("List = %v, %v", ids, err)
 	}
-	if err := host.Adopt(ctx, "/sessions/octopus", false); err != nil {
-		t.Fatal(err)
-	}
 	if err := host.Close(ctx, id); err != nil {
 		t.Fatal(err)
 	}
@@ -120,28 +118,11 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 		{OpRead, func(r Request) bool { return r.ID == "window-1" && r.Full }},
 		{OpExists, func(r Request) bool { return r.ID == "window-1" }},
 		{OpList, func(r Request) bool { return true }},
-		{OpAdopt, func(r Request) bool { return r.Root == "/sessions/octopus" && !r.Boot }},
 		{OpClose, func(r Request) bool { return r.ID == "window-1" }},
 	} {
 		got := <-requests
 		if got.Op != want.op || !want.check(got) {
 			t.Fatalf("%s request = %+v", want.op, got)
-		}
-	}
-}
-
-// Boot is what asks the workbench to start the adopted session's agent, so a
-// value that does not survive the wire leaves that session with none.
-func TestAdoptCarriesItsBootFlagOverTheSocket(t *testing.T) {
-	socket, requests := echoServer(t, func(Request) Response { return Response{} })
-	host := newClient(socket)
-	for _, boot := range []bool{true, false} {
-		if err := host.Adopt(context.Background(), "/sessions/octopus", boot); err != nil {
-			t.Fatal(err)
-		}
-		got := <-requests
-		if got.Op != OpAdopt || got.Root != "/sessions/octopus" || got.Boot != boot {
-			t.Fatalf("adopt request = %+v, want root /sessions/octopus and boot %v", got, boot)
 		}
 	}
 }
@@ -268,4 +249,41 @@ func echoServer(t *testing.T, reply func(Request) Response) (socket string, requ
 		}
 	}()
 	return socket, requests
+}
+
+// The deadline travels with the request: the workbench never learns that the
+// escalating agent gave up, so a request without it would draw a picker whose
+// answer nothing is polling for.
+func TestPickerCarriesItsSessionAndDeadlineOverTheSocket(t *testing.T) {
+	socket, requests := echoServer(t, func(Request) Response { return Response{} })
+	deadline := time.Now().Add(30 * time.Minute).Round(time.Millisecond)
+	req := PickerRequest{SessionRoot: "/sessions/octopus", Name: "Webhook retry",
+		Prefix: "fix", Deadline: deadline}
+	if err := newClient(socket).Picker(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	got := <-requests
+	if got.Op != OpPicker || got.Root != "/sessions/octopus" || got.Picker == nil {
+		t.Fatalf("picker request = %+v", got)
+	}
+	// A round-tripped time answers to a different location than the one that
+	// made it, so the instant is what carries, not the struct.
+	if got.Picker.SessionRoot != req.SessionRoot || got.Picker.Name != req.Name ||
+		got.Picker.Prefix != req.Prefix || !got.Picker.Deadline.Equal(req.Deadline) {
+		t.Fatalf("picker request = %+v, want %+v", *got.Picker, req)
+	}
+}
+
+// A refusal is the workbench answering, not the transport failing.
+func TestPickerSurfacesARefusalRatherThanADialError(t *testing.T) {
+	socket, _ := echoServer(t, func(Request) Response {
+		return Response{Error: "picker request carries no session root"}
+	})
+	err := newClient(socket).Picker(context.Background(), PickerRequest{Deadline: time.Now()})
+	if err == nil {
+		t.Fatal("a refused picker request succeeded")
+	}
+	if errors.Is(err, ErrWorkbenchUnreachable) {
+		t.Fatalf("a refusal reported as a transport failure: %v", err)
+	}
 }

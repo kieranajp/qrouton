@@ -13,13 +13,13 @@
               qrouton
 ```
 
-qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are active work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the desktop workbench it all runs in. 🧊✨
+qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are editing work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the desktop workbench it all runs in. 🧊✨
 
 ## What it does 🥖
 
 - Creates and resumes named multi-repo sessions.
 - Reuses local bare mirrors instead of cloning everything repeatedly.
-- Checks active repos out on `<prefix>/<session-slug>` branches.
+- Checks editing repos out on `<prefix>/<session-slug>` branches.
 - Pins reference repos as detached, read-only context.
 - Adds repositories to a live session from the workbench, on the branch it is already on.
 - Discovers repositories across several GitHub organizations or user accounts.
@@ -47,7 +47,7 @@ make build
 
 `make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell window, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
 
-qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work` and the owners are prompted for the first time you open the repository picker. Configuration is stored at:
+qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work`. Set `orgs` by hand before assembling your first session: with none, the repository list is empty. Configuration is stored at:
 
 ```text
 $XDG_CONFIG_HOME/qrouton/config.json
@@ -77,20 +77,8 @@ It **replaces** the built-in command rather than adding to it, so an override th
 Useful flags:
 
 ```sh
-./qrouton --refresh          # ignore the repo cache for this launch
 ./qrouton --runner codex     # preselect a supported coding agent
 ```
-
-## Quick ad-hoc session ⚡
-
-Skip the picker entirely by naming repositories on the command line:
-
-```sh
-./qrouton kieranajp/qrouton              # one repo, ad-hoc
-./qrouton lifesum/api lifesum/web        # several, all active
-```
-
-This launches (or resumes) an **Assistant**-mode session with those repos checked out active — handy when you just want to poke at a repo without curating a multi-repo workspace. The repos need not be in your configured `orgs`; anything your GitHub token can see resolves. The session is named after the repositories, so re-running the same command drops you back into it. Ask the agent to switch to RPI whenever the work grows into something bigger.
 
 ## Session shape 🗂️
 
@@ -100,19 +88,13 @@ This launches (or resumes) an **Assistant**-mode session with those repos checke
 └── <session>/
     ├── qrouton.json
     ├── src/
-    │   ├── active-repo/
+    │   ├── editing-repo/
     │   └── reference-repo/
     ├── thoughts/shared/
     └── .qrouton/
 ```
 
-Press `Space` in the repository picker to cycle:
-
-```text
-excluded → active → reference → excluded
-```
-
-Active repositories are implementation targets. Reference repositories are available for inspection but are explicitly marked read-only for the coding agent.
+Each repository in the picker carries a three-way control: **Off**, **Editing**, **Reference**. Editing repositories are implementation targets, checked out on the session branch. Reference repositories are available for inspection but are explicitly marked read-only for the coding agent, and pinned to a commit.
 
 ## Session mode 🎛️
 

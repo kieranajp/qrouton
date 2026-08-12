@@ -4,12 +4,13 @@
   "slug": "improve-the-account-service",
   "description": "Improve the account service",
   "mode": "rpi",
+  "runner": "claude",
   "createdAt": "2026-07-16T00:00:00Z",
   "repos": [
     {
       "name": "account-service",
       "org": "qrouton-eval",
-      "role": "active",
+      "role": "editing",
       "branch": "feat/improve-the-account-service",
       "defaultBranch": "main",
       "worktreePath": "src/account-service",

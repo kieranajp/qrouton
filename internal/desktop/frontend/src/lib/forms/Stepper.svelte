@@ -37,6 +37,8 @@
   .marker {
     width: 20px;
     height: 20px;
+    flex: none;
+    box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;

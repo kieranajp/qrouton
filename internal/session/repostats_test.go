@@ -20,10 +20,10 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Webhook retry", "", "", "fix", ModeRPI, []RepoSelection{
-		selection(t, "svc", RepoRoleActive),
-		selection(t, "quiet", RepoRoleActive),
-		selection(t, "level", RepoRoleActive),
+	dir, err := Create(cfg, "Webhook retry", "", "", "fix", ModeRPI, "", []RepoSelection{
+		selection(t, "svc", RepoRoleEditing),
+		selection(t, "quiet", RepoRoleEditing),
+		selection(t, "level", RepoRoleEditing),
 		selection(t, "docs", RepoRoleReference),
 	}, nil)
 	if err != nil {
@@ -58,9 +58,9 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := map[string]RepoStat{
-		"svc":   {Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 2, Insertions: 2, Deletions: 1, Measured: true},
-		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleActive, Commits: 1, Measured: true},
-		"level": {Org: "org", Name: "level", Role: RepoRoleActive, Measured: true},
+		"svc":   {Org: "org", Name: "svc", Role: RepoRoleEditing, Commits: 2, Insertions: 2, Deletions: 1, Measured: true},
+		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleEditing, Commits: 1, Measured: true},
+		"level": {Org: "org", Name: "level", Role: RepoRoleEditing, Measured: true},
 		"docs":  {Org: "org", Name: "docs", Role: RepoRoleReference},
 	}
 	stats := RepoStats(t.Context(), root, m)
@@ -82,8 +82,8 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
 	origin := localOrigin(t, "svc")
-	dir, err := Create(cfg, "Moved base", "", "", "fix", ModeRPI, []RepoSelection{
-		{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleActive},
+	dir, err := Create(cfg, "Moved base", "", "", "fix", ModeRPI, "", []RepoSelection{
+		{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing},
 	}, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -108,7 +108,7 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if base, _ := resolveRevision(worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
 		t.Fatal("the fetch on resume left the base branch where it was")
 	}
-	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleActive, Commits: 1, Insertions: 2, Measured: true}
+	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleEditing, Commits: 1, Insertions: 2, Measured: true}
 	if stats := RepoStats(t.Context(), root, m); len(stats) != 1 || stats[0] != want {
 		t.Fatalf("stats = %#v, want %#v", stats, want)
 	}
@@ -119,8 +119,8 @@ func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "No base branch", "", "", "fix", ModeRPI, []RepoSelection{
-		selection(t, "svc", RepoRoleActive),
+	dir, err := Create(cfg, "No base branch", "", "", "fix", ModeRPI, "", []RepoSelection{
+		selection(t, "svc", RepoRoleEditing),
 	}, nil)
 	if err != nil {
 		t.Fatal(err)

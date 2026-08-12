@@ -114,11 +114,8 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	dir := filepath.Join(root, m.Slug)
 	stats := make([]RepoStat, 0, len(m.Repos))
 	for _, repo := range m.Repos {
-		stat := RepoStat{Org: repo.Org, Name: repo.Name, Role: repo.Role}
-		if stat.Role == "" {
-			stat.Role = RepoRoleActive
-		}
-		if stat.Role == RepoRoleActive && repo.DefaultBranch != "" {
+		stat := RepoStat{Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective()}
+		if stat.Role == RepoRoleEditing && repo.DefaultBranch != "" {
 			base := remoteRefPrefix + repo.DefaultBranch
 			path := filepath.Join(dir, repo.WorktreePath)
 			measure(ctx, path, base, &stat)

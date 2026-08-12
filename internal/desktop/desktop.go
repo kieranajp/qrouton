@@ -14,6 +14,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -23,8 +25,8 @@ import (
 // Options is the workbench: where its sessions live, which one it opens on, and
 // how it builds what each of them runs.
 type Options struct {
-	// SessionRoot is empty when no session has been chosen yet: onboarding runs
-	// in the conversation terminal and adopts one over the control socket.
+	// SessionRoot is empty when there is no session to open on, which is the
+	// window whose only content is the assembly overlay.
 	SessionRoot string
 	// Resume asks the runner of the session the workbench opens on to continue
 	// its previous conversation. A session the rail boots always resumes.
@@ -32,42 +34,48 @@ type Options struct {
 	// Root is where sessions live, so the rail can boot one this workbench has
 	// never run.
 	Root string
-	// Socket answers the launcher's readiness poll and the adopt an onboarding
-	// child with no session of its own sends.
+	// Socket answers the launcher's readiness poll.
 	Socket string
-	// Onboard is the conversation's command on the landing path, which has no
-	// session to build an agent command from.
-	Onboard []string
-	Env     []string
+	Env    []string
 	// Agent builds a session's supervisor command and environment against the
-	// control socket the workbench will serve that session on.
-	Agent func(sessionRoot, socket string, resume bool) (argv, env []string, err error)
+	// control socket the workbench will serve that session on. runnerID names
+	// the agent the session was assembled with; empty means the workbench's own.
+	Agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, err error)
 	// Shell builds the user shell window's command for a session root, which is
 	// why it is a function rather than an argv.
 	Shell func(sessionRoot string) []string
 	// Document is the window one of the session's own files opens in, named
 	// relative to its root; it errors on a name resolving outside the session.
 	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
-	// Picker builds the repository picker's command, as Shell does.
-	Picker func(sessionRoot string) []string
 	// Reveal builds the command that shows a session's directory in the file
 	// manager, and is a function for the same reason Shell is.
 	Reveal func(sessionRoot string) []string
-	// Onboarding builds the command that assembles a new session. It takes the
-	// control socket, not a root: it names the session it makes by adopting it.
-	Onboarding func(socket string) []string
 	// Dock sends the agent's windows to the tab strip rather than the screen.
 	Dock bool
+	// Config is the sessions root and the configured owners the overlay assembles
+	// against.
+	Config *config.Config
+	// Runners is the agents the overlay offers, mapped off launch's own rows so
+	// nothing here imports launch.
+	Runners func() ([]assembly.Runner, error)
+	// Signal relaunches a session's runner after an escalation, which is
+	// launch.SignalSupervisor reached without importing it.
+	Signal func(sessionRoot string)
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
 // booted goes with it; nothing survives in the background.
 func Run(opts Options) error {
-	if opts.Agent == nil || (opts.SessionRoot == "" && len(opts.Onboard) == 0) {
+	// A workbench with no way to build an agent command is an error; a workbench
+	// with no session is the ordinary case.
+	if opts.Agent == nil {
 		return ErrNoAgentCommand
 	}
 	if opts.Socket == "" {
 		return ErrNoControlSocket
+	}
+	if opts.Config == nil {
+		return ErrNoConfig
 	}
 	assets, err := frontend()
 	if err != nil {
@@ -77,9 +85,15 @@ func Run(opts Options) error {
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)
 	windows := newWindows(r, r.Emit, opts.Dock, reg)
+	repos := newRepositories(opts.Config, r.Emit)
+	picker := newPicker(opts.Config, reg, repos, opts.Signal)
 	r.register(application.NewService(term))
 	r.register(application.NewService(windows))
 	r.register(application.NewService(reg))
+	r.register(application.NewService(repos))
+	r.register(application.NewService(&Orgs{cfg: opts.Config}))
+	r.register(application.NewService(newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)))
+	r.register(application.NewService(picker))
 	return run(r, term, windows, opts)
 }
 
@@ -109,7 +123,8 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 		},
 		agent: opts.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
-			return serveControl(socket, windows, state, controlHooks{attention: state.activity.hook})
+			return serveControl(socket, windows, state,
+				controlHooks{attention: state.activity.hook, picker: reg.queuePicker})
 		},
 		shown: func(state *sessionState) {
 			r.Retitle(mainWindowName, windowTitle(state.root()))
@@ -177,26 +192,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	windows.newDocument = func(name string) (string, error) {
 		return openDocument(windows, reg.current(), opts.Document, name)
 	}
-	windows.newPicker = func() (string, error) {
-		return openPicker(windows, reg.current(), opts.Picker)
-	}
-	windows.newOnboard = func() (string, error) {
-		return openOnboard(windows, reg.current(), opts.Onboarding, opts.Socket, opts.Root)
-	}
-
-	// The landing path's conversation is registered before it is served, because
-	// the process socket is the session it goes on to adopt.
-	var landing *sessionState
-	if opts.SessionRoot == "" {
-		landing = reg.add("", opts.Onboard, withTerminalEnv(opts.Env))
-	}
-	// The landing path's supervisor keeps talking to the process socket across the
-	// handover, so that is where its runner raises attention.
-	hooks := controlHooks{adopt: reg.adopt}
-	if landing != nil {
-		hooks.attention = landing.activity.hook
-	}
-	server, err := serveControl(opts.Socket, windows, landing, hooks)
+	server, err := serveControl(opts.Socket, windows, nil, controlHooks{picker: reg.queuePicker})
 	if err != nil {
 		return err
 	}
@@ -213,10 +209,8 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	}); err != nil {
 		return err
 	}
-	if landing != nil {
-		reg.reveal(landing)
-	} else {
-		opened, err := reg.start(opts.SessionRoot, opts.Resume)
+	if opts.SessionRoot != "" {
+		opened, err := reg.start(opts.SessionRoot, "", opts.Resume)
 		if err != nil {
 			return err
 		}
@@ -287,42 +281,6 @@ func openDocument(windows *Windows, owner *sessionState, window func(string, str
 		return "", err
 	}
 	return windows.openStructural(owner, opts)
-}
-
-// openPicker puts the repository picker in the right pane. A tab, not a window
-// of its own: adding a repository is not worth losing sight of the conversation.
-func openPicker(windows *Windows, owner *sessionState, argv func(string) []string) (string, error) {
-	if owner == nil || argv == nil {
-		return "", ErrNoPickerCommand
-	}
-	root := owner.root()
-	if root == "" {
-		return "", ErrNoPickerCommand
-	}
-	return windows.openStructural(owner, workbench.WindowOptions{
-		Kind:        workbench.KindTerminal,
-		Label:       pickerWindowLabel,
-		Cwd:         root,
-		Command:     argv(root),
-		Source:      pickerSource,
-		CloseOnExit: true,
-	})
-}
-
-// openOnboard puts the session assembly in the right pane, belonging to whichever
-// session is on screen — or to none, which is the window with no session at all.
-func openOnboard(windows *Windows, owner *sessionState, argv func(string) []string, socket, root string) (string, error) {
-	if argv == nil || socket == "" {
-		return "", ErrNoOnboardCommand
-	}
-	return windows.openStructural(owner, workbench.WindowOptions{
-		Kind:        workbench.KindTerminal,
-		Label:       onboardWindowLabel,
-		Cwd:         root,
-		Command:     argv(socket),
-		Source:      onboardSource,
-		CloseOnExit: true,
-	})
 }
 
 // shellLabel leaves the first shell unnumbered, so a session with one reads as

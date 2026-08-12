@@ -3,26 +3,32 @@ package desktop
 import (
 	"errors"
 	"fmt"
+
+	"github.com/kieranajp/qrouton/internal/assembly"
 )
 
 var (
 	ErrNoAgentCommand     = errors.New("workbench has no agent command to run")
 	ErrNoControlSocket    = errors.New("workbench has no control socket address")
+	ErrNoConfig           = errors.New("workbench has no configuration to assemble sessions against")
 	ErrTerminalNotStarted = errors.New("terminal is not started")
 
-	ErrNoWindowOptions  = errors.New("open request carries no window options")
-	ErrNoWindowCommand  = errors.New("a terminal window needs a command")
-	ErrNotATerminal     = errors.New("window is not a terminal")
-	ErrNoSessionRoot    = errors.New("adopt request carries no session root")
-	ErrNoSession        = errors.New("this control socket serves no session")
-	ErrNoLandingSession = errors.New("no session is being chosen for this workbench to adopt")
-	ErrNoShellCommand   = errors.New("workbench has no shell command to run")
-	ErrNoDocumentName   = errors.New("open request names no document")
-	ErrNoEditorCommand  = errors.New("workbench has no editor command to open a document with")
-	ErrNoPickerCommand  = errors.New("workbench has no repository picker to run")
-	ErrNoRevealCommand  = errors.New("workbench has no command to reveal a session's directory with")
-	ErrNoOnboardCommand = errors.New("workbench has no session assembly to run")
+	ErrNoWindowOptions = errors.New("open request carries no window options")
+	ErrNoWindowCommand = errors.New("a terminal window needs a command")
+	ErrNotATerminal    = errors.New("window is not a terminal")
+	ErrNoSessionRoot   = errors.New("picker request carries no session root")
+	ErrNoSession       = errors.New("this control socket serves no session")
+	ErrNoShellCommand  = errors.New("workbench has no shell command to run")
+	ErrNoDocumentName  = errors.New("open request names no document")
+	ErrNoEditorCommand = errors.New("workbench has no editor command to open a document with")
+	ErrNoRevealCommand = errors.New("workbench has no command to reveal a session's directory with")
 )
+
+// draftRefused turns a validation problem into the refusal the page's promise
+// rejects with, so pressing Create on an invalid form says which field.
+func draftRefused(p assembly.Problem) error {
+	return fmt.Errorf("%s: %s", p.Field, p.Message)
+}
 
 func noSuchWindow(id string) error {
 	return fmt.Errorf("no open window with id %q", id)

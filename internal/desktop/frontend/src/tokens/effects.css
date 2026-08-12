@@ -9,6 +9,7 @@
   --shadow-offset-lg: 5px 5px 0;
   --shadow-cube: 3px 3px 0 var(--ctp-surface-0);
   --shadow-focus: 3px 3px 0 color-mix(in srgb, var(--ctp-blue) 16%, transparent);
+  --shadow-focus-md: 4px 4px 0 color-mix(in srgb, var(--ctp-blue) 16%, transparent);
   --shadow-focus-lg: 5px 5px 0 color-mix(in srgb, var(--ctp-blue) 16%, transparent);
   --shadow-menu: 6px 6px 0 rgba(0, 0, 0, 0.45);
   --shadow-window: 0 24px 60px rgba(0, 0, 0, 0.5);
