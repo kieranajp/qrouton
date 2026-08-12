@@ -22,18 +22,19 @@ func recordedWindows(t *testing.T, dir string) []session.WindowRecord {
 // being told — and the session ending is not the user closing them.
 func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	r := newFakeRenderer()
-	opts := testOptions(t)
+	opts, boot := testOptions(t)
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	if err := session.WriteManifest(opts.SessionRoot, session.Manifest{Slug: "recorded", Name: "Recorded"}); err != nil {
 		t.Fatal(err)
 	}
-	windows := newWindows(r, r.Emit, false)
+	_, term, windows := testWorkbench(t, r, r.Emit)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, newTerm(opts, r.Emit), windows, opts) }()
+	go func() { done <- run(r, term, windows, opts) }()
 	conversation := <-r.opened
 
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
+	socket := boot.socket(t, opts.SessionRoot)
+	host, err := (workbench.Handle{Socket: socket, SessionRoot: opts.SessionRoot}).WindowHost()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,12 +82,14 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 // write, and must not treat that as a failure.
 func TestRecordingWaitsForASession(t *testing.T) {
 	r := newFakeRenderer()
-	windows := newWindows(r, r.Emit, false)
-	root := ""
-	record := &windowRecorder{root: func() string { return root }, windows: windows}
+	reg := newSessions()
+	owner := reg.add("", []string{"/bin/cat"}, nil)
+	reg.reveal(owner)
+	windows := newWindows(r, r.Emit, false, reg)
+	record := &windowRecorder{windows: windows}
 	windows.observe(record.save)
 
-	if _, err := windows.openWindow(workbench.WindowOptions{
+	if _, err := windows.openWindow(owner, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 	}); err != nil {
 		t.Fatal(err)
@@ -95,8 +98,10 @@ func TestRecordingWaitsForASession(t *testing.T) {
 	t.Cleanup(windows.stopAll)
 
 	dir := t.TempDir()
-	root = dir
-	record.save()
+	if err := reg.adopt(dir, false); err != nil {
+		t.Fatal(err)
+	}
+	record.save(owner)
 	if _, err := session.Load(dir); err == nil {
 		t.Fatal("recording invented a manifest for a directory that is not a session")
 	}

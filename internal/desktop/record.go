@@ -10,7 +10,6 @@ import (
 // so the session's state is legible from the file and a later resume can rebuild
 // it. Nothing replays the record yet.
 type windowRecorder struct {
-	root    func() string
 	windows *Windows
 
 	// mu orders the read-modify-write, so the last change is what the manifest
@@ -20,14 +19,17 @@ type windowRecorder struct {
 
 // save is best-effort: a session whose manifest is not written yet, or a root
 // onboarding has not chosen, costs nothing while nothing reads the record back.
-func (r *windowRecorder) save() {
-	root := r.root()
+func (r *windowRecorder) save(owner *sessionState) {
+	if owner == nil {
+		return
+	}
+	root := owner.root()
 	if root == "" {
 		return
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	open := r.windows.snapshot()
+	open := r.windows.snapshot(owner)
 	records := make([]session.WindowRecord, 0, len(open))
 	for _, opts := range open {
 		records = append(records, session.WindowRecord{

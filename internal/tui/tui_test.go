@@ -52,6 +52,85 @@ func TestRepositoryInclusionAndRoles(t *testing.T) {
 	}
 }
 
+// pickRepo presses space on a named repository, wherever the list holds its row.
+func pickRepo(t *testing.T, m *appModel, id string) {
+	t.Helper()
+	for i, r := range m.filteredRepos() {
+		if r.ID() == id {
+			m.form.cursor = i
+			m.cycleRepoRole()
+			return
+		}
+	}
+	t.Fatalf("%q is not in the repository list", id)
+}
+
+func selectedIDs(sels []session.RepoSelection) string {
+	ids := make([]string, 0, len(sels))
+	for _, sel := range sels {
+		ids = append(ids, sel.Repo.ID())
+	}
+	return strings.Join(ids, " ")
+}
+
+// The rail names three repositories and counts the rest, so pick order is a
+// ranking: the ones chosen first are the ones being worked in.
+func TestSelectedReposFollowThePickOrderNotTheListOrder(t *testing.T) {
+	m := testApp()
+	m.repos = []github.Repo{
+		{Org: "acme", Name: "api", DefaultBranch: "main"},
+		{Org: "acme", Name: "docs", DefaultBranch: "main"},
+		{Org: "other", Name: "web", DefaultBranch: "trunk"},
+	}
+	pickRepo(t, &m, "other/web")
+	pickRepo(t, &m, "acme/api")
+	pickRepo(t, &m, "acme/docs")
+
+	if got, want := selectedIDs(m.selectedRepos()), "other/web acme/api acme/docs"; got != want {
+		t.Fatalf("selected = %q, want %q", got, want)
+	}
+}
+
+// Demoting a repository to reference changes its role, not its rank.
+func TestCyclingToReferenceKeepsThePickPosition(t *testing.T) {
+	m := testApp()
+	pickRepo(t, &m, "acme/api")
+	pickRepo(t, &m, "other/web")
+	pickRepo(t, &m, "acme/api")
+
+	sels := m.selectedRepos()
+	if got, want := selectedIDs(sels), "acme/api other/web"; got != want {
+		t.Fatalf("selected = %q, want %q", got, want)
+	}
+	if sels[0].Role != session.RepoRoleReference {
+		t.Fatalf("acme/api selected as %q, want reference", sels[0].Role)
+	}
+}
+
+func TestCyclingARepositoryOffAndBackPicksItLast(t *testing.T) {
+	m := testApp()
+	m.repos = []github.Repo{
+		{Org: "acme", Name: "api", DefaultBranch: "main"},
+		{Org: "acme", Name: "docs", DefaultBranch: "main"},
+		{Org: "other", Name: "web", DefaultBranch: "trunk"},
+	}
+	pickRepo(t, &m, "acme/api")
+	pickRepo(t, &m, "acme/docs")
+	pickRepo(t, &m, "other/web")
+
+	// acme/api on to reference, then off altogether.
+	pickRepo(t, &m, "acme/api")
+	pickRepo(t, &m, "acme/api")
+	if got, want := selectedIDs(m.selectedRepos()), "acme/docs other/web"; got != want {
+		t.Fatalf("selected after excluding acme/api = %q, want %q", got, want)
+	}
+
+	pickRepo(t, &m, "acme/api")
+	if got, want := selectedIDs(m.selectedRepos()), "acme/docs other/web acme/api"; got != want {
+		t.Fatalf("selected after picking acme/api again = %q, want %q", got, want)
+	}
+}
+
 func TestModeFieldTogglesAndRenders(t *testing.T) {
 	m := testApp()
 	m.width = 100

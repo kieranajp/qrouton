@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"encoding/base64"
-	"sync"
 
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -10,103 +9,55 @@ import (
 // emitter delivers a payload to the windows' pages.
 type emitter func(event string, payload any)
 
-// Term is the conversation terminal's Go half; the page calls these methods
-// over the Wails bridge by their fully qualified names. Its child is the agent
-// supervisor, whose stdio is therefore the PTY the runner inherits.
+// Term is the conversation terminals' Go half; a page calls these methods over
+// the Wails bridge, naming the terminal it draws. A terminal's child is a
+// session's agent supervisor, so its stdio is the PTY that runner inherits.
 type Term struct {
-	argv     []string
-	env      []string
-	dir      string
+	sessions *Sessions
 	emit     emitter
-	activity *activity
 
-	exited func(code int)
-
-	mu      sync.Mutex
-	process *ptyProcess
+	exited func(state *sessionState, code int)
 }
 
-func newTerm(opts Options, emit emitter) *Term {
-	env := workbench.WithEnv(opts.Env, termEnvVar, termValue)
-	return &Term{
-		argv:     opts.Argv,
-		env:      workbench.WithEnv(env, colorTermEnvVar, colorTermValue),
-		dir:      opts.SessionRoot,
-		emit:     emit,
-		activity: &activity{},
-	}
+func newTerm(reg *Sessions, emit emitter) *Term {
+	return &Term{sessions: reg, emit: emit}
 }
 
-// whenChildExits registers what happens once the conversation's process ends.
-// Set it before the page can call Start.
-func (t *Term) whenChildExits(f func(code int)) { t.exited = f }
+// whenChildExits registers what happens once a conversation's process ends. Set
+// it before the page can call Start.
+func (t *Term) whenChildExits(f func(state *sessionState, code int)) { t.exited = f }
 
-// Start launches the supervisor under a PTY sized to the terminal displaying
-// it. The page calls it on load, so a reload must not fork a second agent.
-func (t *Term) Start(cols, rows int) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.process != nil {
-		return nil
+func (t *Term) Start(id string, cols, rows int) error {
+	state, ok := t.sessions.byTerminal(id)
+	if !ok {
+		return noSuchTerminal(id)
 	}
-	process, err := startPTY(t.argv, t.env, t.dir, cols, rows)
-	if err != nil {
-		return err
-	}
-	t.process = process
-	// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and
-	// JSON marshalling corrupts it.
-	go process.pump(
-		func(b []byte) {
-			t.activity.wrote()
-			t.emit(ptyDataEvent, base64.StdEncoding.EncodeToString(b))
-		},
-		t.childExited,
-	)
-	return nil
+	return state.start(t.emit, t.exited, cols, rows)
 }
 
-func (t *Term) childExited(code int) {
-	t.emit(ptyExitEvent, code)
-	if t.exited != nil {
-		t.exited(code)
-	}
-}
-
-func (t *Term) Write(encoded string) error {
+func (t *Term) Write(id, encoded string) error {
 	data, err := base64.StdEncoding.DecodeString(encoded)
 	if err != nil {
 		return err
 	}
-	t.activity.answered()
-	t.mu.Lock()
-	process := t.process
-	t.mu.Unlock()
-	if process == nil {
-		return ErrTerminalNotStarted
+	state, ok := t.sessions.byTerminal(id)
+	if !ok {
+		return noSuchTerminal(id)
 	}
-	return process.write(data)
+	return state.write(data)
 }
 
 // Resize retells the child how big its terminal is, so dragging the window edge
 // reflows the agent's layout.
-func (t *Term) Resize(cols, rows int) error {
-	t.mu.Lock()
-	process := t.process
-	t.mu.Unlock()
-	if process == nil {
+func (t *Term) Resize(id string, cols, rows int) error {
+	state, ok := t.sessions.byTerminal(id)
+	if !ok {
 		return nil
 	}
-	return process.resize(cols, rows)
+	return state.resize(cols, rows)
 }
 
-// Stop ends the session's process tree.
-func (t *Term) Stop() {
-	t.mu.Lock()
-	process := t.process
-	t.process = nil
-	t.mu.Unlock()
-	if process != nil {
-		process.stop()
-	}
+// withTerminalEnv tells a child what it is rendering for.
+func withTerminalEnv(env []string) []string {
+	return workbench.WithEnv(workbench.WithEnv(env, termEnvVar, termValue), colorTermEnvVar, colorTermValue)
 }

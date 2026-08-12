@@ -33,6 +33,7 @@ const (
 	resumeFlag        = "--resume"
 	socketFlag        = "--socket"
 	refreshFlag       = "--refresh"
+	adoptOnlyFlag     = "--adopt-only"
 
 	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
 	// loop rather than assemble a session. Its literal is duplicated in main,
@@ -45,7 +46,6 @@ const (
 const (
 	workbenchFailureFormat = "%w: see %s"
 	specParseError         = "parse workbench spec"
-	socketNetwork          = "unix"
 )
 
 // scriptMode is the permission bit the generated support scripts need.

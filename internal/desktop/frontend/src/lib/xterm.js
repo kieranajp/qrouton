@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { position } from "./shortcuts.js";
 
 // getPropertyValue does not resolve a var() chain, so read the ramp itself.
 const shade = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -59,6 +60,9 @@ export function mount(host, { write, background = "--ctp-base" }) {
 
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
+    // Returning false without preventing the default leaves the keystroke to
+    // bubble, which is how the session shortcut reaches the page from in here.
+    if (position(event)) return false;
     if (event.key === "Enter" && event.shiftKey) {
       // Returning false stops xterm's keydown handling but not the browser's
       // own keypress, which would append a CR and submit.

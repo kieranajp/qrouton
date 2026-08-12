@@ -18,6 +18,11 @@ const (
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
+	onboardWindowLabel = "+ session"
+	// Two assemblies writing the same manifest is a lost selection, so this keys
+	// the deduplication.
+	onboardSource = "qrouton:onboard"
+
 	pickerWindowLabel = "+ repos"
 	// Source is the manifest's own name for a window; the picker has no file
 	// behind it, so this stands in as the key OpenPicker deduplicates on.
@@ -40,13 +45,15 @@ const (
 	contentTypeHeader = "Content-Type"
 
 	windowIDFormat = "window-%d"
+
+	terminalIDFormat = "term-%d"
 )
 
-// Events the Go side emits at the pages; an agent window's own id is appended
-// so each page hears only its own stream.
+// Events the Go side emits at the pages; a window's or a conversation's own id
+// is appended so each page hears only its own stream.
 const (
-	ptyDataEvent = "pty:data"
-	ptyExitEvent = "pty:exit"
+	ptyDataEvent = "pty:data:"
+	ptyExitEvent = "pty:exit:"
 	chromeEvent  = "chrome:update"
 
 	windowDataEvent = "window:data:"

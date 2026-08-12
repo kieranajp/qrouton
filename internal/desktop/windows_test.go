@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -8,10 +9,23 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
+// testWindows is a window registry over one session, which w.shown() answers
+// with and every open takes as owner.
 func testWindows(t *testing.T) (*Windows, *fakeRenderer) {
 	t.Helper()
+	return newTestWindows(t, false)
+}
+
+// testDockedWindows sends the agent's windows to the tab strip.
+func testDockedWindows(t *testing.T) (*Windows, *fakeRenderer) {
+	t.Helper()
+	return newTestWindows(t, true)
+}
+
+func newTestWindows(t *testing.T, dock bool) (*Windows, *fakeRenderer) {
+	t.Helper()
 	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, false)
+	w := newWindows(r, r.Emit, dock, testRegistry(t, t.TempDir()))
 	t.Cleanup(w.stopAll)
 	return w, r
 }
@@ -21,7 +35,7 @@ func testWindows(t *testing.T) (*Windows, *fakeRenderer) {
 // window it is.
 func TestOpenTerminalWindowCarriesItsIDInThePageURL(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
 		Label:   "▶ dev",
 		Cwd:     t.TempDir(),
@@ -52,11 +66,9 @@ func TestOpenTerminalWindowCarriesItsIDInThePageURL(t *testing.T) {
 // for most of a session is the shell. Terminals stay put: the tab strip focuses
 // the terminal it selects, and the keyboard belongs to the conversation.
 func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) {
-	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, true)
-	t.Cleanup(w.stopAll)
+	w, r := testDockedWindows(t)
 
-	if _, err := w.openWindow(workbench.WindowOptions{
+	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 	}); err != nil {
 		t.Fatal(err)
@@ -68,7 +80,7 @@ func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) 
 		t.Fatal("a docked terminal pulled the right pane over to itself")
 	}
 
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md",
 		Content: "# P006\n", Format: workbench.FormatMarkdown,
 	})
@@ -77,7 +89,7 @@ func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) 
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if got := r.events[selectEvent]; got != id {
+	if got := r.events[selectEvent]; got != (selection{Session: w.shown().slug(), ID: id}) {
 		t.Fatalf("selected %v, want the document %q", got, id)
 	}
 }
@@ -86,7 +98,7 @@ func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) 
 // keyboard back once the picker is up.
 func TestOpenHonoursAFocusRequest(t *testing.T) {
 	w, r := testWindows(t)
-	if _, err := w.openWindow(workbench.WindowOptions{
+	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "escalate", Cwd: t.TempDir(),
 		Command: []string{"/bin/cat"}, Focus: true,
 	}); err != nil {
@@ -99,7 +111,7 @@ func TestOpenHonoursAFocusRequest(t *testing.T) {
 
 func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 	w, _ := testWindows(t)
-	if _, err := w.openWindow(workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "empty"}); err != ErrNoWindowCommand {
+	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "empty"}); err != ErrNoWindowCommand {
 		t.Fatalf("open error = %v, want ErrNoWindowCommand", err)
 	}
 }
@@ -108,11 +120,9 @@ func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 // and take the whole workbench with it. Under dock the agent's documents become
 // tabs, which is exactly what the terminal page calls Start on.
 func TestStartRefusesADocumentWindow(t *testing.T) {
-	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, true)
-	t.Cleanup(w.stopAll)
+	w, _ := testDockedWindows(t)
 
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
 	})
 	if err != nil {
@@ -128,7 +138,7 @@ func TestStartRefusesADocumentWindow(t *testing.T) {
 
 func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ diff", Content: "diff --git a/x b/x",
 	})
 	if err != nil {
@@ -151,7 +161,7 @@ func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 // a document that merely quotes a diff must not be painted as one.
 func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ diff",
 		Content: "@@ -1 +1 @@\n-old\n+new", Format: workbench.FormatDiff,
 	})
@@ -174,7 +184,7 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 		t.Fatalf("the agent was given something other than the diff text: %q", agent)
 	}
 
-	plain, err := w.openWindow(workbench.WindowOptions{
+	plain, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
 	})
 	if err != nil {
@@ -191,7 +201,7 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	w, r := testWindows(t)
 	const source = "thoughts/shared/plans/P007-2026-08-11-document-panes.md"
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "P007", Source: source, Content: "# Document panes",
 	})
 	if err != nil {
@@ -210,7 +220,7 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 // The toast is the only self-expiring window; nothing else is on a timer.
 func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished", TTL: 20 * time.Millisecond,
 	})
 	if err != nil {
@@ -228,18 +238,16 @@ func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
 // A docked toast is a tab the user dismisses, not a clock the way a floating
 // one is.
 func TestADockedAttentionWindowReportsWaitingAndOutlivesItsTTL(t *testing.T) {
-	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, true)
-	t.Cleanup(w.stopAll)
+	w, _ := testDockedWindows(t)
 
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
 		Attention: true, TTL: 20 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.tabs()[0].Status; got != tabStatusWaiting {
+	if got := w.tabs(w.shown())[0].Status; got != tabStatusWaiting {
 		t.Fatalf("an attention tab reports %q, want waiting", got)
 	}
 	time.Sleep(60 * time.Millisecond)
@@ -261,7 +269,7 @@ func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, r := testWindows(t)
-			id, err := w.openWindow(workbench.WindowOptions{
+			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 				Kind: workbench.KindTerminal, Label: tc.name, Cwd: t.TempDir(),
 				Command: tc.command, CloseOnExit: true,
 			})
@@ -293,7 +301,7 @@ func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
 // rewritten by a carriage return reads as what it ended up saying.
 func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "output", Cwd: t.TempDir(),
 		Command: []string{"/bin/sh", "-c", `printf 'a\033[31mred\033[0m\nprogress\rdone\n'`},
 	})
@@ -348,7 +356,7 @@ func TestRingKeepsTheTailWithinItsLimit(t *testing.T) {
 // closed a window; the close handler is what keeps it honest.
 func TestAWindowTheUserClosedLeavesTheRegistry(t *testing.T) {
 	w, r := testWindows(t)
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 	})
 	if err != nil {
@@ -375,7 +383,7 @@ func TestCloseWindowRejectsAnUnknownID(t *testing.T) {
 func TestStopAllTearsDownEveryWindow(t *testing.T) {
 	w, r := testWindows(t)
 	for range 3 {
-		if _, err := w.openWindow(workbench.WindowOptions{
+		if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 			Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 		}); err != nil {
 			t.Fatal(err)
@@ -397,11 +405,9 @@ func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
 		{"dock", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			r := newFakeRenderer()
-			w := newWindows(r, r.Emit, tc.dock)
-			t.Cleanup(w.stopAll)
+			w, r := newTestWindows(t, tc.dock)
 
-			id, err := w.openWindow(workbench.WindowOptions{
+			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 				Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(),
 				Command: []string{"/bin/sh", "-c", "echo docked"},
 			})
@@ -411,7 +417,7 @@ func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
 			if !w.exists(id) || len(w.list()) != 1 {
 				t.Fatalf("registry = %v", w.list())
 			}
-			drawn := w.surfaces()
+			drawn := w.surfaces(w.shown())
 			if tc.dock {
 				if len(drawn.Tabs) != 1 || drawn.Tabs[0].ID != id || drawn.Tabs[0].Label != "▶ dev" {
 					t.Fatalf("tabs = %+v, want the window", drawn.Tabs)
@@ -453,35 +459,31 @@ func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
 // A tab reports the state of its process, which is what AGENTS.md requires
 // before a tab may stand in for a window.
 func TestADockedTabReportsItsProcessWithoutBeingFocused(t *testing.T) {
-	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, true)
-	t.Cleanup(w.stopAll)
+	w, _ := testDockedWindows(t)
 
-	id, err := w.openWindow(workbench.WindowOptions{
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "go test", Cwd: t.TempDir(),
 		Command: []string{"/bin/sh", "-c", "exit 3"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.tabs()[0].Status; got != tabStatusRunning {
+	if got := w.tabs(w.shown())[0].Status; got != tabStatusRunning {
 		t.Fatalf("a fresh tab reports %q, want running", got)
 	}
 	if err := w.Start(id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure to reach the tab", func() bool {
-		tabs := w.tabs()
+		tabs := w.tabs(w.shown())
 		return len(tabs) == 1 && tabs[0].Status == tabStatusFailed
 	})
 }
 
 func TestAFocusedWindowFloatsEvenWhenDocking(t *testing.T) {
-	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, true)
-	t.Cleanup(w.stopAll)
+	w, r := testDockedWindows(t)
 
-	if _, err := w.openWindow(workbench.WindowOptions{
+	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "escalate", Cwd: t.TempDir(),
 		Command: []string{"/bin/cat"}, Focus: true,
 	}); err != nil {
@@ -490,7 +492,70 @@ func TestAFocusedWindowFloatsEvenWhenDocking(t *testing.T) {
 	if spec := <-r.opened; !spec.Focus {
 		t.Fatal("the picker opened without focus")
 	}
-	if drawn := w.surfaces(); len(drawn.Tabs) != 0 || len(drawn.Floating) != 1 {
+	if drawn := w.surfaces(w.shown()); len(drawn.Tabs) != 0 || len(drawn.Floating) != 1 {
 		t.Fatalf("surfaces = %+v, want the picker on screen", drawn)
+	}
+}
+
+// A page asks for its own session's windows by slug, and drawing another
+// session's tabs is drawing work the user cannot reach from that window.
+func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
+	r := newFakeRenderer()
+	reg := newSessions()
+	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
+	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
+	reg.reveal(alpha)
+	w := newWindows(r, r.Emit, true, reg)
+	t.Cleanup(w.stopAll)
+
+	for _, tc := range []struct {
+		owner *sessionState
+		label string
+	}{{alpha, "▶ alpha dev"}, {beta, "▶ beta dev"}} {
+		if _, err := w.openStructural(tc.owner, workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: tc.label, Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tc := range []struct {
+		slug  string
+		label string
+	}{{"alpha", "▶ alpha dev"}, {"beta", "▶ beta dev"}} {
+		drawn := w.Surfaces(tc.slug)
+		if drawn.Session != tc.slug {
+			t.Fatalf("surfaces for %q name session %q", tc.slug, drawn.Session)
+		}
+		if len(drawn.Tabs) != 1 || drawn.Tabs[0].Label != tc.label {
+			t.Fatalf("%q sees %+v, want only its own %q", tc.slug, drawn.Tabs, tc.label)
+		}
+	}
+}
+
+// Both payloads reach every session's page, so each has to say which session it
+// is about before the page can decide whether it is being spoken to.
+func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
+	w, r := testDockedWindows(t)
+	owner := w.shown()
+
+	id, err := w.openWindow(owner, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md", Content: "# P006\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	opened, ok := r.events[windowsEvent].(surfaces)
+	if !ok {
+		t.Fatalf("no open payload reached the page: %v", r.events)
+	}
+	if opened.Session != owner.slug() {
+		t.Fatalf("the open payload names session %q, want %q", opened.Session, owner.slug())
+	}
+	if got := r.events[selectEvent]; got != (selection{Session: owner.slug(), ID: id}) {
+		t.Fatalf("the select payload is %#v, want the session and %q", got, id)
 	}
 }

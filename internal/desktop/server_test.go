@@ -9,6 +9,13 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
+// adoption is what the adopt hook was told: the session chosen, and whether the
+// workbench is the one to boot its agent.
+type adoption struct {
+	root string
+	boot bool
+}
+
 // The control socket is the one place the port's wire format is agreed, and the
 // two halves are compiled separately — so this drives the real server through
 // the real client rather than either side's idea of the other.
@@ -18,8 +25,10 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adopted := make(chan string, 1)
-	server, err := serveControl(socket, windows, controlHooks{adopt: func(root string) { adopted <- root }})
+	adopted := make(chan adoption, 1)
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
+		adopt: func(root string, boot bool) error { adopted <- adoption{root: root, boot: boot}; return nil },
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,11 +69,11 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil || text != "one change" {
 		t.Fatalf("Read = %q, %v", text, err)
 	}
-	if err := host.Adopt(ctx, "/sessions/octopus"); err != nil {
+	if err := host.Adopt(ctx, "/sessions/octopus", true); err != nil {
 		t.Fatal(err)
 	}
-	if root := <-adopted; root != "/sessions/octopus" {
-		t.Fatalf("adopted %q", root)
+	if got := <-adopted; got.root != "/sessions/octopus" || !got.boot {
+		t.Fatalf("adopted %+v, want the root and the boot the caller asked for", got)
 	}
 
 	if err := host.Close(ctx, id); err != nil {
@@ -86,7 +95,7 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, controlHooks{adopt: func(string) {}})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{adopt: func(string, bool) error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +110,7 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	if err := host.Close(ctx, "window-99"); err == nil {
 		t.Fatal("close of an unknown window succeeded")
 	}
-	if err := host.Adopt(ctx, ""); err == nil {
+	if err := host.Adopt(ctx, "", false); err == nil {
 		t.Fatal("adopt with no session root succeeded")
 	}
 	if _, err := host.Open(ctx, workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "x"}); err == nil {
@@ -120,7 +129,7 @@ func TestServeControlReplacesAStaleSocket(t *testing.T) {
 	if err := os.WriteFile(socket, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, controlHooks{adopt: func(string) {}})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{adopt: func(string, bool) error { return nil }})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -25,8 +25,11 @@ type formState struct {
 	focus, cursor                     int
 	mode                              session.SessionMode
 	roles                             map[string]repoRole
-	owners                            map[string]bool
-	ticketStatus                      string
+	// picked is the repositories in the order they were given a role. Chosen first
+	// means worked in most, which is the ranking the rail truncates against.
+	picked       []string
+	owners       map[string]bool
+	ticketStatus string
 }
 
 // Focus indices, in the order viewForm renders the fields. lastFormField bounds
@@ -299,11 +302,23 @@ func (m *appModel) cycleRepoRole() {
 	switch m.form.roles[id] {
 	case excluded:
 		m.form.roles[id] = active
+		m.form.picked = append(m.form.picked, id)
 	case active:
 		m.form.roles[id] = reference
 	case reference:
 		delete(m.form.roles, id)
+		m.form.picked = dropPicked(m.form.picked, id)
 	}
+}
+
+func dropPicked(picked []string, id string) []string {
+	kept := picked[:0]
+	for _, seen := range picked {
+		if seen != id {
+			kept = append(kept, seen)
+		}
+	}
+	return kept
 }
 
 func (m appModel) validateForm() error {

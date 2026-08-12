@@ -17,31 +17,47 @@ import (
 )
 
 // Fields is the session the workbench window draws around its terminal. Read
-// leaves Repos and Activity empty: one costs subprocesses, the other needs a
-// live PTY, so their owners fill them.
+// leaves Repos, Activity and Sessions empty: the first costs subprocesses, the
+// second needs a live PTY, and the last is the app's rather than a session's.
 //
 // No slice here may be nil. A nil one marshals as JSON null, and the page's
 // defaults only fill keys the payload omits, so null reaches a .length and
 // takes the whole window down with it.
 type Fields struct {
-	Mode      string       `json:"mode"`
-	Phase     string       `json:"phase"`
-	Identity  string       `json:"identity"`
-	Branch    string       `json:"branch"`
+	Mode     string `json:"mode"`
+	Phase    string `json:"phase"`
+	Identity string `json:"identity"`
+	Branch   string `json:"branch"`
+	// Slug and Terminal name the session on screen and the conversation the page
+	// attaches to; the page has no other way to address either.
+	Slug      string       `json:"slug"`
+	Terminal  string       `json:"terminal"`
 	Sessions  []SessionRow `json:"sessions"`
 	Documents []Document   `json:"documents"`
 	Repos     []RepoStat   `json:"repos"`
 	Activity  string       `json:"activity"`
 }
 
-// SessionRow is one session under the same root; Live marks this process's own.
+// SessionRow is one session under the sessions root. A Terminal means this
+// workbench holds a conversation for it; Activity and Unseen are all a row claims
+// about a session that is not on screen.
 type SessionRow struct {
-	Name     string `json:"name"`
-	Slug     string `json:"slug"`
-	Initials string `json:"initials"`
-	Mode     string `json:"mode"`
-	Repos    int    `json:"repos"`
-	Live     bool   `json:"live"`
+	Name     string        `json:"name"`
+	Slug     string        `json:"slug"`
+	Initials string        `json:"initials"`
+	Mode     string        `json:"mode"`
+	Repos    []SessionRepo `json:"repos"`
+	Terminal string        `json:"terminal"`
+	Activity string        `json:"activity"`
+	Unseen   int           `json:"unseen"`
+	Opened   time.Time     `json:"opened"`
+}
+
+// SessionRepo names one of a session's repositories, which is what tells two
+// sessions apart in the rail.
+type SessionRepo struct {
+	Name string `json:"name"`
+	Role string `json:"role"`
 }
 
 // Document is one durable artifact under thoughts/shared, its Path relative to
@@ -63,25 +79,24 @@ type RepoStat struct {
 	Measured   bool   `json:"measured"`
 }
 
-// Read reports everything a file read can answer, or false when the manifest
-// cannot be loaded — the caller decides what to render in its place.
-func Read(root string) (Fields, bool) {
+// Read reports everything a file read can answer about a session. A root with no
+// manifest answers with the session-level fields empty rather than nothing at all.
+func Read(root string) Fields {
+	fields := Fields{Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{}}
 	m, err := session.Load(root)
 	if err != nil {
-		return Fields{}, false
+		return fields
 	}
-	fields := Fields{
-		Mode:      modeAssistantLabel,
-		Phase:     phase(root, m),
-		Identity:  displayName(m),
-		Branch:    m.Branch(),
-		Sessions:  sessions(root),
-		Documents: documents(root),
-	}
+	fields.Mode = modeAssistantLabel
 	if m.EffectiveMode() == session.ModeRPI {
 		fields.Mode = modeRPILabel
 	}
-	return fields, true
+	fields.Phase = phase(root, m)
+	fields.Identity = displayName(m)
+	fields.Branch = m.Branch()
+	fields.Slug = m.Slug
+	fields.Documents = documents(root)
+	return fields
 }
 
 // displayName is the one owner of a session's human name: its Name if set,
@@ -136,14 +151,14 @@ func phase(root string, m session.Manifest) string {
 	}
 }
 
-// sessions lists every session under the same root, the live one first. A rail
-// row is the only way a session that is not on screen can speak.
-func sessions(root string) []SessionRow {
-	found, err := session.Scan(filepath.Dir(root))
+// Sessions lists every session under the sessions root, most recently opened
+// first and never-opened ones last by name. That order seeds the rail once; what
+// the rail then draws is the caller's, because a row's position addresses it.
+func Sessions(root string) []SessionRow {
+	found, err := session.Scan(root)
 	if err != nil {
 		return []SessionRow{}
 	}
-	live := filepath.Base(root)
 	rows := make([]SessionRow, 0, len(found))
 	for _, m := range found {
 		name := displayName(m)
@@ -151,18 +166,74 @@ func sessions(root string) []SessionRow {
 		if m.EffectiveMode() == session.ModeRPI {
 			mode = modeRPILabel
 		}
+		opened, _ := session.LastOpened(filepath.Join(root, m.Slug))
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: mode,
-			Repos: len(m.Repos), Live: m.Slug == live,
+			Repos: sessionRepos(m), Opened: opened,
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
-		if rows[i].Live != rows[j].Live {
-			return rows[i].Live
+		if !rows[i].Opened.Equal(rows[j].Opened) {
+			return rows[i].Opened.After(rows[j].Opened)
 		}
 		return rows[i].Name < rows[j].Name
 	})
 	return rows
+}
+
+// Unseen counts the documents each session has written since it was last shown.
+// One never opened reports none: everything it holds would otherwise count.
+func Unseen(root string) map[string]int {
+	found, err := session.Scan(root)
+	if err != nil {
+		return map[string]int{}
+	}
+	out := make(map[string]int, len(found))
+	for _, m := range found {
+		if count, shown := UnseenIn(filepath.Join(root, m.Slug)); shown {
+			out[m.Slug] = count
+		}
+	}
+	return out
+}
+
+// UnseenIn counts one session's documents written since it was last shown, and
+// reports false for a session never shown. Arriving at a session recounts it
+// without rereading every other one's tree.
+func UnseenIn(sessionRoot string) (int, bool) {
+	since, ok := session.LastOpened(sessionRoot)
+	if !ok {
+		return 0, false
+	}
+	return writtenSince(sessionRoot, since), true
+}
+
+func writtenSince(root string, since time.Time) int {
+	count := 0
+	_ = filepath.WalkDir(sessionpaths.Thoughts(root), func(_ string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+			return nil
+		}
+		if info, err := entry.Info(); err == nil && info.ModTime().After(since) {
+			count++
+		}
+		return nil
+	})
+	return count
+}
+
+// sessionRepos names a session's repositories in the order they were picked,
+// which is the order the manifest holds them in.
+func sessionRepos(m session.Manifest) []SessionRepo {
+	out := make([]SessionRepo, 0, len(m.Repos))
+	for _, r := range m.Repos {
+		role := roleEditing
+		if r.Role == session.RepoRoleReference {
+			role = roleReference
+		}
+		out = append(out, SessionRepo{Name: r.Name, Role: role})
+	}
+	return out
 }
 
 // initials abbreviates a session to the two letters a rail row has room for.

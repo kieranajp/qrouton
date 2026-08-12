@@ -51,7 +51,7 @@ func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &activity{}
-	server, err := serveControl(socket, windows, controlHooks{adopt: func(string) {}, attention: a.hook})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{adopt: func(string, bool) error { return nil }, attention: a.hook})
 	if err != nil {
 		t.Fatal(err)
 	}

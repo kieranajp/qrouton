@@ -102,7 +102,7 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 	if err != nil || len(ids) != 2 {
 		t.Fatalf("List = %v, %v", ids, err)
 	}
-	if err := host.Adopt(ctx, "/sessions/octopus"); err != nil {
+	if err := host.Adopt(ctx, "/sessions/octopus", false); err != nil {
 		t.Fatal(err)
 	}
 	if err := host.Close(ctx, id); err != nil {
@@ -120,12 +120,28 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 		{OpRead, func(r Request) bool { return r.ID == "window-1" && r.Full }},
 		{OpExists, func(r Request) bool { return r.ID == "window-1" }},
 		{OpList, func(r Request) bool { return true }},
-		{OpAdopt, func(r Request) bool { return r.Root == "/sessions/octopus" }},
+		{OpAdopt, func(r Request) bool { return r.Root == "/sessions/octopus" && !r.Boot }},
 		{OpClose, func(r Request) bool { return r.ID == "window-1" }},
 	} {
 		got := <-requests
 		if got.Op != want.op || !want.check(got) {
 			t.Fatalf("%s request = %+v", want.op, got)
+		}
+	}
+}
+
+// Boot is what asks the workbench to start the adopted session's agent, so a
+// value that does not survive the wire leaves that session with none.
+func TestAdoptCarriesItsBootFlagOverTheSocket(t *testing.T) {
+	socket, requests := echoServer(t, func(Request) Response { return Response{} })
+	host := newClient(socket)
+	for _, boot := range []bool{true, false} {
+		if err := host.Adopt(context.Background(), "/sessions/octopus", boot); err != nil {
+			t.Fatal(err)
+		}
+		got := <-requests
+		if got.Op != OpAdopt || got.Root != "/sessions/octopus" || got.Boot != boot {
+			t.Fatalf("adopt request = %+v, want root /sessions/octopus and boot %v", got, boot)
 		}
 	}
 }
@@ -156,6 +172,61 @@ func TestClientReportsAnAbsentWorkbench(t *testing.T) {
 	if _, err := host.List(context.Background()); !errors.Is(err, ErrWorkbenchUnreachable) {
 		t.Fatalf("List error = %v, want ErrWorkbenchUnreachable", err)
 	}
+}
+
+func TestAnsweredSeesOnlyALiveSocket(t *testing.T) {
+	socket, _ := echoServer(t, func(Request) Response { return Response{} })
+	if !Answered(socket) {
+		t.Fatalf("Answered(%q) = false while a listener is serving it", socket)
+	}
+	absent := socket + socketSuffix
+	if Answered(absent) {
+		t.Fatalf("Answered(%q) = true with nothing listening", absent)
+	}
+}
+
+func TestRunningFindsALiveSocket(t *testing.T) {
+	dir := t.TempDir()
+	listenAt(t, filepath.Join(dir, "live"+socketSuffix))
+	if !running(dir) {
+		t.Fatal("running = false with a workbench serving its socket, so a second one would launch over it")
+	}
+}
+
+// A stale socket file left there makes every later launch think a workbench is
+// already up; a process log beside it is the only record of why one died.
+func TestRunningSweepsStaleSockets(t *testing.T) {
+	dir := t.TempDir()
+	if running(filepath.Join(dir, "absent")) {
+		t.Fatal("running = true for a directory that does not exist")
+	}
+	dead := filepath.Join(dir, "dead"+socketSuffix)
+	log := ProcessLog(dead)
+	if err := os.WriteFile(dead, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(log, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if running(dir) {
+		t.Fatal("running = true with only a socket nothing answers on")
+	}
+	if _, err := os.Stat(dead); !os.IsNotExist(err) {
+		t.Fatalf("stale socket survived: %v", err)
+	}
+	if _, err := os.Stat(log); err != nil {
+		t.Fatalf("process log was swept along with the stale socket: %v", err)
+	}
+}
+
+// listenAt serves a socket at path until the test ends.
+func listenAt(t *testing.T, path string) {
+	t.Helper()
+	listener, err := net.Listen(socketNetwork, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = listener.Close() })
 }
 
 // echoServer answers each request with reply and records what it was asked.

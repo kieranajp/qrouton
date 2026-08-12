@@ -103,7 +103,7 @@ func (h *fakeHost) List(_ context.Context) ([]string, error) {
 	return ids, nil
 }
 
-func (h *fakeHost) Adopt(context.Context, string) error { return nil }
+func (h *fakeHost) Adopt(context.Context, string, bool) error { return nil }
 
 // drop takes a window away behind the manager's back, the way a user closing a
 // window by hand does.

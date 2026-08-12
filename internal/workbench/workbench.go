@@ -75,8 +75,9 @@ type WindowHost interface {
 	// tell "you closed it" from a transport failure.
 	Exists(ctx context.Context, id string) (bool, error)
 	List(ctx context.Context) ([]string, error)
-	// Adopt names the session, which onboarding chooses after the process starts.
-	Adopt(ctx context.Context, sessionRoot string) error
+	// Adopt names the session onboarding chose after the process started. boot asks
+	// the workbench to start its agent, since the caller hands over no terminal.
+	Adopt(ctx context.Context, sessionRoot string, boot bool) error
 }
 
 // Handle identifies a running desktop process across the exec boundary.

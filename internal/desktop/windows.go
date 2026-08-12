@@ -18,23 +18,26 @@ import (
 type Windows struct {
 	renderer renderer
 	emit     emitter
+	sessions *Sessions
 	// dock sends the agent's windows to the tab strip instead of the screen.
 	dock bool
 	// newShell reopens the shell after the user closes its tab.
 	newShell    func() (string, error)
 	newDocument func(name string) (string, error)
 	newPicker   func() (string, error)
+	newOnboard  func() (string, error)
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu sync.Mutex
 
 	mu      sync.Mutex
 	seq     int
 	open    map[string]*agentWindow
-	changed func()
+	changed func(owner *sessionState)
 }
 
 type agentWindow struct {
 	opts    workbench.WindowOptions
+	session *sessionState
 	seq     int
 	buffer  *ring
 	process *ptyProcess
@@ -48,27 +51,29 @@ type agentWindow struct {
 	exit *int
 }
 
-func newWindows(r renderer, emit emitter, dock bool) *Windows {
-	return &Windows{renderer: r, emit: emit, dock: dock, open: map[string]*agentWindow{}}
+func newWindows(r renderer, emit emitter, dock bool, reg *Sessions) *Windows {
+	return &Windows{renderer: r, emit: emit, sessions: reg, dock: dock, open: map[string]*agentWindow{}}
 }
+
+func (w *Windows) shown() *sessionState { return w.sessions.current() }
 
 // A picker nobody can see is a session that hangs, so anything asking for focus
 // gets a real window.
-func (w *Windows) openWindow(opts workbench.WindowOptions) (string, error) {
+func (w *Windows) openWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	if opts.Source != "" {
 		w.sourceMu.Lock()
 		defer w.sourceMu.Unlock()
-		if id, ok := w.showing(opts.Source); ok {
+		if id, ok := w.showing(owner, opts.Source); ok {
 			w.dismiss(id)
 		}
 	}
-	return w.spawn(opts, true, w.dock && !opts.Focus)
+	return w.spawn(owner, opts, true, w.dock && !opts.Focus)
 }
 
 // openStructural opens a window the workbench owns rather than the agent: the
 // session shell, always a tab.
-func (w *Windows) openStructural(opts workbench.WindowOptions) (string, error) {
-	return w.spawn(opts, false, true)
+func (w *Windows) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	return w.spawn(owner, opts, false, true)
 }
 
 // OpenShell opens another terminal in the session's right pane and returns its
@@ -85,13 +90,27 @@ func (w *Windows) OpenShell() (string, error) {
 func (w *Windows) OpenPicker() (string, error) {
 	w.sourceMu.Lock()
 	defer w.sourceMu.Unlock()
-	if id, ok := w.showing(pickerSource); ok {
+	if id, ok := w.showing(w.shown(), pickerSource); ok {
 		return id, nil
 	}
 	if w.newPicker == nil {
 		return "", ErrNoPickerCommand
 	}
 	return w.newPicker()
+}
+
+// OpenOnboard opens the session assembly in the right pane, or selects the one
+// already open: two of them writing the same manifest is a lost selection.
+func (w *Windows) OpenOnboard() (string, error) {
+	w.sourceMu.Lock()
+	defer w.sourceMu.Unlock()
+	if id, ok := w.showing(w.shown(), onboardSource); ok {
+		return id, nil
+	}
+	if w.newOnboard == nil {
+		return "", ErrNoOnboardCommand
+	}
+	return w.newOnboard()
 }
 
 // OpenDocument returns the window already showing the named document, or opens
@@ -102,8 +121,9 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	}
 	w.sourceMu.Lock()
 	defer w.sourceMu.Unlock()
-	if id, ok := w.showing(name); ok {
-		w.emit(selectEvent, id)
+	owner := w.shown()
+	if id, ok := w.showing(owner, name); ok {
+		w.emit(selectEvent, selection{Session: owner.slug(), ID: id})
 		return id, nil
 	}
 	if w.newDocument == nil {
@@ -112,28 +132,28 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	return w.newDocument(name)
 }
 
-func (w *Windows) showing(source string) (string, bool) {
+func (w *Windows) showing(owner *sessionState, source string) (string, bool) {
 	if source == "" {
 		return "", false
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	for id, window := range w.open {
-		if window.opts.Source == source {
+		if window.session == owner && window.opts.Source == source {
 			return id, true
 		}
 	}
 	return "", false
 }
 
-func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (string, error) {
+func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recorded, docked bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
 	w.mu.Lock()
 	w.seq++
 	id := fmt.Sprintf(windowIDFormat, w.seq)
-	window := &agentWindow{opts: opts, seq: w.seq, recorded: recorded, docked: docked}
+	window := &agentWindow{opts: opts, session: owner, seq: w.seq, recorded: recorded, docked: docked}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
 	}
@@ -162,12 +182,12 @@ func (w *Windows) spawn(opts workbench.WindowOptions, recorded, docked bool) (st
 		}
 		w.mu.Unlock()
 	}
-	w.announce()
+	w.announce(owner)
 	// A document the agent opened behind the shell tab is a document nobody
 	// reads. Terminals are left where they are: the tab strip focuses the
 	// terminal it selects, which would take the keyboard off the conversation.
 	if docked && opts.Kind == workbench.KindDocument {
-		w.emit(selectEvent, id)
+		w.emit(selectEvent, selection{Session: owner.slug(), ID: id})
 	}
 	return id, nil
 }
@@ -276,7 +296,7 @@ func (w *Windows) processExited(id string, code int) {
 		w.dismiss(id)
 		return
 	}
-	w.announce()
+	w.announce(window.session)
 }
 
 // Close serves the agent's window tool and the tab strip's close control. Wails
@@ -348,27 +368,27 @@ func (w *Windows) discard(id string) bool {
 	if process != nil {
 		process.stop()
 	}
-	w.announce()
+	w.announce(window.session)
 	return true
 }
 
-// observe registers what to tell when the open set changes. Clearing it before
-// teardown keeps the session's own ending out of the record: the manifest is
-// meant to say which windows were open, not that closing the conversation
-// closed them.
-func (w *Windows) observe(changed func()) {
+// observe registers what to tell when a session's open set changes. Clearing it
+// before teardown keeps a session's own ending out of the manifest's record.
+func (w *Windows) observe(changed func(owner *sessionState)) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	w.changed = changed
 }
 
-func (w *Windows) announce() {
+// announce tells one session's pages what it has open. A background session
+// docking a tab must not redraw the foreground's tab strip.
+func (w *Windows) announce(owner *sessionState) {
 	w.mu.Lock()
 	changed := w.changed
 	w.mu.Unlock()
-	w.emit(windowsEvent, w.surfaces())
+	w.emit(windowsEvent, w.surfaces(owner))
 	if changed != nil {
-		changed()
+		changed(owner)
 	}
 }
 
@@ -380,22 +400,31 @@ type drawnWindow struct {
 	Status string `json:"status,omitempty"`
 }
 
-// surfaces splits the open windows by where they are drawn, oldest first so the
-// shell stays leftmost.
+// surfaces splits one session's open windows by where they are drawn, oldest
+// first so the shell stays leftmost, and names the session it describes.
 type surfaces struct {
+	Session  string        `json:"session"`
 	Tabs     []drawnWindow `json:"tabs"`
 	Floating []drawnWindow `json:"floating"`
 }
 
-func (w *Windows) surfaces() surfaces {
+// selection is the window a page is being asked to bring forward.
+type selection struct {
+	Session string `json:"session"`
+	ID      string `json:"id"`
+}
+
+func (w *Windows) surfaces(owner *sessionState) surfaces {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	live := make([]*agentWindow, 0, len(w.open))
 	for _, window := range w.open {
-		live = append(live, window)
+		if window.session == owner {
+			live = append(live, window)
+		}
 	}
 	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
-	out := surfaces{Tabs: []drawnWindow{}, Floating: []drawnWindow{}}
+	out := surfaces{Session: owner.slug(), Tabs: []drawnWindow{}, Floating: []drawnWindow{}}
 	for _, window := range live {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
@@ -410,11 +439,11 @@ func (w *Windows) surfaces() surfaces {
 	return out
 }
 
-func (w *Windows) tabs() []drawnWindow { return w.surfaces().Tabs }
+func (w *Windows) tabs(owner *sessionState) []drawnWindow { return w.surfaces(owner).Tabs }
 
-// Surfaces answers the page on load: the event only fires on a change, and the
-// shell opens before anything is subscribed.
-func (w *Windows) Surfaces() surfaces { return w.surfaces() }
+// Surfaces answers a session's page on load: the event only fires on a change,
+// and the shell opens before anything is subscribed.
+func (w *Windows) Surfaces(slug string) surfaces { return w.surfaces(w.sessions.bySlug(slug)) }
 
 func tabStatus(window *agentWindow) string {
 	switch {
@@ -431,13 +460,13 @@ func tabStatus(window *agentWindow) string {
 	}
 }
 
-// snapshot describes the agent's open windows, oldest first.
-func (w *Windows) snapshot() []workbench.WindowOptions {
+// snapshot describes one session's open agent windows, oldest first.
+func (w *Windows) snapshot(owner *sessionState) []workbench.WindowOptions {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 	live := make([]*agentWindow, 0, len(w.open))
 	for _, window := range w.open {
-		if window.recorded {
+		if window.session == owner && window.recorded {
 			live = append(live, window)
 		}
 	}
@@ -457,6 +486,15 @@ func (w *Windows) stopAll() {
 	}
 }
 
+// stop tears down one session's windows, so retiring it leaves the rest alone.
+func (w *Windows) stop(owner *sessionState) {
+	for _, id := range w.list() {
+		if window, ok := w.window(id); ok && window.session == owner {
+			w.discard(id)
+		}
+	}
+}
+
 func (w *Windows) window(id string) (*agentWindow, bool) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -464,10 +502,7 @@ func (w *Windows) window(id string) (*agentWindow, bool) {
 	return window, ok
 }
 
-func terminalEnv() []string {
-	env := workbench.WithEnv(os.Environ(), termEnvVar, termValue)
-	return workbench.WithEnv(env, colorTermEnvVar, colorTermValue)
-}
+func terminalEnv() []string { return withTerminalEnv(os.Environ()) }
 
 func pageURL(kind workbench.WindowKind, id string) string {
 	page := terminalPage

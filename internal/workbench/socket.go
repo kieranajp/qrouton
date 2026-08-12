@@ -22,6 +22,7 @@ type Request struct {
 	ID       string         `json:"id,omitempty"`
 	Full     bool           `json:"full,omitempty"`
 	Root     string         `json:"root,omitempty"`
+	Boot     bool           `json:"boot,omitempty"`
 	Activity string         `json:"activity,omitempty"`
 	Options  *WindowOptions `json:"options,omitempty"`
 }
@@ -44,11 +45,51 @@ func NewSocketPath() (string, error) {
 	if _, err := rand.Read(token); err != nil {
 		return "", err
 	}
-	dir := filepath.Join(socketRoot, strconv.Itoa(os.Getuid()))
+	dir := socketDir()
 	if err := os.MkdirAll(dir, socketDirMode); err != nil {
 		return "", err
 	}
 	return filepath.Join(dir, hex.EncodeToString(token)+socketSuffix), nil
+}
+
+// socketDir holds every workbench address and process log belonging to one user.
+func socketDir() string {
+	return filepath.Join(socketRoot, strconv.Itoa(os.Getuid()))
+}
+
+// Answered reports whether something is listening on socket.
+func Answered(socket string) bool {
+	conn, err := net.Dial(socketNetwork, socket)
+	if err != nil {
+		return false
+	}
+	_ = conn.Close()
+	return true
+}
+
+// Running reports whether a workbench is already up.
+func Running() bool { return running(socketDir()) }
+
+func running(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	up := false
+	for _, entry := range entries {
+		if !strings.HasSuffix(entry.Name(), socketSuffix) {
+			continue
+		}
+		socket := filepath.Join(dir, entry.Name())
+		if Answered(socket) {
+			up = true
+			continue
+		}
+		// An address is reserved without creating a file, so a socket file that
+		// does not answer belonged to a process that is gone.
+		_ = os.Remove(socket)
+	}
+	return up
 }
 
 // ProcessLog is where a workbench process's stdio lands before it belongs to a
@@ -111,8 +152,8 @@ func (c *client) List(ctx context.Context) ([]string, error) {
 	return res.IDs, nil
 }
 
-func (c *client) Adopt(ctx context.Context, sessionRoot string) error {
-	_, err := c.call(ctx, Request{Op: OpAdopt, Root: sessionRoot})
+func (c *client) Adopt(ctx context.Context, sessionRoot string, boot bool) error {
+	_, err := c.call(ctx, Request{Op: OpAdopt, Root: sessionRoot, Boot: boot})
 	return err
 }
 

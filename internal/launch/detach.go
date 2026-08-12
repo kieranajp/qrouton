@@ -8,12 +8,13 @@ package launch
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"syscall"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 const (
@@ -25,15 +26,18 @@ const (
 	dirMode = 0o755
 )
 
-// WorkbenchSpec is what the detached process is told to open: the session it
-// belongs to (empty until onboarding chooses one), the control socket it serves,
-// and the command its conversation terminal runs. Everything it needs is here,
-// so the child never repeats the assembly the parent already did.
+// WorkbenchSpec is what the detached process is told to open: its session, its
+// control socket, its runner, and whether that runner has a conversation to
+// resume. It builds each session's own command as it boots it.
 type WorkbenchSpec struct {
-	SessionRoot string   `json:"session_root,omitempty"`
-	Socket      string   `json:"socket"`
-	Argv        []string `json:"argv"`
-	Dock        bool     `json:"dock,omitempty"`
+	SessionRoot string `json:"session_root,omitempty"`
+	Socket      string `json:"socket"`
+	Runner      string `json:"runner,omitempty"`
+	Resume      bool   `json:"resume,omitempty"`
+	// Onboard is the landing list's conversation command, and empty when a
+	// session was named on the command line.
+	Onboard []string `json:"onboard,omitempty"`
+	Dock    bool     `json:"dock,omitempty"`
 	// Empty on the landing list, which has not resolved one yet.
 	Editor EditorCommand `json:"editor"`
 }
@@ -48,7 +52,7 @@ func ParseWorkbenchSpec(s string) (WorkbenchSpec, error) {
 	if err := json.Unmarshal([]byte(s), &spec); err != nil {
 		return WorkbenchSpec{}, fmt.Errorf("%s: %w", specParseError, err)
 	}
-	if spec.Socket == "" || len(spec.Argv) == 0 {
+	if spec.Socket == "" || (spec.SessionRoot == "" && len(spec.Onboard) == 0) {
 		return WorkbenchSpec{}, fmt.Errorf("%w: %q", ErrWorkbenchSpecIncomplete, s)
 	}
 	return spec, nil
@@ -105,7 +109,7 @@ func detach(argv, env []string, socket, log string, timeout, interval time.Durat
 func waitReady(socket string, exited <-chan error, timeout, interval time.Duration) error {
 	deadline := time.After(timeout)
 	for {
-		if answered(socket) {
+		if workbench.Answered(socket) {
 			return nil
 		}
 		select {
@@ -119,13 +123,4 @@ func waitReady(socket string, exited <-chan error, timeout, interval time.Durati
 		case <-time.After(interval):
 		}
 	}
-}
-
-func answered(socket string) bool {
-	conn, err := net.Dial(socketNetwork, socket)
-	if err != nil {
-		return false
-	}
-	_ = conn.Close()
-	return true
 }

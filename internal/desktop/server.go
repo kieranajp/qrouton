@@ -12,7 +12,7 @@ import (
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
-	adopt     func(sessionRoot string)
+	adopt     func(sessionRoot string, boot bool) error
 	attention func(activity string)
 }
 
@@ -22,10 +22,13 @@ type control struct {
 	listener net.Listener
 	socket   string
 	windows  *Windows
-	hooks    controlHooks
+	// owner is the session this listener speaks for. A handler bound to a
+	// listener cannot address another session.
+	owner *sessionState
+	hooks controlHooks
 }
 
-func serveControl(socket string, windows *Windows, hooks controlHooks) (*control, error) {
+func serveControl(socket string, windows *Windows, owner *sessionState, hooks controlHooks) (*control, error) {
 	// A stale socket from a process that died without unlinking would otherwise
 	// make every later run fail to bind.
 	_ = os.Remove(socket)
@@ -33,7 +36,7 @@ func serveControl(socket string, windows *Windows, hooks controlHooks) (*control
 	if err != nil {
 		return nil, err
 	}
-	c := &control{listener: listener, socket: socket, windows: windows, hooks: hooks}
+	c := &control{listener: listener, socket: socket, windows: windows, owner: owner, hooks: hooks}
 	go c.accept()
 	return c, nil
 }
@@ -76,7 +79,10 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		if req.Options == nil {
 			return workbench.Response{Error: ErrNoWindowOptions.Error()}
 		}
-		id, err := c.windows.openWindow(*req.Options)
+		if c.owner == nil {
+			return workbench.Response{Error: ErrNoSession.Error()}
+		}
+		id, err := c.windows.openWindow(c.owner, *req.Options)
 		if err != nil {
 			return workbench.Response{Error: err.Error()}
 		}
@@ -101,7 +107,9 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 			return workbench.Response{Error: ErrNoSessionRoot.Error()}
 		}
 		if c.hooks.adopt != nil {
-			c.hooks.adopt(req.Root)
+			if err := c.hooks.adopt(req.Root, req.Boot); err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
 		}
 		return workbench.Response{}
 	case workbench.OpAttention:
