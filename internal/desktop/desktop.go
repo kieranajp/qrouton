@@ -303,5 +303,12 @@ func windowTitle(root string) string {
 
 // frontend is the embedded page tree the webview serves.
 func frontend() (fs.FS, error) {
-	return fs.Sub(assetFS, assetRoot)
+	assets, err := fs.Sub(assetFS, assetRoot)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateFrontend(assets); err != nil {
+		return nil, err
+	}
+	return assets, nil
 }

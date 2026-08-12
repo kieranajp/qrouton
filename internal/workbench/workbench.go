@@ -122,12 +122,18 @@ func (h Handle) WindowHost() (WindowHost, error) {
 
 // WithEnv returns env with key set to value, replacing any existing entry.
 func WithEnv(env []string, key, value string) []string {
+	out := WithoutEnv(env, key)
+	return append(out, key+envKeyValueSep+value)
+}
+
+// WithoutEnv returns env without key.
+func WithoutEnv(env []string, key string) []string {
 	prefix := key + envKeyValueSep
-	out := make([]string, 0, len(env)+1)
+	out := make([]string, 0, len(env))
 	for _, item := range env {
 		if !strings.HasPrefix(item, prefix) {
 			out = append(out, item)
 		}
 	}
-	return append(out, prefix+value)
+	return out
 }

@@ -87,13 +87,14 @@ func TestTermPumpsChildOutputToThePage(t *testing.T) {
 func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
-		[]string{"/bin/sh", "-c", "printf '%s %s\\n' \"$TERM\" \"$COLORTERM\""}, []string{"TERM=dumb"})
+		[]string{"/bin/sh", "-c", "printf '%s %s <%s>\\n' \"$TERM\" \"$COLORTERM\" \"$NO_COLOR\""},
+		[]string{"TERM=dumb", "NO_COLOR=1"})
 
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the child's environment", func() bool {
-		return strings.Contains(rec.output(), termValue+" "+colorTermValue)
+		return strings.Contains(rec.output(), termValue+" "+colorTermValue+" <>")
 	})
 }
 

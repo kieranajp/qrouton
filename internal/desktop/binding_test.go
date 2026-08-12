@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"errors"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
@@ -46,32 +48,28 @@ func builtBundle(t *testing.T) string {
 // and only one of the two is visible before the build.
 func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 	bundle := builtBundle(t)
-	for _, tc := range []struct {
-		service any
-		methods []string
-	}{
-		{Term{}, []string{"Start", "Write", "Resize"}},
-		{Sessions{}, []string{"Show", "Reveal", "Uncommitted", "Cleanup"}},
-		{Windows{}, []string{
-			"Start", "Write", "Resize", "Content", "Surfaces", "Close", "OpenShell", "OpenDocument",
-		}},
-		{Assembly{}, []string{"Prefixes", "Runners", "Check", "CheckSlug", "Preview", "Fetch", "Create"}},
-		{Repositories{}, []string{"Cached", "Refresh"}},
-		{Orgs{}, []string{"List"}},
-		{Picker{}, []string{"Load", "Confirm", "Cancel"}},
-	} {
-		typ := reflect.TypeOf(tc.service)
+	for _, service := range frontendServices {
+		typ := reflect.TypeOf(service)
 		qualified := typ.PkgPath() + "." + typ.Name()
-		for _, method := range tc.methods {
+		methods := reflect.PointerTo(typ)
+		for i := 0; i < methods.NumMethod(); i++ {
+			method := methods.Method(i).Name
 			t.Run(typ.Name()+"."+method, func(t *testing.T) {
-				if _, ok := reflect.PointerTo(typ).MethodByName(method); !ok {
-					t.Fatalf("a page calls %s.%s, which is not an exported method", typ.Name(), method)
-				}
 				if !strings.Contains(bundle, qualified+"."+method) {
 					t.Fatalf("the built pages no longer call %s.%s", typ.Name(), method)
 				}
 			})
 		}
+	}
+}
+
+func TestAStaleFrontendIsRejectedBeforeTheWindowOpens(t *testing.T) {
+	err := validateFrontend(fstest.MapFS{"index.html": {Data: []byte("old workbench")}})
+	if !errors.Is(err, ErrStaleFrontend) {
+		t.Fatalf("validateFrontend error = %v, want ErrStaleFrontend", err)
+	}
+	if !strings.Contains(err.Error(), "make front") {
+		t.Fatalf("stale frontend error gives no repair: %v", err)
 	}
 }
 

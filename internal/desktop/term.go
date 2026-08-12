@@ -59,5 +59,6 @@ func (t *Term) Resize(id string, cols, rows int) error {
 
 // withTerminalEnv tells a child what it is rendering for.
 func withTerminalEnv(env []string) []string {
+	env = workbench.WithoutEnv(env, noColorEnvVar)
 	return workbench.WithEnv(workbench.WithEnv(env, termEnvVar, termValue), colorTermEnvVar, colorTermValue)
 }

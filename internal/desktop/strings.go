@@ -27,6 +27,9 @@ const (
 
 	assetRoot = "assets"
 
+	staleFrontendError         = "workbench frontend is stale; run make front before building qrouton"
+	staleFrontendBindingFormat = "%w: built pages do not call %s"
+
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 
@@ -70,6 +73,7 @@ const (
 	termValue       = "xterm-256color"
 	colorTermEnvVar = "COLORTERM"
 	colorTermValue  = "truecolor"
+	noColorEnvVar   = "NO_COLOR"
 
 	// ptyReadBuffer is one read of the PTY. An agent painting a full-screen
 	// frame produces well under this, so a repaint arrives as one event.
