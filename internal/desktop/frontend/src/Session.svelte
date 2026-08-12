@@ -212,12 +212,16 @@
   let added = $state("");
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
 
-  // The overlays cover the terminal, so dismissing one hands the keyboard back
-  // the same way the rail's menu and its confirm do.
-  function dismissOverlay(clear) {
-    clear();
-    keyboard++;
-  }
+  // An overlay covering the terminal hands the keyboard back when it goes, the
+  // same way the rail's menu and its confirm do. Watching the state rather than
+  // the dismissal catches the picker the backend closes, which no handler here
+  // ever sees.
+  let covered = $derived(assembling || picker);
+  let wasCovered = false;
+  $effect(() => {
+    if (wasCovered && !covered) keyboard++;
+    wasCovered = covered;
+  });
 
   let commits = $derived(
     fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
@@ -402,12 +406,12 @@
       : 's'}" />
 
   {#if assembling}
-    <Overlay onClose={() => dismissOverlay(() => (assembling = false))} />
+    <Overlay onClose={() => (assembling = false)} />
   {:else if picker}
     <!-- Keyed on the session, so arriving at another one draws that session's
          picker rather than keeping this one over it. -->
     {#key fields.slug}
-      <PickerOverlay slug={fields.slug} onClose={() => dismissOverlay(() => (added = ""))} />
+      <PickerOverlay slug={fields.slug} onClose={() => (added = "")} />
     {/key}
   {/if}
 </div>
