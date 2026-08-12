@@ -55,6 +55,7 @@
   .select {
     gap: 9px;
     min-width: 0;
+    flex: 1 1 auto;
   }
 
   .label {
