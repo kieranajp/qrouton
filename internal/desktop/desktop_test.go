@@ -34,6 +34,7 @@ type fakeRenderer struct {
 	events map[string]any
 	quit   bool
 	block  chan struct{}
+	once   sync.Once
 }
 
 func newFakeRenderer() *fakeRenderer {
@@ -84,11 +85,15 @@ func (f *fakeRenderer) Run() error {
 	return nil
 }
 
+// Quit tolerates being called twice: the workbench quits itself when its
+// conversation window closes, and the test stops it again on the way out.
 func (f *fakeRenderer) Quit() {
-	f.mu.Lock()
-	f.quit = true
-	f.mu.Unlock()
-	close(f.block)
+	f.once.Do(func() {
+		f.mu.Lock()
+		f.quit = true
+		f.mu.Unlock()
+		close(f.block)
+	})
 }
 
 func (f *fakeRenderer) wasClosed(name string) bool {
@@ -193,6 +198,25 @@ func testWorkbench(t *testing.T, r *fakeRenderer, emit emitter) (*Sessions, *Ter
 	return reg, newTerm(reg, emit), windows
 }
 
+// startWorkbench runs the workbench and stops it before the temporary root goes:
+// a session reaching the screen does not order against the stamping and
+// recording that follows it, which would otherwise land in a directory the
+// test's cleanup is already removing. The channel carries run's result.
+func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows, opts Options) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		done <- run(r, term, windows, opts)
+	}()
+	t.Cleanup(func() {
+		r.Quit()
+		<-stopped
+	})
+	return done
+}
+
 // testSessions is a registry that boots sessions as run does: a supervisor
 // command per session and a listener of its own, over one window registry.
 func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Windows, *fakeRenderer) {
@@ -293,7 +317,7 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 
 	spec := <-r.opened
 	shownSession(t, reg)
@@ -318,8 +342,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	done := make(chan error, 1)
-	go func() { done <- run(r, term, windows, opts) }()
+	done := startWorkbench(t, r, term, windows, opts)
 
 	conversation := <-r.opened
 	shownSession(t, reg)
@@ -342,7 +365,7 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	first := shownSession(t, reg)
 
@@ -386,8 +409,7 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	done := make(chan error, 1)
-	go func() { done <- run(r, term, windows, opts) }()
+	done := startWorkbench(t, r, term, windows, opts)
 	conversation := <-r.opened
 	first := shownSession(t, reg)
 
@@ -431,7 +453,7 @@ func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
 	rec := &recorder{}
 	reg, term, windows := testWorkbench(t, r, rec.emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	if err := term.Start(shownSession(t, reg).terminal, 80, 24); err != nil {
 		t.Fatal(err)
@@ -450,7 +472,7 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	boot.argv = []string{"/bin/sh", "-c", "exit 3"}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	conversation := shownSession(t, reg).terminal
 	if err := term.Start(conversation, 80, 24); err != nil {
@@ -480,7 +502,7 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 
@@ -544,7 +566,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -603,7 +625,7 @@ func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
 	opts.Picker = func(dir string) []string { return []string{"/bin/cat", "pick", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -690,7 +712,7 @@ func TestTheNewSessionButtonOpensOneOnboardTab(t *testing.T) {
 	opts.Onboarding = func(socket string) []string { return []string{"/bin/cat", "onboard", socket} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -896,7 +918,7 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -932,7 +954,7 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 	adopted := t.TempDir()
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	if spec := <-r.opened; spec.Title != mainWindowTitle {
 		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
 	}
@@ -1041,7 +1063,7 @@ func TestTheLandingPathPublishesNoRailRows(t *testing.T) {
 	sessionDir(t, opts.Root, "octopus")
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	landing := shownSession(t, reg)
 
@@ -1079,7 +1101,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1299,14 +1321,18 @@ func TestShowingASessionStampsOnlyThatOne(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
-	first, ok := session.LastOpened(opts.SessionRoot)
-	if !ok {
-		t.Fatal("the session the workbench opened on was never stamped")
-	}
+	// The stamp lands inside the shown hook, which the session reaching the
+	// screen does not order against.
+	var first time.Time
+	waitFor(t, "the workbench to stamp the session it opened on", func() bool {
+		var ok bool
+		first, ok = session.LastOpened(opts.SessionRoot)
+		return ok
+	})
 
 	kraken := sessionDir(t, opts.Root, "kraken")
 	if err := reg.Show("kraken"); err != nil {
@@ -1496,7 +1522,7 @@ func TestTheProcessSocketAnswersReadinessAndAdoptAndRefusesAWindowOp(t *testing.
 	adopted := sessionDir(t, opts.Root, "kraken")
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1563,7 +1589,7 @@ func TestShowRefusesARowWhoseSessionIsGone(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1642,7 +1668,7 @@ func TestAdoptingAFreshlyAssembledSessionDoesNotResumeIt(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1675,7 +1701,7 @@ func TestAPaneAdoptBootsTheNewSessionAndRetiresTheLanding(t *testing.T) {
 	opts.SessionRoot = ""
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	landing := shownSession(t, reg)
 	if err := term.Start(landing.terminal, 80, 24); err != nil {
@@ -1794,8 +1820,8 @@ func TestASessionAssembledMidLifetimeTakesTheFirstRow(t *testing.T) {
 	}
 }
 
-// Nothing in the app deletes a session, so this only follows an rm -rf. Keeping
-// the slug's place means it comes back where it was rather than at the front.
+// A cleanup or an rm -rf takes a session's directory. Keeping the slug's place
+// means it comes back where it was rather than at the front.
 func TestASessionGoneFromDiskKeepsItsPlaceForWhenItReturns(t *testing.T) {
 	reg := newSessions()
 	railSlugs(reg, polled("kraken", "octopus", "webhook"))
@@ -1816,7 +1842,12 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
 	sessionDir(t, opts.Root, "kraken")
-	go func() { _ = run(r, term, windows, opts) }()
+	// The chrome poller freezes the rail on whichever poll gets there first, so
+	// the order under test is the stamps' and not that poll's timing.
+	if err := session.MarkOpened(opts.SessionRoot, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1841,5 +1872,389 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	}
 	if fields.Sessions[0].Slug == fields.Slug {
 		t.Fatal("switching moved the session to the top row; the rail's order is not frozen")
+	}
+}
+
+// Removing a session's files out from under a live supervisor leaves it running
+// on an unlinked directory, and the window recorder saving on the way down would
+// write the manifest back into the directory that had just gone.
+func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, windows, r := testSessions(t, root, boot)
+	windows.observe((&windowRecorder{windows: windows}).save)
+	dir := sessionDir(t, root, "octopus")
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	state := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	pid := state.process.cmd.Process.Pid
+	socket := boot.socket(t, dir)
+	host, err := (workbench.Handle{Socket: socket, SessionRoot: dir}).WindowHost()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.Open(context.Background(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: dir, Command: []string{"/bin/cat"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	<-r.opened
+
+	var held []string
+	reg.boot.cleanup = func(sessionRoot string) error {
+		state.mu.Lock()
+		if state.process != nil {
+			held = append(held, "its conversation")
+		}
+		if state.control != nil {
+			held = append(held, "its listener")
+		}
+		state.mu.Unlock()
+		if drawn := windows.Surfaces("octopus"); len(drawn.Floating)+len(drawn.Tabs) > 0 {
+			held = append(held, "its windows")
+		}
+		return os.RemoveAll(sessionRoot)
+	}
+
+	if err := reg.Cleanup("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if len(held) > 0 {
+		t.Fatalf("the session still had %v when its directory was removed", held)
+	}
+	waitFor(t, "the conversation to end", func() bool { return syscall.Kill(pid, 0) != nil })
+	if workbench.Answered(socket) {
+		t.Fatalf("the cleaned-up session still answers on %q", socket)
+	}
+	if _, err := os.Stat(sessionpaths.Manifest(dir)); !os.IsNotExist(err) {
+		t.Fatal("the manifest is back under the removed session, so the window recorder wrote it after the removal")
+	}
+	if reg.bySlug("octopus") != nil {
+		t.Fatal("the cleaned-up session is still registered")
+	}
+}
+
+// Cleaning up the session you are looking at is allowed, and it ends the same way
+// a supervisor exiting does: the window falls back rather than closing.
+func TestCleanupFallsTheWindowBackAsARetirementDoes(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	reg.boot.cleanup = func(sessionRoot string) error { return os.RemoveAll(sessionRoot) }
+	for _, slug := range []string{"octopus", "kraken", "webhook"} {
+		sessionDir(t, root, slug)
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := reg.Cleanup("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if state := reg.current(); state == nil || state.slug() != "webhook" {
+		t.Fatalf("cleaning up a background session moved the window to %v", state)
+	}
+	if err := reg.Cleanup("webhook"); err != nil {
+		t.Fatal(err)
+	}
+	if state := reg.current(); state == nil || state.slug() != "kraken" {
+		t.Fatalf("the window fell back to %v, want the session shown before it", state)
+	}
+	if err := reg.Cleanup("kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if state := reg.current(); state != nil {
+		t.Fatalf("cleaning up the last session left %q on screen", state.slug())
+	}
+}
+
+// A removal can fail with earlier worktrees already gone, and the dialog has
+// nothing to say about it but the error it was handed.
+func TestCleanupHandsTheRemovalsFailureBack(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	refused := errors.New("remove lifesum/api worktree: permission denied")
+	reg.boot.cleanup = func(string) error { return refused }
+	sessionDir(t, root, "octopus")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := reg.Cleanup("octopus"); !errors.Is(err, refused) {
+		t.Fatalf("cleanup failure = %v, want the removal's own error intact", err)
+	}
+}
+
+// A supervisor that outlived its workbench is the one case where removing a
+// session's worktrees is worse than leaving it alone. A dead pid is the residue
+// of a crash and must not strand the session.
+func TestCleanupRefusesAnUnresolvableSlugAndALiveAgent(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	var removals atomic.Int64
+	reg.boot.cleanup = func(sessionRoot string) error {
+		removals.Add(1)
+		return os.RemoveAll(sessionRoot)
+	}
+
+	// A directory that lost its manifest is not a session, and the row naming it
+	// can outlive it.
+	if err := os.MkdirAll(filepath.Join(root, "ghost"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, slug := range []string{"ghost", "never-existed"} {
+		if err := reg.Cleanup(slug); err == nil {
+			t.Fatalf("%q was cleaned up with no session under the root", slug)
+		} else if !strings.Contains(err.Error(), slug) {
+			t.Fatalf("refusal %q does not name the session asked for", err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, "ghost")); err != nil {
+		t.Fatal("the refused directory was removed anyway:", err)
+	}
+
+	writeAgentPID(t, sessionDir(t, root, "live"), os.Getpid())
+	err := reg.Cleanup("live")
+	if err == nil {
+		t.Fatal("a session with a running agent had its worktrees removed underneath it")
+	}
+	if !strings.Contains(err.Error(), strconv.Itoa(os.Getpid())) {
+		t.Fatalf("refusal %q does not name the pid holding the session", err)
+	}
+	if got := removals.Load(); got != 0 {
+		t.Fatalf("the refused sessions were removed %d times", got)
+	}
+
+	crashed := sessionDir(t, root, "crashed")
+	writeAgentPID(t, crashed, deadPID(t))
+	if err := reg.Cleanup("crashed"); err != nil {
+		t.Fatalf("a session whose recorded agent is gone refused to be cleaned up: %v", err)
+	}
+	if _, err := os.Stat(crashed); !os.IsNotExist(err) {
+		t.Fatal("the stranded session's directory survived its cleanup")
+	}
+}
+
+// The rail loses the row on the act rather than up to a tick later.
+func TestCleanupWakesTheChromePoller(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	reg.boot.cleanup = func(sessionRoot string) error { return os.RemoveAll(sessionRoot) }
+	sessionDir(t, root, "octopus")
+
+	select {
+	case <-reg.touched:
+	default:
+	}
+	if err := reg.Cleanup("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-reg.touched:
+	default:
+		t.Fatal("cleaning up a session left the rail drawing it until the next tick")
+	}
+}
+
+// The dirty check is N git status subprocesses, so it answers the dialog that
+// asked for it and never a poll.
+func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	var checks atomic.Int64
+	dirty := []string{"lifesum/api", "lifesum/web"}
+	reg.boot.uncommitted = func(string) ([]string, error) {
+		checks.Add(1)
+		return dirty, nil
+	}
+	reg.reveal(reg.add(sessionDir(t, root, "octopus"), []string{"/bin/cat"}, os.Environ()))
+
+	var pushes atomic.Int64
+	emit := func(event string, _ any) {
+		if event == chromeEvent {
+			pushes.Add(1)
+		}
+	}
+	counts := unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, true },
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go watch(ctx, reg, root, emit, time.Millisecond, 2*time.Millisecond, counts)
+	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
+	if got := checks.Load(); got != 0 {
+		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())
+	}
+
+	got, err := reg.Uncommitted("octopus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, dirty) {
+		t.Fatalf("uncommitted = %v, want the repositories the check named", got)
+	}
+
+	dirty = nil
+	if got, err = reg.Uncommitted("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if got == nil {
+		t.Fatal("a clean session answered nil, which marshals as JSON null and reaches a .length on the page")
+	}
+	if len(got) != 0 {
+		t.Fatalf("a clean session answered %v", got)
+	}
+
+	before := checks.Load()
+	if _, err := reg.Uncommitted("ghost"); err == nil {
+		t.Fatal("a slug with no session under the root was checked anyway")
+	}
+	if checks.Load() != before {
+		t.Fatal("the unresolvable slug was checked on disk")
+	}
+}
+
+// Revealing a row is not switching to it: the common case is finding the files
+// of a session you are not looking at.
+func TestRevealNamesTheRowsOwnDirectoryAndDisturbsNothing(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	refused := errors.New("nothing opened it")
+	var revealed []string
+	var fail bool
+	reg.boot.reveal = func(sessionRoot string) error {
+		revealed = append(revealed, sessionRoot)
+		if fail {
+			return refused
+		}
+		return nil
+	}
+	sessionDir(t, root, "octopus")
+	kraken := sessionDir(t, root, "kraken")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	shown := reg.current()
+	select {
+	case <-reg.touched:
+	default:
+	}
+
+	if err := reg.Reveal("kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if len(revealed) != 1 || revealed[0] != kraken {
+		t.Fatalf("revealed %v, want the row's own directory %q", revealed, kraken)
+	}
+	if reg.current() != shown {
+		t.Fatal("revealing a row put it on screen")
+	}
+	if reg.bySlug("kraken") != nil {
+		t.Fatal("revealing a session booted it")
+	}
+	select {
+	case <-reg.touched:
+		t.Fatal("revealing woke the poller, and nothing in the chrome payload moved")
+	default:
+	}
+
+	if err := reg.Reveal("ghost"); err == nil {
+		t.Fatal("a slug with no session under the root was revealed anyway")
+	}
+	if len(revealed) != 1 {
+		t.Fatalf("the unresolvable slug reached the file manager: %v", revealed)
+	}
+
+	fail = true
+	if err := reg.Reveal("octopus"); !errors.Is(err, refused) {
+		t.Fatalf("reveal failure = %v, want the refusal intact", err)
+	}
+}
+
+// A path nothing can open is an error the page can show rather than a click that
+// silently does nothing, which is what waiting on the command buys.
+func TestTheWorkbenchRunsTheRevealCommandAndRefusesWithoutOne(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	marker := filepath.Join(t.TempDir(), "revealed")
+	opts.Reveal = func(sessionRoot string) []string {
+		if filepath.Base(sessionRoot) == "kraken" {
+			return []string{"/bin/sh", "-c", "exit 3"}
+		}
+		return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", sessionRoot, marker}
+	}
+	kraken := sessionDir(t, opts.Root, "kraken")
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	shownSession(t, reg)
+
+	if err := reg.Reveal(filepath.Base(opts.SessionRoot)); err != nil {
+		t.Fatal(err)
+	}
+	if got, err := os.ReadFile(marker); err != nil || string(got) != opts.SessionRoot {
+		t.Fatalf("the reveal command was run with %q (%v), want the session's root %q", got, err, opts.SessionRoot)
+	}
+	if err := reg.Reveal(filepath.Base(kraken)); err == nil {
+		t.Fatal("a reveal command that failed came back as a success")
+	}
+}
+
+func TestAWorkbenchWithNoRevealCommandRefuses(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	shownSession(t, reg)
+
+	if err := reg.Reveal(filepath.Base(opts.SessionRoot)); !errors.Is(err, ErrNoRevealCommand) {
+		t.Fatalf("reveal with nothing to run = %v, want ErrNoRevealCommand", err)
+	}
+}
+
+// A removal resolves its target from the manifest rather than from the directory
+// the manifest was read in, so a directory holding another session's manifest
+// would take that session's worktrees — one click away from --force.
+func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	shownSession(t, reg)
+
+	kraken := sessionDir(t, opts.Root, "kraken")
+	stray := filepath.Join(opts.Root, "webhook")
+	if err := os.MkdirAll(stray, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(stray, session.Manifest{Slug: "kraken", Mode: session.ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
+
+	err := reg.Cleanup("webhook")
+	if err == nil {
+		t.Fatal("a directory holding another session's manifest was cleaned up anyway")
+	}
+	for _, name := range []string{"webhook", "kraken"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("refusal %q names neither the directory asked for nor the one its manifest claims", err)
+		}
+	}
+	if _, err := os.Stat(sessionpaths.Manifest(kraken)); err != nil {
+		t.Fatal("the session the stray manifest named was removed:", err)
+	}
+	if _, err := os.Stat(stray); err != nil {
+		t.Fatal("the refused directory was removed:", err)
 	}
 }

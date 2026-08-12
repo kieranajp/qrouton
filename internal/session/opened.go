@@ -14,7 +14,7 @@ func MarkOpened(root string, at time.Time) error {
 	if err := os.MkdirAll(sessionpaths.Dir(root), dirMode); err != nil {
 		return err
 	}
-	return os.WriteFile(sessionpaths.Opened(root), []byte(at.UTC().Format(time.RFC3339Nano)), fileMode)
+	return replaceFile(sessionpaths.Opened(root), []byte(at.UTC().Format(time.RFC3339Nano)))
 }
 
 // LastOpened is when a session was last shown, and false for one this workbench

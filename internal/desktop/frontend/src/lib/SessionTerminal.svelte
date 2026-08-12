@@ -6,8 +6,8 @@
 
   const TERM_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Term";
 
-  /** @type {{id: string, active?: boolean}} */
-  let { id, active = false } = $props();
+  /** @type {{id: string, active?: boolean, focus?: number}} */
+  let { id, active = false, focus = 0 } = $props();
 
   let host;
   let term = $state();
@@ -19,6 +19,9 @@
   // layout box can be neither measured nor focused — hence the frame's wait.
   $effect(() => {
     if (!active || !term) return;
+    // focus is a token, read so that a change re-runs this: an overlay closing
+    // is what bumps it, and the keyboard belongs back here after one.
+    void focus;
     const frame = requestAnimationFrame(() => {
       sized?.();
       term.focus();

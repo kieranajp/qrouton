@@ -64,6 +64,12 @@ func PickerArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, pickSubcommand, sessionRootFlag, dir}
 }
 
+// RevealArgv shows a directory in Finder. Revealing rather than opening leaves
+// Finder on the sessions root with the session itself selected.
+func RevealArgv(dir string) []string {
+	return []string{openCommand, openRevealFlag, dir}
+}
+
 // Launch stamps the session's support files and returns what the workbench runs
 // in its conversation terminal: the supervisor's argv, and the environment it
 // inherits. socket is the control socket the desktop process will serve, and

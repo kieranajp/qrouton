@@ -29,8 +29,7 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	}
 	_, term, windows := testWorkbench(t, r, r.Emit)
 
-	done := make(chan error, 1)
-	go func() { done <- run(r, term, windows, opts) }()
+	done := startWorkbench(t, r, term, windows, opts)
 	conversation := <-r.opened
 
 	socket := boot.socket(t, opts.SessionRoot)

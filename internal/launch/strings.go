@@ -61,6 +61,9 @@ const (
 	treeDepth      = "2"
 	treeColourFlag = "-C"
 
+	openCommand    = "open"
+	openRevealFlag = "-R"
+
 	findCommand   = "find"
 	findRoot      = "."
 	findDepthFlag = "-maxdepth"

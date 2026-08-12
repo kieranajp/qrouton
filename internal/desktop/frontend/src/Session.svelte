@@ -6,6 +6,7 @@
   import CubeMark from "./lib/core/CubeMark.svelte";
   import StatusDot from "./lib/core/StatusDot.svelte";
   import RailItem from "./lib/session/RailItem.svelte";
+  import Confirm from "./lib/shell/Confirm.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
@@ -15,9 +16,11 @@
   import DockedDocument from "./lib/DockedDocument.svelte";
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import SessionTerminal from "./lib/SessionTerminal.svelte";
+  import { dismissible } from "./lib/core/dismiss.js";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
-  import { show } from "./lib/sessions.js";
+  import { menuHeight, place } from "./lib/menu.js";
+  import { cleanup, reveal, show, uncommitted } from "./lib/sessions.js";
   import { rowAt, shortcut } from "./lib/shortcuts.js";
   import {
     closeWindow,
@@ -141,6 +144,80 @@
       select(await openOnboard());
     } catch {}
   }
+  const ROW_MENU = [
+    { label: "Reveal in Finder", act: revealRow },
+    "-",
+    { label: "Clean up…", tone: "destructive", act: askCleanup },
+  ];
+  const ROW_MENU_WIDTH = 190;
+
+  /** @type {{row: any, x: number, y: number} | null} */
+  let menu = $state(null);
+  /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
+  let confirming = $state(null);
+  // A token the terminal watches: bumping it is what hands the keyboard back
+  // when an overlay closes.
+  let keyboard = $state(0);
+
+  // The rail clips and scrolls, so the menu is drawn at the page and placed at
+  // the pointer instead of anchored to the row.
+  let anchor = $derived(
+    menu
+      ? place(
+          menu,
+          { width: ROW_MENU_WIDTH, height: menuHeight(ROW_MENU) },
+          { width: window.innerWidth, height: window.innerHeight },
+        )
+      : null,
+  );
+
+  function openMenu(event, row) {
+    // The webview draws one of its own otherwise.
+    event.preventDefault();
+    menu = { row, x: event.clientX, y: event.clientY };
+  }
+
+  function dismissMenu() {
+    menu = null;
+    keyboard++;
+  }
+
+  // Nothing here changed, and the rail has no surface to report a refusal on.
+  async function revealRow(row) {
+    keyboard++;
+    try {
+      await reveal(row.slug);
+    } catch {}
+  }
+
+  // The list is advisory — the removal forces regardless — so a check that could
+  // not be made says so and leaves the confirm live.
+  async function askCleanup(row) {
+    let dirty = [];
+    let checked = true;
+    try {
+      dirty = await uncommitted(row.slug);
+    } catch {
+      checked = false;
+    }
+    confirming = { row, dirty, checked, error: "" };
+  }
+
+  // The chrome poll notices the row is gone, so nothing here waits on a refresh.
+  async function cleanUp() {
+    try {
+      await cleanup(confirming.row.slug);
+      dismissConfirm();
+    } catch (err) {
+      confirming = { ...confirming, error: String(err?.message ?? err) };
+    }
+  }
+
+  function dismissConfirm() {
+    confirming = null;
+    keyboard++;
+  }
+
   let commits = $derived(
     fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
   );
@@ -169,7 +246,8 @@
           selected={row.slug === fields.slug}
           activity={row.activity}
           unseen={row.unseen}
-          onclick={() => show(row.slug)} />
+          onclick={() => show(row.slug)}
+          oncontextmenu={(event) => openMenu(event, row)} />
       {/each}
 
       <Button variant="dashed" size="sm" glyph="+" onclick={newSession}>New session</Button>
@@ -227,7 +305,10 @@
         </LatestDocument>
       </PaneHeader>
       {#each mounted as row (row.terminal)}
-        <SessionTerminal id={row.terminal} active={row.terminal === fields.terminal} />
+        <SessionTerminal
+          id={row.terminal}
+          active={row.terminal === fields.terminal}
+          focus={keyboard} />
       {/each}
     </div>
 
@@ -257,6 +338,54 @@
       {/each}
     </div>
   </div>
+
+  {#if menu}
+    <div
+      class="anchor"
+      style:left="{anchor.left}px"
+      style:top="{anchor.top}px"
+      use:dismissible={dismissMenu}>
+      <Menu
+        items={ROW_MENU}
+        width={ROW_MENU_WIDTH}
+        offsetY={0}
+        onSelect={(item) => {
+          const row = menu.row;
+          menu = null;
+          item.act(row);
+        }} />
+    </div>
+  {/if}
+
+  {#if confirming}
+    <Confirm
+      title="Clean up {confirming.row.name}?"
+      confirmLabel="Clean up"
+      onConfirm={cleanUp}
+      onCancel={dismissConfirm}>
+      <div class="tell">
+        {#if confirming.error}
+          <p class="lost">{confirming.error}</p>
+        {:else}
+          <p>Removes its worktrees and session files.</p>
+          <p>
+            Kept: the shared mirrors, this session's branch inside them, and the documents under
+            thoughts/.
+          </p>
+          {#if !confirming.checked}
+            <p>Could not check for uncommitted work.</p>
+          {:else if confirming.dirty.length}
+            <p class="lost">Uncommitted files will be lost in:</p>
+            <ul class="lost">
+              {#each confirming.dirty as repo (repo)}
+                <li>{repo}</li>
+              {/each}
+            </ul>
+          {/if}
+        {/if}
+      </div>
+    </Confirm>
+  {/if}
 
   <WindowTray
     windows={open.floating}
@@ -396,6 +525,34 @@
 
   .badge.quiet {
     color: var(--text-secondary);
+  }
+
+  /* A zero-size point for the menu to resolve its own position against. */
+  .anchor {
+    position: fixed;
+    width: 0;
+    height: 0;
+    z-index: 20;
+  }
+
+  .tell {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    line-height: 1.5;
+  }
+
+  .tell p,
+  .tell ul {
+    margin: 0;
+  }
+
+  .tell ul {
+    padding-left: 18px;
+  }
+
+  .lost {
+    color: var(--action-destructive);
   }
 
   .human {

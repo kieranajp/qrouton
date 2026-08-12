@@ -91,6 +91,15 @@ func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 	}
 }
 
+// A cleaned path would name the wrong directory for a session whose root came
+// through a symlink, and quoting it is a directory Finder cannot find.
+func TestRevealArgvSelectsTheDirectoryVerbatim(t *testing.T) {
+	dir := "/sessions/octopus/../octopus/"
+	if got := RevealArgv(dir); len(got) != 3 || got[0] != "open" || got[1] != "-R" || got[2] != dir {
+		t.Fatalf("reveal argv = %q, want open -R %q", got, dir)
+	}
+}
+
 func flagValue(argv []string, flag string) int {
 	for i, arg := range argv {
 		if arg == flag && i+1 < len(argv) {
