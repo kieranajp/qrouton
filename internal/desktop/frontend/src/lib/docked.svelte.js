@@ -4,19 +4,32 @@ const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
 const NONE = { tabs: [], floating: [] };
 
-/** surfaces is where each window the workbench has open is drawn. */
-export function surfaces() {
+/**
+ * surfaces is where each window one session has open is drawn. Another
+ * session's windows are ignored: the event reaches every page in the process.
+ * @param {() => string} slug
+ */
+export function surfaces(slug) {
   let open = $state(NONE);
   let live = false;
   const apply = (value) => (open = { ...NONE, ...(value || {}) });
   Events.On("window:open", (event) => {
+    if (event.data?.session !== slug()) return;
     live = true;
     apply(event.data);
   });
-  // The initial pull can resolve after an event has already landed; a stale
-  // snapshot must not overwrite it.
-  Call.ByName(WINDOWS_SERVICE + ".Surfaces").then((value) => {
-    if (!live) apply(value);
+  // A session's windows are open before its page subscribes, so each is pulled
+  // once — and a pull resolving after an event must not overwrite it.
+  let pulled;
+  $effect(() => {
+    const session = slug();
+    if (session === pulled) return;
+    pulled = session;
+    live = false;
+    apply(NONE);
+    Call.ByName(WINDOWS_SERVICE + ".Surfaces", session).then((value) => {
+      if (!live && pulled === session) apply(value);
+    });
   });
   return {
     get tabs() {
@@ -37,9 +50,17 @@ export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocume
 /** openPicker opens the repository picker, or selects the one already open. */
 export const openPicker = () => Call.ByName(WINDOWS_SERVICE + ".OpenPicker");
 
+/** openOnboard assembles a new session in a pane, or selects the one already
+ * assembling. */
+export const openOnboard = () => Call.ByName(WINDOWS_SERVICE + ".OpenOnboard");
+
 /**
  * whenSelected runs on a window the Go side wants shown — a document the agent
  * opened, which would otherwise render behind whatever tab is up.
+ * @param {() => string} slug
  * @param {(id: string) => void} select
  */
-export const whenSelected = (select) => Events.On("window:select", (event) => select(event.data));
+export const whenSelected = (slug, select) =>
+  Events.On("window:select", (event) => {
+    if (event.data?.session === slug()) select(event.data.id);
+  });

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	agentcmd "github.com/kieranajp/qrouton/cmd/agent"
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
@@ -56,6 +57,11 @@ func onboard(c *cli.Context) error {
 	if spec := c.String(workbenchSpecFlag); spec != "" {
 		return workbenchProcess(spec)
 	}
+	// There is one workbench, and every path below opens on a session: two of them
+	// would each believe they were the only one holding that session's supervisor.
+	if workbench.Running() {
+		return errWorkbenchRunning
+	}
 	args := c.Args().Slice()
 	if len(args) == 0 {
 		return list(c.String(runnerFlag), c.Bool(refreshFlag))
@@ -76,9 +82,26 @@ func onboard(c *cli.Context) error {
 	return launchAdhoc(cfg, sessions, args, c.String(runnerFlag))
 }
 
-// list opens the workbench on the landing list: the window comes up first and
-// onboarding draws in its terminal, then hands that same terminal to the agent.
+// list opens the workbench on the session the user was last in, or on the landing
+// list when there are none, which draws in the conversation and hands it over.
 func list(runnerID string, refresh bool) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	sessions, err := session.Scan(cfg.Root)
+	if err != nil {
+		return err
+	}
+	// Refreshing the cache is something only the landing list does, so asking for
+	// it asks for the list.
+	if resume, ok := lastShown(cfg.Root, sessions); ok && !refresh {
+		runner, err := pickRunner(cfg, runnerID)
+		if err != nil {
+			return err
+		}
+		return launchRunner(cfg, filepath.Join(cfg.Root, resume.Slug), runner, true)
+	}
 	bin, err := os.Executable()
 	if err != nil {
 		return err
@@ -87,18 +110,37 @@ func list(runnerID string, refresh bool) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := config.Load()
-	if err != nil {
-		return err
-	}
 	// A missing editor costs the document chip, and must not keep the list shut.
 	editor, _ := launch.ResolveEditor(cfg.Editor)
 	return detach(launch.WorkbenchSpec{
-		Socket: socket,
-		Argv:   launch.OnboardArgv(bin, socket, runnerID, refresh),
-		Dock:   cfg.Dock(),
-		Editor: editor,
+		Socket:  socket,
+		Runner:  runnerID,
+		Onboard: launch.OnboardArgv(bin, socket, runnerID, refresh),
+		Dock:    cfg.Dock(),
+		Editor:  editor,
 	}, os.Environ())
+}
+
+// lastShown is the session to come back to: the one the workbench showed most
+// recently, or the newest when none of them carries a stamp.
+func lastShown(root string, sessions []session.Manifest) (session.Manifest, bool) {
+	var best session.Manifest
+	var stamp time.Time
+	for _, m := range sessions {
+		at, ok := session.LastOpened(filepath.Join(root, m.Slug))
+		if ok && (best.Slug == "" || at.After(stamp)) {
+			best, stamp = m, at
+		}
+	}
+	if best.Slug != "" {
+		return best, true
+	}
+	for _, m := range sessions {
+		if best.Slug == "" || m.CreatedAt.After(best.CreatedAt) {
+			best = m
+		}
+	}
+	return best, best.Slug != ""
 }
 
 // launchScratch is the directory-argument path: a zero-repo Assistant session
@@ -240,15 +282,10 @@ func adhocName(repos []github.Repo) string {
 	return strings.Join(names, adhocNameSeparator)
 }
 
-// launchRunner opens the workbench on the session. Prompt stamping is not done
-// here: the supervisor running in the conversation terminal stamps on every
-// (re)launch, from the manifest as it then stands.
+// launchRunner opens the workbench on the session. The workbench builds the
+// agent's command as it boots it, and that supervisor stamps the prompts.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	editor, err := launch.ResolveEditor(cfg.Editor)
-	if err != nil {
-		return err
-	}
-	bin, err := os.Executable()
 	if err != nil {
 		return err
 	}
@@ -256,13 +293,10 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	if err != nil {
 		return err
 	}
-	argv, env, err := launch.Launch(dir, r, bin, socket, editor, resume)
-	if err != nil {
-		return err
-	}
 	return detach(launch.WorkbenchSpec{
-		SessionRoot: dir, Socket: socket, Argv: argv, Dock: cfg.Dock(), Editor: editor,
-	}, env)
+		SessionRoot: dir, Socket: socket, Runner: r.ID, Resume: resume,
+		Dock: cfg.Dock(), Editor: editor,
+	}, os.Environ())
 }
 
 // detach hands the workbench to a process of its own and returns as soon as it
@@ -282,9 +316,9 @@ func detach(spec launch.WorkbenchSpec, env []string) error {
 	return nil
 }
 
-// workbenchProcess is the detached process's own entry: it runs the event loop
-// and lives until the session ends. Nothing is re-derived — the parent assembled
-// the session and put everything this needs in the spec.
+// workbenchProcess is the detached process's own entry: the event loop, until its
+// window closes. It reads the config because it can boot any session under the
+// root, each needing a runner and a socket of its own.
 func workbenchProcess(marshalled string) error {
 	spec, err := launch.ParseWorkbenchSpec(marshalled)
 	if err != nil {
@@ -294,16 +328,36 @@ func workbenchProcess(marshalled string) error {
 	if err != nil {
 		return err
 	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
 	return desktop.Run(desktop.Options{
 		SessionRoot: spec.SessionRoot,
+		Resume:      spec.Resume,
+		Root:        cfg.Root,
 		Socket:      spec.Socket,
-		Argv:        spec.Argv,
+		Onboard:     spec.Onboard,
 		Env:         os.Environ(),
+		Agent:       agentCommand(cfg, bin, spec.Runner, spec.Editor),
 		Shell:       shellArgv(bin),
 		Picker:      pickerArgv(bin),
+		Onboarding:  func(socket string) []string { return launch.OnboardPaneArgv(bin, socket) },
 		Document:    documentWindow(spec.Editor),
 		Dock:        spec.Dock,
 	})
+}
+
+// agentCommand builds a session's supervisor command when the workbench boots it,
+// so the socket it is served on and the manifest it reads are the current ones.
+func agentCommand(cfg *config.Config, bin, runnerID string, editor launch.EditorCommand) func(string, string, bool) ([]string, []string, error) {
+	return func(sessionRoot, socket string, resume bool) ([]string, []string, error) {
+		runner, err := pickRunner(cfg, runnerID)
+		if err != nil {
+			return nil, nil, err
+		}
+		return launch.Launch(sessionRoot, runner, bin, socket, editor, resume)
+	}
 }
 
 // documentWindow reaches the same decision the agent's file tool does.

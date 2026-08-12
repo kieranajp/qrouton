@@ -75,6 +75,16 @@ func TestOnboardArgvCarriesTheSocketAndTheLaunchFlags(t *testing.T) {
 	}
 }
 
+// Onboarding in a pane has no terminal to hand over, so it has to be told to
+// stop at adoption and let the workbench boot the agent.
+func TestOnboardPaneArgvAdoptsWithoutHandingOver(t *testing.T) {
+	socket := "/tmp/qrouton-sock/501/deadbeef.sock"
+	joined := strings.Join(OnboardPaneArgv("/bin/qrouton", socket), " ")
+	if joined != "/bin/qrouton onboard --socket "+socket+" --adopt-only" {
+		t.Fatalf("onboard pane argv = %q", joined)
+	}
+}
+
 func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 	if joined := strings.Join(ShellArgv("/bin/qrouton", "/sessions/octopus"), " "); joined != "/bin/qrouton shell --session-root /sessions/octopus" {
 		t.Fatalf("shell argv = %q", joined)

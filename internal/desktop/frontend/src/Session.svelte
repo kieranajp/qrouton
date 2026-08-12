@@ -11,15 +11,17 @@
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
-  import TerminalPane from "./lib/shell/TerminalPane.svelte";
   import WindowTray from "./lib/shell/WindowTray.svelte";
   import DockedDocument from "./lib/DockedDocument.svelte";
   import DockedTerminal from "./lib/DockedTerminal.svelte";
+  import SessionTerminal from "./lib/SessionTerminal.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
-  import { attach } from "./lib/conversation.js";
+  import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
+  import { show } from "./lib/sessions.js";
   import {
     closeWindow,
     openDocument,
+    openOnboard,
     openPicker,
     openShell,
     surfaces,
@@ -38,29 +40,28 @@
   // letting one of them become a strip.
   const MIN_HUMAN = 320;
   const MIN_AGENT = 360;
-  const WIDTH_KEY = "qrouton.human-pane";
 
   // A page served from a custom scheme has an origin the webview may call
   // opaque, where storage throws rather than coming back empty.
-  const remembered = () => {
+  const readStored = (key) => {
     try {
-      return Number(localStorage.getItem(WIDTH_KEY)) || 0;
+      return localStorage.getItem(key);
     } catch {
-      return 0;
+      return null;
     }
   };
-  const remember = (value) => {
+  const writeStored = (key, value) => {
     try {
-      if (value) localStorage.setItem(WIDTH_KEY, String(value));
-      else localStorage.removeItem(WIDTH_KEY);
+      if (value) localStorage.setItem(key, String(value));
+      else localStorage.removeItem(key);
     } catch {}
   };
 
   const session = chrome();
-  const open = surfaces();
-  let host;
-  // Zero is untouched, which leaves the starting width the token's to own.
-  let width = $state(remembered());
+  let fields = $derived(session.fields);
+  const open = surfaces(() => fields.slug);
+  let dragged = $state({});
+  let width = $derived(dragged[fields.slug] ?? storedWidth(readStored, fields.slug));
   let panels = $state(0);
   let rail = $state(0);
   let measured = $state(0);
@@ -68,24 +69,28 @@
   let human = $derived(width ? Math.min(Math.max(width, MIN_HUMAN), room) : 0);
 
   function resize(next) {
-    width = next;
-    remember(next);
+    dragged = { ...dragged, [fields.slug]: next };
+    writeStored(widthKey(fields.slug), next);
   }
 
   function reset() {
-    width = 0;
-    remember(0);
+    resize(0);
   }
 
-  // The focused tab is held by id, so a window docking behind it cannot shift
-  // the selection the way an index would.
-  let focused = $state("");
+  let focus = $state({});
+  let focused = $derived(focusedIn(focus, fields.slug));
   let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === focused)));
+  const select = (id) => (focus = focusIn(focus, fields.slug, id));
 
-  onMount(() => attach(host));
-  onMount(() => whenSelected((id) => (focused = id)));
+  // The session on screen may have no rail row yet: onboarding names the session
+  // it assembles only once the window is already up.
+  let mounted = $derived([
+    ...(fields.terminal ? [{ terminal: fields.terminal, slug: fields.slug }] : []),
+    ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
+  ]);
 
-  let fields = $derived(session.fields);
+  onMount(() => whenSelected(() => fields.slug, select));
+
   let activity = $derived(ACTIVITY[fields.activity] ?? ACTIVITY.idle);
   let latest = $derived(
     fields.documents.length
@@ -105,14 +110,21 @@
   async function read(path) {
     listing = false;
     try {
-      focused = await openDocument(path);
+      select(await openDocument(path));
     } catch {}
   }
   // The picker writes the manifest and the chrome poll notices, so nothing here
   // waits on it.
   async function addRepos() {
     try {
-      focused = await openPicker();
+      select(await openPicker());
+    } catch {}
+  }
+  // Onboarding names the session it assembles by adopting it, and the workbench
+  // switches to it then; nothing here waits.
+  async function newSession() {
+    try {
+      select(await openOnboard());
     } catch {}
   }
   let commits = $derived(
@@ -137,13 +149,15 @@
         <RailItem
           initials={row.initials}
           name={row.name}
-          mode={row.mode}
           repos={row.repos}
-          live={row.live}
-          selected={row.live}
-          activity={row.live ? fields.activity : "idle"}
-          style="cursor: default" />
+          live={!!row.terminal}
+          selected={row.slug === fields.slug}
+          activity={row.activity}
+          unseen={row.unseen}
+          onclick={() => show(row.slug)} />
       {/each}
+
+      <Button variant="dashed" size="sm" glyph="+" onclick={newSession}>New session</Button>
 
       <div class="repos">
         <CapsLabel tone="dim">This session</CapsLabel>
@@ -197,9 +211,9 @@
             onSelect={(_, i) => read(fields.documents[i].path)} />
         </LatestDocument>
       </PaneHeader>
-      <TerminalPane>
-        <div class="host" bind:this={host}></div>
-      </TerminalPane>
+      {#each mounted as row (row.terminal)}
+        <SessionTerminal id={row.terminal} active={row.terminal === fields.terminal} />
+      {/each}
     </div>
 
     <Splitter
@@ -214,9 +228,9 @@
       <TabStrip
         tabs={open.tabs}
         {selected}
-        onSelect={(i) => (focused = open.tabs[i].id)}
+        onSelect={(i) => select(open.tabs[i].id)}
         onClose={(i) => closeWindow(open.tabs[i].id)}
-        onNew={async () => (focused = await openShell())}
+        onNew={async () => select(await openShell())}
         newLabel="Shell" />
       {#each open.tabs as tab, i (tab.id)}
         <!-- Only a terminal may be Started; a document tab has no process behind it. -->
@@ -367,11 +381,6 @@
 
   .badge.quiet {
     color: var(--text-secondary);
-  }
-
-  .host {
-    flex: 1;
-    min-height: 0;
   }
 
   .human {

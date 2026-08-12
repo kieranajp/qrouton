@@ -6,23 +6,41 @@ package desktop
 import (
 	"context"
 	"fmt"
+	"io"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
+	"time"
 
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Options is the session the workbench opens on.
+// Options is the workbench: where its sessions live, which one it opens on, and
+// how it builds what each of them runs.
 type Options struct {
 	// SessionRoot is empty when no session has been chosen yet: onboarding runs
 	// in the conversation terminal and adopts one over the control socket.
 	SessionRoot string
-	Socket      string
-	Argv        []string
-	Env         []string
+	// Resume asks the runner of the session the workbench opens on to continue
+	// its previous conversation. A session the rail boots always resumes.
+	Resume bool
+	// Root is where sessions live, so the rail can boot one this workbench has
+	// never run.
+	Root string
+	// Socket answers the launcher's readiness poll and the adopt an onboarding
+	// child with no session of its own sends.
+	Socket string
+	// Onboard is the conversation's command on the landing path, which has no
+	// session to build an agent command from.
+	Onboard []string
+	Env     []string
+	// Agent builds a session's supervisor command and environment against the
+	// control socket the workbench will serve that session on.
+	Agent func(sessionRoot, socket string, resume bool) (argv, env []string, err error)
 	// Shell builds the user shell window's command for a session root, which is
 	// why it is a function rather than an argv.
 	Shell func(sessionRoot string) []string
@@ -31,16 +49,17 @@ type Options struct {
 	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
 	// Picker builds the repository picker's command, as Shell does.
 	Picker func(sessionRoot string) []string
+	// Onboarding builds the command that assembles a new session. It takes the
+	// control socket, not a root: it names the session it makes by adopting it.
+	Onboarding func(socket string) []string
 	// Dock sends the agent's windows to the tab strip rather than the screen.
 	Dock bool
 }
 
-// Run opens the workbench and blocks until the session ends: closing the
-// conversation window and the agent exiting are the same ending reached from
-// either side. There is no detached server and nothing survives in the
-// background.
+// Run opens the workbench and blocks until the window closes. Every session it
+// booted goes with it; nothing survives in the background.
 func Run(opts Options) error {
-	if len(opts.Argv) == 0 {
+	if opts.Agent == nil || (opts.SessionRoot == "" && len(opts.Onboard) == 0) {
 		return ErrNoAgentCommand
 	}
 	if opts.Socket == "" {
@@ -51,10 +70,12 @@ func Run(opts Options) error {
 		return err
 	}
 	r := newWailsRenderer(assets)
-	term := newTerm(opts, r.Emit)
-	windows := newWindows(r, r.Emit, opts.Dock)
+	reg := newSessions()
+	term := newTerm(reg, r.Emit)
+	windows := newWindows(r, r.Emit, opts.Dock, reg)
 	r.register(application.NewService(term))
 	r.register(application.NewService(windows))
+	r.register(application.NewService(reg))
 	return run(r, term, windows, opts)
 }
 
@@ -64,48 +85,83 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	var root atomic.Pointer[string]
-	root.Store(&opts.SessionRoot)
-	sessionRoot := func() string { return *root.Load() }
-	go watchChrome(ctx, sessionRoot, term.activity.state, r.Emit)
-
-	record := &windowRecorder{root: sessionRoot, windows: windows}
+	reg := term.sessions
+	shell := &shellWindow{windows: windows, argv: opts.Shell}
+	record := &windowRecorder{windows: windows}
 	windows.observe(record.save)
 
-	// Closing the conversation window and the agent exiting are the same ending
-	// reached from either side, and either may arrive first.
+	reg.boot = booting{
+		root: func(slug string) string {
+			if opts.Root == "" || slug == "" {
+				return ""
+			}
+			root := filepath.Join(opts.Root, slug)
+			// A rail row can outlive the directory it names, and a directory
+			// without a manifest is not resumable.
+			if _, err := os.Stat(sessionpaths.Manifest(root)); err != nil {
+				return ""
+			}
+			return root
+		},
+		agent: opts.Agent,
+		serve: func(state *sessionState, socket string) (io.Closer, error) {
+			return serveControl(socket, windows, state, controlHooks{attention: state.activity.hook})
+		},
+		shown: func(state *sessionState) {
+			r.Retitle(mainWindowName, windowTitle(state.root()))
+			if state == nil {
+				return
+			}
+			if root := state.root(); root != "" {
+				_ = session.MarkOpened(root, time.Now())
+			}
+			shell.open(state)
+			// A resumed session's manifest still lists the last run's windows,
+			// and none of them are open.
+			record.save(state)
+		},
+		teardown: windows.stop,
+	}
+	go watchChrome(ctx, reg, opts.Root, r.Emit)
+
+	// Closing the conversation window ends the app; a supervisor exiting ends
+	// only its own session, and a failed one keeps its terminal readable.
 	quit := sync.OnceFunc(func() {
 		windows.observe(nil)
 		windows.stopAll()
-		term.Stop()
+		reg.stopAll()
 		r.Quit()
 	})
-	// A supervisor that failed keeps its window, so the reason stays readable.
-	term.whenChildExits(func(code int) {
+	term.whenChildExits(func(state *sessionState, code int) {
 		if code == 0 {
-			quit()
+			reg.retire(state)
 		}
 	})
 
-	shell := &shellWindow{windows: windows, argv: opts.Shell, root: sessionRoot}
-	windows.newShell = shell.another
+	windows.newShell = func() (string, error) { return shell.another(reg.current()) }
 	windows.newDocument = func(name string) (string, error) {
-		return openDocument(windows, opts.Document, sessionRoot(), name)
+		return openDocument(windows, reg.current(), opts.Document, name)
 	}
 	windows.newPicker = func() (string, error) {
-		return openPicker(windows, opts.Picker, sessionRoot())
+		return openPicker(windows, reg.current(), opts.Picker)
 	}
-	server, err := serveControl(opts.Socket, windows, controlHooks{
-		adopt: func(adopted string) {
-			root.Store(&adopted)
-			r.Retitle(mainWindowName, windowTitle(adopted))
-			shell.open(adopted)
-			// A resumed session's manifest still lists the last run's windows,
-			// and none of them are open.
-			record.save()
-		},
-		attention: term.activity.hook,
-	})
+	windows.newOnboard = func() (string, error) {
+		return openOnboard(windows, reg.current(), opts.Onboarding, opts.Socket, opts.Root)
+	}
+
+	// The landing path's conversation is registered before it is served, because
+	// the process socket is the session it goes on to adopt.
+	var landing *sessionState
+	if opts.SessionRoot == "" {
+		landing = reg.add("", opts.Onboard, withTerminalEnv(opts.Env))
+	}
+	// The landing path's supervisor keeps talking to the process socket across the
+	// handover, so that is where its runner raises attention.
+	hooks := controlHooks{adopt: reg.adopt}
+	if landing != nil {
+		hooks.attention = landing.activity.hook
+	}
+	server, err := serveControl(opts.Socket, windows, landing, hooks)
 	if err != nil {
 		return err
 	}
@@ -122,57 +178,64 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 	}); err != nil {
 		return err
 	}
-	shell.open(opts.SessionRoot)
-	record.save()
+	if landing != nil {
+		reg.reveal(landing)
+	} else {
+		opened, err := reg.start(opts.SessionRoot, opts.Resume)
+		if err != nil {
+			return err
+		}
+		reg.reveal(opened)
+	}
 	return r.Run()
 }
 
-// shellWindow is the session's user shell: one opened unasked, and however many
-// more the user asks for.
+// shellWindow opens a session's user shells: one unasked, and however many more
+// the user asks for. The numbering is the session's, so a second one restarts it.
 type shellWindow struct {
 	windows *Windows
 	argv    func(string) []string
-	root    func() string
-
-	mu sync.Mutex
-	id string
-	// opened counts the shells the session has had rather than the ones still
-	// open: a number freed by a close would name two terminals at once.
-	opened int
 }
 
-// open gives the session a shell without being asked. Adoption may call it
-// again once the session is known, which must not leave two.
-func (s *shellWindow) open(root string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.id != "" && s.windows.exists(s.id) {
+// open gives a session a shell without being asked. Adoption may call it again
+// once the session is known, which must not leave two.
+func (s *shellWindow) open(owner *sessionState) {
+	if owner == nil {
 		return
 	}
-	id, err := s.spawn(root)
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.shell != "" && s.windows.exists(owner.shell) {
+		return
+	}
+	id, err := s.spawn(owner)
 	if err != nil {
 		return
 	}
-	s.id = id
+	owner.shell = id
 }
 
 // another is the tab strip's + button.
-func (s *shellWindow) another() (string, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.spawn(s.root())
+func (s *shellWindow) another(owner *sessionState) (string, error) {
+	if owner == nil {
+		return "", ErrNoShellCommand
+	}
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	return s.spawn(owner)
 }
 
-// spawn is called with mu held, so the numbering matches the order the tabs
-// open in.
-func (s *shellWindow) spawn(root string) (string, error) {
+// spawn is called with the session's lock held, so the numbering matches the
+// order the tabs open in.
+func (s *shellWindow) spawn(owner *sessionState) (string, error) {
+	root := owner.root()
 	if root == "" || s.argv == nil {
 		return "", ErrNoShellCommand
 	}
-	s.opened++
-	return s.windows.openStructural(workbench.WindowOptions{
+	owner.shells++
+	return s.windows.openStructural(owner, workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
-		Label:   shellLabel(s.opened),
+		Label:   shellLabel(owner.shells),
 		Cwd:     root,
 		Command: s.argv(root),
 	})
@@ -180,29 +243,49 @@ func (s *shellWindow) spawn(root string) (string, error) {
 
 // openDocument puts a document in the right pane. The user asked for it, so it
 // is a tab under either windows preference, and unrecorded like the shell.
-func openDocument(windows *Windows, window func(string, string) (workbench.WindowOptions, error), root, name string) (string, error) {
-	if window == nil {
+func openDocument(windows *Windows, owner *sessionState, window func(string, string) (workbench.WindowOptions, error), name string) (string, error) {
+	if owner == nil || window == nil {
 		return "", ErrNoEditorCommand
 	}
-	opts, err := window(root, name)
+	opts, err := window(owner.root(), name)
 	if err != nil {
 		return "", err
 	}
-	return windows.openStructural(opts)
+	return windows.openStructural(owner, opts)
 }
 
 // openPicker puts the repository picker in the right pane. A tab, not a window
 // of its own: adding a repository is not worth losing sight of the conversation.
-func openPicker(windows *Windows, argv func(string) []string, root string) (string, error) {
-	if root == "" || argv == nil {
+func openPicker(windows *Windows, owner *sessionState, argv func(string) []string) (string, error) {
+	if owner == nil || argv == nil {
 		return "", ErrNoPickerCommand
 	}
-	return windows.openStructural(workbench.WindowOptions{
+	root := owner.root()
+	if root == "" {
+		return "", ErrNoPickerCommand
+	}
+	return windows.openStructural(owner, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
 		Label:       pickerWindowLabel,
 		Cwd:         root,
 		Command:     argv(root),
 		Source:      pickerSource,
+		CloseOnExit: true,
+	})
+}
+
+// openOnboard puts the session assembly in the right pane, belonging to whichever
+// session is on screen — or to none, which is the window with no session at all.
+func openOnboard(windows *Windows, owner *sessionState, argv func(string) []string, socket, root string) (string, error) {
+	if argv == nil || socket == "" {
+		return "", ErrNoOnboardCommand
+	}
+	return windows.openStructural(owner, workbench.WindowOptions{
+		Kind:        workbench.KindTerminal,
+		Label:       onboardWindowLabel,
+		Cwd:         root,
+		Command:     argv(socket),
+		Source:      onboardSource,
 		CloseOnExit: true,
 	})
 }

@@ -12,4 +12,7 @@ const (
 
 	refreshFlag  = "refresh"
 	refreshUsage = "refresh the cached org repo list"
+
+	adoptOnlyFlag  = "adopt-only"
+	adoptOnlyUsage = "leave the terminal after adopting, so the workbench boots the agent itself"
 )

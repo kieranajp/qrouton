@@ -32,6 +32,7 @@ const (
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	agentPIDName       = "agent.pid"
+	openedName         = "opened"
 )
 
 // Dir is the session-private directory inside a session root.
@@ -83,6 +84,12 @@ func Handoff(root string) string {
 // `qrouton mode` can signal it to relaunch the runner.
 func AgentPID(root string) string {
 	return filepath.Join(Dir(root), agentPIDName)
+}
+
+// Opened records when the workbench last showed a session, so opening the app
+// comes back to the one you were in rather than the newest on disk.
+func Opened(root string) string {
+	return filepath.Join(Dir(root), openedName)
 }
 
 // HandoffPending marks an escalation that still owes the next runner a fresh

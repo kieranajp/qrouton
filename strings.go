@@ -51,6 +51,7 @@ const (
 )
 
 var (
-	errNoRepositories = errors.New("no repositories given")
-	errRepoSpecShape  = errors.New("expected owner/repo")
+	errNoRepositories   = errors.New("no repositories given")
+	errWorkbenchRunning = errors.New(`a qrouton workbench is already open — use "+ New session" in it`)
+	errRepoSpecShape    = errors.New("expected owner/repo")
 )

@@ -25,6 +25,7 @@ var Command = &cli.Command{
 		&cli.StringFlag{Name: socketFlag, Usage: socketUsage, Required: true},
 		&cli.StringFlag{Name: runnerFlag, Usage: runnerUsage},
 		&cli.BoolFlag{Name: refreshFlag, Usage: refreshUsage},
+		&cli.BoolFlag{Name: adoptOnlyFlag, Usage: adoptOnlyUsage},
 	},
 	Action: func(c *cli.Context) error {
 		cfg, err := config.Load()
@@ -41,13 +42,13 @@ var Command = &cli.Command{
 		if err != nil || request == nil {
 			return err
 		}
-		return handOver(c.Context, cfg, c.String(socketFlag), *request)
+		return handOver(c.Context, cfg, c.String(socketFlag), *request, c.Bool(adoptOnlyFlag))
 	},
 }
 
-// handOver replaces this process with the session's agent supervisor, keeping
-// the terminal the landing list has been drawing in.
-func handOver(ctx context.Context, cfg *config.Config, socket string, request tui.LaunchRequest) error {
+// handOver replaces this process with the session's agent supervisor, keeping the
+// terminal the landing list drew in. adoptOnly exits and the workbench boots it.
+func handOver(ctx context.Context, cfg *config.Config, socket string, request tui.LaunchRequest, adoptOnly bool) error {
 	editor, err := launch.ResolveEditor(cfg.Editor)
 	if err != nil {
 		return err
@@ -64,10 +65,13 @@ func handOver(ctx context.Context, cfg *config.Config, socket string, request tu
 	if err != nil {
 		return err
 	}
-	// The workbench opened before a session existed; its chrome and its user
-	// shell are waiting to be told which one this is.
-	if err := host.Adopt(ctx, request.Dir); err != nil {
+	// The workbench is waiting to be told which session this is: its chrome, its
+	// user shell, and the agent it boots when this process is not the one to.
+	if err := host.Adopt(ctx, request.Dir, adoptOnly); err != nil {
 		return fmt.Errorf("%w: %w", errNotAdopted, err)
+	}
+	if adoptOnly {
+		return nil
 	}
 	return handover(argv, env)
 }

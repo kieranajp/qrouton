@@ -32,18 +32,15 @@ func sessionDir(t *testing.T, root string, m session.Manifest) string {
 
 func TestReadScratchAssistant(t *testing.T) {
 	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "lifesum-4f3a", Mode: session.ModeAssistant})
-	got, ok := Read(dir)
-	if !ok {
-		t.Fatal("Read reported no manifest")
-	}
+	got := Read(dir)
 	want := Fields{
-		Mode:     "ASSISTANT",
-		Phase:    "scratch",
-		Identity: "lifesum-4f3a",
-		Sessions: []SessionRow{
-			{Name: "lifesum-4f3a", Slug: "lifesum-4f3a", Initials: "l4", Mode: "ASSISTANT", Live: true},
-		},
+		Mode:      "ASSISTANT",
+		Phase:     "scratch",
+		Identity:  "lifesum-4f3a",
+		Slug:      "lifesum-4f3a",
+		Sessions:  []SessionRow{},
 		Documents: []Document{},
+		Repos:     []RepoStat{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -60,10 +57,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	dir := sessionDir(t, root, m)
 
 	// No documents yet: freshly escalated means Research.
-	got, ok := Read(dir)
-	if !ok {
-		t.Fatal("Read reported no manifest")
-	}
+	got := Read(dir)
 	if got.Mode != "RPI" || got.Phase != "Research" {
 		t.Fatalf("fields = %#v", got)
 	}
@@ -79,7 +73,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(research, "r1-findings.md"), []byte("# findings"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := Read(dir); got.Phase != "Plan" {
+	if got := Read(dir); got.Phase != "Plan" {
 		t.Fatalf("phase did not advance to Plan: %q", got.Phase)
 	}
 
@@ -91,15 +85,47 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plans, "p1.md"), []byte("- [ ] step"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, _ := Read(dir); got.Phase != "Implement" {
+	if got := Read(dir); got.Phase != "Implement" {
 		t.Fatalf("phase did not advance to Implement: %q", got.Phase)
 	}
 }
 
+// The landing path, before onboarding has chosen a session: the window still has
+// to be told something, and no slice in it may be nil.
 func TestReadWithoutManifest(t *testing.T) {
-	got, ok := Read(t.TempDir())
-	if ok || !reflect.DeepEqual(got, Fields{}) {
-		t.Fatalf("missing manifest = %#v, %v", got, ok)
+	want := Fields{Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{}}
+	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
+		t.Fatalf("missing manifest = %#v, want %#v", got, want)
+	}
+}
+
+// The slug is how the page addresses a session: its rail row, its window
+// surfaces and its documents are all keyed on it.
+func TestFieldsCarryTheSessionsSlug(t *testing.T) {
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "extract-billing", Name: "Extract billing"})
+	if got := Read(dir).Slug; got != "extract-billing" {
+		t.Fatalf("slug = %q, want the manifest's", got)
+	}
+	if got := Read(t.TempDir()).Slug; got != "" {
+		t.Fatalf("a directory with no manifest answered with slug %q", got)
+	}
+}
+
+// The page reads both off the chrome payload: without them it can name no
+// session and attach to no conversation.
+func TestTheSlugAndTerminalReachTheWire(t *testing.T) {
+	b, err := json.Marshal(Fields{Slug: "extract-billing", Terminal: "term-1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyed map[string]any
+	if err := json.Unmarshal(b, &keyed); err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"slug": "extract-billing", "terminal": "term-1"} {
+		if keyed[key] != want {
+			t.Fatalf("%q marshalled as %v, want %q", key, keyed[key], want)
+		}
 	}
 }
 
@@ -134,7 +160,7 @@ func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
 		}
 	}
 
-	fields, _ := Read(dir)
+	fields := Read(dir)
 	if len(fields.Documents) != len(kinds) {
 		t.Fatalf("found %d documents, want %d: %#v", len(fields.Documents), len(kinds), fields.Documents)
 	}
@@ -152,25 +178,206 @@ func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
 	}
 }
 
-func TestSessionsListsEverySessionAndMarksTheLiveOne(t *testing.T) {
+// The rail is drawn before any session is on screen, so this answers from the
+// root alone and leaves the workbench's own knowledge to the caller that has it.
+func TestSessionsListsEverySessionUnderTheRoot(t *testing.T) {
 	root := t.TempDir()
 	sessionDir(t, root, session.Manifest{Slug: "flaky-suite", Name: "Flaky suite", Mode: session.ModeAssistant})
-	dir := sessionDir(t, root, session.Manifest{Slug: "extract-billing", Name: "Extract billing", Mode: session.ModeRPI,
+	sessionDir(t, root, session.Manifest{Slug: "extract-billing", Name: "Extract billing", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{{Name: "api", Org: "lifesum"}}})
 
-	fields, _ := Read(dir)
-	if len(fields.Sessions) != 2 {
-		t.Fatalf("listed %d sessions, want 2", len(fields.Sessions))
+	rows := Sessions(root)
+	if len(rows) != 2 {
+		t.Fatalf("listed %d sessions, want 2: %#v", len(rows), rows)
 	}
-	live := fields.Sessions[0]
-	if !live.Live || live.Slug != "extract-billing" {
-		t.Fatalf("live row = %#v", live)
+	byslug := map[string]SessionRow{}
+	for _, row := range rows {
+		byslug[row.Slug] = row
+		if row.Terminal != "" || row.Activity != "" {
+			t.Fatalf("row %#v claims a conversation; a file scan cannot know that", row)
+		}
 	}
-	if live.Initials != "eb" || live.Mode != "RPI" || live.Repos != 1 {
-		t.Fatalf("live row = %#v", live)
+	if got := byslug["extract-billing"]; got.Name != "Extract billing" || got.Initials != "eb" || got.Mode != "RPI" {
+		t.Fatalf("billing row = %#v", got)
 	}
-	if fields.Sessions[1].Live || fields.Sessions[1].Initials != "fs" {
-		t.Fatalf("second row = %#v", fields.Sessions[1])
+	if got := byslug["extract-billing"].Repos; len(got) != 1 || got[0].Name != "api" {
+		t.Fatalf("billing row repositories = %#v, want the one its manifest names", got)
+	}
+	if got := byslug["flaky-suite"]; got.Name != "Flaky suite" || got.Initials != "fs" || got.Mode != "ASSISTANT" {
+		t.Fatalf("flaky row = %#v", got)
+	}
+}
+
+// The rail has room for three repository names and counts the rest, so manifest
+// order is a ranking: reorder it and truncation keeps an arbitrary three.
+func TestSessionRowsCarryRepositoriesInManifestOrder(t *testing.T) {
+	root := t.TempDir()
+	sessionDir(t, root, session.Manifest{Slug: "webhook", Name: "Webhook retry",
+		Repos: []session.ManifestRepo{
+			{Name: "svc", Org: "lifesum", Role: session.RepoRoleActive},
+			{Name: "contracts", Org: "lifesum", Role: session.RepoRoleReference},
+			{Name: "api", Org: "lifesum", Role: session.RepoRoleActive},
+		}})
+
+	rows := Sessions(root)
+	if len(rows) != 1 {
+		t.Fatalf("listed %d sessions, want 1: %#v", len(rows), rows)
+	}
+	want := []SessionRepo{
+		{Name: "svc", Role: "editing"},
+		{Name: "contracts", Role: "reference"},
+		{Name: "api", Role: "editing"},
+	}
+	if got := rows[0].Repos; !reflect.DeepEqual(got, want) {
+		t.Fatalf("row repositories = %#v, want %#v", got, want)
+	}
+}
+
+// A nil slice marshals as null, and the page's defaults only fill keys the
+// payload omits, so null reaches a .length and unwinds the render.
+func TestSessionRowsWithoutRepositoriesCarryAnEmptyList(t *testing.T) {
+	root := t.TempDir()
+	sessionDir(t, root, session.Manifest{Slug: "bare", Name: "Bare"})
+
+	rows := Sessions(root)
+	if len(rows) != 1 {
+		t.Fatalf("listed %d sessions, want 1: %#v", len(rows), rows)
+	}
+	if rows[0].Repos == nil {
+		t.Fatal("a session with no repositories carries a nil repository list")
+	}
+	b, err := json.Marshal(rows[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyed map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keyed); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(keyed["repos"]); got != "[]" {
+		t.Fatalf("repos marshalled as %s, want []", got)
+	}
+}
+
+func TestSessionRowsCarryWhenTheyWereLastShown(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "extract-billing", Name: "Extract billing"})
+	sessionDir(t, root, session.Manifest{Slug: "flaky-suite", Name: "Flaky suite"})
+	at := time.Now().Add(-time.Hour).UTC()
+	if err := session.MarkOpened(dir, at); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, row := range Sessions(root) {
+		switch row.Slug {
+		case "extract-billing":
+			if !row.Opened.Equal(at) {
+				t.Fatalf("stamped row = %#v, want Opened %v", row, at)
+			}
+		case "flaky-suite":
+			if !row.Opened.IsZero() {
+				t.Fatalf("row %#v carries a stamp for a session never shown", row)
+			}
+		}
+	}
+}
+
+// sessionDoc writes one document under a session's thoughts tree at an explicit
+// mtime; filesystem timestamps are too coarse to order writes by wall clock.
+func sessionDoc(t *testing.T, dir, name string, at time.Time) {
+	t.Helper()
+	path := filepath.Join(dir, "thoughts", "shared", name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(path, at, at); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestUnseenCountsTheDocumentsWrittenSinceTheStamp(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "webhook"})
+	stamp := time.Now().Add(-time.Hour)
+	if err := session.MarkOpened(dir, stamp); err != nil {
+		t.Fatal(err)
+	}
+	sessionDoc(t, dir, "research/R1-findings.md", stamp.Add(-time.Minute))
+	sessionDoc(t, dir, "plans/P1-rollout.md", stamp.Add(time.Minute))
+	sessionDoc(t, dir, "specs/S1-shape.md", stamp.Add(2*time.Minute))
+	sessionDoc(t, dir, "scratch.txt", stamp.Add(3*time.Minute))
+
+	if got := Unseen(root)["webhook"]; got != 2 {
+		t.Fatalf("unseen = %d, want the 2 documents newer than the stamp", got)
+	}
+}
+
+func TestUnseenIsZeroWithNothingNewToReport(t *testing.T) {
+	root := t.TempDir()
+	stamp := time.Now().Add(-time.Hour)
+	empty := sessionDir(t, root, session.Manifest{Slug: "empty"})
+	stale := sessionDir(t, root, session.Manifest{Slug: "stale"})
+	for _, dir := range []string{empty, stale} {
+		if err := session.MarkOpened(dir, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sessionDoc(t, stale, "research/R1-findings.md", stamp.Add(-time.Minute))
+
+	unseen := Unseen(root)
+	for _, slug := range []string{"empty", "stale"} {
+		got, measured := unseen[slug]
+		if !measured || got != 0 {
+			t.Fatalf("%q reports %d unseen documents, measured %v; want a measured zero", slug, got, measured)
+		}
+	}
+}
+
+// A session this workbench has never shown has nothing to measure against, so
+// every document it ever wrote would count.
+func TestUnseenSkipsASessionWithNoStamp(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "never-shown"})
+	sessionDoc(t, dir, "research/R1-findings.md", time.Now())
+	sessionDoc(t, dir, "plans/P1-rollout.md", time.Now())
+
+	got, measured := Unseen(root)["never-shown"]
+	if measured || got != 0 {
+		t.Fatalf("a session never shown reports %d unseen documents, measured %v", got, measured)
+	}
+}
+
+// Opening the app comes back to the session you were last in, and the rail is
+// ordered the same way.
+func TestSessionsPutTheMostRecentlyShownFirst(t *testing.T) {
+	root := t.TempDir()
+	shown := []struct {
+		slug string
+		ago  time.Duration
+	}{
+		{slug: "older", ago: 2 * time.Hour},
+		{slug: "newer", ago: time.Minute},
+	}
+	for _, s := range shown {
+		dir := sessionDir(t, root, session.Manifest{Slug: s.slug, Name: s.slug})
+		if err := session.MarkOpened(dir, time.Now().Add(-s.ago)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Never shown, and named so that name order alone would put them first.
+	sessionDir(t, root, session.Manifest{Slug: "alpha", Name: "alpha"})
+	sessionDir(t, root, session.Manifest{Slug: "beta", Name: "beta"})
+
+	var got []string
+	for _, row := range Sessions(root) {
+		got = append(got, row.Slug)
+	}
+	want := []string{"newer", "older", "alpha", "beta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("rail order = %v, want %v", got, want)
 	}
 }
 
@@ -280,10 +487,7 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "bare", Mode: session.ModeAssistant})
 
-	fields, ok := Read(dir)
-	if !ok {
-		t.Fatal("Read reported no manifest")
-	}
+	fields := Read(dir)
 	fields.Repos = Repos(t.Context(), dir)
 
 	b, err := json.Marshal(fields)

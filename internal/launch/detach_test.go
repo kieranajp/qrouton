@@ -123,7 +123,7 @@ func TestWaitReadyReportsWhatWentWrong(t *testing.T) {
 // the round trip is a workbench that opens on nothing.
 func TestWorkbenchSpecRoundTrips(t *testing.T) {
 	spec := WorkbenchSpec{SessionRoot: "/sessions/api", Socket: "/tmp/qrouton-sock/501/ab.sock",
-		Argv: []string{"/bin/qrouton", "agent", "--session-root", "/sessions/api"}}
+		Runner: "codex", Resume: true, Onboard: []string{"/bin/qrouton", "onboard"}}
 
 	argv := WorkbenchArgv("/bin/qrouton", spec)
 	if argv[0] != "/bin/qrouton" || argv[1] != "--workbench-spec" || len(argv) != 3 {
@@ -134,19 +134,25 @@ func TestWorkbenchSpecRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	if parsed.SessionRoot != spec.SessionRoot || parsed.Socket != spec.Socket ||
-		strings.Join(parsed.Argv, " ") != strings.Join(spec.Argv, " ") {
+		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume ||
+		strings.Join(parsed.Onboard, " ") != strings.Join(spec.Onboard, " ") {
 		t.Fatalf("parsed spec = %#v, want %#v", parsed, spec)
 	}
 }
 
 func TestParseWorkbenchSpecRejectsAnIncompleteOne(t *testing.T) {
-	// The landing-list path has no session root, so only the socket and the
-	// command are required.
-	if _, err := ParseWorkbenchSpec(WorkbenchSpec{Socket: "/tmp/a.sock", Argv: []string{"/bin/qrouton"}}.Marshal()); err != nil {
-		t.Fatalf("spec without a session root = %v, want it accepted", err)
+	// A spec naming a session needs no conversation command, since the workbench
+	// builds one as it boots it; the landing list has no session and needs one.
+	for _, spec := range []WorkbenchSpec{
+		{SessionRoot: "/sessions/api", Socket: "/tmp/a.sock"},
+		{Socket: "/tmp/a.sock", Onboard: []string{"/bin/qrouton", "onboard"}},
+	} {
+		if _, err := ParseWorkbenchSpec(spec.Marshal()); err != nil {
+			t.Fatalf("ParseWorkbenchSpec(%#v) = %v, want it accepted", spec, err)
+		}
 	}
 	for _, spec := range []WorkbenchSpec{
-		{Argv: []string{"/bin/qrouton"}},
+		{Onboard: []string{"/bin/qrouton", "onboard"}},
 		{Socket: "/tmp/a.sock"},
 	} {
 		if _, err := ParseWorkbenchSpec(spec.Marshal()); !errors.Is(err, ErrWorkbenchSpecIncomplete) {

@@ -47,6 +47,12 @@ func OnboardArgv(qroutonBin, socket, runnerID string, refresh bool) []string {
 	return argv
 }
 
+// OnboardPaneArgv assembles a session in a pane. There is no terminal here worth
+// handing over, so it adopts and exits and the workbench boots the agent.
+func OnboardPaneArgv(qroutonBin, socket string) []string {
+	return []string{qroutonBin, onboardSubcommand, socketFlag, socket, adoptOnlyFlag}
+}
+
 // ShellArgv is a user shell window's command, rooted in the session.
 func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}

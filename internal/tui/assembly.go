@@ -11,6 +11,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 )
@@ -90,11 +91,20 @@ func sameStep(a, b session.Progress) bool {
 	return a.Repo.ID() == b.Repo.ID()
 }
 
-// selectedRepos translates the form's role map into session selections.
+// selectedRepos translates the form's roles into session selections, in the order
+// they were picked. The manifest keeps that order and so does the rail.
 func (m *appModel) selectedRepos() []session.RepoSelection {
-	var selected []session.RepoSelection
+	byID := make(map[string]github.Repo, len(m.repos))
 	for _, r := range m.repos {
-		switch m.form.roles[r.ID()] {
+		byID[r.ID()] = r
+	}
+	var selected []session.RepoSelection
+	for _, id := range m.form.picked {
+		r, ok := byID[id]
+		if !ok {
+			continue
+		}
+		switch m.form.roles[id] {
 		case active:
 			selected = append(selected, session.RepoSelection{Repo: r, Role: session.RepoRoleActive})
 		case reference:

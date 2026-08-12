@@ -1,6 +1,7 @@
 import { Events } from "./wails.js";
 
 /** @type {{mode: string, phase: string, identity: string, branch: string,
+ *   slug: string, terminal: string,
  *   sessions: any[], documents: any[], repos: any[],
  *   activity: 'working'|'waiting'|'idle'}} */
 const NOTHING = {
@@ -8,6 +9,8 @@ const NOTHING = {
   phase: "",
   identity: "",
   branch: "",
+  slug: "",
+  terminal: "",
   sessions: [],
   documents: [],
   repos: [],

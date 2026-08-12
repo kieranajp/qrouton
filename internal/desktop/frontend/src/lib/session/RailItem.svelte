@@ -9,12 +9,14 @@
     return null;
   }
 
-  /** @type {{initials?: string, name?: string, mode?: string, repos?: number, live?: boolean, activity?: 'working'|'waiting'|'idle', unseen?: number, selected?: boolean, [attribute: string]: any}} */
+  // The rail has room for three repository names, and counts the rest.
+  const NAMED = 3;
+
+  /** @type {{initials?: string, name?: string, repos?: {name: string, role: string}[], live?: boolean, activity?: 'working'|'waiting'|'idle', unseen?: number, selected?: boolean, [attribute: string]: any}} */
   let {
     initials,
     name,
-    mode = "RPI",
-    repos = 0,
+    repos = [],
     live = false,
     activity = "idle",
     unseen = 0,
@@ -23,19 +25,15 @@
   } = $props();
 
   let mark = $derived(marker(activity, unseen));
-  // Mode reads as one word: the reason line has ~19 monospace characters before
-  // it truncates, and unlike the name above it, it is short enough not to.
-  let modeLabel = $derived(mode === "RPI" ? "Guided" : "Open");
+  // Pick order is a ranking, so dropping the tail drops the least important.
+  let named = $derived(repos.slice(0, NAMED));
+  let hidden = $derived(repos.length - named.length);
   let reason = $derived(
-    activity === "waiting"
-      ? "Waiting for you"
-      : unseen > 0
-        ? `${unseen} unseen`
-        : `${modeLabel} · ${repos} repo${repos === 1 ? "" : "s"}`,
+    activity === "waiting" ? "Waiting for you" : unseen > 0 ? `${unseen} unseen` : "",
   );
 </script>
 
-<div class="item" class:selected class:cold={!selected && !live} {...rest}>
+<button type="button" class="item" class:selected class:cold={!selected && !live} {...rest}>
   <div class="avatar">
     {initials}
     {#if mark?.kind === "dot"}
@@ -52,19 +50,35 @@
 
   <div class="text">
     <div class="name">{name}</div>
-    <div class="reason" class:waiting={activity === "waiting"}>{reason}</div>
+    <div class="reason" class:waiting={activity === "waiting"}>
+      {#if reason}
+        {reason}
+      {:else if named.length}
+        {#each named as repo, i (repo.name)}{i ? " · " : ""}<span
+            class="repo"
+            class:reference={repo.role === "reference"}>{repo.name}</span>{/each}{#if hidden}
+          <span class="more">+{hidden}</span>
+        {/if}
+      {:else}
+        no repositories yet
+      {/if}
+    </div>
   </div>
-</div>
+</button>
 
 <style>
   .item {
     display: flex;
     align-items: center;
     gap: 10px;
+    width: 100%;
     padding: 8px 9px;
     cursor: pointer;
     border: 1px solid transparent;
     background: transparent;
+    font: inherit;
+    color: inherit;
+    text-align: left;
   }
 
   .cold {
@@ -143,5 +157,17 @@
 
   .reason.waiting {
     color: var(--state-waiting);
+  }
+
+  .repo {
+    color: var(--role-editing);
+  }
+
+  .repo.reference {
+    color: var(--role-reference);
+  }
+
+  .more {
+    color: var(--text-faint);
   }
 </style>
