@@ -34,23 +34,24 @@ const (
 // machine, the rest report. Reusing one for a second job is how a field label
 // and a warning end up the same colour and neither can be trusted.
 var Roles = map[string]string{
-	RoleAccentAction:  Blue,
-	RoleAccentLabel:   Yellow,
-	RoleAccentLiteral: Sapphire,
-	RoleStateSelected: Blue,
-	RoleStateSuccess:  Green,
-	RoleStateRunning:  Teal,
-	RoleStateFailed:   Red,
-	RoleStateWaiting:  Peach,
-	RoleStateGuided:   Mauve,
-	RoleRepoEditing:   Green,
-	RoleRepoReference: Blue,
-	RoleRepoOff:       Overlay1,
+	RoleAccentAction:      Blue,
+	RoleAccentLabel:       Yellow,
+	RoleAccentLiteral:     Sapphire,
+	RoleActionDestructive: Red,
+	RoleStateSelected:     Blue,
+	RoleStateSuccess:      Green,
+	RoleStateRunning:      Teal,
+	RoleStateFailed:       Red,
+	RoleStateWaiting:      Peach,
+	RoleStateGuided:       Mauve,
+	RoleRepoEditing:       Green,
+	RoleRepoReference:     Blue,
+	RoleRepoOff:           Overlay1,
 }
 
 // roleOrder fixes the render order; ranging Roles would reshuffle it each time.
 var roleOrder = []string{
-	RoleAccentAction, RoleAccentLabel, RoleAccentLiteral,
+	RoleAccentAction, RoleAccentLabel, RoleAccentLiteral, RoleActionDestructive,
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,

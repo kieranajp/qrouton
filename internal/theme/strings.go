@@ -2,18 +2,19 @@ package theme
 
 // Role names, which are the custom property names without their dashes.
 const (
-	RoleAccentAction  = "accent-action"
-	RoleAccentLabel   = "accent-label"
-	RoleAccentLiteral = "accent-literal"
-	RoleStateSelected = "state-selected"
-	RoleStateSuccess  = "state-success"
-	RoleStateRunning  = "state-running"
-	RoleStateFailed   = "state-failed"
-	RoleStateWaiting  = "state-waiting"
-	RoleStateGuided   = "state-guided"
-	RoleRepoEditing   = "role-editing"
-	RoleRepoReference = "role-reference"
-	RoleRepoOff       = "role-off"
+	RoleAccentAction      = "accent-action"
+	RoleAccentLabel       = "accent-label"
+	RoleAccentLiteral     = "accent-literal"
+	RoleActionDestructive = "action-destructive"
+	RoleStateSelected     = "state-selected"
+	RoleStateSuccess      = "state-success"
+	RoleStateRunning      = "state-running"
+	RoleStateFailed       = "state-failed"
+	RoleStateWaiting      = "state-waiting"
+	RoleStateGuided       = "state-guided"
+	RoleRepoEditing       = "role-editing"
+	RoleRepoReference     = "role-reference"
+	RoleRepoOff           = "role-off"
 )
 
 // The stylesheet CSS renders, and the path the workbench serves it at.
