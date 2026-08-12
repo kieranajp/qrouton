@@ -34,6 +34,7 @@ type fakeRenderer struct {
 	events map[string]any
 	quit   bool
 	block  chan struct{}
+	once   sync.Once
 }
 
 func newFakeRenderer() *fakeRenderer {
@@ -84,11 +85,15 @@ func (f *fakeRenderer) Run() error {
 	return nil
 }
 
+// Quit tolerates being called twice: the workbench quits itself when its
+// conversation window closes, and the test stops it again on the way out.
 func (f *fakeRenderer) Quit() {
-	f.mu.Lock()
-	f.quit = true
-	f.mu.Unlock()
-	close(f.block)
+	f.once.Do(func() {
+		f.mu.Lock()
+		f.quit = true
+		f.mu.Unlock()
+		close(f.block)
+	})
 }
 
 func (f *fakeRenderer) wasClosed(name string) bool {
@@ -193,6 +198,25 @@ func testWorkbench(t *testing.T, r *fakeRenderer, emit emitter) (*Sessions, *Ter
 	return reg, newTerm(reg, emit), windows
 }
 
+// startWorkbench runs the workbench and stops it before the temporary root goes:
+// a session reaching the screen does not order against the stamping and
+// recording that follows it, which would otherwise land in a directory the
+// test's cleanup is already removing. The channel carries run's result.
+func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows, opts Options) <-chan error {
+	t.Helper()
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		done <- run(r, term, windows, opts)
+	}()
+	t.Cleanup(func() {
+		r.Quit()
+		<-stopped
+	})
+	return done
+}
+
 // testSessions is a registry that boots sessions as run does: a supervisor
 // command per session and a listener of its own, over one window registry.
 func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Windows, *fakeRenderer) {
@@ -293,7 +317,7 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 
 	spec := <-r.opened
 	shownSession(t, reg)
@@ -318,8 +342,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	done := make(chan error, 1)
-	go func() { done <- run(r, term, windows, opts) }()
+	done := startWorkbench(t, r, term, windows, opts)
 
 	conversation := <-r.opened
 	shownSession(t, reg)
@@ -342,7 +365,7 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	first := shownSession(t, reg)
 
@@ -386,8 +409,7 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	done := make(chan error, 1)
-	go func() { done <- run(r, term, windows, opts) }()
+	done := startWorkbench(t, r, term, windows, opts)
 	conversation := <-r.opened
 	first := shownSession(t, reg)
 
@@ -431,7 +453,7 @@ func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
 	rec := &recorder{}
 	reg, term, windows := testWorkbench(t, r, rec.emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	if err := term.Start(shownSession(t, reg).terminal, 80, 24); err != nil {
 		t.Fatal(err)
@@ -450,7 +472,7 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	boot.argv = []string{"/bin/sh", "-c", "exit 3"}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	conversation := shownSession(t, reg).terminal
 	if err := term.Start(conversation, 80, 24); err != nil {
@@ -480,7 +502,7 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 
@@ -544,7 +566,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -603,7 +625,7 @@ func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
 	opts.Picker = func(dir string) []string { return []string{"/bin/cat", "pick", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -690,7 +712,7 @@ func TestTheNewSessionButtonOpensOneOnboardTab(t *testing.T) {
 	opts.Onboarding = func(socket string) []string { return []string{"/bin/cat", "onboard", socket} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -896,7 +918,7 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
 	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
@@ -932,7 +954,7 @@ func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
 	adopted := t.TempDir()
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	if spec := <-r.opened; spec.Title != mainWindowTitle {
 		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
 	}
@@ -1041,7 +1063,7 @@ func TestTheLandingPathPublishesNoRailRows(t *testing.T) {
 	sessionDir(t, opts.Root, "octopus")
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	landing := shownSession(t, reg)
 
@@ -1079,7 +1101,7 @@ func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg, term, windows := testWorkbench(t, r, r.Emit)
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1299,7 +1321,7 @@ func TestShowingASessionStampsOnlyThatOne(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1500,7 +1522,7 @@ func TestTheProcessSocketAnswersReadinessAndAdoptAndRefusesAWindowOp(t *testing.
 	adopted := sessionDir(t, opts.Root, "kraken")
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1567,7 +1589,7 @@ func TestShowRefusesARowWhoseSessionIsGone(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1646,7 +1668,7 @@ func TestAdoptingAFreshlyAssembledSessionDoesNotResumeIt(t *testing.T) {
 	opts, boot := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -1679,7 +1701,7 @@ func TestAPaneAdoptBootsTheNewSessionAndRetiresTheLanding(t *testing.T) {
 	opts.SessionRoot = ""
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	landing := shownSession(t, reg)
 	if err := term.Start(landing.terminal, 80, 24); err != nil {
@@ -1820,14 +1842,15 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
 	sessionDir(t, opts.Root, "kraken")
-	go func() { _ = run(r, term, windows, opts) }()
+	// The chrome poller freezes the rail on whichever poll gets there first, so
+	// the order under test is the stamps' and not that poll's timing.
+	if err := session.MarkOpened(opts.SessionRoot, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
-	waitFor(t, "the workbench to stamp the session it opened on", func() bool {
-		_, stamped := session.LastOpened(opts.SessionRoot)
-		return stamped
-	})
 	// The rail freezes on the first poll, with the session the workbench opened on
 	// at the top because showing it stamped it.
 	pushChrome(reg, opts.Root, nil, nil, r.Emit)
@@ -2169,7 +2192,7 @@ func TestTheWorkbenchRunsTheRevealCommandAndRefusesWithoutOne(t *testing.T) {
 	kraken := sessionDir(t, opts.Root, "kraken")
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -2189,7 +2212,7 @@ func TestAWorkbenchWithNoRevealCommandRefuses(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -2206,7 +2229,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
-	go func() { _ = run(r, term, windows, opts) }()
+	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	shownSession(t, reg)
 
