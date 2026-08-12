@@ -45,9 +45,9 @@ const (
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
 
-	// manifestTmpSuffix ends the name of WriteManifest's staging file, which is
-	// created uniquely so two processes staging at once cannot share one.
-	manifestTmpSuffix = ".tmp"
+	// tmpSuffix ends the name of a staging file, which is created uniquely so two
+	// processes staging at once cannot share one.
+	tmpSuffix = ".tmp"
 )
 
 // Git subcommands, in the order the lifecycle uses them.

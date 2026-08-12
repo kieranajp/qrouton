@@ -213,10 +213,7 @@ func Load(dir string) (Manifest, error) {
 	return m, nil
 }
 
-// WriteManifest atomically replaces a session's manifest — temp file plus
-// rename — so pollers re-reading it every few seconds never see a torn write.
-// Several processes write this file, so the temp name is unique per call: a
-// shared one lets a short write land inside a long one and be renamed over.
+// WriteManifest replaces a session's manifest.
 func WriteManifest(dir string, m Manifest) error {
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
@@ -224,7 +221,25 @@ func WriteManifest(dir string, m Manifest) error {
 	}
 	// Read before the write: it compares m against what is still on disk.
 	handoff := escalatesToRPI(dir, m)
-	f, err := os.CreateTemp(dir, manifestName+".*"+manifestTmpSuffix)
+	if err := replaceFile(sessionpaths.Manifest(dir), b); err != nil {
+		return err
+	}
+	if handoff {
+		// The session-private directory need not exist yet: a manifest can be
+		// written before the launcher stages anything. Best-effort beyond that —
+		// losing the marker costs the fresh context, not the escalation itself.
+		_ = os.MkdirAll(sessionpaths.Dir(dir), dirMode)
+		_ = os.WriteFile(sessionpaths.HandoffPending(dir), nil, fileMode)
+	}
+	return nil
+}
+
+// replaceFile puts b at path whole — temp file plus rename — so a poller
+// re-reading it every few seconds never sees a torn write. Several processes
+// write these files, so the temp name is unique per call: a shared one lets a
+// short write land inside a long one and be renamed over.
+func replaceFile(path string, b []byte) error {
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*"+tmpSuffix)
 	if err != nil {
 		return err
 	}
@@ -243,16 +258,9 @@ func WriteManifest(dir string, m Manifest) error {
 		os.Remove(tmp)
 		return err
 	}
-	if err := os.Rename(tmp, sessionpaths.Manifest(dir)); err != nil {
+	if err := os.Rename(tmp, path); err != nil {
 		os.Remove(tmp)
 		return err
-	}
-	if handoff {
-		// The session-private directory need not exist yet: a manifest can be
-		// written before the launcher stages anything. Best-effort beyond that —
-		// losing the marker costs the fresh context, not the escalation itself.
-		_ = os.MkdirAll(sessionpaths.Dir(dir), dirMode)
-		_ = os.WriteFile(sessionpaths.HandoffPending(dir), nil, fileMode)
 	}
 	return nil
 }
