@@ -40,7 +40,7 @@ func TestCreateZeroRepoScratchSession(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := Create(&config.Config{Root: root}, "lifesum-4f3a", "", "", "", ModeAssistant, nil, nil)
+	dir, err := Create(&config.Config{Root: root}, "lifesum-4f3a", "", "", "", ModeAssistant, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestDeleteKeepsDocumentsWrittenThroughTheThoughtsLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "scratch-1a2b", "", "", "", ModeAssistant, nil, nil)
+	dir, err := Create(cfg, "scratch-1a2b", "", "", "", ModeAssistant, "", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

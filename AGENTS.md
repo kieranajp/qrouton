@@ -22,14 +22,14 @@ The invariants below are mechanical rules. These are the reasons they exist; whe
 
 ## Architecture
 
-Dependency direction: `config ← github ← session ← tui`; `launch`, `agents`, `repos`, and `mcpserver` sit above the shared leaves. Nothing imports `tui`. `workbench` carries the window port: `launch` and `mcpserver` reach the running workbench only through `WindowHost` and the `Handle` naming its control socket, so neither links a webview and the window tools keep a fakeable seam. `desktop` is the workbench itself — the Wails application, the conversation PTY, the window registry and the socket server — and it is the only package that imports Wails, imported only by `main.go`. That split is load-bearing: put the two together and every test that touches a window tool links WebKit through cgo.
+Dependency direction: `config ← github ← session ← assembly`; `launch`, `agents`, `repos`, and `mcpserver` sit above the shared leaves. `assembly` sits where the old TUI did — above `session`, below `desktop` — and imports no display and no `launch`: it reaches the supervisor signal through a function field, because everything it imports is linked into the workbench with it. `workbench` carries the window port: `launch` and `mcpserver` reach the running workbench only through `WindowHost` and the `Handle` naming its control socket, so neither links a webview and the window tools keep a fakeable seam. `desktop` is the workbench itself — the Wails application, the conversation PTY, the window registry and the socket server — and it is the only package that imports Wails, imported only by `main.go`. That split is load-bearing: put the two together and every test that touches a window tool links WebKit through cgo.
 
 The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's own files), `theme` (the palette and what each accent is for), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
 
-- `main.go`: urfave/cli app; the root action assembles the session in the terminal it was run from and then re-execs the binary behind a hidden marker flag, so the workbench owns a process of its own and the prompt comes back. Subcommands come from `cmd/*`. `cmd/onboard` is hidden: it runs the onboarding TUI inside the conversation PTY and then execs the supervisor in place, so a session has one long-lived terminal.
+- `main.go`: urfave/cli app; the root action opens the workbench on the session last shown — or on no session at all, whose window is the assembly overlay — and re-execs the binary behind a hidden marker flag, so the workbench owns a process of its own and the prompt comes back. It takes no arguments: sessions are assembled in the window. Subcommands come from `cmd/*`.
 - `cmd/mcp/`, `cmd/agents/`, `cmd/repos/`, `cmd/shell/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
-- `internal/tui/`: fullscreen Bubble Tea onboarding and async UI state.
-- `internal/session/`: manifest schema, active/reference roles, mirrors, worktree lifecycle.
+- `internal/assembly/`: the rules a session is assembled by — the draft, its validation, the branch derivation, and the single atomic manifest write that adds repositories to a live session.
+- `internal/session/`: manifest schema, editing/reference roles, mirrors, worktree lifecycle.
 - `internal/github/`: authenticated owner discovery, cache, concurrent refresh.
 - `prompts/`: canonical workflow, skill, and agent prompts, provider rendering, and `Stamp` — the one implementation of the runner discovery tree, shared by launches and evals.
 - `internal/launch/`: runner launch/resume arguments, MCP injection, the conversation and shell argv, the supervisor and its signal path, the workbench detach and its readiness wait, and editor resolution. Asset stamping delegates to `prompts.Stamp`; only the mode-to-discovery-file decision lives here.
@@ -37,14 +37,14 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - `internal/desktop/`: the Wails application — the conversation PTY, the window registry and its lifecycle rules, the control-socket server, and the embedded pages. Window construction sits behind a `renderer` seam so everything else is testable without a display. One registry serves both surfaces: a docked window skips `renderer.Open` and reaches the session's tab strip instead, so the window tools cannot tell the two apart. The pages are a Vite + Svelte project under `frontend/`, built into `assets/` by `make front`; that tree is generated and is not in git.
 - `internal/mcpserver/`, `internal/agents/`, `internal/repos/`: the agent's window tools; subagent event collection, whose own surface is deferred; legacy repo status.
 - `internal/sessionpaths/`, `internal/codex/`, `internal/theme/`: the shared leaves above.
-- `internal/config/`: config file, XDG paths, the `windows` preference (`dock` by default, `float` for OS windows), and the on-demand owner prompt. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and `EnsureOrgs` asks at the first repository search.
+- `internal/config/`: config file, XDG paths, and the `windows` preference (`dock` by default, `float` for OS windows). `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and an empty owner list is simply an empty repository list. Nothing asks for owners; setting them is by hand until the onboarding surface exists.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
 
 ## Invariants
 
 - Subagent depth stays bounded at three levels. Lead prompts (`qrspi-*-lead`) omit `tools:` deliberately, so they inherit `Task` and can delegate; every specialist declares a read-only `tools:` set without `Task`, so it cannot. Adding or removing one `tools:` line silently changes the topology — treat it as an architectural change, not prompt editing.
-- Active repos use session branches; reference repos are detached at pinned commits.
-- Focus is never taken *from* the user. A window the agent opens leaves the keyboard where it was and a tab opens behind the active one; `WindowOptions.Focus` has exactly one caller, the escalate picker, and a focused window always gets a real OS window even under `dock`. A surface the user asked for is the opposite case and takes the keyboard.
+- Editing repos use session branches; reference repos are detached at pinned commits.
+- Focus is never taken *from* the user. A window the agent opens leaves the keyboard where it was and a tab opens behind the active one. `WindowOptions.Focus` now has no callers: the escalate picker was the only one, and it draws in the window instead — so a focused window still gets a real OS window even under `dock`, but nothing asks for one. A surface the user asked for is the opposite case and takes the keyboard.
 - Mirrors live under `<root>/.mirrors`; session worktrees live under `<session>/src`.
 - Write `qrouton.json` last. A directory without it must not appear resumable.
 - Never silently overwrite user-owned agent files; only replace qrouton-marked assets.

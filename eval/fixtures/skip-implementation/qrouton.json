@@ -4,12 +4,13 @@
   "slug": "implement-calculator-health",
   "description": "Implement calculator health",
   "mode": "rpi",
+  "runner": "claude",
   "createdAt": "2026-07-16T00:00:00Z",
   "repos": [
     {
       "name": "account-service",
       "org": "qrouton-eval",
-      "role": "active",
+      "role": "editing",
       "branch": "feat/implement-calculator-health",
       "defaultBranch": "main",
       "worktreePath": "src/account-service",

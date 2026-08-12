@@ -95,20 +95,19 @@ func pushChrome(reg *Sessions, root string, measured map[string][]status.RepoSta
 	}
 	if shown != nil {
 		fields.Terminal, fields.Activity = shown.terminal, shown.activity.state()
+		fields.Picker = shown.pendingPicker() != nil
 	}
-	// The rail stays empty while the conversation pane is choosing a session: a row
-	// clicked from there would switch away from an onboarding nothing can return to.
-	if shown.slug() != "" {
+	// The rail populates with nothing on screen: a window opening on no session at
+	// all still has to offer the ones on disk.
+	fields.Sessions = reg.railOrder(status.Sessions(root))
+	for i, row := range fields.Sessions {
 		// A terminal id and an activity are this workbench's own knowledge, so only
 		// the sessions it has booted carry them.
-		fields.Sessions = reg.railOrder(status.Sessions(root))
-		for i, row := range fields.Sessions {
-			if state := reg.bySlug(row.Slug); state != nil {
-				fields.Sessions[i].Terminal = state.terminal
-				fields.Sessions[i].Activity = state.activity.state()
-			}
-			fields.Sessions[i].Unseen = unseen[row.Slug]
+		if state := reg.bySlug(row.Slug); state != nil {
+			fields.Sessions[i].Terminal = state.terminal
+			fields.Sessions[i].Activity = state.activity.state()
 		}
+		fields.Sessions[i].Unseen = unseen[row.Slug]
 	}
 	emit(chromeEvent, fields)
 }

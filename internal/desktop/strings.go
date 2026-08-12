@@ -18,16 +18,6 @@ const (
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
-	onboardWindowLabel = "+ session"
-	// Two assemblies writing the same manifest is a lost selection, so this keys
-	// the deduplication.
-	onboardSource = "qrouton:onboard"
-
-	pickerWindowLabel = "+ repos"
-	// Source is the manifest's own name for a window; the picker has no file
-	// behind it, so this stands in as the key OpenPicker deduplicates on.
-	pickerSource = "qrouton:pick"
-
 	// The page URLs are directories: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot  = "/"
@@ -60,6 +50,9 @@ const (
 	windowExitEvent = "window:exit:"
 	windowsEvent    = "window:open"
 	selectEvent     = "window:select"
+
+	reposRefreshEvent     = "repos:refresh"
+	assemblyProgressEvent = "assembly:progress"
 )
 
 // A tab may only stand in for a window if it reports its process's state.

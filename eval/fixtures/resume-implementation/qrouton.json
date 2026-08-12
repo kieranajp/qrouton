@@ -4,12 +4,13 @@
   "slug": "resume-calculator-health-implementation",
   "description": "Resume calculator health implementation",
   "mode": "rpi",
+  "runner": "claude",
   "createdAt": "2026-07-16T00:00:00Z",
   "repos": [
     {
       "name": "account-service",
       "org": "qrouton-eval",
-      "role": "active",
+      "role": "editing",
       "branch": "feat/resume-calculator-health-implementation",
       "defaultBranch": "main",
       "worktreePath": "src/account-service",

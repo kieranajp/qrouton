@@ -23,9 +23,18 @@ const manifestSchemaVersion = 2
 type RepoRole string
 
 const (
-	RepoRoleActive    RepoRole = "active"
+	RepoRoleEditing   RepoRole = "editing"
 	RepoRoleReference RepoRole = "reference"
 )
+
+// Effective reads an unset role as editing. Assembly always names a role, so an
+// empty one means a hand-edited manifest and editing is the safe reading.
+func (r RepoRole) Effective() RepoRole {
+	if r == "" {
+		return RepoRoleEditing
+	}
+	return r
+}
 
 // SessionMode selects the system prompt (and opening message) the runner starts
 // under. RPI is the default orchestrated Research→Plan→Implement workflow;
@@ -88,16 +97,19 @@ type Progress struct {
 type ProgressFunc func(Progress)
 
 type Manifest struct {
-	SchemaVersion int                `json:"schemaVersion"`
-	Name          string             `json:"name"`
-	Slug          string             `json:"slug"`
-	Description   string             `json:"description"`
-	TicketURL     string             `json:"ticketUrl,omitempty"`
-	Mode          SessionMode        `json:"mode,omitempty"`
-	CreatedAt     time.Time          `json:"createdAt"`
-	Repos         []ManifestRepo     `json:"repos"`
-	Escalation    *EscalationOutcome `json:"escalation,omitempty"`
-	Windows       []WindowRecord     `json:"windows,omitempty"`
+	SchemaVersion int         `json:"schemaVersion"`
+	Name          string      `json:"name"`
+	Slug          string      `json:"slug"`
+	Description   string      `json:"description"`
+	TicketURL     string      `json:"ticketUrl,omitempty"`
+	Mode          SessionMode `json:"mode,omitempty"`
+	// Runner is the coding agent this session was assembled with, so every later
+	// boot starts the one that was chosen rather than the workbench's default.
+	Runner     string             `json:"runner,omitempty"`
+	CreatedAt  time.Time          `json:"createdAt"`
+	Repos      []ManifestRepo     `json:"repos"`
+	Escalation *EscalationOutcome `json:"escalation,omitempty"`
+	Windows    []WindowRecord     `json:"windows,omitempty"`
 }
 
 // WindowRecord is one window the agent had open when the manifest was last
@@ -130,7 +142,16 @@ type EscalationOutcome struct {
 // written before the field existed.
 func (m Manifest) EffectiveMode() SessionMode { return m.Mode.effective() }
 
-// Branch is the session branch: the first active repo's branch.
+// DisplayName is what a session is called: its Name, or its Slug for one written
+// before it had a name.
+func (m Manifest) DisplayName() string {
+	if m.Name != "" {
+		return m.Name
+	}
+	return m.Slug
+}
+
+// Branch is the session branch: the first editing repo's branch.
 func (m Manifest) Branch() string {
 	for _, r := range m.Repos {
 		if r.Branch != "" {
@@ -169,12 +190,26 @@ func Scan(root string) ([]Manifest, error) {
 		if err != nil {
 			continue
 		}
-		var m Manifest
-		if json.Unmarshal(b, &m) == nil {
+		if m, err := decode(b); err == nil {
 			out = append(out, m)
 		}
 	}
 	return out, nil
+}
+
+// decode is the one reader of the on-disk document, so a manifest a session
+// cannot be resumed from never appears in a listing either.
+func decode(b []byte) (Manifest, error) {
+	var m Manifest
+	if err := json.Unmarshal(b, &m); err != nil {
+		return Manifest{}, err
+	}
+	for _, r := range m.Repos {
+		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
+			return Manifest{}, invalidRole(r.Role, r.Org, r.Name)
+		}
+	}
+	return m, nil
 }
 
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
@@ -206,11 +241,7 @@ func Load(dir string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
-	var m Manifest
-	if err := json.Unmarshal(b, &m); err != nil {
-		return Manifest{}, err
-	}
-	return m, nil
+	return decode(b)
 }
 
 // WriteManifest replaces a session's manifest.

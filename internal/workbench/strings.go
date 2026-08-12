@@ -16,7 +16,7 @@ const (
 	OpRead      = "read"
 	OpExists    = "exists"
 	OpList      = "list"
-	OpAdopt     = "adopt"
+	OpPicker    = "picker"
 	OpAttention = "attention"
 )
 

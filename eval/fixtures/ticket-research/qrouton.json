@@ -5,12 +5,13 @@
   "description": "Research resilient account lookups",
   "ticketUrl": "thoughts/shared/ticket.md",
   "mode": "rpi",
+  "runner": "claude",
   "createdAt": "2026-07-16T00:00:00Z",
   "repos": [
     {
       "name": "account-service",
       "org": "qrouton-eval",
-      "role": "active",
+      "role": "editing",
       "branch": "feat/research-resilient-account-lookups",
       "defaultBranch": "main",
       "worktreePath": "src/account-service",

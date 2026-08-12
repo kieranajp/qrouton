@@ -28,17 +28,16 @@ const (
 
 // WorkbenchSpec is what the detached process is told to open: its session, its
 // control socket, its runner, and whether that runner has a conversation to
-// resume. It builds each session's own command as it boots it.
+// resume. An empty SessionRoot opens on no session at all, which is where the
+// assembly overlay draws. It builds each session's own command as it boots it.
 type WorkbenchSpec struct {
 	SessionRoot string `json:"session_root,omitempty"`
 	Socket      string `json:"socket"`
 	Runner      string `json:"runner,omitempty"`
 	Resume      bool   `json:"resume,omitempty"`
-	// Onboard is the landing list's conversation command, and empty when a
-	// session was named on the command line.
-	Onboard []string `json:"onboard,omitempty"`
-	Dock    bool     `json:"dock,omitempty"`
-	// Empty on the landing list, which has not resolved one yet.
+	Dock        bool   `json:"dock,omitempty"`
+	// Empty when the editor could not be resolved, which costs the document chip
+	// and must not keep the window shut.
 	Editor EditorCommand `json:"editor"`
 }
 
@@ -52,7 +51,7 @@ func ParseWorkbenchSpec(s string) (WorkbenchSpec, error) {
 	if err := json.Unmarshal([]byte(s), &spec); err != nil {
 		return WorkbenchSpec{}, fmt.Errorf("%s: %w", specParseError, err)
 	}
-	if spec.Socket == "" || (spec.SessionRoot == "" && len(spec.Onboard) == 0) {
+	if spec.Socket == "" {
 		return WorkbenchSpec{}, fmt.Errorf("%w: %q", ErrWorkbenchSpecIncomplete, s)
 	}
 	return spec, nil

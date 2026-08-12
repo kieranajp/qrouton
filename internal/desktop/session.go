@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -38,9 +39,42 @@ type sessionState struct {
 	stopped bool
 	process *ptyProcess
 	shell   string
+	// picker is the escalation waiting for the user to arrive at this session. The
+	// workbench never learns that the escalating agent gave up, so a request past
+	// its deadline is ignored rather than drawn for an answer nobody is polling for.
+	picker *workbench.PickerRequest
 	// shells counts the shells the session has had rather than the ones still
 	// open: a number freed by a close would name two terminals at once.
 	shells int
+}
+
+// requestPicker queues an escalation on this session. A later request replaces
+// an earlier one: both pollers then read the one stanza the confirm writes.
+func (s *sessionState) requestPicker(req workbench.PickerRequest) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.picker = &req
+}
+
+// pendingPicker is this session's escalation while it is still worth drawing.
+func (s *sessionState) pendingPicker() *workbench.PickerRequest {
+	if s == nil {
+		return nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.picker == nil || !time.Now().Before(s.picker.Deadline) {
+		return nil
+	}
+	return s.picker
+}
+
+// clearPicker is confirm and cancel both: arriving at the session again must not
+// redraw a picker that has been answered.
+func (s *sessionState) clearPicker() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.picker = nil
 }
 
 // slug and root tolerate a nil session, which is the window showing none.
@@ -141,8 +175,9 @@ func (s *sessionState) stop() {
 type booting struct {
 	root func(slug string) string
 	// agent builds a session's supervisor command against the control socket it
-	// will be served on.
-	agent func(sessionRoot, socket string, resume bool) (argv, env []string, err error)
+	// will be served on. runnerID is the agent the session was assembled with;
+	// empty means the workbench's own.
+	agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, err error)
 	serve func(state *sessionState, socket string) (io.Closer, error)
 	// shown puts a session on screen: its title, its shell, its record.
 	shown       func(state *sessionState)
@@ -196,7 +231,7 @@ func (s *Sessions) Show(slug string) error {
 		if root == "" {
 			return unknownSession(slug)
 		}
-		booted, err := s.start(root, true)
+		booted, err := s.start(root, "", true)
 		if err != nil {
 			return err
 		}
@@ -260,17 +295,24 @@ func (s *Sessions) Cleanup(slug string) error {
 
 // start brings up a session about to be shown, and only one: a terminal under
 // display:none has no layout box, so its PTY would size from the page's defaults.
-func (s *Sessions) start(root string, resume bool) (*sessionState, error) {
+func (s *Sessions) start(root, runnerID string, resume bool) (*sessionState, error) {
 	// A crashed workbench leaves agent.pid behind with nothing on the other end,
 	// so a dead pid boots. A live one is an error rather than a state.
 	if pid, alive := session.AgentAlive(root); alive {
 		return nil, agentAlreadyRunning(filepath.Base(root), pid)
 	}
+	// A session records the agent it was assembled with, so every boot after the
+	// first starts that one rather than whatever the workbench was launched with.
+	if runnerID == "" {
+		if m, err := session.Load(root); err == nil {
+			runnerID = m.Runner
+		}
+	}
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		return nil, err
 	}
-	argv, env, err := s.boot.agent(root, socket, resume)
+	argv, env, err := s.boot.agent(root, socket, runnerID, resume)
 	if err != nil {
 		return nil, err
 	}
@@ -288,39 +330,20 @@ func (s *Sessions) start(root string, resume bool) (*sessionState, error) {
 	return state, nil
 }
 
-// adopt gives a session the identity onboarding chose for it. Onboarding about to
-// exec the supervisor hands its state over; onboarding in a pane has no terminal
-// to hand over, so its session boots here with nothing to resume.
-func (s *Sessions) adopt(root string, boot bool) error {
+// adopt puts a freshly assembled session on screen. The overlay has no PTY to
+// hand over, so the session boots itself here with nothing to resume.
+func (s *Sessions) adopt(root, runnerID string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
-	landing := s.landing()
-	if !boot {
-		if landing == nil {
-			return ErrNoLandingSession
-		}
-		s.mu.Lock()
-		delete(s.slugs, landing.slug())
-		landing.named.Store(&identity{slug: slugFor(root), root: root})
-		s.slugs[landing.slug()] = landing
-		s.mu.Unlock()
-		s.reveal(landing)
-		return nil
-	}
 	state := s.bySlug(slugFor(root))
 	if state == nil {
-		booted, err := s.start(root, false)
+		booted, err := s.start(root, runnerID, false)
 		if err != nil {
 			return err
 		}
 		state = booted
 	}
 	s.reveal(state)
-	// The landing list has been answered by a pane instead, and its terminal is
-	// unreachable once another session is on screen.
-	if landing != nil {
-		s.retire(landing)
-	}
 	return nil
 }
 
@@ -401,13 +424,6 @@ func (s *Sessions) current() *sessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.showing
-}
-
-// landing is the session onboarding is running in, which has no identity yet.
-func (s *Sessions) landing() *sessionState {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.slugs[""]
 }
 
 func (s *Sessions) bySlug(slug string) *sessionState {

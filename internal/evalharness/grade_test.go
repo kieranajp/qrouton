@@ -37,7 +37,7 @@ func sortedKeys(values map[string]string) []string {
 
 func TestGradeChecksSentinelLeakAndObservableEvents(t *testing.T) {
 	workspace := t.TempDir()
-	writeSessionManifest(t, workspace, map[string]string{"active": "active", "reference": "reference"})
+	writeSessionManifest(t, workspace, map[string]string{"active": "editing", "reference": "reference"})
 	for _, repo := range []string{"active", "reference"} {
 		repoDir := filepath.Join(workspace, "src", repo)
 		writeTestFile(t, filepath.Join(repoDir, "README.md"), repo)
@@ -90,19 +90,19 @@ func TestGradeDetectsReferenceModification(t *testing.T) {
 	}
 }
 
-func TestGradeChecksActiveRepositoryRemainsUnchanged(t *testing.T) {
+func TestGradeChecksEditingRepositoryRemainsUnchanged(t *testing.T) {
 	unchanged := gradeCheck(CheckSpec{Kind: "repo_unchanged", Repo: "app"}, CaseResult{
 		Diffs: map[string]string{"app": ""},
 	}, t.TempDir())
 	if !unchanged.Passed {
-		t.Fatal("unchanged active repository failed")
+		t.Fatal("unchanged editing repository failed")
 	}
 
 	changed := gradeCheck(CheckSpec{Kind: "repo_unchanged", Repo: "app"}, CaseResult{
 		Diffs: map[string]string{"app": "diff --git a/file b/file"},
 	}, t.TempDir())
 	if changed.Passed {
-		t.Fatal("changed active repository passed as unchanged")
+		t.Fatal("changed editing repository passed as unchanged")
 	}
 }
 

@@ -39,8 +39,4 @@ const (
 	// defaultRoot is where sessions live when config.json names no root, so a
 	// launch never has to stop and ask. Mirrors go under <root>/.mirrors.
 	defaultRoot = "~/work"
-
-	wizardOrgsTitle       = "GitHub orgs"
-	wizardOrgsDescription = "Comma-separated organizations whose repos the session picker lists"
-	wizardOrgsDefault     = "lifesum"
 )

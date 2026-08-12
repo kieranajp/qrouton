@@ -6,8 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	"github.com/charmbracelet/huh"
 )
 
 type Config struct {
@@ -49,8 +47,8 @@ func CachePath() string {
 
 // Load reads config.json if it exists, and otherwise starts from defaults —
 // deliberately without prompting. A zero-repo session needs neither a root nor
-// owners, so nothing may block a launch here; EnsureOrgs asks at the first
-// repository search. QROUTON_ROOT / QROUTON_ORGS override at runtime.
+// owners, so nothing may block a launch here, and an empty owner list is simply
+// an empty repository list. QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {
 	cfg := &Config{}
 	b, err := os.ReadFile(Path())
@@ -76,32 +74,7 @@ func Load() (*Config, error) {
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
 
-// EnsureOrgs prompts for GitHub owners and persists them, the first time
-// something actually needs them — which is the repository picker, not qrouton
-// itself. A no-op once they are known, so the ordinary path never prompts.
-func EnsureOrgs(cfg *Config) error {
-	if len(cfg.Orgs) > 0 {
-		return nil
-	}
-	orgs := wizardOrgsDefault
-	err := huh.NewInput().Title(wizardOrgsTitle).
-		Description(wizardOrgsDescription).
-		Value(&orgs).
-		Validate(func(s string) error {
-			if len(splitOrgs(s)) == 0 {
-				return errOrgsRequired
-			}
-			return nil
-		}).Run()
-	if err != nil {
-		return err
-	}
-	cfg.Orgs = splitOrgs(orgs)
-	return Save(cfg)
-}
-
-// Save writes the whole config back to disk, creating its directory. It is how
-// the owners EnsureOrgs collected survive to the next launch.
+// Save writes the whole config back to disk, creating its directory.
 func Save(cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {
 		return err

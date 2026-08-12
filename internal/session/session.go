@@ -58,7 +58,7 @@ func entropySuffix() string {
 // Create is the role-aware assembly entry point. mode selects the runner's
 // starting system prompt. Progress reports the start and outcome of each real
 // mirror, worktree, scaffold, and manifest operation.
-func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, repos []RepoSelection, progress ProgressFunc) (string, error) {
+func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
 	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, dirMode); err != nil {
@@ -85,7 +85,7 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
-		TicketURL: ticket, Mode: mode.effective(), CreatedAt: time.Now()}
+		TicketURL: ticket, Mode: mode.effective(), Runner: runner, CreatedAt: time.Now()}
 	var err error
 	if m, err = ComposeRepos(cfg, m, repos, prefix+branchSeparator+slug, progress); err != nil {
 		return "", err
@@ -129,15 +129,12 @@ func thoughtsHome(root, slug string) string {
 
 // materialise mirrors and checks out one selected repository for the session
 // at dir, returning its manifest entry — the shared per-repo body of Create
-// and ComposeRepos. branch names the session branch an active repository is
+// and ComposeRepos. branch names the session branch an editing repository is
 // cut on; worktreePath is the checkout's location relative to dir.
 func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
 	r := sel.Repo
-	role := sel.Role
-	if role == "" {
-		role = RepoRoleActive
-	}
-	if role != RepoRoleActive && role != RepoRoleReference {
+	role := sel.Role.Effective()
+	if role != RepoRoleEditing && role != RepoRoleReference {
 		return ManifestRepo{}, invalidRole(role, r.Org, r.Name)
 	}
 	url := sshURL(r.Org, r)
@@ -186,7 +183,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 // ComposeRepos materialises the selected repositories into m — mirrors,
 // worktrees, manifest entries — without writing the manifest, so a caller can
 // fold repos, mode, and an escalation outcome into one atomic write. branch is
-// the session branch active repositories are cut on. A repository sharing its
+// the session branch editing repositories are cut on. A repository sharing its
 // name with another (in the batch, or already in m) gets an org-qualified
 // worktree path.
 func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {

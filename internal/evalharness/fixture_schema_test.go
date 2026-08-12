@@ -49,24 +49,29 @@ func TestFixtureManifestsMatchSessionSchema(t *testing.T) {
 		if manifest.EffectiveMode() != session.ModeRPI {
 			t.Errorf("%s: eval exercises the RPI workflow, got mode %q", path, manifest.EffectiveMode())
 		}
+		// A session records the agent it was assembled with, and every boot after
+		// the first starts that one.
+		if manifest.Runner == "" {
+			t.Errorf("%s: fixture records no runner, so a boot would fall back to the workbench's", path)
+		}
 
-		var active, reference int
+		var editing, reference int
 		for _, repo := range manifest.Repos {
 			if repo.WorktreePath == "" {
 				t.Errorf("%s: repo %s records no worktree path", path, repo.Name)
 			}
 			switch repo.Role {
-			case session.RepoRoleActive:
-				active++
+			case session.RepoRoleEditing:
+				editing++
 			case session.RepoRoleReference:
 				reference++
 			default:
 				t.Errorf("%s: repo %s has role %q", path, repo.Name, repo.Role)
 			}
 		}
-		if active == 0 || reference == 0 {
-			t.Errorf("%s: fixtures need an active and a reference repo to grade both roles, got %d/%d",
-				path, active, reference)
+		if editing == 0 || reference == 0 {
+			t.Errorf("%s: fixtures need an editing and a reference repo to grade both roles, got %d/%d",
+				path, editing, reference)
 		}
 	}
 }

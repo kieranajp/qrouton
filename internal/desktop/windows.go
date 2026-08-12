@@ -24,8 +24,6 @@ type Windows struct {
 	// newShell reopens the shell after the user closes its tab.
 	newShell    func() (string, error)
 	newDocument func(name string) (string, error)
-	newPicker   func() (string, error)
-	newOnboard  func() (string, error)
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu sync.Mutex
 
@@ -83,34 +81,6 @@ func (w *Windows) OpenShell() (string, error) {
 		return "", ErrNoShellCommand
 	}
 	return w.newShell()
-}
-
-// OpenPicker opens the repository picker in the right pane, or selects the one
-// already open: two pickers writing the same manifest is a lost selection.
-func (w *Windows) OpenPicker() (string, error) {
-	w.sourceMu.Lock()
-	defer w.sourceMu.Unlock()
-	if id, ok := w.showing(w.shown(), pickerSource); ok {
-		return id, nil
-	}
-	if w.newPicker == nil {
-		return "", ErrNoPickerCommand
-	}
-	return w.newPicker()
-}
-
-// OpenOnboard opens the session assembly in the right pane, or selects the one
-// already open: two of them writing the same manifest is a lost selection.
-func (w *Windows) OpenOnboard() (string, error) {
-	w.sourceMu.Lock()
-	defer w.sourceMu.Unlock()
-	if id, ok := w.showing(w.shown(), onboardSource); ok {
-		return id, nil
-	}
-	if w.newOnboard == nil {
-		return "", ErrNoOnboardCommand
-	}
-	return w.newOnboard()
 }
 
 // OpenDocument returns the window already showing the named document, or opens

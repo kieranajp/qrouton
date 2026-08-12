@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -25,9 +26,9 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	adopted := make(chan adoption, 1)
+	queued := make(chan workbench.PickerRequest, 1)
 	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
-		adopt: func(root string, boot bool) error { adopted <- adoption{root: root, boot: boot}; return nil },
+		picker: func(req workbench.PickerRequest) error { queued <- req; return nil },
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -69,11 +70,14 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil || text != "one change" {
 		t.Fatalf("Read = %q, %v", text, err)
 	}
-	if err := host.Adopt(ctx, "/sessions/octopus", true); err != nil {
+	deadline := time.Now().Add(time.Minute)
+	if err := host.Picker(ctx, workbench.PickerRequest{SessionRoot: "/sessions/octopus",
+		Name: "Webhook retry", Prefix: "fix", Deadline: deadline}); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-adopted; got.root != "/sessions/octopus" || !got.boot {
-		t.Fatalf("adopted %+v, want the root and the boot the caller asked for", got)
+	if got := <-queued; got.SessionRoot != "/sessions/octopus" || got.Name != "Webhook retry" ||
+		got.Prefix != "fix" || !got.Deadline.Equal(deadline) {
+		t.Fatalf("queued %+v, want the request the caller sent", got)
 	}
 
 	if err := host.Close(ctx, id); err != nil {
@@ -95,7 +99,7 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, windows.shown(), controlHooks{adopt: func(string, bool) error { return nil }})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,8 +114,8 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	if err := host.Close(ctx, "window-99"); err == nil {
 		t.Fatal("close of an unknown window succeeded")
 	}
-	if err := host.Adopt(ctx, "", false); err == nil {
-		t.Fatal("adopt with no session root succeeded")
+	if err := host.Picker(ctx, workbench.PickerRequest{}); err == nil {
+		t.Fatal("a picker request with no session root succeeded")
 	}
 	if _, err := host.Open(ctx, workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "x"}); err == nil {
 		t.Fatal("a terminal window opened with no command")
@@ -129,7 +133,7 @@ func TestServeControlReplacesAStaleSocket(t *testing.T) {
 	if err := os.WriteFile(socket, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, windows.shown(), controlHooks{adopt: func(string, bool) error { return nil }})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{})
 	if err != nil {
 		t.Fatal(err)
 	}

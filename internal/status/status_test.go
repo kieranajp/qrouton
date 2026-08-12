@@ -214,9 +214,9 @@ func TestSessionRowsCarryRepositoriesInManifestOrder(t *testing.T) {
 	root := t.TempDir()
 	sessionDir(t, root, session.Manifest{Slug: "webhook", Name: "Webhook retry",
 		Repos: []session.ManifestRepo{
-			{Name: "svc", Org: "lifesum", Role: session.RepoRoleActive},
+			{Name: "svc", Org: "lifesum", Role: session.RepoRoleEditing},
 			{Name: "contracts", Org: "lifesum", Role: session.RepoRoleReference},
-			{Name: "api", Org: "lifesum", Role: session.RepoRoleActive},
+			{Name: "api", Org: "lifesum", Role: session.RepoRoleEditing},
 		}})
 
 	rows := Sessions(root)
@@ -395,13 +395,13 @@ func TestInitialsSurviveShortAndPunctuatedNames(t *testing.T) {
 	}
 }
 
-func TestReposMeasuresActiveRepositoriesAndSkipsReferences(t *testing.T) {
+func TestReposMeasuresEditingRepositoriesAndSkipsReferences(t *testing.T) {
 	root := t.TempDir()
 	m := session.Manifest{Slug: "webhook", Name: "webhook", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{
-			{Name: "svc", Org: "org", Role: session.RepoRoleActive, DefaultBranch: "main",
+			{Name: "svc", Org: "org", Role: session.RepoRoleEditing, DefaultBranch: "main",
 				Branch: "fix/webhook", WorktreePath: "src/svc"},
-			{Name: "quiet", Org: "org", Role: session.RepoRoleActive, DefaultBranch: "main",
+			{Name: "quiet", Org: "org", Role: session.RepoRoleEditing, DefaultBranch: "main",
 				Branch: "fix/webhook", WorktreePath: "src/quiet"},
 			{Name: "docs", Org: "org", Role: session.RepoRoleReference, WorktreePath: "src/docs"},
 		}}
@@ -438,7 +438,7 @@ func TestReposMeasuresActiveRepositoriesAndSkipsReferences(t *testing.T) {
 func TestReposReportsNothingWithoutABaseBranch(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "webhook", Mode: session.ModeRPI,
-		Repos: []session.ManifestRepo{{Name: "svc", Org: "org", Role: session.RepoRoleActive,
+		Repos: []session.ManifestRepo{{Name: "svc", Org: "org", Role: session.RepoRoleEditing,
 			WorktreePath: "src/svc"}}})
 	fixtureRepo(t, filepath.Join(dir, "src", "svc"))
 

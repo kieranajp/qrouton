@@ -112,27 +112,6 @@ func TestTheConversationRunsInTheSessionRoot(t *testing.T) {
 	})
 }
 
-// The landing path registers its conversation before onboarding has chosen a
-// session, and the agent it is already running has to end up in the session it
-// chose.
-func TestTheConversationRunsInASessionAdoptedAfterItWasRegistered(t *testing.T) {
-	rec := &recorder{}
-	reg := newSessions()
-	state := reg.add("", []string{"/bin/pwd"}, withTerminalEnv(os.Environ()))
-	term := newTerm(reg, rec.emit)
-
-	adopted := t.TempDir()
-	if err := reg.adopt(adopted, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := term.Start(state.terminal, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the child's own directory", func() bool {
-		return strings.Contains(rec.output(), resolved(t, adopted))
-	})
-}
-
 // A page subscribes per terminal, so a stream announced under a bare name is a
 // stream nobody hears.
 func TestTheConversationsStreamsAreKeyedByTerminal(t *testing.T) {

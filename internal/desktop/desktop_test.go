@@ -115,20 +115,23 @@ type stubBoot struct {
 	mu      sync.Mutex
 	sockets map[string]string
 	resumes map[string]bool
+	runners map[string]string
 	agents  int
 	serves  int
 }
 
 func newStubBoot(argv ...string) *stubBoot {
-	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{}}
+	return &stubBoot{argv: argv, sockets: map[string]string{}, resumes: map[string]bool{},
+		runners: map[string]string{}}
 }
 
-func (b *stubBoot) command(sessionRoot, socket string, resume bool) ([]string, []string, error) {
+func (b *stubBoot) command(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.agents++
 	b.sockets[sessionRoot] = socket
 	b.resumes[sessionRoot] = resume
+	b.runners[sessionRoot] = runnerID
 	return b.argv, os.Environ(), nil
 }
 
@@ -181,7 +184,6 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 		SessionRoot: sessionDir(t, root, "octopus"),
 		Root:        root,
 		Socket:      socket,
-		Onboard:     []string{"/bin/cat"},
 		Env:         os.Environ(),
 		Agent:       boot.command,
 	}, boot
@@ -442,28 +444,6 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 	}
 }
 
-// Onboarding execs the supervisor rather than spawning it, so a session has one
-// terminal: the PTY, the page it draws on and the exit that ends the session all
-// survive the child replacing itself. A shell's own exec stands in for
-// syscall.Exec, which a test cannot perform on itself.
-func TestTheConversationSurvivesItsChildReplacingItself(t *testing.T) {
-	r := newFakeRenderer()
-	opts, boot := testOptions(t)
-	boot.argv = []string{"/bin/sh", "-c", `printf 'landing list\n'; exec /bin/sh -c "printf 'the agent\n'; exit 0"`}
-	rec := &recorder{}
-	reg, term, windows := testWorkbench(t, r, rec.emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	if err := term.Start(shownSession(t, reg).terminal, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "both halves of the session", func() bool {
-		output := rec.output()
-		return strings.Contains(output, "landing list") && strings.Contains(output, "the agent")
-	})
-}
-
 // A supervisor that failed has something to say, and quitting would take it off
 // the screen before anyone read it.
 func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
@@ -614,225 +594,6 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 }
 
-// The rail's add-repos button. The old terminal picker took the whole screen,
-// which is what made adding a repository feel like leaving the conversation;
-// here it is a tab, and a second click selects the one already open rather than
-// racing a second picker at the same manifest.
-func TestTheAddReposButtonOpensOnePickerTab(t *testing.T) {
-	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	opts.Picker = func(dir string) []string { return []string{"/bin/cat", "pick", dir} }
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
-
-	id, err := windows.OpenPicker()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tabs := windows.tabs(owner)
-	if len(tabs) != 2 || tabs[1].ID != id {
-		t.Fatalf("the picker is not the newest tab: %+v", tabs)
-	}
-	if len(r.opened) != 0 {
-		t.Fatalf("%d OS windows opened; the picker is a tab", len(r.opened))
-	}
-	window, ok := windows.window(id)
-	if !ok {
-		t.Fatalf("the picker %q is not registered", id)
-	}
-	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat pick "+opts.SessionRoot {
-		t.Fatalf("picker command = %q", got)
-	}
-	if !window.opts.CloseOnExit {
-		t.Fatal("the picker tab outlives the picker")
-	}
-
-	again, err := windows.OpenPicker()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again != id || len(windows.tabs(owner)) != 2 {
-		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
-	}
-}
-
-func TestConcurrentAddReposClicksOpenOnePicker(t *testing.T) {
-	w, _ := testWindows(t)
-	entered := make(chan struct{}, 2)
-	release := make(chan struct{})
-	w.newPicker = func() (string, error) {
-		entered <- struct{}{}
-		<-release
-		return w.openStructural(w.shown(), workbench.WindowOptions{
-			Kind: workbench.KindTerminal, Label: pickerWindowLabel, Source: pickerSource,
-			Command: []string{"/bin/cat"},
-		})
-	}
-
-	type result struct {
-		id  string
-		err error
-	}
-	results := make(chan result, 2)
-	for range 2 {
-		go func() {
-			id, err := w.OpenPicker()
-			results <- result{id: id, err: err}
-		}()
-	}
-	<-entered
-	select {
-	case <-entered:
-		close(release)
-		t.Fatal("both clicks started a picker")
-	case <-time.After(100 * time.Millisecond):
-	}
-	close(release)
-	first, second := <-results, <-results
-	if first.err != nil || second.err != nil {
-		t.Fatalf("picker errors = %v, %v", first.err, second.err)
-	}
-	if first.id != second.id || len(w.tabs(w.shown())) != 1 {
-		t.Fatalf("concurrent clicks returned %q and %q with tabs %+v", first.id, second.id, w.tabs(w.shown()))
-	}
-}
-
-// The rail's + session button. Assembling a session is a tab like the picker,
-// and a second click selects the assembly already up rather than racing a second
-// one at the same manifest.
-func TestTheNewSessionButtonOpensOneOnboardTab(t *testing.T) {
-	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	opts.Onboarding = func(socket string) []string { return []string{"/bin/cat", "onboard", socket} }
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
-
-	id, err := windows.OpenOnboard()
-	if err != nil {
-		t.Fatal(err)
-	}
-	tabs := windows.tabs(owner)
-	if len(tabs) != 2 || tabs[1].ID != id {
-		t.Fatalf("the assembly is not the newest tab: %+v", tabs)
-	}
-	if len(r.opened) != 0 {
-		t.Fatalf("%d OS windows opened; the assembly is a tab", len(r.opened))
-	}
-	window, ok := windows.window(id)
-	if !ok {
-		t.Fatalf("the assembly %q is not registered", id)
-	}
-	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat onboard "+opts.Socket {
-		t.Fatalf("onboard command = %q, want it carrying the control socket", got)
-	}
-	if !window.opts.CloseOnExit {
-		t.Fatal("the assembly tab outlives the assembly")
-	}
-
-	again, err := windows.OpenOnboard()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if again != id || len(windows.tabs(owner)) != 2 {
-		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
-	}
-}
-
-func TestConcurrentNewSessionClicksOpenOneOnboard(t *testing.T) {
-	w, _ := testWindows(t)
-	entered := make(chan struct{}, 2)
-	release := make(chan struct{})
-	w.newOnboard = func() (string, error) {
-		entered <- struct{}{}
-		<-release
-		return w.openStructural(w.shown(), workbench.WindowOptions{
-			Kind: workbench.KindTerminal, Label: onboardWindowLabel, Source: onboardSource,
-			Command: []string{"/bin/cat"},
-		})
-	}
-
-	type result struct {
-		id  string
-		err error
-	}
-	results := make(chan result, 2)
-	for range 2 {
-		go func() {
-			id, err := w.OpenOnboard()
-			results <- result{id: id, err: err}
-		}()
-	}
-	<-entered
-	select {
-	case <-entered:
-		close(release)
-		t.Fatal("both clicks started an assembly")
-	case <-time.After(100 * time.Millisecond):
-	}
-	close(release)
-	first, second := <-results, <-results
-	if first.err != nil || second.err != nil {
-		t.Fatalf("onboard errors = %v, %v", first.err, second.err)
-	}
-	if first.id != second.id || len(w.tabs(w.shown())) != 1 {
-		t.Fatalf("concurrent clicks returned %q and %q with tabs %+v", first.id, second.id, w.tabs(w.shown()))
-	}
-}
-
-// The window left when the last session's agent exits has no session to own the
-// assembly, and that is exactly when the user reaches for it.
-func TestOnboardOpensWithNoSessionOnScreen(t *testing.T) {
-	r := newFakeRenderer()
-	reg := newSessions()
-	w := newWindows(r, r.Emit, false, reg)
-	t.Cleanup(w.stopAll)
-	root := t.TempDir()
-
-	socket := "/tmp/qrouton-sock/501/deadbeef.sock"
-	id, err := openOnboard(w, nil, func(s string) []string { return []string{"/bin/cat", s} }, socket, root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(r.opened) != 0 {
-		t.Fatalf("%d OS windows opened; the assembly is a tab", len(r.opened))
-	}
-	drawn := w.Surfaces("")
-	if len(drawn.Tabs) != 1 || drawn.Tabs[0].ID != id {
-		t.Fatalf("the session-less window sees %+v, want the assembly %q", drawn, id)
-	}
-	window, _ := w.window(id)
-	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat "+socket {
-		t.Fatalf("onboard command = %q, want it carrying the control socket", got)
-	}
-	if window.opts.Cwd != root {
-		t.Fatalf("the assembly runs in %q, want the sessions root %q", window.opts.Cwd, root)
-	}
-}
-
-func TestOnboardRefusesWithoutACommandOrASocket(t *testing.T) {
-	w, _ := testWindows(t)
-	argv := func(string) []string { return []string{"/bin/cat"} }
-	if _, err := openOnboard(w, nil, nil, "/tmp/sock", t.TempDir()); !errors.Is(err, ErrNoOnboardCommand) {
-		t.Fatalf("openOnboard without a command = %v, want ErrNoOnboardCommand", err)
-	}
-	if _, err := openOnboard(w, nil, argv, "", t.TempDir()); !errors.Is(err, ErrNoOnboardCommand) {
-		t.Fatalf("openOnboard without a socket = %v, want ErrNoOnboardCommand", err)
-	}
-	if _, err := w.OpenOnboard(); !errors.Is(err, ErrNoOnboardCommand) {
-		t.Fatalf("OpenOnboard with nothing wired = %v, want ErrNoOnboardCommand", err)
-	}
-}
-
 // The agent opens documents too, through its file tool. The chip has to find
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
@@ -944,55 +705,16 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	}
 }
 
-// On the landing-list path the workbench opens before a session exists, so the
-// shell and the title bar wait for onboarding to adopt one.
-func TestTheShellWindowWaitsForOnboardingToChooseASession(t *testing.T) {
-	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.SessionRoot = ""
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	adopted := t.TempDir()
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	if spec := <-r.opened; spec.Title != mainWindowTitle {
-		t.Fatalf("window title %q names a session nobody has chosen", spec.Title)
-	}
-	owner := shownSession(t, reg)
-	if len(windows.tabs(owner)) != 0 {
-		t.Fatal("a shell opened before onboarding chose a session")
-	}
-
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: adopted}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.Adopt(context.Background(), adopted, false); err != nil {
-		t.Fatal(err)
-	}
-
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
-	window, ok := windows.window(windows.tabs(owner)[0].ID)
-	if !ok || window.opts.Cwd != adopted {
-		t.Fatalf("the shell is not rooted in the adopted session: %+v", window)
-	}
-	waitFor(t, "the retitled conversation", func() bool {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		return strings.Contains(r.titles[mainWindowName], filepath.Base(adopted))
-	})
-}
-
 func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
 	agent := newStubBoot("/bin/cat").command
 	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock"}); err != ErrNoAgentCommand {
 		t.Fatalf("Run with no way to build an agent command returned %v, want ErrNoAgentCommand", err)
 	}
-	if err := Run(Options{Socket: "/tmp/x.sock", Agent: agent}); err != ErrNoAgentCommand {
-		t.Fatalf("Run with neither a session nor an onboarding command returned %v, want ErrNoAgentCommand", err)
-	}
 	if err := Run(Options{SessionRoot: t.TempDir(), Agent: agent}); err != ErrNoControlSocket {
 		t.Fatalf("Run with no socket returned %v, want ErrNoControlSocket", err)
+	}
+	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock", Agent: agent}); err != ErrNoConfig {
+		t.Fatalf("Run with nothing to assemble against returned %v, want ErrNoConfig", err)
 	}
 }
 
@@ -1027,59 +749,6 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 	}
 }
 
-// The landing path: the page cannot attach to a conversation whose terminal id
-// it has not been told, and it is told by the chrome.
-func TestChromePushesTheTerminalWithoutAManifest(t *testing.T) {
-	r := newFakeRenderer()
-	root := t.TempDir()
-	reg := testRegistry(t, filepath.Join(root, "unnamed"))
-	state := reg.current()
-
-	pushChrome(reg, root, nil, nil, r.Emit)
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
-	if !ok {
-		t.Fatalf("no chrome pushed for a session with no manifest: %v", r.events)
-	}
-	if fields.Terminal != state.terminal {
-		t.Fatalf("chrome names terminal %q, want %q", fields.Terminal, state.terminal)
-	}
-	if fields.Mode != "" || fields.Phase != "" || fields.Identity != "" || fields.Slug != "" {
-		t.Fatalf("chrome = %+v, want the manifest's fields empty", fields)
-	}
-	if fields.Sessions == nil || fields.Documents == nil || fields.Repos == nil {
-		t.Fatalf("chrome = %+v; a nil slice marshals as null and takes the page down", fields)
-	}
-}
-
-// A rail row clicked while the conversation is choosing a session would switch
-// away from an onboarding nothing can return to, so it is sent no rows.
-func TestTheLandingPathPublishesNoRailRows(t *testing.T) {
-	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.SessionRoot = ""
-	sessionDir(t, opts.Root, "octopus")
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	landing := shownSession(t, reg)
-
-	pushChrome(reg, opts.Root, nil, nil, r.Emit)
-	fields := pushedChrome(t, r)
-	if len(fields.Sessions) != 0 {
-		t.Fatalf("the landing list was sent rail rows %+v", fields.Sessions)
-	}
-	if fields.Sessions == nil {
-		t.Fatal("chrome sessions is nil; a nil slice marshals as null and takes the page down")
-	}
-	if fields.Terminal != landing.terminal {
-		t.Fatalf("chrome names terminal %q, want the landing conversation %q", fields.Terminal, landing.terminal)
-	}
-}
-
 func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
@@ -1089,36 +758,6 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 		close(done)
 	}()
 	<-done
-}
-
-// Adopt is how onboarding names the session it chose, so the chrome has to read
-// the root on every tick rather than capturing it once.
-func TestAdoptRepointsTheChromeAtTheAdoptedSession(t *testing.T) {
-	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	adopted := sessionDir(t, opts.Root, "adopted")
-	if err := session.WriteManifest(adopted, session.Manifest{Slug: "adopted", Name: "Adopted", Mode: session.ModeAssistant}); err != nil {
-		t.Fatal(err)
-	}
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	shownSession(t, reg)
-
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.Adopt(context.Background(), adopted, true); err != nil {
-		t.Fatal(err)
-	}
-
-	waitFor(t, "the adopted session's chrome", func() bool {
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		fields, ok := r.events[chromeEvent].(status.Fields)
-		return ok && fields.Identity == "Adopted"
-	})
 }
 
 // The page draws a row only if it has a conversation id for it, and marks the row
@@ -1338,10 +977,12 @@ func TestShowingASessionStampsOnlyThatOne(t *testing.T) {
 	if err := reg.Show("kraken"); err != nil {
 		t.Fatal(err)
 	}
-	second, ok := session.LastOpened(kraken)
-	if !ok {
-		t.Fatal("a session the rail showed was never stamped")
-	}
+	var second time.Time
+	waitFor(t, "the session the rail showed to be stamped", func() bool {
+		at, ok := session.LastOpened(kraken)
+		second = at
+		return ok
+	})
 	if !second.After(first) {
 		t.Fatalf("kraken was stamped %v, want later than the session before it at %v", second, first)
 	}
@@ -1401,10 +1042,10 @@ func TestConcurrentShowsOfOneSessionBootItOnce(t *testing.T) {
 	command := reg.boot.agent
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
-	reg.boot.agent = func(sessionRoot, socket string, resume bool) ([]string, []string, error) {
+	reg.boot.agent = func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
 		entered <- struct{}{}
 		<-release
-		return command(sessionRoot, socket, resume)
+		return command(sessionRoot, socket, runnerID, resume)
 	}
 
 	shows := make(chan error, 2)
@@ -1516,7 +1157,7 @@ func TestAnOpOnOneSessionsListenerTouchesOnlyThatSessionsWindows(t *testing.T) {
 // A workbench that opened on a session leaves its process socket owning none, so
 // all it answers is the launcher's readiness poll and an onboarding child's
 // adopt. A window op is refused in an answer rather than by a closed door.
-func TestTheProcessSocketAnswersReadinessAndAdoptAndRefusesAWindowOp(t *testing.T) {
+func TestTheProcessSocketAnswersReadinessAndRefusesAWindowOp(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
 	adopted := sessionDir(t, opts.Root, "kraken")
@@ -1544,7 +1185,7 @@ func TestTheProcessSocketAnswersReadinessAndAdoptAndRefusesAWindowOp(t *testing.
 		t.Fatalf("refusal = %q, want %q", err, ErrNoSession)
 	}
 
-	if err := host.Adopt(ctx, adopted, true); err != nil {
+	if err := reg.adopt(adopted, ""); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the adopted session on screen", func() bool {
@@ -1629,8 +1270,10 @@ func TestBootingASessionRacesTeardownSafely(t *testing.T) {
 		serving := make(chan struct{})
 		var reserved string
 		reg.boot = booting{
-			root:  func(slug string) string { return filepath.Join(root, slug) },
-			agent: func(string, string, bool) ([]string, []string, error) { return []string{"/bin/cat"}, os.Environ(), nil },
+			root: func(slug string) string { return filepath.Join(root, slug) },
+			agent: func(string, string, string, bool) ([]string, []string, error) {
+				return []string{"/bin/cat"}, os.Environ(), nil
+			},
 			serve: func(state *sessionState, socket string) (io.Closer, error) {
 				reserved = socket
 				close(serving)
@@ -1673,11 +1316,7 @@ func TestAdoptingAFreshlyAssembledSessionDoesNotResumeIt(t *testing.T) {
 	shownSession(t, reg)
 
 	assembled := sessionDir(t, opts.Root, "kraken")
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: assembled}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.Adopt(context.Background(), assembled, true); err != nil {
+	if err := reg.adopt(assembled, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1690,80 +1329,6 @@ func TestAdoptingAFreshlyAssembledSessionDoesNotResumeIt(t *testing.T) {
 	}
 	if boot.resumed(t, assembled) {
 		t.Fatal("the assembled session was booted with resume; its runner would continue a conversation that never happened, and start without its opening message")
-	}
-}
-
-// Onboarding in a pane has no terminal to hand over, so the session it named gets
-// an agent of its own, and the landing list it answered goes with its terminal.
-func TestAPaneAdoptBootsTheNewSessionAndRetiresTheLanding(t *testing.T) {
-	r := newFakeRenderer()
-	opts, boot := testOptions(t)
-	opts.SessionRoot = ""
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	landing := shownSession(t, reg)
-	if err := term.Start(landing.terminal, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	landingPID := landing.process.cmd.Process.Pid
-
-	assembled := sessionDir(t, opts.Root, "kraken")
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: assembled}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := host.Adopt(context.Background(), assembled, true); err != nil {
-		t.Fatal(err)
-	}
-
-	waitFor(t, "the assembled session on screen", func() bool {
-		state := reg.current()
-		return state != nil && state.slug() == "kraken"
-	})
-	booted := reg.current()
-	if booted == landing {
-		t.Fatal("the landing session was renamed rather than the assembled one booted, so it never got an agent")
-	}
-	if socket := boot.socket(t, assembled); socket == "" {
-		t.Fatal("the assembled session got no control socket of its own")
-	}
-	if err := term.Start(booted.terminal, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	if booted.process.cmd.Process.Pid == landingPID {
-		t.Fatal("the assembled session runs in the landing session's process")
-	}
-	waitFor(t, "the landing session to be unregistered", func() bool {
-		_, live := reg.byTerminal(landing.terminal)
-		return !live && reg.landing() == nil
-	})
-	waitFor(t, "the landing conversation to end", func() bool { return syscall.Kill(landingPID, 0) != nil })
-}
-
-// A handover adopt is onboarding about to exec the supervisor in the terminal it
-// drew in, so booting one here would be a second agent beside it.
-func TestAHandoverAdoptWithoutALandingSessionRefuses(t *testing.T) {
-	root := t.TempDir()
-	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
-	sessionDir(t, root, "octopus")
-	if err := reg.Show("octopus"); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := reg.adopt(sessionDir(t, root, "kraken"), false); !errors.Is(err, ErrNoLandingSession) {
-		t.Fatalf("a handover adopt with nothing to hand over = %v, want ErrNoLandingSession", err)
-	}
-	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
-		t.Fatalf("the refused adopt left %d supervisors and %d listeners", agents, serves)
-	}
-	if reg.bySlug("kraken") != nil {
-		t.Fatal("the refused session was registered anyway")
-	}
-	if state := reg.current(); state == nil || state.slug() != "octopus" {
-		t.Fatalf("the session on screen is %v, want the one already up", state)
 	}
 }
 
@@ -1851,27 +1416,24 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	<-r.opened
 	shownSession(t, reg)
 
-	// The rail freezes on the first poll, with the session the workbench opened on
-	// at the top because showing it stamped it.
-	pushChrome(reg, opts.Root, nil, nil, r.Emit)
+	// Which session the frozen order puts first is whatever the first poll saw, and
+	// the poller runs on its own goroutine — so the invariant is that switching does
+	// not reorder the rail, not that a named session sits at the top.
+	before := polledRail(t, r, reg, opts.Root)
 	if err := reg.Show("kraken"); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, opts.Root, nil, nil, r.Emit)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	fields, ok := r.events[chromeEvent].(status.Fields)
-	if !ok {
-		t.Fatalf("no chrome pushed: %v", r.events)
-	}
+	after := polledRail(t, r, reg, opts.Root)
+
+	fields := lastChrome(t, r)
 	if fields.Slug != "kraken" {
 		t.Fatalf("chrome names %q as shown, want the session Show revealed", fields.Slug)
 	}
-	if len(fields.Sessions) < 2 {
-		t.Fatalf("rail has %d rows, want both sessions", len(fields.Sessions))
+	if len(after) < 2 {
+		t.Fatalf("rail has %d rows, want both sessions", len(after))
 	}
-	if fields.Sessions[0].Slug == fields.Slug {
-		t.Fatal("switching moved the session to the top row; the rail's order is not frozen")
+	if strings.Join(before, " ") != strings.Join(after, " ") {
+		t.Fatalf("switching reordered the rail from %v to %v", before, after)
 	}
 }
 
@@ -2257,4 +1819,27 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 	if _, err := os.Stat(stray); err != nil {
 		t.Fatal("the refused directory was removed:", err)
 	}
+}
+
+// polledRail is the rail as one poll draws it, pushed explicitly so the assertion
+// does not race the background poller's own tick.
+func polledRail(t *testing.T, r *fakeRenderer, reg *Sessions, root string) []string {
+	t.Helper()
+	pushChrome(reg, root, nil, nil, r.Emit)
+	var slugs []string
+	for _, row := range lastChrome(t, r).Sessions {
+		slugs = append(slugs, row.Slug)
+	}
+	return slugs
+}
+
+func lastChrome(t *testing.T, r *fakeRenderer) status.Fields {
+	t.Helper()
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fields, ok := r.events[chromeEvent].(status.Fields)
+	if !ok {
+		t.Fatalf("no chrome pushed: %v", r.events)
+	}
+	return fields
 }

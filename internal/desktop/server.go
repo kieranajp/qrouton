@@ -12,7 +12,9 @@ import (
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
-	adopt     func(sessionRoot string, boot bool) error
+	// picker queues the repository picker on the session it names. Nothing is
+	// drawn until the user arrives there.
+	picker    func(req workbench.PickerRequest) error
 	attention func(activity string)
 }
 
@@ -102,12 +104,12 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}
 	case workbench.OpList:
 		return workbench.Response{IDs: c.windows.list()}
-	case workbench.OpAdopt:
-		if req.Root == "" {
+	case workbench.OpPicker:
+		if req.Root == "" || req.Picker == nil {
 			return workbench.Response{Error: ErrNoSessionRoot.Error()}
 		}
-		if c.hooks.adopt != nil {
-			if err := c.hooks.adopt(req.Root, req.Boot); err != nil {
+		if c.hooks.picker != nil {
+			if err := c.hooks.picker(*req.Picker); err != nil {
 				return workbench.Response{Error: err.Error()}
 			}
 		}

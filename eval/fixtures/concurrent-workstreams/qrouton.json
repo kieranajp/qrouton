@@ -4,12 +4,13 @@
   "slug": "plan-retry-timeout-support",
   "description": "Plan retry timeout support",
   "mode": "rpi",
+  "runner": "claude",
   "createdAt": "2026-07-16T00:00:00Z",
   "repos": [
     {
       "name": "account-service",
       "org": "qrouton-eval",
-      "role": "active",
+      "role": "editing",
       "branch": "feat/plan-retry-timeout-support",
       "defaultBranch": "main",
       "worktreePath": "src/account-service",

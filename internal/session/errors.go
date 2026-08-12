@@ -6,7 +6,7 @@ import (
 )
 
 // ErrInvalidRole means a caller asked for a repository role that is neither
-// active nor reference.
+// editing nor reference.
 var ErrInvalidRole = errors.New("invalid repository role")
 
 // ErrNoPinnedRevision means a reference repository cannot be re-materialised,

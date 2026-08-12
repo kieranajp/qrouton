@@ -78,7 +78,7 @@ func writeRunFixture(t *testing.T, root, id, prompt string) {
 	writeTestFile(t, filepath.Join(root, "eval", "scenarios", id+".json"), scenario)
 	fixture := filepath.Join(root, "eval", "fixtures", id)
 	writeTestFile(t, filepath.Join(fixture, "qrouton.json"), `{
-  "repositories": [{"name":"app","role":"active"}]
+  "repositories": [{"name":"app","role":"editing"}]
 }`)
 	writeTestFile(t, filepath.Join(fixture, "src", "app", "README.md"), "fixture")
 }
@@ -89,7 +89,7 @@ func TestTimedOutCaseStillCollectsDiffs(t *testing.T) {
 	writeTestFile(t, filepath.Join(assets, "orchestrator.md"), "# Instructions\n")
 	writeRunFixture(t, repoRoot, "slow", "healthy")
 
-	// Modifies the active repo, then outlives the case timeout so the
+	// Modifies the editing repo, then outlives the case timeout so the
 	// per-case context is already expired when diffs are collected.
 	bin := filepath.Join(repoRoot, "fake-claude-slow")
 	writeTestFile(t, bin, `#!/bin/sh

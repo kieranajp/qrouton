@@ -1,0 +1,156 @@
+package desktop
+
+import (
+	"strings"
+
+	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/workbench"
+)
+
+// heldRepo is one repository the session already holds. Locked rows reach the
+// manifest as they are rather than as a fresh selection to compose, which is what
+// keeps a repo the agent is already working in from being cloned a second time.
+type heldRepo struct {
+	ID     string `json:"id"`
+	Role   string `json:"role"`
+	Locked bool   `json:"locked"`
+}
+
+// pickerFields is what the picker draws itself from: the branch anything added
+// joins, and the rows the session already holds. Branch is empty for a session
+// with no repositories yet, which is the escalation that acquires its first ones.
+type pickerFields struct {
+	Branch string     `json:"branch"`
+	Repos  []heldRepo `json:"repos"`
+}
+
+// Picker is the second step over a live session, serving both the escalate tool
+// and the add-repos button.
+type Picker struct {
+	cfg       *config.Config
+	sessions  *Sessions
+	repos     *Repositories
+	assembler assembly.Assembler
+}
+
+func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
+	return &Picker{cfg: cfg, sessions: reg, repos: repos,
+		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
+}
+
+func (p *Picker) Load(slug string) (pickerFields, error) {
+	root, err := p.root(slug)
+	if err != nil {
+		return pickerFields{}, err
+	}
+	m, err := session.Load(root)
+	if err != nil {
+		return pickerFields{}, err
+	}
+	held := make([]heldRepo, 0, len(m.Repos))
+	for _, r := range m.Repos {
+		held = append(held, heldRepo{
+			ID:     (github.Repo{Org: r.Org, Name: r.Name}).ID(),
+			Role:   string(r.Role.Effective()),
+			Locked: true,
+		})
+	}
+	return pickerFields{Branch: m.Branch(), Repos: held}, nil
+}
+
+// Confirm adds the picked repositories to the session, escalating it when an
+// escalation is what asked for the picker.
+func (p *Picker) Confirm(slug string, in draftInput) error {
+	root, err := p.root(slug)
+	if err != nil {
+		return err
+	}
+	state := p.sessions.bySlug(slug)
+	escalation := state.pendingPicker()
+	m, err := session.Load(root)
+	if err != nil {
+		return err
+	}
+	draft := p.draft(m, escalation, in)
+	if problems := assembly.CheckRepos(draft); len(problems) > 0 {
+		return draftRefused(problems[0])
+	}
+	if err := p.assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+		return err
+	}
+	state.clearPicker()
+	p.sessions.touch()
+	return nil
+}
+
+func (p *Picker) Cancel(slug string) error {
+	root, err := p.root(slug)
+	if err != nil {
+		return err
+	}
+	state := p.sessions.bySlug(slug)
+	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
+		return err
+	}
+	state.clearPicker()
+	p.sessions.touch()
+	return nil
+}
+
+// draft is the session's own description of itself plus the rows just picked: the
+// picker has no name, ticket or mode field, so those come from the manifest. An
+// escalation is the exception — it proposes a name for the work it is escalating
+// to, and the prefix a first branch is cut with.
+func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in draftInput) assembly.Draft {
+	byID := make(map[string]github.Repo)
+	for _, r := range p.repos.Cached() {
+		byID[r.ID()] = r
+	}
+	repos := make([]session.RepoSelection, 0, len(in.Repos))
+	for _, pick := range in.Repos {
+		repo, ok := byID[pick.ID]
+		if !ok {
+			continue
+		}
+		repos = append(repos, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
+	}
+	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
+	if escalation != nil {
+		if proposed := strings.TrimSpace(escalation.Name); proposed != "" {
+			name = proposed
+		}
+		if proposed := strings.TrimSpace(escalation.Prefix); proposed != "" {
+			prefix = proposed
+		}
+	}
+	return assembly.Draft{Name: name, Description: m.Description, Ticket: m.TicketURL,
+		Prefix: prefix, Mode: m.EffectiveMode(), Repos: repos}
+}
+
+// root is the session the picker is about, which is only ever one this workbench
+// is running.
+func (p *Picker) root(slug string) (string, error) {
+	state := p.sessions.bySlug(slug)
+	if state == nil || state.root() == "" {
+		return "", unknownSession(slug)
+	}
+	return state.root(), nil
+}
+
+// queuePicker records an escalation on the session it names and raises nothing.
+// The overlay opens when the user next arrives there, so an escalation he never
+// arrives at expires unseen — the accepted cost of never taking the screen from
+// a background agent's tool call.
+func (s *Sessions) queuePicker(req workbench.PickerRequest) error {
+	slug := slugFor(req.SessionRoot)
+	state := s.bySlug(slug)
+	if state == nil {
+		return unknownSession(slug)
+	}
+	state.requestPicker(req)
+	s.touch()
+	return nil
+}
