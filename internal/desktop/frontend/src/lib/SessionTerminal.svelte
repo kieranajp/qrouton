@@ -12,10 +12,18 @@
   let host;
   let term = $state();
   let teardown;
+  let sized;
 
   // A session switch is a surface the user asked for, so it takes the keyboard.
+  // The pane has only just stopped being display:none, and an element with no
+  // layout box can be neither measured nor focused — hence the frame's wait.
   $effect(() => {
-    if (active) term?.focus();
+    if (!active || !term) return;
+    const frame = requestAnimationFrame(() => {
+      sized?.();
+      term.focus();
+    });
+    return () => cancelAnimationFrame(frame);
   });
 
   // An async onMount callback returns a Promise, not a cleanup Svelte would
@@ -25,17 +33,16 @@
       const write = (text) => Call.ByName(TERM_SERVICE + ".Write", id, encode(text));
       const started = mount(host, { write, background: "--ctp-crust" });
       const { refit, dispose } = started;
-      term = started.term;
 
+      term = started.term;
       term.onBinary((data) => Call.ByName(TERM_SERVICE + ".Write", id, btoa(data)));
       const offData = Events.On("pty:data:" + id, (event) => term.write(decode(event.data)));
       // A supervisor that failed keeps its terminal, so this is read after it.
       const offExit = Events.On("pty:exit:" + id, (event) => {
         term.write("\r\n\x1b[2m[session ended — status " + event.data + "]\x1b[0m\r\n");
       });
-      const stopWatch = watchSize(host, () =>
-        refit((cols, rows) => Call.ByName(TERM_SERVICE + ".Resize", id, cols, rows)),
-      );
+      sized = () => refit((cols, rows) => Call.ByName(TERM_SERVICE + ".Resize", id, cols, rows));
+      const stopWatch = watchSize(host, sized);
 
       teardown = () => {
         offData();

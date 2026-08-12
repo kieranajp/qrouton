@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NUMBERED, position, shortcut } from "./shortcuts.js";
+import { NUMBERED, position, rowAt, shortcut } from "./shortcuts.js";
 
 const cmd = (key, extra = {}) => ({ key, metaKey: true, ...extra });
 
@@ -33,4 +33,19 @@ test("the first nine rows wear their shortcut and the rest wear none", () => {
   assert.equal(shortcut(0), "⌘1");
   assert.equal(shortcut(NUMBERED - 1), "⌘" + NUMBERED);
   assert.equal(shortcut(NUMBERED), "");
+});
+
+// An off-by-one here sends every shortcut to the neighbouring session.
+test("a shortcut names the row at that position, counting from one", () => {
+  const rows = [{ slug: "kraken" }, { slug: "octopus" }, { slug: "webhook" }];
+  assert.equal(rowAt(rows, cmd("1")).slug, "kraken");
+  assert.equal(rowAt(rows, cmd("3")).slug, "webhook");
+});
+
+test("a shortcut past the last row, or no shortcut at all, names nothing", () => {
+  const rows = [{ slug: "kraken" }];
+  assert.equal(rowAt(rows, cmd("2")), undefined);
+  assert.equal(rowAt(rows, cmd("0")), undefined);
+  assert.equal(rowAt(rows, { key: "1" }), undefined);
+  assert.equal(rowAt([], cmd("1")), undefined);
 });

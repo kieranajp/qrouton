@@ -190,14 +190,22 @@ func Unseen(root string) map[string]int {
 	}
 	out := make(map[string]int, len(found))
 	for _, m := range found {
-		dir := filepath.Join(root, m.Slug)
-		since, ok := session.LastOpened(dir)
-		if !ok {
-			continue
+		if count, shown := UnseenIn(filepath.Join(root, m.Slug)); shown {
+			out[m.Slug] = count
 		}
-		out[m.Slug] = writtenSince(dir, since)
 	}
 	return out
+}
+
+// UnseenIn counts one session's documents written since it was last shown, and
+// reports false for a session never shown. Arriving at a session recounts it
+// without rereading every other one's tree.
+func UnseenIn(sessionRoot string) (int, bool) {
+	since, ok := session.LastOpened(sessionRoot)
+	if !ok {
+		return 0, false
+	}
+	return writtenSince(sessionRoot, since), true
 }
 
 func writtenSince(root string, since time.Time) int {

@@ -11,7 +11,16 @@ import (
 // until the context is cancelled. Escalation rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
 func watchChrome(ctx context.Context, reg *Sessions, root string, emit emitter) {
-	watch(ctx, reg, root, emit, chromeInterval, repoStatInterval, status.Unseen)
+	watch(ctx, reg, root, emit, chromeInterval, repoStatInterval,
+		unseenCounts{all: status.Unseen, in: status.UnseenIn})
+}
+
+// unseenCounts is what the rail knows about documents nobody has looked at: every
+// session's, which is what rides the slow ticker, and one session's, which is
+// cheap enough to run the moment the user arrives at it.
+type unseenCounts struct {
+	all func(root string) map[string]int
+	in  func(sessionRoot string) (int, bool)
 }
 
 // measurement is one session's repository stats, named by the session they were
@@ -23,14 +32,14 @@ type measurement struct {
 
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
-func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field, slow time.Duration, count func(string) map[string]int) {
+func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field, slow time.Duration, count unseenCounts) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
 
 	measured := map[string][]status.RepoStat{}
-	unseen := count(root)
+	unseen := count.all(root)
 	result := make(chan measurement, 1)
 	// A refresh runs off this loop so a wedged git cannot stall the field ticker;
 	// pending guards against a second one starting before it answers.
@@ -60,9 +69,16 @@ func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field,
 		case <-stats.C:
 			delete(measured, reg.current().root())
 			refresh()
-			unseen = count(root)
+			unseen = count.all(root)
 		case <-reg.touched:
 			refresh()
+			// Arriving at a session is looking at what it wrote, and a marker still
+			// lit after that is a marker nobody reads.
+			if shown := reg.current().root(); shown != "" {
+				if at, ok := count.in(shown); ok {
+					unseen[slugFor(shown)] = at
+				}
+			}
 		case <-fields.C:
 		}
 		pushChrome(reg, root, measured, unseen, emit)

@@ -1246,18 +1246,27 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 }
 
-func TestTheUnseenCountIsRecountedOnlyOnTheSlowTicker(t *testing.T) {
+// Every session's documents are ×N directory reads, so that count rides the slow
+// ticker. Arriving at one session is a single read on a deliberate act, so it
+// happens at once: a marker still lit after you have looked is one nobody reads.
+func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.T) {
 	root := t.TempDir()
 	reg := testRegistry(t, sessionDir(t, root, "octopus"))
-	var pushes, counts atomic.Int64
+	var pushes, all, arrivals atomic.Int64
 	emit := func(event string, _ any) {
 		if event == chromeEvent {
 			pushes.Add(1)
 		}
 	}
-	count := func(string) map[string]int {
-		counts.Add(1)
-		return map[string]int{}
+	counts := unseenCounts{
+		all: func(string) map[string]int {
+			all.Add(1)
+			return map[string]int{}
+		},
+		in: func(string) (int, bool) {
+			arrivals.Add(1)
+			return 0, true
+		},
 	}
 
 	// The registry's own reveal already woke the poller; the switch below is the
@@ -1265,20 +1274,21 @@ func TestTheUnseenCountIsRecountedOnlyOnTheSlowTicker(t *testing.T) {
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, emit, time.Millisecond, time.Hour, count)
+	go watch(ctx, reg, root, emit, time.Millisecond, time.Hour, counts)
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
-	if got := counts.Load(); got != 1 {
-		t.Fatalf("the unseen count ran %d times over %d pushes, want the one before the loop",
+	if got := all.Load(); got != 1 {
+		t.Fatalf("every session's unseen count ran %d times over %d pushes, want the one before the loop",
 			got, pushes.Load())
+	}
+	if got := arrivals.Load(); got != 0 {
+		t.Fatalf("the fast ticker recounted an arrival %d times", got)
 	}
 
 	reg.reveal(reg.add(sessionDir(t, root, "kraken"), []string{"/bin/cat"}, os.Environ()))
-	waitFor(t, "the switch to reach the poller", func() bool { return len(reg.touched) == 0 })
-	settled := pushes.Load()
-	waitFor(t, "the pushes after the switch", func() bool { return pushes.Load() > settled+5 })
-	if got := counts.Load(); got != 1 {
-		t.Fatalf("switching sessions recounted unseen documents, %d counts in all", got)
+	waitFor(t, "the arrival to be recounted", func() bool { return arrivals.Load() == 1 })
+	if got := all.Load(); got != 1 {
+		t.Fatalf("switching recounted every session's unseen documents, %d counts in all", got)
 	}
 }
 

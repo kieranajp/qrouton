@@ -18,5 +18,12 @@ export function position(event) {
   return digit;
 }
 
+/**
+ * rowAt is the rail row a keystroke names, and undefined for a keystroke that
+ * names none or one naming a row that is not there.
+ * @param {any[]} rows
+ */
+export const rowAt = (rows, event) => rows?.[position(event) - 1];
+
 /** shortcut is the glyph a rail row wears in place of its initials. */
 export const shortcut = (index) => (index < NUMBERED ? "⌘" + (index + 1) : "");

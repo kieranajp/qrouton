@@ -18,7 +18,7 @@
   import { age, chrome } from "./lib/chrome.svelte.js";
   import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
   import { show } from "./lib/sessions.js";
-  import { position, shortcut } from "./lib/shortcuts.js";
+  import { rowAt, shortcut } from "./lib/shortcuts.js";
   import {
     closeWindow,
     openDocument,
@@ -96,8 +96,7 @@
   // re-sorts the list. Nothing here reaches a floating window's own page.
   onMount(() => {
     const onKey = (event) => {
-      const at = position(event);
-      const row = at && fields.sessions[at - 1];
+      const row = rowAt(fields.sessions, event);
       if (!row) return;
       event.preventDefault();
       show(row.slug);

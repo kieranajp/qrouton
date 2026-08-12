@@ -34,7 +34,15 @@
   );
 </script>
 
-<button type="button" class="item" class:selected class:cold={!selected && !live} {...rest}>
+<!-- Taking focus on the press would leave the keyboard on the row rather than in
+     the session it selects, including when that session is already the one shown. -->
+<button
+  type="button"
+  class="item"
+  class:selected
+  class:cold={!selected && !live}
+  onmousedown={(event) => event.preventDefault()}
+  {...rest}>
   <div class="avatar" class:keyed={shortcut}>
     {shortcut || initials}
     {#if mark?.kind === "dot"}
