@@ -89,11 +89,8 @@ func Run(opts Options) error {
 	windows := newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Signal)
-	// This is the exact teardown closing the conversation window runs — every
-	// open session's supervisor and PTY end cleanly before the process does.
-	// Settings.Quit gets the same closure rather than a bare r.Quit, so quitting
-	// from the panel is no worse than quitting from the window's own close
-	// button.
+	// The same teardown the main window's OnClose runs, shared with Settings.Quit
+	// so quitting from the panel is no worse than closing the window.
 	quit := sync.OnceFunc(func() {
 		windows.observe(nil)
 		windows.stopAll()

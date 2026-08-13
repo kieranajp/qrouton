@@ -109,10 +109,9 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, err
 	}
 
-	// Root is deliberately not written here: the rail's scanner, boot path and
-	// cleanup all closed over the live root at process start, and mutating it
-	// now would make a session created after this Save invisible to a rail
-	// still scanning the old directory.
+	// Root stays off the live pointer: the rail's scanner and boot path closed
+	// over it at process start, so a session created against a live-mutated
+	// root would not appear in a rail still scanning the old one.
 	s.cfg.Orgs, s.cfg.Editor, s.cfg.Launch = orgs, editor, launch
 
 	return SaveResult{RestartRequired: expandedRoot != filepath.Clean(s.cfg.Root)}, nil
