@@ -21,7 +21,9 @@
         aria-hidden="true"
         data-line={row.newLine ?? ""}
       ></span>
-      <span class="diff-content">{row.text}</span>
+      <span class="diff-content">
+        {row.text}{#if row.text === ""}<br aria-hidden="true" />{/if}
+      </span>
     </div>
   {/each}
 </div>

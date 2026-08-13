@@ -149,4 +149,10 @@ test("copies and exposes only raw diff content", async ({ page }) => {
   expect(aria).toContain("context before");
   expect(aria).not.toContain("98");
   expect(aria).not.toContain("198");
+
+  const separated = "=== one ===\na\n\n=== two ===\nb\n";
+  await page.evaluate((text) => window.setDiff(text), separated);
+  expect(await page.evaluate(() => window.selectDiff())).toBe(separated);
+  await expect(page.locator(".diff-content").nth(2).locator("br"))
+    .toHaveAttribute("aria-hidden", "true");
 });
