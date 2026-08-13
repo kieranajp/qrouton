@@ -48,7 +48,8 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // TTL expires a document window. Attention marks a window that needs the
 // user's eye without taking focus. Source names the session file the window
 // shows, relative to the session root, so a second request for that file
-// selects this window instead of opening another.
+// selects this window instead of opening another. Span is the part of the file
+// the window scrolls to and marks.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
@@ -57,10 +58,31 @@ type WindowOptions struct {
 	Command     []string       `json:"command,omitempty"`
 	Content     string         `json:"content,omitempty"`
 	Format      DocumentFormat `json:"format,omitempty"`
+	Span        LineSpan       `json:"span,omitzero"`
 	Focus       bool           `json:"focus,omitempty"`
 	Attention   bool           `json:"attention,omitempty"`
 	CloseOnExit bool           `json:"close_on_exit,omitempty"`
 	TTL         time.Duration  `json:"ttl,omitempty"`
+}
+
+// LineSpan is the part of a document the user should be looking at, in
+// one-based source lines. A zero Line asks for the top of the file, and a
+// Through below Line spans that line alone.
+type LineSpan struct {
+	Line    int `json:"line,omitempty"`
+	Through int `json:"through,omitempty"`
+}
+
+// Bounds reports the span as a closed line range, and false when it names no
+// line at all.
+func (s LineSpan) Bounds() (first, last int, ok bool) {
+	if s.Line < 1 {
+		return 0, 0, false
+	}
+	if s.Through < s.Line {
+		return s.Line, s.Line, true
+	}
+	return s.Line, s.Through, true
 }
 
 // WindowHost opens and inspects the OS windows a session shows the user. The

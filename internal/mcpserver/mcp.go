@@ -15,8 +15,9 @@ import (
 )
 
 type openFileInput struct {
-	Path string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
-	Line int    `json:"line,omitempty" jsonschema:"One-based line number; defaults to 1"`
+	Path    string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
+	Line    int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
+	Through int    `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
 }
 
 type runCommandInput struct {

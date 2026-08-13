@@ -32,7 +32,7 @@ func TestDocumentWindowRendersMarkdownAndEditsEverythingElse(t *testing.T) {
 		"src/app/main.go":               "package main\n",
 	})
 
-	pane, err := DocumentWindow(root, "thoughts/shared/plans/P007.md", testDocumentEditor, 12)
+	pane, err := DocumentWindow(root, "thoughts/shared/plans/P007.md", testDocumentEditor, workbench.LineSpan{Line: 12})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -48,8 +48,11 @@ func TestDocumentWindowRendersMarkdownAndEditsEverythingElse(t *testing.T) {
 	if len(pane.Command) != 0 {
 		t.Fatalf("a rendered pane carries a command: %v", pane.Command)
 	}
+	if pane.Span != (workbench.LineSpan{Line: 12, Through: 12}) {
+		t.Fatalf("pane span = %+v, want line 12 alone", pane.Span)
+	}
 
-	editor, err := DocumentWindow(root, "src/app/main.go", testDocumentEditor, 12)
+	editor, err := DocumentWindow(root, "src/app/main.go", testDocumentEditor, workbench.LineSpan{Line: 12})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,6 +65,57 @@ func TestDocumentWindowRendersMarkdownAndEditsEverythingElse(t *testing.T) {
 	}
 	if got := strings.Join(editor.Command, " "); got != "vi +12 "+filepath.Join(real, "src/app/main.go") {
 		t.Fatalf("editor command = %q, want the file at line 12", got)
+	}
+}
+
+func TestDocumentWindowPassesAMarkedRangeToThePaneAndItsFirstLineToTheEditor(t *testing.T) {
+	root := documentRoot(t, map[string]string{
+		"plan.md": "# Plan\n\nA paragraph.\n",
+		"main.go": "package main\n",
+	})
+
+	pane, err := DocumentWindow(root, "plan.md", testDocumentEditor, workbench.LineSpan{Line: 8, Through: 14})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pane.Span != (workbench.LineSpan{Line: 8, Through: 14}) {
+		t.Fatalf("pane span = %+v, want lines 8 to 14", pane.Span)
+	}
+
+	editor, err := DocumentWindow(root, "main.go", testDocumentEditor, workbench.LineSpan{Line: 8, Through: 14})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(editor.Command, " "); !strings.Contains(got, "+8 ") {
+		t.Fatalf("editor command = %q, want it opened at line 8", got)
+	}
+}
+
+// A span nobody asked for must not mark the top of the document, and one whose
+// range runs backwards is the line it names rather than an empty range the pane
+// would draw nothing for.
+func TestDocumentWindowNormalisesASpanThePaneCannotUse(t *testing.T) {
+	root := documentRoot(t, map[string]string{"plan.md": "# Plan\n"})
+
+	for _, tc := range []struct {
+		name string
+		span workbench.LineSpan
+		want workbench.LineSpan
+	}{
+		{"none", workbench.LineSpan{}, workbench.LineSpan{}},
+		{"a through with no line", workbench.LineSpan{Through: 9}, workbench.LineSpan{}},
+		{"a line below one", workbench.LineSpan{Line: -3}, workbench.LineSpan{}},
+		{"a backwards range", workbench.LineSpan{Line: 9, Through: 4}, workbench.LineSpan{Line: 9, Through: 9}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			opts, err := DocumentWindow(root, "plan.md", testDocumentEditor, tc.span)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if opts.Span != tc.want {
+				t.Fatalf("pane span = %+v, want %+v", opts.Span, tc.want)
+			}
+		})
 	}
 }
 
@@ -85,7 +139,7 @@ func TestDocumentWindowNamesAParkedDocumentRelativeToTheSession(t *testing.T) {
 
 	want := filepath.Join("thoughts", "shared", "plans", "P007.md")
 	for _, name := range []string{want, doc} {
-		opts, err := DocumentWindow(root, name, testDocumentEditor, 1)
+		opts, err := DocumentWindow(root, name, testDocumentEditor, workbench.LineSpan{Line: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -110,7 +164,7 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 			file = "doc.md"
 		}
 		root := documentRoot(t, map[string]string{file: body})
-		opts, err := DocumentWindow(root, file, testDocumentEditor, 1)
+		opts, err := DocumentWindow(root, file, testDocumentEditor, workbench.LineSpan{Line: 1})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -123,7 +177,7 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 // A file this size is a log, and a window holding a copy of it serves nobody.
 func TestDocumentWindowSendsAHugeMarkdownFileToTheEditor(t *testing.T) {
 	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", documentLimit+1)})
-	opts, err := DocumentWindow(root, "huge.md", testDocumentEditor, 1)
+	opts, err := DocumentWindow(root, "huge.md", testDocumentEditor, workbench.LineSpan{Line: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +188,7 @@ func TestDocumentWindowSendsAHugeMarkdownFileToTheEditor(t *testing.T) {
 
 func TestDocumentWindowRefusesToLeaveTheSession(t *testing.T) {
 	root := documentRoot(t, map[string]string{"thoughts/shared/plans/P007.md": "# in\n"})
-	if _, err := DocumentWindow(root, "../outside.md", testDocumentEditor, 1); err == nil {
+	if _, err := DocumentWindow(root, "../outside.md", testDocumentEditor, workbench.LineSpan{Line: 1}); err == nil {
 		t.Fatal("a path outside the session opened a window")
 	}
 }
@@ -142,10 +196,10 @@ func TestDocumentWindowRefusesToLeaveTheSession(t *testing.T) {
 // A session with no editor still renders what it can, and says so otherwise.
 func TestDocumentWindowNeedsNoEditorForAPane(t *testing.T) {
 	root := documentRoot(t, map[string]string{"note.md": "# Note\n", "main.go": "package main\n"})
-	if _, err := DocumentWindow(root, "note.md", EditorCommand{}, 1); err != nil {
+	if _, err := DocumentWindow(root, "note.md", EditorCommand{}, workbench.LineSpan{Line: 1}); err != nil {
 		t.Fatalf("a pane needed an editor: %v", err)
 	}
-	if _, err := DocumentWindow(root, "main.go", EditorCommand{}, 1); err == nil {
+	if _, err := DocumentWindow(root, "main.go", EditorCommand{}, workbench.LineSpan{Line: 1}); err == nil {
 		t.Fatal("a source file opened with no editor configured")
 	}
 }

@@ -219,7 +219,7 @@ func assemblyRunners(cfg *config.Config) func() ([]assembly.Runner, error) {
 // documentWindow reaches the same decision the agent's file tool does.
 func documentWindow(editor launch.EditorCommand) func(string, string) (workbench.WindowOptions, error) {
 	return func(sessionRoot, name string) (workbench.WindowOptions, error) {
-		return launch.DocumentWindow(sessionRoot, name, editor, 1)
+		return launch.DocumentWindow(sessionRoot, name, editor, workbench.LineSpan{})
 	}
 }
 

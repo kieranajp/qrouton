@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { documentPath, linkKind, render } from "./markdown.js";
+import { documentPath, linkKind, marks, render } from "./markdown.js";
+
+/** @param {string} body */
+const numbered = (body) => [...body.matchAll(/<(\w+)[^>]*data-line="(\d+)"/g)].map((m) => [m[1], Number(m[2])]);
 
 const PLAN = [
   "---",
@@ -38,7 +41,7 @@ test("the opening heading becomes the title and leaves the body", () => {
 test("a document with no opening heading keeps its title empty", () => {
   const { title, body } = render("Just a note.\n\n# Later heading\n");
   assert.equal(title, "");
-  assert.ok(body.includes("<h1>Later heading</h1>"));
+  assert.ok(body.includes(">Later heading</h1>"));
 });
 
 test("task list state survives as markup the pane can draw", () => {
@@ -67,6 +70,65 @@ test("script and event handlers do not survive the sanitiser", () => {
   assert.ok(!body.includes("<script"));
   assert.ok(!body.includes("onerror"));
   assert.ok(!body.includes("alert"));
+});
+
+test("every block carries the source line it opens on, front matter included in the count", () => {
+  assert.deepEqual(numbered(render(PLAN).body), [
+    ["blockquote", 8],
+    ["li", 10],
+    ["li", 11],
+    ["pre", 13],
+  ]);
+});
+
+test("a block spanning several lines reports the line it ends on too", () => {
+  const { body } = render("first\nstill first\n\nsecond\n");
+  assert.ok(body.includes('<p data-line="1" data-line-end="2">'));
+  assert.ok(body.includes('<p data-line="4" data-line-end="4">'));
+});
+
+test("a list defers its number to its items, at every depth", () => {
+  const { body } = render("- one\n- two\n  - nested\n");
+  assert.deepEqual(numbered(body), [
+    ["li", 1],
+    ["li", 2],
+    ["li", 3],
+  ]);
+  assert.ok(!body.includes("<ul data-line"));
+});
+
+test("a fence keeps its line despite the highlighter rebuilding it", () => {
+  const { body } = render("intro\n\n```go\nx := 1\n```\n\n```\nplain\n```\n");
+  assert.deepEqual(numbered(body), [
+    ["p", 1],
+    ["pre", 3],
+    ["pre", 7],
+  ]);
+});
+
+test("marks covers the blocks a span reaches and scrolls to the first", () => {
+  const blocks = [
+    { line: 3, end: 3 },
+    { line: 5, end: 8 },
+    { line: 12, end: 12 },
+  ];
+  assert.deepEqual(marks(blocks, { line: 5, to: 0 }), { marked: [1], at: 1 });
+  assert.deepEqual(marks(blocks, { line: 7, to: 12 }), { marked: [1, 2], at: 1 });
+  assert.deepEqual(marks(blocks, { line: 1, to: 20 }), { marked: [0, 1, 2], at: 0 });
+});
+
+test("a span landing between blocks marks nothing and scrolls to the next one", () => {
+  const blocks = [
+    { line: 3, end: 3 },
+    { line: 9, end: 9 },
+  ];
+  assert.deepEqual(marks(blocks, { line: 5, to: 6 }), { marked: [], at: 1 });
+});
+
+test("a span past the last block, or naming no line, reaches nothing", () => {
+  const blocks = [{ line: 3, end: 3 }];
+  assert.deepEqual(marks(blocks, { line: 40, to: 0 }), { marked: [], at: -1 });
+  assert.deepEqual(marks(blocks, { line: 0, to: 0 }), { marked: [], at: -1 });
 });
 
 test("linkKind separates a document from a URL from everything else", () => {

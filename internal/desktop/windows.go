@@ -230,12 +230,15 @@ func (w *Windows) Resize(id string, cols, rows int) error {
 	return process.resize(cols, rows)
 }
 
-// document is a document window's text, how its page should render it, and the
-// session file it came from, if it came from one.
+// document is a document window's text, how its page should render it, the
+// session file it came from, if it came from one, and the source lines the page
+// should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
 	Text   string `json:"text"`
 	Format string `json:"format"`
 	Source string `json:"source"`
+	Line   int    `json:"line"`
+	To     int    `json:"to"`
 }
 
 // Content is a document window's text, fetched by its page on load.
@@ -244,10 +247,13 @@ func (w *Windows) Content(id string) (document, error) {
 	if !ok {
 		return document{}, noSuchWindow(id)
 	}
+	first, last, _ := window.opts.Span.Bounds()
 	return document{
 		Text:   window.opts.Content,
 		Format: string(window.opts.Format),
 		Source: window.opts.Source,
+		Line:   first,
+		To:     last,
 	}, nil
 }
 
