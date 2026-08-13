@@ -78,6 +78,42 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil || text != "one change" {
 		t.Fatalf("Read = %q, %v", text, err)
 	}
+	const diff = `diff --git a/app.txt b/app.txt
+index 6dad4ad..84db3de 100644
+--- a/app.txt
++++ b/app.txt
+@@ -1,4 +1,4 @@
+ alpha
+-beta
++bravo
+ gamma
+ delta
+@@ -10,3 +10,4 @@ footer
+ ten
+ eleven
++eleven and a half
+ twelve
+`
+	diffDocument, err := host.Open(ctx, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ diff", Content: diff, Format: workbench.FormatDiff,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tabs := windows.tabs(windows.shown()); len(tabs) != 3 || tabs[2].ID != diffDocument {
+		t.Fatalf("socket-opened tabs = %+v, want diff document %q third", tabs, diffDocument)
+	}
+	diffPage, err := windows.Content(diffDocument)
+	if err != nil || diffPage.Text != diff || diffPage.Format != string(workbench.FormatDiff) {
+		t.Fatalf("diff Content = %+v, %v", diffPage, err)
+	}
+	diffText, err := host.Read(ctx, diffDocument, true)
+	if err != nil || diffText != diff {
+		t.Fatalf("diff Read = %q, %v", diffText, err)
+	}
+	if viewport, err := host.Viewport(ctx, diffDocument); err != nil || viewport != nil {
+		t.Fatalf("diff Viewport = %+v, %v", viewport, err)
+	}
 	if viewport, err := host.Viewport(ctx, id); err != nil || viewport != nil {
 		t.Fatalf("terminal Viewport = %+v, %v", viewport, err)
 	}
@@ -116,8 +152,8 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if live, err := host.Exists(ctx, id); err != nil || live {
 		t.Fatalf("Exists = %v, %v after Close", live, err)
 	}
-	if tabs := windows.tabs(windows.shown()); len(tabs) != 1 || tabs[0].ID != document {
-		t.Fatalf("tabs after close = %+v, want only document %q", tabs, document)
+	if tabs := windows.tabs(windows.shown()); len(tabs) != 2 || tabs[0].ID != document || tabs[1].ID != diffDocument {
+		t.Fatalf("tabs after close = %+v, want documents %q and %q", tabs, document, diffDocument)
 	}
 }
 
