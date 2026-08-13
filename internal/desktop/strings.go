@@ -46,7 +46,6 @@ const (
 	windowDataEvent = "window:data:"
 	windowExitEvent = "window:exit:"
 	windowsEvent    = "window:open"
-	selectEvent     = "window:select"
 
 	reposRefreshEvent     = "repos:refresh"
 	assemblyProgressEvent = "assembly:progress"

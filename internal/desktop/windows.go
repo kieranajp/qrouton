@@ -23,10 +23,11 @@ type Windows struct {
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu sync.Mutex
 
-	mu      sync.Mutex
-	seq     int
-	open    map[string]*agentWindow
-	changed func(owner *sessionState)
+	mu       sync.Mutex
+	seq      int
+	open     map[string]*agentWindow
+	selected map[*sessionState]string
+	changed  func(owner *sessionState)
 }
 
 type agentWindow struct {
@@ -53,7 +54,10 @@ type ViewportReport struct {
 }
 
 func newWindows(emit emitter, reg *Sessions) *Windows {
-	return &Windows{emit: emit, sessions: reg, open: map[string]*agentWindow{}}
+	return &Windows{
+		emit: emit, sessions: reg, open: map[string]*agentWindow{},
+		selected: map[*sessionState]string{},
+	}
 }
 
 func (w *Windows) shown() *sessionState { return w.sessions.current() }
@@ -93,13 +97,38 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	defer w.sourceMu.Unlock()
 	owner := w.shown()
 	if id, ok := w.showing(owner, name); ok {
-		w.emit(selectEvent, selection{Session: owner.slug(), ID: id})
-		return id, nil
+		return id, w.selectWindow(owner, id)
 	}
 	if w.newDocument == nil {
 		return "", ErrNoEditorCommand
 	}
-	return w.newDocument(name)
+	id, err := w.newDocument(name)
+	if err != nil {
+		return "", err
+	}
+	return id, w.selectWindow(owner, id)
+}
+
+// Select records a user-driven tab selection for one session.
+func (w *Windows) Select(slug, id string) error {
+	owner := w.sessions.bySlug(slug)
+	if owner == nil {
+		return unknownSession(slug)
+	}
+	return w.selectWindow(owner, id)
+}
+
+func (w *Windows) selectWindow(owner *sessionState, id string) error {
+	w.mu.Lock()
+	window, ok := w.open[id]
+	if !ok || window.session != owner {
+		w.mu.Unlock()
+		return noSuchWindow(id)
+	}
+	w.selected[owner] = id
+	w.mu.Unlock()
+	w.announce(owner)
+	return nil
 }
 
 func (w *Windows) showing(owner *sessionState, source string) (string, bool) {
@@ -131,15 +160,12 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recor
 		window.viewport = &workbench.DocumentViewport{Source: opts.Source, Intervals: []workbench.LineInterval{}}
 	}
 	w.open[id] = window
+	if recorded {
+		w.selected[owner] = id
+	}
 	w.mu.Unlock()
 
 	w.announce(owner)
-	// A document the agent opened behind the shell tab is a document nobody
-	// reads. Terminals are left where they are: the tab strip focuses the
-	// terminal it selects, which would take the keyboard off the conversation.
-	if opts.Kind == workbench.KindDocument {
-		w.emit(selectEvent, selection{Session: owner.slug(), ID: id})
-	}
 	return id, nil
 }
 
@@ -383,6 +409,13 @@ func (w *Windows) discard(id string) {
 	var process *ptyProcess
 	if ok {
 		process = window.process
+		if w.selected[window.session] == id {
+			if fallback := w.oldest(window.session); fallback != "" {
+				w.selected[window.session] = fallback
+			} else {
+				delete(w.selected, window.session)
+			}
+		}
 	}
 	w.mu.Unlock()
 	if !ok {
@@ -392,6 +425,18 @@ func (w *Windows) discard(id string) {
 		process.stop()
 	}
 	w.announce(window.session)
+}
+
+func (w *Windows) oldest(owner *sessionState) string {
+	oldestID := ""
+	oldestSeq := 0
+	for id, window := range w.open {
+		if window.session == owner && (oldestID == "" || window.seq < oldestSeq) {
+			oldestID = id
+			oldestSeq = window.seq
+		}
+	}
+	return oldestID
 }
 
 // observe registers what to tell when a session's open set changes. Clearing it
@@ -425,14 +470,9 @@ type drawnWindow struct {
 // surfaces names one session's open tabs, oldest first so the shell stays
 // leftmost.
 type surfaces struct {
-	Session string        `json:"session"`
-	Tabs    []drawnWindow `json:"tabs"`
-}
-
-// selection is the window a page is being asked to bring forward.
-type selection struct {
-	Session string `json:"session"`
-	ID      string `json:"id"`
+	Session  string        `json:"session"`
+	Selected string        `json:"selected"`
+	Tabs     []drawnWindow `json:"tabs"`
 }
 
 func (w *Windows) surfaces(owner *sessionState) surfaces {
@@ -445,7 +485,7 @@ func (w *Windows) surfaces(owner *sessionState) surfaces {
 		}
 	}
 	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
-	out := surfaces{Session: owner.slug(), Tabs: []drawnWindow{}}
+	out := surfaces{Session: owner.slug(), Selected: w.selected[owner], Tabs: []drawnWindow{}}
 	for _, window := range live {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,

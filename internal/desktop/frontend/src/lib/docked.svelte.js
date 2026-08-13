@@ -2,7 +2,7 @@ import { Call, Events } from "./wails.js";
 
 const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-const NONE = { tabs: [] };
+const NONE = { tabs: [], selected: "" };
 
 /** @param {() => string} slug */
 export function surfaces(slug) {
@@ -31,22 +31,17 @@ export function surfaces(slug) {
     get tabs() {
       return open.tabs;
     },
+    get selected() {
+      return open.selected;
+    },
   };
 }
 
 export const closeWindow = (id) => Call.ByName(WINDOWS_SERVICE + ".Close", id);
 export const openShell = () => Call.ByName(WINDOWS_SERVICE + ".OpenShell");
 
+export const selectWindow = (slug, id) =>
+  Call.ByName(WINDOWS_SERVICE + ".Select", slug, id);
+
 /** openDocument opens a session document, or selects the tab already on it. */
 export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocument", path);
-
-/**
- * whenSelected runs on a window the Go side wants shown — a document the agent
- * opened, which would otherwise render behind whatever tab is up.
- * @param {() => string} slug
- * @param {(id: string) => void} select
- */
-export const whenSelected = (slug, select) =>
-  Events.On("window:select", (event) => {
-    if (event.data?.session === slug()) select(event.data.id);
-  });

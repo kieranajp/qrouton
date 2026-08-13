@@ -21,7 +21,16 @@
   import { pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
   import { age, chrome } from "./lib/chrome.svelte.js";
-  import { focusedIn, focusIn, storedWidth, widthKey } from "./lib/layout.js";
+  import {
+    consumeTerminalFocus,
+    focusGenerationIn,
+    focusPendingIn,
+    focusTerminal,
+    selectedIn,
+    selectIn,
+    storedWidth,
+    widthKey,
+  } from "./lib/layout.js";
   import { menuHeight, place } from "./lib/menu.js";
   import { cleanup, reveal, show, uncommitted } from "./lib/sessions.js";
   import { rowAt, shortcut } from "./lib/shortcuts.js";
@@ -29,8 +38,8 @@
     closeWindow,
     openDocument,
     openShell,
+    selectWindow,
     surfaces,
-    whenSelected,
   } from "./lib/docked.svelte.js";
 
   /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
@@ -82,10 +91,31 @@
     resize(0);
   }
 
-  let focus = $state({});
-  let focused = $derived(focusedIn(focus, fields.slug));
-  let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === focused)));
-  const select = (id) => (focus = focusIn(focus, fields.slug, id));
+  let selection = $state({});
+  let applied = $state({});
+  let terminalFocus = $state({});
+  let selectedID = $derived(selectedIn(selection, fields.slug));
+  let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === selectedID)));
+
+  $effect(() => {
+    const slug = fields.slug;
+    const id = open.selected;
+    if (selectedIn(applied, slug) === id) return;
+    applied = selectIn(applied, slug, id);
+    selection = selectIn(selection, slug, id);
+  });
+
+  const showTab = (id) => (selection = selectIn(selection, fields.slug, id));
+
+  function userSelect(tab) {
+    showTab(tab.id);
+    if (tab.kind === "terminal") terminalFocus = focusTerminal(terminalFocus, tab.id);
+    selectWindow(fields.slug, tab.id).catch(() => {});
+  }
+
+  function terminalFocused(id, generation) {
+    terminalFocus = consumeTerminalFocus(terminalFocus, id, generation);
+  }
 
   // The session on screen may have no rail row yet: a session is named by
   // adopting it, which happens once the window is already up.
@@ -93,8 +123,6 @@
     ...(fields.terminal ? [{ terminal: fields.terminal, slug: fields.slug }] : []),
     ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
   ]);
-
-  onMount(() => whenSelected(() => fields.slug, select));
 
   // A rail row's number is its position, so it moves when showing a session
   // re-sorts the list.
@@ -128,7 +156,7 @@
   async function read(path) {
     listing = false;
     try {
-      select(await openDocument(path));
+      showTab(await openDocument(path));
     } catch {}
   }
   const ROW_MENU = [
@@ -334,14 +362,19 @@
       <TabStrip
         tabs={open.tabs}
         {selected}
-        onSelect={(i) => select(open.tabs[i].id)}
+        onSelect={(i) => userSelect(open.tabs[i])}
         onClose={(i) => closeWindow(open.tabs[i].id)}
-        onNew={async () => select(await openShell())}
+        onNew={async () => userSelect({ id: await openShell(), kind: "terminal" })}
         newLabel="Shell" />
       {#each open.tabs as tab, i (tab.id)}
         <!-- Only a terminal may be Started; a document tab has no process behind it. -->
         {#if tab.kind === "terminal"}
-          <DockedTerminal id={tab.id} active={i === selected} />
+          <DockedTerminal
+            id={tab.id}
+            active={i === selected}
+            focus={focusGenerationIn(terminalFocus, tab.id)}
+            focusPending={focusPendingIn(terminalFocus, tab.id)}
+            onFocused={(generation) => terminalFocused(tab.id, generation)} />
         {:else}
           <DockedDocument id={tab.id} active={i === selected} />
         {/if}

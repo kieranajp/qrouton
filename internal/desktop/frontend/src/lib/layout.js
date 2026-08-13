@@ -11,9 +11,21 @@ export const widthKey = (slug) => WIDTH_PREFIX + slug;
  */
 export const storedWidth = (read, slug) => Number(read(widthKey(slug))) || 0;
 
-/** focusedIn is the tab id a session had up, held by id so a window docking
- * behind it cannot shift the selection the way an index would. */
-export const focusedIn = (focus, slug) => focus[slug] ?? "";
+export const selectedIn = (selection, slug) => selection[slug] ?? "";
 
-/** focusIn records one session's focused tab and leaves every other session's. */
-export const focusIn = (focus, slug, id) => ({ ...focus, [slug]: id });
+export const selectIn = (selection, slug, id) => ({ ...selection, [slug]: id });
+
+export const focusGenerationIn = (generations, id) => generations[id]?.generation ?? 0;
+
+export const focusPendingIn = (generations, id) => generations[id]?.pending ?? false;
+
+export const focusTerminal = (generations, id) => ({
+  ...generations,
+  [id]: { generation: focusGenerationIn(generations, id) + 1, pending: true },
+});
+
+export function consumeTerminalFocus(generations, id, generation) {
+  const current = generations[id];
+  if (!current || current.generation !== generation || !current.pending) return generations;
+  return { ...generations, [id]: { generation, pending: false } };
+}

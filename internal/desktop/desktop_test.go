@@ -539,6 +539,9 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	if len(r.opened) != 0 {
 		t.Fatalf("%d OS windows opened; a document the user asked for is a tab", len(r.opened))
 	}
+	if selected := windows.Surfaces(owner.slug()).Selected; selected != id {
+		t.Fatalf("the document chip selected %q, want %q", selected, id)
+	}
 
 	again, err := windows.OpenDocument(doc)
 	if err != nil {
@@ -617,7 +620,7 @@ func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
 }
 
 func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	const doc = "thoughts/shared/plans/P006.md"
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ P006", Source: doc, Content: "plan",
@@ -625,18 +628,22 @@ func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.mu.Lock()
-	delete(r.events, selectEvent)
-	r.mu.Unlock()
+	other, err := w.openStructural(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "other", Content: "other",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Select(w.shown().slug(), other); err != nil {
+		t.Fatal(err)
+	}
 	got, err := w.OpenDocument(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	r.mu.Lock()
-	selected := r.events[selectEvent]
-	r.mu.Unlock()
-	if got != id || selected != (selection{Session: w.shown().slug(), ID: id}) {
-		t.Fatalf("OpenDocument returned %q and selected %v, want %q", got, selected, id)
+	selected := w.Surfaces(w.shown().slug()).Selected
+	if got != id || selected != id {
+		t.Fatalf("OpenDocument returned %q and selected %q, want %q", got, selected, id)
 	}
 }
 

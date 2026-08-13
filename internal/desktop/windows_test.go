@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -36,6 +37,9 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	if tabs := w.tabs(w.shown()); len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "▶ dev" {
 		t.Fatalf("tabs = %+v, want the opened terminal", tabs)
 	}
+	if got := w.Surfaces(w.shown().slug()).Selected; got != id {
+		t.Fatalf("selected = %q, want the agent terminal %q", got, id)
+	}
 	select {
 	case spec := <-r.opened:
 		t.Fatalf("an agent tab opened a renderer window: %+v", spec)
@@ -43,35 +47,40 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	}
 }
 
-// A document the agent opened used to render behind whatever tab was up, which
-// for most of a session is the shell. Terminals stay put: the tab strip focuses
-// the terminal it selects, and the keyboard belongs to the conversation.
-func TestADocumentAsksToBeSelectedAndATerminalDoesNot(t *testing.T) {
-	w, r := testWindows(t)
-
-	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
-	}); err != nil {
-		t.Fatal(err)
-	}
-	r.mu.Lock()
-	_, selected := r.events[selectEvent]
-	r.mu.Unlock()
-	if selected {
-		t.Fatal("an agent terminal pulled the right pane over to itself")
-	}
-
-	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md",
-		Content: "# P006\n", Format: workbench.FormatMarkdown,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if got := r.events[selectEvent]; got != (selection{Session: w.shown().slug(), ID: id}) {
-		t.Fatalf("selected %v, want the document %q", got, id)
+func TestEveryAgentWindowIsSelectedAndStructuralWindowsAreNot(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		opts workbench.WindowOptions
+	}{
+		{name: "terminal", opts: workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+		}},
+		{name: "document", opts: workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md",
+			Content: "# P006\n", Format: workbench.FormatMarkdown,
+		}},
+		{name: "attention", opts: workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "🔔", Content: "build finished", Attention: true,
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, _ := testWindows(t)
+			if _, err := w.openStructural(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindTerminal, Label: "$ shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if got := w.Surfaces(w.shown().slug()).Selected; got != "" {
+				t.Fatalf("structural shell selected %q", got)
+			}
+			id, err := w.openWindow(w.shown(), tc.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := w.Surfaces(w.shown().slug()).Selected; got != id {
+				t.Fatalf("selected = %q, want agent window %q", got, id)
+			}
+		})
 	}
 }
 
@@ -415,6 +424,49 @@ func TestCloseWindowRejectsAnUnknownID(t *testing.T) {
 	}
 }
 
+func TestClosingTheSelectedWindowFallsBackToTheOldestRemainingTab(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	var ids []string
+	for range 3 {
+		id, err := w.openStructural(owner, workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "document",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, id)
+	}
+	if err := w.Select(owner.slug(), ids[2]); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- w.Close(ids[2]) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("closing the selected tab deadlocked")
+	}
+	if got := w.Surfaces(owner.slug()).Selected; got != ids[0] {
+		t.Fatalf("selected = %q, want oldest remaining %q", got, ids[0])
+	}
+	if err := w.Close(ids[0]); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Surfaces(owner.slug()).Selected; got != ids[1] {
+		t.Fatalf("selected = %q, want last remaining %q", got, ids[1])
+	}
+	if err := w.Close(ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Surfaces(owner.slug()).Selected; got != "" {
+		t.Fatalf("empty tab strip selected %q", got)
+	}
+}
+
 // Closing the conversation ends the session, so nothing an agent opened may
 // outlive it.
 func TestStopAllTearsDownEveryWindow(t *testing.T) {
@@ -471,7 +523,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 		owner *sessionState
 		label string
 	}{{alpha, "▶ alpha dev"}, {beta, "▶ beta dev"}} {
-		if _, err := w.openStructural(tc.owner, workbench.WindowOptions{
+		if _, err := w.openWindow(tc.owner, workbench.WindowOptions{
 			Kind: workbench.KindTerminal, Label: tc.label, Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 		}); err != nil {
 			t.Fatal(err)
@@ -489,6 +541,16 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 		if len(drawn.Tabs) != 1 || drawn.Tabs[0].Label != tc.label {
 			t.Fatalf("%q sees %+v, want only its own %q", tc.slug, drawn.Tabs, tc.label)
 		}
+		if drawn.Selected != drawn.Tabs[0].ID {
+			t.Fatalf("%q restored selected %q, want %q", tc.slug, drawn.Selected, drawn.Tabs[0].ID)
+		}
+	}
+	alphaID := w.Surfaces("alpha").Tabs[0].ID
+	if err := w.Select("beta", alphaID); err == nil {
+		t.Fatal("beta selected alpha's tab")
+	}
+	if err := w.Select("missing", alphaID); err == nil {
+		t.Fatal("an unknown session selected a tab")
 	}
 }
 
@@ -514,7 +576,7 @@ func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
 	if opened.Session != owner.slug() {
 		t.Fatalf("the open payload names session %q, want %q", opened.Session, owner.slug())
 	}
-	if got := r.events[selectEvent]; got != (selection{Session: owner.slug(), ID: id}) {
-		t.Fatalf("the select payload is %#v, want the session and %q", got, id)
+	if opened.Selected != id {
+		t.Fatalf("the complete payload selects %q, want %q", opened.Selected, id)
 	}
 }
