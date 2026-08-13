@@ -97,7 +97,7 @@
   onMount(() => whenSelected(() => fields.slug, select));
 
   // A rail row's number is its position, so it moves when showing a session
-  // re-sorts the list. Nothing here reaches a floating window's own page.
+  // re-sorts the list.
   onMount(() => {
     const onKey = (event) => {
       const row = rowAt(fields.sessions, event);
@@ -398,9 +398,7 @@
   {/if}
 
   <WindowTray
-    windows={open.floating}
-    onClose={(window) => closeWindow(window.id)}
-    right="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===
+    summary="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===
     1
       ? ''
       : 's'}" />

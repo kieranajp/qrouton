@@ -73,42 +73,31 @@ func TestAStaleFrontendIsRejectedBeforeTheWindowOpens(t *testing.T) {
 	}
 }
 
-// An agent window's page hears one stream, so its event names have to carry the
-// window id the Go side appends.
-func TestTheAgentTerminalPageSubscribesToItsOwnWindowsEvents(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "window-terminal.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{`"` + windowDataEvent + `" + id`, `"` + windowExitEvent + `" + id`} {
-		if !strings.Contains(string(source), want) {
-			t.Fatalf("the terminal page does not subscribe to %s", want)
-		}
-	}
-}
-
-// Every window URL is served as-is. A path the handler redirects instead of
-// serving comes up as a blank window with nothing reported anywhere, so each
-// page's own URL is checked against the handler that will serve it.
-func TestEveryWindowURLIsServedWithoutARedirect(t *testing.T) {
+func TestTheConversationURLIsServedWithoutARedirect(t *testing.T) {
 	assets, err := frontend()
 	if err != nil {
 		t.Fatal(err)
 	}
 	handler := assetHandler(assets)
-	for _, url := range []string{
-		frontendRoot,
-		terminalPage + windowIDQuery + "window-1",
-		documentPage + windowIDQuery + "window-2",
-	} {
-		request := httptest.NewRequest(http.MethodGet, url, nil)
-		recorder := httptest.NewRecorder()
-		handler.ServeHTTP(recorder, request)
-		if recorder.Code != http.StatusOK {
-			t.Fatalf("%s answered %d (%q), not the page", url, recorder.Code, recorder.Header().Get("Location"))
-		}
-		if !strings.Contains(recorder.Body.String(), `<script type="module"`) {
-			t.Fatalf("%s served something that is not a built workbench page", url)
+	request := httptest.NewRequest(http.MethodGet, frontendRoot, nil)
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("%s answered %d (%q), not the page", frontendRoot, recorder.Code, recorder.Header().Get("Location"))
+	}
+	if !strings.Contains(recorder.Body.String(), `<script type="module"`) {
+		t.Fatalf("%s served something that is not the built workbench page", frontendRoot)
+	}
+}
+
+func TestBuiltAssetsContainNoStandaloneAgentPages(t *testing.T) {
+	assets, err := frontend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, page := range []string{"terminal/index.html", "document/index.html"} {
+		if _, err := fs.Stat(assets, page); !errors.Is(err, fs.ErrNotExist) {
+			t.Fatalf("retired standalone page %q remains in built assets (%v)", page, err)
 		}
 	}
 }
@@ -133,17 +122,15 @@ func TestTheHandlerServesThePaletteBesideTheEmbeddedTree(t *testing.T) {
 	}
 }
 
-func TestEveryPageLinksThePalette(t *testing.T) {
+func TestTheConversationPageLinksThePalette(t *testing.T) {
 	assets, err := frontend()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, url := range []string{frontendRoot, terminalPage, documentPage} {
-		recorder := httptest.NewRecorder()
-		assetHandler(assets).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, url, nil))
-		if !strings.Contains(recorder.Body.String(), theme.Path) {
-			t.Fatalf("%s does not link %s", url, theme.Path)
-		}
+	recorder := httptest.NewRecorder()
+	assetHandler(assets).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, frontendRoot, nil))
+	if !strings.Contains(recorder.Body.String(), theme.Path) {
+		t.Fatalf("%s does not link %s", frontendRoot, theme.Path)
 	}
 }
 

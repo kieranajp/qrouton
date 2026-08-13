@@ -24,9 +24,9 @@ qrouton turns a handful of GitHub repositories into one ready-to-use coding-agen
 - Adds repositories to a live session from the workbench, on the branch it is already on.
 - Discovers repositories across several GitHub organizations or user accounts.
 - Starts from cached GitHub data, then refreshes owners concurrently.
-- Opens a desktop window and runs Claude Code, Codex CLI, or OpenCode in it, with a shell window alongside.
+- Opens a desktop window and runs Claude Code, Codex CLI, or OpenCode in it, with a shell tab alongside.
 - Resumes the agent conversation when the workspace is resumed.
-- Gives agents session-aware instructions, skills, and MCP tools that open real OS windows — an editor, a live command, a diff — while the conversation keeps the keyboard.
+- Gives agents session-aware instructions, skills, and MCP tools that open tabs — an editor, a live command, a diff — while the conversation keeps the keyboard.
 - Starts sessions in **RPI** (orchestrated Research → Plan → Implement) or **Assistant** (open-ended) mode.
 
 ## Requirements 🧰
@@ -45,7 +45,7 @@ make build
 ./qrouton
 ```
 
-`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell window, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
+`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell tab, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
 
 qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work`. Set `orgs` by hand before assembling your first session: with none, the repository list is empty. Configuration is stored at:
 

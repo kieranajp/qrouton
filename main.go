@@ -80,7 +80,6 @@ func open(c *cli.Context) error {
 	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Runner: c.String(runnerFlag),
-		Dock:   cfg.Dock(),
 		Editor: editor,
 	}, os.Environ())
 }
@@ -129,7 +128,7 @@ func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) 
 	}
 	return detach(launch.WorkbenchSpec{
 		SessionRoot: dir, Socket: socket, Runner: r.ID, Resume: resume,
-		Dock: cfg.Dock(), Editor: editor,
+		Editor: editor,
 	}, os.Environ())
 }
 
@@ -176,7 +175,6 @@ func workbenchProcess(marshalled string) error {
 		Shell:       shellArgv(bin),
 		Reveal:      launch.RevealArgv,
 		Document:    documentWindow(spec.Editor),
-		Dock:        spec.Dock,
 		Config:      cfg,
 		Runners:     assemblyRunners(cfg),
 		Signal:      launch.SignalSupervisor,

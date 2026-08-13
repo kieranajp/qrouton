@@ -45,11 +45,10 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // WindowOptions describes a window the agent opens. Command belongs to a
 // terminal window and Content to a document one. CloseOnExit closes a terminal
 // window whose process exits zero; a non-zero exit keeps it open regardless.
-// TTL expires a document window. Attention marks a window that needs the
-// user's eye without taking focus. Source names the session file the window
-// shows, relative to the session root, so a second request for that file
-// selects this window instead of opening another. Span is the part of the file
-// the window scrolls to and marks.
+// Attention marks a window that needs the user's eye without taking focus.
+// Source names the session file the window shows, relative to the session root,
+// so a second request for that file selects this window instead of opening
+// another. Span is the part of the file the window scrolls to and marks.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
@@ -59,10 +58,8 @@ type WindowOptions struct {
 	Content     string         `json:"content,omitempty"`
 	Format      DocumentFormat `json:"format,omitempty"`
 	Span        LineSpan       `json:"span,omitzero"`
-	Focus       bool           `json:"focus,omitempty"`
 	Attention   bool           `json:"attention,omitempty"`
 	CloseOnExit bool           `json:"close_on_exit,omitempty"`
-	TTL         time.Duration  `json:"ttl,omitempty"`
 }
 
 // LineSpan is the part of a document the user should be looking at, in
@@ -85,8 +82,8 @@ func (s LineSpan) Bounds() (first, last int, ok bool) {
 	return s.Line, s.Through, true
 }
 
-// WindowHost opens and inspects the OS windows a session shows the user. The
-// conversation keeps keyboard focus unless WindowOptions.Focus asks otherwise.
+// WindowHost opens and inspects the tabs a session shows the user. Agent opens
+// leave keyboard focus with the conversation.
 type WindowHost interface {
 	Open(ctx context.Context, opts WindowOptions) (id string, err error)
 	Close(ctx context.Context, id string) error

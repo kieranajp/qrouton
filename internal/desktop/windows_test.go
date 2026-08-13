@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -13,27 +12,13 @@ import (
 // with and every open takes as owner.
 func testWindows(t *testing.T) (*Windows, *fakeRenderer) {
 	t.Helper()
-	return newTestWindows(t, false)
-}
-
-// testDockedWindows sends the agent's windows to the tab strip.
-func testDockedWindows(t *testing.T) (*Windows, *fakeRenderer) {
-	t.Helper()
-	return newTestWindows(t, true)
-}
-
-func newTestWindows(t *testing.T, dock bool) (*Windows, *fakeRenderer) {
-	t.Helper()
 	r := newFakeRenderer()
-	w := newWindows(r, r.Emit, dock, testRegistry(t, t.TempDir()))
+	w := newWindows(r.Emit, testRegistry(t, t.TempDir()))
 	t.Cleanup(w.stopAll)
 	return w, r
 }
 
-// A terminal window's page is what starts its command, so the id has to be in
-// the URL the renderer is given — the page has no other way to know which
-// window it is.
-func TestOpenTerminalWindowCarriesItsIDInThePageURL(t *testing.T) {
+func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing.T) {
 	w, r := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
@@ -44,29 +29,24 @@ func TestOpenTerminalWindowCarriesItsIDInThePageURL(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	spec := <-r.opened
-	if spec.Name != id {
-		t.Fatalf("window name = %q, want the id %q", spec.Name, id)
-	}
-	if spec.URL != terminalPage+windowIDQuery+id {
-		t.Fatalf("window URL = %q, want the terminal page carrying %q", spec.URL, id)
-	}
-	if spec.Title != "▶ dev" {
-		t.Fatalf("window title = %q", spec.Title)
-	}
-	if spec.Focus {
-		t.Fatal("an agent-opened window took focus from the conversation")
-	}
 	if !w.exists(id) || len(w.list()) != 1 {
 		t.Fatalf("registry = %v after one open", w.list())
+	}
+	if tabs := w.tabs(w.shown()); len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "▶ dev" {
+		t.Fatalf("tabs = %+v, want the opened terminal", tabs)
+	}
+	select {
+	case spec := <-r.opened:
+		t.Fatalf("an agent tab opened a renderer window: %+v", spec)
+	default:
 	}
 }
 
 // A document the agent opened used to render behind whatever tab was up, which
 // for most of a session is the shell. Terminals stay put: the tab strip focuses
 // the terminal it selects, and the keyboard belongs to the conversation.
-func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) {
-	w, r := testDockedWindows(t)
+func TestADocumentAsksToBeSelectedAndATerminalDoesNot(t *testing.T) {
+	w, r := testWindows(t)
 
 	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
@@ -77,7 +57,7 @@ func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) 
 	_, selected := r.events[selectEvent]
 	r.mu.Unlock()
 	if selected {
-		t.Fatal("a docked terminal pulled the right pane over to itself")
+		t.Fatal("an agent terminal pulled the right pane over to itself")
 	}
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
@@ -94,21 +74,6 @@ func TestADockedDocumentAsksToBeSelectedAndADockedTerminalDoesNot(t *testing.T) 
 	}
 }
 
-// escalate is the one caller that asks for focus: no agent is waiting for the
-// keyboard back once the picker is up.
-func TestOpenHonoursAFocusRequest(t *testing.T) {
-	w, r := testWindows(t)
-	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "escalate", Cwd: t.TempDir(),
-		Command: []string{"/bin/cat"}, Focus: true,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if spec := <-r.opened; !spec.Focus {
-		t.Fatal("a focused window was opened without focus")
-	}
-}
-
 func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 	w, _ := testWindows(t)
 	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "empty"}); err != ErrNoWindowCommand {
@@ -117,10 +82,9 @@ func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 }
 
 // A document has no command to run, so Start on one would index an empty argv
-// and take the whole workbench with it. Under dock the agent's documents become
-// tabs, which is exactly what the terminal page calls Start on.
+// and take the whole workbench with it. Document tabs never call Start.
 func TestStartRefusesADocumentWindow(t *testing.T) {
-	w, _ := testDockedWindows(t)
+	w, _ := testWindows(t)
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
@@ -137,15 +101,12 @@ func TestStartRefusesADocumentWindow(t *testing.T) {
 }
 
 func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ diff", Content: "diff --git a/x b/x",
 	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	if spec := <-r.opened; spec.URL != documentPage+windowIDQuery+id {
-		t.Fatalf("window URL = %q, want the document page", spec.URL)
 	}
 	page, err := w.Content(id)
 	if err != nil || page.Text != "diff --git a/x b/x" {
@@ -160,7 +121,7 @@ func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 // The page styles a diff by line prefix, so it has to be told it holds one —
 // a document that merely quotes a diff must not be painted as one.
 func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ diff",
 		Content: "@@ -1 +1 @@\n-old\n+new", Format: workbench.FormatDiff,
@@ -168,7 +129,6 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
 	page, err := w.Content(id)
 	if err != nil {
 		t.Fatal(err)
@@ -190,7 +150,6 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
 	if page, err := w.Content(plain); err != nil || page.Format != "" || page.Source != "" {
 		t.Fatalf("a plain document declared format %q from %q", page.Format, page.Source)
 	}
@@ -199,7 +158,7 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 // A pane draws the path its document came from, and only the registry knows the
 // window it is drawing.
 func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	const source = "thoughts/shared/plans/P007-2026-08-11-document-panes.md"
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "P007", Source: source, Content: "# Document panes",
@@ -207,7 +166,6 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
 	page, err := w.Content(id)
 	if err != nil {
 		t.Fatal(err)
@@ -221,7 +179,7 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 // span has to reach the page. A window nobody aimed reports no lines at all,
 // which is how the page knows to stay at the top.
 func TestContentCarriesTheMarkedLinesToThePage(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	for _, tc := range []struct {
 		name       string
 		span       workbench.LineSpan
@@ -238,7 +196,6 @@ func TestContentCarriesTheMarkedLinesToThePage(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			<-r.opened
 			page, err := w.Content(id)
 			if err != nil {
 				t.Fatal(err)
@@ -250,32 +207,12 @@ func TestContentCarriesTheMarkedLinesToThePage(t *testing.T) {
 	}
 }
 
-// The toast is the only self-expiring window; nothing else is on a timer.
-func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
-	w, r := testWindows(t)
-	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished", TTL: 20 * time.Millisecond,
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	<-r.opened
-	// Leaving the registry and leaving the screen are two steps, so waiting on
-	// the first and asserting the second is a race the loaded machine loses.
-	waitFor(t, "the toast to leave the screen", func() bool { return r.wasClosed(id) })
-	if w.exists(id) {
-		t.Fatal("the toast left the screen but stayed in the registry")
-	}
-}
-
-// A docked toast is a tab the user dismisses, not a clock the way a floating
-// one is.
-func TestADockedAttentionWindowReportsWaitingAndOutlivesItsTTL(t *testing.T) {
-	w, _ := testDockedWindows(t)
+func TestAnAttentionWindowReportsWaitingAndRemainsUntilClosed(t *testing.T) {
+	w, _ := testWindows(t)
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
-		Attention: true, TTL: 20 * time.Millisecond,
+		Attention: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -283,9 +220,14 @@ func TestADockedAttentionWindowReportsWaitingAndOutlivesItsTTL(t *testing.T) {
 	if got := w.tabs(w.shown())[0].Status; got != tabStatusWaiting {
 		t.Fatalf("an attention tab reports %q, want waiting", got)
 	}
-	time.Sleep(60 * time.Millisecond)
 	if !w.exists(id) {
-		t.Fatal("a docked attention window expired on its TTL")
+		t.Fatal("an attention tab closed without being dismissed")
+	}
+	if err := w.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	if w.exists(id) {
+		t.Fatal("the attention tab survived being closed")
 	}
 }
 
@@ -309,7 +251,6 @@ func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			<-r.opened
 			if err := w.Start(id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
@@ -333,7 +274,7 @@ func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
 // The agent reads text, not a terminal: escape sequences go, and a line
 // rewritten by a carriage return reads as what it ended up saying.
 func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "output", Cwd: t.TempDir(),
 		Command: []string{"/bin/sh", "-c", `printf 'a\033[31mred\033[0m\nprogress\rdone\n'`},
@@ -341,7 +282,6 @@ func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
 	if err := w.Start(id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
@@ -385,25 +325,6 @@ func TestRingKeepsTheTailWithinItsLimit(t *testing.T) {
 	}
 }
 
-// The registry is qrouton's own map and nothing in it learns that the user
-// closed a window; the close handler is what keeps it honest.
-func TestAWindowTheUserClosedLeavesTheRegistry(t *testing.T) {
-	w, r := testWindows(t)
-	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	(<-r.opened).OnClose()
-	if w.exists(id) {
-		t.Fatal("the closed window is still registered")
-	}
-	if _, err := w.readWindow(id, false); err == nil {
-		t.Fatal("reading a closed window should say it is gone")
-	}
-}
-
 func TestCloseWindowRejectsAnUnknownID(t *testing.T) {
 	w, _ := testWindows(t)
 	if err := w.Close("window-99"); err == nil {
@@ -414,14 +335,13 @@ func TestCloseWindowRejectsAnUnknownID(t *testing.T) {
 // Closing the conversation ends the session, so nothing an agent opened may
 // outlive it.
 func TestStopAllTearsDownEveryWindow(t *testing.T) {
-	w, r := testWindows(t)
+	w, _ := testWindows(t)
 	for range 3 {
 		if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
 			Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 		}); err != nil {
 			t.Fatal(err)
 		}
-		<-r.opened
 	}
 	w.stopAll()
 	if got := w.list(); len(got) != 0 {
@@ -429,70 +349,10 @@ func TestStopAllTearsDownEveryWindow(t *testing.T) {
 	}
 }
 
-func TestDockDecidesTheSurfaceAndNotTheRegistry(t *testing.T) {
-	for _, tc := range []struct {
-		name string
-		dock bool
-	}{
-		{"float", false},
-		{"dock", true},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			w, r := newTestWindows(t, tc.dock)
-
-			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-				Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(),
-				Command: []string{"/bin/sh", "-c", "echo docked"},
-			})
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !w.exists(id) || len(w.list()) != 1 {
-				t.Fatalf("registry = %v", w.list())
-			}
-			drawn := w.surfaces(w.shown())
-			if tc.dock {
-				if len(drawn.Tabs) != 1 || drawn.Tabs[0].ID != id || drawn.Tabs[0].Label != "▶ dev" {
-					t.Fatalf("tabs = %+v, want the window", drawn.Tabs)
-				}
-				if len(drawn.Floating) != 0 {
-					t.Fatalf("a docked window also reached the tray: %+v", drawn.Floating)
-				}
-				select {
-				case spec := <-r.opened:
-					t.Fatalf("a docked window opened an OS window: %+v", spec)
-				default:
-				}
-			} else {
-				if spec := <-r.opened; spec.Name != id {
-					t.Fatalf("window name = %q, want %q", spec.Name, id)
-				}
-				if len(drawn.Floating) != 1 || len(drawn.Tabs) != 0 {
-					t.Fatalf("surfaces = %+v, want the tray only", drawn)
-				}
-			}
-
-			if err := w.Start(id, 80, 24); err != nil {
-				t.Fatal(err)
-			}
-			waitFor(t, "the command's output", func() bool {
-				text, _ := w.readWindow(id, true)
-				return strings.Contains(text, "docked")
-			})
-			if err := w.Close(id); err != nil {
-				t.Fatal(err)
-			}
-			if w.exists(id) {
-				t.Fatal("close left the window in the registry")
-			}
-		})
-	}
-}
-
 // A tab reports the state of its process, which is what AGENTS.md requires
 // before a tab may stand in for a window.
-func TestADockedTabReportsItsProcessWithoutBeingFocused(t *testing.T) {
-	w, _ := testDockedWindows(t)
+func TestATabReportsItsProcessWithoutBeingFocused(t *testing.T) {
+	w, _ := testWindows(t)
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "go test", Cwd: t.TempDir(),
@@ -513,23 +373,6 @@ func TestADockedTabReportsItsProcessWithoutBeingFocused(t *testing.T) {
 	})
 }
 
-func TestAFocusedWindowFloatsEvenWhenDocking(t *testing.T) {
-	w, r := testDockedWindows(t)
-
-	if _, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "escalate", Cwd: t.TempDir(),
-		Command: []string{"/bin/cat"}, Focus: true,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if spec := <-r.opened; !spec.Focus {
-		t.Fatal("the picker opened without focus")
-	}
-	if drawn := w.surfaces(w.shown()); len(drawn.Tabs) != 0 || len(drawn.Floating) != 1 {
-		t.Fatalf("surfaces = %+v, want the picker on screen", drawn)
-	}
-}
-
 // A page asks for its own session's windows by slug, and drawing another
 // session's tabs is drawing work the user cannot reach from that window.
 func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
@@ -538,7 +381,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
 	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
 	reg.reveal(alpha)
-	w := newWindows(r, r.Emit, true, reg)
+	w := newWindows(r.Emit, reg)
 	t.Cleanup(w.stopAll)
 
 	for _, tc := range []struct {
@@ -569,7 +412,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 // Both payloads reach every session's page, so each has to say which session it
 // is about before the page can decide whether it is being spoken to.
 func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
-	w, r := testDockedWindows(t)
+	w, r := testWindows(t)
 	owner := w.shown()
 
 	id, err := w.openWindow(owner, workbench.WindowOptions{

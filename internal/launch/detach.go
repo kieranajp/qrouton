@@ -35,7 +35,6 @@ type WorkbenchSpec struct {
 	Socket      string `json:"socket"`
 	Runner      string `json:"runner,omitempty"`
 	Resume      bool   `json:"resume,omitempty"`
-	Dock        bool   `json:"dock,omitempty"`
 	// Empty when the editor could not be resolved, which costs the document chip
 	// and must not keep the window shut.
 	Editor EditorCommand `json:"editor"`

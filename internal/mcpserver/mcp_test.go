@@ -518,7 +518,7 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	}
 }
 
-func TestNotifyOpensAnExpiringToastAndRingsTheSessionSound(t *testing.T) {
+func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	var played string
 	original := playSound
@@ -533,8 +533,8 @@ func TestNotifyOpensAnExpiringToastAndRingsTheSessionSound(t *testing.T) {
 	if opts.Kind != workbench.KindDocument {
 		t.Fatalf("toast kind = %q, want %q", opts.Kind, workbench.KindDocument)
 	}
-	if opts.TTL != toastLifetime {
-		t.Fatalf("toast TTL = %s, want %s", opts.TTL, toastLifetime)
+	if !opts.Attention {
+		t.Fatal("notification tab does not request attention")
 	}
 	if !strings.Contains(opts.Content, "build finished") {
 		t.Fatalf("toast content = %q", opts.Content)

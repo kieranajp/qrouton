@@ -139,6 +139,19 @@ func TestWorkbenchSpecRoundTrips(t *testing.T) {
 	}
 }
 
+func TestLegacyPlacementIsIgnored(t *testing.T) {
+	parsed, err := ParseWorkbenchSpec(`{"session_root":"/sessions/api","socket":"/tmp/a.sock","dock":false}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed.SessionRoot != "/sessions/api" || parsed.Socket != "/tmp/a.sock" {
+		t.Fatalf("parsed legacy spec = %#v", parsed)
+	}
+	if marshalled := parsed.Marshal(); strings.Contains(marshalled, `"dock"`) {
+		t.Fatalf("new spec retained retired placement: %s", marshalled)
+	}
+}
+
 func TestParseWorkbenchSpecRejectsAnIncompleteOne(t *testing.T) {
 	// A workbench with no session is the ordinary case — that window's content is
 	// the assembly overlay — so the socket is the only thing it cannot open without.

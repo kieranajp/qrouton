@@ -1,5 +1,3 @@
-/* How a unified diff paints, shared by the document window and the docked pane.
-   Padding is not here: each surface sits in different chrome. */
 .diff-row {
   white-space: pre-wrap;
   word-break: break-word;

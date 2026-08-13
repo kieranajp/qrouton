@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -75,27 +76,34 @@ func TestLoadReadsLaunchOverridesVerbatim(t *testing.T) {
 	}
 }
 
-func TestWindowsPreferenceRoundTrips(t *testing.T) {
+func TestLegacyWindowsPreferenceIsIgnoredAndOmittedOnSave(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", dir)
 	t.Setenv("QROUTON_ROOT", filepath.Join(dir, "sessions"))
-
-	if err := Save(&Config{Root: filepath.Join(dir, "sessions"), Windows: WindowsDock}); err != nil {
+	configDir := filepath.Join(dir, appDirName)
+	if err := os.MkdirAll(configDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
+	legacy := `{"orgs":["acme"],"root":"unused","windows":"float","editor":["vi"]}`
+	if err := os.WriteFile(filepath.Join(configDir, configFileName), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.Windows != WindowsDock || !cfg.Dock() {
-		t.Fatalf("windows = %q, Dock() = %v", cfg.Windows, cfg.Dock())
+	if !reflect.DeepEqual(cfg.Orgs, []string{"acme"}) || !reflect.DeepEqual(cfg.Editor, []string{"vi"}) {
+		t.Fatalf("legacy config lost ordinary fields: %+v", cfg)
 	}
-	if (&Config{Windows: WindowsFloat}).Dock() {
-		t.Errorf("Windows=%q docked", WindowsFloat)
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
 	}
-	for _, value := range []string{"", "tiled"} {
-		if !(&Config{Windows: value}).Dock() {
-			t.Errorf("Windows=%q floated; anything but %q docks", value, WindowsFloat)
-		}
+	saved, err := os.ReadFile(filepath.Join(configDir, configFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(saved), `"windows"`) {
+		t.Fatalf("saved config retained the retired preference: %s", saved)
 	}
 }

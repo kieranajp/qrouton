@@ -1,7 +1,5 @@
 package mcpserver
 
-import "time"
-
 // Window labels and the messages qrouton returns to the agent after driving a
 // window. The messages double as instructions — they tell the agent what it can
 // do next with the window it just opened — so they are worded here rather than
@@ -54,7 +52,7 @@ const (
 
 // Messages returned to the agent.
 const (
-	openedFileFormat = "Opened %s at line %d in an editor window " +
+	openedFileFormat = "Opened %s at line %d in an editor tab " +
 		"(it stays open until the user quits the editor; the conversation keeps focus)."
 
 	renderedFileFormat = "Showing %s rendered in a pane the user can read and scroll " +
@@ -66,7 +64,7 @@ const (
 	singleLineFormat = "line %d"
 	lineRangeFormat  = "lines %d-%d"
 
-	runningFormat = "Running in window %q (cwd %s). The user can close the window, " +
+	runningFormat = "Running in tab %q (cwd %s). The user can close the tab, " +
 		"or call " + toolReadWindow + " with name %q to see its " +
 		"output and " + toolCloseWindow + " %q to close it."
 
@@ -97,10 +95,7 @@ const (
 	escalationTimeoutMessage = "The picker is still open; the user hasn't confirmed or cancelled yet."
 )
 
-const (
-	toastFormat   = "🔔  %s"
-	toastLifetime = 8 * time.Second
-)
+const toastFormat = "🔔  %s"
 
 // The shell show_diff captures. Both forms disable Git's pager; the all-repos
 // form walks the worktrees.

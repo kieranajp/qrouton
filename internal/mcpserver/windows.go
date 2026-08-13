@@ -230,7 +230,6 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 		Label:     notifyWindowLabel,
 		Content:   fmt.Sprintf(toastFormat, message),
 		Attention: true,
-		TTL:       toastLifetime,
 	}); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}

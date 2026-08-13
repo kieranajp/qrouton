@@ -47,8 +47,8 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec := <-r.opened; spec.Name != id {
-		t.Fatalf("the server opened %q for id %q", spec.Name, id)
+	if tabs := windows.tabs(windows.shown()); len(tabs) != 1 || tabs[0].ID != id {
+		t.Fatalf("socket-opened tabs = %+v, want terminal %q", tabs, id)
 	}
 
 	document, err := host.Open(ctx, workbench.WindowOptions{
@@ -57,7 +57,14 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
+	if tabs := windows.tabs(windows.shown()); len(tabs) != 2 || tabs[1].ID != document {
+		t.Fatalf("socket-opened tabs = %+v, want document %q second", tabs, document)
+	}
+	select {
+	case spec := <-r.opened:
+		t.Fatalf("socket-opened tab reached the renderer: %+v", spec)
+	default:
+	}
 
 	if live, err := host.Exists(ctx, id); err != nil || !live {
 		t.Fatalf("Exists = %v, %v for a window that is open", live, err)
@@ -86,8 +93,8 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if live, err := host.Exists(ctx, id); err != nil || live {
 		t.Fatalf("Exists = %v, %v after Close", live, err)
 	}
-	if !r.wasClosed(id) {
-		t.Fatal("the closed window never left the screen")
+	if tabs := windows.tabs(windows.shown()); len(tabs) != 1 || tabs[0].ID != document {
+		t.Fatalf("tabs after close = %+v, want only document %q", tabs, document)
 	}
 }
 

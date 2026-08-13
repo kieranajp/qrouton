@@ -28,8 +28,6 @@ import (
 type fakeRenderer struct {
 	mu     sync.Mutex
 	opened chan windowSpec
-	closed []string
-	specs  map[string]windowSpec
 	titles map[string]string
 	events map[string]any
 	quit   bool
@@ -40,7 +38,6 @@ type fakeRenderer struct {
 func newFakeRenderer() *fakeRenderer {
 	return &fakeRenderer{
 		opened: make(chan windowSpec, 8),
-		specs:  map[string]windowSpec{},
 		titles: map[string]string{},
 		events: map[string]any{},
 		block:  make(chan struct{}),
@@ -54,24 +51,8 @@ func (f *fakeRenderer) Retitle(name, title string) {
 }
 
 func (f *fakeRenderer) Open(spec windowSpec) error {
-	f.mu.Lock()
-	f.specs[spec.Name] = spec
-	f.mu.Unlock()
 	f.opened <- spec
 	return nil
-}
-
-// Close mirrors the toolkit: taking a window off the screen still fires its
-// close handler, which is what makes the registry's teardown idempotent.
-func (f *fakeRenderer) Close(name string) {
-	f.mu.Lock()
-	f.closed = append(f.closed, name)
-	spec, ok := f.specs[name]
-	delete(f.specs, name)
-	f.mu.Unlock()
-	if ok && spec.OnClose != nil {
-		spec.OnClose()
-	}
 }
 
 func (f *fakeRenderer) Emit(event string, payload any) {
@@ -94,17 +75,6 @@ func (f *fakeRenderer) Quit() {
 		f.mu.Unlock()
 		close(f.block)
 	})
-}
-
-func (f *fakeRenderer) wasClosed(name string) bool {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, closed := range f.closed {
-		if closed == name {
-			return true
-		}
-	}
-	return false
 }
 
 // stubBoot stands in for what a session needs to come up, counting the
@@ -194,7 +164,7 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 func testWorkbench(t *testing.T, r *fakeRenderer, emit emitter) (*Sessions, *Term, *Windows) {
 	t.Helper()
 	reg := newSessions()
-	windows := newWindows(r, r.Emit, false, reg)
+	windows := newWindows(r.Emit, reg)
 	t.Cleanup(reg.stopAll)
 	t.Cleanup(windows.stopAll)
 	return reg, newTerm(reg, emit), windows
@@ -225,7 +195,7 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 	t.Helper()
 	r := newFakeRenderer()
 	reg := newSessions()
-	windows := newWindows(r, r.Emit, false, reg)
+	windows := newWindows(r.Emit, reg)
 	t.Cleanup(reg.stopAll)
 	t.Cleanup(windows.stopAll)
 	reg.boot = booting{
@@ -620,7 +590,7 @@ func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
 }
 
 func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
-	w, _ := testDockedWindows(t)
+	w, _ := testWindows(t)
 	const doc = "thoughts/shared/plans/P006.md"
 	old, err := w.openStructural(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ old", Source: doc, Content: "old",
@@ -647,7 +617,7 @@ func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
 }
 
 func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
-	w, r := testDockedWindows(t)
+	w, r := testWindows(t)
 	const doc = "thoughts/shared/plans/P006.md"
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ P006", Source: doc, Content: "plan",
@@ -1125,7 +1095,7 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 func TestAnOpOnOneSessionsListenerTouchesOnlyThatSessionsWindows(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg, windows, r := testSessions(t, root, boot)
+	reg, windows, _ := testSessions(t, root, boot)
 	for _, slug := range []string{"alpha", "beta"} {
 		sessionDir(t, root, slug)
 		if err := reg.Show(slug); err != nil {
@@ -1144,12 +1114,10 @@ func TestAnOpOnOneSessionsListenerTouchesOnlyThatSessionsWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
-
-	if drawn := windows.Surfaces("alpha"); len(drawn.Floating) != 1 || drawn.Floating[0].ID != id {
+	if drawn := windows.Surfaces("alpha"); len(drawn.Tabs) != 1 || drawn.Tabs[0].ID != id {
 		t.Fatalf("alpha sees %+v, want the window opened on its own socket", drawn)
 	}
-	if drawn := windows.Surfaces("beta"); len(drawn.Floating) != 0 || len(drawn.Tabs) != 0 {
+	if drawn := windows.Surfaces("beta"); len(drawn.Tabs) != 0 {
 		t.Fatalf("beta sees %+v, want none of alpha's windows", drawn)
 	}
 }
@@ -1265,7 +1233,7 @@ func TestBootingASessionRacesTeardownSafely(t *testing.T) {
 
 	for range 40 {
 		reg := newSessions()
-		windows := newWindows(r, r.Emit, false, reg)
+		windows := newWindows(r.Emit, reg)
 		release := make(chan struct{})
 		serving := make(chan struct{})
 		var reserved string
@@ -1466,8 +1434,6 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
-
 	var held []string
 	reg.boot.cleanup = func(sessionRoot string) error {
 		state.mu.Lock()
@@ -1478,7 +1444,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 			held = append(held, "its listener")
 		}
 		state.mu.Unlock()
-		if drawn := windows.Surfaces("octopus"); len(drawn.Floating)+len(drawn.Tabs) > 0 {
+		if drawn := windows.Surfaces("octopus"); len(drawn.Tabs) > 0 {
 			held = append(held, "its windows")
 		}
 		return os.RemoveAll(sessionRoot)

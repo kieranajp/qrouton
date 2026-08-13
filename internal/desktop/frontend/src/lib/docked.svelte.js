@@ -2,13 +2,9 @@ import { Call, Events } from "./wails.js";
 
 const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-const NONE = { tabs: [], floating: [] };
+const NONE = { tabs: [] };
 
-/**
- * surfaces is where each window one session has open is drawn. Another
- * session's windows are ignored: the event reaches every page in the process.
- * @param {() => string} slug
- */
+/** @param {() => string} slug */
 export function surfaces(slug) {
   let open = $state(NONE);
   let live = false;
@@ -34,9 +30,6 @@ export function surfaces(slug) {
   return {
     get tabs() {
       return open.tabs;
-    },
-    get floating() {
-      return open.floating;
     },
   };
 }

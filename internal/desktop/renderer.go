@@ -4,8 +4,6 @@ package desktop
 // draws it; only the implementation links WebKit.
 type renderer interface {
 	Open(spec windowSpec) error
-	// Close takes a window off the screen; its OnClose still fires.
-	Close(name string)
 	// Retitle renames an open window, which is how the conversation learns the
 	// name of a session onboarding chose after it opened.
 	Retitle(name, title string)
@@ -16,9 +14,7 @@ type renderer interface {
 	Quit()
 }
 
-// windowSpec describes a window to the renderer. URL names a directory: a page
-// path 301-redirects to it, the webview does not follow that, and the window
-// comes up blank with nothing reported anywhere.
+// windowSpec describes the main conversation window to the renderer.
 type windowSpec struct {
 	Name    string
 	Title   string

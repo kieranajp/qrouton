@@ -18,14 +18,7 @@ type Config struct {
 	Launch map[string][]string `json:"launch,omitempty"`
 
 	Editor []string `json:"editor,omitempty"`
-
-	// "dock" (the default) for a tab in the session's right pane, "float" for an
-	// OS window.
-	Windows string `json:"windows,omitempty"`
 }
-
-// Only the floating value floats, so a misspelling still gives the default.
-func (c *Config) Dock() bool { return c.Windows != WindowsFloat }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.
 func xdgDir(envVar, fallback string) string {

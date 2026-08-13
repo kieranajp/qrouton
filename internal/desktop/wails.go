@@ -54,14 +54,6 @@ func (r *wailsRenderer) Open(spec windowSpec) error {
 	return nil
 }
 
-func (r *wailsRenderer) Close(name string) {
-	r.onMain(func() {
-		if window, ok := r.app.Window.Get(name); ok {
-			window.Close()
-		}
-	})
-}
-
 func (r *wailsRenderer) Retitle(name, title string) {
 	r.onMain(func() {
 		if window, ok := r.app.Window.Get(name); ok {

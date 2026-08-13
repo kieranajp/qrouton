@@ -1,6 +1,5 @@
-// Package desktop is qrouton's workbench: the Wails application, the PTY the
-// conversation runs in, the OS windows the session shows the user, and the
-// control socket the agent's tools reach them through.
+// Package desktop is qrouton's workbench: one Wails conversation window, its
+// tab registry and PTYs, and the control socket the agent's tools reach through.
 package desktop
 
 import (
@@ -50,8 +49,6 @@ type Options struct {
 	// Reveal builds the command that shows a session's directory in the file
 	// manager, and is a function for the same reason Shell is.
 	Reveal func(sessionRoot string) []string
-	// Dock sends the agent's windows to the tab strip rather than the screen.
-	Dock bool
 	// Config is the sessions root and the configured owners the overlay assembles
 	// against.
 	Config *config.Config
@@ -84,7 +81,7 @@ func Run(opts Options) error {
 	r := newWailsRenderer(assets)
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)
-	windows := newWindows(r, r.Emit, opts.Dock, reg)
+	windows := newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Signal)
 	r.register(application.NewService(term))
@@ -270,8 +267,7 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 	})
 }
 
-// openDocument puts a document in the right pane. The user asked for it, so it
-// is a tab under either windows preference, and unrecorded like the shell.
+// openDocument puts a document in the right pane, unrecorded like the shell.
 func openDocument(windows *Windows, owner *sessionState, window func(string, string) (workbench.WindowOptions, error), name string) (string, error) {
 	if owner == nil || window == nil {
 		return "", ErrNoEditorCommand

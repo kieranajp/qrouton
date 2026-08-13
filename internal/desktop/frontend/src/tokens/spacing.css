@@ -19,7 +19,7 @@
   --h-pane-header: 46px;
   --h-footer: 36px;
   --h-form-footer: 52px;
-  --h-tray: 40px;
+  --h-status-footer: 40px;
 
   /* fixed widths; the human pane's is where its divider starts, not where it stays */
   --w-rail: 176px;

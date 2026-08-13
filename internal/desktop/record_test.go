@@ -44,7 +44,11 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
+	select {
+	case spec := <-r.opened:
+		t.Fatalf("agent terminal opened a second renderer window: %+v", spec)
+	default:
+	}
 
 	waitFor(t, "the window to be recorded", func() bool { return len(recordedWindows(t, opts.SessionRoot)) == 1 })
 	record := recordedWindows(t, opts.SessionRoot)[0]
@@ -65,7 +69,11 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
+	select {
+	case spec := <-r.opened:
+		t.Fatalf("agent document opened a second renderer window: %+v", spec)
+	default:
+	}
 	waitFor(t, "the document to be recorded", func() bool { return len(recordedWindows(t, opts.SessionRoot)) == 1 })
 
 	conversation.OnClose()
@@ -84,7 +92,7 @@ func TestRecordingWaitsForASession(t *testing.T) {
 	reg := newSessions()
 	owner := reg.add("", []string{"/bin/cat"}, nil)
 	reg.reveal(owner)
-	windows := newWindows(r, r.Emit, false, reg)
+	windows := newWindows(r.Emit, reg)
 	record := &windowRecorder{windows: windows}
 	windows.observe(record.save)
 
@@ -93,7 +101,6 @@ func TestRecordingWaitsForASession(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	<-r.opened
 	t.Cleanup(windows.stopAll)
 
 	dir := t.TempDir()
