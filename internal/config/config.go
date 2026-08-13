@@ -92,6 +92,10 @@ func splitOrgs(s string) []string {
 	return out
 }
 
+// ExpandHome resolves a leading ~ against the user's home directory, the same
+// expansion Load applies to a configured root.
+func ExpandHome(p string) string { return expandHome(p) }
+
 func expandHome(p string) string {
 	if strings.HasPrefix(p, homeSlash) || p == homePrefix {
 		home, _ := os.UserHomeDir()

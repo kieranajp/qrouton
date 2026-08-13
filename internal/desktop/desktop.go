@@ -58,6 +58,11 @@ type Options struct {
 	// Signal relaunches a session's runner after an escalation, which is
 	// launch.SignalSupervisor reached without importing it.
 	Signal func(sessionRoot string)
+	// ValidateEditor and ValidateLaunch reach launch.ResolveEditor and
+	// launch.Runners without desktop importing launch, the same shape Agent,
+	// Shell, Signal and Runners already use.
+	ValidateEditor func(argv []string) error
+	ValidateLaunch func(overrides map[string][]string) error
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -84,6 +89,17 @@ func Run(opts Options) error {
 	windows := newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Signal)
+	// This is the exact teardown closing the conversation window runs — every
+	// open session's supervisor and PTY end cleanly before the process does.
+	// Settings.Quit gets the same closure rather than a bare r.Quit, so quitting
+	// from the panel is no worse than quitting from the window's own close
+	// button.
+	quit := sync.OnceFunc(func() {
+		windows.observe(nil)
+		windows.stopAll()
+		reg.stopAll()
+		r.Quit()
+	})
 	r.register(application.NewService(term))
 	r.register(application.NewService(windows))
 	r.register(application.NewService(reg))
@@ -91,12 +107,14 @@ func Run(opts Options) error {
 	r.register(application.NewService(&Orgs{cfg: opts.Config}))
 	r.register(application.NewService(newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)))
 	r.register(application.NewService(picker))
-	return run(r, term, windows, opts)
+	r.register(application.NewService(newSettings(opts.Config, opts.ValidateEditor, opts.ValidateLaunch, quit)))
+	return run(r, term, windows, opts, quit)
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
-// control socket are exercised against a double instead of a display.
-func run(r renderer, term *Term, windows *Windows, opts Options) error {
+// control socket are exercised against a double instead of a display. quit is
+// the same teardown Run wires into Settings.Quit.
+func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -173,12 +191,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options) error {
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
-	quit := sync.OnceFunc(func() {
-		windows.observe(nil)
-		windows.stopAll()
-		reg.stopAll()
-		r.Quit()
-	})
 	term.whenChildExits(func(state *sessionState, code int) {
 		if code == 0 {
 			reg.retire(state)

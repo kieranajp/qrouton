@@ -176,11 +176,21 @@ func testWorkbench(t *testing.T, r *fakeRenderer, emit emitter) (*Sessions, *Ter
 // test's cleanup is already removing. The channel carries run's result.
 func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows, opts Options) <-chan error {
 	t.Helper()
+	reg := term.sessions
+	// The same teardown Run builds for Settings.Quit and the window's own
+	// OnClose, so a test closing the conversation window exercises the real
+	// shutdown rather than a bare Quit.
+	quit := sync.OnceFunc(func() {
+		windows.observe(nil)
+		windows.stopAll()
+		reg.stopAll()
+		r.Quit()
+	})
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- run(r, term, windows, opts)
+		done <- run(r, term, windows, opts, quit)
 	}()
 	t.Cleanup(func() {
 		r.Quit()

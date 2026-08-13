@@ -107,3 +107,18 @@ func TestLegacyWindowsPreferenceIsIgnoredAndOmittedOnSave(t *testing.T) {
 		t.Fatalf("saved config retained the retired preference: %s", saved)
 	}
 }
+
+func TestExpandHomeResolvesTildeAndLeavesAnAbsolutePathAlone(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	if got, want := ExpandHome("~"), home; got != want {
+		t.Fatalf("ExpandHome(%q) = %q, want %q", "~", got, want)
+	}
+	if got, want := ExpandHome("~/work"), filepath.Join(home, "work"); got != want {
+		t.Fatalf("ExpandHome(%q) = %q, want %q", "~/work", got, want)
+	}
+	if got, want := ExpandHome("/srv/sessions"), "/srv/sessions"; got != want {
+		t.Fatalf("ExpandHome(%q) = %q, want %q", "/srv/sessions", got, want)
+	}
+}

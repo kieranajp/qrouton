@@ -178,6 +178,17 @@ func workbenchProcess(marshalled string) error {
 		Config:      cfg,
 		Runners:     assemblyRunners(cfg),
 		Signal:      launch.SignalSupervisor,
+		ValidateEditor: func(argv []string) error {
+			if len(argv) == 0 {
+				return nil
+			}
+			_, err := launch.ResolveEditor(argv)
+			return err
+		},
+		ValidateLaunch: func(overrides map[string][]string) error {
+			_, err := launch.Runners(&config.Config{Launch: overrides})
+			return err
+		},
 	})
 }
 
