@@ -9,7 +9,7 @@
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{doc: {text: string, format: string, source: string, line?: number, to?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {text: string, format: string, source: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, active = false, scrollRoot } = $props();
 
   let rendered = $derived(render(doc.text));
@@ -62,7 +62,10 @@
           selected: params.active,
           nextSequence: () => nextViewportSequence(windowID),
           report: (report) =>
-            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, report).catch(() => {}),
+            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
+              epoch: doc.viewportEpoch,
+              ...report,
+            }).catch(() => {}),
         });
         return;
       }

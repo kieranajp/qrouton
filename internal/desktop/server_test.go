@@ -85,8 +85,12 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil || viewport == nil || viewport.Available || viewport.Intervals == nil {
 		t.Fatalf("initial Markdown Viewport = %+v, %v", viewport, err)
 	}
+	page, err := windows.Content(document)
+	if err != nil || page.ViewportEpoch == 0 {
+		t.Fatalf("Content viewport epoch = %d, %v", page.ViewportEpoch, err)
+	}
 	if err := windows.ReportViewport(document, ViewportReport{
-		Seq: 1, Available: true, Selected: true,
+		Epoch: page.ViewportEpoch, Seq: 1, Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 4, To: 6}, {Line: 12, To: 12}},
 	}); err != nil {
 		t.Fatal(err)

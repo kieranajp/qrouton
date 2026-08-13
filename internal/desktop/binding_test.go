@@ -63,6 +63,16 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 	}
 }
 
+func TestViewportReportsCarryTheContentEpoch(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/panes/MarkdownPane.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "epoch: doc.viewportEpoch") {
+		t.Fatal("Markdown viewport reports do not carry the content epoch")
+	}
+}
+
 func TestAStaleFrontendIsRejectedBeforeTheWindowOpens(t *testing.T) {
 	err := validateFrontend(fstest.MapFS{"index.html": {Data: []byte("old workbench")}})
 	if !errors.Is(err, ErrStaleFrontend) {

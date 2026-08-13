@@ -226,12 +226,17 @@ func TestMarkdownViewportStartsUnavailableAndAcceptsOnlyNewValidReports(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
+	page, err := w.Content(id)
+	if err != nil || page.ViewportEpoch == 0 {
+		t.Fatalf("Content viewport epoch = %d, %v", page.ViewportEpoch, err)
+	}
+	epoch := page.ViewportEpoch
 	view, err := w.viewport(w.shown(), id)
 	if err != nil || view == nil || view.Available || view.Selected || view.Intervals == nil {
 		t.Fatalf("initial viewport = %+v, %v", view, err)
 	}
 	if err := w.ReportViewport(id, ViewportReport{
-		Seq: 2, Available: true, Selected: true,
+		Epoch: epoch, Seq: 2, Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 9, To: 10}, {Line: 3, To: 5}, {Line: 6, To: 8}},
 	}); err != nil {
 		t.Fatal(err)
@@ -241,14 +246,14 @@ func TestMarkdownViewportStartsUnavailableAndAcceptsOnlyNewValidReports(t *testi
 		view.Intervals[0] != (workbench.LineInterval{Line: 3, To: 10}) {
 		t.Fatalf("measured viewport = %+v, %v", view, err)
 	}
-	if err := w.ReportViewport(id, ViewportReport{Seq: 1}); err != nil {
+	if err := w.ReportViewport(id, ViewportReport{Epoch: epoch, Seq: 1}); err != nil {
 		t.Fatal(err)
 	}
 	if stale, _ := w.viewport(w.shown(), id); !stale.Available || len(stale.Intervals) != 1 {
 		t.Fatalf("stale report replaced viewport: %+v", stale)
 	}
 	if err := w.ReportViewport(id, ViewportReport{
-		Seq: 3, Available: true, Selected: true,
+		Epoch: epoch, Seq: 3, Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 8, To: 7}},
 	}); !errors.Is(err, ErrInvalidViewport) {
 		t.Fatalf("invalid report error = %v", err)
@@ -256,12 +261,39 @@ func TestMarkdownViewportStartsUnavailableAndAcceptsOnlyNewValidReports(t *testi
 	if after, _ := w.viewport(w.shown(), id); !after.Available || len(after.Intervals) != 1 {
 		t.Fatalf("invalid report replaced viewport: %+v", after)
 	}
-	if err := w.ReportViewport(id, ViewportReport{Seq: 4, Selected: false, Available: true,
+	if err := w.ReportViewport(id, ViewportReport{Epoch: epoch, Seq: 4, Selected: false, Available: true,
 		Intervals: []workbench.LineInterval{{Line: 3, To: 5}}}); err != nil {
 		t.Fatal(err)
 	}
 	if inactive, _ := w.viewport(w.shown(), id); inactive.Available || inactive.Selected || len(inactive.Intervals) != 0 || inactive.Intervals == nil {
 		t.Fatalf("inactive viewport = %+v", inactive)
+	}
+
+	reloaded, err := w.Content(id)
+	if err != nil || reloaded.ViewportEpoch <= epoch {
+		t.Fatalf("reloaded viewport epoch = %d after %d, %v", reloaded.ViewportEpoch, epoch, err)
+	}
+	if reset, _ := w.viewport(w.shown(), id); reset.Available || reset.Selected || reset.Intervals == nil {
+		t.Fatalf("reload did not reset viewport: %+v", reset)
+	}
+	if err := w.ReportViewport(id, ViewportReport{
+		Epoch: epoch, Seq: 99, Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 30, To: 30}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if stale, _ := w.viewport(w.shown(), id); stale.Available || stale.Selected || len(stale.Intervals) != 0 {
+		t.Fatalf("pre-reload report replaced viewport: %+v", stale)
+	}
+	if err := w.ReportViewport(id, ViewportReport{
+		Epoch: reloaded.ViewportEpoch, Seq: 1, Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 12, To: 14}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if current, _ := w.viewport(w.shown(), id); !current.Available || !current.Selected ||
+		len(current.Intervals) != 1 || current.Intervals[0] != (workbench.LineInterval{Line: 12, To: 14}) {
+		t.Fatalf("post-reload report = %+v", current)
 	}
 }
 

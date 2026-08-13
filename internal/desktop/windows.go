@@ -31,13 +31,14 @@ type Windows struct {
 }
 
 type agentWindow struct {
-	opts        workbench.WindowOptions
-	session     *sessionState
-	seq         int
-	buffer      *ring
-	process     *ptyProcess
-	viewport    *workbench.DocumentViewport
-	viewportSeq uint64
+	opts          workbench.WindowOptions
+	session       *sessionState
+	seq           int
+	buffer        *ring
+	process       *ptyProcess
+	viewport      *workbench.DocumentViewport
+	viewportEpoch uint64
+	viewportSeq   uint64
 	// recorded excludes the windows the workbench opens for itself from the
 	// manifest's record, since a resume rebuilds those without being told to.
 	recorded bool
@@ -47,6 +48,7 @@ type agentWindow struct {
 
 // ViewportReport is one browser measurement of a rendered Markdown tab.
 type ViewportReport struct {
+	Epoch     uint64                   `json:"epoch"`
 	Seq       uint64                   `json:"seq"`
 	Available bool                     `json:"available"`
 	Selected  bool                     `json:"selected"`
@@ -241,26 +243,39 @@ func (w *Windows) Resize(id string, cols, rows int) error {
 // session file it came from, if it came from one, and the source lines the page
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
-	Text   string `json:"text"`
-	Format string `json:"format"`
-	Source string `json:"source"`
-	Line   int    `json:"line"`
-	To     int    `json:"to"`
+	Text          string `json:"text"`
+	Format        string `json:"format"`
+	Source        string `json:"source"`
+	Line          int    `json:"line"`
+	To            int    `json:"to"`
+	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
 }
 
 // Content is a document window's text, fetched by its page on load.
 func (w *Windows) Content(id string) (document, error) {
-	window, ok := w.window(id)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	window, ok := w.open[id]
 	if !ok {
 		return document{}, noSuchWindow(id)
 	}
+	var viewportEpoch uint64
+	if window.viewport != nil {
+		window.viewportEpoch++
+		window.viewportSeq = 0
+		window.viewport = &workbench.DocumentViewport{
+			Source: window.opts.Source, Intervals: []workbench.LineInterval{},
+		}
+		viewportEpoch = window.viewportEpoch
+	}
 	first, last, _ := window.opts.Span.Bounds()
 	return document{
-		Text:   window.opts.Content,
-		Format: string(window.opts.Format),
-		Source: window.opts.Source,
-		Line:   first,
-		To:     last,
+		Text:          window.opts.Content,
+		Format:        string(window.opts.Format),
+		Source:        window.opts.Source,
+		Line:          first,
+		To:            last,
+		ViewportEpoch: viewportEpoch,
 	}, nil
 }
 
@@ -274,6 +289,9 @@ func (w *Windows) ReportViewport(id string, report ViewportReport) error {
 	}
 	if window.viewport == nil {
 		return ErrNoViewport
+	}
+	if report.Epoch != window.viewportEpoch {
+		return nil
 	}
 	if report.Seq <= window.viewportSeq {
 		return nil

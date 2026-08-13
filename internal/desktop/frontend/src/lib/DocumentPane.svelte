@@ -8,7 +8,7 @@
   /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { id, active = false, scrollRoot } = $props();
 
-  /** @type {{text: string, format: string, source: string, line: number, to: number} | undefined} */
+  /** @type {{text: string, format: string, source: string, line: number, to: number, viewportEpoch?: number} | undefined} */
   let doc = $state();
 
   onMount(async () => {
