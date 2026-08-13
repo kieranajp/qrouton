@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -37,6 +38,7 @@ type fakeHost struct {
 	ids    []string
 	closes []string
 	reads  []readCall
+	views  []string
 	checks []string
 	lists  int
 
@@ -45,11 +47,13 @@ type fakeHost struct {
 	pickers   []workbench.PickerRequest
 	pickerErr error
 
-	text      string
-	readErr   error
-	existsErr error
-	listIDs   []string
-	listErr   error
+	text        string
+	readErr     error
+	viewports   []*workbench.DocumentViewport
+	viewportErr error
+	existsErr   error
+	listIDs     []string
+	listErr     error
 }
 
 func (h *fakeHost) Open(_ context.Context, opts workbench.WindowOptions) (string, error) {
@@ -78,6 +82,23 @@ func (h *fakeHost) Read(_ context.Context, id string, full bool) (string, error)
 	defer h.mu.Unlock()
 	h.reads = append(h.reads, readCall{id: id, full: full})
 	return h.text, h.readErr
+}
+
+func (h *fakeHost) Viewport(_ context.Context, id string) (*workbench.DocumentViewport, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.views = append(h.views, id)
+	if h.viewportErr != nil {
+		return nil, h.viewportErr
+	}
+	if len(h.viewports) == 0 {
+		return nil, nil
+	}
+	viewport := h.viewports[0]
+	if len(h.viewports) > 1 {
+		h.viewports = h.viewports[1:]
+	}
+	return viewport, nil
 }
 
 func (h *fakeHost) Exists(_ context.Context, id string) (bool, error) {
@@ -141,16 +162,23 @@ func shortEscalatePoll(t *testing.T, timeout time.Duration) {
 	t.Cleanup(func() { escalateTimeout, escalatePollInterval = originalTimeout, originalInterval })
 }
 
+func shortViewportPoll(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	originalTimeout, originalInterval := viewportWaitTimeout, viewportPollInterval
+	viewportWaitTimeout, viewportPollInterval = timeout, time.Millisecond
+	t.Cleanup(func() { viewportWaitTimeout, viewportPollInterval = originalTimeout, originalInterval })
+}
+
 func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	if _, err := m.openFile(ctx, openFileInput{Path: "main.go", Line: 7}); err != nil {
+	if _, _, err := m.openFile(ctx, openFileInput{Path: "main.go", Line: 7}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.openFile(ctx, openFileInput{Path: "main.go"}); err != nil {
+	if _, _, err := m.openFile(ctx, openFileInput{Path: "main.go"}); err != nil {
 		t.Fatal(err)
 	}
 	realDir, err := filepath.EvalSymlinks(dir)
@@ -191,9 +219,16 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	message, err := m.openFile(context.Background(), openFileInput{Path: "P007.md"})
+	host.viewports = []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
+	}}
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md"})
 	if err != nil {
 		t.Fatal(err)
+	}
+	if viewport == nil || !viewport.Available {
+		t.Fatalf("open viewport = %+v", viewport)
 	}
 	if len(host.opens) != 1 {
 		t.Fatalf("opened %d windows, want 1", len(host.opens))
@@ -211,8 +246,8 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 	if opts.Span != (workbench.LineSpan{}) {
 		t.Fatalf("a pane nobody aimed carries a span: %+v", opts.Span)
 	}
-	if strings.Contains(message, "line") {
-		t.Fatalf("the agent was told about a line it never asked for: %q", message)
+	if strings.Contains(message, "requested line") || strings.Contains(message, "scrolled") {
+		t.Fatalf("the agent was told it requested a line or caused a scroll: %q", message)
 	}
 }
 
@@ -224,8 +259,12 @@ func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
+	host.viewports = []*workbench.DocumentViewport{
+		{Source: "P007.md", Available: true, Selected: true, Intervals: []workbench.LineInterval{{Line: 7, To: 7}}},
+		{Source: "P007.md", Available: true, Selected: true, Intervals: []workbench.LineInterval{{Line: 7, To: 19}}},
+	}
 
-	message, err := m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7})
+	message, _, err := m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +275,7 @@ func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 		t.Fatalf("message = %q, want the marked line named", message)
 	}
 
-	message, err = m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Through: 19})
+	message, _, err = m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Through: 19})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -245,6 +284,81 @@ func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 	}
 	if !strings.Contains(message, "lines 7-19") {
 		t.Fatalf("message = %q, want the marked range named", message)
+	}
+}
+
+func TestOpenFileDoesNotClaimLiftedBlankOrPastEndLinesAreVisible(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nPhase 1.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range []int{1, 2, 99} {
+		host.viewports = []*workbench.DocumentViewport{{
+			Source: "P007.md", Available: true, Selected: true,
+			Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
+		}}
+		message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: line})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(message, "scrolled") || strings.Contains(message, "marked") ||
+			strings.Contains(message, "requested source range visible") {
+			t.Fatalf("line %d response invents visibility: %q", line, message)
+		}
+		if !strings.Contains(message, fmt.Sprintf("requested line %d", line)) || !strings.Contains(message, "could not be verified") {
+			t.Fatalf("line %d response is not explicit about the unverified target: %q", line, message)
+		}
+		if viewport == nil || len(viewport.Intervals) != 1 || viewport.Intervals[0].Line != 3 {
+			t.Fatalf("line %d viewport = %+v", line, viewport)
+		}
+	}
+}
+
+func TestOpenFileTimesOutSuccessfullyWithAnUnavailableViewport(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	shortViewportPoll(t, 8*time.Millisecond)
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nPhase 1.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host.viewports = []*workbench.DocumentViewport{{Source: "P007.md", Intervals: []workbench.LineInterval{}}}
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewport == nil || viewport.Available || viewport.Selected || viewport.Intervals == nil {
+		t.Fatalf("timeout viewport = %+v", viewport)
+	}
+	if strings.Contains(message, "scrolled") || strings.Contains(message, "visible in a measured block") {
+		t.Fatalf("timeout response claims visibility: %q", message)
+	}
+	if !strings.Contains(message, "could not be verified") || !strings.Contains(message, "not selected") {
+		t.Fatalf("timeout response does not describe the unavailable viewport: %q", message)
+	}
+}
+
+func TestOpenFilePollsPastUnavailableUntilTheRequestedBlockIsMeasured(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	shortViewportPoll(t, 50*time.Millisecond)
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nA paragraph\nstill the paragraph\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host.viewports = []*workbench.DocumentViewport{
+		{Source: "P007.md", Selected: true, Intervals: []workbench.LineInterval{}},
+		{Source: "P007.md", Available: true, Selected: true,
+			Intervals: []workbench.LineInterval{{Line: 3, To: 4}}},
+	}
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(host.views) < 2 {
+		t.Fatalf("viewport was queried %d times, want at least two", len(host.views))
+	}
+	if viewport == nil || !viewport.Available || len(viewport.Intervals) != 1 || viewport.Intervals[0].To != 4 {
+		t.Fatalf("eventual viewport = %+v", viewport)
+	}
+	if !strings.Contains(message, "scrolled") || !strings.Contains(message, "visible in a measured block") {
+		t.Fatalf("measured response does not verify the requested block: %q", message)
 	}
 }
 
@@ -318,18 +432,21 @@ func TestReadWindowReturnsTheHostsText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := m.read(ctx, readWindowInput{Name: "server", Full: true})
+	out, viewport, err := m.read(ctx, readWindowInput{Name: "server", Full: true})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if out != "listening on :3000" {
 		t.Fatalf("read output = %q", out)
 	}
+	if viewport != nil {
+		t.Fatalf("terminal read viewport = %+v", viewport)
+	}
 	want := readCall{id: host.ids[0], full: true}
 	if len(host.reads) != 1 || host.reads[0] != want {
 		t.Fatalf("reads = %v, want [%v]", host.reads, want)
 	}
-	if _, err := m.read(ctx, readWindowInput{Name: "missing"}); err == nil {
+	if _, _, err := m.read(ctx, readWindowInput{Name: "missing"}); err == nil {
 		t.Fatal("read of an unregistered window should error")
 	}
 }
@@ -342,7 +459,7 @@ func TestReadWindowKeepsTheTailOfALongWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := m.read(ctx, readWindowInput{Name: "server"})
+	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,12 +482,78 @@ func TestReadWindowReportsAWindowWithNoOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := m.read(ctx, readWindowInput{Name: "server"})
+	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if want := fmt.Sprintf(noOutputFormat, "server"); out != want {
 		t.Fatalf("read output = %q, want %q", out, want)
+	}
+}
+
+func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		viewport *workbench.DocumentViewport
+		want     string
+	}{
+		{"unavailable", &workbench.DocumentViewport{Source: "P007.md", Selected: true, Intervals: []workbench.LineInterval{}}, viewportUnavailableSelected},
+		{"measured empty", &workbench.DocumentViewport{Source: "P007.md", Available: true, Selected: true, Intervals: []workbench.LineInterval{}}, viewportMeasuredEmpty},
+		{"disjoint", &workbench.DocumentViewport{Source: "P007.md", Available: true, Selected: true,
+			Intervals: []workbench.LineInterval{{Line: 3, To: 5}, {Line: 12, To: 12}}},
+			"visible source blocks: lines 3-5, line 12"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, host, _ := newTestManager(t)
+			m.mu.Lock()
+			_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
+				Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
+				Source: "P007.md", Content: "# Plan\n\nText\n",
+			})
+			m.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+			host.text = "# Plan\n\nText\n"
+			host.viewports = []*workbench.DocumentViewport{tc.viewport}
+			out, viewport, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, tc.want) {
+				t.Fatalf("read output = %q, want %q", out, tc.want)
+			}
+			if viewport == nil || viewport.Source != "P007.md" || viewport.Intervals == nil {
+				t.Fatalf("structured viewport = %+v", viewport)
+			}
+		})
+	}
+}
+
+func TestReadWindowKeepsMarkdownViewportAfterTruncatedSource(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	m.mu.Lock()
+	_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Source: "P007.md",
+	})
+	m.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	host.text = "HEAD" + strings.Repeat("x", readWindowLimit) + "TAIL"
+	host.viewports = []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 20, To: 24}},
+	}}
+	out, _, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(out, truncatedPrefix) || strings.Contains(out, "HEAD") {
+		t.Fatalf("source was not truncated from its head: %q", out[:len(truncatedPrefix)+8])
+	}
+	if !strings.Contains(out, "TAIL\n\n") || !strings.HasSuffix(out, "visible source blocks: lines 20-24.") {
+		t.Fatalf("viewport summary did not survive source truncation: %q", out[len(out)-100:])
 	}
 }
 
@@ -405,7 +588,7 @@ func TestReadAndClosePruneAWindowTheUserClosed(t *testing.T) {
 		call func(*windowManager) error
 	}{
 		{toolReadWindow, func(m *windowManager) error {
-			_, err := m.read(context.Background(), readWindowInput{Name: "server"})
+			_, _, err := m.read(context.Background(), readWindowInput{Name: "server"})
 			return err
 		}},
 		{toolCloseWindow, func(m *windowManager) error {
@@ -443,7 +626,7 @@ func TestReadWindowKeepsALiveWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, err := m.read(ctx, readWindowInput{Name: "server"})
+	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +653,7 @@ func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
 	}
 	host.existsErr = errors.New("workbench unreachable")
 
-	if _, err := m.read(ctx, readWindowInput{Name: "server"}); err != nil {
+	if _, _, err := m.read(ctx, readWindowInput{Name: "server"}); err != nil {
 		t.Fatalf("an unanswerable liveness check should not fail the read: %v", err)
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{"server"}) {
@@ -738,6 +921,100 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	}
 	for name := range advertised {
 		t.Errorf("tool %q is advertised but no longer part of the surface", name)
+	}
+}
+
+func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nText\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host := &fakeHost{viewports: []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
+	}}}
+	server := newMCPServer(dir, testEditor, host)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	opened, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: toolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3},
+	})
+	if err != nil || opened.IsError {
+		t.Fatalf("open_file = %+v, %v", opened, err)
+	}
+	openOutput := structuredOutput(t, opened.StructuredContent)
+	assertStructuredViewport(t, openOutput["viewport"], true, true, 3, 3)
+
+	host.mu.Lock()
+	host.text = "# Plan\n\nText\n"
+	host.viewports = []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{},
+	}}
+	host.mu.Unlock()
+	read, err := cs.CallTool(ctx, &mcp.CallToolParams{
+		Name: toolReadWindow, Arguments: readWindowInput{Name: editorWindowName},
+	})
+	if err != nil || read.IsError {
+		t.Fatalf("read_window = %+v, %v", read, err)
+	}
+	readOutput := structuredOutput(t, read.StructuredContent)
+	assertStructuredViewport(t, readOutput["viewport"], true, true, 0, 0)
+	if output, ok := readOutput["output"].(string); !ok || !strings.Contains(output, viewportMeasuredEmpty) {
+		t.Fatalf("structured read output = %#v", readOutput["output"])
+	}
+}
+
+func structuredOutput(t *testing.T, value any) map[string]any {
+	t.Helper()
+	body, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var output map[string]any
+	if err := json.Unmarshal(body, &output); err != nil {
+		t.Fatal(err)
+	}
+	return output
+}
+
+func assertStructuredViewport(t *testing.T, value any, available, selected bool, line, to int) {
+	t.Helper()
+	viewport, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("viewport = %#v", value)
+	}
+	if viewport["source"] != "P007.md" || viewport["available"] != available || viewport["selected"] != selected {
+		t.Fatalf("viewport fields = %#v", viewport)
+	}
+	intervals, ok := viewport["intervals"].([]any)
+	if !ok {
+		t.Fatalf("viewport intervals = %#v", viewport["intervals"])
+	}
+	if line == 0 {
+		if len(intervals) != 0 {
+			t.Fatalf("viewport intervals = %#v, want empty", intervals)
+		}
+		return
+	}
+	if len(intervals) != 1 {
+		t.Fatalf("viewport intervals = %#v", intervals)
+	}
+	interval := intervals[0].(map[string]any)
+	if interval["line"] != float64(line) || interval["to"] != float64(to) {
+		t.Fatalf("viewport interval = %#v, want %d-%d", interval, line, to)
 	}
 }
 

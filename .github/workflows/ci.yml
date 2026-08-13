@@ -24,6 +24,7 @@ jobs:
       # The workbench is a WebKit window, so the binary links cgo. GTK4 only:
       # Wails also has a GTK3 backend behind a build tag, which we do not ship.
       - run: sudo apt-get update && sudo apt-get install -y pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - run: cd internal/desktop/frontend && npm ci && npx playwright install chromium
       # The pre-handoff gate from AGENTS.md, so CI and a developer's last command
       # are the same thing.
       - run: make check

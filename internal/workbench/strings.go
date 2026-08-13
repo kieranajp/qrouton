@@ -14,6 +14,7 @@ const (
 	OpOpen      = "open"
 	OpClose     = "close"
 	OpRead      = "read"
+	OpViewport  = "viewport"
 	OpExists    = "exists"
 	OpList      = "list"
 	OpPicker    = "picker"

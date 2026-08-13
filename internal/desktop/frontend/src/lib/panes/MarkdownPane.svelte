@@ -2,12 +2,15 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { openDocument } from "../docked.svelte.js";
-  import { openURL } from "../wails.js";
+  import { Call, openURL } from "../wails.js";
   import { documentPath, linkKind, marks, render } from "./markdown.js";
+  import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, line?: number, to?: number}}} */
-  let { doc } = $props();
+  const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
+
+  /** @type {{doc: {text: string, format: string, source: string, line?: number, to?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  let { doc, id, active = false, scrollRoot } = $props();
 
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
@@ -56,6 +59,36 @@
     // time once the text has settled is invisible.
     document.fonts.ready.then(() => requestAnimationFrame(reveal));
   }
+
+  /** @param {HTMLElement} body */
+  function viewport(body, initial) {
+    let controller;
+    let root;
+    let windowID;
+    const apply = (params) => {
+      if (!params.scrollRoot) return;
+      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
+        controller?.destroy();
+        root = params.scrollRoot;
+        windowID = params.id;
+        controller = createViewportController({
+          root,
+          content: body,
+          selected: params.active,
+          nextSequence: () => nextViewportSequence(windowID),
+          report: (report) =>
+            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, report).catch(() => {}),
+        });
+        return;
+      }
+      controller.setSelected(params.active);
+    };
+    apply(initial);
+    return {
+      update: apply,
+      destroy: () => controller?.destroy(),
+    };
+  }
 </script>
 
 <article class="document">
@@ -66,7 +99,9 @@
       <span>{heading}</span>
     </div>
   {/if}
-  <div class="markdown" use:links use:focus>{@html rendered.body}</div>
+  <div class="markdown" use:links use:focus use:viewport={{ id, active, scrollRoot }}>
+    {@html rendered.body}
+  </div>
 </article>
 
 <style>

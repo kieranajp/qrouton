@@ -56,10 +56,13 @@ const (
 		"(it stays open until the user quits the editor; the conversation keeps focus)."
 
 	renderedFileFormat = "Showing %s rendered in a pane the user can read and scroll " +
-		"(it stays open until they close it; the conversation keeps focus)."
+		"(it stays open until they close it; the conversation keeps focus). %s"
 
-	renderedSpanFormat = "Showing %s rendered in a pane, scrolled to %s with those lines marked " +
-		"(it stays open until the user closes it; the conversation keeps focus)."
+	renderedSpanVisibleFormat = "Showing %s rendered in a pane, scrolled to %s with the requested source " +
+		"range visible in a measured block (the conversation keeps focus). %s"
+
+	renderedSpanUnverifiedFormat = "Showing %s rendered in a pane and requested %s, but its position could " +
+		"not be verified (the conversation keeps focus). %s"
 
 	singleLineFormat = "line %d"
 	lineRangeFormat  = "lines %d-%d"
@@ -70,6 +73,12 @@ const (
 
 	noOutputFormat  = "Window %q has produced no output yet."
 	truncatedPrefix = "…(earlier output truncated)…\n"
+
+	viewportUnavailableUnselected = "Viewport: unavailable because the document tab is not selected."
+	viewportUnavailableSelected   = "Viewport: selected, but browser geometry is unavailable."
+	viewportMeasuredEmpty         = "Viewport: selected and measured; no source-mapped blocks are visible."
+	viewportMeasuredFormat        = "Viewport: selected and measured; visible source blocks: %s."
+	viewportRangeJoiner           = ", "
 
 	closedFormat = "Closed window %q."
 

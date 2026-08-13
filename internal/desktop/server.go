@@ -100,6 +100,15 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 			return workbench.Response{Error: err.Error()}
 		}
 		return workbench.Response{ID: req.ID, Text: text}
+	case workbench.OpViewport:
+		if c.owner == nil {
+			return workbench.Response{Error: ErrNoSession.Error()}
+		}
+		viewport, err := c.windows.viewport(c.owner, req.ID)
+		if err != nil {
+			return workbench.Response{Error: err.Error()}
+		}
+		return workbench.Response{ID: req.ID, Viewport: viewport}
 	case workbench.OpExists:
 		return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}
 	case workbench.OpList:

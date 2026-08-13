@@ -74,6 +74,22 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 			return Response{ID: "window-1"}
 		case OpRead:
 			return Response{Text: "listening on :3000"}
+		case OpViewport:
+			switch req.ID {
+			case "unsupported":
+				return Response{}
+			case "unavailable":
+				return Response{Viewport: &DocumentViewport{Source: "plan.md"}}
+			case "empty":
+				return Response{Viewport: &DocumentViewport{
+					Source: "plan.md", Available: true, Selected: true,
+				}}
+			default:
+				return Response{Viewport: &DocumentViewport{
+					Source: "plan.md", Available: true, Selected: true,
+					Intervals: []LineInterval{{Line: 3, To: 5}, {Line: 9, To: 9}},
+				}}
+			}
 		case OpExists:
 			return Response{Exists: true}
 		case OpList:
@@ -94,6 +110,22 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 	text, err := host.Read(ctx, id, true)
 	if err != nil || text != "listening on :3000" {
 		t.Fatalf("Read = %q, %v", text, err)
+	}
+	unsupported, err := host.Viewport(ctx, "unsupported")
+	if err != nil || unsupported != nil {
+		t.Fatalf("unsupported Viewport = %+v, %v", unsupported, err)
+	}
+	unavailable, err := host.Viewport(ctx, "unavailable")
+	if err != nil || unavailable == nil || unavailable.Available || unavailable.Selected || unavailable.Intervals == nil {
+		t.Fatalf("unavailable Viewport = %+v, %v", unavailable, err)
+	}
+	empty, err := host.Viewport(ctx, "empty")
+	if err != nil || empty == nil || !empty.Available || !empty.Selected || empty.Intervals == nil || len(empty.Intervals) != 0 {
+		t.Fatalf("measured-empty Viewport = %+v, %v", empty, err)
+	}
+	measured, err := host.Viewport(ctx, "measured")
+	if err != nil || measured == nil || len(measured.Intervals) != 2 || measured.Intervals[1] != (LineInterval{Line: 9, To: 9}) {
+		t.Fatalf("measured Viewport = %+v, %v", measured, err)
 	}
 	live, err := host.Exists(ctx, id)
 	if err != nil || !live {
@@ -116,6 +148,10 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 		check func(Request) bool
 	}{
 		{OpRead, func(r Request) bool { return r.ID == "window-1" && r.Full }},
+		{OpViewport, func(r Request) bool { return r.ID == "unsupported" }},
+		{OpViewport, func(r Request) bool { return r.ID == "unavailable" }},
+		{OpViewport, func(r Request) bool { return r.ID == "empty" }},
+		{OpViewport, func(r Request) bool { return r.ID == "measured" }},
 		{OpExists, func(r Request) bool { return r.ID == "window-1" }},
 		{OpList, func(r Request) bool { return true }},
 		{OpClose, func(r Request) bool { return r.ID == "window-1" }},

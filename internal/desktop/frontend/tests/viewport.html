@@ -1,0 +1,27 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Viewport fixture</title>
+    <style>
+      body { margin: 0; }
+      #root { width: 320px; height: 120px; overflow-y: auto; }
+      #before { height: 80px; }
+      [data-line] { box-sizing: border-box; height: 60px; margin: 0; }
+      #gap { height: 180px; }
+      #hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="content">
+        <div id="before"></div>
+        <p data-line="3" data-line-end="5">A paragraph rendered across several visual rows.</p>
+        <p data-line="6" data-line-end="6">Adjacent source block.</p>
+        <div id="gap"></div>
+        <p data-line="12" data-line-end="14">A later block.</p>
+      </div>
+    </div>
+    <script type="module" src="./viewport-fixture.js"></script>
+  </body>
+</html>

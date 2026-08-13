@@ -70,6 +70,21 @@ type LineSpan struct {
 	Through int `json:"through,omitempty"`
 }
 
+// LineInterval is a source-mapped block visible in a rendered document.
+type LineInterval struct {
+	Line int `json:"line"`
+	To   int `json:"to"`
+}
+
+// DocumentViewport is the measured source view of a rendered Markdown tab.
+// Available distinguishes a measured empty viewport from one without geometry.
+type DocumentViewport struct {
+	Source    string         `json:"source"`
+	Available bool           `json:"available"`
+	Selected  bool           `json:"selected"`
+	Intervals []LineInterval `json:"intervals"`
+}
+
 // Bounds reports the span as a closed line range, and false when it names no
 // line at all.
 func (s LineSpan) Bounds() (first, last int, ok bool) {
@@ -90,6 +105,8 @@ type WindowHost interface {
 	// Read returns a terminal window's output with escape sequences stripped, or
 	// a document window's content; full is the whole buffer, not the last screen.
 	Read(ctx context.Context, id string, full bool) (string, error)
+	// Viewport returns nil for windows without a source-mapped Markdown view.
+	Viewport(ctx context.Context, id string) (*DocumentViewport, error)
 	// Exists reports whether a window is still open, so a caller's registry can
 	// tell "you closed it" from a transport failure.
 	Exists(ctx context.Context, id string) (bool, error)

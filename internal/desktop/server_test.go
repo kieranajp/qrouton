@@ -52,7 +52,8 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	}
 
 	document, err := host.Open(ctx, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ diff", Content: "one change",
+		Kind: workbench.KindDocument, Label: "◆ plan", Content: "one change",
+		Format: workbench.FormatMarkdown, Source: "thoughts/shared/plans/P1.md",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -76,6 +77,24 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	text, err := host.Read(ctx, document, false)
 	if err != nil || text != "one change" {
 		t.Fatalf("Read = %q, %v", text, err)
+	}
+	if viewport, err := host.Viewport(ctx, id); err != nil || viewport != nil {
+		t.Fatalf("terminal Viewport = %+v, %v", viewport, err)
+	}
+	viewport, err := host.Viewport(ctx, document)
+	if err != nil || viewport == nil || viewport.Available || viewport.Intervals == nil {
+		t.Fatalf("initial Markdown Viewport = %+v, %v", viewport, err)
+	}
+	if err := windows.ReportViewport(document, ViewportReport{
+		Seq: 1, Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 4, To: 6}, {Line: 12, To: 12}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	viewport, err = host.Viewport(ctx, document)
+	if err != nil || viewport == nil || viewport.Source != "thoughts/shared/plans/P1.md" ||
+		len(viewport.Intervals) != 2 || viewport.Intervals[0] != (workbench.LineInterval{Line: 4, To: 6}) {
+		t.Fatalf("measured Markdown Viewport = %+v, %v", viewport, err)
 	}
 	deadline := time.Now().Add(time.Minute)
 	if err := host.Picker(ctx, workbench.PickerRequest{SessionRoot: "/sessions/octopus",

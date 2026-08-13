@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -204,6 +205,88 @@ func TestContentCarriesTheMarkedLinesToThePage(t *testing.T) {
 				t.Fatalf("Content lines = %d to %d, want %d to %d", page.Line, page.To, tc.line, tc.want)
 			}
 		})
+	}
+}
+
+func TestMarkdownViewportStartsUnavailableAndAcceptsOnlyNewValidReports(t *testing.T) {
+	w, _ := testWindows(t)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
+		Source: "thoughts/shared/plans/P1.md", Content: "# Plan\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	view, err := w.viewport(w.shown(), id)
+	if err != nil || view == nil || view.Available || view.Selected || view.Intervals == nil {
+		t.Fatalf("initial viewport = %+v, %v", view, err)
+	}
+	if err := w.ReportViewport(id, ViewportReport{
+		Seq: 2, Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 9, To: 10}, {Line: 3, To: 5}, {Line: 6, To: 8}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	view, err = w.viewport(w.shown(), id)
+	if err != nil || view.Source != "thoughts/shared/plans/P1.md" || len(view.Intervals) != 1 ||
+		view.Intervals[0] != (workbench.LineInterval{Line: 3, To: 10}) {
+		t.Fatalf("measured viewport = %+v, %v", view, err)
+	}
+	if err := w.ReportViewport(id, ViewportReport{Seq: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if stale, _ := w.viewport(w.shown(), id); !stale.Available || len(stale.Intervals) != 1 {
+		t.Fatalf("stale report replaced viewport: %+v", stale)
+	}
+	if err := w.ReportViewport(id, ViewportReport{
+		Seq: 3, Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 8, To: 7}},
+	}); !errors.Is(err, ErrInvalidViewport) {
+		t.Fatalf("invalid report error = %v", err)
+	}
+	if after, _ := w.viewport(w.shown(), id); !after.Available || len(after.Intervals) != 1 {
+		t.Fatalf("invalid report replaced viewport: %+v", after)
+	}
+	if err := w.ReportViewport(id, ViewportReport{Seq: 4, Selected: false, Available: true,
+		Intervals: []workbench.LineInterval{{Line: 3, To: 5}}}); err != nil {
+		t.Fatal(err)
+	}
+	if inactive, _ := w.viewport(w.shown(), id); inactive.Available || inactive.Selected || len(inactive.Intervals) != 0 || inactive.Intervals == nil {
+		t.Fatalf("inactive viewport = %+v", inactive)
+	}
+}
+
+func TestViewportIsMarkdownOnlyAndOwnerScoped(t *testing.T) {
+	r := newFakeRenderer()
+	reg := newSessions()
+	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
+	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
+	w := newWindows(r.Emit, reg)
+	t.Cleanup(w.stopAll)
+	terminal, err := w.openStructural(alpha, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view, err := w.viewport(alpha, terminal); err != nil || view != nil {
+		t.Fatalf("terminal viewport = %+v, %v", view, err)
+	}
+	markdown, err := w.openWindow(alpha, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Source: "plan.md",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.viewport(beta, markdown); err == nil {
+		t.Fatal("another session inspected the Markdown viewport")
+	}
+	if err := w.ReportViewport(terminal, ViewportReport{Seq: 1}); !errors.Is(err, ErrNoViewport) {
+		t.Fatalf("terminal report error = %v", err)
+	}
+	w.discard(markdown)
+	if _, err := w.viewport(alpha, markdown); err == nil {
+		t.Fatal("discarded viewport remained readable")
 	}
 }
 

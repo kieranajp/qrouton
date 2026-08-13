@@ -68,11 +68,15 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		Name:        toolOpenFile,
 		Description: descOpenFile,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input openFileInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.openFile(ctx, input)
+		message, viewport, err := windows.openFile(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(message), map[string]any{"message": message}, nil
+		output := map[string]any{"message": message}
+		if viewport != nil {
+			output["viewport"] = viewport
+		}
+		return textResult(message), output, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{
@@ -90,11 +94,15 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		Name:        toolReadWindow,
 		Description: descReadWindow,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, input readWindowInput) (*mcp.CallToolResult, any, error) {
-		text, err := windows.read(ctx, input)
+		text, viewport, err := windows.read(ctx, input)
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(text), map[string]any{"output": text}, nil
+		output := map[string]any{"output": text}
+		if viewport != nil {
+			output["viewport"] = viewport
+		}
+		return textResult(text), output, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

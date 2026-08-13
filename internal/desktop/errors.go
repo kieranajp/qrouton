@@ -23,6 +23,8 @@ var (
 	ErrNoDocumentName  = errors.New("open request names no document")
 	ErrNoEditorCommand = errors.New("workbench has no editor command to open a document with")
 	ErrNoRevealCommand = errors.New("workbench has no command to reveal a session's directory with")
+	ErrNoViewport      = errors.New("window has no source-mapped viewport")
+	ErrInvalidViewport = errors.New("invalid document viewport report")
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

@@ -24,6 +24,8 @@ var (
 	// agent's tool call forever.
 	escalateTimeout      = 30 * time.Minute
 	escalatePollInterval = 2 * time.Second
+	viewportWaitTimeout  = 750 * time.Millisecond
+	viewportPollInterval = 25 * time.Millisecond
 )
 
 // windowManager owns qrouton's slice of the workbench: the editor window plus
@@ -60,29 +62,79 @@ func (m *windowManager) closeLocked(ctx context.Context, name string) {
 	}
 }
 
-func (m *windowManager) openFile(ctx context.Context, input openFileInput) (string, error) {
+func (m *windowManager) openFile(ctx context.Context, input openFileInput) (string, *workbench.DocumentViewport, error) {
 	span := workbench.LineSpan{Line: input.Line, Through: input.Through}
 	opts, err := launch.DocumentWindow(m.root, input.Path, m.editor, span)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	m.mu.Lock()
-	defer m.mu.Unlock()
-	if _, err := m.open(ctx, editorWindowName, opts); err != nil {
-		return "", fmt.Errorf("open file window: %w", err)
+	id, err := m.open(ctx, editorWindowName, opts)
+	m.mu.Unlock()
+	if err != nil {
+		return "", nil, fmt.Errorf("open file window: %w", err)
 	}
 	first, last, focused := opts.Span.Bounds()
 	if opts.Kind == workbench.KindDocument {
-		if !focused {
-			return fmt.Sprintf(renderedFileFormat, opts.Source), nil
+		viewport, err := m.awaitViewport(ctx, id, opts.Source)
+		if err != nil {
+			return "", nil, fmt.Errorf("read opened file viewport: %w", err)
 		}
-		return fmt.Sprintf(renderedSpanFormat, opts.Source, lineRange(first, last)), nil
+		if !focused {
+			return fmt.Sprintf(renderedFileFormat, opts.Source, viewportSummary(viewport)), viewport, nil
+		}
+		if intersects(viewport, first, last) {
+			return fmt.Sprintf(renderedSpanVisibleFormat, opts.Source, lineRange(first, last), viewportSummary(viewport)), viewport, nil
+		}
+		return fmt.Sprintf(renderedSpanUnverifiedFormat, opts.Source, lineRange(first, last), viewportSummary(viewport)), viewport, nil
 	}
 	line, _, ok := span.Bounds()
 	if !ok {
 		line = 1
 	}
-	return fmt.Sprintf(openedFileFormat, opts.Source, line), nil
+	return fmt.Sprintf(openedFileFormat, opts.Source, line), nil, nil
+}
+
+func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*workbench.DocumentViewport, error) {
+	last := &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}
+	deadline := time.NewTimer(viewportWaitTimeout)
+	defer deadline.Stop()
+	ticker := time.NewTicker(viewportPollInterval)
+	defer ticker.Stop()
+	for {
+		viewport, err := m.host.Viewport(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+		if viewport != nil {
+			last = viewport
+			if last.Intervals == nil {
+				last.Intervals = []workbench.LineInterval{}
+			}
+			if viewport.Selected && viewport.Available {
+				return viewport, nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-deadline.C:
+			return last, nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func intersects(viewport *workbench.DocumentViewport, first, last int) bool {
+	if viewport == nil || !viewport.Available || !viewport.Selected {
+		return false
+	}
+	for _, interval := range viewport.Intervals {
+		if interval.Line <= last && interval.To >= first {
+			return true
+		}
+	}
+	return false
 }
 
 // lineRange names the marked lines the way the message reads them: one line, or
@@ -131,24 +183,51 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 	return fmt.Sprintf(runningFormat, name, where, name, name), nil
 }
 
-func (m *windowManager) read(ctx context.Context, input readWindowInput) (string, error) {
+func (m *windowManager) read(ctx context.Context, input readWindowInput) (string, *workbench.DocumentViewport, error) {
 	name := strings.TrimSpace(input.Name)
 	id, err := m.liveWindow(ctx, name)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	out, err := m.host.Read(ctx, id, input.Full)
 	if err != nil {
-		return "", fmt.Errorf("read window %q: %w", name, err)
+		return "", nil, fmt.Errorf("read window %q: %w", name, err)
+	}
+	viewport, err := m.host.Viewport(ctx, id)
+	if err != nil {
+		return "", nil, fmt.Errorf("read window %q viewport: %w", name, err)
 	}
 	text := strings.TrimRight(out, "\n")
 	if strings.TrimSpace(text) == "" {
-		return fmt.Sprintf(noOutputFormat, name), nil
+		text = fmt.Sprintf(noOutputFormat, name)
 	}
 	if len(text) > readWindowLimit {
 		text = truncatedPrefix + text[len(text)-readWindowLimit:]
 	}
-	return text, nil
+	if viewport != nil {
+		if viewport.Intervals == nil {
+			viewport.Intervals = []workbench.LineInterval{}
+		}
+		text += "\n\n" + viewportSummary(viewport)
+	}
+	return text, viewport, nil
+}
+
+func viewportSummary(viewport *workbench.DocumentViewport) string {
+	if viewport == nil || !viewport.Selected {
+		return viewportUnavailableUnselected
+	}
+	if !viewport.Available {
+		return viewportUnavailableSelected
+	}
+	if len(viewport.Intervals) == 0 {
+		return viewportMeasuredEmpty
+	}
+	ranges := make([]string, 0, len(viewport.Intervals))
+	for _, interval := range viewport.Intervals {
+		ranges = append(ranges, lineRange(interval.Line, interval.To))
+	}
+	return fmt.Sprintf(viewportMeasuredFormat, strings.Join(ranges, viewportRangeJoiner))
 }
 
 func (m *windowManager) closeWindow(ctx context.Context, input windowNameInput) (string, error) {

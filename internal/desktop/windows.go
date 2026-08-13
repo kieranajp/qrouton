@@ -30,16 +30,26 @@ type Windows struct {
 }
 
 type agentWindow struct {
-	opts    workbench.WindowOptions
-	session *sessionState
-	seq     int
-	buffer  *ring
-	process *ptyProcess
+	opts        workbench.WindowOptions
+	session     *sessionState
+	seq         int
+	buffer      *ring
+	process     *ptyProcess
+	viewport    *workbench.DocumentViewport
+	viewportSeq uint64
 	// recorded excludes the windows the workbench opens for itself from the
 	// manifest's record, since a resume rebuilds those without being told to.
 	recorded bool
 	// exit is nil while the process is still running.
 	exit *int
+}
+
+// ViewportReport is one browser measurement of a rendered Markdown tab.
+type ViewportReport struct {
+	Seq       uint64                   `json:"seq"`
+	Available bool                     `json:"available"`
+	Selected  bool                     `json:"selected"`
+	Intervals []workbench.LineInterval `json:"intervals"`
 }
 
 func newWindows(emit emitter, reg *Sessions) *Windows {
@@ -116,6 +126,9 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recor
 	window := &agentWindow{opts: opts, session: owner, seq: w.seq, recorded: recorded}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
+	}
+	if opts.Kind == workbench.KindDocument && opts.Format == workbench.FormatMarkdown {
+		window.viewport = &workbench.DocumentViewport{Source: opts.Source, Intervals: []workbench.LineInterval{}}
 	}
 	w.open[id] = window
 	w.mu.Unlock()
@@ -223,6 +236,83 @@ func (w *Windows) Content(id string) (document, error) {
 		Line:   first,
 		To:     last,
 	}, nil
+}
+
+// ReportViewport stores the newest browser measurement for a Markdown tab.
+func (w *Windows) ReportViewport(id string, report ViewportReport) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	window, ok := w.open[id]
+	if !ok {
+		return noSuchWindow(id)
+	}
+	if window.viewport == nil {
+		return ErrNoViewport
+	}
+	if report.Seq <= window.viewportSeq {
+		return nil
+	}
+	intervals, err := normalizedIntervals(report.Intervals)
+	if err != nil {
+		return err
+	}
+	available := report.Available && report.Selected
+	if !available {
+		intervals = []workbench.LineInterval{}
+	}
+	window.viewportSeq = report.Seq
+	window.viewport = &workbench.DocumentViewport{
+		Source:    window.opts.Source,
+		Available: available,
+		Selected:  report.Selected,
+		Intervals: intervals,
+	}
+	return nil
+}
+
+func normalizedIntervals(intervals []workbench.LineInterval) ([]workbench.LineInterval, error) {
+	if len(intervals) == 0 {
+		return []workbench.LineInterval{}, nil
+	}
+	out := append([]workbench.LineInterval(nil), intervals...)
+	for _, interval := range out {
+		if interval.Line < 1 || interval.To < interval.Line {
+			return nil, fmt.Errorf("%w: %d-%d", ErrInvalidViewport, interval.Line, interval.To)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Line == out[j].Line {
+			return out[i].To < out[j].To
+		}
+		return out[i].Line < out[j].Line
+	})
+	merged := out[:1]
+	for _, interval := range out[1:] {
+		last := &merged[len(merged)-1]
+		if interval.Line <= last.To+1 {
+			if interval.To > last.To {
+				last.To = interval.To
+			}
+			continue
+		}
+		merged = append(merged, interval)
+	}
+	return merged, nil
+}
+
+func (w *Windows) viewport(owner *sessionState, id string) (*workbench.DocumentViewport, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	window, ok := w.open[id]
+	if !ok || window.session != owner {
+		return nil, noSuchWindow(id)
+	}
+	if window.viewport == nil {
+		return nil, nil
+	}
+	view := *window.viewport
+	view.Intervals = append([]workbench.LineInterval{}, window.viewport.Intervals...)
+	return &view, nil
 }
 
 // processExited applies the lifecycle rule: a clean exit closes the window, a

@@ -4,11 +4,14 @@
 
   /** @type {{id: string, active?: boolean}} */
   let { id, active = false } = $props();
+
+  /** @type {HTMLElement} */
+  let scrollRoot = $state();
 </script>
 
 <TerminalPane style="display: {active ? 'flex' : 'none'}">
-  <div class="body">
-    <DocumentPane {id} />
+  <div class="body" bind:this={scrollRoot}>
+    <DocumentPane {id} {active} {scrollRoot} />
   </div>
 </TerminalPane>
 

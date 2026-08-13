@@ -29,11 +29,12 @@ type Request struct {
 
 // Response is the desktop process's single-line answer.
 type Response struct {
-	ID     string   `json:"id,omitempty"`
-	Text   string   `json:"text,omitempty"`
-	Exists bool     `json:"exists,omitempty"`
-	IDs    []string `json:"ids,omitempty"`
-	Error  string   `json:"error,omitempty"`
+	ID       string            `json:"id,omitempty"`
+	Text     string            `json:"text,omitempty"`
+	Exists   bool              `json:"exists,omitempty"`
+	IDs      []string          `json:"ids,omitempty"`
+	Viewport *DocumentViewport `json:"viewport,omitempty"`
+	Error    string            `json:"error,omitempty"`
 }
 
 // NewSocketPath reserves an address for a desktop process's control socket.
@@ -134,6 +135,17 @@ func (c *client) Read(ctx context.Context, id string, full bool) (string, error)
 		return "", err
 	}
 	return res.Text, nil
+}
+
+func (c *client) Viewport(ctx context.Context, id string) (*DocumentViewport, error) {
+	res, err := c.call(ctx, Request{Op: OpViewport, ID: id})
+	if err != nil || res.Viewport == nil {
+		return res.Viewport, err
+	}
+	if res.Viewport.Intervals == nil {
+		res.Viewport.Intervals = []LineInterval{}
+	}
+	return res.Viewport, nil
 }
 
 func (c *client) Exists(ctx context.Context, id string) (bool, error) {
