@@ -79,3 +79,124 @@ test("controller coalesces frames and suppresses unchanged reports", () => {
   controller.destroy();
   assert.equal(reports.length, 2);
 });
+
+function controllerHarness(selected = true) {
+  const reports = [];
+  const frames = new Map();
+  const listeners = new Map();
+  let nextFrame = 0;
+  let resize;
+  let reveals = 0;
+  let targetRect = { top: 180, bottom: 220, width: 100, height: 40 };
+  const root = {
+    addEventListener: (name, call) => listeners.set(name, call),
+    removeEventListener: () => {},
+    getBoundingClientRect: () => ({ top: 0, bottom: 100, width: 100, height: 100 }),
+  };
+  const target = {
+    dataset: { line: "8", lineEnd: "11" },
+    getBoundingClientRect: () => targetRect,
+    scrollIntoView: () => {
+      reveals++;
+      targetRect = { top: 30, bottom: 70, width: 100, height: 40 };
+    },
+  };
+  const content = {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+    querySelectorAll: () => [target],
+  };
+  class Observer {
+    constructor(call) {
+      resize = call;
+    }
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+  const controller = createViewportController({
+    root: /** @type {HTMLElement} */ (/** @type {unknown} */ (root)),
+    content: /** @type {HTMLElement} */ (/** @type {unknown} */ (content)),
+    blocks: [/** @type {HTMLElement} */ (/** @type {unknown} */ (target))],
+    target: /** @type {HTMLElement} */ (/** @type {unknown} */ (target)),
+    span: { line: 9, to: 9 },
+    selected,
+    report: (value) => reports.push(value),
+    requestFrame: (call) => {
+      const id = ++nextFrame;
+      frames.set(id, call);
+      return id;
+    },
+    cancelFrame: (id) => frames.delete(id),
+    resizeObserver: /** @type {typeof ResizeObserver} */ (Observer),
+    view: undefined,
+    fonts: undefined,
+  });
+  return {
+    controller,
+    reports,
+    revealCount: () => reveals,
+    moveTarget: (top, bottom) => (targetRect = { top, bottom, width: 100, height: bottom - top }),
+    resize: () => resize(),
+    scroll: () => listeners.get("scroll")(),
+    flush: () => {
+      const pending = [...frames.values()];
+      frames.clear();
+      pending.forEach((call) => call(0));
+    },
+  };
+}
+
+test("activation reveals the requested block after layout and reports its full interval", () => {
+  const harness = controllerHarness();
+  assert.equal(harness.revealCount(), 0);
+  harness.flush();
+  assert.equal(harness.revealCount(), 1);
+  assert.deepEqual(harness.reports.at(-1), {
+    seq: 1,
+    available: true,
+    selected: true,
+    intervals: [{ line: 8, to: 11 }],
+  });
+});
+
+test("layout recovers a previously visible target but a later scroll remains authoritative", () => {
+  const harness = controllerHarness();
+  harness.flush();
+  harness.moveTarget(140, 180);
+  harness.resize();
+  harness.flush();
+  assert.equal(harness.revealCount(), 2);
+
+  harness.moveTarget(150, 190);
+  harness.scroll();
+  harness.flush();
+  assert.deepEqual(harness.reports.at(-1).intervals, []);
+  harness.resize();
+  harness.flush();
+  assert.equal(harness.revealCount(), 2);
+});
+
+test("a scroll event cancels a queued layout recovery", () => {
+  const harness = controllerHarness();
+  harness.flush();
+  harness.moveTarget(140, 180);
+  harness.resize();
+  harness.scroll();
+  harness.flush();
+  assert.equal(harness.revealCount(), 1);
+  assert.deepEqual(harness.reports.at(-1).intervals, []);
+});
+
+test("deactivation cancels a scheduled reveal and publishes unavailable state", () => {
+  const harness = controllerHarness();
+  harness.controller.setSelected(false);
+  harness.flush();
+  assert.equal(harness.revealCount(), 0);
+  assert.deepEqual(harness.reports.at(-1), {
+    seq: 1,
+    available: false,
+    selected: false,
+    intervals: [],
+  });
+});

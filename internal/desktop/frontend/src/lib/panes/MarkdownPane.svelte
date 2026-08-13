@@ -34,34 +34,16 @@
     return { destroy: () => body.removeEventListener("click", click) };
   }
 
-  /**
-   * Marks the lines the agent pointed at and scrolls them into view. The action
-   * runs once, after the rendered html is in the DOM: a document window holds a
-   * snapshot of the file, so neither the text nor the span changes under it.
-   * @param {HTMLElement} body
-   */
-  function focus(body) {
+  /** @param {HTMLElement} body */
+  function viewport(body, initial) {
     const blocks = [.../** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll("[data-line]"))];
+    const span = { line: doc.line ?? 0, to: doc.to ?? 0 };
     const { marked, at } = marks(
       blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      { line: doc.line ?? 0, to: doc.to ?? 0 },
+      span,
     );
     for (const index of marked) blocks[index].classList.add("marked");
     const target = blocks[at];
-    if (!target) return;
-    // "center" rather than the top: a marked passage reads better with the
-    // paragraph that led to it still on screen.
-    const reveal = () => target.scrollIntoView({ block: "center" });
-    reveal();
-    // The pane's fonts are fetched rather than installed, and the whole document
-    // reflows under that scroll when they land — which on a long file leaves the
-    // passage tens of lines off. Nothing here animates, so revealing it a second
-    // time once the text has settled is invisible.
-    document.fonts.ready.then(() => requestAnimationFrame(reveal));
-  }
-
-  /** @param {HTMLElement} body */
-  function viewport(body, initial) {
     let controller;
     let root;
     let windowID;
@@ -74,6 +56,9 @@
         controller = createViewportController({
           root,
           content: body,
+          blocks,
+          target,
+          span,
           selected: params.active,
           nextSequence: () => nextViewportSequence(windowID),
           report: (report) =>
@@ -99,7 +84,7 @@
       <span>{heading}</span>
     </div>
   {/if}
-  <div class="markdown" use:links use:focus use:viewport={{ id, active, scrollRoot }}>
+  <div class="markdown" use:links use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
 </article>
