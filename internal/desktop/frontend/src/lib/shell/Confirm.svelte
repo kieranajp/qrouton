@@ -2,8 +2,8 @@
   import Button from "../core/Button.svelte";
   import { dismissible } from "../core/dismiss.js";
 
-  /** @type {{title: string, confirmLabel?: string, onConfirm?: () => void, onCancel?: () => void, children?: import('svelte').Snippet}} */
-  let { title, confirmLabel = "Confirm", onConfirm, onCancel, children } = $props();
+  /** @type {{title: string, confirmLabel?: string, busy?: boolean, onConfirm?: () => void, onCancel?: () => void, children?: import('svelte').Snippet}} */
+  let { title, confirmLabel = "Confirm", busy = false, onConfirm, onCancel, children } = $props();
 
   let actions = $state();
   // The dialog takes the keyboard so Enter and Escape do not reach the agent's
@@ -21,8 +21,15 @@
     <div class="body">{@render children?.()}</div>
     <div class="actions" bind:this={actions}>
       <Button variant="secondary" onclick={() => onCancel?.()}>Cancel</Button>
-      <Button variant="destructive" data-confirm="true" onclick={() => onConfirm?.()}
-        >{confirmLabel}</Button>
+      <Button
+        variant="destructive"
+        data-confirm="true"
+        disabled={busy}
+        aria-busy={busy}
+        onclick={() => onConfirm?.()}>
+        {#if busy}<span class="spinner" aria-hidden="true"></span>{/if}
+        {confirmLabel}
+      </Button>
     </div>
   </div>
 </div>
@@ -64,5 +71,20 @@
     display: flex;
     justify-content: flex-end;
     gap: 8px;
+  }
+
+  .spinner {
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgb(255 255 255 / 0.35);
+    border-top-color: currentColor;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 </style>

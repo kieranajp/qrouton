@@ -170,6 +170,7 @@
   let menu = $state(null);
   /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
   let confirming = $state(null);
+  let cleaning = $state(false);
   // A token the terminal watches: bumping it is what hands the keyboard back
   // when an overlay closes.
   let keyboard = $state(0);
@@ -220,11 +221,15 @@
 
   // The chrome poll notices the row is gone, so nothing here waits on a refresh.
   async function cleanUp() {
+    if (cleaning) return;
+    cleaning = true;
     try {
       await cleanup(confirming.row.slug);
       dismissConfirm();
     } catch (err) {
       confirming = { ...confirming, error: String(err?.message ?? err) };
+    } finally {
+      cleaning = false;
     }
   }
 
@@ -404,6 +409,7 @@
     <Confirm
       title="Clean up {confirming.row.name}?"
       confirmLabel="Clean up"
+      busy={cleaning}
       onConfirm={cleanUp}
       onCancel={dismissConfirm}>
       <div class="tell">
