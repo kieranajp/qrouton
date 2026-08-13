@@ -217,6 +217,39 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	}
 }
 
+// The pane scrolls to the lines the agent aimed it at and marks them, so the
+// span has to reach the page. A window nobody aimed reports no lines at all,
+// which is how the page knows to stay at the top.
+func TestContentCarriesTheMarkedLinesToThePage(t *testing.T) {
+	w, r := testWindows(t)
+	for _, tc := range []struct {
+		name       string
+		span       workbench.LineSpan
+		line, want int
+	}{
+		{name: "a range", span: workbench.LineSpan{Line: 12, Through: 18}, line: 12, want: 18},
+		{name: "one line", span: workbench.LineSpan{Line: 12}, line: 12, want: 12},
+		{name: "none"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindDocument, Label: "P007", Content: "# Plan", Span: tc.span,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			<-r.opened
+			page, err := w.Content(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if page.Line != tc.line || page.To != tc.want {
+				t.Fatalf("Content lines = %d to %d, want %d to %d", page.Line, page.To, tc.line, tc.want)
+			}
+		})
+	}
+}
+
 // The toast is the only self-expiring window; nothing else is on a timer.
 func TestADocumentWindowWithATTLClosesItself(t *testing.T) {
 	w, r := testWindows(t)

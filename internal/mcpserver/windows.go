@@ -61,7 +61,8 @@ func (m *windowManager) closeLocked(ctx context.Context, name string) {
 }
 
 func (m *windowManager) openFile(ctx context.Context, input openFileInput) (string, error) {
-	opts, err := launch.DocumentWindow(m.root, input.Path, m.editor, input.Line)
+	span := workbench.LineSpan{Line: input.Line, Through: input.Through}
+	opts, err := launch.DocumentWindow(m.root, input.Path, m.editor, span)
 	if err != nil {
 		return "", err
 	}
@@ -70,13 +71,27 @@ func (m *windowManager) openFile(ctx context.Context, input openFileInput) (stri
 	if _, err := m.open(ctx, editorWindowName, opts); err != nil {
 		return "", fmt.Errorf("open file window: %w", err)
 	}
+	first, last, focused := opts.Span.Bounds()
 	if opts.Kind == workbench.KindDocument {
-		return fmt.Sprintf(renderedFileFormat, opts.Source), nil
+		if !focused {
+			return fmt.Sprintf(renderedFileFormat, opts.Source), nil
+		}
+		return fmt.Sprintf(renderedSpanFormat, opts.Source, lineRange(first, last)), nil
 	}
-	if input.Line < 1 {
-		input.Line = 1
+	line, _, ok := span.Bounds()
+	if !ok {
+		line = 1
 	}
-	return fmt.Sprintf(openedFileFormat, opts.Source, input.Line), nil
+	return fmt.Sprintf(openedFileFormat, opts.Source, line), nil
+}
+
+// lineRange names the marked lines the way the message reads them: one line, or
+// a range.
+func lineRange(first, last int) string {
+	if first == last {
+		return fmt.Sprintf(singleLineFormat, first)
+	}
+	return fmt.Sprintf(lineRangeFormat, first, last)
 }
 
 func (m *windowManager) run(ctx context.Context, input runCommandInput) (string, error) {

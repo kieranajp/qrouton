@@ -8,7 +8,7 @@
   /** @type {{id: string}} */
   let { id } = $props();
 
-  /** @type {{text: string, format: string, source: string} | undefined} */
+  /** @type {{text: string, format: string, source: string, line: number, to: number} | undefined} */
   let doc = $state();
 
   onMount(async () => {

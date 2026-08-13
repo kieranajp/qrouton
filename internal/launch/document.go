@@ -16,22 +16,25 @@ const documentLimit = 1 << 20
 
 // DocumentWindow is how a session file reaches the user: a pane qrouton draws
 // for the formats it can, and the editor for everything else. Both the agent's
-// file tool and the window's own document chip come through here.
-func DocumentWindow(root, name string, editor EditorCommand, line int) (workbench.WindowOptions, error) {
+// file tool and the window's own document chip come through here. span is the
+// part of the file to draw the eye to; a pane marks it, an editor opens on its
+// first line.
+func DocumentWindow(root, name string, editor EditorCommand, span workbench.LineSpan) (workbench.WindowOptions, error) {
 	path, err := ResolveSessionFile(root, name)
 	if err != nil {
 		return workbench.WindowOptions{}, err
 	}
 	rel := sessionRelative(root, path, name)
 	if format, ok := workbench.FormatFor(path); ok {
-		if opts, ok := documentPane(path, rel, format); ok {
+		if opts, ok := documentPane(path, rel, format, span); ok {
 			return opts, nil
 		}
 	}
 	if len(editor.Argv) == 0 {
 		return workbench.WindowOptions{}, ErrNoEditor
 	}
-	if line < firstLine {
+	line, _, ok := span.Bounds()
+	if !ok {
 		line = firstLine
 	}
 	return workbench.WindowOptions{
@@ -46,7 +49,7 @@ func DocumentWindow(root, name string, editor EditorCommand, line int) (workbenc
 
 // documentPane reports false when the file cannot be a pane after all, leaving
 // the caller to fall back to the editor.
-func documentPane(path, rel string, format workbench.DocumentFormat) (workbench.WindowOptions, bool) {
+func documentPane(path, rel string, format workbench.DocumentFormat, span workbench.LineSpan) (workbench.WindowOptions, bool) {
 	info, err := os.Stat(path)
 	if err != nil || info.Size() > documentLimit {
 		return workbench.WindowOptions{}, false
@@ -55,6 +58,12 @@ func documentPane(path, rel string, format workbench.DocumentFormat) (workbench.
 	if err != nil {
 		return workbench.WindowOptions{}, false
 	}
+	first, last, ok := span.Bounds()
+	if ok {
+		span = workbench.LineSpan{Line: first, Through: last}
+	} else {
+		span = workbench.LineSpan{}
+	}
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
 		Label:   documentLabel(string(text), rel),
@@ -62,6 +71,7 @@ func documentPane(path, rel string, format workbench.DocumentFormat) (workbench.
 		Cwd:     filepath.Dir(path),
 		Content: string(text),
 		Format:  format,
+		Span:    span,
 	}, true
 }
 

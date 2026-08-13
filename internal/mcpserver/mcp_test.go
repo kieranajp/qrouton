@@ -184,14 +184,14 @@ func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
 }
 
 // Showing the user a plan is the common case, and an editor is not how they read
-// one. The line number goes with it: a rendered pane has no lines.
+// one.
 func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	body := "# Document panes\n\nThe pane is a tab.\n"
 	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	message, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 7})
+	message, err := m.openFile(context.Background(), openFileInput{Path: "P007.md"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -208,8 +208,43 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 	if opts.Label != "◆ Document panes" {
 		t.Fatalf("pane label = %q", opts.Label)
 	}
+	if opts.Span != (workbench.LineSpan{}) {
+		t.Fatalf("a pane nobody aimed carries a span: %+v", opts.Span)
+	}
 	if strings.Contains(message, "line") {
-		t.Fatalf("the agent was told about a line in a rendered pane: %q", message)
+		t.Fatalf("the agent was told about a line it never asked for: %q", message)
+	}
+}
+
+// A long document is no use open at the top when the agent means one passage of
+// it, so the span travels to the pane and the agent is told what was marked.
+func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nPhase 1.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+
+	message, err := m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := host.opens[0].Span; got != (workbench.LineSpan{Line: 7, Through: 7}) {
+		t.Fatalf("pane span = %+v, want line 7 alone", got)
+	}
+	if !strings.Contains(message, "line 7") {
+		t.Fatalf("message = %q, want the marked line named", message)
+	}
+
+	message, err = m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Through: 19})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := host.opens[1].Span; got != (workbench.LineSpan{Line: 7, Through: 19}) {
+		t.Fatalf("pane span = %+v, want lines 7 to 19", got)
+	}
+	if !strings.Contains(message, "lines 7-19") {
+		t.Fatalf("message = %q, want the marked range named", message)
 	}
 }
 

@@ -1,11 +1,68 @@
+/* The gutter is declared on the wrapper because the pane's own heading lines up
+   against it too, and a sibling cannot read what .markdown declares. */
+.document {
+  --gutter: 4.5ch;
+}
+
 /* Global: the body is html the pipeline made, out of scoped styles' reach. */
 .markdown {
   font: var(--machine-lg);
   line-height: 1.75;
   color: var(--text-secondary);
   text-wrap: pretty;
-  /* Mono prose runs out of legs long before the pane runs out of width. */
+  /* Mono prose runs out of legs long before the pane runs out of width. The
+     measure is the content box, so the gutter's padding sits outside it. */
   max-inline-size: 78ch;
+  padding-left: var(--gutter);
+  position: relative;
+}
+
+/* Source line numbers, so a passage in a long document can be referred to by
+   number. Every number resolves its column against .markdown and its row
+   against wherever the block already sits, which keeps one gutter for blocks at
+   every depth — a nested list item, a fenced block — without any of them
+   knowing how far they are indented. A block spanning several source lines is
+   named by the one it opens on: the prose is reflowed and no longer has rows. */
+.markdown [data-line]::before {
+  content: attr(data-line);
+  position: absolute;
+  left: 0;
+  width: var(--gutter);
+  padding-right: 1.5ch;
+  box-sizing: border-box;
+  font: var(--terminal-sm);
+  color: var(--text-faint);
+  text-align: right;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* A table lays its rows out itself, and a number left in the flow inside one
+   lands beside whichever row came first, so a table carries its own gutter: the
+   column comes off the table's left edge and the row off its top. */
+.markdown table[data-line] {
+  position: relative;
+}
+
+.markdown table[data-line]::before {
+  left: calc(-1 * var(--gutter));
+  top: 0;
+}
+
+/* The lines the agent pointed at. The bar hangs in the gap between the number
+   and the text — a bar inside the block would sit on its first character, and
+   padding to clear it would move the prose every time something is marked. */
+.markdown [data-line].marked {
+  background: var(--wash-selected);
+  box-shadow: -1.2ch 0 0 -0.4ch var(--accent-action);
+}
+
+.markdown pre[data-line].marked {
+  background: color-mix(in srgb, var(--accent-action) 7%, var(--surface-terminal));
+}
+
+.markdown [data-line].marked::before {
+  color: var(--accent-action);
 }
 
 .markdown > :first-child {

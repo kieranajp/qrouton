@@ -60,6 +60,12 @@ const (
 	renderedFileFormat = "Showing %s rendered in a pane the user can read and scroll " +
 		"(it stays open until they close it; the conversation keeps focus)."
 
+	renderedSpanFormat = "Showing %s rendered in a pane, scrolled to %s with those lines marked " +
+		"(it stays open until the user closes it; the conversation keeps focus)."
+
+	singleLineFormat = "line %d"
+	lineRangeFormat  = "lines %d-%d"
+
 	runningFormat = "Running in window %q (cwd %s). The user can close the window, " +
 		"or call " + toolReadWindow + " with name %q to see its " +
 		"output and " + toolCloseWindow + " %q to close it."
