@@ -20,6 +20,7 @@
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import { pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
+  import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import {
     consumeTerminalFocus,
@@ -239,6 +240,7 @@
   }
 
   let assembling = $state(false);
+  let settingsOpen = $state(false);
   // An escalation is the shown session's own pending request, so switching
   // session takes its picker with it. Add-repos is this page's, and belongs to
   // the session it was pressed on for the same reason.
@@ -249,7 +251,7 @@
   // same way the rail's menu and its confirm do. Watching the state rather than
   // the dismissal catches the picker the backend closes, which no handler here
   // ever sees.
-  let covered = $derived(assembling || picker);
+  let covered = $derived(assembling || picker || settingsOpen);
   let wasCovered = false;
   $effect(() => {
     if (wasCovered && !covered) keyboard++;
@@ -267,7 +269,7 @@
     <span class="name">{fields.identity}</span>
     {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
     <span class="tools">
-      <Button variant="ghost" size="sm" disabled>Settings</Button>
+      <Button variant="ghost" size="sm" onclick={() => (settingsOpen = true)}>Settings</Button>
     </span>
   </div>
 
@@ -450,6 +452,8 @@
     {#key fields.slug}
       <PickerOverlay slug={fields.slug} onClose={() => (added = "")} />
     {/key}
+  {:else if settingsOpen}
+    <SettingsOverlay onClose={() => (settingsOpen = false)} />
   {/if}
 </div>
 
