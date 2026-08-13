@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { diffClass, parseDiff } from "./diff.js";
+import { parseDiff } from "./diff.js";
 
 const positions = (text) => parseDiff(text).rows.map(({ kind, oldLine, newLine }) => [
   kind,
@@ -236,12 +236,4 @@ test("only the anchored ASCII two-way header grammar starts a candidate", () => 
     const parsed = parseDiff(`${header}\n row`);
     assert.ok(parsed.rows.every((row) => row.oldLine === null && row.newLine === null), header);
   }
-});
-
-test("diffClass retains the component's prefix classifier", () => {
-  assert.equal(diffClass("+++ b/file"), "diff-file");
-  assert.equal(diffClass("@@@ combined"), "diff-hunk");
-  assert.equal(diffClass("+outside"), "diff-add");
-  assert.equal(diffClass("-outside"), "diff-del");
-  assert.equal(diffClass(" context"), "");
 });

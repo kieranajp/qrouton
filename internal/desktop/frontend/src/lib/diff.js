@@ -160,13 +160,3 @@ export function parseDiff(text) {
   }
   return { rows, digits };
 }
-
-/**
- * diffClass names one line's part in a unified diff.
- * @param {string} line
- * @returns {string}
- */
-export function diffClass(line) {
-  const kind = outsideKind(line);
-  return kind === "plain" ? "" : `diff-${kind}`;
-}

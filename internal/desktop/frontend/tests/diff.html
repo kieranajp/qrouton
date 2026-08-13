@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Diff fixture</title>
+    <style>
+      :root {
+        --diff-add-bg: #e6ffed;
+        --diff-add-fg: #17451f;
+        --diff-del-bg: #ffeef0;
+        --diff-del-fg: #611a20;
+        --diff-hunk-bg: #f1f4f8;
+        --diff-file-fg: #17365d;
+        --text-muted: #68717d;
+        --text-primary: #20252b;
+        --space-4: 8px;
+        --terminal: 14px/20px "Courier New", monospace;
+      }
+
+      body {
+        margin: 0;
+        color: var(--text-primary);
+        font: var(--terminal);
+      }
+
+      #diff-root {
+        box-sizing: border-box;
+        width: 440px;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="diff-root"></main>
+    <script type="module" src="./diff-fixture.js"></script>
+  </body>
+</html>

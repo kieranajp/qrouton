@@ -3,6 +3,44 @@
   word-break: break-word;
 }
 
+.diff-grid {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.diff-line {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: var(--diff-gutter-width) var(--diff-gutter-width) minmax(12ch, 1fr);
+  align-items: start;
+  min-width: calc(var(--diff-gutter-width) + var(--diff-gutter-width) + 12ch);
+}
+
+.diff-gutter {
+  box-sizing: border-box;
+  width: 100%;
+  padding-right: 0.5ch;
+  border-right: 1px solid var(--text-muted);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  user-select: none;
+  pointer-events: none;
+}
+
+.diff-gutter::before {
+  content: attr(data-line);
+}
+
+.diff-content {
+  min-width: 0;
+  min-height: 1lh;
+  padding-left: 0.5ch;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .diff-add {
   background: var(--diff-add-bg);
   color: var(--diff-add-fg);
