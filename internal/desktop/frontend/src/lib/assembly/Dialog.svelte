@@ -1,12 +1,14 @@
 <script>
   import { onMount } from "svelte";
   import Button from "../core/Button.svelte";
+  import Pips from "../forms/Pips.svelte";
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], active?: number, secondary: string, primary: string, status?: string, busy?: boolean, onSecondary: () => void, onPrimary: () => void, onEscape: () => void, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, primary: string, status?: string, busy?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
   let {
     steps = [],
+    pips = 0,
     active = 0,
     secondary,
     primary,
@@ -30,7 +32,7 @@
     const meant = intent(event);
     if (!meant) return;
     event.preventDefault();
-    if (meant === "cancel") onEscape();
+    if (meant === "cancel") onEscape?.();
     else onPrimary();
   }
 </script>
@@ -48,8 +50,15 @@
     </div>
 
     <div class="footer">
-      <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
+      {#if pips}
+        <Pips total={pips} {active} />
+      {:else if secondary}
+        <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
+      {/if}
       <div class="advance">
+        {#if pips && secondary}
+          <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
+        {/if}
         <span class="status">{status}</span>
         <Button disabled={busy} onclick={onPrimary}>{primary}</Button>
       </div>
@@ -109,7 +118,10 @@
     border-top: 1px solid var(--border-subtle);
   }
 
+  /* Right-aligned by its own margin rather than by space-between, so a footer
+     whose left slot is empty still puts the buttons on the right. */
   .advance {
+    margin-left: auto;
     display: flex;
     align-items: center;
     gap: 14px;
