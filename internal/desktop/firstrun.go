@@ -1,9 +1,12 @@
 package desktop
 
 import (
+	"context"
+	"net/http"
 	"path/filepath"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 )
 
 // FirstRunInput is the two answers the flow collects: the owners to search and
@@ -26,10 +29,37 @@ type FirstRun struct {
 	reg      *Sessions
 	relaunch func() error
 	quit     func()
+	choose   func() (string, error)
 }
 
-func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func()) *FirstRun {
-	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit}
+func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
+	choose func() (string, error)) *FirstRun {
+	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose}
+}
+
+// Login is the GitHub account the screens name, resolved asynchronously so the
+// screen renders at once and the line fills in. No account is a useful answer
+// rather than an error: a wrong or absent one is exactly how the owners silently
+// fail to resolve, and the screen has a sentence for it.
+func (f *FirstRun) Login() string {
+	token, err := github.Token()
+	if err != nil {
+		return ""
+	}
+	login, err := github.AuthenticatedLogin(context.Background(), http.DefaultClient, token)
+	if err != nil {
+		return ""
+	}
+	return login
+}
+
+// ChooseRoot asks for a directory. Cancelling answers the empty string, so the
+// field keeps what it had.
+func (f *FirstRun) ChooseRoot() (string, error) {
+	if f.choose == nil {
+		return "", ErrNoDirectoryPicker
+	}
+	return f.choose()
 }
 
 // Save writes orgs, root and the welcomed marker together, then either drops the

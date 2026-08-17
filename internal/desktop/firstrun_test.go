@@ -51,7 +51,7 @@ func TestFirstRunSaveWithAnUnchangedRootPersistsBothAnswersAndDropsTheGate(t *te
 	cfg := &config.Config{Root: root}
 	reg := newSessions()
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit)
+	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil)
 
 	result, err := f.Save(FirstRunInput{Orgs: []string{" acme ", "acme", "", "second-org"}, Root: root})
 	if err != nil {
@@ -88,7 +88,7 @@ func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
 
 	next := filepath.Join(t.TempDir(), "elsewhere")
 	result, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next})
@@ -117,7 +117,7 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{fail: errors.New("workbench never answered")}
 	reg := newSessions()
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit)
+	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil)
 
 	_, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: filepath.Join(t.TempDir(), "elsewhere")})
 	if err == nil {
@@ -152,7 +152,7 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	}
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
 
 	for _, in := range []FirstRunInput{{Root: "   "}, {Root: filepath.Join(blocked, "sub")}} {
 		if _, err := f.Save(in); err == nil {
@@ -167,5 +167,31 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
 		t.Fatal("a refused save wrote config.json")
+	}
+}
+
+// A wrong or absent account is the useful signal, so the screen is given "" to
+// say so rather than an error it has nowhere to put.
+func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("GITHUB_TOKEN", "")
+	f := newFirstRun(&config.Config{}, newSessions(), nil, nil, nil)
+
+	if login := f.Login(); login != "" {
+		t.Fatalf("Login() = %q, want no account named", login)
+	}
+}
+
+func TestFirstRunChooseRootAnswersThePickerAndNothingOnACancel(t *testing.T) {
+	chosen := "/sessions/elsewhere"
+	f := newFirstRun(&config.Config{}, newSessions(), nil, nil,
+		func() (string, error) { return chosen, nil })
+	if got, err := f.ChooseRoot(); err != nil || got != chosen {
+		t.Fatalf("ChooseRoot() = %q, %v, want %q", got, err, chosen)
+	}
+
+	chosen = ""
+	if got, err := f.ChooseRoot(); err != nil || got != "" {
+		t.Fatalf("a cancelled picker answered %q, %v, want the field left alone", got, err)
 	}
 }

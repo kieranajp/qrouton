@@ -109,7 +109,7 @@ func Run(opts Options) error {
 	r.register(application.NewService(newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)))
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newSettings(opts.Config, opts.ValidateEditor, opts.ValidateLaunch, quit)))
-	r.register(application.NewService(newFirstRun(opts.Config, reg, opts.Relaunch, quit)))
+	r.register(application.NewService(newFirstRun(opts.Config, reg, opts.Relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)
 }
 

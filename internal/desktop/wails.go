@@ -70,6 +70,19 @@ func (r *wailsRenderer) Run() error { return r.app.Run() }
 
 func (r *wailsRenderer) Quit() { r.app.Quit() }
 
+// chooseDirectory prompts for a directory, answering "" when the user cancels.
+// It is not on the renderer seam: nothing else needs it, and adding it there
+// would make every test double grow a method with no behaviour to check.
+// PromptForSingleSelection marshals to the main thread itself, so onMain must
+// not be layered on top of it.
+func (r *wailsRenderer) chooseDirectory() (string, error) {
+	return r.app.Dialog.OpenFile().
+		CanChooseDirectories(true).
+		CanChooseFiles(false).
+		CanCreateDirectories(true).
+		PromptForSingleSelection()
+}
+
 // onMain runs work on the main thread, which is where window construction has
 // to happen. InvokeSync has no loop to marshal onto until the application has
 // started, so work queued before then runs inline.

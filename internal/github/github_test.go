@@ -221,3 +221,55 @@ func TestRepoIDIncludesOrganization(t *testing.T) {
 		t.Fatalf("Repo.ID() = %q", got)
 	}
 }
+
+func TestAuthenticatedLoginNamesTheAccountTheTokenBelongsTo(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/user": `{"login":"kieranajp"}`,
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	login, err := AuthenticatedLogin(context.Background(), client, "token")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if login != "kieranajp" {
+		t.Fatalf("login = %q, want %q", login, "kieranajp")
+	}
+}
+
+func TestAuthenticatedLoginReportsAFailedLookup(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	if _, err := AuthenticatedLogin(context.Background(), client, "token"); err == nil {
+		t.Fatal("AuthenticatedLogin invented a login from a failed lookup")
+	}
+}
+
+// Owner discovery resolves a personal owner through the same lookup, so the
+// shared implementation must still answer it.
+func TestRefreshOwnerReposStillResolvesTheAuthenticatedUsersOwnRepos(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/users/kieranajp": `{"login":"kieranajp","type":"User"}`,
+		"/user":            `{"login":"kieranajp"}`,
+		"/user/repos?affiliation=owner&visibility=all&per_page=100&page=1": `[{"name":"qrouton"}]`,
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	repos, err := RefreshOwnerRepos(context.Background(), client, "token", "kieranajp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(repos) != 1 || repos[0].Name != "qrouton" {
+		t.Fatalf("repos = %#v, want the authenticated user's own", repos)
+	}
+}

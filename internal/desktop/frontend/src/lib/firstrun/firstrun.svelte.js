@@ -18,6 +18,7 @@ export function firstRun() {
   let fields = $state(/** @type {Record<string, string>} */ ({}));
   let status = $state("");
   let busy = $state(false);
+  let login = $state("");
 
   // The prefill is Settings' own Load: the same config, so asking twice would be
   // two owners of one fact.
@@ -26,6 +27,9 @@ export function firstRun() {
     form.root = loaded?.root ?? "";
   });
 
+  // Resolved off the render: shelling out to gh costs more than the screen does.
+  go.login().then((resolved) => (login = resolved ?? ""));
+
   function add() {
     form.orgs = addOrg(form.orgs, orgInput);
     orgInput = "";
@@ -33,6 +37,14 @@ export function firstRun() {
 
   function remove(org) {
     form.orgs = removeOrg(form.orgs, org);
+  }
+
+  // A cancelled picker answers "", which leaves the field as the user had it.
+  async function choose() {
+    try {
+      const chosen = await go.chooseRoot();
+      if (chosen) form.root = chosen;
+    } catch {}
   }
 
   function back() {
@@ -84,8 +96,12 @@ export function firstRun() {
     get busy() {
       return busy;
     },
+    get login() {
+      return login;
+    },
     add,
     remove,
+    choose,
     back,
     next,
   };

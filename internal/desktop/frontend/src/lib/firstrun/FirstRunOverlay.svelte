@@ -37,10 +37,11 @@
     <OrgsScreen
       orgs={flow.form.orgs}
       bind:orgInput={flow.orgInput}
+      login={flow.login}
       onAddOrg={flow.add}
       onRemoveOrg={flow.remove} />
   {:else}
-    <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} />
+    <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} onChoose={flow.choose} />
   {/if}
 </Dialog>
 

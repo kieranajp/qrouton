@@ -139,6 +139,18 @@ func Token() (string, error) {
 	return "", ErrNoToken
 }
 
+// AuthenticatedLogin is the account the token belongs to, which is how a screen
+// naming the signed-in user says whose repositories it can see.
+func AuthenticatedLogin(ctx context.Context, client *http.Client, token string) (string, error) {
+	var me struct {
+		Login string `json:"login"`
+	}
+	if err := githubJSON(ctx, client, token, githubAPIBase+userPath, &me); err != nil {
+		return "", fmt.Errorf("github: identifying authenticated user: %w", err)
+	}
+	return me.Login, nil
+}
+
 func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner string) ([]Repo, error) {
 	login := ""
 	return fetchOwnerRepos(ctx, client, token, owner, &login)
@@ -193,13 +205,11 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 		endpoint = githubAPIBase + orgsPath + url.PathEscape(owner) + reposPath + orgReposQuery
 	case ownerTypeUser:
 		if *authenticatedLogin == "" {
-			var me struct {
-				Login string `json:"login"`
+			login, err := AuthenticatedLogin(ctx, client, token)
+			if err != nil {
+				return nil, err
 			}
-			if err := githubJSON(ctx, client, token, githubAPIBase+userPath, &me); err != nil {
-				return nil, fmt.Errorf("github: identifying authenticated user: %w", err)
-			}
-			*authenticatedLogin = me.Login
+			*authenticatedLogin = login
 		}
 		if strings.EqualFold(owner, *authenticatedLogin) {
 			endpoint = githubAPIBase + userReposQuery
