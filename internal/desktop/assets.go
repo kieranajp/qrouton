@@ -17,7 +17,9 @@ import (
 //go:embed all:assets
 var assetFS embed.FS
 
-var frontendServices = []any{Term{}, Sessions{}, Windows{}}
+// FirstRun is guarded because it is a gate: bindings missing from the bundle
+// leave a user who can never reach a session.
+var frontendServices = []any{Term{}, Sessions{}, Windows{}, FirstRun{}}
 
 func validateFrontend(assets fs.FS) error {
 	var bundle strings.Builder

@@ -178,6 +178,7 @@ func workbenchProcess(marshalled string) error {
 		Config:      cfg,
 		Runners:     assemblyRunners(cfg),
 		Signal:      launch.SignalSupervisor,
+		Relaunch:    relaunchWorkbench(bin, spec, os.Environ()),
 		ValidateEditor: func(argv []string) error {
 			if len(argv) == 0 {
 				return nil
@@ -190,6 +191,28 @@ func workbenchProcess(marshalled string) error {
 			return err
 		},
 	})
+}
+
+// relaunchWorkbench replaces this workbench with one that reads config.json
+// again, on no session so it opens on the assembly overlay. It passes no root:
+// workbenchProcess loads the config itself, so the successor picks up whatever
+// was just written. Detach returns once the child answers, so the caller only
+// quits behind a live successor.
+//
+// Two workbenches overlap for the length of that wait. That is safe here only
+// because the caller holds no session, and so no supervisor two of them could
+// both believe they own.
+func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func() error {
+	return func() error {
+		socket, err := workbench.NewSocketPath()
+		if err != nil {
+			return err
+		}
+		next := spec
+		next.SessionRoot, next.Resume, next.Socket = "", false, socket
+		return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
+			socket, workbench.ProcessLog(socket))
+	}
 }
 
 // agentCommand builds a session's supervisor command when the workbench boots it,

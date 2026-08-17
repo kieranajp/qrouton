@@ -58,6 +58,10 @@ type Options struct {
 	// Signal relaunches a session's runner after an escalation, which is
 	// launch.SignalSupervisor reached without importing it.
 	Signal func(sessionRoot string)
+	// Relaunch replaces this workbench with one reading the config file afresh,
+	// and returns only once the successor is serving. First run needs it because
+	// a changed sessions root cannot take effect in a running process.
+	Relaunch func() error
 	// ValidateEditor and ValidateLaunch reach launch.ResolveEditor and
 	// launch.Runners without desktop importing launch, the same shape Agent,
 	// Shell, Signal and Runners already use.
@@ -105,6 +109,7 @@ func Run(opts Options) error {
 	r.register(application.NewService(newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)))
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newSettings(opts.Config, opts.ValidateEditor, opts.ValidateLaunch, quit)))
+	r.register(application.NewService(newFirstRun(opts.Config, reg, opts.Relaunch, quit)))
 	return run(r, term, windows, opts, quit)
 }
 

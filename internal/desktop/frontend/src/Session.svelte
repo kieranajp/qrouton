@@ -20,6 +20,7 @@
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
+  import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import {
@@ -252,7 +253,7 @@
   // same way the rail's menu and its confirm do. Watching the state rather than
   // the dismissal catches the picker the backend closes, which no handler here
   // ever sees.
-  let covered = $derived(assembling || picker || settingsOpen);
+  let covered = $derived(fields.welcoming || assembling || picker || settingsOpen);
   let wasCovered = false;
   $effect(() => {
     if (wasCovered && !covered) keyboard++;
@@ -445,7 +446,9 @@
       ? ''
       : 's'}" />
 
-  {#if assembling}
+  {#if fields.welcoming}
+    <FirstRunOverlay />
+  {:else if assembling}
     <Overlay gated={!fields.slug} onClose={() => (requested = false)} />
   {:else if picker}
     <!-- Keyed on the session, so arriving at another one draws that session's

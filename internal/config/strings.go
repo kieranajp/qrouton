@@ -22,6 +22,7 @@ const (
 	orgsEnvVar = "QROUTON_ORGS"
 
 	orgSeparator = ","
+	envAssign    = "="
 
 	homePrefix = "~"
 	homeSlash  = homePrefix + "/"

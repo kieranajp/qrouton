@@ -23,6 +23,7 @@ var (
 	ErrNoDocumentName  = errors.New("open request names no document")
 	ErrNoEditorCommand = errors.New("workbench has no editor command to open a document with")
 	ErrNoRevealCommand = errors.New("workbench has no command to reveal a session's directory with")
+	ErrNoRelaunch      = errors.New("workbench has no way to relaunch itself into a new sessions root")
 	ErrNoViewport      = errors.New("window has no source-mapped viewport")
 	ErrInvalidViewport = errors.New("invalid document viewport report")
 )

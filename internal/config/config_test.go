@@ -161,6 +161,22 @@ func TestLegacyWindowsPreferenceIsIgnoredAndOmittedOnSave(t *testing.T) {
 	}
 }
 
+// A successor inheriting an override would have the answer just written to
+// config.json overridden the moment it read it.
+func TestWithoutOverridesDropsOnlyTheRuntimeOverrides(t *testing.T) {
+	env := []string{"PATH=/usr/bin", rootEnvVar + "=/old/sessions", "HOME=/home/me",
+		orgsEnvVar + "=acme,other", "QROUTON_ROOTLESS=keep"}
+	want := []string{"PATH=/usr/bin", "HOME=/home/me", "QROUTON_ROOTLESS=keep"}
+	if got := WithoutOverrides(env); !reflect.DeepEqual(got, want) {
+		t.Fatalf("WithoutOverrides() = %#v, want %#v", got, want)
+	}
+
+	plain := []string{"PATH=/usr/bin", "HOME=/home/me"}
+	if got := WithoutOverrides(plain); !reflect.DeepEqual(got, plain) {
+		t.Fatalf("WithoutOverrides() = %#v, want it unchanged", got)
+	}
+}
+
 func TestExpandHomeResolvesTildeAndLeavesAnAbsolutePathAlone(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

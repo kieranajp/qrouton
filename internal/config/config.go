@@ -83,6 +83,20 @@ func Save(cfg *Config) error {
 	return os.WriteFile(Path(), b, fileMode)
 }
 
+// WithoutOverrides drops the runtime overrides from an environment, so a process
+// inheriting it reads the config file's answer rather than this one's.
+func WithoutOverrides(env []string) []string {
+	out := make([]string, 0, len(env))
+	for _, entry := range env {
+		name, _, _ := strings.Cut(entry, envAssign)
+		if name == rootEnvVar || name == orgsEnvVar {
+			continue
+		}
+		out = append(out, entry)
+	}
+	return out
+}
+
 func splitOrgs(s string) []string {
 	var out []string
 	seen := make(map[string]bool)

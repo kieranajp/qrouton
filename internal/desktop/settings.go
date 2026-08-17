@@ -71,12 +71,9 @@ func (s *Settings) Load() SettingsView {
 // own Root handling below for why.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	root := strings.TrimSpace(in.Root)
-	if root == "" {
-		return SaveResult{}, fmt.Errorf("root: cannot be empty")
-	}
-	expandedRoot := filepath.Clean(config.ExpandHome(root))
-	if err := os.MkdirAll(expandedRoot, 0o755); err != nil {
-		return SaveResult{}, fmt.Errorf("root: %s", err)
+	expandedRoot, err := validateRoot(in.Root)
+	if err != nil {
+		return SaveResult{}, err
 	}
 
 	editor, err := shlex.Split(in.Editor)
@@ -121,6 +118,20 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 // renderer Quit: every open session's supervisor and PTY end cleanly before
 // the process does.
 func (s *Settings) Quit() { s.quit() }
+
+// validateRoot expands a typed sessions root and creates it, answering the
+// cleaned absolute path. Shared with first run, which asks the same question.
+func validateRoot(raw string) (string, error) {
+	root := strings.TrimSpace(raw)
+	if root == "" {
+		return "", fmt.Errorf("root: cannot be empty")
+	}
+	expanded := filepath.Clean(config.ExpandHome(root))
+	if err := os.MkdirAll(expanded, 0o755); err != nil {
+		return "", fmt.Errorf("root: %s", err)
+	}
+	return expanded, nil
+}
 
 // dedupOrgs trims and deduplicates the way config's own QROUTON_ORGS parsing
 // does, over a slice rather than a CSV string.
