@@ -89,7 +89,6 @@ var aliases = []token{
 	{"surface-chrome", ref("ctp-mantle")},
 	{"surface-terminal", ref("ctp-crust")},
 	{"surface-raised", ref("ctp-surface-0")},
-	{"surface-canvas", "#11121c"},
 
 	{"text-primary", ref("ctp-text")},
 	{"text-secondary", ref("ctp-subtext-0")},

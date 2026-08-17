@@ -66,7 +66,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--surface-canvas);
+    background: var(--scrim);
     outline: none;
   }
 
@@ -79,6 +79,7 @@
     flex-direction: column;
     background: var(--surface-app);
     border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-menu);
     overflow: hidden;
   }
 

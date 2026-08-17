@@ -37,7 +37,11 @@ export function browsing(branch) {
   });
   go.cached().then((list) => (refresh = idle(list ?? [])));
 
-  let listed = $derived(filter({ repos: refresh.repos, owners, query, cap: SHOWN }));
+  // Pinning the locked rows rather than every picked one: a selection that
+  // re-sorted as it was made would move the next row under the pointer.
+  let listed = $derived(
+    filter({ repos: refresh.repos, owners, query, cap: SHOWN, pinned: selection.locked }),
+  );
   let rows = $derived(
     listed.rows.map((row) => ({
       id: row.id,

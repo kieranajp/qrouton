@@ -50,3 +50,21 @@ test("the cap changes what is shown without changing the total", () => {
   assert.equal(ids(capped.rows), "lifesum/api lifesum/billing");
   assert.deepEqual([capped.shown, capped.total], [2, 4]);
 });
+
+test("pinned rows sort first, in activity order, ahead of the cap", () => {
+  const owners = ["lifesum", "vimeda", "kieranajp"];
+  const pinned = ["kieranajp/billboard", "lifesum/billing"];
+  assert.equal(ids(filter({ repos: REPOS, owners, pinned }).rows),
+    "lifesum/billing kieranajp/billboard lifesum/api vimeda/billing-legacy");
+
+  const capped = filter({ repos: REPOS, owners, pinned: ["kieranajp/billboard"], cap: 2 });
+  assert.equal(ids(capped.rows), "kieranajp/billboard lifesum/api");
+});
+
+test("a pinned row still answers to the owners and the search", () => {
+  const pinned = ["kieranajp/billboard"];
+  assert.equal(ids(filter({ repos: REPOS, owners: ["lifesum"], pinned }).rows),
+    "lifesum/api lifesum/billing");
+  assert.equal(ids(filter({ repos: REPOS, owners: ["lifesum", "kieranajp"], query: "api", pinned }).rows),
+    "lifesum/api");
+});

@@ -75,7 +75,7 @@ func (p *Picker) Confirm(slug string, in draftInput) error {
 		return err
 	}
 	draft := p.draft(m, escalation, in)
-	if problems := assembly.CheckRepos(draft); len(problems) > 0 {
+	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
 	if err := p.assembler.Confirm(root, draft, escalation != nil, nil); err != nil {

@@ -42,7 +42,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgb(0 0 0 / 0.5);
+    background: var(--scrim);
   }
 
   .panel {

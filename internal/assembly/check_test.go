@@ -46,6 +46,25 @@ func TestCheckRejectsADraftWhoseOnlyEditingRepoHasGone(t *testing.T) {
 	problemOn(t, Check(d), FieldRepos)
 }
 
+// The rows a picker opens holding are the session's, not the visit's: an
+// escalation over a session already being worked in adds reference repositories
+// alone, or confirms adding nothing at all.
+func TestAdditionsLeanOnTheEditingRepositoryTheSessionAlreadyHolds(t *testing.T) {
+	working := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "acme", Name: "api", Role: session.RepoRoleEditing},
+	}}
+	reference := Draft{Name: "Research", Prefix: "feat",
+		Repos: []session.RepoSelection{{Repo: repoNamed("docs"), Role: session.RepoRoleReference}}}
+
+	if problems := CheckAdditions(working, reference); len(problems) != 0 {
+		t.Fatalf("addition to a session holding an editing repo refused: %+v", problems)
+	}
+	if problems := CheckAdditions(working, Draft{Name: "Research", Prefix: "feat"}); len(problems) != 0 {
+		t.Fatalf("confirming no additions refused: %+v", problems)
+	}
+	problemOn(t, CheckAdditions(session.Manifest{}, reference), FieldRepos)
+}
+
 func TestCheckRejectsAnUnparseableTicketURLAndAnEmptyName(t *testing.T) {
 	editingAPI := []session.RepoSelection{{Repo: repoNamed("api"), Role: session.RepoRoleEditing}}
 	d := Draft{Name: "Cleanup", Prefix: "feat", Ticket: "not a ticket", Repos: editingAPI}

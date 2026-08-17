@@ -37,13 +37,22 @@ func Check(d Draft) []Problem {
 	if session.Slugify(d.Name) == "" {
 		problems = append(problems, Problem{Field: FieldName, Message: msgNameRequired})
 	}
-	return append(problems, CheckRepos(d)...)
+	return append(problems, checkRepos(d)...)
 }
 
-// CheckRepos is the only one of these rules the picker shares. A session that
+// CheckAdditions is the only one of these rules the picker shares. A session that
 // exists has already been named and branched, so its name and ticket are not the
-// picker's to judge again — only the selection is still in question.
-func CheckRepos(d Draft) []Problem {
+// picker's to judge again — and one already holding an editing repo cannot be
+// made to lack one by adding to it, so only a session still without one has to be
+// given one here.
+func CheckAdditions(m session.Manifest, d Draft) []Problem {
+	if holdsEditingRepo(m) {
+		return nil
+	}
+	return checkRepos(d)
+}
+
+func checkRepos(d Draft) []Problem {
 	if hasEditingRepo(d) {
 		return nil
 	}
@@ -71,6 +80,15 @@ func (a Assembler) CheckSlug(d Draft) []Problem {
 func hasEditingRepo(d Draft) bool {
 	for _, sel := range d.Repos {
 		if sel.Role.Effective() == session.RepoRoleEditing {
+			return true
+		}
+	}
+	return false
+}
+
+func holdsEditingRepo(m session.Manifest) bool {
+	for _, r := range m.Repos {
+		if r.Role.Effective() == session.RepoRoleEditing {
 			return true
 		}
 	}

@@ -25,6 +25,15 @@
     transparent 1.5px 4px
   );
 
+  /* the field behind a modal: the same hatch inverted for a dark fill, over a
+     wash heavy enough that the app below reads as shape and never as text */
+  --scrim: repeating-linear-gradient(
+      45deg,
+      color-mix(in srgb, var(--ctp-surface-1) 32%, transparent) 0 1.5px,
+      transparent 1.5px 6px
+    )
+    color-mix(in srgb, var(--ctp-crust) 94%, transparent);
+
   /* selection wash behind an active tab */
   --wash-selected: color-mix(in srgb, var(--ctp-blue) 7%, transparent);
   --wash-guided: color-mix(in srgb, var(--ctp-mauve) 9%, transparent);
