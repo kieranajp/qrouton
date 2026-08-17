@@ -195,8 +195,8 @@ func workbenchProcess(marshalled string) error {
 
 // relaunchWorkbench replaces this workbench with one that loads the config
 // again, on no session. Detach returns only once the child answers, so the two
-// overlap for that wait — safe only because the caller holds no session, and so
-// no supervisor both could believe they own.
+// overlap for that wait — safe because the successor holds no session, and so
+// claims no supervisor the caller might still own.
 func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func() error {
 	return func() error {
 		socket, err := workbench.NewSocketPath()
@@ -206,7 +206,7 @@ func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func
 		next := spec
 		next.SessionRoot, next.Resume, next.Socket = "", false, socket
 		return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
-			socket, workbench.ProcessLog(socket))
+			socket, workbenchLog(next))
 	}
 }
 

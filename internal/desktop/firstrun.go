@@ -45,7 +45,9 @@ func (f *FirstRun) Login() string {
 	if err != nil {
 		return ""
 	}
-	login, err := github.AuthenticatedLogin(context.Background(), http.DefaultClient, token)
+	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
+	defer cancel()
+	login, err := github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
 	if err != nil {
 		return ""
 	}
@@ -86,7 +88,9 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 		return FirstRunResult{}, nil
 	}
 
-	if f.relaunch == nil {
+	// Both, before either runs: relaunching and then finding nothing to quit with
+	// would leave two workbenches up.
+	if f.relaunch == nil || f.quit == nil {
 		return FirstRunResult{}, ErrNoRelaunch
 	}
 	if err := f.relaunch(); err != nil {

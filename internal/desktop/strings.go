@@ -94,4 +94,8 @@ const (
 	// terminateGrace is how long a process tree gets to exit on SIGTERM before
 	// it is killed outright.
 	terminateGrace = 3 * time.Second
+
+	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
+	// which fills in after the screen has already drawn.
+	loginTimeout = 5 * time.Second
 )

@@ -19,8 +19,7 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
-	// Welcomed is set once the first-run flow has been through. Absent reads
-	// false, so a hand-written config sees the flow once.
+	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 }
 

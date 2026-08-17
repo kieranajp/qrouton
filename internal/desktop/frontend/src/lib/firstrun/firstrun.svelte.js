@@ -39,19 +39,26 @@ export function firstRun() {
     form.orgs = removeOrg(form.orgs, org);
   }
 
-  // A cancelled picker answers "", which leaves the field as the user had it.
+  // A cancelled picker answers "" with no error, which leaves the field as the
+  // user had it; anything thrown is a real failure and would otherwise look like
+  // a button that does nothing.
   async function choose() {
     try {
       const chosen = await go.chooseRoot();
       if (chosen) form.root = chosen;
-    } catch {}
+    } catch (err) {
+      status = String(err?.message ?? err ?? "");
+    }
   }
 
   function back() {
     if (step > 0) step--;
   }
 
+  // A typed owner is committed on the way out. Chips are the only way to answer
+  // screen 4, and there is no Add button beside the field to press instead.
   function next() {
+    add();
     if (step < last) {
       step++;
       return;
