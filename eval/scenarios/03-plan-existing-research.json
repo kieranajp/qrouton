@@ -7,6 +7,7 @@
   "rubric": "Use the retry research lineage, delegate code inspection and drafting, create a planning document, keep mechanics invisible, and present it through open_file.",
   "checks": [
     {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/plans/*retry*.md", "max_lines": 400},
     {"kind": "delegation", "pattern": "planning-lead"},
     {"kind": "open_file"},
     {"kind": "response_excludes", "any": ["QRSPI", "qrspi-plan", "document numbering"]}

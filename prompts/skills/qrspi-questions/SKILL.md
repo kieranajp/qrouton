@@ -11,5 +11,5 @@ Keep this conversational; the user experiences one Research step.
 2. Ask only for missing information that materially changes the investigation: symptoms, trigger, suspected area, boundaries, and desired understanding. Do not grill a user who already supplied enough context.
 3. Convert the framing into concrete questions about what exists, how it behaves, and where it connects. Avoid embedding a proposed solution.
 4. Add safe context pointers such as repositories, paths, systems, and public documentation. Exclude the ticket URL, ticket text, and solution intent because this entire document is passed to blind researchers.
-5. Write `thoughts/shared/research/R<n>-<date>-<slug>-questions.md` with `type: research-questions` frontmatter. Pair its number and slug with the eventual research artifact.
+5. Write `thoughts/shared/research/R<n>-<date>-<slug>-questions.md` with `type: research-questions` frontmatter. Pair its number and slug with the eventual research artifact. Keep the brief under 80 lines: combine overlapping questions and include only context the researchers need.
 6. Ask for review only when ambiguity remains or correction would substantially change the research. Otherwise continue into delegated research.

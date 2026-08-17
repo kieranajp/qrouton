@@ -18,11 +18,12 @@ type Scenario struct {
 }
 
 type CheckSpec struct {
-	Kind    string   `json:"kind"`
-	Path    string   `json:"path,omitempty"`
-	Repo    string   `json:"repo,omitempty"`
-	Pattern string   `json:"pattern,omitempty"`
-	Any     []string `json:"any,omitempty"`
+	Kind     string   `json:"kind"`
+	Path     string   `json:"path,omitempty"`
+	Repo     string   `json:"repo,omitempty"`
+	Pattern  string   `json:"pattern,omitempty"`
+	Any      []string `json:"any,omitempty"`
+	MaxLines int      `json:"max_lines,omitempty"`
 }
 
 type Config struct {

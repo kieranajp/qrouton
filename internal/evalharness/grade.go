@@ -84,6 +84,8 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return artifactsExclude(result.Artifacts, check.Pattern)
 	case checkArtifactContains:
 		return artifactContains(workspace, check.Path, check.Pattern)
+	case checkArtifactMaxLines:
+		return artifactMaxLines(workspace, check.Path, check.MaxLines)
 	case checkResearchPair:
 		return researchPair(workspace, check.Path)
 	case checkSentinelSafe:
@@ -114,6 +116,44 @@ func artifactContains(workspace, path, pattern string) Assertion {
 		Name:   assertArtifactContains + path,
 		Passed: strings.Contains(string(content), pattern),
 	}
+}
+
+func artifactMaxLines(workspace, pattern string, limit int) Assertion {
+	name := assertArtifactMaxLines + pattern
+	if limit <= 0 {
+		return Assertion{Name: name, Evidence: evidenceInvalidLineLimit}
+	}
+	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
+	if err != nil {
+		return Assertion{Name: name, Evidence: err.Error()}
+	}
+	if len(matches) == 0 {
+		return Assertion{Name: name, Evidence: evidenceNoArtifacts}
+	}
+
+	var overLimit []string
+	for _, match := range matches {
+		content, readErr := os.ReadFile(match)
+		if readErr != nil {
+			overLimit = append(overLimit, readErr.Error())
+			continue
+		}
+		lines := 0
+		if len(content) > 0 {
+			lines = strings.Count(string(content), "\n")
+			if content[len(content)-1] != '\n' {
+				lines++
+			}
+		}
+		if lines > limit {
+			relative, relErr := filepath.Rel(workspace, match)
+			if relErr != nil {
+				relative = match
+			}
+			overLimit = append(overLimit, fmt.Sprintf("%s (%d > %d)", filepath.ToSlash(relative), lines, limit))
+		}
+	}
+	return Assertion{Name: name, Passed: len(overLimit) == 0, Evidence: strings.Join(overLimit, evidenceJoiner)}
 }
 
 func sentinelSafe(result CaseResult, sentinel string) Assertion {
