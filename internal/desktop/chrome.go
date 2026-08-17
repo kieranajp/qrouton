@@ -92,8 +92,10 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	shown := reg.current()
 	fields := status.Read(shown.root())
 	// Dereferenced on every tick: a value captured at wiring time re-raises the
-	// overlay two seconds after it closes.
-	fields.Welcoming = cfg != nil && !cfg.Welcomed
+	// overlay two seconds after it closes. A window holding a session never asks,
+	// so the questions can never land over a live conversation — and an install
+	// that always opens on one stays unasked until it opens on none.
+	fields.Welcoming = cfg != nil && !cfg.Welcomed && fields.Slug == ""
 	if repos, ok := measured[shown.root()]; ok {
 		fields.Repos = repos
 	}

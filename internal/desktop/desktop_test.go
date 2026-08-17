@@ -737,31 +737,55 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 	}
 }
 
+// welcomingFor pushes one payload and reports whether the window is asking the
+// first-run questions.
+func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
+	t.Helper()
+	r := newFakeRenderer()
+	pushChrome(reg, root, cfg, nil, nil, r.Emit)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	fields, ok := r.events[chromeEvent].(status.Fields)
+	if !ok {
+		t.Fatalf("no chrome pushed at the window: %v", r.events)
+	}
+	return fields.Welcoming
+}
+
+// Asking over a live conversation would put two answers between the user and the
+// agent they were talking to, and answering with a changed root would take that
+// session's workbench down with it.
+func TestChromeAsksTheFirstRunQuestionsOnlyOnAWindowWithNoSession(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, "octopus")
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "octopus", Name: "Octopus"}); err != nil {
+		t.Fatal(err)
+	}
+
+	if !welcomingFor(t, newSessions(), root, &config.Config{Root: root}) {
+		t.Fatal("a window with no session and no marker does not ask")
+	}
+	for _, marked := range []bool{false, true} {
+		cfg := &config.Config{Root: root, Welcomed: marked}
+		if welcomingFor(t, testRegistry(t, dir), root, cfg) {
+			t.Fatalf("a window holding a session asks anyway (welcomed %v)", marked)
+		}
+	}
+}
+
 // The push runs every couple of seconds off the live config, so a marker set
 // while the window is up drops the gate on the next tick rather than at the next
 // launch.
 func TestChromeReadsTheWelcomedMarkerOffTheLiveConfig(t *testing.T) {
-	r := newFakeRenderer()
 	root := t.TempDir()
-	reg := testRegistry(t, filepath.Join(root, "octopus"))
+	reg := newSessions()
 	cfg := &config.Config{Root: root}
 
-	welcoming := func() bool {
-		pushChrome(reg, root, cfg, nil, nil, r.Emit)
-		r.mu.Lock()
-		defer r.mu.Unlock()
-		fields, ok := r.events[chromeEvent].(status.Fields)
-		if !ok {
-			t.Fatalf("no chrome pushed at the window: %v", r.events)
-		}
-		return fields.Welcoming
-	}
-
-	if !welcoming() {
+	if !welcomingFor(t, reg, root, cfg) {
 		t.Fatal("a config with no marker does not raise first run")
 	}
 	cfg.Welcomed = true
-	if welcoming() {
+	if welcomingFor(t, reg, root, cfg) {
 		t.Fatal("first run stays raised after the live config was marked")
 	}
 }
