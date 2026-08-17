@@ -70,8 +70,7 @@ func (s *Settings) Load() SettingsView {
 // whole config to disk and updates every live field except Root — see Save's
 // own Root handling below for why.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
-	root := strings.TrimSpace(in.Root)
-	expandedRoot, err := validateRoot(in.Root)
+	root, expandedRoot, err := validateRoot(in.Root)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -119,18 +118,20 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 // the process does.
 func (s *Settings) Quit() { s.quit() }
 
-// validateRoot expands a typed sessions root and creates it, answering the
-// cleaned absolute path. Shared with first run, which asks the same question.
-func validateRoot(raw string) (string, error) {
-	root := strings.TrimSpace(raw)
-	if root == "" {
-		return "", fmt.Errorf("root: cannot be empty")
+// validateRoot creates a typed sessions root, answering both the form to store —
+// a leading ~ survives, so the config stays portable — and the cleaned absolute
+// path to compare against the live one. Shared with first run, which asks the
+// same question.
+func validateRoot(raw string) (stored, expanded string, err error) {
+	stored = strings.TrimSpace(raw)
+	if stored == "" {
+		return "", "", fmt.Errorf("root: cannot be empty")
 	}
-	expanded := filepath.Clean(config.ExpandHome(root))
+	expanded = filepath.Clean(config.ExpandHome(stored))
 	if err := os.MkdirAll(expanded, 0o755); err != nil {
-		return "", fmt.Errorf("root: %s", err)
+		return "", "", fmt.Errorf("root: %s", err)
 	}
-	return expanded, nil
+	return stored, expanded, nil
 }
 
 // dedupOrgs trims and deduplicates the way config's own QROUTON_ORGS parsing

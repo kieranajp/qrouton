@@ -82,6 +82,26 @@ func TestFirstRunSaveWithAnUnchangedRootPersistsBothAnswersAndDropsTheGate(t *te
 	}
 }
 
+// Load trims only to decide whether a root was given at all, so untrimmed
+// padding on disk becomes a sessions directory with spaces in its name.
+func TestFirstRunSaveStoresTheRootWithoutSurroundingSpace(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	stubs := &firstRunStubs{}
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+
+	if _, err := f.Save(FirstRunInput{Root: "  " + root + "  "}); err != nil {
+		t.Fatal(err)
+	}
+	if saved := savedConfig(t); saved.Root != root {
+		t.Fatalf("saved root = %q, want %q", saved.Root, root)
+	}
+	if stubs.relaunches != 0 {
+		t.Fatal("a retyped root with padding was read as a different one")
+	}
+}
+
 // The rail's scanner and boot path closed over the boot root, so the successor is
 // what reaches a new one.
 func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {

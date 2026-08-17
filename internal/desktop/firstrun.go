@@ -68,14 +68,14 @@ func (f *FirstRun) ChooseRoot() (string, error) {
 // successor is what reaches the new root, and the marker only goes on the live
 // pointer when this process is the one carrying on.
 func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
-	expanded, err := validateRoot(in.Root)
+	root, expanded, err := validateRoot(in.Root)
 	if err != nil {
 		return FirstRunResult{}, err
 	}
 	changed := expanded != filepath.Clean(f.cfg.Root)
 
 	next := *f.cfg
-	next.Orgs, next.Root, next.Welcomed = dedupOrgs(in.Orgs), in.Root, true
+	next.Orgs, next.Root, next.Welcomed = dedupOrgs(in.Orgs), root, true
 	if err := config.Save(&next); err != nil {
 		return FirstRunResult{}, err
 	}
