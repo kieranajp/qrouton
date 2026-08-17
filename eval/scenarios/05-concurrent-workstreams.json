@@ -7,6 +7,7 @@
   "rubric": "Select the newest retry-timeout research lineage rather than the unrelated legacy cache plan, then create and present the correct plan.",
   "checks": [
     {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/plans/*retry*.md", "max_lines": 400},
     {"kind": "open_file"},
     {"kind": "response_excludes", "any": ["legacy cache plan"]}
   ]

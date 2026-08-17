@@ -9,6 +9,7 @@
     {"kind": "artifact_exists", "path": "thoughts/shared/research/02-retry-research.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/research/R*.md"},
     {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/plans/*retry*.md", "max_lines": 400},
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
     {"kind": "repo_unchanged", "repo": "account-service"},
     {"kind": "delegation", "pattern": "planning-lead"},

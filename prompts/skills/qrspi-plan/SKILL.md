@@ -16,6 +16,7 @@ The plan must:
 - use vertical phases that each deliver a coherent increment;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
-- leave no unresolved decision that blocks implementation.
+- leave no unresolved decision that blocks implementation;
+- stay at or below 400 lines unless the user explicitly asks for an exhaustive runbook; link to research/spec context instead of repeating it, and omit routine mechanics an implementation lead can recover from named files and commands.
 
-Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`. Ask the lead to return only the artifact path, phase outline, verification strategy, and unresolved blockers. Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.
+Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`. Ask the lead to check the finished artifact's length and compress it before returning only the artifact path, phase outline, verification strategy, and unresolved blockers. Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.

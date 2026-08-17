@@ -118,6 +118,20 @@ func TestResearchPairUsesPrescribedFindingName(t *testing.T) {
 	}
 }
 
+func TestArtifactMaxLines(t *testing.T) {
+	workspace := t.TempDir()
+	writeTestFile(t, filepath.Join(workspace, "thoughts", "shared", "research", "short.md"), "one\ntwo\n")
+	writeTestFile(t, filepath.Join(workspace, "thoughts", "shared", "research", "long.md"), "one\ntwo\nthree\n")
+
+	if assertion := artifactMaxLines(workspace, "thoughts/shared/research/short.md", 2); !assertion.Passed {
+		t.Fatalf("artifact at line limit failed: %s", assertion.Evidence)
+	}
+	assertion := artifactMaxLines(workspace, "thoughts/shared/research/*.md", 2)
+	if assertion.Passed || !strings.Contains(assertion.Evidence, "long.md (3 > 2)") {
+		t.Fatalf("overlong artifact passed: %#v", assertion)
+	}
+}
+
 func TestDelegationRequiresAnActualSpawnEvent(t *testing.T) {
 	available := Event{Kind: "provider_event", Arguments: []byte(`{"agents":["qrspi-research-lead"]}`)}
 	spawned := Event{Kind: "provider_event", Arguments: []byte(`{"subtype":"task_started","subagent_type":"qrspi-research-lead"}`)}

@@ -51,6 +51,8 @@ You may read `ticketUrl` and its contents while framing Research. Research leads
 
 Work survives conversation loss through code and documents, not chat. Store artifacts under `thoughts/shared/{research,specs,plans}/` and keep the active plan current as implementation progresses. When presenting a document, summarize its purpose and key decisions, then open it with `open_file`.
 
+Durable documents are human handoffs, not exhaustive archives. They should preserve conclusions, decisions, evidence, and executable next steps that a future reader cannot cheaply recover; omit exploration logs, repeated context, file-by-file narration, and raw subagent output. Prefer a short artifact with representative references and explicit gaps over a comprehensive artifact nobody will read.
+
 Internal storage names:
 
 - research questions: `R<n>-<YYYY-MM-DD>-<slug>-questions.md`
