@@ -37,10 +37,9 @@ func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit 
 	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose}
 }
 
-// Login is the GitHub account the screens name, resolved asynchronously so the
-// screen renders at once and the line fills in. No account is a useful answer
-// rather than an error: a wrong or absent one is exactly how the owners silently
-// fail to resolve, and the screen has a sentence for it.
+// Login is the GitHub account the owners screen names. No account is an answer
+// rather than an error: the screen has a sentence for it, and a wrong or absent
+// account is exactly how the owners silently fail to resolve.
 func (f *FirstRun) Login() string {
 	token, err := github.Token()
 	if err != nil {
@@ -62,11 +61,11 @@ func (f *FirstRun) ChooseRoot() (string, error) {
 	return f.choose()
 }
 
-// Save writes orgs, root and the welcomed marker together, then either drops the
-// gate or replaces the workbench. A changed root cannot take effect in this
-// process — the rail's scanner and boot path closed over the boot value — so the
-// successor is what reaches the new root, and the marker only goes on the live
-// pointer when this process is the one carrying on.
+// Save writes both answers and the welcomed marker together, then either drops
+// the gate or replaces the workbench: a changed root cannot take effect in this
+// process, since the rail's scanner and boot path closed over the boot value.
+// The marker reaches the live pointer only when this process is carrying on, so
+// a failed relaunch leaves the gate up rather than a workbench on the old root.
 func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	root, expanded, err := validateRoot(in.Root)
 	if err != nil {

@@ -118,10 +118,9 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 // the process does.
 func (s *Settings) Quit() { s.quit() }
 
-// validateRoot creates a typed sessions root, answering both the form to store —
-// a leading ~ survives, so the config stays portable — and the cleaned absolute
-// path to compare against the live one. Shared with first run, which asks the
-// same question.
+// validateRoot creates a typed sessions root, answering the form to store — a
+// leading ~ survives, so the config stays portable — and the cleaned absolute
+// path to compare against the live one.
 func validateRoot(raw string) (stored, expanded string, err error) {
 	stored = strings.TrimSpace(raw)
 	if stored == "" {

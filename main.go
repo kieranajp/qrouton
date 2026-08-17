@@ -193,15 +193,10 @@ func workbenchProcess(marshalled string) error {
 	})
 }
 
-// relaunchWorkbench replaces this workbench with one that reads config.json
-// again, on no session so it opens on the assembly overlay. It passes no root:
-// workbenchProcess loads the config itself, so the successor picks up whatever
-// was just written. Detach returns once the child answers, so the caller only
-// quits behind a live successor.
-//
-// Two workbenches overlap for the length of that wait. That is safe here only
-// because the caller holds no session, and so no supervisor two of them could
-// both believe they own.
+// relaunchWorkbench replaces this workbench with one that loads the config
+// again, on no session. Detach returns only once the child answers, so the two
+// overlap for that wait — safe only because the caller holds no session, and so
+// no supervisor both could believe they own.
 func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func() error {
 	return func() error {
 		socket, err := workbench.NewSocketPath()
