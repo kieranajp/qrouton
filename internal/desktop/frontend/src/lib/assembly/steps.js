@@ -57,6 +57,17 @@ export function destination(branch, repos) {
 export const joining = (branch) => (branch ? `Added repositories join ${branch}` : "");
 
 /**
+ * assemblyOpen is whether the assembly overlay is drawn: asked for by the rail's
+ * button, or because the window holds no session and so has nothing else to
+ * offer. It waits for the first payload, since an unsettled window reads as
+ * having no session too.
+ * @param {boolean} requested
+ * @param {boolean} settled
+ * @param {string} slug
+ */
+export const assemblyOpen = (requested, settled, slug) => !!requested || (!!settled && !slug);
+
+/**
  * pickerOpen is whether the picker is drawn over the session on screen: an
  * escalation waiting on it, or the add-repos button pressed on that same
  * session. Pressing it on one session and switching to another closes it.

@@ -18,7 +18,7 @@
   import SessionTerminal from "./lib/SessionTerminal.svelte";
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
-  import { pickerOpen } from "./lib/assembly/steps.js";
+  import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
@@ -239,7 +239,8 @@
     keyboard++;
   }
 
-  let assembling = $state(false);
+  let requested = $state(false);
+  let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let settingsOpen = $state(false);
   // An escalation is the shown session's own pending request, so switching
   // session takes its picker with it. Add-repos is this page's, and belongs to
@@ -290,7 +291,7 @@
           oncontextmenu={(event) => openMenu(event, row)} />
       {/each}
 
-      <Button variant="dashed" size="sm" glyph="+" onclick={() => (assembling = true)}
+      <Button variant="dashed" size="sm" glyph="+" onclick={() => (requested = true)}
         >New session</Button>
 
       <div class="repos">
@@ -445,7 +446,7 @@
       : 's'}" />
 
   {#if assembling}
-    <Overlay onClose={() => (assembling = false)} />
+    <Overlay gated={!fields.slug} onClose={() => (requested = false)} />
   {:else if picker}
     <!-- Keyed on the session, so arriving at another one draws that session's
          picker rather than keeping this one over it. -->

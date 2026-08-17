@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assemblyOpen,
   blocks,
   destination,
   folder,
@@ -51,6 +52,19 @@ test("the destination counts repositories and names the folder", () => {
 test("the picker names the branch it adds to, and a branchless session says nothing", () => {
   assert.equal(joining("feat/billing"), "Added repositories join feat/billing");
   assert.equal(joining(""), "");
+});
+
+test("a window holding no session is the assembly overlay", () => {
+  assert.equal(assemblyOpen(false, true, ""), true);
+  assert.equal(assemblyOpen(false, true, "billing"), false);
+  assert.equal(assemblyOpen(true, true, "billing"), true);
+});
+
+// An unsettled window has an empty slug too, and flashing assembly over a real
+// session is worse than opening it a moment late.
+test("assembly waits for the first payload before deciding there is no session", () => {
+  assert.equal(assemblyOpen(false, false, ""), false);
+  assert.equal(assemblyOpen(true, false, ""), true);
 });
 
 test("the picker is open for an escalation waiting on the session on screen", () => {

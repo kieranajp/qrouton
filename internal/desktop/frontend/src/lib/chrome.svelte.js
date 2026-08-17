@@ -32,12 +32,19 @@ const observed = (data) =>
 /** chrome is the last thing the workbench said it could observe. */
 export function chrome() {
   let fields = $state(NOTHING);
+  let settled = $state(false);
   Events.On("chrome:update", (event) => {
     fields = observed(event.data);
+    settled = true;
   });
   return {
     get fields() {
       return fields;
+    },
+    // Until the first payload arrives every field reads as its default, which is
+    // indistinguishable from a window holding no session.
+    get settled() {
+      return settled;
     },
   };
 }
