@@ -209,7 +209,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 	t.Helper()
 	var fields status.Fields
-	pushChrome(reg, "", map[string][]status.RepoStat{}, map[string]int{},
+	pushChrome(reg, "", nil, map[string][]status.RepoStat{}, map[string]int{},
 		func(event string, payload any) {
 			if event == chromeEvent {
 				fields = payload.(status.Fields)

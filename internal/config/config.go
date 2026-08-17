@@ -18,6 +18,10 @@ type Config struct {
 	Launch map[string][]string `json:"launch,omitempty"`
 
 	Editor []string `json:"editor,omitempty"`
+
+	// Welcomed is set once the first-run flow has been through. Absent reads
+	// false, so a hand-written config sees the flow once.
+	Welcomed bool `json:"welcomed,omitempty"`
 }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.

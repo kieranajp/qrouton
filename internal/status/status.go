@@ -39,6 +39,9 @@ type Fields struct {
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
+	// Welcoming means first run has not been through yet. Workbench-side
+	// knowledge too, so a file read never sets it.
+	Welcoming bool `json:"welcoming"`
 }
 
 // SessionRow is one session under the sessions root. A Terminal means this

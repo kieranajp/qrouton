@@ -1,6 +1,6 @@
 package config
 
-// Paths, environment overrides, and first-run wizard copy.
+// Paths, environment overrides, and the defaults a launch never asks about.
 
 const (
 	// appDirName is the directory qrouton owns inside each XDG base directory.
@@ -30,7 +30,6 @@ const (
 	fileMode = 0o644
 )
 
-// Owner-prompt copy and defaults.
 const (
 	// defaultRoot is where sessions live when config.json names no root, so a
 	// launch never has to stop and ask. Mirrors go under <root>/.mirrors.

@@ -194,6 +194,33 @@ func TestSettingsSaveWritesTheFileAndUpdatesEveryLiveFieldExceptRoot(t *testing.
 	}
 }
 
+// Save rewrites the whole file, so a marker it does not carry forward re-arms
+// first run the moment anyone opens the panel.
+func TestSettingsSaveKeepsTheWelcomedMarker(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	cfg := &config.Config{Root: root, Welcomed: true}
+	s := newSettings(cfg, nil, nil, nil)
+
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root}); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Welcomed {
+		t.Fatal("a save cleared the live welcomed marker")
+	}
+	raw, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onDisk config.Config
+	if err := json.Unmarshal(raw, &onDisk); err != nil {
+		t.Fatal(err)
+	}
+	if !onDisk.Welcomed {
+		t.Fatalf("on-disk config lost the welcomed marker: %s", raw)
+	}
+}
+
 // RestartRequired compares the expanded, cleaned input Root against the live
 // one: a no-op retype (leading ~, trailing slash) never claims a restart, an
 // unrelated field change never claims one either, a genuinely different root

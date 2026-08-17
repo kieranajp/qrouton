@@ -34,8 +34,61 @@ func TestLoadWithoutConfigFileDefaultsInsteadOfPrompting(t *testing.T) {
 	if cfg.Root != root {
 		t.Fatalf("root = %q, want %q", cfg.Root, root)
 	}
+	if cfg.Welcomed {
+		t.Fatal("a config nobody has written claims first run has been through")
+	}
 	if _, err := os.Stat(Path()); !os.IsNotExist(err) {
 		t.Fatal("Load wrote a config file; nothing was configured yet")
+	}
+}
+
+// A hand-written config predating the marker sees the first-run flow once.
+func TestLoadReadsAConfigWithoutTheWelcomedMarkerAsNotWelcomed(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	dir := filepath.Join(configHome, appDirName)
+	if err := os.MkdirAll(dir, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, configFileName),
+		[]byte(`{"orgs":["acme"],"root":"unused"}`), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Welcomed {
+		t.Fatal("a config with no welcomed key reads as welcomed")
+	}
+}
+
+func TestSaveWritesTheWelcomedMarkerAndOmitsItWhenUnset(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+
+	if err := Save(&Config{Root: "/sessions", Welcomed: true}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"welcomed": true`) {
+		t.Fatalf("saved config carries no welcomed marker: %s", b)
+	}
+
+	if err := Save(&Config{Root: "/sessions"}); err != nil {
+		t.Fatal(err)
+	}
+	b, err = os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), `"welcomed"`) {
+		t.Fatalf("saved config claims a marker nobody set: %s", b)
 	}
 }
 

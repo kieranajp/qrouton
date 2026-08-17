@@ -4,14 +4,15 @@ import (
 	"context"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
 // watchChrome pushes what the window can observe about the session on screen
 // until the context is cancelled. Escalation rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
-func watchChrome(ctx context.Context, reg *Sessions, root string, emit emitter) {
-	watch(ctx, reg, root, emit, chromeInterval, repoStatInterval,
+func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter) {
+	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
 		unseenCounts{all: status.Unseen, in: status.UnseenIn})
 }
 
@@ -32,7 +33,7 @@ type measurement struct {
 
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
-func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field, slow time.Duration, count unseenCounts) {
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
@@ -57,7 +58,7 @@ func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field,
 	}
 
 	refresh()
-	pushChrome(reg, root, measured, unseen, emit)
+	pushChrome(reg, root, cfg, measured, unseen, emit)
 	for {
 		select {
 		case <-ctx.Done():
@@ -81,15 +82,18 @@ func watch(ctx context.Context, reg *Sessions, root string, emit emitter, field,
 			}
 		case <-fields.C:
 		}
-		pushChrome(reg, root, measured, unseen, emit)
+		pushChrome(reg, root, cfg, measured, unseen, emit)
 	}
 }
 
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
-func pushChrome(reg *Sessions, root string, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
+func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
 	shown := reg.current()
 	fields := status.Read(shown.root())
+	// Dereferenced on every tick: a value captured at wiring time re-raises the
+	// overlay two seconds after it closes.
+	fields.Welcoming = cfg != nil && !cfg.Welcomed
 	if repos, ok := measured[shown.root()]; ok {
 		fields.Repos = repos
 	}

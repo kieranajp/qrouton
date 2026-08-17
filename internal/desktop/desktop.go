@@ -184,7 +184,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return exec.Command(argv[0], argv[1:]...).Run()
 		},
 	}
-	go watchChrome(ctx, reg, opts.Root, r.Emit)
+	go watchChrome(ctx, reg, opts.Root, opts.Config, r.Emit)
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
