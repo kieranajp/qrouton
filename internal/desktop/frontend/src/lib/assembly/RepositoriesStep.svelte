@@ -6,7 +6,7 @@
   import TextField from "../forms/TextField.svelte";
   import RepoRow from "../session/RepoRow.svelte";
 
-  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: {id: string, meta: string, role: 'off'|'editing'|'reference', locked: boolean}[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void}} */
+  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: {id: string, meta: string, role: 'off'|'editing'|'reference', offers: ('off'|'editing'|'reference')[]}[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void}} */
   let {
     query = $bindable(""),
     orgs = [],
@@ -60,7 +60,7 @@
         name={row.id}
         meta={row.meta}
         role={row.role}
-        locked={row.locked}
+        offers={row.offers}
         onRoleChange={(role) => onRole?.(row.id, role)} />
     {/each}
   </div>

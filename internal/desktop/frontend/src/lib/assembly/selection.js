@@ -7,13 +7,23 @@ import { repoID } from "./filter.js";
 /**
  * @typedef {object} Selection
  * @property {string[]} order the ids in the order they were picked, which is the ranking
- * @property {Record<string, Role>} roles
+ * @property {Record<string, Role>} roles for a held row, the role the session holds it in
  * @property {string[]} locked the ids the session already holds
+ * @property {string[]} upgrades the held ids to take up for editing
  */
 
 const GLYPHS = { editing: "●", reference: "◐" };
 const READ_ONLY = "read-only";
 const IN_SESSION = "in session";
+const READING = "in session, read-only";
+const TAKING_UP = "in session, taking it up to edit";
+
+/** @type {Role[]} */
+const OFFERS = ["off", "editing", "reference"];
+/** @type {Role[]} */
+const UPGRADE_OFFERS = ["reference", "editing"];
+/** @type {Role[]} */
+const NO_OFFERS = [];
 
 /**
  * seed is the selection step 2 opens with. A held row carries its role and stays
@@ -26,22 +36,44 @@ export function seed(held = []) {
   /** @type {Record<string, Role>} */
   const roles = {};
   for (const row of held) roles[row.id] = row.role;
-  return { order: [], roles, locked: held.map((row) => row.id) };
+  return { order: [], roles, locked: held.map((row) => row.id), upgrades: [] };
 }
 
 /** @returns {Role} */
-export const roleOf = (selection, id) => selection.roles[id] ?? "off";
+export const roleOf = (selection, id) =>
+  isUpgrading(selection, id) ? "editing" : (selection.roles[id] ?? "off");
 
 export const isLocked = (selection, id) => selection.locked.includes(id);
 
+export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
+
 /**
- * rowMeta says in words what the role column cannot: a held row wears the role
- * it has, so the toggle beside it looks exactly like one that would answer.
- * @param {string} meta
- * @param {boolean} locked
+ * roleOffers is what one row's toggle will answer to. A held editing repository
+ * answers to nothing: its worktree can carry commits and uncommitted work, so
+ * dropping or demoting it is not a thing to do from a picker.
+ * @returns {Role[]}
  */
-export const rowMeta = (meta, locked) =>
-  locked ? [meta, IN_SESSION].filter(Boolean).join(" · ") : meta;
+export function roleOffers(selection, id) {
+  if (!isLocked(selection, id)) return OFFERS;
+  return selection.roles[id] === "reference" ? UPGRADE_OFFERS : NO_OFFERS;
+}
+
+/**
+ * rowMeta is the line beside a repository's name. A held row says so, and one
+ * being taken up says that before it happens: the toggle beside it has answered.
+ * @param {Selection} selection
+ * @param {string} id
+ * @param {string} pushed
+ */
+export function rowMeta(selection, id, pushed) {
+  return [pushed, heldNote(selection, id)].filter(Boolean).join(" · ");
+}
+
+function heldNote(selection, id) {
+  if (!isLocked(selection, id)) return "";
+  if (isUpgrading(selection, id)) return TAKING_UP;
+  return selection.roles[id] === "reference" ? READING : IN_SESSION;
+}
 
 /**
  * setRole records one row's role. A repository keeps the rank it was first given,
@@ -50,7 +82,7 @@ export const rowMeta = (meta, locked) =>
  * @returns {Selection}
  */
 export function setRole(selection, id, role) {
-  if (isLocked(selection, id)) return selection;
+  if (isLocked(selection, id)) return takeUp(selection, id, role);
   const roles = { ...selection.roles };
   if (role === "off") {
     delete roles[id];
@@ -59,6 +91,18 @@ export function setRole(selection, id, role) {
   roles[id] = role;
   const order = selection.order.includes(id) ? selection.order : [...selection.order, id];
   return { ...selection, roles, order };
+}
+
+/**
+ * takeUp marks a held reference row to be checked out for editing, or unmarks it.
+ * The held role stays in roles, so the row can go back to what the session still
+ * has on disk right up until confirm.
+ * @returns {Selection}
+ */
+function takeUp(selection, id, role) {
+  if (!roleOffers(selection, id).includes(role)) return selection;
+  const upgrades = selection.upgrades.filter((seen) => seen !== id);
+  return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
 /**
@@ -82,7 +126,8 @@ export function reconcile(selection, ids) {
 export function counts(selection) {
   let editing = 0;
   let reference = 0;
-  for (const role of Object.values(selection.roles)) {
+  for (const id of Object.keys(selection.roles)) {
+    const role = roleOf(selection, id);
     if (role === "editing") editing++;
     else if (role === "reference") reference++;
   }
@@ -96,9 +141,13 @@ export function counts(selection) {
 export const ordered = (selection) =>
   selection.order.map((id) => ({ id, role: selection.roles[id] }));
 
+/** upgrading is what Go takes up for editing, which it finds in the manifest. */
+export const upgrading = (selection) => [...selection.upgrades];
+
 /**
  * summary is the selected chips. An editing chip names the branch it joins, and
- * says nothing while there is no branch to name.
+ * says nothing while there is no branch to name. A row being taken up leads: it
+ * is the one answer whose row a search can scroll out of sight.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
  * @param {string} branch
@@ -106,7 +155,8 @@ export const ordered = (selection) =>
  */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
-  return ordered(selection).map(({ id, role }) => ({
+  const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));
+  return [...taken, ...ordered(selection)].map(({ id, role }) => ({
     id,
     role,
     glyph: GLYPHS[role],

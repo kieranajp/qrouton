@@ -148,7 +148,7 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	}
 	for _, held := range fields.Repos {
 		if !held.Locked {
-			t.Fatalf("%s is not locked; a repo the session holds cannot be re-roled", held.ID)
+			t.Fatalf("%s is not locked; a repo the session holds is not composed again", held.ID)
 		}
 	}
 	if fields.Repos[0].ID != "org/svc" || fields.Repos[0].Role != "editing" {
@@ -187,7 +187,7 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	in := draftInput{Repos: []repoPick{{ID: "org/svc", Role: "editing"}}}
+	in := pickerInput{Repos: []repoPick{{ID: "org/svc", Role: "editing"}}}
 	if err := p.Confirm("shown", in); err != nil {
 		t.Fatal(err)
 	}
@@ -216,4 +216,50 @@ func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 			}
 		})
 	return fields
+}
+
+// Upgrades name rows against the manifest, not the cached repository list: the
+// picker's held rows are the session's, and the page may be a refresh behind. An
+// id the session does not read is dropped, and a repeated one counts once.
+func TestConfirmTakesUpAHeldReferenceRepoAndIgnoresTheRest(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	dir, err := session.Create(cfg, "reading", "", "", "feat", session.ModeAssistant, "",
+		[]session.RepoSelection{{Role: session.RepoRoleReference,
+			Repo: github.Repo{Org: "org", Name: "docs", SSHURL: testOrigin(t, "docs"), DefaultBranch: "main"}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := newSessions()
+	t.Cleanup(reg.stopAll)
+	reg.reveal(reg.add(dir, []string{"/bin/cat"}, nil))
+	p := newPicker(cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
+
+	in := pickerInput{Upgrades: []string{"org/docs", "org/docs", "org/kraken"}}
+	if err := p.Confirm("reading", in); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos after taking one up = %+v", got.Repos)
+	}
+	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "feat/reading" || r.Revision != "" {
+		t.Fatalf("taken-up repo = %+v", r)
+	}
+}
+
+// The editing-repo rule is short-circuited by the presence of an upgrade, so an
+// id naming a repository the session is already editing must not reach the draft.
+func TestHeldRefsKeepOnlyTheReferenceRowsNamedOnce(t *testing.T) {
+	m := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "org", Name: "svc", Role: session.RepoRoleEditing},
+		{Org: "org", Name: "docs", Role: session.RepoRoleReference},
+	}}
+	got := heldRefs(m, []string{"org/svc", "org/docs", "org/docs", "org/kraken"})
+	if len(got) != 1 || got[0] != (session.RepoRef{Org: "org", Name: "docs"}) {
+		t.Fatalf("resolved refs = %+v", got)
+	}
 }

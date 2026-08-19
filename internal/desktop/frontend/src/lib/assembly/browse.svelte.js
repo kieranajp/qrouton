@@ -5,14 +5,15 @@ import { pushed } from "./pushed.js";
 import { apply, failedOwners, idle } from "./refresh.js";
 import {
   counts,
-  isLocked,
   ordered,
   reconcile,
   roleOf,
+  roleOffers,
   rowMeta,
   seed,
   setRole,
   summary,
+  upgrading,
 } from "./selection.js";
 
 // Search narrows the list; the rows never outgrow the region they scroll in.
@@ -45,9 +46,9 @@ export function browsing(branch) {
   let rows = $derived(
     listed.rows.map((row) => ({
       id: row.id,
-      meta: rowMeta(pushed(row.pushed_at), isLocked(selection, row.id)),
+      meta: rowMeta(selection, row.id, pushed(row.pushed_at)),
       role: roleOf(selection, row.id),
-      locked: isLocked(selection, row.id),
+      offers: roleOffers(selection, row.id),
     })),
   );
 
@@ -102,6 +103,9 @@ export function browsing(branch) {
     },
     get ordered() {
       return ordered(selection);
+    },
+    get upgrading() {
+      return upgrading(selection);
     },
     /** @param {{id: string, role: 'editing'|'reference'}[]} rows */
     hold: (rows) => (selection = seed(rows)),

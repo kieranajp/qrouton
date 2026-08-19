@@ -61,12 +61,12 @@ export const orgs = () => Call.ByName(ORGS_SERVICE + ".List");
 export const held = (slug) => Call.ByName(PICKER_SERVICE + ".Load", slug);
 
 /**
- * addRepos gives the session the picked repositories, and the escalation waiting
- * on it its answer. Only repos is read; the rest of the draft is the session's.
+ * addRepos gives the session the picked repositories, takes up the held ones
+ * named in upgrades, and gives the escalation waiting on it its answer.
  * @param {string} slug
- * @param {{repos: {id: string, role: string}[]}} draft
+ * @param {{repos: {id: string, role: string}[], upgrades: string[]}} answer
  */
-export const addRepos = (slug, draft) => Call.ByName(PICKER_SERVICE + ".Confirm", slug, draft);
+export const addRepos = (slug, answer) => Call.ByName(PICKER_SERVICE + ".Confirm", slug, answer);
 
 /** @param {string} slug */
 export const cancelPicker = (slug) => Call.ByName(PICKER_SERVICE + ".Cancel", slug);

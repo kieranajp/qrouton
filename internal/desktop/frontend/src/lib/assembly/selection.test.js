@@ -3,13 +3,16 @@ import test from "node:test";
 import {
   counts,
   isLocked,
+  isUpgrading,
   ordered,
   reconcile,
   roleOf,
+  roleOffers,
   rowMeta,
   seed,
   setRole,
   summary,
+  upgrading,
 } from "./selection.js";
 
 const picked = (selection) => ordered(selection).map((row) => row.id).join(" ");
@@ -54,30 +57,82 @@ test("a repository a refresh dropped leaves the rest of the order intact", () =>
   assert.equal(roleOf(selection, "acme/docs"), "off");
 });
 
-// Composing a repository the session already holds clones it a second time.
-test("a locked row reports its role and never reaches the ordered array", () => {
+// An editing worktree can carry commits and uncommitted work, so the picker
+// neither demotes it nor drops it — and composing it again would clone it twice.
+test("a held editing row answers to nothing and never reaches the ordered array", () => {
   let selection = seed([{ id: "acme/api", role: "editing" }]);
   assert.equal(roleOf(selection, "acme/api"), "editing");
   assert.ok(isLocked(selection, "acme/api"));
+  assert.deepEqual(roleOffers(selection, "acme/api"), []);
   assert.equal(picked(selection), "");
 
-  selection = setRole(selection, "acme/api", "reference");
-  assert.equal(roleOf(selection, "acme/api"), "editing");
+  for (const role of ["reference", "off"]) {
+    selection = setRole(selection, "acme/api", role);
+    assert.equal(roleOf(selection, "acme/api"), "editing");
+    assert.deepEqual(upgrading(selection), []);
+  }
   assert.equal(picked(selection), "");
 
   selection = setRole(selection, "other/web", "editing");
   assert.equal(picked(selection), "other/web");
 });
 
-test("a held row says so beside its push time, and on its own without one", () => {
-  assert.equal(rowMeta("pushed 2h ago", true), "pushed 2h ago · in session");
-  assert.equal(rowMeta("", true), "in session");
-  assert.equal(rowMeta("pushed 2h ago", false), "pushed 2h ago");
+// The point of the toggle beside a held reference row: it reaches Go as an
+// upgrade, not as a row to compose, because the two are different operations.
+test("a held reference row can be taken up for editing, and put back", () => {
+  let selection = seed([{ id: "acme/docs", role: "reference" }]);
+  assert.deepEqual(roleOffers(selection, "acme/docs"), ["reference", "editing"]);
+
+  selection = setRole(selection, "acme/docs", "editing");
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+  assert.ok(isUpgrading(selection, "acme/docs"));
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+  assert.equal(picked(selection), "");
+
+  selection = setRole(selection, "acme/docs", "reference");
+  assert.equal(roleOf(selection, "acme/docs"), "reference");
+  assert.deepEqual(upgrading(selection), []);
+});
+
+// Turning a held row off would mean removing a checkout, which the picker does
+// not do — so the toggle does not offer it.
+test("a held reference row cannot be turned off", () => {
+  let selection = setRole(seed([{ id: "acme/docs", role: "reference" }]), "acme/docs", "editing");
+  selection = setRole(selection, "acme/docs", "off");
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+});
+
+test("a held row says what the session does with it, and says it once taken up", () => {
+  const editing = seed([{ id: "acme/api", role: "editing" }]);
+  assert.equal(rowMeta(editing, "acme/api", "pushed 2h ago"), "pushed 2h ago · in session");
+  assert.equal(rowMeta(editing, "acme/api", ""), "in session");
+  assert.equal(rowMeta(editing, "other/web", "pushed 2h ago"), "pushed 2h ago");
+
+  const reading = seed([{ id: "acme/docs", role: "reference" }]);
+  assert.equal(rowMeta(reading, "acme/docs", ""), "in session, read-only");
+  assert.equal(
+    rowMeta(setRole(reading, "acme/docs", "editing"), "acme/docs", ""),
+    "in session, taking it up to edit",
+  );
+});
+
+// A free row's toggle answers to everything, which is what the wizard draws.
+test("a row the session does not hold answers to every role", () => {
+  assert.deepEqual(roleOffers(seed(), "acme/api"), ["off", "editing", "reference"]);
 });
 
 test("a locked row survives a refresh that no longer lists it", () => {
   const selection = reconcile(seed([{ id: "acme/api", role: "editing" }]), ["other/web"]);
   assert.equal(roleOf(selection, "acme/api"), "editing");
+});
+
+// The session holds it whatever GitHub now reports, so it is still upgradable.
+test("taking a held row up survives a refresh that no longer lists it", () => {
+  const taken = setRole(seed([{ id: "acme/docs", role: "reference" }]), "acme/docs", "editing");
+  const selection = reconcile(taken, ["other/web"]);
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
 });
 
 test("the role counts follow the rows, locked ones included", () => {
@@ -88,6 +143,12 @@ test("the role counts follow the rows, locked ones included", () => {
 
   selection = setRole(selection, "acme/docs", "off");
   assert.deepEqual(counts(selection), { editing: 1, reference: 1 });
+});
+
+test("a held row taken up counts against editing, not reference", () => {
+  const reading = seed([{ id: "acme/docs", role: "reference" }]);
+  assert.deepEqual(counts(reading), { editing: 0, reference: 1 });
+  assert.deepEqual(counts(setRole(reading, "acme/docs", "editing")), { editing: 1, reference: 0 });
 });
 
 test("the summary names the branch editing repos join and the branch reference repos are read at", () => {
@@ -110,4 +171,23 @@ test("an editing chip names no branch while there is none", () => {
   assert.deepEqual(summary(selection, [], ""), [
     { id: "acme/api", role: "editing", glyph: "●", meta: "" },
   ]);
+});
+
+// A held row scrolls out of sight behind a search; the chip is where an answer
+// the user has given stays visible until they confirm it.
+test("a row being taken up leads the chips, naming the branch it joins", () => {
+  const repos = [{ org: "acme", name: "docs", default_branch: "main" }];
+  let selection = seed([{ id: "acme/docs", role: "reference" }]);
+  assert.deepEqual(summary(selection, repos, "feat/extract-billing"), []);
+
+  selection = setRole(selection, "acme/docs", "editing");
+  selection = setRole(selection, "other/web", "reference");
+  assert.deepEqual(summary(selection, repos, "feat/extract-billing"), [
+    { id: "acme/docs", role: "editing", glyph: "●", meta: "→ feat/extract-billing" },
+    { id: "other/web", role: "reference", glyph: "◐", meta: "→ read-only" },
+  ]);
+
+  selection = setRole(selection, "acme/docs", "reference");
+  assert.deepEqual(ordered(selection).map((row) => row.id), ["other/web"]);
+  assert.equal(summary(selection, repos, "feat/extract-billing").length, 1);
 });

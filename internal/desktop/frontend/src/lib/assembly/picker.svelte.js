@@ -30,7 +30,7 @@ export function picking(slug, done) {
     if (answering) return;
     answering = true;
     try {
-      await go.addRepos(slug(), { repos: repos.ordered });
+      await go.addRepos(slug(), { repos: repos.ordered, upgrades: repos.upgrading });
       done();
     } catch (err) {
       answering = false;
