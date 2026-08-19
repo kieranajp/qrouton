@@ -20,6 +20,10 @@ type Draft struct {
 	Prefix      string
 	Mode        session.SessionMode
 	Repos       []session.RepoSelection
+	// Upgrades names repositories the session already holds and reads, to be
+	// checked out for editing instead. Only the picker fills it: a session that
+	// does not exist yet holds nothing.
+	Upgrades []session.RepoRef
 }
 
 // Assembler carries what the rules cannot reach for themselves. Signal is

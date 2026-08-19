@@ -46,7 +46,7 @@ func Check(d Draft) []Problem {
 // made to lack one by adding to it, so only a session still without one has to be
 // given one here.
 func CheckAdditions(m session.Manifest, d Draft) []Problem {
-	if holdsEditingRepo(m) {
+	if holdsEditingRepo(m) || len(d.Upgrades) > 0 {
 		return nil
 	}
 	return checkRepos(d)

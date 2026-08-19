@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
@@ -308,5 +309,191 @@ func TestCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	}
 	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
 		t.Fatalf("cancel discarded Windows written after the picker opened: %+v", got.Windows)
+	}
+}
+
+func commit(t *testing.T, dir, message string) {
+	t.Helper()
+	args := []string{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
+		"commit", "--allow-empty", "-m", message}
+	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func referenced(repos ...github.Repo) []session.RepoSelection {
+	sels := make([]session.RepoSelection, 0, len(repos))
+	for _, r := range repos {
+		sels = append(sels, session.RepoSelection{Repo: r, Role: session.RepoRoleReference})
+	}
+	return sels
+}
+
+// Taking up a repository the session reads is how a session assembled for
+// reading alone starts being worked in: the branch is derived here, because a
+// reference-only session has none of its own yet.
+func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir()}
+	a := Assembler{Cfg: cfg}
+	dir, err := session.Create(cfg, "Read only", "", "", "feat", session.ModeAssistant, "",
+		referenced(testRepo(t, "docs")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := Draft{Name: "Read only", Prefix: "chore",
+		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
+	if err := a.Confirm(dir, draft, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos after an upgrade = %+v", got.Repos)
+	}
+	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "chore/read-only" || r.Revision != "" {
+		t.Fatalf("upgraded repo = %+v", r)
+	}
+	if got.Branch() != "chore/read-only" {
+		t.Fatalf("session branch after an upgrade = %q", got.Branch())
+	}
+}
+
+// An upgrade and an addition land on the same branch, in the same write.
+func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir()}
+	a := Assembler{Cfg: cfg}
+	dir, err := session.Create(cfg, "Both", "", "", "feat", session.ModeAssistant, "",
+		referenced(testRepo(t, "docs")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := Draft{Name: "Both", Prefix: "fix", Repos: editing(testRepo(t, "svc")),
+		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
+	if err := a.Confirm(dir, draft, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 2 {
+		t.Fatalf("repos = %+v", got.Repos)
+	}
+	for _, r := range got.Repos {
+		if r.Role != session.RepoRoleEditing || r.Branch != "fix/both" {
+			t.Fatalf("%s = role %q branch %q", r.Name, r.Role, r.Branch)
+		}
+	}
+}
+
+// A refused take-up leaves the file describing what is on disk, and — because it
+// is attempted before anything is cloned — leaves the session holding no checkout
+// the manifest never learned about.
+func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir()}
+	a := Assembler{Cfg: cfg}
+	dir, err := session.Create(cfg, "Refused", "", "", "feat", session.ModeAssistant, "",
+		referenced(testRepo(t, "docs")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	commit(t, filepath.Join(dir, "src", "docs"), "local work")
+
+	draft := Draft{Name: "Refused", Prefix: "feat", Repos: editing(testRepo(t, "svc")),
+		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
+	if err := a.Confirm(dir, draft, true, nil); err == nil {
+		t.Fatal("a take-up of a checkout carrying commits was confirmed")
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos after a refusal = %+v", got.Repos)
+	}
+	if r := got.Repos[0]; r.Role != session.RepoRoleReference || r.Branch != "" || r.Revision == "" {
+		t.Fatalf("a refused take-up rewrote the entry: %+v", r)
+	}
+	if got.Escalation != nil {
+		t.Fatalf("a refused take-up recorded an escalation: %+v", got.Escalation)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "src", "svc")); !os.IsNotExist(err) {
+		t.Fatalf("the addition was cloned before the take-up was refused (%v)", err)
+	}
+	if entries, err := os.ReadDir(filepath.Join(dir, "src")); err != nil || len(entries) != 1 {
+		t.Fatalf("src/ holds %d checkouts, want 1 (err %v)", len(entries), err)
+	}
+
+	// Nothing is orphaned, so the same confirm succeeds once the refusal is gone.
+	draft.Upgrades = nil
+	if err := a.Confirm(dir, draft, true, nil); err != nil {
+		t.Fatal("retrying after a refused take-up failed:", err)
+	}
+}
+
+// Two repositories read, both taken up, one branch.
+func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir()}
+	a := Assembler{Cfg: cfg}
+	dir, err := session.Create(cfg, "Batch", "", "", "feat", session.ModeAssistant, "",
+		referenced(testRepo(t, "docs"), testRepo(t, "specs")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	draft := Draft{Name: "Batch", Prefix: "chore",
+		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}, {Org: "org", Name: "specs"}}}
+	if err := a.Confirm(dir, draft, false, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 2 {
+		t.Fatalf("repos after the batch = %+v", got.Repos)
+	}
+	for _, r := range got.Repos {
+		if r.Role != session.RepoRoleEditing || r.Branch != "chore/batch" || r.Revision != "" {
+			t.Fatalf("%s = %+v", r.Name, r)
+		}
+	}
+}
+
+// The take-up is recorded before the additions are cloned, so a clone that fails
+// cannot leave the file calling a checkout pinned that is on the session branch.
+func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir()}
+	a := Assembler{Cfg: cfg}
+	dir, err := session.Create(cfg, "Half", "", "", "feat", session.ModeAssistant, "",
+		referenced(testRepo(t, "docs")), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unclonable := github.Repo{Name: "ghost", Org: "org", SSHURL: filepath.Join(t.TempDir(), "nowhere"),
+		DefaultBranch: "main"}
+	draft := Draft{Name: "Half", Prefix: "feat", Repos: editing(unclonable),
+		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
+	if err := a.Confirm(dir, draft, true, nil); err == nil {
+		t.Fatal("a session was confirmed with a repository that cannot be cloned")
+	}
+
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "feat/half" || r.Revision != "" {
+		t.Fatalf("the manifest describes a checkout that is not on disk: %+v", r)
+	}
+	if got.Escalation != nil {
+		t.Fatalf("a failed addition recorded an escalation: %+v", got.Escalation)
+	}
+	branch, err := exec.Command("git", "-C", filepath.Join(dir, "src", "docs"), "branch", "--show-current").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(branch)) != "feat/half" {
+		t.Fatalf("the checkout is on %q", strings.TrimSpace(string(branch)))
 	}
 }
