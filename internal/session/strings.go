@@ -57,8 +57,10 @@ const (
 	worktreeCmd = "worktree"
 	revParseCmd = "rev-parse"
 
-	configCmd  = "config"
-	showRefCmd = "show-ref"
+	configCmd      = "config"
+	showRefCmd     = "show-ref"
+	checkoutCmd    = "checkout"
+	symbolicRefCmd = "symbolic-ref"
 
 	worktreeAdd    = "add"
 	worktreeRemove = "remove"
@@ -70,6 +72,7 @@ const (
 	verifyFlag   = "--verify"
 	branchFlag   = "-b"
 	quietFlag    = "-q"
+	shortFlag    = "--short"
 	pruneFlag    = "--prune"
 	tagsFlag     = "--tags"
 	porcelainArg = "--porcelain"
