@@ -10,9 +10,9 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// heldRepo is one repository the session already holds. Locked rows reach the
-// manifest as they are rather than as a fresh selection to compose, which is what
-// keeps a repo the agent is already working in from being cloned a second time.
+// heldRepo is one repository the session already holds, wearing the role it holds
+// it in. A held row is not composed again — that would clone a repo the agent is
+// working in a second time — but a reference one can be named in Upgrades.
 type heldRepo struct {
 	ID     string `json:"id"`
 	Role   string `json:"role"`
@@ -25,6 +25,14 @@ type heldRepo struct {
 type pickerFields struct {
 	Branch string     `json:"branch"`
 	Repos  []heldRepo `json:"repos"`
+}
+
+// pickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
+// rows the session already reads, to be checked out for editing instead — the
+// two reach the session by different routes, so they arrive apart.
+type pickerInput struct {
+	Repos    []repoPick `json:"repos"`
+	Upgrades []string   `json:"upgrades"`
 }
 
 // Picker is the second step over a live session, serving both the escalate tool
@@ -61,9 +69,9 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 	return pickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-// Confirm adds the picked repositories to the session, escalating it when an
-// escalation is what asked for the picker.
-func (p *Picker) Confirm(slug string, in draftInput) error {
+// Confirm gives the session the picked repositories and takes up the named ones
+// it already reads, escalating it when an escalation is what asked for the picker.
+func (p *Picker) Confirm(slug string, in pickerInput) error {
 	root, err := p.root(slug)
 	if err != nil {
 		return err
@@ -104,7 +112,7 @@ func (p *Picker) Cancel(slug string) error {
 // picker has no name, ticket or mode field, so those come from the manifest. An
 // escalation is the exception — it proposes a name for the work it is escalating
 // to, and the prefix a first branch is cut with.
-func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in draftInput) assembly.Draft {
+func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in pickerInput) assembly.Draft {
 	byID := make(map[string]github.Repo)
 	for _, r := range p.repos.Cached() {
 		byID[r.ID()] = r
@@ -118,6 +126,7 @@ func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, 
 		repos = append(repos, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
 	}
 	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
+	upgrades := heldRefs(m, in.Upgrades)
 	if escalation != nil {
 		if proposed := strings.TrimSpace(escalation.Name); proposed != "" {
 			name = proposed
@@ -127,7 +136,28 @@ func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, 
 		}
 	}
 	return assembly.Draft{Name: name, Description: m.Description, Ticket: m.TicketURL,
-		Prefix: prefix, Mode: m.EffectiveMode(), Repos: repos}
+		Prefix: prefix, Mode: m.EffectiveMode(), Repos: repos, Upgrades: upgrades}
+}
+
+// heldRefs keeps the ids naming a reference repository the session holds, once
+// each. They resolve against the manifest rather than the cached repository list,
+// so a page a refresh behind still names the rows the session actually reads.
+func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
+	byID := make(map[string]session.RepoRef, len(m.Repos))
+	for _, r := range m.Repos {
+		if r.Role.Effective() != session.RepoRoleReference {
+			continue
+		}
+		byID[(github.Repo{Org: r.Org, Name: r.Name}).ID()] = session.RepoRef{Org: r.Org, Name: r.Name}
+	}
+	refs := make([]session.RepoRef, 0, len(ids))
+	for _, id := range ids {
+		if ref, ok := byID[id]; ok {
+			refs = append(refs, ref)
+			delete(byID, id)
+		}
+	}
+	return refs
 }
 
 // root is the session the picker is about, which is only ever one this workbench
