@@ -24,7 +24,7 @@ func DocumentWindow(root, name string, editor EditorCommand, span workbench.Line
 	if err != nil {
 		return workbench.WindowOptions{}, err
 	}
-	rel := sessionRelative(root, path, name)
+	rel := SessionRelative(root, path, name)
 	if format, ok := workbench.FormatFor(path); ok {
 		if opts, ok := documentPane(path, rel, format, span); ok {
 			return opts, nil
@@ -86,10 +86,10 @@ func documentLabel(text, rel string) string {
 	return fmt.Sprintf(documentLabelFormat, filepath.Base(rel))
 }
 
-// sessionRelative names a file the way the session refers to it. The resolved
+// SessionRelative names a file the way the session refers to it. The resolved
 // path has been through EvalSymlinks and the root has not, so on a mac they
 // share no prefix until both have.
-func sessionRelative(root, path, name string) string {
+func SessionRelative(root, path, name string) string {
 	if real, err := filepath.EvalSymlinks(root); err == nil {
 		root = real
 	}

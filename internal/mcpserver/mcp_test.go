@@ -913,6 +913,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	for _, name := range []string{
 		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolEscalate,
+		toolSharePage,
 	} {
 		if !advertised[name] {
 			t.Errorf("tool %q was not advertised", name)
@@ -1030,5 +1031,40 @@ func TestEscalatePrefixSchemaEnumeratesTheAssemblyPrefixes(t *testing.T) {
 	prefixes := assembly.Prefixes()
 	if want := "one of " + strings.Join(prefixes, ", "); description != want {
 		t.Fatalf("branch_prefix description = %q, want %q", description, want)
+	}
+}
+
+// share_page stages a file and reports where; qrouton never sends it anywhere,
+// so the handler's whole contract is the path it hands back.
+func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "thoughts", "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join("thoughts", "shared", "spec.md")
+	if err := os.WriteFile(filepath.Join(dir, source), []byte("# Spec\n\nProse.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	message, err := sharePage(dir, sharePageInput{Path: source})
+	if err != nil {
+		t.Fatalf("sharePage: %v", err)
+	}
+	page := filepath.Join(sessionpaths.SharePages(dir), "thoughts-shared-spec.html")
+	if !strings.Contains(message, page) {
+		t.Errorf("message %q does not name %q", message, page)
+	}
+	body, err := os.ReadFile(page)
+	if err != nil {
+		t.Fatalf("read staged page: %v", err)
+	}
+	if !strings.HasPrefix(string(body), "<title>Spec</title>") {
+		t.Errorf("staged page opens %.40q", body)
+	}
+}
+
+func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
+	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
+		t.Error("shared a document from outside the session")
 	}
 }

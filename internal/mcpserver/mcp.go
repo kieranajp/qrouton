@@ -41,6 +41,10 @@ type showDiffInput struct {
 	Base   string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
 }
 
+type sharePageInput struct {
+	Path string `json:"path" jsonschema:"Path to a markdown document in the qrouton session, relative to its root"`
+}
+
 type notifyInput struct {
 	Message string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
 }
@@ -77,6 +81,17 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			output["viewport"] = viewport
 		}
 		return textResult(message), output, nil
+	})
+
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolSharePage,
+		Description: descSharePage,
+	}, func(_ context.Context, _ *mcp.CallToolRequest, input sharePageInput) (*mcp.CallToolResult, any, error) {
+		message, err := sharePage(root, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{"message": message}, nil
 	})
 
 	mcp.AddTool(server, &mcp.Tool{

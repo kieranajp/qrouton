@@ -3,6 +3,7 @@ EVAL     := qrouton-eval
 BINDIR   ?= $(HOME)/.local/bin
 FRONTEND := internal/desktop/frontend
 PAGES    := internal/desktop/assets/index.html
+SHARE    := internal/share/assets/share.js
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
@@ -10,7 +11,7 @@ SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.h
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
-front: $(PAGES)
+front: $(PAGES) $(SHARE)
 
 $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
 	cd $(FRONTEND) && npm ci
@@ -18,6 +19,11 @@ $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
 
 $(PAGES): $(FRONTEND)/node_modules $(SOURCES)
 	cd $(FRONTEND) && npm run build
+
+# The shared page carries its fonts, so it is built apart from the workbench's
+# own pages, which are served theirs.
+$(SHARE): $(FRONTEND)/node_modules $(SOURCES)
+	cd $(FRONTEND) && npm run build:share
 
 build: front
 	go build -o $(BIN) .
@@ -59,4 +65,4 @@ uninstall:
 
 clean:
 	rm -f $(BIN) $(EVAL)
-	rm -rf internal/desktop/assets $(FRONTEND)/node_modules
+	rm -rf internal/desktop/assets internal/share/assets $(FRONTEND)/node_modules

@@ -33,6 +33,10 @@ const (
 	handoffPendingName = "handoff.pending"
 	agentPIDName       = "agent.pid"
 	openedName         = "opened"
+
+	// sharePagesDirName holds rendered pages staged for the agent to publish.
+	// Distinct from thoughts/shared, which holds the documents themselves.
+	sharePagesDirName = "share"
 )
 
 // Dir is the session-private directory inside a session root.
@@ -97,4 +101,10 @@ func Opened(root string) string {
 // between the escalation and the next launch still honours the handoff.
 func HandoffPending(root string) string {
 	return filepath.Join(Dir(root), handoffPendingName)
+}
+
+// SharePages stages the self-contained pages rendered from session documents,
+// each one waiting for the agent to hand it to somebody.
+func SharePages(root string) string {
+	return filepath.Join(Dir(root), sharePagesDirName)
 }
