@@ -8,7 +8,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/urfave/cli/v2 v2.27.7
-	github.com/wailsapp/wails/v3 v3.0.0-beta.4
+	github.com/wailsapp/wails/v3 v3.0.0-beta.13
 )
 
 require (
@@ -32,5 +32,5 @@ require (
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/sys v0.45.0 // indirect
+	golang.org/x/sys v0.46.0 // indirect
 )
