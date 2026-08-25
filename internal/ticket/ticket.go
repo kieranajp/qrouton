@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 )
 
@@ -23,6 +24,8 @@ const (
 	linearProvider = "linear"
 	asanaProvider  = "asana"
 )
+
+var linearIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*$`)
 
 type Ticket struct {
 	Title string
@@ -45,14 +48,17 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, err
 
 // ParseURL validates the ticket providers and browser URL shapes accepted by qrouton.
 func ParseURL(rawURL string) (*url.URL, error) {
-	u, err := url.Parse(strings.TrimSpace(rawURL))
+	trimmed := strings.TrimSpace(rawURL)
+	u, err := url.Parse(trimmed)
 	if err != nil || u.Scheme != httpsScheme {
 		return nil, ErrUnsupportedProvider
 	}
 	switch strings.ToLower(u.Hostname()) {
 	case linearHost:
-		parts := pathSegments(u)
-		if len(parts) < linearMinSegments || parts[1] != linearIssueSegment || parts[linearIssueIndex] == "" {
+		if len(trimmed) > linearMaxReferenceBytes || u.User != nil || u.Port() != "" {
+			return nil, ErrNotLinearIssue
+		}
+		if _, err := linearIdentifier(u); err != nil {
 			return nil, ErrNotLinearIssue
 		}
 	case asanaHost:
@@ -66,21 +72,77 @@ func ParseURL(rawURL string) (*url.URL, error) {
 	return u, nil
 }
 
-// pathSegments splits a ticket URL's path, which both providers address
-// positionally. ParseURL has already validated the segment count.
+// CanonicalLinearURL validates a Linear identifier or issue URL and returns the
+// workspace-free URL persisted by external ingress.
+func CanonicalLinearURL(raw string) (string, error) {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || len(trimmed) > linearMaxReferenceBytes {
+		return "", ErrInvalidLinearReference
+	}
+	if id, ok := normalizeLinearIdentifier(trimmed); ok {
+		return linearCanonicalPrefix + id, nil
+	}
+	u, err := url.Parse(trimmed)
+	if err != nil || u.Scheme != httpsScheme || strings.ToLower(u.Hostname()) != linearHost ||
+		u.User != nil || u.Port() != "" {
+		return "", ErrInvalidLinearReference
+	}
+	id, err := linearIdentifier(u)
+	if err != nil {
+		return "", ErrInvalidLinearReference
+	}
+	return linearCanonicalPrefix + id, nil
+}
+
 func pathSegments(u *url.URL) []string {
 	return strings.Split(strings.Trim(u.Path, pathSeparator), pathSeparator)
 }
 
+func linearIdentifier(u *url.URL) (string, error) {
+	escaped := u.EscapedPath()
+	if !strings.HasPrefix(escaped, pathSeparator) {
+		return "", ErrNotLinearIssue
+	}
+	parts := strings.Split(strings.TrimPrefix(escaped, pathSeparator), pathSeparator)
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." {
+			return "", ErrNotLinearIssue
+		}
+	}
+	index := -1
+	switch {
+	case len(parts) >= linearShortMinSegments && parts[0] == linearIssueSegment:
+		index = linearShortIDIndex
+	case len(parts) >= linearScopedMinSegments && parts[1] == linearIssueSegment && parts[0] != "":
+		index = linearScopedIDIndex
+	default:
+		return "", ErrNotLinearIssue
+	}
+	if id, ok := normalizeLinearIdentifier(parts[index]); ok {
+		return id, nil
+	}
+	return "", ErrNotLinearIssue
+}
+
+func normalizeLinearIdentifier(raw string) (string, bool) {
+	if len(raw) == 0 || len(raw) > linearMaxIdentifierBytes || !linearIdentifierPattern.MatchString(raw) {
+		return "", false
+	}
+	return strings.ToUpper(raw), true
+}
+
 func fetchLinear(ctx context.Context, client *http.Client, u *url.URL) (Ticket, error) {
-	parts := pathSegments(u)
+	id, err := linearIdentifier(u)
+	if err != nil {
+		return Ticket{}, err
+	}
 	token := strings.TrimSpace(os.Getenv(linearTokenEnvVar))
 	if token == "" {
 		return Ticket{}, ErrNoLinearToken
 	}
 	payload, _ := json.Marshal(map[string]any{
 		linearQueryKey: linearIssueQuery,
-		linearVarsKey:  map[string]string{linearIDVar: parts[linearIssueIndex]},
+		linearVarsKey:  map[string]string{linearIDVar: id},
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, linearAPI, bytes.NewReader(payload))
 	if err != nil {
