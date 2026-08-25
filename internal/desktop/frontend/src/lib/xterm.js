@@ -4,6 +4,8 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { position } from "./shortcuts.js";
 
+export { Terminal };
+
 // getPropertyValue does not resolve a var() chain, so read the ramp itself.
 const shade = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 
