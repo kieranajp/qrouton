@@ -184,13 +184,13 @@ func TestOpenLinearIssueUsesTheTypedProcessRequest(t *testing.T) {
 		}
 		return Response{}
 	})
-	outcome, err := OpenLinearIssue(context.Background(), socket, "https://linear.app/issue/LIF-2841")
+	outcome, err := OpenLinearIssue(context.Background(), socket, "https://linear.app/issue/LIF-2841", "Fix it")
 	if err != nil || outcome != "queued" {
 		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
 	}
 	got := <-requests
 	if got.Op != OpOpenLinearIssue || got.LinearIssue == nil ||
-		got.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" {
+		got.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" || got.LinearIssue.Prompt != "Fix it" {
 		t.Fatalf("request = %+v", got)
 	}
 }

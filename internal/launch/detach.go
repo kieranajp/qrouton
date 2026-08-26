@@ -31,11 +31,12 @@ const (
 // resume. An empty SessionRoot opens on no session at all, which is where the
 // assembly overlay draws. It builds each session's own command as it boots it.
 type WorkbenchSpec struct {
-	SessionRoot string `json:"session_root,omitempty"`
-	Socket      string `json:"socket"`
-	Runner      string `json:"runner,omitempty"`
-	Resume      bool   `json:"resume,omitempty"`
-	LinearIssue string `json:"linear_issue,omitempty"`
+	SessionRoot  string `json:"session_root,omitempty"`
+	Socket       string `json:"socket"`
+	Runner       string `json:"runner,omitempty"`
+	Resume       bool   `json:"resume,omitempty"`
+	LinearIssue  string `json:"linear_issue,omitempty"`
+	LinearPrompt string `json:"linear_prompt,omitempty"`
 	// Empty when the editor could not be resolved, which costs the document chip
 	// and must not keep the window shut.
 	Editor EditorCommand `json:"editor"`

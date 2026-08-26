@@ -67,14 +67,14 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["codex"], false, modeRPI)
+	argv := runnerArgv(byID["codex"], false, modeRPI, "")
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := runnerArgv(byID["opencode"], false, modeRPI); len(argv) != len(byID["opencode"].Command) {
+	if argv := runnerArgv(byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command) {
 		t.Fatalf("unknown launch protocol should not receive a positional prompt: %#v", argv)
 	}
 }
@@ -85,13 +85,30 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["claude"], false, modeAssistant)
+	argv := runnerArgv(byID["claude"], false, modeAssistant, "")
 	msg := argv[len(argv)-1]
 	if strings.Contains(msg, "Present the work as Research, Plan, or Implement") {
 		t.Fatalf("assistant opening should not mandate the RPI presentation: %q", msg)
 	}
 	if !strings.Contains(msg, "help with whatever the user asks") || !strings.Contains(msg, "Research → Plan → Implement workflow is available") {
 		t.Fatalf("assistant opening should stay open-ended and offer escalation: %q", msg)
+	}
+}
+
+func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
+	for _, runner := range builtinRunners {
+		argv := runnerArgv(runner, false, modeAssistant, "  Fix the login regression.  ")
+		if runner.ID == runnerIDOpenCode {
+			if strings.Contains(strings.Join(argv, " "), "Fix the login regression") {
+				t.Fatalf("OpenCode received an unsupported positional prompt: %#v", argv)
+			}
+			continue
+		}
+		message := argv[len(argv)-1]
+		if !strings.HasPrefix(message, openingMessageAssistant) ||
+			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {
+			t.Fatalf("%s opening message = %q", runner.ID, message)
+		}
 	}
 }
 
@@ -102,19 +119,22 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"opencode": {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, true, modeRPI)
+		argv := runnerArgv(runner, true, modeRPI, "must not be repeated")
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
 		if strings.Contains(strings.Join(argv, " "), "just been launched") {
 			t.Errorf("%s resume argv included fresh-session greeting: %#v", runner.ID, argv)
 		}
+		if strings.Contains(strings.Join(argv, " "), "must not be repeated") {
+			t.Errorf("%s resume argv repeated the external prompt: %#v", runner.ID, argv)
+		}
 	}
 }
 
 func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), true)
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), true, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -127,7 +147,7 @@ func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 
 func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
-	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), false)
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +169,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	bin := "/opt/qro uton/$peculiar/qrouton"
 	dir := "/work/kieran's session"
 	handle := workbench.Handle{Socket: "/tmp/qr outon/it's.sock", SessionRoot: dir}
-	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, handle, false)
+	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, handle, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +229,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), false)
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), false, "")
 		if err != nil {
 			t.Fatal(err)
 		}

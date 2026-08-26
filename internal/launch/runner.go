@@ -102,8 +102,8 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, resume bool) ([]string, []string, error) {
-	argv := runnerArgv(r, resume, sessionMode(dir))
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, resume bool, initialPrompt string) ([]string, []string, error) {
+	argv := runnerArgv(r, resume, sessionMode(dir), initialPrompt)
 	mcpArgs := []string{mcpSubcommand, sessionRootFlag, dir, editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()}
 	switch r.ID {
 	case runnerIDClaude:
@@ -169,7 +169,7 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(r Runner, resume bool, mode string) []string {
+func runnerArgv(r Runner, resume bool, mode, initialPrompt string) []string {
 	argv := append([]string(nil), r.Command...)
 	if resume {
 		switch r.ID {
@@ -183,16 +183,20 @@ func runnerArgv(r Runner, resume bool, mode string) []string {
 	}
 	switch r.ID {
 	case runnerIDClaude, runnerIDCodex:
-		argv = append(argv, openingMessage(mode))
+		argv = append(argv, openingMessage(mode, initialPrompt))
 	}
 	return argv
 }
 
 // openingMessage is the fresh-session greeting injected as the runner's first
 // prompt.
-func openingMessage(mode string) string {
+func openingMessage(mode, initialPrompt string) string {
+	message := openingMessageRPI
 	if mode == modeAssistant {
-		return openingMessageAssistant
+		message = openingMessageAssistant
 	}
-	return openingMessageRPI
+	if prompt := strings.TrimSpace(initialPrompt); prompt != "" {
+		message += linearRequestSeparator + prompt
+	}
+	return message
 }

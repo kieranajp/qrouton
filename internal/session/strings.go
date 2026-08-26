@@ -11,8 +11,9 @@ const (
 	slugSeparator   = "-"
 	branchSeparator = "/"
 
-	dirMode  = 0o755
-	fileMode = 0o644
+	dirMode         = 0o755
+	fileMode        = 0o644
+	privateFileMode = 0o600
 
 	gitBin = "git"
 

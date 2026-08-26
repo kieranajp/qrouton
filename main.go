@@ -53,22 +53,25 @@ func open(c *cli.Context) error {
 	if arg := c.Args().First(); arg != "" {
 		return fmt.Errorf("%w: %q", errNoSessionArguments, arg)
 	}
-	linearIssue := ""
+	linearIssue, linearPrompt := "", ""
 	if c.IsSet(linearIssueFlag) {
 		canonical, err := ticket.CanonicalLinearURL(c.String(linearIssueFlag))
 		if err != nil {
 			return err
 		}
 		linearIssue = canonical
+		linearPrompt = os.Getenv(linearPromptEnvVar)
 	}
-	return workbench.WithLaunchLock(func() error { return openLocked(c, linearIssue) })
+	return workbench.WithLaunchLock(func() error { return openLocked(c, linearIssue, linearPrompt) })
 }
 
-func openLocked(c *cli.Context, linearIssue string) error {
+func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
 	discovery := discoverProcess()
 	if linearIssue != "" {
 		if discovery.Socket != "" {
-			_, err := workbench.OpenLinearIssue(context.Background(), discovery.Socket, linearIssue)
+			_, err := workbench.OpenLinearIssue(
+				context.Background(), discovery.Socket, linearIssue, linearPrompt,
+			)
 			return err
 		}
 		if discovery.Legacy {
@@ -84,7 +87,8 @@ func openLocked(c *cli.Context, linearIssue string) error {
 		}
 		editor, _ := launch.ResolveEditor(cfg.Editor)
 		return detachProcess(launch.WorkbenchSpec{
-			Socket: socket, Runner: c.String(runnerFlag), Editor: editor, LinearIssue: linearIssue,
+			Socket: socket, Runner: c.String(runnerFlag), Editor: editor,
+			LinearIssue: linearIssue, LinearPrompt: linearPrompt,
 		}, os.Environ())
 	}
 	// There is one workbench, and it opens on a session: two of them would each
@@ -185,24 +189,26 @@ func workbenchProcess(marshalled string) error {
 		return err
 	}
 	return desktop.Run(desktop.Options{
-		SessionRoot: spec.SessionRoot,
-		Resume:      spec.Resume,
-		Root:        cfg.Root,
-		Socket:      spec.Socket,
-		LinearIssue: spec.LinearIssue,
+		SessionRoot:  spec.SessionRoot,
+		Resume:       spec.Resume,
+		Root:         cfg.Root,
+		Socket:       spec.Socket,
+		LinearIssue:  spec.LinearIssue,
+		LinearPrompt: spec.LinearPrompt,
 		LinearCommand: []string{
 			bin,
 			"--" + linearIssueFlag,
 		},
-		Env:      os.Environ(),
-		Agent:    agentCommand(cfg, bin, spec.Runner, spec.Editor),
-		Shell:    shellArgv(bin),
-		Reveal:   launch.RevealArgv,
-		Document: documentWindow(spec.Editor),
-		Config:   cfg,
-		Runners:  assemblyRunners(cfg),
-		Signal:   launch.SignalSupervisor,
-		Relaunch: relaunchWorkbench(bin, spec, os.Environ()),
+		LinearEnvironment: []string{linearPromptEnvVar},
+		Env:               os.Environ(),
+		Agent:             agentCommand(cfg, bin, spec.Runner, spec.Editor),
+		Shell:             shellArgv(bin),
+		Reveal:            launch.RevealArgv,
+		Document:          documentWindow(spec.Editor),
+		Config:            cfg,
+		Runners:           assemblyRunners(cfg),
+		Signal:            launch.SignalSupervisor,
+		Relaunch:          relaunchWorkbench(bin, spec, os.Environ()),
 		ValidateEditor: func(argv []string) error {
 			if len(argv) == 0 {
 				return nil
@@ -221,8 +227,8 @@ func workbenchProcess(marshalled string) error {
 // again, on no session. Detach returns only once the child answers, so the two
 // overlap for that wait — safe because the successor holds no session, and so
 // claims no supervisor the caller might still own.
-func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func(func() string) error {
-	return func(linearIssue func() string) error {
+func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func(func() (string, string)) error {
+	return func(linearIssue func() (string, string)) error {
 		return workbench.WithLaunchLock(func() error {
 			socket, err := workbench.NewSocketPath()
 			if err != nil {
@@ -231,7 +237,7 @@ func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func
 			next := spec
 			next.SessionRoot, next.Resume, next.Socket = "", false, socket
 			if linearIssue != nil {
-				next.LinearIssue = linearIssue()
+				next.LinearIssue, next.LinearPrompt = linearIssue()
 			}
 			return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
 				socket, workbenchLog(next))

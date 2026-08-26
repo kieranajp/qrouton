@@ -89,7 +89,8 @@ Linear Desktop can send **Work on issue → Custom script** to qrouton's existin
 {
   "openIssue": {
     "path": "/Users/you/.local/bin/qrouton",
-    "args": ["--linear-issue", "{{issue.identifier}}"]
+    "args": ["--linear-issue", "{{issue.identifier}}"],
+    "env": ["LINEAR_PROMPT"]
   }
 }
 ```
@@ -98,7 +99,9 @@ The field remains a plain JSON editor: an existing file is loaded verbatim, and 
 
 The flag accepts an identifier such as `LIF-2841`, `https://linear.app/issue/LIF-2841`, or a workspace URL such as `https://linear.app/lifesum/issue/LIF-2841/title`. It validates and persists the workspace-free form `https://linear.app/issue/LIF-2841`. Repository roles, agent, mode, branch and Create remain interactive.
 
-The command succeeds when a running workbench accepts the request, or when a newly launched workbench is ready with the request queued. Ticket fetching and session creation happen later in the window. `LINEAR_API_KEY` must be present in the environment of the workbench process: a running workbench keeps the environment it started with, and Linear does not guarantee that a cold custom-script launch inherits the environment from your usual shell. qrouton does not store the key.
+The generated `env` entry lets Linear pass its composed `LINEAR_PROMPT` alongside the issue. On the session's first launch, qrouton sends its own Assistant or RPI opening message first, followed by `Linear request:` and Linear's prompt. The prompt is consumed once and is not repeated on agent resume. Ticket fetching and session creation still happen later in the window.
+
+The command succeeds when a running workbench accepts the request, or when a newly launched workbench is ready with the request queued. `LINEAR_API_KEY` must be present in the environment of the workbench process: a running workbench keeps the environment it started with, and Linear does not guarantee that a cold custom-script launch inherits the environment from your usual shell. qrouton does not store the key.
 
 Repeated actions for the same issue reveal its open draft or preferred existing session. A different issue is refused while any New session draft is open, without replacing that draft. If a workbench from an older qrouton version is running, quit it and retry so the installed version can start.
 

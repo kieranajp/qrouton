@@ -19,7 +19,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	s := newSettings(cfg, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
-	}, quit)
+	}, []string{"LINEAR_PROMPT"}, quit)
 	s.linearFile = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
@@ -79,6 +79,9 @@ func TestSettingsLoadPrefillsTheLinearConfigWithThisExecutable(t *testing.T) {
 	wantArgs := []string{s.linearCommand[1], linearIssueTemplate}
 	if !reflect.DeepEqual(document.OpenIssue.Args, wantArgs) {
 		t.Fatalf("linear args = %#v, want %#v", document.OpenIssue.Args, wantArgs)
+	}
+	if !reflect.DeepEqual(document.OpenIssue.Env, s.linearEnv) {
+		t.Fatalf("linear env = %#v, want %#v", document.OpenIssue.Env, s.linearEnv)
 	}
 }
 

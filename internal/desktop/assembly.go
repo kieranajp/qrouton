@@ -45,6 +45,11 @@ type AssemblySeed struct {
 	Generation uint64 `json:"generation"`
 }
 
+type linearSeed struct {
+	ticket string
+	prompt string
+}
+
 // Assembly is what the overlay calls: the rules, the branch preview, the ticket
 // lookup, and the create that ends with the new session on screen.
 type Assembly struct {
@@ -55,11 +60,11 @@ type Assembly struct {
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
 
-	mu             sync.Mutex
-	pending        string
-	draftOpen      bool
-	externalTicket string
-	generation     uint64
+	mu         sync.Mutex
+	pending    linearSeed
+	draftOpen  bool
+	external   linearSeed
+	generation uint64
 }
 
 func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit emitter,
@@ -107,7 +112,16 @@ func (a *Assembly) Fetch(url string) (ticketFields, error) {
 func (a *Assembly) Pending() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.pending
+	return a.pending.ticket
+}
+
+// pendingLinear supplies the full external request to a replacement workbench.
+// The prompt stays out of the frontend seed and is carried only to session
+// creation, where the runner consumes it once.
+func (a *Assembly) pendingLinear() (string, string) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.pending.ticket, a.pending.prompt
 }
 
 // Begin claims the pending external ticket and owns the draft until End.
@@ -116,11 +130,11 @@ func (a *Assembly) Begin() AssemblySeed {
 	defer a.mu.Unlock()
 	a.generation++
 	if !a.draftOpen {
-		a.externalTicket = a.pending
-		a.pending = ""
+		a.external = a.pending
+		a.pending = linearSeed{}
 	}
 	a.draftOpen = true
-	return AssemblySeed{Ticket: a.externalTicket, Generation: a.generation}
+	return AssemblySeed{Ticket: a.external.ticket, Generation: a.generation}
 }
 
 // End releases only the overlay generation that still owns the draft.
@@ -131,25 +145,25 @@ func (a *Assembly) End(generation uint64) {
 		return
 	}
 	a.draftOpen = false
-	a.externalTicket = ""
+	a.external = linearSeed{}
 }
 
-func (a *Assembly) offer(raw string) (string, error) {
+func (a *Assembly) offer(raw, prompt string) (string, error) {
 	canonical, err := ticket.CanonicalLinearURL(raw)
 	if err != nil {
 		return "", err
 	}
 	a.mu.Lock()
 	if a.draftOpen {
-		if a.externalTicket == canonical {
+		if a.external.ticket == canonical {
 			a.mu.Unlock()
 			return assemblyOutcomeDraft, nil
 		}
 		a.mu.Unlock()
 		return "", ErrAssemblyDraftConflict
 	}
-	if a.pending != "" {
-		if a.pending == canonical {
+	if a.pending.ticket != "" {
+		if a.pending.ticket == canonical {
 			a.mu.Unlock()
 			return assemblyOutcomeQueued, nil
 		}
@@ -180,12 +194,18 @@ func (a *Assembly) offer(raw string) (string, error) {
 		}
 		return assemblyOutcomeExisting, nil
 	}
-	a.pending = canonical
+	a.pending = linearSeed{ticket: canonical, prompt: prompt}
 	a.mu.Unlock()
 	if a.emit != nil {
 		a.emit(assemblyRequestedEvent, canonical)
 	}
 	return assemblyOutcomeQueued, nil
+}
+
+func (a *Assembly) initialPrompt() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.external.prompt
 }
 
 // Create assembles the session and puts it on screen. Adoption is in process
@@ -201,8 +221,8 @@ func (a *Assembly) Create(in draftInput) error {
 	}
 	slug := session.Slugify(draft.Name)
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
-	root, err := session.Create(a.cfg, draft.Name, draft.Description, draft.Ticket,
-		draft.Prefix, draft.Mode, in.Runner, draft.Repos, progress)
+	root, err := session.CreateWithInitialPrompt(a.cfg, draft.Name, draft.Description, draft.Ticket,
+		a.initialPrompt(), draft.Prefix, draft.Mode, in.Runner, draft.Repos, progress)
 	if err != nil {
 		return err
 	}

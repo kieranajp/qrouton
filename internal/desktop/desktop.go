@@ -36,12 +36,15 @@ type Options struct {
 	// Socket answers the launcher's readiness poll.
 	Socket string
 	// LinearIssue is a canonical ticket offered after session boot is wired and
-	// before the page can claim a blank draft.
-	LinearIssue string
+	// before the page can claim a blank draft. LinearPrompt is the full prompt
+	// Linear generated for the eventual runner's first turn.
+	LinearIssue  string
+	LinearPrompt string
 	// LinearCommand is the executable and fixed arguments written before
 	// Linear's issue identifier template in coding-tools.json.
-	LinearCommand []string
-	Env           []string
+	LinearCommand     []string
+	LinearEnvironment []string
+	Env               []string
 	// Agent builds a session's supervisor command and environment against the
 	// control socket the workbench will serve that session on. runnerID names
 	// the agent the session was assembled with; empty means the workbench's own.
@@ -68,7 +71,7 @@ type Options struct {
 	// and returns only once the successor is serving. First run needs it because
 	// a changed sessions root cannot take effect in a running process. The ticket
 	// supplier is read after the relaunch owns launch serialization.
-	Relaunch func(linearIssue func() string) error
+	Relaunch func(linearIssue func() (ticket, prompt string)) error
 	// ValidateEditor and ValidateLaunch reach launch.ResolveEditor and
 	// launch.Runners without desktop importing launch, the same shape Agent,
 	// Shell, Signal and Runners already use.
@@ -119,18 +122,19 @@ func Run(opts Options) error {
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newSettings(
-		opts.Config, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand, quit,
+		opts.Config, opts.ValidateEditor, opts.ValidateLaunch,
+		opts.LinearCommand, opts.LinearEnvironment, quit,
 	)))
 	relaunch := pendingRelaunch(opts.Relaunch, assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)
 }
 
-func pendingRelaunch(relaunch func(func() string) error, assembly *Assembly) func() error {
+func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Assembly) func() error {
 	if relaunch == nil {
 		return nil
 	}
-	return func() error { return relaunch(assembly.Pending) }
+	return func() error { return relaunch(assembly.pendingLinear) }
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
@@ -237,7 +241,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		if opts.assembly == nil {
 			return ErrNoConfig
 		}
-		if _, err := opts.assembly.offer(opts.LinearIssue); err != nil {
+		if _, err := opts.assembly.offer(opts.LinearIssue, opts.LinearPrompt); err != nil {
 			return err
 		}
 	}

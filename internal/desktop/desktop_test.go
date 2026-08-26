@@ -1252,7 +1252,7 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	running := shownSession(t, reg)
 	beforeAgents, beforeServes := boot.counts()
 
-	outcome, err := workbench.OpenLinearIssue(context.Background(), opts.Socket, "lif-2841")
+	outcome, err := workbench.OpenLinearIssue(context.Background(), opts.Socket, "lif-2841", "Linear prompt")
 	if err != nil || outcome != assemblyOutcomeQueued {
 		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
 	}
@@ -1267,6 +1267,9 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	if pending := opts.assembly.Pending(); pending != "https://linear.app/issue/LIF-2841" {
 		t.Fatalf("pending = %q", pending)
 	}
+	if _, prompt := opts.assembly.pendingLinear(); prompt != "Linear prompt" {
+		t.Fatalf("pending prompt = %q", prompt)
+	}
 	waitFor(t, "the conversation window to be focused", func() bool {
 		r.mu.Lock()
 		defer r.mu.Unlock()
@@ -1274,10 +1277,10 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	})
 
 	seed := opts.assembly.Begin()
-	if outcome, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2841"); err != nil || outcome != assemblyOutcomeDraft {
+	if outcome, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2841", "duplicate"); err != nil || outcome != assemblyOutcomeDraft {
 		t.Fatalf("same issue repeat = %q, %v", outcome, err)
 	}
-	if _, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2842"); err == nil {
+	if _, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2842", ""); err == nil {
 		t.Fatal("different issue replaced the open draft")
 	}
 	opts.assembly.End(seed.Generation)
@@ -1288,6 +1291,7 @@ func TestAColdLinearIssueIsPendingBeforeTheWindowOpens(t *testing.T) {
 	opts, boot := testOptions(t)
 	opts.SessionRoot = ""
 	opts.LinearIssue = "https://linear.app/issue/LIF-2841"
+	opts.LinearPrompt = "Cold prompt"
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
 
@@ -1295,6 +1299,9 @@ func TestAColdLinearIssueIsPendingBeforeTheWindowOpens(t *testing.T) {
 	<-r.opened
 	if pending := opts.assembly.Pending(); pending != opts.LinearIssue {
 		t.Fatalf("pending after open = %q, want %q", pending, opts.LinearIssue)
+	}
+	if _, prompt := opts.assembly.pendingLinear(); prompt != opts.LinearPrompt {
+		t.Fatalf("pending prompt after open = %q, want %q", prompt, opts.LinearPrompt)
 	}
 	if agents, serves := boot.counts(); agents != 0 || serves != 0 {
 		t.Fatalf("cold draft started %d agents and %d session listeners", agents, serves)

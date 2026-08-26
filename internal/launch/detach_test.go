@@ -158,7 +158,7 @@ func TestWaitReadyDoesNotAcceptAnUnpublishedSocket(t *testing.T) {
 // the round trip is a workbench that opens on nothing.
 func TestWorkbenchSpecRoundTrips(t *testing.T) {
 	spec := WorkbenchSpec{SessionRoot: "/sessions/api", Socket: "/tmp/qrouton-sock/501/ab.sock",
-		Runner: "codex", Resume: true, LinearIssue: "https://linear.app/issue/LIF-2841"}
+		Runner: "codex", Resume: true, LinearIssue: "https://linear.app/issue/LIF-2841", LinearPrompt: "Fix it"}
 
 	argv := WorkbenchArgv("/bin/qrouton", spec)
 	if argv[0] != "/bin/qrouton" || argv[1] != "--workbench-spec" || len(argv) != 3 {
@@ -169,7 +169,8 @@ func TestWorkbenchSpecRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	if parsed.SessionRoot != spec.SessionRoot || parsed.Socket != spec.Socket ||
-		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume || parsed.LinearIssue != spec.LinearIssue {
+		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume || parsed.LinearIssue != spec.LinearIssue ||
+		parsed.LinearPrompt != spec.LinearPrompt {
 		t.Fatalf("parsed spec = %#v, want %#v", parsed, spec)
 	}
 }

@@ -15,6 +15,7 @@ const (
 	runnerFlagUsage      = "coding agent to launch (claude, codex, or opencode)"
 	linearIssueFlag      = "linear-issue"
 	linearIssueFlagUsage = "open a Linear issue in the New session flow"
+	linearPromptEnvVar   = "LINEAR_PROMPT"
 
 	// workbenchSpecFlag is the marker the detached workbench process is started
 	// with. Hidden: it is qrouton talking to itself, and the spec behind it is

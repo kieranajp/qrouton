@@ -18,7 +18,7 @@ type controlHooks struct {
 	// drawn until the user arrives there.
 	picker      func(req workbench.PickerRequest) error
 	attention   func(activity string)
-	linearIssue func(ticket string) (string, error)
+	linearIssue func(ticket, prompt string) (string, error)
 	focus       func()
 }
 
@@ -143,7 +143,7 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		if err != nil {
 			return workbench.Response{Error: err.Error()}
 		}
-		outcome, err := c.hooks.linearIssue(canonical)
+		outcome, err := c.hooks.linearIssue(canonical, req.LinearIssue.Prompt)
 		if c.hooks.focus != nil && (err == nil || errors.Is(err, ErrAssemblyDraftConflict)) {
 			c.hooks.focus()
 		}
