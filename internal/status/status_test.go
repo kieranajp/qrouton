@@ -129,18 +129,20 @@ func TestTheSlugAndTerminalReachTheWire(t *testing.T) {
 	}
 }
 
-func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
+func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, session.Manifest{Slug: "webhook"})
 	shared := filepath.Join(dir, "thoughts", "shared")
 	kinds := []struct{ path, want string }{
 		{"readme.md", "NOTE"},
-		{"research/questions-about-p1.md", "NOTE"},
-		{"research/parity-checklist.md", "NOTE"},
+		{"research/questions-about-p1.md", "RESEARCH"},
+		{"research/parity-checklist.md", "RESEARCH"},
 		{"research/R7-editor.md", "RESEARCH"},
+		{"plans/next-steps.md", "PLAN"},
 		{"plans/p002-orchestrated.md", "PLAN"},
 		{"specs/S006-gui-workbench.md", "SPEC"},
 		{"plans/P006-design-system.md", "PLAN"},
+		{"R8-retiring-the-tui.md", "RESEARCH"},
 	}
 	base := time.Now().Add(-time.Hour)
 	for i, doc := range kinds {
@@ -155,8 +157,8 @@ func TestDocumentsAreClassifiedByFilenamePrefix(t *testing.T) {
 		if err := os.Chtimes(full, mtime, mtime); err != nil {
 			t.Fatal(err)
 		}
-		if got := kind(filepath.Base(doc.path)); got != doc.want {
-			t.Errorf("kind(%q) = %q, want %q", doc.path, got, doc.want)
+		if got := DocumentKind(doc.path); got != doc.want {
+			t.Errorf("DocumentKind(%q) = %q, want %q", doc.path, got, doc.want)
 		}
 	}
 

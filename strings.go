@@ -11,8 +11,10 @@ const (
 	appDescription = "qrouton opens the workbench on the session you were last in, and on an\n" +
 		"empty one when there are none. Sessions are assembled in the window."
 
-	runnerFlag      = "runner"
-	runnerFlagUsage = "coding agent to launch (claude, codex, or opencode)"
+	runnerFlag           = "runner"
+	runnerFlagUsage      = "coding agent to launch (claude, codex, or opencode)"
+	linearIssueFlag      = "linear-issue"
+	linearIssueFlagUsage = "open a Linear issue in the New session flow"
 
 	// workbenchSpecFlag is the marker the detached workbench process is started
 	// with. Hidden: it is qrouton talking to itself, and the spec behind it is
@@ -31,4 +33,5 @@ const (
 var (
 	errWorkbenchRunning   = errors.New(`a qrouton workbench is already open — use "+ New session" in it`)
 	errNoSessionArguments = errors.New("qrouton takes no arguments; assemble a session in the window")
+	errLegacyWorkbench    = errors.New("the running qrouton workbench cannot open Linear issues; quit and restart it, then try again")
 )

@@ -65,7 +65,7 @@ export const joining = (branch) => (branch ? `Added repositories join ${branch}`
  * @param {boolean} settled
  * @param {string} slug
  */
-export const assemblyOpen = (requested, settled, slug) => !!requested || (!!settled && !slug);
+export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
 /**
  * pickerOpen is whether the picker is drawn over the session on screen: an

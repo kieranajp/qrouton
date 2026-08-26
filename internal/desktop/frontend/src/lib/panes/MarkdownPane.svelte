@@ -1,19 +1,32 @@
 <script>
+  import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
+  import { artifactTone } from "../artifacts.js";
   import { openDocument } from "../docked.svelte.js";
-  import { Call, openURL } from "../wails.js";
+  import { Call, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind, marks, render } from "./markdown.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{doc: {text: string, format: string, source: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, active = false, scrollRoot } = $props();
 
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
+  let tone = $derived(artifactTone(doc.kind));
+  let copied = $state(false);
+
+  async function copyPath() {
+    if (!doc.path) return;
+    try {
+      await copyText(doc.path);
+      copied = true;
+      setTimeout(() => (copied = false), 1200);
+    } catch {}
+  }
 
   /** @param {HTMLElement} body */
   function links(body) {
@@ -80,10 +93,22 @@
 </script>
 
 <article class="document">
-  {#if doc.source}<CapsLabel tone="dim">{doc.source}</CapsLabel>{/if}
+  {#if doc.source}
+    <div class="source">
+      <CapsLabel tone="dim">{doc.source}</CapsLabel>
+      {#if doc.path}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Copy absolute path"
+          title={doc.path}
+          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
+      {/if}
+    </div>
+  {/if}
   {#if heading}
     <div class="title">
-      <CubeMark size={18} />
+      <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
       <span>{heading}</span>
     </div>
   {/if}
@@ -98,9 +123,22 @@
   }
 
   /* The heading and the path start where the prose does, right of the gutter. */
-  .document :global(.caps),
+  .source,
   .title {
     padding-left: var(--gutter);
+  }
+
+  .source {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+  }
+
+  .source :global(.caps) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .title {

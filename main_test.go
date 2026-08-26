@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -99,6 +101,101 @@ func TestArgumentsAreRefusedRatherThanIgnored(t *testing.T) {
 	}
 }
 
+func TestLinearIssueColdLaunchCarriesOnlyTheCanonicalTicket(t *testing.T) {
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	previous := detachProcess
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{} }
+	var got launch.WorkbenchSpec
+	detachProcess = func(spec launch.WorkbenchSpec, _ []string) error {
+		got = spec
+		return nil
+	}
+
+	if err := open(rootContext(t, "--linear-issue", "lif-2841")); err != nil {
+		t.Fatal(err)
+	}
+	if got.LinearIssue != "https://linear.app/issue/LIF-2841" || got.SessionRoot != "" || got.Socket == "" {
+		t.Fatalf("cold workbench spec = %+v", got)
+	}
+}
+
+func TestLinearIssueRejectsInvalidOrExtraInputBeforeLaunch(t *testing.T) {
+	previous := detachProcess
+	defer func() { detachProcess = previous }()
+	called := false
+	detachProcess = func(launch.WorkbenchSpec, []string) error { called = true; return nil }
+	for _, args := range [][]string{
+		{"--linear-issue", ""},
+		{"--linear-issue", "not-an-issue"},
+		{"--linear-issue", "LIF-2841", "extra"},
+	} {
+		if err := open(rootContext(t, args...)); err == nil {
+			t.Fatalf("qrouton %v succeeded", args)
+		}
+	}
+	if called {
+		t.Fatal("invalid Linear input reached detach")
+	}
+}
+
+func TestLinearIssueUsesThePublishedProcessEndpoint(t *testing.T) {
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("unix", socket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = listener.Close()
+		_ = os.Remove(socket)
+	})
+	previousDiscovery := discoverProcess
+	defer func() { discoverProcess = previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Socket: socket} }
+	requests := make(chan workbench.Request, 1)
+	go func() {
+		for {
+			conn, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			line, err := bufio.NewReader(conn).ReadBytes('\n')
+			if err == nil {
+				var req workbench.Request
+				if json.Unmarshal(line, &req) == nil {
+					requests <- req
+					body, _ := json.Marshal(workbench.Response{Outcome: "queued"})
+					_, _ = conn.Write(append(body, '\n'))
+				}
+			}
+			_ = conn.Close()
+		}
+	}()
+
+	if err := open(rootContext(t, "--linear-issue", "lif-2841")); err != nil {
+		t.Fatal(err)
+	}
+	req := <-requests
+	if req.Op != workbench.OpOpenLinearIssue || req.LinearIssue == nil ||
+		req.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("live request = %+v", req)
+	}
+}
+
+func TestLinearIssueRefusesALegacyRunningWorkbench(t *testing.T) {
+	previousDiscovery := discoverProcess
+	defer func() { discoverProcess = previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{Legacy: true} }
+	if err := open(rootContext(t, "--linear-issue", "LIF-2841")); !errors.Is(err, errLegacyWorkbench) {
+		t.Fatalf("legacy workbench refusal = %v, want %v", err, errLegacyWorkbench)
+	}
+}
+
 // Opening the app comes back to the session you were last in, not the newest one
 // on disk.
 func TestLastShownPrefersTheMostRecentlyStampedSession(t *testing.T) {
@@ -111,7 +208,7 @@ func TestLastShownPrefersTheMostRecentlyStampedSession(t *testing.T) {
 	stampSession(t, root, "octopus", time.Now().Add(-2*time.Hour))
 	stampSession(t, root, "kraken", time.Now().Add(-time.Hour))
 
-	got, ok := lastShown(root, sessions)
+	got, ok := session.Preferred(root, sessions)
 	if !ok || got.Slug != "kraken" {
 		t.Fatalf("lastShown = %q, %v; want kraken, the last one shown", got.Slug, ok)
 	}
@@ -122,7 +219,7 @@ func TestLastShownFallsBackToTheNewestSession(t *testing.T) {
 		{Slug: "octopus", CreatedAt: time.Now().Add(-48 * time.Hour)},
 		{Slug: "kraken", CreatedAt: time.Now()},
 	}
-	got, ok := lastShown(t.TempDir(), sessions)
+	got, ok := session.Preferred(t.TempDir(), sessions)
 	if !ok || got.Slug != "kraken" {
 		t.Fatalf("lastShown with nothing stamped = %q, %v; want the newest session kraken", got.Slug, ok)
 	}
@@ -130,7 +227,7 @@ func TestLastShownFallsBackToTheNewestSession(t *testing.T) {
 
 // Nothing to come back to opens the landing list instead.
 func TestLastShownReportsNothingWithoutASession(t *testing.T) {
-	if got, ok := lastShown(t.TempDir(), nil); ok {
+	if got, ok := session.Preferred(t.TempDir(), nil); ok {
 		t.Fatalf("lastShown named %q under a root holding no sessions", got.Slug)
 	}
 }
@@ -168,6 +265,7 @@ func rootContext(t *testing.T, args ...string) *cli.Context {
 	t.Helper()
 	set := flag.NewFlagSet(appName, flag.ContinueOnError)
 	set.String(runnerFlag, "", "")
+	set.String(linearIssueFlag, "", "")
 	set.String(workbenchSpecFlag, "", "")
 	if err := set.Parse(args); err != nil {
 		t.Fatal(err)

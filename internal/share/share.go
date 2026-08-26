@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
 )
 
@@ -95,10 +96,12 @@ func body(markdown []byte) []string {
 }
 
 // The document travels base64-encoded so that no markdown in it can close the
-// script tag carrying it. Its first line is the source path, which the page
-// prints above the title.
+// script tag carrying it. Its first lines are the kind and source path, which
+// the page uses for its identity and title treatment.
 func payload(source string, markdown []byte) string {
 	var document bytes.Buffer
+	document.WriteString(status.DocumentKind(source))
+	document.WriteString("\n")
 	document.WriteString(source)
 	document.WriteString("\n")
 	document.Write(markdown)

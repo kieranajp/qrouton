@@ -80,6 +80,14 @@ func TestCheckRejectsAnUnparseableTicketURLAndAnEmptyName(t *testing.T) {
 	}
 }
 
+func TestCheckAcceptsWorkspaceFreeLinearTicketURLs(t *testing.T) {
+	d := Draft{Name: "Cleanup", Prefix: "feat", Ticket: "https://linear.app/issue/API-42",
+		Repos: []session.RepoSelection{{Repo: repoNamed("api"), Role: session.RepoRoleEditing}}}
+	if problems := Check(d); len(problems) != 0 {
+		t.Fatalf("workspace-free Linear URL rejected: %+v", problems)
+	}
+}
+
 func TestCheckSlugRefusesAnOccupiedDirectoryAndReclaimsAnAbandonedOne(t *testing.T) {
 	root := t.TempDir()
 	a := Assembler{Cfg: &config.Config{Root: root}}

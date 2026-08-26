@@ -12,3 +12,7 @@ export declare const Events: {
 export declare const Browser: {
   OpenURL(url: string): Promise<void>;
 };
+
+export declare const Clipboard: {
+  SetText(text: string): Promise<void>;
+};

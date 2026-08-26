@@ -78,7 +78,29 @@ Useful flags:
 
 ```sh
 ./qrouton --runner codex     # preselect a supported coding agent
+./qrouton --linear-issue LIF-2841
 ```
+
+## Open Linear issues in qrouton 🔗
+
+Linear Desktop can send **Work on issue → Custom script** to qrouton's existing New session flow. Install qrouton at an absolute path, then create `~/.linear/coding-tools.json` with that path:
+
+```json
+{
+  "openIssue": {
+    "path": "/Users/you/.local/bin/qrouton",
+    "args": ["--linear-issue", "{{issue.identifier}}"]
+  }
+}
+```
+
+The flag accepts an identifier such as `LIF-2841`, `https://linear.app/issue/LIF-2841`, or a workspace URL such as `https://linear.app/lifesum/issue/LIF-2841/title`. It validates and persists the workspace-free form `https://linear.app/issue/LIF-2841`. Repository roles, agent, mode, branch and Create remain interactive.
+
+The command succeeds when a running workbench accepts the request, or when a newly launched workbench is ready with the request queued. Ticket fetching and session creation happen later in the window. `LINEAR_API_KEY` must be present in the environment of the workbench process: a running workbench keeps the environment it started with, and Linear does not guarantee that a cold custom-script launch inherits the environment from your usual shell. qrouton does not store the key.
+
+Repeated actions for the same issue reveal its open draft or preferred existing session. A different issue is refused while any New session draft is open, without replacing that draft. If a workbench from an older qrouton version is running, quit it and retry so the installed version can start.
+
+To remove the integration, delete `openIssue` from `~/.linear/coding-tools.json` or point it back to the previous coding tool. To roll back the binary, quit the workbench before installing the earlier version; pasted Linear and Asana ticket URLs continue to work independently of this integration.
 
 ## Session shape 🗂️
 

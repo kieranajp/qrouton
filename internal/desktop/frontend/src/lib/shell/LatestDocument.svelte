@@ -1,4 +1,5 @@
 <script>
+  import { artifactTone } from "../artifacts.js";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { dismissible } from "../core/dismiss.js";
 
@@ -16,7 +17,7 @@
     <span class="nothing">nothing yet</span>
   {:else}
     {#snippet summary()}
-      <span class="tag" class:plan={latest.tag === "PLAN"}>{latest.tag}</span>
+      <span class="tag" style:--artifact={artifactTone(latest.tag)}>{latest.tag}</span>
       <span class="name">{latest.name}</span>
       <span class="age">{latest.age}</span>
       {#if count > 1}<span class="age">+{count - 1}</span>{/if}
@@ -73,12 +74,8 @@
   .tag {
     font: 700 9px var(--font-machine);
     color: var(--text-on-accent);
-    background: var(--accent-label);
+    background: var(--artifact);
     padding: 2px 6px;
-  }
-
-  .tag.plan {
-    background: var(--state-guided);
   }
 
   .name {

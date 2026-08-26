@@ -8,9 +8,10 @@ import (
 // URL-shape errors. Each names the provider, because the fix is to paste a
 // different link.
 var (
-	ErrUnsupportedProvider = errors.New("ticket must be a Linear or Asana URL")
-	ErrNotLinearIssue      = errors.New("ticket must be a Linear issue URL")
-	ErrNotAsanaTask        = errors.New("ticket must be an Asana task URL")
+	ErrUnsupportedProvider    = errors.New("ticket must be a Linear or Asana URL")
+	ErrNotLinearIssue         = errors.New("ticket must be a Linear issue URL")
+	ErrNotAsanaTask           = errors.New("ticket must be an Asana task URL")
+	ErrInvalidLinearReference = errors.New("Linear issue must be an identifier like LIF-2841 or a linear.app issue URL")
 )
 
 // Credential errors, worded as the action the user has to take.

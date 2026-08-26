@@ -18,6 +18,19 @@ test("the document shortcut opens a working find bar", async ({ page }) => {
   await expect(page.locator("mark[data-document-find]")).toHaveCount(0);
 });
 
+test("a document exposes its absolute path and artifact colour", async ({ page }) => {
+  await page.goto("/tests/find-component.html");
+  await page.getByRole("button", { name: "Copy absolute path" }).click();
+  await expect(page.getByRole("button", { name: "Copy absolute path" })).toHaveText("Copied");
+  expect(await page.evaluate(() => window.clipboardText)).toBe(
+    "/sessions/artifacts/notes/find.md",
+  );
+  await expect(page.locator('[data-artifact-kind="PLAN"] .face')).toHaveCSS(
+    "background-color",
+    "rgb(183, 189, 248)",
+  );
+});
+
 test("find is case-insensitive and crosses inline markup", async ({ page }) => {
   await page.goto("/tests/find.html");
   expect(await page.evaluate(() => window.searchDocument("["))).toBe(0);

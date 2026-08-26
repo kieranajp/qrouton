@@ -1,8 +1,5 @@
 package ticket
 
-// The two ticket providers qrouton reads: their API endpoints, the URL shapes it
-// accepts, and the credentials each needs.
-
 const (
 	linearAPIDefault = "https://api.linear.app/graphql"
 	asanaAPIDefault  = "https://app.asana.com/api/1.0"
@@ -12,12 +9,15 @@ const (
 
 	httpsScheme = "https"
 
-	// A Linear issue URL is /<workspace>/issue/<id>/<slug>.
-	linearIssueSegment = "issue"
-	linearIssueIndex   = 2
-	linearMinSegments  = 3
+	linearIssueSegment       = "issue"
+	linearShortIDIndex       = 1
+	linearScopedIDIndex      = 2
+	linearShortMinSegments   = 2
+	linearScopedMinSegments  = 3
+	linearCanonicalPrefix    = "https://linear.app/issue/"
+	linearMaxReferenceBytes  = 2048
+	linearMaxIdentifierBytes = 128
 
-	// An Asana task URL is /0/<project>/<task>.
 	asanaRootSegment = "0"
 	asanaMinSegments = 3
 

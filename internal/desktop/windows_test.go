@@ -183,6 +183,10 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	if page.Source != source {
 		t.Fatalf("Content source = %q, want %q", page.Source, source)
 	}
+	wantPath := filepath.Join(w.shown().root(), source)
+	if page.Path != wantPath || page.Kind != "PLAN" {
+		t.Fatalf("Content path/kind = %q/%q, want %q/PLAN", page.Path, page.Kind, wantPath)
+	}
 }
 
 // The pane scrolls to the lines the agent aimed it at and marks them, so the

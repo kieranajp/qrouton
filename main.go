@@ -3,10 +3,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	agentcmd "github.com/kieranajp/qrouton/cmd/agent"
 	agentscmd "github.com/kieranajp/qrouton/cmd/agents"
@@ -20,6 +20,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
@@ -31,6 +32,7 @@ func main() {
 		Description: appDescription,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
+			&cli.StringFlag{Name: linearIssueFlag, Usage: linearIssueFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
 		Commands: []*cli.Command{mcpcmd.Command, agentscmd.EventCommand, reposcmd.Command, agentcmd.Command, modecmd.Command, shellcmd.Command},
@@ -51,9 +53,43 @@ func open(c *cli.Context) error {
 	if arg := c.Args().First(); arg != "" {
 		return fmt.Errorf("%w: %q", errNoSessionArguments, arg)
 	}
+	linearIssue := ""
+	if c.IsSet(linearIssueFlag) {
+		canonical, err := ticket.CanonicalLinearURL(c.String(linearIssueFlag))
+		if err != nil {
+			return err
+		}
+		linearIssue = canonical
+	}
+	return workbench.WithLaunchLock(func() error { return openLocked(c, linearIssue) })
+}
+
+func openLocked(c *cli.Context, linearIssue string) error {
+	discovery := discoverProcess()
+	if linearIssue != "" {
+		if discovery.Socket != "" {
+			_, err := workbench.OpenLinearIssue(context.Background(), discovery.Socket, linearIssue)
+			return err
+		}
+		if discovery.Legacy {
+			return errLegacyWorkbench
+		}
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		socket, err := workbench.NewSocketPath()
+		if err != nil {
+			return err
+		}
+		editor, _ := launch.ResolveEditor(cfg.Editor)
+		return detachProcess(launch.WorkbenchSpec{
+			Socket: socket, Runner: c.String(runnerFlag), Editor: editor, LinearIssue: linearIssue,
+		}, os.Environ())
+	}
 	// There is one workbench, and it opens on a session: two of them would each
 	// believe they were the only one holding that session's supervisor.
-	if workbench.Running() {
+	if discovery.Socket != "" || discovery.Legacy {
 		return errWorkbenchRunning
 	}
 	cfg, err := config.Load()
@@ -64,7 +100,7 @@ func open(c *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	if last, ok := lastShown(cfg.Root, sessions); ok {
+	if last, ok := session.Preferred(cfg.Root, sessions); ok {
 		runner, err := pickRunner(cfg, c.String(runnerFlag))
 		if err != nil {
 			return err
@@ -84,27 +120,10 @@ func open(c *cli.Context) error {
 	}, os.Environ())
 }
 
-// lastShown is the session to come back to: the one the workbench showed most
-// recently, or the newest when none of them carries a stamp.
-func lastShown(root string, sessions []session.Manifest) (session.Manifest, bool) {
-	var best session.Manifest
-	var stamp time.Time
-	for _, m := range sessions {
-		at, ok := session.LastOpened(filepath.Join(root, m.Slug))
-		if ok && (best.Slug == "" || at.After(stamp)) {
-			best, stamp = m, at
-		}
-	}
-	if best.Slug != "" {
-		return best, true
-	}
-	for _, m := range sessions {
-		if best.Slug == "" || m.CreatedAt.After(best.CreatedAt) {
-			best = m
-		}
-	}
-	return best, best.Slug != ""
-}
+var (
+	detachProcess   = detach
+	discoverProcess = workbench.Discover
+)
 
 // pickRunner resolves the runner headlessly: the requested one if given and
 // installed, otherwise the first installed built-in.
@@ -170,6 +189,7 @@ func workbenchProcess(marshalled string) error {
 		Resume:      spec.Resume,
 		Root:        cfg.Root,
 		Socket:      spec.Socket,
+		LinearIssue: spec.LinearIssue,
 		Env:         os.Environ(),
 		Agent:       agentCommand(cfg, bin, spec.Runner, spec.Editor),
 		Shell:       shellArgv(bin),
@@ -197,16 +217,21 @@ func workbenchProcess(marshalled string) error {
 // again, on no session. Detach returns only once the child answers, so the two
 // overlap for that wait — safe because the successor holds no session, and so
 // claims no supervisor the caller might still own.
-func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func() error {
-	return func() error {
-		socket, err := workbench.NewSocketPath()
-		if err != nil {
-			return err
-		}
-		next := spec
-		next.SessionRoot, next.Resume, next.Socket = "", false, socket
-		return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
-			socket, workbenchLog(next))
+func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func(func() string) error {
+	return func(linearIssue func() string) error {
+		return workbench.WithLaunchLock(func() error {
+			socket, err := workbench.NewSocketPath()
+			if err != nil {
+				return err
+			}
+			next := spec
+			next.SessionRoot, next.Resume, next.Socket = "", false, socket
+			if linearIssue != nil {
+				next.LinearIssue = linearIssue()
+			}
+			return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
+				socket, workbenchLog(next))
+		})
 	}
 }
 

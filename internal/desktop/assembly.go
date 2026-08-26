@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"net/http"
+	"sync"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -38,6 +39,12 @@ type ticketFields struct {
 	Body  string `json:"body"`
 }
 
+// AssemblySeed is the external ticket, if any, claimed by an overlay mount.
+type AssemblySeed struct {
+	Ticket     string `json:"ticket"`
+	Generation uint64 `json:"generation"`
+}
+
 // Assembly is what the overlay calls: the rules, the branch preview, the ticket
 // lookup, and the create that ends with the new session on screen.
 type Assembly struct {
@@ -47,6 +54,12 @@ type Assembly struct {
 	emit      emitter
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
+
+	mu             sync.Mutex
+	pending        string
+	draftOpen      bool
+	externalTicket string
+	generation     uint64
 }
 
 func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit emitter,
@@ -81,11 +94,98 @@ func (a *Assembly) CheckSlug(in draftInput) []assembly.Problem {
 func (a *Assembly) Preview(in draftInput) string { return assembly.Preview(a.draft(in)) }
 
 func (a *Assembly) Fetch(url string) (ticketFields, error) {
-	loaded, err := ticket.Fetch(context.Background(), http.DefaultClient, url)
+	ctx, cancel := context.WithTimeout(context.Background(), ticketFetchTimeout)
+	defer cancel()
+	loaded, err := ticket.Fetch(ctx, http.DefaultClient, url)
 	if err != nil {
 		return ticketFields{}, err
 	}
 	return ticketFields{Title: loaded.Title, Body: loaded.Body}, nil
+}
+
+// Pending is the external ticket waiting for the page to open an overlay.
+func (a *Assembly) Pending() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.pending
+}
+
+// Begin claims the pending external ticket and owns the draft until End.
+func (a *Assembly) Begin() AssemblySeed {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.generation++
+	if !a.draftOpen {
+		a.externalTicket = a.pending
+		a.pending = ""
+	}
+	a.draftOpen = true
+	return AssemblySeed{Ticket: a.externalTicket, Generation: a.generation}
+}
+
+// End releases only the overlay generation that still owns the draft.
+func (a *Assembly) End(generation uint64) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if generation != a.generation {
+		return
+	}
+	a.draftOpen = false
+	a.externalTicket = ""
+}
+
+func (a *Assembly) offer(raw string) (string, error) {
+	canonical, err := ticket.CanonicalLinearURL(raw)
+	if err != nil {
+		return "", err
+	}
+	a.mu.Lock()
+	if a.draftOpen {
+		if a.externalTicket == canonical {
+			a.mu.Unlock()
+			return assemblyOutcomeDraft, nil
+		}
+		a.mu.Unlock()
+		return "", ErrAssemblyDraftConflict
+	}
+	if a.pending != "" {
+		if a.pending == canonical {
+			a.mu.Unlock()
+			return assemblyOutcomeQueued, nil
+		}
+		a.mu.Unlock()
+		return "", ErrAssemblyDraftConflict
+	}
+	if a.cfg == nil || a.sessions == nil {
+		a.mu.Unlock()
+		return "", ErrNoConfig
+	}
+	manifests, err := session.Scan(a.cfg.Root)
+	if err != nil {
+		a.mu.Unlock()
+		return "", err
+	}
+	matching := make([]session.Manifest, 0, len(manifests))
+	for _, manifest := range manifests {
+		persisted, err := ticket.CanonicalLinearURL(manifest.TicketURL)
+		if err == nil && persisted == canonical {
+			matching = append(matching, manifest)
+		}
+	}
+	if preferred, ok := session.Preferred(a.cfg.Root, matching); ok {
+		err := a.sessions.Show(preferred.Slug)
+		a.mu.Unlock()
+		if err != nil {
+			return "", err
+		}
+		return assemblyOutcomeExisting, nil
+	}
+	a.pending = canonical
+	a.mu.Unlock()
+	if a.emit != nil {
+		a.emit(assemblyRequestedEvent, canonical)
+	}
+	return assemblyOutcomeQueued, nil
 }
 
 // Create assembles the session and puts it on screen. Adoption is in process

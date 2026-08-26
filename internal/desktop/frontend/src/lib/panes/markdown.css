@@ -171,17 +171,17 @@
 }
 
 .markdown .task-list-item {
-  display: flex;
-  gap: 11px;
-  align-items: flex-start;
+  display: block;
+  padding-left: 24px;
 }
 
 .markdown input[type="checkbox"] {
   appearance: none;
+  display: inline-block;
   width: 13px;
   height: 13px;
-  flex: none;
-  margin: 4px 0 0;
+  margin: 4px 11px 0 -24px;
+  vertical-align: top;
   border: 1px solid var(--border-default);
   background: transparent;
 }

@@ -3,6 +3,7 @@ package session
 import (
 	"bytes"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -58,5 +59,25 @@ func TestMarkOpenedLeavesTheManifestByteForByte(t *testing.T) {
 	}
 	if !bytes.Equal(before, after) {
 		t.Fatalf("stamping rewrote the manifest, so a stamp holding a stale copy can revert an escalation\nbefore: %s\nafter:  %s", before, after)
+	}
+}
+
+func TestPreferredUsesTheLatestStampAndFallsBackToCreationTime(t *testing.T) {
+	root := t.TempDir()
+	sessions := []Manifest{
+		{Slug: "octopus", CreatedAt: time.Now().Add(-48 * time.Hour)},
+		{Slug: "kraken", CreatedAt: time.Now()},
+	}
+	if got, ok := Preferred(root, sessions); !ok || got.Slug != "kraken" {
+		t.Fatalf("Preferred without stamps = %q, %v; want kraken", got.Slug, ok)
+	}
+	if err := MarkOpened(filepath.Join(root, "octopus"), time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := Preferred(root, sessions); !ok || got.Slug != "octopus" {
+		t.Fatalf("Preferred with a stamp = %q, %v; want octopus", got.Slug, ok)
+	}
+	if got, ok := Preferred(root, nil); ok || got.Slug != "" {
+		t.Fatalf("Preferred without sessions = %q, %v", got.Slug, ok)
 	}
 }

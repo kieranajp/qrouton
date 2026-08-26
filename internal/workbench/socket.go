@@ -14,17 +14,33 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/sys/unix"
 )
+
+// Discovery is the one process endpoint external launchers may use. Legacy is
+// true when a live socket exists without a published endpoint.
+type Discovery struct {
+	Socket string
+	Legacy bool
+}
+
+type processDescriptor struct {
+	Version int    `json:"version"`
+	Socket  string `json:"socket"`
+	PID     int    `json:"pid"`
+}
 
 // Request is one call on the control socket.
 type Request struct {
-	Op       string         `json:"op"`
-	ID       string         `json:"id,omitempty"`
-	Full     bool           `json:"full,omitempty"`
-	Root     string         `json:"root,omitempty"`
-	Activity string         `json:"activity,omitempty"`
-	Options  *WindowOptions `json:"options,omitempty"`
-	Picker   *PickerRequest `json:"picker,omitempty"`
+	Op          string              `json:"op"`
+	ID          string              `json:"id,omitempty"`
+	Full        bool                `json:"full,omitempty"`
+	Root        string              `json:"root,omitempty"`
+	Activity    string              `json:"activity,omitempty"`
+	Options     *WindowOptions      `json:"options,omitempty"`
+	Picker      *PickerRequest      `json:"picker,omitempty"`
+	LinearIssue *LinearIssueRequest `json:"linear_issue,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -34,7 +50,13 @@ type Response struct {
 	Exists   bool              `json:"exists,omitempty"`
 	IDs      []string          `json:"ids,omitempty"`
 	Viewport *DocumentViewport `json:"viewport,omitempty"`
+	Outcome  string            `json:"outcome,omitempty"`
 	Error    string            `json:"error,omitempty"`
+}
+
+// LinearIssueRequest is the bounded canonical value offered to a workbench.
+type LinearIssueRequest struct {
+	Ticket string `json:"ticket"`
 }
 
 // NewSocketPath reserves an address for a desktop process's control socket.
@@ -68,13 +90,50 @@ func Answered(socket string) bool {
 	return true
 }
 
+// Published reports whether socket is the live process endpoint named by the
+// active descriptor.
+func Published(socket string) bool { return published(socketDir(), socket) }
+
+func published(dir, socket string) bool {
+	descriptor, _, ok := readDescriptor(dir)
+	return ok && descriptor.Socket == socket && validDescriptor(dir, descriptor) && Answered(socket)
+}
+
+// Discover returns the published process endpoint, or reports a live workbench
+// from before endpoint publication was introduced.
+func Discover() Discovery { return discover(socketDir()) }
+
 // Running reports whether a workbench is already up.
 func Running() bool { return running(socketDir()) }
 
 func running(dir string) bool {
+	d := discover(dir)
+	return d.Socket != "" || d.Legacy
+}
+
+func discover(dir string) Discovery {
+	active := ""
+	_ = withFileLock(dir, descriptorLockName, func() error {
+		descriptor, _, ok := readDescriptor(dir)
+		if !ok {
+			return nil
+		}
+		if validDescriptor(dir, descriptor) && Answered(descriptor.Socket) {
+			active = descriptor.Socket
+			return nil
+		}
+		err := os.Remove(filepath.Join(dir, activeName))
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	})
+	if active != "" {
+		return Discovery{Socket: active}
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return false
+		return Discovery{}
 	}
 	up := false
 	for _, entry := range entries {
@@ -90,7 +149,105 @@ func running(dir string) bool {
 		// does not answer belonged to a process that is gone.
 		_ = os.Remove(socket)
 	}
-	return up
+	return Discovery{Legacy: up}
+}
+
+// Publish makes socket the only process endpoint external launchers may use.
+func Publish(socket string) error {
+	descriptor := processDescriptor{Version: descriptorVersion, Socket: socket, PID: os.Getpid()}
+	return publish(socketDir(), descriptor)
+}
+
+func publish(dir string, descriptor processDescriptor) error {
+	if !validDescriptor(dir, descriptor) {
+		return ErrInvalidProcessDescriptor
+	}
+	return withFileLock(dir, descriptorLockName, func() error {
+		body, err := json.Marshal(descriptor)
+		if err != nil {
+			return err
+		}
+		file, err := os.CreateTemp(dir, temporaryPattern)
+		if err != nil {
+			return err
+		}
+		tmp := file.Name()
+		defer os.Remove(tmp)
+		if err := file.Chmod(descriptorMode); err != nil {
+			file.Close()
+			return err
+		}
+		if _, err := file.Write(body); err != nil {
+			file.Close()
+			return err
+		}
+		if err := file.Close(); err != nil {
+			return err
+		}
+		return os.Rename(tmp, filepath.Join(dir, activeName))
+	})
+}
+
+// Unpublish removes this process's descriptor only while it still names socket.
+func Unpublish(socket string) {
+	unpublish(socketDir(), processDescriptor{Version: descriptorVersion, Socket: socket, PID: os.Getpid()})
+}
+
+func unpublish(dir string, expected processDescriptor) {
+	_ = withFileLock(dir, descriptorLockName, func() error {
+		descriptor, _, ok := readDescriptor(dir)
+		if !ok || descriptor != expected {
+			return nil
+		}
+		err := os.Remove(filepath.Join(dir, activeName))
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	})
+}
+
+func readDescriptor(dir string) (processDescriptor, []byte, bool) {
+	body, err := os.ReadFile(filepath.Join(dir, activeName))
+	if err != nil {
+		return processDescriptor{}, nil, false
+	}
+	var descriptor processDescriptor
+	if err := json.Unmarshal(body, &descriptor); err != nil {
+		return processDescriptor{}, body, true
+	}
+	return descriptor, body, true
+}
+
+func validDescriptor(dir string, descriptor processDescriptor) bool {
+	return descriptor.Version == descriptorVersion && descriptor.PID > 0 &&
+		filepath.IsAbs(descriptor.Socket) && filepath.Dir(filepath.Clean(descriptor.Socket)) == filepath.Clean(dir) &&
+		strings.HasSuffix(descriptor.Socket, socketSuffix)
+}
+
+// WithLaunchLock serializes workbench discovery and launch across processes.
+func WithLaunchLock(fn func() error) error {
+	return withLaunchLock(socketDir(), fn)
+}
+
+func withLaunchLock(dir string, fn func() error) error {
+	return withFileLock(dir, launchLockName, fn)
+}
+
+func withFileLock(dir, name string, fn func() error) error {
+	if err := os.MkdirAll(dir, socketDirMode); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_RDWR, descriptorMode)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
+		return err
+	}
+	defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
+	return fn()
 }
 
 // ProcessLog is where a workbench process's stdio lands before it belongs to a
@@ -105,6 +262,15 @@ func ProcessLog(socket string) string {
 func (h Handle) Attention(ctx context.Context, activity string) error {
 	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpAttention, Activity: activity})
 	return err
+}
+
+// OpenLinearIssue offers one canonical Linear ticket to the published process
+// endpoint.
+func OpenLinearIssue(ctx context.Context, socket, ticket string) (string, error) {
+	res, err := (&client{socket: socket}).call(ctx, Request{
+		Op: OpOpenLinearIssue, LinearIssue: &LinearIssueRequest{Ticket: ticket},
+	})
+	return res.Outcome, err
 }
 
 type client struct {
