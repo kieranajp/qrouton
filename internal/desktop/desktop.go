@@ -38,7 +38,10 @@ type Options struct {
 	// LinearIssue is a canonical ticket offered after session boot is wired and
 	// before the page can claim a blank draft.
 	LinearIssue string
-	Env         []string
+	// LinearCommand is the executable and fixed arguments written before
+	// Linear's issue identifier template in coding-tools.json.
+	LinearCommand []string
+	Env           []string
 	// Agent builds a session's supervisor command and environment against the
 	// control socket the workbench will serve that session on. runnerID names
 	// the agent the session was assembled with; empty means the workbench's own.
@@ -119,7 +122,9 @@ func Run(opts Options) error {
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
-	r.register(application.NewService(newSettings(opts.Config, opts.ValidateEditor, opts.ValidateLaunch, quit)))
+	r.register(application.NewService(newSettings(
+		opts.Config, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand, quit,
+	)))
 	relaunch := pendingRelaunch(opts.Relaunch, assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)

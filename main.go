@@ -190,15 +190,19 @@ func workbenchProcess(marshalled string) error {
 		Root:        cfg.Root,
 		Socket:      spec.Socket,
 		LinearIssue: spec.LinearIssue,
-		Env:         os.Environ(),
-		Agent:       agentCommand(cfg, bin, spec.Runner, spec.Editor),
-		Shell:       shellArgv(bin),
-		Reveal:      launch.RevealArgv,
-		Document:    documentWindow(spec.Editor),
-		Config:      cfg,
-		Runners:     assemblyRunners(cfg),
-		Signal:      launch.SignalSupervisor,
-		Relaunch:    relaunchWorkbench(bin, spec, os.Environ()),
+		LinearCommand: []string{
+			bin,
+			"--" + linearIssueFlag,
+		},
+		Env:      os.Environ(),
+		Agent:    agentCommand(cfg, bin, spec.Runner, spec.Editor),
+		Shell:    shellArgv(bin),
+		Reveal:   launch.RevealArgv,
+		Document: documentWindow(spec.Editor),
+		Config:   cfg,
+		Runners:  assemblyRunners(cfg),
+		Signal:   launch.SignalSupervisor,
+		Relaunch: relaunchWorkbench(bin, spec, os.Environ()),
 		ValidateEditor: func(argv []string) error {
 			if len(argv) == 0 {
 				return nil

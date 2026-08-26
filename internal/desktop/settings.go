@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,13 +12,16 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
-// SettingsView is config.Config on the wire: Editor and Launch collapse to the
-// one text field each side of the panel edits.
+// SettingsView is config.Config plus Linear's coding-tools.json on the wire:
+// each structured value collapses to the text field the panel edits.
 type SettingsView struct {
-	Orgs   []string `json:"orgs"`
-	Root   string   `json:"root"`
-	Editor string   `json:"editor"`
-	Launch string   `json:"launch"`
+	Orgs        []string `json:"orgs"`
+	Root        string   `json:"root"`
+	Editor      string   `json:"editor"`
+	Launch      string   `json:"launch"`
+	Linear      string   `json:"linear"`
+	LinearPath  string   `json:"linearPath"`
+	LinearError string   `json:"linearError,omitempty"`
 }
 
 // SettingsInput is what Save receives back: the same shape SettingsView hands
@@ -27,6 +31,7 @@ type SettingsInput struct {
 	Root   string   `json:"root"`
 	Editor string   `json:"editor"`
 	Launch string   `json:"launch"`
+	Linear string   `json:"linear"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -35,18 +40,27 @@ type SaveResult struct {
 	RestartRequired bool `json:"restartRequired"`
 }
 
-// Settings is the panel's service: config.Config's four fields, and the
-// process teardown its Root banner offers instead of a relaunch it cannot do.
+// Settings is the panel's service: config.Config, Linear's custom-script file,
+// and the process teardown its Root banner offers instead of a relaunch.
 type Settings struct {
 	cfg            *config.Config
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	quit           func()
+	linearFile     string
+	linearCommand  []string
 }
 
 func newSettings(cfg *config.Config, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, quit func()) *Settings {
-	return &Settings{cfg: cfg, validateEditor: validateEditor, validateLaunch: validateLaunch, quit: quit}
+	validateLaunch func(map[string][]string) error, linearCommand []string, quit func()) *Settings {
+	return &Settings{
+		cfg:            cfg,
+		validateEditor: validateEditor,
+		validateLaunch: validateLaunch,
+		quit:           quit,
+		linearFile:     filepath.Clean(config.ExpandHome(linearConfigPath)),
+		linearCommand:  append([]string(nil), linearCommand...),
+	}
 }
 
 // Load reads the live config as the panel draws it.
@@ -57,18 +71,21 @@ func (s *Settings) Load() SettingsView {
 			launch = string(b)
 		}
 	}
+	linear, linearErr := s.loadLinear()
 	return SettingsView{
-		Orgs:   append([]string(nil), s.cfg.Orgs...),
-		Root:   s.cfg.Root,
-		Editor: strings.Join(s.cfg.Editor, " "),
-		Launch: launch,
+		Orgs:        append([]string(nil), s.cfg.Orgs...),
+		Root:        s.cfg.Root,
+		Editor:      strings.Join(s.cfg.Editor, " "),
+		Launch:      launch,
+		Linear:      linear,
+		LinearPath:  linearConfigPath,
+		LinearError: errorText(linearErr),
 	}
 }
 
-// Save validates Root, then Editor, then Launch, refusing on the first
-// problem and writing nothing if any field fails. On success it writes the
-// whole config to disk and updates every live field except Root — see Save's
-// own Root handling below for why.
+// Save validates Root, Editor, Launch, then Linear, refusing on the first
+// problem and writing nothing if any field fails. On success it writes both
+// files and updates every live config field except Root.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	root, expandedRoot, err := validateRoot(in.Root)
 	if err != nil {
@@ -97,10 +114,18 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		}
 	}
 
+	linear, err := validateLinear(in.Linear)
+	if err != nil {
+		return SaveResult{}, err
+	}
+
 	orgs := dedupOrgs(in.Orgs)
 
 	next := *s.cfg
 	next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
+	if err := s.saveLinear(linear); err != nil {
+		return SaveResult{}, err
+	}
 	if err := config.Save(&next); err != nil {
 		return SaveResult{}, err
 	}
@@ -117,6 +142,68 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 // renderer Quit: every open session's supervisor and PTY end cleanly before
 // the process does.
 func (s *Settings) Quit() { s.quit() }
+
+func (s *Settings) loadLinear() (string, error) {
+	b, err := os.ReadFile(s.linearFile)
+	if err == nil {
+		return string(b), nil
+	}
+	if !os.IsNotExist(err) {
+		return "", err
+	}
+	if len(s.linearCommand) == 0 {
+		return "", ErrNoLinearCommand
+	}
+	args := append(append([]string(nil), s.linearCommand[1:]...), linearIssueTemplate)
+	b, err = json.MarshalIndent(linearConfig{
+		OpenIssue: linearCommand{
+			Path: s.linearCommand[0],
+			Args: args,
+		},
+	}, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func validateLinear(raw string) ([]byte, error) {
+	trimmed := strings.TrimSpace(raw)
+	var document map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(trimmed), &document); err != nil {
+		return nil, fmt.Errorf("linear: %s", err)
+	}
+	if document == nil {
+		return nil, fmt.Errorf("linear: %w", ErrLinearConfigObject)
+	}
+	return append([]byte(trimmed), '\n'), nil
+}
+
+func (s *Settings) saveLinear(body []byte) error {
+	current, err := os.ReadFile(s.linearFile)
+	if err == nil && bytes.Equal(bytes.TrimSpace(current), bytes.TrimSpace(body)) {
+		return nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("linear: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(s.linearFile), linearConfigDirMode); err != nil {
+		return fmt.Errorf("linear: %w", err)
+	}
+	if err := os.WriteFile(s.linearFile, body, linearConfigFileMode); err != nil {
+		return fmt.Errorf("linear: %w", err)
+	}
+	return nil
+}
+
+type linearConfig struct {
+	OpenIssue linearCommand `json:"openIssue"`
+}
+
+type linearCommand struct {
+	Path string   `json:"path"`
+	Args []string `json:"args"`
+}
 
 // validateRoot creates a typed sessions root, answering the form to store — a
 // leading ~ survives, so the config stays portable — and the cleaned absolute

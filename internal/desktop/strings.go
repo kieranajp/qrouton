@@ -5,6 +5,8 @@ import "time"
 const (
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"
+	linearConfigPath       = "~/.linear/coding-tools.json"
+	linearIssueTemplate    = "{{issue.identifier}}"
 
 	mainWindowName   = "conversation"
 	mainWindowTitle  = "qrouton"
@@ -34,6 +36,11 @@ const (
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
+)
+
+const (
+	linearConfigDirMode  = 0o755
+	linearConfigFileMode = 0o644
 )
 
 // Events the Go side emits at the pages; a window's or a conversation's own id

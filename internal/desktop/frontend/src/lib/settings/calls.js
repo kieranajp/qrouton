@@ -8,6 +8,9 @@ const SETTINGS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Settings
  * @property {string} root
  * @property {string} editor
  * @property {string} launch
+ * @property {string} linear
+ * @property {string} [linearPath]
+ * @property {string} [linearError]
  */
 
 /** @returns {Promise<SettingsFields>} */
