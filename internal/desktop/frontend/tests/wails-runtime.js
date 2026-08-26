@@ -4,7 +4,18 @@ export const Clipboard = {
     window.clipboardText = text;
   },
 };
-export const Events = { On: () => () => {} };
+const listeners = new Map();
+export const Events = {
+  On: (name, listener) => {
+    const eventListeners = listeners.get(name) ?? new Set();
+    eventListeners.add(listener);
+    listeners.set(name, eventListeners);
+    return () => eventListeners.delete(listener);
+  },
+};
+export const emitWailsEvent = (name, data) => {
+  for (const listener of listeners.get(name) ?? []) listener({ data });
+};
 export const Call = {
   ByName: async (name, ...args) => {
     if (window.wailsCall) return window.wailsCall(name, ...args);

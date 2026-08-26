@@ -170,6 +170,7 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recor
 	w.mu.Unlock()
 
 	w.announce(owner)
+	w.persist(owner)
 	return id, nil
 }
 
@@ -454,6 +455,7 @@ func (w *Windows) discard(id string) {
 		process.stop()
 	}
 	w.announce(window.session)
+	w.persist(window.session)
 }
 
 func (w *Windows) oldest(owner *sessionState) string {
@@ -476,16 +478,19 @@ func (w *Windows) observe(changed func(owner *sessionState)) {
 	w.changed = changed
 }
 
-// announce tells one session's pages what it has open. A background session
-// docking a tab must not redraw the foreground's tab strip.
-func (w *Windows) announce(owner *sessionState) {
+func (w *Windows) persist(owner *sessionState) {
 	w.mu.Lock()
 	changed := w.changed
 	w.mu.Unlock()
-	w.emit(windowsEvent, w.surfaces(owner))
 	if changed != nil {
 		changed(owner)
 	}
+}
+
+// announce tells one session's pages what it has open. A background session
+// docking a tab must not redraw the foreground's tab strip.
+func (w *Windows) announce(owner *sessionState) {
+	w.emit(windowsEvent, w.surfaces(owner))
 }
 
 // drawnWindow is one window as its surface draws it.

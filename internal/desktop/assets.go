@@ -19,7 +19,7 @@ var assetFS embed.FS
 
 // Lifecycle services are guarded because missing bindings can strand the user
 // outside a session or leave a backend-owned draft open.
-var frontendServices = []any{Term{}, Sessions{}, Windows{}, FirstRun{}, Assembly{}}
+var frontendServices = []any{Term{}, Sessions{}, Windows{}, FirstRun{}, Assembly{}, Chrome{}}
 
 func validateFrontend(assets fs.FS) error {
 	var bundle strings.Builder

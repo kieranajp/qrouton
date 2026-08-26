@@ -2,9 +2,11 @@ package desktop
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -58,11 +60,33 @@ func TestTheManifestRecordsTheAgentsWindows(t *testing.T) {
 	if len(record.Command) != 1 || record.Command[0] != "/bin/cat" {
 		t.Fatalf("recorded command = %v, which is what a replay would put in the input line", record.Command)
 	}
+	before, err := os.Stat(sessionpaths.Manifest(opts.SessionRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.Select(windows.shown().slug(), id); err != nil {
+		t.Fatal(err)
+	}
+	windows.processExited(id, 7)
+	afterStatus, err := os.Stat(sessionpaths.Manifest(opts.SessionRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, afterStatus) {
+		t.Fatal("selection or process status replaced the manifest")
+	}
 
 	if err := host.Close(ctx, id); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the record to shrink", func() bool { return len(recordedWindows(t, opts.SessionRoot)) == 0 })
+	afterClose, err := os.Stat(sessionpaths.Manifest(opts.SessionRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if os.SameFile(before, afterClose) {
+		t.Fatal("closing the window did not replace the manifest")
+	}
 
 	if _, err := host.Open(ctx, workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "◆ diff", Content: "@@ -1 +1 @@",

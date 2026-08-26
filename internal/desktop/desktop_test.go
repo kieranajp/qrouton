@@ -932,6 +932,37 @@ func pushedChrome(t *testing.T, r *fakeRenderer) status.Fields {
 	return fields
 }
 
+func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.T) {
+	var snapshots []status.Fields
+	var chrome *Chrome
+	chrome = newChrome(func(event string, _ any) {
+		if event == chromeEvent {
+			snapshots = append(snapshots, chrome.Snapshot())
+		}
+	})
+
+	empty := chrome.Snapshot()
+	if empty.Sessions == nil || empty.Documents == nil || empty.Repos == nil {
+		t.Fatalf("initial snapshot has nil slices: %+v", empty)
+	}
+	first := status.Fields{
+		Activity: "idle", Sessions: []status.SessionRow{},
+		Documents: []status.Document{}, Repos: []status.RepoStat{},
+	}
+	chrome.publish(chromeEvent, first)
+	chrome.publish(chromeEvent, first)
+	if len(snapshots) != 1 || !reflect.DeepEqual(snapshots[0], first) {
+		t.Fatalf("initial publishes = %+v, want one stored-before-emit snapshot", snapshots)
+	}
+
+	changed := first
+	changed.Activity = "working"
+	chrome.publish(chromeEvent, changed)
+	if len(snapshots) != 2 || !reflect.DeepEqual(chrome.Snapshot(), changed) {
+		t.Fatalf("changed publishes = %+v, snapshot = %+v", snapshots, chrome.Snapshot())
+	}
+}
+
 // A measurement belongs to the session it was taken for, so the session switched
 // to is drawn with no repository numbers rather than the last one's.
 func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {

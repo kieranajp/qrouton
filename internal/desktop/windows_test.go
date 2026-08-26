@@ -47,6 +47,53 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	}
 }
 
+func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
+	reg := testRegistry(t, t.TempDir())
+	owner := reg.current()
+	emissions := 0
+	var latest surfaces
+	w := newWindows(func(event string, payload any) {
+		if event == windowsEvent {
+			emissions++
+			latest = payload.(surfaces)
+		}
+	}, reg)
+	persists := 0
+	w.observe(func(got *sessionState) {
+		if got != owner {
+			t.Fatalf("persisted owner = %p, want %p", got, owner)
+		}
+		persists++
+	})
+
+	id, err := w.openWindow(owner, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "▶ dev", Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if emissions != 1 || persists != 1 {
+		t.Fatalf("open emitted %d and persisted %d times", emissions, persists)
+	}
+	if err := w.Select(owner.slug(), id); err != nil {
+		t.Fatal(err)
+	}
+	if emissions != 2 || persists != 1 {
+		t.Fatalf("selection emitted %d and persisted %d times", emissions, persists)
+	}
+
+	w.processExited(id, 7)
+	if emissions != 3 || persists != 1 || len(latest.Tabs) != 1 || latest.Tabs[0].Status != tabStatusFailed {
+		t.Fatalf("failed exit emitted %d and persisted %d times with payload %+v", emissions, persists, latest)
+	}
+	if err := w.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	if emissions != 4 || persists != 2 || len(latest.Tabs) != 0 {
+		t.Fatalf("close emitted %d and persisted %d times with payload %+v", emissions, persists, latest)
+	}
+}
+
 func TestEveryAgentWindowIsSelectedAndStructuralWindowsAreNot(t *testing.T) {
 	for _, tc := range []struct {
 		name string
