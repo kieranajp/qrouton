@@ -83,7 +83,7 @@ Useful flags:
 
 ## Open Linear issues in qrouton 🔗
 
-Linear Desktop can send **Work on issue → Custom script** to qrouton's existing New session flow. Install qrouton at an absolute path, then create `~/.linear/coding-tools.json` with that path:
+Linear Desktop can send **Work on issue → Custom script** to qrouton's existing New session flow. Open qrouton's Settings and save the prefilled **Linear custom script** field. If `~/.linear/coding-tools.json` does not exist, qrouton creates it with the running executable's absolute path:
 
 ```json
 {
@@ -93,6 +93,8 @@ Linear Desktop can send **Work on issue → Custom script** to qrouton's existin
   }
 }
 ```
+
+The field remains a plain JSON editor: an existing file is loaded verbatim, and qrouton validates it as a JSON object before writing it back.
 
 The flag accepts an identifier such as `LIF-2841`, `https://linear.app/issue/LIF-2841`, or a workspace URL such as `https://linear.app/lifesum/issue/LIF-2841/title`. It validates and persists the workspace-free form `https://linear.app/issue/LIF-2841`. Repository roles, agent, mode, branch and Create remain interactive.
 

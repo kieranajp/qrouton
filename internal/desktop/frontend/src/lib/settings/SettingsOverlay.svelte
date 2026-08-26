@@ -23,6 +23,8 @@
     bind:root={panel.form.root}
     bind:editor={panel.form.editor}
     bind:launch={panel.form.launch}
+    bind:linear={panel.form.linear}
+    linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}
     onAddOrg={panel.add}
