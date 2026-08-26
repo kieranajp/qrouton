@@ -49,10 +49,11 @@ type Settings struct {
 	quit           func()
 	linearFile     string
 	linearCommand  []string
+	linearEnv      []string
 }
 
 func newSettings(cfg *config.Config, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand []string, quit func()) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit func()) *Settings {
 	return &Settings{
 		cfg:            cfg,
 		validateEditor: validateEditor,
@@ -60,6 +61,7 @@ func newSettings(cfg *config.Config, validateEditor func([]string) error,
 		quit:           quit,
 		linearFile:     filepath.Clean(config.ExpandHome(linearConfigPath)),
 		linearCommand:  append([]string(nil), linearCommand...),
+		linearEnv:      append([]string(nil), linearEnv...),
 	}
 }
 
@@ -159,6 +161,7 @@ func (s *Settings) loadLinear() (string, error) {
 		OpenIssue: linearCommand{
 			Path: s.linearCommand[0],
 			Args: args,
+			Env:  append([]string(nil), s.linearEnv...),
 		},
 	}, "", "  ")
 	if err != nil {
@@ -203,6 +206,7 @@ type linearConfig struct {
 type linearCommand struct {
 	Path string   `json:"path"`
 	Args []string `json:"args"`
+	Env  []string `json:"env,omitempty"`
 }
 
 // validateRoot creates a typed sessions root, answering the form to store — a

@@ -217,12 +217,13 @@ func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	var offered string
+	var offered, offeredPrompt string
 	var focused int
 	conflict := false
 	server, err := serveControl(socket, windows, nil, controlHooks{
-		linearIssue: func(ticket string) (string, error) {
+		linearIssue: func(ticket, prompt string) (string, error) {
 			offered = ticket
+			offeredPrompt = prompt
 			if conflict {
 				return "", ErrAssemblyDraftConflict
 			}
@@ -236,23 +237,23 @@ func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T
 	t.Cleanup(func() { _ = server.Close() })
 
 	outcome, err := workbench.OpenLinearIssue(context.Background(), socket,
-		"https://linear.app/lifesum/issue/lif-2841/title")
+		"https://linear.app/lifesum/issue/lif-2841/title", "Linear's task")
 	if err != nil || outcome != assemblyOutcomeQueued {
 		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
 	}
-	if offered != "https://linear.app/issue/LIF-2841" || focused != 1 {
-		t.Fatalf("offered %q and focused %d times", offered, focused)
+	if offered != "https://linear.app/issue/LIF-2841" || offeredPrompt != "Linear's task" || focused != 1 {
+		t.Fatalf("offered %q, prompt %q, and focused %d times", offered, offeredPrompt, focused)
 	}
 
 	conflict = true
-	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "LIF-2842"); err == nil {
+	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "LIF-2842", ""); err == nil {
 		t.Fatal("draft conflict succeeded")
 	}
 	if focused != 2 {
 		t.Fatalf("draft conflict focused %d times, want twice in all", focused)
 	}
 	before := offered
-	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "not-an-issue"); err == nil {
+	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "not-an-issue", ""); err == nil {
 		t.Fatal("invalid Linear issue reached the process")
 	}
 	if offered != before || focused != 2 {
@@ -275,7 +276,7 @@ func TestLinearIssueOpIsRefusedOnSessionSocketsAndWithoutItsPayload(t *testing.T
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control := &control{windows: windows, owner: tc.owner, hooks: controlHooks{
-				linearIssue: func(string) (string, error) { return assemblyOutcomeQueued, nil },
+				linearIssue: func(string, string) (string, error) { return assemblyOutcomeQueued, nil },
 			}}
 			if res := control.dispatch(tc.req); res.Error == "" {
 				t.Fatalf("dispatch(%+v) = %+v, want a refusal", tc.req, res)

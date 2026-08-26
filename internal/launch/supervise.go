@@ -40,6 +40,13 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 	if err != nil {
 		return err
 	}
+	initialPrompt, err := takeInitialPrompt(dir)
+	if err != nil {
+		return err
+	}
+	if initialPrompt != "" {
+		resume = false
+	}
 	relaunch := make(chan os.Signal, 1)
 	signal.Notify(relaunch, syscall.SIGUSR1)
 	defer signal.Stop(relaunch)
@@ -55,10 +62,11 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if tookHandoff(dir) {
 			resume = false
 		}
-		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, resume)
+		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, resume, initialPrompt)
 		if err != nil {
 			return err
 		}
+		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
 		signalled, err := runAgent(argv, env, dir, relaunch)
 		if err != nil || !signalled {
@@ -68,6 +76,21 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		// trip through the picker that merely adds repositories.
 		resume = true
 	}
+}
+
+func takeInitialPrompt(dir string) (string, error) {
+	path := sessionpaths.InitialPrompt(dir)
+	prompt, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := os.Remove(path); err != nil {
+		return "", err
+	}
+	return string(prompt), nil
 }
 
 // tookHandoff consumes the pending-handoff marker, reporting whether this launch

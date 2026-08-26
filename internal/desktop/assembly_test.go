@@ -117,21 +117,24 @@ func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 	root := t.TempDir()
 	a := newAssembly(&config.Config{Root: root}, nil, newSessions(), nil, nil, nil)
-	got, err := a.offer("lif-2841")
+	got, err := a.offer("lif-2841", "Fix the regression")
 	if err != nil || got != assemblyOutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
 	}
 	if pending := a.Pending(); pending != "https://linear.app/issue/LIF-2841" {
 		t.Fatalf("pending = %q", pending)
 	}
+	if ticket, prompt := a.pendingLinear(); ticket != "https://linear.app/issue/LIF-2841" || prompt != "Fix the regression" {
+		t.Fatalf("pending Linear request = %q, %q", ticket, prompt)
+	}
 	seed := a.Begin()
 	if seed.Ticket != "https://linear.app/issue/LIF-2841" || seed.Generation == 0 || a.Pending() != "" {
 		t.Fatalf("Begin = %+v, pending %q", seed, a.Pending())
 	}
-	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title"); err != nil || got != assemblyOutcomeDraft {
+	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title", "ignored duplicate"); err != nil || got != assemblyOutcomeDraft {
 		t.Fatalf("same issue against open draft = %q, %v", got, err)
 	}
-	if _, err := a.offer("LIF-2842"); !errors.Is(err, ErrAssemblyDraftConflict) {
+	if _, err := a.offer("LIF-2842", "another task"); !errors.Is(err, ErrAssemblyDraftConflict) {
 		t.Fatalf("different issue against open draft = %v", err)
 	}
 }
@@ -142,18 +145,18 @@ func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
 	if manual.Ticket != "" {
 		t.Fatalf("manual Begin = %+v", manual)
 	}
-	if _, err := a.offer("LIF-2841"); !errors.Is(err, ErrAssemblyDraftConflict) {
+	if _, err := a.offer("LIF-2841", ""); !errors.Is(err, ErrAssemblyDraftConflict) {
 		t.Fatalf("external issue took over a manual draft: %v", err)
 	}
 	a.End(manual.Generation)
-	if got, err := a.offer("LIF-2841"); err != nil || got != assemblyOutcomeQueued {
+	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeQueued {
 		t.Fatalf("offer after cancel = %q, %v", got, err)
 	}
 }
 
 func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
 	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
-	if _, err := a.offer("LIF-2841"); err != nil {
+	if _, err := a.offer("LIF-2841", ""); err != nil {
 		t.Fatal(err)
 	}
 	first := a.Begin()
@@ -162,40 +165,44 @@ func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
 		t.Fatalf("replacement = %+v after %+v", replacement, first)
 	}
 	a.End(first.Generation)
-	if got, err := a.offer("LIF-2842"); !errors.Is(err, ErrAssemblyDraftConflict) || got != "" {
+	if got, err := a.offer("LIF-2842", ""); !errors.Is(err, ErrAssemblyDraftConflict) || got != "" {
 		t.Fatalf("late End closed the replacement: %q, %v", got, err)
 	}
 	a.End(replacement.Generation)
-	if got, err := a.offer("LIF-2842"); err != nil || got != assemblyOutcomeQueued {
+	if got, err := a.offer("LIF-2842", ""); err != nil || got != assemblyOutcomeQueued {
 		t.Fatalf("current End did not release the draft: %q, %v", got, err)
 	}
 }
 
 func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
 	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
-	if _, err := a.offer("LIF-2841"); err != nil {
+	if _, err := a.offer("LIF-2841", "Linear prompt"); err != nil {
 		t.Fatal(err)
 	}
-	var carried string
-	relaunch := pendingRelaunch(func(ticket func() string) error { carried = ticket(); return nil }, a)
-	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" {
-		t.Fatalf("unclaimed relaunch = %q, %v", carried, err)
+	var carried, carriedPrompt string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		carried, carriedPrompt = request()
+		return nil
+	}, a)
+	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
+		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
 	}
 	a.Begin()
 	carried = "not called"
+	carriedPrompt = "not called"
 	if err := relaunch(); err != nil || carried != "" {
-		t.Fatalf("claimed relaunch = %q, %v", carried, err)
+		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
 	}
 }
 
 func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
 	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	var carried string
-	relaunch := pendingRelaunch(func(ticket func() string) error {
-		if _, err := a.offer("LIF-2841"); err != nil {
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		if _, err := a.offer("LIF-2841", "Late prompt"); err != nil {
 			return err
 		}
-		carried = ticket()
+		carried, _ = request()
 		return nil
 	}, a)
 	if err := relaunch(); err != nil {
@@ -224,7 +231,7 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 	}
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 	for range 2 {
-		if got, err := a.offer("LIF-2841"); err != nil || got != assemblyOutcomeExisting {
+		if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {
 			t.Fatalf("matching offer = %q, %v", got, err)
 		}
 	}
@@ -246,7 +253,7 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			_, err := a.offer(issue)
+			_, err := a.offer(issue, "")
 			results <- err
 		}()
 	}

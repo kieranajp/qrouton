@@ -101,9 +101,10 @@ func TestArgumentsAreRefusedRatherThanIgnored(t *testing.T) {
 	}
 }
 
-func TestLinearIssueColdLaunchCarriesOnlyTheCanonicalTicket(t *testing.T) {
+func TestLinearIssueColdLaunchCarriesTheCanonicalTicketAndPrompt(t *testing.T) {
 	t.Setenv("QROUTON_ROOT", t.TempDir())
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LINEAR_PROMPT", "Fix the login regression")
 	previous := detachProcess
 	previousDiscovery := discoverProcess
 	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
@@ -117,7 +118,8 @@ func TestLinearIssueColdLaunchCarriesOnlyTheCanonicalTicket(t *testing.T) {
 	if err := open(rootContext(t, "--linear-issue", "lif-2841")); err != nil {
 		t.Fatal(err)
 	}
-	if got.LinearIssue != "https://linear.app/issue/LIF-2841" || got.SessionRoot != "" || got.Socket == "" {
+	if got.LinearIssue != "https://linear.app/issue/LIF-2841" || got.LinearPrompt != "Fix the login regression" ||
+		got.SessionRoot != "" || got.Socket == "" {
 		t.Fatalf("cold workbench spec = %+v", got)
 	}
 }
@@ -142,6 +144,7 @@ func TestLinearIssueRejectsInvalidOrExtraInputBeforeLaunch(t *testing.T) {
 }
 
 func TestLinearIssueUsesThePublishedProcessEndpoint(t *testing.T) {
+	t.Setenv("LINEAR_PROMPT", "Fix the warm path")
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)
@@ -182,7 +185,7 @@ func TestLinearIssueUsesThePublishedProcessEndpoint(t *testing.T) {
 	}
 	req := <-requests
 	if req.Op != workbench.OpOpenLinearIssue || req.LinearIssue == nil ||
-		req.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" {
+		req.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" || req.LinearIssue.Prompt != "Fix the warm path" {
 		t.Fatalf("live request = %+v", req)
 	}
 }

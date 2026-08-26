@@ -54,9 +54,11 @@ type Response struct {
 	Error    string            `json:"error,omitempty"`
 }
 
-// LinearIssueRequest is the bounded canonical value offered to a workbench.
+// LinearIssueRequest is the canonical ticket and the user-level request Linear
+// generated for it.
 type LinearIssueRequest struct {
 	Ticket string `json:"ticket"`
+	Prompt string `json:"prompt,omitempty"`
 }
 
 // NewSocketPath reserves an address for a desktop process's control socket.
@@ -264,11 +266,11 @@ func (h Handle) Attention(ctx context.Context, activity string) error {
 	return err
 }
 
-// OpenLinearIssue offers one canonical Linear ticket to the published process
-// endpoint.
-func OpenLinearIssue(ctx context.Context, socket, ticket string) (string, error) {
+// OpenLinearIssue offers one canonical Linear ticket and its generated prompt
+// to the published process endpoint.
+func OpenLinearIssue(ctx context.Context, socket, ticket, prompt string) (string, error) {
 	res, err := (&client{socket: socket}).call(ctx, Request{
-		Op: OpOpenLinearIssue, LinearIssue: &LinearIssueRequest{Ticket: ticket},
+		Op: OpOpenLinearIssue, LinearIssue: &LinearIssueRequest{Ticket: ticket, Prompt: prompt},
 	})
 	return res.Outcome, err
 }
