@@ -35,6 +35,13 @@ export const preview = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Preview", dra
 /** @param {Draft} draft */
 export const create = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Create", draft);
 
+export const pending = () => Call.ByName(ASSEMBLY_SERVICE + ".Pending");
+
+export const begin = () => Call.ByName(ASSEMBLY_SERVICE + ".Begin");
+
+/** @param {number} generation */
+export const end = (generation) => Call.ByName(ASSEMBLY_SERVICE + ".End", generation);
+
 /**
  * fetchTicket answers with the URL it asked about, which is what lets a result
  * for a URL the field has since moved off be dropped.

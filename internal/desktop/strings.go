@@ -47,8 +47,13 @@ const (
 	windowExitEvent = "window:exit:"
 	windowsEvent    = "window:open"
 
-	reposRefreshEvent     = "repos:refresh"
-	assemblyProgressEvent = "assembly:progress"
+	reposRefreshEvent      = "repos:refresh"
+	assemblyProgressEvent  = "assembly:progress"
+	assemblyRequestedEvent = "assembly:requested"
+
+	assemblyOutcomeDraft    = "draft"
+	assemblyOutcomeExisting = "existing-session"
+	assemblyOutcomeQueued   = "queued"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -97,5 +102,6 @@ const (
 
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
 	// which fills in after the screen has already drawn.
-	loginTimeout = 5 * time.Second
+	loginTimeout       = 5 * time.Second
+	ticketFetchTimeout = 15 * time.Second
 )

@@ -1,10 +1,12 @@
 <script>
+  import { onMount } from "svelte";
   import AssemblyStep from "../session/AssemblyStep.svelte";
   import AgentStep from "./AgentStep.svelte";
   import DescribeStep from "./DescribeStep.svelte";
   import Dialog from "./Dialog.svelte";
   import RepositoriesStep from "./RepositoriesStep.svelte";
   import { assembling } from "./draft.svelte.js";
+  import { begin, end } from "./calls.js";
   import { destination, labels, last, primary } from "./steps.js";
 
   /** @type {{onClose: () => void, gated?: boolean}} */
@@ -21,8 +23,30 @@
   // over an empty middle, so there is nothing to cancel to. Back on the later
   // steps is unaffected: a user who can go back is not at a dead end.
   let trapped = $derived(gated && wizard.step === 0);
+  let owned = $state(false);
+
+  onMount(() => {
+    let live = true;
+    let generation = 0;
+    begin()
+      .then((seed) => {
+        if (!live) {
+          if (seed?.generation) end(seed.generation).catch(() => {});
+          return;
+        }
+        generation = seed?.generation ?? 0;
+        if (seed?.ticket) wizard.seed(seed.ticket);
+        owned = true;
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      if (generation) end(generation).catch(() => {});
+    };
+  });
 </script>
 
+{#if owned}
 <Dialog
   steps={labels}
   active={wizard.step}
@@ -76,6 +100,7 @@
       bind:mode={wizard.form.mode} />
   {/if}
 </Dialog>
+{/if}
 
 <style>
   .progress {

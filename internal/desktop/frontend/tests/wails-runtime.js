@@ -1,8 +1,9 @@
 export const Browser = { OpenURL: async () => {} };
-export const Events = {};
+export const Events = { On: () => () => {} };
 export const Call = {
-  ByName: async (name) =>
-    name.endsWith(".Content")
+  ByName: async (name, ...args) => {
+    if (window.wailsCall) return window.wailsCall(name, ...args);
+    return name.endsWith(".Content")
       ? {
           text: "# Find me\n\nFind **me** once. Find me twice.",
           format: "markdown",
@@ -10,5 +11,6 @@ export const Call = {
           line: 0,
           to: 0,
         }
-      : undefined,
+      : undefined;
+  },
 };
