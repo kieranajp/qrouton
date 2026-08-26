@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -246,6 +248,8 @@ type document struct {
 	Text          string `json:"text"`
 	Format        string `json:"format"`
 	Source        string `json:"source"`
+	Path          string `json:"path,omitempty"`
+	Kind          string `json:"kind,omitempty"`
 	Line          int    `json:"line"`
 	To            int    `json:"to"`
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
@@ -269,10 +273,17 @@ func (w *Windows) Content(id string) (document, error) {
 		viewportEpoch = window.viewportEpoch
 	}
 	first, last, _ := window.opts.Span.Bounds()
+	var path, kind string
+	if window.opts.Source != "" && window.session != nil {
+		path = filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
+		kind = status.DocumentKind(window.opts.Source)
+	}
 	return document{
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),
 		Source:        window.opts.Source,
+		Path:          path,
+		Kind:          kind,
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,

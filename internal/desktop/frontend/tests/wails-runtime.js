@@ -1,4 +1,9 @@
 export const Browser = { OpenURL: async () => {} };
+export const Clipboard = {
+  SetText: async (text) => {
+    window.clipboardText = text;
+  },
+};
 export const Events = { On: () => () => {} };
 export const Call = {
   ByName: async (name, ...args) => {
@@ -8,6 +13,8 @@ export const Call = {
           text: "# Find me\n\nFind **me** once. Find me twice.",
           format: "markdown",
           source: "notes/find.md",
+          path: "/sessions/artifacts/notes/find.md",
+          kind: "PLAN",
           line: 0,
           to: 0,
         }

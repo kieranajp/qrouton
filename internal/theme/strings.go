@@ -15,6 +15,10 @@ const (
 	RoleRepoEditing       = "role-editing"
 	RoleRepoReference     = "role-reference"
 	RoleRepoOff           = "role-off"
+	RoleArtifactPlan      = "artifact-plan"
+	RoleArtifactSpec      = "artifact-spec"
+	RoleArtifactResearch  = "artifact-research"
+	RoleArtifactNote      = "artifact-note"
 )
 
 // The stylesheet CSS renders, and the path the workbench serves it at.

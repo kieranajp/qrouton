@@ -78,7 +78,7 @@ func TestPageCarriesTheDocumentAndItsSource(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Page: %v", err)
 	}
-	encoded := base64.StdEncoding.EncodeToString([]byte(source + "\n" + markdown))
+	encoded := base64.StdEncoding.EncodeToString([]byte("NOTE\n" + source + "\n" + markdown))
 	if !strings.Contains(string(page), encoded) {
 		t.Error("page does not carry the encoded document")
 	}

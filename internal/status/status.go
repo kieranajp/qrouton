@@ -261,7 +261,7 @@ func documents(root string) []Document {
 			return nil
 		}
 		out = append(out, Document{
-			Name: entry.Name(), Path: rel, Kind: kind(entry.Name()), At: info.ModTime(),
+			Name: entry.Name(), Path: rel, Kind: DocumentKind(rel), At: info.ModTime(),
 		})
 		return nil
 	})
@@ -269,18 +269,29 @@ func documents(root string) []Document {
 	return out
 }
 
-// kind reads the filename prefix the workflow already stamps; anything else is
-// a note, which is what an unprefixed document is.
-func kind(name string) string {
+// DocumentKind reads the shared artifact taxonomy first and the workflow's
+// filename prefix second. Anything outside both is a note.
+func DocumentKind(path string) string {
+	for _, part := range strings.Split(strings.ToLower(filepath.ToSlash(path)), "/") {
+		switch part {
+		case "plans":
+			return KindPlan
+		case "specs":
+			return KindSpec
+		case "research":
+			return KindResearch
+		}
+	}
+	name := filepath.Base(path)
 	switch {
 	case planPrefix.MatchString(name):
-		return kindPlan
+		return KindPlan
 	case specPrefix.MatchString(name):
-		return kindSpec
+		return KindSpec
 	case researchPrefix.MatchString(name):
-		return kindResearch
+		return KindResearch
 	default:
-		return kindNote
+		return KindNote
 	}
 }
 

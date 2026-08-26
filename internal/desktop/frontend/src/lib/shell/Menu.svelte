@@ -1,4 +1,5 @@
 <script>
+  import { artifactTone } from "../artifacts.js";
   import StatusDot from "../core/StatusDot.svelte";
 
   /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
@@ -26,7 +27,7 @@
           <StatusDot state={item.status === "succeeded" ? "success" : item.status} size={7} />
         {/if}
         {#if item.tag}
-          <span class="tag" class:plan={item.tag === "PLAN"}>{item.tag}</span>
+          <span class="tag" style:--artifact={artifactTone(item.tag)}>{item.tag}</span>
         {/if}
         <span class="label">{item.label}</span>
         {#if item.meta}<span class="meta">{item.meta}</span>{/if}
@@ -93,15 +94,11 @@
   .tag {
     font: 700 9px var(--font-machine);
     color: var(--text-on-accent);
-    background: var(--accent-label);
+    background: var(--artifact);
     padding: 2px 6px;
     width: 52px;
     text-align: center;
     flex: none;
-  }
-
-  .tag.plan {
-    background: var(--state-guided);
   }
 
   .label {
