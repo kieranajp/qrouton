@@ -82,6 +82,7 @@ const (
 	claudeSkipPermissionsFlag = "--dangerously-skip-permissions"
 	codexBypassSandboxFlag    = "--dangerously-bypass-approvals-and-sandbox"
 	openCodeAutoFlag          = "--auto"
+	openCodePromptFlag        = "--prompt"
 
 	// Resume arguments: each runner spells "continue the last conversation"
 	// differently.

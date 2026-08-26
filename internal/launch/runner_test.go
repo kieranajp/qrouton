@@ -74,8 +74,9 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := runnerArgv(byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command) {
-		t.Fatalf("unknown launch protocol should not receive a positional prompt: %#v", argv)
+	if argv := runnerArgv(byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
+		!strings.Contains(argv[len(argv)-1], "Research, Plan, or Implement") {
+		t.Fatalf("OpenCode should receive the opening through --prompt: %#v", argv)
 	}
 }
 
@@ -98,12 +99,6 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
 		argv := runnerArgv(runner, false, modeAssistant, "  Fix the login regression.  ")
-		if runner.ID == runnerIDOpenCode {
-			if strings.Contains(strings.Join(argv, " "), "Fix the login regression") {
-				t.Fatalf("OpenCode received an unsupported positional prompt: %#v", argv)
-			}
-			continue
-		}
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
 			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {

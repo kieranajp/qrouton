@@ -184,6 +184,8 @@ func runnerArgv(r Runner, resume bool, mode, initialPrompt string) []string {
 	switch r.ID {
 	case runnerIDClaude, runnerIDCodex:
 		argv = append(argv, openingMessage(mode, initialPrompt))
+	case runnerIDOpenCode:
+		argv = append(argv, openCodePromptFlag, openingMessage(mode, initialPrompt))
 	}
 	return argv
 }
