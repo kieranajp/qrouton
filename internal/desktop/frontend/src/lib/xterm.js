@@ -2,6 +2,7 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { latestPerFrame } from "./frame.js";
 import { position } from "./shortcuts.js";
 
 export { Terminal };
@@ -90,11 +91,18 @@ export function mount(host, { write, background = "--ctp-base" }) {
 }
 
 export function watchSize(host, resize) {
-  const observer = new ResizeObserver(resize);
+  let live = true;
+  const scheduled = latestPerFrame(() => resize());
+  const notify = () => {
+    if (live) scheduled.schedule();
+  };
+  const observer = new ResizeObserver(notify);
   observer.observe(host);
-  window.addEventListener("resize", resize);
+  window.addEventListener("resize", notify);
   return () => {
+    live = false;
+    scheduled.cancel();
     observer.disconnect();
-    window.removeEventListener("resize", resize);
+    window.removeEventListener("resize", notify);
   };
 }

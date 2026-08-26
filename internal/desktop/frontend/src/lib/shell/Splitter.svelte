@@ -1,17 +1,24 @@
 <script>
-  /** @type {{size: number, min: number, max: number, onResize: (size: number) => void, onReset?: () => void, label?: string}} */
-  let { size, min, max, onResize, onReset, label = "Resize pane" } = $props();
+  import { onDestroy } from "svelte";
+  import { latestPerFrame } from "../frame.js";
+
+  /** @type {{size: number, min: number, max: number, onResize: (size: number) => void, onCommit: (size: number) => void, onReset?: () => void, label?: string}} */
+  let { size, min, max, onResize, onCommit, onReset, label = "Resize pane" } = $props();
 
   let origin = 0;
   let grabbed = 0;
+  let latest = 0;
   let dragging = $state(false);
+  const scheduled = latestPerFrame((value) => onResize(value));
 
   const clamp = (value) => Math.min(max, Math.max(min, value));
+  const sizeAt = (event) => clamp(grabbed - (event.clientX - origin));
 
   function grab(event) {
     if (event.button !== 0) return;
     origin = event.clientX;
     grabbed = size;
+    latest = size;
     dragging = true;
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -19,21 +26,31 @@
   // The pane being sized sits to the right of the border, so it grows as the
   // pointer moves left.
   function drag(event) {
-    if (dragging) onResize(clamp(grabbed - (event.clientX - origin)));
+    if (!dragging) return;
+    latest = sizeAt(event);
+    scheduled.schedule(latest);
   }
 
   function release(event) {
+    if (!dragging) return;
+    if (event.type === "pointerup") latest = sizeAt(event);
     dragging = false;
-    event.currentTarget.releasePointerCapture(event.pointerId);
+    scheduled.cancel();
+    onCommit(latest);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   }
 
   function nudge(event) {
     const step = event.shiftKey ? 40 : 8;
-    if (event.key === "ArrowLeft") onResize(clamp(size + step));
-    else if (event.key === "ArrowRight") onResize(clamp(size - step));
+    if (event.key === "ArrowLeft") onCommit(clamp(size + step));
+    else if (event.key === "ArrowRight") onCommit(clamp(size - step));
     else return;
     event.preventDefault();
   }
+
+  onDestroy(scheduled.cancel);
 
   // Pointer capture keeps the events coming, but the panes either side would
   // still select their text under the drag.

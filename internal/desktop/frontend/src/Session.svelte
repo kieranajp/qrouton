@@ -88,11 +88,16 @@
 
   function resize(next) {
     dragged = { ...dragged, [fields.slug]: next };
+  }
+
+  function commit(next) {
+    resize(next);
     writeStored(widthKey(fields.slug), next);
   }
 
   function reset() {
     resize(0);
+    writeStored(widthKey(fields.slug), 0);
   }
 
   let selection = $state({});
@@ -381,6 +386,7 @@
       min={MIN_HUMAN}
       max={room}
       onResize={resize}
+      onCommit={commit}
       onReset={reset}
       label="Resize the shell pane" />
 
