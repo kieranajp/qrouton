@@ -13,8 +13,12 @@ test("accumulator summarizes frame, task, event, exit and chrome metrics", () =>
   measurement.supportsLongTasks();
   measurement.longTask(55);
   measurement.longTask(70);
-  measurement.storageWrite();
-  measurement.storageWrite();
+  measurement.storageWrite("other");
+  measurement.storageWrite("qrouton.human-pane:session-a");
+  measurement.shellSplitterPointer("pointerdown");
+  measurement.shellSplitterPointer("pointermove");
+  measurement.shellSplitterPointer("pointermove");
+  measurement.shellSplitterPointer("pointerup");
   measurement.event("window:data:b", 40, 3, 108);
   measurement.event("chrome:update", 20, 2, 112);
   measurement.event("chrome:update", 30, 4, 130);
@@ -38,6 +42,15 @@ test("accumulator summarizes frame, task, event, exit and chrome metrics", () =>
     },
     longTasks: { supported: true, count: 2, maxMs: 70, totalMs: 125 },
     storageWrites: 2,
+    shellSplitter: {
+      role: "separator",
+      ariaLabel: "Resize the shell pane",
+      pointerdown: 1,
+      pointermove: 2,
+      pointerup: 1,
+      pointercancel: 0,
+      storageWrites: 1,
+    },
     exitCount: 2,
     exitedStreamCount: 2,
     duplicateExits: 0,
@@ -145,6 +158,20 @@ const controllerEnvironment = () => {
     visualViewport: { width: 1400, height: 860, scale: 1 },
   };
   const document = {
+    listeners: new Map(),
+    addEventListener(type, listener) {
+      const listeners = this.listeners.get(type) ?? [];
+      listeners.push(listener);
+      this.listeners.set(type, listeners);
+    },
+    removeEventListener(type, listener) {
+      const listeners = this.listeners.get(type) ?? [];
+      this.listeners.set(type, listeners.filter((candidate) => candidate !== listener));
+    },
+    dispatch(type, target, options = {}) {
+      const event = { target, pointerId: 1, button: 0, ...options };
+      for (const listener of this.listeners.get(type) ?? []) listener(event);
+    },
     querySelectorAll(selector) {
       return { length: selector === ".xterm" ? 2 : selector === ".xterm canvas" ? 4 : 0 };
     },
@@ -170,6 +197,7 @@ const controllerEnvironment = () => {
   return {
     browser,
     canceledFrames,
+    document,
     environment,
     FakeStorage,
     frames,
@@ -190,13 +218,40 @@ const controllerEnvironment = () => {
   };
 };
 
+const separatorTarget = (label = "Resize the shell pane", role = "separator") => ({
+  getAttribute(name) {
+    return name === "role" ? role : name === "aria-label" ? label : null;
+  },
+});
+
 test("controller patches, freezes, restores and can reset instrumentation", () => {
   const fixture = controllerEnvironment();
   const originalSetItem = fixture.FakeStorage.prototype.setItem;
   const controller = createMeasurementController(fixture.environment);
+  const shellSplitter = separatorTarget();
+  const decoySplitter = separatorTarget("Resize the shell panes");
+  const wrongRole = separatorTarget("Resize the shell pane", "button");
 
   const storage = new fixture.FakeStorage();
   storage.setItem("width", "420");
+  storage.setItem("qrouton.human-pane:alpha", "460");
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 2 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 2 });
+  fixture.document.dispatch("pointerdown", wrongRole, { pointerId: 10 });
+  fixture.document.dispatch("pointerup", wrongRole, { pointerId: 10 });
+  fixture.document.dispatch("pointerdown", decoySplitter, { pointerId: 3 });
+  fixture.document.dispatch("pointermove", decoySplitter, { pointerId: 3 });
+  fixture.document.dispatch("pointerup", decoySplitter, { pointerId: 3 });
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 4, button: 2 });
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 4 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 4 });
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 5 });
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 6 });
+  fixture.document.dispatch("pointermove", decoySplitter, { pointerId: 5 });
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 5 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 5 });
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 5 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 5 });
   fixture.setClock(105);
   assert.equal(
     fixture.browser._wails.dispatchWailsEvent.call(
@@ -210,10 +265,20 @@ test("controller patches, freezes, restores and can reset instrumentation", () =
   fixture.runFrame(150);
   fixture.observers[0].callback({ getEntries: () => [{ duration: 61 }] });
   fixture.observers[0].records.push({ duration: 77 });
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 12 });
   fixture.setClock(160);
 
   const stopped = controller.stop();
-  assert.equal(stopped.storageWrites, 1);
+  assert.equal(stopped.storageWrites, 2);
+  assert.deepEqual(stopped.shellSplitter, {
+    role: "separator",
+    ariaLabel: "Resize the shell pane",
+    pointerdown: 2,
+    pointermove: 1,
+    pointerup: 1,
+    pointercancel: 0,
+    storageWrites: 1,
+  });
   assert.deepEqual(stopped.frames, {
     enabled: true,
     count: 2,
@@ -231,6 +296,10 @@ test("controller patches, freezes, restores and can reset instrumentation", () =
   assert.deepEqual(stopped.viewport.visual, { width: 1400, height: 860, scale: 1 });
   assert.equal(fixture.browser._wails.dispatchWailsEvent, fixture.originalDispatch);
   assert.equal(fixture.FakeStorage.prototype.setItem, originalSetItem);
+  assert.deepEqual(
+    [...fixture.document.listeners.values()].map((listeners) => listeners.length),
+    [0, 0, 0, 0],
+  );
   assert.equal(fixture.environment.Terminal.prototype.write, fixture.originalTerminalWrite);
   assert.equal(fixture.observers[0].disconnected, true);
   assert.equal(fixture.canceledFrames.length, 1);
@@ -238,11 +307,24 @@ test("controller patches, freezes, restores and can reset instrumentation", () =
   fixture.setClock(200);
   assert.equal(controller.reset(1), true);
   assert.notEqual(fixture.browser._wails.dispatchWailsEvent, fixture.originalDispatch);
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 12 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 12 });
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 7 });
+  fixture.document.dispatch("pointercancel", shellSplitter, { pointerId: 7 });
   fixture.browser._wails.dispatchWailsEvent({ name: "pty:data:x", data: new Uint8Array([1, 2, 3]) });
   fixture.browser._wails.dispatchWailsEvent({ name: "pty:exit:x", data: 0 });
   fixture.setClock(210);
   const draining = controller.snapshot();
   assert.equal(draining.exitsComplete, false);
+  assert.deepEqual(draining.shellSplitter, {
+    role: "separator",
+    ariaLabel: "Resize the shell pane",
+    pointerdown: 1,
+    pointermove: 0,
+    pointerup: 0,
+    pointercancel: 1,
+    storageWrites: 0,
+  });
   assert.deepEqual(draining.terminalWrites, {
     count: 1,
     bytes: 3,
@@ -268,14 +350,34 @@ test("controller patches, freezes, restores and can reset instrumentation", () =
   assert.equal(outOfOrder.exitsComplete, false);
   assert.equal(outOfOrder.terminalWrites.writesAfterExit, 1);
 
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 8 });
   assert.equal(controller.reset(0, false), true);
   assert.equal(fixture.frames.size, 0);
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 8 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 8 });
   fixture.browser._wails.dispatchWailsEvent({ name: "chrome:update", data: null });
   const eventOnly = controller.snapshot();
   assert.equal(eventOnly.frames.enabled, false);
   assert.equal(eventOnly.events["chrome:update"].count, 1);
+  assert.deepEqual(eventOnly.shellSplitter, {
+    role: "separator",
+    ariaLabel: "Resize the shell pane",
+    pointerdown: 0,
+    pointermove: 0,
+    pointerup: 0,
+    pointercancel: 0,
+    storageWrites: 0,
+  });
+  fixture.document.dispatch("pointerdown", shellSplitter, { pointerId: 9 });
+  const activeBeforeDestroy = controller.snapshot();
+  assert.equal(activeBeforeDestroy.shellSplitter.pointerdown, 1);
   controller.destroy();
   assert.equal(fixture.browser._wails.dispatchWailsEvent, fixture.originalDispatch);
+  fixture.document.dispatch("pointermove", shellSplitter, { pointerId: 9 });
+  fixture.document.dispatch("pointerup", shellSplitter, { pointerId: 9 });
+  storage.setItem("qrouton.human-pane:destroyed", "500");
+  assert.deepEqual(controller.snapshot(), activeBeforeDestroy);
+  assert.equal(fixture.document.listeners.get("pointerdown").length, 0);
   assert.equal(controller.reset(0), false);
 });
 

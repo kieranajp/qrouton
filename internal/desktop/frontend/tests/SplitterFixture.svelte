@@ -1,10 +1,11 @@
 <script>
   import { onMount } from "svelte";
+  import { createMeasurementController } from "../src/lib/measure.js";
   import Splitter from "../src/lib/shell/Splitter.svelte";
   import { watchSize } from "../src/lib/xterm.js";
 
   const DEFAULT_WIDTH = 400;
-  const STORAGE_KEY = "splitter-fixture-width";
+  const STORAGE_KEY = "qrouton.human-pane:splitter-fixture";
 
   let customWidth = $state(Number(localStorage.getItem(STORAGE_KEY)) || 0);
   let width = $derived(customWidth || DEFAULT_WIDTH);
@@ -35,6 +36,7 @@
   }
 
   onMount(() => {
+    const measurement = createMeasurementController({ window, document, Storage });
     let stopSize = watchSize(sizeHost, () => fits++);
     window.splitterMetrics = () => ({
       width,
@@ -46,6 +48,10 @@
       fits,
     });
     window.resetFits = () => (fits = 0);
+    window.measurementSummary = () => measurement.snapshot();
+    window.resetMeasurement = () => measurement.reset();
+    window.stopMeasurement = () => measurement.stop();
+    window.destroyMeasurement = () => measurement.destroy();
     window.sizeBurst = () => {
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("resize"));
@@ -56,7 +62,10 @@
       stopSize?.();
       stopSize = undefined;
     };
-    return () => stopSize?.();
+    return () => {
+      stopSize?.();
+      measurement.destroy();
+    };
   });
 </script>
 
@@ -69,9 +78,10 @@
     onResize={resize}
     onCommit={commit}
     onReset={reset}
-    label="Resize fixture pane" />
+    label="Resize the shell pane" />
   <div id="pane" style:width="{width}px"></div>
 </div>
+<div role="separator" aria-label="Resize the shell panes" data-testid="decoy-separator"></div>
 <div id="size-host" bind:this={sizeHost}></div>
 
 <style>

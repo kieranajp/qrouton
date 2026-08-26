@@ -1,5 +1,14 @@
 let encoder;
 
+const SHELL_SPLITTER_LABEL = "Resize the shell pane";
+const SHELL_SPLITTER_STORAGE_PREFIX = "qrouton.human-pane:";
+const SHELL_SPLITTER_POINTER_EVENTS = [
+  "pointerdown",
+  "pointermove",
+  "pointerup",
+  "pointercancel",
+];
+
 const percentile = (values, fraction) => {
   if (values.length === 0) return 0;
   const sorted = [...values].sort((left, right) => left - right);
@@ -31,6 +40,15 @@ export function createMeasurementAccumulator(startedAt, expectedExits = 0, frame
   const streams = new Map();
   let longTasksSupported = false;
   let storageWrites = 0;
+  const shellSplitter = {
+    role: "separator",
+    ariaLabel: SHELL_SPLITTER_LABEL,
+    pointerdown: 0,
+    pointermove: 0,
+    pointerup: 0,
+    pointercancel: 0,
+    storageWrites: 0,
+  };
   let exitCount = 0;
   let exitedStreamCount = 0;
   let duplicateExits = 0;
@@ -59,8 +77,14 @@ export function createMeasurementAccumulator(startedAt, expectedExits = 0, frame
     supportsLongTasks() {
       longTasksSupported = true;
     },
-    storageWrite() {
+    storageWrite(key) {
       storageWrites++;
+      if (typeof key === "string" && key.startsWith(SHELL_SPLITTER_STORAGE_PREFIX)) {
+        shellSplitter.storageWrites++;
+      }
+    },
+    shellSplitterPointer(type) {
+      if (SHELL_SPLITTER_POINTER_EVENTS.includes(type)) shellSplitter[type]++;
     },
     terminalWriteStarted(name, bytes) {
       const key = streamKey(name, "pty:data") ?? streamKey(name, "window:data");
@@ -136,6 +160,7 @@ export function createMeasurementAccumulator(startedAt, expectedExits = 0, frame
           totalMs: longTasks.reduce((total, duration) => total + duration, 0),
         },
         storageWrites,
+        shellSplitter: { ...shellSplitter },
         exitCount,
         exitedStreamCount,
         duplicateExits,
@@ -241,15 +266,50 @@ export function createMeasurementController(environment = {}) {
   let terminalPatch;
   let dispatchingEvent;
   let framesEnabled = true;
+  let splitterListeners = [];
+  const activeSplitterPointers = new Set();
 
   const patchStorage = () => {
     if (restoreStorage || !StorageClass?.prototype) return;
     const original = StorageClass.prototype.setItem;
     const wrapped = function (...args) {
-      if (running) accumulator.storageWrite();
+      if (running) accumulator.storageWrite(args[0]);
       return Reflect.apply(original, this, args);
     };
     restoreStorage = replaceMethod(StorageClass.prototype, "setItem", wrapped);
+  };
+
+  const isShellSplitter = (target) => target?.getAttribute?.("role") === "separator"
+    && target.getAttribute("aria-label") === SHELL_SPLITTER_LABEL;
+
+  const observeShellSplitter = () => {
+    if (splitterListeners.length || !documentObject?.addEventListener) return;
+    for (const type of SHELL_SPLITTER_POINTER_EVENTS) {
+      const listener = (event) => {
+        const matches = isShellSplitter(event.target);
+        if (type === "pointerdown") {
+          if (!matches || event.button !== 0 || activeSplitterPointers.has(event.pointerId)) return;
+          activeSplitterPointers.add(event.pointerId);
+          if (running) accumulator.shellSplitterPointer(type);
+          return;
+        }
+        if (!activeSplitterPointers.has(event.pointerId)) return;
+        if (matches && running) accumulator.shellSplitterPointer(type);
+        if (type === "pointerup" || type === "pointercancel") {
+          activeSplitterPointers.delete(event.pointerId);
+        }
+      };
+      documentObject.addEventListener(type, listener, true);
+      splitterListeners.push({ type, listener });
+    }
+  };
+
+  const stopObservingShellSplitter = () => {
+    for (const { type, listener } of splitterListeners) {
+      documentObject?.removeEventListener?.(type, listener, true);
+    }
+    splitterListeners = [];
+    activeSplitterPointers.clear();
   };
 
   const restoreWails = () => {
@@ -389,6 +449,7 @@ export function createMeasurementController(environment = {}) {
     terminalPatch = undefined;
     restoreStorage?.();
     restoreStorage = undefined;
+    stopObservingShellSplitter();
     lastFrame = null;
   };
 
@@ -407,6 +468,7 @@ export function createMeasurementController(environment = {}) {
     frozenSummary = undefined;
     running = true;
     patchStorage();
+    observeShellSplitter();
     patchWails();
     patchTerminal();
     observeLongTasks();
