@@ -16,6 +16,8 @@ Do the work the user asks for: answer questions, read and edit code in `active` 
 
 Keep your own context lean. When a chunk of work is genuinely read-heavy or self-contained (sweeping many files, a long build, a broad refactor), hand it to a subagent and keep the outcome rather than the raw output. But for a normal request, just do it.
 
+{{subagent-choice}}
+
 Persist anything worth keeping in code or in `thoughts/shared/` — work survives conversation loss through files, not chat.
 
 ## The workspace windows
