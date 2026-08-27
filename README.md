@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="build/macos/appicon.svg" width="132" alt="qrouton cube">
+  <img src="build/appicon.svg" width="132" alt="qrouton cube">
 </p>
 
 <h1 align="center">qrouton</h1>
@@ -16,7 +16,9 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS</strong></a>
+  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download for macOS</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://aur.archlinux.org/packages/qrouton"><strong>Install on Arch Linux</strong></a>
 </p>
 
 Most engineering work does not fit neatly inside one repository. A product
@@ -58,7 +60,22 @@ newer.
 > unidentified-developer warning on first launch. Developer ID signing and
 > notarisation are supported by the release workflow but not configured yet.
 
-qrouton expects these tools on the Mac:
+## Install on Arch Linux
+
+qrouton is on the AUR as [`qrouton`](https://aur.archlinux.org/packages/qrouton),
+built from the release tag's source:
+
+```sh
+paru -S qrouton    # or: yay -S qrouton
+```
+
+The package pulls GTK4 and WebKitGTK 6, installs a desktop entry, and puts
+`qrouton` on `PATH`. Building it needs Go and npm, which the package declares as
+make dependencies.
+
+## What qrouton expects
+
+On either platform:
 
 - [Git](https://git-scm.com/)
 - [GitHub CLI](https://cli.github.com/), authenticated with `gh auth login`, or
@@ -228,6 +245,9 @@ sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev
 sudo pacman -S webkitgtk-6.0
 ```
 
+`make production` is the build a distribution package ships: the same binary
+with the workbench's real assets rather than the dev server's.
+
 Build the macOS bundle and universal release archive with:
 
 ```sh
@@ -252,6 +272,22 @@ To enable Developer ID signing and notarisation, configure:
 
 Without those secrets the workflow deliberately produces an ad-hoc signed
 bundle.
+
+The same Release pushes the AUR package. `packaging/aur/PKGBUILD` is the
+canonical copy; `packaging/aur/publish.sh <version>` points it at a tag,
+refreshes the source checksum and `.SRCINFO`, and with `--push` sends it to
+`ssh://aur@aur.archlinux.org/qrouton.git`. It needs Arch (`base-devel` and
+`pacman-contrib`) because makepkg owns the `.SRCINFO` format.
+
+One-time setup, in this order:
+
+1. Create an AUR account and add an SSH public key to it.
+2. Run `./packaging/aur/publish.sh --push <version>` once from an Arch machine
+   to claim the `qrouton` name — the AUR creates the repository on first push.
+3. Add `AUR_SSH_PRIVATE_KEY` to the repository secrets, optionally alongside
+   `AUR_MAINTAINER_NAME` and `AUR_MAINTAINER_EMAIL` for the commit author.
+
+Releases skip the AUR job until that secret exists.
 
 ## Contributing
 

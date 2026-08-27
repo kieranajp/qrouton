@@ -8,6 +8,12 @@ internal/desktop/assets/
 internal/share/assets/
 internal/desktop/frontend/node_modules/
 
+# makepkg leaves the downloaded source and its build trees beside the PKGBUILD.
+/packaging/aur/*.tar.gz
+/packaging/aur/*.pkg.tar.*
+/packaging/aur/src/
+/packaging/aur/pkg/
+
 # Riptide artifacts (cloud-synced)
 .humanlayer/tasks/
 .qrouton/

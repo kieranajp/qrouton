@@ -12,7 +12,7 @@ export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
-.PHONY: build eval front front-check test race vet fmt check app archive dist install uninstall clean
+.PHONY: build production eval front front-check test race vet fmt check app archive dist install uninstall clean
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
@@ -32,6 +32,12 @@ $(SHARE): $(FRONTEND)/node_modules $(SOURCES)
 
 build: front
 	go build -o $(BIN) .
+
+# What a distribution package ships: real assets rather than the dev server's.
+# GOFLAGS from the environment still reaches the compiler, which is how a
+# distro's own hardening and reproducibility flags get in.
+production: front
+	go build -tags production -o $(BIN) .
 
 app: front
 	./build/macos/package.sh

@@ -1,0 +1,21 @@
+pkgbase = qrouton
+	pkgdesc = Multi-repository workspace manager for coding agents
+	pkgver = 0.2.0
+	pkgrel = 1
+	url = https://github.com/kieranajp/qrouton
+	arch = x86_64
+	arch = aarch64
+	license = LicenseRef-unknown
+	makedepends = go
+	makedepends = npm
+	depends = gtk4
+	depends = webkitgtk-6.0
+	depends = hicolor-icon-theme
+	depends = git
+	optdepends = github-cli: repository discovery without a GITHUB_TOKEN
+	optdepends = xdg-utils: reveal a session directory in the file manager
+	optdepends = claude-code: Claude Code as the session agent
+	source = qrouton-0.2.0.tar.gz::https://github.com/kieranajp/qrouton/archive/refs/tags/v0.2.0.tar.gz
+	sha256sums = b8dab2b477b87b27a4caabc2278f624593e14b97b4e8f9b448b4ae18ff57ce39
+
+pkgname = qrouton

@@ -95,8 +95,13 @@ func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 // through a symlink, and quoting it is a directory Finder cannot find.
 func TestRevealArgvSelectsTheDirectoryVerbatim(t *testing.T) {
 	dir := "/sessions/octopus/../octopus/"
-	if got := RevealArgv(dir); len(got) != 3 || got[0] != "open" || got[1] != "-R" || got[2] != dir {
-		t.Fatalf("reveal argv = %q, want open -R %q", got, dir)
+	for goos, want := range map[string]string{
+		"darwin": "open -R " + dir,
+		"linux":  "xdg-open " + dir,
+	} {
+		if got := strings.Join(revealArgv(goos, dir), " "); got != want {
+			t.Fatalf("reveal argv on %s = %q, want %q", goos, got, want)
+		}
 	}
 }
 

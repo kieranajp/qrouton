@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=qrouton
+GenericName=Agent workbench
+Comment=Multi-repository workspace manager for coding agents
+Exec=qrouton
+Icon=qrouton
+Terminal=false
+Categories=Development;IDE;RevisionControl;
+Keywords=agent;coding;git;worktree;repository;workspace;
+StartupNotify=true
+StartupWMClass=qrouton

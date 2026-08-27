@@ -70,3 +70,31 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$RELEASE_VERSION" dist/*.zip dist/checksums.txt --clobber
+
+  # The AUR package builds from the release tag's source tarball, so it only
+  # needs the tag to exist — not the macOS job's artifacts.
+  aur:
+    runs-on: ubuntu-latest
+    container: archlinux:base-devel
+    steps:
+      - run: pacman -Syu --noconfirm --needed git pacman-contrib openssh
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - name: Publish to the AUR
+        env:
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          AUR_MAINTAINER_NAME: ${{ secrets.AUR_MAINTAINER_NAME }}
+          AUR_MAINTAINER_EMAIL: ${{ secrets.AUR_MAINTAINER_EMAIL }}
+        run: |
+          if [ -z "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "AUR_SSH_PRIVATE_KEY is unset; skipping the AUR push" >&2
+            exit 0
+          fi
+          # makepkg refuses to run as root, and this container is.
+          useradd --create-home builder
+          chown -R builder:builder .
+          # -p keeps the secrets in the environment but also root's HOME, which
+          # builder cannot write and makepkg needs.
+          su builder --preserve-environment -c \
+            'HOME=/home/builder ./packaging/aur/publish.sh --push "${{ github.event.release.tag_name }}"'

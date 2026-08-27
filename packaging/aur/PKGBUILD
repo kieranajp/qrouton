@@ -1,0 +1,57 @@
+# Maintainer: Kieran Patel <kieranajp@users.noreply.github.com>
+
+pkgname=qrouton
+pkgver=0.2.0
+pkgrel=1
+pkgdesc='Multi-repository workspace manager for coding agents'
+arch=('x86_64' 'aarch64')
+url='https://github.com/kieranajp/qrouton'
+# No LICENSE in the repository yet, so namcap has nothing to install under
+# /usr/share/licenses and reports the gap. Adding one makes this the SPDX id.
+license=('LicenseRef-unknown')
+# webkitgtk-6.0 pulls gtk4, but the workbench links both directly. git is
+# shelled out to rather than linked, so namcap cannot see that it is needed.
+depends=('gtk4' 'webkitgtk-6.0' 'hicolor-icon-theme' 'git')
+makedepends=('go' 'npm')
+optdepends=(
+	'github-cli: repository discovery without a GITHUB_TOKEN'
+	'xdg-utils: reveal a session directory in the file manager'
+	'claude-code: Claude Code as the session agent'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('b8dab2b477b87b27a4caabc2278f624593e14b97b4e8f9b448b4ae18ff57ce39')
+
+# The Go module cache and the frontend's node_modules are both fetched here, so
+# that build() needs no network of its own.
+prepare() {
+	cd "$pkgname-$pkgver"
+	go mod download -modcacherw
+	cd internal/desktop/frontend
+	npm ci
+}
+
+build() {
+	cd "$pkgname-$pkgver"
+	export CGO_CPPFLAGS="$CPPFLAGS"
+	export CGO_CFLAGS="$CFLAGS"
+	export CGO_CXXFLAGS="$CXXFLAGS"
+	export CGO_LDFLAGS="$LDFLAGS"
+	export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw'
+	make production
+}
+
+check() {
+	cd "$pkgname-$pkgver"
+	# The frontend suite wants a downloaded browser, so only the Go tests run.
+	go test -modcacherw ./...
+}
+
+package() {
+	cd "$pkgname-$pkgver"
+	install -Dm755 qrouton "$pkgdir/usr/bin/qrouton"
+	install -Dm644 build/linux/qrouton.desktop \
+		"$pkgdir/usr/share/applications/qrouton.desktop"
+	install -Dm644 build/appicon.svg \
+		"$pkgdir/usr/share/icons/hicolor/scalable/apps/qrouton.svg"
+	install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

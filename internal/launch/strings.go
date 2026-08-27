@@ -57,8 +57,10 @@ const (
 	treeDepth      = "2"
 	treeColourFlag = "-C"
 
+	darwinGOOS     = "darwin"
 	openCommand    = "open"
 	openRevealFlag = "-R"
+	xdgOpenCommand = "xdg-open"
 
 	findCommand   = "find"
 	findRoot      = "."

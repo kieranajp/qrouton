@@ -3,6 +3,7 @@ package launch
 import (
 	_ "embed"
 	"os"
+	"runtime"
 
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -38,10 +39,19 @@ func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
 }
 
-// RevealArgv shows a directory in Finder. Revealing rather than opening leaves
-// Finder on the sessions root with the session itself selected.
+// RevealArgv shows a directory in the desktop's file manager.
 func RevealArgv(dir string) []string {
-	return []string{openCommand, openRevealFlag, dir}
+	return revealArgv(runtime.GOOS, dir)
+}
+
+// revealArgv reveals rather than opens on macOS, which leaves Finder on the
+// sessions root with the session itself selected. No Linux file manager is
+// portably asked for that, so there the directory is opened instead.
+func revealArgv(goos, dir string) []string {
+	if goos == darwinGOOS {
+		return []string{openCommand, openRevealFlag, dir}
+	}
+	return []string{xdgOpenCommand, dir}
 }
 
 // Launch stamps the session's support files and returns what the workbench runs
