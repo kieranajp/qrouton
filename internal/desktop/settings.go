@@ -85,10 +85,17 @@ func (s *Settings) Load() SettingsView {
 	}
 }
 
-// Save validates Root, Editor, Launch, then Linear, refusing on the first
+// Save validates Orgs, Root, Editor, Launch, then Linear, refusing on the first
 // problem and writing nothing if any field fails. On success it writes both
-// files and updates every live config field except Root.
+// files and updates every live config field except Root. Orgs comes first
+// because validateRoot creates the directory it is given, so a refusal behind
+// it would leave that directory behind.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
+	orgs := dedupOrgs(in.Orgs)
+	if len(orgs) == 0 {
+		return SaveResult{}, fmt.Errorf("orgs: %w", ErrNoOwners)
+	}
+
 	root, expandedRoot, err := validateRoot(in.Root)
 	if err != nil {
 		return SaveResult{}, err
@@ -120,8 +127,6 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
-
-	orgs := dedupOrgs(in.Orgs)
 
 	next := *s.cfg
 	next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
