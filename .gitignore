@@ -14,3 +14,4 @@ internal/desktop/frontend/node_modules/
 
 # Riptide machine-local override (workspace.json is shared)
 .humanlayer/workspace.local.json
+thoughts/
