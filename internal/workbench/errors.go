@@ -9,5 +9,6 @@ var (
 	// registry.
 	ErrWindowIDUnavailable = errors.New("workbench returned no window id")
 
-	ErrWorkbenchUnreachable = errors.New("workbench control socket unreachable")
+	ErrWorkbenchUnreachable     = errors.New("workbench control socket unreachable")
+	ErrInvalidProcessDescriptor = errors.New("invalid active-workbench descriptor")
 )

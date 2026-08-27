@@ -4,11 +4,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -168,6 +170,7 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recor
 	w.mu.Unlock()
 
 	w.announce(owner)
+	w.persist(owner)
 	return id, nil
 }
 
@@ -246,6 +249,8 @@ type document struct {
 	Text          string `json:"text"`
 	Format        string `json:"format"`
 	Source        string `json:"source"`
+	Path          string `json:"path,omitempty"`
+	Kind          string `json:"kind,omitempty"`
 	Line          int    `json:"line"`
 	To            int    `json:"to"`
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
@@ -269,10 +274,17 @@ func (w *Windows) Content(id string) (document, error) {
 		viewportEpoch = window.viewportEpoch
 	}
 	first, last, _ := window.opts.Span.Bounds()
+	var path, kind string
+	if window.opts.Source != "" && window.session != nil {
+		path = filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
+		kind = status.DocumentKind(window.opts.Source)
+	}
 	return document{
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),
 		Source:        window.opts.Source,
+		Path:          path,
+		Kind:          kind,
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
@@ -443,6 +455,7 @@ func (w *Windows) discard(id string) {
 		process.stop()
 	}
 	w.announce(window.session)
+	w.persist(window.session)
 }
 
 func (w *Windows) oldest(owner *sessionState) string {
@@ -465,16 +478,19 @@ func (w *Windows) observe(changed func(owner *sessionState)) {
 	w.changed = changed
 }
 
-// announce tells one session's pages what it has open. A background session
-// docking a tab must not redraw the foreground's tab strip.
-func (w *Windows) announce(owner *sessionState) {
+func (w *Windows) persist(owner *sessionState) {
 	w.mu.Lock()
 	changed := w.changed
 	w.mu.Unlock()
-	w.emit(windowsEvent, w.surfaces(owner))
 	if changed != nil {
 		changed(owner)
 	}
+}
+
+// announce tells one session's pages what it has open. A background session
+// docking a tab must not redraw the foreground's tab strip.
+func (w *Windows) announce(owner *sessionState) {
+	w.emit(windowsEvent, w.surfaces(owner))
 }
 
 // drawnWindow is one window as its surface draws it.

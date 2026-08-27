@@ -62,6 +62,14 @@ func (r *wailsRenderer) Retitle(name, title string) {
 	})
 }
 
+func (r *wailsRenderer) Focus(name string) {
+	r.onMain(func() {
+		if window, ok := r.app.Window.Get(name); ok {
+			window.Focus()
+		}
+	})
+}
+
 func (r *wailsRenderer) Emit(event string, payload any) {
 	r.app.Event.Emit(event, payload)
 }

@@ -2,6 +2,7 @@
 package prompts
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"fmt"
@@ -42,7 +43,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md agents/*.md skills/*/SKILL.md
+//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md skills/*/SKILL.md
 var embedded embed.FS
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
@@ -58,6 +59,13 @@ func (l *FSLoader) Load(ctx context.Context, id ID) (Prompt, error) {
 	content, err := fs.ReadFile(l.fsys, path)
 	if err != nil {
 		return Prompt{}, fmt.Errorf("load prompt %q: %w", id, err)
+	}
+	if bytes.Contains(content, []byte(subagentChoicePlaceholder)) {
+		choice, err := fs.ReadFile(l.fsys, subagentChoiceFileName)
+		if err != nil {
+			return Prompt{}, fmt.Errorf("load prompt %q: %w", id, err)
+		}
+		content = bytes.ReplaceAll(content, []byte(subagentChoicePlaceholder), choice)
 	}
 	return Prompt{ID: id, Content: content}, nil
 }

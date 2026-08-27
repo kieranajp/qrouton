@@ -15,6 +15,10 @@ const (
 	RoleRepoEditing       = "role-editing"
 	RoleRepoReference     = "role-reference"
 	RoleRepoOff           = "role-off"
+	RoleArtifactPlan      = "artifact-plan"
+	RoleArtifactSpec      = "artifact-spec"
+	RoleArtifactResearch  = "artifact-research"
+	RoleArtifactNote      = "artifact-note"
 )
 
 // The stylesheet CSS renders, and the path the workbench serves it at.
@@ -24,7 +28,8 @@ const (
 
 	cssHeader = "/* Catppuccin Macchiato, rendered from internal/theme. The neutral ramp is\n" +
 		"   the palette verbatim; each accent carries one job and must not be reused.\n" +
-		"   Nothing generates a file: the workbench serves this. */\n"
+		"   No copy is checked in: the workbench serves this, and a shared page\n" +
+		"   carries it. */\n"
 	cssRootOpen  = ":root {\n"
 	cssRootClose = "}\n"
 

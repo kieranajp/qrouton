@@ -45,6 +45,31 @@ make build
 ./qrouton
 ```
 
+To build the macOS application bundle locally:
+
+```sh
+make app                         # dist/qrouton.app
+make dist VERSION=0.1.0          # app plus a shareable universal zip
+```
+
+The bundle contains both Apple silicon and Intel slices and targets macOS 12 or
+newer. Finder-launched builds add the conventional Homebrew and per-user CLI
+directories to `PATH`, so `gh`, supported agents, and configured editors remain
+discoverable.
+
+GitHub Actions builds and attaches the zip when a non-draft GitHub Release is
+created for a numeric tag such as `v0.1.0`. Draft releases do not emit the
+workflow's `release: created` event. Without signing secrets the result is
+ad-hoc signed and macOS will show its unidentified-developer warning. For a
+Developer ID signed and notarised build, configure these repository secrets:
+
+- `MACOS_CERTIFICATE` — base64-encoded Developer ID Application `.p12`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `MACOS_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
 `make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell tab, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
 
 qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work`. Set `orgs` by hand before assembling your first session: with none, the repository list is empty. Configuration is stored at:
@@ -78,7 +103,34 @@ Useful flags:
 
 ```sh
 ./qrouton --runner codex     # preselect a supported coding agent
+./qrouton --linear-issue LIF-2841
 ```
+
+## Open Linear issues in qrouton 🔗
+
+Linear Desktop can send **Work on issue → Custom script** to qrouton's existing New session flow. Open qrouton's Settings and save the prefilled **Linear custom script** field. If `~/.linear/coding-tools.json` does not exist, qrouton creates it with the running executable's absolute path:
+
+```json
+{
+  "openIssue": {
+    "path": "/Users/you/.local/bin/qrouton",
+    "args": ["--linear-issue", "{{issue.identifier}}"],
+    "env": ["LINEAR_PROMPT"]
+  }
+}
+```
+
+The field remains a plain JSON editor: an existing file is loaded verbatim, and qrouton validates it as a JSON object before writing it back.
+
+The flag accepts an identifier such as `LIF-2841`, `https://linear.app/issue/LIF-2841`, or a workspace URL such as `https://linear.app/lifesum/issue/LIF-2841/title`. It validates and persists the workspace-free form `https://linear.app/issue/LIF-2841`. Repository roles, agent, mode, branch and Create remain interactive.
+
+The generated `env` entry lets Linear pass its composed `LINEAR_PROMPT` alongside the issue. On the session's first launch, qrouton sends its own Assistant or RPI opening message first, followed by `Linear request:` and Linear's prompt. The prompt is consumed once and is not repeated on agent resume. Ticket fetching and session creation still happen later in the window.
+
+The command succeeds when a running workbench accepts the request, or when a newly launched workbench is ready with the request queued. `LINEAR_API_KEY` must be present in the environment of the workbench process: a running workbench keeps the environment it started with, and Linear does not guarantee that a cold custom-script launch inherits the environment from your usual shell. qrouton does not store the key.
+
+Repeated actions for the same issue reveal its open draft or preferred existing session. A different issue is refused while any New session draft is open, without replacing that draft. If a workbench from an older qrouton version is running, quit it and retry so the installed version can start.
+
+To remove the integration, delete `openIssue` from `~/.linear/coding-tools.json` or point it back to the previous coding tool. To roll back the binary, quit the workbench before installing the earlier version; pasted Linear and Asana ticket URLs continue to work independently of this integration.
 
 ## Session shape 🗂️
 

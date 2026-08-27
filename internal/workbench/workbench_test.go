@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -175,6 +177,24 @@ func TestClientSurfacesTheAnswersError(t *testing.T) {
 	}
 }
 
+func TestOpenLinearIssueUsesTheTypedProcessRequest(t *testing.T) {
+	socket, requests := echoServer(t, func(req Request) Response {
+		if req.Op == OpOpenLinearIssue {
+			return Response{Outcome: "queued"}
+		}
+		return Response{}
+	})
+	outcome, err := OpenLinearIssue(context.Background(), socket, "https://linear.app/issue/LIF-2841", "Fix it")
+	if err != nil || outcome != "queued" {
+		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
+	}
+	got := <-requests
+	if got.Op != OpOpenLinearIssue || got.LinearIssue == nil ||
+		got.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" || got.LinearIssue.Prompt != "Fix it" {
+		t.Fatalf("request = %+v", got)
+	}
+}
+
 // A window id the desktop process answered without is an orphan the caller
 // could never address again.
 func TestClientRejectsAnOpenWithNoWindowID(t *testing.T) {
@@ -234,6 +254,220 @@ func TestRunningSweepsStaleSockets(t *testing.T) {
 	if _, err := os.Stat(log); err != nil {
 		t.Fatalf("process log was swept along with the stale socket: %v", err)
 	}
+}
+
+func TestDiscoveryPrefersThePublishedProcessSocket(t *testing.T) {
+	dir := shortSocketDir(t)
+	process := filepath.Join(dir, "process"+socketSuffix)
+	session := filepath.Join(dir, "session"+socketSuffix)
+	listenAt(t, process)
+	listenAt(t, session)
+	descriptor := processDescriptor{Version: descriptorVersion, Socket: process, PID: 123}
+	if err := publish(dir, descriptor); err != nil {
+		t.Fatal(err)
+	}
+	got := discover(dir)
+	if got.Socket != process || got.Legacy {
+		t.Fatalf("discover = %+v, want only the published process socket", got)
+	}
+	info, err := os.Stat(filepath.Join(dir, activeName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != descriptorMode {
+		t.Fatalf("descriptor mode = %v, want %v", info.Mode().Perm(), os.FileMode(descriptorMode))
+	}
+}
+
+func TestPublishedRequiresTheLiveDescriptorToNameTheSocket(t *testing.T) {
+	dir := shortSocketDir(t)
+	process := filepath.Join(dir, "process"+socketSuffix)
+	other := filepath.Join(dir, "other"+socketSuffix)
+	listenAt(t, process)
+	listenAt(t, other)
+	if published(dir, process) {
+		t.Fatal("an unpublished listener reported ready")
+	}
+	if err := publish(dir, processDescriptor{Version: descriptorVersion, Socket: other, PID: 1}); err != nil {
+		t.Fatal(err)
+	}
+	if published(dir, process) {
+		t.Fatal("a listener named by another descriptor reported ready")
+	}
+	if err := publish(dir, processDescriptor{Version: descriptorVersion, Socket: process, PID: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if !published(dir, process) {
+		t.Fatal("the live published process endpoint did not report ready")
+	}
+}
+
+func TestDiscoverySweepsAStaleDescriptorAndReportsLegacySockets(t *testing.T) {
+	dir := shortSocketDir(t)
+	dead := filepath.Join(dir, "dead"+socketSuffix)
+	if err := os.WriteFile(dead, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := publish(dir, processDescriptor{Version: descriptorVersion, Socket: dead, PID: 123}); err != nil {
+		t.Fatal(err)
+	}
+	legacy := filepath.Join(dir, "legacy"+socketSuffix)
+	listenAt(t, legacy)
+
+	got := discover(dir)
+	if got.Socket != "" || !got.Legacy {
+		t.Fatalf("discover = %+v, want a legacy workbench", got)
+	}
+	for _, path := range []string{filepath.Join(dir, activeName), dead} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("stale path %q survived: %v", path, err)
+		}
+	}
+}
+
+func TestUnpublishCannotRemoveAReplacementDescriptor(t *testing.T) {
+	dir := shortSocketDir(t)
+	old := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "old"+socketSuffix), PID: 1}
+	fresh := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "fresh"+socketSuffix), PID: 2}
+	if err := publish(dir, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := publish(dir, fresh); err != nil {
+		t.Fatal(err)
+	}
+	unpublish(dir, old)
+	got, _, ok := readDescriptor(dir)
+	if !ok || got != fresh {
+		t.Fatalf("descriptor after old process exit = %+v, %v; want %+v", got, ok, fresh)
+	}
+	unpublish(dir, fresh)
+	if _, err := os.Stat(filepath.Join(dir, activeName)); !os.IsNotExist(err) {
+		t.Fatalf("fresh descriptor survived its own unpublish: %v", err)
+	}
+}
+
+func TestStaleDescriptorRemovalCannotRaceAReplacementPublication(t *testing.T) {
+	dir := shortSocketDir(t)
+	old := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "old"+socketSuffix), PID: 1}
+	fresh := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "fresh"+socketSuffix), PID: 2}
+	if err := publish(dir, old); err != nil {
+		t.Fatal(err)
+	}
+	listenAt(t, fresh.Socket)
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		<-start
+		discover(dir)
+	}()
+	go func() {
+		defer wg.Done()
+		<-start
+		if err := publish(dir, fresh); err != nil {
+			t.Errorf("publish replacement: %v", err)
+		}
+	}()
+	close(start)
+	wg.Wait()
+	got, _, ok := readDescriptor(dir)
+	if !ok || got != fresh {
+		t.Fatalf("descriptor after stale removal = %+v, %v; want %+v", got, ok, fresh)
+	}
+}
+
+func TestDescriptorReplacementSurvivesConcurrentConditionalDeletion(t *testing.T) {
+	dir := shortSocketDir(t)
+	old := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "old"+socketSuffix), PID: 1}
+	fresh := processDescriptor{Version: descriptorVersion, Socket: filepath.Join(dir, "fresh"+socketSuffix), PID: 2}
+	for range 50 {
+		if err := publish(dir, old); err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			unpublish(dir, old)
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			if err := publish(dir, fresh); err != nil {
+				t.Errorf("publish replacement: %v", err)
+			}
+		}()
+		close(start)
+		wg.Wait()
+		got, _, ok := readDescriptor(dir)
+		if !ok || got != fresh {
+			t.Fatalf("descriptor after concurrent replacement = %+v, %v; want %+v", got, ok, fresh)
+		}
+	}
+}
+
+func TestPublishRejectsAnEndpointOutsideThePerUserDirectory(t *testing.T) {
+	dir := shortSocketDir(t)
+	for _, descriptor := range []processDescriptor{
+		{Version: descriptorVersion, Socket: filepath.Join(t.TempDir(), "foreign"+socketSuffix), PID: 1},
+		{Version: descriptorVersion, Socket: filepath.Join(dir, "not-a-socket"), PID: 1},
+		{Version: descriptorVersion + 1, Socket: filepath.Join(dir, "future"+socketSuffix), PID: 1},
+	} {
+		if err := publish(dir, descriptor); !errors.Is(err, ErrInvalidProcessDescriptor) {
+			t.Fatalf("publish(%+v) = %v, want %v", descriptor, err, ErrInvalidProcessDescriptor)
+		}
+	}
+}
+
+func TestLaunchLockSerializesCriticalSections(t *testing.T) {
+	dir := shortSocketDir(t)
+	var inside atomic.Int64
+	var overlapped atomic.Bool
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	done := make(chan error, 2)
+	for range 2 {
+		go func() {
+			done <- withLaunchLock(dir, func() error {
+				if inside.Add(1) != 1 {
+					overlapped.Store(true)
+				}
+				entered <- struct{}{}
+				<-release
+				inside.Add(-1)
+				return nil
+			})
+		}()
+	}
+	<-entered
+	select {
+	case <-entered:
+		close(release)
+		t.Fatal("both launch critical sections ran together")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	for range 2 {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if overlapped.Load() {
+		t.Fatal("launch lock allowed overlap")
+	}
+}
+
+func shortSocketDir(t *testing.T) string {
+	t.Helper()
+	dir, err := os.MkdirTemp("/tmp", "qrwb")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	return dir
 }
 
 // listenAt serves a socket at path until the test ends.

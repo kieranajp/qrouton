@@ -10,6 +10,8 @@ const (
 	frontmatterKeySep         = ":"
 	frontmatterNameKey        = "name"
 	frontmatterDescriptionKey = "description"
+	subagentChoiceFileName    = "subagent-choice.md"
+	subagentChoicePlaceholder = "{{subagent-choice}}"
 
 	codexNameFormat        = "name = %s\ndescription = %s\n"
 	codexSandboxFormat     = "sandbox_mode = %s\n"

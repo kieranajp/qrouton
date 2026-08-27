@@ -2,11 +2,53 @@ package desktop
 
 import (
 	"context"
+	"reflect"
+	"sync"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/status"
 )
+
+// Chrome is the current workbench state exposed to a page that subscribes
+// after the initial update.
+type Chrome struct {
+	mu          sync.RWMutex
+	fields      status.Fields
+	initialized bool
+	emit        emitter
+}
+
+func newChrome(emit emitter) *Chrome {
+	return &Chrome{
+		fields: status.Fields{
+			Sessions:  []status.SessionRow{},
+			Documents: []status.Document{},
+			Repos:     []status.RepoStat{},
+		},
+		emit: emit,
+	}
+}
+
+// Snapshot returns the most recently published chrome state.
+func (c *Chrome) Snapshot() status.Fields {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.fields
+}
+
+func (c *Chrome) publish(event string, payload any) {
+	fields := payload.(status.Fields)
+	c.mu.Lock()
+	if c.initialized && reflect.DeepEqual(c.fields, fields) {
+		c.mu.Unlock()
+		return
+	}
+	c.fields = fields
+	c.initialized = true
+	c.mu.Unlock()
+	c.emit(event, fields)
+}
 
 // watchChrome pushes what the window can observe about the session on screen
 // until the context is cancelled. Escalation rewrites the manifest, so

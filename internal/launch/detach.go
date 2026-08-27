@@ -31,10 +31,12 @@ const (
 // resume. An empty SessionRoot opens on no session at all, which is where the
 // assembly overlay draws. It builds each session's own command as it boots it.
 type WorkbenchSpec struct {
-	SessionRoot string `json:"session_root,omitempty"`
-	Socket      string `json:"socket"`
-	Runner      string `json:"runner,omitempty"`
-	Resume      bool   `json:"resume,omitempty"`
+	SessionRoot  string `json:"session_root,omitempty"`
+	Socket       string `json:"socket"`
+	Runner       string `json:"runner,omitempty"`
+	Resume       bool   `json:"resume,omitempty"`
+	LinearIssue  string `json:"linear_issue,omitempty"`
+	LinearPrompt string `json:"linear_prompt,omitempty"`
 	// Empty when the editor could not be resolved, which costs the document chip
 	// and must not keep the window shut.
 	Editor EditorCommand `json:"editor"`
@@ -67,10 +69,12 @@ func WorkbenchArgv(qroutonBin string, spec WorkbenchSpec) []string {
 // including a terminal closed the moment the prompt comes back; its stdio goes
 // to log for the same reason.
 func Detach(argv, env []string, socket, log string) error {
-	return detach(argv, env, socket, log, readyTimeout, readyInterval)
+	return detach(argv, env, socket, log, readyTimeout, readyInterval, workbench.Published)
 }
 
-func detach(argv, env []string, socket, log string, timeout, interval time.Duration) error {
+func detach(argv, env []string, socket, log string, timeout, interval time.Duration,
+	ready func(string) bool,
+) error {
 	if err := os.MkdirAll(filepath.Dir(log), dirMode); err != nil {
 		return err
 	}
@@ -90,7 +94,7 @@ func detach(argv, env []string, socket, log string, timeout, interval time.Durat
 	exited := make(chan error, 1)
 	go func() { exited <- cmd.Wait() }()
 
-	if err := waitReady(socket, exited, timeout, interval); err != nil {
+	if err := waitReady(socket, exited, timeout, interval, ready); err != nil {
 		// A workbench that never answered has no window and no way to be found
 		// again, so it does not get to linger.
 		if cmd.Process != nil {
@@ -101,13 +105,15 @@ func detach(argv, env []string, socket, log string, timeout, interval time.Durat
 	return nil
 }
 
-// waitReady blocks until the socket accepts a connection, the child dies, or
-// the deadline passes. Dialling is checked before the child's fate so a process
-// that answered and then exited still counts as started.
-func waitReady(socket string, exited <-chan error, timeout, interval time.Duration) error {
+// waitReady blocks until the process endpoint is published, the child dies, or
+// the deadline passes. Readiness is checked before the child's fate so a process
+// that published and then exited still counts as started.
+func waitReady(socket string, exited <-chan error, timeout, interval time.Duration,
+	ready func(string) bool,
+) error {
 	deadline := time.After(timeout)
 	for {
-		if workbench.Answered(socket) {
+		if ready(socket) {
 			return nil
 		}
 		select {

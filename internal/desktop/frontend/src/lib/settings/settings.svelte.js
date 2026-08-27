@@ -3,13 +3,20 @@ import { saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
 
 /**
- * settings is the panel's one screen: config.Config's four fields, loaded on
- * construction. onClose is called once a save needs nothing further from the
- * user — a save asking for a restart stays open behind a banner instead.
+ * settings is the panel's one screen, loaded on construction. onClose is
+ * called once a save needs nothing further from the user — a save asking for
+ * a restart stays open behind a banner instead.
  * @param {() => void} onClose
  */
 export function settings(onClose) {
-  const form = $state({ orgs: /** @type {string[]} */ ([]), root: "", editor: "", launch: "" });
+  const form = $state({
+    orgs: /** @type {string[]} */ ([]),
+    root: "",
+    editor: "",
+    launch: "",
+    linear: "",
+    linearPath: "~/.linear/coding-tools.json",
+  });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
   let status = $state("");
@@ -21,6 +28,9 @@ export function settings(onClose) {
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
+    form.linear = loaded?.linear ?? "";
+    form.linearPath = loaded?.linearPath ?? form.linearPath;
+    if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
   });
 
   function add() {
@@ -42,6 +52,7 @@ export function settings(onClose) {
         root: form.root,
         editor: form.editor,
         launch: form.launch,
+        linear: form.linear,
       });
     } catch (thrown) {
       err = thrown;

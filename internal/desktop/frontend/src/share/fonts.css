@@ -1,0 +1,8 @@
+/* Latin weight axes only, rather than the whole families tokens/fonts.css
+   loads: every byte here is base64-inlined into the file a colleague opens.
+   Italic comes along because emphasis is ordinary in prose and a synthesised
+   oblique mono looks like a rendering fault. */
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght-italic.css";
+@import "@fontsource-variable/space-grotesk/wght.css";
+@import "@fontsource-variable/instrument-sans/wght.css";

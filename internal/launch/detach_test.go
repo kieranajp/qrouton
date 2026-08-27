@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 // shortDir is a directory for unix sockets. macOS caps the path at 104 bytes and
@@ -46,7 +48,8 @@ func TestDetachReturnsOnceTheSocketAnswersAndKeepsTheLog(t *testing.T) {
 	listen(t, socket)
 	log := filepath.Join(dir, "nested", "workbench.log")
 
-	if err := Detach([]string{"/bin/sh", "-c", "echo up; sleep 5"}, os.Environ(), socket, log); err != nil {
+	if err := detach([]string{"/bin/sh", "-c", "echo up; sleep 5"}, os.Environ(), socket, log,
+		readyTimeout, readyInterval, workbench.Answered); err != nil {
 		t.Fatal(err)
 	}
 	deadline := time.Now().Add(2 * time.Second)
@@ -87,7 +90,8 @@ func TestDetachKillsAWorkbenchThatNeverAnswers(t *testing.T) {
 	log := filepath.Join(dir, "workbench.log")
 
 	err := detach([]string{"/bin/sh", "-c", "sleep 0.4; echo late"}, os.Environ(),
-		filepath.Join(dir, "never.sock"), log, 100*time.Millisecond, 10*time.Millisecond)
+		filepath.Join(dir, "never.sock"), log, 100*time.Millisecond, 10*time.Millisecond,
+		workbench.Answered)
 	if !errors.Is(err, ErrWorkbenchNotReady) {
 		t.Fatalf("error = %v, want %v", err, ErrWorkbenchNotReady)
 	}
@@ -103,19 +107,50 @@ func TestWaitReadyReportsWhatWentWrong(t *testing.T) {
 	dir := shortDir(t)
 	socket := filepath.Join(dir, "control.sock")
 	listen(t, socket)
-	if err := waitReady(socket, make(chan error), time.Second, 10*time.Millisecond); err != nil {
+	if err := waitReady(socket, make(chan error), time.Second, 10*time.Millisecond, workbench.Answered); err != nil {
 		t.Fatalf("waitReady on a listening socket = %v, want nil", err)
 	}
 
 	exited := make(chan error, 1)
 	exited <- errors.New("exit status 1")
-	if err := waitReady(filepath.Join(dir, "never.sock"), exited, time.Second, 10*time.Millisecond); !errors.Is(err, ErrWorkbenchExited) {
+	if err := waitReady(filepath.Join(dir, "never.sock"), exited, time.Second, 10*time.Millisecond,
+		workbench.Answered); !errors.Is(err, ErrWorkbenchExited) {
 		t.Fatalf("waitReady after a dead child = %v, want %v", err, ErrWorkbenchExited)
 	}
 
-	err := waitReady(filepath.Join(dir, "never.sock"), make(chan error), 50*time.Millisecond, 10*time.Millisecond)
+	err := waitReady(filepath.Join(dir, "never.sock"), make(chan error), 50*time.Millisecond,
+		10*time.Millisecond, workbench.Answered)
 	if !errors.Is(err, ErrWorkbenchNotReady) {
 		t.Fatalf("waitReady with no child = %v, want %v", err, ErrWorkbenchNotReady)
+	}
+}
+
+func TestWaitReadyDoesNotAcceptAnUnpublishedSocket(t *testing.T) {
+	dir := shortDir(t)
+	socket := filepath.Join(dir, "control.sock")
+	listen(t, socket)
+	published := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		done <- waitReady(socket, make(chan error), time.Second, time.Millisecond,
+			func(string) bool {
+				select {
+				case <-published:
+					return true
+				default:
+					return false
+				}
+			})
+	}()
+	time.Sleep(20 * time.Millisecond)
+	select {
+	case err := <-done:
+		t.Fatalf("waitReady returned before publication: %v", err)
+	default:
+	}
+	close(published)
+	if err := <-done; err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -123,7 +158,7 @@ func TestWaitReadyReportsWhatWentWrong(t *testing.T) {
 // the round trip is a workbench that opens on nothing.
 func TestWorkbenchSpecRoundTrips(t *testing.T) {
 	spec := WorkbenchSpec{SessionRoot: "/sessions/api", Socket: "/tmp/qrouton-sock/501/ab.sock",
-		Runner: "codex", Resume: true}
+		Runner: "codex", Resume: true, LinearIssue: "https://linear.app/issue/LIF-2841", LinearPrompt: "Fix it"}
 
 	argv := WorkbenchArgv("/bin/qrouton", spec)
 	if argv[0] != "/bin/qrouton" || argv[1] != "--workbench-spec" || len(argv) != 3 {
@@ -134,7 +169,8 @@ func TestWorkbenchSpecRoundTrips(t *testing.T) {
 		t.Fatal(err)
 	}
 	if parsed.SessionRoot != spec.SessionRoot || parsed.Socket != spec.Socket ||
-		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume {
+		parsed.Runner != spec.Runner || parsed.Resume != spec.Resume || parsed.LinearIssue != spec.LinearIssue ||
+		parsed.LinearPrompt != spec.LinearPrompt {
 		t.Fatalf("parsed spec = %#v, want %#v", parsed, spec)
 	}
 }

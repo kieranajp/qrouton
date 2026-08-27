@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Document find fixture</title>
+    <style>
+      body { margin: 0; }
+      #root { width: 320px; height: 90px; overflow-y: auto; }
+      #before { height: 140px; }
+      p, .diff-row { margin: 0 0 24px; }
+      mark.current { outline: 2px solid blue; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="before"></div>
+      <main id="content">
+        <p id="first">Alpha <strong>beta</strong> appears across markup.</p>
+        <p id="second">Another ALPHA beta appears here.</p>
+        <div class="diff-row">alpha beta in a diff</div>
+      </main>
+    </div>
+    <script type="module" src="./find-fixture.js"></script>
+  </body>
+</html>

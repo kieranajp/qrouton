@@ -3,9 +3,11 @@ package desktop
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"net"
 	"os"
 
+	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -14,8 +16,10 @@ import (
 type controlHooks struct {
 	// picker queues the repository picker on the session it names. Nothing is
 	// drawn until the user arrives there.
-	picker    func(req workbench.PickerRequest) error
-	attention func(activity string)
+	picker      func(req workbench.PickerRequest) error
+	attention   func(activity string)
+	linearIssue func(ticket, prompt string) (string, error)
+	focus       func()
 }
 
 // control serves the workbench port over a unix socket: one request per
@@ -128,6 +132,25 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 			c.hooks.attention(req.Activity)
 		}
 		return workbench.Response{}
+	case workbench.OpOpenLinearIssue:
+		if c.owner != nil || c.hooks.linearIssue == nil {
+			return workbench.Response{Error: ErrProcessIngressOnly.Error()}
+		}
+		if req.LinearIssue == nil || req.LinearIssue.Ticket == "" {
+			return workbench.Response{Error: ErrNoLinearIssue.Error()}
+		}
+		canonical, err := ticket.CanonicalLinearURL(req.LinearIssue.Ticket)
+		if err != nil {
+			return workbench.Response{Error: err.Error()}
+		}
+		outcome, err := c.hooks.linearIssue(canonical, req.LinearIssue.Prompt)
+		if c.hooks.focus != nil && (err == nil || errors.Is(err, ErrAssemblyDraftConflict)) {
+			c.hooks.focus()
+		}
+		if err != nil {
+			return workbench.Response{Error: err.Error()}
+		}
+		return workbench.Response{Outcome: outcome}
 	default:
 		return workbench.Response{Error: unknownOperation(req.Op).Error()}
 	}

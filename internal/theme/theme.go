@@ -19,14 +19,19 @@ const (
 	Subtext1  = "#b8c0e0"
 	Text      = "#cad3f5"
 	Rosewater = "#f4dbd6"
+	Flamingo  = "#f0c6c6"
+	Pink      = "#f5bde6"
 
 	Blue     = "#8aadf4"
+	Lavender = "#b7bdf8"
 	Sapphire = "#7dc4e4"
+	Sky      = "#91d7e3"
 	Teal     = "#8bd5ca"
 	Green    = "#a6da95"
 	Yellow   = "#eed49f"
 	Peach    = "#f5a97f"
 	Red      = "#ed8796"
+	Maroon   = "#ee99a0"
 	Mauve    = "#c6a0f6"
 )
 
@@ -47,6 +52,10 @@ var Roles = map[string]string{
 	RoleRepoEditing:       Green,
 	RoleRepoReference:     Blue,
 	RoleRepoOff:           Overlay1,
+	RoleArtifactPlan:      Lavender,
+	RoleArtifactSpec:      Pink,
+	RoleArtifactResearch:  Sky,
+	RoleArtifactNote:      Flamingo,
 }
 
 // roleOrder fixes the render order; ranging Roles would reshuffle it each time.
@@ -55,6 +64,7 @@ var roleOrder = []string{
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,
+	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote,
 }
 
 type token struct{ name, value string }
@@ -73,13 +83,18 @@ var ramp = []token{
 	{"ctp-subtext-1", Subtext1},
 	{"ctp-text", Text},
 	{"ctp-rosewater", Rosewater},
+	{"ctp-flamingo", Flamingo},
+	{"ctp-pink", Pink},
 	{"ctp-blue", Blue},
+	{"ctp-lavender", Lavender},
 	{"ctp-sapphire", Sapphire},
+	{"ctp-sky", Sky},
 	{"ctp-teal", Teal},
 	{"ctp-green", Green},
 	{"ctp-yellow", Yellow},
 	{"ctp-peach", Peach},
 	{"ctp-red", Red},
+	{"ctp-maroon", Maroon},
 	{"ctp-mauve", Mauve},
 }
 

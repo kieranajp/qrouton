@@ -3,13 +3,15 @@
   import Chip from "../core/Chip.svelte";
   import TextField from "../forms/TextField.svelte";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
     root = $bindable(""),
     editor = $bindable(""),
     launch = $bindable(""),
+    linear = $bindable(""),
+    linearPath = "~/.linear/coding-tools.json",
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -60,6 +62,16 @@
   valueVoice="literal"
   help={fields.launch ?? "JSON, keyed by runner id"}
   helpTone={fields.launch ? "failed" : "muted"} />
+
+<TextField
+  label="Linear custom script"
+  multiline
+  rows="6"
+  bind:value={linear}
+  valueVoice="literal"
+  help={fields.linear ?? "Used by Work on issue → Custom script. Save writes"}
+  helpLiteral={fields.linear ? "" : linearPath}
+  helpTone={fields.linear ? "failed" : "muted"} />
 
 {#if restartRequired}
   <div class="banner">

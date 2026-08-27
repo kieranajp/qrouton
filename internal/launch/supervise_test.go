@@ -88,6 +88,42 @@ func TestSuperviseRelaunchesWithContinueAfterDeescalation(t *testing.T) {
 	assertLinkTargetContains(t, dir+"/CLAUDE.md", "ASSISTANT.md")
 }
 
+func TestSuperviseConsumesTheExternalPromptOnTheFirstLaunchOnly(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeAssistant)
+	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte("Fix the login regression."), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		return len(argvs) == 1, nil
+	})
+
+	// Even a restart asking to resume must start fresh when the prompt is still
+	// pending: otherwise the external request would never enter the conversation.
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("expected two launches, got %d", len(argvs))
+	}
+	if first := strings.Join(argvs[0], " "); !strings.Contains(first, openingMessageAssistant) ||
+		!strings.Contains(first, linearRequestSeparator+"Fix the login regression.") ||
+		strings.Contains(first, claudeContinueFlag) {
+		t.Fatalf("first launch did not layer the external prompt into a fresh opening: %v", argvs[0])
+	}
+	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) ||
+		strings.Contains(second, "Fix the login regression") {
+		t.Fatalf("relaunch repeated the external prompt or lost the conversation: %v", argvs[1])
+	}
+	if _, err := os.Stat(sessionpaths.InitialPrompt(dir)); !os.IsNotExist(err) {
+		t.Fatalf("consumed initial prompt remains on disk: %v", err)
+	}
+}
+
 // A second trip through the picker on a session already in RPI adds
 // repositories; it is not a handoff, so the conversation must survive it.
 // Reading the mode alone cannot tell the two apart — only the change can.

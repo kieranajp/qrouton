@@ -59,6 +59,17 @@ func entropySuffix() string {
 // starting system prompt. Progress reports the start and outcome of each real
 // mirror, worktree, scaffold, and manifest operation.
 func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
+	return create(cfg, name, desc, ticket, "", prefix, mode, runner, repos, progress)
+}
+
+// CreateWithInitialPrompt assembles a session whose first runner launch also
+// receives an external request. The request is carried in a private one-shot
+// file rather than becoming durable manifest state.
+func CreateWithInitialPrompt(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
+	return create(cfg, name, desc, ticket, initialPrompt, prefix, mode, runner, repos, progress)
+}
+
+func create(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
 	slug := Slugify(name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, dirMode); err != nil {
@@ -82,6 +93,14 @@ func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionM
 	}()
 	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, fileMode); err != nil {
 		return "", err
+	}
+	if strings.TrimSpace(initialPrompt) != "" {
+		if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte(initialPrompt), privateFileMode); err != nil {
+			return "", err
+		}
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,

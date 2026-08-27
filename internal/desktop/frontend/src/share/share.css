@@ -1,0 +1,67 @@
+/* The shared page's own token layer. tokens/index.css is not imported: its
+   html/body rules pin the height and hide the overflow, which is right for a
+   window and wrong for a page someone scrolls. Colours arrive ahead of this
+   file, rendered by internal/theme. */
+@import "./fonts.css";
+@import "../tokens/typography.css";
+@import "../tokens/spacing.css";
+@import "../tokens/effects.css";
+@import "../lib/panes/markdown.css";
+
+/* The page commits to qrouton's palette rather than inheriting the reader's
+   theme, so both are stated outright. */
+body {
+  margin: 0;
+  background: var(--surface-app);
+  color: var(--text-primary);
+}
+
+.document {
+  padding: 26px 34px;
+  max-width: 960px;
+}
+
+.caps {
+  text-transform: uppercase;
+  font: var(--instruction-sm);
+  letter-spacing: var(--instruction-tracking-sm);
+  color: var(--text-faint);
+  margin: 0;
+}
+
+.caps,
+.title {
+  padding-left: var(--gutter);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0 18px;
+  font: var(--display-sm);
+  letter-spacing: var(--display-tracking);
+  color: var(--text-primary);
+}
+
+/* Below 24px the hatch averages to mid-grey, so the mark is drawn flat at the
+   18px this page uses. */
+.mark {
+  position: relative;
+  display: inline-block;
+  flex: none;
+}
+
+.square {
+  position: absolute;
+}
+
+.face {
+  left: 0;
+  top: 0;
+  background: var(--accent-label);
+}
+
+.back {
+  background-color: var(--ctp-surface-2);
+}

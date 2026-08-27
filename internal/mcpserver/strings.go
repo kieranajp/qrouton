@@ -55,6 +55,11 @@ const (
 	openedFileFormat = "Opened %s at line %d in an editor tab " +
 		"(it stays open until the user quits the editor; the conversation keeps focus)."
 
+	sharedPageFormat = "Rendered %s as a self-contained page at %s, styled the way the " +
+		"workbench draws it. Publish that file verbatim — it needs no styling of " +
+		"your own and fetches nothing at runtime — then give the user the link. " +
+		"qrouton does not send it anywhere."
+
 	renderedFileFormat = "Showing %s rendered in a pane the user can read and scroll " +
 		"(it stays open until they close it; the conversation keeps focus). %s"
 

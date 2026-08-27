@@ -3,7 +3,7 @@ import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
 import { record } from "./progress.js";
 import { blocks, folder, last, refusal } from "./steps.js";
-import { fill } from "./ticket.js";
+import { loader } from "./ticket.js";
 
 const TICKET_LOADED = "✓ Loaded — name and description filled in";
 
@@ -75,21 +75,24 @@ export function assembling(done) {
     }),
   );
 
-  async function load() {
-    const url = form.ticket.trim();
-    if (!url || fetching) return;
-    fetching = true;
-    try {
-      const filled = fill(form, await go.fetchTicket(url));
+  const tickets = loader(form, go.fetchTicket, {
+    fetching(active) {
+      fetching = active;
+    },
+    loaded(filled) {
       form.name = filled.name;
       form.description = filled.description;
       hint = { text: TICKET_LOADED, tone: "success" };
-    } catch (err) {
+    },
+    failed(err) {
       hint = { text: message(err), tone: "failed" };
-    } finally {
-      fetching = false;
-    }
-  }
+    },
+  });
+
+  const load = () => tickets.load();
+
+  /** @param {string} ticket */
+  const seed = (ticket) => tickets.seed(ticket);
 
   async function next() {
     if (creating) return;
@@ -158,5 +161,6 @@ export function assembling(done) {
     back,
     next,
     load,
+    seed,
   };
 }

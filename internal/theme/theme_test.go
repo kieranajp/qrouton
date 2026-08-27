@@ -32,6 +32,23 @@ func TestWaitingIsPeachAndLabelsAreButter(t *testing.T) {
 	}
 }
 
+func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
+	want := map[string]string{
+		RoleArtifactPlan: Lavender, RoleArtifactSpec: Pink,
+		RoleArtifactResearch: Sky, RoleArtifactNote: Flamingo,
+	}
+	seen := map[string]string{}
+	for role, colour := range want {
+		if Roles[role] != colour {
+			t.Errorf("%s = %q, want %q", role, Roles[role], colour)
+		}
+		if other := seen[colour]; other != "" {
+			t.Errorf("%s and %s share %s", role, other, colour)
+		}
+		seen[colour] = role
+	}
+}
+
 // An unresolved var() reports nothing anywhere.
 func TestEveryReferenceResolves(t *testing.T) {
 	css := CSS()

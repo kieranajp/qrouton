@@ -8,7 +8,9 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -109,6 +111,168 @@ func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 	}
 	if got := a.Prefixes(); len(got) == 0 || got[0] != "feat" {
 		t.Fatalf("prefixes = %v", got)
+	}
+}
+
+func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
+	root := t.TempDir()
+	a := newAssembly(&config.Config{Root: root}, nil, newSessions(), nil, nil, nil)
+	got, err := a.offer("lif-2841", "Fix the regression")
+	if err != nil || got != assemblyOutcomeQueued {
+		t.Fatalf("offer = %q, %v", got, err)
+	}
+	if pending := a.Pending(); pending != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("pending = %q", pending)
+	}
+	if ticket, prompt := a.pendingLinear(); ticket != "https://linear.app/issue/LIF-2841" || prompt != "Fix the regression" {
+		t.Fatalf("pending Linear request = %q, %q", ticket, prompt)
+	}
+	seed := a.Begin()
+	if seed.Ticket != "https://linear.app/issue/LIF-2841" || seed.Generation == 0 || a.Pending() != "" {
+		t.Fatalf("Begin = %+v, pending %q", seed, a.Pending())
+	}
+	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title", "ignored duplicate"); err != nil || got != assemblyOutcomeDraft {
+		t.Fatalf("same issue against open draft = %q, %v", got, err)
+	}
+	if _, err := a.offer("LIF-2842", "another task"); !errors.Is(err, ErrAssemblyDraftConflict) {
+		t.Fatalf("different issue against open draft = %v", err)
+	}
+}
+
+func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	manual := a.Begin()
+	if manual.Ticket != "" {
+		t.Fatalf("manual Begin = %+v", manual)
+	}
+	if _, err := a.offer("LIF-2841", ""); !errors.Is(err, ErrAssemblyDraftConflict) {
+		t.Fatalf("external issue took over a manual draft: %v", err)
+	}
+	a.End(manual.Generation)
+	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeQueued {
+		t.Fatalf("offer after cancel = %q, %v", got, err)
+	}
+}
+
+func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	if _, err := a.offer("LIF-2841", ""); err != nil {
+		t.Fatal(err)
+	}
+	first := a.Begin()
+	replacement := a.Begin()
+	if replacement.Generation <= first.Generation || replacement.Ticket != first.Ticket {
+		t.Fatalf("replacement = %+v after %+v", replacement, first)
+	}
+	a.End(first.Generation)
+	if got, err := a.offer("LIF-2842", ""); !errors.Is(err, ErrAssemblyDraftConflict) || got != "" {
+		t.Fatalf("late End closed the replacement: %q, %v", got, err)
+	}
+	a.End(replacement.Generation)
+	if got, err := a.offer("LIF-2842", ""); err != nil || got != assemblyOutcomeQueued {
+		t.Fatalf("current End did not release the draft: %q, %v", got, err)
+	}
+}
+
+func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	if _, err := a.offer("LIF-2841", "Linear prompt"); err != nil {
+		t.Fatal(err)
+	}
+	var carried, carriedPrompt string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		carried, carriedPrompt = request()
+		return nil
+	}, a)
+	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
+		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+	a.Begin()
+	carried = "not called"
+	carriedPrompt = "not called"
+	if err := relaunch(); err != nil || carried != "" {
+		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+}
+
+func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	var carried string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		if _, err := a.offer("LIF-2841", "Late prompt"); err != nil {
+			return err
+		}
+		carried, _ = request()
+		return nil
+	}, a)
+	if err := relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if carried != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("late pending seed = %q", carried)
+	}
+}
+
+func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	created := time.Now()
+	for i, slug := range []string{"older", "shown", "newest"} {
+		dir := sessionDir(t, root, slug)
+		manifest := session.Manifest{Slug: slug, Name: slug, TicketURL: "https://linear.app/acme/issue/LIF-2841/title",
+			Mode: session.ModeAssistant, CreatedAt: created.Add(time.Duration(i) * time.Hour)}
+		if err := session.WriteManifest(dir, manifest); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := session.MarkOpened(filepath.Join(root, "shown"), created.Add(4*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
+	for range 2 {
+		if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {
+			t.Fatalf("matching offer = %q, %v", got, err)
+		}
+	}
+	if current := reg.current(); current == nil || current.slug() != "shown" {
+		t.Fatalf("shown session = %v, want preferred match", current)
+	}
+	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
+		t.Fatalf("repeated match started %d agents and %d listeners", agents, serves)
+	}
+}
+
+func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	start := make(chan struct{})
+	results := make(chan error, 2)
+	var ready sync.WaitGroup
+	ready.Add(2)
+	for _, issue := range []string{"LIF-2841", "LIF-2842"} {
+		go func() {
+			ready.Done()
+			<-start
+			_, err := a.offer(issue, "")
+			results <- err
+		}()
+	}
+	ready.Wait()
+	close(start)
+	var accepted, refused int
+	for range 2 {
+		err := <-results
+		switch {
+		case err == nil:
+			accepted++
+		case errors.Is(err, ErrAssemblyDraftConflict):
+			refused++
+		default:
+			t.Fatalf("simultaneous offer = %v", err)
+		}
+	}
+	if accepted != 1 || refused != 1 {
+		t.Fatalf("simultaneous offers: %d accepted, %d refused", accepted, refused)
 	}
 }
 

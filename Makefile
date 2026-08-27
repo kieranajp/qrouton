@@ -3,14 +3,20 @@ EVAL     := qrouton-eval
 BINDIR   ?= $(HOME)/.local/bin
 FRONTEND := internal/desktop/frontend
 PAGES    := internal/desktop/assets/index.html
+SHARE    := internal/share/assets/share.js
+VERSION  ?= 0.1.0
+BUILD_NUMBER ?= 1
+SIGN_IDENTITY ?= -
+MACOSX_DEPLOYMENT_TARGET ?= 12.0
+export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
-.PHONY: build eval front front-check test race vet fmt check install uninstall clean
+.PHONY: build eval front front-check test race vet fmt check app archive dist install uninstall clean
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
-front: $(PAGES)
+front: $(PAGES) $(SHARE)
 
 $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
 	cd $(FRONTEND) && npm ci
@@ -19,8 +25,22 @@ $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
 $(PAGES): $(FRONTEND)/node_modules $(SOURCES)
 	cd $(FRONTEND) && npm run build
 
+# The shared page carries its fonts, so it is built apart from the workbench's
+# own pages, which are served theirs.
+$(SHARE): $(FRONTEND)/node_modules $(SOURCES)
+	cd $(FRONTEND) && npm run build:share
+
 build: front
 	go build -o $(BIN) .
+
+app: front
+	./build/macos/package.sh
+
+archive:
+	./build/macos/archive.sh
+
+dist: app
+	$(MAKE) archive
 
 eval:
 	go build -o $(EVAL) ./cmd/$(EVAL)
@@ -59,4 +79,5 @@ uninstall:
 
 clean:
 	rm -f $(BIN) $(EVAL)
-	rm -rf internal/desktop/assets $(FRONTEND)/node_modules
+	rm -rf internal/desktop/assets internal/share/assets $(FRONTEND)/node_modules
+	rm -rf dist

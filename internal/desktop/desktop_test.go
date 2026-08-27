@@ -27,21 +27,23 @@ import (
 // fakeRenderer stands in for the toolkit, so the window lifecycle runs without
 // a display.
 type fakeRenderer struct {
-	mu     sync.Mutex
-	opened chan windowSpec
-	titles map[string]string
-	events map[string]any
-	quit   bool
-	block  chan struct{}
-	once   sync.Once
+	mu      sync.Mutex
+	opened  chan windowSpec
+	titles  map[string]string
+	events  map[string]any
+	focused map[string]int
+	quit    bool
+	block   chan struct{}
+	once    sync.Once
 }
 
 func newFakeRenderer() *fakeRenderer {
 	return &fakeRenderer{
-		opened: make(chan windowSpec, 8),
-		titles: map[string]string{},
-		events: map[string]any{},
-		block:  make(chan struct{}),
+		opened:  make(chan windowSpec, 8),
+		titles:  map[string]string{},
+		events:  map[string]any{},
+		focused: map[string]int{},
+		block:   make(chan struct{}),
 	}
 }
 
@@ -54,6 +56,12 @@ func (f *fakeRenderer) Retitle(name, title string) {
 func (f *fakeRenderer) Open(spec windowSpec) error {
 	f.opened <- spec
 	return nil
+}
+
+func (f *fakeRenderer) Focus(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.focused[name]++
 }
 
 func (f *fakeRenderer) Emit(event string, payload any) {
@@ -924,6 +932,37 @@ func pushedChrome(t *testing.T, r *fakeRenderer) status.Fields {
 	return fields
 }
 
+func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.T) {
+	var snapshots []status.Fields
+	var chrome *Chrome
+	chrome = newChrome(func(event string, _ any) {
+		if event == chromeEvent {
+			snapshots = append(snapshots, chrome.Snapshot())
+		}
+	})
+
+	empty := chrome.Snapshot()
+	if empty.Sessions == nil || empty.Documents == nil || empty.Repos == nil {
+		t.Fatalf("initial snapshot has nil slices: %+v", empty)
+	}
+	first := status.Fields{
+		Activity: "idle", Sessions: []status.SessionRow{},
+		Documents: []status.Document{}, Repos: []status.RepoStat{},
+	}
+	chrome.publish(chromeEvent, first)
+	chrome.publish(chromeEvent, first)
+	if len(snapshots) != 1 || !reflect.DeepEqual(snapshots[0], first) {
+		t.Fatalf("initial publishes = %+v, want one stored-before-emit snapshot", snapshots)
+	}
+
+	changed := first
+	changed.Activity = "working"
+	chrome.publish(chromeEvent, changed)
+	if len(snapshots) != 2 || !reflect.DeepEqual(chrome.Snapshot(), changed) {
+		t.Fatalf("changed publishes = %+v, snapshot = %+v", snapshots, chrome.Snapshot())
+	}
+}
+
 // A measurement belongs to the session it was taken for, so the session switched
 // to is drawn with no repository numbers rather than the last one's.
 func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
@@ -1230,6 +1269,103 @@ func TestTheProcessSocketAnswersReadinessAndRefusesAWindowOp(t *testing.T) {
 	waitFor(t, "the adopted session on screen", func() bool {
 		state := reg.current()
 		return state != nil && state.slug() == "kraken"
+	})
+}
+
+func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	running := shownSession(t, reg)
+	beforeAgents, beforeServes := boot.counts()
+
+	outcome, err := workbench.OpenLinearIssue(context.Background(), opts.Socket, "lif-2841", "Linear prompt")
+	if err != nil || outcome != assemblyOutcomeQueued {
+		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
+	}
+	if reg.current() != running {
+		t.Fatal("opening a draft switched the running session")
+	}
+	afterAgents, afterServes := boot.counts()
+	if afterAgents != beforeAgents || afterServes != beforeServes {
+		t.Fatalf("opening a draft changed agent/listener counts from %d/%d to %d/%d",
+			beforeAgents, beforeServes, afterAgents, afterServes)
+	}
+	if pending := opts.assembly.Pending(); pending != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("pending = %q", pending)
+	}
+	if _, prompt := opts.assembly.pendingLinear(); prompt != "Linear prompt" {
+		t.Fatalf("pending prompt = %q", prompt)
+	}
+	waitFor(t, "the conversation window to be focused", func() bool {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		return r.focused[mainWindowName] == 1
+	})
+
+	seed := opts.assembly.Begin()
+	if outcome, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2841", "duplicate"); err != nil || outcome != assemblyOutcomeDraft {
+		t.Fatalf("same issue repeat = %q, %v", outcome, err)
+	}
+	if _, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2842", ""); err == nil {
+		t.Fatal("different issue replaced the open draft")
+	}
+	opts.assembly.End(seed.Generation)
+}
+
+func TestAColdLinearIssueIsPendingBeforeTheWindowOpens(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	opts.SessionRoot = ""
+	opts.LinearIssue = "https://linear.app/issue/LIF-2841"
+	opts.LinearPrompt = "Cold prompt"
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	if pending := opts.assembly.Pending(); pending != opts.LinearIssue {
+		t.Fatalf("pending after open = %q, want %q", pending, opts.LinearIssue)
+	}
+	if _, prompt := opts.assembly.pendingLinear(); prompt != opts.LinearPrompt {
+		t.Fatalf("pending prompt after open = %q, want %q", prompt, opts.LinearPrompt)
+	}
+	if agents, serves := boot.counts(); agents != 0 || serves != 0 {
+		t.Fatalf("cold draft started %d agents and %d session listeners", agents, serves)
+	}
+}
+
+func TestAColdLinearIssueIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	opts.SessionRoot = ""
+	opts.LinearIssue = "https://linear.app/issue/LIF-2841"
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+	offered := make(chan struct{})
+	release := make(chan struct{})
+	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, func(event string, _ any) {
+		if event != assemblyRequestedEvent {
+			return
+		}
+		close(offered)
+		<-release
+	}, nil, nil)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-offered
+	if workbench.Published(opts.Socket) {
+		t.Fatal("the process endpoint was published before its cold Linear issue was installed")
+	}
+	if pending := opts.assembly.Pending(); pending != opts.LinearIssue {
+		t.Fatalf("pending during publication handoff = %q, want %q", pending, opts.LinearIssue)
+	}
+	close(release)
+	waitFor(t, "the seeded process endpoint to be published", func() bool {
+		return workbench.Published(opts.Socket)
 	})
 }
 

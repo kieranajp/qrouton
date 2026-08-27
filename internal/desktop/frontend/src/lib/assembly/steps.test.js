@@ -64,7 +64,8 @@ test("a window holding no session is the assembly overlay", () => {
 // session is worse than opening it a moment late.
 test("assembly waits for the first payload before deciding there is no session", () => {
   assert.equal(assemblyOpen(false, false, ""), false);
-  assert.equal(assemblyOpen(true, false, ""), true);
+  assert.equal(assemblyOpen(true, false, ""), false);
+  assert.equal(assemblyOpen(true, false, "billing"), false);
 });
 
 test("the picker is open for an escalation waiting on the session on screen", () => {

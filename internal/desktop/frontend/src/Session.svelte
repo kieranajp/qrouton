@@ -18,6 +18,7 @@
   import SessionTerminal from "./lib/SessionTerminal.svelte";
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
+  import { pending as pendingAssembly } from "./lib/assembly/calls.js";
   import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import { dismissible } from "./lib/core/dismiss.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
@@ -43,6 +44,7 @@
     selectWindow,
     surfaces,
   } from "./lib/docked.svelte.js";
+  import { Events } from "./lib/wails.js";
 
   /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
   const ACTIVITY = {
@@ -86,11 +88,16 @@
 
   function resize(next) {
     dragged = { ...dragged, [fields.slug]: next };
+  }
+
+  function commit(next) {
+    resize(next);
     writeStored(widthKey(fields.slug), next);
   }
 
   function reset() {
     resize(0);
+    writeStored(widthKey(fields.slug), 0);
   }
 
   let selection = $state({});
@@ -241,6 +248,21 @@
   }
 
   let requested = $state(false);
+
+  onMount(() => {
+    let live = true;
+    const off = Events.On("assembly:requested", () => (requested = true));
+    pendingAssembly()
+      .then((ticket) => {
+        if (live && ticket) requested = true;
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+      off();
+    };
+  });
+
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let settingsOpen = $state(false);
   // An escalation is the shown session's own pending request, so switching
@@ -364,6 +386,7 @@
       min={MIN_HUMAN}
       max={room}
       onResize={resize}
+      onCommit={commit}
       onReset={reset}
       label="Resize the shell pane" />
 

@@ -2,6 +2,7 @@ package session
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -29,4 +30,26 @@ func LastOpened(root string) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	return at, true
+}
+
+// Preferred is the session most recently shown, or the newest session when no
+// candidate has been shown.
+func Preferred(root string, sessions []Manifest) (Manifest, bool) {
+	var best Manifest
+	var stamp time.Time
+	for _, m := range sessions {
+		at, ok := LastOpened(filepath.Join(root, m.Slug))
+		if ok && (best.Slug == "" || at.After(stamp)) {
+			best, stamp = m, at
+		}
+	}
+	if best.Slug != "" {
+		return best, true
+	}
+	for _, m := range sessions {
+		if best.Slug == "" || m.CreatedAt.After(best.CreatedAt) {
+			best = m
+		}
+	}
+	return best, best.Slug != ""
 }

@@ -30,3 +30,27 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 		t.Fatalf("embedded prompt count = %d, want 17", len(all))
 	}
 }
+
+func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	ids := []ID{
+		Orchestrator,
+		Assistant,
+		ID(agentIDPrefix + "qrspi-implementation-lead"),
+		ID(agentIDPrefix + "qrspi-planning-lead"),
+		ID(agentIDPrefix + "qrspi-research-lead"),
+	}
+	for _, id := range ids {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(prompt.Content)
+		if !strings.Contains(content, "Default to the efficient tier (to keep fan-out costs from ballooning)") {
+			t.Errorf("prompt %q missing subagent choice guidance", id)
+		}
+		if strings.Contains(content, subagentChoicePlaceholder) {
+			t.Errorf("prompt %q retained subagent choice placeholder", id)
+		}
+	}
+}

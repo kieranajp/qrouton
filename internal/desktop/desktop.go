@@ -35,7 +35,16 @@ type Options struct {
 	Root string
 	// Socket answers the launcher's readiness poll.
 	Socket string
-	Env    []string
+	// LinearIssue is a canonical ticket offered after session boot is wired and
+	// before the page can claim a blank draft. LinearPrompt is the full prompt
+	// Linear generated for the eventual runner's first turn.
+	LinearIssue  string
+	LinearPrompt string
+	// LinearCommand is the executable and fixed arguments written before
+	// Linear's issue identifier template in coding-tools.json.
+	LinearCommand     []string
+	LinearEnvironment []string
+	Env               []string
 	// Agent builds a session's supervisor command and environment against the
 	// control socket the workbench will serve that session on. runnerID names
 	// the agent the session was assembled with; empty means the workbench's own.
@@ -60,13 +69,16 @@ type Options struct {
 	Signal func(sessionRoot string)
 	// Relaunch replaces this workbench with one reading the config file afresh,
 	// and returns only once the successor is serving. First run needs it because
-	// a changed sessions root cannot take effect in a running process.
-	Relaunch func() error
+	// a changed sessions root cannot take effect in a running process. The ticket
+	// supplier is read after the relaunch owns launch serialization.
+	Relaunch func(linearIssue func() (ticket, prompt string)) error
 	// ValidateEditor and ValidateLaunch reach launch.ResolveEditor and
 	// launch.Runners without desktop importing launch, the same shape Agent,
 	// Shell, Signal and Runners already use.
 	ValidateEditor func(argv []string) error
 	ValidateLaunch func(overrides map[string][]string) error
+	assembly       *Assembly
+	chrome         *Chrome
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -106,11 +118,27 @@ func Run(opts Options) error {
 	r.register(application.NewService(reg))
 	r.register(application.NewService(repos))
 	r.register(application.NewService(&Orgs{cfg: opts.Config}))
-	r.register(application.NewService(newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)))
+	chrome := newChrome(r.Emit)
+	opts.chrome = chrome
+	r.register(application.NewService(chrome))
+	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)
+	opts.assembly = assemblyService
+	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
-	r.register(application.NewService(newSettings(opts.Config, opts.ValidateEditor, opts.ValidateLaunch, quit)))
-	r.register(application.NewService(newFirstRun(opts.Config, reg, opts.Relaunch, quit, r.chooseDirectory)))
+	r.register(application.NewService(newSettings(
+		opts.Config, opts.ValidateEditor, opts.ValidateLaunch,
+		opts.LinearCommand, opts.LinearEnvironment, quit,
+	)))
+	relaunch := pendingRelaunch(opts.Relaunch, assemblyService)
+	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)
+}
+
+func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Assembly) func() error {
+	if relaunch == nil {
+		return nil
+	}
+	return func() error { return relaunch(assembly.pendingLinear) }
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
@@ -189,7 +217,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return exec.Command(argv[0], argv[1:]...).Run()
 		},
 	}
-	go watchChrome(ctx, reg, opts.Root, opts.Config, r.Emit)
+	chromeEmit := r.Emit
+	if opts.chrome != nil {
+		chromeEmit = opts.chrome.publish
+	}
+	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
@@ -203,15 +235,36 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	windows.newDocument = func(name string) (string, error) {
 		return openDocument(windows, reg.current(), opts.Document, name)
 	}
-	server, err := serveControl(opts.Socket, windows, nil, controlHooks{picker: reg.queuePicker})
+	processHooks := controlHooks{picker: reg.queuePicker}
+	if opts.assembly != nil {
+		processHooks.linearIssue = opts.assembly.offer
+		processHooks.focus = func() { r.Focus(mainWindowName) }
+	}
+	server, err := serveControl(opts.Socket, windows, nil, processHooks)
 	if err != nil {
 		return err
 	}
 	defer server.Close()
+	if opts.LinearIssue != "" {
+		if opts.assembly == nil {
+			return ErrNoConfig
+		}
+		if _, err := opts.assembly.offer(opts.LinearIssue, opts.LinearPrompt); err != nil {
+			return err
+		}
+	}
+	if err := workbench.Publish(opts.Socket); err != nil {
+		return err
+	}
+	defer workbench.Unpublish(opts.Socket)
+	titleRoot := opts.SessionRoot
+	if shown := reg.current(); shown != nil {
+		titleRoot = shown.root()
+	}
 
 	if err := r.Open(windowSpec{
 		Name:    mainWindowName,
-		Title:   windowTitle(opts.SessionRoot),
+		Title:   windowTitle(titleRoot),
 		URL:     frontendRoot,
 		Width:   mainWindowWidth,
 		Height:  mainWindowHeight,
@@ -220,7 +273,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}); err != nil {
 		return err
 	}
-	if opts.SessionRoot != "" {
+	if opts.LinearIssue == "" && opts.SessionRoot != "" {
 		opened, err := reg.start(opts.SessionRoot, "", opts.Resume)
 		if err != nil {
 			return err
