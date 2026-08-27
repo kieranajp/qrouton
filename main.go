@@ -86,9 +86,8 @@ func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
 		if err != nil {
 			return err
 		}
-		editor, _ := launch.ResolveEditor(cfg.Editor)
 		return detachProcess(launch.WorkbenchSpec{
-			Socket: socket, Runner: c.String(runnerFlag), Editor: editor,
+			Socket: socket, Runner: c.String(runnerFlag), Editor: editorFor(cfg),
 			LinearIssue: linearIssue, LinearPrompt: linearPrompt,
 		}, os.Environ())
 	}
@@ -116,12 +115,10 @@ func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
 	if err != nil {
 		return err
 	}
-	// A missing editor costs the document chip, and must not keep the window shut.
-	editor, _ := launch.ResolveEditor(cfg.Editor)
 	return detach(launch.WorkbenchSpec{
 		Socket: socket,
 		Runner: c.String(runnerFlag),
-		Editor: editor,
+		Editor: editorFor(cfg),
 	}, os.Environ())
 }
 
@@ -142,18 +139,22 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 // launchRunner opens the workbench on the session. The workbench builds the
 // agent's command as it boots it, and that supervisor stamps the prompts.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
-	editor, err := launch.ResolveEditor(cfg.Editor)
-	if err != nil {
-		return err
-	}
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		return err
 	}
-	return detach(launch.WorkbenchSpec{
+	return detachProcess(launch.WorkbenchSpec{
 		SessionRoot: dir, Socket: socket, Runner: r.ID, Resume: resume,
-		Editor: editor,
+		Editor: editorFor(cfg),
 	}, os.Environ())
+}
+
+// editorFor resolves the editor a session's windows open files with. Failing to
+// is not fatal: qrouton renders the documents it can itself, so an unresolvable
+// editor costs only the files it cannot, and must not keep the window shut.
+func editorFor(cfg *config.Config) launch.EditorCommand {
+	editor, _ := launch.ResolveEditor(cfg.Editor)
+	return editor
 }
 
 // detach hands the workbench to a process of its own and returns as soon as it

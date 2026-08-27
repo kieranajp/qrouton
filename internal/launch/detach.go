@@ -37,8 +37,7 @@ type WorkbenchSpec struct {
 	Resume       bool   `json:"resume,omitempty"`
 	LinearIssue  string `json:"linear_issue,omitempty"`
 	LinearPrompt string `json:"linear_prompt,omitempty"`
-	// Empty when the editor could not be resolved, which costs the document chip
-	// and must not keep the window shut.
+	// Zero when no editor resolved, which the session runs without.
 	Editor EditorCommand `json:"editor"`
 }
 

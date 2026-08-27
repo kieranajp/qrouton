@@ -64,6 +64,31 @@ func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 	}
 }
 
+// Every path that opens a workbench opens it, editor or no editor. Resuming a
+// session used to be the one that refused, so an install with nothing on PATH
+// to edit with got a terminal error where a fresh one got a window.
+func TestOpeningASessionWithNoEditorStillOpensTheWorkbench(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("VISUAL", "")
+	t.Setenv("EDITOR", "")
+	previous := detachProcess
+	defer func() { detachProcess = previous }()
+	var spec launch.WorkbenchSpec
+	detachProcess = func(s launch.WorkbenchSpec, _ []string) error { spec = s; return nil }
+
+	dir := t.TempDir()
+	if err := launchRunner(&config.Config{}, dir, launch.Runner{ID: "codex"}, true); err != nil {
+		t.Fatalf("resuming a session with no editor: %v", err)
+	}
+	if spec.SessionRoot != dir || !spec.Resume {
+		t.Fatalf("workbench spec = %#v, want %q resumed", spec, dir)
+	}
+	if len(spec.Editor.Argv) != 0 {
+		t.Fatalf("spec editor = %#v, want none", spec.Editor)
+	}
+}
+
 // Two workbenches would each believe they were the only one holding a session's
 // supervisor, so every path that opens on one refuses — bare qrouton included —
 // and says where a session is started instead.
