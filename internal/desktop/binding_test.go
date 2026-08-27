@@ -236,3 +236,13 @@ func TestTheChromePageDefaultsEveryField(t *testing.T) {
 		}
 	}
 }
+
+// Without this one wire the toggle beside a held reference row answers, the tally
+// counts it, and the session is never told. The bundle is read rather than the
+// source: a page built before the wire existed fails in exactly the same silence.
+func TestThePickerSendsTheRowsItWasToldToTakeUp(t *testing.T) {
+	wire := regexp.MustCompile(`upgrades:[\w$.]*\.upgrading`)
+	if !wire.MatchString(builtBundle(t)) {
+		t.Fatal("the built pages confirm the picker without the rows to take up for editing")
+	}
+}

@@ -1,5 +1,5 @@
 <script>
-  /** @type {{segments?: {key: string, label: string, accent?: string, ink?: string}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
+  /** @type {{segments?: {key: string, label: string, accent?: string, ink?: string, disabled?: boolean}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
   let {
     segments = [],
     value,
@@ -22,7 +22,7 @@
       style:--on-bg={segment.accent || "var(--accent-action)"}
       style:--on-fg={segment.ink || "var(--text-on-accent)"}
       aria-pressed={chosen.includes(segment.key)}
-      {disabled}
+      disabled={disabled || segment.disabled}
       onclick={() => onSelect?.(segment.key)}>{segment.label}</button>
   {/each}
 </div>

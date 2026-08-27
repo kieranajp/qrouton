@@ -149,8 +149,14 @@ func addWorktree(mirror, path, branch, startRef string) error {
 	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err
 	}
-	if gitOK(dirFlag, mirror, showRefCmd, verifyFlag, quietLongFlag, localBranchRef+branch) {
+	if mirrorHasBranch(mirror, branch) {
 		return git(dirFlag, mirror, worktreeCmd, worktreeAdd, path, branch)
 	}
 	return git(dirFlag, mirror, worktreeCmd, worktreeAdd, branchFlag, branch, path, startRef)
+}
+
+// mirrorHasBranch reports whether qrouton has already cut this session branch in
+// the mirror, which is what a resume after a prune finds.
+func mirrorHasBranch(mirror, branch string) bool {
+	return gitOK(dirFlag, mirror, showRefCmd, verifyFlag, quietLongFlag, localBranchRef+branch)
 }

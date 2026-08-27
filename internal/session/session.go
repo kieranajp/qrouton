@@ -251,16 +251,9 @@ func MergeRepos(m Manifest, repos []ManifestRepo) Manifest {
 	return m
 }
 
-// hasRepo reports whether the session already holds this repository. Identity is
-// owner and name together, case-insensitively — the same reckoning the ad-hoc
-// path uses when it dedupes command-line arguments.
+// hasRepo reports whether the session already holds this repository.
 func hasRepo(repos []ManifestRepo, org, name string) bool {
-	for _, r := range repos {
-		if strings.EqualFold(r.Org, org) && strings.EqualFold(r.Name, name) {
-			return true
-		}
-	}
-	return false
+	return indexOfRepo(repos, org, name) >= 0
 }
 
 func emitProgress(progress ProgressFunc, event Progress) {

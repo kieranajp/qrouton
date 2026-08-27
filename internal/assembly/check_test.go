@@ -116,3 +116,19 @@ func TestCheckSlugRefusesAnOccupiedDirectoryAndReclaimsAnAbandonedOne(t *testing
 		t.Fatalf("abandoned half-assembly blocked the name: %+v", problems)
 	}
 }
+
+// A session assembled for reading alone cannot be confirmed without acquiring
+// something to work in — and taking up one of the repositories it already reads
+// is one of the two ways to do that.
+func TestAdditionsAcceptAnUpgradeInsteadOfANewEditingRepo(t *testing.T) {
+	reading := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "acme", Name: "docs", Role: session.RepoRoleReference},
+	}}
+	problemOn(t, CheckAdditions(reading, Draft{Name: "Research", Prefix: "feat"}), FieldRepos)
+
+	upgrade := Draft{Name: "Research", Prefix: "feat",
+		Upgrades: []session.RepoRef{{Org: "acme", Name: "docs"}}}
+	if problems := CheckAdditions(reading, upgrade); len(problems) != 0 {
+		t.Fatalf("an upgrade did not satisfy the editing-repo rule: %+v", problems)
+	}
+}

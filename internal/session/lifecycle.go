@@ -55,21 +55,30 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
-		out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
+		changed, err := worktreeDirty(path)
 		if err != nil {
-			// A checkout can outlive its worktree metadata when a mirror was
-			// manually removed or corrupted. There is no useful dirty-state check
-			// left to perform, but the session must still remain deletable.
-			if strings.Contains(string(out), notARepositoryMessage) {
-				continue
-			}
-			return nil, fmt.Errorf("check %s/%s for changes: %w\n%s", repo.Org, repo.Name, err, out)
+			return nil, fmt.Errorf("check %s/%s for changes: %w", repo.Org, repo.Name, err)
 		}
-		if len(bytes.TrimSpace(out)) > 0 {
+		if changed {
 			dirty = append(dirty, repo.Org+"/"+repo.Name)
 		}
 	}
 	return dirty, nil
+}
+
+// worktreeDirty reports staged, unstaged, or untracked files. A checkout can
+// outlive its worktree metadata when a mirror was manually removed or corrupted;
+// there is no dirty state left to read then, and a session carrying one must
+// still be deletable.
+func worktreeDirty(path string) (bool, error) {
+	out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
+	if err != nil {
+		if strings.Contains(string(out), notARepositoryMessage) {
+			return false, nil
+		}
+		return false, fmt.Errorf("%w\n%s", err, out)
+	}
+	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
 // Delete removes registered worktrees and then the remaining session files.
