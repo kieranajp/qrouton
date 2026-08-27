@@ -107,7 +107,7 @@ func TestSettingsLoadNamesAMissingLinearCommandInsteadOfWritingABrokenStarter(t 
 	}
 }
 
-// Save refuses Root, Editor, Launch, then Linear in that order, and never
+// Save refuses Orgs, Root, Editor, Launch, then Linear in that order, and never
 // writes config.json for an input that fails any of them.
 func TestSettingsSaveRefusesTheFirstInvalidFieldAndWritesNothing(t *testing.T) {
 	unwritable := filepath.Join(t.TempDir(), "notadir")
@@ -122,31 +122,37 @@ func TestSettingsSaveRefusesTheFirstInvalidFieldAndWritesNothing(t *testing.T) {
 		validateLaunch func(map[string][]string) error
 		wantField      string
 	}{
-		{name: "empty root", in: SettingsInput{Root: "   "}, wantField: "root"},
+		{name: "no orgs", in: SettingsInput{Root: t.TempDir()}, wantField: "orgs"},
+		{
+			name:      "orgs are all blank",
+			in:        SettingsInput{Orgs: []string{"", "   "}, Root: t.TempDir()},
+			wantField: "orgs",
+		},
+		{name: "empty root", in: SettingsInput{Orgs: []string{"acme"}, Root: "   "}, wantField: "root"},
 		{
 			name:      "root cannot be created",
-			in:        SettingsInput{Root: filepath.Join(unwritable, "sub")},
+			in:        SettingsInput{Orgs: []string{"acme"}, Root: filepath.Join(unwritable, "sub")},
 			wantField: "root",
 		},
 		{
 			name:      "editor does not shlex-split",
-			in:        SettingsInput{Root: t.TempDir(), Editor: `vim "`},
+			in:        SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: `vim "`},
 			wantField: "editor",
 		},
 		{
 			name:           "editor refused by validateEditor",
-			in:             SettingsInput{Root: t.TempDir(), Editor: "vim {}"},
+			in:             SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: "vim {}"},
 			validateEditor: func([]string) error { return errors.New("vim is not installed") },
 			wantField:      "editor",
 		},
 		{
 			name:      "launch is not valid json",
-			in:        SettingsInput{Root: t.TempDir(), Launch: "{not json"},
+			in:        SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Launch: "{not json"},
 			wantField: "launch",
 		},
 		{
 			name:           "launch refused by validateLaunch",
-			in:             SettingsInput{Root: t.TempDir(), Launch: `{"claude": ["claude"]}`},
+			in:             SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Launch: `{"claude": ["claude"]}`},
 			validateLaunch: func(map[string][]string) error { return errors.New("nope") },
 			wantField:      "launch",
 		},
@@ -172,6 +178,39 @@ func TestSettingsSaveRefusesTheFirstInvalidFieldAndWritesNothing(t *testing.T) {
 	}
 }
 
+// Never zero owners holds at both write points, not just first run: clearing
+// the list here would write an ownerless config that stays welcomed, so the
+// question never comes back.
+func TestSettingsSaveRefusesAnEmptyOwnerListAndWritesNothing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir(), Welcomed: true}
+	s := testSettings(t, cfg, nil, nil, nil)
+
+	root := filepath.Join(t.TempDir(), "sessions")
+	for _, orgs := range [][]string{nil, {}, {"", "   "}} {
+		_, err := s.Save(SettingsInput{Orgs: orgs, Root: root, Linear: `{}`})
+		if !errors.Is(err, ErrNoOwners) {
+			t.Fatalf("Save(%q) error = %v, want ErrNoOwners", orgs, err)
+		}
+		if !strings.HasPrefix(err.Error(), "orgs: ") {
+			t.Fatalf("refusal %q does not name the field the panel puts it on", err)
+		}
+	}
+
+	if !reflect.DeepEqual(cfg.Orgs, []string{"acme"}) {
+		t.Fatalf("live orgs = %#v; a refused save cleared them", cfg.Orgs)
+	}
+	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
+		t.Fatal("a refused save wrote config.json")
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatal("a refused save created the sessions root it was given")
+	}
+	if _, err := os.Stat(s.linearFile); !os.IsNotExist(err) {
+		t.Fatal("a refused save wrote coding-tools.json")
+	}
+}
+
 // A JSON syntax error in Launch is reported with Go's own message intact,
 // rather than a rewritten one.
 func TestSettingsSaveKeepsTheJSONErrorMessageVerbatim(t *testing.T) {
@@ -185,7 +224,7 @@ func TestSettingsSaveKeepsTheJSONErrorMessageVerbatim(t *testing.T) {
 		t.Fatal("test fixture is valid JSON; pick a genuinely malformed one")
 	}
 
-	_, err := s.Save(SettingsInput{Root: t.TempDir(), Launch: "{not json"})
+	_, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Launch: "{not json"})
 	if err == nil {
 		t.Fatal("Save accepted malformed JSON")
 	}
@@ -199,7 +238,7 @@ func TestSettingsSaveRefusesAnInvalidLinearConfigBeforeWritingEitherFile(t *test
 	s := testSettings(t, &config.Config{Root: t.TempDir()}, nil, nil, nil)
 
 	for _, raw := range []string{"{not json", "null"} {
-		_, err := s.Save(SettingsInput{Root: t.TempDir(), Linear: raw})
+		_, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Linear: raw})
 		if err == nil || !strings.HasPrefix(err.Error(), "linear: ") {
 			t.Fatalf("Save(%q) error = %v, want a Linear field error", raw, err)
 		}
@@ -219,7 +258,7 @@ func TestSettingsSaveCreatesTheLinearStarterAndItsDirectory(t *testing.T) {
 	s.linearFile = filepath.Join(t.TempDir(), ".linear", "coding-tools.json")
 	starter := s.Load().Linear
 
-	if _, err := s.Save(SettingsInput{Root: root, Linear: starter}); err != nil {
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root, Linear: starter}); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(s.linearFile)
@@ -244,7 +283,7 @@ func TestSettingsSaveDoesNotRewriteAnUnchangedLinearConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Save(SettingsInput{Root: root, Linear: s.Load().Linear}); err != nil {
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root, Linear: s.Load().Linear}); err != nil {
 		t.Fatal(err)
 	}
 	raw, err := os.ReadFile(s.linearFile)
@@ -359,7 +398,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	cfg := &config.Config{Root: liveRoot}
 	s := testSettings(t, cfg, nil, nil, nil)
 
-	result, err := s.Save(SettingsInput{Root: "~/work/", Linear: `{}`})
+	result, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: "~/work/", Linear: `{}`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +415,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	}
 
 	otherRoot := t.TempDir()
-	result, err = s.Save(SettingsInput{Root: otherRoot, Linear: `{}`})
+	result, err = s.Save(SettingsInput{Orgs: []string{"acme"}, Root: otherRoot, Linear: `{}`})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -387,7 +426,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 		t.Fatalf("live root mutated to %q", cfg.Root)
 	}
 
-	result, err = s.Save(SettingsInput{Root: liveRoot, Linear: `{}`})
+	result, err = s.Save(SettingsInput{Orgs: []string{"acme"}, Root: liveRoot, Linear: `{}`})
 	if err != nil {
 		t.Fatal(err)
 	}
