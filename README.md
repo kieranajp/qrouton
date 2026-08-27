@@ -1,138 +1,131 @@
-# qrouton 🟫
+<p align="center">
+  <img src="build/macos/appicon.svg" width="132" alt="qrouton cube">
+</p>
 
-```text
-              __________
-             /  ·  *   /|
-            / *   ·   / |
-           /_________/  |
-           |  ·   *  |  |
-           | *     · |  /
-           |  ·   *  | /
-           |_________|/
+<h1 align="center">qrouton</h1>
 
-              qrouton
-```
+<p align="center">
+  <strong>A desktop workbench for coding-agent sessions that cross repository boundaries.</strong>
+  <br>
+  Pick the repos. Set their roles. Choose an agent. Start working.
+</p>
 
-qrouton turns a handful of GitHub repositories into one ready-to-use coding-agent workspace. Pick the repos, decide which are editing work and which are reference material, choose an agent, and qrouton handles mirrors, worktrees, branches, instructions, and the desktop workbench it all runs in. 🧊✨
+<p align="center">
+  <a href="https://github.com/kieranajp/qrouton/actions/workflows/ci.yml"><img src="https://github.com/kieranajp/qrouton/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/kieranajp/qrouton/releases/latest"><img src="https://img.shields.io/github/v/release/kieranajp/qrouton?label=release" alt="Latest release"></a>
+</p>
 
-## What it does 🥖
+<p align="center">
+  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS</strong></a>
+</p>
 
-- Creates and resumes named multi-repo sessions.
-- Reuses local bare mirrors instead of cloning everything repeatedly.
-- Checks editing repos out on `<prefix>/<session-slug>` branches.
-- Pins reference repos as detached, read-only context.
-- Adds repositories to a live session from the workbench, on the branch it is already on.
-- Discovers repositories across several GitHub organizations or user accounts.
-- Starts from cached GitHub data, then refreshes owners concurrently.
-- Opens a desktop window and runs Claude Code, Codex CLI, or OpenCode in it, with a shell tab alongside.
-- Resumes the agent conversation when the workspace is resumed.
-- Gives agents session-aware instructions, skills, and MCP tools that open tabs — an editor, a live command, a diff — while the conversation keeps the keyboard.
-- Starts sessions in **RPI** (orchestrated Research → Plan → Implement) or **Assistant** (open-ended) mode.
+Most engineering work does not fit neatly inside one repository. A product
+change can touch an app, a service, a shared library, and a set of design or
+architecture notes. qrouton assembles those pieces into one durable workspace
+and runs the coding agent inside it.
 
-## Requirements 🧰
+It handles the plumbing—mirrors, worktrees, branches, instructions, process
+supervision, and conversation resume—while you and the agent share one desktop
+workbench.
 
-- macOS or Linux. The workbench is a WebKit window, so the binary links cgo; there is no Windows build. Linux needs WebKitGTK 6 — `pacman -S webkitgtk-6.0` on Arch, `apt install libgtk-4-dev libwebkitgtk-6.0-dev` on Debian or Ubuntu. GTK4 only, so a distro new enough to carry it.
-- Git.
-- [GitHub CLI](https://cli.github.com/) authenticated with `gh auth login`, or `GITHUB_TOKEN`.
-- `LINEAR_API_KEY` or `ASANA_ACCESS_TOKEN` to populate a new session's name and description from a linked ticket.
-- At least one supported coding agent: `claude`, `codex`, or `opencode`.
-- Go 1.26+ and Node 22+ to build from source — the workbench's Svelte frontend is built by `make front` before anything Go embeds it.
+![The qrouton workbench with a session rail, Codex conversation, shell, and rendered plan](docs/images/workbench.png)
 
-## Build and run 🚀
+## What you get
 
-```sh
-make build
-./qrouton
-```
+- **One session across many repositories.** Editing repos get a session branch;
+  reference repos are pinned, detached, and read-only.
+- **A workbench you can drive together.** The agent conversation, a real shell,
+  live commands, documents, diffs, and status all live in one window.
+- **Your choice of agent.** Claude Code, Codex CLI, and OpenCode are supported.
+- **Two ways to work.** Use Assistant mode for ordinary collaboration, or RPI
+  for a structured Research → Plan → Implement run.
+- **Sessions that survive.** Reopen a session and qrouton restores its repos,
+  mode, branch, and agent conversation.
+- **Less repeated cloning.** Shared bare mirrors feed lightweight worktrees for
+  every session.
 
-To build the macOS application bundle locally:
+## Install on macOS
 
-```sh
-make app                         # dist/qrouton.app
-make dist VERSION=0.1.0          # app plus a shareable universal zip
-```
+The release bundle supports Apple silicon and Intel Macs running macOS 12 or
+newer.
 
-The bundle contains both Apple silicon and Intel slices and targets macOS 12 or
-newer. Finder-launched builds add the conventional Homebrew and per-user CLI
-directories to `PATH`, so `gh`, supported agents, and configured editors remain
-discoverable.
+1. Download the latest zip from [GitHub Releases](https://github.com/kieranajp/qrouton/releases/latest).
+2. Unzip it and move `qrouton.app` to Applications.
+3. Control-click the app, choose **Open**, then confirm **Open** on first launch.
 
-GitHub Actions builds and attaches the zip when a non-draft GitHub Release is
-created for a numeric tag such as `v0.1.0`. Draft releases do not emit the
-workflow's `release: created` event. Without signing secrets the result is
-ad-hoc signed and macOS will show its unidentified-developer warning. For a
-Developer ID signed and notarised build, configure these repository secrets:
+> [!NOTE]
+> Release builds are currently ad-hoc signed, so macOS shows an
+> unidentified-developer warning on first launch. Developer ID signing and
+> notarisation are supported by the release workflow but not configured yet.
 
-- `MACOS_CERTIFICATE` — base64-encoded Developer ID Application `.p12`
-- `MACOS_CERTIFICATE_PASSWORD`
-- `MACOS_SIGNING_IDENTITY`
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_SPECIFIC_PASSWORD`
+qrouton expects these tools on the Mac:
 
-`make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell tab, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
+- [Git](https://git-scm.com/)
+- [GitHub CLI](https://cli.github.com/), authenticated with `gh auth login`, or
+  a `GITHUB_TOKEN`
+- At least one supported agent: `claude`, `codex`, or `opencode`
 
-qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work`. Set `orgs` by hand before assembling your first session: with none, the repository list is empty. Configuration is stored at:
+Ticket lookup is optional. Set `LINEAR_API_KEY` or `ASANA_ACCESS_TOKEN` if you
+want a pasted ticket link to populate the session name and description.
 
-```text
-$XDG_CONFIG_HOME/qrouton/config.json
-# fallback: ~/.config/qrouton/config.json
-```
+## Create your first session
 
-Example:
+1. Open **Settings** and add the GitHub organisations or users whose repos you
+   want to search.
+2. Choose **+ New session**.
+3. Name the work, or paste a Linear/Asana ticket to fill it in.
+4. Choose a branch prefix, agent, and session mode.
+5. Set each repository to **Editing**, **Reference**, or **Off**.
+6. Create the session. qrouton assembles it and starts the agent in the
+   workbench.
 
-```json
-{
-  "orgs": ["lifesum", "vimeda", "kieranajp"],
-  "root": "~/work/qrouton",
-  "editor": ["nvim", "+{line}", "{path}"]
-}
-```
+![Creating a qrouton session from a ticket, with a branch prefix and repository selection](docs/images/new-session.png)
 
-`orgs` accepts both organizations and personal GitHub accounts. `editor` is optional; qrouton otherwise uses `$VISUAL`, `$EDITOR`, or a detected editor.
+Repositories have deliberately different roles:
 
-`launch` is optional too, and overrides a runner's command — keyed by runner id, with the exact argv to run:
+| Role | What qrouton does | What the agent may do |
+| --- | --- | --- |
+| **Editing** | Checks out `<prefix>/<session-slug>` | Read and change files |
+| **Reference** | Pins a detached commit | Read only |
+| **Off** | Leaves the repository out | Nothing |
 
-```json
-"launch": { "claude": ["claude", "--dangerously-skip-permissions", "--verbose"] }
-```
+You can add more repositories later without restarting the conversation.
 
-It **replaces** the built-in command rather than adding to it, so an override that omits a flag removes it. The argv need not name the runner, which is how you point at a different build: `"claude": ["/opt/claude-beta/claude", "--dangerously-skip-permissions"]`. Omit the key entirely to get the default.
+## The workbench
 
-Useful flags:
+The conversation is the main surface, not a dashboard wrapped around it.
+qrouton runs the selected agent in a real PTY and gives it session-aware tools
+for opening supporting work beside the conversation.
 
-```sh
-./qrouton --runner codex     # preselect a supported coding agent
-./qrouton --linear-issue LIF-2841
-```
+An agent can:
 
-## Open Linear issues in qrouton 🔗
+- open a Markdown plan or research document;
+- show the current diff;
+- run a build, watcher, server, or log tail in an interactive tab;
+- open a source file in your configured editor;
+- ask for more repositories when the task expands.
 
-Linear Desktop can send **Work on issue → Custom script** to qrouton's existing New session flow. Open qrouton's Settings and save the prefilled **Linear custom script** field. If `~/.linear/coding-tools.json` does not exist, qrouton creates it with the running executable's absolute path:
+Agent-opened tabs do not steal keyboard focus. Commands that succeed close
+their tab; failed commands stay visible with their error.
 
-```json
-{
-  "openIssue": {
-    "path": "/Users/you/.local/bin/qrouton",
-    "args": ["--linear-issue", "{{issue.identifier}}"],
-    "env": ["LINEAR_PROMPT"]
-  }
-}
-```
+## Assistant and RPI modes
 
-The field remains a plain JSON editor: an existing file is loaded verbatim, and qrouton validates it as a JSON object before writing it back.
+| | Assistant | RPI |
+| --- | --- | --- |
+| Best for | Questions, diagnosis, small changes, open-ended collaboration | Larger or ambiguous work that benefits from explicit phases |
+| Flow | Work directly | Research → Plan → Implement |
+| Delegation | Used only when helpful | Leads fan out to focused specialists |
+| Durable artifacts | Optional | Research, specs, and plans are part of the workflow |
 
-The flag accepts an identifier such as `LIF-2841`, `https://linear.app/issue/LIF-2841`, or a workspace URL such as `https://linear.app/lifesum/issue/LIF-2841/title`. It validates and persists the workspace-free form `https://linear.app/issue/LIF-2841`. Repository roles, agent, mode, branch and Create remain interactive.
+RPI is qrouton's structured orchestration loop: research establishes what is
+true, planning turns it into a tactical design, implementation executes and
+verifies it. Assistant mode keeps the same workbench and tools without forcing
+that ceremony.
 
-The generated `env` entry lets Linear pass its composed `LINEAR_PROMPT` alongside the issue. On the session's first launch, qrouton sends its own Assistant or RPI opening message first, followed by `Linear request:` and Linear's prompt. The prompt is consumed once and is not repeated on agent resume. Ticket fetching and session creation still happen later in the window.
+A session can escalate from Assistant to RPI mid-conversation. The mode and its
+prompt assets are stored with the session and restored when it resumes.
 
-The command succeeds when a running workbench accepts the request, or when a newly launched workbench is ready with the request queued. `LINEAR_API_KEY` must be present in the environment of the workbench process: a running workbench keeps the environment it started with, and Linear does not guarantee that a cold custom-script launch inherits the environment from your usual shell. qrouton does not store the key.
-
-Repeated actions for the same issue reveal its open draft or preferred existing session. A different issue is refused while any New session draft is open, without replacing that draft. If a workbench from an older qrouton version is running, quit it and retry so the installed version can start.
-
-To remove the integration, delete `openIssue` from `~/.linear/coding-tools.json` or point it back to the previous coding tool. To roll back the binary, quit the workbench before installing the earlier version; pasted Linear and Asana ticket URLs continue to work independently of this integration.
-
-## Session shape 🗂️
+## Sessions on disk
 
 ```text
 <root>/
@@ -146,41 +139,131 @@ To remove the integration, delete `openIssue` from `~/.linear/coding-tools.json`
     └── .qrouton/
 ```
 
-Each repository in the picker carries a three-way control: **Off**, **Editing**, **Reference**. Editing repositories are implementation targets, checked out on the session branch. Reference repositories are available for inspection but are explicitly marked read-only for the coding agent, and pinned to a commit.
+Mirrors are shared across sessions. Worktrees, the manifest, agent discovery
+files, and durable thoughts belong to the session.
 
-## Session mode 🎛️
+## Configuration
 
-Each session starts in one of two modes, chosen on the new-session form (`RPI` is the default):
+Configuration lives at `$XDG_CONFIG_HOME/qrouton/config.json`, falling back to
+`~/.config/qrouton/config.json`.
 
-- **RPI** — the orchestrated Research → Plan → Implement workflow, with research/planning/implementation leads, ticket-blind specialists, and durable specs and plans.
-- **Assistant** — an open-ended coding session: help directly, no forced workflow or artifacts.
-
-RPI is qrouton's take on [loop engineering](https://newsletter.pragmaticengineer.com/p/what-is-loop-engineering): the interesting part isn't the prompt, it's the loop around it — the topology (leads fanning out to specialists), the verifier (review and test gates), and the stop rules (phased plans). Assistant mode is the honest other half of that idea: loops have preconditions, and plenty of work doesn't clear them. So you pick the loop when it earns its keep, and skip it when you're the verifier.
-
-The mode only swaps the runner's starting system prompt and opening message; the workbench, MCP tools, and skills are identical either way. The choice is stored in `qrouton.json` and preserved on resume. Both prompts are always stamped under `.qrouton/qrspi/`, so an Assistant session can **escalate to RPI mid-conversation** just by asking the agent — no relaunch needed.
-
-## Prompt sources 🧠
-
-The workflow prompts are first-class source files under [`prompts/`](./prompts):
-
-```text
-prompts/
-├── orchestrator.md   # RPI mode
-├── assistant.md      # Assistant mode
-├── skills/
-└── agents/
+```json
+{
+  "orgs": ["lifesum", "vimeda", "kieranajp"],
+  "root": "~/work/qrouton",
+  "editor": ["code", "--goto", "{path}:{line}"],
+  "launch": {
+    "claude": ["claude", "--dangerously-skip-permissions", "--verbose"]
+  }
+}
 ```
 
-A `prompts.PromptLoader` supplies these sources: the embedded loader ships them inside the qrouton binary, and the filesystem loader reads them from a directory, for tests, eval snapshots, and alternate prompt sets. Provider discovery files — Claude Markdown, Codex TOML — are rendered from the same canonical agent prompts.
+| Key | Purpose |
+| --- | --- |
+| `orgs` | GitHub organisations or personal accounts shown in the repo picker |
+| `root` | Sessions root; defaults to `~/work` |
+| `editor` | Optional editor argv; `{path}` is required and `{line}` is supported |
+| `launch` | Optional exact argv override keyed by `claude`, `codex`, or `opencode` |
 
-Laying those rendered assets out on disk is `prompts.Stamp`, and both a session launch and a prompt eval call it. That is deliberate: an eval that graded a different discovery tree than sessions actually get would be grading the wrong thing.
+`launch` replaces the built-in command; it does not append flags. An override
+may use an absolute executable path to point qrouton at a beta or local build.
 
-## Development 🤖
+Finder-launched app bundles add the conventional Homebrew and per-user CLI
+directories to `PATH`, keeping `gh`, agents, and editor commands discoverable.
+
+Useful command-line options:
 
 ```sh
-make check
+qrouton --runner codex
+qrouton --linear-issue LIF-2841
 ```
 
-One entry point rather than bare `go` commands: the embedded asset tree is generated by `make front`, so a build, test, or vet run before it fails on an empty embed. `check` covers test, race, vet, build, and the frontend's own checks.
+## Linear Desktop integration
 
-Robot contributors should read [`AGENTS.md`](./AGENTS.md). Humans are also allowed, especially if adequately caffeinated. ☕
+Linear Desktop can send **Work on issue → Custom script** into qrouton's New
+session flow.
+
+1. Open qrouton's **Settings**.
+2. Find **Linear custom script**.
+3. Save the prefilled JSON to `~/.linear/coding-tools.json`.
+
+The generated entry points Linear at the running qrouton executable:
+
+```json
+{
+  "openIssue": {
+    "path": "/Applications/qrouton.app/Contents/MacOS/qrouton",
+    "args": ["--linear-issue", "{{issue.identifier}}"],
+    "env": ["LINEAR_PROMPT"]
+  }
+}
+```
+
+The issue opens in a new-session draft. Linear's composed prompt is delivered
+once, after qrouton's own opening message, when the agent first starts.
+
+`LINEAR_API_KEY` must be available to the qrouton process. A workbench that is
+already running keeps the environment it started with.
+
+## Build from source
+
+Source builds require Go 1.26+, Node 22+, and the platform WebKit development
+libraries. There is no Windows build.
+
+```sh
+make build
+./qrouton
+```
+
+`make install` writes the binary to `~/.local/bin` by default. Override that
+with `BINDIR=/somewhere make install`.
+
+On Linux, install GTK4 and WebKitGTK 6 first:
+
+```sh
+# Debian / Ubuntu
+sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev
+
+# Arch
+sudo pacman -S webkitgtk-6.0
+```
+
+Build the macOS bundle and universal release archive with:
+
+```sh
+make app
+make dist VERSION=0.1.0
+```
+
+## Releases
+
+Creating a non-draft GitHub Release with a numeric tag such as `v0.1.0`
+triggers the release workflow. CI builds a universal `.app`, verifies it,
+archives it, and uploads the zip and checksum to that Release.
+
+To enable Developer ID signing and notarisation, configure:
+
+- `MACOS_CERTIFICATE` — base64-encoded Developer ID Application `.p12`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `MACOS_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
+Without those secrets the workflow deliberately produces an ad-hoc signed
+bundle.
+
+## Contributing
+
+Run the complete gate before handing work over:
+
+```sh
+GOCACHE=/tmp/qrouton-go-cache make check
+```
+
+That covers Go tests, the race detector, vet, the production build, formatting,
+Svelte checks, unit tests, and browser tests.
+
+The repository's working agreement and architecture live in
+[`AGENTS.md`](./AGENTS.md). Prompt sources are under [`prompts/`](./prompts),
+and the design history is kept in [`thoughts/shared/`](./thoughts/shared/).
