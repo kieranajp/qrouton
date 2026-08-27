@@ -171,6 +171,37 @@ func TestTheConfirmDialogFocusesTheButtonThatConfirms(t *testing.T) {
 	}
 }
 
+// Enter advances the dialog without going through its button, so a screen that
+// will not go forward has to gate both. Neither is observable in a harness with
+// no components, so the wiring is what is read.
+func TestTheDialogGatesEnterWithItsAdvanceButton(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/assembly/Dialog.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(source)
+	if !strings.Contains(body, "else if (canAdvance) onPrimary();") {
+		t.Fatal("Enter reaches onPrimary without asking whether the dialog can advance")
+	}
+	if !strings.Contains(body, "disabled={busy || !canAdvance}") {
+		t.Fatal("the advance button stays live on a dialog that cannot advance")
+	}
+}
+
+// Nothing joins the tested predicate to the gated dialog, so a page that stops
+// passing either attribute reopens the trap with every check still green.
+func TestTheOwnersQuestionHoldsTheDialogItDraws(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/firstrun/FirstRunOverlay.svelte")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, wiring := range []string{"canAdvance={!blocked}", "status={blocked || flow.status}"} {
+		if !strings.Contains(string(source), wiring) {
+			t.Fatalf("first run does not pass %s, so an unanswered owners question advances", wiring)
+		}
+	}
+}
+
 // The formats the pane registry keys on are the port's values, spelled again in
 // JavaScript. Nothing checks that at build time, and a format no pane claims
 // draws as plain text rather than erroring.

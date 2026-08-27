@@ -7,9 +7,11 @@
   import SessionScreen from "./SessionScreen.svelte";
   import Welcome from "./Welcome.svelte";
   import { firstRun } from "./firstrun.svelte.js";
-  import { back, caps, pip, primary, title, total } from "./screens.js";
+  import { back, blocking, caps, pip, primary, title, total } from "./screens.js";
 
   const flow = firstRun();
+
+  let blocked = $derived(blocking(flow.step, flow.form.orgs, flow.orgInput));
 </script>
 
 <Dialog
@@ -17,8 +19,9 @@
   active={pip(flow.step)}
   secondary={back(flow.step) || undefined}
   primary={primary(flow.step)}
-  status={flow.status}
+  status={blocked || flow.status}
   busy={flow.busy}
+  canAdvance={!blocked}
   onSecondary={flow.back}
   onPrimary={flow.next}>
   <div class="title">{title}</div>

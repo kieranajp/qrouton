@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { back, caps, last, pip, primary, total } from "./screens.js";
+import { back, blocking, caps, last, pip, primary, total } from "./screens.js";
 
 test("there are five screens, three of them explaining and two asking", () => {
   assert.equal(total, 5);
@@ -34,4 +34,28 @@ test("the lit pip is the step, and a step outside the five still lights one", ()
 test("a step outside the five falls back to the first screen's chrome", () => {
   assert.equal(primary(9), "Show me →");
   assert.equal(back(9), "");
+});
+
+// Answering with no owners would write the welcomed marker, and a workbench with
+// no sessions has no route back to the question or to Settings.
+test("the owners question cannot be left unanswered", () => {
+  assert.equal(blocking(3, [], ""), "Add at least one organisation or username to search.");
+});
+
+test("a committed chip answers the owners question", () => {
+  assert.equal(blocking(3, ["acme"], ""), "");
+});
+
+// Next commits what is in the field on the way out, so a typed owner is an
+// answer already.
+test("an owner typed but not yet a chip answers the owners question", () => {
+  assert.equal(blocking(3, [], "acme"), "");
+});
+
+test("whitespace in the field answers nothing", () => {
+  assert.equal(blocking(3, [], "   "), "Add at least one organisation or username to search.");
+});
+
+test("no other screen has an answer it will not accept, nor does a step outside the five", () => {
+  for (const step of [0, 1, 2, 4, 9]) assert.equal(blocking(step, [], ""), "");
 });

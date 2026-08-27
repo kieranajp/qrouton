@@ -5,7 +5,7 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, primary: string, status?: string, busy?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, primary: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
@@ -14,6 +14,7 @@
     primary,
     status = "",
     busy = false,
+    canAdvance = true,
     onSecondary,
     onPrimary,
     onEscape,
@@ -33,7 +34,7 @@
     if (!meant) return;
     event.preventDefault();
     if (meant === "cancel") onEscape?.();
-    else onPrimary();
+    else if (canAdvance) onPrimary();
   }
 </script>
 
@@ -60,7 +61,7 @@
           <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
         {/if}
         <span class="status">{status}</span>
-        <Button disabled={busy} onclick={onPrimary}>{primary}</Button>
+        <Button disabled={busy || !canAdvance} onclick={onPrimary}>{primary}</Button>
       </div>
     </div>
   </div>
