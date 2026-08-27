@@ -1,4 +1,6 @@
-import { Events } from "./wails.js";
+import { Call, Events } from "./wails.js";
+
+const CHROME_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Chrome";
 
 /** @type {{mode: string, phase: string, identity: string, branch: string,
  *   slug: string, terminal: string,
@@ -33,9 +35,17 @@ const observed = (data) =>
 export function chrome() {
   let fields = $state(NOTHING);
   let settled = $state(false);
-  Events.On("chrome:update", (event) => {
-    fields = observed(event.data);
+  let live = false;
+  const apply = (value) => {
+    fields = observed(value);
     settled = true;
+  };
+  Events.On("chrome:update", (event) => {
+    live = true;
+    apply(event.data);
+  });
+  Call.ByName(CHROME_SERVICE + ".Snapshot").then((value) => {
+    if (!live) apply(value);
   });
   return {
     get fields() {

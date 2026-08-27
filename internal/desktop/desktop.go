@@ -78,6 +78,7 @@ type Options struct {
 	ValidateEditor func(argv []string) error
 	ValidateLaunch func(overrides map[string][]string) error
 	assembly       *Assembly
+	chrome         *Chrome
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -117,6 +118,9 @@ func Run(opts Options) error {
 	r.register(application.NewService(reg))
 	r.register(application.NewService(repos))
 	r.register(application.NewService(&Orgs{cfg: opts.Config}))
+	chrome := newChrome(r.Emit)
+	opts.chrome = chrome
+	r.register(application.NewService(chrome))
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
@@ -213,7 +217,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return exec.Command(argv[0], argv[1:]...).Run()
 		},
 	}
-	go watchChrome(ctx, reg, opts.Root, opts.Config, r.Emit)
+	chromeEmit := r.Emit
+	if opts.chrome != nil {
+		chromeEmit = opts.chrome.publish
+	}
+	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
