@@ -26,6 +26,7 @@ import (
 )
 
 func main() {
+	prepareEnvironment()
 	app := &cli.App{
 		Name:        appName,
 		Usage:       appUsage,

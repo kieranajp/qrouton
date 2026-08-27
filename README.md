@@ -45,6 +45,31 @@ make build
 ./qrouton
 ```
 
+To build the macOS application bundle locally:
+
+```sh
+make app                         # dist/qrouton.app
+make dist VERSION=0.1.0          # app plus a shareable universal zip
+```
+
+The bundle contains both Apple silicon and Intel slices and targets macOS 12 or
+newer. Finder-launched builds add the conventional Homebrew and per-user CLI
+directories to `PATH`, so `gh`, supported agents, and configured editors remain
+discoverable.
+
+GitHub Actions builds and attaches the zip when a non-draft GitHub Release is
+created for a numeric tag such as `v0.1.0`. Draft releases do not emit the
+workflow's `release: created` event. Without signing secrets the result is
+ad-hoc signed and macOS will show its unidentified-developer warning. For a
+Developer ID signed and notarised build, configure these repository secrets:
+
+- `MACOS_CERTIFICATE` — base64-encoded Developer ID Application `.p12`
+- `MACOS_CERTIFICATE_PASSWORD`
+- `MACOS_SIGNING_IDENTITY`
+- `APPLE_ID`
+- `APPLE_TEAM_ID`
+- `APPLE_APP_SPECIFIC_PASSWORD`
+
 `make install` puts the binary in `~/.local/bin` (override with `BINDIR=`). Worth doing: you switch a running session's mode with `qrouton mode` from its shell tab, so it wants to be somewhere your shell can find it. `make check` runs the whole pre-handoff gate.
 
 qrouton does not ask for anything on first run — a session with no repositories needs neither a root nor GitHub owners, so the root defaults to `~/work`. Set `orgs` by hand before assembling your first session: with none, the repository list is empty. Configuration is stored at:

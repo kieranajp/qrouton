@@ -1,19 +1,27 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  release:
+    types: [created]
 
 permissions:
   contents: write
 
 jobs:
   release:
-    # cgo links WebKit, so both artifacts are built on a Mac. Go hands clang the
-    # arch, which is why one arm64 runner can produce the amd64 slice too.
     runs-on: macos-latest
+    env:
+      MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+      MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      RELEASE_VERSION: ${{ github.event.release.tag_name }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
@@ -22,20 +30,43 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: internal/desktop/frontend/package-lock.json
-      # This job drives go directly rather than through make, so the embedded
-      # pages have to be built explicitly — without them the test job fails on
-      # an empty embed and the release ships stale ones.
       - run: make front
       - run: go test ./...
-      - name: Build binaries
+
+      - name: Import Developer ID certificate
+        if: env.MACOS_CERTIFICATE != '' && env.MACOS_SIGNING_IDENTITY != ''
         run: |
-          mkdir -p dist
-          for goarch in arm64 amd64; do
-            CGO_ENABLED=1 GOOS=darwin GOARCH=$goarch \
-              go build -trimpath -ldflags "-s -w" -o "dist/qrouton-darwin-${goarch}" .
-          done
-          (cd dist && shasum -a 256 * > checksums.txt)
-      - uses: softprops/action-gh-release@v3
-        with:
-          files: dist/*
-          generate_release_notes: true
+          certificate_path="$RUNNER_TEMP/qrouton-certificate.p12"
+          keychain_path="$RUNNER_TEMP/qrouton-signing.keychain-db"
+          keychain_password=$(uuidgen)
+          printf '%s' "$MACOS_CERTIFICATE" | base64 --decode -o "$certificate_path"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -lut 21600 "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security import "$certificate_path" -P "$MACOS_CERTIFICATE_PASSWORD" -A -t cert -f pkcs12 -k "$keychain_path"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          security list-keychains -d user -s "$keychain_path"
+
+      - name: Build universal macOS app
+        run: |
+          signing_identity=${MACOS_SIGNING_IDENTITY:--}
+          make app VERSION="$RELEASE_VERSION" BUILD_NUMBER="${{ github.run_number }}" SIGN_IDENTITY="$signing_identity"
+          make archive VERSION="$RELEASE_VERSION"
+
+      - name: Notarize macOS app
+        if: env.MACOS_SIGNING_IDENTITY != '' && env.APPLE_ID != '' && env.APPLE_TEAM_ID != '' && env.APPLE_APP_SPECIFIC_PASSWORD != ''
+        run: |
+          xcrun notarytool submit dist/*.zip \
+            --apple-id "$APPLE_ID" \
+            --team-id "$APPLE_TEAM_ID" \
+            --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+            --wait
+          xcrun stapler staple dist/qrouton.app
+          xcrun stapler validate dist/qrouton.app
+          make archive VERSION="$RELEASE_VERSION"
+          spctl --assess --type execute --verbose=2 dist/qrouton.app
+
+      - name: Upload release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$RELEASE_VERSION" dist/*.zip dist/checksums.txt --clobber
