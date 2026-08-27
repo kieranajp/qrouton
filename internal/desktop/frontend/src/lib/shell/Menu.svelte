@@ -22,6 +22,7 @@
         class="item"
         class:active={item.active}
         class:destructive={item.tone === "destructive"}
+        disabled={item.disabled}
         onclick={() => onSelect?.(item, i)}>
         {#if item.status}
           <StatusDot state={item.status === "succeeded" ? "success" : item.status} size={7} />
@@ -77,18 +78,23 @@
   }
 
   .item.active,
-  .item:hover {
+  .item:enabled:hover {
     background: var(--surface-raised);
     color: var(--text-primary);
   }
 
   .item.destructive,
-  .item.destructive:hover {
+  .item.destructive:enabled:hover {
     color: var(--action-destructive);
   }
 
-  .item.destructive:hover {
+  .item.destructive:enabled:hover {
     background: color-mix(in srgb, var(--action-destructive) 14%, var(--surface-raised));
+  }
+
+  .item:disabled {
+    color: var(--text-faint);
+    cursor: default;
   }
 
   .tag {
