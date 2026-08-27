@@ -7,6 +7,7 @@
   import StatusDot from "./lib/core/StatusDot.svelte";
   import RailItem from "./lib/session/RailItem.svelte";
   import Confirm from "./lib/shell/Confirm.svelte";
+  import ContextMenu from "./lib/shell/ContextMenu.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
@@ -462,6 +463,8 @@
       </div>
     </Confirm>
   {/if}
+
+  <ContextMenu />
 
   <WindowTray
     summary="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===
