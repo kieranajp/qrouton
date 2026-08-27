@@ -32,6 +32,11 @@ var (
 	// ErrNoEditor means qrouton found no terminal editor to open files with.
 	ErrNoEditor = errors.New("no terminal editor found")
 
+	// ErrInvalidEditor means the marshalled editor configuration a child process
+	// was handed could not be read back. An absent editor is legitimate; a
+	// malformed one is a configuration mistake worth stopping for.
+	ErrInvalidEditor = errors.New("editor configuration is malformed")
+
 	// ErrWorkbenchSpecIncomplete means a detached workbench was started without
 	// a socket to serve or a conversation command to run.
 	ErrWorkbenchSpecIncomplete = errors.New("workbench spec missing socket or command")

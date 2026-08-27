@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -28,6 +29,37 @@ func TestResolveEditorFromEnvironment(t *testing.T) {
 	}
 	if got := e.Args("doc.md", 9); !reflect.DeepEqual(got, []string{"sh", "-x", "doc.md"}) {
 		t.Fatalf("args = %#v", got)
+	}
+}
+
+// An unresolvable editor reaches every child as the zero value, so reading it
+// back must be a non-event: it costs the document chip, not the session.
+func TestParseEditorAcceptsAnAbsentEditor(t *testing.T) {
+	for name, marshalled := range map[string]string{
+		"an unset flag":   "",
+		"whitespace":      "  ",
+		"the zero value":  EditorCommand{}.Marshal(),
+		"an empty object": "{}",
+	} {
+		t.Run(name, func(t *testing.T) {
+			editor, err := ParseEditor(marshalled)
+			if err != nil {
+				t.Fatalf("ParseEditor(%q) = %v, want no editor and no error", marshalled, err)
+			}
+			if len(editor.Argv) != 0 || editor.Template {
+				t.Fatalf("ParseEditor(%q) = %#v, want the zero value", marshalled, editor)
+			}
+		})
+	}
+}
+
+// A mistyped editor is a configuration mistake, and must not be read as the
+// user having chosen not to have one.
+func TestParseEditorRejectsAMalformedEditor(t *testing.T) {
+	for _, marshalled := range []string{"{", "vi", `{"argv":"vi"}`, `{"argv":[1,2]}`} {
+		if _, err := ParseEditor(marshalled); !errors.Is(err, ErrInvalidEditor) {
+			t.Fatalf("ParseEditor(%q) = %v, want %v", marshalled, err, ErrInvalidEditor)
+		}
 	}
 }
 
