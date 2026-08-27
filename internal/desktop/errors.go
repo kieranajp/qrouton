@@ -13,6 +13,7 @@ var (
 	ErrNoConfig           = errors.New("workbench has no configuration to assemble sessions against")
 	ErrTerminalNotStarted = errors.New("terminal is not started")
 	ErrStaleFrontend      = errors.New(staleFrontendError)
+	ErrNoOwners           = errors.New(noOwnersError)
 
 	ErrNoWindowOptions       = errors.New("open request carries no window options")
 	ErrNoWindowCommand       = errors.New("a terminal window needs a command")

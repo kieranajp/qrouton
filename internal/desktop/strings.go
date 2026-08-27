@@ -26,6 +26,8 @@ const (
 	staleFrontendError         = "workbench frontend is stale; run make front before building qrouton"
 	staleFrontendBindingFormat = "%w: built pages do not call %s"
 
+	noOwnersError = "add at least one organisation or username to search"
+
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 

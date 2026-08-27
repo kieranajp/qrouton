@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
@@ -91,7 +92,7 @@ func TestFirstRunSaveStoresTheRootWithoutSurroundingSpace(t *testing.T) {
 	stubs := &firstRunStubs{}
 	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
 
-	if _, err := f.Save(FirstRunInput{Root: "  " + root + "  "}); err != nil {
+	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: "  " + root + "  "}); err != nil {
 		t.Fatal(err)
 	}
 	if saved := savedConfig(t); saved.Root != root {
@@ -174,7 +175,11 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	stubs := &firstRunStubs{}
 	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
 
-	for _, in := range []FirstRunInput{{Root: "   "}, {Root: filepath.Join(blocked, "sub")}} {
+	owned := []string{"acme"}
+	for _, in := range []FirstRunInput{
+		{Orgs: owned, Root: "   "},
+		{Orgs: owned, Root: filepath.Join(blocked, "sub")},
+	} {
 		if _, err := f.Save(in); err == nil {
 			t.Fatalf("Save accepted %q as a sessions root", in.Root)
 		}
@@ -187,6 +192,40 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	}
 	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
 		t.Fatal("a refused save wrote config.json")
+	}
+}
+
+// The binding is callable without the screens, and an owner list saved empty
+// would be marked welcomed: no owners, no question to come back to, and a
+// session-less workbench has no route to Settings either.
+func TestFirstRunSaveRefusesAnEmptyOwnerListAndTouchesNothing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: t.TempDir()}
+	stubs := &firstRunStubs{}
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+
+	root := filepath.Join(t.TempDir(), "sessions")
+	for _, orgs := range [][]string{nil, {}, {"", "   "}} {
+		_, err := f.Save(FirstRunInput{Orgs: orgs, Root: root})
+		if !errors.Is(err, ErrNoOwners) {
+			t.Fatalf("Save(%q) error = %v, want ErrNoOwners", orgs, err)
+		}
+		if !strings.HasPrefix(err.Error(), "orgs: ") {
+			t.Fatalf("refusal %q does not name the field the screen puts it on", err)
+		}
+	}
+
+	if cfg.Welcomed {
+		t.Fatal("a refused save marked the config welcomed, so the flow never reappears")
+	}
+	if stubs.relaunches != 0 || stubs.quits != 0 {
+		t.Fatal("a refused save reached the relaunch")
+	}
+	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
+		t.Fatal("a refused save wrote config.json")
+	}
+	if _, err := os.Stat(root); !os.IsNotExist(err) {
+		t.Fatal("a refused save created the sessions root it was given")
 	}
 }
 
