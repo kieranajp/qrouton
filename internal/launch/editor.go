@@ -71,8 +71,7 @@ func (e EditorCommand) Args(path string, line int) []string {
 func (e EditorCommand) Marshal() string { b, _ := json.Marshal(e); return string(b) }
 
 // ParseEditor reads back what Marshal wrote. An absent value is the zero
-// EditorCommand and no error, which is how a session with no editor runs at
-// all. Malformed JSON is an error, so a mistyped editor cannot pass for none.
+// EditorCommand and no error, which is how a session with no editor runs at all.
 func ParseEditor(marshalled string) (EditorCommand, error) {
 	if strings.TrimSpace(marshalled) == "" {
 		return EditorCommand{}, nil

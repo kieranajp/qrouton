@@ -62,8 +62,8 @@ func TestLaunchAsksTheSupervisorToResume(t *testing.T) {
 }
 
 // The launcher stamps the zero editor when it could not resolve one, and the
-// supervisor it stamps for must read that as having no editor rather than as a
-// broken argument — every session used to die on this.
+// supervisor it stamps for reads that as having no editor rather than as a
+// broken argument.
 func TestLaunchStampsAnAbsentEditorTheSupervisorCanRead(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("CODEX_HOME", t.TempDir())

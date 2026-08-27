@@ -186,8 +186,8 @@ func TestSuperviseStartsFreshWhenEscalationPrecedesTheLaunch(t *testing.T) {
 	}
 }
 
-// A session with no editor is a session, and the supervisor passes the absence
-// on to the MCP child the same way it passes a resolved editor.
+// A session with no editor is a session, and the supervisor hands the absence to
+// the runner the same way it hands over a resolved editor.
 func TestSuperviseLaunchesWithNoEditor(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
 	var argvs, envs [][]string

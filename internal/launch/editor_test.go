@@ -32,8 +32,19 @@ func TestResolveEditorFromEnvironment(t *testing.T) {
 	}
 }
 
+func TestParseEditorRoundTripsAResolvedEditor(t *testing.T) {
+	want := EditorCommand{Argv: []string{"nvim", "+{line}", "{path}"}, Template: true}
+	got, err := ParseEditor(want.Marshal())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("round trip = %#v, want %#v", got, want)
+	}
+}
+
 // An unresolvable editor reaches every child as the zero value, so reading it
-// back must be a non-event: it costs the document chip, not the session.
+// back must be a non-event.
 func TestParseEditorAcceptsAnAbsentEditor(t *testing.T) {
 	for name, marshalled := range map[string]string{
 		"an unset flag":   "",
