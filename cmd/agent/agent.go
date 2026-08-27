@@ -4,8 +4,6 @@
 package agent
 
 import (
-	"encoding/json"
-
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -33,9 +31,9 @@ var Command = &cli.Command{
 		if err != nil {
 			return err
 		}
-		var editor launch.EditorCommand
-		if err := json.Unmarshal([]byte(c.String(editorJSONFlag)), &editor); err != nil || len(editor.Argv) == 0 {
-			return errInvalidEditor
+		editor, err := launch.ParseEditor(c.String(editorJSONFlag))
+		if err != nil {
+			return err
 		}
 		handle, err := workbench.ParseHandle(c.String(workbenchJSONFlag))
 		if err != nil {

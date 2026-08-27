@@ -186,6 +186,40 @@ func TestSuperviseStartsFreshWhenEscalationPrecedesTheLaunch(t *testing.T) {
 	}
 }
 
+// A session with no editor is a session, and the supervisor passes the absence
+// on to the MCP child the same way it passes a resolved editor.
+func TestSuperviseLaunchesWithNoEditor(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	var argvs, envs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs, envs = append(argvs, argv), append(envs, env)
+		return false, nil
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, false); err != nil {
+		t.Fatalf("a session with no editor refused to launch: %v", err)
+	}
+	if len(argvs) != 1 {
+		t.Fatalf("launched %d runners, want 1", len(argvs))
+	}
+	inherited := ""
+	for _, entry := range envs[0] {
+		if value, ok := strings.CutPrefix(entry, EditorEnvVar+"="); ok {
+			inherited = value
+		}
+	}
+	if inherited == "" {
+		t.Fatalf("the child inherits no %s at all", EditorEnvVar)
+	}
+	editor, err := ParseEditor(inherited)
+	if err != nil {
+		t.Fatalf("the child inherits %q, which it cannot read: %v", inherited, err)
+	}
+	if len(editor.Argv) != 0 {
+		t.Fatalf("inherited editor = %#v, want none", editor)
+	}
+}
+
 func TestSuperviseEndsTheTerminalOnUnsignalledExit(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)
 	calls := 0

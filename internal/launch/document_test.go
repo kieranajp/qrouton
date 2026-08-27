@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -199,7 +200,7 @@ func TestDocumentWindowNeedsNoEditorForAPane(t *testing.T) {
 	if _, err := DocumentWindow(root, "note.md", EditorCommand{}, workbench.LineSpan{Line: 1}); err != nil {
 		t.Fatalf("a pane needed an editor: %v", err)
 	}
-	if _, err := DocumentWindow(root, "main.go", EditorCommand{}, workbench.LineSpan{Line: 1}); err == nil {
-		t.Fatal("a source file opened with no editor configured")
+	if _, err := DocumentWindow(root, "main.go", EditorCommand{}, workbench.LineSpan{Line: 1}); !errors.Is(err, ErrNoEditor) {
+		t.Fatalf("a source file with no editor configured = %v, want %v", err, ErrNoEditor)
 	}
 }

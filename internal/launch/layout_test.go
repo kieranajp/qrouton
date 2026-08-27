@@ -61,6 +61,30 @@ func TestLaunchAsksTheSupervisorToResume(t *testing.T) {
 	}
 }
 
+// The launcher stamps the zero editor when it could not resolve one, and the
+// supervisor it stamps for must read that as having no editor rather than as a
+// broken argument — every session used to die on this.
+func TestLaunchStampsAnAbsentEditorTheSupervisorCanRead(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	argv, env, err := Launch(t.TempDir(), Runner{ID: "codex", Command: []string{"codex"}}, "/bin/qrouton",
+		"/tmp/qrouton/501/deadbeef.sock", EditorCommand{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stamped := argv[flagValue(argv, editorJSONFlag)]
+	editor, err := ParseEditor(stamped)
+	if err != nil {
+		t.Fatalf("the supervisor cannot read the stamped editor %q: %v", stamped, err)
+	}
+	if len(editor.Argv) != 0 {
+		t.Fatalf("stamped editor = %#v, want none", editor)
+	}
+	if !contains(env, EditorEnvVar+"="+stamped) {
+		t.Fatalf("environment does not carry the absent editor: %v", env)
+	}
+}
+
 func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 	if joined := strings.Join(ShellArgv("/bin/qrouton", "/sessions/octopus"), " "); joined != "/bin/qrouton shell --session-root /sessions/octopus" {
 		t.Fatalf("shell argv = %q", joined)

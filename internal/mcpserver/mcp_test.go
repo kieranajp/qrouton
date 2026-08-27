@@ -253,6 +253,46 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 
 // A long document is no use open at the top when the agent means one passage of
 // it, so the span travels to the pane and the agent is told what was marked.
+// A workbench that could not resolve an editor still serves the tools: what
+// qrouton renders itself opens as a pane, and only the rest is refused — one
+// tool call at a time, rather than the whole session.
+func TestOpenFileWithNoEditorRendersWhatItCanAndRefusesTheRest(t *testing.T) {
+	dir := t.TempDir()
+	host := &fakeHost{}
+	m := newWindowManager(dir, launch.EditorCommand{}, host)
+	shortViewportPoll(t, 8*time.Millisecond)
+	for name, body := range map[string]string{"P007.md": "# Plan\n\nPhase 1.\n", "main.go": "package main\n"} {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ctx := context.Background()
+
+	if _, _, err := m.openFile(ctx, openFileInput{Path: "P007.md"}); err != nil {
+		t.Fatalf("a rendered pane needed an editor: %v", err)
+	}
+	if _, _, err := m.openFile(ctx, openFileInput{Path: "main.go"}); !errors.Is(err, launch.ErrNoEditor) {
+		t.Fatalf("opening a source file with no editor = %v, want %v", err, launch.ErrNoEditor)
+	}
+	if len(host.opens) != 1 {
+		t.Fatalf("opened %d windows, want only the rendered pane", len(host.opens))
+	}
+	if host.opens[0].Kind != workbench.KindDocument {
+		t.Fatalf("the pane opened as a %q", host.opens[0].Kind)
+	}
+}
+
+// The editor no longer gates the server: an absent one gets past it to the
+// handle, and only a malformed one still stops the process.
+func TestRunRefusesAMalformedEditorButNotAnAbsentOne(t *testing.T) {
+	if err := Run(t.TempDir(), "", "{}"); !errors.Is(err, workbench.ErrHandleIncomplete) {
+		t.Fatalf("an absent editor = %v, want the handle to be the only complaint", err)
+	}
+	if err := Run(t.TempDir(), "{", "{}"); !errors.Is(err, launch.ErrInvalidEditor) {
+		t.Fatalf("a malformed editor = %v, want %v", err, launch.ErrInvalidEditor)
+	}
+}
+
 func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nPhase 1.\n"), 0o644); err != nil {

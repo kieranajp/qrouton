@@ -16,10 +16,6 @@ var (
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
 
-// ErrInvalidEditor means the editor configuration the launcher marshalled into
-// this process is missing or unusable.
-var ErrInvalidEditor = errors.New("mcp: invalid inherited editor configuration")
-
 func noSuchWindow(name string) error {
 	return fmt.Errorf("no open window named %q", name)
 }

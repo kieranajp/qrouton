@@ -5,7 +5,6 @@ package mcpserver
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -183,9 +182,9 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 // EditorCommand marshalled by the launcher (or inherited via QROUTON_EDITOR_JSON);
 // workbenchJSON is the Handle the launcher stamped into our arguments.
 func Run(root, editorJSON, workbenchJSON string) error {
-	var editor launch.EditorCommand
-	if err := json.Unmarshal([]byte(editorJSON), &editor); err != nil || len(editor.Argv) == 0 {
-		return ErrInvalidEditor
+	editor, err := launch.ParseEditor(editorJSON)
+	if err != nil {
+		return fmt.Errorf("mcp: %w", err)
 	}
 	handle, err := workbench.ParseHandle(workbenchJSON)
 	if err != nil {
