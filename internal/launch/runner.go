@@ -47,6 +47,7 @@ type injectContext struct {
 	dir        string
 	handle     workbench.Handle
 	mcpArgs    []string
+	generation uint64
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -184,7 +185,7 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, resume bool, initialPrompt string) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, generation uint64, resume bool, initialPrompt string) ([]string, []string, error) {
 	// Runner's fields are exported, so a hand-built one can still reach here
 	// without the per-runner wiring the launch path needs.
 	spec, ok := specFor(r.ID)
@@ -195,6 +196,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
+		generation: generation,
 		mcpArgs: []string{mcpSubcommand, sessionRootFlag, dir,
 			editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()},
 		override: r.Override,
@@ -208,7 +210,8 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	argv = append(argv, claudeMCPConfigFlag, string(b))
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
 		" " + sessionRootFlag + " " + ShellQuote(c.dir) +
-		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal())
+		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
+		" " + generationFlag + " " + fmt.Sprint(c.generation)
 	// Chime only when the agent asks for attention (not on every turn), so the user
 	// can step away; notify.sh is stamped into .qrouton by writeSupport.
 	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))

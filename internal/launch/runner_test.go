@@ -131,7 +131,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 
 func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), true, "")
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, true, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -144,7 +144,7 @@ func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
 
 func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
-	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), false, "")
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,7 +166,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	bin := "/opt/qro uton/$peculiar/qrouton"
 	dir := "/work/kieran's session"
 	handle := workbench.Handle{Socket: "/tmp/qr outon/it's.sock", SessionRoot: dir}
-	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, handle, false, "")
+	argv, _, err := runnerLaunch(r, bin, dir, EditorCommand{}, handle, 7, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -187,7 +187,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
 	callback := settings.Hooks["SubagentStart"][0].Hooks[0].Command
-	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal()}
+	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal(), "--generation", "7"}
 	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
 		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
@@ -226,7 +226,7 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), false, "")
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, false, "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -355,7 +355,7 @@ func TestBuiltinRunnersMirrorTheSpecTableWithoutSharingIt(t *testing.T) {
 // with no MCP server and no hooks.
 func TestAnUnregisteredRunnerIsRefusedRatherThanLaunchedBare(t *testing.T) {
 	_, _, err := runnerLaunch(Runner{ID: "handrolled", Command: []string{"echo"}},
-		"/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+		"/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 1, false, "")
 	if !errors.Is(err, ErrUnsupportedRunner) {
 		t.Fatalf("runnerLaunch error = %v, want ErrUnsupportedRunner", err)
 	}
@@ -382,7 +382,7 @@ func codexArgv(t *testing.T, command []string, config string) []string {
 		}
 	}
 	r := Runner{ID: runnerIDCodex, Label: runnerLabelCodex, Command: command}
-	argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+	argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 1, false, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +430,7 @@ func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
 			t.Fatalf("no spec for %q", id)
 		}
 		r := Runner{ID: spec.ID, Label: spec.Label, Command: spec.Command}
-		argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+		argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 1, false, "")
 		if err != nil {
 			t.Fatal(err)
 		}

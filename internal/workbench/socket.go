@@ -33,14 +33,17 @@ type processDescriptor struct {
 
 // Request is one call on the control socket.
 type Request struct {
-	Op          string              `json:"op"`
-	ID          string              `json:"id,omitempty"`
-	Full        bool                `json:"full,omitempty"`
-	Root        string              `json:"root,omitempty"`
-	Activity    string              `json:"activity,omitempty"`
-	Options     *WindowOptions      `json:"options,omitempty"`
-	Picker      *PickerRequest      `json:"picker,omitempty"`
-	LinearIssue *LinearIssueRequest `json:"linear_issue,omitempty"`
+	Op               string                     `json:"op"`
+	ID               string                     `json:"id,omitempty"`
+	Full             bool                       `json:"full,omitempty"`
+	Root             string                     `json:"root,omitempty"`
+	Activity         string                     `json:"activity,omitempty"`
+	Generation       uint64                     `json:"generation,omitempty"`
+	Options          *WindowOptions             `json:"options,omitempty"`
+	Picker           *PickerRequest             `json:"picker,omitempty"`
+	LinearIssue      *LinearIssueRequest        `json:"linear_issue,omitempty"`
+	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
+	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -59,6 +62,21 @@ type Response struct {
 type LinearIssueRequest struct {
 	Ticket string `json:"ticket"`
 	Prompt string `json:"prompt,omitempty"`
+}
+
+type RunnerGenerationRequest struct {
+	Provider   string `json:"provider"`
+	Generation uint64 `json:"generation"`
+}
+
+type DelegatedLifecycleRequest struct {
+	Provider   string    `json:"provider"`
+	Generation uint64    `json:"generation"`
+	Kind       string    `json:"kind"`
+	ID         string    `json:"id"`
+	Type       string    `json:"type,omitempty"`
+	ParentID   string    `json:"parent_id,omitempty"`
+	Timestamp  time.Time `json:"timestamp"`
 }
 
 // NewSocketPath reserves an address for a desktop process's control socket.
@@ -253,8 +271,19 @@ func ProcessLog(socket string) string {
 
 // Attention carries what the runner's own hooks said about its state. No tool
 // exposes it, so nothing reads model output to work it out.
-func (h Handle) Attention(ctx context.Context, activity string) error {
-	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpAttention, Activity: activity})
+func (h Handle) Attention(ctx context.Context, activity string, generation uint64) error {
+	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpAttention, Activity: activity, Generation: generation})
+	return err
+}
+
+func (h Handle) RunnerGeneration(ctx context.Context, provider string, generation uint64) error {
+	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpRunnerGeneration,
+		RunnerGeneration: &RunnerGenerationRequest{Provider: provider, Generation: generation}})
+	return err
+}
+
+func (h Handle) DelegatedLifecycle(ctx context.Context, event DelegatedLifecycleRequest) error {
+	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpDelegatedLifecycle, Lifecycle: &event})
 	return err
 }
 

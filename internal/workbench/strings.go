@@ -8,18 +8,25 @@ const (
 	handleParseError = "parse session handle"
 )
 
+const (
+	LifecycleStart = "start"
+	LifecycleStop  = "stop"
+)
+
 // Operations the control socket understands: one per WindowHost method, plus
 // the attention signal the runner's own hooks raise.
 const (
-	OpOpen            = "open"
-	OpClose           = "close"
-	OpRead            = "read"
-	OpViewport        = "viewport"
-	OpExists          = "exists"
-	OpList            = "list"
-	OpPicker          = "picker"
-	OpAttention       = "attention"
-	OpOpenLinearIssue = "open-linear-issue"
+	OpOpen               = "open"
+	OpClose              = "close"
+	OpRead               = "read"
+	OpViewport           = "viewport"
+	OpExists             = "exists"
+	OpList               = "list"
+	OpPicker             = "picker"
+	OpAttention          = "attention"
+	OpRunnerGeneration   = "runner-generation"
+	OpDelegatedLifecycle = "delegated-lifecycle"
+	OpOpenLinearIssue    = "open-linear-issue"
 )
 
 const (

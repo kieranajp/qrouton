@@ -42,6 +42,13 @@ func (a *activity) answered() {
 	a.spoke = time.Now()
 }
 
+func (a *activity) reset() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.waiting = false
+	a.spoke = time.Time{}
+}
+
 func (a *activity) state() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()

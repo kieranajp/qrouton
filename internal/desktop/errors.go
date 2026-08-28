@@ -33,6 +33,8 @@ var (
 	ErrAssemblyDraftConflict = errors.New("another New session draft is already open; finish or cancel it before opening a different Linear issue")
 	ErrNoLinearIssue         = errors.New("open Linear issue request carries no ticket")
 	ErrProcessIngressOnly    = errors.New("open Linear issue is available only on the published process socket")
+	ErrNoRunnerGeneration    = errors.New("runner generation request carries no generation")
+	ErrNoDelegatedLifecycle  = errors.New("delegated lifecycle request carries no event")
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

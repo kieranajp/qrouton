@@ -8,6 +8,7 @@ package launch
 // while de-escalation keeps the conversation with the runner's continue flag.
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -51,6 +52,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 	relaunch := make(chan os.Signal, 1)
 	signal.Notify(relaunch, syscall.SIGUSR1)
 	defer signal.Stop(relaunch)
+	generation := firstRunnerGeneration()
+	if generation == 0 {
+		generation = 1
+	}
 	for {
 		if err := StampAssets(dir); err != nil {
 			return err
@@ -63,7 +68,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if tookHandoff(dir) {
 			resume = false
 		}
-		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, resume, initialPrompt)
+		if err := announceRunnerGeneration(handle, r.ID, generation); err != nil {
+			return err
+		}
+		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, initialPrompt)
 		if err != nil {
 			return err
 		}
@@ -75,8 +83,17 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		}
 		// Every later relaunch keeps the conversation: de-escalation, and a second
 		// trip through the picker that merely adds repositories.
+		generation++
 		resume = true
 	}
+}
+
+var firstRunnerGeneration = func() uint64 { return uint64(time.Now().UnixNano()) }
+
+var announceRunnerGeneration = func(handle workbench.Handle, provider string, generation uint64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), generationSignalTimeout)
+	defer cancel()
+	return handle.RunnerGeneration(ctx, provider, generation)
 }
 
 func takeInitialPrompt(dir string) (string, error) {

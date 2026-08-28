@@ -195,6 +195,30 @@ func TestOpenLinearIssueUsesTheTypedProcessRequest(t *testing.T) {
 	}
 }
 
+func TestRunnerGenerationAndDelegatedLifecycleUseTypedRequests(t *testing.T) {
+	socket, requests := echoServer(t, func(Request) Response { return Response{} })
+	handle := Handle{Socket: socket, SessionRoot: "/sessions/octopus"}
+	ctx := context.Background()
+	if err := handle.RunnerGeneration(ctx, "claude", 3); err != nil {
+		t.Fatal(err)
+	}
+	at := time.Date(2026, 8, 28, 12, 30, 0, 0, time.UTC)
+	event := DelegatedLifecycleRequest{
+		Provider: "claude", Generation: 3, Kind: "start", ID: "agent-7",
+		Type: "qrspi-research-lead", ParentID: "root", Timestamp: at,
+	}
+	if err := handle.DelegatedLifecycle(ctx, event); err != nil {
+		t.Fatal(err)
+	}
+	if got := <-requests; got.Op != OpRunnerGeneration || got.RunnerGeneration == nil ||
+		got.RunnerGeneration.Provider != "claude" || got.RunnerGeneration.Generation != 3 {
+		t.Fatalf("generation request = %+v", got)
+	}
+	if got := <-requests; got.Op != OpDelegatedLifecycle || got.Lifecycle == nil || *got.Lifecycle != event {
+		t.Fatalf("lifecycle request = %+v, want %+v", got, event)
+	}
+}
+
 // A window id the desktop process answered without is an orphan the caller
 // could never address again.
 func TestClientRejectsAnOpenWithNoWindowID(t *testing.T) {

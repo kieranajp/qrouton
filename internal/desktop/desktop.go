@@ -58,7 +58,8 @@ type Options struct {
 	// Agent builds a session's supervisor command and environment against the
 	// control socket the workbench will serve that session on. runnerID names
 	// the agent the session was assembled with; empty means the workbench's own.
-	Agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, err error)
+	// resolvedRunner is the provider actually selected for legacy empty values.
+	Agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, resolvedRunner string, err error)
 	// Shell builds the user shell window's command for a session root, which is
 	// why it is a function rather than an argv.
 	Shell func(sessionRoot string) []string
@@ -171,8 +172,29 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		},
 		agent: opts.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
-			return serveControl(socket, windows, state,
-				controlHooks{attention: state.activity.hook, picker: reg.queuePicker})
+			return serveControl(socket, windows, state, controlHooks{
+				attention: func(value string, generation uint64) {
+					if state.agents.attention(generation, value) {
+						state.activity.hook(value)
+						reg.touch()
+					}
+				},
+				generation: func(req workbench.RunnerGenerationRequest) {
+					if req.Provider != state.provider {
+						return
+					}
+					if state.agents.begin(req.Provider, req.Generation) {
+						state.activity.reset()
+						reg.touch()
+					}
+				},
+				lifecycle: func(req workbench.DelegatedLifecycleRequest) {
+					if state.agents.lifecycle(req) {
+						reg.touch()
+					}
+				},
+				picker: reg.queuePicker,
+			})
 		},
 		shown: func(state *sessionState) {
 			r.Retitle(mainWindowName, windowTitle(state.root()))
@@ -226,6 +248,10 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
 	term.whenChildExits(func(state *sessionState, code int) {
+		if state.agents.exit(code) {
+			state.activity.reset()
+			reg.touch()
+		}
 		if code == 0 {
 			reg.retire(state)
 		}

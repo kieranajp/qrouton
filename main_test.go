@@ -46,7 +46,7 @@ func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 	for _, slug := range []string{"alpha", "beta"} {
 		root := t.TempDir()
 		socket := "/tmp/qrouton-sock/501/" + slug + ".sock"
-		argv, _, err := agent(root, socket, "", false)
+		argv, _, resolved, err := agent(root, socket, "", false)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -57,10 +57,27 @@ func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 		if handle.Socket != socket || handle.SessionRoot != root {
 			t.Fatalf("%s's supervisor got %#v, want the socket %q rooted at %q", slug, handle, socket, root)
 		}
+		if resolved != "codex" {
+			t.Fatalf("%s resolved provider = %q, want codex", slug, resolved)
+		}
 		sockets[slug] = handle.Socket
 	}
 	if sockets["alpha"] == sockets["beta"] {
 		t.Fatalf("both sessions' agents were pointed at %q", sockets["alpha"])
+	}
+}
+
+func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.T) {
+	cfg := &config.Config{Launch: map[string][]string{
+		"claude": {"/bin/echo"}, "codex": {"/bin/echo"}, "opencode": {"/bin/echo"},
+	}}
+	agent := agentCommand(cfg, "/bin/qrouton", "", launch.EditorCommand{})
+	_, _, resolved, err := agent(t.TempDir(), "/tmp/s.sock", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved != "claude" {
+		t.Fatalf("legacy manifest resolved provider = %q, want the first installed provider", resolved)
 	}
 }
 
@@ -319,7 +336,7 @@ func TestTheAgentCommandRefusesARunnerThatIsGone(t *testing.T) {
 	cfg := &config.Config{Launch: map[string][]string{"codex": {"/bin/echo"}}}
 	agent := agentCommand(cfg, "/bin/qrouton", "codex", launch.EditorCommand{Argv: []string{"vi"}})
 
-	_, _, err := agent(t.TempDir(), "/tmp/s.sock", "no-such-agent", false)
+	_, _, _, err := agent(t.TempDir(), "/tmp/s.sock", "no-such-agent", false)
 	if !errors.Is(err, launch.ErrRunnerUnavailable) {
 		t.Fatalf("booting a session against a missing agent = %v, want %v", err, launch.ErrRunnerUnavailable)
 	}

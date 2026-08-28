@@ -1,6 +1,10 @@
 package launch
 
-import "github.com/kieranajp/qrouton/internal/codex"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/codex"
+)
 
 // Literals the launch path depends on: runner identifiers and their arguments,
 // the environment variables and shell fragments qrouton injects, and the
@@ -30,6 +34,7 @@ const (
 	runnerFlag        = "--runner"
 	editorJSONFlag    = "--editor-json"
 	workbenchJSONFlag = "--workbench-json"
+	generationFlag    = "--generation"
 	resumeFlag        = "--resume"
 	socketFlag        = "--socket"
 
@@ -38,6 +43,8 @@ const (
 	// which defines the flag it names.
 	workbenchSpecFlag = "--workbench-spec"
 )
+
+const generationSignalTimeout = 2 * time.Second
 
 // The detached workbench's own plumbing: how a failure to start names the log
 // that explains it, and the socket's network.

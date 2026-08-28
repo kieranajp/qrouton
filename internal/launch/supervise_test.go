@@ -2,19 +2,29 @@ package launch
 
 import (
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 // swapRunAgent replaces the exec seam with a scripted closure and restores it.
 func swapRunAgent(t *testing.T, fake func(argv, env []string, dir string, relaunch <-chan os.Signal) (bool, error)) {
 	t.Helper()
 	original := runAgent
+	originalAnnounce := announceRunnerGeneration
+	originalGeneration := firstRunnerGeneration
 	runAgent = fake
-	t.Cleanup(func() { runAgent = original })
+	announceRunnerGeneration = func(workbench.Handle, string, uint64) error { return nil }
+	firstRunnerGeneration = func() uint64 { return 1 }
+	t.Cleanup(func() {
+		runAgent = original
+		announceRunnerGeneration = originalAnnounce
+		firstRunnerGeneration = originalGeneration
+	})
 }
 
 func testRunner() Runner {
@@ -59,6 +69,36 @@ func TestSuperviseRelaunchesFreshAfterEscalation(t *testing.T) {
 	}
 	// The relaunch stamped from the rewritten manifest.
 	assertLinkTargetContains(t, dir+"/CLAUDE.md", "ORCHESTRATOR.md")
+}
+
+func TestSuperviseAnnouncesEverySignalDrivenRunGeneration(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeAssistant)
+	var announced []uint64
+	var hookArgv [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		hookArgv = append(hookArgv, argv)
+		return len(hookArgv) == 1, nil
+	})
+	announceRunnerGeneration = func(_ workbench.Handle, provider string, generation uint64) error {
+		if provider != runnerIDClaude {
+			t.Fatalf("announced provider = %q, want %q", provider, runnerIDClaude)
+		}
+		announced = append(announced, generation)
+		return nil
+	}
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if len(announced) != 2 || announced[0] != 1 || announced[1] != 2 {
+		t.Fatalf("announced generations = %v, want [1 2]", announced)
+	}
+	for i, argv := range hookArgv {
+		want := generationFlag + " " + strconv.Itoa(i+1)
+		if !strings.Contains(strings.Join(argv, " "), want) {
+			t.Fatalf("launch %d does not stamp %q into its hooks: %v", i+1, want, argv)
+		}
+	}
 }
 
 func TestSuperviseRelaunchesWithContinueAfterDeescalation(t *testing.T) {

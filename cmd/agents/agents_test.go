@@ -26,6 +26,8 @@ const (
 		`"cwd":"/work/webhook","hook_event_name":"Notification","message":"Claude needs your permission to use Bash"}`
 	subagentStartPayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"SubagentStart","agent_id":"agent_017c","agent_type":"Explore"}`
+	subagentStopPayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
+		`"cwd":"/work/webhook","hook_event_name":"SubagentStop","agent_id":"agent_017c","agent_type":"Explore"}`
 	preToolUsePayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`
 )
@@ -37,20 +39,33 @@ func TestNotificationHookAsksTheWorkbenchForAttention(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := await(t, requests)
-	if req.Op != workbench.OpAttention || req.Activity != status.ActivityWaiting {
-		t.Fatalf("request = %#v, want op %q and activity %q", req, workbench.OpAttention, status.ActivityWaiting)
+	if req.Op != workbench.OpAttention || req.Activity != status.ActivityWaiting || req.Generation != 7 {
+		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", req, workbench.OpAttention, status.ActivityWaiting)
 	}
 }
 
-func TestSubagentStartHookClearsAttentionToWorking(t *testing.T) {
+func TestSubagentHooksSendLifecycleAndStartClearsAttentionToWorking(t *testing.T) {
 	root := sessionRoot(t)
 	socket, requests := controlSocket(t)
 	if err := runEvent(t, root, handleFor(socket, root), subagentStartPayload); err != nil {
 		t.Fatal(err)
 	}
-	req := await(t, requests)
-	if req.Op != workbench.OpAttention || req.Activity != status.ActivityWorking {
-		t.Fatalf("request = %#v, want op %q and activity %q", req, workbench.OpAttention, status.ActivityWorking)
+	start := await(t, requests)
+	if start.Op != workbench.OpDelegatedLifecycle || start.Lifecycle == nil ||
+		start.Lifecycle.Kind != workbench.LifecycleStart || start.Lifecycle.ID != "agent_017c" ||
+		start.Lifecycle.Type != "Explore" || start.Lifecycle.Generation != 7 || start.Lifecycle.Timestamp.IsZero() {
+		t.Fatalf("start request = %#v", start)
+	}
+	attention := await(t, requests)
+	if attention.Op != workbench.OpAttention || attention.Activity != status.ActivityWorking || attention.Generation != 7 {
+		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", attention, workbench.OpAttention, status.ActivityWorking)
+	}
+	if err := runEvent(t, root, handleFor(socket, root), subagentStopPayload); err != nil {
+		t.Fatal(err)
+	}
+	stop := await(t, requests)
+	if stop.Op != workbench.OpDelegatedLifecycle || stop.Lifecycle == nil || stop.Lifecycle.Kind != workbench.LifecycleStop {
+		t.Fatalf("stop request = %#v", stop)
 	}
 }
 
@@ -107,6 +122,7 @@ func runEvent(t *testing.T, root, handle, payload string) error {
 	t.Helper()
 	feedStdin(t, payload)
 	args := []string{"qrouton", eventCommandName, "--" + sessionRootFlag, root}
+	args = append(args, "--"+generationFlag, "7")
 	if handle != "" {
 		args = append(args, "--"+workbenchJSONFlag, handle)
 	}
@@ -202,6 +218,10 @@ func TestAFailedLogStillSignalsTheWorkbench(t *testing.T) {
 	socket, requests := controlSocket(t)
 	if err := runEvent(t, root, handleFor(socket, root), subagentStartPayload); err == nil {
 		t.Fatal("an unwritable agent log reported success")
+	}
+	if req := await(t, requests); req.Op != workbench.OpDelegatedLifecycle || req.Lifecycle == nil ||
+		req.Lifecycle.Kind != workbench.LifecycleStart || req.Lifecycle.ID != "agent_017c" {
+		t.Fatalf("request = %#v, want the valid lifecycle event despite the log failure", req)
 	}
 	if req := await(t, requests); req.Op != workbench.OpAttention || req.Activity != status.ActivityWorking {
 		t.Fatalf("request = %#v, want op %q and activity %q", req, workbench.OpAttention, status.ActivityWorking)

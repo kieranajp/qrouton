@@ -105,6 +105,8 @@ const (
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second
 
+	finishedAgentRetention = 90 * time.Second
+
 	// terminateGrace is how long a PTY's process tree gets to exit on SIGTERM
 	// before it is killed outright. launch has its own for the runner the
 	// supervisor signals; the two bound different processes and need not agree.
@@ -114,4 +116,24 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
+)
+
+const (
+	agentProviderClaude   = "claude"
+	agentProviderCodex    = "codex"
+	agentProviderOpenCode = "opencode"
+
+	agentRootID = "root"
+
+	agentRoleOrchestrator = "Orchestrator"
+	agentRoleLead         = "Lead"
+	agentRoleSpecialist   = "Specialist"
+	agentRoleUnavailable  = "Role unavailable"
+
+	agentStateWaiting  = "Waiting for you"
+	agentStateWorking  = "Working"
+	agentStateIdle     = "Idle"
+	agentStateActive   = "Active"
+	agentStateFinished = "Finished"
+	agentStateFailed   = "Failed"
 )

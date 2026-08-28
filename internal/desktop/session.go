@@ -28,6 +28,8 @@ type sessionState struct {
 	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
 	terminal string
 	activity *activity
+	agents   *agentActivity
+	provider string
 	argv     []string
 	env      []string
 	named    atomic.Pointer[identity]
@@ -110,6 +112,7 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	go process.pump(
 		func(b []byte) {
 			s.activity.wrote()
+			s.agents.output()
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
 		func(code int) {
@@ -124,6 +127,7 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 
 func (s *sessionState) write(data []byte) error {
 	s.activity.answered()
+	s.agents.input()
 	s.mu.Lock()
 	process := s.process
 	s.mu.Unlock()
@@ -176,8 +180,8 @@ type booting struct {
 	root func(slug string) string
 	// agent builds a session's supervisor command against the control socket it
 	// will be served on. runnerID is the agent the session was assembled with;
-	// empty means the workbench's own.
-	agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, err error)
+	// empty means the workbench's own, and resolvedRunner names the actual choice.
+	agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, resolvedRunner string, err error)
 	serve func(state *sessionState, socket string) (io.Closer, error)
 	// shown puts a session on screen: its title, its shell, its record.
 	shown       func(state *sessionState)
@@ -210,13 +214,24 @@ type Sessions struct {
 	// appended to. A row's position addresses it from the keyboard, so a position
 	// that moved would rename every shortcut under the user's fingers.
 	rail []string
+
+	now       func() time.Time
+	retention time.Duration
+	agents    map[string]*agentActivity
 }
 
 func newSessions() *Sessions {
+	return newSessionsWithActivity(time.Now, finishedAgentRetention)
+}
+
+func newSessionsWithActivity(now func() time.Time, retention time.Duration) *Sessions {
 	return &Sessions{
-		touched: make(chan struct{}, 1),
-		slugs:   map[string]*sessionState{},
-		terms:   map[string]*sessionState{},
+		touched:   make(chan struct{}, 1),
+		slugs:     map[string]*sessionState{},
+		terms:     map[string]*sessionState{},
+		now:       now,
+		retention: retention,
+		agents:    map[string]*agentActivity{},
 	}
 }
 
@@ -289,6 +304,7 @@ func (s *Sessions) Cleanup(slug string) error {
 	if err := s.boot.cleanup(root); err != nil {
 		return err
 	}
+	s.dropAgentActivity(slug)
 	s.touch()
 	return nil
 }
@@ -312,11 +328,12 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*sessionState, err
 	if err != nil {
 		return nil, err
 	}
-	argv, env, err := s.boot.agent(root, socket, runnerID, resume)
+	argv, env, resolvedRunner, err := s.boot.agent(root, socket, runnerID, resume)
 	if err != nil {
 		return nil, err
 	}
 	state := s.add(root, argv, withTerminalEnv(env))
+	state.provider = resolvedRunner
 	control, err := s.boot.serve(state, socket)
 	if err != nil {
 		s.forget(state)
@@ -365,6 +382,9 @@ func (s *Sessions) stopAll() {
 	for _, state := range s.all() {
 		state.stop()
 	}
+	s.mu.Lock()
+	s.agents = map[string]*agentActivity{}
+	s.mu.Unlock()
 }
 
 // add registers a session and mints the id its conversation is addressed by.
@@ -372,9 +392,16 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.seq++
+	slug := slugFor(root)
+	tracker := s.agents[slug]
+	if tracker == nil {
+		tracker = newAgentActivity(s.now, s.retention)
+		s.agents[slug] = tracker
+	}
 	state := &sessionState{
 		terminal: fmt.Sprintf(terminalIDFormat, s.seq),
 		activity: &activity{},
+		agents:   tracker,
 		argv:     argv,
 		env:      env,
 	}
@@ -382,6 +409,18 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	s.slugs[state.slug()] = state
 	s.terms[state.terminal] = state
 	return state
+}
+
+func (s *Sessions) agentActivity(slug string) *agentActivity {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.agents[slug]
+}
+
+func (s *Sessions) dropAgentActivity(slug string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.agents, slug)
 }
 
 // forget unregisters a session and names the one the window falls back to, if

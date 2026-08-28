@@ -104,14 +104,18 @@ func newStubBoot(argv ...string) *stubBoot {
 		runners: map[string]string{}}
 }
 
-func (b *stubBoot) command(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
+func (b *stubBoot) command(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.agents++
 	b.sockets[sessionRoot] = socket
 	b.resumes[sessionRoot] = resume
 	b.runners[sessionRoot] = runnerID
-	return b.argv, os.Environ(), nil
+	resolved := runnerID
+	if resolved == "" {
+		resolved = "codex"
+	}
+	return b.argv, os.Environ(), resolved, nil
 }
 
 func (b *stubBoot) served() {
@@ -230,7 +234,7 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 		agent: boot.command,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			boot.served()
-			return serveControl(socket, windows, state, controlHooks{attention: state.activity.hook})
+			return serveControl(socket, windows, state, controlHooks{attention: func(value string, _ uint64) { state.activity.hook(value) }})
 		},
 		teardown: windows.stop,
 	}
@@ -862,7 +866,7 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 
 	dir := filepath.Join(root, "background")
 	handle := workbench.Handle{Socket: boot.socket(t, dir), SessionRoot: dir}
-	if err := handle.Attention(context.Background(), status.ActivityWaiting); err != nil {
+	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
 	pushChrome(reg, root, nil, nil, nil, r.Emit)
@@ -1121,7 +1125,7 @@ func TestConcurrentShowsOfOneSessionBootItOnce(t *testing.T) {
 	command := reg.boot.agent
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
-	reg.boot.agent = func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
+	reg.boot.agent = func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
 		entered <- struct{}{}
 		<-release
 		return command(sessionRoot, socket, runnerID, resume)
@@ -1188,6 +1192,9 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 	}
 
 	alpha, beta := booted["alpha"], booted["beta"]
+	if alpha.provider != "codex" || beta.provider != "codex" {
+		t.Fatalf("resolved providers = %q, %q, want codex", alpha.provider, beta.provider)
+	}
 	if alpha.terminal == beta.terminal {
 		t.Fatalf("both sessions were minted %q", alpha.terminal)
 	}
@@ -1439,8 +1446,8 @@ func TestBootingASessionRacesTeardownSafely(t *testing.T) {
 		var reserved string
 		reg.boot = booting{
 			root: func(slug string) string { return filepath.Join(root, slug) },
-			agent: func(string, string, string, bool) ([]string, []string, error) {
-				return []string{"/bin/cat"}, os.Environ(), nil
+			agent: func(string, string, string, bool) ([]string, []string, string, error) {
+				return []string{"/bin/cat"}, os.Environ(), "codex", nil
 			},
 			serve: func(state *sessionState, socket string) (io.Closer, error) {
 				reserved = socket

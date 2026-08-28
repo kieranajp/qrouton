@@ -17,7 +17,9 @@ type controlHooks struct {
 	// picker queues the repository picker on the session it names. Nothing is
 	// drawn until the user arrives there.
 	picker      func(req workbench.PickerRequest) error
-	attention   func(activity string)
+	attention   func(activity string, generation uint64)
+	generation  func(req workbench.RunnerGenerationRequest)
+	lifecycle   func(req workbench.DelegatedLifecycleRequest)
 	linearIssue func(ticket, prompt string) (string, error)
 	focus       func()
 }
@@ -129,7 +131,29 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 		return workbench.Response{}
 	case workbench.OpAttention:
 		if c.hooks.attention != nil {
-			c.hooks.attention(req.Activity)
+			c.hooks.attention(req.Activity, req.Generation)
+		}
+		return workbench.Response{}
+	case workbench.OpRunnerGeneration:
+		if c.owner == nil {
+			return workbench.Response{Error: ErrNoSession.Error()}
+		}
+		if req.RunnerGeneration == nil || req.RunnerGeneration.Generation == 0 {
+			return workbench.Response{Error: ErrNoRunnerGeneration.Error()}
+		}
+		if c.hooks.generation != nil {
+			c.hooks.generation(*req.RunnerGeneration)
+		}
+		return workbench.Response{}
+	case workbench.OpDelegatedLifecycle:
+		if c.owner == nil {
+			return workbench.Response{Error: ErrNoSession.Error()}
+		}
+		if req.Lifecycle == nil {
+			return workbench.Response{Error: ErrNoDelegatedLifecycle.Error()}
+		}
+		if c.hooks.lifecycle != nil {
+			c.hooks.lifecycle(*req.Lifecycle)
 		}
 		return workbench.Response{}
 	case workbench.OpOpenLinearIssue:

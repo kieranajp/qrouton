@@ -250,16 +250,17 @@ func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func
 // so the socket it is served on and the manifest it reads are the current ones.
 // A session assembled in the overlay names its own agent; anything else takes the
 // workbench's.
-func agentCommand(cfg *config.Config, bin, workbenchRunner string, editor launch.EditorCommand) func(string, string, string, bool) ([]string, []string, error) {
-	return func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, error) {
+func agentCommand(cfg *config.Config, bin, workbenchRunner string, editor launch.EditorCommand) func(string, string, string, bool) ([]string, []string, string, error) {
+	return func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
 		if runnerID == "" {
 			runnerID = workbenchRunner
 		}
 		runner, err := pickRunner(cfg, runnerID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
-		return launch.Launch(sessionRoot, runner, bin, socket, editor, resume)
+		argv, env, err := launch.Launch(sessionRoot, runner, bin, socket, editor, resume)
+		return argv, env, runner.ID, err
 	}
 }
 

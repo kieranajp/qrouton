@@ -38,6 +38,12 @@ func TestActivityRanksTheHookOverTheClock(t *testing.T) {
 		t.Fatalf("a subagent starting = %q, want working", got)
 	}
 
+	a.hook(status.ActivityWaiting)
+	a.reset()
+	if got := a.state(); got != status.ActivityIdle {
+		t.Fatalf("a new run or root exit left stale state %q, want idle", got)
+	}
+
 	a.spoke = time.Now().Add(-activityQuiet - time.Second)
 	if got := a.state(); got != status.ActivityIdle {
 		t.Fatalf("after silence = %q, want idle", got)
@@ -51,14 +57,14 @@ func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
 		t.Fatal(err)
 	}
 	a := &activity{}
-	server, err := serveControl(socket, windows, windows.shown(), controlHooks{attention: a.hook})
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{attention: func(value string, _ uint64) { a.hook(value) }})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = server.Close() })
 
 	handle := workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}
-	if err := handle.Attention(context.Background(), status.ActivityWaiting); err != nil {
+	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
 	if got := a.state(); got != status.ActivityWaiting {

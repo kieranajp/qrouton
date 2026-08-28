@@ -12,7 +12,7 @@ import (
 )
 
 // recorded is the log as the collector left it, one decoded event per line.
-func recorded(t *testing.T, root string) []claudeAgentEvent {
+func recorded(t *testing.T, root string) []Event {
 	t.Helper()
 	f, err := os.Open(sessionpaths.ClaudeAgentLog(root))
 	if os.IsNotExist(err) {
@@ -22,10 +22,10 @@ func recorded(t *testing.T, root string) []claudeAgentEvent {
 		t.Fatal(err)
 	}
 	defer f.Close()
-	var events []claudeAgentEvent
+	var events []Event
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var event claudeAgentEvent
+		var event Event
 		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
 			t.Fatalf("log line %q does not decode: %v", scanner.Text(), err)
 		}
@@ -49,10 +49,10 @@ func session(t *testing.T) string {
 func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
 	root := session(t)
 	for _, input := range []string{
-		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore"}`,
+		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore","parent_agent_id":"lead-1"}`,
 		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
 	} {
-		hook, err := RecordEvent(root, bytes.NewBufferString(input))
+		event, hook, err := RecordEvent(root, bytes.NewBufferString(input))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -60,6 +60,9 @@ func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
 		// has to survive a successful write as well as a failed one.
 		if hook == "" {
 			t.Fatalf("RecordEvent(%s) reported no hook name", input)
+		}
+		if event.AgentID != "agent-1" || event.Timestamp == "" {
+			t.Fatalf("RecordEvent(%s) = %#v, want the stamped live event", input, event)
 		}
 	}
 
@@ -69,6 +72,9 @@ func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
 	}
 	if events[0].HookEventName != hookSubagentStart || events[1].HookEventName != hookSubagentStop {
 		t.Errorf("recorded hooks = %q, %q", events[0].HookEventName, events[1].HookEventName)
+	}
+	if events[0].ParentID != "lead-1" {
+		t.Fatalf("recorded start lost its parent: %#v", events[0])
 	}
 	for i, event := range events {
 		if event.AgentID != "agent-1" || event.AgentType != "Explore" {
@@ -91,12 +97,15 @@ func TestUncollectedEventsAreNamedButNotRecorded(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := session(t)
-			hook, err := RecordEvent(root, bytes.NewBufferString(tc.input))
+			event, hook, err := RecordEvent(root, bytes.NewBufferString(tc.input))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if hook != tc.hook {
 				t.Errorf("hook = %q, want %q", hook, tc.hook)
+			}
+			if event.HookEventName != tc.hook {
+				t.Errorf("event = %#v, want hook %q", event, tc.hook)
 			}
 			if events := recorded(t, root); len(events) != 0 {
 				t.Errorf("recorded %#v, want nothing", events)
@@ -107,7 +116,7 @@ func TestUncollectedEventsAreNamedButNotRecorded(t *testing.T) {
 
 func TestMalformedEventIsAnError(t *testing.T) {
 	root := session(t)
-	if _, err := RecordEvent(root, bytes.NewBufferString("not json")); err == nil {
+	if _, _, err := RecordEvent(root, bytes.NewBufferString("not json")); err == nil {
 		t.Fatal("expected a decode error")
 	}
 	if events := recorded(t, root); len(events) != 0 {
