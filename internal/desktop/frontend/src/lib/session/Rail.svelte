@@ -147,7 +147,9 @@
   </div>
 
   <div class="detail-stack" aria-label="Selected session details">
-    <ActivityPanel {agents} />
+    <div class="activity-scroll">
+      <ActivityPanel {agents} />
+    </div>
     <RepoList {repos} {onAddRepos} />
   </div>
 </div>
@@ -232,6 +234,13 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
+  }
+
+  .activity-scroll {
+    flex: 0 1 60%;
+    min-height: 0;
+    max-height: 60%;
+    overflow: hidden auto;
   }
 
   .anchor {

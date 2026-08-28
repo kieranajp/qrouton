@@ -89,6 +89,11 @@
   let added = $state(0);
 
   function rootOnly(provider) {
+    sessions = sessions.map((session) =>
+      session.slug === "checkout"
+        ? { ...session, summary: { attention: "unknown", active: 1, coverage: "root", running: true } }
+        : session,
+    );
     agents = {
       provider,
       attention_known: false,

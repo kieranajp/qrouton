@@ -87,16 +87,14 @@ export function summaryFacts(summary = {}, unseen = 0) {
   const facts = [];
   if (summary.running && summary.attention === "needs-you") {
     facts.push({ kind: "attention", label: "Needs you" });
-  } else if (summary.running && summary.attention === "unknown") {
-    facts.push({ kind: "attention", label: "Attention unknown" });
   }
 
   if (!summary.running) {
     facts.push({ kind: "agents", label: "Not running" });
   } else if (summary.coverage === "full") {
-    facts.push({ kind: "agents", label: `${Math.max(0, summary.active ?? 0)} active` });
+    facts.push({ kind: "agents", label: `${Math.max(0, summary.active ?? 0)} active`, active: true });
   } else if (summary.coverage === "root") {
-    facts.push({ kind: "agents", label: "Root active" });
+    facts.push({ kind: "agents", label: "Root active", active: true });
   } else {
     facts.push({ kind: "agents", label: "Activity unavailable" });
   }

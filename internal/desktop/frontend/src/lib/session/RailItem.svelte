@@ -39,7 +39,7 @@
     <div class="facts">
       {#each facts as fact (fact.kind)}
         <span class="fact {fact.kind}">
-          <span class="glyph" aria-hidden="true">{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
+          <span class="glyph" class:running={fact.active} aria-hidden="true">{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
           {fact.label}
         </span>
       {/each}
@@ -158,6 +158,10 @@
 
   .fact.attention {
     color: var(--state-waiting);
+  }
+
+  .glyph.running {
+    color: var(--state-running);
   }
 
   .fact.unseen {

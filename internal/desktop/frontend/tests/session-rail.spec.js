@@ -46,6 +46,20 @@ test("selected activity is honest about hierarchy, capabilities, and recent reco
 test("root-only providers and missing capabilities are textual", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
   await page.evaluate(() => window.sessionRail.rootOnly("codex"));
+  const row = page.getByRole("button", { name: /Checkout migration .* Root active · 3 unseen/ });
+  await expect(row).not.toContainText("Attention unknown");
+  const runningPip = row.locator(".glyph.running");
+  await expect(runningPip).toHaveText("●");
+  expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--state-running)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    }),
+  );
   await expect(activity).toContainText("Orchestrator");
   await expect(activity).toContainText("Codex");
   await expect(activity).toContainText("Codex provides root activity only.");
@@ -67,6 +81,7 @@ test("reference detail and Add repos stay in the lower detail stack", async ({ p
 test("the session list and selected detail scroll independently", async ({ page }) => {
   const sessions = page.getByLabel("Sessions");
   const detail = page.getByLabel("Selected session details");
+  const activity = page.locator(".activity-scroll");
   const dimensions = async (locator) =>
     locator.evaluate((element) => ({
       clientHeight: element.clientHeight,
@@ -76,8 +91,14 @@ test("the session list and selected detail scroll independently", async ({ page 
 
   expect((await dimensions(sessions)).scrollHeight).toBeGreaterThan((await dimensions(sessions)).clientHeight);
   expect((await dimensions(detail)).scrollHeight).toBeGreaterThan((await dimensions(detail)).clientHeight);
+  expect((await dimensions(activity)).clientHeight).toBeLessThanOrEqual((await dimensions(detail)).clientHeight * 0.61);
+  expect((await dimensions(activity)).scrollHeight).toBeGreaterThan((await dimensions(activity)).clientHeight);
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await dimensions(sessions)).scrollTop).toBeGreaterThan(0);
+  expect((await dimensions(detail)).scrollTop).toBe(0);
+  expect((await dimensions(activity)).scrollTop).toBe(0);
+  await activity.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  expect((await dimensions(activity)).scrollTop).toBeGreaterThan(0);
   expect((await dimensions(detail)).scrollTop).toBe(0);
   await detail.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await dimensions(detail)).scrollTop).toBeGreaterThan(0);

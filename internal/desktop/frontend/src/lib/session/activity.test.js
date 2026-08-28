@@ -20,11 +20,18 @@ test("summary facts preserve attention, agent, and unseen order", () => {
   );
   assert.deepEqual(facts, [
     { kind: "attention", label: "Needs you" },
-    { kind: "agents", label: "3 active" },
+    { kind: "agents", label: "3 active", active: true },
     { kind: "unseen", label: "2 unseen" },
   ]);
   assert.equal(rowLabel("Checkout", [{ name: "acme/web" }], facts),
     "Checkout · acme/web · Needs you · 3 active · 2 unseen");
+});
+
+test("unsupported attention stays quiet while root activity remains explicit", () => {
+  assert.deepEqual(
+    summaryFacts({ attention: "unknown", active: 1, coverage: "root", running: true }),
+    [{ kind: "agents", label: "Root active", active: true }],
+  );
 });
 
 test("unknown summary, role, state, provider, and type stay explicit", () => {
