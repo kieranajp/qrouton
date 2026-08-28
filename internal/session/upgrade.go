@@ -106,31 +106,19 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 
 func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, progress ProgressFunc) error {
 	repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
-	var onProgress func(string, int)
-	if progress != nil {
-		onProgress = func(phase string, percent int) {
-			progress(Progress{Step: ProgressMirror, Status: ProgressAdvanced, Repo: &repo,
-				Role: RepoRoleEditing, Phase: phase, Percent: percent})
-		}
-	}
+	rep := reporter{fn: progress, repo: &repo, role: RepoRoleEditing}
 	// The mirror is already there; this is the fetch that brings the default
 	// branch's tip within reach of the new session branch.
-	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &repo, Role: RepoRoleEditing})
-	if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, onProgress); err != nil {
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &repo, Role: RepoRoleEditing, Err: err})
+	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
+		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)
+	}); err != nil {
 		return err
 	}
-	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &repo, Role: RepoRoleEditing})
-
-	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &repo, Role: RepoRoleEditing})
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 	wt := filepath.Join(dir, r.WorktreePath)
-	if err := branchWorktree(mirror, wt, r, branch); err != nil {
-		emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &repo, Role: RepoRoleEditing, Err: err})
-		return err
-	}
-	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressCompleted, Repo: &repo, Role: RepoRoleEditing})
-	return nil
+	return rep.step(ProgressWorktree, func(func(string, int)) error {
+		return branchWorktree(mirror, wt, r, branch)
+	})
 }
 
 // branchWorktree switches an existing checkout in place rather than replacing it,

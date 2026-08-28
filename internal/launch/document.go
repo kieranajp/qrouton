@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -78,10 +79,8 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 // documentLabel names the pane by what the document calls itself, since a tab
 // has room for a title and not for a path.
 func documentLabel(text, rel string) string {
-	for line := range strings.SplitSeq(frontMatter(text), "\n") {
-		if heading, ok := strings.CutPrefix(strings.TrimSpace(line), "# "); ok {
-			return fmt.Sprintf(documentLabelFormat, strings.TrimSpace(heading))
-		}
+	if title, ok := markdown.Title(text); ok {
+		return fmt.Sprintf(documentLabelFormat, title)
 	}
 	return fmt.Sprintf(documentLabelFormat, filepath.Base(rel))
 }
@@ -114,15 +113,4 @@ func under(dir, path string) (string, bool) {
 		return "", false
 	}
 	return rel, true
-}
-
-func frontMatter(text string) string {
-	rest, ok := strings.CutPrefix(text, frontMatterFence+"\n")
-	if !ok {
-		return text
-	}
-	if _, after, ok := strings.Cut(rest, "\n"+frontMatterFence+"\n"); ok {
-		return after
-	}
-	return text
 }

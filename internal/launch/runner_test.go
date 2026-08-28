@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -304,5 +306,136 @@ func TestRunnersRejectEmptyOverride(t *testing.T) {
 	_, err := Runners(&config.Config{Launch: map[string][]string{"claude": {}}})
 	if !errors.Is(err, ErrEmptyOverride) {
 		t.Fatalf("empty override error = %v, want ErrEmptyOverride", err)
+	}
+}
+
+// Every spec has to answer all three questions the launch path asks it. An entry
+// added with one of them left nil would panic on the launch it was added for.
+func TestEverySpecIsCompletelyWired(t *testing.T) {
+	if len(runnerSpecs) == 0 {
+		t.Fatal("no runners are registered")
+	}
+	seen := map[string]bool{}
+	for _, spec := range runnerSpecs {
+		if spec.ID == "" || spec.Label == "" || len(spec.Command) == 0 {
+			t.Errorf("spec %+v has no identity or no command", spec)
+		}
+		if seen[spec.ID] {
+			t.Errorf("two specs claim id %q, so specFor answers with whichever is first", spec.ID)
+		}
+		seen[spec.ID] = true
+		if spec.Resume == nil || spec.Prompt == nil || spec.Inject == nil {
+			t.Errorf("spec %q is missing Resume, Prompt or Inject", spec.ID)
+		}
+	}
+}
+
+// builtinRunners is derived, so the resolver cannot fall out of step with the
+// behaviour table — and it has to be a copy, or an override would edit the spec
+// every later call reads.
+func TestBuiltinRunnersMirrorTheSpecTableWithoutSharingIt(t *testing.T) {
+	if len(builtinRunners) != len(runnerSpecs) {
+		t.Fatalf("%d builtins for %d specs", len(builtinRunners), len(runnerSpecs))
+	}
+	for i, spec := range runnerSpecs {
+		if builtinRunners[i].ID != spec.ID || builtinRunners[i].Label != spec.Label {
+			t.Errorf("builtin %d = %q/%q, spec = %q/%q",
+				i, builtinRunners[i].ID, builtinRunners[i].Label, spec.ID, spec.Label)
+		}
+	}
+	fresh := builtins()
+	fresh[0].Command[0] = "clobbered"
+	if runnerSpecs[0].Command[0] == "clobbered" {
+		t.Fatal("builtins share the spec's command slice, so one caller's override reaches every later one")
+	}
+}
+
+// A Runner is an exported struct with exported fields, so one can reach the
+// launch path without the per-runner wiring. Refusing beats launching an agent
+// with no MCP server and no hooks.
+func TestAnUnregisteredRunnerIsRefusedRatherThanLaunchedBare(t *testing.T) {
+	_, _, err := runnerLaunch(Runner{ID: "handrolled", Command: []string{"echo"}},
+		"/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+	if !errors.Is(err, ErrUnsupportedRunner) {
+		t.Fatalf("runnerLaunch error = %v, want ErrUnsupportedRunner", err)
+	}
+}
+
+// The same runner, unregistered, must not silently get a bare argv either.
+func TestAnUnregisteredRunnerArgvIsJustItsCommand(t *testing.T) {
+	r := Runner{ID: "handrolled", Command: []string{"echo", "--flag"}}
+	if got := runnerArgv(r, false, modeRPI, ""); !reflect.DeepEqual(got, r.Command) {
+		t.Fatalf("argv = %v, want the command untouched", got)
+	}
+}
+
+// codexArgv is what the launch path hands Codex, with CODEX_HOME pointed at a
+// config qrouton controls so the test reads its own depth rather than the
+// developer's.
+func codexArgv(t *testing.T, command []string, config string) []string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	if config != "" {
+		if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := Runner{ID: runnerIDCodex, Label: runnerLabelCodex, Command: command}
+	argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return argv
+}
+
+// AGENTS.md bounds subagent depth at three levels: orchestrator, lead,
+// specialist. Codex defaults to one, so a lead could not spawn anything —
+// launch has to raise it before the runner starts.
+func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
+	argv := codexArgv(t, []string{runnerIDCodex, codexBypassSandboxFlag}, "")
+	if got := codex.MaxDepth(argv); got != codex.RequiredMaxDepth {
+		t.Fatalf("codex would run at depth %d, want %d\nargv: %v", got, codex.RequiredMaxDepth, argv)
+	}
+}
+
+// A user who configured more nesting than qrouton needs keeps it: the injection
+// raises a shallow default, it does not pin the setting.
+func TestCodexKeepsADeeperConfiguredDepth(t *testing.T) {
+	deeper := codex.RequiredMaxDepth + 2
+	argv := codexArgv(t, []string{runnerIDCodex}, fmt.Sprintf("[agents]\nmax_depth = %d\n", deeper))
+	if got := codex.MaxDepth(argv); got != deeper {
+		t.Fatalf("configured depth %d became %d\nargv: %v", deeper, got, argv)
+	}
+}
+
+// Same for a depth set in the user's own launch override, which reaches the
+// injector as part of the command rather than through the config file.
+func TestCodexKeepsADeeperDepthFromALaunchOverride(t *testing.T) {
+	deeper := codex.RequiredMaxDepth + 1
+	argv := codexArgv(t,
+		[]string{runnerIDCodex, codex.ConfigFlag, codex.MaxDepthSetting(deeper)}, "")
+	if got := codex.MaxDepth(argv); got != deeper {
+		t.Fatalf("overridden depth %d became %d\nargv: %v", deeper, got, argv)
+	}
+}
+
+// The depth setting is Codex's alone; the other runners take their nesting from
+// their own defaults and must not be handed a -c they do not understand.
+func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
+	setting := codex.MaxDepthSetting(codex.RequiredMaxDepth)
+	for _, id := range []string{runnerIDClaude, runnerIDOpenCode} {
+		spec, ok := specFor(id)
+		if !ok {
+			t.Fatalf("no spec for %q", id)
+		}
+		r := Runner{ID: spec.ID, Label: spec.Label, Command: spec.Command}
+		argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.Join(argv, " "), setting) {
+			t.Errorf("%s was handed %q", id, setting)
+		}
 	}
 }

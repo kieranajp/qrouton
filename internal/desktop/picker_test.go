@@ -8,6 +8,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -110,10 +111,7 @@ func TestOpPickerRefusesAnEmptyRootAsAnAnswer(t *testing.T) {
 	}
 	defer server.Close()
 
-	host, err := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
 	if err := host.Picker(t.Context(), workbench.PickerRequest{Deadline: time.Now()}); err == nil {
 		t.Fatal("a picker with no session root succeeded")
 	} else if !strings.Contains(err.Error(), ErrNoSessionRoot.Error()) {
@@ -163,7 +161,7 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	reg, shown, _ := pickerWorkbench(t)
 	cfg := &config.Config{Root: filepath.Dir(shown)}
-	repo := github.Repo{Org: "org", Name: "svc", SSHURL: testOrigin(t, "svc"), DefaultBranch: "main"}
+	repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 	p := newPicker(cfg, reg, repos, nil)
 
@@ -224,9 +222,13 @@ func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 func TestConfirmTakesUpAHeldReferenceRepoAndIgnoresTheRest(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{Root: root}
-	dir, err := session.Create(cfg, "reading", "", "", "feat", session.ModeAssistant, "",
-		[]session.RepoSelection{{Role: session.RepoRoleReference,
-			Repo: github.Repo{Org: "org", Name: "docs", SSHURL: testOrigin(t, "docs"), DefaultBranch: "main"}}}, nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "reading", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: []session.RepoSelection{{
+			Role: session.RepoRoleReference,
+			Repo: github.Repo{Org: "org", Name: "docs", SSHURL: gittest.Origin(t, "docs"), DefaultBranch: "main"},
+		}},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

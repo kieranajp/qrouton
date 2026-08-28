@@ -35,10 +35,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = server.Close() })
 
-	host, err := (workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}).WindowHost()
 	ctx := context.Background()
 
 	id, err := host.Open(ctx, workbench.WindowOptions{
@@ -47,7 +44,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tabs := windows.tabs(windows.shown()); len(tabs) != 1 || tabs[0].ID != id {
+	if tabs := windows.surfaces(windows.shown()).Tabs; len(tabs) != 1 || tabs[0].ID != id {
 		t.Fatalf("socket-opened tabs = %+v, want terminal %q", tabs, id)
 	}
 
@@ -58,7 +55,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tabs := windows.tabs(windows.shown()); len(tabs) != 2 || tabs[1].ID != document {
+	if tabs := windows.surfaces(windows.shown()).Tabs; len(tabs) != 2 || tabs[1].ID != document {
 		t.Fatalf("socket-opened tabs = %+v, want document %q second", tabs, document)
 	}
 	select {
@@ -100,7 +97,7 @@ index 6dad4ad..84db3de 100644
 	if err != nil {
 		t.Fatal(err)
 	}
-	if tabs := windows.tabs(windows.shown()); len(tabs) != 3 || tabs[2].ID != diffDocument {
+	if tabs := windows.surfaces(windows.shown()).Tabs; len(tabs) != 3 || tabs[2].ID != diffDocument {
 		t.Fatalf("socket-opened tabs = %+v, want diff document %q third", tabs, diffDocument)
 	}
 	diffPage, err := windows.Content(diffDocument)
@@ -152,7 +149,7 @@ index 6dad4ad..84db3de 100644
 	if live, err := host.Exists(ctx, id); err != nil || live {
 		t.Fatalf("Exists = %v, %v after Close", live, err)
 	}
-	if tabs := windows.tabs(windows.shown()); len(tabs) != 2 || tabs[0].ID != document || tabs[1].ID != diffDocument {
+	if tabs := windows.surfaces(windows.shown()).Tabs; len(tabs) != 2 || tabs[0].ID != document || tabs[1].ID != diffDocument {
 		t.Fatalf("tabs after close = %+v, want documents %q and %q", tabs, document, diffDocument)
 	}
 }
@@ -171,7 +168,7 @@ func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = server.Close() })
 
-	host, _ := (workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}).WindowHost()
+	host := (workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}).WindowHost()
 	ctx := context.Background()
 
 	if _, err := host.Read(ctx, "window-99", false); err == nil {

@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	md "github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
 )
@@ -57,42 +58,13 @@ func Write(dir, source string, markdown []byte) (string, error) {
 	return path, nil
 }
 
-// Title is the document's opening level-one heading — the same one the renderer
-// lifts out of the body — and the file's own name for a document that starts
-// with anything else.
+// Title is the document's own name: the level-one heading it opens with, or the
+// file's own name for a document that starts with anything else.
 func Title(source string, markdown []byte) string {
-	for _, line := range body(markdown) {
-		text := strings.TrimSpace(line)
-		if text == "" {
-			continue
-		}
-		if heading, ok := strings.CutPrefix(text, headingPrefix); ok {
-			return strings.TrimSpace(heading)
-		}
-		break
+	if title, ok := md.Title(string(markdown)); ok {
+		return title
 	}
 	return filepath.Base(source)
-}
-
-// body drops frontmatter, which the renderer parses but never shows.
-func body(markdown []byte) []string {
-	lines := strings.Split(string(markdown), "\n")
-	for at, line := range lines {
-		text := strings.TrimSpace(line)
-		if text == "" {
-			continue
-		}
-		if text != frontmatterRule {
-			return lines[at:]
-		}
-		for closing := at + 1; closing < len(lines); closing++ {
-			if strings.TrimSpace(lines[closing]) == frontmatterRule {
-				return lines[closing+1:]
-			}
-		}
-		return nil
-	}
-	return nil
 }
 
 // The document travels base64-encoded so that no markdown in it can close the

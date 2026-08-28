@@ -29,7 +29,6 @@ type Windows struct {
 	seq      int
 	open     map[string]*agentWindow
 	selected map[*sessionState]string
-	changed  func(owner *sessionState)
 }
 
 type agentWindow struct {
@@ -41,9 +40,6 @@ type agentWindow struct {
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64
-	// recorded excludes the windows the workbench opens for itself from the
-	// manifest's record, since a resume rebuilds those without being told to.
-	recorded bool
 	// exit is nil while the process is still running.
 	exit *int
 }
@@ -71,13 +67,16 @@ func (w *Windows) openWindow(owner *sessionState, opts workbench.WindowOptions) 
 		w.sourceMu.Lock()
 		defer w.sourceMu.Unlock()
 		if id, ok := w.showing(owner, opts.Source); ok {
-			w.dismiss(id)
+			w.discard(id)
 		}
 	}
 	return w.spawn(owner, opts, true)
 }
 
-// openStructural opens a tab the workbench owns rather than the agent.
+// openStructural opens a tab the workbench owns rather than the agent. It
+// leaves the selection alone: every caller either selects the tab itself once
+// it has the id, or is the unasked-for first shell, which has nothing to steal
+// the selection from.
 func (w *Windows) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	return w.spawn(owner, opts, false)
 }
@@ -149,14 +148,14 @@ func (w *Windows) showing(owner *sessionState, source string) (string, bool) {
 	return "", false
 }
 
-func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recorded bool) (string, error) {
+func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, selects bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
 	w.mu.Lock()
 	w.seq++
 	id := fmt.Sprintf(windowIDFormat, w.seq)
-	window := &agentWindow{opts: opts, session: owner, seq: w.seq, recorded: recorded}
+	window := &agentWindow{opts: opts, session: owner, seq: w.seq}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
 	}
@@ -164,13 +163,12 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, recor
 		window.viewport = &workbench.DocumentViewport{Source: opts.Source, Intervals: []workbench.LineInterval{}}
 	}
 	w.open[id] = window
-	if recorded {
+	if selects {
 		w.selected[owner] = id
 	}
 	w.mu.Unlock()
 
 	w.announce(owner)
-	w.persist(owner)
 	return id, nil
 }
 
@@ -383,7 +381,7 @@ func (w *Windows) processExited(id string, code int) {
 	window.exit = &code
 	w.mu.Unlock()
 	if code == 0 && window.opts.CloseOnExit {
-		w.dismiss(id)
+		w.discard(id)
 		return
 	}
 	w.announce(window.session)
@@ -395,7 +393,7 @@ func (w *Windows) Close(id string) error {
 	if _, ok := w.window(id); !ok {
 		return noSuchWindow(id)
 	}
-	w.dismiss(id)
+	w.discard(id)
 	return nil
 }
 
@@ -426,11 +424,6 @@ func (w *Windows) list() []string {
 	return ids
 }
 
-// dismiss tears the tab down.
-func (w *Windows) dismiss(id string) {
-	w.discard(id)
-}
-
 // discard forgets a window and stops whatever it was running.
 func (w *Windows) discard(id string) {
 	w.mu.Lock()
@@ -455,7 +448,6 @@ func (w *Windows) discard(id string) {
 		process.stop()
 	}
 	w.announce(window.session)
-	w.persist(window.session)
 }
 
 func (w *Windows) oldest(owner *sessionState) string {
@@ -468,23 +460,6 @@ func (w *Windows) oldest(owner *sessionState) string {
 		}
 	}
 	return oldestID
-}
-
-// observe registers what to tell when a session's open set changes. Clearing it
-// before teardown keeps a session's own ending out of the manifest's record.
-func (w *Windows) observe(changed func(owner *sessionState)) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	w.changed = changed
-}
-
-func (w *Windows) persist(owner *sessionState) {
-	w.mu.Lock()
-	changed := w.changed
-	w.mu.Unlock()
-	if changed != nil {
-		changed(owner)
-	}
 }
 
 // announce tells one session's pages what it has open. A background session
@@ -530,8 +505,6 @@ func (w *Windows) surfaces(owner *sessionState) surfaces {
 	return out
 }
 
-func (w *Windows) tabs(owner *sessionState) []drawnWindow { return w.surfaces(owner).Tabs }
-
 // Surfaces answers a session's page on load: the event only fires on a change,
 // and the shell opens before anything is subscribed.
 func (w *Windows) Surfaces(slug string) surfaces { return w.surfaces(w.sessions.bySlug(slug)) }
@@ -549,24 +522,6 @@ func tabStatus(window *agentWindow) string {
 	default:
 		return tabStatusFailed
 	}
-}
-
-// snapshot describes one session's open agent windows, oldest first.
-func (w *Windows) snapshot(owner *sessionState) []workbench.WindowOptions {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	live := make([]*agentWindow, 0, len(w.open))
-	for _, window := range w.open {
-		if window.session == owner && window.recorded {
-			live = append(live, window)
-		}
-	}
-	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
-	out := make([]workbench.WindowOptions, 0, len(live))
-	for _, window := range live {
-		out = append(out, window.opts)
-	}
-	return out
 }
 
 // stopAll tears every window down, so closing the conversation leaves nothing

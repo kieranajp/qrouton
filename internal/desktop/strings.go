@@ -105,8 +105,9 @@ const (
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second
 
-	// terminateGrace is how long a process tree gets to exit on SIGTERM before
-	// it is killed outright.
+	// terminateGrace is how long a PTY's process tree gets to exit on SIGTERM
+	// before it is killed outright. launch has its own for the runner the
+	// supervisor signals; the two bound different processes and need not agree.
 	terminateGrace = 3 * time.Second
 
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,

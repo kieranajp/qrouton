@@ -1,7 +1,7 @@
 // Package codex owns what qrouton knows about the Codex CLI's own files: its
-// home, its rollout session logs, its configuration, and the one setting qrouton
-// reasons about (subagent nesting depth). The launcher and the subagent watcher
-// share it so the two cannot drift on where CODEX_HOME points.
+// home, its configuration, and the one setting qrouton reasons about — subagent
+// nesting depth, which the launcher raises to what a lead needs before it
+// starts a Codex runner.
 package codex
 
 import (
@@ -13,11 +13,9 @@ import (
 )
 
 const (
-	homeEnvVar    = "CODEX_HOME"
-	homeDirName   = ".codex"
-	sessionsDir   = "sessions"
-	configFile    = "config.toml"
-	sessionLogExt = ".jsonl"
+	homeEnvVar  = "CODEX_HOME"
+	homeDirName = ".codex"
+	configFile  = "config.toml"
 
 	// Binary is the Codex CLI's command name, as it appears in argv[0] of a
 	// launched runner and in qrouton's runner identifiers.
@@ -37,13 +35,23 @@ const (
 	// RequiredMaxDepth is the nesting a lead needs to spawn its own workers.
 	RequiredMaxDepth = 2
 
-	configComment  = "#"
-	tableOpen      = "["
-	tableClose     = "]"
-	keyValueSep    = "="
-	configFlag     = "-c"
+	configComment = "#"
+	tableOpen     = "["
+	tableClose    = "]"
+	keyValueSep   = "="
+
+	// ConfigFlag is how Codex takes a setting on the command line, where it
+	// overrides config.toml. The launcher passes qrouton's own settings through
+	// it, so the spelling lives here with the keys it carries.
+	ConfigFlag     = "-c"
 	configFlagLong = "--config"
 )
+
+// MaxDepthSetting is the ConfigFlag value that sets Codex's subagent nesting to
+// depth. Paired with ConfigFlag it is the override MaxDepth reads back.
+func MaxDepthSetting(depth int) string {
+	return dottedMaxDepth + keyValueSep + strconv.Itoa(depth)
+}
 
 // Home is the directory Codex keeps its state in: $CODEX_HOME when set,
 // otherwise ~/.codex. It is empty only if neither is discoverable.
@@ -58,17 +66,6 @@ func Home() string {
 	return filepath.Join(userHome, homeDirName)
 }
 
-// SessionsDir holds Codex's rollout logs, one JSONL file per thread.
-func SessionsDir() string {
-	return filepath.Join(Home(), sessionsDir)
-}
-
-// IsSessionLog reports whether a directory entry name is one of Codex's rollout
-// logs.
-func IsSessionLog(name string) bool {
-	return strings.HasSuffix(name, sessionLogExt)
-}
-
 // MaxDepth returns the subagent nesting depth a Codex invocation will run with:
 // the value from its configuration file, overridden by any -c/--config argument
 // in argv, matching Codex's own precedence. Absent both, Codex's default.
@@ -77,7 +74,7 @@ func MaxDepth(argv []string) int {
 	for index := 1; index < len(argv); index++ {
 		var override string
 		switch {
-		case argv[index] == configFlag || argv[index] == configFlagLong:
+		case argv[index] == ConfigFlag || argv[index] == configFlagLong:
 			if index+1 < len(argv) {
 				index++
 				override = argv[index]

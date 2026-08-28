@@ -34,7 +34,7 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	if !w.exists(id) || len(w.list()) != 1 {
 		t.Fatalf("registry = %v after one open", w.list())
 	}
-	if tabs := w.tabs(w.shown()); len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "▶ dev" {
+	if tabs := w.surfaces(w.shown()).Tabs; len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "▶ dev" {
 		t.Fatalf("tabs = %+v, want the opened terminal", tabs)
 	}
 	if got := w.Surfaces(w.shown().slug()).Selected; got != id {
@@ -58,39 +58,31 @@ func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
 			latest = payload.(surfaces)
 		}
 	}, reg)
-	persists := 0
-	w.observe(func(got *sessionState) {
-		if got != owner {
-			t.Fatalf("persisted owner = %p, want %p", got, owner)
-		}
-		persists++
-	})
-
 	id, err := w.openWindow(owner, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Command: []string{"/bin/cat"},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if emissions != 1 || persists != 1 {
-		t.Fatalf("open emitted %d and persisted %d times", emissions, persists)
+	if emissions != 1 {
+		t.Fatalf("open emitted %d times, want one", emissions)
 	}
 	if err := w.Select(owner.slug(), id); err != nil {
 		t.Fatal(err)
 	}
-	if emissions != 2 || persists != 1 {
-		t.Fatalf("selection emitted %d and persisted %d times", emissions, persists)
+	if emissions != 2 {
+		t.Fatalf("selection emitted %d times, want one more", emissions)
 	}
 
 	w.processExited(id, 7)
-	if emissions != 3 || persists != 1 || len(latest.Tabs) != 1 || latest.Tabs[0].Status != tabStatusFailed {
-		t.Fatalf("failed exit emitted %d and persisted %d times with payload %+v", emissions, persists, latest)
+	if emissions != 3 || len(latest.Tabs) != 1 || latest.Tabs[0].Status != tabStatusFailed {
+		t.Fatalf("failed exit emitted %d times with payload %+v", emissions, latest)
 	}
 	if err := w.Close(id); err != nil {
 		t.Fatal(err)
 	}
-	if emissions != 4 || persists != 2 || len(latest.Tabs) != 0 {
-		t.Fatalf("close emitted %d and persisted %d times with payload %+v", emissions, persists, latest)
+	if emissions != 4 || len(latest.Tabs) != 0 {
+		t.Fatalf("close emitted %d times with payload %+v", emissions, latest)
 	}
 }
 
@@ -392,7 +384,7 @@ func TestAnAttentionWindowReportsWaitingAndRemainsUntilClosed(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.tabs(w.shown())[0].Status; got != tabStatusWaiting {
+	if got := w.surfaces(w.shown()).Tabs[0].Status; got != tabStatusWaiting {
 		t.Fatalf("an attention tab reports %q, want waiting", got)
 	}
 	if !w.exists(id) {
@@ -579,14 +571,14 @@ func TestATabReportsItsProcessWithoutBeingFocused(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := w.tabs(w.shown())[0].Status; got != tabStatusRunning {
+	if got := w.surfaces(w.shown()).Tabs[0].Status; got != tabStatusRunning {
 		t.Fatalf("a fresh tab reports %q, want running", got)
 	}
 	if err := w.Start(id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure to reach the tab", func() bool {
-		tabs := w.tabs(w.shown())
+		tabs := w.surfaces(w.shown()).Tabs
 		return len(tabs) == 1 && tabs[0].Status == tabStatusFailed
 	})
 }

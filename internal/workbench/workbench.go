@@ -151,9 +151,11 @@ func ParseHandle(s string) (Handle, error) {
 	return h, nil
 }
 
-// WindowHost resolves the handle to a control-socket client.
-func (h Handle) WindowHost() (WindowHost, error) {
-	return newClient(h.Socket), nil
+// WindowHost resolves the handle to a control-socket client. Nothing is dialled
+// here, so there is nothing to fail: ParseHandle already refused a handle
+// without a socket.
+func (h Handle) WindowHost() WindowHost {
+	return newClient(h.Socket)
 }
 
 // WithEnv returns env with key set to value, replacing any existing entry.

@@ -14,32 +14,33 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 )
 
 func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Webhook retry", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Webhook retry", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		selection(t, "svc", RepoRoleEditing),
 		selection(t, "quiet", RepoRoleEditing),
 		selection(t, "level", RepoRoleEditing),
 		selection(t, "docs", RepoRoleReference),
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// svc: two commits, one adding a two-line file and one dropping a line.
 	svc := filepath.Join(dir, "src", "svc")
-	writeLines(t, svc, "retry.go", "package svc", "func Retry() {}")
-	run(t, svc, "add", ".")
-	run(t, svc, "commit", "-m", "add retry")
-	writeLines(t, svc, "README.md", "one", "three")
-	run(t, svc, "commit", "-am", "drop a line")
+	gittest.WriteFile(t, svc, "retry.go", "package svc", "func Retry() {}")
+	gittest.Run(t, svc, "add", ".")
+	gittest.Run(t, svc, "commit", "-m", "add retry")
+	gittest.WriteFile(t, svc, "README.md", "one", "three")
+	gittest.Run(t, svc, "commit", "-am", "drop a line")
 
 	// quiet: a commit that changes nothing.
-	run(t, filepath.Join(dir, "src", "quiet"), "commit", "--allow-empty", "-m", "nothing")
+	gittest.Run(t, filepath.Join(dir, "src", "quiet"), "commit", "--allow-empty", "-m", "nothing")
 
 	// docs is a reference checkout, detached and pinned; scribbling on it must
 	// not turn it into something with progress to report.
@@ -47,9 +48,9 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	if gitOK(dirFlag, docs, "symbolic-ref", quietFlag, headRef) {
 		t.Fatal("reference checkout is not detached")
 	}
-	writeLines(t, docs, "notes.md", "scribble")
-	run(t, docs, "add", ".")
-	run(t, docs, "commit", "-m", "scribble")
+	gittest.WriteFile(t, docs, "notes.md", "scribble")
+	gittest.Run(t, docs, "add", ".")
+	gittest.Run(t, docs, "commit", "-m", "scribble")
 
 	// level keeps the worktree exactly as it was added, at origin/main.
 
@@ -82,20 +83,20 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
 	origin := localOrigin(t, "svc")
-	dir, err := Create(cfg, "Moved base", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Moved base", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing},
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	worktree := filepath.Join(dir, "src", "svc")
-	writeLines(t, worktree, "retry.go", "package svc", "func Retry() {}")
-	run(t, worktree, "add", ".")
-	run(t, worktree, "commit", "-m", "add retry")
+	gittest.WriteFile(t, worktree, "retry.go", "package svc", "func Retry() {}")
+	gittest.Run(t, worktree, "add", ".")
+	gittest.Run(t, worktree, "commit", "-m", "add retry")
 
 	upstream := strings.TrimPrefix(origin, "file://")
-	writeLines(t, upstream, "README.md", "one", "two", "three", "four")
-	run(t, upstream, "commit", "-am", "unrelated upstream work")
+	gittest.WriteFile(t, upstream, "README.md", "one", "two", "three", "four")
+	gittest.Run(t, upstream, "commit", "-am", "unrelated upstream work")
 
 	m, err := Load(dir)
 	if err != nil {
@@ -119,9 +120,9 @@ func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "No base branch", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "No base branch", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		selection(t, "svc", RepoRoleEditing),
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,28 +163,19 @@ func sessionsRoot(t *testing.T) string {
 	return root
 }
 
+// localOrigin is a repository to clone a mirror from, addressed over file:// so
+// the clone is a real transfer and needs no network. Its three lines are what
+// the diff counts in these tests measure against.
+func localOrigin(t *testing.T, name string) string {
+	t.Helper()
+	return gittest.Origin(t, name,
+		gittest.WithFile("README.md", "one", "two", "three"),
+		gittest.WithMessage("base"),
+		gittest.AsFileURL())
+}
+
 func selection(t *testing.T, name string, role RepoRole) RepoSelection {
 	t.Helper()
 	return RepoSelection{Repo: github.Repo{Name: name, Org: "org", SSHURL: localOrigin(t, name),
 		DefaultBranch: "main"}, Role: role}
-}
-
-// localOrigin is a repository to clone a mirror from, addressed over file:// so
-// the clone is a real transfer and needs no network.
-func localOrigin(t *testing.T, name string) string {
-	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	run(t, "", "init", "-b", "main", origin)
-	writeLines(t, origin, "README.md", "one", "two", "three")
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "base")
-	return "file://" + origin
-}
-
-func writeLines(t *testing.T, dir, name string, lines ...string) {
-	t.Helper()
-	body := strings.Join(lines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
 }

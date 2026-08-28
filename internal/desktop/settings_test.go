@@ -444,7 +444,6 @@ func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
 	quit := sync.OnceFunc(func() {
-		windows.observe(nil)
 		windows.stopAll()
 		reg.stopAll()
 		r.Quit()

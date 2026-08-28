@@ -55,22 +55,31 @@ func entropySuffix() string {
 	return hex.EncodeToString(b)
 }
 
-// Create is the role-aware assembly entry point. mode selects the runner's
-// starting system prompt. Progress reports the start and outcome of each real
-// mirror, worktree, scaffold, and manifest operation.
-func Create(cfg *config.Config, name, desc, ticket, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
-	return create(cfg, name, desc, ticket, "", prefix, mode, runner, repos, progress)
+// CreateRequest is the work a session is being assembled for. Only Name is
+// required: a scratch session has no repositories, no ticket and no prefix.
+type CreateRequest struct {
+	Name        string
+	Description string
+	// Ticket is the external issue this work came from, if any.
+	Ticket string
+	// Prefix is the branch prefix editing repositories are cut with.
+	Prefix string
+	// Mode selects the runner's starting system prompt.
+	Mode SessionMode
+	// Runner is the coding agent this session is assembled with, so every later
+	// boot starts the one that was chosen. Empty takes the workbench's own.
+	Runner string
+	Repos  []RepoSelection
+	// InitialPrompt is an external request the first runner launch receives. It
+	// is carried in a private one-shot file rather than becoming durable
+	// manifest state, so the runner consumes it exactly once.
+	InitialPrompt string
 }
 
-// CreateWithInitialPrompt assembles a session whose first runner launch also
-// receives an external request. The request is carried in a private one-shot
-// file rather than becoming durable manifest state.
-func CreateWithInitialPrompt(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
-	return create(cfg, name, desc, ticket, initialPrompt, prefix, mode, runner, repos, progress)
-}
-
-func create(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string, mode SessionMode, runner string, repos []RepoSelection, progress ProgressFunc) (string, error) {
-	slug := Slugify(name)
+// Create is the role-aware assembly entry point. Progress reports the start and
+// outcome of each real mirror, worktree, scaffold, and manifest operation.
+func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (string, error) {
+	slug := Slugify(req.Name)
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, dirMode); err != nil {
 		// Reclaim only directories our own interrupted assembly left behind —
@@ -94,19 +103,19 @@ func create(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string
 	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, fileMode); err != nil {
 		return "", err
 	}
-	if strings.TrimSpace(initialPrompt) != "" {
+	if strings.TrimSpace(req.InitialPrompt) != "" {
 		if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte(initialPrompt), privateFileMode); err != nil {
+		if err := os.WriteFile(sessionpaths.InitialPrompt(dir), []byte(req.InitialPrompt), privateFileMode); err != nil {
 			return "", err
 		}
 	}
 
-	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: name, Slug: slug, Description: desc,
-		TicketURL: ticket, Mode: mode.effective(), Runner: runner, CreatedAt: time.Now()}
+	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: req.Name, Slug: slug, Description: req.Description,
+		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, CreatedAt: time.Now()}
 	var err error
-	if m, err = ComposeRepos(cfg, m, repos, prefix+branchSeparator+slug, progress); err != nil {
+	if m, err = ComposeRepos(cfg, m, req.Repos, req.Prefix+branchSeparator+slug, progress); err != nil {
 		return "", err
 	}
 
@@ -114,29 +123,32 @@ func create(cfg *config.Config, name, desc, ticket, initialPrompt, prefix string
 	// live under <root>/thoughts/<slug> and the session reaches them through
 	// a relative symlink, so Delete's RemoveAll (which does not follow links)
 	// keeps them when the session directory goes.
-	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressStarted})
+	steps := reporter{fn: progress}
 	home := thoughtsHome(cfg.Root, slug)
-	for _, d := range scaffoldDirs {
-		if err := os.MkdirAll(filepath.Join(home, sessionpaths.SharedDirName, d), dirMode); err != nil {
-			emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
-			return "", err
+	if err := steps.step(ProgressScaffold, func(func(string, int)) error {
+		for _, d := range scaffoldDirs {
+			if err := os.MkdirAll(filepath.Join(home, sessionpaths.SharedDirName, d), dirMode); err != nil {
+				return err
+			}
 		}
-	}
-	if err := os.Symlink(filepath.Join("..", sessionpaths.ThoughtsDirName, slug),
-		filepath.Join(dir, sessionpaths.ThoughtsDirName)); err != nil {
-		emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressFailed, Err: err})
+		return os.Symlink(filepath.Join("..", sessionpaths.ThoughtsDirName, slug),
+			filepath.Join(dir, sessionpaths.ThoughtsDirName))
+	}); err != nil {
 		return "", err
 	}
-	emitProgress(progress, Progress{Step: ProgressScaffold, Status: ProgressCompleted})
 
-	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressStarted})
-	if err := WriteManifest(dir, m); err != nil {
-		emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressFailed, Err: err})
+	// The marker goes inside the step: it is what makes the directory resumable,
+	// so nothing may observe the manifest as complete while it is still there.
+	if err := steps.step(ProgressManifest, func(func(string, int)) error {
+		if err := WriteManifest(dir, m); err != nil {
+			return err
+		}
+		manifestComplete = true
+		_ = os.Remove(filepath.Join(dir, assemblingMarker))
+		return nil
+	}); err != nil {
 		return "", err
 	}
-	manifestComplete = true
-	_ = os.Remove(filepath.Join(dir, assemblingMarker))
-	emitProgress(progress, Progress{Step: ProgressManifest, Status: ProgressCompleted})
 	return dir, nil
 }
 
@@ -157,45 +169,31 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 		return ManifestRepo{}, invalidRole(role, r.Org, r.Name)
 	}
 	url := sshURL(r.Org, r)
-	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &r, Role: role})
-	// git's clone/fetch progress, forwarded per repository so several
-	// assembling at once each draw their own bar instead of interleaving lines.
-	var onProgress func(string, int)
-	if progress != nil {
-		onProgress = func(phase string, percent int) {
-			progress(Progress{Step: ProgressMirror, Status: ProgressAdvanced, Repo: &r, Role: role,
-				Phase: phase, Percent: percent})
-		}
-	}
-	if err := ensureMirror(cfg.Root, r.Org, r.Name, url, onProgress); err != nil {
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
+	rep := reporter{fn: progress, repo: &r, role: role}
+	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
+		return ensureMirror(cfg.Root, r.Org, r.Name, url, advance)
+	}); err != nil {
 		return ManifestRepo{}, err
 	}
-	emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &r, Role: role})
 	mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
 		DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath, SSHURL: url}
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressStarted, Repo: &r, Role: role})
-	if role == RepoRoleReference {
+	err := rep.step(ProgressWorktree, func(func(string, int)) error {
+		if role != RepoRoleReference {
+			mr.Branch = branch
+			return addWorktree(mirror, filepath.Join(dir, worktreePath), branch,
+				remoteRefPrefix+r.DefaultBranch)
+		}
 		revision, err := resolveRevision(mirror, remoteRefPrefix+r.DefaultBranch)
 		if err != nil {
-			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-			return ManifestRepo{}, err
+			return err
 		}
 		mr.Revision = revision
-		if err := addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision); err != nil {
-			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-			return ManifestRepo{}, err
-		}
-	} else {
-		mr.Branch = branch
-		if err := addWorktree(mirror, filepath.Join(dir, worktreePath), branch,
-			remoteRefPrefix+r.DefaultBranch); err != nil {
-			emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressFailed, Repo: &r, Role: role, Err: err})
-			return ManifestRepo{}, err
-		}
+		return addDetachedWorktree(mirror, filepath.Join(dir, worktreePath), revision)
+	})
+	if err != nil {
+		return ManifestRepo{}, err
 	}
-	emitProgress(progress, Progress{Step: ProgressWorktree, Status: ProgressCompleted, Repo: &r, Role: role})
 	return mr, nil
 }
 
@@ -256,12 +254,6 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 	return indexOfRepo(repos, org, name) >= 0
 }
 
-func emitProgress(progress ProgressFunc, event Progress) {
-	if progress != nil {
-		progress(event)
-	}
-}
-
 // EnsureWorktrees re-materialises any pruned worktrees on resume (fresh fetch
 // either way). progress reports the fetch — and, if a mirror has been deleted,
 // a full re-clone — so a slow resume is not silent.
@@ -272,19 +264,12 @@ func EnsureWorktrees(cfg *config.Config, m Manifest, progress ProgressFunc) erro
 			return fmt.Errorf("%s: %w: %s/%s", manifestName, ErrNoCloneURL, r.Org, r.Name)
 		}
 		repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
-		var onProgress func(string, int)
-		if progress != nil {
-			onProgress = func(phase string, percent int) {
-				progress(Progress{Step: ProgressMirror, Status: ProgressAdvanced, Repo: &repo,
-					Role: r.Role, Phase: phase, Percent: percent})
-			}
-		}
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressStarted, Repo: &repo, Role: r.Role})
-		if err := ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, onProgress); err != nil {
-			emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressFailed, Repo: &repo, Role: r.Role, Err: err})
+		rep := reporter{fn: progress, repo: &repo, role: r.Role}
+		if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
+			return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)
+		}); err != nil {
 			return err
 		}
-		emitProgress(progress, Progress{Step: ProgressMirror, Status: ProgressCompleted, Repo: &repo, Role: r.Role})
 		wt := filepath.Join(dir, r.WorktreePath)
 		if _, err := os.Stat(wt); err == nil {
 			continue

@@ -21,8 +21,8 @@ var (
 	// not one qrouton supports.
 	ErrRunnerUnavailable = errors.New("runner is unavailable")
 
-	// ErrUnsupportedRunner means a Runner reached the launch path without the
-	// per-runner MCP and hook wiring runnerLaunch needs.
+	// ErrUnsupportedRunner means a Runner reached the launch path with an id no
+	// spec claims, so there is no MCP and hook wiring to launch it with.
 	ErrUnsupportedRunner = errors.New("unsupported runner")
 
 	// ErrEditorPlaceholder means a configured editor command cannot be used

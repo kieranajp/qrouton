@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  MIN_AGENT,
+  MIN_HUMAN,
   consumeTerminalFocus,
   focusGenerationIn,
   focusPendingIn,
   focusTerminal,
+  humanWidth,
+  roomFor,
   selectedIn,
   selectIn,
   storedWidth,
@@ -62,4 +66,39 @@ test("focus requested before a terminal mounts stays pending and does not replay
   generations = consumeTerminalFocus(generations, "window-3", 1);
   assert.equal(focusPendingIn(generations, "window-3"), false);
   assert.equal(consumeTerminalFocus(generations, "window-3", 0), generations);
+});
+
+// The pane arithmetic below moved out of Session.svelte, where nothing could
+// reach it: the splitter's own tests drive Splitter.svelte with handlers of
+// their own and never see this clamp.
+
+test("an unmeasured window imposes no limit", () => {
+  assert.equal(roomFor(0, 0), Infinity);
+  assert.equal(roomFor(0, 240), Infinity);
+});
+
+test("room is what is left once the rail and the agent's minimum are taken out", () => {
+  assert.equal(roomFor(1400, 240), 1400 - 240 - MIN_AGENT);
+});
+
+// The divider stops rather than letting either pane become a strip, so the
+// agent gives up its minimum before the shell does.
+test("a window too narrow for both panes still leaves the shell its minimum", () => {
+  assert.equal(roomFor(500, 240), MIN_HUMAN);
+  assert.equal(roomFor(1, 0), MIN_HUMAN);
+});
+
+test("an untouched width stays untouched, so the pane keeps its own default", () => {
+  assert.equal(humanWidth(0, 800), 0);
+  assert.equal(humanWidth(0, Infinity), 0);
+});
+
+test("a width is clamped up to the minimum and down to the room there is", () => {
+  assert.equal(humanWidth(100, 800), MIN_HUMAN);
+  assert.equal(humanWidth(500, 800), 500);
+  assert.equal(humanWidth(900, 800), 800);
+});
+
+test("the minimum wins over the room when a window cannot fit both", () => {
+  assert.equal(humanWidth(1000, roomFor(500, 240)), MIN_HUMAN);
 });

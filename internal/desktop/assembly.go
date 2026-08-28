@@ -7,7 +7,6 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
@@ -221,30 +220,18 @@ func (a *Assembly) Create(in draftInput) error {
 	}
 	slug := session.Slugify(draft.Name)
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
-	root, err := session.CreateWithInitialPrompt(a.cfg, draft.Name, draft.Description, draft.Ticket,
-		a.initialPrompt(), draft.Prefix, draft.Mode, in.Runner, draft.Repos, progress)
+	root, err := session.Create(a.cfg, session.CreateRequest{
+		Name: draft.Name, Description: draft.Description, Ticket: draft.Ticket,
+		InitialPrompt: a.initialPrompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
+		Repos: draft.Repos,
+	}, progress)
 	if err != nil {
 		return err
 	}
 	return a.sessions.adopt(root, in.Runner)
 }
 
-// draft resolves the picked names against the list the step was drawn from. A
-// repository a refresh has dropped simply is not there any more, which is what
-// leaves the draft short of an editing repo for Check to refuse.
 func (a *Assembly) draft(in draftInput) assembly.Draft {
-	byID := make(map[string]github.Repo)
-	for _, r := range a.repos.Cached() {
-		byID[r.ID()] = r
-	}
-	repos := make([]session.RepoSelection, 0, len(in.Repos))
-	for _, pick := range in.Repos {
-		repo, ok := byID[pick.ID]
-		if !ok {
-			continue
-		}
-		repos = append(repos, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
-	}
 	return assembly.Draft{Name: in.Name, Description: in.Description, Ticket: in.Ticket,
-		Prefix: in.Prefix, Mode: session.SessionMode(in.Mode), Repos: repos}
+		Prefix: in.Prefix, Mode: session.SessionMode(in.Mode), Repos: a.repos.Select(in.Repos)}
 }

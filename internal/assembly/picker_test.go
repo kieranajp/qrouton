@@ -9,27 +9,14 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-func makeTestOrigin(t *testing.T, name string) string {
-	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	for _, args := range [][]string{
-		{"init", "-b", "main", origin},
-		{"-C", origin, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"},
-	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return origin
-}
-
 func testRepo(t *testing.T, name string) github.Repo {
 	t.Helper()
-	return github.Repo{Name: name, Org: "org", SSHURL: makeTestOrigin(t, name), DefaultBranch: "main"}
+	return github.Repo{Name: name, Org: "org", SSHURL: gittest.Origin(t, name), DefaultBranch: "main"}
 }
 
 func editing(repos ...github.Repo) []session.RepoSelection {
@@ -45,7 +32,9 @@ func editing(repos ...github.Repo) []session.RepoSelection {
 func scratch(t *testing.T) (Assembler, string) {
 	t.Helper()
 	cfg := &config.Config{Orgs: []string{"org"}, Root: t.TempDir()}
-	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, "", nil, nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "scratch", Mode: session.ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,10 +90,9 @@ func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 }
 
 // The final write must merge into what is on disk after a long clone, rather
-// than restoring the mode and window record from before it began.
+// than restoring the manifest from before it began.
 func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 	a, dir := scratch(t)
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "tests", Cwd: "src/svc"}}
 	wrote := false
 	progress := func(p session.Progress) {
 		if wrote || p.Step != session.ProgressWorktree || p.Status != session.ProgressCompleted {
@@ -114,7 +102,9 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 		if err := session.SetMode(dir, session.ModeRPI); err != nil {
 			t.Error(err)
 		}
-		if err := session.SetWindows(dir, windows); err != nil {
+		// Runner is a field Confirm never sets, so it witnesses the merge
+		// independently of the mode.
+		if err := setRunner(dir, "codex"); err != nil {
 			t.Error(err)
 		}
 	}
@@ -132,22 +122,20 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 	if got.EffectiveMode() != session.ModeRPI {
 		t.Fatalf("mode = %q, want the mode written during assembly", got.Mode)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "tests" {
-		t.Fatalf("windows written during assembly were lost: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("runner written during assembly was lost: %q", got.Runner)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
 		t.Fatalf("assembled repository was lost: %+v", got.Repos)
 	}
 }
 
-// The picker can sit open for the escalate tool's full ~30 minutes while the
-// workbench keeps rewriting Windows underneath it. Confirm used to write back
-// the manifest snapshot the picker loaded on open, discarding any Windows
-// written since.
-func TestConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+// The picker can sit open for the escalate tool's full ~30 minutes while
+// something else rewrites the manifest underneath it. Confirm used to write back
+// the snapshot the picker loaded on open, discarding anything written since.
+func TestConfirmPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	a, dir := scratch(t)
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
-	if err := session.SetWindows(dir, windows); err != nil {
+	if err := setRunner(dir, "codex"); err != nil {
 		t.Fatal(err)
 	}
 	draft := Draft{Name: "Webhook retry backoff", Prefix: "fix", Repos: editing(testRepo(t, "svc"))}
@@ -158,9 +146,20 @@ func TestConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
-		t.Fatalf("confirm discarded Windows written after the picker opened: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("confirm discarded the runner written after the picker opened: %q", got.Runner)
 	}
+}
+
+// setRunner writes a field Confirm never touches, so a test can prove the final
+// write merged rather than restored.
+func setRunner(dir, runner string) error {
+	m, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
+	m.Runner = runner
+	return session.WriteManifest(dir, m)
 }
 
 // A second trip through the picker used to derive a branch from the form's
@@ -169,8 +168,9 @@ func TestConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"org"}, Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Webhook retry", "", "", "fix", session.ModeRPI, "",
-		editing(testRepo(t, "svc")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Webhook retry", Prefix: "fix", Mode: session.ModeRPI, Repos: editing(testRepo(t, "svc")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -199,8 +199,10 @@ func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: makeTestOrigin(t, "repo123"), DefaultBranch: "main"}
-	dir, err := session.Create(cfg, "repo123", "", "", "feat", session.ModeAssistant, "", editing(repo), nil)
+	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: gittest.Origin(t, "repo123"), DefaultBranch: "main"}
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "repo123", Prefix: "feat", Mode: session.ModeAssistant, Repos: editing(repo),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,15 +291,14 @@ func TestCancelWritesTheCancelledStanzaOnlyOnAnEscalation(t *testing.T) {
 	}
 }
 
-// Same staleness risk as confirm: cancel must not overwrite Windows the
-// workbench wrote while the picker was up with the picker's own load-time copy.
-func TestCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+// Same staleness risk as confirm: cancel must not overwrite what was written
+// while the picker was up with the picker's own load-time copy.
+func TestCancelPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	dir := t.TempDir()
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
-	if err := session.SetWindows(dir, windows); err != nil {
+	if err := setRunner(dir, "codex"); err != nil {
 		t.Fatal(err)
 	}
 	if err := Cancel(dir, true); err != nil {
@@ -307,8 +308,8 @@ func TestCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
-		t.Fatalf("cancel discarded Windows written after the picker opened: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("cancel discarded the runner written after the picker opened: %q", got.Runner)
 	}
 }
 
@@ -335,8 +336,10 @@ func referenced(repos ...github.Repo) []session.RepoSelection {
 func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Read only", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Read only", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,8 +367,9 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Both", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Both", Prefix: "feat", Mode: session.ModeAssistant, Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,8 +398,10 @@ func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
 func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Refused", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Refused", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,8 +443,10 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Batch", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs"), testRepo(t, "specs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Batch", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs"), testRepo(t, "specs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -466,8 +474,9 @@ func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
 func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Half", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Half", Prefix: "feat", Mode: session.ModeAssistant, Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

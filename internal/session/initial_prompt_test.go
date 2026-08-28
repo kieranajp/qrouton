@@ -10,8 +10,10 @@ import (
 
 func TestCreateCarriesAnInitialPromptPrivately(t *testing.T) {
 	root := t.TempDir()
-	dir, err := CreateWithInitialPrompt(&config.Config{Root: root}, "Linear task", "",
-		"https://linear.app/issue/LIF-2841", "Fix the login regression.", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Linear task", Ticket: "https://linear.app/issue/LIF-2841",
+		InitialPrompt: "Fix the login regression.", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,7 +35,9 @@ func TestCreateCarriesAnInitialPromptPrivately(t *testing.T) {
 
 func TestCreateOmitsABlankInitialPrompt(t *testing.T) {
 	root := t.TempDir()
-	dir, err := CreateWithInitialPrompt(&config.Config{Root: root}, "Blank task", "", "", " \n ", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Blank task", InitialPrompt: " \n ", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

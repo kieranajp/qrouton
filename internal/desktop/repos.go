@@ -7,6 +7,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/session"
 )
 
 // gh is the GitHub work a refresh does, as fields so a test drives the rules
@@ -60,6 +61,26 @@ func (r *Repositories) Cached() []github.Repo {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return append([]github.Repo(nil), r.repos...)
+}
+
+// Select resolves picked rows against the list the step was drawn from, in the
+// order they were picked. A repository a refresh has dropped simply is not there
+// any more, which is what leaves a draft short of an editing repo for Check to
+// refuse.
+func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
+	byID := make(map[string]github.Repo)
+	for _, repo := range r.Cached() {
+		byID[repo.ID()] = repo
+	}
+	out := make([]session.RepoSelection, 0, len(picks))
+	for _, pick := range picks {
+		repo, ok := byID[pick.ID]
+		if !ok {
+			continue
+		}
+		out = append(out, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
+	}
+	return out
 }
 
 // Refresh refetches the owners whose last attempt failed if any did, and every

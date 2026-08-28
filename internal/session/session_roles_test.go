@@ -11,21 +11,16 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
+// makeOrigin is gittest.Origin plus the commit it landed on, which the
+// pinned-reference tests assert a detached checkout sits at.
 func makeOrigin(t *testing.T, name string) (string, string) {
 	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	run(t, "", "init", "-b", "main", origin)
-	os.WriteFile(filepath.Join(origin, "version"), []byte("one"), 0o644)
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "initial")
-	out, err := exec.Command("git", "-C", origin, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return origin, strings.TrimSpace(string(out))
+	origin := gittest.Origin(t, name, gittest.WithFile("version", "one"))
+	return origin, gittest.Head(t, origin)
 }
 
 func TestCreatePersistsSessionMode(t *testing.T) {
@@ -35,7 +30,9 @@ func TestCreatePersistsSessionMode(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "svc")
 	repos := []RepoSelection{{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}}
-	dir, err := Create(&config.Config{Root: root}, "Assistant sesh", "", "", "feat", ModeAssistant, "", repos, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Assistant sesh", Prefix: "feat", Mode: ModeAssistant, Repos: repos,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,10 +64,10 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	editingOrigin, _ := makeOrigin(t, "editing")
 	referenceOrigin, pinned := makeOrigin(t, "reference")
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Role test", "", "", "feat", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Role test", Prefix: "feat", Mode: ModeRPI, Repos: []RepoSelection{
 		{Repo: github.Repo{Name: "editing", Org: "org", SSHURL: editingOrigin, DefaultBranch: "main"}, Role: RepoRoleEditing},
 		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,8 +94,8 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 
 	// Advance the remote, remove the worktree, and prove resume uses the recorded SHA.
 	os.WriteFile(filepath.Join(referenceOrigin, "version"), []byte("two"), 0o644)
-	run(t, referenceOrigin, "add", ".")
-	run(t, referenceOrigin, "commit", "-m", "advance")
+	gittest.Run(t, referenceOrigin, "add", ".")
+	gittest.Run(t, referenceOrigin, "commit", "-m", "advance")
 	os.RemoveAll(filepath.Join(dir, "src", "reference"))
 	if err := EnsureWorktrees(cfg, m, nil); err != nil {
 		t.Fatal(err)
@@ -214,15 +211,19 @@ func TestCreateFailureCleansNewSessionDirectoryAndAllowsRetry(t *testing.T) {
 	origin, _ := makeOrigin(t, "retry")
 	repo := github.Repo{Name: "retry", Org: "org", SSHURL: origin, DefaultBranch: "main"}
 	bad := []RepoSelection{{Repo: repo, Role: RepoRole("invalid")}}
-	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI, "", bad, nil); err == nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Retry me", Prefix: "feat", Mode: ModeRPI, Repos: bad,
+	}, nil); err == nil {
 		t.Fatal("invalid role unexpectedly succeeded")
 	}
 	dir := filepath.Join(root, "retry-me")
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("failed session directory was not cleaned up: %v", err)
 	}
-	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil); err != nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Retry me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil); err != nil {
 		t.Fatal("retry failed:", err)
 	}
 }
@@ -244,8 +245,10 @@ func TestCreateReclaimsAbandonedAssemblyDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "reclaim", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	created, err := Create(&config.Config{Root: root}, "Reclaim me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil)
+	created, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Reclaim me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal("abandoned directory blocked its session name:", err)
 	}
@@ -274,8 +277,10 @@ func TestCreateRefusesToReclaimUnmarkedDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "keep", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	if _, err := Create(&config.Config{Root: root}, "Keep me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil); err == nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Keep me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil); err == nil {
 		t.Fatal("unmarked directory was silently taken over")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
@@ -290,8 +295,10 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "custom")
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Custom origin", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}}, nil)
+	dir, err := Create(cfg, CreateRequest{
+		Name: "Custom origin", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +339,7 @@ func TestComposeReposAssemblesIntoZeroRepoSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Scratch pad", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(cfg, CreateRequest{Name: "Scratch pad", Mode: ModeAssistant}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +386,9 @@ func TestSetModePersistsAcrossReread(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Modal", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,43 +404,6 @@ func TestSetModePersistsAcrossReread(t *testing.T) {
 	}
 }
 
-// The window record is the session's own state, so writing it must not disturb
-// the mode a launch reads back.
-func TestSetWindowsRecordsWhatIsOpenWithoutTouchingTheMode(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	dir, err := Create(&config.Config{Root: root}, "Windowed", "", "", "", ModeAssistant, "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	open := []WindowRecord{
-		{Kind: "terminal", Label: "▶ dev", Cwd: dir, Command: []string{"/bin/sh", "-lc", "yarn dev"}},
-		{Kind: "document", Label: "◆ diff"},
-	}
-	if err := SetWindows(dir, open); err != nil {
-		t.Fatal(err)
-	}
-	got, err := Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Windows) != 2 || got.Windows[0].Command[2] != "yarn dev" || got.Windows[1].Kind != "document" {
-		t.Fatalf("recorded windows = %+v", got.Windows)
-	}
-	if got.EffectiveMode() != ModeAssistant {
-		t.Fatalf("mode after recording windows = %q", got.EffectiveMode())
-	}
-
-	if err := SetWindows(dir, nil); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := Load(dir); err != nil || len(got.Windows) != 0 {
-		t.Fatalf("windows after closing everything = %+v, %v", got.Windows, err)
-	}
-}
-
 // Escalating out of assistant mode owes the next runner a fresh conversation,
 // and that debt is recorded on disk so a restart cannot lose it. Every other
 // mode write must leave no marker, or a later launch would discard a
@@ -441,7 +413,9 @@ func TestWriteManifestMarksOnlyTheEscalationHandoff(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Modal", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,9 +454,10 @@ func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "progress")
 	var events []Progress
-	_, err := Create(&config.Config{Root: root}, "Progress", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
-		func(event Progress) { events = append(events, event) })
+	_, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Progress", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
+	}, func(event Progress) { events = append(events, event) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,8 +494,10 @@ func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
 	cfg := &config.Config{Root: root}
 	origin, _ := makeOrigin(t, "repo123")
 	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: origin, DefaultBranch: "main"}
-	dir, err := Create(cfg, "repo123", "", "", "feat",
-		ModeAssistant, "", []RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil)
+	dir, err := Create(cfg, CreateRequest{
+		Name: "repo123", Prefix: "feat", Mode: ModeAssistant,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

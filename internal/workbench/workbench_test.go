@@ -222,20 +222,23 @@ func TestAnsweredSeesOnlyALiveSocket(t *testing.T) {
 	}
 }
 
-func TestRunningFindsALiveSocket(t *testing.T) {
+// An unpublished socket that answers is a workbench from before endpoint
+// publication: discovery reports it as legacy rather than as nothing at all, so
+// a second one does not launch over it.
+func TestDiscoveryFindsALiveUnpublishedSocket(t *testing.T) {
 	dir := t.TempDir()
 	listenAt(t, filepath.Join(dir, "live"+socketSuffix))
-	if !running(dir) {
-		t.Fatal("running = false with a workbench serving its socket, so a second one would launch over it")
+	if got := discover(dir); got.Legacy != true || got.Socket != "" {
+		t.Fatalf("discover = %+v, want a legacy workbench and no published endpoint", got)
 	}
 }
 
 // A stale socket file left there makes every later launch think a workbench is
 // already up; a process log beside it is the only record of why one died.
-func TestRunningSweepsStaleSockets(t *testing.T) {
+func TestDiscoverySweepsStaleSockets(t *testing.T) {
 	dir := t.TempDir()
-	if running(filepath.Join(dir, "absent")) {
-		t.Fatal("running = true for a directory that does not exist")
+	if got := discover(filepath.Join(dir, "absent")); got.Socket != "" || got.Legacy {
+		t.Fatalf("discover = %+v for a directory that does not exist", got)
 	}
 	dead := filepath.Join(dir, "dead"+socketSuffix)
 	log := ProcessLog(dead)
@@ -245,8 +248,8 @@ func TestRunningSweepsStaleSockets(t *testing.T) {
 	if err := os.WriteFile(log, nil, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if running(dir) {
-		t.Fatal("running = true with only a socket nothing answers on")
+	if got := discover(dir); got.Socket != "" || got.Legacy {
+		t.Fatalf("discover = %+v with only a socket nothing answers on", got)
 	}
 	if _, err := os.Stat(dead); !os.IsNotExist(err) {
 		t.Fatalf("stale socket survived: %v", err)
