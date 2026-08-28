@@ -319,6 +319,8 @@ func DocumentKind(path string) string {
 			return KindSpec
 		case "research":
 			return KindResearch
+		case "explainers":
+			return KindExplainer
 		}
 	}
 	name := filepath.Base(path)
@@ -329,13 +331,16 @@ func DocumentKind(path string) string {
 		return KindSpec
 	case researchPrefix.MatchString(name):
 		return KindResearch
+	case explainerPrefix.MatchString(name):
+		return KindExplainer
 	default:
 		return KindNote
 	}
 }
 
 var (
-	planPrefix     = regexp.MustCompile(`(?i)^p\d+[-_.]`)
-	specPrefix     = regexp.MustCompile(`(?i)^s\d+[-_.]`)
-	researchPrefix = regexp.MustCompile(`(?i)^r\d+[-_.]`)
+	planPrefix      = regexp.MustCompile(`(?i)^p\d+[-_.]`)
+	specPrefix      = regexp.MustCompile(`(?i)^s\d+[-_.]`)
+	researchPrefix  = regexp.MustCompile(`(?i)^r\d+[-_.]`)
+	explainerPrefix = regexp.MustCompile(`(?i)^e\d+[-_.]`)
 )

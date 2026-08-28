@@ -19,6 +19,7 @@ const (
 	RoleArtifactSpec      = "artifact-spec"
 	RoleArtifactResearch  = "artifact-research"
 	RoleArtifactNote      = "artifact-note"
+	RoleArtifactExplainer = "artifact-explainer"
 )
 
 // The stylesheet CSS renders, and the path the workbench serves it at.

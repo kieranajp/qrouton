@@ -159,6 +159,10 @@ func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T
 		{"specs/S006-gui-workbench.md", "SPEC"},
 		{"plans/P006-design-system.md", "PLAN"},
 		{"R8-retiring-the-tui.md", "RESEARCH"},
+		{"explainers/onboarding.md", "EXPLAINER"},
+		{"explainers/E1-billing-flow.md", "EXPLAINER"},
+		{"E2-webhook-retries.md", "EXPLAINER"},
+		{"escalation-notes.md", "NOTE"},
 	}
 	base := time.Now().Add(-time.Hour)
 	for i, doc := range kinds {

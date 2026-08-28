@@ -1,3 +1,4 @@
+import { apply } from "../src/lib/panes/diagrams.js";
 import { createViewportController } from "../src/lib/panes/viewport.js";
 
 const root = document.querySelector("#root");
@@ -48,4 +49,19 @@ window.scrollToGap = () => {
 window.resizeAfterScroll = () => {
   before.style.height = `${before.offsetHeight + 60}px`;
   root.style.width = `${root.offsetWidth - 20}px`;
+};
+
+// The swap the workbench performs, through the code that performs it: the same
+// <pre> stays in the flow, taller, carrying the lines it was stamped with.
+const drawn =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 200">' +
+  '<rect width="120" height="200"></rect></svg>';
+
+window.drawDiagram = () => apply(content, [{ line: 32, svg: drawn }]);
+window.diagramHeight = () => document.querySelector("#diagram").getBoundingClientRect().height;
+window.scrollToDiagram = () => {
+  root.scrollTop = document.querySelector("#prose-before").offsetTop;
+};
+window.scrollPastDiagram = () => {
+  root.scrollTop = document.querySelector("#prose-after").offsetTop - 30;
 };

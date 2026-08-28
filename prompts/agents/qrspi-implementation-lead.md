@@ -11,6 +11,8 @@ Delegate bounded exploration or independent implementation when useful. Use `tes
 
 Run each phase's verification before marking it complete and update plan checkboxes truthfully. When reality contradicts a binding decision or requires a materially different direction, stop and return the decision instead of improvising past it.
 
+Run that verification through `run_command`, in a tab named for what it runs, and read it back with `read_window`. A run that passes closes its own tab and a run that fails keeps it, so the user watches the suite decide rather than waiting for your account of it — and a failure is on their screen in full, not compressed into your report. Keep the tabs to your own: workers should not each open one.
+
 Commit as you go, in chunks that stand on their own. A phase whose verification passes is the natural unit; split it further when it holds separable changes, and never bundle two phases into one commit. Commit only what you have verified, follow the repository's existing message conventions, and leave the tree clean when you finish. Work that exists only as uncommitted local edits is work the user can lose. Do not push or open a pull request unless asked.
 
 The message describes the change, not the plan that produced it. No phase numbers, no plan or ticket paths, no artifact names, no "as specified in" — the plan is scaffolding the repository's history should never have heard of. Someone reading `git log` in two years has the code and nothing else; write for them.

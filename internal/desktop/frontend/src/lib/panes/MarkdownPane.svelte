@@ -4,7 +4,8 @@
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
   import { openDocument } from "../docked.svelte.js";
-  import { Call, copyText, openURL } from "../wails.js";
+  import { Call, Events, copyText, openURL } from "../wails.js";
+  import { apply as applyDiagrams } from "./diagrams.js";
   import { documentPath, linkKind, marks, render } from "./markdown.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
@@ -45,6 +46,18 @@
     };
     body.addEventListener("click", click);
     return { destroy: () => body.removeEventListener("click", click) };
+  }
+
+  // Subscribed before the call, so a diagram that lands between the two is
+  // heard rather than missed. The reply names every fence, so the ones still
+  // being laid out are marked as such.
+  /** @param {HTMLElement} body */
+  function diagrams(body) {
+    const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(body, [event.data]));
+    Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
+      .then((found) => applyDiagrams(body, found ?? []))
+      .catch(() => {});
+    return { destroy: off };
   }
 
   /** @param {HTMLElement} body */
@@ -112,7 +125,12 @@
       <span>{heading}</span>
     </div>
   {/if}
-  <div class="markdown" use:links use:viewport={{ id, active, scrollRoot }}>
+  <div
+    class="markdown"
+    data-document-source={doc.source}
+    use:links
+    use:diagrams
+    use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
 </article>

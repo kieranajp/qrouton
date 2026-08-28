@@ -3,6 +3,7 @@ const TONES = {
   SPEC: "var(--artifact-spec)",
   RESEARCH: "var(--artifact-research)",
   NOTE: "var(--artifact-note)",
+  EXPLAINER: "var(--artifact-explainer)",
 };
 
 /** @param {string | undefined} kind */

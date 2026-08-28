@@ -207,6 +207,33 @@
   overflow-x: auto;
 }
 
+.markdown pre.diagram-pending {
+  opacity: 0.55;
+}
+
+/* line-height: 0 avoids a baseline descender gap; the diagram draws at its own viewBox size, so it scrolls rather than shrinks. */
+.markdown pre.diagram {
+  line-height: 0;
+}
+
+.markdown pre.diagram svg {
+  vertical-align: top;
+}
+
+.markdown pre.diagram-failed {
+  border-color: color-mix(in srgb, var(--state-failed) 40%, var(--border-subtle));
+}
+
+.markdown .diagram-error {
+  display: block;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--state-failed) 30%, var(--border-subtle));
+  font: var(--terminal-sm);
+  color: var(--state-failed);
+  white-space: pre-wrap;
+}
+
 /* The block is already a quoted surface; a chip inside it quotes twice. */
 .markdown pre code {
   font: var(--terminal-sm);

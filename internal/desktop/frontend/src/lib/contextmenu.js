@@ -11,16 +11,19 @@ const selectAll = { label: "Select All", act: "selectAll" };
  * itemsFor is the menu a right click opens. A click with nothing to offer gets
  * no items and opens no menu: inert chrome in a native window has none either,
  * and a menu that only ever says "Copy" is how a page admits it is a page.
- * @param {{kind?: string, selection?: string, writable?: boolean}} at
+ * @param {{kind?: string, selection?: string, writable?: boolean, linkKind?: "document"|"external"|"none"}} at
  */
-export function itemsFor({ kind, selection = "", writable = true } = {}) {
+export function itemsFor({ kind, selection = "", writable = true, linkKind } = {}) {
   const copy = { label: "Copy", act: "copy", disabled: !selection };
   switch (kind) {
-    case "link":
-      return [
-        { label: "Open Link", act: "open" },
-        { label: "Copy Link", act: "copyLink" },
-      ];
+    case "link": {
+      // A link nothing can follow gets no item rather than one that silently
+      // does nothing.
+      const followable = linkKind === "external" || linkKind === "document";
+      const items = followable ? [{ label: "Open Link", act: "open" }] : [];
+      items.push({ label: "Copy Link", act: "copyLink" });
+      return items;
+    }
     case "terminal":
       return [copy, paste, "-", selectAll];
     case "field":

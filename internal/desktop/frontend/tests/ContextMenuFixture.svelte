@@ -26,6 +26,10 @@
   <input id="field" aria-label="Field" bind:value={field} />
   <p id="prose">Some prose to select.</p>
   <a id="link" href="https://example.com/doc">A document</a>
+  <div data-document-source="notes/find.md">
+    <a id="doc-link" href="child.md">A relative document</a>
+  </div>
+  <a id="orphan-link" href="child.md">A relative document with no pane</a>
   <div id="chrome">Inert chrome</div>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div id="claimed" oncontextmenu={(event) => event.preventDefault()}>Claims its own click</div>

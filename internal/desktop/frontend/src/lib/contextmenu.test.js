@@ -37,10 +37,25 @@ test("cutting is dimmed with nothing selected", () => {
   assert.equal(acts(itemsFor({ kind: "field" })).cut.disabled, true);
 });
 
-test("a link is opened or copied, whatever the selection", () => {
+test("an external link is opened or copied, whatever the selection", () => {
   const open = ["Open Link", "Copy Link"];
-  assert.deepEqual(labels(itemsFor({ kind: "link" })), open);
-  assert.deepEqual(labels(itemsFor({ kind: "link", selection: "text" })), open);
+  assert.deepEqual(labels(itemsFor({ kind: "link", linkKind: "external" })), open);
+  assert.deepEqual(
+    labels(itemsFor({ kind: "link", linkKind: "external", selection: "text" })),
+    open,
+  );
+});
+
+test("a document link is opened in the pane it names", () => {
+  assert.deepEqual(labels(itemsFor({ kind: "link", linkKind: "document" })), [
+    "Open Link",
+    "Copy Link",
+  ]);
+});
+
+// An unfollowable link would otherwise offer an item that silently does nothing.
+test("an unclassified link only offers a copy", () => {
+  assert.deepEqual(labels(itemsFor({ kind: "link", linkKind: "none" })), ["Copy Link"]);
 });
 
 // The rules hand out one object per call; a shared item would carry a stale

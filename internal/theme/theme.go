@@ -56,6 +56,7 @@ var Roles = map[string]string{
 	RoleArtifactSpec:      Pink,
 	RoleArtifactResearch:  Sky,
 	RoleArtifactNote:      Flamingo,
+	RoleArtifactExplainer: Maroon,
 }
 
 // roleOrder fixes the render order; ranging Roles would reshuffle it each time.
@@ -64,7 +65,7 @@ var roleOrder = []string{
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,
-	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote,
+	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote, RoleArtifactExplainer,
 }
 
 type token struct{ name, value string }

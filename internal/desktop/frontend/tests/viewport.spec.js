@@ -147,3 +147,44 @@ test("deactivation publishes unavailable state and cancels stale scheduled work"
   expect(await page.evaluate(() => window.reveals)).toBe(before.reveals);
   expect(await page.evaluate(() => window.reports.length)).toBe(before.reports + 1);
 });
+
+// The load-bearing one: Go claims a scroll succeeded from these intervals, and
+// they are measured off block elements captured at mount. A diagram arriving a
+// microtask later must leave that array live and the stamped lines intact.
+test("a diagram swapped in keeps the lines around it measurable", async ({ page }) => {
+  await page.goto("/tests/viewport.html");
+  await waitForReport(page, 1);
+  await page.evaluate(() => window.scrollToDiagram());
+  await page.waitForFunction(() => window.reports.at(-1)?.intervals?.[0]?.line === 30);
+  await expect.poll(() => latest(page)).toMatchObject({
+    available: true,
+    intervals: [
+      { line: 30, to: 30 },
+      { line: 32, to: 35 },
+      { line: 37, to: 37 },
+    ],
+  });
+
+  const code = await page.evaluate(() => window.diagramHeight());
+  await page.evaluate(() => window.drawDiagram());
+  await expect.poll(() => page.evaluate(() => window.diagramHeight())).toBeGreaterThan(code);
+
+  // Re-measured off the same elements: the taller diagram now fills the
+  // viewport and has pushed the prose under it out of view.
+  await expect.poll(() => latest(page)).toMatchObject({
+    available: true,
+    intervals: [
+      { line: 30, to: 30 },
+      { line: 32, to: 35 },
+    ],
+  });
+
+  await page.evaluate(() => window.scrollPastDiagram());
+  await expect.poll(() => latest(page)).toMatchObject({
+    available: true,
+    intervals: [
+      { line: 32, to: 35 },
+      { line: 37, to: 37 },
+    ],
+  });
+});

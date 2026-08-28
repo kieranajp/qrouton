@@ -56,9 +56,10 @@ const (
 	ptyExitEvent = "pty:exit:"
 	chromeEvent  = "chrome:update"
 
-	windowDataEvent = "window:data:"
-	windowExitEvent = "window:exit:"
-	windowsEvent    = "window:open"
+	windowDataEvent    = "window:data:"
+	windowExitEvent    = "window:exit:"
+	windowDiagramEvent = "window:diagram:"
+	windowsEvent       = "window:open"
 
 	reposRefreshEvent      = "repos:refresh"
 	assemblyProgressEvent  = "assembly:progress"
