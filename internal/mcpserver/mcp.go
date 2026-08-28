@@ -61,97 +61,56 @@ func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }
 
+// answer is what all but one of qrouton's tools return: a line for the agent to
+// read, and sometimes the viewport measured for the document it opened.
+type answer[In any] func(context.Context, In) (string, *workbench.DocumentViewport, error)
+
+// addTool registers a tool whose result is one keyed string plus an optional
+// viewport. key names that string in the structured payload — every tool says
+// "message" except read_window, which is returning output rather than talking.
+func addTool[In any](server *mcp.Server, name, description, key string, fn answer[In]) {
+	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input In) (*mcp.CallToolResult, any, error) {
+			text, viewport, err := fn(ctx, input)
+			if err != nil {
+				return nil, nil, err
+			}
+			output := map[string]any{key: text}
+			if viewport != nil {
+				output["viewport"] = viewport
+			}
+			return textResult(text), output, nil
+		})
+}
+
+// messageOnly adapts a tool that has no viewport to report.
+func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
+	return func(ctx context.Context, input In) (string, *workbench.DocumentViewport, error) {
+		message, err := fn(ctx, input)
+		return message, nil, err
+	}
+}
+
 func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,
 	})
 	windows := newWindowManager(root, editor, host)
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolOpenFile,
-		Description: descOpenFile,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input openFileInput) (*mcp.CallToolResult, any, error) {
-		message, viewport, err := windows.openFile(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		output := map[string]any{"message": message}
-		if viewport != nil {
-			output["viewport"] = viewport
-		}
-		return textResult(message), output, nil
-	})
+	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, toolSharePage, descSharePage, keyMessage,
+		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
+			return sharePage(root, input)
+		}))
+	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
+	addTool(server, toolReadWindow, descReadWindow, keyOutput, windows.read)
+	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
+	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
+	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))
+	addTool(server, toolEscalate, descEscalate, keyMessage, messageOnly(windows.escalate))
 
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolSharePage,
-		Description: descSharePage,
-	}, func(_ context.Context, _ *mcp.CallToolRequest, input sharePageInput) (*mcp.CallToolResult, any, error) {
-		message, err := sharePage(root, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolRunCommand,
-		Description: descRunCommand,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input runCommandInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.run(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolReadWindow,
-		Description: descReadWindow,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input readWindowInput) (*mcp.CallToolResult, any, error) {
-		text, viewport, err := windows.read(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		output := map[string]any{"output": text}
-		if viewport != nil {
-			output["viewport"] = viewport
-		}
-		return textResult(text), output, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolShowDiff,
-		Description: descShowDiff,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input showDiffInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.showDiff(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolNotify,
-		Description: descNotify,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input notifyInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.notify(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolCloseWindow,
-		Description: descCloseWindow,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input windowNameInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.closeWindow(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
-	})
-
+	// list_windows is the one tool whose payload is a list rather than a line,
+	// so it stays hand-written rather than bending the shape above.
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolListWindows,
 		Description: descListWindows,
@@ -162,17 +121,6 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			message = openWindowsPrefix + strings.Join(names, windowNameJoiner) + openWindowsSuffix
 		}
 		return textResult(message), map[string]any{"windows": names}, nil
-	})
-
-	mcp.AddTool(server, &mcp.Tool{
-		Name:        toolEscalate,
-		Description: descEscalate,
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, input escalateInput) (*mcp.CallToolResult, any, error) {
-		message, err := windows.escalate(ctx, input)
-		if err != nil {
-			return nil, nil, err
-		}
-		return textResult(message), map[string]any{"message": message}, nil
 	})
 
 	return server

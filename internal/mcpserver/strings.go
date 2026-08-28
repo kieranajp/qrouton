@@ -121,3 +121,10 @@ const (
 
 	stagedFlag = " --staged"
 )
+
+// Keys the tools' structured payloads carry their text under. read_window is
+// returning a window's output; everything else is talking to the agent.
+const (
+	keyMessage = "message"
+	keyOutput  = "output"
+)
