@@ -19,6 +19,7 @@ import (
 // Fields is the session the workbench window draws around its terminal. Read
 // leaves Repos, Activity and Sessions empty: the first costs subprocesses, the
 // second needs a live PTY, and the last is the app's rather than a session's.
+// Agents carries only the manifest provider until the workbench overlays live data.
 //
 // No slice here may be nil. A nil one marshals as JSON null, and the page's
 // defaults only fill keys the payload omits, so null reaches a .length and
@@ -36,6 +37,7 @@ type Fields struct {
 	Documents []Document   `json:"documents"`
 	Repos     []RepoStat   `json:"repos"`
 	Activity  string       `json:"activity"`
+	Agents    AgentPanel   `json:"agents"`
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
@@ -56,12 +58,41 @@ type SessionRow struct {
 	Repos    []SessionRepo `json:"repos"`
 	Terminal string        `json:"terminal"`
 	Activity string        `json:"activity"`
+	Summary  AgentSummary  `json:"summary"`
 	Unseen   int           `json:"unseen"`
 	Opened   time.Time     `json:"opened"`
 }
 
-// SessionRepo names one of a session's repositories, which is what tells two
-// sessions apart in the rail.
+type AgentSummary struct {
+	Attention string `json:"attention"`
+	Active    int    `json:"active"`
+	Coverage  string `json:"coverage"`
+	Running   bool   `json:"running"`
+}
+
+type AgentRecord struct {
+	ID          string    `json:"id"`
+	RunID       string    `json:"run_id"`
+	Provider    string    `json:"provider"`
+	ParentID    string    `json:"parent_id"`
+	Type        string    `json:"type"`
+	Role        string    `json:"role"`
+	State       string    `json:"state"`
+	ParentKnown bool      `json:"parent_known"`
+	StartedAt   time.Time `json:"started_at"`
+	FinishedAt  time.Time `json:"finished_at"`
+}
+
+type AgentPanel struct {
+	Provider       string        `json:"provider"`
+	AttentionKnown bool          `json:"attention_known"`
+	ChildrenKnown  bool          `json:"children_known"`
+	ParentsKnown   bool          `json:"parents_known"`
+	OutcomesKnown  bool          `json:"outcomes_known"`
+	Agents         []AgentRecord `json:"agents"`
+}
+
+// SessionRepo names one of a session's editing repositories in the rail.
 type SessionRepo struct {
 	Name string `json:"name"`
 	Role string `json:"role"`
@@ -89,7 +120,10 @@ type RepoStat struct {
 // Read reports everything a file read can answer about a session. A root with no
 // manifest answers with the session-level fields empty rather than nothing at all.
 func Read(root string) Fields {
-	fields := Fields{Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{}}
+	fields := Fields{
+		Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{},
+		Agents: AgentPanel{Agents: []AgentRecord{}},
+	}
 	m, err := session.Load(root)
 	if err != nil {
 		return fields
@@ -102,6 +136,7 @@ func Read(root string) Fields {
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
+	fields.Agents.Provider = m.Runner
 	fields.Documents = documents(root)
 	return fields
 }
@@ -164,6 +199,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: mode,
 			Repos: sessionRepos(m), Opened: opened,
+			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}
 	sort.Slice(rows, func(i, j int) bool {
@@ -221,7 +257,10 @@ func writtenSince(root string, since time.Time) int {
 func sessionRepos(m session.Manifest) []SessionRepo {
 	out := make([]SessionRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
-		out = append(out, SessionRepo{Name: r.Name, Role: string(r.Role.Effective())})
+		if r.Role.Effective() != session.RepoRoleEditing {
+			continue
+		}
+		out = append(out, SessionRepo{Name: r.Org + repoSeparator + r.Name, Role: string(session.RepoRoleEditing)})
 	}
 	return out
 }

@@ -417,6 +417,36 @@ func (s *Sessions) agentActivity(slug string) *agentActivity {
 	return s.agents[slug]
 }
 
+func (s *Sessions) agentActivitySnapshots() map[string]agentActivitySnapshot {
+	s.mu.Lock()
+	trackers := make(map[string]*agentActivity, len(s.agents))
+	for slug, tracker := range s.agents {
+		trackers[slug] = tracker
+	}
+	s.mu.Unlock()
+	snapshots := make(map[string]agentActivitySnapshot, len(trackers))
+	for slug, tracker := range trackers {
+		snapshots[slug] = tracker.snapshot()
+	}
+	return snapshots
+}
+
+func (s *Sessions) earliestAgentExpiry() time.Time {
+	s.mu.Lock()
+	trackers := make([]*agentActivity, 0, len(s.agents))
+	for _, tracker := range s.agents {
+		trackers = append(trackers, tracker)
+	}
+	s.mu.Unlock()
+	var earliest time.Time
+	for _, tracker := range trackers {
+		if expiry := tracker.earliestExpiry(); !expiry.IsZero() && (earliest.IsZero() || expiry.Before(earliest)) {
+			earliest = expiry
+		}
+	}
+	return earliest
+}
+
 func (s *Sessions) dropAgentActivity(slug string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

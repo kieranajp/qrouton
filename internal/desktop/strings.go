@@ -1,6 +1,10 @@
 package desktop
 
-import "time"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/status"
+)
 
 const (
 	applicationName        = "qrouton"
@@ -125,15 +129,15 @@ const (
 
 	agentRootID = "root"
 
-	agentRoleOrchestrator = "Orchestrator"
-	agentRoleLead         = "Lead"
-	agentRoleSpecialist   = "Specialist"
-	agentRoleUnavailable  = "Role unavailable"
+	agentRoleOrchestrator = status.AgentRoleOrchestrator
+	agentRoleLead         = status.AgentRoleLead
+	agentRoleSpecialist   = status.AgentRoleSpecialist
+	agentRoleUnavailable  = status.AgentRoleUnavailable
 
-	agentStateWaiting  = "Waiting for you"
-	agentStateWorking  = "Working"
-	agentStateIdle     = "Idle"
-	agentStateActive   = "Active"
-	agentStateFinished = "Finished"
-	agentStateFailed   = "Failed"
+	agentStateWaiting  = status.AgentStateWaiting
+	agentStateWorking  = status.AgentStateWorking
+	agentStateIdle     = status.AgentStateIdle
+	agentStateActive   = status.AgentStateActive
+	agentStateFinished = status.AgentStateFinished
+	agentStateFailed   = status.AgentStateFailed
 )

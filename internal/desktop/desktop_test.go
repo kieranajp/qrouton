@@ -917,7 +917,7 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 		t.Fatalf("chrome repos = %+v, want the session on screen's alone", fields.Repos)
 	}
 	for _, row := range fields.Sessions {
-		if row.Slug == "kraken" && (len(row.Repos) != 1 || row.Repos[0].Name != "api") {
+		if row.Slug == "kraken" && (len(row.Repos) != 1 || row.Repos[0].Name != "lifesum/api") {
 			t.Fatalf("the background row = %+v, want the repository its manifest names", row)
 		}
 	}
@@ -945,7 +945,7 @@ func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.
 	})
 
 	empty := chrome.Snapshot()
-	if empty.Sessions == nil || empty.Documents == nil || empty.Repos == nil {
+	if empty.Sessions == nil || empty.Documents == nil || empty.Repos == nil || empty.Agents.Agents == nil {
 		t.Fatalf("initial snapshot has nil slices: %+v", empty)
 	}
 	first := status.Fields{

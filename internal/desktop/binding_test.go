@@ -237,6 +237,16 @@ func TestTheChromePageDefaultsEveryField(t *testing.T) {
 	}
 }
 
+func TestTheChromePageDefaultsTheNestedAgentRecordList(t *testing.T) {
+	source, err := os.ReadFile(frontendSource + "lib/chrome.svelte.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), `agents: { provider: "", agents: [] }`) {
+		t.Fatal("chrome.svelte.js has no non-null default for the selected agent panel")
+	}
+}
+
 // Without this one wire the toggle beside a held reference row answers, the tally
 // counts it, and the session is never told. The bundle is read rather than the
 // source: a page built before the wire existed fails in exactly the same silence.

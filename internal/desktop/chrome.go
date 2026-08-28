@@ -25,6 +25,7 @@ func newChrome(emit emitter) *Chrome {
 			Sessions:  []status.SessionRow{},
 			Documents: []status.Document{},
 			Repos:     []status.RepoStat{},
+			Agents:    status.AgentPanel{Agents: []status.AgentRecord{}},
 		},
 		emit: emit,
 	}
@@ -73,13 +74,43 @@ type measurement struct {
 	stats []status.RepoStat
 }
 
+type chromeExpiryTimer interface {
+	channel() <-chan time.Time
+	reset(time.Duration)
+	stop()
+}
+
+type realChromeExpiryTimer struct{ timer *time.Timer }
+
+func newChromeExpiryTimer() chromeExpiryTimer {
+	timer := time.NewTimer(time.Hour)
+	timer.Stop()
+	return &realChromeExpiryTimer{timer: timer}
+}
+
+func (t *realChromeExpiryTimer) channel() <-chan time.Time { return t.timer.C }
+func (t *realChromeExpiryTimer) reset(after time.Duration) { t.timer.Reset(after) }
+func (t *realChromeExpiryTimer) stop() {
+	if !t.timer.Stop() {
+		select {
+		case <-t.timer.C:
+		default:
+		}
+	}
+}
+
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
 func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts) {
+	watchWithExpiryTimer(ctx, reg, root, cfg, emit, field, slow, count, newChromeExpiryTimer())
+}
+
+func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts, expiry chromeExpiryTimer) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
+	defer expiry.stop()
 
 	measured := map[string][]status.RepoStat{}
 	unseen := count.all(root)
@@ -101,6 +132,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 
 	refresh()
 	pushChrome(reg, root, cfg, measured, unseen, emit)
+	resetAgentExpiry(expiry, reg)
 	for {
 		select {
 		case <-ctx.Done():
@@ -123,9 +155,24 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 				}
 			}
 		case <-fields.C:
+		case <-expiry.channel():
 		}
 		pushChrome(reg, root, cfg, measured, unseen, emit)
+		resetAgentExpiry(expiry, reg)
 	}
+}
+
+func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
+	timer.stop()
+	expires := reg.earliestAgentExpiry()
+	if expires.IsZero() {
+		return
+	}
+	after := expires.Sub(reg.now())
+	if after < 0 {
+		after = 0
+	}
+	timer.reset(after)
 }
 
 // pushChrome emits even with the session-level fields empty: the page cannot
@@ -133,6 +180,7 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
 	shown := reg.current()
 	fields := status.Read(shown.root())
+	agentSnapshots := reg.agentActivitySnapshots()
 	// Dereferenced on every tick: a value captured at wiring time re-raises the
 	// overlay two seconds after it closes. A window holding a session never asks,
 	// so the questions can never land over a live conversation — and an install
@@ -145,6 +193,13 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		fields.Terminal, fields.Activity = shown.terminal, shown.activity.state()
 		fields.Picker = shown.pendingPicker() != nil
 	}
+	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
+		panel := agentPanel(snapshot)
+		if panel.Provider == "" {
+			panel.Provider = fields.Agents.Provider
+		}
+		fields.Agents = panel
+	}
 	// The rail populates with nothing on screen: a window opening on no session at
 	// all still has to offer the ones on disk.
 	fields.Sessions = reg.railOrder(status.Sessions(root))
@@ -155,7 +210,54 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 			fields.Sessions[i].Terminal = state.terminal
 			fields.Sessions[i].Activity = state.activity.state()
 		}
+		if snapshot, ok := agentSnapshots[row.Slug]; ok {
+			fields.Sessions[i].Summary = agentSummary(snapshot)
+		}
 		fields.Sessions[i].Unseen = unseen[row.Slug]
 	}
 	emit(chromeEvent, fields)
+}
+
+func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
+	summary := status.AgentSummary{
+		Attention: status.AgentAttentionNone,
+		Active:    snapshot.Active,
+		Coverage:  status.AgentCoverageNone,
+		Running:   snapshot.Running,
+	}
+	if !snapshot.Running {
+		return summary
+	}
+	if snapshot.Capabilities.Children {
+		summary.Coverage = status.AgentCoverageFull
+	} else {
+		summary.Coverage = status.AgentCoverageRoot
+	}
+	if snapshot.Capabilities.Attention {
+		if snapshot.Attention {
+			summary.Attention = status.AgentAttentionNeedsYou
+		}
+	} else {
+		summary.Attention = status.AgentAttentionUnknown
+	}
+	return summary
+}
+
+func agentPanel(snapshot agentActivitySnapshot) status.AgentPanel {
+	records := make([]status.AgentRecord, 0, len(snapshot.Records))
+	for _, record := range snapshot.Records {
+		records = append(records, status.AgentRecord{
+			ID: record.ID, RunID: record.RunID, Provider: record.Provider, ParentID: record.ParentID,
+			Type: record.Type, Role: record.Role, State: record.State,
+			ParentKnown: record.ParentKnown, StartedAt: record.StartedAt, FinishedAt: record.FinishedAt,
+		})
+	}
+	return status.AgentPanel{
+		Provider:       snapshot.Provider,
+		AttentionKnown: snapshot.Capabilities.Attention,
+		ChildrenKnown:  snapshot.Capabilities.Children,
+		ParentsKnown:   snapshot.Capabilities.Parents,
+		OutcomesKnown:  snapshot.Capabilities.Outcomes,
+		Agents:         records,
+	}
 }

@@ -28,3 +28,25 @@ const (
 	ActivityWaiting = "waiting"
 	ActivityIdle    = "idle"
 )
+
+const (
+	AgentAttentionNeedsYou = "needs-you"
+	AgentAttentionNone     = "none"
+	AgentAttentionUnknown  = "unknown"
+
+	AgentCoverageFull = "full"
+	AgentCoverageRoot = "root"
+	AgentCoverageNone = "none"
+
+	AgentRoleOrchestrator = "Orchestrator"
+	AgentRoleLead         = "Lead"
+	AgentRoleSpecialist   = "Specialist"
+	AgentRoleUnavailable  = "Role unavailable"
+
+	AgentStateWaiting  = "Waiting for you"
+	AgentStateWorking  = "Working"
+	AgentStateIdle     = "Idle"
+	AgentStateActive   = "Active"
+	AgentStateFinished = "Finished"
+	AgentStateFailed   = "Failed"
+)

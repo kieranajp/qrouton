@@ -37,6 +37,7 @@ type agentActivitySnapshot struct {
 	Provider     string
 	Running      bool
 	Attention    bool
+	Active       int
 	Capabilities agentCapabilities
 	Records      []agentRecord
 }
@@ -198,7 +199,11 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	now := a.now()
 	a.pruneLocked(now)
 	records := make([]agentRecord, 0, len(a.records))
+	active := 0
 	for _, record := range a.records {
+		if record.State == agentStateActive {
+			active++
+		}
 		copy := *record
 		if copy.Root && copy.State == agentStateActive {
 			switch {
@@ -226,7 +231,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	})
 	return agentActivitySnapshot{
 		Provider: a.provider, Running: a.running, Attention: a.running && a.waiting,
-		Capabilities: capabilitiesFor(a.provider), Records: records,
+		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
 	}
 }
 
@@ -245,8 +250,6 @@ func (a *agentActivity) activeCount() int {
 func (a *agentActivity) earliestExpiry() time.Time {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	now := a.now()
-	a.pruneLocked(now)
 	var earliest time.Time
 	for _, record := range a.records {
 		if record.FinishedAt.IsZero() {

@@ -5,7 +5,8 @@ const CHROME_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Chrome";
 /** @type {{mode: string, phase: string, identity: string, branch: string,
  *   slug: string, terminal: string,
  *   sessions: any[], documents: any[], repos: any[],
- *   activity: 'working'|'waiting'|'idle', picker: boolean, welcoming: boolean}} */
+ *   activity: 'working'|'waiting'|'idle', agents: {provider: string, agents: any[]},
+ *   picker: boolean, welcoming: boolean}} */
 const NOTHING = {
   mode: "",
   phase: "",
@@ -17,6 +18,7 @@ const NOTHING = {
   documents: [],
   repos: [],
   activity: "idle",
+  agents: { provider: "", agents: [] },
   picker: false,
   welcoming: false,
 };

@@ -41,6 +41,7 @@ func TestReadScratchAssistant(t *testing.T) {
 		Sessions:  []SessionRow{},
 		Documents: []Document{},
 		Repos:     []RepoStat{},
+		Agents:    AgentPanel{Agents: []AgentRecord{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -93,7 +94,10 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 // The landing path, before onboarding has chosen a session: the window still has
 // to be told something, and no slice in it may be nil.
 func TestReadWithoutManifest(t *testing.T) {
-	want := Fields{Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{}}
+	want := Fields{
+		Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{},
+		Agents: AgentPanel{Agents: []AgentRecord{}},
+	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
 	}
@@ -108,6 +112,18 @@ func TestFieldsCarryTheSessionsSlug(t *testing.T) {
 	}
 	if got := Read(t.TempDir()).Slug; got != "" {
 		t.Fatalf("a directory with no manifest answered with slug %q", got)
+	}
+}
+
+func TestReadPreservesKnownProviderAndLeavesLegacyProviderUnknown(t *testing.T) {
+	root := t.TempDir()
+	known := sessionDir(t, root, session.Manifest{Slug: "known", Runner: "codex"})
+	legacy := sessionDir(t, root, session.Manifest{Slug: "legacy"})
+	if got := Read(known).Agents.Provider; got != "codex" {
+		t.Fatalf("known provider = %q, want codex", got)
+	}
+	if got := Read(legacy).Agents.Provider; got != "" {
+		t.Fatalf("legacy provider = %q, want unknown", got)
 	}
 }
 
@@ -202,7 +218,7 @@ func TestSessionsListsEverySessionUnderTheRoot(t *testing.T) {
 	if got := byslug["extract-billing"]; got.Name != "Extract billing" || got.Initials != "eb" || got.Mode != "RPI" {
 		t.Fatalf("billing row = %#v", got)
 	}
-	if got := byslug["extract-billing"].Repos; len(got) != 1 || got[0].Name != "api" {
+	if got := byslug["extract-billing"].Repos; len(got) != 1 || got[0].Name != "lifesum/api" {
 		t.Fatalf("billing row repositories = %#v, want the one its manifest names", got)
 	}
 	if got := byslug["flaky-suite"]; got.Name != "Flaky suite" || got.Initials != "fs" || got.Mode != "ASSISTANT" {
@@ -226,12 +242,56 @@ func TestSessionRowsCarryRepositoriesInManifestOrder(t *testing.T) {
 		t.Fatalf("listed %d sessions, want 1: %#v", len(rows), rows)
 	}
 	want := []SessionRepo{
-		{Name: "svc", Role: "editing"},
-		{Name: "contracts", Role: "reference"},
-		{Name: "api", Role: "editing"},
+		{Name: "lifesum/svc", Role: "editing"},
+		{Name: "lifesum/api", Role: "editing"},
 	}
 	if got := rows[0].Repos; !reflect.DeepEqual(got, want) {
 		t.Fatalf("row repositories = %#v, want %#v", got, want)
+	}
+}
+
+func TestSessionRowsKeepLegacyEditingRolesAndOmitReferences(t *testing.T) {
+	root := t.TempDir()
+	sessionDir(t, root, session.Manifest{Slug: "webhook", Name: "Webhook retry",
+		Repos: []session.ManifestRepo{
+			{Name: "legacy", Org: "lifesum"},
+			{Name: "docs", Org: "lifesum", Role: session.RepoRoleReference},
+		}})
+	sessionDir(t, root, session.Manifest{Slug: "reference-only", Name: "Reference only",
+		Repos: []session.ManifestRepo{{Name: "contracts", Org: "lifesum", Role: session.RepoRoleReference}}})
+
+	rows := map[string]SessionRow{}
+	for _, row := range Sessions(root) {
+		rows[row.Slug] = row
+	}
+	if got := rows["webhook"].Repos; !reflect.DeepEqual(got, []SessionRepo{{Name: "lifesum/legacy", Role: "editing"}}) {
+		t.Fatalf("legacy row repositories = %#v", got)
+	}
+	if got := rows["reference-only"].Repos; got == nil || len(got) != 0 {
+		t.Fatalf("reference-only row repositories = %#v, want an empty list", got)
+	}
+}
+
+func TestAgentContractCarriesProviderAndNeverMarshalsANullRecordList(t *testing.T) {
+	fields := Read(t.TempDir())
+	fields.Agents.Provider = "claude"
+	b, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keyed map[string]json.RawMessage
+	if err := json.Unmarshal(b, &keyed); err != nil {
+		t.Fatal(err)
+	}
+	var panel map[string]json.RawMessage
+	if err := json.Unmarshal(keyed["agents"], &panel); err != nil {
+		t.Fatal(err)
+	}
+	if got := string(panel["provider"]); got != `"claude"` {
+		t.Fatalf("provider marshalled as %s", got)
+	}
+	if got := string(panel["agents"]); got != "[]" {
+		t.Fatalf("agent records marshalled as %s, want []", got)
 	}
 }
 
@@ -472,6 +532,13 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 		if string(keyed[key]) == "null" {
 			t.Errorf("%q marshalled as null", key)
 		}
+	}
+	var agents map[string]json.RawMessage
+	if err := json.Unmarshal(keyed["agents"], &agents); err != nil {
+		t.Fatal(err)
+	}
+	if string(agents["agents"]) == "null" {
+		t.Error("agent records marshalled as null")
 	}
 
 	// The failure paths are the ones that reach for a bare nil.
