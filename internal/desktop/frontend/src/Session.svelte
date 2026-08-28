@@ -1,11 +1,12 @@
 <script>
   import { onMount } from "svelte";
   import Button from "./lib/core/Button.svelte";
-    import CapsLabel from "./lib/core/CapsLabel.svelte";
+  import CapsLabel from "./lib/core/CapsLabel.svelte";
   import Chip from "./lib/core/Chip.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import StatusDot from "./lib/core/StatusDot.svelte";
   import Rail from "./lib/session/Rail.svelte";
+  import ContextMenu from "./lib/shell/ContextMenu.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
@@ -259,6 +260,8 @@
       {/each}
     </div>
   </div>
+
+  <ContextMenu />
 
   <WindowTray
     summary="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===

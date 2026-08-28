@@ -15,4 +15,5 @@ export declare const Browser: {
 
 export declare const Clipboard: {
   SetText(text: string): Promise<void>;
+  Text(): Promise<string>;
 };

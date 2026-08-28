@@ -35,6 +35,17 @@ export function decode(encoded) {
   return buffer;
 }
 
+const mounted = new WeakMap();
+
+/** terminalAt is the terminal a node sits inside, and undefined outside one. */
+export function terminalAt(node) {
+  for (let element = node; element; element = element.parentElement) {
+    const term = mounted.get(element);
+    if (term) return term;
+  }
+  return undefined;
+}
+
 /**
  * @param {HTMLElement} host
  * @param {{write: (text: string) => void, background?: string}} options
@@ -54,6 +65,7 @@ export function mount(host, { write, background = "--ctp-base" }) {
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
+  mounted.set(host, term);
   try {
     term.loadAddon(new WebglAddon());
   } catch (e) {
@@ -87,7 +99,11 @@ export function mount(host, { write, background = "--ctp-base" }) {
     ({ cols, rows } = term);
     report(cols, rows);
   };
-  return { term, fit, refit, dispose: () => term.dispose() };
+  const dispose = () => {
+    mounted.delete(host);
+    term.dispose();
+  };
+  return { term, fit, refit, dispose };
 }
 
 export function watchSize(host, resize) {

@@ -1,8 +1,13 @@
-export const Browser = { OpenURL: async () => {} };
+export const Browser = {
+  OpenURL: async (url) => {
+    window.openedURL = url;
+  },
+};
 export const Clipboard = {
   SetText: async (text) => {
     window.clipboardText = text;
   },
+  Text: async () => window.clipboardText ?? "",
 };
 const listeners = new Map();
 export const Events = {
