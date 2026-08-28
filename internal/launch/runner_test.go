@@ -306,3 +306,63 @@ func TestRunnersRejectEmptyOverride(t *testing.T) {
 		t.Fatalf("empty override error = %v, want ErrEmptyOverride", err)
 	}
 }
+
+// Every spec has to answer all three questions the launch path asks it. An entry
+// added with one of them left nil would panic on the launch it was added for.
+func TestEverySpecIsCompletelyWired(t *testing.T) {
+	if len(runnerSpecs) == 0 {
+		t.Fatal("no runners are registered")
+	}
+	seen := map[string]bool{}
+	for _, spec := range runnerSpecs {
+		if spec.ID == "" || spec.Label == "" || len(spec.Command) == 0 {
+			t.Errorf("spec %+v has no identity or no command", spec)
+		}
+		if seen[spec.ID] {
+			t.Errorf("two specs claim id %q, so specFor answers with whichever is first", spec.ID)
+		}
+		seen[spec.ID] = true
+		if spec.Resume == nil || spec.Prompt == nil || spec.Inject == nil {
+			t.Errorf("spec %q is missing Resume, Prompt or Inject", spec.ID)
+		}
+	}
+}
+
+// builtinRunners is derived, so the resolver cannot fall out of step with the
+// behaviour table — and it has to be a copy, or an override would edit the spec
+// every later call reads.
+func TestBuiltinRunnersMirrorTheSpecTableWithoutSharingIt(t *testing.T) {
+	if len(builtinRunners) != len(runnerSpecs) {
+		t.Fatalf("%d builtins for %d specs", len(builtinRunners), len(runnerSpecs))
+	}
+	for i, spec := range runnerSpecs {
+		if builtinRunners[i].ID != spec.ID || builtinRunners[i].Label != spec.Label {
+			t.Errorf("builtin %d = %q/%q, spec = %q/%q",
+				i, builtinRunners[i].ID, builtinRunners[i].Label, spec.ID, spec.Label)
+		}
+	}
+	fresh := builtins()
+	fresh[0].Command[0] = "clobbered"
+	if runnerSpecs[0].Command[0] == "clobbered" {
+		t.Fatal("builtins share the spec's command slice, so one caller's override reaches every later one")
+	}
+}
+
+// A Runner is an exported struct with exported fields, so one can reach the
+// launch path without the per-runner wiring. Refusing beats launching an agent
+// with no MCP server and no hooks.
+func TestAnUnregisteredRunnerIsRefusedRatherThanLaunchedBare(t *testing.T) {
+	_, _, err := runnerLaunch(Runner{ID: "handrolled", Command: []string{"echo"}},
+		"/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+	if !errors.Is(err, ErrUnsupportedRunner) {
+		t.Fatalf("runnerLaunch error = %v, want ErrUnsupportedRunner", err)
+	}
+}
+
+// The same runner, unregistered, must not silently get a bare argv either.
+func TestAnUnregisteredRunnerArgvIsJustItsCommand(t *testing.T) {
+	r := Runner{ID: "handrolled", Command: []string{"echo", "--flag"}}
+	if got := runnerArgv(r, false, modeRPI, ""); !reflect.DeepEqual(got, r.Command) {
+		t.Fatalf("argv = %v, want the command untouched", got)
+	}
+}
