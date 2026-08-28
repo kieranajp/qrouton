@@ -90,10 +90,8 @@ function draw(block, svg) {
   const drawn = /** @type {SVGSVGElement | null} */ (holder.firstElementChild);
   const size = naturalSize(drawn?.getAttribute("viewBox"));
   if (drawn && size) {
-    // Natural size is the ceiling, the pane the limit; the viewBox keeps the ratio.
     drawn.style.width = `${size.width}px`;
-    drawn.style.maxWidth = "100%";
-    drawn.style.height = "auto";
+    drawn.style.height = `${size.height}px`;
   }
   block.classList.remove(PENDING, FAILED);
   block.classList.add(DRAWN);

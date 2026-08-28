@@ -26,6 +26,9 @@ const (
 
 	cacheEntries = 128
 	pad          = int64(20)
+
+	// d2 sizes by content, so an unscaled diagram dwarfs the prose around it.
+	scale = 0.75
 )
 
 // Result is one fence's outcome, carrying the document line it was found on so
@@ -195,6 +198,7 @@ func render(ctx context.Context, ruler *textmeasure.Ruler, fence Fence) Result {
 		// inserted inline. OmitVersion keeps output stable across d2 upgrades.
 		NoXMLTag:    ptr(true),
 		OmitVersion: ptr(true),
+		Scale:       ptr(scale),
 	}
 	compiled, _, err := d2lib.Compile(ctx, fence.Source, &d2lib.CompileOptions{
 		Ruler:          ruler,

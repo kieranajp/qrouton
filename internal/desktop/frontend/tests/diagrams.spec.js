@@ -24,11 +24,8 @@ test("a fence waiting on its diagram says so, then draws it inside the measure",
 
   expect(drawn.width).toBeGreaterThan(0);
   expect(drawn.height).toBeGreaterThan(0);
-  // Wider than the measure, so it shrinks into the block and nothing scrolls sideways.
-  expect(drawn.scrolls).toBe(false);
-  expect(drawn.width).toBeLessThanOrEqual(Math.ceil(drawn.block));
-  // height: auto reads the fixture's 1642x108 viewBox, so shrinking keeps the shape.
-  expect(drawn.width / drawn.height).toBeCloseTo(1642 / 108, 1);
+  // Wider than the measure, so the block scrolls rather than the page.
+  expect(drawn.scrolls).toBe(true);
   expect(drawn.block).toBeLessThanOrEqual(drawn.container);
   expect(drawn.page).toBeLessThanOrEqual(drawn.viewport);
 });
