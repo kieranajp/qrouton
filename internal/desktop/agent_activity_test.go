@@ -72,6 +72,42 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 }
 
+func TestDelegatedStopRemainsTerminalAfterItsDisplayRetentionExpires(t *testing.T) {
+	clock := &activityClock{at: time.Date(2026, 8, 28, 12, 30, 0, 0, time.UTC)}
+	retention := 10 * time.Second
+	tracker := newAgentActivity(clock.now, retention)
+	tracker.begin(agentProviderClaude, 1)
+	event := workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "agent-1", Type: "explorer",
+	}
+	if !tracker.lifecycle(event) {
+		t.Fatal("start was rejected")
+	}
+	event.Kind = workbench.LifecycleStop
+	if !tracker.lifecycle(event) {
+		t.Fatal("stop was rejected")
+	}
+	clock.at = clock.at.Add(retention)
+	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
+		t.Fatal("finished record survived its display retention")
+	}
+	event.Kind = workbench.LifecycleStart
+	if tracker.lifecycle(event) {
+		t.Fatal("a delayed start resurrected an expired stopped agent")
+	}
+	event.Kind = workbench.LifecycleStop
+	if tracker.lifecycle(event) {
+		t.Fatal("a duplicate stop recreated an expired tombstone")
+	}
+	if got := tracker.activeCount(); got != 1 {
+		t.Fatalf("active records = %d, want only the root", got)
+	}
+	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
+		t.Fatal("late lifecycle events restarted display retention")
+	}
+}
+
 func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 13, 0, 0, 0, time.UTC)}
 	tracker := newAgentActivity(clock.now, time.Minute)

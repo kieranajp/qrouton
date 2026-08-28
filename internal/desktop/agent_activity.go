@@ -61,10 +61,16 @@ type agentActivity struct {
 	waiting    bool
 	spoke      time.Time
 	records    map[agentRecordKey]*agentRecord
+	stopped    map[agentRecordKey]struct{}
 }
 
 func newAgentActivity(now func() time.Time, retention time.Duration) *agentActivity {
-	return &agentActivity{now: now, retention: retention, records: map[agentRecordKey]*agentRecord{}}
+	return &agentActivity{
+		now:       now,
+		retention: retention,
+		records:   map[agentRecordKey]*agentRecord{},
+		stopped:   map[agentRecordKey]struct{}{},
+	}
 }
 
 func (a *agentActivity) begin(provider string, generation uint64) bool {
@@ -78,6 +84,7 @@ func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.finishActiveLocked(now, agentStateFinished)
 	a.provider = provider
 	a.generation = generation
+	a.stopped = map[agentRecordKey]struct{}{}
 	a.running = true
 	a.waiting = false
 	a.spoke = time.Time{}
@@ -101,6 +108,9 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	}
 	runID := strconv.FormatUint(event.Generation, 10)
 	key := agentRecordKey{provider: event.Provider, runID: runID, id: event.ID}
+	if _, stopped := a.stopped[key]; stopped {
+		return false
+	}
 	record := a.records[key]
 	switch event.Kind {
 	case workbench.LifecycleStart:
@@ -119,6 +129,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		}
 		return true
 	case workbench.LifecycleStop:
+		a.stopped[key] = struct{}{}
 		if record == nil {
 			a.records[key] = &agentRecord{
 				ID: event.ID, RunID: runID, Provider: event.Provider,

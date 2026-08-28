@@ -4,4 +4,3 @@ import SessionRailFixture from "./SessionRailFixture.svelte";
 
 window.wailsCall = async () => undefined;
 mount(SessionRailFixture, { target: document.querySelector("#fixture") });
-
