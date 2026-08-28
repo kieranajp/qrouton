@@ -1,12 +1,11 @@
 <script>
   import { onMount } from "svelte";
   import Button from "./lib/core/Button.svelte";
-  import CapsLabel from "./lib/core/CapsLabel.svelte";
+    import CapsLabel from "./lib/core/CapsLabel.svelte";
   import Chip from "./lib/core/Chip.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import StatusDot from "./lib/core/StatusDot.svelte";
-  import RailItem from "./lib/session/RailItem.svelte";
-  import Confirm from "./lib/shell/Confirm.svelte";
+  import Rail from "./lib/session/Rail.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
@@ -20,7 +19,6 @@
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import { pending as pendingAssembly } from "./lib/assembly/calls.js";
   import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
-  import { dismissible } from "./lib/core/dismiss.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
@@ -39,9 +37,6 @@
     widthKey,
     writeStored,
   } from "./lib/layout.js";
-  import { menuHeight, place } from "./lib/menu.js";
-  import { cleanup, reveal, show, uncommitted } from "./lib/sessions.js";
-  import { rowAt, shortcut } from "./lib/shortcuts.js";
   import {
     closeWindow,
     openDocument,
@@ -117,19 +112,6 @@
     ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
   ]);
 
-  // A rail row's number is its position, so it moves when showing a session
-  // re-sorts the list.
-  onMount(() => {
-    const onKey = (event) => {
-      const row = rowAt(fields.sessions, event);
-      if (!row) return;
-      event.preventDefault();
-      show(row.slug);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
-
   let activity = $derived(ACTIVITY[fields.activity] ?? ACTIVITY.idle);
   let latest = $derived(
     fields.documents.length
@@ -152,85 +134,10 @@
       showTab(await openDocument(path));
     } catch {}
   }
-  const ROW_MENU = [
-    { label: "Reveal in Finder", act: revealRow },
-    "-",
-    { label: "Clean up…", tone: "destructive", act: askCleanup },
-  ];
-  const ROW_MENU_WIDTH = 190;
-
-  /** @type {{row: any, x: number, y: number} | null} */
-  let menu = $state(null);
-  /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
-  let confirming = $state(null);
-  let cleaning = $state(false);
-  // A token the terminal watches: bumping it is what hands the keyboard back
-  // when an overlay closes.
+  // A token the agent terminal watches: bumping it is what hands the keyboard
+  // back when whatever covered it goes away — an overlay, or one of the rail's
+  // own menus.
   let keyboard = $state(0);
-
-  // The rail clips and scrolls, so the menu is drawn at the page and placed at
-  // the pointer instead of anchored to the row.
-  let anchor = $derived(
-    menu
-      ? place(
-          menu,
-          { width: ROW_MENU_WIDTH, height: menuHeight(ROW_MENU) },
-          { width: window.innerWidth, height: window.innerHeight },
-        )
-      : null,
-  );
-
-  function openMenu(event, row) {
-    // The webview draws one of its own otherwise.
-    event.preventDefault();
-    menu = { row, x: event.clientX, y: event.clientY };
-  }
-
-  function dismissMenu() {
-    menu = null;
-    keyboard++;
-  }
-
-  // Nothing here changed, and the rail has no surface to report a refusal on.
-  async function revealRow(row) {
-    keyboard++;
-    try {
-      await reveal(row.slug);
-    } catch {}
-  }
-
-  // The list is advisory — the removal forces regardless — so a check that could
-  // not be made says so and leaves the confirm live.
-  async function askCleanup(row) {
-    let dirty = [];
-    let checked = true;
-    try {
-      dirty = await uncommitted(row.slug);
-    } catch {
-      checked = false;
-    }
-    confirming = { row, dirty, checked, error: "" };
-  }
-
-  // The chrome poll notices the row is gone, so nothing here waits on a refresh.
-  async function cleanUp() {
-    if (cleaning) return;
-    cleaning = true;
-    try {
-      await cleanup(confirming.row.slug);
-      dismissConfirm();
-    } catch (err) {
-      confirming = { ...confirming, error: String(err?.message ?? err) };
-    } finally {
-      cleaning = false;
-    }
-  }
-
-  function dismissConfirm() {
-    confirming = null;
-    keyboard++;
-  }
-
   let requested = $state(false);
 
   onMount(() => {
@@ -282,59 +189,14 @@
   </div>
 
   <div class="panels" bind:clientWidth={panels}>
-    <div class="rail" bind:clientWidth={rail}>
-      <CapsLabel>Sessions</CapsLabel>
-      {#each fields.sessions as row, i (row.slug)}
-        <RailItem
-          initials={row.initials}
-          shortcut={shortcut(i)}
-          name={row.name}
-          repos={row.repos}
-          live={!!row.terminal}
-          selected={row.slug === fields.slug}
-          activity={row.activity}
-          unseen={row.unseen}
-          onclick={() => show(row.slug)}
-          oncontextmenu={(event) => openMenu(event, row)} />
-      {/each}
-
-      <Button variant="dashed" size="sm" glyph="+" onclick={() => (requested = true)}
-        >New session</Button>
-
-      <div class="repos">
-        <CapsLabel tone="dim">This session</CapsLabel>
-        {#if !fields.repos.length}
-          <div class="empty">no repositories yet</div>
-        {/if}
-        {#each fields.repos as repo (repo.name)}
-          <div class="repo">
-            <div class="repo-name {repo.role}">
-              {repo.role === "editing" ? "●" : "◐"}
-              {repo.name}
-            </div>
-            <div class="repo-stat">
-              {#if repo.role === "reference"}
-                read-only
-              {:else if repo.measured === false}
-                unmeasured
-              {:else}
-                {repo.commits} commit{repo.commits === 1 ? "" : "s"}
-                {#if repo.insertions || repo.deletions}
-                  · <span class="added">+{repo.insertions}</span>
-                  <span class="removed">−{repo.deletions}</span>
-                {/if}
-              {/if}
-            </div>
-          </div>
-        {/each}
-        <Button
-          variant="dashed"
-          size="sm"
-          glyph="+"
-          onclick={() => (added = fields.slug)}
-          style="margin-top: 6px">Add repos</Button>
-      </div>
-    </div>
+    <Rail
+      sessions={fields.sessions}
+      slug={fields.slug}
+      repos={fields.repos}
+      onNewSession={() => (requested = true)}
+      onAddRepos={() => (added = fields.slug)}
+      onDismissed={() => keyboard++}
+      bind:width={rail} />
 
     <div class="agent">
       <PaneHeader>
@@ -397,55 +259,6 @@
       {/each}
     </div>
   </div>
-
-  {#if menu}
-    <div
-      class="anchor"
-      style:left="{anchor.left}px"
-      style:top="{anchor.top}px"
-      use:dismissible={dismissMenu}>
-      <Menu
-        items={ROW_MENU}
-        width={ROW_MENU_WIDTH}
-        offsetY={0}
-        onSelect={(item) => {
-          const row = menu.row;
-          menu = null;
-          item.act(row);
-        }} />
-    </div>
-  {/if}
-
-  {#if confirming}
-    <Confirm
-      title="Clean up {confirming.row.name}?"
-      confirmLabel="Clean up"
-      busy={cleaning}
-      onConfirm={cleanUp}
-      onCancel={dismissConfirm}>
-      <div class="tell">
-        {#if confirming.error}
-          <p class="lost">{confirming.error}</p>
-        {:else}
-          <p>Removes its worktrees and session files.</p>
-          <p>
-            Kept: the shared mirrors, this session's branch inside them, and the documents under
-            thoughts/.
-          </p>
-          {#if !confirming.checked}
-            <p>Could not check for uncommitted work.</p>
-          {:else if confirming.dirty.length}
-            <p class="lost">Uncommitted files will be lost in:</p>
-            <ul class="lost">
-              {#each confirming.dirty as repo (repo)}
-                <li>{repo}</li>
-              {/each}
-            </ul>
-          {/if}
-        {/if}
-      </div>
-    </Confirm>
-  {/if}
 
   <WindowTray
     summary="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===
@@ -515,71 +328,6 @@
     display: flex;
   }
 
-  .rail {
-    width: var(--w-rail);
-    flex: none;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px 12px;
-    background: var(--surface-chrome);
-    border-right: 1px solid var(--border-subtle);
-    overflow: hidden auto;
-  }
-
-  .repos {
-    margin-top: auto;
-    padding-top: 10px;
-    border-top: 1px solid var(--border-subtle);
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .repo {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 5px 0;
-  }
-
-  .empty {
-    font: var(--machine-xs);
-    font-size: 10.5px;
-    color: var(--text-faint);
-    padding: 5px 0;
-  }
-
-  .repo-name {
-    font: var(--machine-xs);
-    font-size: 10.5px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .repo-name.editing {
-    color: var(--role-editing);
-  }
-
-  .repo-name.reference {
-    color: var(--role-reference);
-  }
-
-  .repo-stat {
-    font: var(--machine-xs);
-    font-size: 9.5px;
-    color: var(--text-faint);
-  }
-
-  .added {
-    color: var(--state-success);
-  }
-
-  .removed {
-    color: var(--state-failed);
-  }
-
   .agent {
     flex: 1;
     min-width: 0;
@@ -600,33 +348,6 @@
   }
 
   /* A zero-size point for the menu to resolve its own position against. */
-  .anchor {
-    position: fixed;
-    width: 0;
-    height: 0;
-    z-index: 20;
-  }
-
-  .tell {
-    display: flex;
-    flex-direction: column;
-    gap: 9px;
-    line-height: 1.5;
-  }
-
-  .tell p,
-  .tell ul {
-    margin: 0;
-  }
-
-  .tell ul {
-    padding-left: 18px;
-  }
-
-  .lost {
-    color: var(--action-destructive);
-  }
-
   .human {
     width: var(--w-human-pane);
     flex: none;
