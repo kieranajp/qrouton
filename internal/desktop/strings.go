@@ -127,7 +127,8 @@ const (
 	agentProviderCodex    = "codex"
 	agentProviderOpenCode = "opencode"
 
-	agentRootID = "root"
+	agentRootID         = "root"
+	agentSetupRunPrefix = "setup-"
 
 	agentRoleOrchestrator = status.AgentRoleOrchestrator
 	agentRoleLead         = status.AgentRoleLead

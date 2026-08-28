@@ -43,10 +43,10 @@ type agentActivitySnapshot struct {
 }
 
 type agentRecordKey struct {
-	provider   string
-	generation uint64
-	id         string
-	root       bool
+	provider string
+	runID    string
+	id       string
+	root     bool
 }
 
 type agentActivity struct {
@@ -56,6 +56,7 @@ type agentActivity struct {
 
 	provider   string
 	generation uint64
+	setupRuns  uint64
 	running    bool
 	waiting    bool
 	spoke      time.Time
@@ -80,9 +81,10 @@ func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.running = true
 	a.waiting = false
 	a.spoke = time.Time{}
-	key := agentRecordKey{provider: provider, generation: generation, id: agentRootID, root: true}
+	runID := strconv.FormatUint(generation, 10)
+	key := agentRecordKey{provider: provider, runID: runID, id: agentRootID, root: true}
 	a.records[key] = &agentRecord{
-		ID: agentRootID, RunID: strconv.FormatUint(generation, 10), Provider: provider,
+		ID: agentRootID, RunID: runID, Provider: provider,
 		Role: agentRoleOrchestrator, State: agentStateActive, Root: true,
 		Generation: generation, StartedAt: now,
 	}
@@ -97,7 +99,8 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	if !a.running || event.Generation != a.generation || event.Provider != a.provider || event.ID == "" {
 		return false
 	}
-	key := agentRecordKey{provider: event.Provider, generation: event.Generation, id: event.ID}
+	runID := strconv.FormatUint(event.Generation, 10)
+	key := agentRecordKey{provider: event.Provider, runID: runID, id: event.ID}
 	record := a.records[key]
 	switch event.Kind {
 	case workbench.LifecycleStart:
@@ -109,7 +112,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 			started = now
 		}
 		a.records[key] = &agentRecord{
-			ID: event.ID, RunID: strconv.FormatUint(event.Generation, 10), Provider: event.Provider,
+			ID: event.ID, RunID: runID, Provider: event.Provider,
 			ParentID: event.ParentID, Type: event.Type, Role: delegatedRole(event.Type),
 			State: agentStateActive, ParentKnown: event.ParentID != "", Generation: event.Generation,
 			StartedAt: started,
@@ -118,7 +121,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	case workbench.LifecycleStop:
 		if record == nil {
 			a.records[key] = &agentRecord{
-				ID: event.ID, RunID: strconv.FormatUint(event.Generation, 10), Provider: event.Provider,
+				ID: event.ID, RunID: runID, Provider: event.Provider,
 				ParentID: event.ParentID, Type: event.Type, Role: delegatedRole(event.Type),
 				State: agentStateFinished, ParentKnown: event.ParentID != "", Generation: event.Generation,
 				FinishedAt: now,
@@ -172,18 +175,37 @@ func (a *agentActivity) input() {
 }
 
 func (a *agentActivity) exit(code int) bool {
+	return a.exitWithProvider("", code)
+}
+
+func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.running {
-		return false
-	}
 	now := a.now()
+	a.pruneLocked(now)
 	rootState := agentStateFinished
 	if code != 0 {
 		rootState = agentStateFailed
 	}
+	if !a.running {
+		if provider == "" {
+			return false
+		}
+		a.setupRuns++
+		runID := agentSetupRunPrefix + strconv.FormatUint(a.setupRuns, 10)
+		a.provider = provider
+		a.waiting = false
+		a.spoke = time.Time{}
+		key := agentRecordKey{provider: provider, runID: runID, id: agentRootID, root: true}
+		a.records[key] = &agentRecord{
+			ID: agentRootID, RunID: runID, Provider: provider, Role: agentRoleOrchestrator,
+			State: rootState, Root: true, StartedAt: now, FinishedAt: now,
+		}
+		return true
+	}
 	a.finishActiveLocked(now, agentStateFinished)
-	key := agentRecordKey{provider: a.provider, generation: a.generation, id: agentRootID, root: true}
+	runID := strconv.FormatUint(a.generation, 10)
+	key := agentRecordKey{provider: a.provider, runID: runID, id: agentRootID, root: true}
 	if root := a.records[key]; root != nil {
 		root.State = rootState
 		root.FinishedAt = now
@@ -218,14 +240,22 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		records = append(records, copy)
 	}
 	sort.Slice(records, func(i, j int) bool {
-		if (records[i].Generation == a.generation) != (records[j].Generation == a.generation) {
-			return records[i].Generation == a.generation
+		iCurrent := a.generation != 0 && records[i].Generation == a.generation
+		jCurrent := a.generation != 0 && records[j].Generation == a.generation
+		if iCurrent != jCurrent {
+			return iCurrent
 		}
 		if records[i].Generation != records[j].Generation {
 			return records[i].StartedAt.After(records[j].StartedAt)
 		}
 		if records[i].Root != records[j].Root {
 			return records[i].Root
+		}
+		if !records[i].StartedAt.Equal(records[j].StartedAt) {
+			return records[i].StartedAt.After(records[j].StartedAt)
+		}
+		if records[i].RunID != records[j].RunID {
+			return records[i].RunID < records[j].RunID
 		}
 		return records[i].ID < records[j].ID
 	})

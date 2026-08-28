@@ -248,7 +248,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
 	term.whenChildExits(func(state *sessionState, code int) {
-		if state.agents.exit(code) {
+		if state.agents.exitWithProvider(state.provider, code) {
 			state.activity.reset()
 			reg.touch()
 		}

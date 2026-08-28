@@ -446,7 +446,8 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
-	conversation := shownSession(t, reg).terminal
+	state := shownSession(t, reg)
+	conversation := state.terminal
 	if err := term.Start(conversation, 80, 24); err != nil {
 		t.Fatal(err)
 	}
@@ -463,6 +464,19 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	if quit {
 		t.Fatal("a failed agent took its window and its error with it")
 	}
+	waitFor(t, "the pre-generation root failure", func() bool {
+		view := state.agents.snapshot()
+		return len(view.Records) == 1 && view.Records[0].RunID == agentSetupRunPrefix+"1" &&
+			view.Records[0].Provider == "codex" && view.Records[0].State == agentStateFailed
+	})
+	handle := workbench.Handle{Socket: boot.socket(t, state.root()), SessionRoot: state.root()}
+	if err := handle.RunnerGeneration(context.Background(), "codex", 42); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the announced run beside the retained setup failure", func() bool {
+		view := state.agents.snapshot()
+		return len(view.Records) == 2 && view.Running
+	})
 	r.Quit()
 }
 

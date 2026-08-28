@@ -174,6 +174,34 @@ func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 	}
 }
 
+func TestPreGenerationExitRetainsAnExplicitSetupRunAlongsideTheLaterRun(t *testing.T) {
+	clock := &activityClock{at: time.Date(2026, 8, 28, 15, 0, 0, 0, time.UTC)}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	if !tracker.exitWithProvider(agentProviderCodex, 7) {
+		t.Fatal("pre-generation exit was ignored")
+	}
+	setup := recordForRunID(t, tracker.snapshot(), agentRootID, agentSetupRunPrefix+"1")
+	if setup.Provider != agentProviderCodex || setup.Generation != 0 || setup.State != agentStateFailed ||
+		setup.StartedAt.IsZero() || !setup.FinishedAt.Equal(setup.StartedAt) {
+		t.Fatalf("setup root = %+v", setup)
+	}
+
+	clock.at = clock.at.Add(time.Second)
+	if !tracker.begin(agentProviderCodex, 42) {
+		t.Fatal("later announced run was rejected")
+	}
+	view := tracker.snapshot()
+	if !view.Running || view.Provider != agentProviderCodex || len(view.Records) != 2 {
+		t.Fatalf("coexisting setup and announced runs = %+v", view)
+	}
+	if current := recordForRun(t, view, agentRootID, 42); current.State != agentStateIdle {
+		t.Fatalf("announced root = %+v", current)
+	}
+	if retained := recordForRunID(t, view, agentRootID, agentSetupRunPrefix+"1"); retained.State != agentStateFailed {
+		t.Fatalf("retained setup root = %+v", retained)
+	}
+}
+
 func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	tracker := newAgentActivity(clock.now, time.Minute)
@@ -297,4 +325,15 @@ func findRecord(snapshot agentActivitySnapshot, id string, generation uint64) (a
 		}
 	}
 	return agentRecord{}, false
+}
+
+func recordForRunID(t *testing.T, snapshot agentActivitySnapshot, id, runID string) agentRecord {
+	t.Helper()
+	for _, record := range snapshot.Records {
+		if record.ID == id && record.RunID == runID {
+			return record
+		}
+	}
+	t.Fatalf("no record %q run %q in %+v", id, runID, snapshot.Records)
+	return agentRecord{}
 }
