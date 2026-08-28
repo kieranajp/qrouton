@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { apply, naturalSize, place } from "./diagrams.js";
+import { apply, emittedSize, naturalSize, place } from "./diagrams.js";
 
 const block = (line) => ({ dataset: { line: String(line) } });
 
@@ -36,6 +36,38 @@ test("a viewBox that names no size is left to the browser", () => {
   for (const box of [null, "", "0 0 1642", "0 0 a b", "0 0 0 108"]) {
     assert.equal(naturalSize(box), null, `viewBox ${JSON.stringify(box)}`);
   }
+});
+
+const svg = (/** @type {Record<string, string>} */ attributes) => ({
+  getAttribute: (/** @type {string} */ name) => attributes[name] ?? null,
+});
+
+test("the size the renderer emitted beats the viewBox it left at natural size", () => {
+  const drawn = svg({ width: "1067", height: "70", viewBox: "0 0 1642 108" });
+  assert.deepEqual(emittedSize(drawn), { width: 1067, height: 70 });
+});
+
+test("output carrying no size of its own is taken down to the renderer's ceiling", () => {
+  assert.deepEqual(emittedSize(svg({ viewBox: "0 0 200 100" })), { width: 130, height: 65 });
+  assert.deepEqual(emittedSize(svg({ width: "200", viewBox: "0 0 200 100" })), {
+    width: 130,
+    height: 65,
+  });
+});
+
+test("a size that states nothing usable falls back rather than drawing at it", () => {
+  for (const size of [{ width: "0", height: "0" }, { width: "-4", height: "-1" }, { width: "wide", height: "tall" }]) {
+    assert.deepEqual(emittedSize(svg({ ...size, viewBox: "0 0 200 100" })), {
+      width: 130,
+      height: 65,
+    });
+    assert.equal(emittedSize(svg(size)), null, JSON.stringify(size));
+  }
+});
+
+test("nothing readable leaves the size to the browser", () => {
+  assert.equal(emittedSize(svg({})), null);
+  assert.equal(emittedSize(null), null);
 });
 
 // Enough of a <pre> for apply to settle it; the drawn geometry is a browser

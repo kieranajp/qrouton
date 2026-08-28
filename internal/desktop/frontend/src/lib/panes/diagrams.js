@@ -3,6 +3,10 @@ const DRAWN = "diagram";
 const FAILED = "diagram-failed";
 const NOTE = "diagram-error";
 
+// The renderer's ceiling on natural size, mirrored here only for output that
+// predates it and so carries no size of its own.
+const EMITTED_SCALE = 0.65;
+
 /**
  * @typedef {{line?: number, svg?: string, error?: string}} Rendered
  */
@@ -36,6 +40,30 @@ export function naturalSize(viewBox) {
   if (box.length !== 4 || box.some((value) => !Number.isFinite(value))) return null;
   const [, , width, height] = box;
   return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/**
+ * The size the renderer asked the diagram to draw at, which d2 writes as
+ * width/height beside a viewBox left at natural size.
+ * @param {{getAttribute: (name: string) => string | null} | null | undefined} svg
+ * @returns {{width: number, height: number} | null}
+ */
+export function emittedSize(svg) {
+  const width = attributeSize(svg?.getAttribute("width"));
+  const height = attributeSize(svg?.getAttribute("height"));
+  if (width && height) return { width, height };
+  const natural = naturalSize(svg?.getAttribute("viewBox"));
+  if (!natural) return null;
+  return { width: natural.width * EMITTED_SCALE, height: natural.height * EMITTED_SCALE };
+}
+
+/**
+ * @param {string | null | undefined} value
+ * @returns {number}
+ */
+function attributeSize(value) {
+  const size = Number.parseFloat(value ?? "");
+  return Number.isFinite(size) && size > 0 ? size : 0;
 }
 
 /**
@@ -88,10 +116,10 @@ function draw(block, svg) {
   const holder = block.ownerDocument.createElement("div");
   holder.innerHTML = svg;
   const drawn = /** @type {SVGSVGElement | null} */ (holder.firstElementChild);
-  const size = naturalSize(drawn?.getAttribute("viewBox"));
-  if (drawn && size) {
-    drawn.style.width = `${size.width}px`;
-    drawn.style.height = `${size.height}px`;
+  const emitted = emittedSize(drawn);
+  if (drawn && emitted) {
+    drawn.style.width = `${emitted.width}px`;
+    drawn.style.height = `${emitted.height}px`;
   }
   block.classList.remove(PENDING, FAILED);
   block.classList.add(DRAWN);

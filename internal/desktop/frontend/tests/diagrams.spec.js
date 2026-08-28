@@ -22,12 +22,23 @@ test("a fence waiting on its diagram says so, then draws it inside the measure",
   expect(drawn.gutter).toBe('"3"');
   expect(Number.parseFloat(drawn.gutterLine)).toBeGreaterThan(0);
 
-  expect(drawn.width).toBeGreaterThan(0);
-  expect(drawn.height).toBeGreaterThan(0);
+  // Drawn at the size the renderer asked for, not the natural size its viewBox states.
+  const emitted = await page.evaluate(() => window.emitted);
+  expect(drawn.width).toBeCloseTo(emitted.width, 0);
+  expect(drawn.height).toBeCloseTo(emitted.height, 0);
   // Wider than the measure, so the block scrolls rather than the page.
   expect(drawn.scrolls).toBe(true);
   expect(drawn.block).toBeLessThanOrEqual(drawn.container);
   expect(drawn.page).toBeLessThanOrEqual(drawn.viewport);
+});
+
+test("output carrying no size of its own is drawn at the renderer's ceiling", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  const drawn = await page.evaluate(() => (window.drawSizeless(), window.probe()));
+
+  expect(drawn.drawn).toBe(true);
+  expect(drawn.width).toBeCloseTo(1642 * 0.65, 0);
+  expect(drawn.height).toBeCloseTo(108 * 0.65, 0);
 });
 
 test("a diagram that failed to render leaves the fence as code and says why", async ({ page }) => {

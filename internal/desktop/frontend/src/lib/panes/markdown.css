@@ -208,7 +208,7 @@
   opacity: 0.55;
 }
 
-/* line-height: 0 avoids a baseline descender gap; the diagram draws at its own viewBox size, so it scrolls rather than shrinks. */
+/* line-height: 0 avoids a baseline descender gap under the diagram. */
 .markdown pre.diagram {
   line-height: 0;
 }

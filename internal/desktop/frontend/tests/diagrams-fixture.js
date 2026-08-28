@@ -35,17 +35,29 @@ const root = document.querySelector("#markdown-root");
 
 root.innerHTML = render(DOCUMENT.join("\n")).body;
 
-// Shaped like d2's own output: an outer element carrying a viewBox and no size,
-// wrapping one that carries both.
-const svg =
-  '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1642 108">' +
+// Shaped like d2's own output: the root carries the scaled size the renderer
+// asked for beside a viewBox left at natural size.
+const inner =
   '<svg class="d2-svg" width="1642" height="108" viewBox="-21 -21 1642 108">' +
   '<rect x="-21" y="-21" width="1642" height="108" fill="#24273a"></rect>' +
-  '<text x="40" y="60" fill="#cad3f5">a</text></svg></svg>';
+  '<text x="40" y="60" fill="#cad3f5">a</text></svg>';
+const EMITTED = { width: 1067, height: 70 };
+const svg =
+  '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet"' +
+  ` viewBox="0 0 1642 108" width="${EMITTED.width}" height="${EMITTED.height}">` +
+  inner +
+  "</svg>";
+// Output from before the renderer carried a scale, which is sized by fallback.
+const sizeless =
+  '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1642 108">' +
+  inner +
+  "</svg>";
 
 window.lines = LINES;
+window.emitted = EMITTED;
 window.pending = () => apply(root, Object.values(LINES).map((line) => ({ line })));
 window.draw = () => apply(root, [{ line: LINES.drawn, svg }]);
+window.drawSizeless = () => apply(root, [{ line: LINES.drawn, svg: sizeless }]);
 window.fail = (line = LINES.drawn, error = TIMEOUT) => apply(root, [{ line, error }]);
 window.settle = () =>
   apply(root, [
