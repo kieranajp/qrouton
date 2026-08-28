@@ -36,6 +36,7 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 	want := map[string]string{
 		RoleArtifactPlan: Lavender, RoleArtifactSpec: Pink,
 		RoleArtifactResearch: Sky, RoleArtifactNote: Flamingo,
+		RoleArtifactExplainer: Maroon,
 	}
 	seen := map[string]string{}
 	for role, colour := range want {

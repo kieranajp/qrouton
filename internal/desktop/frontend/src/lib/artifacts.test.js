@@ -7,5 +7,6 @@ test("each artifact kind resolves to its design token", () => {
   assert.equal(artifactTone("SPEC"), "var(--artifact-spec)");
   assert.equal(artifactTone("RESEARCH"), "var(--artifact-research)");
   assert.equal(artifactTone("NOTE"), "var(--artifact-note)");
+  assert.equal(artifactTone("EXPLAINER"), "var(--artifact-explainer)");
   assert.equal(artifactTone("unknown"), "var(--artifact-note)");
 });

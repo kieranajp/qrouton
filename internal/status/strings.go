@@ -11,10 +11,11 @@ const (
 	phasePlan      = "Plan"
 	phaseImplement = "Implement"
 
-	KindPlan     = "PLAN"
-	KindSpec     = "SPEC"
-	KindResearch = "RESEARCH"
-	KindNote     = "NOTE"
+	KindPlan      = "PLAN"
+	KindSpec      = "SPEC"
+	KindResearch  = "RESEARCH"
+	KindNote      = "NOTE"
+	KindExplainer = "EXPLAINER"
 
 	repoSeparator  = "/"
 	fieldSeparator = " "
