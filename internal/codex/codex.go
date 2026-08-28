@@ -1,7 +1,7 @@
 // Package codex owns what qrouton knows about the Codex CLI's own files: its
-// home, its rollout session logs, its configuration, and the one setting qrouton
-// reasons about (subagent nesting depth). The launcher and the subagent watcher
-// share it so the two cannot drift on where CODEX_HOME points.
+// home, its configuration, and the one setting qrouton reasons about — subagent
+// nesting depth, which the launcher raises to what a lead needs before it
+// starts a Codex runner.
 package codex
 
 import (
@@ -13,11 +13,9 @@ import (
 )
 
 const (
-	homeEnvVar    = "CODEX_HOME"
-	homeDirName   = ".codex"
-	sessionsDir   = "sessions"
-	configFile    = "config.toml"
-	sessionLogExt = ".jsonl"
+	homeEnvVar  = "CODEX_HOME"
+	homeDirName = ".codex"
+	configFile  = "config.toml"
 
 	// Binary is the Codex CLI's command name, as it appears in argv[0] of a
 	// launched runner and in qrouton's runner identifiers.
@@ -56,17 +54,6 @@ func Home() string {
 		return ""
 	}
 	return filepath.Join(userHome, homeDirName)
-}
-
-// SessionsDir holds Codex's rollout logs, one JSONL file per thread.
-func SessionsDir() string {
-	return filepath.Join(Home(), sessionsDir)
-}
-
-// IsSessionLog reports whether a directory entry name is one of Codex's rollout
-// logs.
-func IsSessionLog(name string) bool {
-	return strings.HasSuffix(name, sessionLogExt)
 }
 
 // MaxDepth returns the subagent nesting depth a Codex invocation will run with:

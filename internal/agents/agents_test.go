@@ -1,59 +1,116 @@
 package agents
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-func TestScanAgentStatusesFindsRunningAndCompletedSubagents(t *testing.T) {
-	dir := t.TempDir()
-	root := t.TempDir()
-	writeRollout := func(name, events string) {
-		t.Helper()
-		content := `{"timestamp":"2026-07-16T12:00:00Z","type":"session_meta","payload":{"cwd":` + quoteJSON(root) + `,"parent_thread_id":"parent","agent_nickname":` + quoteJSON(name) + `,"agent_path":"/root/task"}}` + "\n" + events
-		if err := os.WriteFile(filepath.Join(dir, name+".jsonl"), []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+// recorded is the log as the collector left it, one decoded event per line.
+func recorded(t *testing.T, root string) []claudeAgentEvent {
+	t.Helper()
+	f, err := os.Open(sessionpaths.ClaudeAgentLog(root))
+	if os.IsNotExist(err) {
+		return nil
 	}
-	writeRollout("Ada", `{"timestamp":"2026-07-16T12:01:00Z","type":"event_msg","payload":{"type":"task_started"}}`+"\n")
-	writeRollout("Grace", `{"timestamp":"2026-07-16T12:02:00Z","type":"event_msg","payload":{"type":"task_started"}}`+"\n"+`{"timestamp":"2026-07-16T12:03:00Z","type":"event_msg","payload":{"type":"task_complete"}}`+"\n")
-
-	statuses, err := scanAgentStatuses(dir, root)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(statuses) != 2 || statuses[0].Name != "Ada" || statuses[0].State != "running" || statuses[1].Name != "Grace" || statuses[1].State != "done" {
-		t.Fatalf("unexpected statuses: %#v", statuses)
+	defer f.Close()
+	var events []claudeAgentEvent
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		var event claudeAgentEvent
+		if err := json.Unmarshal(scanner.Bytes(), &event); err != nil {
+			t.Fatalf("log line %q does not decode: %v", scanner.Text(), err)
+		}
+		events = append(events, event)
 	}
-}
-
-func TestClaudeAgentHooksRecordLifecycle(t *testing.T) {
-	root := t.TempDir()
-	if err := os.Mkdir(filepath.Join(root, ".qrouton"), 0o755); err != nil {
+	if err := scanner.Err(); err != nil {
 		t.Fatal(err)
 	}
+	return events
+}
+
+func session(t *testing.T) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.Mkdir(filepath.Join(root, sessionpaths.DirName), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
+	root := session(t)
 	for _, input := range []string{
 		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore"}`,
 		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
 	} {
-		if _, err := RecordEvent(root, bytes.NewBufferString(input)); err != nil {
+		hook, err := RecordEvent(root, bytes.NewBufferString(input))
+		if err != nil {
 			t.Fatal(err)
 		}
+		// cmd/agents maps the returned hook name to an attention state, so it
+		// has to survive a successful write as well as a failed one.
+		if hook == "" {
+			t.Fatalf("RecordEvent(%s) reported no hook name", input)
+		}
 	}
-	t.Setenv("PATH", t.TempDir())
-	statuses, err := scanClaudeAgentStatuses(root)
-	if err != nil {
-		t.Fatal(err)
+
+	events := recorded(t, root)
+	if len(events) != 2 {
+		t.Fatalf("recorded %d events, want the start and the stop: %#v", len(events), events)
 	}
-	if len(statuses) != 1 || statuses[0].Name != "Explore" || statuses[0].State != "done" {
-		t.Fatalf("unexpected Claude statuses: %#v", statuses)
+	if events[0].HookEventName != hookSubagentStart || events[1].HookEventName != hookSubagentStop {
+		t.Errorf("recorded hooks = %q, %q", events[0].HookEventName, events[1].HookEventName)
+	}
+	for i, event := range events {
+		if event.AgentID != "agent-1" || event.AgentType != "Explore" {
+			t.Errorf("event %d lost its identity: %#v", i, event)
+		}
+		// The hook itself carries no timestamp; the collector stamps one so the
+		// log is orderable without depending on file offsets.
+		if event.Timestamp == "" {
+			t.Errorf("event %d was recorded unstamped", i)
+		}
 	}
 }
 
-func quoteJSON(value string) string {
-	b, _ := json.Marshal(value)
-	return string(b)
+// A hook qrouton does not collect, and an event naming no agent, still report
+// their name: the caller signals attention off that even when nothing is logged.
+func TestUncollectedEventsAreNamedButNotRecorded(t *testing.T) {
+	for _, tc := range []struct{ name, input, hook string }{
+		{"another hook", `{"hook_event_name":"Notification","agent_id":"agent-1"}`, "Notification"},
+		{"no agent id", `{"hook_event_name":"SubagentStart","agent_type":"Explore"}`, hookSubagentStart},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := session(t)
+			hook, err := RecordEvent(root, bytes.NewBufferString(tc.input))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if hook != tc.hook {
+				t.Errorf("hook = %q, want %q", hook, tc.hook)
+			}
+			if events := recorded(t, root); len(events) != 0 {
+				t.Errorf("recorded %#v, want nothing", events)
+			}
+		})
+	}
+}
+
+func TestMalformedEventIsAnError(t *testing.T) {
+	root := session(t)
+	if _, err := RecordEvent(root, bytes.NewBufferString("not json")); err == nil {
+		t.Fatal("expected a decode error")
+	}
+	if events := recorded(t, root); len(events) != 0 {
+		t.Errorf("recorded %#v, want nothing", events)
+	}
 }
