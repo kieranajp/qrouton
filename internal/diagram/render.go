@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -41,11 +42,13 @@ type Result struct {
 // Renderer turns d2 source into inline SVG. Renders are serialised through one
 // goroutine: a textmeasure.Ruler carries mutable state and no lock, so it
 // cannot be shared, and one worker also bounds CPU when a document opens with a
-// dozen diagrams in it.
+// dozen diagrams in it. The cache sits outside that goroutine so a caller can
+// read it without joining the queue.
 type Renderer struct {
 	jobs    chan job
 	stopped chan struct{}
 	renders atomic.Int64
+	cache   *cache
 }
 
 type job struct {
@@ -59,12 +62,12 @@ func New(timeout time.Duration) *Renderer {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	r := &Renderer{jobs: make(chan job), stopped: make(chan struct{})}
+	r := &Renderer{jobs: make(chan job), stopped: make(chan struct{}), cache: newCache(cacheEntries)}
 	go (&worker{
 		jobs:    r.jobs,
 		stopped: r.stopped,
 		renders: &r.renders,
-		cache:   newCache(cacheEntries),
+		cache:   r.cache,
 		timeout: timeout,
 	}).run()
 	return r
@@ -87,6 +90,13 @@ func (r *Renderer) Render(ctx context.Context, fence Fence) Result {
 	case <-ctx.Done():
 		return Result{Line: fence.Line, Err: ctx.Err()}
 	}
+}
+
+// Cached answers from what has already been rendered without queueing, so a
+// caller that must return promptly can serve the hits and wait only for the
+// misses.
+func (r *Renderer) Cached(source string) (string, bool) {
+	return r.cache.get(cacheKey(source))
 }
 
 func (r *Renderer) Close() {
@@ -220,8 +230,9 @@ func cacheKey(source string) string {
 
 // cache holds rendered SVG for the life of the process, oldest out once full.
 // Nothing else invalidates it; a palette edit bumps paletteRevision, which is
-// part of every key.
+// part of every key. The worker writes it and Cached reads it, so it locks.
 type cache struct {
+	mu      sync.Mutex
 	entries map[string]string
 	order   []string
 	limit   int
@@ -232,11 +243,15 @@ func newCache(limit int) *cache {
 }
 
 func (c *cache) get(key string) (string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	svg, ok := c.entries[key]
 	return svg, ok
 }
 
 func (c *cache) put(key, svg string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if _, seen := c.entries[key]; seen {
 		return
 	}

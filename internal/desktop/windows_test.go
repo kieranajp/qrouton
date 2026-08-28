@@ -655,3 +655,116 @@ func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
 		t.Fatalf("the complete payload selects %q, want %q", opened.Selected, id)
 	}
 }
+
+type emittedDiagram struct {
+	event string
+	drawn renderedDiagram
+}
+
+// diagramDocument opens a Markdown window over text and hands back the stream
+// of diagrams the renderer emits for it.
+func diagramDocument(t *testing.T, text string) (*Windows, string, <-chan emittedDiagram) {
+	t.Helper()
+	emitted := make(chan emittedDiagram, 8)
+	w := newWindows(func(event string, payload any) {
+		if drawn, ok := payload.(renderedDiagram); ok {
+			emitted <- emittedDiagram{event: event, drawn: drawn}
+		}
+	}, testRegistry(t, t.TempDir()))
+	t.Cleanup(w.stopAll)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: "◆ notes", Format: workbench.FormatMarkdown,
+		Source: "thoughts/notes.md", Content: text,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w, id, emitted
+}
+
+func waitForDiagram(t *testing.T, emitted <-chan emittedDiagram) emittedDiagram {
+	t.Helper()
+	select {
+	case out := <-emitted:
+		return out
+	case <-time.After(30 * time.Second):
+		t.Fatal("nothing was emitted for the queued diagram")
+		return emittedDiagram{}
+	}
+}
+
+func TestRenderDiagramsQueuesAMissAndAnswersACacheHitInPlace(t *testing.T) {
+	w, id, emitted := diagramDocument(t, "# Notes\n\n```d2\na -> b\n```\n")
+
+	found, err := w.RenderDiagrams(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || found[0].Line != 3 || found[0].SVG != "" {
+		t.Fatalf("found = %+v, want the fence on line 3 with nothing rendered yet", found)
+	}
+
+	out := waitForDiagram(t, emitted)
+	if out.event != windowDiagramEvent+id {
+		t.Errorf("event = %q, want %q", out.event, windowDiagramEvent+id)
+	}
+	if out.drawn.Line != 3 || out.drawn.Error != "" || !strings.HasPrefix(out.drawn.SVG, "<svg") {
+		t.Fatalf("emitted %+v, want the drawn diagram for line 3", out.drawn)
+	}
+
+	again, err := w.RenderDiagrams(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(again) != 1 || again[0].SVG != out.drawn.SVG {
+		t.Fatalf("again = %d fences, the first without the cached SVG", len(again))
+	}
+	select {
+	case queued := <-emitted:
+		t.Fatalf("a cached diagram was queued again: %+v", queued.drawn)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+func TestARefusedDiagramEmitsItsReasonRatherThanNothing(t *testing.T) {
+	w, id, emitted := diagramDocument(t, "```d2\nc: {\n```\n")
+
+	found, err := w.RenderDiagrams(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(found) != 1 || found[0].Line != 1 {
+		t.Fatalf("found = %+v, want the fence on line 1", found)
+	}
+
+	out := waitForDiagram(t, emitted)
+	if out.drawn.Line != 1 || out.drawn.SVG != "" || out.drawn.Error == "" {
+		t.Fatalf("emitted %+v, want the reason the fence was refused", out.drawn)
+	}
+}
+
+func TestRenderDiagramsHasNothingToSayAboutOtherWindows(t *testing.T) {
+	w, _ := testWindows(t)
+	for name, opts := range map[string]workbench.WindowOptions{
+		"a terminal": {
+			Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+		},
+		"a plain document": {
+			Kind: workbench.KindDocument, Label: "🔔", Content: "```d2\na -> b\n```\n",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			id, err := w.openWindow(w.shown(), opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			found, err := w.RenderDiagrams(id)
+			if err != nil || len(found) != 0 {
+				t.Fatalf("RenderDiagrams = %+v, %v; want nothing and no error", found, err)
+			}
+		})
+	}
+	if _, err := w.RenderDiagrams("window-404"); err == nil {
+		t.Fatal("an unknown window rendered diagrams")
+	}
+}

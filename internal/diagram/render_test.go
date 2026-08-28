@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -162,6 +163,30 @@ func TestACacheHitDoesNotRenderAgain(t *testing.T) {
 	if got := r.renders.Load(); got != 2 {
 		t.Errorf("%d renders after a new diagram", got)
 	}
+}
+
+func TestCachedAnswersWithoutJoiningTheQueue(t *testing.T) {
+	r := renderer(t, 0)
+	source := "probe -> me\n"
+	if _, ok := r.Cached(source); ok {
+		t.Fatal("an unrendered source is cached")
+	}
+	svg := rendered(t, r, source)
+
+	busy := make(chan struct{})
+	go func() {
+		defer close(busy)
+		r.Render(context.Background(), Fence{Line: 1, Source: fortyNodes()})
+	}()
+	for r.renders.Load() < 2 {
+		runtime.Gosched()
+	}
+
+	got, ok := r.Cached(source)
+	if !ok || got != svg {
+		t.Errorf("Cached() = %t while the worker is busy, want the rendered SVG", ok)
+	}
+	<-busy
 }
 
 func TestTheCacheEvictsOldestFirst(t *testing.T) {

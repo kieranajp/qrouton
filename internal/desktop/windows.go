@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/kieranajp/qrouton/internal/diagram"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -25,10 +27,16 @@ type Windows struct {
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu sync.Mutex
 
-	mu       sync.Mutex
-	seq      int
-	open     map[string]*agentWindow
-	selected map[*sessionState]string
+	diagrams      *diagram.Renderer
+	stopRendering context.CancelFunc
+	renderCtx     context.Context
+	rendering     sync.WaitGroup
+
+	mu             sync.Mutex
+	seq            int
+	open           map[string]*agentWindow
+	selected       map[*sessionState]string
+	diagramsClosed bool
 }
 
 type agentWindow struct {
@@ -54,9 +62,12 @@ type ViewportReport struct {
 }
 
 func newWindows(emit emitter, reg *Sessions) *Windows {
+	ctx, stop := context.WithCancel(context.Background())
 	return &Windows{
 		emit: emit, sessions: reg, open: map[string]*agentWindow{},
-		selected: map[*sessionState]string{},
+		selected:  map[*sessionState]string{},
+		diagrams:  diagram.New(diagram.DefaultTimeout),
+		renderCtx: ctx, stopRendering: stop,
 	}
 }
 
@@ -287,6 +298,75 @@ func (w *Windows) Content(id string) (document, error) {
 		To:            last,
 		ViewportEpoch: viewportEpoch,
 	}, nil
+}
+
+// renderedDiagram is one d2 fence as the page receives it: the document line
+// its opening marker sits on, and either the SVG, the reason there is none, or
+// neither while it is still being laid out.
+type renderedDiagram struct {
+	Line  int    `json:"line"`
+	SVG   string `json:"svg,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// RenderDiagrams names every d2 fence in a document window, carrying the SVG of
+// the ones already rendered; the rest are laid out off this goroutine and
+// arrive on windowDiagramEvent as they land. Opening a document costs a scan,
+// never a layout. A window with nothing to draw answers with an empty list
+// rather than an error: every Markdown pane calls this, diagrams or not.
+func (w *Windows) RenderDiagrams(id string) ([]renderedDiagram, error) {
+	window, ok := w.window(id)
+	if !ok {
+		return nil, noSuchWindow(id)
+	}
+	if window.opts.Kind != workbench.KindDocument || window.opts.Format != workbench.FormatMarkdown {
+		return []renderedDiagram{}, nil
+	}
+	found := []renderedDiagram{}
+	var misses []diagram.Fence
+	for _, fence := range diagram.Scan(window.opts.Content) {
+		if svg, hit := w.diagrams.Cached(fence.Source); hit {
+			found = append(found, renderedDiagram{Line: fence.Line, SVG: svg})
+			continue
+		}
+		found = append(found, renderedDiagram{Line: fence.Line})
+		misses = append(misses, fence)
+	}
+	w.layOut(id, misses)
+	return found, nil
+}
+
+// layOut renders one document's misses in document order, emitting each as it
+// finishes. It declines once the renderer is stopping, so a quit cannot race a
+// send at a worker that is shutting down.
+func (w *Windows) layOut(id string, fences []diagram.Fence) {
+	if len(fences) == 0 {
+		return
+	}
+	w.mu.Lock()
+	if w.diagramsClosed {
+		w.mu.Unlock()
+		return
+	}
+	w.rendering.Add(1)
+	w.mu.Unlock()
+	go func() {
+		defer w.rendering.Done()
+		for _, fence := range fences {
+			out := w.diagrams.Render(w.renderCtx, fence)
+			if w.renderCtx.Err() != nil {
+				return
+			}
+			w.emit(windowDiagramEvent+id, drawnDiagram(out))
+		}
+	}()
+}
+
+func drawnDiagram(out diagram.Result) renderedDiagram {
+	if out.Err != nil {
+		return renderedDiagram{Line: out.Line, Error: out.Err.Error()}
+	}
+	return renderedDiagram{Line: out.Line, SVG: out.SVG}
 }
 
 // ReportViewport stores the newest browser measurement for a Markdown tab.
@@ -530,6 +610,23 @@ func (w *Windows) stopAll() {
 	for _, id := range w.list() {
 		w.discard(id)
 	}
+	w.stopDiagrams()
+}
+
+// stopDiagrams cancels what is in flight before closing the worker: the
+// cancellation reaches the layout already underway, so quitting mid-diagram
+// does not wait out the render budget.
+func (w *Windows) stopDiagrams() {
+	w.mu.Lock()
+	closed := w.diagramsClosed
+	w.diagramsClosed = true
+	w.mu.Unlock()
+	if closed {
+		return
+	}
+	w.stopRendering()
+	w.rendering.Wait()
+	w.diagrams.Close()
 }
 
 // stop tears down one session's windows, so retiring it leaves the rest alone.
