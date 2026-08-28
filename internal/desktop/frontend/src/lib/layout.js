@@ -1,8 +1,11 @@
 // Per-session layout, kept pure: node --test is the whole frontend harness.
 
 const WIDTH_PREFIX = "qrouton.human-pane:";
+const SIDEBAR_WIDTH_KEY = "qrouton.sidebar";
 
 export const widthKey = (slug) => WIDTH_PREFIX + slug;
+
+export const sidebarWidthKey = () => SIDEBAR_WIDTH_KEY;
 
 /**
  * storedWidth is the width a session was left at. Zero means untouched, which
@@ -10,6 +13,8 @@ export const widthKey = (slug) => WIDTH_PREFIX + slug;
  * @param {(key: string) => string | null} read
  */
 export const storedWidth = (read, slug) => Number(read(widthKey(slug))) || 0;
+
+export const storedSidebarWidth = (read) => Number(read(SIDEBAR_WIDTH_KEY)) || 0;
 
 export const selectedIn = (selection, slug) => selection[slug] ?? "";
 
@@ -34,6 +39,11 @@ export function consumeTerminalFocus(generations, id, generation) {
 // letting one of them become a strip.
 export const MIN_HUMAN = 320;
 export const MIN_AGENT = 360;
+export const MIN_SIDEBAR = 160;
+export const MAX_SIDEBAR = 360;
+
+export const sidebarWidth = (width) =>
+  width ? Math.min(Math.max(width, MIN_SIDEBAR), MAX_SIDEBAR) : 0;
 
 /**
  * roomFor is the widest the shell pane may be drawn: whatever is left once the

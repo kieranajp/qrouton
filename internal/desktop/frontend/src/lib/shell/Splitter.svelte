@@ -2,8 +2,8 @@
   import { onDestroy } from "svelte";
   import { latestPerFrame } from "../frame.js";
 
-  /** @type {{size: number, min: number, max: number, onResize: (size: number) => void, onCommit: (size: number) => void, onReset?: () => void, label?: string}} */
-  let { size, min, max, onResize, onCommit, onReset, label = "Resize pane" } = $props();
+  /** @type {{size: number, min: number, max: number, side?: 'left'|'right', onResize: (size: number) => void, onCommit: (size: number) => void, onReset?: () => void, label?: string}} */
+  let { size, min, max, side = "right", onResize, onCommit, onReset, label = "Resize pane" } = $props();
 
   let origin = 0;
   let grabbed = 0;
@@ -12,7 +12,10 @@
   const scheduled = latestPerFrame((value) => onResize(value));
 
   const clamp = (value) => Math.min(max, Math.max(min, value));
-  const sizeAt = (event) => clamp(grabbed - (event.clientX - origin));
+  const sizeAt = (event) => {
+    const delta = event.clientX - origin;
+    return clamp(grabbed + (side === "left" ? delta : -delta));
+  };
 
   function grab(event) {
     if (event.button !== 0) return;
@@ -23,8 +26,6 @@
     event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  // The pane being sized sits to the right of the border, so it grows as the
-  // pointer moves left.
   function drag(event) {
     if (!dragging) return;
     latest = sizeAt(event);
@@ -44,8 +45,9 @@
 
   function nudge(event) {
     const step = event.shiftKey ? 40 : 8;
-    if (event.key === "ArrowLeft") onCommit(clamp(size + step));
-    else if (event.key === "ArrowRight") onCommit(clamp(size - step));
+    const left = side === "left" ? -step : step;
+    if (event.key === "ArrowLeft") onCommit(clamp(size + left));
+    else if (event.key === "ArrowRight") onCommit(clamp(size - left));
     else return;
     event.preventDefault();
   }

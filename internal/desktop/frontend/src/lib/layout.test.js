@@ -3,6 +3,8 @@ import test from "node:test";
 import {
   MIN_AGENT,
   MIN_HUMAN,
+  MAX_SIDEBAR,
+  MIN_SIDEBAR,
   consumeTerminalFocus,
   focusGenerationIn,
   focusPendingIn,
@@ -11,6 +13,9 @@ import {
   roomFor,
   selectedIn,
   selectIn,
+  sidebarWidth,
+  sidebarWidthKey,
+  storedSidebarWidth,
   storedWidth,
   widthKey,
 } from "./layout.js";
@@ -32,6 +37,15 @@ test("unusable stored text reads as untouched rather than NaN", () => {
     storedWidth(() => "wide", "octopus"),
     0,
   );
+});
+
+test("the sidebar keeps one persisted width across sessions", () => {
+  const stored = { [sidebarWidthKey()]: "260" };
+  assert.equal(storedSidebarWidth((key) => stored[key] ?? null), 260);
+  assert.equal(sidebarWidth(260), 260);
+  assert.equal(sidebarWidth(10), MIN_SIDEBAR);
+  assert.equal(sidebarWidth(1000), MAX_SIDEBAR);
+  assert.equal(sidebarWidth(0), 0);
 });
 
 // Switching sessions and back has to land on the tab you left up.

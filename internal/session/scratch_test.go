@@ -13,6 +13,15 @@ import (
 
 var scratchSuffix = regexp.MustCompile(`-[0-9a-f]{4}$`)
 
+func TestSessionSlugAddsSuppliedEntropyWithoutChangingTheDisplayName(t *testing.T) {
+	if got := SessionSlug("API Cleanup!", "4F3A"); got != "api-cleanup-4f3a" {
+		t.Fatalf("session slug = %q", got)
+	}
+	if got := SessionSlug("API Cleanup!", ""); got != "api-cleanup" {
+		t.Fatalf("legacy session slug = %q", got)
+	}
+}
+
 func TestScratchNameDerivesFromInvokingDirectory(t *testing.T) {
 	got := ScratchName("/home/kieran/Work/Lifesum App")
 	if !strings.HasPrefix(got, "lifesum-app-") || !scratchSuffix.MatchString(got) {

@@ -19,6 +19,7 @@ const message = (err) => String(err?.message ?? err ?? "");
 export function assembling(done) {
   const form = $state({
     name: "",
+    entropy: "",
     description: "",
     ticket: "",
     prefix: "",

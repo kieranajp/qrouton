@@ -29,11 +29,16 @@
     focusPendingIn,
     focusTerminal,
     humanWidth,
+    MAX_SIDEBAR,
     MIN_HUMAN,
+    MIN_SIDEBAR,
     readStored,
     roomFor,
     selectedIn,
     selectIn,
+    sidebarWidth,
+    sidebarWidthKey,
+    storedSidebarWidth,
     storedWidth,
     widthKey,
     writeStored,
@@ -60,8 +65,11 @@
   const open = surfaces(() => fields.slug);
   let dragged = $state({});
   let width = $derived(dragged[fields.slug] ?? storedWidth(readStored, fields.slug));
+  let sidebarDragged = $state(storedSidebarWidth(readStored));
+  let sidebarSize = $derived(sidebarWidth(sidebarDragged));
   let panels = $state(0);
-  let rail = $state(0);
+  let railMeasured = $state(0);
+  let rail = $derived(sidebarSize || railMeasured);
   let measured = $state(0);
   let room = $derived(roomFor(panels, rail));
   let human = $derived(humanWidth(width, room));
@@ -78,6 +86,20 @@
   function reset() {
     resize(0);
     writeStored(widthKey(fields.slug), 0);
+  }
+
+  function resizeSidebar(next) {
+    sidebarDragged = next;
+  }
+
+  function commitSidebar(next) {
+    resizeSidebar(next);
+    writeStored(sidebarWidthKey(), next);
+  }
+
+  function resetSidebar() {
+    resizeSidebar(0);
+    writeStored(sidebarWidthKey(), 0);
   }
 
   let selection = $state({});
@@ -198,7 +220,18 @@
       onNewSession={() => (requested = true)}
       onAddRepos={() => (added = fields.slug)}
       onDismissed={() => keyboard++}
-      bind:width={rail} />
+      size={sidebarSize}
+      bind:width={railMeasured} />
+
+    <Splitter
+      size={rail || MIN_SIDEBAR}
+      min={MIN_SIDEBAR}
+      max={MAX_SIDEBAR}
+      side="left"
+      onResize={resizeSidebar}
+      onCommit={commitSidebar}
+      onReset={resetSidebar}
+      label="Resize the sidebar" />
 
     <div class="agent">
       <PaneHeader>

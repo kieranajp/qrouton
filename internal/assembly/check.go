@@ -63,7 +63,7 @@ func checkRepos(d Draft) []Problem {
 // on every keystroke. An abandoned half-assembly does not block the name;
 // session.Create reclaims it.
 func (a Assembler) CheckSlug(d Draft) []Problem {
-	slug := session.Slugify(d.Name)
+	slug := d.Slug()
 	if slug == "" {
 		return []Problem{{Field: FieldName, Message: msgNameRequired}}
 	}

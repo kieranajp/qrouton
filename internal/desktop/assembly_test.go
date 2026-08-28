@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"sync"
 	"testing"
@@ -106,7 +107,7 @@ func TestADraftDropsRepositoriesTheListNoLongerHolds(t *testing.T) {
 
 func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 	a := &Assembly{cfg: &config.Config{}, repos: &Repositories{cfg: &config.Config{}, errs: map[string]error{}}}
-	if got := a.Preview(draftInput{Name: "API Cleanup!", Prefix: "fix"}); got != "fix/api-cleanup" {
+	if got := a.Preview(draftInput{Name: "API Cleanup!", Entropy: "4f3a", Prefix: "fix"}); got != "fix/api-cleanup-4f3a" {
 		t.Fatalf("preview = %q", got)
 	}
 	if got := a.Prefixes(); len(got) == 0 || got[0] != "feat" {
@@ -128,7 +129,7 @@ func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 		t.Fatalf("pending Linear request = %q, %q", ticket, prompt)
 	}
 	seed := a.Begin()
-	if seed.Ticket != "https://linear.app/issue/LIF-2841" || seed.Generation == 0 || a.Pending() != "" {
+	if seed.Ticket != "https://linear.app/issue/LIF-2841" || !regexp.MustCompile(`^[0-9a-f]{4}$`).MatchString(seed.Entropy) || seed.Generation == 0 || a.Pending() != "" {
 		t.Fatalf("Begin = %+v, pending %q", seed, a.Pending())
 	}
 	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title", "ignored duplicate"); err != nil || got != assemblyOutcomeDraft {
@@ -294,13 +295,13 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 		}
 	}, nil, nil)
 
-	in := draftInput{Name: "API Cleanup", Description: "tidy", Prefix: "fix", Mode: "rpi",
+	in := draftInput{Name: "API Cleanup", Entropy: "4f3a", Description: "tidy", Prefix: "fix", Mode: "rpi",
 		Runner: "codex", Repos: []repoPick{{ID: "acme/api", Role: "editing"}}}
 	if err := a.Create(in); err != nil {
 		t.Fatal(err)
 	}
 
-	dir := filepath.Join(root, "api-cleanup")
+	dir := filepath.Join(root, "api-cleanup-4f3a")
 	m, err := session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -308,7 +309,10 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	if m.Name != "API Cleanup" || m.Description != "tidy" || m.EffectiveMode() != session.ModeRPI {
 		t.Fatalf("manifest = %+v", m)
 	}
-	if len(m.Repos) != 1 || m.Repos[0].Role != session.RepoRoleEditing || m.Repos[0].Branch != "fix/api-cleanup" {
+	if m.Name != "API Cleanup" || m.Slug != "api-cleanup-4f3a" {
+		t.Fatalf("session identity = %+v", m)
+	}
+	if len(m.Repos) != 1 || m.Repos[0].Role != session.RepoRoleEditing || m.Repos[0].Branch != "fix/api-cleanup-4f3a" {
 		t.Fatalf("manifest repos = %+v", m.Repos)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "src", "api", ".git")); err != nil {
@@ -318,7 +322,7 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 		t.Fatal("assembly reported no progress")
 	}
 	for _, step := range steps {
-		if step.Session != "api-cleanup" {
+		if step.Session != "api-cleanup-4f3a" {
 			t.Fatalf("progress event names %q, not the session being assembled", step.Session)
 		}
 	}
@@ -374,12 +378,12 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 	a := newAssembly(cfg, repos, reg, func(event string, payload any) {}, nil, nil)
 
-	in := draftInput{Name: "API Cleanup", Prefix: "fix", Mode: "rpi", Runner: "codex",
+	in := draftInput{Name: "API Cleanup", Entropy: "4f3a", Prefix: "fix", Mode: "rpi", Runner: "codex",
 		Repos: []repoPick{{ID: "acme/api", Role: "editing"}}}
 	if err := a.Create(in); err != nil {
 		t.Fatal(err)
 	}
-	dir := filepath.Join(root, "api-cleanup")
+	dir := filepath.Join(root, "api-cleanup-4f3a")
 
 	m, err := session.Load(dir)
 	if err != nil {
@@ -391,8 +395,8 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 
 	// The rail booting it later names no runner, so the manifest's is what reaches
 	// the agent command.
-	reg.retire(reg.bySlug("api-cleanup"))
-	if err := reg.Show("api-cleanup"); err != nil {
+	reg.retire(reg.bySlug("api-cleanup-4f3a"))
+	if err := reg.Show("api-cleanup-4f3a"); err != nil {
 		t.Fatal(err)
 	}
 	if got := boot.runners[dir]; got != "codex" {

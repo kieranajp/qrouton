@@ -15,6 +15,7 @@ import (
 // manifest keeps and the rail truncates against.
 type Draft struct {
 	Name        string
+	Entropy     string
 	Description string
 	Ticket      string
 	Prefix      string
@@ -24,6 +25,10 @@ type Draft struct {
 	// checked out for editing instead. Only the picker fills it: a session that
 	// does not exist yet holds nothing.
 	Upgrades []session.RepoRef
+}
+
+func (d Draft) Slug() string {
+	return session.SessionSlug(d.Name, d.Entropy)
 }
 
 // Assembler carries what the rules cannot reach for themselves. Signal is
@@ -42,9 +47,9 @@ func Prefixes() []string {
 }
 
 // Preview is the branch a first assembly cuts, which is also the hint under the
-// name field. session.Slugify stays the one implementation of the transform.
+// name field.
 func Preview(d Draft) string {
-	return fmt.Sprintf(branchFormat, d.Prefix, session.Slugify(d.Name))
+	return fmt.Sprintf(branchFormat, d.Prefix, d.Slug())
 }
 
 // branchFor is the branch repositories being added land on. A session that

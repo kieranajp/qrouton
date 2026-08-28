@@ -16,6 +16,7 @@ import (
 // anything a refresh has taken away.
 type draftInput struct {
 	Name        string     `json:"name"`
+	Entropy     string     `json:"entropy"`
 	Description string     `json:"description"`
 	Ticket      string     `json:"ticket"`
 	Prefix      string     `json:"prefix"`
@@ -41,6 +42,7 @@ type ticketFields struct {
 // AssemblySeed is the external ticket, if any, claimed by an overlay mount.
 type AssemblySeed struct {
 	Ticket     string `json:"ticket"`
+	Entropy    string `json:"entropy"`
 	Generation uint64 `json:"generation"`
 }
 
@@ -63,6 +65,7 @@ type Assembly struct {
 	pending    linearSeed
 	draftOpen  bool
 	external   linearSeed
+	entropy    string
 	generation uint64
 }
 
@@ -131,9 +134,10 @@ func (a *Assembly) Begin() AssemblySeed {
 	if !a.draftOpen {
 		a.external = a.pending
 		a.pending = linearSeed{}
+		a.entropy = session.NewEntropy()
 	}
 	a.draftOpen = true
-	return AssemblySeed{Ticket: a.external.ticket, Generation: a.generation}
+	return AssemblySeed{Ticket: a.external.ticket, Entropy: a.entropy, Generation: a.generation}
 }
 
 // End releases only the overlay generation that still owns the draft.
@@ -145,6 +149,7 @@ func (a *Assembly) End(generation uint64) {
 	}
 	a.draftOpen = false
 	a.external = linearSeed{}
+	a.entropy = ""
 }
 
 func (a *Assembly) offer(raw, prompt string) (string, error) {
@@ -212,16 +217,19 @@ func (a *Assembly) initialPrompt() string {
 // on a socket of its own.
 func (a *Assembly) Create(in draftInput) error {
 	draft := a.draft(in)
+	if draft.Entropy == "" {
+		draft.Entropy = session.NewEntropy()
+	}
 	if problems := assembly.Check(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
 	if problems := a.assembler.CheckSlug(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
-	slug := session.Slugify(draft.Name)
+	slug := draft.Slug()
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
 	root, err := session.Create(a.cfg, session.CreateRequest{
-		Name: draft.Name, Description: draft.Description, Ticket: draft.Ticket,
+		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
 		InitialPrompt: a.initialPrompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
 		Repos: draft.Repos,
 	}, progress)
@@ -232,6 +240,6 @@ func (a *Assembly) Create(in draftInput) error {
 }
 
 func (a *Assembly) draft(in draftInput) assembly.Draft {
-	return assembly.Draft{Name: in.Name, Description: in.Description, Ticket: in.Ticket,
+	return assembly.Draft{Name: in.Name, Entropy: in.Entropy, Description: in.Description, Ticket: in.Ticket,
 		Prefix: in.Prefix, Mode: session.SessionMode(in.Mode), Repos: a.repos.Select(in.Repos)}
 }

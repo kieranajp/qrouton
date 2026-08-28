@@ -133,11 +133,11 @@ const (
 // cannot hang the caller.
 const repoStatTimeout = 5 * time.Second
 
-// Scratch sessions (a bare `qrouton`) are named after the invoking directory
-// plus entropy, falling back when the basename slugifies to nothing.
+// Session slugs use a short entropy suffix to avoid collisions without making
+// paths and branches cumbersome.
 const (
 	scratchFallbackName = "scratch"
-	scratchEntropyBytes = 2 // 4 hex characters
+	sessionEntropyBytes = 2 // 4 hex characters
 )
 
 // The durable-artifact directories every session starts with, under

@@ -11,6 +11,9 @@ func TestPreviewDerivesTheBranchFromThePrefixAndTheSlug(t *testing.T) {
 	if got := Preview(Draft{Name: "API Cleanup!", Prefix: "fix"}); got != "fix/api-cleanup" {
 		t.Fatalf("preview = %q", got)
 	}
+	if got := Preview(Draft{Name: "API Cleanup!", Entropy: "4f3a", Prefix: "fix"}); got != "fix/api-cleanup-4f3a" {
+		t.Fatalf("entropic preview = %q", got)
+	}
 }
 
 // An existing session keeps its branch; only a first assembly derives one.

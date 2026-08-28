@@ -144,6 +144,29 @@ test("keyboard nudges commit their width and reset removes the stored override",
   await expect(page.locator("#pane")).toHaveCSS("width", "400px");
 });
 
+test("a left-side pane grows with a rightward drag and follows physical arrow keys", async ({ page }) => {
+  const splitter = page.getByRole("separator", { name: "Resize the sidebar", exact: true });
+  const box = await splitter.boundingBox();
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x + 60, y);
+  await page.mouse.up();
+
+  await expect.poll(() => metrics(page)).toMatchObject({
+    sidebarWidth: 260,
+    sidebarCommits: 1,
+  });
+  await expect(page.locator("#sidebar")).toHaveCSS("width", "260px");
+
+  await splitter.focus();
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => metrics(page)).toMatchObject({ sidebarWidth: 252, sidebarCommits: 2 });
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect.poll(() => metrics(page)).toMatchObject({ sidebarWidth: 292, sidebarCommits: 3 });
+});
+
 test("terminal size notifications share one fit per frame", async ({ page }) => {
   await settleFrames(page);
   await page.evaluate(() => window.resetFits());

@@ -21,6 +21,7 @@
    *   onNewSession: () => void,
    *   onAddRepos: () => void,
    *   onDismissed: () => void,
+   *   size: number,
    *   width: number,
    * }}
    */
@@ -32,6 +33,7 @@
     onNewSession,
     onAddRepos,
     onDismissed,
+    size = 0,
     // The splitter needs to know how much room the rail leaves the panes, and
     // only the rail knows how wide it drew itself.
     width = $bindable(0),
@@ -127,7 +129,7 @@
   }
 </script>
 
-<div class="rail" bind:clientWidth={width}>
+<div class="rail" style:width={size ? size + "px" : null} bind:clientWidth={width}>
   <div class="session-list" aria-label="Sessions">
     <CapsLabel>Sessions</CapsLabel>
     {#each sessions as row, i (row.slug)}
@@ -206,13 +208,13 @@
 <style>
   .rail {
     width: var(--w-rail);
+    box-sizing: border-box;
     flex: none;
     display: flex;
     flex-direction: column;
     gap: 10px;
     padding: 14px 12px;
     background: var(--surface-chrome);
-    border-right: 1px solid var(--border-subtle);
     overflow: hidden;
   }
 

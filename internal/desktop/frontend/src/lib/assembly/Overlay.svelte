@@ -35,6 +35,7 @@
           return;
         }
         generation = seed?.generation ?? 0;
+        wizard.form.entropy = seed?.entropy ?? "";
         if (seed?.ticket) wizard.seed(seed.ticket);
         owned = true;
       })

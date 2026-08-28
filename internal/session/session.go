@@ -37,6 +37,25 @@ func Slugify(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), slugSeparator), slugSeparator)
 }
 
+// SessionSlug appends one already-generated entropy suffix to a human name.
+// An empty suffix preserves the old slug shape for manifests and callers that
+// predate entropic session creation.
+func SessionSlug(name, entropy string) string {
+	base := Slugify(name)
+	suffix := Slugify(entropy)
+	if base == "" || suffix == "" {
+		return base
+	}
+	return base + slugSeparator + suffix
+}
+
+// NewEntropy returns the short identifier used to distinguish session slugs.
+func NewEntropy() string {
+	b := make([]byte, sessionEntropyBytes)
+	_, _ = rand.Read(b) // crypto/rand never fails
+	return hex.EncodeToString(b)
+}
+
 // ScratchName names a zero-repo scratch session after the directory qrouton
 // was invoked from, plus entropy to dodge collisions: running from
 // ~/Work/lifesum yields "lifesum-4f3a". A basename that slugifies to nothing
@@ -46,19 +65,16 @@ func ScratchName(cwd string) string {
 	if base == "" {
 		base = scratchFallbackName
 	}
-	return base + slugSeparator + entropySuffix()
-}
-
-func entropySuffix() string {
-	b := make([]byte, scratchEntropyBytes)
-	_, _ = rand.Read(b) // crypto/rand never fails
-	return hex.EncodeToString(b)
+	return SessionSlug(base, NewEntropy())
 }
 
 // CreateRequest is the work a session is being assembled for. Only Name is
 // required: a scratch session has no repositories, no ticket and no prefix.
 type CreateRequest struct {
-	Name        string
+	Name string
+	// Slug is the precomputed session folder and branch suffix. Empty derives
+	// the legacy slug from Name.
+	Slug        string
 	Description string
 	// Ticket is the external issue this work came from, if any.
 	Ticket string
@@ -79,7 +95,10 @@ type CreateRequest struct {
 // Create is the role-aware assembly entry point. Progress reports the start and
 // outcome of each real mirror, worktree, scaffold, and manifest operation.
 func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (string, error) {
-	slug := Slugify(req.Name)
+	slug := Slugify(req.Slug)
+	if slug == "" {
+		slug = Slugify(req.Name)
+	}
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, dirMode); err != nil {
 		// Reclaim only directories our own interrupted assembly left behind —

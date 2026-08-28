@@ -14,6 +14,8 @@
   let resetCalls = $state(0);
   let storageWrites = $state(0);
   let fits = $state(0);
+  let sidebarWidth = $state(200);
+  let sidebarCommits = $state(0);
   let sizeHost;
 
   function resize(next) {
@@ -46,6 +48,8 @@
       storageWrites,
       stored: localStorage.getItem(STORAGE_KEY),
       fits,
+      sidebarWidth,
+      sidebarCommits,
     });
     window.resetFits = () => (fits = 0);
     window.measurementSummary = () => measurement.snapshot();
@@ -81,6 +85,21 @@
     label="Resize the shell pane" />
   <div id="pane" style:width="{width}px"></div>
 </div>
+<div class="workspace sidebar-workspace">
+  <div id="sidebar" style:width="{sidebarWidth}px"></div>
+  <Splitter
+    size={sidebarWidth}
+    min={160}
+    max={360}
+    side="left"
+    onResize={(next) => (sidebarWidth = next)}
+    onCommit={(next) => {
+      sidebarWidth = next;
+      sidebarCommits++;
+    }}
+    label="Resize the sidebar" />
+  <div class="agent"></div>
+</div>
 <div role="separator" aria-label="Resize the shell panes" data-testid="decoy-separator"></div>
 <div id="size-host" bind:this={sizeHost}></div>
 
@@ -94,6 +113,11 @@
   .agent {
     flex: 1;
     background: #24273a;
+  }
+
+  #sidebar {
+    flex: none;
+    background: #494d64;
   }
 
   #pane {
