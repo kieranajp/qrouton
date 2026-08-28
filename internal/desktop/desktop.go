@@ -45,6 +45,16 @@ type Options struct {
 	LinearCommand     []string
 	LinearEnvironment []string
 	Env               []string
+	// Config is the sessions root and the configured owners the overlay assembles
+	// against.
+	Config *config.Config
+
+	// The fields below are launch's, reached as functions because desktop must
+	// not import it: everything desktop imports is linked into the workbench,
+	// and launch pulls in no webview. A nil one means the workbench simply
+	// cannot do that thing, and says so through the matching sentinel error —
+	// which is why these are optional slots rather than one interface.
+	//
 	// Agent builds a session's supervisor command and environment against the
 	// control socket the workbench will serve that session on. runnerID names
 	// the agent the session was assembled with; empty means the workbench's own.
@@ -58,27 +68,23 @@ type Options struct {
 	// Reveal builds the command that shows a session's directory in the file
 	// manager, and is a function for the same reason Shell is.
 	Reveal func(sessionRoot string) []string
-	// Config is the sessions root and the configured owners the overlay assembles
-	// against.
-	Config *config.Config
-	// Runners is the agents the overlay offers, mapped off launch's own rows so
-	// nothing here imports launch.
+	// Runners is the agents the overlay offers, mapped off launch's own rows.
 	Runners func() ([]assembly.Runner, error)
-	// Signal relaunches a session's runner after an escalation, which is
-	// launch.SignalSupervisor reached without importing it.
+	// Signal relaunches a session's runner after an escalation:
+	// launch.SignalSupervisor.
 	Signal func(sessionRoot string)
 	// Relaunch replaces this workbench with one reading the config file afresh,
 	// and returns only once the successor is serving. First run needs it because
 	// a changed sessions root cannot take effect in a running process. The ticket
 	// supplier is read after the relaunch owns launch serialization.
 	Relaunch func(linearIssue func() (ticket, prompt string)) error
-	// ValidateEditor and ValidateLaunch reach launch.ResolveEditor and
-	// launch.Runners without desktop importing launch, the same shape Agent,
-	// Shell, Signal and Runners already use.
+	// ValidateEditor and ValidateLaunch are launch.ResolveEditor and
+	// launch.Runners, called for their errors alone.
 	ValidateEditor func(argv []string) error
 	ValidateLaunch func(overrides map[string][]string) error
-	assembly       *Assembly
-	chrome         *Chrome
+
+	assembly *Assembly
+	chrome   *Chrome
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it

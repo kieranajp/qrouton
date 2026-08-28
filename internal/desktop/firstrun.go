@@ -2,7 +2,6 @@ package desktop
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"path/filepath"
 
@@ -70,13 +69,7 @@ func (f *FirstRun) ChooseRoot() (string, error) {
 // The marker reaches the live pointer only when this process is carrying on, so
 // a failed relaunch leaves the gate up rather than a workbench on the old root.
 func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
-	// Ahead of the root, whose validation creates the directory it is given.
-	orgs := dedupOrgs(in.Orgs)
-	if len(orgs) == 0 {
-		return FirstRunResult{}, fmt.Errorf("orgs: %w", ErrNoOwners)
-	}
-
-	root, expanded, err := validateRoot(in.Root)
+	orgs, root, expanded, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
 		return FirstRunResult{}, err
 	}

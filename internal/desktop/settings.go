@@ -87,16 +87,9 @@ func (s *Settings) Load() SettingsView {
 
 // Save validates Orgs, Root, Editor, Launch, then Linear, refusing on the first
 // problem and writing nothing if any field fails. On success it writes both
-// files and updates every live config field except Root. Orgs comes first
-// because validateRoot creates the directory it is given, so a refusal behind
-// it would leave that directory behind.
+// files and updates every live config field except Root.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
-	orgs := dedupOrgs(in.Orgs)
-	if len(orgs) == 0 {
-		return SaveResult{}, fmt.Errorf("orgs: %w", ErrNoOwners)
-	}
-
-	root, expandedRoot, err := validateRoot(in.Root)
+	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -212,6 +205,20 @@ type linearCommand struct {
 	Path string   `json:"path"`
 	Args []string `json:"args"`
 	Env  []string `json:"env,omitempty"`
+}
+
+// validateOwnersAndRoot is the two answers both the settings panel and the
+// first-run gate collect, checked in the order that matters: validateRoot
+// creates the directory it is given, so an empty owner list refused behind it
+// would leave that directory behind. Keeping the pair here is what stops a
+// later edit to either caller from reordering them.
+func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root, expanded string, err error) {
+	orgs = dedupOrgs(owners)
+	if len(orgs) == 0 {
+		return nil, "", "", fmt.Errorf("orgs: %w", ErrNoOwners)
+	}
+	root, expanded, err = validateRoot(rawRoot)
+	return orgs, root, expanded, err
 }
 
 // validateRoot creates a typed sessions root, answering the form to store — a
