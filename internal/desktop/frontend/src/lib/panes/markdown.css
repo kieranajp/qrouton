@@ -213,8 +213,27 @@
   line-height: 0;
 }
 
-.markdown pre.diagram svg {
-  vertical-align: top;
+/* Zoom replaces the scrollbar, so the whole diagram opens visible inside a box
+   sized by the pane and the emitted size alone and the reader moves the paint
+   inside it. The stage is the positioned element and the <pre> never is: a
+   positioned <pre> would pull the gutter number in beside the diagram. */
+.markdown pre.diagram.zoomable {
+  padding: 0;
+  overflow: hidden;
+}
+
+.markdown pre.diagram .diagram-stage {
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  aspect-ratio: var(--diagram-w) / var(--diagram-h);
+  max-block-size: calc(var(--diagram-h) * 1px);
+}
+
+.markdown pre.diagram .diagram-stage svg {
+  position: absolute;
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
 }
 
 .markdown pre.diagram-failed {

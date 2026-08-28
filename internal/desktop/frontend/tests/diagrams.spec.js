@@ -22,12 +22,14 @@ test("a fence waiting on its diagram says so, then draws it inside the measure",
   expect(drawn.gutter).toBe('"3"');
   expect(Number.parseFloat(drawn.gutterLine)).toBeGreaterThan(0);
 
-  // Drawn at the size the renderer asked for, not the natural size its viewBox states.
+  // Laid out at the size the renderer asked for, not the natural size its
+  // viewBox states, and shown fitted to the measure rather than scrolled in it.
   const emitted = await page.evaluate(() => window.emitted);
-  expect(drawn.width).toBeCloseTo(emitted.width, 0);
-  expect(drawn.height).toBeCloseTo(emitted.height, 0);
-  // Wider than the measure, so the block scrolls rather than the page.
-  expect(drawn.scrolls).toBe(true);
+  expect(Number.parseFloat(drawn.styleWidth)).toBeCloseTo(emitted.width, 1);
+  expect(Number.parseFloat(drawn.styleHeight)).toBeCloseTo(emitted.height, 1);
+  expect(drawn.width).toBeCloseTo(drawn.boxWidth, 0);
+  expect(drawn.height).toBeGreaterThan(0);
+  expect(drawn.scrolls).toBe(false);
   expect(drawn.block).toBeLessThanOrEqual(drawn.container);
   expect(drawn.page).toBeLessThanOrEqual(drawn.viewport);
 });
@@ -37,8 +39,34 @@ test("output carrying no size of its own is drawn at the renderer's ceiling", as
   const drawn = await page.evaluate(() => (window.drawSizeless(), window.probe()));
 
   expect(drawn.drawn).toBe(true);
-  expect(drawn.width).toBeCloseTo(1642 * 0.65, 0);
-  expect(drawn.height).toBeCloseTo(108 * 0.65, 0);
+  expect(Number.parseFloat(drawn.styleWidth)).toBeCloseTo(1642 * 0.65, 1);
+  expect(Number.parseFloat(drawn.styleHeight)).toBeCloseTo(108 * 0.65, 1);
+});
+
+test("a diagram opens whole inside a stage the pane sizes", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  const emitted = await page.evaluate(() => window.emitted);
+  const narrowSize = await page.evaluate(() => window.narrow);
+  const page_width = await page.evaluate(() => document.documentElement.scrollWidth);
+
+  const wide = await page.evaluate(() => (window.draw(), window.probe()));
+  expect(wide.staged).toBe(true);
+  // The <pre> stays unpositioned: the gutter number resolves its column against
+  // the document, and a positioned block would land it inside the diagram.
+  expect(wide.position).toBe("static");
+  expect(wide.gutter).toBe('"3"');
+  expect(wide.line).toBe("3");
+  expect(wide.width).toBeLessThan(emitted.width);
+  expect(wide.width).toBeCloseTo(wide.boxWidth, 0);
+  expect(wide.boxHeight).toBeCloseTo((wide.boxWidth / emitted.width) * emitted.height, 0);
+
+  const narrow = await page.evaluate(() => (window.drawNarrow(), window.probe(window.lines.narrow)));
+  expect(narrow.staged).toBe(true);
+  expect(narrow.width).toBeCloseTo(narrowSize.width, 0);
+  expect(narrow.boxHeight).toBeCloseTo(narrowSize.height, 0);
+  expect(narrow.slack).toBeGreaterThan(0);
+
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(page_width);
 });
 
 test("a diagram that failed to render leaves the fence as code and says why", async ({ page }) => {

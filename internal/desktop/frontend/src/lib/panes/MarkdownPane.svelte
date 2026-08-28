@@ -5,7 +5,7 @@
   import { artifactTone } from "../artifacts.js";
   import { openDocument } from "../docked.svelte.js";
   import { Call, Events, copyText, openURL } from "../wails.js";
-  import { apply as applyDiagrams } from "./diagrams.js";
+  import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
   import { documentPath, linkKind, marks, render } from "./markdown.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
@@ -57,7 +57,12 @@
     Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
       .then((found) => applyDiagrams(body, found ?? []))
       .catch(() => {});
-    return { destroy: off };
+    return {
+      destroy: () => {
+        off();
+        teardownDiagrams(body);
+      },
+    };
   }
 
   /** @param {HTMLElement} body */

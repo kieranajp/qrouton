@@ -1,3 +1,5 @@
+import { attach, detach } from "./diagram-view.js";
+
 const PENDING = "diagram-pending";
 const DRAWN = "diagram";
 const FAILED = "diagram-failed";
@@ -98,6 +100,7 @@ function wait(block) {
  * @param {string} message
  */
 function fail(block, message) {
+  detach(block);
   const stated = block.querySelector("." + NOTE);
   const note = stated ?? block.ownerDocument.createElement("span");
   note.className = NOTE;
@@ -113,6 +116,7 @@ function fail(block, message) {
  * @param {string} svg
  */
 function draw(block, svg) {
+  detach(block);
   const holder = block.ownerDocument.createElement("div");
   holder.innerHTML = svg;
   const drawn = /** @type {SVGSVGElement | null} */ (holder.firstElementChild);
@@ -124,4 +128,17 @@ function draw(block, svg) {
   block.classList.remove(PENDING, FAILED);
   block.classList.add(DRAWN);
   block.replaceChildren(...holder.childNodes);
+  if (drawn && emitted) attach(block, drawn, emitted);
+}
+
+/**
+ * Drops every view a container's diagrams hold, so nothing outlives the pane.
+ * @param {HTMLElement} container
+ */
+export function teardown(container) {
+  for (const block of /** @type {NodeListOf<HTMLElement>} */ (
+    container.querySelectorAll("pre[data-line]")
+  )) {
+    detach(block);
+  }
 }

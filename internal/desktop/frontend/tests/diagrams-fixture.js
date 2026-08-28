@@ -28,8 +28,14 @@ const DOCUMENT = [
   "",
   "Tail.",
   "",
+  "```d2",
+  "x -> y",
+  "```",
+  "",
+  "End.",
+  "",
 ];
-const LINES = { drawn: 3, broken: 10, embedded: 16 };
+const LINES = { drawn: 3, broken: 10, embedded: 16, narrow: 24 };
 const TIMEOUT = "diagram took too long to lay out";
 const root = document.querySelector("#markdown-root");
 
@@ -47,6 +53,13 @@ const svg =
   ` viewBox="0 0 1642 108" width="${EMITTED.width}" height="${EMITTED.height}">` +
   inner +
   "</svg>";
+// Narrower than the fixture's container, so it opens at the emitted size.
+const NARROW = { width: 180, height: 90 };
+const narrow =
+  '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet"' +
+  ` viewBox="0 0 277 138" width="${NARROW.width}" height="${NARROW.height}">` +
+  '<rect width="277" height="138" fill="#24273a"></rect>' +
+  '<text x="20" y="60" fill="#cad3f5">x</text></svg>';
 // Output from before the renderer carried a scale, which is sized by fallback.
 const sizeless =
   '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1642 108">' +
@@ -55,9 +68,11 @@ const sizeless =
 
 window.lines = LINES;
 window.emitted = EMITTED;
+window.narrow = NARROW;
 window.pending = () => apply(root, Object.values(LINES).map((line) => ({ line })));
 window.draw = () => apply(root, [{ line: LINES.drawn, svg }]);
 window.drawSizeless = () => apply(root, [{ line: LINES.drawn, svg: sizeless }]);
+window.drawNarrow = () => apply(root, [{ line: LINES.narrow, svg: narrow }]);
 window.fail = (line = LINES.drawn, error = TIMEOUT) => apply(root, [{ line, error }]);
 window.settle = () =>
   apply(root, [
@@ -68,6 +83,7 @@ window.settle = () =>
 window.probe = (line = LINES.drawn) => {
   const block = root.querySelector(`pre[data-line="${line}"]`);
   const drawn = block?.querySelector("svg");
+  const stage = block?.querySelector(".diagram-stage");
   const note = block?.querySelector(".diagram-error");
   const box = drawn?.getBoundingClientRect();
   const bounds = block?.getBoundingClientRect();
@@ -91,6 +107,17 @@ window.probe = (line = LINES.drawn) => {
     tall: bounds?.height ?? 0,
     block: bounds?.width ?? 0,
     scrolls: (block?.scrollWidth ?? 0) > (block?.clientWidth ?? 0),
+    staged: Boolean(stage),
+    position: block && getComputedStyle(block).position,
+    styleWidth: drawn?.style.width ?? "",
+    styleHeight: drawn?.style.height ?? "",
+    transform: drawn && getComputedStyle(drawn).transform,
+    boxWidth: block?.clientWidth ?? 0,
+    boxHeight: block?.clientHeight ?? 0,
+    slack:
+      stage && drawn
+        ? stage.getBoundingClientRect().right - drawn.getBoundingClientRect().right
+        : 0,
     container: root.getBoundingClientRect().width,
     page: document.documentElement.scrollWidth,
     viewport: window.innerWidth,
