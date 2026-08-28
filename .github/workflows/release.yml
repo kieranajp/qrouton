@@ -66,7 +66,34 @@ jobs:
           make archive VERSION="$RELEASE_VERSION"
           spctl --assess --type execute --verbose=2 dist/qrouton.app
 
+      - name: Read release artifact
+        id: release-artifact
+        run: |
+          version=${RELEASE_VERSION#v}
+          archive="qrouton-$version-macos-universal.zip"
+          checksum=$(awk -v archive="$archive" '$2 == archive { print $1 }' dist/checksums.txt)
+          test -n "$checksum"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "archive=$archive" >> "$GITHUB_OUTPUT"
+          echo "checksum=$checksum" >> "$GITHUB_OUTPUT"
+
       - name: Upload release assets
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh release upload "$RELEASE_VERSION" dist/*.zip dist/checksums.txt --clobber
+
+      - name: Update Homebrew cask
+        uses: mislav/bump-homebrew-formula-action@f865c8b0dbebd6e263cc06782a0e974c61cf12d2 # v4
+        with:
+          formula-name: qrouton
+          formula-path: Casks/qrouton.rb
+          tag-name: ${{ steps.release-artifact.outputs.version }}
+          download-url: https://github.com/kieranajp/qrouton/releases/download/${{ github.event.release.tag_name }}/${{ steps.release-artifact.outputs.archive }}
+          download-sha256: ${{ steps.release-artifact.outputs.checksum }}
+          homebrew-tap: ${{ github.repository }}
+          base-branch: main
+          create-pullrequest: false
+          create-branch: false
+          commit-message: Update Homebrew cask to {{version}}
+        env:
+          COMMITTER_TOKEN: ${{ github.token }}

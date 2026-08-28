@@ -52,6 +52,7 @@ newer.
 Install with Homebrew:
 
 ```sh
+brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton
 brew install --cask kieranajp/qrouton/qrouton
 ```
 

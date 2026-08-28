@@ -2,8 +2,12 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - Casks/qrouton.rb
   push:
     branches: [main]
+    paths-ignore:
+      - Casks/qrouton.rb
 
 jobs:
   check:
