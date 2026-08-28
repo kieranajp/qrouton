@@ -10,9 +10,6 @@
   line-height: 1.75;
   color: var(--text-secondary);
   text-wrap: pretty;
-  /* Mono prose runs out of legs long before the pane runs out of width. The
-     measure is the content box, so the gutter's padding sits outside it. */
-  max-inline-size: 78ch;
   padding-left: var(--gutter);
   position: relative;
 }
