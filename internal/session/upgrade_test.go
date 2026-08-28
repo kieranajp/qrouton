@@ -29,7 +29,9 @@ func referenceSession(t *testing.T, names ...string) (*config.Config, string, []
 			Repo: github.Repo{Name: name, Org: "org", SSHURL: origin, DefaultBranch: "main"}})
 	}
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, strings.Join(names, "-"), "", "", "feat", ModeAssistant, "", sels, nil)
+	dir, err := Create(cfg, CreateRequest{
+		Name: strings.Join(names, "-"), Prefix: "feat", Mode: ModeAssistant, Repos: sels,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -192,9 +194,9 @@ func TestUpgradeReposRefusesAnythingButAReferenceRepoItHolds(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "svc")
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Held", "", "", "feat", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Held", Prefix: "feat", Mode: ModeRPI, Repos: []RepoSelection{
 		{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing},
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

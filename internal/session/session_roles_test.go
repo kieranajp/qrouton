@@ -35,7 +35,9 @@ func TestCreatePersistsSessionMode(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "svc")
 	repos := []RepoSelection{{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}}
-	dir, err := Create(&config.Config{Root: root}, "Assistant sesh", "", "", "feat", ModeAssistant, "", repos, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Assistant sesh", Prefix: "feat", Mode: ModeAssistant, Repos: repos,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,10 +69,10 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	editingOrigin, _ := makeOrigin(t, "editing")
 	referenceOrigin, pinned := makeOrigin(t, "reference")
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Role test", "", "", "feat", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Role test", Prefix: "feat", Mode: ModeRPI, Repos: []RepoSelection{
 		{Repo: github.Repo{Name: "editing", Org: "org", SSHURL: editingOrigin, DefaultBranch: "main"}, Role: RepoRoleEditing},
 		{Repo: github.Repo{Name: "reference", Org: "org", SSHURL: referenceOrigin, DefaultBranch: "main"}, Role: RepoRoleReference},
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -214,15 +216,19 @@ func TestCreateFailureCleansNewSessionDirectoryAndAllowsRetry(t *testing.T) {
 	origin, _ := makeOrigin(t, "retry")
 	repo := github.Repo{Name: "retry", Org: "org", SSHURL: origin, DefaultBranch: "main"}
 	bad := []RepoSelection{{Repo: repo, Role: RepoRole("invalid")}}
-	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI, "", bad, nil); err == nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Retry me", Prefix: "feat", Mode: ModeRPI, Repos: bad,
+	}, nil); err == nil {
 		t.Fatal("invalid role unexpectedly succeeded")
 	}
 	dir := filepath.Join(root, "retry-me")
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("failed session directory was not cleaned up: %v", err)
 	}
-	if _, err := Create(&config.Config{Root: root}, "Retry me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil); err != nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Retry me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil); err != nil {
 		t.Fatal("retry failed:", err)
 	}
 }
@@ -244,8 +250,10 @@ func TestCreateReclaimsAbandonedAssemblyDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "reclaim", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	created, err := Create(&config.Config{Root: root}, "Reclaim me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil)
+	created, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Reclaim me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal("abandoned directory blocked its session name:", err)
 	}
@@ -274,8 +282,10 @@ func TestCreateRefusesToReclaimUnmarkedDirectory(t *testing.T) {
 	}
 
 	repo := github.Repo{Name: "keep", Org: "org", SSHURL: origin, DefaultBranch: "main"}
-	if _, err := Create(&config.Config{Root: root}, "Keep me", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil); err == nil {
+	if _, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Keep me", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil); err == nil {
 		t.Fatal("unmarked directory was silently taken over")
 	}
 	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
@@ -290,8 +300,10 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "custom")
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Custom origin", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}}, nil)
+	dir, err := Create(cfg, CreateRequest{
+		Name: "Custom origin", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -332,7 +344,7 @@ func TestComposeReposAssemblesIntoZeroRepoSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Scratch pad", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(cfg, CreateRequest{Name: "Scratch pad", Mode: ModeAssistant}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,7 +391,9 @@ func TestSetModePersistsAcrossReread(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Modal", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -404,7 +418,9 @@ func TestWriteManifestMarksOnlyTheEscalationHandoff(t *testing.T) {
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	dir, err := Create(&config.Config{Root: root}, "Modal", "", "", "", ModeAssistant, "", nil, nil)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Modal", Mode: ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -443,9 +459,10 @@ func TestSessionProgressReportsAssemblyOperations(t *testing.T) {
 	}
 	origin, _ := makeOrigin(t, "progress")
 	var events []Progress
-	_, err := Create(&config.Config{Root: root}, "Progress", "", "", "feat", ModeRPI, "",
-		[]RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
-		func(event Progress) { events = append(events, event) })
+	_, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Progress", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "progress", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
+	}, func(event Progress) { events = append(events, event) })
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,8 +499,10 @@ func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
 	cfg := &config.Config{Root: root}
 	origin, _ := makeOrigin(t, "repo123")
 	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: origin, DefaultBranch: "main"}
-	dir, err := Create(cfg, "repo123", "", "", "feat",
-		ModeAssistant, "", []RepoSelection{{Repo: repo, Role: RepoRoleEditing}}, nil)
+	dir, err := Create(cfg, CreateRequest{
+		Name: "repo123", Prefix: "feat", Mode: ModeAssistant,
+		Repos: []RepoSelection{{Repo: repo, Role: RepoRoleEditing}},
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

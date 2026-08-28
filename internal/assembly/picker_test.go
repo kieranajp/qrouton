@@ -45,7 +45,9 @@ func editing(repos ...github.Repo) []session.RepoSelection {
 func scratch(t *testing.T) (Assembler, string) {
 	t.Helper()
 	cfg := &config.Config{Orgs: []string{"org"}, Root: t.TempDir()}
-	dir, err := session.Create(cfg, "scratch", "", "", "", session.ModeAssistant, "", nil, nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "scratch", Mode: session.ModeAssistant,
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -179,8 +181,9 @@ func setRunner(dir, runner string) error {
 func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"org"}, Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Webhook retry", "", "", "fix", session.ModeRPI, "",
-		editing(testRepo(t, "svc")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Webhook retry", Prefix: "fix", Mode: session.ModeRPI, Repos: editing(testRepo(t, "svc")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,7 +213,9 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
 	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: makeTestOrigin(t, "repo123"), DefaultBranch: "main"}
-	dir, err := session.Create(cfg, "repo123", "", "", "feat", session.ModeAssistant, "", editing(repo), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "repo123", Prefix: "feat", Mode: session.ModeAssistant, Repos: editing(repo),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,8 +349,10 @@ func referenced(repos ...github.Repo) []session.RepoSelection {
 func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Read only", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Read only", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -373,8 +380,9 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Both", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Both", Prefix: "feat", Mode: session.ModeAssistant, Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -403,8 +411,10 @@ func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
 func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Refused", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Refused", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -446,8 +456,10 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Batch", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs"), testRepo(t, "specs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Batch", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: referenced(testRepo(t, "docs"), testRepo(t, "specs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -475,8 +487,9 @@ func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
 func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	dir, err := session.Create(cfg, "Half", "", "", "feat", session.ModeAssistant, "",
-		referenced(testRepo(t, "docs")), nil)
+	dir, err := session.Create(cfg, session.CreateRequest{
+		Name: "Half", Prefix: "feat", Mode: session.ModeAssistant, Repos: referenced(testRepo(t, "docs")),
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

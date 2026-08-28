@@ -20,12 +20,12 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "Webhook retry", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Webhook retry", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		selection(t, "svc", RepoRoleEditing),
 		selection(t, "quiet", RepoRoleEditing),
 		selection(t, "level", RepoRoleEditing),
 		selection(t, "docs", RepoRoleReference),
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,9 +82,9 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
 	origin := localOrigin(t, "svc")
-	dir, err := Create(cfg, "Moved base", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "Moved base", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing},
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,9 +119,9 @@ func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
 	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, "No base branch", "", "", "fix", ModeRPI, "", []RepoSelection{
+	dir, err := Create(cfg, CreateRequest{Name: "No base branch", Prefix: "fix", Mode: ModeRPI, Repos: []RepoSelection{
 		selection(t, "svc", RepoRoleEditing),
-	}, nil)
+	}}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

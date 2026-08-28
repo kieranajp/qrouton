@@ -220,8 +220,11 @@ func (a *Assembly) Create(in draftInput) error {
 	}
 	slug := session.Slugify(draft.Name)
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
-	root, err := session.CreateWithInitialPrompt(a.cfg, draft.Name, draft.Description, draft.Ticket,
-		a.initialPrompt(), draft.Prefix, draft.Mode, in.Runner, draft.Repos, progress)
+	root, err := session.Create(a.cfg, session.CreateRequest{
+		Name: draft.Name, Description: draft.Description, Ticket: draft.Ticket,
+		InitialPrompt: a.initialPrompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
+		Repos: draft.Repos,
+	}, progress)
 	if err != nil {
 		return err
 	}
