@@ -246,6 +246,67 @@
   transform-origin: 0 0;
 }
 
+/* A discrete step is worth watching go by. A wheel or a drag never carries
+   this class: a transition there lags the pointer. */
+.markdown pre.diagram .diagram-stage.stepping svg {
+  transition: transform 120ms ease-out;
+}
+
+/* Top right, clear of the gutter where the line number and the marked accent
+   bar both live. A document of a dozen diagrams would be all chrome if this
+   were always on, so it waits for a hover — except while the diagram is zoomed,
+   when it is the way back. */
+.markdown pre.diagram .diagram-controls {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  background: color-mix(in srgb, var(--surface-terminal) 88%, transparent);
+  border: 1px solid var(--border-subtle);
+  font: var(--terminal-sm);
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.markdown pre.diagram .diagram-stage:hover .diagram-controls,
+.markdown pre.diagram .diagram-stage[data-zoomed="true"] .diagram-controls {
+  opacity: 1;
+}
+
+.markdown pre.diagram .diagram-controls button {
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 3px 7px;
+  font: inherit;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.markdown pre.diagram .diagram-controls button:hover {
+  color: var(--text-primary);
+  background: var(--wash-selected);
+}
+
+.markdown pre.diagram .diagram-level {
+  min-width: 5ch;
+  padding: 0 4px;
+  text-align: center;
+  color: var(--text-faint);
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .markdown pre.diagram .diagram-stage.stepping svg,
+  .markdown pre.diagram .diagram-controls {
+    transition: none;
+  }
+}
+
 .markdown pre.diagram-failed {
   border-color: color-mix(in srgb, var(--state-failed) 40%, var(--border-subtle));
 }

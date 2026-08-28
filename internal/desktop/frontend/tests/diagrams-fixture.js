@@ -84,6 +84,26 @@ const stageOf = (line) => root.querySelector(`pre[data-line="${line}"] .diagram-
 
 window.scrolled = () => document.querySelector("#scroller").scrollTop;
 window.cursor = (line = LINES.drawn) => getComputedStyle(stageOf(line)).cursor;
+window.overlay = (line = LINES.drawn) => {
+  const controls = stageOf(line)?.querySelector(".diagram-controls");
+  return {
+    present: Boolean(controls),
+    opacity: controls && Number(getComputedStyle(controls).opacity),
+    level: controls?.querySelector(".diagram-level")?.textContent ?? "",
+    stamped: controls?.querySelectorAll("[data-line], [data-line-end]").length ?? 0,
+  };
+};
+window.press = (name, line = LINES.drawn) => {
+  const control = stageOf(line).querySelector(`button[aria-label="${name}"]`);
+  control.click();
+  const drawn = stageOf(line).querySelector("svg");
+  return {
+    stepping: stageOf(line).classList.contains("stepping"),
+    duration: getComputedStyle(drawn).transitionDuration,
+  };
+};
+window.stamped = () => root.querySelectorAll("[data-line]").length;
+window.focused = () => Boolean(document.activeElement?.closest?.(".diagram-controls"));
 window.selected = () => String(window.getSelection() ?? "");
 window.stageBox = (line = LINES.drawn) => {
   const box = stageOf(line).getBoundingClientRect();
@@ -138,6 +158,8 @@ window.probe = (line = LINES.drawn) => {
     tall: bounds?.height ?? 0,
     block: bounds?.width ?? 0,
     scrolls: (block?.scrollWidth ?? 0) > (block?.clientWidth ?? 0),
+    zoomable: block?.classList.contains("zoomable"),
+    controls: block?.querySelectorAll(".diagram-controls").length ?? 0,
     staged: Boolean(stage),
     position: block && getComputedStyle(block).position,
     styleWidth: drawn?.style.width ?? "",

@@ -257,3 +257,88 @@ test("a zoomed diagram is dragged, and cannot be dragged off its own edges", asy
   expect(after.boxWidth).toBe(resting.boxWidth);
   expect(after.boxHeight).toBe(resting.boxHeight);
 });
+
+test("the overlay says the level and stays out of the document", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  const stamped = await page.evaluate(() => window.stamped());
+  await page.evaluate(() => (window.draw(), window.drawNarrow()));
+
+  // Chrome, not content: the pane measures no new source interval from it.
+  expect(await page.evaluate(() => window.stamped())).toBe(stamped);
+  expect(await page.evaluate(() => window.overlay().stamped)).toBe(0);
+
+  // 100% is the size the renderer emitted, so a fitted wide diagram says less.
+  expect(await page.evaluate(() => window.overlay(window.lines.narrow).level)).toBe("100%");
+  const level = await page.evaluate(() => window.overlay().level);
+  expect(Number.parseInt(level, 10)).toBeLessThan(100);
+
+  expect(await page.evaluate(() => window.overlay().opacity)).toBe(0);
+  await page.locator('pre[data-line="3"] .diagram-stage').hover();
+  await expect.poll(() => page.evaluate(() => window.overlay().opacity)).toBe(1);
+
+  // A zoomed diagram never hides the way back, hovered or not.
+  const box = await page.evaluate(() => window.stageBox());
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -400);
+  await page.keyboard.up("Control");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height + 400);
+  await expect.poll(() => page.evaluate(() => window.overlay().opacity)).toBe(1);
+
+  // Nothing here is a tab stop: the pane has no keyboard model to strand.
+  await page.evaluate(() => document.body.focus());
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => window.focused())).toBe(false);
+});
+
+test("the steps go up and down by the same amount, and Fit goes all the way back", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const fitted = await page.evaluate(() => window.view());
+
+  const stepped = await page.evaluate(() => window.press("Zoom in"));
+  expect(stepped).toEqual({ stepping: true, duration: "0.12s" });
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale * Math.SQRT2, 3);
+
+  await page.evaluate(() => window.press("Zoom out"));
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale, 3);
+
+  await page.evaluate(() => (window.press("Zoom in"), window.press("Zoom in")));
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale * 2, 3);
+  await page.evaluate(() => window.press("Fit the whole diagram"));
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale, 3);
+  expect(await page.evaluate(() => window.overlay().level)).toBe(
+    `${Math.round(fitted.scale * 100)}%`,
+  );
+});
+
+test("a diagram that drew and then failed leaves no stage behind", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  expect(await page.evaluate(() => window.probe().controls)).toBe(1);
+
+  const box = await page.evaluate(() => window.stageBox());
+  const failed = await page.evaluate(() => (window.fail(), window.probe()));
+  expect(failed.failed).toBe(true);
+  expect(failed.staged).toBe(false);
+  expect(failed.zoomable).toBe(false);
+  expect(failed.controls).toBe(0);
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -400);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.probe().staged)).toBe(false);
+});
+
+test("a reader who asked for less motion gets the step without the animation", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+
+  expect(await page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches)).toBe(true);
+  expect(await page.evaluate(() => window.press("Zoom in"))).toEqual({
+    stepping: true,
+    duration: "0s",
+  });
+});

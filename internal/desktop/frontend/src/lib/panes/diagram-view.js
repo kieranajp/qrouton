@@ -2,6 +2,9 @@ import { latestPerFrame } from "../frame.js";
 
 const STAGE = "diagram-stage";
 const ZOOMABLE = "zoomable";
+const CONTROLS = "diagram-controls";
+const LEVEL = "diagram-level";
+const STEPPING = "stepping";
 
 // 100% is the size the renderer emitted, so a fitted wide diagram opens below
 // it and says so; the ceiling is far enough past d2's own output that the
@@ -11,6 +14,7 @@ const STEP = Math.SQRT2;
 const WHEEL_K = 0.0015;
 const LINE_DELTA = 16;
 const DRAG_SLOP = 4;
+const STEP_MS = 120;
 
 /** @type {WeakMap<Element, {destroy: () => void}>} */
 const stages = new WeakMap();
@@ -102,7 +106,9 @@ export function panBy(grab, by, box, content) {
  * @param {{width: number, height: number}} emitted
  */
 export function attach(block, svg, emitted) {
-  const stage = block.ownerDocument.createElement("div");
+  const doc = block.ownerDocument;
+  const view = doc.defaultView;
+  const stage = doc.createElement("div");
   stage.className = STAGE;
   stage.style.setProperty("--diagram-w", String(emitted.width));
   stage.style.setProperty("--diagram-h", String(emitted.height));
@@ -112,6 +118,13 @@ export function attach(block, svg, emitted) {
 
   const state = { base: 1, multiplier: 1, tx: 0, ty: 0 };
   const scale = () => state.base * state.multiplier;
+
+  // Chrome on the stage, never part of the document: no data-line here, or the
+  // pane would report the overlay as a source interval.
+  const controls = doc.createElement("div");
+  controls.className = CONTROLS;
+  const readout = doc.createElement("span");
+  readout.className = LEVEL;
 
   const box = () => ({ width: stage.clientWidth, height: stage.clientHeight });
   const content = () => ({
@@ -125,6 +138,9 @@ export function attach(block, svg, emitted) {
     const reach = box();
     const overflows = shown.width > reach.width + 0.5 || shown.height > reach.height + 0.5;
     stage.dataset.pannable = overflows ? "true" : "false";
+    // A zoomed diagram shows the way back without being hovered.
+    stage.dataset.zoomed = state.multiplier > 1.0001 ? "true" : "false";
+    readout.textContent = `${Math.round(scale() * 100)}%`;
   };
 
   // A pane resize keeps the reader's level of detail and moves the scale the
@@ -153,6 +169,8 @@ export function attach(block, svg, emitted) {
 
   const down = (/** @type {PointerEvent} */ event) => {
     if (event.button !== 0) return;
+    if (controls.contains(/** @type {Node} */ (event.target))) return;
+    settle();
     // Otherwise the browser drags the SVG content itself.
     event.preventDefault();
     grab = { x: event.clientX, y: event.clientY, moved: 0 };
@@ -199,9 +217,10 @@ export function attach(block, svg, emitted) {
     // does over prose. A pinch arrives here too, with ctrlKey already set.
     if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
-    const box = stage.getBoundingClientRect();
+    settle();
+    const bounds = stage.getBoundingClientRect();
     move(
-      { x: event.clientX - box.left, y: event.clientY - box.top },
+      { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
       clampScale(scale() * Math.exp(-travel(event) * WHEEL_K), state.base),
     );
     paint.schedule(0);
@@ -214,15 +233,57 @@ export function attach(block, svg, emitted) {
     render();
   };
 
+  let timer = 0;
+  // A discrete step is worth watching go by; a wheel or a drag must not lag.
+  const stepping = () => {
+    stage.classList.add(STEPPING);
+    view?.clearTimeout(timer);
+    timer = view?.setTimeout(() => stage.classList.remove(STEPPING), STEP_MS * 2) ?? 0;
+  };
+  const settle = () => {
+    view?.clearTimeout(timer);
+    stage.classList.remove(STEPPING);
+  };
+
+  const step = (/** @type {number} */ direction) => {
+    const reach = box();
+    stepping();
+    move({ x: reach.width / 2, y: reach.height / 2 }, stepScale(scale(), direction, state.base));
+    render();
+  };
+
+  const stepped = (/** @type {string} */ label, /** @type {string} */ name, /** @type {() => void} */ run) => {
+    const control = doc.createElement("button");
+    control.type = "button";
+    control.tabIndex = -1;
+    control.textContent = label;
+    control.setAttribute("aria-label", name);
+    control.addEventListener("click", run);
+    return control;
+  };
+
+  controls.append(
+    stepped("\u2212", "Zoom out", () => step(-1)),
+    readout,
+    stepped("+", "Zoom in", () => step(1)),
+    stepped("Fit", "Fit the whole diagram", () => (stepping(), fit())),
+  );
+  stage.append(controls);
+
+  const doubled = (/** @type {MouseEvent} */ event) => {
+    if (controls.contains(/** @type {Node} */ (event.target))) return;
+    stepping();
+    fit();
+  };
+
   stage.addEventListener("wheel", wheel, { passive: false });
-  stage.addEventListener("dblclick", fit);
+  stage.addEventListener("dblclick", doubled);
   stage.addEventListener("pointerdown", down);
   stage.addEventListener("pointermove", drag);
   stage.addEventListener("pointerup", release);
   stage.addEventListener("pointercancel", release);
   stage.addEventListener("click", clicked, true);
 
-  const view = block.ownerDocument.defaultView;
   const observer = view?.ResizeObserver ? new view.ResizeObserver(measure) : undefined;
   observer?.observe(stage);
 
@@ -230,8 +291,9 @@ export function attach(block, svg, emitted) {
     destroy() {
       observer?.disconnect();
       paint.cancel();
+      view?.clearTimeout(timer);
       stage.removeEventListener("wheel", wheel);
-      stage.removeEventListener("dblclick", fit);
+      stage.removeEventListener("dblclick", doubled);
       stage.removeEventListener("pointerdown", down);
       stage.removeEventListener("pointermove", drag);
       stage.removeEventListener("pointerup", release);
