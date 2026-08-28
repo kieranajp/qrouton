@@ -113,18 +113,7 @@ func (p *Picker) Cancel(slug string) error {
 // escalation is the exception — it proposes a name for the work it is escalating
 // to, and the prefix a first branch is cut with.
 func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in pickerInput) assembly.Draft {
-	byID := make(map[string]github.Repo)
-	for _, r := range p.repos.Cached() {
-		byID[r.ID()] = r
-	}
-	repos := make([]session.RepoSelection, 0, len(in.Repos))
-	for _, pick := range in.Repos {
-		repo, ok := byID[pick.ID]
-		if !ok {
-			continue
-		}
-		repos = append(repos, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
-	}
+	repos := p.repos.Select(in.Repos)
 	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
 	upgrades := heldRefs(m, in.Upgrades)
 	if escalation != nil {

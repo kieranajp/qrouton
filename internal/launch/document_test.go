@@ -150,8 +150,10 @@ func TestDocumentWindowNamesAParkedDocumentRelativeToTheSession(t *testing.T) {
 	}
 }
 
-// The tab has room for a title, not a path — and a document's own first heading
-// is the title it chose.
+// The tab has room for a title, not a path — and the heading a document opens
+// with is the title it chose. Only the opening one: a `# ` further down is a
+// later section or the inside of a code fence, and a tab named after either
+// would be lying.
 func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 	for name, body := range map[string]string{
 		"◆ Document panes": "# Document panes\n\nbody\n",
@@ -159,6 +161,9 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 			"# Behind the fence\n",
 		"◆ headless.md": "No heading here, just prose.\n",
 		"◆ deeper.md":   "## Only a second-level heading\n",
+		"◆ fenced.md":   "```sh\n# not a title, a shell comment\n```\n",
+		"◆ sectioned.md": "Intro prose the document opens with.\n\n" +
+			"# Section two\n",
 	} {
 		file := strings.TrimPrefix(name, "◆ ")
 		if !strings.HasSuffix(file, ".md") {

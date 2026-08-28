@@ -159,7 +159,6 @@ const (
 const (
 	editorWindowLabel   = "Editor"
 	documentLabelFormat = "◆ %s"
-	frontMatterFence    = "---"
 )
 
 var (
