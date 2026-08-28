@@ -58,7 +58,8 @@ test("a diagram opens whole inside a stage the pane sizes", async ({ page }) => 
   expect(wide.line).toBe("3");
   expect(wide.width).toBeLessThan(emitted.width);
   expect(wide.width).toBeCloseTo(wide.boxWidth, 0);
-  expect(wide.boxHeight).toBeCloseTo((wide.boxWidth / emitted.width) * emitted.height, 0);
+  expect(wide.height).toBeCloseTo((wide.boxWidth / emitted.width) * emitted.height, 0);
+  expect(wide.boxHeight).toBeCloseTo(wide.height, 0);
 
   const narrow = await page.evaluate(() => (window.drawNarrow(), window.probe(window.lines.narrow)));
   expect(narrow.staged).toBe(true);
@@ -212,6 +213,8 @@ test("a zoomed diagram is dragged, and cannot be dragged off its own edges", asy
   await page.mouse.move(at.x, at.y);
   await page.mouse.down();
   await page.mouse.move(at.x - 60, at.y - 10, { steps: 4 });
+  // Nothing moved, so nothing claims to be moving.
+  expect(await page.evaluate(() => window.cursor())).toBe("auto");
   await page.mouse.up();
   await page.evaluate(() => window.settled());
   expect(await page.evaluate(() => window.view())).toMatchObject({ tx: 0, ty: 0 });
@@ -366,4 +369,52 @@ test("a reader who asked for less motion gets the step without the animation", a
     stepping: true,
     duration: "0s",
   });
+});
+
+test("a narrower pane keeps the level of detail and refits underneath it", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+
+  await page.mouse.move(box.x + box.width * 0.8, box.y + box.height * 0.7);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -600);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  const zoomed = await page.evaluate(() => window.view());
+  const multiplier = zoomed.scale / zoomed.base;
+  expect(multiplier).toBeGreaterThan(1);
+
+  await page.evaluate(() => window.resize(360));
+  const resized = await page.evaluate(() => window.view());
+  expect(resized.base).toBeLessThan(zoomed.base);
+  expect(resized.scale / resized.base).toBeCloseTo(multiplier, 3);
+  // Re-clamped against the narrower stage, so no edge came inside it.
+  const emitted = await page.evaluate(() => window.emitted);
+  const narrowed = await page.evaluate(() => window.stageBox());
+  expect(resized.tx).toBeLessThanOrEqual(0.5);
+  expect(resized.tx).toBeGreaterThanOrEqual(narrowed.width - emitted.width * resized.scale - 0.5);
+});
+
+test("a pane that goes away takes its diagrams' views with it", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => (window.draw(), window.drawNarrow()));
+  expect(await page.evaluate(() => window.probe().staged)).toBe(true);
+
+  const box = await page.evaluate(() => window.stageBox());
+  await page.evaluate(() => window.teardownAll());
+
+  for (const line of [3, 24]) {
+    const gone = await page.evaluate((at) => window.probe(at), line);
+    expect(gone.staged).toBe(false);
+    expect(gone.controls).toBe(0);
+    expect(gone.zoomable).toBe(false);
+  }
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -400);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.probe().staged)).toBe(false);
 });

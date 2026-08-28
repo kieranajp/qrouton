@@ -1,6 +1,6 @@
 import "../src/tokens/typography.css";
 import "../src/lib/panes/markdown.css";
-import { apply } from "../src/lib/panes/diagrams.js";
+import { apply, teardown } from "../src/lib/panes/diagrams.js";
 import { render } from "../src/lib/panes/markdown.js";
 
 // One fence of each outcome, prose between them, numbered from the document.
@@ -102,6 +102,11 @@ window.press = (name, line = LINES.drawn) => {
     duration: getComputedStyle(drawn).transitionDuration,
   };
 };
+window.resize = (width) => {
+  root.style.width = `${width}px`;
+  return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+};
+window.teardownAll = () => teardown(root);
 window.stamped = () => root.querySelectorAll("[data-line]").length;
 window.focused = () => Boolean(document.activeElement?.closest?.(".diagram-controls"));
 window.selected = () => String(window.getSelection() ?? "");

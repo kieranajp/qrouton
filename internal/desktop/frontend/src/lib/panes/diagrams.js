@@ -5,8 +5,7 @@ const DRAWN = "diagram";
 const FAILED = "diagram-failed";
 const NOTE = "diagram-error";
 
-// The renderer's ceiling on natural size, mirrored here only for output that
-// predates it and so carries no size of its own.
+// What output carrying no size of its own is drawn at.
 const EMITTED_SCALE = 0.65;
 
 /**
@@ -64,8 +63,9 @@ export function emittedSize(svg) {
  * @returns {number}
  */
 function attributeSize(value) {
-  const size = Number.parseFloat(value ?? "");
-  return Number.isFinite(size) && size > 0 ? size : 0;
+  // A percentage or an em would parse to a number meaning something else.
+  if (!/^\d*\.?\d+(px)?$/.test((value ?? "").trim())) return 0;
+  return Number.parseFloat(value ?? "");
 }
 
 /**

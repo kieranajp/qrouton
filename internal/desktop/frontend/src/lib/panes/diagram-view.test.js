@@ -104,6 +104,16 @@ test("a drag at the fitted default has nothing to move", () => {
   }
 });
 
+test("a delta that states nothing leaves the pan where it was", () => {
+  const content = { width: 1000, height: 500 };
+  for (const by of [{ x: Number.NaN, y: 0 }, { x: 0, y: Number.NaN }]) {
+    assert.deepEqual(panBy({ tx: -100, ty: -50, button: 0 }, by, box, content), {
+      tx: -100,
+      ty: -50,
+    });
+  }
+});
+
 test("a drag on any button but the primary one is not a pan", () => {
   const content = { width: 1000, height: 500 };
   for (const button of [1, 2, -1]) {

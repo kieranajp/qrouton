@@ -65,6 +65,16 @@ test("a size that states nothing usable falls back rather than drawing at it", (
   }
 });
 
+test("a size given in anything but pixels is not a pixel count", () => {
+  for (const width of ["100%", "12em", "3pt", "1e3"]) {
+    assert.deepEqual(emittedSize(svg({ width, height: width, viewBox: "0 0 200 100" })), {
+      width: 130,
+      height: 65,
+    });
+  }
+  assert.deepEqual(emittedSize(svg({ width: "180px", height: "90px" })), { width: 180, height: 90 });
+});
+
 test("nothing readable leaves the size to the browser", () => {
   assert.equal(emittedSize(svg({})), null);
   assert.equal(emittedSize(null), null);

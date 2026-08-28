@@ -6,9 +6,7 @@ const CONTROLS = "diagram-controls";
 const LEVEL = "diagram-level";
 const STEPPING = "stepping";
 
-// 100% is the size the renderer emitted, so a fitted wide diagram opens below
-// it and says so; the ceiling is far enough past d2's own output that the
-// smallest label on a heavily shrunk diagram is legible.
+// Multiples of the size the renderer emitted, which is what the readout says.
 const CEILING = 8;
 const STEP = Math.SQRT2;
 const WHEEL_K = 0.0015;
@@ -81,15 +79,15 @@ export function stepScale(scale, direction, base) {
 
 /**
  * Where a drag moves the view, clamped so neither edge of the diagram comes
- * inside the stage. Only the primary button drags, and a drag with nothing to
- * pan moves nothing.
+ * inside the stage.
  * @param {{tx: number, ty: number, button: number}} grab
  * @param {{x: number, y: number}} by
  * @param {{width: number, height: number}} box
  * @param {{width: number, height: number}} content
  */
 export function panBy(grab, by, box, content) {
-  if (grab.button !== 0) return { tx: grab.tx, ty: grab.ty };
+  const held = { tx: grab.tx, ty: grab.ty };
+  if (grab.button !== 0 || !Number.isFinite(by.x) || !Number.isFinite(by.y)) return held;
   return {
     tx: clampTranslate(grab.tx + by.x, box.width, content.width),
     ty: clampTranslate(grab.ty + by.y, box.height, content.height),
@@ -106,6 +104,7 @@ export function panBy(grab, by, box, content) {
  * @param {{width: number, height: number}} emitted
  */
 export function attach(block, svg, emitted) {
+  detach(block);
   const doc = block.ownerDocument;
   const view = doc.defaultView;
   const stage = doc.createElement("div");
@@ -133,18 +132,16 @@ export function attach(block, svg, emitted) {
   });
 
   const render = () => {
+    // Read before the write: the other way round forces a layout flush a frame.
+    const reach = box();
     const shown = content();
     svg.style.transform = `translate(${state.tx}px, ${state.ty}px) scale(${scale()})`;
-    const reach = box();
     const overflows = shown.width > reach.width + 0.5 || shown.height > reach.height + 0.5;
     stage.dataset.pannable = overflows ? "true" : "false";
-    // A zoomed diagram shows the way back without being hovered.
     stage.dataset.zoomed = state.multiplier > 1.0001 ? "true" : "false";
     readout.textContent = `${Math.round(scale() * 100)}%`;
   };
 
-  // A pane resize keeps the reader's level of detail and moves the scale the
-  // fit is measured from underneath it.
   const measure = () => {
     state.base = fitScale(emitted, stage.clientWidth);
     const drawn = scale();
@@ -156,41 +153,46 @@ export function attach(block, svg, emitted) {
 
   const paint = latestPerFrame(render);
 
-  const move = (/** @type {{x: number, y: number}} */ at, /** @type {number} */ next) => {
+  const zoomTo = (/** @type {{x: number, y: number}} */ at, /** @type {number} */ next) => {
     const moved = zoomAt({ scale: scale(), tx: state.tx, ty: state.ty }, at, next);
     state.multiplier = moved.scale / state.base;
     state.tx = clampTranslate(moved.tx, stage.clientWidth, emitted.width * moved.scale);
     state.ty = clampTranslate(moved.ty, stage.clientHeight, emitted.height * moved.scale);
   };
 
-  /** @type {{x: number, y: number, moved: number} | null} */
+  /** @type {{id: number, x: number, y: number, moved: number} | null} */
   let grab = null;
   let dragged = false;
 
   const down = (/** @type {PointerEvent} */ event) => {
-    if (event.button !== 0) return;
+    dragged = false;
+    if (event.button !== 0 || grab) return;
     if (controls.contains(/** @type {Node} */ (event.target))) return;
     settle();
     // Otherwise the browser drags the SVG content itself.
     event.preventDefault();
-    grab = { x: event.clientX, y: event.clientY, moved: 0 };
-    dragged = false;
+    grab = { id: event.pointerId, x: event.clientX, y: event.clientY, moved: 0 };
     stage.setPointerCapture(event.pointerId);
-    stage.dataset.dragging = "true";
+    if (stage.dataset.pannable === "true") stage.dataset.dragging = "true";
   };
 
   const drag = (/** @type {PointerEvent} */ event) => {
-    if (!grab) return;
+    if (grab?.id !== event.pointerId) return;
     const by = { x: event.clientX - grab.x, y: event.clientY - grab.y };
     const panned = panBy({ tx: state.tx, ty: state.ty, button: 0 }, by, box(), content());
     state.tx = panned.tx;
     state.ty = panned.ty;
-    grab = { x: event.clientX, y: event.clientY, moved: grab.moved + Math.abs(by.x) + Math.abs(by.y) };
+    grab = {
+      id: grab.id,
+      x: event.clientX,
+      y: event.clientY,
+      moved: grab.moved + Math.abs(by.x) + Math.abs(by.y),
+    };
     paint.schedule(0);
   };
 
   const release = (/** @type {PointerEvent} */ event) => {
-    if (!grab) return;
+    if (grab?.id !== event.pointerId) return;
     // A cancelled drag is followed by no click, so nothing is owed one.
     dragged = event.type === "pointerup" && grab.moved > DRAG_SLOP;
     grab = null;
@@ -200,14 +202,13 @@ export function attach(block, svg, emitted) {
 
   // A drag that ends over a diagram must not reach the pane's link handler.
   const clicked = (/** @type {MouseEvent} */ event) => {
-    if (controls.contains(/** @type {Node} */ (event.target))) return;
-    if (!dragged) return;
+    const swallow = dragged;
     dragged = false;
+    if (!swallow || controls.contains(/** @type {Node} */ (event.target))) return;
     event.stopPropagation();
     event.preventDefault();
   };
 
-  // A wheel event states its delta in whatever unit the device reports in.
   const travel = (/** @type {WheelEvent} */ event) => {
     if (event.deltaMode === 1) return event.deltaY * LINE_DELTA;
     if (event.deltaMode === 2) return event.deltaY * stage.clientHeight;
@@ -221,7 +222,7 @@ export function attach(block, svg, emitted) {
     event.preventDefault();
     settle();
     const bounds = stage.getBoundingClientRect();
-    move(
+    zoomTo(
       { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
       clampScale(scale() * Math.exp(-travel(event) * WHEEL_K), state.base),
     );
@@ -236,7 +237,6 @@ export function attach(block, svg, emitted) {
   };
 
   let timer = 0;
-  // A discrete step is worth watching go by; a wheel or a drag must not lag.
   const stepping = () => {
     stage.classList.add(STEPPING);
     view?.clearTimeout(timer);
@@ -250,25 +250,25 @@ export function attach(block, svg, emitted) {
   const step = (/** @type {number} */ direction) => {
     const reach = box();
     stepping();
-    move({ x: reach.width / 2, y: reach.height / 2 }, stepScale(scale(), direction, state.base));
+    zoomTo({ x: reach.width / 2, y: reach.height / 2 }, stepScale(scale(), direction, state.base));
     render();
   };
 
-  const stepped = (/** @type {string} */ label, /** @type {string} */ name, /** @type {() => void} */ run) => {
-    const control = doc.createElement("button");
-    control.type = "button";
-    control.tabIndex = -1;
-    control.textContent = label;
-    control.setAttribute("aria-label", name);
-    control.addEventListener("click", run);
-    return control;
+  const control = (/** @type {string} */ label, /** @type {string} */ name, /** @type {() => void} */ run) => {
+    const pressed = doc.createElement("button");
+    pressed.type = "button";
+    pressed.tabIndex = -1;
+    pressed.textContent = label;
+    pressed.setAttribute("aria-label", name);
+    pressed.addEventListener("click", run);
+    return pressed;
   };
 
   controls.append(
-    stepped("\u2212", "Zoom out", () => step(-1)),
+    control("\u2212", "Zoom out", () => step(-1)),
     readout,
-    stepped("+", "Zoom in", () => step(1)),
-    stepped("Fit", "Fit the whole diagram", () => (stepping(), fit())),
+    control("+", "Zoom in", () => step(1)),
+    control("Fit", "Fit the whole diagram", () => (stepping(), fit())),
   );
   stage.append(controls);
 
