@@ -106,6 +106,10 @@
     margin: 0;
   }
 
+  h2 {
+    display: flex;
+  }
+
   ul {
     list-style: none;
     padding: 0;

@@ -53,7 +53,12 @@ test("selected activity is honest about hierarchy, capabilities, and recent reco
     }),
   );
   expect(await activity.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("solid");
-  await expect(activity).toContainText("Parent relationships and outcomes unavailable.");
+  const dividerGap = (selector) =>
+    page.locator(selector).evaluate((element) =>
+      element.querySelector(".caps").getBoundingClientRect().top - element.getBoundingClientRect().top
+    );
+  expect(await dividerGap(".activity")).toBeCloseTo(await dividerGap(".repos"), 1);
+  await expect(activity).not.toContainText("Parent relationships and outcomes unavailable.");
   await expect(activity).toContainText("Test Verifier");
   await expect(activity).toContainText("Finished");
 
@@ -80,7 +85,8 @@ test("provider coverage and missing capabilities are textual", async ({ page }) 
   );
   await expect(activity).toContainText("Orchestrator");
   await expect(activity).toContainText("Codex");
-  await expect(activity).toContainText("Attention, parent relationships, and outcomes unavailable.");
+  await expect(activity).toContainText("Attention unavailable.");
+  await expect(activity).not.toContainText("parent relationships and outcomes");
   await expect(activity).not.toContainText("Codex provides root activity only.");
 
   await page.evaluate(() => window.sessionRail.rootOnly("opencode"));
@@ -111,8 +117,8 @@ test("the session list and selected detail scroll independently", async ({ page 
   expect((await dimensions(sessions)).scrollHeight).toBeGreaterThan((await dimensions(sessions)).clientHeight);
   expect((await dimensions(detail)).scrollHeight).toBeGreaterThan((await dimensions(detail)).clientHeight);
   const activityRatio = (await dimensions(activity)).height / (await dimensions(detail)).height;
-  expect(activityRatio).toBeGreaterThanOrEqual(0.59);
-  expect(activityRatio).toBeLessThanOrEqual(0.61);
+  expect(activityRatio).toBeGreaterThanOrEqual(0.29);
+  expect(activityRatio).toBeLessThanOrEqual(0.31);
   expect((await dimensions(activity)).scrollHeight).toBeGreaterThan((await dimensions(activity)).clientHeight);
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await dimensions(sessions)).scrollTop).toBeGreaterThan(0);

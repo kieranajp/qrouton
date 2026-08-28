@@ -4,7 +4,6 @@
   import CapsLabel from "./lib/core/CapsLabel.svelte";
   import Chip from "./lib/core/Chip.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
-  import StatusDot from "./lib/core/StatusDot.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
@@ -51,14 +50,6 @@
     surfaces,
   } from "./lib/docked.svelte.js";
   import { Events } from "./lib/wails.js";
-
-  /** @type {Record<string, {label: string, tone: 'waiting'|'running'|'idle', fill: string}>} */
-  const ACTIVITY = {
-    waiting: { label: "Waiting for you", tone: "waiting", fill: "var(--state-waiting)" },
-    working: { label: "Working", tone: "running", fill: "var(--state-running)" },
-    // Idle has no state colour, because idle is not a state worth a hue.
-    idle: { label: "Idle", tone: "idle", fill: "var(--ctp-surface-2)" },
-  };
 
   const session = chrome();
   let fields = $derived(session.fields);
@@ -135,7 +126,6 @@
     ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
   ]);
 
-  let activity = $derived(ACTIVITY[fields.activity] ?? ACTIVITY.idle);
   let latest = $derived(
     fields.documents.length
       ? {
@@ -235,12 +225,9 @@
 
     <div class="agent">
       <PaneHeader>
-        <StatusDot state={activity.tone} />
         <CapsLabel>Agent</CapsLabel>
         <Chip tone={fields.mode === "RPI" ? "guided" : "assistant"} selected>{fields.mode}</Chip>
         {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
-        <span class="badge" class:quiet={fields.activity === "idle"} style:--tone={activity.fill}
-          >{activity.label}</span>
         <LatestDocument
           {latest}
           count={fields.documents.length}
@@ -370,18 +357,6 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-  }
-
-  .badge {
-    font: var(--machine-bold);
-    font-size: 10.5px;
-    color: var(--text-on-accent);
-    background: var(--tone);
-    padding: 2px 8px;
-  }
-
-  .badge.quiet {
-    color: var(--text-secondary);
   }
 
   /* A zero-size point for the menu to resolve its own position against. */

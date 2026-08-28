@@ -56,7 +56,7 @@ test("unknown summary, role, state, provider, and type stay explicit", () => {
 test("provider capability copy distinguishes child-aware and missing integrations", () => {
   assert.equal(
     capabilityNote({ provider: "codex", children_known: true }),
-    "Attention, parent relationships, and outcomes unavailable.",
+    "Attention unavailable.",
   );
   assert.equal(capabilityNote({}), "Provider unknown · live activity unavailable");
   assert.equal(
@@ -67,7 +67,7 @@ test("provider capability copy distinguishes child-aware and missing integration
       parents_known: false,
       outcomes_known: false,
     }),
-    "Parent relationships and outcomes unavailable.",
+    "",
   );
 });
 

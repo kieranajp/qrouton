@@ -131,8 +131,6 @@ export function capabilityNote(panel = {}) {
   const unavailable = [];
   if (!panel.attention_known) unavailable.push("attention");
   if (!panel.children_known) unavailable.push("delegated agents");
-  if (!panel.parents_known) unavailable.push("parent relationships");
-  if (!panel.outcomes_known) unavailable.push("outcomes");
   if (!unavailable.length) return "";
   const prefix = panel.children_known
     ? ""

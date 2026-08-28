@@ -239,7 +239,7 @@
   }
 
   .activity-scroll {
-    flex: 0 0 60%;
+    flex: 0 0 30%;
     min-height: 0;
     overflow: hidden auto;
   }
