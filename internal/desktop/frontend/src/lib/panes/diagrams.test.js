@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { naturalSize, place } from "./diagrams.js";
+import { apply, naturalSize, place } from "./diagrams.js";
 
 const block = (line) => ({ dataset: { line: String(line) } });
 
@@ -36,4 +36,51 @@ test("a viewBox that names no size is left to the browser", () => {
   for (const box of [null, "", "0 0 1642", "0 0 a b", "0 0 0 108"]) {
     assert.equal(naturalSize(box), null, `viewBox ${JSON.stringify(box)}`);
   }
+});
+
+// Enough of a <pre> for apply to settle it; the drawn geometry is a browser
+// question and is asserted against a real one.
+const fence = () => {
+  const classes = new Set();
+  /** @type {{className: string, textContent: string}[]} */
+  const children = [];
+  return {
+    children,
+    classList: {
+      add: (/** @type {string[]} */ ...names) => names.forEach((name) => classes.add(name)),
+      remove: (/** @type {string[]} */ ...names) => names.forEach((name) => classes.delete(name)),
+      contains: (/** @type {string} */ name) => classes.has(name),
+    },
+    dataset: { line: "3" },
+    ownerDocument: { createElement: () => ({ className: "", textContent: "" }) },
+    append: (/** @type {any} */ child) => children.push(child),
+    querySelector: (/** @type {string} */ selector) =>
+      children.find((child) => `.${child.className}` === selector) ?? null,
+  };
+};
+
+const failed = (block) => /** @type {any} */ ({ querySelectorAll: () => [block] });
+
+test("a fence that failed states its reason as text, once", () => {
+  const block = fence();
+  const container = failed(block);
+
+  apply(container, [{ line: 3, error: "5:1: <b> is not a shape" }]);
+  apply(container, [{ line: 3, error: "5:1: <b> is not a shape" }]);
+
+  assert.equal(block.children.length, 1);
+  assert.equal(block.children[0].textContent, "5:1: <b> is not a shape");
+  assert.equal(block.classList.contains("diagram-failed"), true);
+  assert.equal(block.classList.contains("diagram-pending"), false);
+});
+
+test("a reply arriving after the failure does not put the fence back to waiting", () => {
+  const block = fence();
+  const container = failed(block);
+
+  apply(container, [{ line: 3, error: "diagram took too long to lay out" }]);
+  apply(container, [{ line: 3 }]);
+
+  assert.equal(block.classList.contains("diagram-pending"), false);
+  assert.equal(block.classList.contains("diagram-failed"), true);
 });

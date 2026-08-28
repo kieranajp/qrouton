@@ -1,5 +1,7 @@
 const PENDING = "diagram-pending";
 const DRAWN = "diagram";
+const FAILED = "diagram-failed";
+const NOTE = "diagram-error";
 
 /**
  * One d2 fence as the workbench reports it: the source line it opens on, and
@@ -56,9 +58,35 @@ export function apply(container, results) {
   ];
   for (const { block, result } of place(blocks, results)) {
     if (result.svg) draw(block, result.svg);
-    else if (result.error) block.classList.remove(PENDING);
-    else block.classList.add(PENDING);
+    else if (result.error) fail(block, result.error);
+    else wait(block);
   }
+}
+
+/**
+ * The reply naming every fence can land after the event carrying one's outcome,
+ * so a block that has already settled is not put back to waiting.
+ * @param {HTMLElement} block
+ */
+function wait(block) {
+  if (block.classList.contains(DRAWN) || block.classList.contains(FAILED)) return;
+  block.classList.add(PENDING);
+}
+
+/**
+ * Says why there is no diagram, under the code that failed. The message quotes
+ * the author's own d2, so it is written as text and never as markup.
+ * @param {HTMLElement} block
+ * @param {string} message
+ */
+function fail(block, message) {
+  const stated = block.querySelector("." + NOTE);
+  const note = stated ?? block.ownerDocument.createElement("span");
+  note.className = NOTE;
+  note.textContent = message;
+  block.classList.remove(PENDING);
+  block.classList.add(FAILED);
+  if (!stated) block.append(note);
 }
 
 /**
@@ -76,7 +104,7 @@ function draw(block, svg) {
     drawn.style.width = `${size.width}px`;
     drawn.style.height = `${size.height}px`;
   }
-  block.classList.remove(PENDING);
+  block.classList.remove(PENDING, FAILED);
   block.classList.add(DRAWN);
   block.replaceChildren(...holder.childNodes);
 }

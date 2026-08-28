@@ -14,6 +14,10 @@
       #nested { height: 100px; padding: 20px 0; }
       #nested-child { height: 40px; }
       #tail { height: 200px; }
+      #prose-before, #prose-after { height: 20px; font: 12px/20px monospace; }
+      #diagram { padding: 0; font: 12px/16px monospace; }
+      #diagram svg { vertical-align: top; }
+      #foot { height: 200px; }
     </style>
   </head>
   <body>
@@ -28,6 +32,10 @@
             <div id="nested-child" data-line="22" data-line-end="23">A nested list item.</div>
           </div>
           <div id="tail"></div>
+          <p id="prose-before" data-line="30" data-line-end="30">Before the diagram.</p>
+          <pre id="diagram" data-line="32" data-line-end="35"><code>a -&gt; b</code></pre>
+          <p id="prose-after" data-line="37" data-line-end="37">After the diagram.</p>
+          <div id="foot"></div>
         </div>
       </div>
     </div>

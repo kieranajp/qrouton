@@ -149,7 +149,10 @@ func (w *worker) one(j job) Result {
 		// abandoned goroutine keeps measuring against this ruler, so it must
 		// never be handed to another diagram.
 		w.ruler = nil
-		return Result{Line: j.fence.Line, Err: fmt.Errorf("%w: %w", ErrTimedOut, ctx.Err())}
+		return Result{Line: j.fence.Line, Err: phrased{
+			message: timedOutError,
+			err:     fmt.Errorf("%w: %w", ErrTimedOut, ctx.Err()),
+		}}
 	}
 }
 
@@ -212,16 +215,18 @@ func relocate(err error, line int) error {
 		at := fmt.Sprintf("%d:%d", one.Range.Start.Line+line+1, one.Range.Start.Column+1)
 		messages = append(messages, at+": "+strings.TrimPrefix(one.Message, one.Range.String()+": "))
 	}
-	return located{message: strings.Join(messages, "\n"), err: err}
+	return phrased{message: strings.Join(messages, "\n"), err: err}
 }
 
-type located struct {
+// phrased carries the line a pane prints over a chain errors.Is still reads:
+// what the document says is not what a Go caller matches on.
+type phrased struct {
 	message string
 	err     error
 }
 
-func (l located) Error() string { return l.message }
-func (l located) Unwrap() error { return l.err }
+func (p phrased) Error() string { return p.message }
+func (p phrased) Unwrap() error { return p.err }
 
 func cacheKey(source string) string {
 	sum := sha256.Sum256([]byte(paletteRevision + "\x00" + source))

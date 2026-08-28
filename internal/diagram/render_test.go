@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -211,6 +212,34 @@ func TestARenderThatOverrunsItsBudgetFails(t *testing.T) {
 	}
 	if !errors.Is(out.Err, context.DeadlineExceeded) {
 		t.Errorf("err = %v, want it to carry the deadline", out.Err)
+	}
+	// The pane prints this beside the fence, where Go's own phrasing for a
+	// deadline is noise the author cannot act on.
+	if got := out.Err.Error(); got != timedOutError {
+		t.Errorf("the printed reason is %q, want %q", got, timedOutError)
+	}
+	if out.SVG != "" {
+		t.Error("a diagram that ran out of time still carries SVG")
+	}
+}
+
+// The goroutine a timeout abandons keeps measuring against the ruler it was
+// handed, so the diagram after it has to be given a fresh one.
+func TestATimeoutDoesNotPoisonTheNextDiagram(t *testing.T) {
+	w := &worker{renders: &atomic.Int64{}, cache: newCache(cacheEntries), timeout: time.Nanosecond}
+
+	first := w.one(job{ctx: context.Background(), fence: Fence{Line: 1, Source: "a -> b\n"}})
+	if !errors.Is(first.Err, ErrTimedOut) {
+		t.Fatalf("err = %v, want %v", first.Err, ErrTimedOut)
+	}
+	if w.ruler != nil {
+		t.Error("the abandoned goroutine's ruler was kept")
+	}
+
+	w.timeout = DefaultTimeout
+	second := w.one(job{ctx: context.Background(), fence: Fence{Line: 2, Source: "c -> d\n"}})
+	if second.Err != nil || !strings.HasPrefix(second.SVG, "<svg") {
+		t.Fatalf("the diagram after a timeout failed: %v", second.Err)
 	}
 }
 
