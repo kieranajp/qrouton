@@ -112,7 +112,11 @@
       <span>{heading}</span>
     </div>
   {/if}
-  <div class="markdown" use:links use:viewport={{ id, active, scrollRoot }}>
+  <div
+    class="markdown"
+    data-document-source={doc.source}
+    use:links
+    use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
 </article>

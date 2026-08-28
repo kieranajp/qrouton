@@ -87,6 +87,36 @@ test("a link is opened or copied rather than selected", async ({ page }) => {
   expect(await page.evaluate(() => window.openedURL)).toBe("https://example.com/doc");
 });
 
+// A relative href resolves to an absolute wails.localhost URL by the time the
+// DOM reports it; the menu must read the authored attribute instead, or a
+// document link goes to the OS browser rather than the pane beside it.
+test("a relative document link opens in the pane, resolved against its document", async ({
+  page,
+}) => {
+  await page.evaluate(() => {
+    window.calls = [];
+    window.wailsCall = (name, ...args) => window.calls.push([name, ...args]);
+  });
+  await page.locator("#doc-link").click({ button: "right" });
+  expect(await labels(page)).toEqual(["Open Link", "Copy Link"]);
+  await item(page, "Open Link").click();
+  await expect
+    .poll(() => page.evaluate(() => window.calls))
+    .toEqual([
+      ["github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument", "notes/child.md"],
+    ]);
+  expect(await page.evaluate(() => window.openedURL)).toBeUndefined();
+});
+
+test("a relative link outside any document offers only a copy of its authored href", async ({
+  page,
+}) => {
+  await page.locator("#orphan-link").click({ button: "right" });
+  expect(await labels(page)).toEqual(["Copy Link"]);
+  await item(page, "Copy Link").click();
+  expect(await page.evaluate(() => window.clipboardText)).toBe("child.md");
+});
+
 test("selected prose offers a copy, and unselected prose offers nothing", async ({ page }) => {
   await page.locator("#prose").click({ button: "right" });
   await expect(menu(page)).toHaveCount(0);

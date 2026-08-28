@@ -4,7 +4,9 @@
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
+  import { openDocument } from "../docked.svelte.js";
   import { clipboardText, copyText, openURL } from "../wails.js";
+  import { documentPath, linkKind } from "../panes/markdown.js";
   import { terminalAt } from "../xterm.js";
 
   /** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */
@@ -42,7 +44,17 @@
       };
     }
     const link = target?.closest?.("a[href]");
-    if (link) return { kind: "link", href: link.href };
+    // getAttribute, not .href: the latter is DOM-resolved to an absolute URL,
+    // which turns a relative document link into something linkKind reads as
+    // pointing at the webview's own origin.
+    if (link) {
+      const href = link.getAttribute("href");
+      const source = link.closest("[data-document-source]")?.getAttribute("data-document-source");
+      const kind = linkKind(href);
+      // A relative link is only followable from a pane that names the document
+      // it is relative to.
+      return { kind: "link", href, source, linkKind: kind === "document" && !source ? "none" : kind };
+    }
     return { kind: "text", selection: String(window.getSelection() ?? "") };
   }
 
@@ -99,7 +111,8 @@
         else at.field.select();
         break;
       case "open":
-        openURL(at.href);
+        if (at.linkKind === "document") openDocument(documentPath(at.href, at.source)).catch(() => {});
+        else openURL(at.href);
         break;
       case "copyLink":
         await copyText(at.href);
