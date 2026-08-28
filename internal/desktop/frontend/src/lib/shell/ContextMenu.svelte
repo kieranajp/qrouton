@@ -44,15 +44,12 @@
       };
     }
     const link = target?.closest?.("a[href]");
-    // getAttribute, not .href: the latter is DOM-resolved to an absolute URL,
-    // which turns a relative document link into something linkKind reads as
-    // pointing at the webview's own origin.
+    // The raw attribute, deliberately, not the DOM-resolved absolute URL, so a relative link stays relative.
     if (link) {
       const href = link.getAttribute("href");
       const source = link.closest("[data-document-source]")?.getAttribute("data-document-source");
       const kind = linkKind(href);
-      // A relative link is only followable from a pane that names the document
-      // it is relative to.
+      // A relative link with no known source pane is reported unfollowable.
       return { kind: "link", href, source, linkKind: kind === "document" && !source ? "none" : kind };
     }
     return { kind: "text", selection: String(window.getSelection() ?? "") };

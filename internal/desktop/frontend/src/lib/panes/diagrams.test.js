@@ -84,3 +84,14 @@ test("a reply arriving after the failure does not put the fence back to waiting"
   assert.equal(block.classList.contains("diagram-pending"), false);
   assert.equal(block.classList.contains("diagram-failed"), true);
 });
+
+test("a fence that had already drawn loses that class when it later fails", () => {
+  const block = fence();
+  block.classList.add("diagram");
+  const container = failed(block);
+
+  apply(container, [{ line: 3, error: "5:1: <b> is not a shape" }]);
+
+  assert.equal(block.classList.contains("diagram"), false);
+  assert.equal(block.classList.contains("diagram-failed"), true);
+});

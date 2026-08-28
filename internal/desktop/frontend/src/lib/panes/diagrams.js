@@ -4,16 +4,11 @@ const FAILED = "diagram-failed";
 const NOTE = "diagram-error";
 
 /**
- * One d2 fence as the workbench reports it: the source line it opens on, and
- * either the rendered SVG, the reason there is none, or neither while it is
- * still being laid out.
  * @typedef {{line?: number, svg?: string, error?: string}} Rendered
  */
 
 /**
- * Pairs each result with the block whose source line it names. A result naming
- * a line no block carries is dropped, so a fence the page never stamped stays
- * code.
+ * Pairs each result with the block whose line it names; a result naming no block is dropped.
  * @param {{dataset?: DOMStringMap}[]} blocks In document order.
  * @param {Rendered[]} results
  */
@@ -32,9 +27,7 @@ export function place(blocks, results) {
 }
 
 /**
- * The size a d2 diagram draws at. Its outer element carries a viewBox and no
- * width, which lays it out at whatever the measure allows and takes the labels
- * down with it; at the viewBox's own size the block scrolls instead.
+ * Parses an SVG viewBox's own width and height.
  * @param {string | null | undefined} viewBox
  * @returns {{width: number, height: number} | null}
  */
@@ -47,8 +40,7 @@ export function naturalSize(viewBox) {
 
 /**
  * Draws what the workbench has rendered and marks what it is still laying out.
- * The <pre> survives the swap: it carries the gutter number, the marked
- * styling, and the line the viewport measures by.
+ * The <pre> element itself is kept, never replaced: other code holds onto that exact instance.
  * @param {HTMLElement} container
  * @param {Rendered[]} results
  */
@@ -64,8 +56,7 @@ export function apply(container, results) {
 }
 
 /**
- * The reply naming every fence can land after the event carrying one's outcome,
- * so a block that has already settled is not put back to waiting.
+ * Marks a block pending, unless it has already settled.
  * @param {HTMLElement} block
  */
 function wait(block) {
@@ -74,8 +65,7 @@ function wait(block) {
 }
 
 /**
- * Says why there is no diagram, under the code that failed. The message quotes
- * the author's own d2, so it is written as text and never as markup.
+ * States the failure reason under the block, as text — never as markup.
  * @param {HTMLElement} block
  * @param {string} message
  */
@@ -84,14 +74,13 @@ function fail(block, message) {
   const note = stated ?? block.ownerDocument.createElement("span");
   note.className = NOTE;
   note.textContent = message;
-  block.classList.remove(PENDING);
+  block.classList.remove(PENDING, DRAWN);
   block.classList.add(FAILED);
   if (!stated) block.append(note);
 }
 
 /**
- * Go produced this markup and vetted it, and it never touches the markdown
- * pipeline, so it is parsed as html rather than escaped as text.
+ * Parses the SVG as markup rather than escaping it as text: it arrives pre-vetted.
  * @param {HTMLElement} block
  * @param {string} svg
  */

@@ -207,16 +207,11 @@
   overflow-x: auto;
 }
 
-/* A fence the workbench is still laying out. Its code stays, dimmed, so the
-   diagram reads as an arrival rather than appearing out of an empty block. */
 .markdown pre.diagram-pending {
   opacity: 0.55;
 }
 
-/* A drawn diagram is not text: left on the baseline of a line box it collects a
-   descender's worth of gap under it. Its width is its viewBox's, not the
-   measure's — squeezed into 78ch a wide diagram takes its labels down with it,
-   so the block scrolls instead, as pre already does. */
+/* line-height: 0 avoids a baseline descender gap; the diagram draws at its own viewBox size, so it scrolls rather than shrinks. */
 .markdown pre.diagram {
   line-height: 0;
 }
@@ -225,9 +220,6 @@
   vertical-align: top;
 }
 
-/* A fence the workbench refused or could not lay out. The code stays as code,
-   with the reason stated under it: an unchanged block reads as a document that
-   forgot to render, not as one that could not. */
 .markdown pre.diagram-failed {
   border-color: color-mix(in srgb, var(--state-failed) 40%, var(--border-subtle));
 }
