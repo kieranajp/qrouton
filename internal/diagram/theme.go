@@ -6,23 +6,16 @@ import (
 	"github.com/kieranajp/qrouton/internal/theme"
 )
 
-// paletteRevision is part of every cache key, so editing the overrides below
-// invalidates rendered SVG rather than leaving the old colours on screen.
+// paletteRevision is part of every cache key: editing the overrides invalidates
+// rendered SVG rather than leaving the old colours on screen.
 const paletteRevision = "1"
 
 // neutralDefaultTheme is d2 theme 0, the only stock theme an override can
-// repaint completely: every other one carries SpecialRules — forced caps-lock
-// labels, container dots — that no colour can undo.
+// repaint completely: the others force caps-lock labels and container dots.
 const neutralDefaultTheme = int64(0)
 
 // overrides repaints d2 in Catppuccin Macchiato. The neutral ramp runs ink to
-// ground, so on a dark palette N1 is the lightest of the seven and N7 the
-// darkest; reversed, the diagram looks legible and has its ink inverted.
-//
-// B1 draws every border and connection, B2 the same when dashed, B3 to B6 fill
-// containers outwards from the deepest, and B6 also fills a top-level leaf. AA
-// and AB are the data and flow shape families; N4, N5 and N7 the diamonds,
-// queues and clouds, N7 catching anything unmatched.
+// ground, so N1 is the lightest of the seven here and N7 the darkest.
 func overrides() *d2target.ThemeOverrides {
 	return &d2target.ThemeOverrides{
 		N1: ptr(theme.Text),

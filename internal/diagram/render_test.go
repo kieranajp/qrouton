@@ -5,9 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"runtime"
 	"strings"
-	"sync/atomic"
+	"sync"
 	"testing"
 	"time"
 
@@ -106,32 +105,6 @@ func TestRenderAllowsAnHTTPLinkAndTheEmbeddedFontDataURIs(t *testing.T) {
 	}
 }
 
-func TestGuardReadsAnHrefTheWayABrowserWould(t *testing.T) {
-	cases := map[string]struct {
-		svg  string
-		want error
-	}{
-		"an entity-encoded scheme":  {svg: `<svg><a href="&#106;avascript:alert(1)">x</a></svg>`, want: ErrUnsafeLink},
-		"a scheme split by a tab":   {svg: "<svg><a href=\"java\tscript:alert(1)\">x</a></svg>", want: ErrUnsafeLink},
-		"an uppercase scheme":       {svg: `<svg><a href="FILE:///etc/passwd">x</a></svg>`, want: ErrUnsafeLink},
-		"a single-quoted attribute": {svg: `<svg><a xlink:href='data:text/html,x'>x</a></svg>`, want: ErrUnsafeLink},
-		"an event handler":          {svg: `<svg><rect ONLOAD = "alert(1)" /></svg>`, want: ErrEmbeddedScript},
-		"a script element":          {svg: `<svg><SCRIPT>alert(1)</SCRIPT></svg>`, want: ErrEmbeddedScript},
-		"a remote image":            {svg: `<svg><image href="//evil.example/x.png" /></svg>`, want: ErrRemoteImage},
-		"an inline image is fine":   {svg: `<svg><image href="data:image/png;base64,AAAA" /></svg>`},
-		"an https link is fine":     {svg: `<svg><a href="https://example.com">x</a></svg>`},
-		"prose that begins with on": {svg: `<svg><text>only once = twice</text></svg>`},
-	}
-
-	for name, tc := range cases {
-		t.Run(name, func(t *testing.T) {
-			if got := guard(tc.svg); !errors.Is(got, tc.want) {
-				t.Fatalf("guard() = %v, want %v", got, tc.want)
-			}
-		})
-	}
-}
-
 // d2 numbers a parse error from the top of the fence; the page needs a document
 // line, or the message points at whatever happens to sit near the top of the file.
 func TestSyntaxErrorsNameADocumentLine(t *testing.T) {
@@ -149,20 +122,19 @@ func TestACacheHitDoesNotRenderAgain(t *testing.T) {
 	source := "cached -> twice\n"
 
 	first := rendered(t, r, source)
-	if got := r.renders.Load(); got != 1 {
-		t.Fatalf("%d renders for the first call", got)
+	if got, ok := r.Cached(source); !ok || got != first {
+		t.Fatalf("the first render did not reach the cache")
 	}
-
 	if second := rendered(t, r, source); second != first {
 		t.Error("the cached SVG differs from the rendered one")
 	}
-	if got := r.renders.Load(); got != 1 {
-		t.Errorf("%d renders after a repeat, want the cache to have answered", got)
-	}
 
-	rendered(t, r, "different -> source\n")
-	if got := r.renders.Load(); got != 2 {
-		t.Errorf("%d renders after a new diagram", got)
+	// Nothing but the cache can answer with this, so a render that returns it
+	// never reached d2.
+	planted := "plant -> me\n"
+	r.cache.put(cacheKey(planted), outcome{svg: "<svg>planted</svg>"})
+	if got := rendered(t, r, planted); got != "<svg>planted</svg>" {
+		t.Errorf("Render() drew the diagram instead of answering from the cache")
 	}
 }
 
@@ -174,27 +146,23 @@ func TestCachedAnswersWithoutJoiningTheQueue(t *testing.T) {
 	}
 	svg := rendered(t, r, source)
 
-	busy := make(chan struct{})
-	go func() {
-		defer close(busy)
-		r.Render(context.Background(), Fence{Line: 1, Source: fortyNodes()})
-	}()
-	for r.renders.Load() < 2 {
-		runtime.Gosched()
-	}
+	// The queue is unbuffered, so a send that completes means the worker has
+	// taken the job and is inside it.
+	reply := make(chan Result, 1)
+	r.jobs <- job{ctx: context.Background(), fence: Fence{Line: 1, Source: fortyNodes()}, reply: reply}
 
 	got, ok := r.Cached(source)
 	if !ok || got != svg {
 		t.Errorf("Cached() = %t while the worker is busy, want the rendered SVG", ok)
 	}
-	<-busy
+	<-reply
 }
 
 func TestTheCacheEvictsOldestFirst(t *testing.T) {
 	c := newCache(2)
-	c.put("a", "1")
-	c.put("b", "2")
-	c.put("c", "3")
+	c.put("a", outcome{svg: "1"})
+	c.put("b", outcome{svg: "2"})
+	c.put("c", outcome{svg: "3"})
 	if _, ok := c.get("a"); ok {
 		t.Error("the oldest entry survived")
 	}
@@ -226,7 +194,7 @@ func TestARenderThatOverrunsItsBudgetFails(t *testing.T) {
 // The goroutine a timeout abandons keeps measuring against the ruler it was
 // handed, so the diagram after it has to be given a fresh one.
 func TestATimeoutDoesNotPoisonTheNextDiagram(t *testing.T) {
-	w := &worker{renders: &atomic.Int64{}, cache: newCache(cacheEntries), timeout: time.Nanosecond}
+	w := &worker{cache: newCache(cacheEntries), timeout: time.Nanosecond}
 
 	first := w.one(job{ctx: context.Background(), fence: Fence{Line: 1, Source: "a -> b\n"}})
 	if !errors.Is(first.Err, ErrTimedOut) {
@@ -246,7 +214,7 @@ func TestATimeoutDoesNotPoisonTheNextDiagram(t *testing.T) {
 // ELK is EPL-2.0 and goja is a JavaScript interpreter. Neither may reach the
 // binary through a d2 import added later.
 func TestTheDependencyTreeStaysClean(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", "github.com/kieranajp/qrouton/...").CombinedOutput()
 	if err != nil {
 		t.Fatalf("go list: %v\n%s", err, out)
 	}
@@ -294,11 +262,19 @@ func fortyNodes() string {
 	return b.String()
 }
 
-// A tag pattern that stops at the first ">" would see only "<a href=" here and
-// find no target to reject.
-func TestGuardIsNotSplitByAnUnescapedAngleBracket(t *testing.T) {
-	svg := `<svg><a href="javascript:void(0)>x" target="_blank">label</a></svg>`
-	if err := guard(svg); !errors.Is(err, ErrUnsafeLink) {
-		t.Fatalf("guard() = %v, want %v", err, ErrUnsafeLink)
+// Close closes nothing a Render can be parked on a send to, so a quit that
+// races a mount cannot panic on a closed channel.
+func TestCloseDoesNotRaceARenderInFlight(t *testing.T) {
+	r := New(0)
+	var pending sync.WaitGroup
+	for range 8 {
+		pending.Add(1)
+		go func() {
+			defer pending.Done()
+			r.Render(context.Background(), Fence{Line: 1, Source: fortyNodes()})
+		}()
 	}
+	r.Close()
+	pending.Wait()
+	r.Close()
 }

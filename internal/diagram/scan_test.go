@@ -25,6 +25,16 @@ func TestScanFindsTopLevelFencesOnly(t *testing.T) {
 		"four spaces of indent is code, not a fence": {
 			document: "    ```d2\n    a -> b\n    ```\n",
 		},
+		"a tab of indent is code too": {
+			document: "\t```d2\n\ta -> b\n\t```\n",
+		},
+		"two spaces and a tab reach the fourth column": {
+			document: "  \t```d2\n  \ta -> b\n  \t```\n",
+		},
+		"three spaces of indent is still a fence": {
+			document: "   ```d2\n   a -> b\n   ```\n",
+			want:     []Fence{{Line: 1, EndLine: 3, Source: "a -> b"}},
+		},
 		"a fence inside a longer fence is quoted, not a diagram": {
 			document: "````markdown\n```d2\na -> b\n```\n````\n",
 		},

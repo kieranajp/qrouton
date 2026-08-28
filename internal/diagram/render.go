@@ -6,12 +6,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"html"
 	"log/slog"
-	"regexp"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/d2lang/d2/d2graph"
@@ -40,14 +37,14 @@ type Result struct {
 }
 
 // Renderer turns d2 source into inline SVG. Renders are serialised through one
-// goroutine: a textmeasure.Ruler carries mutable state and no lock, so it
-// cannot be shared, and one worker also bounds CPU when a document opens with a
-// dozen diagrams in it. The cache sits outside that goroutine so a caller can
-// read it without joining the queue.
+// goroutine: the font ruler carries mutable state and no lock.
 type Renderer struct {
-	jobs    chan job
+	jobs chan job
+	// Render selects on closing rather than on a closed jobs channel: a send
+	// case on a closed channel is ready in a select, and panics if it is chosen.
+	closing chan struct{}
 	stopped chan struct{}
-	renders atomic.Int64
+	once    sync.Once
 	cache   *cache
 }
 
@@ -62,26 +59,31 @@ func New(timeout time.Duration) *Renderer {
 	if timeout <= 0 {
 		timeout = DefaultTimeout
 	}
-	r := &Renderer{jobs: make(chan job), stopped: make(chan struct{}), cache: newCache(cacheEntries)}
+	r := &Renderer{
+		jobs:    make(chan job),
+		closing: make(chan struct{}),
+		stopped: make(chan struct{}),
+		cache:   newCache(cacheEntries),
+	}
 	go (&worker{
 		jobs:    r.jobs,
+		closing: r.closing,
 		stopped: r.stopped,
-		renders: &r.renders,
 		cache:   r.cache,
 		timeout: timeout,
 	}).run()
 	return r
 }
 
-// Render queues one fence and waits for it. Concurrent callers are served one
-// at a time, in the order the worker takes them.
+// Render queues one fence and waits for it, one caller at a time. One that
+// arrives after Close has begun is answered with context.Canceled.
 func (r *Renderer) Render(ctx context.Context, fence Fence) Result {
 	reply := make(chan Result, 1)
 	select {
 	case r.jobs <- job{ctx: ctx, fence: fence, reply: reply}:
 	case <-ctx.Done():
 		return Result{Line: fence.Line, Err: ctx.Err()}
-	case <-r.stopped:
+	case <-r.closing:
 		return Result{Line: fence.Line, Err: context.Canceled}
 	}
 	select {
@@ -93,21 +95,26 @@ func (r *Renderer) Render(ctx context.Context, fence Fence) Result {
 }
 
 // Cached answers from what has already been rendered without queueing, so a
-// caller that must return promptly can serve the hits and wait only for the
-// misses.
+// caller that must return promptly can serve the hits and wait for the misses.
 func (r *Renderer) Cached(source string) (string, bool) {
-	return r.cache.get(cacheKey(source))
+	done, ok := r.cache.get(cacheKey(source))
+	if !ok || done.err != nil {
+		return "", false
+	}
+	return done.svg, true
 }
 
+// Close stops the worker and waits for it. It may be called more than once, and
+// concurrently with Render.
 func (r *Renderer) Close() {
-	close(r.jobs)
+	r.once.Do(func() { close(r.closing) })
 	<-r.stopped
 }
 
 type worker struct {
 	jobs    <-chan job
+	closing <-chan struct{}
 	stopped chan struct{}
-	renders *atomic.Int64
 	cache   *cache
 	timeout time.Duration
 	ruler   *textmeasure.Ruler
@@ -115,15 +122,20 @@ type worker struct {
 
 func (w *worker) run() {
 	defer close(w.stopped)
-	for j := range w.jobs {
-		j.reply <- w.one(j)
+	for {
+		select {
+		case j := <-w.jobs:
+			j.reply <- w.one(j)
+		case <-w.closing:
+			return
+		}
 	}
 }
 
 func (w *worker) one(j job) Result {
 	key := cacheKey(j.fence.Source)
-	if svg, ok := w.cache.get(key); ok {
-		return Result{Line: j.fence.Line, SVG: svg}
+	if done, ok := w.cache.get(key); ok {
+		return Result{Line: j.fence.Line, SVG: done.svg, Err: done.err}
 	}
 
 	ruler, err := w.rule()
@@ -134,25 +146,27 @@ func (w *worker) one(j job) Result {
 	ctx, cancel := context.WithTimeout(d2log.With(j.ctx, silent), w.timeout)
 	defer cancel()
 
-	w.renders.Add(1)
 	done := make(chan Result, 1)
 	go func() { done <- render(ctx, ruler, j.fence) }()
 
 	select {
 	case out := <-done:
-		if out.Err == nil {
-			w.cache.put(key, out.SVG)
-		}
+		w.cache.put(key, outcome{svg: out.SVG, err: out.Err})
 		return out
 	case <-ctx.Done():
 		// Dagre never reads the context, so the deadline is enforced here. The
 		// abandoned goroutine keeps measuring against this ruler, so it must
 		// never be handed to another diagram.
 		w.ruler = nil
-		return Result{Line: j.fence.Line, Err: phrased{
+		out := Result{Line: j.fence.Line, Err: phrased{
 			message: timedOutError,
 			err:     fmt.Errorf("%w: %w", ErrTimedOut, ctx.Err()),
 		}}
+		// A caller that walked away is not a verdict on the source.
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			w.cache.put(key, outcome{err: out.Err})
+		}
+		return out
 	}
 }
 
@@ -233,28 +247,34 @@ func cacheKey(source string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// cache holds rendered SVG for the life of the process, oldest out once full.
-// Nothing else invalidates it; a palette edit bumps paletteRevision, which is
-// part of every key. The worker writes it and Cached reads it, so it locks.
+// cache holds every verdict for the life of the process, oldest out once full.
+// A palette edit bumps paletteRevision, which is part of every key.
 type cache struct {
 	mu      sync.Mutex
-	entries map[string]string
+	entries map[string]outcome
 	order   []string
 	limit   int
 }
 
-func newCache(limit int) *cache {
-	return &cache{entries: make(map[string]string, limit), limit: limit}
+// outcome is what the worker decided about one source. A refusal is as final as
+// a drawing, so it is kept too: nothing about the source will change.
+type outcome struct {
+	svg string
+	err error
 }
 
-func (c *cache) get(key string) (string, bool) {
+func newCache(limit int) *cache {
+	return &cache{entries: make(map[string]outcome, limit), limit: limit}
+}
+
+func (c *cache) get(key string) (outcome, bool) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	svg, ok := c.entries[key]
-	return svg, ok
+	done, ok := c.entries[key]
+	return done, ok
 }
 
-func (c *cache) put(key, svg string) {
+func (c *cache) put(key string, done outcome) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if _, seen := c.entries[key]; seen {
@@ -264,78 +284,6 @@ func (c *cache) put(key, svg string) {
 		delete(c.entries, c.order[0])
 		c.order = c.order[1:]
 	}
-	c.entries[key] = svg
+	c.entries[key] = done
 	c.order = append(c.order, key)
-}
-
-// The rendered SVG is swapped straight into the DOM, past rehype-sanitize, into
-// a webview with no content policy and a context menu that hands href to the
-// OS. Go is the only thing between d2's output and that, so the scan below
-// rejects on doubt rather than parsing precisely.
-var (
-	scriptTag  = regexp.MustCompile(`(?i)<\s*script\b`)
-	eventAttr  = regexp.MustCompile(`(?i)\son[a-z]+\s*=\s*["']`)
-	foreignTag = regexp.MustCompile(`(?i)<\s*foreignobject\b`)
-	imageTag   = regexp.MustCompile(`(?is)<\s*image\b[^>]*>`)
-	anchorTag  = regexp.MustCompile(`(?is)<\s*a\b[^>]*>`)
-	hrefAttr   = regexp.MustCompile(`(?is)\b(?:xlink:)?href\s*=\s*("[^"]*"|'[^']*')`)
-)
-
-func guard(svg string) error {
-	if scriptTag.MatchString(svg) || eventAttr.MatchString(svg) {
-		return ErrEmbeddedScript
-	}
-	if foreignTag.MatchString(svg) {
-		return ErrEmbeddedMarkup
-	}
-	for _, tag := range imageTag.FindAllString(svg, -1) {
-		for _, target := range targets(tag) {
-			// d2's embedded fonts are legitimate data URIs; an icon: URL is not.
-			if !strings.HasPrefix(target, dataScheme) {
-				return ErrRemoteImage
-			}
-		}
-	}
-	for _, tag := range anchorTag.FindAllString(svg, -1) {
-		for _, target := range targets(tag) {
-			if !strings.HasPrefix(target, httpScheme) && !strings.HasPrefix(target, httpsScheme) {
-				return ErrUnsafeLink
-			}
-		}
-	}
-	// The tag patterns above stop at the first ">", so a value carrying one
-	// unescaped would hide the attributes after it. This sweep reads every href
-	// in the document and cannot be split that way; the checks above run first
-	// only so their message names the construct.
-	for _, target := range targets(svg) {
-		if !strings.HasPrefix(target, dataScheme) &&
-			!strings.HasPrefix(target, httpScheme) &&
-			!strings.HasPrefix(target, httpsScheme) {
-			return ErrUnsafeLink
-		}
-	}
-	return nil
-}
-
-// targets is one tag's href values as a browser would resolve them: entities
-// decoded, whitespace and control characters dropped wherever they sit, and the
-// scheme lowercased. Anything less lets `&#106;ava&#9;script:` through.
-func targets(tag string) []string {
-	var found []string
-	for _, match := range hrefAttr.FindAllStringSubmatch(tag, -1) {
-		quoted := match[1]
-		found = append(found, normalise(quoted[1:len(quoted)-1]))
-	}
-	return found
-}
-
-func normalise(target string) string {
-	target = html.UnescapeString(target)
-	target = strings.Map(func(r rune) rune {
-		if r <= ' ' {
-			return -1
-		}
-		return r
-	}, target)
-	return strings.ToLower(target)
 }

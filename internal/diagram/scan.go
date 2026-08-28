@@ -13,11 +13,10 @@ type Fence struct {
 }
 
 // Scan finds the d2 fences in raw markdown. Only top-level ones count — under
-// four spaces of indent, outside any other open fence, and outside a
-// blockquote, whose marker stops the line looking like a fence at all. That is
-// the set whose mdast line numbers the page stamps onto its rendered blocks,
-// and both directions of error are safe: a fence found here that the page never
-// stamped is dropped, and one missed stays code.
+// four columns of indent, outside any other open fence, and outside a
+// blockquote, whose marker stops the line looking like a fence at all. Both
+// directions of error are safe: a fence the page never stamped is dropped, and
+// one missed stays code.
 func Scan(document string) []Fence {
 	lines := strings.Split(document, "\n")
 	var found []Fence
@@ -88,12 +87,21 @@ func block(lines []string, at int, open fence) (string, int) {
 	return strings.Join(source, "\n"), len(lines) - 1
 }
 
+// split measures the leading indent in columns. Counting bytes instead makes a
+// tab-indented fence top level here and an indented code block to the renderer.
 func split(line string) (int, string) {
-	indent := 0
-	for indent < len(line) && line[indent] == ' ' {
-		indent++
+	column := 0
+	for at := 0; at < len(line); at++ {
+		switch line[at] {
+		case ' ':
+			column++
+		case '\t':
+			column += tabStop - column%tabStop
+		default:
+			return column, line[at:]
+		}
 	}
-	return indent, line[indent:]
+	return column, ""
 }
 
 func run(text string, char byte) int {
