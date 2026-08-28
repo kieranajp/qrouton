@@ -3,12 +3,12 @@ package status
 import (
 	"encoding/json"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -410,16 +410,16 @@ func TestReposMeasuresEditingRepositoriesAndSkipsReferences(t *testing.T) {
 	dir := sessionDir(t, root, m)
 
 	// svc: one commit ahead of origin/main, adding one line.
-	svc := fixtureRepo(t, filepath.Join(dir, "src", "svc"))
-	writeFile(t, svc, "invoice.go", "package billing\n")
-	git(t, svc, "add", ".")
-	git(t, svc, "commit", "-m", "port")
+	svc := gittest.Worktree(t, filepath.Join(dir, "src", "svc"))
+	gittest.WriteFile(t, svc, "invoice.go", "package billing")
+	gittest.Run(t, svc, "add", ".")
+	gittest.Run(t, svc, "commit", "-m", "port")
 	// quiet: one commit ahead, changing nothing.
-	quiet := fixtureRepo(t, filepath.Join(dir, "src", "quiet"))
-	git(t, quiet, "commit", "--allow-empty", "-m", "nothing")
+	quiet := gittest.Worktree(t, filepath.Join(dir, "src", "quiet"))
+	gittest.Run(t, quiet, "commit", "--allow-empty", "-m", "nothing")
 	// docs: detached, as a reference checkout is.
-	docs := fixtureRepo(t, filepath.Join(dir, "src", "docs"))
-	git(t, docs, "checkout", "--detach")
+	docs := gittest.Worktree(t, filepath.Join(dir, "src", "docs"))
+	gittest.Run(t, docs, "checkout", "--detach")
 
 	stats := Repos(t.Context(), dir)
 	if len(stats) != 3 {
@@ -442,43 +442,11 @@ func TestReposReportsNothingWithoutABaseBranch(t *testing.T) {
 	dir := sessionDir(t, root, session.Manifest{Slug: "webhook", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{{Name: "svc", Org: "org", Role: session.RepoRoleEditing,
 			WorktreePath: "src/svc"}}})
-	fixtureRepo(t, filepath.Join(dir, "src", "svc"))
+	gittest.Worktree(t, filepath.Join(dir, "src", "svc"))
 
 	stats := Repos(t.Context(), dir)
 	if len(stats) != 1 || stats[0].Measured {
 		t.Fatalf("stats = %#v, want an unmeasured repository", stats)
-	}
-}
-
-// fixtureRepo has a base commit reachable as origin/main, as a worktree does.
-func fixtureRepo(t *testing.T, path string) string {
-	t.Helper()
-	if err := os.MkdirAll(path, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	git(t, path, "init", "-b", "main")
-	git(t, path, "config", "user.email", "test@example.com")
-	git(t, path, "config", "user.name", "test")
-	writeFile(t, path, "README.md", "base\n")
-	git(t, path, "add", ".")
-	git(t, path, "commit", "-m", "base")
-	git(t, path, "update-ref", "refs/remotes/origin/main", "HEAD")
-	return path
-}
-
-func writeFile(t *testing.T, dir, name, body string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func git(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
 

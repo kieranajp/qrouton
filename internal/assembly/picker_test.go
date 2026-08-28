@@ -9,27 +9,14 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-func makeTestOrigin(t *testing.T, name string) string {
-	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	for _, args := range [][]string{
-		{"init", "-b", "main", origin},
-		{"-C", origin, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false", "commit", "--allow-empty", "-m", "initial"},
-	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return origin
-}
-
 func testRepo(t *testing.T, name string) github.Repo {
 	t.Helper()
-	return github.Repo{Name: name, Org: "org", SSHURL: makeTestOrigin(t, name), DefaultBranch: "main"}
+	return github.Repo{Name: name, Org: "org", SSHURL: gittest.Origin(t, name), DefaultBranch: "main"}
 }
 
 func editing(repos ...github.Repo) []session.RepoSelection {
@@ -212,7 +199,7 @@ func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
-	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: makeTestOrigin(t, "repo123"), DefaultBranch: "main"}
+	repo := github.Repo{Name: "repo123", Org: "kieranajp", SSHURL: gittest.Origin(t, "repo123"), DefaultBranch: "main"}
 	dir, err := session.Create(cfg, session.CreateRequest{
 		Name: "repo123", Prefix: "feat", Mode: session.ModeAssistant, Repos: editing(repo),
 	}, nil)

@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -15,6 +14,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 )
@@ -276,21 +276,6 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 	}
 }
 
-func testOrigin(t *testing.T, name string) string {
-	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	for _, args := range [][]string{
-		{"init", "-b", "main", origin},
-		{"-C", origin, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false",
-			"commit", "--allow-empty", "-m", "initial"},
-	} {
-		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", args, err, out)
-		}
-	}
-	return origin
-}
-
 // Create is the whole of assembly from the overlay: the manifest, the worktrees,
 // and a session that boots itself. A webview has no PTY to hand over, so the
 // adoption is in process and the supervisor lands on a socket of its own.
@@ -299,7 +284,7 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	boot := newStubBoot("/bin/cat")
 	reg, _, _ := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
-	repo := github.Repo{Org: "acme", Name: "api", SSHURL: testOrigin(t, "api"), DefaultBranch: "main"}
+	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 
 	var steps []progressEvent
@@ -385,7 +370,7 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 	boot := newStubBoot("/bin/cat")
 	reg, _, _ := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
-	repo := github.Repo{Org: "acme", Name: "api", SSHURL: testOrigin(t, "api"), DefaultBranch: "main"}
+	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 	a := newAssembly(cfg, repos, reg, func(event string, payload any) {}, nil, nil)
 

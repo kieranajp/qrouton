@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 )
 
 // referenceSession is a session holding reference checkouts of the named
@@ -69,8 +70,8 @@ func TestUpgradeReposMovesAReferenceCheckoutOntoTheSessionBranch(t *testing.T) {
 	// The default branch has moved on since the pin; the take-up follows its tip,
 	// so the repo shares the base its siblings were cut from.
 	os.WriteFile(filepath.Join(origins[0], "version"), []byte("two"), 0o644)
-	run(t, origins[0], "add", ".")
-	run(t, origins[0], "commit", "-m", "advance")
+	gittest.Run(t, origins[0], "add", ".")
+	gittest.Run(t, origins[0], "commit", "-m", "advance")
 	tip := gitOutput(t, origins[0], "rev-parse", "HEAD")
 
 	if err := UpgradeRepos(cfg, m, []RepoRef{{Org: "ORG", Name: "DOCS"}}, "feat/docs", nil); err != nil {
@@ -169,8 +170,8 @@ func TestUpgradeReposRefusesACheckoutThatHasMovedOffItsPin(t *testing.T) {
 	}
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
 	os.WriteFile(filepath.Join(wt, "note"), []byte("mine"), 0o644)
-	run(t, wt, "add", ".")
-	run(t, wt, "commit", "-m", "local work")
+	gittest.Run(t, wt, "add", ".")
+	gittest.Run(t, wt, "commit", "-m", "local work")
 	local := gitOutput(t, wt, "rev-parse", "HEAD")
 
 	err = UpgradeRepos(cfg, m, refs("moved"), "feat/moved", nil)
@@ -224,7 +225,7 @@ func TestUpgradeReposTouchesNothingWhenOneOfTheBatchIsRefused(t *testing.T) {
 		t.Fatal(err)
 	}
 	bravo := filepath.Join(dir, m.Repos[1].WorktreePath)
-	run(t, bravo, "commit", "--allow-empty", "-m", "local work")
+	gittest.Run(t, bravo, "commit", "--allow-empty", "-m", "local work")
 
 	err = UpgradeRepos(cfg, m, refs("alpha", "bravo"), "feat/both", nil)
 	if !errors.Is(err, ErrReferenceMoved) {
@@ -246,8 +247,8 @@ func TestUpgradeReposCompletesATakeUpWhoseWriteNeverLanded(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(origins[0], "version"), []byte("two"), 0o644)
-	run(t, origins[0], "add", ".")
-	run(t, origins[0], "commit", "-m", "advance")
+	gittest.Run(t, origins[0], "add", ".")
+	gittest.Run(t, origins[0], "commit", "-m", "advance")
 
 	if err := UpgradeRepos(cfg, m, refs("again"), "feat/again", nil); err != nil {
 		t.Fatal(err)
@@ -334,8 +335,8 @@ func TestUpgradeReposRefusesToOverwriteUncommittedWork(t *testing.T) {
 	}
 	// The same tracked file changed on both sides, so the switch cannot keep both.
 	os.WriteFile(filepath.Join(origins[0], "version"), []byte("upstream"), 0o644)
-	run(t, origins[0], "add", ".")
-	run(t, origins[0], "commit", "-m", "advance")
+	gittest.Run(t, origins[0], "add", ".")
+	gittest.Run(t, origins[0], "commit", "-m", "advance")
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
 	if err := os.WriteFile(filepath.Join(wt, "version"), []byte("mine"), 0o644); err != nil {
 		t.Fatal(err)

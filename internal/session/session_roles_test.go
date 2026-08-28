@@ -11,21 +11,16 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
+// makeOrigin is gittest.Origin plus the commit it landed on, which the
+// pinned-reference tests assert a detached checkout sits at.
 func makeOrigin(t *testing.T, name string) (string, string) {
 	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	run(t, "", "init", "-b", "main", origin)
-	os.WriteFile(filepath.Join(origin, "version"), []byte("one"), 0o644)
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "initial")
-	out, err := exec.Command("git", "-C", origin, "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return origin, strings.TrimSpace(string(out))
+	origin := gittest.Origin(t, name, gittest.WithFile("version", "one"))
+	return origin, gittest.Head(t, origin)
 }
 
 func TestCreatePersistsSessionMode(t *testing.T) {
@@ -99,8 +94,8 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 
 	// Advance the remote, remove the worktree, and prove resume uses the recorded SHA.
 	os.WriteFile(filepath.Join(referenceOrigin, "version"), []byte("two"), 0o644)
-	run(t, referenceOrigin, "add", ".")
-	run(t, referenceOrigin, "commit", "-m", "advance")
+	gittest.Run(t, referenceOrigin, "add", ".")
+	gittest.Run(t, referenceOrigin, "commit", "-m", "advance")
 	os.RemoveAll(filepath.Join(dir, "src", "reference"))
 	if err := EnsureWorktrees(cfg, m, nil); err != nil {
 		t.Fatal(err)

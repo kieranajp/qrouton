@@ -2,19 +2,11 @@ package session
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
-)
 
-func run(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"}, args...)...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
+	"github.com/kieranajp/qrouton/internal/gittest"
+)
 
 // The one non-obvious correctness hazard (S001 / design discussion): a --mirror-style
 // +refs/*:refs/* refspec would prune session branches on the next fetch, silently breaking
@@ -24,11 +16,11 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 
 	// local "origin" with a commit on main and a doomed extra branch
 	origin := filepath.Join(tmp, "origin")
-	run(t, "", "init", "-b", "main", origin)
+	gittest.Run(t, "", "init", "-b", "main", origin)
 	os.WriteFile(filepath.Join(origin, "f"), []byte("x"), 0o644)
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "init")
-	run(t, origin, "branch", "doomed")
+	gittest.Run(t, origin, "add", ".")
+	gittest.Run(t, origin, "commit", "-m", "init")
+	gittest.Run(t, origin, "branch", "doomed")
 
 	root := filepath.Join(tmp, "root")
 	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
@@ -40,7 +32,7 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 	}
 
 	// origin deletes a branch; our prune-fetch must drop its remote ref but keep the session branch
-	run(t, origin, "branch", "-D", "doomed")
+	gittest.Run(t, origin, "branch", "-D", "doomed")
 	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
 		t.Fatal(err)
 	}
@@ -57,10 +49,10 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 func TestWorktreeRematerialisesOnExistingBranch(t *testing.T) {
 	tmp := t.TempDir()
 	origin := filepath.Join(tmp, "origin")
-	run(t, "", "init", "-b", "main", origin)
+	gittest.Run(t, "", "init", "-b", "main", origin)
 	os.WriteFile(filepath.Join(origin, "f"), []byte("x"), 0o644)
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "init")
+	gittest.Run(t, origin, "add", ".")
+	gittest.Run(t, origin, "commit", "-m", "init")
 
 	root := filepath.Join(tmp, "root")
 	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
@@ -72,8 +64,8 @@ func TestWorktreeRematerialisesOnExistingBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(wt, "work"), []byte("y"), 0o644)
-	run(t, wt, "add", ".")
-	run(t, wt, "commit", "-m", "session work")
+	gittest.Run(t, wt, "add", ".")
+	gittest.Run(t, wt, "commit", "-m", "session work")
 
 	os.RemoveAll(wt) // simulate a pruned/deleted worktree
 	if err := addWorktree(mp, wt, "feat/session", "origin/main"); err != nil {

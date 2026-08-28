@@ -14,6 +14,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/gittest"
 )
 
 func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
@@ -32,14 +33,14 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 
 	// svc: two commits, one adding a two-line file and one dropping a line.
 	svc := filepath.Join(dir, "src", "svc")
-	writeLines(t, svc, "retry.go", "package svc", "func Retry() {}")
-	run(t, svc, "add", ".")
-	run(t, svc, "commit", "-m", "add retry")
-	writeLines(t, svc, "README.md", "one", "three")
-	run(t, svc, "commit", "-am", "drop a line")
+	gittest.WriteFile(t, svc, "retry.go", "package svc", "func Retry() {}")
+	gittest.Run(t, svc, "add", ".")
+	gittest.Run(t, svc, "commit", "-m", "add retry")
+	gittest.WriteFile(t, svc, "README.md", "one", "three")
+	gittest.Run(t, svc, "commit", "-am", "drop a line")
 
 	// quiet: a commit that changes nothing.
-	run(t, filepath.Join(dir, "src", "quiet"), "commit", "--allow-empty", "-m", "nothing")
+	gittest.Run(t, filepath.Join(dir, "src", "quiet"), "commit", "--allow-empty", "-m", "nothing")
 
 	// docs is a reference checkout, detached and pinned; scribbling on it must
 	// not turn it into something with progress to report.
@@ -47,9 +48,9 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	if gitOK(dirFlag, docs, "symbolic-ref", quietFlag, headRef) {
 		t.Fatal("reference checkout is not detached")
 	}
-	writeLines(t, docs, "notes.md", "scribble")
-	run(t, docs, "add", ".")
-	run(t, docs, "commit", "-m", "scribble")
+	gittest.WriteFile(t, docs, "notes.md", "scribble")
+	gittest.Run(t, docs, "add", ".")
+	gittest.Run(t, docs, "commit", "-m", "scribble")
 
 	// level keeps the worktree exactly as it was added, at origin/main.
 
@@ -89,13 +90,13 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 		t.Fatal(err)
 	}
 	worktree := filepath.Join(dir, "src", "svc")
-	writeLines(t, worktree, "retry.go", "package svc", "func Retry() {}")
-	run(t, worktree, "add", ".")
-	run(t, worktree, "commit", "-m", "add retry")
+	gittest.WriteFile(t, worktree, "retry.go", "package svc", "func Retry() {}")
+	gittest.Run(t, worktree, "add", ".")
+	gittest.Run(t, worktree, "commit", "-m", "add retry")
 
 	upstream := strings.TrimPrefix(origin, "file://")
-	writeLines(t, upstream, "README.md", "one", "two", "three", "four")
-	run(t, upstream, "commit", "-am", "unrelated upstream work")
+	gittest.WriteFile(t, upstream, "README.md", "one", "two", "three", "four")
+	gittest.Run(t, upstream, "commit", "-am", "unrelated upstream work")
 
 	m, err := Load(dir)
 	if err != nil {
@@ -162,28 +163,19 @@ func sessionsRoot(t *testing.T) string {
 	return root
 }
 
+// localOrigin is a repository to clone a mirror from, addressed over file:// so
+// the clone is a real transfer and needs no network. Its three lines are what
+// the diff counts in these tests measure against.
+func localOrigin(t *testing.T, name string) string {
+	t.Helper()
+	return gittest.Origin(t, name,
+		gittest.WithFile("README.md", "one", "two", "three"),
+		gittest.WithMessage("base"),
+		gittest.AsFileURL())
+}
+
 func selection(t *testing.T, name string, role RepoRole) RepoSelection {
 	t.Helper()
 	return RepoSelection{Repo: github.Repo{Name: name, Org: "org", SSHURL: localOrigin(t, name),
 		DefaultBranch: "main"}, Role: role}
-}
-
-// localOrigin is a repository to clone a mirror from, addressed over file:// so
-// the clone is a real transfer and needs no network.
-func localOrigin(t *testing.T, name string) string {
-	t.Helper()
-	origin := filepath.Join(t.TempDir(), name)
-	run(t, "", "init", "-b", "main", origin)
-	writeLines(t, origin, "README.md", "one", "two", "three")
-	run(t, origin, "add", ".")
-	run(t, origin, "commit", "-m", "base")
-	return "file://" + origin
-}
-
-func writeLines(t *testing.T, dir, name string, lines ...string) {
-	t.Helper()
-	body := strings.Join(lines, "\n") + "\n"
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(body), 0o644); err != nil {
-		t.Fatal(err)
-	}
 }
