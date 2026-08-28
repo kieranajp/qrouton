@@ -17,6 +17,16 @@
       #prose-before, #prose-after { height: 20px; font: 12px/20px monospace; }
       #diagram { padding: 0; font: 12px/16px monospace; }
       #diagram svg { vertical-align: top; }
+      /* The pane's stage, as far as this fixture needs it: a clipping box the
+         pane sizes, with the diagram transformed inside it. */
+      #diagram .diagram-stage {
+        position: relative;
+        overflow: hidden;
+        width: 100%;
+        aspect-ratio: var(--diagram-w) / var(--diagram-h);
+        max-block-size: calc(var(--diagram-h) * 1px);
+      }
+      #diagram .diagram-stage svg { position: absolute; inset: 0 auto auto 0; transform-origin: 0 0; }
       #foot { height: 200px; }
     </style>
   </head>

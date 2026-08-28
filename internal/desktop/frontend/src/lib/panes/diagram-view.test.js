@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clampTranslate, fitScale } from "./diagram-view.js";
+import { clampScale, clampTranslate, fitScale, stepScale, zoomAt } from "./diagram-view.js";
 
 test("a diagram wider than the box opens shrunk to fit across it", () => {
   assert.equal(fitScale({ width: 1000, height: 100 }, 500), 0.5);
@@ -29,4 +29,52 @@ test("content larger than the box cannot be dragged off either edge", () => {
   assert.equal(clampTranslate(-500, 500, 800), -300);
   assert.equal(clampTranslate(60, 500, 800), 0);
   assert.equal(clampTranslate(Number.NaN, 500, 800), 0);
+});
+
+test("zooming holds the content under the pointer still", () => {
+  for (const scale of [0.34, 1, 2.5]) {
+    for (const next of [0.5, 1.2, 8]) {
+      for (const at of [{ x: 0, y: 0 }, { x: 210, y: 44 }, { x: 4000, y: -30 }]) {
+        const state = { scale, tx: -60, ty: -12 };
+        const zoomed = zoomAt(state, at, next);
+        assert.ok(
+          Math.abs((at.x - zoomed.tx) / zoomed.scale - (at.x - state.tx) / state.scale) < 1e-9,
+          `x at ${at.x} from ${scale} to ${next}`,
+        );
+        assert.ok(
+          Math.abs((at.y - zoomed.ty) / zoomed.scale - (at.y - state.ty) / state.scale) < 1e-9,
+          `y at ${at.y} from ${scale} to ${next}`,
+        );
+      }
+    }
+  }
+});
+
+test("a scale that states nothing leaves the view where it was", () => {
+  assert.deepEqual(zoomAt({ scale: 1, tx: -5, ty: -5 }, { x: 10, y: 10 }, 0), {
+    scale: 1,
+    tx: -5,
+    ty: -5,
+  });
+  assert.deepEqual(zoomAt({ scale: 0, tx: -5, ty: -5 }, { x: 10, y: 10 }, 2), {
+    scale: 0,
+    tx: -5,
+    ty: -5,
+  });
+});
+
+test("a step doubles or halves over two clicks and stops at either end", () => {
+  assert.equal(stepScale(1, 1, 0.25), Math.SQRT2);
+  assert.ok(Math.abs(stepScale(stepScale(1, 1, 0.25), 1, 0.25) - 2) < 1e-12);
+  assert.ok(Math.abs(stepScale(stepScale(1, -1, 0.25), -1, 0.25) - 0.5) < 1e-12);
+  assert.equal(stepScale(0.3, -1, 0.25), 0.25);
+  assert.equal(stepScale(7, 1, 0.25), 8);
+  assert.equal(stepScale(8, 1, 0.25), 8);
+});
+
+test("the fitted scale is the floor and eight hundred percent the ceiling", () => {
+  assert.equal(clampScale(0.1, 0.34), 0.34);
+  assert.equal(clampScale(400, 0.34), 8);
+  assert.equal(clampScale(Number.NaN, 0.34), 0.34);
+  assert.equal(clampScale(2, 0.34), 2);
 });

@@ -80,6 +80,35 @@ window.settle = () =>
     { line: LINES.broken, error: "11:5: unexpected end of file" },
     { line: LINES.embedded, error: "diagram embeds HTML; |md| blocks are not rendered" },
   ]);
+const stageOf = (line) => root.querySelector(`pre[data-line="${line}"] .diagram-stage`);
+
+window.scrolled = () => document.querySelector("#scroller").scrollTop;
+window.stageBox = (line = LINES.drawn) => {
+  const box = stageOf(line).getBoundingClientRect();
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
+};
+// The transform read back off the element, so what is asserted is what paints.
+window.view = (line = LINES.drawn) => {
+  const stage = stageOf(line);
+  const drawn = stage?.querySelector("svg");
+  if (!drawn) return null;
+  const matrix = new DOMMatrix(getComputedStyle(drawn).transform);
+  return {
+    scale: matrix.a,
+    tx: matrix.e,
+    ty: matrix.f,
+    base: Math.min(stage.clientWidth / Number.parseFloat(drawn.style.width), 1),
+  };
+};
+// Where in the diagram's own coordinates a point on the screen falls.
+window.contentAt = (clientX, clientY, line = LINES.drawn) => {
+  const seen = window.view(line);
+  const box = window.stageBox(line);
+  return { x: (clientX - box.x - seen.tx) / seen.scale, y: (clientY - box.y - seen.ty) / seen.scale };
+};
+window.settled = () =>
+  new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
 window.probe = (line = LINES.drawn) => {
   const block = root.querySelector(`pre[data-line="${line}"]`);
   const drawn = block?.querySelector("svg");

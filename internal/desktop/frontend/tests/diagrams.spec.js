@@ -134,3 +134,68 @@ test("a reply naming every fence does not put a settled failure back to waiting"
   expect(failed.failed).toBe(true);
   expect(failed.notes).toBe(1);
 });
+
+test("ctrl and the wheel zoom about the pointer, and a double-click goes back", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+
+  const box = await page.evaluate(() => window.stageBox());
+  const at = { x: box.x + box.width * 0.65, y: box.y + box.height * 0.4 };
+  const fitted = await page.evaluate(() => window.view());
+  const under = await page.evaluate(([x, y]) => window.contentAt(x, y), [at.x, at.y]);
+
+  await page.mouse.move(at.x, at.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -240);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+
+  const zoomed = await page.evaluate(() => window.view());
+  expect(zoomed.scale).toBeGreaterThan(fitted.scale);
+  // The point the pointer was on is still the point the pointer is on.
+  const held = await page.evaluate(([x, y]) => window.contentAt(x, y), [at.x, at.y]);
+  expect(held.x).toBeCloseTo(under.x, 0);
+  expect(held.y).toBeCloseTo(under.y, 0);
+  // Paint only: the block is the same size it was before the zoom.
+  const staged = await page.evaluate(() => window.probe());
+  expect(staged.boxWidth).toBeCloseTo(box.width, 0);
+  expect(staged.boxHeight).toBeCloseTo(box.height, 0);
+
+  await page.mouse.dblclick(at.x, at.y);
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale, 3);
+  const back = await page.evaluate(() => window.view());
+  expect(back.tx).toBeCloseTo(0, 3);
+  expect(back.ty).toBeCloseTo(0, 3);
+});
+
+test("an unmodified wheel over a diagram scrolls the document past it", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+  const before = await page.evaluate(() => window.view());
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.wheel(0, 200);
+  await page.evaluate(() => window.settled());
+
+  expect(await page.evaluate(() => window.scrolled())).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.view())).toEqual(before);
+});
+
+test("zoom stops at eight hundred percent above and at the fitted view below", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+  const fitted = await page.evaluate(() => window.view());
+
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.keyboard.down("Control");
+  for (let turn = 0; turn < 20; turn++) await page.mouse.wheel(0, -400);
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.view().scale)).toBeCloseTo(8, 3);
+
+  for (let turn = 0; turn < 40; turn++) await page.mouse.wheel(0, 400);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.base, 3);
+});

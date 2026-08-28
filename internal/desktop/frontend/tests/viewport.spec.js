@@ -188,3 +188,48 @@ test("a diagram swapped in keeps the lines around it measurable", async ({ page 
     ],
   });
 });
+
+// The other half of the load-bearing one: Go polls this measurement and
+// open_file claims a scroll succeeded from it, so a view the reader moves must
+// report nothing at all. A transform escaping into layout would change the
+// block's box, change the intervals, and defeat publish()'s dedupe.
+test("zooming a diagram reports nothing at all", async ({ page }) => {
+  await page.goto("/tests/viewport.html");
+  await waitForReport(page, 1);
+  await page.evaluate(() => window.scrollToDiagram());
+  await page.waitForFunction(() => window.reports.at(-1)?.intervals?.[0]?.line === 30);
+  await page.evaluate(() => window.drawDiagram());
+  await expect.poll(() => latest(page)).toMatchObject({
+    available: true,
+    intervals: [
+      { line: 30, to: 30 },
+      { line: 32, to: 35 },
+    ],
+  });
+  await page.waitForTimeout(150);
+
+  const state = () =>
+    page.evaluate(() => ({
+      reports: window.reports.length,
+      last: JSON.stringify(window.reports.at(-1)),
+      box: window.diagramBox(),
+      transform: window.diagramTransform(),
+      scrollTop: document.querySelector("#root").scrollTop,
+    }));
+  const before = await state();
+
+  const stage = await page.evaluate(() => window.stageBox());
+  await page.mouse.move(stage.x + stage.width / 2, stage.y + 30);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -300);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  await page.waitForTimeout(150);
+
+  const after = await state();
+  expect(after.transform).not.toBe(before.transform);
+  expect(after.scrollTop).toBe(before.scrollTop);
+  expect(after.box).toEqual(before.box);
+  expect(after.reports).toBe(before.reports);
+  expect(after.last).toBe(before.last);
+});

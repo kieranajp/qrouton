@@ -62,6 +62,15 @@ window.diagramHeight = () => document.querySelector("#diagram").getBoundingClien
 window.scrollToDiagram = () => {
   root.scrollTop = document.querySelector("#prose-before").offsetTop;
 };
+const rect = (selector) => {
+  const box = document.querySelector(selector).getBoundingClientRect();
+  return { x: box.x, y: box.y, width: box.width, height: box.height };
+};
+window.stageBox = () => rect("#diagram .diagram-stage");
+window.diagramBox = () => rect("#diagram");
+window.diagramTransform = () => getComputedStyle(document.querySelector("#diagram svg")).transform;
+window.settled = () =>
+  new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
 window.scrollPastDiagram = () => {
   root.scrollTop = document.querySelector("#prose-after").offsetTop - 30;
 };

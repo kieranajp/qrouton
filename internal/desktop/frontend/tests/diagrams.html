@@ -16,11 +16,18 @@
       }
 
       body { margin: 0; }
+      /* The pane's scroll root, so an unmodified wheel over a diagram has
+         somewhere to go. */
+      #scroller { height: 360px; overflow-y: auto; }
+      #tail { height: 800px; }
       #markdown-root { box-sizing: border-box; width: 520px; }
     </style>
   </head>
   <body>
-    <main id="markdown-root" class="markdown"></main>
+    <div id="scroller">
+      <main id="markdown-root" class="markdown"></main>
+      <div id="tail"></div>
+    </div>
     <script type="module" src="./diagrams-fixture.js"></script>
   </body>
 </html>
