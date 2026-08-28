@@ -191,7 +191,8 @@ export function attach(block, svg, emitted) {
 
   const release = (/** @type {PointerEvent} */ event) => {
     if (!grab) return;
-    dragged = grab.moved > DRAG_SLOP;
+    // A cancelled drag is followed by no click, so nothing is owed one.
+    dragged = event.type === "pointerup" && grab.moved > DRAG_SLOP;
     grab = null;
     delete stage.dataset.dragging;
     if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
@@ -199,6 +200,7 @@ export function attach(block, svg, emitted) {
 
   // A drag that ends over a diagram must not reach the pane's link handler.
   const clicked = (/** @type {MouseEvent} */ event) => {
+    if (controls.contains(/** @type {Node} */ (event.target))) return;
     if (!dragged) return;
     dragged = false;
     event.stopPropagation();

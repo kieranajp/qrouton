@@ -311,6 +311,31 @@ test("the steps go up and down by the same amount, and Fit goes all the way back
   );
 });
 
+test("a press on the overlay lands, drag or no drag", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+
+  await page.mouse.move(at.x, at.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -600);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  const zoomed = await page.evaluate(() => window.view().scale);
+
+  await page.mouse.down();
+  await page.mouse.move(at.x - 120, box.y + box.height + 200, { steps: 6 });
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+
+  await page.click('pre[data-line="3"] button[aria-label="Zoom in"]');
+  await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(
+    zoomed * Math.SQRT2,
+    3,
+  );
+});
+
 test("a diagram that drew and then failed leaves no stage behind", async ({ page }) => {
   await page.goto("/tests/diagrams.html");
   await page.evaluate(() => window.draw());
