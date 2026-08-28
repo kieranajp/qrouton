@@ -239,9 +239,8 @@
   }
 
   .activity-scroll {
-    flex: 0 1 60%;
+    flex: 0 0 60%;
     min-height: 0;
-    max-height: 60%;
     overflow: hidden auto;
   }
 

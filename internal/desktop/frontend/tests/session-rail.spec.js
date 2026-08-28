@@ -84,6 +84,7 @@ test("the session list and selected detail scroll independently", async ({ page 
   const activity = page.locator(".activity-scroll");
   const dimensions = async (locator) =>
     locator.evaluate((element) => ({
+      height: element.getBoundingClientRect().height,
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
       scrollTop: element.scrollTop,
@@ -91,7 +92,9 @@ test("the session list and selected detail scroll independently", async ({ page 
 
   expect((await dimensions(sessions)).scrollHeight).toBeGreaterThan((await dimensions(sessions)).clientHeight);
   expect((await dimensions(detail)).scrollHeight).toBeGreaterThan((await dimensions(detail)).clientHeight);
-  expect((await dimensions(activity)).clientHeight).toBeLessThanOrEqual((await dimensions(detail)).clientHeight * 0.61);
+  const activityRatio = (await dimensions(activity)).height / (await dimensions(detail)).height;
+  expect(activityRatio).toBeGreaterThanOrEqual(0.59);
+  expect(activityRatio).toBeLessThanOrEqual(0.61);
   expect((await dimensions(activity)).scrollHeight).toBeGreaterThan((await dimensions(activity)).clientHeight);
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await dimensions(sessions)).scrollTop).toBeGreaterThan(0);
