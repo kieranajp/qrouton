@@ -1,7 +1,7 @@
-package agents
+package agentevent
 
-// The middle of the attention chain: the subcommand parses one of Claude's hook
-// payloads, maps it to an activity, and dials a real control socket. The socket
+// The middle of the attention chain: the subcommand parses one runner hook
+// payload, maps it to an activity, and dials a real control socket. The socket
 // here speaks the line protocol itself rather than running the desktop server,
 // which links WebKit and would need a display.
 
@@ -28,6 +28,8 @@ const (
 		`"cwd":"/work/webhook","hook_event_name":"SubagentStart","agent_id":"agent_017c","agent_type":"Explore"}`
 	subagentStopPayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"SubagentStop","agent_id":"agent_017c","agent_type":"Explore"}`
+	codexStartPayload = `{"session_id":"lead_012","transcript_path":"/work/.codex/rollout.jsonl",` +
+		`"cwd":"/work/webhook","hook_event_name":"SubagentStart","agent_id":"agent_017c","agent_type":"code-reviewer","model":"gpt-5.6-sol"}`
 	preToolUsePayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`
 )
@@ -35,7 +37,7 @@ const (
 func TestNotificationHookAsksTheWorkbenchForAttention(t *testing.T) {
 	root := sessionRoot(t)
 	socket, requests := controlSocket(t)
-	if err := runEvent(t, root, handleFor(socket, root), notificationPayload); err != nil {
+	if err := runEvent(t, "claude", root, handleFor(socket, root), notificationPayload); err != nil {
 		t.Fatal(err)
 	}
 	req := await(t, requests)
@@ -47,7 +49,7 @@ func TestNotificationHookAsksTheWorkbenchForAttention(t *testing.T) {
 func TestSubagentHooksSendLifecycleAndStartClearsAttentionToWorking(t *testing.T) {
 	root := sessionRoot(t)
 	socket, requests := controlSocket(t)
-	if err := runEvent(t, root, handleFor(socket, root), subagentStartPayload); err != nil {
+	if err := runEvent(t, "claude", root, handleFor(socket, root), subagentStartPayload); err != nil {
 		t.Fatal(err)
 	}
 	start := await(t, requests)
@@ -60,12 +62,28 @@ func TestSubagentHooksSendLifecycleAndStartClearsAttentionToWorking(t *testing.T
 	if attention.Op != workbench.OpAttention || attention.Activity != status.ActivityWorking || attention.Generation != 7 {
 		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", attention, workbench.OpAttention, status.ActivityWorking)
 	}
-	if err := runEvent(t, root, handleFor(socket, root), subagentStopPayload); err != nil {
+	if err := runEvent(t, "claude", root, handleFor(socket, root), subagentStopPayload); err != nil {
 		t.Fatal(err)
 	}
 	stop := await(t, requests)
 	if stop.Op != workbench.OpDelegatedLifecycle || stop.Lifecycle == nil || stop.Lifecycle.Kind != workbench.LifecycleStop {
 		t.Fatalf("stop request = %#v", stop)
+	}
+}
+
+func TestCodexHookSendsProviderAndParentLifecycle(t *testing.T) {
+	root := sessionRoot(t)
+	socket, requests := controlSocket(t)
+	if err := runEvent(t, "codex", root, handleFor(socket, root), codexStartPayload); err != nil {
+		t.Fatal(err)
+	}
+	start := await(t, requests)
+	if start.Lifecycle == nil || start.Lifecycle.Provider != "codex" || start.Lifecycle.Kind != workbench.LifecycleStart ||
+		start.Lifecycle.ID != "agent_017c" || start.Lifecycle.ParentID != "lead_012" {
+		t.Fatalf("Codex lifecycle = %+v", start)
+	}
+	if attention := await(t, requests); attention.Op != workbench.OpAttention || attention.Activity != status.ActivityWorking {
+		t.Fatalf("Codex attention = %+v", attention)
 	}
 }
 
@@ -76,12 +94,12 @@ func TestUnmappedHookSendsNothing(t *testing.T) {
 	root := sessionRoot(t)
 	socket, requests := controlSocket(t)
 	handle := handleFor(socket, root)
-	if err := runEvent(t, root, handle, preToolUsePayload); err != nil {
+	if err := runEvent(t, "claude", root, handle, preToolUsePayload); err != nil {
 		t.Fatal(err)
 	}
 	// The mapped hook that follows is the barrier: its request proves the socket
 	// was reachable all along, so an empty queue before it means nothing was sent.
-	if err := runEvent(t, root, handle, notificationPayload); err != nil {
+	if err := runEvent(t, "claude", root, handle, notificationPayload); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(requests); got != 1 {
@@ -97,13 +115,13 @@ func TestUnmappedHookSendsNothing(t *testing.T) {
 func TestHookSurvivesAnUnreachableWorkbench(t *testing.T) {
 	root := sessionRoot(t)
 	gone := workbench.Handle{Socket: filepath.Join(t.TempDir(), "gone.sock"), SessionRoot: root}.Marshal()
-	if err := runEvent(t, root, gone, subagentStartPayload); err != nil {
+	if err := runEvent(t, "claude", root, gone, subagentStartPayload); err != nil {
 		t.Fatalf("unreachable workbench failed the hook: %v", err)
 	}
-	if err := runEvent(t, root, "", subagentStartPayload); err != nil {
+	if err := runEvent(t, "claude", root, "", subagentStartPayload); err != nil {
 		t.Fatalf("absent workbench handle failed the hook: %v", err)
 	}
-	logged, err := os.ReadFile(sessionpaths.ClaudeAgentLog(root))
+	logged, err := os.ReadFile(sessionpaths.AgentEventLog(root))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,11 +136,11 @@ func TestHookSurvivesAnUnreachableWorkbench(t *testing.T) {
 	}
 }
 
-func runEvent(t *testing.T, root, handle, payload string) error {
+func runEvent(t *testing.T, provider, root, handle, payload string) error {
 	t.Helper()
 	feedStdin(t, payload)
 	args := []string{"qrouton", eventCommandName, "--" + sessionRootFlag, root}
-	args = append(args, "--"+generationFlag, "7")
+	args = append(args, "--"+generationFlag, "7", "--"+providerFlag, provider)
 	if handle != "" {
 		args = append(args, "--"+workbenchJSONFlag, handle)
 	}
@@ -216,7 +234,7 @@ func await(t *testing.T, requests chan workbench.Request) workbench.Request {
 func TestAFailedLogStillSignalsTheWorkbench(t *testing.T) {
 	root := t.TempDir()
 	socket, requests := controlSocket(t)
-	if err := runEvent(t, root, handleFor(socket, root), subagentStartPayload); err == nil {
+	if err := runEvent(t, "claude", root, handleFor(socket, root), subagentStartPayload); err == nil {
 		t.Fatal("an unwritable agent log reported success")
 	}
 	if req := await(t, requests); req.Op != workbench.OpDelegatedLifecycle || req.Lifecycle == nil ||

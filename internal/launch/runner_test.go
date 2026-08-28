@@ -8,9 +8,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -187,7 +189,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
 	callback := settings.Hooks["SubagentStart"][0].Hooks[0].Command
-	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal(), "--generation", "7"}
+	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal(), "--generation", "7", "--provider", "claude"}
 	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
 		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
@@ -202,6 +204,51 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	}
 	if notification[1].Command != callback {
 		t.Fatalf("notification callback = %s", notification[1].Command)
+	}
+}
+
+func TestRunnerLaunchInjectsCodexAgentHooks(t *testing.T) {
+	r := Runner{ID: runnerIDCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}}
+	handle := testHandle()
+	argv, env, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, handle, 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	hook := fmt.Sprintf(codexCommandHookFormat,
+		quotedConfigString(fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, agentEventSubcommand)))
+	for _, want := range []string{
+		codexBypassHookTrustFlag,
+		codexSubagentStartHook + hook,
+		codexSubagentStopHook + hook,
+	} {
+		if !slices.Contains(argv, want) {
+			t.Fatalf("Codex launch missing %q: %v", want, argv)
+		}
+	}
+	for key, value := range map[string]string{
+		agentevent.QroutonBinEnvVar:  "/tmp/qrouton",
+		agentevent.SessionRootEnvVar: "/tmp/session",
+		agentevent.WorkbenchEnvVar:   handle.Marshal(),
+		agentevent.GenerationEnvVar:  "7",
+		agentevent.ProviderEnvVar:    runnerIDCodex,
+	} {
+		if !slices.Contains(env, key+"="+value) {
+			t.Errorf("Codex hook environment missing %s=%q", key, value)
+		}
+	}
+}
+
+func TestConfiguredCodexKeepsHookTrustReview(t *testing.T) {
+	r := Runner{ID: runnerIDCodex, Command: []string{runnerIDCodex}, Override: true}
+	argv, _, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(argv, codexBypassHookTrustFlag) {
+		t.Fatalf("configured Codex launch bypassed the user's hook trust: %v", argv)
+	}
+	if !strings.Contains(strings.Join(argv, " "), codexSubagentStartHook) {
+		t.Fatalf("configured Codex launch lost lifecycle hooks: %v", argv)
 	}
 }
 

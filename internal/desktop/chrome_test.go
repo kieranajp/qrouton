@@ -45,13 +45,13 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	}
 	shownSummary := rows["onscreen"].Summary
 	if shownSummary.Attention != status.AgentAttentionUnknown || shownSummary.Active != 1 ||
-		shownSummary.Coverage != status.AgentCoverageRoot || !shownSummary.Running {
+		shownSummary.Coverage != status.AgentCoverageFull || !shownSummary.Running {
 		t.Fatalf("onscreen row = %+v", rows["onscreen"])
 	}
 	if cold := rows["cold"].Summary; cold.Running || cold.Coverage != status.AgentCoverageNone || cold.Attention != status.AgentAttentionNone {
 		t.Fatalf("cold row summary = %+v", cold)
 	}
-	if fields.Agents.Provider != agentProviderCodex || len(fields.Agents.Agents) != 1 || fields.Agents.ChildrenKnown || fields.Agents.AttentionKnown {
+	if fields.Agents.Provider != agentProviderCodex || len(fields.Agents.Agents) != 1 || !fields.Agents.ChildrenKnown || fields.Agents.AttentionKnown {
 		t.Fatalf("selected panel = %+v", fields.Agents)
 	}
 }

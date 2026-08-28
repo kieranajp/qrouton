@@ -1,4 +1,4 @@
-package agents
+package agentevent
 
 import (
 	"bufio"
@@ -14,7 +14,7 @@ import (
 // recorded is the log as the collector left it, one decoded event per line.
 func recorded(t *testing.T, root string) []Event {
 	t.Helper()
-	f, err := os.Open(sessionpaths.ClaudeAgentLog(root))
+	f, err := os.Open(sessionpaths.AgentEventLog(root))
 	if os.IsNotExist(err) {
 		return nil
 	}
@@ -46,23 +46,23 @@ func session(t *testing.T) string {
 	return root
 }
 
-func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
+func TestAgentHooksAppendOneStampedLineEach(t *testing.T) {
 	root := session(t)
 	for _, input := range []string{
 		`{"hook_event_name":"SubagentStart","agent_id":"agent-1","agent_type":"Explore","parent_agent_id":"lead-1"}`,
 		`{"hook_event_name":"SubagentStop","agent_id":"agent-1","agent_type":"Explore"}`,
 	} {
-		event, hook, err := RecordEvent(root, bytes.NewBufferString(input))
+		event, hook, err := Record(root, "claude", bytes.NewBufferString(input))
 		if err != nil {
 			t.Fatal(err)
 		}
-		// cmd/agents maps the returned hook name to an attention state, so it
+		// cmd/agentevent maps the returned hook name to an attention state, so it
 		// has to survive a successful write as well as a failed one.
 		if hook == "" {
-			t.Fatalf("RecordEvent(%s) reported no hook name", input)
+			t.Fatalf("Record(%s) reported no hook name", input)
 		}
 		if event.AgentID != "agent-1" || event.Timestamp == "" {
-			t.Fatalf("RecordEvent(%s) = %#v, want the stamped live event", input, event)
+			t.Fatalf("Record(%s) = %#v, want the stamped live event", input, event)
 		}
 	}
 
@@ -70,14 +70,14 @@ func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
 	if len(events) != 2 {
 		t.Fatalf("recorded %d events, want the start and the stop: %#v", len(events), events)
 	}
-	if events[0].HookEventName != hookSubagentStart || events[1].HookEventName != hookSubagentStop {
+	if events[0].HookEventName != HookSubagentStart || events[1].HookEventName != HookSubagentStop {
 		t.Errorf("recorded hooks = %q, %q", events[0].HookEventName, events[1].HookEventName)
 	}
 	if events[0].ParentID != "lead-1" {
 		t.Fatalf("recorded start lost its parent: %#v", events[0])
 	}
 	for i, event := range events {
-		if event.AgentID != "agent-1" || event.AgentType != "Explore" {
+		if event.Provider != "claude" || event.AgentID != "agent-1" || event.AgentType != "Explore" {
 			t.Errorf("event %d lost its identity: %#v", i, event)
 		}
 		// The hook itself carries no timestamp; the collector stamps one so the
@@ -88,16 +88,32 @@ func TestClaudeAgentHooksAppendOneStampedLineEach(t *testing.T) {
 	}
 }
 
+func TestCodexParentSessionBecomesTheLifecycleParent(t *testing.T) {
+	root := session(t)
+	event, _, err := Record(root, "codex", bytes.NewBufferString(
+		`{"session_id":"lead-1","hook_event_name":"SubagentStart","agent_id":"specialist-1","agent_type":"code-reviewer"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if event.Provider != "codex" || event.ParentID != "lead-1" {
+		t.Fatalf("Codex event = %+v, want provider and parent session", event)
+	}
+	logged := recorded(t, root)
+	if len(logged) != 1 || logged[0].ParentID != "lead-1" || logged[0].SessionID != "lead-1" {
+		t.Fatalf("logged Codex events = %+v", logged)
+	}
+}
+
 // A hook qrouton does not collect, and an event naming no agent, still report
 // their name: the caller signals attention off that even when nothing is logged.
 func TestUncollectedEventsAreNamedButNotRecorded(t *testing.T) {
 	for _, tc := range []struct{ name, input, hook string }{
 		{"another hook", `{"hook_event_name":"Notification","agent_id":"agent-1"}`, "Notification"},
-		{"no agent id", `{"hook_event_name":"SubagentStart","agent_type":"Explore"}`, hookSubagentStart},
+		{"no agent id", `{"hook_event_name":"SubagentStart","agent_type":"Explore"}`, HookSubagentStart},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := session(t)
-			event, hook, err := RecordEvent(root, bytes.NewBufferString(tc.input))
+			event, hook, err := Record(root, "claude", bytes.NewBufferString(tc.input))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -116,7 +132,7 @@ func TestUncollectedEventsAreNamedButNotRecorded(t *testing.T) {
 
 func TestMalformedEventIsAnError(t *testing.T) {
 	root := session(t)
-	if _, _, err := RecordEvent(root, bytes.NewBufferString("not json")); err == nil {
+	if _, _, err := Record(root, "claude", bytes.NewBufferString("not json")); err == nil {
 		t.Fatal("expected a decode error")
 	}
 	if events := recorded(t, root); len(events) != 0 {

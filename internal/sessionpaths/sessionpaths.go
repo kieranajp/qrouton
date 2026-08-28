@@ -28,7 +28,7 @@ const (
 
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
-	claudeAgentLogName = "claude-agents.jsonl"
+	agentEventLogName  = "agent-events.jsonl"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	initialPromptName  = "initial-prompt"
@@ -73,9 +73,9 @@ func WorkbenchLog(root string) string {
 	return filepath.Join(Dir(root), workbenchLogName)
 }
 
-// ClaudeAgentLog records Claude subagent lifecycle hook events.
-func ClaudeAgentLog(root string) string {
-	return filepath.Join(Dir(root), claudeAgentLogName)
+// AgentEventLog records runner subagent lifecycle hook events.
+func AgentEventLog(root string) string {
+	return filepath.Join(Dir(root), agentEventLogName)
 }
 
 // Handoff is the assistant's escalation brief. When it exists, the prompt

@@ -23,7 +23,7 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 	start := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "agent-1", Type: "qrspi-research-lead", ParentID: agentRootID, Timestamp: clock.now(),
+		ID: "agent-1", Type: "qrspi-research-lead", Timestamp: clock.now(),
 	}
 	if !tracker.lifecycle(start) || tracker.activeCount() != 2 {
 		t.Fatalf("start left %d active records, want root and child", tracker.activeCount())
@@ -105,6 +105,35 @@ func TestDelegatedStopRemainsTerminalAfterItsDisplayRetentionExpires(t *testing.
 	}
 	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
 		t.Fatal("late lifecycle events restarted display retention")
+	}
+}
+
+func TestSpecialistUsesTheSoleActiveLeadWithoutInventingAnAmbiguousParent(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker.begin(agentProviderClaude, 1)
+	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "lead-1", Type: "qrspi-research-lead",
+	})
+	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "specialist-1", Type: "explorer",
+	})
+	if record := delegatedRecord(t, tracker.snapshot(), "specialist-1"); !record.ParentKnown || record.ParentID != "lead-1" {
+		t.Fatalf("specialist under one active lead = %+v", record)
+	}
+
+	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "lead-2", Type: "qrspi-planning-lead",
+	})
+	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "specialist-2", Type: "reviewer",
+	})
+	if record := delegatedRecord(t, tracker.snapshot(), "specialist-2"); record.ParentKnown || record.ParentID != "" {
+		t.Fatalf("specialist under two active leads = %+v", record)
 	}
 }
 
@@ -253,6 +282,10 @@ func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T)
 	}
 	if caps := tracker.snapshot().Capabilities; !caps.Attention || !caps.Children || caps.Parents || caps.Outcomes {
 		t.Fatalf("Claude capabilities = %+v", caps)
+	}
+	tracker.begin(agentProviderCodex, 2)
+	if caps := tracker.snapshot().Capabilities; caps.Attention || !caps.Children || caps.Parents || caps.Outcomes {
+		t.Fatalf("Codex capabilities = %+v", caps)
 	}
 	for agentType, role := range map[string]string{
 		"qrspi-implementation-lead": agentRoleLead,

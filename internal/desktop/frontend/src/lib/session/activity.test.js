@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  activeAgent,
   capabilityNote,
   parentLabel,
   projectAgents,
@@ -44,16 +45,18 @@ test("unknown summary, role, state, provider, and type stay explicit", () => {
   assert.equal(typeLabel(""), "Type unavailable");
   assert.equal(typeLabel("qrspi-planning-lead"), "QRSPI Planning Lead");
   assert.equal(parentLabel({}), "Parent unavailable");
+  assert.equal(activeAgent({ state: "Active" }), true);
+  assert.equal(activeAgent({ state: "Finished" }), false);
   assert.equal(
     recordLabel({ role: "Specialist", type: "code-reviewer", state: "Finished" }),
     "Specialist · Code Reviewer · Finished",
   );
 });
 
-test("provider capability copy distinguishes root-only and missing integrations", () => {
+test("provider capability copy distinguishes child-aware and missing integrations", () => {
   assert.equal(
-    capabilityNote({ provider: "codex" }),
-    "Codex provides root activity only. Attention, delegated agents, parent relationships, and outcomes unavailable.",
+    capabilityNote({ provider: "codex", children_known: true }),
+    "Attention, parent relationships, and outcomes unavailable.",
   );
   assert.equal(capabilityNote({}), "Provider unknown · live activity unavailable");
   assert.equal(

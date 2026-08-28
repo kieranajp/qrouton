@@ -34,7 +34,25 @@ test("selected activity is honest about hierarchy, capabilities, and recent reco
     "aria-level",
     "2",
   );
-  await expect(activity.getByRole("listitem", { name: /Specialist · Code Reviewer · Active · Parent unavailable/ })).toBeVisible();
+  await expect(activity.getByRole("treeitem", { name: "Specialist · Code Reviewer · Active" })).toHaveAttribute(
+    "aria-level",
+    "3",
+  );
+  const activeDot = activity
+    .getByRole("treeitem", { name: "Lead · QRSPI Planning Lead · Active" })
+    .locator(":scope > .record > .agent-dot");
+  await expect(activeDot).toHaveText("●");
+  expect(await activeDot.evaluate((dot) => getComputedStyle(dot).color)).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--state-running)";
+      document.body.append(probe);
+      const color = getComputedStyle(probe).color;
+      probe.remove();
+      return color;
+    }),
+  );
+  expect(await activity.evaluate((element) => getComputedStyle(element).borderTopStyle)).toBe("solid");
   await expect(activity).toContainText("Parent relationships and outcomes unavailable.");
   await expect(activity).toContainText("Test Verifier");
   await expect(activity).toContainText("Finished");
@@ -43,10 +61,10 @@ test("selected activity is honest about hierarchy, capabilities, and recent reco
   await expect(activity).not.toContainText("Test Verifier");
 });
 
-test("root-only providers and missing capabilities are textual", async ({ page }) => {
+test("provider coverage and missing capabilities are textual", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
   await page.evaluate(() => window.sessionRail.rootOnly("codex"));
-  const row = page.getByRole("button", { name: /Checkout migration .* Root active · 3 unseen/ });
+  const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 unseen/ });
   await expect(row).not.toContainText("Attention unknown");
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");
@@ -62,8 +80,8 @@ test("root-only providers and missing capabilities are textual", async ({ page }
   );
   await expect(activity).toContainText("Orchestrator");
   await expect(activity).toContainText("Codex");
-  await expect(activity).toContainText("Codex provides root activity only.");
-  await expect(activity).toContainText("Attention, delegated agents, parent relationships, and outcomes unavailable.");
+  await expect(activity).toContainText("Attention, parent relationships, and outcomes unavailable.");
+  await expect(activity).not.toContainText("Codex provides root activity only.");
 
   await page.evaluate(() => window.sessionRail.rootOnly("opencode"));
   await expect(activity).toContainText("OpenCode provides root activity only.");

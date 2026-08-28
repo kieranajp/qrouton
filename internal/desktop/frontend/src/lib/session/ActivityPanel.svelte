@@ -1,6 +1,7 @@
 <script>
   import CapsLabel from "../core/CapsLabel.svelte";
   import {
+    activeAgent,
     capabilityNote,
     parentLabel,
     projectAgents,
@@ -30,6 +31,7 @@
     aria-selected="false"
     aria-label={recordLabel(node.record, agents.provider)}>
     <div class="record" title={recordLabel(node.record, agents.provider)}>
+      {#if activeAgent(node.record)}<span class="agent-dot" aria-hidden="true">●</span>{/if}
       <div class="identity">
         <span class="role">{roleLabel(node.record.role)}</span>
         <span class="type">
@@ -72,6 +74,7 @@
         {#each projected.observed as record (key(record))}
           <li aria-label={`${recordLabel(record, agents.provider)} · ${parentLabel(record)}`}>
             <div class="record" title={recordLabel(record, agents.provider)}>
+              {#if activeAgent(record)}<span class="agent-dot" aria-hidden="true">●</span>{/if}
               <div class="identity">
                 <span class="role">{roleLabel(record.role)}</span>
                 <span class="type">{typeLabel(record.type)}</span>
@@ -93,6 +96,8 @@
     display: flex;
     flex-direction: column;
     gap: 6px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border-subtle);
   }
 
   h2,
@@ -125,8 +130,16 @@
 
   .identity {
     min-width: 0;
+    flex: 1;
     display: flex;
     flex-direction: column;
+  }
+
+  .agent-dot {
+    flex: none;
+    color: var(--state-running);
+    font-size: 8px;
+    line-height: 1;
   }
 
   .role {

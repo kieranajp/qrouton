@@ -35,6 +35,7 @@ const (
 	editorJSONFlag    = "--editor-json"
 	workbenchJSONFlag = "--workbench-json"
 	generationFlag    = "--generation"
+	providerFlag      = "--provider"
 	resumeFlag        = "--resume"
 	socketFlag        = "--socket"
 
@@ -92,6 +93,7 @@ const (
 
 	claudeSkipPermissionsFlag = "--dangerously-skip-permissions"
 	codexBypassSandboxFlag    = "--dangerously-bypass-approvals-and-sandbox"
+	codexBypassHookTrustFlag  = "--dangerously-bypass-hook-trust"
 	openCodeAutoFlag          = "--auto"
 	openCodePromptFlag        = "--prompt"
 
@@ -125,8 +127,12 @@ const (
 	claudeSubagentStopHook  = "SubagentStop"
 	claudeNotificationHook  = "Notification"
 
-	codexMCPCommandKey = "mcp_servers.qrouton.command="
-	codexMCPArgsKey    = "mcp_servers.qrouton.args="
+	codexMCPCommandKey           = "mcp_servers.qrouton.command="
+	codexMCPArgsKey              = "mcp_servers.qrouton.args="
+	codexSubagentStartHook       = "hooks.SubagentStart="
+	codexSubagentStopHook        = "hooks.SubagentStop="
+	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=3}]}]`
+	codexAgentEventCommandFormat = `"$%s" %s`
 
 	openCodeMCPKey        = "mcp"
 	openCodeLocalType     = "local"

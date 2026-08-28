@@ -51,7 +51,8 @@
         id: "agent-flat",
         run_id: "7",
         provider: "claude",
-        parent_known: false,
+        parent_id: "lead-1",
+        parent_known: true,
         type: "code-reviewer",
         role: "Specialist",
         state: "Active",
@@ -89,15 +90,16 @@
   let added = $state(0);
 
   function rootOnly(provider) {
+    const childrenKnown = provider === "codex";
     sessions = sessions.map((session) =>
       session.slug === "checkout"
-        ? { ...session, summary: { attention: "unknown", active: 1, coverage: "root", running: true } }
+        ? { ...session, summary: { attention: "unknown", active: 1, coverage: childrenKnown ? "full" : "root", running: true } }
         : session,
     );
     agents = {
       provider,
       attention_known: false,
-      children_known: false,
+      children_known: childrenKnown,
       parents_known: false,
       outcomes_known: false,
       agents: [

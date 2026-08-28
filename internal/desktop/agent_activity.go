@@ -112,6 +112,13 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		return false
 	}
 	record := a.records[key]
+	role := delegatedRole(event.Type)
+	parentID := event.ParentID
+	if role == agentRoleLead {
+		parentID = agentRootID
+	} else if parentID == "" {
+		parentID = a.soleActiveLeadLocked(event.Provider, runID)
+	}
 	switch event.Kind {
 	case workbench.LifecycleStart:
 		if record != nil {
@@ -123,8 +130,8 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		}
 		a.records[key] = &agentRecord{
 			ID: event.ID, RunID: runID, Provider: event.Provider,
-			ParentID: event.ParentID, Type: event.Type, Role: delegatedRole(event.Type),
-			State: agentStateActive, ParentKnown: event.ParentID != "", Generation: event.Generation,
+			ParentID: parentID, Type: event.Type, Role: role,
+			State: agentStateActive, ParentKnown: parentID != "", Generation: event.Generation,
 			StartedAt: started,
 		}
 		return true
@@ -133,8 +140,8 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		if record == nil {
 			a.records[key] = &agentRecord{
 				ID: event.ID, RunID: runID, Provider: event.Provider,
-				ParentID: event.ParentID, Type: event.Type, Role: delegatedRole(event.Type),
-				State: agentStateFinished, ParentKnown: event.ParentID != "", Generation: event.Generation,
+				ParentID: parentID, Type: event.Type, Role: role,
+				State: agentStateFinished, ParentKnown: parentID != "", Generation: event.Generation,
 				FinishedAt: now,
 			}
 			return true
@@ -148,6 +155,20 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	default:
 		return false
 	}
+}
+
+func (a *agentActivity) soleActiveLeadLocked(provider, runID string) string {
+	lead := ""
+	for _, record := range a.records {
+		if record.Provider != provider || record.RunID != runID || record.Role != agentRoleLead || record.State != agentStateActive {
+			continue
+		}
+		if lead != "" {
+			return ""
+		}
+		lead = record.ID
+	}
+	return lead
 }
 
 func (a *agentActivity) attention(generation uint64, state string) bool {
@@ -328,7 +349,9 @@ func capabilitiesFor(provider string) agentCapabilities {
 	switch provider {
 	case agentProviderClaude:
 		return agentCapabilities{Attention: true, Children: true}
-	case agentProviderCodex, agentProviderOpenCode:
+	case agentProviderCodex:
+		return agentCapabilities{Children: true}
+	case agentProviderOpenCode:
 		return agentCapabilities{}
 	default:
 		return agentCapabilities{}

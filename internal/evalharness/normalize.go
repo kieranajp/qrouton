@@ -130,7 +130,7 @@ func normalizedKind(typeName, name string) string {
 }
 
 // firstString returns the first key holding a non-empty string. The harness
-// deliberately does not import qrouton's own packages, so internal/agents keeps
+// deliberately does not import qrouton's own packages, so internal/agentevent keeps
 // its own copy of this; both skip empty values, because a present-but-empty
 // session id or tool name is no more useful than an absent one.
 func firstString(value map[string]any, keys ...string) string {

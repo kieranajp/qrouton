@@ -1,4 +1,4 @@
-package agents
+package agentevent
 
 import (
 	"encoding/json"
@@ -10,6 +10,8 @@ import (
 )
 
 type Event struct {
+	Provider      string `json:"provider"`
+	SessionID     string `json:"session_id,omitempty"`
 	HookEventName string `json:"hook_event_name"`
 	AgentID       string `json:"agent_id"`
 	AgentType     string `json:"agent_type"`
@@ -17,14 +19,18 @@ type Event struct {
 	Timestamp     string `json:"timestamp,omitempty"`
 }
 
-// RecordEvent appends one Claude subagent hook event read from input to the
-// session's log and returns the decoded live event even if the append fails.
-func RecordEvent(root string, input io.Reader) (Event, string, error) {
+// Record appends one subagent hook event read from input to the session's log
+// and returns the decoded live event even if the append fails.
+func Record(root, provider string, input io.Reader) (Event, string, error) {
 	var event Event
 	if err := json.NewDecoder(input).Decode(&event); err != nil {
 		return Event{}, "", err
 	}
-	if event.AgentID == "" || (event.HookEventName != hookSubagentStart && event.HookEventName != hookSubagentStop) {
+	event.Provider = provider
+	if provider == providerCodex && event.ParentID == "" {
+		event.ParentID = event.SessionID
+	}
+	if event.AgentID == "" || (event.HookEventName != HookSubagentStart && event.HookEventName != HookSubagentStop) {
 		return event, event.HookEventName, nil
 	}
 	event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
@@ -32,7 +38,7 @@ func RecordEvent(root string, input io.Reader) (Event, string, error) {
 	if err != nil {
 		return event, event.HookEventName, err
 	}
-	f, err := os.OpenFile(sessionpaths.ClaudeAgentLog(root), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	f, err := os.OpenFile(sessionpaths.AgentEventLog(root), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return event, event.HookEventName, err
 	}

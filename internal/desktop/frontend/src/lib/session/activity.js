@@ -62,10 +62,15 @@ export function parentLabel(record) {
 }
 
 /** @param {AgentRecord} record */
+export function activeAgent(record) {
+  return ["Waiting for you", "Working", "Idle", "Active"].includes(record.state ?? "");
+}
+
+/** @param {AgentRecord} record */
 export function runningRoot(record) {
   return (
     (record.role === "Orchestrator" || record.id === "root") &&
-    ["Waiting for you", "Working", "Idle", "Active"].includes(record.state ?? "")
+    activeAgent(record)
   );
 }
 

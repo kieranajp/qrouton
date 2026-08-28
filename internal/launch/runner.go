@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -211,7 +212,8 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
 		" " + sessionRootFlag + " " + ShellQuote(c.dir) +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
-		" " + generationFlag + " " + fmt.Sprint(c.generation)
+		" " + generationFlag + " " + fmt.Sprint(c.generation) +
+		" " + providerFlag + " " + runnerIDClaude
 	// Chime only when the agent asks for attention (not on every turn), so the user
 	// can step away; notify.sh is stamped into .qrouton by writeSupport.
 	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))
@@ -234,7 +236,31 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	if codex.MaxDepth(argv) < codex.RequiredMaxDepth {
 		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	}
-	return argv, os.Environ(), nil
+	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, agentEventSubcommand)
+	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(hookCommand))
+	if !c.override {
+		argv = append(argv, codexBypassHookTrustFlag)
+	}
+	argv = append(argv,
+		codex.ConfigFlag, codexSubagentStartHook+hook,
+		codex.ConfigFlag, codexSubagentStopHook+hook,
+	)
+	return argv, agentEventEnv(c, runnerIDCodex), nil
+}
+
+func quotedConfigString(value string) string {
+	quoted, _ := json.Marshal(value)
+	return string(quoted)
+}
+
+func agentEventEnv(c injectContext, provider string) []string {
+	env := os.Environ()
+	env = workbench.WithEnv(env, agentevent.QroutonBinEnvVar, c.qroutonBin)
+	env = workbench.WithEnv(env, agentevent.SessionRootEnvVar, c.dir)
+	env = workbench.WithEnv(env, agentevent.WorkbenchEnvVar, c.handle.Marshal())
+	env = workbench.WithEnv(env, agentevent.GenerationEnvVar, fmt.Sprint(c.generation))
+	env = workbench.WithEnv(env, agentevent.ProviderEnvVar, provider)
+	return env
 }
 
 // injectOpenCode is the one runner configured through the environment rather
