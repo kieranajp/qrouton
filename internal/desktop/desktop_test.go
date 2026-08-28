@@ -190,7 +190,6 @@ func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows,
 	// OnClose, so a test closing the conversation window exercises the real
 	// shutdown rather than a bare Quit.
 	quit := sync.OnceFunc(func() {
-		windows.observe(nil)
 		windows.stopAll()
 		reg.stopAll()
 		r.Quit()
@@ -475,8 +474,8 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	<-r.opened
 	owner := shownSession(t, reg)
 
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
-	tab := windows.tabs(owner)[0]
+	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	tab := windows.surfaces(owner).Tabs[0]
 	if tab.Label != shellWindowLabel {
 		t.Fatalf("first tab is %q, want the user shell", tab.Label)
 	}
@@ -500,7 +499,7 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	if err := windows.Close(tab.ID); err != nil {
 		t.Fatal(err)
 	}
-	if len(windows.tabs(owner)) != 0 {
+	if len(windows.surfaces(owner).Tabs) != 0 {
 		t.Fatal("the shell tab survived being closed")
 	}
 	for want := 1; want <= 2; want++ {
@@ -508,7 +507,7 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		tabs := windows.tabs(owner)
+		tabs := windows.surfaces(owner).Tabs
 		if len(tabs) != want {
 			t.Fatalf("%d tabs after asking %d times: %+v", len(tabs), want, tabs)
 		}
@@ -538,14 +537,14 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
+	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	const doc = "thoughts/shared/research/R7-editor-surfaces.md"
 	id, err := windows.OpenDocument(doc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	tabs := windows.tabs(owner)
+	tabs := windows.surfaces(owner).Tabs
 	if len(tabs) != 2 || tabs[1].ID != id {
 		t.Fatalf("the document is not the newest tab: %+v", tabs)
 	}
@@ -569,7 +568,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	if again != id {
 		t.Fatalf("a second click opened %q rather than selecting %q", again, id)
 	}
-	if got := len(windows.tabs(owner)); got != 2 {
+	if got := len(windows.surfaces(owner).Tabs); got != 2 {
 		t.Fatalf("%d tabs after clicking twice", got)
 	}
 
@@ -678,14 +677,14 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.tabs(owner)) == 1 })
+	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	for range 2 {
 		if _, err := windows.OpenShell(); err != nil {
 			t.Fatal(err)
 		}
 	}
-	tabs := windows.tabs(owner)
+	tabs := windows.surfaces(owner).Tabs
 	want := []string{shellWindowLabel, "$ shell 2", "$ shell 3"}
 	if len(tabs) != len(want) {
 		t.Fatalf("tabs = %+v", tabs)
@@ -1214,10 +1213,7 @@ func TestAnOpOnOneSessionsListenerTouchesOnlyThatSessionsWindows(t *testing.T) {
 	}
 
 	alpha := filepath.Join(root, "alpha")
-	host, err := (workbench.Handle{Socket: boot.socket(t, alpha), SessionRoot: alpha}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: boot.socket(t, alpha), SessionRoot: alpha}).WindowHost()
 	id, err := host.Open(context.Background(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ alpha dev", Cwd: alpha, Command: []string{"/bin/cat"},
 	})
@@ -1248,10 +1244,7 @@ func TestTheProcessSocketAnswersReadinessAndRefusesAWindowOp(t *testing.T) {
 	if !workbench.Answered(opts.Socket) {
 		t.Fatal("the process socket does not answer the launcher's readiness poll")
 	}
-	host, err := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
 	ctx := context.Background()
 	if _, err := host.Open(ctx, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: opts.SessionRoot, Command: []string{"/bin/cat"},
@@ -1612,14 +1605,13 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	}
 }
 
-// Removing a session's files out from under a live supervisor leaves it running
-// on an unlinked directory, and the window recorder saving on the way down would
-// write the manifest back into the directory that had just gone.
+// Removing a session's files out from under a live supervisor would leave it
+// running on an unlinked directory, so everything it holds has to be released
+// before the directory goes.
 func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
 	reg, windows, r := testSessions(t, root, boot)
-	windows.observe((&windowRecorder{windows: windows}).save)
 	dir := sessionDir(t, root, "octopus")
 
 	if err := reg.Show("octopus"); err != nil {
@@ -1632,10 +1624,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	}
 	pid := state.process.cmd.Process.Pid
 	socket := boot.socket(t, dir)
-	host, err := (workbench.Handle{Socket: socket, SessionRoot: dir}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: socket, SessionRoot: dir}).WindowHost()
 	if _, err := host.Open(context.Background(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: dir, Command: []string{"/bin/cat"},
 	}); err != nil {
@@ -1668,7 +1657,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 		t.Fatalf("the cleaned-up session still answers on %q", socket)
 	}
 	if _, err := os.Stat(sessionpaths.Manifest(dir)); !os.IsNotExist(err) {
-		t.Fatal("the manifest is back under the removed session, so the window recorder wrote it after the removal")
+		t.Fatal("the manifest is back under the removed session, so something wrote it after the removal")
 	}
 	if reg.bySlug("octopus") != nil {
 		t.Fatal("the cleaned-up session is still registered")

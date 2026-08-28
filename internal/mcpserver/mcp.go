@@ -190,9 +190,6 @@ func Run(root, editorJSON, workbenchJSON string) error {
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
-	host, err := handle.WindowHost()
-	if err != nil {
-		return fmt.Errorf("mcp: %w", err)
-	}
-	return newMCPServer(root, editor, host).Run(context.Background(), &mcp.StdioTransport{})
+	return newMCPServer(root, editor, handle.WindowHost()).
+		Run(context.Background(), &mcp.StdioTransport{})
 }

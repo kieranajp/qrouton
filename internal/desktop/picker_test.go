@@ -110,10 +110,7 @@ func TestOpPickerRefusesAnEmptyRootAsAnAnswer(t *testing.T) {
 	}
 	defer server.Close()
 
-	host, err := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
-	if err != nil {
-		t.Fatal(err)
-	}
+	host := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
 	if err := host.Picker(t.Context(), workbench.PickerRequest{Deadline: time.Now()}); err == nil {
 		t.Fatal("a picker with no session root succeeded")
 	} else if !strings.Contains(err.Error(), ErrNoSessionRoot.Error()) {

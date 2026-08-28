@@ -21,7 +21,8 @@ import (
 )
 
 // terminateGrace is how long a signalled runner gets to exit on SIGTERM before
-// it is killed outright.
+// it is killed outright. desktop has its own for the PTYs it owns; the two bound
+// different processes and need not agree.
 const terminateGrace = 3 * time.Second
 
 // Supervise owns the conversation terminal: it stamps the session's assets,

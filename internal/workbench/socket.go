@@ -105,14 +105,6 @@ func published(dir, socket string) bool {
 // from before endpoint publication was introduced.
 func Discover() Discovery { return discover(socketDir()) }
 
-// Running reports whether a workbench is already up.
-func Running() bool { return running(socketDir()) }
-
-func running(dir string) bool {
-	d := discover(dir)
-	return d.Socket != "" || d.Legacy
-}
-
 func discover(dir string) Discovery {
 	active := ""
 	_ = withFileLock(dir, descriptorLockName, func() error {

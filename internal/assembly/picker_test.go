@@ -101,10 +101,9 @@ func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 }
 
 // The final write must merge into what is on disk after a long clone, rather
-// than restoring the mode and window record from before it began.
+// than restoring the manifest from before it began.
 func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 	a, dir := scratch(t)
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "tests", Cwd: "src/svc"}}
 	wrote := false
 	progress := func(p session.Progress) {
 		if wrote || p.Step != session.ProgressWorktree || p.Status != session.ProgressCompleted {
@@ -114,7 +113,9 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 		if err := session.SetMode(dir, session.ModeRPI); err != nil {
 			t.Error(err)
 		}
-		if err := session.SetWindows(dir, windows); err != nil {
+		// Runner is a field Confirm never sets, so it witnesses the merge
+		// independently of the mode.
+		if err := setRunner(dir, "codex"); err != nil {
 			t.Error(err)
 		}
 	}
@@ -132,22 +133,20 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 	if got.EffectiveMode() != session.ModeRPI {
 		t.Fatalf("mode = %q, want the mode written during assembly", got.Mode)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "tests" {
-		t.Fatalf("windows written during assembly were lost: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("runner written during assembly was lost: %q", got.Runner)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
 		t.Fatalf("assembled repository was lost: %+v", got.Repos)
 	}
 }
 
-// The picker can sit open for the escalate tool's full ~30 minutes while the
-// workbench keeps rewriting Windows underneath it. Confirm used to write back
-// the manifest snapshot the picker loaded on open, discarding any Windows
-// written since.
-func TestConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+// The picker can sit open for the escalate tool's full ~30 minutes while
+// something else rewrites the manifest underneath it. Confirm used to write back
+// the snapshot the picker loaded on open, discarding anything written since.
+func TestConfirmPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	a, dir := scratch(t)
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
-	if err := session.SetWindows(dir, windows); err != nil {
+	if err := setRunner(dir, "codex"); err != nil {
 		t.Fatal(err)
 	}
 	draft := Draft{Name: "Webhook retry backoff", Prefix: "fix", Repos: editing(testRepo(t, "svc"))}
@@ -158,9 +157,20 @@ func TestConfirmPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
-		t.Fatalf("confirm discarded Windows written after the picker opened: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("confirm discarded the runner written after the picker opened: %q", got.Runner)
 	}
+}
+
+// setRunner writes a field Confirm never touches, so a test can prove the final
+// write merged rather than restored.
+func setRunner(dir, runner string) error {
+	m, err := session.Load(dir)
+	if err != nil {
+		return err
+	}
+	m.Runner = runner
+	return session.WriteManifest(dir, m)
 }
 
 // A second trip through the picker used to derive a branch from the form's
@@ -289,15 +299,14 @@ func TestCancelWritesTheCancelledStanzaOnlyOnAnEscalation(t *testing.T) {
 	}
 }
 
-// Same staleness risk as confirm: cancel must not overwrite Windows the
-// workbench wrote while the picker was up with the picker's own load-time copy.
-func TestCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
+// Same staleness risk as confirm: cancel must not overwrite what was written
+// while the picker was up with the picker's own load-time copy.
+func TestCancelPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	dir := t.TempDir()
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}); err != nil {
 		t.Fatal(err)
 	}
-	windows := []session.WindowRecord{{Kind: "terminal", Label: "repo", Cwd: "src/repo"}}
-	if err := session.SetWindows(dir, windows); err != nil {
+	if err := setRunner(dir, "codex"); err != nil {
 		t.Fatal(err)
 	}
 	if err := Cancel(dir, true); err != nil {
@@ -307,8 +316,8 @@ func TestCancelPreservesWindowsWrittenAfterPickerOpened(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Windows) != 1 || got.Windows[0].Label != "repo" {
-		t.Fatalf("cancel discarded Windows written after the picker opened: %+v", got.Windows)
+	if got.Runner != "codex" {
+		t.Fatalf("cancel discarded the runner written after the picker opened: %q", got.Runner)
 	}
 }
 

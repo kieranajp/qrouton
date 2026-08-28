@@ -395,43 +395,6 @@ func TestSetModePersistsAcrossReread(t *testing.T) {
 	}
 }
 
-// The window record is the session's own state, so writing it must not disturb
-// the mode a launch reads back.
-func TestSetWindowsRecordsWhatIsOpenWithoutTouchingTheMode(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions")
-	if err := os.MkdirAll(root, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	dir, err := Create(&config.Config{Root: root}, "Windowed", "", "", "", ModeAssistant, "", nil, nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	open := []WindowRecord{
-		{Kind: "terminal", Label: "▶ dev", Cwd: dir, Command: []string{"/bin/sh", "-lc", "yarn dev"}},
-		{Kind: "document", Label: "◆ diff"},
-	}
-	if err := SetWindows(dir, open); err != nil {
-		t.Fatal(err)
-	}
-	got, err := Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got.Windows) != 2 || got.Windows[0].Command[2] != "yarn dev" || got.Windows[1].Kind != "document" {
-		t.Fatalf("recorded windows = %+v", got.Windows)
-	}
-	if got.EffectiveMode() != ModeAssistant {
-		t.Fatalf("mode after recording windows = %q", got.EffectiveMode())
-	}
-
-	if err := SetWindows(dir, nil); err != nil {
-		t.Fatal(err)
-	}
-	if got, err := Load(dir); err != nil || len(got.Windows) != 0 {
-		t.Fatalf("windows after closing everything = %+v, %v", got.Windows, err)
-	}
-}
-
 // Escalating out of assistant mode owes the next runner a fresh conversation,
 // and that debt is recorded on disk so a restart cannot lose it. Every other
 // mode write must leave no marker, or a later launch would discard a

@@ -108,7 +108,6 @@ func Run(opts Options) error {
 	// The same teardown the main window's OnClose runs, shared with Settings.Quit
 	// so quitting from the panel is no worse than closing the window.
 	quit := sync.OnceFunc(func() {
-		windows.observe(nil)
 		windows.stopAll()
 		reg.stopAll()
 		r.Quit()
@@ -150,8 +149,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 
 	reg := term.sessions
 	shell := &shellWindow{windows: windows, argv: opts.Shell}
-	record := &windowRecorder{windows: windows}
-	windows.observe(record.save)
 
 	reg.boot = booting{
 		root: func(slug string) string {
@@ -180,9 +177,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 				_ = session.MarkOpened(root, time.Now())
 			}
 			shell.open(state)
-			// A resumed session's manifest still lists the last run's windows,
-			// and none of them are open.
-			record.save(state)
 		},
 		teardown: windows.stop,
 		// The destructive path addresses a session by the sessions root and the
@@ -334,7 +328,7 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 	})
 }
 
-// openDocument puts a document in the right pane, unrecorded like the shell.
+// openDocument puts a document in the right pane, as a workbench-owned tab.
 func openDocument(windows *Windows, owner *sessionState, window func(string, string) (workbench.WindowOptions, error), name string) (string, error) {
 	if owner == nil || window == nil {
 		return "", ErrNoEditorCommand

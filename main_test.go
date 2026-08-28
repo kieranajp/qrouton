@@ -283,8 +283,8 @@ func answerOnAWorkbenchSocket(t *testing.T) {
 		_ = listener.Close()
 		_ = os.Remove(socket)
 	})
-	if !workbench.Running() {
-		t.Fatal("a workbench listening on its socket is not reported as running")
+	if d := workbench.Discover(); d.Socket == "" && !d.Legacy {
+		t.Fatal("a workbench listening on its socket is not discovered")
 	}
 }
 
