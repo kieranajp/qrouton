@@ -250,7 +250,7 @@ func TestAnsweredSeesOnlyALiveSocket(t *testing.T) {
 // publication: discovery reports it as legacy rather than as nothing at all, so
 // a second one does not launch over it.
 func TestDiscoveryFindsALiveUnpublishedSocket(t *testing.T) {
-	dir := t.TempDir()
+	dir := shortSocketDir(t)
 	listenAt(t, filepath.Join(dir, "live"+socketSuffix))
 	if got := discover(dir); got.Legacy != true || got.Socket != "" {
 		t.Fatalf("discover = %+v, want a legacy workbench and no published endpoint", got)
@@ -487,6 +487,9 @@ func TestLaunchLockSerializesCriticalSections(t *testing.T) {
 	}
 }
 
+// shortSocketDir is where any test that binds a socket must put it: t.TempDir
+// spells the test's own name into the path, and on macOS that overruns the
+// 104-byte sun_path limit as "bind: invalid argument".
 func shortSocketDir(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("/tmp", "qrwb")
