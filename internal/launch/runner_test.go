@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -364,5 +366,76 @@ func TestAnUnregisteredRunnerArgvIsJustItsCommand(t *testing.T) {
 	r := Runner{ID: "handrolled", Command: []string{"echo", "--flag"}}
 	if got := runnerArgv(r, false, modeRPI, ""); !reflect.DeepEqual(got, r.Command) {
 		t.Fatalf("argv = %v, want the command untouched", got)
+	}
+}
+
+// codexArgv is what the launch path hands Codex, with CODEX_HOME pointed at a
+// config qrouton controls so the test reads its own depth rather than the
+// developer's.
+func codexArgv(t *testing.T, command []string, config string) []string {
+	t.Helper()
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", home)
+	if config != "" {
+		if err := os.WriteFile(filepath.Join(home, "config.toml"), []byte(config), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	r := Runner{ID: runnerIDCodex, Label: runnerLabelCodex, Command: command}
+	argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return argv
+}
+
+// AGENTS.md bounds subagent depth at three levels: orchestrator, lead,
+// specialist. Codex defaults to one, so a lead could not spawn anything —
+// launch has to raise it before the runner starts.
+func TestCodexIsLaunchedAtTheDepthALeadNeeds(t *testing.T) {
+	argv := codexArgv(t, []string{runnerIDCodex, codexBypassSandboxFlag}, "")
+	if got := codex.MaxDepth(argv); got != codex.RequiredMaxDepth {
+		t.Fatalf("codex would run at depth %d, want %d\nargv: %v", got, codex.RequiredMaxDepth, argv)
+	}
+}
+
+// A user who configured more nesting than qrouton needs keeps it: the injection
+// raises a shallow default, it does not pin the setting.
+func TestCodexKeepsADeeperConfiguredDepth(t *testing.T) {
+	deeper := codex.RequiredMaxDepth + 2
+	argv := codexArgv(t, []string{runnerIDCodex}, fmt.Sprintf("[agents]\nmax_depth = %d\n", deeper))
+	if got := codex.MaxDepth(argv); got != deeper {
+		t.Fatalf("configured depth %d became %d\nargv: %v", deeper, got, argv)
+	}
+}
+
+// Same for a depth set in the user's own launch override, which reaches the
+// injector as part of the command rather than through the config file.
+func TestCodexKeepsADeeperDepthFromALaunchOverride(t *testing.T) {
+	deeper := codex.RequiredMaxDepth + 1
+	argv := codexArgv(t,
+		[]string{runnerIDCodex, codex.ConfigFlag, codex.MaxDepthSetting(deeper)}, "")
+	if got := codex.MaxDepth(argv); got != deeper {
+		t.Fatalf("overridden depth %d became %d\nargv: %v", deeper, got, argv)
+	}
+}
+
+// The depth setting is Codex's alone; the other runners take their nesting from
+// their own defaults and must not be handed a -c they do not understand.
+func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
+	setting := codex.MaxDepthSetting(codex.RequiredMaxDepth)
+	for _, id := range []string{runnerIDClaude, runnerIDOpenCode} {
+		spec, ok := specFor(id)
+		if !ok {
+			t.Fatalf("no spec for %q", id)
+		}
+		r := Runner{ID: spec.ID, Label: spec.Label, Command: spec.Command}
+		argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), false, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(strings.Join(argv, " "), setting) {
+			t.Errorf("%s was handed %q", id, setting)
+		}
 	}
 }

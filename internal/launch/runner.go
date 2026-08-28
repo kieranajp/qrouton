@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -222,8 +223,14 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	command, _ := json.Marshal(c.qroutonBin)
 	args, _ := json.Marshal(c.mcpArgs)
-	argv = append(argv, codexConfigFlag, codexMCPCommandKey+string(command),
-		codexConfigFlag, codexMCPArgsKey+string(args))
+	argv = append(argv, codex.ConfigFlag, codexMCPCommandKey+string(command),
+		codex.ConfigFlag, codexMCPArgsKey+string(args))
+	// Codex defaults to one level of nesting, which is a lead that cannot spawn
+	// the specialists qrouton's topology has it delegate to. Raise it, unless
+	// the user's own command already asks for at least as much.
+	if codex.MaxDepth(argv) < codex.RequiredMaxDepth {
+		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
+	}
 	return argv, os.Environ(), nil
 }
 

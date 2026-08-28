@@ -1,5 +1,7 @@
 package launch
 
+import "github.com/kieranajp/qrouton/internal/codex"
+
 // Literals the launch path depends on: runner identifiers and their arguments,
 // the environment variables and shell fragments qrouton injects, and the
 // subcommands qrouton launches against itself.
@@ -71,8 +73,10 @@ const (
 // The permission-bypass flags are deliberate: a qrouton session is an
 // already-isolated worktree the user opened for the agent to work in.
 const (
-	runnerIDClaude   = "claude"
-	runnerIDCodex    = "codex"
+	runnerIDClaude = "claude"
+	// runnerIDCodex is codex.Binary: the identifier and the command are the same
+	// word, and codex owns the spelling.
+	runnerIDCodex    = codex.Binary
 	runnerIDOpenCode = "opencode"
 
 	runnerLabelClaude   = "Claude Code"
@@ -92,7 +96,6 @@ const (
 
 	claudeMCPConfigFlag = "--mcp-config"
 	claudeSettingsFlag  = "--settings"
-	codexConfigFlag     = "-c"
 )
 
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP

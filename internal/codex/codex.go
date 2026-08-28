@@ -35,13 +35,23 @@ const (
 	// RequiredMaxDepth is the nesting a lead needs to spawn its own workers.
 	RequiredMaxDepth = 2
 
-	configComment  = "#"
-	tableOpen      = "["
-	tableClose     = "]"
-	keyValueSep    = "="
-	configFlag     = "-c"
+	configComment = "#"
+	tableOpen     = "["
+	tableClose    = "]"
+	keyValueSep   = "="
+
+	// ConfigFlag is how Codex takes a setting on the command line, where it
+	// overrides config.toml. The launcher passes qrouton's own settings through
+	// it, so the spelling lives here with the keys it carries.
+	ConfigFlag     = "-c"
 	configFlagLong = "--config"
 )
+
+// MaxDepthSetting is the ConfigFlag value that sets Codex's subagent nesting to
+// depth. Paired with ConfigFlag it is the override MaxDepth reads back.
+func MaxDepthSetting(depth int) string {
+	return dottedMaxDepth + keyValueSep + strconv.Itoa(depth)
+}
 
 // Home is the directory Codex keeps its state in: $CODEX_HOME when set,
 // otherwise ~/.codex. It is empty only if neither is discoverable.
@@ -64,7 +74,7 @@ func MaxDepth(argv []string) int {
 	for index := 1; index < len(argv); index++ {
 		var override string
 		switch {
-		case argv[index] == configFlag || argv[index] == configFlagLong:
+		case argv[index] == ConfigFlag || argv[index] == configFlagLong:
 			if index+1 < len(argv) {
 				index++
 				override = argv[index]
