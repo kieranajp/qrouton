@@ -49,6 +49,14 @@ workbench.
 The release bundle supports Apple silicon and Intel Macs running macOS 12 or
 newer.
 
+Install with Homebrew:
+
+```sh
+brew install --cask kieranajp/qrouton/qrouton
+```
+
+Or install the app manually:
+
 1. Download the latest zip from [GitHub Releases](https://github.com/kieranajp/qrouton/releases/latest).
 2. Unzip it and move `qrouton.app` to Applications.
 3. Control-click the app, choose **Open**, then confirm **Open** on first launch.
