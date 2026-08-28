@@ -194,6 +194,7 @@
       sessions={fields.sessions}
       slug={fields.slug}
       repos={fields.repos}
+      agents={fields.agents}
       onNewSession={() => (requested = true)}
       onAddRepos={() => (added = fields.slug)}
       onDismissed={() => keyboard++}

@@ -5,6 +5,7 @@
   import { dismissible } from "../core/dismiss.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
+  import ActivityPanel from "./ActivityPanel.svelte";
   import RailItem from "./RailItem.svelte";
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
@@ -16,6 +17,7 @@
    *   sessions: any[],
    *   slug: string,
    *   repos: any[],
+   *   agents: any,
    *   onNewSession: () => void,
    *   onAddRepos: () => void,
    *   onDismissed: () => void,
@@ -26,6 +28,7 @@
     sessions,
     slug,
     repos,
+    agents,
     onNewSession,
     onAddRepos,
     onDismissed,
@@ -125,24 +128,28 @@
 </script>
 
 <div class="rail" bind:clientWidth={width}>
-  <CapsLabel>Sessions</CapsLabel>
-  {#each sessions as row, i (row.slug)}
-    <RailItem
-      initials={row.initials}
-      shortcut={shortcut(i)}
-      name={row.name}
-      repos={row.repos}
-      live={!!row.terminal}
-      selected={row.slug === slug}
-      activity={row.activity}
-      unseen={row.unseen}
-      onclick={() => show(row.slug)}
-      oncontextmenu={(event) => openMenu(event, row)} />
-  {/each}
+  <div class="session-list" aria-label="Sessions">
+    <CapsLabel>Sessions</CapsLabel>
+    {#each sessions as row, i (row.slug)}
+      <RailItem
+        initials={row.initials}
+        shortcut={shortcut(i)}
+        name={row.name}
+        repos={row.repos}
+        summary={row.summary}
+        selected={row.slug === slug}
+        unseen={row.unseen}
+        onclick={() => show(row.slug)}
+        oncontextmenu={(event) => openMenu(event, row)} />
+    {/each}
 
-  <Button variant="dashed" size="sm" glyph="+" onclick={onNewSession}>New session</Button>
+    <Button variant="dashed" size="sm" glyph="+" onclick={onNewSession}>New session</Button>
+  </div>
 
-  <RepoList {repos} {onAddRepos} />
+  <div class="detail-stack" aria-label="Selected session details">
+    <ActivityPanel {agents} />
+    <RepoList {repos} {onAddRepos} />
+  </div>
 </div>
 
 {#if menu}
@@ -200,11 +207,31 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
     padding: 14px 12px;
     background: var(--surface-chrome);
     border-right: 1px solid var(--border-subtle);
+    overflow: hidden;
+  }
+
+  .session-list,
+  .detail-stack {
+    min-height: 0;
     overflow: hidden auto;
+  }
+
+  .session-list {
+    flex: 1 1 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .detail-stack {
+    flex: 1 1 50%;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
   }
 
   .anchor {
