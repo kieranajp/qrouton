@@ -29,10 +29,15 @@
     focusGenerationIn,
     focusPendingIn,
     focusTerminal,
+    humanWidth,
+    MIN_HUMAN,
+    readStored,
+    roomFor,
     selectedIn,
     selectIn,
     storedWidth,
     widthKey,
+    writeStored,
   } from "./lib/layout.js";
   import { menuHeight, place } from "./lib/menu.js";
   import { cleanup, reveal, show, uncommitted } from "./lib/sessions.js";
@@ -54,27 +59,6 @@
     idle: { label: "Idle", tone: "idle", fill: "var(--ctp-surface-2)" },
   };
 
-  // Neither pane is worth having below these; the divider stops rather than
-  // letting one of them become a strip.
-  const MIN_HUMAN = 320;
-  const MIN_AGENT = 360;
-
-  // A page served from a custom scheme has an origin the webview may call
-  // opaque, where storage throws rather than coming back empty.
-  const readStored = (key) => {
-    try {
-      return localStorage.getItem(key);
-    } catch {
-      return null;
-    }
-  };
-  const writeStored = (key, value) => {
-    try {
-      if (value) localStorage.setItem(key, String(value));
-      else localStorage.removeItem(key);
-    } catch {}
-  };
-
   const session = chrome();
   let fields = $derived(session.fields);
   const open = surfaces(() => fields.slug);
@@ -83,8 +67,8 @@
   let panels = $state(0);
   let rail = $state(0);
   let measured = $state(0);
-  let room = $derived(panels ? Math.max(MIN_HUMAN, panels - rail - MIN_AGENT) : Infinity);
-  let human = $derived(width ? Math.min(Math.max(width, MIN_HUMAN), room) : 0);
+  let room = $derived(roomFor(panels, rail));
+  let human = $derived(humanWidth(width, room));
 
   function resize(next) {
     dragged = { ...dragged, [fields.slug]: next };

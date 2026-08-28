@@ -29,3 +29,45 @@ export function consumeTerminalFocus(generations, id, generation) {
   if (!current || current.generation !== generation || !current.pending) return generations;
   return { ...generations, [id]: { generation, pending: false } };
 }
+
+// Neither pane is worth having below these; the divider stops rather than
+// letting one of them become a strip.
+export const MIN_HUMAN = 320;
+export const MIN_AGENT = 360;
+
+/**
+ * roomFor is the widest the shell pane may be drawn: whatever is left once the
+ * rail and the agent's minimum are taken out. Before the panels have been
+ * measured there is no known limit, so nothing is clamped yet.
+ */
+export const roomFor = (panels, rail) =>
+  panels ? Math.max(MIN_HUMAN, panels - rail - MIN_AGENT) : Infinity;
+
+/**
+ * humanWidth is the width the shell pane actually gets: the stored or dragged
+ * one, never below its own minimum and never past the room there is. Zero means
+ * untouched, which leaves the starting width to the pane itself.
+ */
+export const humanWidth = (width, room) =>
+  width ? Math.min(Math.max(width, MIN_HUMAN), room) : 0;
+
+// A page served from a custom scheme has an origin the webview may call opaque,
+// where storage throws rather than coming back empty. Both of these are the
+// whole reason the pane width is read and written through functions.
+
+/** @param {string} key */
+export const readStored = (key) => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+
+/** @param {string} key */
+export const writeStored = (key, value) => {
+  try {
+    if (value) localStorage.setItem(key, String(value));
+    else localStorage.removeItem(key);
+  } catch {}
+};
