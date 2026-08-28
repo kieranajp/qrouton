@@ -28,7 +28,7 @@ const (
 	pad          = int64(20)
 
 	// d2 sizes by content, so an unscaled diagram dwarfs the prose around it.
-	scale = 0.75
+	scale = 0.65
 )
 
 // Result is one fence's outcome, carrying the document line it was found on so
