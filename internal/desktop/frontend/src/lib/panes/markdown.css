@@ -230,6 +230,16 @@
   max-block-size: calc(var(--diagram-h) * 1px);
 }
 
+/* Only while there is something to pan: at the fitted default the diagram is
+   all there, and a cursor promising otherwise would be lying. */
+.markdown pre.diagram .diagram-stage[data-pannable="true"] {
+  cursor: grab;
+}
+
+.markdown pre.diagram .diagram-stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+
 .markdown pre.diagram .diagram-stage svg {
   position: absolute;
   inset: 0 auto auto 0;

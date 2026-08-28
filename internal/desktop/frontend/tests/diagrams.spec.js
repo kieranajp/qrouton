@@ -199,3 +199,61 @@ test("zoom stops at eight hundred percent above and at the fitted view below", a
   await page.evaluate(() => window.settled());
   expect(await page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.base, 3);
 });
+
+test("a zoomed diagram is dragged, and cannot be dragged off its own edges", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const resting = await page.evaluate(() => window.probe());
+
+  // Nothing to pan at the fitted default, and nothing promising otherwise.
+  expect(await page.evaluate(() => window.cursor())).toBe("auto");
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x - 60, at.y - 10, { steps: 4 });
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.view())).toMatchObject({ tx: 0, ty: 0 });
+
+  await page.mouse.move(at.x, at.y);
+  await page.keyboard.down("Control");
+  await page.mouse.wheel(0, -600);
+  await page.keyboard.up("Control");
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.cursor())).toBe("grab");
+  const zoomed = await page.evaluate(() => window.view());
+
+  await page.mouse.down();
+  await page.mouse.move(at.x - 40, at.y - 8, { steps: 4 });
+  const held = await page.evaluate(() => window.cursor());
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+  const panned = await page.evaluate(() => window.view());
+  expect(held).toBe("grabbing");
+  expect(panned.tx).toBeLessThan(zoomed.tx);
+  expect(panned.ty).toBeLessThan(zoomed.ty);
+  expect(await page.evaluate(() => window.selected())).toBe("");
+
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 4000, at.y + 4000, { steps: 6 });
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+  expect(await page.evaluate(() => window.view())).toMatchObject({ tx: 0, ty: 0 });
+
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x - 8000, at.y - 8000, { steps: 6 });
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+  const edge = await page.evaluate(() => window.view());
+  const emitted = await page.evaluate(() => window.emitted);
+  expect(edge.tx).toBeCloseTo(box.width - emitted.width * edge.scale, 0);
+  expect(edge.ty).toBeCloseTo(box.height - emitted.height * edge.scale, 0);
+
+  // Paint only, throughout.
+  const after = await page.evaluate(() => window.probe());
+  expect(after.boxWidth).toBe(resting.boxWidth);
+  expect(after.boxHeight).toBe(resting.boxHeight);
+});

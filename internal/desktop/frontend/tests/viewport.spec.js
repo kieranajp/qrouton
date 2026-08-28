@@ -193,7 +193,7 @@ test("a diagram swapped in keeps the lines around it measurable", async ({ page 
 // open_file claims a scroll succeeded from it, so a view the reader moves must
 // report nothing at all. A transform escaping into layout would change the
 // block's box, change the intervals, and defeat publish()'s dedupe.
-test("zooming a diagram reports nothing at all", async ({ page }) => {
+test("zooming and panning a diagram report nothing at all", async ({ page }) => {
   await page.goto("/tests/viewport.html");
   await waitForReport(page, 1);
   await page.evaluate(() => window.scrollToDiagram());
@@ -226,10 +226,23 @@ test("zooming a diagram reports nothing at all", async ({ page }) => {
   await page.evaluate(() => window.settled());
   await page.waitForTimeout(150);
 
-  const after = await state();
-  expect(after.transform).not.toBe(before.transform);
-  expect(after.scrollTop).toBe(before.scrollTop);
-  expect(after.box).toEqual(before.box);
-  expect(after.reports).toBe(before.reports);
-  expect(after.last).toBe(before.last);
+  const zoomed = await state();
+  expect(zoomed.transform).not.toBe(before.transform);
+  expect(zoomed.scrollTop).toBe(before.scrollTop);
+  expect(zoomed.box).toEqual(before.box);
+  expect(zoomed.reports).toBe(before.reports);
+  expect(zoomed.last).toBe(before.last);
+
+  await page.mouse.down();
+  await page.mouse.move(stage.x + stage.width / 2 - 30, stage.y + 20, { steps: 4 });
+  await page.mouse.up();
+  await page.evaluate(() => window.settled());
+  await page.waitForTimeout(150);
+
+  const panned = await state();
+  expect(panned.transform).not.toBe(zoomed.transform);
+  expect(panned.scrollTop).toBe(before.scrollTop);
+  expect(panned.box).toEqual(before.box);
+  expect(panned.reports).toBe(before.reports);
+  expect(panned.last).toBe(before.last);
 });

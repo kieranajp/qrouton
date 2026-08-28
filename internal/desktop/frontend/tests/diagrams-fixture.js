@@ -83,6 +83,8 @@ window.settle = () =>
 const stageOf = (line) => root.querySelector(`pre[data-line="${line}"] .diagram-stage`);
 
 window.scrolled = () => document.querySelector("#scroller").scrollTop;
+window.cursor = (line = LINES.drawn) => getComputedStyle(stageOf(line)).cursor;
+window.selected = () => String(window.getSelection() ?? "");
 window.stageBox = (line = LINES.drawn) => {
   const box = stageOf(line).getBoundingClientRect();
   return { x: box.x, y: box.y, width: box.width, height: box.height };

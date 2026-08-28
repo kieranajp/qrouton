@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { clampScale, clampTranslate, fitScale, stepScale, zoomAt } from "./diagram-view.js";
+import { clampScale, clampTranslate, fitScale, panBy, stepScale, zoomAt } from "./diagram-view.js";
 
 test("a diagram wider than the box opens shrunk to fit across it", () => {
   assert.equal(fitScale({ width: 1000, height: 100 }, 500), 0.5);
@@ -77,4 +77,39 @@ test("the fitted scale is the floor and eight hundred percent the ceiling", () =
   assert.equal(clampScale(400, 0.34), 8);
   assert.equal(clampScale(Number.NaN, 0.34), 0.34);
   assert.equal(clampScale(2, 0.34), 2);
+});
+
+const box = { width: 400, height: 200 };
+
+test("a drag moves the view by the pointer and stops at the edges", () => {
+  const content = { width: 1000, height: 500 };
+  assert.deepEqual(panBy({ tx: -100, ty: -50, button: 0 }, { x: -30, y: -20 }, box, content), {
+    tx: -130,
+    ty: -70,
+  });
+  assert.deepEqual(panBy({ tx: -100, ty: -50, button: 0 }, { x: 400, y: 400 }, box, content), {
+    tx: 0,
+    ty: 0,
+  });
+  assert.deepEqual(panBy({ tx: -100, ty: -50, button: 0 }, { x: -900, y: -900 }, box, content), {
+    tx: -600,
+    ty: -300,
+  });
+});
+
+test("a drag at the fitted default has nothing to move", () => {
+  const content = { width: 400, height: 200 };
+  for (const by of [{ x: -80, y: -40 }, { x: 80, y: 40 }]) {
+    assert.deepEqual(panBy({ tx: 0, ty: 0, button: 0 }, by, box, content), { tx: 0, ty: 0 });
+  }
+});
+
+test("a drag on any button but the primary one is not a pan", () => {
+  const content = { width: 1000, height: 500 };
+  for (const button of [1, 2, -1]) {
+    assert.deepEqual(panBy({ tx: -100, ty: -50, button }, { x: -30, y: -20 }, box, content), {
+      tx: -100,
+      ty: -50,
+    });
+  }
 });
