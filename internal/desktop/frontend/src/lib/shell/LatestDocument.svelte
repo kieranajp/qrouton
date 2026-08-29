@@ -14,7 +14,14 @@
 <div class="latest" use:dismissible={dismiss} {...rest}>
   <CapsLabel tone="dim">Wrote</CapsLabel>
   {#if !latest}
-    <span class="nothing">nothing yet</span>
+    {#if onToggle}
+      <button class="chip" class:lit={open || unseen} onclick={onToggle}>
+        <span class="nothing">nothing yet</span>
+        <span class="caret">&#9662;</span>
+      </button>
+    {:else}
+      <span class="nothing">nothing yet</span>
+    {/if}
   {:else}
     {#snippet summary()}
       <span class="tag" style:--artifact={artifactTone(latest.tag)}>{latest.tag}</span>
@@ -31,8 +38,8 @@
     {:else}
       <span class="chip inert" class:lit={unseen}>{@render summary()}</span>
     {/if}
-    {#if open}{@render children?.()}{/if}
   {/if}
+  {#if open}{@render children?.()}{/if}
 </div>
 
 <style>

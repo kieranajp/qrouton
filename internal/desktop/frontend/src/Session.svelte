@@ -136,8 +136,26 @@
       : undefined,
   );
   let written = $derived(
-    fields.documents.map((doc) => ({ tag: doc.kind, label: doc.name, meta: age(doc.at) })),
+    fields.documents.map((doc) => ({
+      tag: doc.kind,
+      label: doc.name,
+      meta: age(doc.at),
+      path: doc.path,
+    })),
   );
+  let repositoryDocuments = $derived(
+    fields.repositoryDocuments.map((repo) => ({
+      label: repo.name,
+      items: repo.documents.map((doc) => ({ tag: doc.kind, label: doc.name, path: doc.path })),
+    })),
+  );
+  let documentMenu = $derived([
+    ...written,
+    ...(repositoryDocuments.length
+      ? ["-", { heading: "In-repo" }, ...repositoryDocuments]
+      : []),
+  ]);
+  let hasDocuments = $derived(fields.documents.length > 0 || repositoryDocuments.length > 0);
   let listing = $state(false);
 
   // A session with no editor has nothing to open and no room here to say so.
@@ -232,13 +250,13 @@
           {latest}
           count={fields.documents.length}
           open={listing}
-          onToggle={() => (listing = !listing)}>
+          onToggle={hasDocuments ? () => (listing = !listing) : undefined}>
           <Menu
             label="Written this session"
-            items={written}
+            items={documentMenu}
             align="right"
             width={320}
-            onSelect={(_, i) => read(fields.documents[i].path)} />
+            onSelect={(item) => read(item.path)} />
         </LatestDocument>
       </PaneHeader>
       {#each mounted as row (row.terminal)}

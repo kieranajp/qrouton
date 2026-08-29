@@ -1,7 +1,13 @@
 import { expect, test } from "@playwright/test";
 
 const state = (page) => page.evaluate(() => window.chromeState());
-const fields = (activity) => ({ activity, sessions: [], documents: [], repos: [] });
+const fields = (activity) => ({
+  activity,
+  sessions: [],
+  documents: [],
+  repositoryDocuments: [],
+  repos: [],
+});
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/tests/chrome.html");

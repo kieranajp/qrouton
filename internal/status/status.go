@@ -31,13 +31,14 @@ type Fields struct {
 	Branch   string `json:"branch"`
 	// Slug and Terminal name the session on screen and the conversation the page
 	// attaches to; the page has no other way to address either.
-	Slug      string       `json:"slug"`
-	Terminal  string       `json:"terminal"`
-	Sessions  []SessionRow `json:"sessions"`
-	Documents []Document   `json:"documents"`
-	Repos     []RepoStat   `json:"repos"`
-	Activity  string       `json:"activity"`
-	Agents    AgentPanel   `json:"agents"`
+	Slug                string                `json:"slug"`
+	Terminal            string                `json:"terminal"`
+	Sessions            []SessionRow          `json:"sessions"`
+	Documents           []Document            `json:"documents"`
+	RepositoryDocuments []RepositoryDocuments `json:"repositoryDocuments"`
+	Repos               []RepoStat            `json:"repos"`
+	Activity            string                `json:"activity"`
+	Agents              AgentPanel            `json:"agents"`
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
@@ -107,6 +108,13 @@ type Document struct {
 	At   time.Time `json:"at"`
 }
 
+// RepositoryDocuments is one session repository whose own thoughts directory
+// contains durable artifacts.
+type RepositoryDocuments struct {
+	Name      string     `json:"name"`
+	Documents []Document `json:"documents"`
+}
+
 // RepoStat is how far one repository has moved, in the window's vocabulary.
 type RepoStat struct {
 	Name       string `json:"name"`
@@ -121,7 +129,7 @@ type RepoStat struct {
 // manifest answers with the session-level fields empty rather than nothing at all.
 func Read(root string) Fields {
 	fields := Fields{
-		Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{},
+		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
 		Agents: AgentPanel{Agents: []AgentRecord{}},
 	}
 	m, err := session.Load(root)
@@ -138,6 +146,7 @@ func Read(root string) Fields {
 	fields.Slug = m.Slug
 	fields.Agents.Provider = m.Runner
 	fields.Documents = documents(root)
+	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	return fields
 }
 
@@ -286,6 +295,44 @@ var nonLetter = regexp.MustCompile(`[^a-z0-9]+`)
 // documents lists what the session has written, newest first.
 func documents(root string) []Document {
 	dir := sessionpaths.Thoughts(root)
+	out := documentsUnder(root, dir, func(path string) string { return filepath.Base(path) })
+	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
+	return out
+}
+
+// repositoryDocuments lists repository-owned thoughts in manifest order. An
+// empty thoughts directory has no row in the picker.
+func repositoryDocuments(root string, repos []session.ManifestRepo) []RepositoryDocuments {
+	out := []RepositoryDocuments{}
+	src := sessionpaths.Src(root)
+	for _, repo := range repos {
+		if repo.WorktreePath == "" {
+			continue
+		}
+		worktree := repo.WorktreePath
+		if !filepath.IsAbs(worktree) {
+			worktree = filepath.Join(root, worktree)
+		}
+		worktree = filepath.Clean(worktree)
+		rel, err := filepath.Rel(src, worktree)
+		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			continue
+		}
+		dir := filepath.Join(worktree, sessionpaths.ThoughtsDirName)
+		documents := documentsUnder(root, dir, func(path string) string {
+			name, _ := filepath.Rel(dir, path)
+			return filepath.ToSlash(name)
+		})
+		if len(documents) == 0 {
+			continue
+		}
+		sort.Slice(documents, func(i, j int) bool { return documents[i].Name < documents[j].Name })
+		out = append(out, RepositoryDocuments{Name: repo.Name, Documents: documents})
+	}
+	return out
+}
+
+func documentsUnder(root, dir string, name func(string) string) []Document {
 	out := []Document{}
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
@@ -300,11 +347,10 @@ func documents(root string) []Document {
 			return nil
 		}
 		out = append(out, Document{
-			Name: entry.Name(), Path: rel, Kind: DocumentKind(rel), At: info.ModTime(),
+			Name: name(path), Path: rel, Kind: DocumentKind(rel), At: info.ModTime(),
 		})
 		return nil
 	})
-	sort.Slice(out, func(i, j int) bool { return out[i].At.After(out[j].At) })
 	return out
 }
 

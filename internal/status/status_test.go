@@ -34,14 +34,15 @@ func TestReadScratchAssistant(t *testing.T) {
 	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "lifesum-4f3a", Mode: session.ModeAssistant})
 	got := Read(dir)
 	want := Fields{
-		Mode:      "ASSISTANT",
-		Phase:     "scratch",
-		Identity:  "lifesum-4f3a",
-		Slug:      "lifesum-4f3a",
-		Sessions:  []SessionRow{},
-		Documents: []Document{},
-		Repos:     []RepoStat{},
-		Agents:    AgentPanel{Agents: []AgentRecord{}},
+		Mode:                "ASSISTANT",
+		Phase:               "scratch",
+		Identity:            "lifesum-4f3a",
+		Slug:                "lifesum-4f3a",
+		Sessions:            []SessionRow{},
+		Documents:           []Document{},
+		RepositoryDocuments: []RepositoryDocuments{},
+		Repos:               []RepoStat{},
+		Agents:              AgentPanel{Agents: []AgentRecord{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -95,7 +96,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 // to be told something, and no slice in it may be nil.
 func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
-		Sessions: []SessionRow{}, Documents: []Document{}, Repos: []RepoStat{},
+		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
 		Agents: AgentPanel{Agents: []AgentRecord{}},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
@@ -197,6 +198,53 @@ func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T
 		if want := filepath.Join("thoughts", "shared", doc); got.Path != want {
 			t.Fatalf("document %d is at %q, want %q", i, got.Path, want)
 		}
+	}
+}
+
+func TestReadListsThoughtsFromEachRepositoryInManifestOrder(t *testing.T) {
+	root := t.TempDir()
+	m := session.Manifest{Slug: "webhook", Repos: []session.ManifestRepo{
+		{Name: "api", Org: "acme", WorktreePath: "src/api"},
+		{Name: "web", Org: "acme", Role: session.RepoRoleReference, WorktreePath: "src/web"},
+		{Name: "empty", Org: "acme", WorktreePath: "src/empty"},
+		{Name: "missing-path", Org: "acme"},
+	}}
+	dir := sessionDir(t, root, m)
+	files := map[string]string{
+		"src/api/thoughts/plans/P2-api.md":        "# API plan\n",
+		"src/api/thoughts/research/R1-api.md":     "# API research\n",
+		"src/api/thoughts/research/ignored.txt":   "not a document\n",
+		"src/web/thoughts/specs/S3-navigation.md": "# Navigation\n",
+		"thoughts/shared/plans/P0-session.md":     "# Session plan\n",
+	}
+	for name, content := range files {
+		path := filepath.Join(dir, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got := Read(dir).RepositoryDocuments
+	if len(got) != 2 || got[0].Name != "api" || got[1].Name != "web" {
+		t.Fatalf("repository documents = %#v, want non-empty repositories in manifest order", got)
+	}
+	want := []struct{ name, path, kind string }{
+		{"plans/P2-api.md", filepath.Join("src", "api", "thoughts", "plans", "P2-api.md"), KindPlan},
+		{"research/R1-api.md", filepath.Join("src", "api", "thoughts", "research", "R1-api.md"), KindResearch},
+	}
+	if len(got[0].Documents) != len(want) {
+		t.Fatalf("api documents = %#v, want %#v", got[0].Documents, want)
+	}
+	for i, document := range got[0].Documents {
+		if document.Name != want[i].name || document.Path != want[i].path || document.Kind != want[i].kind {
+			t.Errorf("api document %d = %#v, want name %q, path %q, kind %q", i, document, want[i].name, want[i].path, want[i].kind)
+		}
+	}
+	if documents := got[1].Documents; len(documents) != 1 || documents[0].Name != "specs/S3-navigation.md" || documents[0].Kind != KindSpec {
+		t.Fatalf("web documents = %#v", documents)
 	}
 }
 
@@ -532,7 +580,7 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 	if err := json.Unmarshal(b, &keyed); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"sessions", "documents", "repos"} {
+	for _, key := range []string{"sessions", "documents", "repositoryDocuments", "repos"} {
 		if string(keyed[key]) == "null" {
 			t.Errorf("%q marshalled as null", key)
 		}

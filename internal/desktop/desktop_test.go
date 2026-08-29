@@ -959,12 +959,12 @@ func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.
 	})
 
 	empty := chrome.Snapshot()
-	if empty.Sessions == nil || empty.Documents == nil || empty.Repos == nil || empty.Agents.Agents == nil {
+	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil || empty.Agents.Agents == nil {
 		t.Fatalf("initial snapshot has nil slices: %+v", empty)
 	}
 	first := status.Fields{
 		Activity: "idle", Sessions: []status.SessionRow{},
-		Documents: []status.Document{}, Repos: []status.RepoStat{},
+		Documents: []status.Document{}, RepositoryDocuments: []status.RepositoryDocuments{}, Repos: []status.RepoStat{},
 	}
 	chrome.publish(chromeEvent, first)
 	chrome.publish(chromeEvent, first)
