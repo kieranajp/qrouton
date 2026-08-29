@@ -4,9 +4,9 @@
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
-  import { dominantStatus, split } from "./tabs.js";
+  import { dominantStatus, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let { tabs = [], selected = 0, onSelect, onClose, onNew, newLabel = "New ▾", ...rest } = $props();
 
   // Below this a tab is a coloured rectangle; the rest go to the menu.
@@ -37,6 +37,7 @@
   {#each drawn.shown as { tab, index } (tab.id ?? tab.label)}
     <Tab
       label={tab.label}
+      badge={tab.badge}
       status={tab.status}
       selected={index === selected}
       closable={tab.closable !== false}
@@ -61,7 +62,7 @@
           width={260}
           align="right"
           offsetY={36}
-          items={drawn.hidden.map(({ tab }) => ({ label: tab.label, status: tab.status }))}
+          items={drawn.hidden.map(({ tab }) => ({ label: tabLabel(tab), status: tab.status }))}
           onSelect={(_, i) => reveal(drawn.hidden[i].index)} />
       {/if}
     </span>

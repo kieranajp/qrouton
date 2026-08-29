@@ -26,7 +26,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	background.agents.begin(agentProviderClaude, 1)
 	background.agents.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "lead-1", Type: "qrspi-research-lead",
+		ID: "lead-1", Type: "qrouton-research-lead",
 	})
 	background.agents.attention(1, status.ActivityWaiting)
 	shown.agents.begin(agentProviderCodex, 2)

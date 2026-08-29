@@ -36,6 +36,14 @@ const observed = (data) =>
 
 /** chrome is the last thing the workbench said it could observe. */
 export function chrome() {
+  return (shared ??= observing());
+}
+
+// One subscription for the whole page: every caller wants the same live fields,
+// and a second Events.On would outlive the component that opened it.
+let shared;
+
+function observing() {
   let fields = $state(NOTHING);
   let settled = $state(false);
   let live = false;

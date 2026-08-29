@@ -1,9 +1,9 @@
 <script>
-  /** @type {{lines?: string[], size?: 'md'|'sm', children?: import('svelte').Snippet, [attribute: string]: any}} */
-  let { lines = [], size = "md", children, ...rest } = $props();
+  /** @type {{lines?: string[], size?: 'md'|'sm', flush?: boolean, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  let { lines = [], size = "md", flush = false, children, ...rest } = $props();
 </script>
 
-<div class="pane" class:small={size === "sm"} {...rest}>
+<div class="pane" class:small={size === "sm"} class:flush {...rest}>
   {#if children}
     {@render children()}
   {:else}
@@ -30,6 +30,11 @@
 
   .small {
     font: var(--terminal-sm);
+  }
+
+  /* For content that reaches the pane's edges and insets itself. */
+  .flush {
+    padding: 0;
   }
 
   .line {

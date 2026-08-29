@@ -23,7 +23,7 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 	start := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "agent-1", Type: "qrspi-research-lead", Timestamp: clock.now(),
+		ID: "agent-1", Type: "qrouton-research-lead", Timestamp: clock.now(),
 	}
 	if !tracker.lifecycle(start) || tracker.activeCount() != 2 {
 		t.Fatalf("start left %d active records, want root and child", tracker.activeCount())
@@ -114,7 +114,7 @@ func TestSpecialistUsesTheSoleActiveLeadWithoutInventingAnAmbiguousParent(t *tes
 	tracker.begin(agentProviderClaude, 1)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "lead-1", Type: "qrspi-research-lead",
+		ID: "lead-1", Type: "qrouton-research-lead",
 	})
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
@@ -126,7 +126,7 @@ func TestSpecialistUsesTheSoleActiveLeadWithoutInventingAnAmbiguousParent(t *tes
 
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "lead-2", Type: "qrspi-planning-lead",
+		ID: "lead-2", Type: "qrouton-planning-lead",
 	})
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
@@ -143,7 +143,7 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "agent-1", Type: "qrspi-planning-lead",
+		ID: "agent-1", Type: "qrouton-planning-lead",
 	})
 	tracker.attention(1, status.ActivityWaiting)
 	clock.at = clock.at.Add(time.Second)
@@ -288,9 +288,9 @@ func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T)
 		t.Fatalf("Codex capabilities = %+v", caps)
 	}
 	for agentType, role := range map[string]string{
-		"qrspi-implementation-lead": agentRoleLead,
-		"explorer":                  agentRoleSpecialist,
-		"":                          agentRoleUnavailable,
+		"qrouton-implementation-lead": agentRoleLead,
+		"explorer":                    agentRoleSpecialist,
+		"":                            agentRoleUnavailable,
 	} {
 		if got := delegatedRole(agentType); got != role {
 			t.Errorf("delegatedRole(%q) = %q, want %q", agentType, got, role)

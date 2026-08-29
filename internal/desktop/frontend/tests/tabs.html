@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Tab strip fixture</title>
+    <style>
+      :root {
+        --surface-app: #24273a;
+        --surface-terminal: #181926;
+        --surface-raised: #363a4f;
+        --text-primary: #cad3f5;
+        --text-secondary: #a5adcb;
+        --text-muted: #8087a2;
+        --text-faint: #6e738d;
+        --text-on-accent: #181926;
+        --accent-action: #8aadf4;
+        --accent-label: #eed49f;
+        --accent-literal: #7dc4e4;
+        --state-success: #a6da95;
+        --state-running: #8bd5ca;
+        --state-guided: #c6a0f6;
+        --artifact-plan: #b7bdf8;
+        --surface-chrome: #1e2030;
+        --terminal: 13px/1.55 Menlo, monospace;
+        --border-subtle: #363a4f;
+        --border-default: #5b6078;
+        --border-width: 1px;
+        --radius: 0;
+        --shadow-cube: 3px 3px 0 #363a4f;
+        --wash-selected: rgba(138, 173, 244, 0.07);
+      }
+
+      body { margin: 0; background: var(--surface-app); }
+      #fixture { display: flex; flex-direction: column; width: min(900px, 100vw); }
+    </style>
+  </head>
+  <body>
+    <main id="fixture"></main>
+    <script type="module" src="./tabs-fixture.js"></script>
+  </body>
+</html>

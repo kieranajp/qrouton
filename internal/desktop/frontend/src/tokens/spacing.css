@@ -19,7 +19,6 @@
   --h-pane-header: 46px;
   --h-footer: 36px;
   --h-form-footer: 52px;
-  --h-status-footer: 40px;
 
   /* starting widths; both panes can move from these with their dividers */
   --w-rail: 200px;

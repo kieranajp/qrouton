@@ -133,8 +133,8 @@ func TestArtifactMaxLines(t *testing.T) {
 }
 
 func TestDelegationRequiresAnActualSpawnEvent(t *testing.T) {
-	available := Event{Kind: "provider_event", Arguments: []byte(`{"agents":["qrspi-research-lead"]}`)}
-	spawned := Event{Kind: "provider_event", Arguments: []byte(`{"subtype":"task_started","subagent_type":"qrspi-research-lead"}`)}
+	available := Event{Kind: "provider_event", Arguments: []byte(`{"agents":["qrouton-research-lead"]}`)}
+	spawned := Event{Kind: "provider_event", Arguments: []byte(`{"subtype":"task_started","subagent_type":"qrouton-research-lead"}`)}
 
 	if assertion := delegationAssertion([]Event{available}, "research-lead"); assertion.Passed {
 		t.Fatal("available agent list was mistaken for delegation")
@@ -174,7 +174,7 @@ func TestSentinelSafetyChecksWorkerBriefsNotOrchestratorReads(t *testing.T) {
 
 	result.Events = append(result.Events, Event{
 		Kind:      "provider_event",
-		Arguments: []byte(`{"subagent_type":"qrspi-research-lead","prompt":"TICKET-SENTINEL"}`),
+		Arguments: []byte(`{"subagent_type":"qrouton-research-lead","prompt":"TICKET-SENTINEL"}`),
 	})
 	if assertion := sentinelSafe(result, "TICKET-SENTINEL"); assertion.Passed {
 		t.Fatal("sentinel in worker brief was not detected")

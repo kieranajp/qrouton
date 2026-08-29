@@ -5,7 +5,7 @@ description: Execute the Implement part of qrouton's RPI workflow through a dele
 
 # Delegate implementation
 
-Spawn one `qrspi-implementation-lead` when available, otherwise a capable general implementation agent. Give it:
+Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent. Give it:
 
 - the approved plan path or a bounded concrete request;
 - active and reference repository roles;

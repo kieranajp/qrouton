@@ -205,7 +205,7 @@ func TestRunnerGenerationAndDelegatedLifecycleUseTypedRequests(t *testing.T) {
 	at := time.Date(2026, 8, 28, 12, 30, 0, 0, time.UTC)
 	event := DelegatedLifecycleRequest{
 		Provider: "claude", Generation: 3, Kind: "start", ID: "agent-7",
-		Type: "qrspi-research-lead", ParentID: "root", Timestamp: at,
+		Type: "qrouton-research-lead", ParentID: "root", Timestamp: at,
 	}
 	if err := handle.DelegatedLifecycle(ctx, event); err != nil {
 		t.Fatal(err)

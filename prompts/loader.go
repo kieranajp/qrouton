@@ -17,8 +17,9 @@ const (
 	Orchestrator ID = "orchestrator"
 	Assistant    ID = "assistant"
 
-	// Skills and agents are addressed by their directory prefix; pathForID and
-	// idForPath are the mapping between an ID and its file.
+	// Skills and agents are addressed by their directory prefix. A skill's ID
+	// names its folder; every file inside hangs off that ID and is never an ID of
+	// its own.
 	skillIDPrefix = "skills/"
 	agentIDPrefix = "agents/"
 
@@ -29,8 +30,19 @@ const (
 	assistantFileName    = string(Assistant) + promptFileExt
 )
 
+// Prompt is one canonical prompt. Content is what a runner reads first; Files
+// is what a skill folder ships beside its SKILL.md, so detail can wait until the
+// entry file sends the reader after it.
 type Prompt struct {
 	ID      ID
+	Content []byte
+	Files   []PromptFile
+}
+
+// PromptFile is a supporting file inside a skill's folder, addressed relative to
+// that folder.
+type PromptFile struct {
+	Path    string
 	Content []byte
 }
 
@@ -43,7 +55,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md skills/*/SKILL.md
+//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md all:skills
 var embedded embed.FS
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
@@ -56,18 +68,71 @@ func (l *FSLoader) Load(ctx context.Context, id ID) (Prompt, error) {
 	if err != nil {
 		return Prompt{}, err
 	}
-	content, err := fs.ReadFile(l.fsys, path)
+	content, err := l.read(path)
 	if err != nil {
 		return Prompt{}, fmt.Errorf("load prompt %q: %w", id, err)
 	}
-	if bytes.Contains(content, []byte(subagentChoicePlaceholder)) {
-		choice, err := fs.ReadFile(l.fsys, subagentChoiceFileName)
+	prompt := Prompt{ID: id, Content: content}
+	if strings.HasPrefix(string(id), skillIDPrefix) {
+		prompt.Files, err = l.skillFiles(string(id))
 		if err != nil {
 			return Prompt{}, fmt.Errorf("load prompt %q: %w", id, err)
 		}
-		content = bytes.ReplaceAll(content, []byte(subagentChoicePlaceholder), choice)
 	}
-	return Prompt{ID: id, Content: content}, nil
+	return prompt, nil
+}
+
+// read is one prompt file with the shared subagent-choice block expanded into
+// it. Every file is offered the block, references included, so a skill that
+// defers the delegation guidance to one reads the same words as the entry file.
+func (l *FSLoader) read(path string) ([]byte, error) {
+	content, err := fs.ReadFile(l.fsys, path)
+	if err != nil {
+		return nil, err
+	}
+	if !bytes.Contains(content, []byte(subagentChoicePlaceholder)) {
+		return content, nil
+	}
+	choice, err := fs.ReadFile(l.fsys, subagentChoiceFileName)
+	if err != nil {
+		return nil, err
+	}
+	return bytes.ReplaceAll(content, []byte(subagentChoicePlaceholder), choice), nil
+}
+
+// skillFiles is everything in a skill's folder other than its entry file, in
+// lexical order. A skill with nothing beside SKILL.md returns none, which is how
+// a single-file skill stays a single file.
+func (l *FSLoader) skillFiles(dir string) ([]PromptFile, error) {
+	entry := dir + "/" + skillFileName
+	var out []PromptFile
+	err := fs.WalkDir(l.fsys, dir, func(path string, node fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		// Hidden files are the editor's and the operating system's, never the
+		// skill's. Skipping them here rather than in the embed pattern keeps a
+		// working copy and the binary shipping the same skill.
+		if path != dir && strings.HasPrefix(node.Name(), ".") {
+			if node.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if node.IsDir() || path == entry {
+			return nil
+		}
+		content, err := l.read(path)
+		if err != nil {
+			return err
+		}
+		out = append(out, PromptFile{Path: strings.TrimPrefix(path, dir+"/"), Content: content})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 func (l *FSLoader) List(ctx context.Context) ([]Prompt, error) {
@@ -120,7 +185,13 @@ func idForPath(path string) (ID, bool) {
 	case path == assistantFileName:
 		return Assistant, true
 	case strings.HasPrefix(path, skillIDPrefix) && strings.HasSuffix(path, "/"+skillFileName):
-		return ID(strings.TrimSuffix(path, "/"+skillFileName)), true
+		id := strings.TrimSuffix(path, "/"+skillFileName)
+		// Only a folder directly under skills/ is a skill. A SKILL.md deeper in
+		// is one of that skill's own files, not a skill of its own.
+		if strings.Contains(strings.TrimPrefix(id, skillIDPrefix), "/") {
+			return "", false
+		}
+		return ID(id), true
 	case strings.HasPrefix(path, agentIDPrefix) && strings.HasSuffix(path, promptFileExt):
 		return ID(strings.TrimSuffix(path, promptFileExt)), true
 	default:

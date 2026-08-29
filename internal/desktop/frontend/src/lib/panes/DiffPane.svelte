@@ -27,3 +27,9 @@
     </div>
   {/each}
 </div>
+
+<style>
+  .diff-grid {
+    padding: 12px 14px;
+  }
+</style>
