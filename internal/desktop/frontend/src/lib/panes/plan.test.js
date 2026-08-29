@@ -132,3 +132,10 @@ test("frontmatter naming a phase opens nothing", () => {
   assert.deepEqual(phases, []);
   assert.equal(preamble.from, 4);
 });
+
+test("a heading quoted inside a fence opens nothing", () => {
+  const { phases } = parsePlan(
+    doc("# Notes", "", "```md", "## Phase 1 — quoted", "```", "", "Prose.", ""),
+  );
+  assert.deepEqual(phases, []);
+});

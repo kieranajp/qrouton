@@ -877,6 +877,23 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 		t.Fatal("a terminal window was pushed")
 	}
 
+	// A document that grows past the ceiling stops being one the pane holds a
+	// copy of, so the tab keeps the last text small enough to show.
+	if err := os.WriteFile(path, make([]byte, workbench.DocumentLimit+1), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	grown := time.Now().Add(4 * time.Second)
+	if err := os.Chtimes(path, grown, grown); err != nil {
+		t.Fatal(err)
+	}
+	w.rescan()
+	mu.Lock()
+	still := pushed[id].Text
+	mu.Unlock()
+	if still != after {
+		t.Fatalf("rescan pushed %d bytes for a file over the ceiling, want the last text it could show", len(still))
+	}
+
 	// A push is not a reload: the page's controller is still running, so a
 	// report it had already earned must not be fenced off behind a new epoch.
 	window, _ := w.window(id)
