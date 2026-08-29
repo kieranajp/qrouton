@@ -201,7 +201,7 @@
         <h1 class="display-lg">{research.title || heading}</h1>
         <div class="markdown lead">{@html parts.preamble}</div>
         {#if research.summary}
-          <section class="pinned" data-item={research.summary.name}>
+          <section class="pinned">
             <CapsLabel>{research.summary.name}</CapsLabel>
             <div class="markdown lifted">{@html parts.sections[research.summary.index].opening}</div>
             <div class="markdown">{@html parts.sections[research.summary.index].body}</div>
@@ -302,7 +302,6 @@
     color: var(--text-primary);
   }
 
-  /* The one section nobody has to ask for. */
   .pinned {
     margin: 26px 0 8px;
   }
@@ -368,7 +367,7 @@
     display: none;
   }
 
-  /* Held on the pane's floor whatever the sheet is tall enough to fill. */
+  /* Held on the pane's floor however tall the sheet is. */
   .footer {
     position: sticky;
     bottom: 0;

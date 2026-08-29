@@ -42,8 +42,7 @@ function opensSection(node) {
  * section is its own business.
  * @typedef {{name: string, from: number, to: number, nodes: any[]}} Section
  * @param {string} text
- * @returns {{title: string, start: number, last: number,
- *   preamble: {from: number, to: number}, sections: Section[]}}
+ * @returns {{title: string, preamble: {from: number, to: number}, sections: Section[]}}
  */
 export function sliceSections(text) {
   const tree = /** @type {any} */ (parser.parse(text));
@@ -76,8 +75,6 @@ export function sliceSections(text) {
 
   return {
     title,
-    start,
-    last,
     preamble: { from: start, to: sections.length > 0 ? sections[0].from - 1 : last },
     sections,
   };

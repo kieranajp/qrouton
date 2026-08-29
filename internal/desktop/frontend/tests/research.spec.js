@@ -41,6 +41,23 @@ test("clicking a question reveals its body and leaves the others closed", async 
   await expect.poll(() => opened(page)).toEqual([LOADER, KIND]);
 });
 
+// The pane took the open state off the element, so the keyboard path no longer
+// rides on the element's own behaviour and has to be held down by a test.
+test("Enter and Space on a question work it the same as a click", async ({ page }) => {
+  await open(page);
+  const summary = row(page, KIND).locator("summary");
+
+  await summary.focus();
+  await page.keyboard.press("Enter");
+  await expect.poll(() => opened(page)).toEqual([KIND]);
+
+  await page.keyboard.press("Enter");
+  await expect.poll(() => opened(page)).toEqual([]);
+
+  await page.keyboard.press("Space");
+  await expect.poll(() => opened(page)).toEqual([KIND]);
+});
+
 test("a document opened at a line inside a question opens that question", async ({ page }) => {
   await open(page, "?line=15&to=15");
 
