@@ -1,6 +1,9 @@
 package markdown
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestTitleIsTheHeadingTheDocumentOpensWith(t *testing.T) {
 	for _, tc := range []struct {
@@ -38,6 +41,42 @@ func TestTitleIsTheHeadingTheDocumentOpensWith(t *testing.T) {
 			got, ok := Title(tc.text)
 			if got != tc.want || ok != tc.found {
 				t.Fatalf("Title(%q) = %q, %v; want %q, %v", tc.text, got, ok, tc.want, tc.found)
+			}
+		})
+	}
+}
+
+func TestSectionsSeparatesFramingFromWhatWasWritten(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want []Section
+	}{
+		{"nothing to open", "# Title\n\nJust prose.\n", nil},
+		{"a section with prose", "## How does it retry?\n\nThree times.\n", []Section{{"How does it retry?", true}}},
+		{"a heading with nothing under it", "## Open Questions\n", []Section{{"Open Questions", false}}},
+		{"framing is not an answer", "## How?\n\n> Start in retry.go.\n", []Section{{"How?", false}}},
+		{
+			"an answer beside its framing",
+			"## How?\n\n> Start in retry.go.\n\nIt doubles the wait.\n",
+			[]Section{{"How?", true}},
+		},
+		{
+			"a fenced heading opens nothing and answers its own section",
+			"## How?\n\n```go\n## not a heading\n```\n",
+			[]Section{{"How?", true}},
+		},
+		{
+			"frontmatter naming a section opens nothing",
+			"---\n## not a section\n---\n\n## Real\n\nBody.\n",
+			[]Section{{"Real", true}},
+		},
+		{"prose above the first heading belongs to no section", "Lead prose.\n\n## First\n", []Section{{"First", false}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Sections(tc.text)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Sections(%q) = %#v; want %#v", tc.text, got, tc.want)
 			}
 		})
 	}

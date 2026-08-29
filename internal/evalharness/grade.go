@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\b(QRSPI|qrspi-[a-z-]+|agent depth|document numbering)\b`)
@@ -176,8 +178,7 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 }
 
 // researchAnswered separates a research document that was filled in from one
-// that was only framed. Framing leaves each question heading holding the
-// blockquote a researcher was given and nothing else.
+// that was only framed.
 func researchAnswered(workspace, pattern string) Assertion {
 	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
 	if err != nil {
@@ -198,39 +199,14 @@ func researchAnswered(workspace, pattern string) Assertion {
 		if relErr != nil {
 			relative = match
 		}
-		for _, section := range unansweredSections(string(content)) {
-			unanswered = append(unanswered, filepath.ToSlash(relative)+": "+section)
+		for _, section := range markdown.Sections(string(content)) {
+			if section.Answered {
+				continue
+			}
+			unanswered = append(unanswered, filepath.ToSlash(relative)+": "+section.Name)
 		}
 	}
 	return Assertion{Name: assertResearchAnswered, Passed: len(unanswered) == 0, Evidence: strings.Join(unanswered, evidenceJoiner)}
-}
-
-// unansweredSections names every second-level heading whose body is empty or
-// still nothing but its framing blockquote.
-func unansweredSections(text string) []string {
-	var names []string
-	heading, answered, fenced := "", false, false
-	flush := func() {
-		if heading != "" && !answered {
-			names = append(names, heading)
-		}
-	}
-	for _, line := range strings.Split(text, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, codeFence) {
-			fenced = !fenced
-		}
-		if !fenced && strings.HasPrefix(line, sectionPrefix) {
-			flush()
-			heading, answered = strings.TrimSpace(strings.TrimPrefix(line, sectionPrefix)), false
-			continue
-		}
-		if trimmed != "" && !strings.HasPrefix(trimmed, blockquotePrefix) {
-			answered = true
-		}
-	}
-	flush()
-	return names
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {

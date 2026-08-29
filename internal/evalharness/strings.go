@@ -113,12 +113,6 @@ const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
 
-	// Markdown the research grader reads: a section opens at a depth-2 heading,
-	// and framing left under one is a blockquote.
-	codeFence        = "```"
-	sectionPrefix    = "## "
-	blockquotePrefix = ">"
-
 	researchPathSegment = "/research/"
 
 	// Event markers the delegation and brief graders match on.
