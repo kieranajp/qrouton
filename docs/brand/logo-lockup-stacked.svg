@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 84" width="140" height="84" role="img" aria-label="qrouton">
+  <defs>
+    <pattern id="h" width="3" height="3" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)">
+      <rect width="3" height="3" fill="#5b6078"/>
+      <rect width="1" height="3" fill="#181926" fill-opacity="0.45"/>
+    </pattern>
+  </defs>
+  <rect x="60" y="14" width="36" height="36" fill="url(#h)"/>
+  <rect x="52" y="6" width="36" height="36" fill="#eed49f"/>
+  <text x="70" y="76" text-anchor="middle" font-family="Space Grotesk, Instrument Sans, system-ui, sans-serif" font-weight="700" font-size="21" letter-spacing="-0.63" fill="#cad3f5">qrouton</text>
+</svg>
