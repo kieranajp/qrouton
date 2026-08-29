@@ -44,7 +44,7 @@ lipo -create -output "$contents/MacOS/qrouton" "$work/qrouton-arm64" "$work/qrou
 
 iconset="$work/qrouton.iconset"
 mkdir -p "$iconset"
-sips -s format png "$root/build/macos/appicon.svg" --out "$work/appicon.png" >/dev/null
+sips -s format png "$root/docs/brand/logo-mark.svg" --out "$work/appicon.png" >/dev/null
 for size in 16 32 128 256 512; do
 	double=$((size * 2))
 	sips -z "$size" "$size" "$work/appicon.png" --out "$iconset/icon_${size}x${size}.png" >/dev/null

@@ -24,6 +24,8 @@ import (
 // Options is the workbench: where its sessions live, which one it opens on, and
 // how it builds what each of them runs.
 type Options struct {
+	// Icon is the application mark shown by the desktop and its default dialogs.
+	Icon []byte
 	// SessionRoot is empty when there is no session to open on, which is the
 	// window whose only content is the assembly overlay.
 	SessionRoot string
@@ -106,7 +108,7 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	r := newWailsRenderer(assets)
+	r := newWailsRenderer(assets, opts.Icon)
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)
 	windows := newWindows(r.Emit, reg)

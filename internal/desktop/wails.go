@@ -13,11 +13,12 @@ type wailsRenderer struct {
 	running atomic.Bool
 }
 
-func newWailsRenderer(assets fs.FS) *wailsRenderer {
+func newWailsRenderer(assets fs.FS, icon []byte) *wailsRenderer {
 	r := &wailsRenderer{}
 	r.app = application.New(application.Options{
 		Name:        applicationName,
 		Description: applicationDescription,
+		Icon:        icon,
 		Assets:      application.AssetOptions{Handler: assetHandler(assets)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})

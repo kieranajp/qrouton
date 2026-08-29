@@ -190,6 +190,7 @@ func workbenchProcess(marshalled string) error {
 		return err
 	}
 	return desktop.Run(desktop.Options{
+		Icon:         applicationIcon,
 		SessionRoot:  spec.SessionRoot,
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
