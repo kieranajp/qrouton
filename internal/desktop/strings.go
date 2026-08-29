@@ -59,6 +59,7 @@ const (
 	windowDataEvent    = "window:data:"
 	windowExitEvent    = "window:exit:"
 	windowDiagramEvent = "window:diagram:"
+	windowContentEvent = "window:content:"
 	windowsEvent       = "window:open"
 
 	reposRefreshEvent      = "repos:refresh"
@@ -97,6 +98,9 @@ const (
 	// windowScreenLines is what a read without full returns.
 	windowScreenLines = 50
 )
+
+// documentPoll is how often open documents are re-stated for changes.
+const documentPoll = time.Second
 
 const (
 	// chromeInterval bounds how stale the window chrome can be after an

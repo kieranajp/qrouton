@@ -182,13 +182,13 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 
 // A file this size is a log, and a window holding a copy of it serves nobody.
 func TestDocumentWindowSendsAHugeMarkdownFileToTheEditor(t *testing.T) {
-	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", documentLimit+1)})
+	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", workbench.DocumentLimit+1)})
 	opts, err := DocumentWindow(root, "huge.md", testDocumentEditor, workbench.LineSpan{Line: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if opts.Kind != workbench.KindTerminal {
-		t.Fatalf("a %d-byte document opened as a %q", documentLimit+1, opts.Kind)
+		t.Fatalf("a %d-byte document opened as a %q", workbench.DocumentLimit+1, opts.Kind)
 	}
 }
 

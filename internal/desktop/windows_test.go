@@ -2,8 +2,10 @@ package desktop
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -766,5 +768,127 @@ func TestRenderDiagramsHasNothingToSayAboutOtherWindows(t *testing.T) {
 	}
 	if _, err := w.RenderDiagrams("window-404"); err == nil {
 		t.Fatal("an unknown window rendered diagrams")
+	}
+}
+
+// A document tab follows its file, so a plan whose checkboxes move under an
+// open pane redraws without the user reopening it.
+func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
+	root := t.TempDir()
+	reg := testRegistry(t, root)
+	var mu sync.Mutex
+	pushed := map[string]document{}
+	w := newWindows(func(event string, payload any) {
+		name, ok := strings.CutPrefix(event, windowContentEvent)
+		if !ok {
+			return
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		pushed[name] = payload.(document)
+	}, reg)
+	t.Cleanup(w.stopAll)
+
+	const source = "P001.md"
+	const before = "# Plan\n\n- [ ] one\n"
+	path := filepath.Join(root, source)
+	if err := os.WriteFile(path, []byte(before), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
+		Label: "P001", Source: source, Content: before,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows a rescan has no file for: one showing text that came from nowhere,
+	// and one running a command.
+	loose, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Label: "loose", Content: before,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	const logged = "run.log"
+	if err := os.WriteFile(filepath.Join(root, logged), []byte("starting\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	terminal, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "▶ dev", Source: logged, Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	page, err := w.Content(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	epoch := page.ViewportEpoch
+	if epoch == 0 {
+		t.Fatal("Content gave the page no viewport epoch")
+	}
+	if err := w.ReportViewport(id, ViewportReport{Epoch: epoch, Seq: 3, Available: true, Selected: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	w.rescan()
+	mu.Lock()
+	untouched := len(pushed)
+	mu.Unlock()
+	if untouched != 0 {
+		t.Fatalf("rescan pushed %d documents for an unchanged file", untouched)
+	}
+
+	// The same length, so only the timestamp says the checkbox moved.
+	const after = "# Plan\n\n- [x] one\n"
+	if err := os.WriteFile(path, []byte(after), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, logged), []byte("finished\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	stamp := time.Now().Add(2 * time.Second)
+	for _, changed := range []string{path, filepath.Join(root, logged)} {
+		if err := os.Chtimes(changed, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	w.rescan()
+	mu.Lock()
+	sent, ok := pushed[id]
+	count := len(pushed)
+	mu.Unlock()
+	if !ok || count != 1 {
+		t.Fatalf("rescan pushed %d documents, want the one whose file changed", count)
+	}
+	if sent.Text != after {
+		t.Fatalf("pushed text = %q, want %q", sent.Text, after)
+	}
+	if sent.ViewportEpoch != epoch {
+		t.Fatalf("pushed epoch = %d, want the epoch the page is already reporting against (%d)", sent.ViewportEpoch, epoch)
+	}
+	if _, sentLoose := pushed[loose]; sentLoose {
+		t.Fatal("a document window with no session file was pushed")
+	}
+	if _, sentTerminal := pushed[terminal]; sentTerminal {
+		t.Fatal("a terminal window was pushed")
+	}
+
+	// A push is not a reload: the page's controller is still running, so a
+	// report it had already earned must not be fenced off behind a new epoch.
+	window, _ := w.window(id)
+	if window.viewportEpoch != epoch || window.viewportSeq != 3 {
+		t.Fatalf("after rescan epoch/seq = %d/%d, want %d/3", window.viewportEpoch, window.viewportSeq, epoch)
+	}
+
+	// Content is a reload, and there the fence is the point.
+	if _, err := w.Content(id); err != nil {
+		t.Fatal(err)
+	}
+	if window.viewportEpoch != epoch+1 || window.viewportSeq != 0 {
+		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", window.viewportEpoch, window.viewportSeq, epoch+1)
 	}
 }

@@ -87,7 +87,6 @@
         controller = createViewportController({
           root,
           content: body,
-          blocks,
           target,
           span,
           selected: params.active,

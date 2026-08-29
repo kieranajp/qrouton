@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/kieranajp/qrouton/internal/diagram"
@@ -48,6 +49,12 @@ type agentWindow struct {
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64
+	// read is the file as the window last saw it, so a rescan can tell a
+	// rewritten document from an untouched one.
+	read struct {
+		at   time.Time
+		size int64
+	}
 	// exit is nil while the process is still running.
 	exit *int
 }
@@ -63,11 +70,29 @@ type ViewportReport struct {
 
 func newWindows(emit emitter, reg *Sessions) *Windows {
 	ctx, stop := context.WithCancel(context.Background())
-	return &Windows{
+	w := &Windows{
 		emit: emit, sessions: reg, open: map[string]*agentWindow{},
 		selected:  map[*sessionState]string{},
 		diagrams:  diagram.New(diagram.DefaultTimeout),
 		renderCtx: ctx, stopRendering: stop,
+	}
+	go w.follow(ctx)
+	return w
+}
+
+// follow keeps open documents current. A stat per open document per second
+// buys the same answer a file watcher would, without the dependency, and it
+// reads an editor's write-then-rename the same way as a write in place.
+func (w *Windows) follow(ctx context.Context) {
+	ticker := time.NewTicker(documentPoll)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			w.rescan()
+		}
 	}
 }
 
@@ -173,6 +198,9 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, selec
 	if opts.Kind == workbench.KindDocument && opts.Format == workbench.FormatMarkdown {
 		window.viewport = &workbench.DocumentViewport{Source: opts.Source, Intervals: []workbench.LineInterval{}}
 	}
+	if info, err := os.Stat(window.sourcePath()); err == nil {
+		window.read.at, window.read.size = info.ModTime(), info.Size()
+	}
 	w.open[id] = window
 	if selects {
 		w.selected[owner] = id
@@ -265,28 +293,27 @@ type document struct {
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
 }
 
-// Content is a document window's text, fetched by its page on load.
-func (w *Windows) Content(id string) (document, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	window, ok := w.open[id]
-	if !ok {
-		return document{}, noSuchWindow(id)
+// sourcePath is the file a window is showing, and empty for one showing no
+// session file at all.
+func (window *agentWindow) sourcePath() string {
+	if window.opts.Source == "" || window.session == nil {
+		return ""
+	}
+	return filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
+}
+
+// documentFor is a window as its page receives it. It builds and never mutates,
+// so the epoch it carries is whatever the caller has already decided on.
+func documentFor(window *agentWindow) document {
+	first, last, _ := window.opts.Span.Bounds()
+	var kind string
+	path := window.sourcePath()
+	if path != "" {
+		kind = status.DocumentKind(window.opts.Source)
 	}
 	var viewportEpoch uint64
 	if window.viewport != nil {
-		window.viewportEpoch++
-		window.viewportSeq = 0
-		window.viewport = &workbench.DocumentViewport{
-			Source: window.opts.Source, Intervals: []workbench.LineInterval{},
-		}
 		viewportEpoch = window.viewportEpoch
-	}
-	first, last, _ := window.opts.Span.Bounds()
-	var path, kind string
-	if window.opts.Source != "" && window.session != nil {
-		path = filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
-		kind = status.DocumentKind(window.opts.Source)
 	}
 	return document{
 		Text:          window.opts.Content,
@@ -297,7 +324,69 @@ func (w *Windows) Content(id string) (document, error) {
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
-	}, nil
+	}
+}
+
+// Content is a document window's text, fetched by its page on load. A load
+// restarts the page's sequence counter, so the epoch moves and the viewport
+// starts again from nothing measured.
+func (w *Windows) Content(id string) (document, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	window, ok := w.open[id]
+	if !ok {
+		return document{}, noSuchWindow(id)
+	}
+	if window.viewport != nil {
+		window.viewportEpoch++
+		window.viewportSeq = 0
+		window.viewport = &workbench.DocumentViewport{
+			Source: window.opts.Source, Intervals: []workbench.LineInterval{},
+		}
+	}
+	return documentFor(window), nil
+}
+
+// rescan pushes every open document whose file has changed to its page. A push
+// is not a reload: the same controller keeps reporting against a monotonic
+// sequence, so the epoch is reused and the sequence left where it is. Bumping
+// either would fence off reports the page is still entitled to send.
+func (w *Windows) rescan() {
+	type push struct {
+		id  string
+		doc document
+	}
+	var pushes []push
+	w.mu.Lock()
+	for id, window := range w.open {
+		if window.opts.Kind != workbench.KindDocument {
+			continue
+		}
+		path := window.sourcePath()
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		// A file caught mid-rewrite must not blank a tab, so an unreadable one
+		// is left showing what it last held.
+		if err != nil || info.IsDir() || info.Size() > workbench.DocumentLimit {
+			continue
+		}
+		if info.Size() == window.read.size && info.ModTime().Equal(window.read.at) {
+			continue
+		}
+		text, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		window.read.at, window.read.size = info.ModTime(), info.Size()
+		window.opts.Content = string(text)
+		pushes = append(pushes, push{id: id, doc: documentFor(window)})
+	}
+	w.mu.Unlock()
+	for _, sent := range pushes {
+		w.emit(windowContentEvent+sent.id, sent.doc)
+	}
 }
 
 // renderedDiagram is one d2 fence as the page receives it: the document line

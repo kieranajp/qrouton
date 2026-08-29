@@ -151,3 +151,24 @@ test("a narrow pane steps the type down and hides nothing", async ({ page }) => 
   expect(lost).toEqual([]);
   expect(narrowHeading).toBeLessThan(wideHeading);
 });
+
+test("a pushed document redraws the body without moving the reader", async ({ page }) => {
+  await open(page, "?line=19&to=21");
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  await expect.poll(() => marked(page)).toEqual([19, 21]);
+
+  await page.evaluate(() => window.pushEdited());
+  await expect(page.locator('[data-screen="2"]')).toContainText("An edited middle paragraph.");
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+});
+
+test("a push that ticks the last box moves the meter, not the screen", async ({ page }) => {
+  await open(page, "?line=19");
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+
+  await page.evaluate(() => window.pushFinished());
+  await expect(page.locator('[data-count="3"]')).toHaveText("1 of 1 met");
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  expect(await marked(page)).toEqual([]);
+});

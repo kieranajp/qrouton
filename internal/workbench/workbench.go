@@ -30,6 +30,11 @@ const (
 	FormatMarkdown DocumentFormat = "markdown"
 )
 
+// DocumentLimit is where a document stops being one. Above it the editor gets
+// the file rather than a window holding a copy of it, and a window already
+// holding one stops following it.
+const DocumentLimit = 1 << 20
+
 // panes name the pane a file opens in. A file with no pane opens in the editor.
 var panes = map[string]DocumentFormat{
 	".md":       FormatMarkdown,

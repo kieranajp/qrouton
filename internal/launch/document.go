@@ -11,10 +11,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// documentLimit is where a document stops being one. Above it the editor gets
-// the file rather than a window holding a copy of it.
-const documentLimit = 1 << 20
-
 // DocumentWindow is how a session file reaches the user: a pane qrouton draws
 // for the formats it can, and the editor for everything else. Both the agent's
 // file tool and the window's own document chip come through here. span is the
@@ -52,7 +48,7 @@ func DocumentWindow(root, name string, editor EditorCommand, span workbench.Line
 // the caller to fall back to the editor.
 func documentPane(path, rel string, format workbench.DocumentFormat, span workbench.LineSpan) (workbench.WindowOptions, bool) {
 	info, err := os.Stat(path)
-	if err != nil || info.Size() > documentLimit {
+	if err != nil || info.Size() > workbench.DocumentLimit {
 		return workbench.WindowOptions{}, false
 	}
 	text, err := os.ReadFile(path)

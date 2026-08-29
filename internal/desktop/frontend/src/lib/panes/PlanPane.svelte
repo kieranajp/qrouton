@@ -38,6 +38,22 @@
   let current = $state(untrack(() => screenFor(plan.phases, doc.line ?? 0)));
   /** @type {HTMLElement | undefined} */
   let body = $state();
+  let epoch = untrack(() => doc.viewportEpoch);
+
+  // A push carries the span along with the text, so re-reading it every time
+  // would yank the reader back to it whenever a checkbox moved. Only a reload,
+  // which is what moves the epoch, is a fresh request.
+  $effect(() => {
+    const at = doc.viewportEpoch;
+    const count = plan.phases.length;
+    untrack(() => {
+      if (at !== epoch) {
+        epoch = at;
+        current = screenFor(plan.phases, doc.line ?? 0);
+      }
+      if (current > count) current = count;
+    });
+  });
 
   function screenFor(phases, line) {
     if (!line || line < 1) return 0;
@@ -193,7 +209,6 @@
         controller = createViewportController({
           root,
           content: deckBody,
-          blocks,
           target,
           span,
           selected: params.active,
