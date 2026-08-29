@@ -86,8 +86,8 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return artifactContains(workspace, check.Path, check.Pattern)
 	case checkArtifactMaxLines:
 		return artifactMaxLines(workspace, check.Path, check.MaxLines)
-	case checkResearchPair:
-		return researchPair(workspace, check.Path)
+	case checkResearchAnswered:
+		return researchAnswered(workspace, check.Path)
 	case checkSentinelSafe:
 		return sentinelSafe(result, check.Pattern)
 	case checkOpenFile:
@@ -175,20 +175,62 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 	}
 }
 
-func researchPair(workspace, questionsPattern string) Assertion {
-	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(questionsPattern)))
-	var pairs []string
-	for _, questions := range matches {
-		findings := strings.Replace(strings.TrimSuffix(questions, markdownExt), researchQuestionsSuffix, "", 1) + markdownExt
-		if fileExists(findings) {
-			pairs = append(pairs, questions+" + "+findings)
+// researchAnswered separates a research document that was filled in from one
+// that was only framed. Framing leaves each question heading holding the
+// blockquote a researcher was given and nothing else.
+func researchAnswered(workspace, pattern string) Assertion {
+	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
+	if err != nil {
+		return Assertion{Name: assertResearchAnswered, Evidence: err.Error()}
+	}
+	if len(matches) == 0 {
+		return Assertion{Name: assertResearchAnswered, Evidence: evidenceNoArtifacts}
+	}
+
+	var unanswered []string
+	for _, match := range matches {
+		content, readErr := os.ReadFile(match)
+		if readErr != nil {
+			unanswered = append(unanswered, readErr.Error())
+			continue
+		}
+		relative, relErr := filepath.Rel(workspace, match)
+		if relErr != nil {
+			relative = match
+		}
+		for _, section := range unansweredSections(string(content)) {
+			unanswered = append(unanswered, filepath.ToSlash(relative)+": "+section)
 		}
 	}
-	evidence := strings.Join(pairs, evidenceJoiner)
-	if err != nil {
-		evidence = err.Error()
+	return Assertion{Name: assertResearchAnswered, Passed: len(unanswered) == 0, Evidence: strings.Join(unanswered, evidenceJoiner)}
+}
+
+// unansweredSections names every second-level heading whose body is empty or
+// still nothing but its framing blockquote.
+func unansweredSections(text string) []string {
+	var names []string
+	heading, answered, fenced := "", false, false
+	flush := func() {
+		if heading != "" && !answered {
+			names = append(names, heading)
+		}
 	}
-	return Assertion{Name: assertResearchPair, Passed: err == nil && len(pairs) > 0, Evidence: evidence}
+	for _, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, codeFence) {
+			fenced = !fenced
+		}
+		if !fenced && strings.HasPrefix(line, sectionPrefix) {
+			flush()
+			heading, answered = strings.TrimSpace(strings.TrimPrefix(line, sectionPrefix)), false
+			continue
+		}
+		if trimmed != "" && !strings.HasPrefix(trimmed, blockquotePrefix) {
+			answered = true
+		}
+	}
+	flush()
+	return names
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {

@@ -6,8 +6,8 @@
   "turns": ["Research the ticket, document the findings, and stop there. I will hand the research to someone else for planning and implementation."],
   "rubric": "Complete safe, concise delegated research and present the human-readable findings, but do not start planning, design, or implementation. Leave both repositories unchanged and create no downstream artifacts.",
   "checks": [
-    {"kind": "artifact_exists", "path": "thoughts/shared/research/*questions*.md"},
-    {"kind": "research_pair", "path": "thoughts/shared/research/*questions*.md"},
+    {"kind": "artifact_exists", "path": "thoughts/shared/research/*.md"},
+    {"kind": "research_answered", "path": "thoughts/shared/research/*.md"},
     {"kind": "artifact_max_lines", "path": "thoughts/shared/research/*.md", "max_lines": 200},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},

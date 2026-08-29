@@ -66,7 +66,7 @@ const (
 	checkArtifactMaxLines = "artifact_max_lines"
 	checkResponseContains = "response_contains"
 	checkResponseExcludes = "response_excludes"
-	checkResearchPair     = "research_pair"
+	checkResearchAnswered = "research_answered"
 	checkSentinelSafe     = "sentinel_safe"
 	checkOpenFile         = "open_file"
 	checkDelegation       = "delegation"
@@ -86,7 +86,7 @@ const (
 	assertArtifactMaxLines = "artifact within line limit: "
 	assertArtifactExists   = "artifact exists: "
 	assertArtifactAbsent   = "artifact absent: "
-	assertResearchPair     = "paired research questions and findings"
+	assertResearchAnswered = "every question in the research document answered"
 	assertSentinelSafe     = "ticket sentinel absent from research briefs and artifacts"
 	assertOpenFile         = "completed document presented with open_file"
 	assertDelegatedTo      = "delegated to "
@@ -113,9 +113,11 @@ const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
 
-	// researchQuestionsSuffix pairs a questions document with its findings.
-	researchQuestionsSuffix = "-questions"
-	markdownExt             = ".md"
+	// Markdown the research grader reads: a section opens at a depth-2 heading,
+	// and framing left under one is a blockquote.
+	codeFence        = "```"
+	sectionPrefix    = "## "
+	blockquotePrefix = ">"
 
 	researchPathSegment = "/research/"
 

@@ -106,15 +106,61 @@ func TestGradeChecksEditingRepositoryRemainsUnchanged(t *testing.T) {
 	}
 }
 
-func TestResearchPairUsesPrescribedFindingName(t *testing.T) {
+// A framed document and a finished one are the same file; what separates them
+// is whether anything sits under the headings.
+func TestResearchAnsweredSeparatesFramingFromFindings(t *testing.T) {
 	workspace := t.TempDir()
-	questions := filepath.Join(workspace, "thoughts", "shared", "research", "R1-2026-07-16-retry-questions.md")
-	writeTestFile(t, questions, "questions")
-	writeTestFile(t, strings.TrimSuffix(questions, "-questions.md")+".md", "findings")
+	document := filepath.Join(workspace, "thoughts", "shared", "research", "R1-2026-07-16-retry.md")
+	pattern := "thoughts/shared/research/*.md"
 
-	assertion := researchPair(workspace, "thoughts/shared/research/*questions*.md")
-	if !assertion.Passed {
-		t.Fatalf("paired research failed: %s", assertion.Evidence)
+	writeTestFile(t, document, strings.Join([]string{
+		"# Retry",
+		"",
+		"## Summary",
+		"",
+		"What is being investigated, and where to look.",
+		"",
+		"## How does the client retry?",
+		"",
+		"> Start in internal/retry.",
+		"",
+		"## Open Questions",
+		"",
+	}, "\n"))
+
+	framed := researchAnswered(workspace, pattern)
+	if framed.Passed {
+		t.Fatal("a document nobody has answered passed as research")
+	}
+	for _, section := range []string{"How does the client retry?", "Open Questions"} {
+		if !strings.Contains(framed.Evidence, section) {
+			t.Errorf("evidence %q does not name %q", framed.Evidence, section)
+		}
+	}
+
+	writeTestFile(t, document, strings.Join([]string{
+		"# Retry",
+		"",
+		"## Summary",
+		"",
+		"It backs off three times.",
+		"",
+		"## How does the client retry?",
+		"",
+		"Three attempts, doubling the wait (`internal/retry/client.go:41`).",
+		"",
+		"```go",
+		"## not a heading",
+		"```",
+		"",
+		"## Open Questions",
+		"",
+		"None.",
+		"",
+	}, "\n"))
+
+	if answered := researchAnswered(workspace, pattern); !answered.Passed {
+		t.Fatalf("a filled-in document failed: %s", answered.Evidence)
 	}
 }
 
