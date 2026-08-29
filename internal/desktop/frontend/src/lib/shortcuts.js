@@ -27,3 +27,12 @@ export const rowAt = (rows, event) => rows?.[position(event) - 1];
 
 /** shortcut is the glyph a rail row wears in place of its initials. */
 export const shortcut = (index) => (index < NUMBERED ? "⌘" + (index + 1) : "");
+
+/**
+ * opensSettings is Command on macOS and Control elsewhere, with a comma.
+ * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
+ */
+export function opensSettings(event) {
+  if (!event || event.altKey || event.shiftKey) return false;
+  return Boolean(event.metaKey) !== Boolean(event.ctrlKey) && event.key === ",";
+}
