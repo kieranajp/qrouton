@@ -141,6 +141,18 @@ test("the document view renders the whole plan and comes back to the same phase"
   await expect.poll(() => shown(page)).toEqual(["2"]);
 });
 
+// The header stopped naming the plan, so whichever view is open has to.
+test("the plan is named in both views and never twice at once", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".head")).not.toContainText("The fixture plan");
+  await expect(page.locator("h1", { hasText: "The fixture plan" })).toHaveCount(1);
+  await expect(page.locator('[data-screen="overview"] h1')).toHaveText("The fixture plan");
+
+  await page.getByRole("button", { name: "Document", exact: true }).click();
+  await expect(page.locator(".reading h1").first()).toHaveText("The fixture plan");
+  await expect(page.locator("h1", { hasText: "The fixture plan" })).toHaveCount(1);
+});
+
 test("a narrow pane steps the type down and hides nothing", async ({ page }) => {
   await open(page);
   const wide = await page.evaluate(() => window.displays());

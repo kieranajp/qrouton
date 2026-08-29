@@ -320,8 +320,6 @@
   <MarkdownPane {doc} {id} {active} {scrollRoot} />
 {:else}
   <article class="document plan">
-    <!-- The deck's opening screen is where the plan says its name; the header
-         says what it is and where it lives, and nothing twice. -->
     <div class="head">
       <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
       <Chip>{doc.kind ?? "PLAN"}</Chip>
@@ -339,6 +337,9 @@
     </div>
     {#if mode === "document"}
       <div class="reading" bind:this={reading}>
+        <!-- The renderer lifts the opening heading out of the body, so the
+             document view states the plan's name itself. -->
+        <h1 class="display-lg">{plan.title || heading}</h1>
         <MarkdownPane {doc} {id} {active} {scrollRoot} bare onMeasure={spy} />
       </div>
     {:else}
@@ -514,6 +515,10 @@
   .deck,
   .reading {
     padding-bottom: 26px;
+  }
+
+  .reading .display-lg {
+    margin-top: 4px;
   }
 
   .modes {

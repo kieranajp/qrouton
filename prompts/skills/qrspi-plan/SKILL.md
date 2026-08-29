@@ -16,10 +16,10 @@ The plan must:
 - use vertical phases that each deliver a coherent increment;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
-- follow the document shape in `references/plan-shape.md`, so progress is readable from the file itself;
+- follow the plan document shape, so progress is readable from the file itself;
 - leave no unresolved decision that blocks implementation;
 - stay at or below 400 lines unless the user explicitly asks for an exhaustive runbook; link to research/spec context instead of repeating it, and omit routine mechanics an implementation lead can recover from named files and commands.
 
-Read `references/plan-shape.md` before the lead writes: it carries the heading convention the workbench reads progress from, and the template to write to.
+The shape is in `references/plan-shape.md` beside this file: the heading convention the workbench reads progress from, and the template to write to. Read it and pass it, or its absolute path, to the lead — the lead starts in a fresh context and cannot resolve a path relative to this file.
 
 Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`. Ask the lead to check the finished artifact's length and compress it before returning only the artifact path, phase outline, verification strategy, and unresolved blockers. Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.

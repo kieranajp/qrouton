@@ -17,9 +17,9 @@ const (
 	Orchestrator ID = "orchestrator"
 	Assistant    ID = "assistant"
 
-	// Skills and agents are addressed by their directory prefix; pathForID and
-	// idForPath are the mapping between an ID and its entry file. A skill's other
-	// files hang off that ID and are never IDs of their own.
+	// Skills and agents are addressed by their directory prefix. A skill's ID
+	// names its folder; every file inside hangs off that ID and is never an ID of
+	// its own.
 	skillIDPrefix = "skills/"
 	agentIDPrefix = "agents/"
 
@@ -55,7 +55,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md skills
+//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md all:skills
 var embedded embed.FS
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
@@ -107,8 +107,20 @@ func (l *FSLoader) skillFiles(dir string) ([]PromptFile, error) {
 	entry := dir + "/" + skillFileName
 	var out []PromptFile
 	err := fs.WalkDir(l.fsys, dir, func(path string, node fs.DirEntry, walkErr error) error {
-		if walkErr != nil || node.IsDir() || path == entry {
+		if walkErr != nil {
 			return walkErr
+		}
+		// Hidden files are the editor's and the operating system's, never the
+		// skill's. Skipping them here rather than in the embed pattern keeps a
+		// working copy and the binary shipping the same skill.
+		if path != dir && strings.HasPrefix(node.Name(), ".") {
+			if node.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if node.IsDir() || path == entry {
+			return nil
 		}
 		content, err := l.read(path)
 		if err != nil {
@@ -173,7 +185,13 @@ func idForPath(path string) (ID, bool) {
 	case path == assistantFileName:
 		return Assistant, true
 	case strings.HasPrefix(path, skillIDPrefix) && strings.HasSuffix(path, "/"+skillFileName):
-		return ID(strings.TrimSuffix(path, "/"+skillFileName)), true
+		id := strings.TrimSuffix(path, "/"+skillFileName)
+		// Only a folder directly under skills/ is a skill. A SKILL.md deeper in
+		// is one of that skill's own files, not a skill of its own.
+		if strings.Contains(strings.TrimPrefix(id, skillIDPrefix), "/") {
+			return "", false
+		}
+		return ID(id), true
 	case strings.HasPrefix(path, agentIDPrefix) && strings.HasSuffix(path, promptFileExt):
 		return ID(strings.TrimSuffix(path, promptFileExt)), true
 	default:

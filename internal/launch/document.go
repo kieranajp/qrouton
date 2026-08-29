@@ -62,10 +62,14 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	} else {
 		span = workbench.LineSpan{}
 	}
-	badge := documentBadge(rel)
+	id := planID(rel)
+	var badge string
+	if id != "" {
+		badge = fmt.Sprintf(documentBadgeFormat, id)
+	}
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
-		Label:   documentLabel(string(text), rel, badge != ""),
+		Label:   documentLabel(string(text), rel, id),
 		Badge:   badge,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
@@ -76,31 +80,27 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 }
 
 // documentLabel names the pane by what the document calls itself, since a tab
-// has room for a title and not for a path. A badged tab already leads with the
-// artifact's id, so it does not also need the diamond.
-func documentLabel(text, rel string, badged bool) string {
-	name := filepath.Base(rel)
-	if title, ok := markdown.Title(text); ok {
-		name = title
+// has room for a title and not for a path. A tab already leading with the
+// artifact's id neither repeats it nor needs the diamond.
+func documentLabel(text, rel, id string) string {
+	name, titled := markdown.Title(text)
+	if !titled {
+		name = strings.TrimLeft(filepath.Base(rel)[len(id):], "-_.")
 	}
-	if badged {
+	if id != "" {
 		return name
 	}
 	return fmt.Sprintf(documentLabelFormat, name)
 }
 
-// documentBadge is the id a plan's tab leads with. Only a plan gets one: it is
-// the artifact a session returns to often enough for its number to be how the
-// reader tells one tab from another.
-func documentBadge(rel string) string {
+// planID is the id a plan's tab leads with. Only a plan gets one: it is the
+// artifact a session returns to often enough for its number to be how the reader
+// tells one tab from another.
+func planID(rel string) string {
 	if status.DocumentKind(rel) != status.KindPlan {
 		return ""
 	}
-	id := status.ArtifactID(rel)
-	if id == "" {
-		return ""
-	}
-	return fmt.Sprintf(documentBadgeFormat, id)
+	return status.ArtifactID(rel)
 }
 
 // SessionRelative names a file the way the session refers to it. The resolved

@@ -184,21 +184,27 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 // plans open tells them apart before reading a word of the title. Every other
 // document keeps the diamond it has always had.
 func TestDocumentWindowBadgesAPlanTabWithItsID(t *testing.T) {
+	const titled = "# Pane smoke test\n\nbody\n"
+
 	for _, tc := range []struct {
 		file  string
+		body  string
 		badge string
 		label string
 	}{
-		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", "[P002]", "Pane smoke test"},
-		{"thoughts/shared/plans/p002-lowercase.md", "[P002]", "Pane smoke test"},
+		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "[P002]", "Pane smoke test"},
+		{"thoughts/shared/plans/p002-lowercase.md", titled, "[P002]", "Pane smoke test"},
+		// Nothing to name the tab after but the file, and the badge already
+		// carries the part of that name it would otherwise say twice.
+		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "[P002]", "2026-08-29-untitled.md"},
 		// Under plans/ but unnumbered: nothing to badge with.
-		{"thoughts/shared/plans/notes.md", "", "◆ Pane smoke test"},
+		{"thoughts/shared/plans/notes.md", titled, "", "◆ Pane smoke test"},
 		// Numbered, but not a plan.
-		{"thoughts/shared/research/R002-findings.md", "", "◆ Pane smoke test"},
-		{"thoughts/shared/specs/S002-shape.md", "", "◆ Pane smoke test"},
+		{"thoughts/shared/research/R002-findings.md", titled, "", "◆ Pane smoke test"},
+		{"thoughts/shared/specs/S002-shape.md", titled, "", "◆ Pane smoke test"},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
-			root := documentRoot(t, map[string]string{tc.file: "# Pane smoke test\n\nbody\n"})
+			root := documentRoot(t, map[string]string{tc.file: tc.body})
 			opts, err := DocumentWindow(root, tc.file, testDocumentEditor, workbench.LineSpan{})
 			if err != nil {
 				t.Fatal(err)

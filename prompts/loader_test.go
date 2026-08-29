@@ -62,10 +62,13 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 // to. Nothing forces a skill that needs only one file to grow a second.
 func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 	loader := NewFSLoader(fstest.MapFS{
-		"skills/solo/SKILL.md":               {Data: []byte("---\nname: solo\n---\n\nAll of it, here.\n")},
-		"skills/folder/SKILL.md":             {Data: []byte("---\nname: folder\n---\n\nSee references/detail.md.\n")},
-		"skills/folder/references/detail.md": {Data: []byte("# Detail\n")},
-		"skills/folder/scripts/run.py":       {Data: []byte("print(\"hi\")\n")},
+		"skills/solo/SKILL.md":                 {Data: []byte("---\nname: solo\n---\n\nAll of it, here.\n")},
+		"skills/folder/SKILL.md":               {Data: []byte("---\nname: folder\n---\n\nSee references/detail.md.\n")},
+		"skills/folder/references/detail.md":   {Data: []byte("# Detail\n")},
+		"skills/folder/references/_partial.md": {Data: []byte("# Partial\n")},
+		"skills/folder/scripts/run.py":         {Data: []byte("print(\"hi\")\n")},
+		"skills/folder/.DS_Store":              {Data: []byte("junk")},
+		"skills/folder/.git/config":            {Data: []byte("junk")},
 	})
 	ctx := context.Background()
 
@@ -98,6 +101,7 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 	}
 	want := []string{
 		"skills/folder/SKILL.md",
+		"skills/folder/references/_partial.md",
 		"skills/folder/references/detail.md",
 		"skills/folder/scripts/run.py",
 	}
@@ -106,7 +110,8 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 	}
 
 	// The whole folder reaches the runner discovery tree, and only the formats
-	// whose comment syntax we know carry the generated-by marker.
+	// whose comment syntax we know carry the generated-by marker. Nothing hidden
+	// goes with it.
 	dir := t.TempDir()
 	if err := Stamp(ctx, dir, loader, OrchestratorAsset); err != nil {
 		t.Fatal(err)
@@ -134,6 +139,9 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, root, skillsDirName, "solo", "references")); !os.IsNotExist(err) {
 			t.Fatalf("a single-file skill grew a references directory: %v", err)
 		}
+		if _, err := os.Stat(filepath.Join(dir, root, skillsDirName, "folder", ".DS_Store")); !os.IsNotExist(err) {
+			t.Fatalf("a hidden file was stamped as part of the skill: %v", err)
+		}
 	}
 }
 
@@ -158,5 +166,24 @@ func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("the plan skill ships %#v, none of them the template", prompt.Files)
+	}
+}
+
+// With whole folders embedded, a SKILL.md deeper inside a skill is one of that
+// skill's files rather than a skill the loader lists twice.
+func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
+	loader := NewFSLoader(fstest.MapFS{
+		"skills/demo/SKILL.md":            {Data: []byte("---\nname: demo\n---\n")},
+		"skills/demo/references/SKILL.md": {Data: []byte("# Not a skill\n")},
+	})
+	listed, err := loader.List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listed) != 1 || listed[0].ID != ID("skills/demo") {
+		t.Fatalf("listed %#v", listed)
+	}
+	if len(listed[0].Files) != 1 || listed[0].Files[0].Path != "references/SKILL.md" {
+		t.Fatalf("the nested file is not the skill's own: %#v", listed[0].Files)
 	}
 }
