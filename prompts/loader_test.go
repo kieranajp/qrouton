@@ -169,6 +169,39 @@ func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
 	}
 }
 
+// The research document's shape is one file, read by the workbench pane and
+// written by the lead, so the skill points at it rather than restating it.
+func TestResearchSkillDefersItsShapeToAReference(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	headings := []string{"## Summary", "## Open Questions"}
+	for _, heading := range headings {
+		if strings.Contains(string(prompt.Content), heading) {
+			t.Errorf("SKILL.md still holds %q from the research template", heading)
+		}
+	}
+	if !strings.Contains(string(prompt.Content), "references/research-shape.md") {
+		t.Error("SKILL.md does not point at its reference")
+	}
+	var found bool
+	for _, file := range prompt.Files {
+		if file.Path != "references/research-shape.md" {
+			continue
+		}
+		found = true
+		for _, heading := range headings {
+			if !strings.Contains(string(file.Content), heading) {
+				t.Errorf("the shape reference is missing %q", heading)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("the research skill ships %#v, none of them the shape", prompt.Files)
+	}
+}
+
 // With whole folders embedded, a SKILL.md deeper inside a skill is one of that
 // skill's files rather than a skill the loader lists twice.
 func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
