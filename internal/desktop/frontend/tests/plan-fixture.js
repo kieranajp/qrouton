@@ -5,6 +5,91 @@ import { mount } from "svelte";
 import PlanFixture from "./PlanFixture.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
 
+export const AROUND = [
+  "# Sections either side",
+  "",
+  "Preamble.",
+  "",
+  "## Decisions",
+  "",
+  "Body line 1 of the decisions.",
+  "",
+  "Body line 2 of the decisions.",
+  "",
+  "Body line 3 of the decisions.",
+  "",
+  "Body line 4 of the decisions.",
+  "",
+  "Body line 5 of the decisions.",
+  "",
+  "Body line 6 of the decisions.",
+  "",
+  "Body line 7 of the decisions.",
+  "",
+  "Body line 8 of the decisions.",
+  "",
+  "## Phase 1 — Groundwork",
+  "",
+  "Body line 1 of groundwork.",
+  "",
+  "Body line 2 of groundwork.",
+  "",
+  "Body line 3 of groundwork.",
+  "",
+  "Body line 4 of groundwork.",
+  "",
+  "Body line 5 of groundwork.",
+  "",
+  "Body line 6 of groundwork.",
+  "",
+  "Body line 7 of groundwork.",
+  "",
+  "Body line 8 of groundwork.",
+  "",
+  "### Verify",
+  "- [x] the check",
+  "",
+  "## Phase 2 — The middle",
+  "",
+  "Body line 1 of the middle.",
+  "",
+  "Body line 2 of the middle.",
+  "",
+  "Body line 3 of the middle.",
+  "",
+  "Body line 4 of the middle.",
+  "",
+  "Body line 5 of the middle.",
+  "",
+  "Body line 6 of the middle.",
+  "",
+  "Body line 7 of the middle.",
+  "",
+  "Body line 8 of the middle.",
+  "",
+  "### Verify",
+  "- [ ] the other check",
+  "",
+  "## Blockers",
+  "",
+  "Body line 1 of the blockers.",
+  "",
+  "Body line 2 of the blockers.",
+  "",
+  "Body line 3 of the blockers.",
+  "",
+  "Body line 4 of the blockers.",
+  "",
+  "Body line 5 of the blockers.",
+  "",
+  "Body line 6 of the blockers.",
+  "",
+  "Body line 7 of the blockers.",
+  "",
+  "Body line 8 of the blockers.",
+  "",
+].join("\n");
+
 export const PLAN = [
   "---", // 1
   "kind: plan", // 2
@@ -102,7 +187,14 @@ const document_ = (text, epoch) => ({
 window.reports = [];
 window.wailsCall = async (name, id, payload) => {
   if (name.endsWith(".Content")) {
-    return document_(params.get("plain") ? PLAIN : params.get("done") ? DONE : PLAN, 1);
+    const text = params.get("plain")
+      ? PLAIN
+      : params.get("done")
+        ? DONE
+        : params.get("around")
+          ? AROUND
+          : PLAN;
+    return document_(text, 1);
   }
   if (name.endsWith(".RenderDiagrams")) return [];
   if (name.endsWith(".ReportViewport")) window.reports.push(payload);
@@ -135,6 +227,14 @@ window.footerGap = () => {
 };
 window.mode = () => document.querySelector('[aria-pressed="true"]').textContent.trim();
 window.counter = () => document.querySelector(".counter").textContent.trim();
+window.pipKinds = () =>
+  [...document.querySelectorAll(".pip")].map((pip) => ({
+    label: pip.getAttribute("aria-label"),
+    outline: pip.classList.contains("summary"),
+  }));
+window.scrollTo_ = (top) => {
+  document.querySelector(".body").scrollTop = top;
+};
 window.pips = () =>
   [...document.querySelectorAll(".pip")].map((pip) => ({
     label: pip.getAttribute("aria-label"),

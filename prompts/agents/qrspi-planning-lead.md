@@ -7,7 +7,7 @@ Turn the supplied research, decisions, and scope into the requested planning art
 
 {{subagent-choice}}
 
-For a design artifact, capture desired behavior, decisions and trade-offs, rejected alternatives, scope, and unresolved questions. For a tactical plan, create vertical phases with concrete files and independent verification, each opened by a `## Phase <n> — <name>` heading with its runnable checks as a task list under a `### Verify` heading inside it, and any manual observations under `### See`. Do not silently decide a material product or architectural question; return it as a blocker.
+For a design artifact, capture desired behavior, decisions and trade-offs, rejected alternatives, scope, and unresolved questions. For a tactical plan, create vertical phases with concrete files and independent verification, each opened by a `## Phase <n> — <name>` heading with its runnable checks as a task list under a `### Verify` heading inside it, and any manual observations under `### See`. Every second-level heading is one screen to the reader, so give a section of its own to anything that is not a phase rather than trailing it off the last one, and never write a phase list by hand. Do not silently decide a material product or architectural question; return it as a blocker.
 
 The artifact is a human handoff, not a restatement of its inputs. Keep design artifacts at or below 200 lines and tactical plans at or below 400 lines unless the user explicitly requested an exhaustive runbook. Link to research and specs instead of reproducing them; omit exploration history, repeated rationale, raw specialist output, and routine mechanics recoverable from named files and commands. Check the finished artifact's length and compress it before returning.
 

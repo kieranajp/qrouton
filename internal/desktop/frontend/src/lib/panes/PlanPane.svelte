@@ -43,28 +43,30 @@
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
   // With nothing unmet left to point at, the meter rests on the last phase.
   let followed = $derived.by(() => {
-    const at = plan.phases.findIndex((phase) => phase.state !== "met");
-    return at < 0 ? plan.phases.length : at + 1;
+    const unmet = plan.phases.find((phase) => phase.state !== "met");
+    return (unmet ?? plan.phases.at(-1))?.screen ?? 0;
   });
   // An agent is working somewhere in this session. Nothing here knows whether
   // it is working on this plan, and the bar must not say that it does.
   let live = $derived(session.fields.activity === "working" || allMet);
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
-  let current = $state(untrack(() => screenFor(plan.phases, doc.line ?? 0)));
+  let current = $state(untrack(() => screenFor(plan.slides, doc.line ?? 0)));
   /** @type {HTMLElement | undefined} */
   let body = $state();
+  /** @type {HTMLElement | undefined} */
+  let reading = $state();
   let epoch = untrack(() => doc.viewportEpoch);
 
   // A push carries the span along with the text, so only a reload — which is
   // what moves the epoch — counts as a fresh request to jump.
   $effect(() => {
     const at = doc.viewportEpoch;
-    const count = plan.phases.length;
+    const count = plan.slides.length;
     untrack(() => {
       if (at !== epoch) {
         epoch = at;
-        current = screenFor(plan.phases, doc.line ?? 0);
+        current = screenFor(plan.slides, doc.line ?? 0);
         pinned = false;
         retired = false;
       }
@@ -72,10 +74,19 @@
     });
   });
 
-  function screenFor(phases, line) {
+  function screenFor(slides, line) {
     if (!line || line < 1) return 0;
-    const at = phases.findIndex((phase) => line >= phase.from && line <= phase.to);
+    const at = slides.findIndex((slide) => line >= slide.from && line <= slide.to);
     return at < 0 ? 0 : at + 1;
+  }
+
+  // A phase slide counts in phases, because that is what its heading numbers.
+  // Anything else answers with its own name, which is the only honest label a
+  // section has: it has no position in a sequence the document defines.
+  function counterFor(screen) {
+    if (screen === 0) return "Overview";
+    const slide = plan.slides[screen - 1];
+    return slide.number === null ? slide.name : `${slide.number} / ${plan.phases.length}`;
   }
 
   /** @param {Element} node */
@@ -102,30 +113,30 @@
     const holder = document.createElement("div");
     holder.innerHTML = html;
     const preamble = [];
-    const phases = parsed.phases.map(() => ({ opening: [], body: [], criteria: [] }));
+    const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
     let at = { from: 0, to: 0 };
     for (const node of [...holder.children]) {
       at = spanOf(node) ?? at;
-      const index = parsed.phases.findIndex((phase) => at.from >= phase.from && at.from <= phase.to);
+      const index = parsed.slides.findIndex((slide) => at.from >= slide.from && at.from <= slide.to);
       if (index < 0) {
         preamble.push(node.outerHTML);
         continue;
       }
-      const verify = criteriaSpans(parsed.phases[index]);
+      const verify = criteriaSpans(parsed.slides[index]);
       const bucket =
-        at.from === parsed.phases[index].from
+        at.from === parsed.slides[index].from
           ? "opening"
           : verify && at.from >= verify.from && at.to <= verify.to
             ? "criteria"
             : "body";
-      phases[index][bucket].push(node.outerHTML);
+      slides[index][bucket].push(node.outerHTML);
     }
     return {
       preamble: preamble.join(""),
-      phases: phases.map((phase) => ({
-        opening: phase.opening.join(""),
-        body: phase.body.join(""),
-        criteria: phase.criteria.join(""),
+      slides: slides.map((slide) => ({
+        opening: slide.opening.join(""),
+        body: slide.body.join(""),
+        criteria: slide.criteria.join(""),
       })),
     };
   }
@@ -136,7 +147,38 @@
     for (const marked of body?.querySelectorAll(".marked") ?? []) marked.classList.remove("marked");
     retired = true;
     pinned = pin;
-    current = Math.max(0, Math.min(screen, plan.phases.length));
+    current = Math.max(0, Math.min(screen, plan.slides.length));
+  }
+
+  // In Document mode nothing is hidden, so the strip reports the slide the
+  // reader has scrolled into rather than the one they selected.
+  let scrolled = $state(0);
+  let viewing = $derived(mode === "document" ? scrolled : current);
+
+  /** @param {{intervals: {line: number, to: number}[]}} state */
+  function spy(state) {
+    if (state.intervals.length === 0) return;
+    // The section under the top edge is the one being read — except at the very
+    // bottom, which no later section can ever scroll up past.
+    const ended =
+      scrollRoot && scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
+    const line = ended ? state.intervals.at(-1).to : state.intervals[0].line;
+    scrolled = screenFor(plan.slides, line);
+  }
+
+  // One strip, two jobs: it selects a screen in the deck and scrolls to a
+  // section in the document.
+  function reach(screen) {
+    if (mode === "plan") {
+      show(screen);
+      return;
+    }
+    const from = screen === 0 ? plan.preamble.from : plan.slides[screen - 1].from;
+    const blocks = [
+      .../** @type {NodeListOf<HTMLElement>} */ (reading?.querySelectorAll("[data-line]") ?? []),
+    ];
+    const target = blocks.find((block) => Number(block.dataset.line) >= from) ?? blocks[0];
+    target?.scrollIntoView({ block: "start" });
   }
 
   // Following moves the view when the meter moves. It does not choose the
@@ -154,7 +196,7 @@
 
   /** @param {KeyboardEvent} event */
   function onKey(event) {
-    if (!active || plan.phases.length === 0) return;
+    if (!active || plan.slides.length === 0) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const from = /** @type {HTMLElement} */ (event.target);
     if (from?.isContentEditable || /^(input|textarea|select)$/i.test(from?.tagName ?? "")) return;
@@ -215,7 +257,7 @@
   function requested() {
     const line = doc.line ?? 0;
     const to = doc.to ?? 0;
-    const opened = current > 0 ? plan.phases[current - 1] : plan.preamble;
+    const opened = current > 0 ? plan.slides[current - 1] : plan.preamble;
     return { line, to: to > line ? Math.min(to, opened.to) : to };
   }
 
@@ -274,7 +316,7 @@
 
 <svelte:window onkeydown={onKey} />
 
-{#if plan.phases.length === 0}
+{#if plan.slides.length === 0}
   <MarkdownPane {doc} {id} {active} {scrollRoot} />
 {:else}
   <article class="document plan">
@@ -297,24 +339,12 @@
           <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
           <Chip>{doc.kind ?? "PLAN"}</Chip>
           <span class="name">{heading}</span>
-          <div class="modes">
-            <Button
-              variant={mode === "plan" ? "outline" : "ghost"}
-              size="sm"
-              aria-pressed={mode === "plan"}
-              onclick={() => (mode = "plan")}>Plan</Button>
-            <Button
-              variant={mode === "document" ? "outline" : "ghost"}
-              size="sm"
-              aria-pressed={mode === "document"}
-              onclick={() => (mode = "document")}>Document</Button>
-          </div>
         </div>
       {/if}
     </div>
     {#if mode === "document"}
-      <div class="reading">
-        <MarkdownPane {doc} {id} {active} {scrollRoot} bare />
+      <div class="reading" bind:this={reading}>
+        <MarkdownPane {doc} {id} {active} {scrollRoot} bare onMeasure={spy} />
       </div>
     {:else}
       <div
@@ -324,17 +354,17 @@
         use:links
         use:diagrams={doc.text}
         use:viewport={{ id, active, scrollRoot, screen: current }}>
-        <section class="screen" data-screen="overview" hidden={current !== 0}>
+        <section class="screen hero" data-screen="overview" hidden={current !== 0}>
           <CapsLabel
             >Plan · {plan.phases.length}
             {plan.phases.length === 1 ? "phase" : "phases"}</CapsLabel>
           <h1 class="display-lg">{plan.title || heading}</h1>
-          <div class="markdown">{@html deck.preamble}</div>
+          <div class="markdown lead">{@html deck.preamble}</div>
           <ol class="rows">
-            {#each plan.phases as phase, at}
+            {#each plan.phases as phase}
               <li>
-                <button type="button" class="row" onclick={() => show(at + 1)}>
-                  <span class="index">{phase.index}</span>
+                <button type="button" class="row" onclick={() => show(phase.screen)}>
+                  <span class="index">{phase.number}</span>
                   <span class="name">{phase.name}</span>
                   <span class="dot" style:background={DOT[phase.state]}></span>
                   <span class="count">{phase.met}/{phase.total}</span>
@@ -343,76 +373,96 @@
             {/each}
           </ol>
         </section>
-        {#each plan.phases as phase, at}
-          <section class="screen" data-screen={phase.index} hidden={current !== at + 1}>
-            <div class="crumb">
-              <CapsLabel>Phase {at + 1} of {plan.phases.length}</CapsLabel>
-              <span class="state">
-                <span class="dot" style:background={DOT[phase.state]}></span>
-                {WORD[phase.state]}
-              </span>
-            </div>
-            <h1 class="display-md">{phase.name}</h1>
-            <div class="markdown lifted">{@html deck.phases[at].opening}</div>
-            <div class="markdown">{@html deck.phases[at].body}</div>
-            <hr class="rule" />
-            <div class="criteria">
-              <div class="criteria-head">
-                <CapsLabel>Acceptance criteria</CapsLabel>
-                <span class="count" data-count={phase.index}>
-                  {phase.total > 0 ? `${phase.met} of ${phase.total} met` : "No checks stated"}
+        {#each plan.slides as slide, at}
+          <section
+            class="screen"
+            data-screen={slide.number ?? slide.name}
+            hidden={current !== at + 1}>
+            {#if slide.number !== null}
+              <div class="crumb">
+                <CapsLabel>Phase {slide.number} of {plan.phases.length}</CapsLabel>
+                <span class="state">
+                  <span class="dot" style:background={DOT[slide.state]}></span>
+                  {WORD[slide.state]}
                 </span>
               </div>
-              <div class="markdown">{@html deck.phases[at].criteria}</div>
-            </div>
+            {/if}
+            <h1 class="display-md">{slide.name}</h1>
+            <div class="markdown lifted">{@html deck.slides[at].opening}</div>
+            <div class="markdown">{@html deck.slides[at].body}</div>
+            {#if slide.number !== null}
+              <hr class="rule" />
+              <div class="criteria">
+                <div class="criteria-head">
+                  <CapsLabel>Acceptance criteria</CapsLabel>
+                  <span class="count" data-count={slide.number}>
+                    {slide.total > 0 ? `${slide.met} of ${slide.total} met` : "No checks stated"}
+                  </span>
+                </div>
+                <div class="markdown">{@html deck.slides[at].criteria}</div>
+              </div>
+            {/if}
           </section>
         {/each}
       </div>
-      <footer class="footer">
-        {#if live}
-          {@const moved = !allMet && followed !== current}
-          <div class="bar">
-            <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
-            <span class="says">
-              {#if allMet}
-                Every phase met
-              {:else if moved}
-                Agent moved to phase {followed} · {plan.phases[followed - 1].name}
-              {:else}
-                Following the agent · {plan.phases[followed - 1].name}
-              {/if}
-            </span>
-            {#if moved}
-              <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+    {/if}
+    <footer class="footer">
+      {#if live}
+        {@const moved = !allMet && followed !== current}
+        <div class="bar">
+          <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
+          <span class="says">
+            {#if allMet}
+              Every phase met
+            {:else if moved}
+              Agent moved to phase {followed} · {plan.phases[followed - 1].name}
+            {:else}
+              Following the agent · {plan.phases[followed - 1].name}
             {/if}
-          </div>
-        {/if}
-        <div class="controls">
-          <div class="pips">
+          </span>
+          {#if moved}
+            <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+          {/if}
+        </div>
+      {/if}
+      <div class="controls">
+        <div class="pips">
+          <button
+            type="button"
+            class="pip summary"
+            class:viewing={viewing === 0}
+            aria-label="Overview"
+            aria-current={viewing === 0}
+            onclick={() => reach(0)}>
+            <span class="mark"></span>
+          </button>
+          {#each plan.slides as slide, at}
             <button
               type="button"
-              class="pip summary"
-              class:viewing={current === 0}
-              aria-label="Overview"
-              aria-current={current === 0}
-              onclick={() => show(0)}>
-              <span class="mark"></span>
+              class="pip"
+              class:summary={slide.number === null}
+              class:viewing={viewing === at + 1}
+              aria-label={slide.number === null ? slide.name : `Phase ${slide.number}`}
+              aria-current={viewing === at + 1}
+              onclick={() => reach(at + 1)}>
+              <span class="mark" style:background={slide.state ? DOT[slide.state] : null}></span>
             </button>
-            {#each plan.phases as phase, at}
-              <button
-                type="button"
-                class="pip"
-                class:viewing={current === at + 1}
-                aria-label="Phase {phase.index}"
-                aria-current={current === at + 1}
-                onclick={() => show(at + 1)}>
-                <span class="mark" style:background={DOT[phase.state]}></span>
-              </button>
-            {/each}
-          </div>
-          <span class="counter">
-            {current === 0 ? "Overview" : `${current} / ${plan.phases.length}`}
-          </span>
+          {/each}
+        </div>
+        <div class="modes">
+          <Button
+            variant={mode === "plan" ? "outline" : "ghost"}
+            size="sm"
+            aria-pressed={mode === "plan"}
+            onclick={() => (mode = "plan")}>Plan</Button>
+          <Button
+            variant={mode === "document" ? "outline" : "ghost"}
+            size="sm"
+            aria-pressed={mode === "document"}
+            onclick={() => (mode = "document")}>Document</Button>
+        </div>
+        <span class="counter">{counterFor(viewing)}</span>
+        {#if mode === "plan"}
           <div class="steps">
             <Button
               variant="ghost"
@@ -424,12 +474,12 @@
               variant="ghost"
               size="sm"
               aria-label="Next screen"
-              disabled={current === plan.phases.length}
+              disabled={current === plan.slides.length}
               onclick={() => show(current + 1)}>→</Button>
           </div>
-        </div>
-      </footer>
-    {/if}
+        {/if}
+      </div>
+    </footer>
   </article>
 {/if}
 
@@ -501,6 +551,33 @@
     margin-left: auto;
   }
 
+  /* The opening screen is the one everybody sees first, so it is given room:
+     label, title, lead, then the list with air around it. */
+  .hero {
+    padding-top: 18px;
+  }
+
+  .hero .display-lg {
+    margin: 14px 0 20px;
+    max-width: 26ch;
+  }
+
+  .hero .lead :global(p) {
+    font: var(--machine-lg);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-secondary);
+    max-width: 68ch;
+  }
+
+  .hero .lead :global(p:first-of-type) {
+    color: var(--text-primary);
+  }
+
+  .hero .rows {
+    margin-top: 34px;
+  }
+
   /* Held on the pane's floor whatever the phase is tall enough to fill, so the
      arrows and pips stay under the same finger from one screen to the next. */
   .footer {
@@ -559,6 +636,10 @@
 
   .pip.summary {
     margin-right: 4px;
+  }
+
+  .footer .modes {
+    margin-left: 0;
   }
 
   .counter {
@@ -624,6 +705,7 @@
     margin: 26px 0 0;
     padding: 0;
     border: var(--border-width) solid var(--border-subtle);
+    box-shadow: var(--shadow-offset) var(--border-subtle);
   }
 
   .rows li + li .row {
@@ -701,6 +783,23 @@
 
   /* Narrow steps the type down. Nothing goes away. */
   @media (max-width: 420px) {
+    .hero {
+      padding-top: 6px;
+    }
+
+    /* The list is what the screen is for; the hero gives way to it. */
+    .hero .display-lg {
+      margin: 8px 0 12px;
+    }
+
+    .hero .rows {
+      margin-top: 18px;
+    }
+
+    .hero .lead :global(p) {
+      font: var(--machine-md);
+    }
+
     .display-lg {
       font: var(--display-md);
     }
@@ -711,6 +810,19 @@
 
     .criteria .markdown :global(li) {
       font: var(--machine-xs);
+    }
+
+    /* Squeezed into the same row the pips wrap one per line, so they take a
+       row of their own and the controls sit under them. */
+    .controls {
+      flex-wrap: wrap;
+      row-gap: 10px;
+      padding-top: 8px;
+      padding-bottom: 8px;
+    }
+
+    .pips {
+      flex: 1 0 100%;
     }
   }
 </style>

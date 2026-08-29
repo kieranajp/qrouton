@@ -16,8 +16,42 @@ The plan must:
 - use vertical phases that each deliver a coherent increment;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
-- open each phase with a `## Phase <n> — <name>` heading and list that phase's runnable checks as a task list under a `### Verify` heading inside it, so progress is readable from the file itself; manual observations belong in a `### See` list and are not the meter;
+- follow the shape below, so progress is readable from the file itself;
 - leave no unresolved decision that blocks implementation;
 - stay at or below 400 lines unless the user explicitly asks for an exhaustive runbook; link to research/spec context instead of repeating it, and omit routine mechanics an implementation lead can recover from named files and commands.
 
-Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`. Ask the lead to check the finished artifact's length and compress it before returning only the artifact path, phase outline, verification strategy, and unresolved blockers. Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.
+Every second-level heading is one screen when the plan is read in the workbench,
+so keep sections whole rather than trailing them off the end of a phase. A phase
+is a section whose heading carries the phase prefix; its runnable checks go in a
+task list under `### Verify`, and manual observations under `### See`, which is
+never the meter. Do not write a phase list of your own — the reader generates one
+from the phases.
+
+```markdown
+---
+kind: plan
+title: <title>
+---
+
+# <title>
+
+<what this changes and why, a few sentences>
+
+## Decisions
+## Out of scope
+
+## Phase 1 — <name>
+
+<what this phase does>
+
+### Verify
+- [ ] <a command that passes or fails>
+
+### See
+- [ ] <something a human confirms; not the meter>
+
+## Blockers
+```
+
+Sections other than the phases are yours to choose; the ones above are the ones
+we expect. Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`. Ask the lead to check the finished artifact's length and compress it before returning only the artifact path, phase outline, verification strategy, and unresolved blockers. Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.

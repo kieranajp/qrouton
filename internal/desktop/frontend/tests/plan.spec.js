@@ -254,7 +254,7 @@ test("a span still wins while an agent is working", async ({ page }) => {
   await expect.poll(() => shown(page)).toEqual(["2"]);
 });
 
-test("phases sharing a number still render, and the crumb counts screens", async ({ page }) => {
+test("phases sharing a number still render, each reporting its own", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.pushRenumbered());
 
@@ -265,8 +265,11 @@ test("phases sharing a number still render, and the crumb counts screens", async
   ]);
   expect(await page.evaluate(() => window.errors)).toEqual([]);
 
-  await page.locator(".pip").nth(2).click();
-  await expect.poll(() => page.evaluate(() => window.crumbs())).toContain("Phase 3 of 3");
+  // Both slides say Phase 1 because the document does; the pane reports the
+  // number it was given rather than inventing a position.
+  await page.locator('.pip[aria-label="Phase 1"]').last().click();
+  await expect.poll(() => page.evaluate(() => window.counter())).toBe("1 / 3");
+  await expect.poll(() => page.evaluate(() => window.crumbs())).toContain("Phase 1 of 3");
 });
 
 test("arrow keys are left to the plain body when nothing opens a phase", async ({ page }) => {
@@ -328,4 +331,65 @@ test("following moves the view when the meter moves, and a pin holds it", async 
   await page.evaluate(() => window.pushFinished());
   await expect.poll(() => shown(page)).toEqual(["3"]);
   expect(await page.evaluate(() => window.counter())).toBe("3 / 3");
+});
+
+test("sections on both sides of the phases are slides of their own", async ({ page }) => {
+  await open(page, "?around=true");
+
+  // Four slides: a leading section, two phases, a trailing one.
+  expect(await page.evaluate(() => window.pipKinds())).toEqual([
+    { label: "Overview", outline: true },
+    { label: "Decisions", outline: true },
+    { label: "Phase 1", outline: false },
+    { label: "Phase 2", outline: false },
+    { label: "Blockers", outline: true },
+  ]);
+
+  // The trailing section is not swallowed into the last phase's body.
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  await expect(page.locator('[data-screen="2"]')).not.toContainText("of the blockers");
+  await page.locator('.pip[aria-label="Blockers"]').click();
+  await expect(page.locator('[data-screen="Blockers"]')).toContainText("of the blockers");
+});
+
+test("the counter reads a phase in phases and a section by name", async ({ page }) => {
+  await open(page, "?around=true");
+  expect(await page.evaluate(() => window.counter())).toBe("Overview");
+
+  await page.locator('.pip[aria-label="Decisions"]').click();
+  expect(await page.evaluate(() => window.counter())).toBe("Decisions");
+
+  // Slide three of five, but phase one of two.
+  await page.locator('.pip[aria-label="Phase 1"]').click();
+  expect(await page.evaluate(() => window.counter())).toBe("1 / 2");
+  expect(await page.evaluate(() => window.crumbs())).toContain("Phase 1 of 2");
+
+  await page.locator('.pip[aria-label="Blockers"]').click();
+  expect(await page.evaluate(() => window.counter())).toBe("Blockers");
+});
+
+test("a section screen carries no meter", async ({ page }) => {
+  await open(page, "?around=true");
+  await page.locator('.pip[aria-label="Decisions"]').click();
+  await expect(page.locator('[data-screen="Decisions"] .criteria')).toHaveCount(0);
+  await expect(page.locator('[data-screen="Decisions"] .crumb')).toHaveCount(0);
+  await page.locator('.pip[aria-label="Phase 1"]').click();
+  await expect(page.locator('[data-screen="1"] .criteria')).toHaveCount(1);
+});
+
+test("the document view keeps the strip, which follows the scroll", async ({ page }) => {
+  await open(page, "?around=true");
+  await page.getByRole("button", { name: "Document", exact: true }).click();
+  await expect(page.locator(".footer")).toBeVisible();
+  await expect(page.locator('button[aria-label="Next screen"]')).toHaveCount(0);
+
+  // Clicking a pip scrolls to that section, and the strip reports where we are.
+  await page.locator('.pip[aria-label="Blockers"]').click();
+  await expect.poll(() => page.evaluate(() => window.counter())).toBe("Blockers");
+  await expect
+    .poll(() => page.evaluate(() => window.pips().filter((pip) => pip.viewing)))
+    .toEqual([{ label: "Blockers", viewing: true }]);
+
+  await page.evaluate(() => window.scrollTo_(0));
+  await expect.poll(() => page.evaluate(() => window.counter())).toBe("Overview");
 });

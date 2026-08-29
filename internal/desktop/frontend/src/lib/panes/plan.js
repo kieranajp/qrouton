@@ -6,16 +6,28 @@ import { unified } from "unified";
 const parser = unified().use([remarkParse, remarkFrontmatter, remarkGfm]);
 
 /**
- * The one place the phase-boundary convention is written down. Everything else
- * consumes the phases it returns, so replacing the convention is this function
- * and the planning prompt, and nothing more.
+ * Where one screen of a plan ends and the next begins. Every second-level
+ * heading opens one, whatever it is called, so a section before or after the
+ * phases is a screen of its own rather than something spilled into a neighbour.
  * @param {any} node An mdast node.
- * @returns {{index: number, name: string} | null}
+ * @returns {{name: string} | null}
  */
-function opensPhase(node) {
+function opensSlide(node) {
   if (node?.type !== "heading" || node.depth !== 2) return null;
-  const match = /^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$/.exec(flatten(node));
-  return match ? { index: Number(match[1]), name: match[2] } : null;
+  const name = flatten(node).trim();
+  return name ? { name } : null;
+}
+
+/**
+ * The one place the phase convention is written down: which slides are phases,
+ * and what each is numbered and called. Everything downstream consumes slides,
+ * so replacing the convention is this function and the planning prompt.
+ * @param {string} name A slide's heading text.
+ * @returns {{number: number, name: string} | null}
+ */
+function namesPhase(name) {
+  const match = /^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$/.exec(name);
+  return match ? { number: Number(match[1]), name: match[2] } : null;
 }
 
 const CRITERIA_HEADING = "verify";
@@ -99,18 +111,22 @@ function stateOf(met, total) {
 }
 
 /**
+ * A slide is one screen of a plan. Those whose heading names a phase carry a
+ * number and a meter; the rest are sections and carry neither.
  * @typedef {{text: string, met: boolean, group: number}} Criterion
- * @typedef {{index: number, name: string, from: number, to: number,
- *   criteria: Criterion[], met: number, total: number,
- *   state: "met" | "working" | "not-started",
- *   verify: {from: number, to: number} | null}} Phase
+ * @typedef {{screen: number, name: string, number: number | null,
+ *   from: number, to: number, criteria: Criterion[], met: number, total: number,
+ *   state: "met" | "working" | "not-started" | null,
+ *   verify: {from: number, to: number} | null}} Slide
  */
 
 /**
- * Reads a plan document as an overview and its phases. A document nothing opens
- * a phase in comes back with none, which is the signal to render it plainly.
+ * Reads a plan document as an overview and the slides beneath it. A document
+ * with no second-level heading comes back with none, which is the signal to
+ * render it plainly.
  * @param {string} text
- * @returns {{title: string, preamble: {from: number, to: number}, phases: Phase[]}}
+ * @returns {{title: string, preamble: {from: number, to: number},
+ *   slides: Slide[], phases: Slide[]}}
  */
 export function parsePlan(text) {
   const tree = /** @type {any} */ (parser.parse(text));
@@ -126,7 +142,7 @@ export function parsePlan(text) {
   /** @type {any[][]} */
   const bodies = [];
   for (const node of children) {
-    const opening = opensPhase(node);
+    const opening = opensSlide(node);
     if (opening) {
       openings.push({ ...opening, from: node.position?.start?.line ?? start });
       bodies.push([]);
@@ -134,15 +150,23 @@ export function parsePlan(text) {
     }
     bodies.at(-1)?.push(node);
   }
-  const phases = openings.map((opening, at) => {
+  const slides = openings.map((opening, at) => {
+    const phase = namesPhase(opening.name);
+    const span = {
+      screen: at + 1,
+      name: phase ? phase.name : opening.name,
+      number: phase ? phase.number : null,
+      from: opening.from,
+      to: openings[at + 1] ? openings[at + 1].from - 1 : last,
+    };
+    if (!phase) {
+      return { ...span, criteria: [], met: 0, total: 0, state: null, verify: null };
+    }
     const { heading, nodes } = criteriaSection(bodies[at]);
     const { criteria, end } = readCriteria(nodes);
     const met = criteria.filter((criterion) => criterion.met).length;
     return {
-      index: opening.index,
-      name: opening.name,
-      from: opening.from,
-      to: openings[at + 1] ? openings[at + 1].from - 1 : last,
+      ...span,
       criteria,
       met,
       total: criteria.length,
@@ -158,16 +182,17 @@ export function parsePlan(text) {
 
   return {
     title,
-    preamble: { from: start, to: phases.length > 0 ? phases[0].from - 1 : last },
-    phases,
+    preamble: { from: start, to: slides.length > 0 ? slides[0].from - 1 : last },
+    slides,
+    phases: slides.filter((slide) => slide.number !== null),
   };
 }
 
 /**
  * The source lines the criteria heading and its list occupy, so a renderer can
  * lift exactly those out of the phase body.
- * @param {Phase | undefined} phase
+ * @param {Slide | undefined} slide
  */
-export function criteriaSpans(phase) {
-  return phase?.verify ?? null;
+export function criteriaSpans(slide) {
+  return slide?.verify ?? null;
 }

@@ -12,8 +12,8 @@
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean}} */
-  let { doc, id, active = false, scrollRoot, bare = false } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown}} */
+  let { doc, id, active = false, scrollRoot, bare = false, onMeasure } = $props();
 
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
@@ -96,6 +96,7 @@
           span,
           selected: params.active,
           nextSequence: () => nextViewportSequence(windowID),
+          onMeasure: (state) => onMeasure?.(state),
           report: (report) =>
             Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
               epoch: doc.viewportEpoch,

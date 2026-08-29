@@ -66,6 +66,7 @@ export function nextViewportSequence(id) {
  *   view?: Window,
  *   fonts?: FontFaceSet,
  *   nextSequence?: () => number,
+ *   onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown,
  * }} options
  */
 export function createViewportController(options) {
@@ -118,6 +119,9 @@ export function createViewportController(options) {
     targetVisible = geometry.visible;
     achievedTarget ||= geometry.visible;
     publish(state);
+    // The same measurement answers "what is on screen" for the pane itself,
+    // rather than a second listener re-measuring the same blocks.
+    options.onMeasure?.(state);
   };
   const run = () => {
     pending = 0;

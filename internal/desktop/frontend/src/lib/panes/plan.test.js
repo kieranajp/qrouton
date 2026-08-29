@@ -42,7 +42,7 @@ const PLAN = doc(
 test("both separators open a phase", () => {
   const { phases } = parsePlan(PLAN);
   assert.deepEqual(
-    phases.map((phase) => [phase.index, phase.name]),
+    phases.map((phase) => [phase.number, phase.name]),
     [
       [1, "The parser"],
       [2, "The deck"],
@@ -138,4 +138,62 @@ test("a heading quoted inside a fence opens nothing", () => {
     doc("# Notes", "", "```md", "## Phase 1 — quoted", "```", "", "Prose.", ""),
   );
   assert.deepEqual(phases, []);
+});
+
+const AROUND = doc(
+  "# Around the phases",
+  "",
+  "Preamble.",
+  "",
+  "## Decisions",
+  "",
+  "What we settled.",
+  "",
+  "## Phase 1 — Groundwork",
+  "",
+  "### Verify",
+  "- [x] the check",
+  "",
+  "## Blockers",
+  "",
+  "None open.",
+  "",
+);
+
+test("every second-level heading opens a slide, phase or not", () => {
+  const { slides } = parsePlan(AROUND);
+  assert.deepEqual(
+    slides.map((slide) => [slide.screen, slide.name, slide.number]),
+    [
+      [1, "Decisions", null],
+      [2, "Groundwork", 1],
+      [3, "Blockers", null],
+    ],
+  );
+});
+
+test("a section carries no meter and a phase does", () => {
+  const [decisions, groundwork] = parsePlan(AROUND).slides;
+  assert.deepEqual([decisions.total, decisions.state, decisions.verify], [0, null, null]);
+  assert.deepEqual([groundwork.met, groundwork.total, groundwork.state], [1, 1, "met"]);
+});
+
+test("a trailing section is its own slide rather than the last phase's body", () => {
+  const { slides } = parsePlan(AROUND);
+  const phase = slides.find((slide) => slide.number === 1);
+  const blockers = slides.at(-1);
+  assert.equal(phase.to, blockers.from - 1);
+  assert.ok(!blockers.name.startsWith("Phase"));
+});
+
+test("phases are the slides that name one, and keep their screens", () => {
+  const { slides, phases } = parsePlan(AROUND);
+  assert.deepEqual(phases.map((phase) => phase.screen), [2]);
+  assert.equal(phases[0], slides[1]);
+});
+
+test("a leading section keeps the preamble to what sits above it", () => {
+  const { preamble, slides } = parsePlan(AROUND);
+  assert.deepEqual(preamble, { from: 1, to: 4 });
+  assert.equal(slides[0].from, 5);
 });
