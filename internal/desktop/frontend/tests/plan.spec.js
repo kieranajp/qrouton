@@ -309,10 +309,14 @@ test("the footer holds the pane's floor and spans its width", async ({ page }) =
   await page.locator('.pip[aria-label="Phase 6"]').click();
   await expect.poll(() => shown(page)).toEqual(["6"]);
 
-  const box = await page.evaluate(() => window.footerGap());
-  expect(box.gap).toBe(0);
-  expect(box.left).toBe(0);
-  expect(box.width).toBe(box.port);
+  const short = await page.evaluate(() => window.footerGap());
+  expect(short).toEqual({ gap: 0, left: 0, width: short.pane, pane: short.pane });
+
+  // And on the longest screen, where the deck scrolls underneath it.
+  await page.locator('.pip[aria-label="Overview"]').click();
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  const long = await page.evaluate(() => window.footerGap());
+  expect(long).toEqual({ gap: 0, left: 0, width: long.pane, pane: long.pane });
 });
 
 test("following moves the view when the meter moves, and a pin holds it", async ({ page }) => {

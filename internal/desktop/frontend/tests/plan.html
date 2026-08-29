@@ -21,6 +21,7 @@
         --state-guided: #c6a0f6;
         --artifact-plan: #b7bdf8;
         --surface-chrome: #1e2030;
+        --terminal: 13px/1.55 Menlo, monospace;
         --border-subtle: #363a4f;
         --border-default: #5b6078;
         --border-width: 1px;
@@ -30,8 +31,7 @@
       }
 
       body { margin: 0; background: var(--surface-app); }
-      #fixture { display: flex; height: 100vh; }
-      #scroll { box-sizing: border-box; width: min(900px, 100vw); flex: 1; min-height: 0; overflow-y: auto; }
+      #fixture { display: flex; flex-direction: column; width: min(900px, 100vw); height: 100vh; }
     </style>
   </head>
   <body>

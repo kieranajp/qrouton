@@ -79,7 +79,7 @@
   onDestroy(() => clearMatches(content));
 </script>
 
-<TerminalPane style="display: {active ? 'flex' : 'none'}">
+<TerminalPane flush style="display: {active ? 'flex' : 'none'}">
   {#if finding}
     <FindBar
       {query}

@@ -123,11 +123,15 @@ window.bar = () => {
   };
 };
 window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });
-// Where the footer sits relative to the bottom of the scroll port.
+// Where the footer sits relative to the bottom edge of the window itself.
 window.footerGap = () => {
-  const port = document.querySelector("#scroll").getBoundingClientRect();
   const footer = document.querySelector(".footer").getBoundingClientRect();
-  return { gap: Math.round(port.bottom - footer.bottom), left: Math.round(footer.left - port.left), width: Math.round(footer.width), port: Math.round(port.width) };
+  return {
+    gap: Math.round(innerHeight - footer.bottom),
+    left: Math.round(footer.left),
+    width: Math.round(footer.width),
+    pane: Math.round(document.querySelector(".pane").getBoundingClientRect().width),
+  };
 };
 window.mode = () => document.querySelector('[aria-pressed="true"]').textContent.trim();
 window.counter = () => document.querySelector(".counter").textContent.trim();
@@ -161,7 +165,7 @@ window.drawnScreens = () =>
     )
     .map((screen) => screen.dataset.screen);
 window.displays = () =>
-  [...document.querySelectorAll("#scroll *")].map((el) => getComputedStyle(el).display);
+  [...document.querySelectorAll(".body *")].map((el) => getComputedStyle(el).display);
 window.headingSize = () =>
   Number.parseFloat(getComputedStyle(document.querySelector(".display-lg")).fontSize);
 window.counters = () =>
