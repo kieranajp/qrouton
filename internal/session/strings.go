@@ -152,10 +152,12 @@ const (
 
 var scaffoldDirs = []string{scaffoldResearch, scaffoldPlans, scaffoldSpecs}
 
-// Markers the workflow-status reader looks for in a plan document: a plan whose
-// checkboxes are all ticked counts as implemented.
+// Markers the workflow-status reader looks for: a plan whose checkboxes are all
+// ticked counts as implemented, and a research document is framing until
+// something stands under a heading other than its summary.
 const (
 	questionsMarker = "question"
+	summaryHeading  = "Summary"
 	checkedBox      = "- [x]"
 	uncheckedBox    = "- [ ]"
 
