@@ -136,3 +136,27 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 		}
 	}
 }
+
+// The plan template lives in the plan skill's own reference file, so SKILL.md
+// stays short enough to skim.
+func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-plan"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(prompt.Content), "### Verify") {
+		t.Error("SKILL.md still holds the plan template")
+	}
+	if !strings.Contains(string(prompt.Content), "references/plan-shape.md") {
+		t.Error("SKILL.md does not point at its reference")
+	}
+	var found bool
+	for _, file := range prompt.Files {
+		if file.Path == "references/plan-shape.md" && strings.Contains(string(file.Content), "### Verify") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("the plan skill ships %#v, none of them the template", prompt.Files)
+	}
+}
