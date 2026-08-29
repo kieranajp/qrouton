@@ -2,8 +2,11 @@ package prompts
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
@@ -51,6 +54,85 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 		}
 		if strings.Contains(content, subagentChoicePlaceholder) {
 			t.Errorf("prompt %q retained subagent choice placeholder", id)
+		}
+	}
+}
+
+// A skill is a folder: a short entry file and the references it defers detail
+// to. Nothing forces a skill that needs only one file to grow a second.
+func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
+	loader := NewFSLoader(fstest.MapFS{
+		"skills/solo/SKILL.md":               {Data: []byte("---\nname: solo\n---\n\nAll of it, here.\n")},
+		"skills/folder/SKILL.md":             {Data: []byte("---\nname: folder\n---\n\nSee references/detail.md.\n")},
+		"skills/folder/references/detail.md": {Data: []byte("# Detail\n")},
+		"skills/folder/scripts/run.py":       {Data: []byte("print(\"hi\")\n")},
+	})
+	ctx := context.Background()
+
+	solo, err := loader.Load(ctx, ID("skills/solo"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(solo.Files) != 0 {
+		t.Fatalf("a single-file skill carries %#v", solo.Files)
+	}
+	assets, err := Render(solo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(assets) != 1 || assets[0].Path != "skills/solo/SKILL.md" {
+		t.Fatalf("rendered assets = %#v", assets)
+	}
+
+	folder, err := loader.Load(ctx, ID("skills/folder"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	assets, err = Render(folder)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var paths []string
+	for _, asset := range assets {
+		paths = append(paths, asset.Path)
+	}
+	want := []string{
+		"skills/folder/SKILL.md",
+		"skills/folder/references/detail.md",
+		"skills/folder/scripts/run.py",
+	}
+	if strings.Join(paths, ",") != strings.Join(want, ",") {
+		t.Fatalf("rendered paths = %v, want %v", paths, want)
+	}
+
+	// The whole folder reaches the runner discovery tree, and only the formats
+	// whose comment syntax we know carry the generated-by marker.
+	dir := t.TempDir()
+	if err := Stamp(ctx, dir, loader, OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		reference := filepath.Join(dir, root, skillsDirName, "folder", "references", "detail.md")
+		info, err := os.Lstat(reference)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is not a symlink: %v", reference, err)
+		}
+		content, err := os.ReadFile(reference)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(string(content), MarkerText) {
+			t.Fatalf("%s missing the generated-by marker:\n%s", reference, content)
+		}
+		script, err := os.ReadFile(filepath.Join(dir, root, skillsDirName, "folder", "scripts", "run.py"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(script) != "print(\"hi\")\n" {
+			t.Fatalf("a script was marked as if it were markdown:\n%s", script)
+		}
+		if _, err := os.Stat(filepath.Join(dir, root, skillsDirName, "solo", "references")); !os.IsNotExist(err) {
+			t.Fatalf("a single-file skill grew a references directory: %v", err)
 		}
 	}
 }
