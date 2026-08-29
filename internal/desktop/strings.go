@@ -99,7 +99,6 @@ const (
 	windowScreenLines = 50
 )
 
-// documentPoll is how often open documents are re-stated for changes.
 const documentPoll = time.Second
 
 const (

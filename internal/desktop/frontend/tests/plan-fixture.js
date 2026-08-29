@@ -59,6 +59,9 @@ export const FINISHED = PLAN.replace("- [ ] one check not", "- [x] one check not
   "- [x] nothing ticked yet",
 );
 
+// Two phases numbered the same, which is what a plan mid-renumber looks like.
+export const RENUMBERED = PLAN.replace("## Phase 3 — The end", "## Phase 1 — The end");
+
 const PLAIN = ["# Just notes", "", "No headings open anything here.", "", "- [x] a ticked box", ""].join("\n");
 
 const params = new URLSearchParams(location.search);
@@ -96,6 +99,11 @@ window.bar = () => {
     follow: Boolean(bar.querySelector("button")),
   };
 };
+window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });
+window.crumbs = () =>
+  [...document.querySelectorAll(".crumb .caps")].map((el) => el.textContent.trim());
+window.errors = [];
+addEventListener("error", (event) => window.errors.push(String(event.message)));
 window.pushEdited = () =>
   window.pushContent({ text: PLAN.replace("Another middle paragraph.", "An edited middle paragraph.") });
 

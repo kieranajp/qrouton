@@ -34,18 +34,19 @@
   let tone = $derived(artifactTone(doc.kind));
   let copied = $state(false);
   let raw = $state(false);
-  let pinned = $state(false);
+  // A span is a direct request for a phase, so it holds the reader there until
+  // they hand the position back. Following only ever moves an unasked-for view.
+  let pinned = $state(untrack(() => (doc.line ?? 0) > 0));
 
   const session = chrome();
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
-  // Once every phase is met there is nothing unmet left to point at, so the
-  // meter rests on the last one.
+  // With nothing unmet left to point at, the meter rests on the last phase.
   let followed = $derived.by(() => {
     const at = plan.phases.findIndex((phase) => phase.state !== "met");
     return at < 0 ? plan.phases.length : at + 1;
   });
-  // The session has an agent working, or the plan has run out of unmet phases.
-  // It cannot know the agent is working on this plan, and does not say so.
+  // An agent is working somewhere in this session. Nothing here knows whether
+  // it is working on this plan, and the bar must not say that it does.
   let live = $derived(session.fields.activity === "working" || allMet);
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
@@ -63,6 +64,7 @@
       if (at !== epoch) {
         epoch = at;
         current = screenFor(plan.phases, doc.line ?? 0);
+        pinned = (doc.line ?? 0) > 0;
       }
       if (current > count) current = count;
     });
@@ -144,7 +146,8 @@
 
   /** @param {KeyboardEvent} event */
   function onKey(event) {
-    if (!active || event.metaKey || event.ctrlKey || event.altKey) return;
+    if (!active || plan.phases.length === 0) return;
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
     const from = /** @type {HTMLElement} */ (event.target);
     if (from?.isContentEditable || /^(input|textarea|select)$/i.test(from?.tagName ?? "")) return;
     if (event.key === "ArrowRight") show(current + 1);
@@ -181,12 +184,17 @@
   }
 
   /** @param {HTMLElement} deckBody */
-  function diagrams(deckBody) {
+  function diagrams(deckBody, _text) {
     const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(deckBody, [event.data]));
-    Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-      .then((found) => applyDiagrams(deckBody, found ?? []))
-      .catch(() => {});
+    // Rendered markup does not survive a content push, so the fences are asked
+    // for again whenever the text behind them changes.
+    const draw = () =>
+      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
+        .then((found) => applyDiagrams(deckBody, found ?? []))
+        .catch(() => {});
+    draw();
     return {
+      update: draw,
       destroy: () => {
         off();
         teardownDiagrams(deckBody);
@@ -242,8 +250,7 @@
         return;
       }
       controller.setSelected(params.active);
-      // A screen change is a visibility change, and the hidden blocks measure as
-      // nothing; it is never a reason to scroll to the request's target again.
+      // Changing screens changes what can be measured, never where to scroll.
       if (screen !== params.screen) {
         screen = params.screen;
         controller.schedule();
@@ -301,7 +308,7 @@
       bind:this={body}
       data-document-source={doc.source}
       use:links
-      use:diagrams
+      use:diagrams={doc.text}
       use:viewport={{ id, active, scrollRoot, screen: current }}>
       <section class="screen" data-screen="overview" hidden={current !== 0}>
         <CapsLabel
@@ -310,7 +317,7 @@
         <h1 class="display-lg">{plan.title || heading}</h1>
         <div class="markdown">{@html deck.preamble}</div>
         <ol class="rows">
-          {#each plan.phases as phase, at (phase.index)}
+          {#each plan.phases as phase, at}
             <li>
               <button type="button" class="row" onclick={() => show(at + 1)}>
                 <span class="index">{phase.index}</span>
@@ -322,10 +329,10 @@
           {/each}
         </ol>
       </section>
-      {#each plan.phases as phase, at (phase.index)}
+      {#each plan.phases as phase, at}
         <section class="screen" data-screen={phase.index} hidden={current !== at + 1}>
           <div class="crumb">
-            <CapsLabel>Phase {phase.index} of {plan.phases.length}</CapsLabel>
+            <CapsLabel>Phase {at + 1} of {plan.phases.length}</CapsLabel>
             <span class="state">
               <span class="dot" style:background={DOT[phase.state]}></span>
               {WORD[phase.state]}
@@ -357,8 +364,7 @@
             {#if allMet}
               Every phase met
             {:else if moved}
-              Agent moved to phase {plan.phases[followed - 1].index} · {plan.phases[followed - 1]
-                .name}
+              Agent moved to phase {followed} · {plan.phases[followed - 1].name}
             {:else}
               Following the agent · {plan.phases[followed - 1].name}
             {/if}
@@ -370,7 +376,7 @@
       {/if}
       <div class="controls">
         <div class="pips">
-          {#each plan.phases as phase, at (phase.index)}
+          {#each plan.phases as phase, at}
             <button
               type="button"
               class="pip"
@@ -627,9 +633,8 @@
     padding-left: var(--gutter);
   }
 
-  /* The pane already names the phase and its criteria, so the document's own
-     headings for both are hidden — but kept measurable, because the viewport
-     reports only blocks with a box and a span may be aimed at either line. */
+  /* The pane names both already. Hidden but still measurable: the viewport
+     reports only blocks with a box, and a span may be aimed at either line. */
   .lifted,
   .criteria .markdown :global(h3) {
     position: absolute;
@@ -645,7 +650,7 @@
     color: var(--text-muted);
   }
 
-  /* Narrow: the type steps down and the pips wrap. Nothing goes away. */
+  /* Narrow steps the type down. Nothing goes away. */
   @media (max-width: 420px) {
     .display-lg {
       font: var(--display-md);

@@ -12,7 +12,8 @@
   let doc = $state();
 
   // The window follows its file, so the pane is told about a write it did not
-  // make. A pull resolving after a push must not put the older text back.
+  // make. A push that beats the load keeps its text, but the load's viewport
+  // epoch still stands: it is the one the workbench is fencing reports against.
   let live = false;
   onMount(() => {
     const off = Events.On("window:content:" + id, (event) => {
@@ -22,7 +23,7 @@
     });
     (async () => {
       const content = await Call.ByName(WINDOWS_SERVICE + ".Content", id);
-      if (!live) doc = content;
+      doc = live && doc ? { ...content, text: doc.text } : content;
       await tick();
       onReady?.();
     })();

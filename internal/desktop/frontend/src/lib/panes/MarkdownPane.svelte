@@ -52,12 +52,17 @@
   // heard rather than missed. The reply names every fence, so the ones still
   // being laid out are marked as such.
   /** @param {HTMLElement} body */
-  function diagrams(body) {
+  function diagrams(body, _text) {
     const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(body, [event.data]));
-    Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-      .then((found) => applyDiagrams(body, found ?? []))
-      .catch(() => {});
+    // Rendered markup does not survive a content push, so the fences are asked
+    // for again whenever the text behind them changes.
+    const draw = () =>
+      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
+        .then((found) => applyDiagrams(body, found ?? []))
+        .catch(() => {});
+    draw();
     return {
+      update: draw,
       destroy: () => {
         off();
         teardownDiagrams(body);
@@ -133,7 +138,7 @@
     class="markdown"
     data-document-source={doc.source}
     use:links
-    use:diagrams
+    use:diagrams={doc.text}
     use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>

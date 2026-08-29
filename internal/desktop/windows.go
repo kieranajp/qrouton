@@ -80,9 +80,8 @@ func newWindows(emit emitter, reg *Sessions) *Windows {
 	return w
 }
 
-// follow keeps open documents current. A stat per open document per second
-// buys the same answer a file watcher would, without the dependency, and it
-// reads an editor's write-then-rename the same way as a write in place.
+// follow keeps open documents current. A stat a second buys what a file
+// watcher would, and reads a write-then-rename the same as a write in place.
 func (w *Windows) follow(ctx context.Context) {
 	ticker := time.NewTicker(documentPoll)
 	defer ticker.Stop()
@@ -198,7 +197,10 @@ func (w *Windows) spawn(owner *sessionState, opts workbench.WindowOptions, selec
 	if opts.Kind == workbench.KindDocument && opts.Format == workbench.FormatMarkdown {
 		window.viewport = &workbench.DocumentViewport{Source: opts.Source, Intervals: []workbench.LineInterval{}}
 	}
-	if info, err := os.Stat(window.sourcePath()); err == nil {
+	// The content arrived from a read taken before this stat. A size that no
+	// longer matches it means the file moved in between, so it is left unseen
+	// for the first rescan to pick up rather than recorded as already read.
+	if info, err := os.Stat(window.sourcePath()); err == nil && info.Size() == int64(len(opts.Content)) {
 		window.read.at, window.read.size = info.ModTime(), info.Size()
 	}
 	w.open[id] = window
@@ -293,8 +295,6 @@ type document struct {
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
 }
 
-// sourcePath is the file a window is showing, and empty for one showing no
-// session file at all.
 func (window *agentWindow) sourcePath() string {
 	if window.opts.Source == "" || window.session == nil {
 		return ""
@@ -367,8 +367,8 @@ func (w *Windows) rescan() {
 			continue
 		}
 		info, err := os.Stat(path)
-		// A file caught mid-rewrite must not blank a tab, so an unreadable one
-		// is left showing what it last held.
+		// An unreadable file leaves the tab showing what it last held. A file
+		// caught between truncation and rewrite still reads empty for a tick.
 		if err != nil || info.IsDir() || info.Size() > workbench.DocumentLimit {
 			continue
 		}

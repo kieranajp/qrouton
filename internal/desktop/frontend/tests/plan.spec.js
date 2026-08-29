@@ -221,3 +221,41 @@ test("a push that meets the last phase turns the bar green", async ({ page }) =>
   });
   await expect.poll(() => shown(page)).toEqual(["3"]);
 });
+
+test("a span still wins while an agent is working", async ({ page }) => {
+  await open(page, "?line=41");
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => bar(page)).toMatchObject({ follow: true });
+  expect(await shown(page)).toEqual(["3"]);
+  expect(await marked(page)).toEqual([41]);
+
+  const intervals = await page.evaluate(() => window.reports.at(-1).intervals);
+  expect(intervals.some((interval) => interval.line <= 41 && interval.to >= 41)).toBe(true);
+
+  await page.getByRole("button", { name: "Follow" }).click();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+});
+
+test("phases sharing a number still render, and the crumb counts screens", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.pushRenumbered());
+
+  await expect.poll(() => page.evaluate(() => window.counters())).toEqual([
+    "1 Groundwork 2/2",
+    "2 The middle 1/2",
+    "1 The end 0/1",
+  ]);
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+
+  await page.locator(".pip").nth(2).click();
+  await expect.poll(() => page.evaluate(() => window.crumbs())).toContain("Phase 3 of 3");
+});
+
+test("arrow keys are left to the plain body when nothing opens a phase", async ({ page }) => {
+  await open(page, "?plain=true");
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator("[data-screen]")).toHaveCount(0);
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
