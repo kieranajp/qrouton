@@ -2,6 +2,7 @@ import DiffPane from "./DiffPane.svelte";
 import MarkdownPane from "./MarkdownPane.svelte";
 import PlainPane from "./PlainPane.svelte";
 import PlanPane from "./PlanPane.svelte";
+import ResearchPane from "./ResearchPane.svelte";
 
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
@@ -14,6 +15,7 @@ const PANES = {
 // of where the file lives, so it refines the format rather than replacing it.
 const KINDS = {
   PLAN: PlanPane,
+  RESEARCH: ResearchPane,
 };
 
 export const paneFor = (format, kind) => {
