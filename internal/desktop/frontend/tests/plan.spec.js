@@ -155,6 +155,35 @@ test("the plan is named in both views and never twice at once", async ({ page })
   await expect(page.locator("h1", { hasText: "The fixture plan" })).toHaveCount(1);
 });
 
+// A section slide puts its name where a phase puts 3 / 6. The name is the one
+// label long enough to want a second line, and the footer cannot give it one.
+test("a long section name truncates rather than growing the footer", async ({ page }) => {
+  const SECTION = "Verification strategy and rollout notes";
+  for (const width of [900, 400]) {
+    await page.setViewportSize({ width, height: 700 });
+    await open(page, "?long=true");
+
+    await page.locator('.pip[aria-label="Phase 3"]').click();
+    await expect.poll(() => shown(page)).toEqual(["3"]);
+    const phase = await page.evaluate(() => window.footerShape());
+
+    await page.locator(`.pip[aria-label="${SECTION}"]`).click();
+    await expect.poll(() => shown(page)).toEqual([SECTION]);
+    const section = await page.evaluate(() => window.footerShape());
+
+    expect(section.height, `footer height at ${width}`).toBe(phase.height);
+    expect(section.counterHeight, `label height at ${width}`).toBe(phase.counterHeight);
+    // The strip says where in the deck the reader is; a second row of pips would
+    // misstate the shape of the document.
+    expect(phase.pipRows, `pip rows at ${width}`).toBe(1);
+    expect(section.pipRows, `pip rows at ${width}`).toBe(1);
+    expect(section.counterTitle).toBe(SECTION);
+  }
+  // Narrowest is where the label has least room, so that is where it gives.
+  const shape = await page.evaluate(() => window.footerShape());
+  expect(shape.counterClipped).toBe(true);
+});
+
 test("a narrow pane steps the type down and hides nothing", async ({ page }) => {
   await open(page);
   const wide = await page.evaluate(() => window.displays());

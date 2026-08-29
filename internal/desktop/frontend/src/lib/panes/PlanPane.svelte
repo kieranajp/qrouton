@@ -477,7 +477,9 @@
             aria-pressed={mode === "document"}
             onclick={() => (mode = "document")}>Document</Button>
         </div>
-        <span class="counter">{counterFor(viewing)}</span>
+        <!-- A truncated section name is unidentifiable, so the whole of it
+             stays reachable on hover. -->
+        <span class="counter" title={counterFor(viewing)}>{counterFor(viewing)}</span>
         {#if mode === "plan"}
           <div class="steps">
             <Button
@@ -627,9 +629,12 @@
     padding: 0 var(--pane-pad);
   }
 
+  /* The strip is a position indicator: a second row of pips would misstate the
+     shape of the document, so it neither wraps nor gives up width. */
   .pips {
     display: flex;
-    flex-wrap: wrap;
+    flex: none;
+    flex-wrap: nowrap;
     gap: 6px;
   }
 
@@ -663,8 +668,15 @@
     margin-left: 0;
   }
 
+  /* Whatever width the fixed controls leave, on one line. A section's name is
+     the only label here long enough to want more, and it may not have it. */
   .counter {
-    margin-left: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
     font: var(--machine-sm);
     color: var(--text-muted);
   }

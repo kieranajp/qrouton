@@ -168,6 +168,32 @@ export const DONE = [
   ]),
 ].join("\n");
 
+// Six phases and a section whose name has no chance of fitting beside the
+// controls: the most pips the strip carries and the least room the label gets.
+export const LONG = [
+  "---",
+  "kind: plan",
+  "---",
+  "",
+  "# The long-named plan",
+  "",
+  "Preamble prose.",
+  "",
+  ...[1, 2, 3, 4, 5, 6].flatMap((n) => [
+    `## Phase ${n} — Step ${n}`,
+    "",
+    `Body for step ${n}.`,
+    "",
+    "### Verify",
+    "- [ ] the check",
+    "",
+  ]),
+  "## Verification strategy and rollout notes",
+  "",
+  "Body for the section.",
+  "",
+].join("\n");
+
 const PLAIN = ["# Just notes", "", "No headings open anything here.", "", "- [x] a ticked box", ""].join("\n");
 
 const params = new URLSearchParams(location.search);
@@ -191,9 +217,11 @@ window.wailsCall = async (name, id, payload) => {
       ? PLAIN
       : params.get("done")
         ? DONE
-        : params.get("around")
-          ? AROUND
-          : PLAN;
+        : params.get("long")
+          ? LONG
+          : params.get("around")
+            ? AROUND
+            : PLAN;
     return document_(text, 1);
   }
   if (name.endsWith(".RenderDiagrams")) return [];
@@ -230,6 +258,21 @@ window.footerGap = () => {
     left: Math.round(footer.left),
     width: Math.round(footer.width),
     pane: Math.round(document.querySelector(".pane").getBoundingClientRect().width),
+  };
+};
+// What the footer is, rather than what it holds: how tall, and whether the
+// strip is still the single row a position indicator has to be.
+window.footerShape = () => {
+  const counter = document.querySelector(".counter");
+  const tops = [...document.querySelectorAll(".pip")].map((pip) =>
+    Math.round(pip.getBoundingClientRect().top),
+  );
+  return {
+    height: Math.round(document.querySelector(".footer").getBoundingClientRect().height),
+    pipRows: new Set(tops).size,
+    counterHeight: Math.round(counter.getBoundingClientRect().height),
+    counterTitle: counter.getAttribute("title"),
+    counterClipped: counter.scrollWidth > counter.clientWidth,
   };
 };
 window.mode = () => document.querySelector('[aria-pressed="true"]').textContent.trim();
