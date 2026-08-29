@@ -505,7 +505,6 @@
 
 <style>
   .document {
-    --gutter: 4.5ch;
     --pane-pad: 34px;
     display: flex;
     flex-direction: column;
