@@ -289,8 +289,8 @@ func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T)
 	}
 	for agentType, role := range map[string]string{
 		"qrouton-implementation-lead": agentRoleLead,
-		"explorer":                  agentRoleSpecialist,
-		"":                          agentRoleUnavailable,
+		"explorer":                    agentRoleSpecialist,
+		"":                            agentRoleUnavailable,
 	} {
 		if got := delegatedRole(agentType); got != role {
 			t.Errorf("delegatedRole(%q) = %q, want %q", agentType, got, role)

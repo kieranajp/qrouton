@@ -74,7 +74,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 		}
 	}
 	agentNames := []string{
-		"qrspi-researcher", "qrouton-research-lead", "qrouton-planning-lead", "qrouton-implementation-lead",
+		"qrouton-researcher", "qrouton-research-lead", "qrouton-planning-lead", "qrouton-implementation-lead",
 		"codebase-researcher", "pattern-finder", "thoughts-researcher", "external-researcher", "test-verifier", "code-reviewer",
 	}
 	for _, name := range agentNames {
