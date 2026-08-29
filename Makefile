@@ -5,10 +5,15 @@ FRONTEND := internal/desktop/frontend
 PAGES    := internal/desktop/assets/index.html
 SHARE    := internal/share/assets/share.js
 VERSION  ?= 0.1.0
+# The oldest release the version being cut will still talk to. Raise it only
+# for a change an older install cannot be left running against — a session
+# manifest or control-socket break — because every install below it is held at
+# the update gate until it has swapped itself.
+MINIMUM_VERSION ?= 0.0.0
 BUILD_NUMBER ?= 1
 SIGN_IDENTITY ?= -
 MACOSX_DEPLOYMENT_TARGET ?= 12.0
-export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
+export VERSION MINIMUM_VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 

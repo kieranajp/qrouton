@@ -20,11 +20,15 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/ticket"
+	"github.com/kieranajp/qrouton/internal/update"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
 )
 
 func main() {
+	// Before the command line is looked at: a helper-mode process is this same
+	// binary, and its job is to replace the bundle rather than to run one.
+	update.HandleHelper()
 	prepareEnvironment()
 	app := &cli.App{
 		Name:        appName,

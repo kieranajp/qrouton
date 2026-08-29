@@ -55,8 +55,8 @@ func (c *Chrome) publish(event string, payload any) {
 // watchChrome pushes what the window can observe about the session on screen
 // until the context is cancelled. Escalation rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
-func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter) {
-	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
+func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, held gate, emit emitter) {
+	watch(ctx, reg, root, cfg, held, emit, chromeInterval, repoStatInterval,
 		unseenCounts{all: status.Unseen, in: status.UnseenIn})
 }
 
@@ -102,11 +102,11 @@ func (t *realChromeExpiryTimer) stop() {
 
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
-func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts) {
-	watchWithExpiryTimer(ctx, reg, root, cfg, emit, field, slow, count, newChromeExpiryTimer())
+func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, held gate, emit emitter, field, slow time.Duration, count unseenCounts) {
+	watchWithExpiryTimer(ctx, reg, root, cfg, held, emit, field, slow, count, newChromeExpiryTimer())
 }
 
-func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts, expiry chromeExpiryTimer) {
+func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *config.Config, held gate, emit emitter, field, slow time.Duration, count unseenCounts, expiry chromeExpiryTimer) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
@@ -132,7 +132,7 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 	}
 
 	refresh()
-	pushChrome(reg, root, cfg, measured, unseen, emit)
+	pushChrome(reg, root, cfg, held, measured, unseen, emit)
 	resetAgentExpiry(expiry, reg)
 	for {
 		select {
@@ -158,7 +158,7 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 		case <-fields.C:
 		case <-expiry.channel():
 		}
-		pushChrome(reg, root, cfg, measured, unseen, emit)
+		pushChrome(reg, root, cfg, held, measured, unseen, emit)
 		resetAgentExpiry(expiry, reg)
 	}
 }
@@ -178,7 +178,7 @@ func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
 
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
-func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
+func pushChrome(reg *Sessions, root string, cfg *config.Config, held gate, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
 	shown := reg.current()
 	fields := status.Read(shown.root())
 	agentSnapshots := reg.agentActivitySnapshots()
@@ -187,6 +187,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	// so the questions can never land over a live conversation — and an install
 	// that always opens on one stays unasked until it opens on none.
 	fields.Welcoming = cfg != nil && !cfg.Welcomed && fields.Slug == ""
+	fields.Outdated = held != nil && held()
 	if repos, ok := measured[shown.root()]; ok {
 		fields.Repos = repos
 	}

@@ -21,6 +21,7 @@
   import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
+  import UpdateGate from "./lib/update/UpdateGate.svelte";
   import { age, chrome } from "./lib/chrome.svelte.js";
   import {
     consumeTerminalFocus,
@@ -308,7 +309,11 @@
       ? ''
       : 's'}" />
 
-  {#if fields.welcoming}
+  <!-- The gate outranks every other overlay: an install the release feed has
+       disowned may not start work behind one of them. -->
+  {#if fields.outdated}
+    <UpdateGate />
+  {:else if fields.welcoming}
     <FirstRunOverlay />
   {:else if assembling}
     <Overlay gated={!fields.slug} onClose={() => (requested = false)} />

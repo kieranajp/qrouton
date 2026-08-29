@@ -36,6 +36,8 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - `internal/workbench/`: the window port (`WindowHost`, `WindowOptions`), the `Handle` that carries the control socket into the MCP child, and the socket client. No webview.
 - `internal/desktop/`: the Wails application — the conversation PTY, the tab registry and its lifecycle rules, the control-socket server, and the embedded page. Window construction sits behind a `renderer` seam so everything else is testable without a display. The main conversation is the one renderer window; agent terminals and documents live in the session's tab strip. The page is a Vite + Svelte project under `frontend/`, built into `assets/` by `make front`; that tree is generated and is not in git.
 - `internal/mcpserver/`, `internal/agentevent/`: the agent's window tools; and the runner subagent hook collector, which is a write path only — the log has no reader yet, so nothing scans it.
+- `internal/update/`: keeping an install on the latest tag. Owns the release feed's two answers — the archive to take, and the floor the release advertises — and the policy that applies them; `desktop` supplies the framework's updater and the predicate for when a relaunch costs nothing. No windows here, so the whole policy is exercised without one.
+- `internal/version/`: the build stamp and the ordering the floor is decided by. A shared leaf; an unstamped build reports `dev`, which is below every release and above every floor.
 - `internal/sessionpaths/`, `internal/codex/`, `internal/theme/`: the shared leaves above.
 - `internal/config/`: config file and XDG paths. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and an empty owner list is simply an empty repository list. A workbench opening on no session asks for the owners and the sessions root once, then marks the config `welcomed`; one opening on a session never asks, so an install that always resumes stays unasked.
 - `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
@@ -52,6 +54,8 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - One owner per fact: a path convention, a helper, or a piece of copy lives in exactly one place. `sessionpaths` owns the session layout, `codex` owns Codex's, and each package keeps its literals in `strings.go` and its sentinel errors in `errors.go` rather than inline.
 - Eval and launch must stamp identical trees. Both go through `prompts.Stamp`; fixtures carry real `session.Manifest` documents, and the fixture-schema test fails if they drift.
 - Preserve cache-first startup, cancellable refreshes, and runner conversation resume.
+- An update never takes a conversation away. The swap happens only when nothing is running and no draft is open; a release found while the user is mid-turn stays staged and waits. The floor is what stops that politeness becoming a way to stay behind — raise `MINIMUM_VERSION` for a change an older install cannot be left running against, and only then, because every install below it is held at the gate.
+- The update path fails open and verifies closed. An unreachable feed leaves the install working on what it has; an artifact whose hash misses the published `checksums.txt` is never swapped in.
 
 ## Working agreement
 
@@ -67,5 +71,7 @@ GOCACHE=/tmp/qrouton-go-cache make check
 ```
 
   One entry point rather than four bare `go` commands: the embedded asset tree is generated, so a build, a test, or a vet run before `make front` fails on an empty embed. `check` covers test, race, vet, build, `gofmt -l` and `git diff --check`.
+
+Cutting a release: tag `vN.N.N` and publish it. The workflow builds, notarizes, uploads the archive with `checksums.txt` and `minimum-version.txt`, and bumps the cask. `MINIMUM_VERSION` lives in the Makefile and is the only thing a breaking change has to remember.
 
 Do not discard unrelated worktree changes or edit generated session assets directly; change prompt sources under `prompts/`, launch support scripts under `internal/launch/scripts/`, or the workbench's frontend under `internal/desktop/frontend/`.

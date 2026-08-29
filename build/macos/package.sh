@@ -10,6 +10,10 @@ build_number=${BUILD_NUMBER:-1}
 deployment_target=${MACOSX_DEPLOYMENT_TARGET:-12.0}
 sign_identity=${SIGN_IDENTITY:--}
 
+# The updater compares this against the release feed, so an unstamped bundle
+# would report itself a working tree and never update.
+version_package=github.com/kieranajp/qrouton/internal/version
+
 if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$'; then
 	printf 'VERSION must be a numeric macOS version such as 1.2.3 (got %s)\n' "$version" >&2
 	exit 1
@@ -34,7 +38,9 @@ build_arch() {
 			MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
 			CGO_CFLAGS="-mmacosx-version-min=$deployment_target -arch $clang_arch" \
 			CGO_LDFLAGS="-mmacosx-version-min=$deployment_target -arch $clang_arch" \
-			go build -tags production -trimpath -ldflags='-w -s' -o "$work/qrouton-$goarch" .
+			go build -tags production -trimpath \
+				-ldflags="-w -s -X $version_package.Current=$version" \
+				-o "$work/qrouton-$goarch" .
 	)
 }
 

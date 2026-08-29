@@ -6,7 +6,7 @@ const CHROME_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Chrome";
  *   slug: string, terminal: string,
  *   sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[],
  *   activity: 'working'|'waiting'|'idle', agents: {provider: string, agents: any[]},
- *   picker: boolean, welcoming: boolean}} */
+ *   picker: boolean, welcoming: boolean, outdated: boolean}} */
 const NOTHING = {
   mode: "",
   phase: "",
@@ -22,6 +22,7 @@ const NOTHING = {
   agents: { provider: "", agents: [] },
   picker: false,
   welcoming: false,
+  outdated: false,
 };
 
 // Spreading over the defaults is not enough: a slice Go leaves nil arrives as

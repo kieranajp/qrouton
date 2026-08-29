@@ -46,6 +46,11 @@ type Fields struct {
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
 	Welcoming bool `json:"welcoming"`
+	// Outdated means this install is below the floor the latest release
+	// advertises, so it may not assemble a session until it has updated. The
+	// update is already running; the gate is what stops new work starting on a
+	// build the release feed has disowned. Workbench-side knowledge as well.
+	Outdated bool `json:"outdated"`
 }
 
 // SessionRow is one session under the sessions root. A Terminal means this

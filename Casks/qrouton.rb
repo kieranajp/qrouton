@@ -7,6 +7,8 @@ cask "qrouton" do
   desc "Multi-repository workspace manager for coding agents"
   homepage "https://github.com/kieranajp/qrouton"
 
+  auto_updates true
+
   depends_on macos: :monterey
 
   app "qrouton.app"

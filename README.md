@@ -91,6 +91,25 @@ to subagents, so the context you're talking to stays lean.
 
 Both are planned. Neither is built.
 
+## Staying current
+
+qrouton keeps itself on the latest tagged release. It checks GitHub in the
+background, verifies the download against the checksums published with the
+release, and swaps itself in at the first moment that costs you nothing — no
+conversation running, no half-filled session draft. A release found mid-turn
+waits; an update that kills an agent's terminal is worse than being a version
+behind.
+
+There is no banner and nothing to dismiss, which is the point: a notification
+you can ignore is a notification everyone ignores. A release may also declare
+the oldest version it will talk to, and an install below that line stops
+starting new sessions until it has updated — the escape hatch for a change that
+older builds genuinely cannot be left running against.
+
+`brew install --cask kieranajp/qrouton/qrouton` is still how you get it; the
+cask is marked `auto_updates`, so Homebrew installs it once and then leaves the
+version alone rather than fighting the app over it.
+
 ## Odds and ends
 
 Paste a Linear or Asana ticket into a new session and it names and describes
