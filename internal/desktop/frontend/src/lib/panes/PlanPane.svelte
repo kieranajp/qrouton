@@ -52,6 +52,9 @@
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
   let current = $state(untrack(() => screenFor(plan.slides, doc.line ?? 0)));
+  // The pane is on the meter's phase and will stay with it. Anything that moves
+  // the reader off it, or pins them to it, ends that.
+  let following = $derived(!pinned && followed === current);
   /** @type {HTMLElement | undefined} */
   let body = $state();
   /** @type {HTMLElement | undefined} */
@@ -194,12 +197,23 @@
     });
   });
 
+  // The tick is the reader's grip on the meter. Taking it up moves them to the
+  // phase the meter is on; letting it go leaves them exactly where they are.
+  function track(on) {
+    if (on) show(followed, false);
+    else pinned = true;
+  }
+
   /** @param {KeyboardEvent} event */
   function onKey(event) {
     if (!active || plan.slides.length === 0) return;
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const from = /** @type {HTMLElement} */ (event.target);
-    if (from?.isContentEditable || /^(input|textarea|select)$/i.test(from?.tagName ?? "")) return;
+    const field = /^(input|textarea|select)$/i.test(from?.tagName ?? "");
+    // A field owns the arrows because they move its caret; a tick box has none,
+    // so the deck keeps them while the reader's focus rests on Follow.
+    const tick = /** @type {HTMLInputElement} */ (from)?.type === "checkbox";
+    if (from?.isContentEditable || (field && !tick)) return;
     if (event.key === "ArrowRight") show(current + 1);
     else if (event.key === "ArrowLeft") show(current - 1);
     else return;
@@ -404,20 +418,26 @@
     {/if}
     <footer class="footer">
       {#if live}
-        {@const moved = !allMet && followed !== current}
         <div class="bar">
           <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
           <span class="says">
             {#if allMet}
               Every phase met
-            {:else if moved}
-              Agent moved to phase {followed} · {plan.phases[followed - 1].name}
-            {:else}
+            {:else if following}
               Following the agent · {plan.phases[followed - 1].name}
+            {:else}
+              Agent is on phase {followed} · {plan.phases[followed - 1].name}
             {/if}
           </span>
-          {#if moved}
-            <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+          <!-- Every phase met leaves nothing to follow, so nothing is offered. -->
+          {#if !allMet}
+            <label class="follow">
+              <input
+                type="checkbox"
+                checked={following}
+                onchange={(event) => track(event.currentTarget.checked)} />
+              Follow
+            </label>
           {/if}
         </div>
       {/if}
@@ -572,6 +592,31 @@
     border-bottom: var(--border-width) solid var(--border-subtle);
     font: var(--machine-sm);
     color: var(--text-secondary);
+  }
+
+  .follow {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+    cursor: pointer;
+  }
+
+  /* The acceptance criteria's box, in the colour of something the reader
+     operates rather than the colour of a check the document has met. */
+  .follow input {
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    border: var(--border-width) solid var(--border-default);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .follow input:checked {
+    border: none;
+    background: var(--accent-action);
   }
 
   .controls {

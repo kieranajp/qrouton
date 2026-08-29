@@ -204,14 +204,21 @@ window.wailsCall = async (name, id, payload) => {
 // The push the workbench sends when the file changes under an open tab.
 window.pushContent = (fields) => emitWailsEvent("window:content:w1", { ...document_(PLAN, 1), ...fields });
 window.pushFinished = () => window.pushContent({ text: FINISHED });
+// Phase 2's last box ticked and phase 3's still open, so the meter moves on
+// without the plan being finished.
+window.pushSecondMet = () =>
+  window.pushContent({ text: PLAN.replace("- [ ] one check not", "- [x] one check not") });
 window.emitChrome = (fields) => emitWailsEvent("chrome:update", fields);
 window.bar = () => {
   const bar = document.querySelector(".bar");
   if (!bar) return null;
+  const follow = bar.querySelector('input[type="checkbox"]');
   return {
     says: bar.querySelector(".says").textContent.replace(/\s+/g, " ").trim(),
     dot: getComputedStyle(bar.querySelector(".dot")).backgroundColor,
-    follow: Boolean(bar.querySelector("button")),
+    // null when the bar offers no control at all, apart from unticked.
+    follow: follow ? follow.checked : null,
+    followFill: follow ? getComputedStyle(follow).backgroundColor : "",
   };
 };
 window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });

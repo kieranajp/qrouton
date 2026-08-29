@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const RUNNING = "rgb(139, 213, 202)";
+const ACTION = "rgb(138, 173, 244)";
 
 const open = async (page, query = "") => {
   await page.goto("/tests/plan.html" + query);
@@ -8,6 +9,7 @@ const open = async (page, query = "") => {
 };
 
 const shown = (page) => page.evaluate(() => window.shown());
+const follow = (page) => page.getByRole("checkbox", { name: "Follow" });
 const marked = (page) => page.evaluate(() => window.markedLines());
 
 test("a span in a later phase opens that phase and marks only its blocks", async ({ page }) => {
@@ -198,54 +200,82 @@ test("the bar appears when an agent is working and offers the meter's phase", as
 
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
   await expect.poll(() => bar(page)).toMatchObject({
-    says: "Agent moved to phase 2 · The middle",
+    says: "Agent is on phase 2 · The middle",
     dot: RUNNING,
-    follow: true,
+    follow: false,
   });
   // The bar names where the agent is; it does not move the reader off the
   // screen they opened on.
   expect(await shown(page)).toEqual(["overview"]);
 
-  await page.getByRole("button", { name: "Follow" }).click();
+  await follow(page).check();
   await expect.poll(() => shown(page)).toEqual(["2"]);
   await expect.poll(() => bar(page)).toMatchObject({
     says: "Following the agent · The middle",
-    follow: false,
+    follow: true,
+    // Blue, because the reader operates it; green already means met.
+    followFill: ACTION,
   });
 });
 
-test("navigating pins the reader and Follow hands the position back", async ({ page }) => {
+test("navigating unticks Follow and ticking it hands the position back", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
-  await page.getByRole("button", { name: "Follow" }).click();
+  await follow(page).check();
   await expect.poll(() => shown(page)).toEqual(["2"]);
 
+  // The controls are not gated by the tick; using one reports through it.
   await page.keyboard.press("ArrowRight");
   await expect.poll(() => shown(page)).toEqual(["3"]);
   await expect.poll(() => bar(page)).toMatchObject({
-    says: "Agent moved to phase 2 · The middle",
-    follow: true,
+    says: "Agent is on phase 2 · The middle",
+    follow: false,
   });
 
-  await page.getByRole("button", { name: "Follow" }).click();
+  await page.getByRole("button", { name: "Overview" }).click();
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  await expect.poll(() => bar(page)).toMatchObject({ follow: false });
+
+  await follow(page).check();
   await expect.poll(() => shown(page)).toEqual(["2"]);
   await expect.poll(() => bar(page)).toMatchObject({
     says: "Following the agent · The middle",
+    follow: true,
+  });
+});
+
+test("unticking Follow pins the reader in place and lets the meter go on alone", async ({
+  page,
+}) => {
+  await open(page);
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await follow(page).check();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+
+  await follow(page).uncheck();
+  expect(await shown(page)).toEqual(["2"]);
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent is on phase 2 · The middle",
     follow: false,
   });
+
+  await page.evaluate(() => window.pushSecondMet());
+  await expect.poll(() => bar(page)).toMatchObject({ says: "Agent is on phase 3 · The end" });
+  expect(await shown(page)).toEqual(["2"]);
 });
 
 test("a push that meets the last phase turns the bar green", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
-  await page.getByRole("button", { name: "Follow" }).click();
+  await follow(page).check();
   await expect.poll(() => shown(page)).toEqual(["2"]);
 
   await page.evaluate(() => window.pushFinished());
+  // Nothing left to follow, so nothing is offered.
   await expect.poll(() => bar(page)).toMatchObject({
     says: "Every phase met",
     dot: "rgb(166, 218, 149)",
-    follow: false,
+    follow: null,
   });
   await expect.poll(() => shown(page)).toEqual(["3"]);
 });
@@ -255,14 +285,14 @@ test("a span still wins while an agent is working", async ({ page }) => {
   await expect.poll(() => shown(page)).toEqual(["3"]);
 
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
-  await expect.poll(() => bar(page)).toMatchObject({ follow: true });
+  await expect.poll(() => bar(page)).toMatchObject({ follow: false });
   expect(await shown(page)).toEqual(["3"]);
   expect(await marked(page)).toEqual([41]);
 
   const intervals = await page.evaluate(() => window.reports.at(-1).intervals);
   expect(intervals.some((interval) => interval.line <= 41 && interval.to >= 41)).toBe(true);
 
-  await page.getByRole("button", { name: "Follow" }).click();
+  await follow(page).check();
   await expect.poll(() => shown(page)).toEqual(["2"]);
 });
 
@@ -296,7 +326,7 @@ test("a finished plan still opens on the overview", async ({ page }) => {
 
   await expect.poll(() => shown(page)).toEqual(["overview"]);
   await expect.poll(() => page.evaluate(() => window.counter())).toBe("Overview");
-  await expect.poll(() => bar(page)).toMatchObject({ says: "Every phase met", follow: false });
+  await expect.poll(() => bar(page)).toMatchObject({ says: "Every phase met", follow: null });
   expect((await page.evaluate(() => window.pips()))[0]).toEqual({ label: "Overview", viewing: true });
 });
 
