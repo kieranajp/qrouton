@@ -252,3 +252,25 @@ func TestOrgsListAnswersAnEmptyConfigurationWithAnEmptyList(t *testing.T) {
 		t.Fatalf("orgs = %v", got)
 	}
 }
+
+func TestARetryDropsReposOfAnOwnerThatLeftTheConfiguration(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.fails["acme"] = errors.New("unavailable")
+	repos, finished, _ := testRepositories(t, []string{"acme"}, fake)
+
+	repos.Refresh()
+	<-finished
+	repos.mu.Lock()
+	repos.repos = append(repos.repos, github.Repo{Org: "gone", Name: "orphan"})
+	repos.mu.Unlock()
+
+	fake.fails = map[string]error{}
+	repos.Refresh()
+	<-finished
+
+	for _, repo := range repos.Cached() {
+		if repo.Org == "gone" {
+			t.Fatalf("the list kept %s, whose owner is no longer configured", repo.ID())
+		}
+	}
+}

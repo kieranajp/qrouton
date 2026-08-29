@@ -273,3 +273,37 @@ func TestRefreshOwnerReposStillResolvesTheAuthenticatedUsersOwnRepos(t *testing.
 		t.Fatalf("repos = %#v, want the authenticated user's own", repos)
 	}
 }
+
+func TestRefreshReposDropsOwnersNoLongerConfigured(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/users/kept": `{"login":"kept","type":"Organization"}`,
+		"/orgs/kept/repos?type=all&per_page=100&page=1": `[{"name":"fresh","pushed_at":"2026-02-01T00:00:00Z"}]`,
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	cached := []Repo{{Org: "gone", Name: "orphan", PushedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
+	var complete RefreshMsg
+	for msg := range RefreshRepos(context.Background(), client, "token", []string{"kept"}, cached) {
+		if msg.State == RefreshComplete {
+			complete = msg
+		}
+	}
+	if got := repoIDs(complete.Repos); !reflect.DeepEqual(got, []string{"kept/fresh"}) {
+		t.Fatalf("repos = %#v, want the configured owner's alone", got)
+	}
+	if got, _, ok := CachedRepos([]string{"kept"}); !ok || !reflect.DeepEqual(repoIDs(got), []string{"kept/fresh"}) {
+		t.Fatalf("cache = %#v (found %v), want the configured owner's alone", repoIDs(got), ok)
+	}
+}
+
+func repoIDs(repos []Repo) []string {
+	out := make([]string, 0, len(repos))
+	for _, repo := range repos {
+		out = append(out, repo.ID())
+	}
+	return out
+}

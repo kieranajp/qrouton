@@ -89,7 +89,7 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 			}()
 		}
 
-		merged := slices.Clone(cached)
+		merged := OwnedBy(cached, orgs)
 		for range orgs {
 			r := <-results
 			if r.err != nil {
@@ -106,6 +106,16 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		out <- RefreshMsg{State: RefreshComplete, Repos: merged}
 	}()
 	return out
+}
+
+func OwnedBy(repos []Repo, owners []string) []Repo {
+	kept := make([]Repo, 0, len(repos))
+	for _, repo := range repos {
+		if slices.ContainsFunc(owners, func(owner string) bool { return strings.EqualFold(owner, repo.Org) }) {
+			kept = append(kept, repo)
+		}
+	}
+	return kept
 }
 
 func ReplaceOwnerRepos(repos []Repo, owner string, replacement []Repo) []Repo {

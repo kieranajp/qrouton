@@ -101,7 +101,7 @@ func (r *Repositories) Refresh() int {
 			failed = append(failed, owner)
 		}
 	}
-	cached := append([]github.Repo(nil), r.repos...)
+	cached := github.OwnedBy(r.repos, r.cfg.Orgs)
 	r.mu.Unlock()
 
 	go r.run(ctx, gen, failed, cached)
