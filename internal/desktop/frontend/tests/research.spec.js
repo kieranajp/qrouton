@@ -149,8 +149,9 @@ test("an unanswered document opens as an accordion of its questions", async ({ p
   expect(await page.evaluate(() => window.items())).toEqual([
     { name: LOADER, open: false },
     { name: KIND, open: false },
+    { name: OPEN, open: false },
   ]);
-  expect(await page.evaluate(() => window.counter())).toBe("2 sections");
+  expect(await page.evaluate(() => window.counter())).toBe("3 sections");
 
   await row(page, LOADER).locator("summary").click();
   await expect(row(page, LOADER).locator("blockquote")).toContainText("prompts/loader.go");

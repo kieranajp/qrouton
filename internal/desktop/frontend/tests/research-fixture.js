@@ -62,6 +62,8 @@ export const UNANSWERED = [
   "",
   "> Start in internal/status.",
   "",
+  "## Open Questions",
+  "",
 ].join("\n");
 
 const PLAIN = ["# Just notes", "", "No headings open anything here.", "", "More prose."].join("\n");
