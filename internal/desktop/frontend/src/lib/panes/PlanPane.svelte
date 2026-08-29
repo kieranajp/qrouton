@@ -6,11 +6,10 @@
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
   import { chrome } from "../chrome.svelte.js";
-  import { openDocument } from "../docked.svelte.js";
-  import { Call, Events, copyText, openURL } from "../wails.js";
-  import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
+  import { Call, copyText } from "../wails.js";
+  import { diagrams, links } from "./actions.js";
   import MarkdownPane from "./MarkdownPane.svelte";
-  import { documentPath, linkKind, marks, render } from "./markdown.js";
+  import { marks, render } from "./markdown.js";
   import { criteriaSpans, parsePlan } from "./plan.js";
   import { dealt } from "./sections.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
@@ -213,43 +212,6 @@
     } catch {}
   }
 
-  /** @param {HTMLElement} deckBody */
-  function links(deckBody) {
-    /** @param {MouseEvent} event */
-    const click = (event) => {
-      const anchor = /** @type {HTMLElement} */ (event.target)?.closest("a");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href");
-      event.preventDefault();
-      if (linkKind(href) === "document") {
-        openDocument(documentPath(href ?? "", doc.source)).catch(() => {});
-      } else if (linkKind(href) === "external") {
-        openURL(href ?? "");
-      }
-    };
-    deckBody.addEventListener("click", click);
-    return { destroy: () => deckBody.removeEventListener("click", click) };
-  }
-
-  /** @param {HTMLElement} deckBody */
-  function diagrams(deckBody, _text) {
-    const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(deckBody, [event.data]));
-    // Rendered markup does not survive a content push, so the fences are asked
-    // for again whenever the text behind them changes.
-    const draw = () =>
-      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-        .then((found) => applyDiagrams(deckBody, found ?? []))
-        .catch(() => {});
-    draw();
-    return {
-      update: draw,
-      destroy: () => {
-        off();
-        teardownDiagrams(deckBody);
-      },
-    };
-  }
-
   // A span running past a phase boundary says nothing about the phase after
   // it, so the pane neither marks that part nor scrolls to it.
   function requested() {
@@ -345,8 +307,8 @@
         class="deck"
         bind:this={body}
         data-document-source={doc.source}
-        use:links
-        use:diagrams={doc.text}
+        use:links={doc.source}
+        use:diagrams={{ id, text: doc.text }}
         use:viewport={{ id, active, scrollRoot, screen: current }}>
         <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
           <CapsLabel
