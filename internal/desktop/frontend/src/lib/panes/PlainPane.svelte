@@ -7,6 +7,14 @@
   let lines = $derived(doc.text.split("\n"));
 </script>
 
-{#each lines as line, i (i)}
-  <div class="diff-row">{line === "" ? " " : line}</div>
-{/each}
+<div class="plain">
+  {#each lines as line, i (i)}
+    <div class="diff-row">{line === "" ? " " : line}</div>
+  {/each}
+</div>
+
+<style>
+  .plain {
+    padding: 12px 14px;
+  }
+</style>

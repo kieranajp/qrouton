@@ -35,12 +35,12 @@ var (
 		"codebase-researcher": true,
 		"external-researcher": true,
 		"pattern-finder":      true,
-		"qrspi-researcher":    true,
+		"qrouton-researcher":  true,
 		"thoughts-researcher": true,
 	}
 
 	workspaceWriteAgents = map[string]bool{
-		"qrspi-research-lead": true,
-		"test-verifier":       true,
+		"qrouton-research-lead": true,
+		"test-verifier":         true,
 	}
 )

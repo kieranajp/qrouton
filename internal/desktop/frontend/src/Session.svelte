@@ -11,7 +11,6 @@
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
-  import WindowTray from "./lib/shell/WindowTray.svelte";
   import DockedDocument from "./lib/DockedDocument.svelte";
   import DockedTerminal from "./lib/DockedTerminal.svelte";
   import SessionTerminal from "./lib/SessionTerminal.svelte";
@@ -204,10 +203,6 @@
     if (wasCovered && !covered) keyboard++;
     wasCovered = covered;
   });
-
-  let commits = $derived(
-    fields.repos.reduce((total, repo) => (repo.measured === false ? total : total + repo.commits), 0),
-  );
 </script>
 
 <div class="session">
@@ -302,12 +297,6 @@
   </div>
 
   <ContextMenu />
-
-  <WindowTray
-    summary="{fields.repos.length} repo{fields.repos.length === 1 ? '' : 's'} · {commits} commit{commits ===
-    1
-      ? ''
-      : 's'}" />
 
   <!-- The gate outranks every other overlay: an install the release feed has
        disowned may not start work behind one of them. -->

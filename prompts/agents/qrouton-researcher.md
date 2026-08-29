@@ -1,5 +1,5 @@
 ---
-name: qrspi-researcher
+name: qrouton-researcher
 description: Ticket-blind, read-only codebase researcher for the QRSPI R phase. Documents what exists and how it works, given only a research question. Proposes nothing.
 tools: Read, Grep, Glob, LS
 ---

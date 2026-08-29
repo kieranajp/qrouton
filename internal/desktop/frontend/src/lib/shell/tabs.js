@@ -26,3 +26,11 @@ const STATUS_PRIORITY = ["waiting", "failed", "running", "succeeded", "success",
 export function dominantStatus(tabs) {
   return STATUS_PRIORITY.find((status) => tabs.some((tab) => tab.status === status)) ?? "";
 }
+
+/**
+ * tabLabel is a tab's whole text: its artifact badge, when it has one, then the
+ * title. The strip draws the two apart so the badge can carry its own colour;
+ * a tooltip and a menu row want them back together.
+ * @param {{badge?: string, label?: string}} tab
+ */
+export const tabLabel = ({ badge, label }) => (badge ? `${badge} ${label}` : (label ?? ""));

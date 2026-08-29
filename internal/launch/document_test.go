@@ -180,15 +180,51 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 	}
 }
 
+// A plan's tab leads with the id its filename states, so a reader with several
+// plans open tells them apart before reading a word of the title. Every other
+// document keeps the diamond it has always had.
+func TestDocumentWindowBadgesAPlanTabWithItsID(t *testing.T) {
+	const titled = "# Pane smoke test\n\nbody\n"
+
+	for _, tc := range []struct {
+		file  string
+		body  string
+		badge string
+		label string
+	}{
+		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "[P002]", "Pane smoke test"},
+		{"thoughts/shared/plans/p002-lowercase.md", titled, "[P002]", "Pane smoke test"},
+		// Nothing to name the tab after but the file, and the badge already
+		// carries the part of that name it would otherwise say twice.
+		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "[P002]", "2026-08-29-untitled.md"},
+		// Under plans/ but unnumbered: nothing to badge with.
+		{"thoughts/shared/plans/notes.md", titled, "", "◆ Pane smoke test"},
+		// Numbered, but not a plan.
+		{"thoughts/shared/research/R002-findings.md", titled, "", "◆ Pane smoke test"},
+		{"thoughts/shared/specs/S002-shape.md", titled, "", "◆ Pane smoke test"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			root := documentRoot(t, map[string]string{tc.file: tc.body})
+			opts, err := DocumentWindow(root, tc.file, testDocumentEditor, workbench.LineSpan{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if opts.Badge != tc.badge || opts.Label != tc.label {
+				t.Fatalf("badge %q label %q, want %q and %q", opts.Badge, opts.Label, tc.badge, tc.label)
+			}
+		})
+	}
+}
+
 // A file this size is a log, and a window holding a copy of it serves nobody.
 func TestDocumentWindowSendsAHugeMarkdownFileToTheEditor(t *testing.T) {
-	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", documentLimit+1)})
+	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", workbench.DocumentLimit+1)})
 	opts, err := DocumentWindow(root, "huge.md", testDocumentEditor, workbench.LineSpan{Line: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if opts.Kind != workbench.KindTerminal {
-		t.Fatalf("a %d-byte document opened as a %q", documentLimit+1, opts.Kind)
+		t.Fatalf("a %d-byte document opened as a %q", workbench.DocumentLimit+1, opts.Kind)
 	}
 }
 

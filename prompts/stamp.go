@@ -203,12 +203,20 @@ func ownAssetLink(link string) bool {
 
 // mark prefixes content with the generated-by marker in the comment syntax the
 // destination's format understands, preserving YAML frontmatter's requirement
-// that it start on line one.
+// that it start on line one. A format whose comment syntax we cannot assume —
+// a skill shipping a script or an asset — is written exactly as authored.
 func mark(destination string, content []byte) []byte {
-	if filepath.Ext(destination) == tomlExtension {
+	switch filepath.Ext(destination) {
+	case tomlExtension:
 		return append([]byte(tomlMarkerText), content...)
+	case promptFileExt:
+		return markMarkdown(string(content))
+	default:
+		return content
 	}
-	text := string(content)
+}
+
+func markMarkdown(text string) []byte {
 	if strings.HasPrefix(text, frontmatterFence) {
 		if index := strings.Index(text[len(frontmatterFence):], frontmatterClose); index >= 0 {
 			position := len(frontmatterFence) + index + len(frontmatterClose)

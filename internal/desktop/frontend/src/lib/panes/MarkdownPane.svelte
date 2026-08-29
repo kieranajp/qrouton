@@ -12,8 +12,8 @@
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id, active = false, scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown}} */
+  let { doc, id, active = false, scrollRoot, bare = false, onMeasure } = $props();
 
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
@@ -52,12 +52,17 @@
   // heard rather than missed. The reply names every fence, so the ones still
   // being laid out are marked as such.
   /** @param {HTMLElement} body */
-  function diagrams(body) {
+  function diagrams(body, _text) {
     const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(body, [event.data]));
-    Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-      .then((found) => applyDiagrams(body, found ?? []))
-      .catch(() => {});
+    // Rendered markup does not survive a content push, so the fences are asked
+    // for again whenever the text behind them changes.
+    const draw = () =>
+      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
+        .then((found) => applyDiagrams(body, found ?? []))
+        .catch(() => {});
+    draw();
     return {
+      update: draw,
       destroy: () => {
         off();
         teardownDiagrams(body);
@@ -87,11 +92,11 @@
         controller = createViewportController({
           root,
           content: body,
-          blocks,
           target,
           span,
           selected: params.active,
           nextSequence: () => nextViewportSequence(windowID),
+          onMeasure: (state) => onMeasure?.(state),
           report: (report) =>
             Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
               epoch: doc.viewportEpoch,
@@ -110,35 +115,43 @@
   }
 </script>
 
-<article class="document">
-  {#if doc.source}
-    <div class="source">
-      <CapsLabel tone="dim">{doc.source}</CapsLabel>
-      {#if doc.path}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Copy absolute path"
-          title={doc.path}
-          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-      {/if}
-    </div>
-  {/if}
-  {#if heading}
-    <div class="title">
-      <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-      <span>{heading}</span>
-    </div>
-  {/if}
+{#snippet prose()}
   <div
     class="markdown"
     data-document-source={doc.source}
     use:links
-    use:diagrams
+    use:diagrams={doc.text}
     use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
-</article>
+{/snippet}
+
+{#if bare}
+  {@render prose()}
+{:else}
+  <article class="document">
+    {#if doc.source}
+      <div class="source">
+        <CapsLabel tone="dim">{doc.source}</CapsLabel>
+        {#if doc.path}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Copy absolute path"
+            title={doc.path}
+            onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
+        {/if}
+      </div>
+    {/if}
+    {#if heading}
+      <div class="title">
+        <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+        <span>{heading}</span>
+      </div>
+    {/if}
+    {@render prose()}
+  </article>
+{/if}
 
 <style>
   .document {

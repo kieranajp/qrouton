@@ -1,5 +1,5 @@
 ---
-name: qrspi-implementation-lead
+name: qrouton-implementation-lead
 description: Owns implementation of an approved plan, delegates specialist work, coordinates edits, verifies every phase, and updates durable progress.
 ---
 

@@ -8,12 +8,9 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
-
-// documentLimit is where a document stops being one. Above it the editor gets
-// the file rather than a window holding a copy of it.
-const documentLimit = 1 << 20
 
 // DocumentWindow is how a session file reaches the user: a pane qrouton draws
 // for the formats it can, and the editor for everything else. Both the agent's
@@ -52,7 +49,7 @@ func DocumentWindow(root, name string, editor EditorCommand, span workbench.Line
 // the caller to fall back to the editor.
 func documentPane(path, rel string, format workbench.DocumentFormat, span workbench.LineSpan) (workbench.WindowOptions, bool) {
 	info, err := os.Stat(path)
-	if err != nil || info.Size() > documentLimit {
+	if err != nil || info.Size() > workbench.DocumentLimit {
 		return workbench.WindowOptions{}, false
 	}
 	text, err := os.ReadFile(path)
@@ -65,9 +62,15 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	} else {
 		span = workbench.LineSpan{}
 	}
+	id := planID(rel)
+	var badge string
+	if id != "" {
+		badge = fmt.Sprintf(documentBadgeFormat, id)
+	}
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
-		Label:   documentLabel(string(text), rel),
+		Label:   documentLabel(string(text), rel, id),
+		Badge:   badge,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
 		Content: string(text),
@@ -77,12 +80,27 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 }
 
 // documentLabel names the pane by what the document calls itself, since a tab
-// has room for a title and not for a path.
-func documentLabel(text, rel string) string {
-	if title, ok := markdown.Title(text); ok {
-		return fmt.Sprintf(documentLabelFormat, title)
+// has room for a title and not for a path. A tab already leading with the
+// artifact's id neither repeats it nor needs the diamond.
+func documentLabel(text, rel, id string) string {
+	name, titled := markdown.Title(text)
+	if !titled {
+		name = strings.TrimLeft(filepath.Base(rel)[len(id):], "-_.")
 	}
-	return fmt.Sprintf(documentLabelFormat, filepath.Base(rel))
+	if id != "" {
+		return name
+	}
+	return fmt.Sprintf(documentLabelFormat, name)
+}
+
+// planID is the id a plan's tab leads with. Only a plan gets one: it is the
+// artifact a session returns to often enough for its number to be how the reader
+// tells one tab from another.
+func planID(rel string) string {
+	if status.DocumentKind(rel) != status.KindPlan {
+		return ""
+	}
+	return status.ArtifactID(rel)
 }
 
 // SessionRelative names a file the way the session refers to it. The resolved

@@ -21,7 +21,11 @@ func Render(prompt Prompt) ([]Rendered, error) {
 	case prompt.ID == Assistant:
 		return []Rendered{{Path: AssistantAsset, Content: prompt.Content}}, nil
 	case strings.HasPrefix(id, skillIDPrefix):
-		return []Rendered{{Path: id + "/" + skillFileName, Content: prompt.Content}}, nil
+		out := []Rendered{{Path: id + "/" + skillFileName, Content: prompt.Content}}
+		for _, file := range prompt.Files {
+			out = append(out, Rendered{Path: id + "/" + file.Path, Content: file.Content})
+		}
+		return out, nil
 	case strings.HasPrefix(id, agentIDPrefix):
 		name := path.Base(id)
 		codex, err := renderCodexAgent(prompt.Content)

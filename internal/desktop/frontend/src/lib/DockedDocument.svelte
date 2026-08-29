@@ -79,7 +79,7 @@
   onDestroy(() => clearMatches(content));
 </script>
 
-<TerminalPane style="display: {active ? 'flex' : 'none'}">
+<TerminalPane flush style="display: {active ? 'flex' : 'none'}">
   {#if finding}
     <FindBar
       {query}
@@ -104,6 +104,14 @@
     min-height: 0;
     overflow-y: auto;
     outline: none;
+  }
+
+  /* The find bar marks inside this wrapper, and a pane with chrome of its own
+     needs the port's full height to place it against. */
+  .body > :global(div) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
   }
 
   .body :global(mark[data-document-find]) {

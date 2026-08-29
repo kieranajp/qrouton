@@ -395,3 +395,15 @@ var (
 	researchPrefix  = regexp.MustCompile(`(?i)^r\d+[-_.]`)
 	explainerPrefix = regexp.MustCompile(`(?i)^e\d+[-_.]`)
 )
+
+// ArtifactID is the numbered prefix a workflow artifact's filename opens with,
+// uppercased, and empty for a filename that opens with anything else.
+func ArtifactID(path string) string {
+	match := artifactPrefix.FindStringSubmatch(filepath.Base(path))
+	if match == nil {
+		return ""
+	}
+	return strings.ToUpper(match[1])
+}
+
+var artifactPrefix = regexp.MustCompile(`(?i)^([psre]\d+)[-_.]`)
