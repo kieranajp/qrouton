@@ -12,8 +12,8 @@
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id, active = false, scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean}} */
+  let { doc, id, active = false, scrollRoot, bare = false } = $props();
 
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
@@ -114,26 +114,7 @@
   }
 </script>
 
-<article class="document">
-  {#if doc.source}
-    <div class="source">
-      <CapsLabel tone="dim">{doc.source}</CapsLabel>
-      {#if doc.path}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Copy absolute path"
-          title={doc.path}
-          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-      {/if}
-    </div>
-  {/if}
-  {#if heading}
-    <div class="title">
-      <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-      <span>{heading}</span>
-    </div>
-  {/if}
+{#snippet prose()}
   <div
     class="markdown"
     data-document-source={doc.source}
@@ -142,7 +123,34 @@
     use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
-</article>
+{/snippet}
+
+{#if bare}
+  {@render prose()}
+{:else}
+  <article class="document">
+    {#if doc.source}
+      <div class="source">
+        <CapsLabel tone="dim">{doc.source}</CapsLabel>
+        {#if doc.path}
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Copy absolute path"
+            title={doc.path}
+            onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
+        {/if}
+      </div>
+    {/if}
+    {#if heading}
+      <div class="title">
+        <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+        <span>{heading}</span>
+      </div>
+    {/if}
+    {@render prose()}
+  </article>
+{/if}
 
 <style>
   .document {

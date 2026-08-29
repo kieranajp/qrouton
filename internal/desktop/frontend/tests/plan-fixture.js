@@ -62,6 +62,27 @@ export const FINISHED = PLAN.replace("- [ ] one check not", "- [x] one check not
 // Two phases numbered the same, which is what a plan mid-renumber looks like.
 export const RENUMBERED = PLAN.replace("## Phase 3 — The end", "## Phase 1 — The end");
 
+// Six phases, every criterion ticked: the shape of a plan an agent has finished.
+export const DONE = [
+  "---",
+  "kind: plan",
+  "---",
+  "",
+  "# The finished plan",
+  "",
+  "Preamble prose.",
+  "",
+  ...[1, 2, 3, 4, 5, 6].flatMap((n) => [
+    `## Phase ${n} — Step ${n}`,
+    "",
+    `Body for step ${n}.`,
+    "",
+    "### Verify",
+    "- [x] the check",
+    "",
+  ]),
+].join("\n");
+
 const PLAIN = ["# Just notes", "", "No headings open anything here.", "", "- [x] a ticked box", ""].join("\n");
 
 const params = new URLSearchParams(location.search);
@@ -80,7 +101,9 @@ const document_ = (text, epoch) => ({
 
 window.reports = [];
 window.wailsCall = async (name, id, payload) => {
-  if (name.endsWith(".Content")) return document_(params.get("plain") ? PLAIN : PLAN, 1);
+  if (name.endsWith(".Content")) {
+    return document_(params.get("plain") ? PLAIN : params.get("done") ? DONE : PLAN, 1);
+  }
   if (name.endsWith(".RenderDiagrams")) return [];
   if (name.endsWith(".ReportViewport")) window.reports.push(payload);
   return undefined;
@@ -100,6 +123,19 @@ window.bar = () => {
   };
 };
 window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });
+// Where the footer sits relative to the bottom of the scroll port.
+window.footerGap = () => {
+  const port = document.querySelector("#scroll").getBoundingClientRect();
+  const footer = document.querySelector(".footer").getBoundingClientRect();
+  return { gap: Math.round(port.bottom - footer.bottom), left: Math.round(footer.left - port.left), width: Math.round(footer.width), port: Math.round(port.width) };
+};
+window.mode = () => document.querySelector('[aria-pressed="true"]').textContent.trim();
+window.counter = () => document.querySelector(".counter").textContent.trim();
+window.pips = () =>
+  [...document.querySelectorAll(".pip")].map((pip) => ({
+    label: pip.getAttribute("aria-label"),
+    viewing: pip.getAttribute("aria-current") === "true",
+  }));
 window.crumbs = () =>
   [...document.querySelectorAll(".crumb .caps")].map((el) => el.textContent.trim());
 window.errors = [];
@@ -124,7 +160,6 @@ window.drawnScreens = () =>
       }),
     )
     .map((screen) => screen.dataset.screen);
-window.mode = () => (document.querySelector(".deck").hasAttribute("hidden") ? "raw" : "plan");
 window.displays = () =>
   [...document.querySelectorAll("#scroll *")].map((el) => getComputedStyle(el).display);
 window.headingSize = () =>

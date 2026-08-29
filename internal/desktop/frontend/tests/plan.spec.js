@@ -124,16 +124,20 @@ test("the counter names the overview and the arrows stop at both ends", async ({
   await expect(previous).toBeEnabled();
 });
 
-test("raw shows the source and coming back lands on the same phase", async ({ page }) => {
+test("the document view renders the whole plan and comes back to the same phase", async ({ page }) => {
   await open(page, "?line=19");
   await expect.poll(() => shown(page)).toEqual(["2"]);
 
-  await page.getByRole("button", { name: "Raw", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.mode())).toBe("raw");
-  await expect(page.locator("pre.raw")).toContainText("## Phase 2 — The middle");
+  await page.getByRole("button", { name: "Document", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.mode())).toBe("Document");
+  // The whole plan as rendered markdown: headings drawn, source not quoted.
+  await expect(page.locator(".reading h2").first()).toHaveText("Phase 1 — Groundwork");
+  await expect(page.locator(".reading")).not.toContainText("## Phase 2");
+  await expect(page.locator(".reading pre")).toContainText("func main()");
+  await expect(page.locator(".reading input[type=checkbox]").first()).toBeChecked();
 
   await page.getByRole("button", { name: "Plan", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => window.mode())).toBe("plan");
+  await expect.poll(() => page.evaluate(() => window.mode())).toBe("Plan");
   await expect.poll(() => shown(page)).toEqual(["2"]);
 });
 
@@ -175,16 +179,25 @@ test("a push that ticks the last box moves the meter, not the screen", async ({ 
 
 const bar = (page) => page.evaluate(() => window.bar());
 
-test("the bar appears when an agent is working and follows the meter", async ({ page }) => {
+test("the bar appears when an agent is working and offers the meter's phase", async ({ page }) => {
   await open(page);
   await expect.poll(() => shown(page)).toEqual(["overview"]);
   expect(await bar(page)).toBeNull();
 
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent moved to phase 2 · The middle",
+    dot: RUNNING,
+    follow: true,
+  });
+  // The bar names where the agent is; it does not move the reader off the
+  // screen they opened on.
+  expect(await shown(page)).toEqual(["overview"]);
+
+  await page.getByRole("button", { name: "Follow" }).click();
   await expect.poll(() => shown(page)).toEqual(["2"]);
   await expect.poll(() => bar(page)).toMatchObject({
     says: "Following the agent · The middle",
-    dot: RUNNING,
     follow: false,
   });
 });
@@ -192,6 +205,7 @@ test("the bar appears when an agent is working and follows the meter", async ({ 
 test("navigating pins the reader and Follow hands the position back", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await page.getByRole("button", { name: "Follow" }).click();
   await expect.poll(() => shown(page)).toEqual(["2"]);
 
   await page.keyboard.press("ArrowRight");
@@ -212,12 +226,14 @@ test("navigating pins the reader and Follow hands the position back", async ({ p
 test("a push that meets the last phase turns the bar green", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await page.getByRole("button", { name: "Follow" }).click();
   await expect.poll(() => shown(page)).toEqual(["2"]);
 
   await page.evaluate(() => window.pushFinished());
   await expect.poll(() => bar(page)).toMatchObject({
     says: "Every phase met",
     dot: "rgb(166, 218, 149)",
+    follow: false,
   });
   await expect.poll(() => shown(page)).toEqual(["3"]);
 });
@@ -258,4 +274,54 @@ test("arrow keys are left to the plain body when nothing opens a phase", async (
   await page.keyboard.press("ArrowRight");
   await expect(page.locator("[data-screen]")).toHaveCount(0);
   expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
+
+test("a finished plan still opens on the overview", async ({ page }) => {
+  await open(page, "?done=true");
+
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  await expect.poll(() => page.evaluate(() => window.counter())).toBe("Overview");
+  await expect.poll(() => bar(page)).toMatchObject({ says: "Every phase met", follow: false });
+  expect((await page.evaluate(() => window.pips()))[0]).toEqual({ label: "Overview", viewing: true });
+});
+
+test("the counter and the pip name the screen being viewed, not the meter", async ({ page }) => {
+  await open(page, "?done=true");
+  expect(await page.evaluate(() => window.counter())).toBe("Overview");
+
+  for (let phase = 1; phase <= 6; phase++) {
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(() => shown(page)).toEqual([String(phase)]);
+    expect(await page.evaluate(() => window.counter())).toBe(`${phase} / 6`);
+    expect(await page.evaluate(() => window.crumbs())).toContain(`Phase ${phase} of 6`);
+    const viewing = (await page.evaluate(() => window.pips())).filter((pip) => pip.viewing);
+    expect(viewing).toEqual([{ label: `Phase ${phase}`, viewing: true }]);
+  }
+
+  await page.locator('.pip[aria-label="Overview"]').click();
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  expect(await page.evaluate(() => window.counter())).toBe("Overview");
+});
+
+test("the footer holds the pane's floor and spans its width", async ({ page }) => {
+  await open(page, "?done=true");
+  // Phase 6 is the shortest screen; the footer must not ride up under it.
+  await page.locator('.pip[aria-label="Phase 6"]').click();
+  await expect.poll(() => shown(page)).toEqual(["6"]);
+
+  const box = await page.evaluate(() => window.footerGap());
+  expect(box.gap).toBe(0);
+  expect(box.left).toBe(0);
+  expect(box.width).toBe(box.port);
+});
+
+test("following moves the view when the meter moves, and a pin holds it", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+
+  // Phase 2's last box gets ticked, so the meter moves on to phase 3.
+  await page.evaluate(() => window.pushFinished());
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  expect(await page.evaluate(() => window.counter())).toBe("3 / 3");
 });

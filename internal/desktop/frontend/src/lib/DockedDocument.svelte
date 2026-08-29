@@ -106,6 +106,14 @@
     outline: none;
   }
 
+  /* The find bar marks inside this wrapper, and a pane with chrome of its own
+     needs the port's full height to place it against. */
+  .body > :global(div) {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
   .body :global(mark[data-document-find]) {
     background: color-mix(in srgb, var(--accent-action) 28%, transparent);
     color: inherit;

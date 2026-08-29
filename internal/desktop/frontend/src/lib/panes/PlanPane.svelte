@@ -33,10 +33,11 @@
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
   let copied = $state(false);
-  let raw = $state(false);
-  // A span is a direct request for a phase, so it holds the reader there until
-  // they hand the position back. Following only ever moves an unasked-for view.
-  let pinned = $state(untrack(() => (doc.line ?? 0) > 0));
+  let mode = $state("plan");
+  let pinned = $state(false);
+  // A mark answers the request that opened the pane; a remount must not revive
+  // one the reader has already navigated away from.
+  let retired = $state(false);
 
   const session = chrome();
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
@@ -64,7 +65,8 @@
       if (at !== epoch) {
         epoch = at;
         current = screenFor(plan.phases, doc.line ?? 0);
-        pinned = (doc.line ?? 0) > 0;
+        pinned = false;
+        retired = false;
       }
       if (current > count) current = count;
     });
@@ -132,15 +134,21 @@
   // control pins the reader; the bar's Follow button hands the position back.
   function show(screen, pin = true) {
     for (const marked of body?.querySelectorAll(".marked") ?? []) marked.classList.remove("marked");
+    retired = true;
     pinned = pin;
     current = Math.max(0, Math.min(screen, plan.phases.length));
   }
 
+  // Following moves the view when the meter moves. It does not choose the
+  // screen a document opens on: that is the overview, or the phase a span asked
+  // for, and neither is the agent's to overrule.
+  let meter = untrack(() => followed);
   $effect(() => {
     const to = followed;
-    const following = live && !pinned;
     untrack(() => {
-      if (following) current = to;
+      if (to === meter) return;
+      meter = to;
+      if (live && !pinned) current = to;
     });
   });
 
@@ -221,7 +229,7 @@
       blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
       span,
     );
-    for (const index of marked) blocks[index].classList.add("marked");
+    if (!untrack(() => retired)) for (const index of marked) blocks[index].classList.add("marked");
     const target = blocks[at];
     let controller;
     let root;
@@ -270,150 +278,186 @@
   <MarkdownPane {doc} {id} {active} {scrollRoot} />
 {:else}
   <article class="document plan">
-    {#if doc.source}
-      <div class="source">
-        <CapsLabel tone="dim">{doc.source}</CapsLabel>
-        {#if doc.path}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Copy absolute path"
-            title={doc.path}
-            onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-        {/if}
-      </div>
-    {/if}
-    {#if heading}
-      <div class="title">
-        <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-        <Chip>{doc.kind ?? "PLAN"}</Chip>
-        <span class="name">{heading}</span>
-        <div class="modes">
-          <Button
-            variant={raw ? "ghost" : "outline"}
-            size="sm"
-            aria-pressed={!raw}
-            onclick={() => (raw = false)}>Plan</Button>
-          <Button
-            variant={raw ? "outline" : "ghost"}
-            size="sm"
-            aria-pressed={raw}
-            onclick={() => (raw = true)}>Raw</Button>
-        </div>
-      </div>
-    {/if}
-    <div
-      class="deck"
-      hidden={raw}
-      bind:this={body}
-      data-document-source={doc.source}
-      use:links
-      use:diagrams={doc.text}
-      use:viewport={{ id, active, scrollRoot, screen: current }}>
-      <section class="screen" data-screen="overview" hidden={current !== 0}>
-        <CapsLabel
-          >Plan · {plan.phases.length}
-          {plan.phases.length === 1 ? "phase" : "phases"}</CapsLabel>
-        <h1 class="display-lg">{plan.title || heading}</h1>
-        <div class="markdown">{@html deck.preamble}</div>
-        <ol class="rows">
-          {#each plan.phases as phase, at}
-            <li>
-              <button type="button" class="row" onclick={() => show(at + 1)}>
-                <span class="index">{phase.index}</span>
-                <span class="name">{phase.name}</span>
-                <span class="dot" style:background={DOT[phase.state]}></span>
-                <span class="count">{phase.met}/{phase.total}</span>
-              </button>
-            </li>
-          {/each}
-        </ol>
-      </section>
-      {#each plan.phases as phase, at}
-        <section class="screen" data-screen={phase.index} hidden={current !== at + 1}>
-          <div class="crumb">
-            <CapsLabel>Phase {at + 1} of {plan.phases.length}</CapsLabel>
-            <span class="state">
-              <span class="dot" style:background={DOT[phase.state]}></span>
-              {WORD[phase.state]}
-            </span>
-          </div>
-          <h1 class="display-md">{phase.name}</h1>
-          <div class="markdown lifted">{@html deck.phases[at].opening}</div>
-          <div class="markdown">{@html deck.phases[at].body}</div>
-          <hr class="rule" />
-          <div class="criteria">
-            <div class="criteria-head">
-              <CapsLabel>Acceptance criteria</CapsLabel>
-              <span class="count" data-count={phase.index}>
-                {phase.total > 0 ? `${phase.met} of ${phase.total} met` : "No checks stated"}
-              </span>
-            </div>
-            <div class="markdown">{@html deck.phases[at].criteria}</div>
-          </div>
-        </section>
-      {/each}
-    </div>
-    <pre class="raw" hidden={!raw}>{doc.text}</pre>
-    <footer class="footer">
-      {#if live}
-        {@const moved = pinned && followed !== current}
-        <div class="bar">
-          <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
-          <span class="says">
-            {#if allMet}
-              Every phase met
-            {:else if moved}
-              Agent moved to phase {followed} · {plan.phases[followed - 1].name}
-            {:else}
-              Following the agent · {plan.phases[followed - 1].name}
-            {/if}
-          </span>
-          {#if moved}
-            <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+    <div class="head">
+      {#if doc.source}
+        <div class="source">
+          <CapsLabel tone="dim">{doc.source}</CapsLabel>
+          {#if doc.path}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Copy absolute path"
+              title={doc.path}
+              onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
           {/if}
         </div>
       {/if}
-      <div class="controls">
-        <div class="pips">
-          {#each plan.phases as phase, at}
+      {#if heading}
+        <div class="title">
+          <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+          <Chip>{doc.kind ?? "PLAN"}</Chip>
+          <span class="name">{heading}</span>
+          <div class="modes">
+            <Button
+              variant={mode === "plan" ? "outline" : "ghost"}
+              size="sm"
+              aria-pressed={mode === "plan"}
+              onclick={() => (mode = "plan")}>Plan</Button>
+            <Button
+              variant={mode === "document" ? "outline" : "ghost"}
+              size="sm"
+              aria-pressed={mode === "document"}
+              onclick={() => (mode = "document")}>Document</Button>
+          </div>
+        </div>
+      {/if}
+    </div>
+    {#if mode === "document"}
+      <div class="reading">
+        <MarkdownPane {doc} {id} {active} {scrollRoot} bare />
+      </div>
+    {:else}
+      <div
+        class="deck"
+        bind:this={body}
+        data-document-source={doc.source}
+        use:links
+        use:diagrams={doc.text}
+        use:viewport={{ id, active, scrollRoot, screen: current }}>
+        <section class="screen" data-screen="overview" hidden={current !== 0}>
+          <CapsLabel
+            >Plan · {plan.phases.length}
+            {plan.phases.length === 1 ? "phase" : "phases"}</CapsLabel>
+          <h1 class="display-lg">{plan.title || heading}</h1>
+          <div class="markdown">{@html deck.preamble}</div>
+          <ol class="rows">
+            {#each plan.phases as phase, at}
+              <li>
+                <button type="button" class="row" onclick={() => show(at + 1)}>
+                  <span class="index">{phase.index}</span>
+                  <span class="name">{phase.name}</span>
+                  <span class="dot" style:background={DOT[phase.state]}></span>
+                  <span class="count">{phase.met}/{phase.total}</span>
+                </button>
+              </li>
+            {/each}
+          </ol>
+        </section>
+        {#each plan.phases as phase, at}
+          <section class="screen" data-screen={phase.index} hidden={current !== at + 1}>
+            <div class="crumb">
+              <CapsLabel>Phase {at + 1} of {plan.phases.length}</CapsLabel>
+              <span class="state">
+                <span class="dot" style:background={DOT[phase.state]}></span>
+                {WORD[phase.state]}
+              </span>
+            </div>
+            <h1 class="display-md">{phase.name}</h1>
+            <div class="markdown lifted">{@html deck.phases[at].opening}</div>
+            <div class="markdown">{@html deck.phases[at].body}</div>
+            <hr class="rule" />
+            <div class="criteria">
+              <div class="criteria-head">
+                <CapsLabel>Acceptance criteria</CapsLabel>
+                <span class="count" data-count={phase.index}>
+                  {phase.total > 0 ? `${phase.met} of ${phase.total} met` : "No checks stated"}
+                </span>
+              </div>
+              <div class="markdown">{@html deck.phases[at].criteria}</div>
+            </div>
+          </section>
+        {/each}
+      </div>
+      <footer class="footer">
+        {#if live}
+          {@const moved = !allMet && followed !== current}
+          <div class="bar">
+            <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
+            <span class="says">
+              {#if allMet}
+                Every phase met
+              {:else if moved}
+                Agent moved to phase {followed} · {plan.phases[followed - 1].name}
+              {:else}
+                Following the agent · {plan.phases[followed - 1].name}
+              {/if}
+            </span>
+            {#if moved}
+              <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+            {/if}
+          </div>
+        {/if}
+        <div class="controls">
+          <div class="pips">
             <button
               type="button"
-              class="pip"
-              class:viewing={current === at + 1}
-              aria-label="Phase {phase.index}"
-              aria-current={current === at + 1}
-              onclick={() => show(at + 1)}>
-              <span class="mark" style:background={DOT[phase.state]}></span>
+              class="pip summary"
+              class:viewing={current === 0}
+              aria-label="Overview"
+              aria-current={current === 0}
+              onclick={() => show(0)}>
+              <span class="mark"></span>
             </button>
-          {/each}
+            {#each plan.phases as phase, at}
+              <button
+                type="button"
+                class="pip"
+                class:viewing={current === at + 1}
+                aria-label="Phase {phase.index}"
+                aria-current={current === at + 1}
+                onclick={() => show(at + 1)}>
+                <span class="mark" style:background={DOT[phase.state]}></span>
+              </button>
+            {/each}
+          </div>
+          <span class="counter">
+            {current === 0 ? "Overview" : `${current} / ${plan.phases.length}`}
+          </span>
+          <div class="steps">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Previous screen"
+              disabled={current === 0}
+              onclick={() => show(current - 1)}>←</Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Next screen"
+              disabled={current === plan.phases.length}
+              onclick={() => show(current + 1)}>→</Button>
+          </div>
         </div>
-        <span class="counter">
-          {current === 0 ? "Overview" : `${current} / ${plan.phases.length}`}
-        </span>
-        <div class="steps">
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Previous screen"
-            disabled={current === 0}
-            onclick={() => show(current - 1)}>←</Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Next screen"
-            disabled={current === plan.phases.length}
-            onclick={() => show(current + 1)}>→</Button>
-        </div>
-      </div>
-    </footer>
+      </footer>
+    {/if}
   </article>
 {/if}
 
 <style>
   .document {
-    padding: 26px 34px;
     --gutter: 4.5ch;
+    --pane-pad: 34px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* The footer spans the pane, so the padding belongs to what it frames. */
+  .head,
+  .deck,
+  .reading {
+    padding-left: var(--pane-pad);
+    padding-right: var(--pane-pad);
+  }
+
+  .head {
+    padding-top: 26px;
+  }
+
+  .deck,
+  .reading {
+    padding-bottom: 26px;
   }
 
   .source,
@@ -457,20 +501,12 @@
     margin-left: auto;
   }
 
-  .raw {
-    margin: 0;
-    padding: 18px var(--gutter);
-    background: var(--surface-terminal);
-    border: var(--border-width) solid var(--border-subtle);
-    font: var(--terminal);
-    color: var(--text-secondary);
-    white-space: pre-wrap;
-  }
-
+  /* Held on the pane's floor whatever the phase is tall enough to fill, so the
+     arrows and pips stay under the same finger from one screen to the next. */
   .footer {
     position: sticky;
     bottom: 0;
-    margin-top: 26px;
+    margin-top: auto;
     background: var(--surface-chrome);
     border-top: var(--border-width) solid var(--border-subtle);
   }
@@ -479,7 +515,7 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px var(--space-3);
+    padding: 8px var(--pane-pad);
     border-bottom: var(--border-width) solid var(--border-subtle);
     font: var(--machine-sm);
     color: var(--text-secondary);
@@ -490,7 +526,7 @@
     align-items: center;
     gap: 14px;
     min-height: var(--h-footer);
-    padding: 0 var(--space-3);
+    padding: 0 var(--pane-pad);
   }
 
   .pips {
@@ -515,6 +551,14 @@
     display: block;
     width: 14px;
     height: 5px;
+  }
+
+  .pip.summary .mark {
+    box-shadow: inset 0 0 0 1px var(--text-faint);
+  }
+
+  .pip.summary {
+    margin-right: 4px;
   }
 
   .counter {
@@ -568,6 +612,11 @@
 
   .display-md {
     font: var(--display-md);
+  }
+
+  .deck,
+  .reading {
+    flex: 1;
   }
 
   .rows {
