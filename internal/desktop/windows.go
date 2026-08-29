@@ -641,6 +641,7 @@ func (w *Windows) announce(owner *sessionState) {
 type drawnWindow struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`
+	Badge  string `json:"badge,omitempty"`
 	Kind   string `json:"kind"`
 	Status string `json:"status,omitempty"`
 }
@@ -667,7 +668,7 @@ func (w *Windows) surfaces(owner *sessionState) surfaces {
 	for _, window := range live {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
-			Kind: string(window.opts.Kind), Status: tabStatus(window),
+			Badge: window.opts.Badge, Kind: string(window.opts.Kind), Status: tabStatus(window),
 		}
 		out.Tabs = append(out.Tabs, drawn)
 	}

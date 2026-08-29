@@ -53,10 +53,12 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // Attention marks a window that needs the user's eye without taking focus.
 // Source names the session file the window shows, relative to the session root,
 // so a second request for that file selects this window instead of opening
-// another. Span is the part of the file the window scrolls to and marks.
+// another. Span is the part of the file the window scrolls to and marks. Badge
+// leads the tab in the artifact's own colour, ahead of Label.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
+	Badge       string         `json:"badge,omitempty"`
 	Source      string         `json:"source,omitempty"`
 	Cwd         string         `json:"cwd,omitempty"`
 	Command     []string       `json:"command,omitempty"`

@@ -8,6 +8,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -61,9 +62,11 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	} else {
 		span = workbench.LineSpan{}
 	}
+	badge := documentBadge(rel)
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
-		Label:   documentLabel(string(text), rel),
+		Label:   documentLabel(string(text), rel, badge != ""),
+		Badge:   badge,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
 		Content: string(text),
@@ -73,12 +76,31 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 }
 
 // documentLabel names the pane by what the document calls itself, since a tab
-// has room for a title and not for a path.
-func documentLabel(text, rel string) string {
+// has room for a title and not for a path. A badged tab already leads with the
+// artifact's id, so it does not also need the diamond.
+func documentLabel(text, rel string, badged bool) string {
+	name := filepath.Base(rel)
 	if title, ok := markdown.Title(text); ok {
-		return fmt.Sprintf(documentLabelFormat, title)
+		name = title
 	}
-	return fmt.Sprintf(documentLabelFormat, filepath.Base(rel))
+	if badged {
+		return name
+	}
+	return fmt.Sprintf(documentLabelFormat, name)
+}
+
+// documentBadge is the id a plan's tab leads with. Only a plan gets one: it is
+// the artifact a session returns to often enough for its number to be how the
+// reader tells one tab from another.
+func documentBadge(rel string) string {
+	if status.DocumentKind(rel) != status.KindPlan {
+		return ""
+	}
+	id := status.ArtifactID(rel)
+	if id == "" {
+		return ""
+	}
+	return fmt.Sprintf(documentBadgeFormat, id)
 }
 
 // SessionRelative names a file the way the session refers to it. The resolved

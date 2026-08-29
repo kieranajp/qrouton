@@ -598,3 +598,21 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 		t.Error("Repos returned nil for a directory with no manifest")
 	}
 }
+
+func TestArtifactIDIsTheNumberedPrefixTheFilenameStates(t *testing.T) {
+	for path, want := range map[string]string{
+		"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md": "P002",
+		"p12_notes.md":     "P12",
+		"R001.md":          "R001",
+		"S3-shape.md":      "S3",
+		"E9-explainer.md":  "E9",
+		"plans/notes.md":   "",
+		"P-unnumbered.md":  "",
+		"P002nodelim.md":   "",
+		"draft-P002-do.md": "",
+	} {
+		if got := ArtifactID(path); got != want {
+			t.Errorf("ArtifactID(%q) = %q, want %q", path, got, want)
+		}
+	}
+}

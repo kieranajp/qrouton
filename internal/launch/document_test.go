@@ -180,6 +180,36 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 	}
 }
 
+// A plan's tab leads with the id its filename states, so a reader with several
+// plans open tells them apart before reading a word of the title. Every other
+// document keeps the diamond it has always had.
+func TestDocumentWindowBadgesAPlanTabWithItsID(t *testing.T) {
+	for _, tc := range []struct {
+		file  string
+		badge string
+		label string
+	}{
+		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", "[P002]", "Pane smoke test"},
+		{"thoughts/shared/plans/p002-lowercase.md", "[P002]", "Pane smoke test"},
+		// Under plans/ but unnumbered: nothing to badge with.
+		{"thoughts/shared/plans/notes.md", "", "◆ Pane smoke test"},
+		// Numbered, but not a plan.
+		{"thoughts/shared/research/R002-findings.md", "", "◆ Pane smoke test"},
+		{"thoughts/shared/specs/S002-shape.md", "", "◆ Pane smoke test"},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			root := documentRoot(t, map[string]string{tc.file: "# Pane smoke test\n\nbody\n"})
+			opts, err := DocumentWindow(root, tc.file, testDocumentEditor, workbench.LineSpan{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if opts.Badge != tc.badge || opts.Label != tc.label {
+				t.Fatalf("badge %q label %q, want %q and %q", opts.Badge, opts.Label, tc.badge, tc.label)
+			}
+		})
+	}
+}
+
 // A file this size is a log, and a window holding a copy of it serves nobody.
 func TestDocumentWindowSendsAHugeMarkdownFileToTheEditor(t *testing.T) {
 	root := documentRoot(t, map[string]string{"huge.md": strings.Repeat("x", workbench.DocumentLimit+1)})

@@ -320,26 +320,21 @@
   <MarkdownPane {doc} {id} {active} {scrollRoot} />
 {:else}
   <article class="document plan">
+    <!-- The deck's opening screen is where the plan says its name; the header
+         says what it is and where it lives, and nothing twice. -->
     <div class="head">
+      <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+      <Chip>{doc.kind ?? "PLAN"}</Chip>
       {#if doc.source}
-        <div class="source">
-          <CapsLabel tone="dim">{doc.source}</CapsLabel>
-          {#if doc.path}
-            <Button
-              variant="ghost"
-              size="sm"
-              aria-label="Copy absolute path"
-              title={doc.path}
-              onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-          {/if}
-        </div>
+        <CapsLabel tone="dim">{doc.source}</CapsLabel>
       {/if}
-      {#if heading}
-        <div class="title">
-          <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-          <Chip>{doc.kind ?? "PLAN"}</Chip>
-          <span class="name">{heading}</span>
-        </div>
+      {#if doc.path}
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label="Copy absolute path"
+          title={doc.path}
+          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
       {/if}
     </div>
     {#if mode === "document"}
@@ -494,55 +489,31 @@
   }
 
   /* The footer spans the pane, so the padding belongs to what it frames. */
-  .head,
   .deck,
   .reading {
     padding-left: var(--pane-pad);
     padding-right: var(--pane-pad);
   }
 
+  /* Aligned with the body's text column rather than the pane edge, so the
+     mark, the chip and the path sit over the deck's own left margin. */
   .head {
-    padding-top: 26px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 26px var(--pane-pad) 20px calc(var(--pane-pad) + var(--gutter));
+  }
+
+  .head :global(.caps) {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .deck,
   .reading {
     padding-bottom: 26px;
-  }
-
-  .source,
-  .title {
-    padding-left: var(--gutter);
-  }
-
-  .source {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-  }
-
-  .source :global(.caps) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .title {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin: 10px 0 18px;
-    font: var(--display-sm);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .title .name {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .modes {
