@@ -57,8 +57,8 @@ test("observations render in the body and stay out of the meter", async ({ page 
   await open(page, "?line=19");
   const screen = page.locator('[data-screen="2"]');
 
-  await expect(screen.locator(".markdown").first()).toContainText("the deck looks right");
-  await expect(screen.locator(".markdown").first()).toContainText("the pips line up");
+  await expect(screen.locator(".markdown:not(.lifted)").first()).toContainText("the deck looks right");
+  await expect(screen.locator(".markdown:not(.lifted)").first()).toContainText("the pips line up");
   await expect(screen.locator('[data-count="2"]')).toHaveText("1 of 2 met");
   await expect(screen.locator(".state")).toContainText("Working");
   await expect(screen.locator(".state .dot")).toHaveCSS("background-color", RUNNING);
@@ -90,4 +90,64 @@ test("a document nothing opens a phase in renders the plain markdown body", asyn
   await open(page, "?plain=true");
   await expect(page.locator("[data-screen]")).toHaveCount(0);
   await expect(page.locator(".markdown")).toContainText("No headings open anything here.");
+});
+
+test("a pip selects its phase and takes the underline", async ({ page }) => {
+  await open(page);
+  const pip = page.locator('.pip[aria-label="Phase 3"]');
+
+  await pip.click();
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  await expect(pip).toHaveAttribute("aria-current", "true");
+  await expect(pip).toHaveCSS("border-bottom-color", "rgb(138, 173, 244)");
+  await expect(page.locator('.pip[aria-label="Phase 1"]')).toHaveCSS(
+    "border-bottom-color",
+    "rgba(0, 0, 0, 0)",
+  );
+});
+
+test("the counter names the overview and the arrows stop at both ends", async ({ page }) => {
+  await open(page);
+  const previous = page.locator('button[aria-label="Previous screen"]');
+  const next = page.locator('button[aria-label="Next screen"]');
+
+  await expect(page.locator(".counter")).toHaveText("Overview");
+  await expect(previous).toBeDisabled();
+  await expect(next).toBeEnabled();
+
+  await next.click();
+  await expect(page.locator(".counter")).toHaveText("1 / 3");
+  await next.click();
+  await next.click();
+  await expect(page.locator(".counter")).toHaveText("3 / 3");
+  await expect(next).toBeDisabled();
+  await expect(previous).toBeEnabled();
+});
+
+test("raw shows the source and coming back lands on the same phase", async ({ page }) => {
+  await open(page, "?line=19");
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+
+  await page.getByRole("button", { name: "Raw", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.mode())).toBe("raw");
+  await expect(page.locator("pre.raw")).toContainText("## Phase 2 — The middle");
+
+  await page.getByRole("button", { name: "Plan", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.mode())).toBe("plan");
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+});
+
+test("a narrow pane steps the type down and hides nothing", async ({ page }) => {
+  await open(page);
+  const wide = await page.evaluate(() => window.displays());
+  const wideHeading = await page.evaluate(() => window.headingSize());
+
+  await page.setViewportSize({ width: 400, height: 520 });
+  const narrow = await page.evaluate(() => window.displays());
+  const narrowHeading = await page.evaluate(() => window.headingSize());
+
+  expect(narrow).toHaveLength(wide.length);
+  const lost = wide.filter((display, at) => display !== "none" && narrow[at] === "none");
+  expect(lost).toEqual([]);
+  expect(narrowHeading).toBeLessThan(wideHeading);
 });

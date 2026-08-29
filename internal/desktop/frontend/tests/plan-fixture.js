@@ -104,6 +104,11 @@ window.drawnScreens = () =>
       }),
     )
     .map((screen) => screen.dataset.screen);
+window.mode = () => (document.querySelector(".deck").hasAttribute("hidden") ? "raw" : "plan");
+window.displays = () =>
+  [...document.querySelectorAll("#scroll *")].map((el) => getComputedStyle(el).display);
+window.headingSize = () =>
+  Number.parseFloat(getComputedStyle(document.querySelector(".display-lg")).fontSize);
 window.counters = () =>
   [...document.querySelectorAll(".rows .row")].map((row) => row.textContent.replace(/\s+/g, " ").trim());
 

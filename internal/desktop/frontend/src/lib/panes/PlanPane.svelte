@@ -1,6 +1,7 @@
 <script>
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Chip from "../core/Chip.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
@@ -31,6 +32,7 @@
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
   let copied = $state(false);
+  let raw = $state(false);
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
   let current = $state(untrack(() => screenFor(plan.phases, doc.line ?? 0)));
@@ -68,7 +70,7 @@
     const holder = document.createElement("div");
     holder.innerHTML = html;
     const preamble = [];
-    const phases = parsed.phases.map(() => ({ body: [], criteria: [] }));
+    const phases = parsed.phases.map(() => ({ opening: [], body: [], criteria: [] }));
     let at = { from: 0, to: 0 };
     for (const node of [...holder.children]) {
       at = spanOf(node) ?? at;
@@ -78,12 +80,18 @@
         continue;
       }
       const verify = criteriaSpans(parsed.phases[index]);
-      const lifted = verify && at.from >= verify.from && at.to <= verify.to;
-      phases[index][lifted ? "criteria" : "body"].push(node.outerHTML);
+      const bucket =
+        at.from === parsed.phases[index].from
+          ? "opening"
+          : verify && at.from >= verify.from && at.to <= verify.to
+            ? "criteria"
+            : "body";
+      phases[index][bucket].push(node.outerHTML);
     }
     return {
       preamble: preamble.join(""),
       phases: phases.map((phase) => ({
+        opening: phase.opening.join(""),
         body: phase.body.join(""),
         criteria: phase.criteria.join(""),
       })),
@@ -236,11 +244,25 @@
     {#if heading}
       <div class="title">
         <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-        <span>{heading}</span>
+        <Chip>{doc.kind ?? "PLAN"}</Chip>
+        <span class="name">{heading}</span>
+        <div class="modes">
+          <Button
+            variant={raw ? "ghost" : "outline"}
+            size="sm"
+            aria-pressed={!raw}
+            onclick={() => (raw = false)}>Plan</Button>
+          <Button
+            variant={raw ? "outline" : "ghost"}
+            size="sm"
+            aria-pressed={raw}
+            onclick={() => (raw = true)}>Raw</Button>
+        </div>
       </div>
     {/if}
     <div
       class="deck"
+      hidden={raw}
       bind:this={body}
       data-document-source={doc.source}
       use:links
@@ -275,6 +297,7 @@
             </span>
           </div>
           <h1 class="display-md">{phase.name}</h1>
+          <div class="markdown lifted">{@html deck.phases[at].opening}</div>
           <div class="markdown">{@html deck.phases[at].body}</div>
           <hr class="rule" />
           <div class="criteria">
@@ -289,6 +312,42 @@
         </section>
       {/each}
     </div>
+    <pre class="raw" hidden={!raw}>{doc.text}</pre>
+    <footer class="footer">
+      <div class="bar"></div>
+      <div class="controls">
+        <div class="pips">
+          {#each plan.phases as phase, at (phase.index)}
+            <button
+              type="button"
+              class="pip"
+              class:viewing={current === at + 1}
+              aria-label="Phase {phase.index}"
+              aria-current={current === at + 1}
+              onclick={() => show(at + 1)}>
+              <span class="mark" style:background={DOT[phase.state]}></span>
+            </button>
+          {/each}
+        </div>
+        <span class="counter">
+          {current === 0 ? "Overview" : `${current} / ${plan.phases.length}`}
+        </span>
+        <div class="steps">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Previous screen"
+            disabled={current === 0}
+            onclick={() => show(current - 1)}>←</Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label="Next screen"
+            disabled={current === plan.phases.length}
+            onclick={() => show(current + 1)}>→</Button>
+        </div>
+      </div>
+    </footer>
   </article>
 {/if}
 
@@ -324,6 +383,80 @@
     font: var(--display-sm);
     letter-spacing: var(--display-tracking);
     color: var(--text-primary);
+  }
+
+  .title .name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .modes {
+    display: flex;
+    gap: 6px;
+    margin-left: auto;
+  }
+
+  .raw {
+    margin: 0;
+    padding: 18px var(--gutter);
+    background: var(--surface-terminal);
+    border: var(--border-width) solid var(--border-subtle);
+    font: var(--terminal);
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+  }
+
+  .footer {
+    position: sticky;
+    bottom: 0;
+    margin-top: 26px;
+    background: var(--surface-chrome);
+    border-top: var(--border-width) solid var(--border-subtle);
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-height: var(--h-footer);
+    padding: 0 var(--space-3);
+  }
+
+  .pips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .pip {
+    padding: 6px 3px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .pip.viewing {
+    border-bottom-color: var(--accent-action);
+  }
+
+  .pip .mark {
+    display: block;
+    width: 14px;
+    height: 5px;
+  }
+
+  .counter {
+    margin-left: auto;
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .steps {
+    display: flex;
+    gap: 6px;
   }
 
   .screen > :global(.caps),
@@ -431,9 +564,11 @@
     padding-left: var(--gutter);
   }
 
-  /* The document's own Verify heading is left in the flow, out of sight: the
-     viewport reports the blocks it can measure, and display:none would drop the
-     one an open_file span aimed at this list would land on. */
+  /* The pane speaks the phase's name and its own criteria label, so the
+     document's headings for both would say it twice. They stay in the layout
+     rather than going display:none: the viewport reports only blocks it can
+     measure, and a span aimed at either line has to land somewhere. */
+  .lifted,
   .criteria .markdown :global(h3) {
     position: absolute;
     width: 1px;
@@ -446,5 +581,20 @@
 
   .criteria .markdown :global(li:not(:has(input:checked))) {
     color: var(--text-muted);
+  }
+
+  /* Narrow: the type steps down and the pips wrap. Nothing goes away. */
+  @media (max-width: 420px) {
+    .display-lg {
+      font: var(--display-md);
+    }
+
+    .display-md {
+      font: var(--display-sm);
+    }
+
+    .criteria .markdown :global(li) {
+      font: var(--machine-xs);
+    }
   }
 </style>

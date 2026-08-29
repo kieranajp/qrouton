@@ -20,6 +20,7 @@
         --state-running: #8bd5ca;
         --state-guided: #c6a0f6;
         --artifact-plan: #b7bdf8;
+        --surface-chrome: #1e2030;
         --border-subtle: #363a4f;
         --border-default: #5b6078;
         --border-width: 1px;
@@ -29,7 +30,7 @@
       }
 
       body { margin: 0; background: var(--surface-app); }
-      #scroll { box-sizing: border-box; width: 900px; height: 520px; overflow-y: auto; }
+      #scroll { box-sizing: border-box; width: min(900px, 100vw); height: 520px; overflow-y: auto; }
     </style>
   </head>
   <body>
