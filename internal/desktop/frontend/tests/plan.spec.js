@@ -172,3 +172,52 @@ test("a push that ticks the last box moves the meter, not the screen", async ({ 
   await expect.poll(() => shown(page)).toEqual(["3"]);
   expect(await marked(page)).toEqual([]);
 });
+
+const bar = (page) => page.evaluate(() => window.bar());
+
+test("the bar appears when an agent is working and follows the meter", async ({ page }) => {
+  await open(page);
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  expect(await bar(page)).toBeNull();
+
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Following the agent · The middle",
+    dot: RUNNING,
+    follow: false,
+  });
+});
+
+test("navigating pins the reader and Follow hands the position back", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent moved to phase 2 · The middle",
+    follow: true,
+  });
+
+  await page.getByRole("button", { name: "Follow" }).click();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Following the agent · The middle",
+    follow: false,
+  });
+});
+
+test("a push that meets the last phase turns the bar green", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+
+  await page.evaluate(() => window.pushFinished());
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Every phase met",
+    dot: "rgb(166, 218, 149)",
+  });
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+});

@@ -86,6 +86,16 @@ window.wailsCall = async (name, id, payload) => {
 // The push the workbench sends when the file changes under an open tab.
 window.pushContent = (fields) => emitWailsEvent("window:content:w1", { ...document_(PLAN, 1), ...fields });
 window.pushFinished = () => window.pushContent({ text: FINISHED });
+window.emitChrome = (fields) => emitWailsEvent("chrome:update", fields);
+window.bar = () => {
+  const bar = document.querySelector(".bar");
+  if (!bar) return null;
+  return {
+    says: bar.querySelector(".says").textContent.replace(/\s+/g, " ").trim(),
+    dot: getComputedStyle(bar.querySelector(".dot")).backgroundColor,
+    follow: Boolean(bar.querySelector("button")),
+  };
+};
 window.pushEdited = () =>
   window.pushContent({ text: PLAN.replace("Another middle paragraph.", "An edited middle paragraph.") });
 

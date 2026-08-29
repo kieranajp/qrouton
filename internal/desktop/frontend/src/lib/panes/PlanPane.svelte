@@ -5,6 +5,7 @@
   import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
+  import { chrome } from "../chrome.svelte.js";
   import { openDocument } from "../docked.svelte.js";
   import { Call, Events, copyText, openURL } from "../wails.js";
   import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
@@ -33,6 +34,19 @@
   let tone = $derived(artifactTone(doc.kind));
   let copied = $state(false);
   let raw = $state(false);
+  let pinned = $state(false);
+
+  const session = chrome();
+  let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
+  // The screen the document's own meter points at. Once every phase is met
+  // there is nothing left unmet to point at, so it rests on the last.
+  let followed = $derived.by(() => {
+    const at = plan.phases.findIndex((phase) => phase.state !== "met");
+    return at < 0 ? plan.phases.length : at + 1;
+  });
+  // The session has an agent working, or the plan has run out of unmet phases.
+  // It cannot know the agent is working on this plan, and does not say so.
+  let live = $derived(session.fields.activity === "working" || allMet);
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
   let current = $state(untrack(() => screenFor(plan.phases, doc.line ?? 0)));
@@ -115,11 +129,22 @@
   }
 
   // A mark answers one open_file request, so any navigation the reader makes
-  // retires it rather than leaving marks strewn across the screens.
-  function show(screen) {
+  // retires it rather than leaving marks strewn across the screens. Every
+  // control pins them where they went; the bar's Follow button is the one that
+  // hands the position back.
+  function show(screen, pin = true) {
     for (const marked of body?.querySelectorAll(".marked") ?? []) marked.classList.remove("marked");
+    pinned = pin;
     current = Math.max(0, Math.min(screen, plan.phases.length));
   }
+
+  $effect(() => {
+    const to = followed;
+    const following = live && !pinned;
+    untrack(() => {
+      if (following) current = to;
+    });
+  });
 
   /** @param {KeyboardEvent} event */
   function onKey(event) {
@@ -329,7 +354,25 @@
     </div>
     <pre class="raw" hidden={!raw}>{doc.text}</pre>
     <footer class="footer">
-      <div class="bar"></div>
+      {#if live}
+        {@const moved = pinned && followed !== current}
+        <div class="bar">
+          <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
+          <span class="says">
+            {#if allMet}
+              Every phase met
+            {:else if moved}
+              Agent moved to phase {plan.phases[followed - 1].index} · {plan.phases[followed - 1]
+                .name}
+            {:else}
+              Following the agent · {plan.phases[followed - 1].name}
+            {/if}
+          </span>
+          {#if moved}
+            <Button variant="ghost" size="sm" onclick={() => show(followed, false)}>Follow</Button>
+          {/if}
+        </div>
+      {/if}
       <div class="controls">
         <div class="pips">
           {#each plan.phases as phase, at (phase.index)}
@@ -429,6 +472,16 @@
     margin-top: 26px;
     background: var(--surface-chrome);
     border-top: var(--border-width) solid var(--border-subtle);
+  }
+
+  .bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px var(--space-3);
+    border-bottom: var(--border-width) solid var(--border-subtle);
+    font: var(--machine-sm);
+    color: var(--text-secondary);
   }
 
   .controls {
