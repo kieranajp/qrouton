@@ -65,6 +65,7 @@ const (
 	reposRefreshEvent      = "repos:refresh"
 	assemblyProgressEvent  = "assembly:progress"
 	assemblyRequestedEvent = "assembly:requested"
+	orgsChangedEvent       = "orgs:changed"
 
 	assemblyOutcomeDraft    = "draft"
 	assemblyOutcomeExisting = "existing-session"

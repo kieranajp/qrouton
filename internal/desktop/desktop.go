@@ -134,7 +134,7 @@ func Run(opts Options) error {
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newSettings(
-		opts.Config, opts.ValidateEditor, opts.ValidateLaunch,
+		opts.Config, r.Emit, opts.ValidateEditor, opts.ValidateLaunch,
 		opts.LinearCommand, opts.LinearEnvironment, quit,
 	)))
 	relaunch := pendingRelaunch(opts.Relaunch, assemblyService)

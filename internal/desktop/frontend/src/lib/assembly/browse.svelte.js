@@ -60,6 +60,14 @@ export function browsing(branch) {
     }),
   );
 
+  $effect(() =>
+    Events.On("orgs:changed", (event) => {
+      orgs = event.data ?? [];
+      owners = [...orgs];
+      refetch();
+    }),
+  );
+
   // The events say when a run is live; a run already finished by the time its
   // generation came back must not be reported as one.
   async function refetch() {
