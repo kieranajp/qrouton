@@ -40,7 +40,7 @@ var (
 	}
 
 	workspaceWriteAgents = map[string]bool{
-		"qrspi-research-lead": true,
+		"qrouton-research-lead": true,
 		"test-verifier":       true,
 	}
 )

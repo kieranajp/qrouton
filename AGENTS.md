@@ -42,7 +42,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 
 ## Invariants
 
-- Subagent depth stays bounded at three levels. Lead prompts (`qrspi-*-lead`) omit `tools:` deliberately, so they inherit `Task` and can delegate; every specialist declares a read-only `tools:` set without `Task`, so it cannot. Adding or removing one `tools:` line silently changes the topology — treat it as an architectural change, not prompt editing.
+- Subagent depth stays bounded at three levels. Lead prompts (`qrouton-*-lead`) omit `tools:` deliberately, so they inherit `Task` and can delegate; every specialist declares a read-only `tools:` set without `Task`, so it cannot. Adding or removing one `tools:` line silently changes the topology — treat it as an architectural change, not prompt editing.
 - The runner has to *allow* that depth as well as the prompts asking for it. Codex defaults to one level, so `launch` raises it to `codex.RequiredMaxDepth` on every Codex launch, leaving a user's deeper setting alone. A runner whose nesting qrouton cannot raise cannot host a lead.
 - Editing repos use session branches; reference repos are detached at pinned commits.
 - Focus is never taken *from* the user. An agent surface is a tab and leaves the keyboard where it was. The main conversation is the sole desktop window. A surface the user asked for may take the keyboard.

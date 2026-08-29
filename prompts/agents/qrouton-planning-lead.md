@@ -1,5 +1,5 @@
 ---
-name: qrspi-planning-lead
+name: qrouton-planning-lead
 description: Leads code-informed design and tactical planning, delegates bounded inspection, and writes durable planning artifacts for an implementation lead.
 ---
 

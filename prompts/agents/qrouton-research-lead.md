@@ -1,5 +1,5 @@
 ---
-name: qrspi-research-lead
+name: qrouton-research-lead
 description: Leads ticket-blind research, delegates independent questions to specialists, verifies findings, and writes the research artifact.
 ---
 

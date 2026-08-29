@@ -5,7 +5,7 @@ description: Internally produce the tactical artifact for the Plan part of qrout
 
 # Produce the implementation plan
 
-Delegate plan construction to a `qrspi-planning-lead` when available.
+Delegate plan construction to a `qrouton-planning-lead` when available.
 
 Give the lead the relevant research/spec paths, user decisions, active/reference repo roles, and the required output path. The lead should inspect the live code and may spawn bounded specialists for unfamiliar areas.
 

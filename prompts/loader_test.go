@@ -11,7 +11,7 @@ import (
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	loader := NewEmbeddedLoader()
-	prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+"qrspi-research-lead"))
+	prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+"qrouton-research-lead"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -19,7 +19,7 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assets) != 2 || assets[0].Path != ".claude/agents/qrspi-research-lead.md" || assets[1].Path != ".codex/agents/qrspi-research-lead.toml" {
+	if len(assets) != 2 || assets[0].Path != ".claude/agents/qrouton-research-lead.md" || assets[1].Path != ".codex/agents/qrouton-research-lead.toml" {
 		t.Fatalf("rendered assets = %#v", assets)
 	}
 	if !strings.Contains(string(assets[1].Content), `sandbox_mode = "workspace-write"`) || !strings.Contains(string(assets[1].Content), "Lead a bounded") {
@@ -39,9 +39,9 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 	ids := []ID{
 		Orchestrator,
 		Assistant,
-		ID(agentIDPrefix + "qrspi-implementation-lead"),
-		ID(agentIDPrefix + "qrspi-planning-lead"),
-		ID(agentIDPrefix + "qrspi-research-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-research-lead"),
 	}
 	for _, id := range ids {
 		prompt, err := loader.Load(context.Background(), id)
