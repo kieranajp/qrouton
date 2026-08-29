@@ -51,6 +51,23 @@ func TestStatusReadsResearchWrittenAsAPair(t *testing.T) {
 	}
 }
 
+// A file the framing step is midway through writing is not research, and the
+// research directory is where a half-written one lands.
+func TestStatusIgnoresAResearchFileWithNothingInIt(t *testing.T) {
+	root := t.TempDir()
+	m := Manifest{Slug: "checkout"}
+	research := filepath.Join(root, m.Slug, "thoughts", "shared", "research")
+	if err := os.MkdirAll(research, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"", "---\nkind: research\n"} {
+		os.WriteFile(filepath.Join(research, "R1-retry.md"), []byte(body), 0o644)
+		if got := Status(root, m); got.Research {
+			t.Fatalf("a document holding %q read as research: %#v", body, got)
+		}
+	}
+}
+
 func TestDirtyWorktreesAndDelete(t *testing.T) {
 	root := t.TempDir()
 	seed := filepath.Join(root, "seed")

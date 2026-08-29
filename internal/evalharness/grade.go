@@ -178,7 +178,9 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 }
 
 // researchAnswered separates a research document that was filled in from one
-// that was only framed.
+// that was only framed. A section left holding the blockquote a researcher was
+// given is the framing surviving unconsumed; an empty one is tolerated, since a
+// finished document may have nothing outstanding to say under its last heading.
 func researchAnswered(workspace, pattern string) Assertion {
 	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
 	if err != nil {
@@ -188,11 +190,12 @@ func researchAnswered(workspace, pattern string) Assertion {
 		return Assertion{Name: assertResearchAnswered, Evidence: evidenceNoArtifacts}
 	}
 
-	var unanswered []string
+	var framed []string
+	answered := false
 	for _, match := range matches {
 		content, readErr := os.ReadFile(match)
 		if readErr != nil {
-			unanswered = append(unanswered, readErr.Error())
+			framed = append(framed, readErr.Error())
 			continue
 		}
 		relative, relErr := filepath.Rel(workspace, match)
@@ -200,13 +203,18 @@ func researchAnswered(workspace, pattern string) Assertion {
 			relative = match
 		}
 		for _, section := range markdown.Sections(string(content)) {
-			if section.Answered {
-				continue
+			switch {
+			case section.State == markdown.SectionFramed:
+				framed = append(framed, filepath.ToSlash(relative)+": "+section.Name)
+			case section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summarySection):
+				answered = true
 			}
-			unanswered = append(unanswered, filepath.ToSlash(relative)+": "+section.Name)
 		}
 	}
-	return Assertion{Name: assertResearchAnswered, Passed: len(unanswered) == 0, Evidence: strings.Join(unanswered, evidenceJoiner)}
+	if !answered {
+		framed = append(framed, evidenceNothingAnswered)
+	}
+	return Assertion{Name: assertResearchAnswered, Passed: len(framed) == 0, Evidence: strings.Join(framed, evidenceJoiner)}
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {

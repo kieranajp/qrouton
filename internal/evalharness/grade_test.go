@@ -132,10 +132,8 @@ func TestResearchAnsweredSeparatesFramingFromFindings(t *testing.T) {
 	if framed.Passed {
 		t.Fatal("a document nobody has answered passed as research")
 	}
-	for _, section := range []string{"How does the client retry?", "Open Questions"} {
-		if !strings.Contains(framed.Evidence, section) {
-			t.Errorf("evidence %q does not name %q", framed.Evidence, section)
-		}
+	if !strings.Contains(framed.Evidence, "How does the client retry?") {
+		t.Errorf("evidence %q does not name the unanswered question", framed.Evidence)
 	}
 
 	writeTestFile(t, document, strings.Join([]string{
@@ -155,12 +153,25 @@ func TestResearchAnsweredSeparatesFramingFromFindings(t *testing.T) {
 		"",
 		"## Open Questions",
 		"",
-		"None.",
-		"",
 	}, "\n"))
 
+	// Nothing outstanding is a legitimate answer, and leaving that heading blank
+	// is not the framing surviving.
 	if answered := researchAnswered(workspace, pattern); !answered.Passed {
 		t.Fatalf("a filled-in document failed: %s", answered.Evidence)
+	}
+}
+
+// A summary is written at framing time, so it cannot be the evidence that the
+// research happened.
+func TestResearchAnsweredNeedsMoreThanASummary(t *testing.T) {
+	workspace := t.TempDir()
+	writeTestFile(t, filepath.Join(workspace, "thoughts", "shared", "research", "R1-retry.md"),
+		"# Retry\n\n## Summary\n\nWhat is being investigated.\n\n## How does the client retry?\n")
+
+	assertion := researchAnswered(workspace, "thoughts/shared/research/*.md")
+	if assertion.Passed {
+		t.Fatalf("a document with only its summary written passed: %#v", assertion)
 	}
 }
 

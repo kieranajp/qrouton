@@ -98,6 +98,7 @@ const (
 	evidenceUnsupportedCheck = "unsupported check kind"
 	evidenceInvalidLineLimit = "max_lines must be greater than zero"
 	evidenceNoArtifacts      = "no matching artifacts"
+	evidenceNothingAnswered  = "no question answered outside the summary"
 	evidenceNoTestManifest   = "no supported test manifest"
 	evidenceCollaboration    = "collaboration=%t target=%t"
 	evidenceTimeoutFormat    = "test run exceeded %s: %s"
@@ -112,6 +113,10 @@ var (
 const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
+
+	// summarySection is the research document's pinned first section, which
+	// carries the framing before it carries the findings.
+	summarySection = "Summary"
 
 	researchPathSegment = "/research/"
 

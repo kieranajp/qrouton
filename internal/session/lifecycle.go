@@ -44,12 +44,12 @@ func Status(root string, m Manifest) WorkflowStatus {
 }
 
 // researched reports whether a research document holds findings. Framing writes
-// the document first, carrying its questions as headings with nothing answered
-// under them, so headings alone are not research yet. A session predating that
-// keeps its questions in a file named for them, and a document with no headings
-// at all is prose findings.
+// the document first, carrying its questions as headings with only the context a
+// researcher needs under them, so headings alone are not research. A document
+// that opens no sections is prose findings, and an empty one is a file still
+// being written. Older sessions keep their questions in a file named for them.
 func researched(path string) bool {
-	if strings.Contains(strings.ToLower(filepath.Base(path)), questionsMarker) {
+	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
 		return false
 	}
 	body, err := os.ReadFile(path)
@@ -58,11 +58,11 @@ func researched(path string) bool {
 	}
 	sections := markdown.Sections(string(body))
 	for _, section := range sections {
-		if section.Answered && !strings.EqualFold(section.Name, summaryHeading) {
+		if section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summaryHeading) {
 			return true
 		}
 	}
-	return len(sections) == 0
+	return len(sections) == 0 && strings.TrimSpace(markdown.Body(string(body))) != ""
 }
 
 func markdownFiles(dir string) []string {

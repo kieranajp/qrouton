@@ -156,10 +156,10 @@ var scaffoldDirs = []string{scaffoldResearch, scaffoldPlans, scaffoldSpecs}
 // ticked counts as implemented, and a research document is framing until
 // something stands under a heading other than its summary.
 const (
-	questionsMarker = "question"
-	summaryHeading  = "Summary"
-	checkedBox      = "- [x]"
-	uncheckedBox    = "- [ ]"
+	legacyQuestionsSuffix = "-questions.md"
+	summaryHeading        = "Summary"
+	checkedBox            = "- [x]"
+	uncheckedBox          = "- [ ]"
 
 	markdownGlob = "*.md"
 )

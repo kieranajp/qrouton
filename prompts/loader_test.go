@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
@@ -218,5 +220,43 @@ func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
 	}
 	if len(listed[0].Files) != 1 || listed[0].Files[0].Path != "references/SKILL.md" {
 		t.Fatalf("the nested file is not the skill's own: %#v", listed[0].Files)
+	}
+}
+
+// The template is the contract between the step that frames a research document
+// and the readers that ask whether it has been answered yet, so read it the way
+// they do.
+func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape string
+	for _, file := range prompt.Files {
+		if file.Path == "references/research-shape.md" {
+			shape = string(file.Content)
+		}
+	}
+	template, _, found := strings.Cut(shape, "\n```\n")
+	if !found {
+		t.Fatal("the shape reference holds no fenced template")
+	}
+	_, template, found = strings.Cut(template, "```markdown\n")
+	if !found {
+		t.Fatal("the shape reference's template is not fenced as markdown")
+	}
+
+	sections := markdown.Sections(template)
+	if len(sections) != 3 {
+		t.Fatalf("the template opens %#v", sections)
+	}
+	if sections[0].Name != "Summary" || sections[0].State != markdown.SectionAnswered {
+		t.Errorf("the pinned summary reads as %#v", sections[0])
+	}
+	if sections[1].State != markdown.SectionFramed {
+		t.Errorf("a question reads as %#v rather than framing awaiting an answer", sections[1])
+	}
+	if sections[2].Name != "Open Questions" || sections[2].State != markdown.SectionEmpty {
+		t.Errorf("the closing section reads as %#v", sections[2])
 	}
 }

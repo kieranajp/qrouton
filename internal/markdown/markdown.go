@@ -10,8 +10,9 @@ import "strings"
 // fence opens and closes a frontmatter block.
 const fence = "---"
 
-// heading marks the level-one heading a document titles itself with;
-// subheading opens a section, and codeFence suspends both.
+// heading names the document and subheading opens a section; a code fence
+// suspends subheading, and a blockquote under one is framing rather than an
+// answer.
 const (
 	heading    = "# "
 	subheading = "## "
@@ -38,6 +39,12 @@ func Title(text string) (string, bool) {
 	return "", false
 }
 
+// Body is the document with any frontmatter dropped: what a reader would see.
+// Empty for a document that is nothing but frontmatter, closed or not.
+func Body(text string) string {
+	return strings.Join(body(text), "\n")
+}
+
 // body is text's lines with any frontmatter block dropped, which is parsed but
 // never shown. A block that never closes leaves no body at all rather than
 // treating its own contents as one.
@@ -61,13 +68,22 @@ func body(text string) []string {
 	return nil
 }
 
-// Section is one second-level heading and whether anything stands under it. A
-// research document is framed before it is answered: its questions are written
-// as headings with the context a researcher needs in a blockquote, so a section
-// holding only that, or nothing at all, is one nobody has answered yet.
+// SectionState is how far a section has been taken. A research document is
+// framed before it is answered: its questions are written as headings with the
+// context a researcher needs in a blockquote, and answering replaces that
+// blockquote with the finding.
+type SectionState int
+
+const (
+	SectionEmpty SectionState = iota
+	SectionFramed
+	SectionAnswered
+)
+
+// Section is one second-level heading and what stands under it.
 type Section struct {
-	Name     string
-	Answered bool
+	Name  string
+	State SectionState
 }
 
 // Sections reads a document's second-level headings in order. A heading inside
@@ -86,10 +102,17 @@ func Sections(text string) []Section {
 				continue
 			}
 		}
-		if len(sections) == 0 || trimmed == "" || strings.HasPrefix(trimmed, quote) {
+		if len(sections) == 0 || trimmed == "" {
 			continue
 		}
-		sections[len(sections)-1].Answered = true
+		section := &sections[len(sections)-1]
+		if strings.HasPrefix(trimmed, quote) {
+			if section.State == SectionEmpty {
+				section.State = SectionFramed
+			}
+			continue
+		}
+		section.State = SectionAnswered
 	}
 	return sections
 }

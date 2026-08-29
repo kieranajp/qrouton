@@ -39,6 +39,5 @@ those are yours to choose; the ones above are the ones we expect.
 
 Answering consumes the framing rather than sitting beside it: each question's
 blockquote is replaced by the finding, and the Summary is rewritten to summarize
-what was found. Every section in the finished document carries something — a
-heading holding only its blockquote, or nothing at all, is a question nobody
-answered, so say `None.` under `## Open Questions` rather than leaving it blank.
+what was found. A heading still holding only its blockquote is a question nobody
+answered.
