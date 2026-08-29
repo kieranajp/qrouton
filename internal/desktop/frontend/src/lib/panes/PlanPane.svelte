@@ -12,6 +12,7 @@
   import MarkdownPane from "./MarkdownPane.svelte";
   import { documentPath, linkKind, marks, render } from "./markdown.js";
   import { criteriaSpans, parsePlan } from "./plan.js";
+  import { dealt } from "./sections.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
 
@@ -93,47 +94,28 @@
     return slide.number === null ? slide.name : `${slide.number} / ${plan.phases.length}`;
   }
 
-  /** @param {Element} node */
-  function spanOf(node) {
-    const own = Number(/** @type {HTMLElement} */ (node).dataset?.line);
-    if (own > 0) {
-      return { from: own, to: Number(/** @type {HTMLElement} */ (node).dataset.lineEnd) || own };
-    }
-    const inside = [...node.querySelectorAll("[data-line]")].map((el) => ({
-      from: Number(/** @type {HTMLElement} */ (el).dataset.line),
-      to: Number(/** @type {HTMLElement} */ (el).dataset.lineEnd),
-    }));
-    if (inside.length === 0) return null;
-    return {
-      from: Math.min(...inside.map((at) => at.from)),
-      to: Math.max(...inside.map((at) => at.to || at.from)),
-    };
-  }
-
   // The deck is one rendered document dealt out by the source lines its blocks
-  // already carry. A block the parser numbered nowhere takes the range of the
-  // numbered blocks inside it, or failing that the range of the block before it.
+  // already carry: the opening heading, the body, and the criteria the phase
+  // states, each into the slide whose span holds it.
   function partition(html, parsed) {
-    const holder = document.createElement("div");
-    holder.innerHTML = html;
     const preamble = [];
     const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
-    let at = { from: 0, to: 0 };
-    for (const node of [...holder.children]) {
-      at = spanOf(node) ?? at;
-      const index = parsed.slides.findIndex((slide) => at.from >= slide.from && at.from <= slide.to);
+    for (const block of dealt(html)) {
+      const index = parsed.slides.findIndex(
+        (slide) => block.from >= slide.from && block.from <= slide.to,
+      );
       if (index < 0) {
-        preamble.push(node.outerHTML);
+        preamble.push(block.html);
         continue;
       }
       const verify = criteriaSpans(parsed.slides[index]);
       const bucket =
-        at.from === parsed.slides[index].from
+        block.from === parsed.slides[index].from
           ? "opening"
-          : verify && at.from >= verify.from && at.to <= verify.to
+          : verify && block.from >= verify.from && block.to <= verify.to
             ? "criteria"
             : "body";
-      slides[index][bucket].push(node.outerHTML);
+      slides[index][bucket].push(block.html);
     }
     return {
       preamble: preamble.join(""),

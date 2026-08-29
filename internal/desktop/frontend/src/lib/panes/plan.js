@@ -1,22 +1,4 @@
-import remarkFrontmatter from "remark-frontmatter";
-import remarkGfm from "remark-gfm";
-import remarkParse from "remark-parse";
-import { unified } from "unified";
-
-const parser = unified().use([remarkParse, remarkFrontmatter, remarkGfm]);
-
-/**
- * Where one screen of a plan ends and the next begins. Every second-level
- * heading opens one, whatever it is called, so a section before or after the
- * phases is a screen of its own rather than something spilled into a neighbour.
- * @param {any} node An mdast node.
- * @returns {{name: string} | null}
- */
-function opensSlide(node) {
-  if (node?.type !== "heading" || node.depth !== 2) return null;
-  const name = flatten(node).trim();
-  return name ? { name } : null;
-}
+import { flatten, sliceSections, walk } from "./sections.js";
 
 /**
  * The one place the phase convention is written down: which slides are phases,
@@ -35,23 +17,6 @@ const CRITERIA_HEADING = "verify";
 // GFM only recognises `[ ]` and `[x]`, so a check a plan struck through with
 // another marker parses as prose. It is still a check, and still unmet.
 const OTHER_MARKER = /^\[[^\]\s]\]\s+/;
-
-const FRONTMATTER = new Set(["yaml", "toml"]);
-
-/**
- * @param {any} node
- * @param {(node: any) => void} visit In document order.
- */
-function walk(node, visit) {
-  visit(node);
-  for (const child of node?.children ?? []) walk(child, visit);
-}
-
-/** @param {any} node */
-function flatten(node) {
-  if (typeof node?.value === "string") return node.value;
-  return (node?.children ?? []).map(flatten).join("");
-}
 
 /** The item's own words: a nested list is a criterion of its own, not this one's text. */
 function itemText(item) {
@@ -129,40 +94,21 @@ function stateOf(met, total) {
  *   slides: Slide[], phases: Slide[]}}
  */
 export function parsePlan(text) {
-  const tree = /** @type {any} */ (parser.parse(text));
-  const children = tree.children ?? [];
-  const last = tree.position?.end?.line ?? 1;
+  const { title, preamble, sections } = sliceSections(text);
 
-  const matter = children.find((node) => FRONTMATTER.has(node.type));
-  const start = matter ? (matter.position?.end?.line ?? 0) + 1 : 1;
-  const first = children.find((node) => !FRONTMATTER.has(node.type));
-  const title = first?.type === "heading" && first.depth === 1 ? flatten(first).trim() : "";
-
-  const openings = [];
-  /** @type {any[][]} */
-  const bodies = [];
-  for (const node of children) {
-    const opening = opensSlide(node);
-    if (opening) {
-      openings.push({ ...opening, from: node.position?.start?.line ?? start });
-      bodies.push([]);
-      continue;
-    }
-    bodies.at(-1)?.push(node);
-  }
-  const slides = openings.map((opening, at) => {
-    const phase = namesPhase(opening.name);
+  const slides = sections.map((section, at) => {
+    const phase = namesPhase(section.name);
     const span = {
       screen: at + 1,
-      name: phase ? phase.name : opening.name,
+      name: phase ? phase.name : section.name,
       number: phase ? phase.number : null,
-      from: opening.from,
-      to: openings[at + 1] ? openings[at + 1].from - 1 : last,
+      from: section.from,
+      to: section.to,
     };
     if (!phase) {
       return { ...span, criteria: [], met: 0, total: 0, state: null, verify: null };
     }
-    const { heading, nodes } = criteriaSection(bodies[at]);
+    const { heading, nodes } = criteriaSection(section.nodes);
     const { criteria, end } = readCriteria(nodes);
     const met = criteria.filter((criterion) => criterion.met).length;
     return {
@@ -182,7 +128,7 @@ export function parsePlan(text) {
 
   return {
     title,
-    preamble: { from: start, to: slides.length > 0 ? slides[0].from - 1 : last },
+    preamble,
     slides,
     phases: slides.filter((slide) => slide.number !== null),
   };
