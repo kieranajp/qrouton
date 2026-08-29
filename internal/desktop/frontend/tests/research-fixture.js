@@ -40,20 +40,27 @@ export const RESEARCH = [
   "",
 ].join("\n");
 
-// A questions brief: one heading per question and no summary to pin, which is
-// what the workbench shows for the artifact the research answers.
-export const QUESTIONS = [
+// The same document before anyone has answered it: the summary frames what is
+// being investigated and each question still holds only the context a
+// researcher was given.
+export const UNANSWERED = [
   "---",
-  "type: research-questions",
+  "kind: research",
   "---",
   "",
-  "# The questions",
+  "# The fixture research",
   "",
-  "Context for the researchers.",
+  "## Summary",
+  "",
+  "What is being looked at, and where to start.",
   "",
   "## How does the loader stamp a skill?",
   "",
+  "> Start in prompts/loader.go.",
+  "",
   "## Where does the kind come from?",
+  "",
+  "> Start in internal/status.",
   "",
 ].join("\n");
 
@@ -76,7 +83,7 @@ const document_ = (text, epoch) => ({
 window.reports = [];
 window.wailsCall = async (name, id, payload) => {
   if (name.endsWith(".Content")) {
-    const text = params.get("plain") ? PLAIN : params.get("questions") ? QUESTIONS : RESEARCH;
+    const text = params.get("plain") ? PLAIN : params.get("unanswered") ? UNANSWERED : RESEARCH;
     return document_(text, 1);
   }
   if (name.endsWith(".RenderDiagrams")) return [];

@@ -141,16 +141,19 @@ test("a document with no second-level heading renders as plain markdown", async 
   expect(await page.evaluate(() => window.errors)).toEqual([]);
 });
 
-// The questions brief lives under research/ too, so it opens here — one row per
-// question, nothing pinned. That is the shape working, not a document misread.
-test("a questions brief opens as an accordion with nothing pinned", async ({ page }) => {
-  await open(page, "?questions=true");
-  await expect(page.locator(".pinned")).toHaveCount(0);
+// A questions brief is this document before anyone answered it, so it opens the
+// same way: the summary pinned, a row per question holding its framing.
+test("an unanswered document opens as an accordion of its questions", async ({ page }) => {
+  await open(page, "?unanswered=true");
+  await expect(page.locator(".pinned")).toContainText("What is being looked at");
   expect(await page.evaluate(() => window.items())).toEqual([
     { name: LOADER, open: false },
     { name: KIND, open: false },
   ]);
   expect(await page.evaluate(() => window.counter())).toBe("2 sections");
+
+  await row(page, LOADER).locator("summary").click();
+  await expect(row(page, LOADER).locator("blockquote")).toContainText("prompts/loader.go");
 });
 
 test("a pushed document redraws without shutting the open questions", async ({ page }) => {
