@@ -60,7 +60,6 @@ Durable documents are human handoffs, not exhaustive archives. They should prese
 
 Internal storage names:
 
-- research questions: `R<n>-<YYYY-MM-DD>-<slug>-questions.md`
 - research: `R<n>-<YYYY-MM-DD>-<slug>.md`
 - spec: `S<n>-<YYYY-MM-DD>-<slug>.md`
 - plan: `P<n>-<YYYY-MM-DD>-<slug>.md`
