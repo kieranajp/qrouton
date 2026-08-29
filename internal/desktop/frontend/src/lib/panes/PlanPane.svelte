@@ -38,8 +38,8 @@
 
   const session = chrome();
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
-  // The screen the document's own meter points at. Once every phase is met
-  // there is nothing left unmet to point at, so it rests on the last.
+  // Once every phase is met there is nothing unmet left to point at, so the
+  // meter rests on the last one.
   let followed = $derived.by(() => {
     const at = plan.phases.findIndex((phase) => phase.state !== "met");
     return at < 0 ? plan.phases.length : at + 1;
@@ -54,9 +54,8 @@
   let body = $state();
   let epoch = untrack(() => doc.viewportEpoch);
 
-  // A push carries the span along with the text, so re-reading it every time
-  // would yank the reader back to it whenever a checkbox moved. Only a reload,
-  // which is what moves the epoch, is a fresh request.
+  // A push carries the span along with the text, so only a reload — which is
+  // what moves the epoch — counts as a fresh request to jump.
   $effect(() => {
     const at = doc.viewportEpoch;
     const count = plan.phases.length;
@@ -92,10 +91,9 @@
     };
   }
 
-  // The pipeline renders the document once; the deck is that markup dealt out by
-  // the source lines it already carries. A block the parser placed nowhere — a
-  // list container, say — takes the range of the numbered blocks inside it, and
-  // one carrying no line at all follows whichever block came before it.
+  // The deck is one rendered document dealt out by the source lines its blocks
+  // already carry. A block the parser numbered nowhere takes the range of the
+  // numbered blocks inside it, or failing that the range of the block before it.
   function partition(html, parsed) {
     const holder = document.createElement("div");
     holder.innerHTML = html;
@@ -128,10 +126,8 @@
     };
   }
 
-  // A mark answers one open_file request, so any navigation the reader makes
-  // retires it rather than leaving marks strewn across the screens. Every
-  // control pins them where they went; the bar's Follow button is the one that
-  // hands the position back.
+  // A mark answers one open_file request, so navigating retires it. Every
+  // control pins the reader; the bar's Follow button hands the position back.
   function show(screen, pin = true) {
     for (const marked of body?.querySelectorAll(".marked") ?? []) marked.classList.remove("marked");
     pinned = pin;
@@ -198,9 +194,8 @@
     };
   }
 
-  // The request is answered on the screen it opens, and no further: a span
-  // running past a phase boundary says nothing about the phase after it, so the
-  // pane neither marks that part nor scrolls to it.
+  // A span running past a phase boundary says nothing about the phase after
+  // it, so the pane neither marks that part nor scrolls to it.
   function requested() {
     const line = doc.line ?? 0;
     const to = doc.to ?? 0;
@@ -632,10 +627,9 @@
     padding-left: var(--gutter);
   }
 
-  /* The pane speaks the phase's name and its own criteria label, so the
-     document's headings for both would say it twice. They stay in the layout
-     rather than going display:none: the viewport reports only blocks it can
-     measure, and a span aimed at either line has to land somewhere. */
+  /* The pane already names the phase and its criteria, so the document's own
+     headings for both are hidden — but kept measurable, because the viewport
+     reports only blocks with a box and a span may be aimed at either line. */
   .lifted,
   .criteria .markdown :global(h3) {
     position: absolute;
