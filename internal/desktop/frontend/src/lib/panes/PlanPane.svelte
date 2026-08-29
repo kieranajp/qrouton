@@ -41,14 +41,15 @@
 
   const session = chrome();
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
-  // With nothing unmet left to point at, the meter rests on the last phase.
-  let followed = $derived.by(() => {
-    const unmet = plan.phases.find((phase) => phase.state !== "met");
-    return (unmet ?? plan.phases.at(-1))?.screen ?? 0;
-  });
+  // The phase the meter rests on, and with nothing unmet left to point at, the
+  // last one. The bar names it from the phase itself: a screen counts sections
+  // too, so a screen number is not a phase number and cannot index the phases.
+  let metered = $derived(plan.phases.find((phase) => phase.state !== "met") ?? plan.phases.at(-1));
+  let followed = $derived(metered?.screen ?? 0);
   // An agent is working somewhere in this session. Nothing here knows whether
-  // it is working on this plan, and the bar must not say that it does.
-  let live = $derived(session.fields.activity === "working" || allMet);
+  // it is working on this plan, and the bar must not say that it does. A deck
+  // of nothing but sections has no meter, so it has nothing to report.
+  let live = $derived((session.fields.activity === "working" || allMet) && Boolean(metered));
 
   /** Screen 0 is the overview; phase at index n is screen n + 1. */
   let current = $state(untrack(() => screenFor(plan.slides, doc.line ?? 0)));
@@ -153,8 +154,9 @@
     current = Math.max(0, Math.min(screen, plan.slides.length));
   }
 
-  // In Document mode nothing is hidden, so the strip reports the slide the
-  // reader has scrolled into rather than the one they selected.
+  // The slide on screen, and the one the footer names: one value, so they
+  // cannot drift apart. In Document mode nothing is hidden, so it is the slide
+  // the reader has scrolled into rather than the one they selected.
   let scrolled = $state(0);
   let viewing = $derived(mode === "document" ? scrolled : current);
 
@@ -364,7 +366,7 @@
         use:links
         use:diagrams={doc.text}
         use:viewport={{ id, active, scrollRoot, screen: current }}>
-        <section class="screen hero" data-screen="overview" hidden={current !== 0}>
+        <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
           <CapsLabel
             >Plan · {plan.phases.length}
             {plan.phases.length === 1 ? "phase" : "phases"}</CapsLabel>
@@ -387,7 +389,7 @@
           <section
             class="screen"
             data-screen={slide.number ?? slide.name}
-            hidden={current !== at + 1}>
+            hidden={viewing !== at + 1}>
             {#if slide.number !== null}
               <div class="crumb">
                 <CapsLabel>Phase {slide.number} of {plan.phases.length}</CapsLabel>
@@ -424,9 +426,9 @@
             {#if allMet}
               Every phase met
             {:else if following}
-              Following the agent · {plan.phases[followed - 1].name}
+              Following the agent · {metered.name}
             {:else}
-              Agent is on phase {followed} · {plan.phases[followed - 1].name}
+              Agent is on phase {metered.number} · {metered.name}
             {/if}
           </span>
           <!-- Every phase met leaves nothing to follow, so nothing is offered. -->

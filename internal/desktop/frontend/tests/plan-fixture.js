@@ -194,6 +194,84 @@ export const LONG = [
   "",
 ].join("\n");
 
+// The live smoke test's shape: one section before the first phase, whose first
+// Verify box is ticked and second is not, so the meter rests on phase 1.
+export const LEADING = [
+  "---",
+  "kind: plan",
+  "---",
+  "",
+  "# The leading-sections plan",
+  "",
+  "Preamble prose.",
+  "",
+  "## Decisions",
+  "",
+  "What was decided.",
+  "",
+  "## Phase 1 — Write the greeting",
+  "",
+  "Body for the greeting.",
+  "",
+  "### Verify",
+  "- [x] the first check",
+  "- [ ] the second check",
+  "",
+  "## Phase 2 — Turn it into a script",
+  "",
+  "Body for the script.",
+  "",
+  "### Verify",
+  "- [ ] the check",
+  "",
+  "## Phase 3 — Count to three",
+  "",
+  "Body for the counting.",
+  "",
+  "### Verify",
+  "- [ ] the check",
+  "",
+  "## Blockers",
+  "",
+  "None.",
+  "",
+].join("\n");
+
+// The same document as the agent ticks its way through it: the meter moves to
+// phase 2, then to phase 3, which is the last one there is.
+export const LEADING_SECOND = LEADING.replace("- [ ] the second check", "- [x] the second check");
+export const LEADING_LAST = LEADING_SECOND.replace(
+  "### Verify\n- [ ] the check\n\n## Phase 3",
+  "### Verify\n- [x] the check\n\n## Phase 3",
+);
+
+// Three sections ahead of the phases, as P001 has: the widest a slide index and
+// a phase number ever get apart.
+export const DEEP = LEADING.replace(
+  "## Phase 1 — Write the greeting",
+  ["## Out of scope", "", "What is not here.", "", "## Degradation", "", "How it fails.", "", "## Phase 1 — Write the greeting"].join("\n"),
+);
+
+// Every slide a section: a deck with no meter at all.
+export const SECTIONS = [
+  "---",
+  "kind: plan",
+  "---",
+  "",
+  "# The plan with no phases",
+  "",
+  "Preamble prose.",
+  "",
+  "## Decisions",
+  "",
+  "What was decided.",
+  "",
+  "## Blockers",
+  "",
+  "None.",
+  "",
+].join("\n");
+
 const PLAIN = ["# Just notes", "", "No headings open anything here.", "", "- [x] a ticked box", ""].join("\n");
 
 const params = new URLSearchParams(location.search);
@@ -219,9 +297,15 @@ window.wailsCall = async (name, id, payload) => {
         ? DONE
         : params.get("long")
           ? LONG
-          : params.get("around")
-            ? AROUND
-            : PLAN;
+          : params.get("leading")
+            ? LEADING
+            : params.get("deep")
+              ? DEEP
+              : params.get("sections")
+                ? SECTIONS
+                : params.get("around")
+                  ? AROUND
+                  : PLAN;
     return document_(text, 1);
   }
   if (name.endsWith(".RenderDiagrams")) return [];
@@ -250,6 +334,8 @@ window.bar = () => {
   };
 };
 window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });
+window.pushLeading = (stage) =>
+  window.pushContent({ text: stage === "last" ? LEADING_LAST : LEADING_SECOND });
 // Where the footer sits relative to the bottom edge of the window itself.
 window.footerGap = () => {
   const footer = document.querySelector(".footer").getBoundingClientRect();

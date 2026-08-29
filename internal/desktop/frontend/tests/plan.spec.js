@@ -293,6 +293,73 @@ test("unticking Follow pins the reader in place and lets the meter go on alone",
   expect(await shown(page)).toEqual(["2"]);
 });
 
+// A screen counts the sections between the phases, so it is not a phase number.
+// Every earlier fixture opened straight into phase 1, where the two agree.
+test("the bar names the meter's phase on a deck with sections before it", async ({ page }) => {
+  await open(page, "?leading=true");
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent is on phase 1 · Write the greeting",
+  });
+
+  // Read from a slide of the reader's own, so the copy names the meter's phase
+  // rather than the one they happen to be on.
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["Decisions"]);
+  await page.evaluate(() => window.pushLeading("second"));
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent is on phase 2 · Turn it into a script",
+  });
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
+
+// The last phase is where a lookup running off the end of the phases stops
+// naming anything and the pane quietly stops moving.
+test("the meter reaching the last phase names it and takes the reader there", async ({ page }) => {
+  await open(page, "?leading=true");
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await follow(page).check();
+  await expect.poll(() => shown(page)).toEqual(["1"]);
+
+  await page.evaluate(() => window.pushLeading("last"));
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Following the agent · Count to three",
+    follow: true,
+  });
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  expect(await page.evaluate(() => window.counter())).toBe("3 / 3");
+
+  // And the footer is not a second opinion about which slide is up: navigating
+  // past the last phase takes the counter and the underline with it.
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["Blockers"]);
+  expect(await page.evaluate(() => window.counter())).toBe("Blockers");
+  expect((await page.evaluate(() => window.pips())).filter((pip) => pip.viewing)).toEqual([
+    { label: "Blockers", viewing: true },
+  ]);
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
+
+// Three sections ahead of the phases, as P001 has, is where the old lookup ran
+// past the end of the array and took the whole pane down with it.
+test("a deck with three sections before its phases still draws", async ({ page }) => {
+  await open(page, "?deep=true");
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => bar(page)).toMatchObject({
+    says: "Agent is on phase 1 · Write the greeting",
+  });
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
+
+// Nothing but sections is a deck with no meter, so the bar has nothing to say.
+test("a deck of sections alone offers no bar", async ({ page }) => {
+  await open(page, "?sections=true");
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  expect(await bar(page)).toBeNull();
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+});
+
 test("a push that meets the last phase turns the bar green", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
