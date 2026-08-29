@@ -92,18 +92,28 @@ function readCriteria(section) {
   return { criteria, end };
 }
 
+/** @returns {"met" | "working" | "not-started"} */
 function stateOf(met, total) {
   if (total > 0 && met === total) return "met";
   return met > 0 ? "working" : "not-started";
 }
 
 /**
+ * @typedef {{text: string, met: boolean, group: number}} Criterion
+ * @typedef {{index: number, name: string, from: number, to: number,
+ *   criteria: Criterion[], met: number, total: number,
+ *   state: "met" | "working" | "not-started",
+ *   verify: {from: number, to: number} | null}} Phase
+ */
+
+/**
  * Reads a plan document as an overview and its phases. A document nothing opens
  * a phase in comes back with none, which is the signal to render it plainly.
  * @param {string} text
+ * @returns {{title: string, preamble: {from: number, to: number}, phases: Phase[]}}
  */
 export function parsePlan(text) {
-  const tree = parser.parse(text);
+  const tree = /** @type {any} */ (parser.parse(text));
   const children = tree.children ?? [];
   const last = tree.position?.end?.line ?? 1;
 
@@ -112,30 +122,38 @@ export function parsePlan(text) {
   const first = children.find((node) => !FRONTMATTER.has(node.type));
   const title = first?.type === "heading" && first.depth === 1 ? flatten(first).trim() : "";
 
-  const phases = [];
+  const openings = [];
   /** @type {any[][]} */
   const bodies = [];
   for (const node of children) {
     const opening = opensPhase(node);
     if (opening) {
-      phases.push({ ...opening, from: node.position?.start?.line ?? start, to: last });
+      openings.push({ ...opening, from: node.position?.start?.line ?? start });
       bodies.push([]);
       continue;
     }
     bodies.at(-1)?.push(node);
   }
-  phases.forEach((phase, at) => {
-    const next = phases[at + 1];
-    if (next) phase.to = next.from - 1;
+  const phases = openings.map((opening, at) => {
     const { heading, nodes } = criteriaSection(bodies[at]);
     const { criteria, end } = readCriteria(nodes);
-    phase.criteria = criteria;
-    phase.total = criteria.length;
-    phase.met = criteria.filter((criterion) => criterion.met).length;
-    phase.state = stateOf(phase.met, phase.total);
-    phase.verify = heading
-      ? { from: heading.position?.start?.line ?? 0, to: Math.max(end, heading.position?.end?.line ?? 0) }
-      : null;
+    const met = criteria.filter((criterion) => criterion.met).length;
+    return {
+      index: opening.index,
+      name: opening.name,
+      from: opening.from,
+      to: openings[at + 1] ? openings[at + 1].from - 1 : last,
+      criteria,
+      met,
+      total: criteria.length,
+      state: stateOf(met, criteria.length),
+      verify: heading
+        ? {
+            from: heading.position?.start?.line ?? 0,
+            to: Math.max(end, heading.position?.end?.line ?? 0),
+          }
+        : null,
+    };
   });
 
   return {
@@ -148,7 +166,7 @@ export function parsePlan(text) {
 /**
  * The source lines the criteria heading and its list occupy, so a renderer can
  * lift exactly those out of the phase body.
- * @param {{verify?: {from: number, to: number} | null}} phase
+ * @param {Phase | undefined} phase
  */
 export function criteriaSpans(phase) {
   return phase?.verify ?? null;

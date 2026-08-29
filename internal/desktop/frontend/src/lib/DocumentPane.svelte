@@ -19,6 +19,6 @@
 </script>
 
 {#if doc}
-  {@const Pane = paneFor(doc.format)}
+  {@const Pane = paneFor(doc.format, doc.kind)}
   <Pane {doc} {id} {active} {scrollRoot} />
 {/if}
