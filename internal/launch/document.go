@@ -62,7 +62,9 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	} else {
 		span = workbench.LineSpan{}
 	}
-	id := planID(rel)
+	// A tab leads with the artifact's id, so its number is how the reader tells
+	// one from another. A document without one, a loose note, simply has none.
+	id := status.ArtifactID(rel)
 	var badge string
 	if id != "" {
 		badge = fmt.Sprintf(documentBadgeFormat, id)
@@ -91,16 +93,6 @@ func documentLabel(text, rel, id string) string {
 		return name
 	}
 	return fmt.Sprintf(documentLabelFormat, name)
-}
-
-// planID is the id a plan's tab leads with. Only a plan gets one: it is the
-// artifact a session returns to often enough for its number to be how the reader
-// tells one tab from another.
-func planID(rel string) string {
-	if status.DocumentKind(rel) != status.KindPlan {
-		return ""
-	}
-	return status.ArtifactID(rel)
 }
 
 // SessionRelative names a file the way the session refers to it. The resolved

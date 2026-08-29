@@ -180,10 +180,10 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 	}
 }
 
-// A plan's tab leads with the id its filename states, so a reader with several
-// plans open tells them apart before reading a word of the title. Every other
-// document keeps the diamond it has always had.
-func TestDocumentWindowBadgesAPlanTabWithItsID(t *testing.T) {
+// An artifact's tab leads with the id its filename states, so a reader with
+// several open tells them apart before reading a word of the title. A document
+// with no id keeps the diamond it has always had.
+func TestDocumentWindowBadgesAnArtifactTabWithItsID(t *testing.T) {
 	const titled = "# Pane smoke test\n\nbody\n"
 
 	for _, tc := range []struct {
@@ -197,11 +197,12 @@ func TestDocumentWindowBadgesAPlanTabWithItsID(t *testing.T) {
 		// Nothing to name the tab after but the file, and the badge already
 		// carries the part of that name it would otherwise say twice.
 		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "[P002]", "2026-08-29-untitled.md"},
-		// Under plans/ but unnumbered: nothing to badge with.
+		{"thoughts/shared/research/R002-findings.md", titled, "[R002]", "Pane smoke test"},
+		{"thoughts/shared/specs/S002-shape.md", titled, "[S002]", "Pane smoke test"},
+		{"thoughts/shared/explainers/E002-how.md", titled, "[E002]", "Pane smoke test"},
+		// Unnumbered, wherever it sits: nothing to badge with.
 		{"thoughts/shared/plans/notes.md", titled, "", "◆ Pane smoke test"},
-		// Numbered, but not a plan.
-		{"thoughts/shared/research/R002-findings.md", titled, "", "◆ Pane smoke test"},
-		{"thoughts/shared/specs/S002-shape.md", titled, "", "◆ Pane smoke test"},
+		{"thoughts/shared/scratch.md", titled, "", "◆ Pane smoke test"},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
 			root := documentRoot(t, map[string]string{tc.file: tc.body})

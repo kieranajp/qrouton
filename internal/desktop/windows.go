@@ -644,6 +644,10 @@ type drawnWindow struct {
 	Badge  string `json:"badge,omitempty"`
 	Kind   string `json:"kind"`
 	Status string `json:"status,omitempty"`
+
+	// Artifact colours the badge. Kind is the window's own, terminal or
+	// document, which says nothing about which artifact a document holds.
+	Artifact string `json:"artifact,omitempty"`
 }
 
 // surfaces names one session's open tabs, oldest first so the shell stays
@@ -669,6 +673,9 @@ func (w *Windows) surfaces(owner *sessionState) surfaces {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
 			Badge: window.opts.Badge, Kind: string(window.opts.Kind), Status: tabStatus(window),
+		}
+		if window.opts.Badge != "" {
+			drawn.Artifact = status.DocumentKind(window.opts.Source)
 		}
 		out.Tabs = append(out.Tabs, drawn)
 	}

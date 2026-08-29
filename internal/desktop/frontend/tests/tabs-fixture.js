@@ -4,12 +4,14 @@ import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import TabsFixture from "./TabsFixture.svelte";
 
-// One tab of each shape a session holds: a running shell, a badged plan, and a
+// One tab of each shape a session holds: a running shell, a badged plan, a
+// badged research document that must not borrow the plan's colour, and a
 // document with no id to badge with.
 const TABS = [
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
-  { id: "w2", label: "Pane smoke test", badge: "[P002]", kind: "document" },
-  { id: "w3", label: "◆ Findings", kind: "document" },
+  { id: "w2", label: "Pane smoke test", badge: "[P002]", artifact: "PLAN", kind: "document" },
+  { id: "w3", label: "Pane selection", badge: "[R001]", artifact: "RESEARCH", kind: "document" },
+  { id: "w4", label: "◆ Findings", kind: "document" },
 ];
 
 // Narrow squeezes the plan tab into the overflow menu, which only ever holds

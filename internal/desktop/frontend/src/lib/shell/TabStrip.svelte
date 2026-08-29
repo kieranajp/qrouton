@@ -6,7 +6,7 @@
   import Tab from "./Tab.svelte";
   import { dominantStatus, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let { tabs = [], selected = 0, onSelect, onClose, onNew, newLabel = "New ▾", ...rest } = $props();
 
   // Below this a tab is a coloured rectangle; the rest go to the menu.
@@ -38,6 +38,7 @@
     <Tab
       label={tab.label}
       badge={tab.badge}
+      artifact={tab.artifact}
       status={tab.status}
       selected={index === selected}
       closable={tab.closable !== false}
