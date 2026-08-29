@@ -16,6 +16,7 @@ The plan must:
 - use vertical phases that each deliver a coherent increment;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
+- open each phase with a `## Phase <n> — <name>` heading and list that phase's runnable checks as a task list under a `### Verify` heading inside it, so progress is readable from the file itself; manual observations belong in a `### See` list and are not the meter;
 - leave no unresolved decision that blocks implementation;
 - stay at or below 400 lines unless the user explicitly asks for an exhaustive runbook; link to research/spec context instead of repeating it, and omit routine mechanics an implementation lead can recover from named files and commands.
 
