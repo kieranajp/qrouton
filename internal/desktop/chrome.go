@@ -23,7 +23,6 @@ func newChrome(emit emitter) *Chrome {
 	return &Chrome{fields: status.EmptyFields(), emit: emit}
 }
 
-// Snapshot returns the most recently published chrome state.
 func (c *Chrome) Snapshot() status.Fields {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -41,8 +40,6 @@ func (c *Chrome) publish(event string, payload any) {
 	c.publishFields(fields)
 }
 
-// publishFields stores the newest chrome state and pushes it, unless it is what
-// the page was last sent.
 func (c *Chrome) publishFields(fields status.Fields) {
 	c.mu.Lock()
 	if c.initialized && reflect.DeepEqual(c.fields, fields) {

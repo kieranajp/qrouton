@@ -25,8 +25,6 @@ type SettingsView struct {
 	LinearError string   `json:"linearError,omitempty"`
 }
 
-// SettingsInput is what Save receives back: the same shape SettingsView hands
-// out, filled in by the user.
 type SettingsInput struct {
 	Orgs   []string `json:"orgs"`
 	Root   string   `json:"root"`
@@ -41,8 +39,6 @@ type SaveResult struct {
 	RestartRequired bool `json:"restartRequired"`
 }
 
-// Settings is the panel's service: config.Config, Linear's custom-script file,
-// and the process teardown its Root banner offers instead of a relaunch.
 type Settings struct {
 	cfg            *config.Config
 	emit           emitter
@@ -64,7 +60,6 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 	}
 }
 
-// Load reads the live config as the panel draws it.
 func (s *Settings) Load() SettingsView {
 	launch := ""
 	if len(s.cfg.Launch) > 0 {
@@ -84,9 +79,6 @@ func (s *Settings) Load() SettingsView {
 	}
 }
 
-// Save validates Orgs, Root, Editor, Launch, then Linear, refusing on the first
-// problem and writing nothing if any field fails. On success it writes both
-// files and updates every live config field except Root.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
@@ -191,8 +183,6 @@ func validateRoot(raw string) (stored, expanded string, err error) {
 	return stored, expanded, nil
 }
 
-// dedupOrgs trims and deduplicates the way config's own QROUTON_ORGS parsing
-// does, over a slice rather than a CSV string.
 func dedupOrgs(orgs []string) []string {
 	var out []string
 	seen := make(map[string]bool)

@@ -2,8 +2,6 @@ package main
 
 import "errors"
 
-// CLI identity and help text, and what the launcher prints once the window is up.
-
 const (
 	appName  = "qrouton"
 	appUsage = "assemble a multi-repo session and launch an agent runner in it"

@@ -1,7 +1,5 @@
 package share
 
-// The assembled page and the names of the parts it is built from.
-
 const (
 	scriptAsset = "assets/share.js"
 	styleAsset  = "assets/share.css"

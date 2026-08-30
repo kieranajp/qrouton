@@ -1,9 +1,5 @@
 package evalharness
 
-// One evaluation case: materialize the fixture and prompt assets, drive the
-// runner turn by turn, then collect artifacts, diffs, and assertions, and
-// persist the per-case output files.
-
 import (
 	"context"
 	"encoding/json"

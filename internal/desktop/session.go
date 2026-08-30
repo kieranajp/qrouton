@@ -21,8 +21,6 @@ type identity struct {
 	root string
 }
 
-// sessionState is one session's workbench-side state: what it is, the PTY its
-// conversation runs in, and what the workbench has opened for it.
 type sessionState struct {
 	// terminal addresses the conversation PTY. Onboarding execs the supervisor
 	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
@@ -172,12 +170,10 @@ func (s *sessionState) stop() {
 	}
 }
 
-// booting is what a session needs to come up and to be put on screen.
 type booting struct {
-	root  func(slug string) string
-	agent func(AgentRequest) (AgentCommand, error)
-	serve func(state *sessionState, socket string) (io.Closer, error)
-	// shown puts a session on screen: its title, its shell, its record.
+	root        func(slug string) string
+	agent       func(AgentRequest) (AgentCommand, error)
+	serve       func(state *sessionState, socket string) (io.Closer, error)
 	shown       func(state *sessionState)
 	teardown    func(state *sessionState)
 	uncommitted func(sessionRoot string) ([]string, error)
@@ -185,8 +181,6 @@ type booting struct {
 	reveal      func(sessionRoot string) error
 }
 
-// Sessions is the workbench's sessions, which of them is on screen, and the
-// service the rail calls to change that.
 type Sessions struct {
 	boot booting
 	// showMu serialises the check and the boot, so a doubled rail click cannot
@@ -229,8 +223,6 @@ func newSessionsWithActivity(now func() time.Time, retention time.Duration) *Ses
 	}
 }
 
-// Show makes a session the one on screen, booting it if this workbench has not
-// run it yet.
 func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
@@ -360,8 +352,7 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	return nil
 }
 
-// retire ends one session without ending the app. The window falls back to the
-// session shown before it, and to no session at all when that was the last one.
+// retire ends one session without ending the app.
 func (s *Sessions) retire(state *sessionState) {
 	s.boot.teardown(state)
 	state.stop()
@@ -373,7 +364,6 @@ func (s *Sessions) retire(state *sessionState) {
 	s.reveal(fallback)
 }
 
-// stopAll ends every session, which is what closing the conversation window does.
 func (s *Sessions) stopAll() {
 	for _, state := range s.all() {
 		state.stop()
@@ -383,7 +373,6 @@ func (s *Sessions) stopAll() {
 	s.mu.Unlock()
 }
 
-// add registers a session and mints the id its conversation is addressed by.
 func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -442,8 +431,6 @@ func (s *Sessions) dropAgentActivity(slug string) {
 	delete(s.agents, slug)
 }
 
-// forget unregisters a session and names the one the window falls back to, if
-// the retired session was the one on screen.
 func (s *Sessions) forget(state *sessionState) (fallback *sessionState, wasShown bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

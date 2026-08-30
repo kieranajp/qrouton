@@ -24,10 +24,6 @@ type Runner struct {
 	Override bool
 }
 
-// runnerSpec is everything qrouton knows about one coding agent: how to start
-// it, how to ask it to continue a conversation, how it takes a first prompt, and
-// how its MCP servers and hooks are configured. One entry per runner, so adding
-// a fourth is one literal rather than an edit in four places.
 type runnerSpec struct {
 	ID      string
 	Label   string
@@ -44,8 +40,6 @@ type runnerSpec struct {
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
 }
 
-// injectContext is what an Inject needs beyond the argv: where this binary and
-// the session are, and the arguments the MCP child is started with.
 type injectContext struct {
 	qroutonBin string
 	dir        string
@@ -84,8 +78,6 @@ var runnerSpecs = []runnerSpec{
 	},
 }
 
-// builtinRunners is the spec table as the resolver sees it: identity and command
-// only, with the behaviour left behind.
 var builtinRunners = builtins()
 
 func builtins() []Runner {
@@ -177,8 +169,6 @@ func ByID(cfg *config.Config, id string) (Runner, error) {
 	return Runner{}, fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
 }
 
-// FirstInstalled returns the first supported runner present on the system, for
-// callers that did not ask for a particular one.
 func FirstInstalled(cfg *config.Config) (Runner, error) {
 	runners, err := Runners(cfg)
 	if err != nil {
@@ -220,8 +210,8 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
-	// Chime only when the agent asks for attention (not on every turn), so the user
-	// can step away; notify.sh is stamped into .qrouton by writeSupport.
+	// Chime only when the agent asks for attention, not on every turn, so the
+	// user can step away.
 	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))
 	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
@@ -353,8 +343,6 @@ func openCodeConfig(bin string, args []string, extra map[string]any) (string, er
 	return string(b), nil
 }
 
-// commandHook is one Claude hook entry running the given shell commands in
-// order.
 func commandHook(commands ...string) []map[string]any {
 	entries := make([]map[string]string, len(commands))
 	for i, command := range commands {
@@ -378,8 +366,6 @@ func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, initialPrompt stri
 	return spec.Prompt(argv, openingMessage(mode, initialPrompt))
 }
 
-// openingMessage is the fresh-session greeting injected as the runner's first
-// prompt.
 func openingMessage(mode, initialPrompt string) string {
 	message := openingMessageRPI
 	if mode == modeAssistant {

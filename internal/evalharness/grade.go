@@ -340,8 +340,7 @@ func firstContained(text string, values []string) string {
 }
 
 // sessionManifest is the slice of qrouton.json the harness reads. Its JSON keys
-// mirror session.Manifest, the schema a real launch writes; TestFixtureManifests-
-// MatchSessionSchema fails if a fixture and that schema ever drift apart.
+// mirror session.Manifest, the schema a real launch writes.
 type sessionManifest struct {
 	Repos []manifestRepo `json:"repos"`
 }

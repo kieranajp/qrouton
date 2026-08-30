@@ -1,9 +1,5 @@
 package github
 
-// GitHub API endpoints, query parameters, and the shell-outs qrouton uses to
-// find a token. Endpoint paths are built from these rather than spelled out at
-// each call, so githubAPIBase stays the only thing a test has to swap.
-
 const (
 	// apiBaseDefault is overridable in tests via githubAPIBase.
 	apiBaseDefault = "https://api.github.com"

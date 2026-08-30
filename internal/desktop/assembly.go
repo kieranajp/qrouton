@@ -39,7 +39,6 @@ type ticketFields struct {
 	Body  string `json:"body"`
 }
 
-// AssemblySeed is the external ticket, if any, claimed by an overlay mount.
 type AssemblySeed struct {
 	Ticket     string `json:"ticket"`
 	Entropy    string `json:"entropy"`
@@ -51,8 +50,6 @@ type linearSeed struct {
 	prompt string
 }
 
-// Assembly is what the overlay calls: the rules, the branch preview, the ticket
-// lookup, and the create that ends with the new session on screen.
 type Assembly struct {
 	cfg       *config.Config
 	repos     *Repositories
@@ -77,8 +74,6 @@ func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit em
 
 func (a *Assembly) Prefixes() []string { return assembly.Prefixes() }
 
-// Runners is only the agents with a resolved path, which is what "only agents
-// found on your PATH are listed" means.
 func (a *Assembly) Runners() ([]assembly.Runner, error) {
 	if a.runners == nil {
 		return nil, ErrNoAgentCommand
@@ -110,7 +105,6 @@ func (a *Assembly) Fetch(url string) (ticketFields, error) {
 	return ticketFields{Title: loaded.Title, Body: loaded.Body}, nil
 }
 
-// Pending is the external ticket waiting for the page to open an overlay.
 func (a *Assembly) Pending() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -234,9 +228,6 @@ func (a *Assembly) initialPrompt() string {
 	return a.external.prompt
 }
 
-// Create assembles the session and puts it on screen. Adoption is in process
-// because a webview overlay has no PTY to hand over: the session boots itself,
-// on a socket of its own.
 func (a *Assembly) Create(in draftInput) error {
 	draft := a.draft(in)
 	if draft.Entropy == "" {

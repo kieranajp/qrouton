@@ -1,7 +1,5 @@
 package status
 
-// The window's copy: mode, phase and document-kind labels.
-
 const (
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"

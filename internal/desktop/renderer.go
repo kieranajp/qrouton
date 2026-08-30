@@ -15,7 +15,6 @@ type renderer interface {
 	Quit()
 }
 
-// windowSpec describes the main conversation window to the renderer.
 type windowSpec struct {
 	Name    string
 	Title   string

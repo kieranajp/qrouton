@@ -39,9 +39,7 @@ type Assembler struct {
 	Signal func(root string)
 }
 
-// Prefixes is the branch-prefix vocabulary, and the only copy of it. The MCP
-// escalate tool describes the same list in a struct tag, which a test holds to
-// this one.
+// Prefixes is the branch-prefix vocabulary, and the only copy of it.
 func Prefixes() []string {
 	return []string{"feat", "fix", "chore", "refactor", "docs", "test"}
 }

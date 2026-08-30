@@ -41,7 +41,6 @@ var panes = map[string]DocumentFormat{
 	".markdown": FormatMarkdown,
 }
 
-// FormatFor names the pane a filename opens in.
 func FormatFor(name string) (DocumentFormat, bool) {
 	format, ok := panes[strings.ToLower(filepath.Ext(name))]
 	return format, ok
@@ -53,8 +52,7 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // Attention marks a window that needs the user's eye without taking focus.
 // Source names the session file the window shows, relative to the session root,
 // so a second request for that file selects this window instead of opening
-// another. Span is the part of the file the window scrolls to and marks. Badge
-// leads the tab in the artifact's own colour, ahead of Label.
+// another. Badge leads the tab in the artifact's own colour, ahead of Label.
 type WindowOptions struct {
 	Kind        WindowKind     `json:"kind"`
 	Label       string         `json:"label"`
@@ -171,7 +169,6 @@ func WithEnv(env []string, key, value string) []string {
 	return append(out, key+envKeyValueSep+value)
 }
 
-// WithoutEnv returns env without key.
 func WithoutEnv(env []string, key string) []string {
 	prefix := key + envKeyValueSep
 	out := make([]string, 0, len(env))

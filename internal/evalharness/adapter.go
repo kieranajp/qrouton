@@ -1,9 +1,5 @@
 package evalharness
 
-// Runner adapters: how the harness invokes the Claude and Codex CLIs — MCP
-// wiring, session continuation, and prompt delivery. Output parsing lives in
-// normalize.go.
-
 import (
 	"bytes"
 	"context"

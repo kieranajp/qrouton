@@ -1,9 +1,5 @@
 package evalharness
 
-// Provider stream normalization: turn Claude/Codex JSONL output into the
-// harness's Event shape, strip hidden reasoning, and read back the mock-MCP
-// event log.
-
 import (
 	"bufio"
 	"bytes"
@@ -129,10 +125,8 @@ func normalizedKind(typeName, name string) string {
 	}
 }
 
-// firstString returns the first key holding a non-empty string. The harness
-// deliberately does not import qrouton's own packages, so internal/agentevent keeps
-// its own copy of this; both skip empty values, because a present-but-empty
-// session id or tool name is no more useful than an absent one.
+// firstString returns the first key holding a non-empty string: a
+// present-but-empty session id or tool name is no more useful than an absent one.
 func firstString(value map[string]any, keys ...string) string {
 	for _, key := range keys {
 		if text, ok := value[key].(string); ok && text != "" {

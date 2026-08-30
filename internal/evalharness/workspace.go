@@ -1,8 +1,5 @@
 package evalharness
 
-// Workspace plumbing shared by case execution and grading: fixture repo
-// baselines, artifact and diff collection, and small git/fs helpers.
-
 import (
 	"context"
 	"crypto/sha256"

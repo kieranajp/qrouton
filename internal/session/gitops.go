@@ -29,9 +29,8 @@ func gitOK(args ...string) bool { return exec.Command(gitBin, args...).Run() == 
 var progressPattern = regexp.MustCompile(`([A-Za-z][A-Za-z ]*):\s+(\d+)%`)
 
 // gitSlow runs a long git command (clone, fetch) with its stderr captured
-// rather than sprayed over the terminal — which in the fullscreen TUI meant
-// scribbling over the alt screen. Parsed phase and percentage go to onProgress;
-// a nil onProgress runs the command silently.
+// rather than sprayed over the terminal. Parsed phase and percentage go to
+// onProgress; a nil onProgress runs the command silently.
 //
 // Two details are load-bearing. Git suppresses progress entirely when stderr
 // is not a terminal, which it no longer is, so verbosityFlag must ask for it
@@ -56,9 +55,8 @@ func gitSlow(onProgress func(phase string, percent int), args ...string) error {
 	return nil
 }
 
-// verbosityFlag asks git for machine-readable progress when someone is
-// rendering it, and for silence otherwise. Callers place it themselves so it
-// lands before a positional argument.
+// verbosityFlag is placed by callers themselves so it lands before a
+// positional argument.
 func verbosityFlag(onProgress func(phase string, percent int)) string {
 	if onProgress == nil {
 		return quietLongFlag
@@ -66,10 +64,9 @@ func verbosityFlag(onProgress func(phase string, percent int)) string {
 	return progressFlag
 }
 
-// scanProgress drains r, reporting each change of phase or percentage, and
-// returns what it read (capped) for error reporting. Reads raw rather than by
-// line: git separates updates with carriage returns, so a line scanner would
-// deliver one enormous line at the end and report nothing until then.
+// scanProgress reads raw rather than by line: git separates updates with
+// carriage returns, so a line scanner would deliver one enormous line at the
+// end and report nothing until then. The capped tail is for error reporting.
 func scanProgress(r io.Reader, onProgress func(phase string, percent int)) string {
 	var tail strings.Builder
 	buf := make([]byte, progressChunkBytes)
@@ -125,7 +122,7 @@ func mirrorPath(root, org, repo string) string {
 
 // ensureMirror clones a bare mirror on first use, otherwise fetches. The fetch refspec maps origin's
 // heads to refs/remotes/origin/* only, so --prune can never touch session branches under refs/heads/*.
-// (A literal --mirror clone's +refs/*:refs/* refspec would prune them — the hazard mirror_test guards.)
+// A literal --mirror clone's +refs/*:refs/* refspec would prune them.
 func ensureMirror(root, org, repo, url string, onProgress func(phase string, percent int)) error {
 	mp := mirrorPath(root, org, repo)
 	if _, err := os.Stat(mp); os.IsNotExist(err) {
@@ -143,8 +140,6 @@ func ensureMirror(root, org, repo, url string, onProgress func(phase string, per
 	return gitSlow(onProgress, dirFlag, mp, fetchCmd, pruneFlag, verbosityFlag(onProgress), remoteName)
 }
 
-// addWorktree materialises a worktree at path: on the existing session branch if it exists
-// (resume after prune), otherwise on a new branch off the freshly-fetched origin default branch.
 func addWorktree(mirror, path, branch, startRef string) error {
 	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err

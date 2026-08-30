@@ -33,7 +33,6 @@ const (
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 
-	// rootPath is the mux pattern the embedded tree is served under.
 	rootPath          = "/"
 	contentTypeHeader = "Content-Type"
 
@@ -86,7 +85,6 @@ const (
 	// frame produces well under this, so a repaint arrives as one event.
 	ptyReadBuffer = 32 * 1024
 
-	// windowScrollback caps what a window keeps for the agent to read back.
 	windowScrollback = 256 * 1024
 
 	// windowScreenLines is what a read without full returns.

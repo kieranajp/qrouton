@@ -21,7 +21,6 @@ var identity = []string{
 	"-c", "commit.gpgsign=false",
 }
 
-// Run runs one git command in dir, failing the test with git's own output.
 func Run(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	if out, err := run(dir, args...); err != nil {
@@ -36,7 +35,6 @@ func run(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
-// output is one git command's trimmed stdout.
 func output(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := run(dir, args...)
@@ -46,7 +44,6 @@ func output(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(out)
 }
 
-// options is how a repository differs from the bare minimum.
 type options struct {
 	files   map[string][]string
 	message string
@@ -55,12 +52,10 @@ type options struct {
 
 type Option func(*options)
 
-// WithFile commits one file of the given lines. Repeatable.
 func WithFile(name string, lines ...string) Option {
 	return func(o *options) { o.files[name] = lines }
 }
 
-// WithMessage names the first commit, for a test that reads the log.
 func WithMessage(message string) Option {
 	return func(o *options) { o.message = message }
 }
@@ -120,7 +115,6 @@ func Worktree(t *testing.T, path string, opts ...Option) string {
 	return path
 }
 
-// Head is dir's current commit, in full.
 func Head(t *testing.T, dir string) string {
 	t.Helper()
 	return output(t, dir, "rev-parse", "HEAD")

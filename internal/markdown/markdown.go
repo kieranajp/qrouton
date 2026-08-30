@@ -80,7 +80,6 @@ const (
 	SectionAnswered
 )
 
-// Section is one second-level heading and what stands under it.
 type Section struct {
 	Name  string
 	State SectionState

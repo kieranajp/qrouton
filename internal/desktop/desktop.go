@@ -18,10 +18,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Options is the workbench: where its sessions live, which one it opens on, and
-// how it builds what each of them runs.
 type Options struct {
-	// Icon is the application mark shown by the desktop and its default dialogs.
 	Icon []byte
 	// SessionRoot is empty when there is no session to open on, which is the
 	// window whose only content is the assembly overlay.
@@ -44,9 +41,7 @@ type Options struct {
 	LinearCommand     []string
 	LinearEnvironment []string
 	Env               []string
-	// Config is the sessions root and the configured owners the overlay assembles
-	// against.
-	Config *config.Config
+	Config            *config.Config
 
 	// Launcher builds every command the workbench runs; Validator and Relauncher
 	// answer the settings panel and first run.
@@ -137,8 +132,7 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
-// control socket are exercised against a double instead of a display. quit is
-// the same teardown Run wires into Settings.Quit.
+// control socket are exercised against a double instead of a display.
 func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -315,7 +309,6 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 	})
 }
 
-// openDocument puts a document in the right pane, as a workbench-owned tab.
 func openDocument(windows *Windows, owner *sessionState, launcher Launcher, name string) (string, error) {
 	if owner == nil || launcher == nil {
 		return "", ErrNoEditorCommand
@@ -337,8 +330,6 @@ func reveal(argv []string) error {
 	return exec.Command(argv[0], argv[1:]...).Run()
 }
 
-// shellLabel leaves the first shell unnumbered, so a session with one reads as
-// it always did.
 func shellLabel(n int) string {
 	if n <= 1 {
 		return shellWindowLabel
@@ -355,7 +346,6 @@ func windowTitle(root string) string {
 	return mainWindowTitle + titleSeparator + filepath.Base(root)
 }
 
-// frontend is the embedded page tree the webview serves.
 func frontend() (fs.FS, error) {
 	assets, err := fs.Sub(assetFS, assetRoot)
 	if err != nil {

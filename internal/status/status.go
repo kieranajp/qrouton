@@ -103,7 +103,6 @@ type AgentPanel struct {
 	Agents         []AgentRecord `json:"agents"`
 }
 
-// SessionRepo names one of a session's editing repositories in the rail.
 type SessionRepo struct {
 	Name string `json:"name"`
 	Role string `json:"role"`
@@ -118,8 +117,6 @@ type Document struct {
 	At   time.Time `json:"at"`
 }
 
-// RepositoryDocuments is one session repository whose own thoughts directory
-// contains durable artifacts.
 type RepositoryDocuments struct {
 	Name      string     `json:"name"`
 	Documents []Document `json:"documents"`
@@ -299,7 +296,6 @@ func initials(name string) string {
 
 var nonLetter = regexp.MustCompile(`[^a-z0-9]+`)
 
-// documents lists what the session has written, newest first.
 func documents(root string) []Document {
 	dir := sessionpaths.Thoughts(root)
 	out := documentsUnder(root, dir, func(path string) string { return filepath.Base(path) })

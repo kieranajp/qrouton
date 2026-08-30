@@ -22,7 +22,6 @@ const (
 	RoleArtifactExplainer = "artifact-explainer"
 )
 
-// The stylesheet CSS renders, and the path the workbench serves it at.
 const (
 	Path      = "/tokens/colors.css"
 	MediaType = "text/css; charset=utf-8"

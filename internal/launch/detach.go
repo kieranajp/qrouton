@@ -1,10 +1,5 @@
 package launch
 
-// The workbench runs in a process of its own so the terminal comes straight
-// back. Only the event loop is handed over; the parent does not return until the
-// child answers on its control socket, because a prompt with no window behind it
-// is worse than a blocked terminal.
-
 import (
 	"encoding/json"
 	"fmt"
@@ -19,7 +14,6 @@ import (
 )
 
 const (
-	// readyTimeout bounds the wait for the workbench to serve its socket.
 	readyTimeout  = 20 * time.Second
 	readyInterval = 25 * time.Millisecond
 
@@ -27,10 +21,9 @@ const (
 	dirMode = 0o755
 )
 
-// WorkbenchSpec is what the detached process is told to open: its session, its
-// control socket, its runner, and whether that runner has a conversation to
-// resume. An empty SessionRoot opens on no session at all, which is where the
-// assembly overlay draws. It builds each session's own command as it boots it.
+// WorkbenchSpec is what the detached process is told to open. An empty
+// SessionRoot opens on no session at all, which is where the assembly overlay
+// draws.
 type WorkbenchSpec struct {
 	SessionRoot  string `json:"session_root,omitempty"`
 	Socket       string `json:"socket"`

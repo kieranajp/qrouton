@@ -22,7 +22,6 @@ type Tools struct {
 	Env     []string
 }
 
-// New answers the tools file at Linear's own path.
 func New(command, env []string) Tools {
 	return Tools{
 		File:    filepath.Clean(config.ExpandHome(ConfigPath)),

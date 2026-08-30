@@ -11,7 +11,6 @@ import (
 	"github.com/creack/pty"
 )
 
-// ptyProcess is a command running under a PTY the workbench owns.
 type ptyProcess struct {
 	mu     sync.Mutex
 	file   *os.File
@@ -38,7 +37,6 @@ func startPTY(argv, env []string, dir string, cols, rows int) (*ptyProcess, erro
 	return p, nil
 }
 
-// pump forwards the PTY's output until it closes, then reports the exit status.
 func (p *ptyProcess) pump(onData func([]byte), onExit func(code int)) {
 	p.mu.Lock()
 	file := p.file

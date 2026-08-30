@@ -1,8 +1,5 @@
 package prompts
 
-// Provider-specific rendering details: where each runner discovers agent
-// definitions, and the TOML shape Codex expects.
-
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
@@ -25,8 +22,6 @@ const (
 	tomlTripleQuote        = `"""`
 	tomlEscapedTripleQuote = `\"\"\"`
 
-	// Codex sandbox modes. The research and review specialists only read; the
-	// research lead and test-verifier hold the workspace.
 	sandboxReadOnly       = "read-only"
 	sandboxWorkspaceWrite = "workspace-write"
 )
@@ -39,8 +34,6 @@ var partials = map[string]string{
 	workspaceWindowsPlaceholder: workspaceWindowsFileName,
 }
 
-// Which agents get which sandbox. An agent absent from both sets inherits
-// Codex's default, as the planning and implementation leads do.
 var (
 	readOnlyAgents = map[string]bool{
 		"code-reviewer":       true,

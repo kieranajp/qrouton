@@ -17,9 +17,6 @@ const (
 	Orchestrator ID = "orchestrator"
 	Assistant    ID = "assistant"
 
-	// Skills and agents are addressed by their directory prefix. A skill's ID
-	// names its folder; every file inside hangs off that ID and is never an ID of
-	// its own.
 	skillIDPrefix = "skills/"
 	agentIDPrefix = "agents/"
 
@@ -30,9 +27,6 @@ const (
 	assistantFileName    = string(Assistant) + promptFileExt
 )
 
-// Prompt is one canonical prompt. Content is what a runner reads first; Files
-// is what a skill folder ships beside its SKILL.md, so detail can wait until the
-// entry file sends the reader after it.
 type Prompt struct {
 	ID      ID
 	Content []byte
@@ -104,8 +98,7 @@ func (l *FSLoader) read(path string) ([]byte, error) {
 }
 
 // skillFiles is everything in a skill's folder other than its entry file, in
-// lexical order. A skill with nothing beside SKILL.md returns none, which is how
-// a single-file skill stays a single file.
+// lexical order.
 func (l *FSLoader) skillFiles(dir string) ([]PromptFile, error) {
 	entry := dir + "/" + skillFileName
 	var out []PromptFile

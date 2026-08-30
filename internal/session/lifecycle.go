@@ -47,7 +47,7 @@ func Status(root string, m Manifest) WorkflowStatus {
 // the document first, carrying its questions as headings with only the context a
 // researcher needs under them, so headings alone are not research. A document
 // that opens no sections is prose findings, and an empty one is a file still
-// being written. Older sessions keep their questions in a file named for them.
+// being written.
 func researched(path string) bool {
 	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
 		return false
@@ -70,7 +70,6 @@ func markdownFiles(dir string) []string {
 	return files
 }
 
-// DirtyWorktrees returns repositories with staged, unstaged, or untracked files.
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	var dirty []string
 	for _, repo := range m.Repos {
@@ -89,10 +88,9 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	return dirty, nil
 }
 
-// worktreeDirty reports staged, unstaged, or untracked files. A checkout can
-// outlive its worktree metadata when a mirror was manually removed or corrupted;
-// there is no dirty state left to read then, and a session carrying one must
-// still be deletable.
+// A checkout can outlive its worktree metadata when a mirror was manually
+// removed or corrupted; there is no dirty state left to read then, and a
+// session carrying one must still be deletable.
 func worktreeDirty(path string) (bool, error) {
 	out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
 	if err != nil {
@@ -104,7 +102,6 @@ func worktreeDirty(path string) (bool, error) {
 	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
-// Delete removes registered worktrees and then the remaining session files.
 func Delete(root string, m Manifest) error {
 	dir := filepath.Join(root, m.Slug)
 	for _, repo := range m.Repos {
@@ -207,7 +204,6 @@ func measure(ctx context.Context, path, base string, stat *RepoStat) {
 	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
 }
 
-// countCommits counts what the session branch has that its base does not.
 func countCommits(ctx context.Context, path, base string) (int, bool) {
 	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
 	defer cancel()

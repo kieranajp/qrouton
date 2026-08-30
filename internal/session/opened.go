@@ -19,8 +19,6 @@ func MarkOpened(root string, at time.Time) error {
 	return atomicfile.Replace(sessionpaths.Opened(root), []byte(at.UTC().Format(time.RFC3339Nano)), fileMode)
 }
 
-// LastOpened is when a session was last shown, and false for one this workbench
-// has never opened.
 func LastOpened(root string) (time.Time, bool) {
 	b, err := os.ReadFile(sessionpaths.Opened(root))
 	if err != nil {
@@ -33,8 +31,6 @@ func LastOpened(root string) (time.Time, bool) {
 	return at, true
 }
 
-// Preferred is the session most recently shown, or the newest session when no
-// candidate has been shown.
 func Preferred(root string, sessions []Manifest) (Manifest, bool) {
 	var best Manifest
 	var stamp time.Time

@@ -9,8 +9,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 )
 
-// FirstRunInput is the two answers the flow collects: the owners to search and
-// where sessions live.
 type FirstRunInput struct {
 	Orgs []string `json:"orgs"`
 	Root string   `json:"root"`
@@ -22,8 +20,6 @@ type FirstRunResult struct {
 	Relaunching bool `json:"relaunching"`
 }
 
-// FirstRun is the gate's service: one save, and the two things the screens
-// promise but config cannot answer.
 type FirstRun struct {
 	cfg      *config.Config
 	reg      *Sessions

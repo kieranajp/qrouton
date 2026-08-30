@@ -1,10 +1,5 @@
 package mcpserver
 
-// The MCP surface as the agent reads it: the server instructions, and each
-// tool's name and description. These are prompt text, not code — the agent's
-// only guide to when a window is the right move — so they live together where
-// they can be read and revised as a set.
-//
 // The mode prompt already describes the workbench and when a window is worth
 // opening, and each description below owns its own tool's mechanics. What is
 // left for the server to say is the one rule neither of them can: the session
@@ -12,8 +7,6 @@ package mcpserver
 
 const serverInstructions = "Drive the user's qrouton workbench: each tool here opens or reads a tab in the session's right pane, beside the conversation and without taking the keyboard. All paths and working directories must belong to this session."
 
-// Tool names, as the agent calls them and as qrouton reports them back in its
-// own messages.
 const (
 	toolOpenFile    = "open_file"
 	toolRunCommand  = "run_command"
@@ -26,7 +19,6 @@ const (
 	toolSharePage   = "share_page"
 )
 
-// Tool descriptions.
 const (
 	descOpenFile = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later."
 

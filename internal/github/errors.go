@@ -5,7 +5,6 @@ import (
 	"fmt"
 )
 
-// ErrNoToken means qrouton has no way to authenticate to GitHub.
 var ErrNoToken = errors.New("no GitHub token: run `gh auth login` or set " + tokenEnvVar)
 
 // ErrUnsupportedOwnerType means an owner is neither a user nor an organization,

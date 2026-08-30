@@ -92,7 +92,6 @@ func (m *windowManager) commit(name string, claim uint64, id string) bool {
 	return true
 }
 
-// release drops a claim whose open never produced a window.
 func (m *windowManager) release(name string, claim uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -174,8 +173,6 @@ func intersects(viewport *workbench.DocumentViewport, first, last int) bool {
 	return false
 }
 
-// lineRange names the marked lines the way the message reads them: one line, or
-// a range.
 func lineRange(first, last int) string {
 	if first == last {
 		return fmt.Sprintf(singleLineFormat, first)
@@ -396,8 +393,6 @@ func awaitEscalation(ctx context.Context, root string, spawnedAt time.Time) (str
 	}
 }
 
-// escalationOutcome reports the picker's verdict once qrouton.json carries an
-// escalation stanza newer than spawnedAt.
 func escalationOutcome(root string, spawnedAt time.Time) (string, bool) {
 	m, err := session.Load(root)
 	if err != nil || m.Escalation == nil || !m.Escalation.At.After(spawnedAt) {

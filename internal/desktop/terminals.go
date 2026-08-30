@@ -10,8 +10,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// terminals runs the processes behind terminal tabs and applies the lifecycle
-// rules their exits carry.
 type terminals struct {
 	emit     emitter
 	registry *registry
@@ -110,7 +108,6 @@ func (t *terminals) exited(id string, code int) {
 
 func terminalEnv() []string { return withTerminalEnv(os.Environ()) }
 
-// ring keeps the tail of a window's output.
 type ring struct {
 	mu    sync.Mutex
 	limit int

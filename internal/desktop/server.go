@@ -14,8 +14,6 @@ import (
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
-	// picker queues the repository picker on the session it names. Nothing is
-	// drawn until the user arrives there.
 	picker      func(req workbench.PickerRequest) error
 	attention   func(activity string, generation uint64)
 	generation  func(req workbench.RunnerGenerationRequest)

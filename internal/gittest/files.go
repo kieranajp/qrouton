@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// WriteFile writes one newline-terminated file under dir, creating the
-// directories it needs.
 func WriteFile(t *testing.T, dir, name string, lines ...string) string {
 	t.Helper()
 	path := filepath.Join(dir, name)

@@ -5,9 +5,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// AgentRequest is one session's supervisor, asked for: the session to run it in,
-// the control socket the workbench will serve that session on, and the agent the
-// session was assembled with. An empty RunnerID means the workbench's own.
+// AgentRequest asks for one session's supervisor. An empty RunnerID means the
+// workbench's own agent.
 type AgentRequest struct {
 	SessionRoot string
 	Socket      string

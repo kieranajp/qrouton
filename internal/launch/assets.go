@@ -16,8 +16,6 @@ const (
 	modeAssistant = "assistant"
 )
 
-// sessionMode reads the session's runner mode from its manifest, defaulting to
-// RPI when the manifest is absent or unreadable.
 func sessionMode(dir string) string {
 	content, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
@@ -32,8 +30,6 @@ func sessionMode(dir string) string {
 	return modeRPI
 }
 
-// primaryDiscovery is the rendered prompt that CLAUDE.md/AGENTS.md link to for
-// the given mode; the other prompt is still stamped, for escalation.
 func primaryDiscovery(mode string) string {
 	if mode == modeAssistant {
 		return prompts.AssistantAsset
@@ -41,13 +37,10 @@ func primaryDiscovery(mode string) string {
 	return prompts.OrchestratorAsset
 }
 
-// StampAssets refreshes qrouton's canonical, session-local assets and their
-// runner adapters from the prompts embedded in the binary.
 func StampAssets(dir string) error {
 	return StampAssetsWithLoader(context.Background(), dir, prompts.NewEmbeddedLoader())
 }
 
-// StampAssetsWithLoader allows callers and tests to supply a prompt source.
 func StampAssetsWithLoader(ctx context.Context, dir string, loader prompts.PromptLoader) error {
 	return prompts.Stamp(ctx, dir, loader, primaryDiscovery(sessionMode(dir)))
 }

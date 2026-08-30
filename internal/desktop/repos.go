@@ -32,8 +32,6 @@ func liveGitHub() gh {
 	}
 }
 
-// Repositories is the list the second step chooses from: the cache it opens on,
-// and the refresh its button drives.
 type Repositories struct {
 	cfg  *config.Config
 	emit emitter

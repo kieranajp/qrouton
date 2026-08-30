@@ -26,7 +26,6 @@ type document struct {
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
 }
 
-// ViewportReport is one browser measurement of a rendered Markdown tab.
 type ViewportReport struct {
 	Epoch     uint64                   `json:"epoch"`
 	Seq       uint64                   `json:"seq"`
@@ -35,8 +34,6 @@ type ViewportReport struct {
 	Intervals []workbench.LineInterval `json:"intervals"`
 }
 
-// documents keeps every open document window agreeing with the file behind it
-// and holds what its page has measured of it.
 type documents struct {
 	emit     emitter
 	registry *registry
@@ -53,8 +50,6 @@ func (window *agentWindow) sourcePath() string {
 	return filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
 }
 
-// beginDocument gives a freshly opened window the document state a rescan and a
-// page report are answered from.
 func beginDocument(window *agentWindow) {
 	if window.opts.Kind == workbench.KindDocument && window.opts.Format == workbench.FormatMarkdown {
 		window.viewport = &workbench.DocumentViewport{
@@ -187,7 +182,6 @@ func (d *documents) markdown(id string) (string, bool, error) {
 	return text, rendered, nil
 }
 
-// report stores the newest browser measurement for a Markdown tab.
 func (d *documents) report(id string, report ViewportReport) error {
 	return d.registry.with(id, func(window *agentWindow) error {
 		if window.viewport == nil {

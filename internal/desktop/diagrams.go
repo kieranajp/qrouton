@@ -39,10 +39,8 @@ func newDiagramWorker(emit emitter) *diagramWorker {
 	}
 }
 
-// render names every d2 fence in a document, carrying the SVG of the ones
-// already rendered; the rest are laid out off this goroutine and arrive on
-// windowDiagramEvent as they land. Opening a document costs a scan, never a
-// layout.
+// render lays the misses out off this goroutine: opening a document costs a
+// scan, never a layout.
 func (d *diagramWorker) render(id, text string) []renderedDiagram {
 	found := []renderedDiagram{}
 	var misses []diagram.Fence

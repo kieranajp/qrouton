@@ -37,9 +37,6 @@ func Slugify(s string) string {
 	return strings.Trim(nonSlug.ReplaceAllString(strings.ToLower(s), slugSeparator), slugSeparator)
 }
 
-// SessionSlug appends one already-generated entropy suffix to a human name.
-// An empty suffix preserves the old slug shape for manifests and callers that
-// predate entropic session creation.
 func SessionSlug(name, entropy string) string {
 	base := Slugify(name)
 	suffix := Slugify(entropy)
@@ -49,7 +46,6 @@ func SessionSlug(name, entropy string) string {
 	return base + slugSeparator + suffix
 }
 
-// NewEntropy returns the short identifier used to distinguish session slugs.
 func NewEntropy() string {
 	b := make([]byte, sessionEntropyBytes)
 	_, _ = rand.Read(b) // crypto/rand never fails
@@ -59,9 +55,7 @@ func NewEntropy() string {
 // CreateRequest is the work a session is being assembled for. Only Name is
 // required: a scratch session has no repositories, no ticket and no prefix.
 type CreateRequest struct {
-	Name string
-	// Slug is the precomputed session folder and branch suffix. Empty derives
-	// the legacy slug from Name.
+	Name        string
 	Slug        string
 	Description string
 	// Ticket is the external issue this work came from, if any.
@@ -126,10 +120,6 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 		return "", err
 	}
 
-	// The durable-artifact scaffold the RPI workflow writes into. Documents
-	// live under <root>/thoughts/<slug> and the session reaches them through
-	// a relative symlink, so Delete's RemoveAll (which does not follow links)
-	// keeps them when the session directory goes.
 	steps := reporter{fn: progress}
 	home := thoughtsHome(cfg.Root, slug)
 	if err := steps.step(ProgressScaffold, func(func(string, int)) error {
@@ -144,8 +134,6 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 		return "", err
 	}
 
-	// The marker goes inside the step: it is what makes the directory resumable,
-	// so nothing may observe the manifest as complete while it is still there.
 	if err := steps.step(ProgressManifest, func(func(string, int)) error {
 		if err := WriteManifest(dir, m); err != nil {
 			return err
@@ -165,10 +153,6 @@ func thoughtsHome(root, slug string) string {
 	return filepath.Join(root, sessionpaths.ThoughtsDirName, slug)
 }
 
-// materialise mirrors and checks out one selected repository for the session
-// at dir, returning its manifest entry — the shared per-repo body of Create
-// and ComposeRepos. branch names the session branch an editing repository is
-// cut on; worktreePath is the checkout's location relative to dir.
 func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
 	r := sel.Repo
 	role := sel.Role.Effective()
@@ -207,9 +191,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 // ComposeRepos materialises the selected repositories into m — mirrors,
 // worktrees, manifest entries — without writing the manifest, so a caller can
 // fold repos, mode, and an escalation outcome into one atomic write. branch is
-// the session branch editing repositories are cut on. A repository sharing its
-// name with another (in the batch, or already in m) gets an org-qualified
-// worktree path.
+// the session branch editing repositories are cut on.
 func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch string, progress ProgressFunc) (Manifest, error) {
 	dir := filepath.Join(cfg.Root, m.Slug)
 	if err := os.MkdirAll(sessionpaths.Src(dir), dirMode); err != nil {
@@ -246,7 +228,6 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 	return m, nil
 }
 
-// MergeRepos appends repositories missing from a freshly loaded manifest.
 func MergeRepos(m Manifest, repos []ManifestRepo) Manifest {
 	for _, repo := range repos {
 		if !hasRepo(m.Repos, repo.Org, repo.Name) {
@@ -256,7 +237,6 @@ func MergeRepos(m Manifest, repos []ManifestRepo) Manifest {
 	return m
 }
 
-// hasRepo reports whether the session already holds this repository.
 func hasRepo(repos []ManifestRepo, org, name string) bool {
 	return indexOfRepo(repos, org, name) >= 0
 }

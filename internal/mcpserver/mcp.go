@@ -1,8 +1,5 @@
 package mcpserver
 
-// The MCP tool surface served to the agent over stdio: tool schemas,
-// descriptions, and registration.
-
 import (
 	"context"
 	"fmt"
@@ -84,7 +81,6 @@ func addTool[In any](server *mcp.Server, name, description, key string, fn answe
 		})
 }
 
-// messageOnly adapts a tool that has no viewport to report.
 func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
 	return func(ctx context.Context, input In) (string, *workbench.DocumentViewport, error) {
 		message, err := fn(ctx, input)

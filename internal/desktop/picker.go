@@ -69,8 +69,6 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 	return pickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-// Confirm gives the session the picked repositories and takes up the named ones
-// it already reads, escalating it when an escalation is what asked for the picker.
 func (p *Picker) Confirm(slug string, in pickerInput) error {
 	state, root, err := p.root(slug)
 	if err != nil {

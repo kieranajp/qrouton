@@ -11,10 +11,9 @@ import (
 // terminal processes and the diagram worker, each owning what only it touches.
 type Windows struct {
 	*registry
-	documents *documents
-	terminals *terminals
-	diagrams  *diagramWorker
-	// newShell reopens the shell after the user closes its tab.
+	documents   *documents
+	terminals   *terminals
+	diagrams    *diagramWorker
 	newShell    func() (string, error)
 	newDocument func(name string) (string, error)
 	stopFollow  context.CancelFunc
@@ -44,7 +43,7 @@ func (w *Windows) OpenShell() (string, error) {
 }
 
 // OpenDocument returns the window already showing the named document, or opens
-// one — so a single click both opens and selects. The name is session-relative.
+// one. The name is session-relative.
 func (w *Windows) OpenDocument(name string) (string, error) {
 	if name == "" {
 		return "", ErrNoDocumentName
@@ -57,7 +56,6 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 	})
 }
 
-// Select records a user-driven tab selection for one session.
 func (w *Windows) Select(slug, id string) error { return w.selectBySlug(slug, id) }
 
 func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
@@ -84,7 +82,6 @@ func (w *Windows) RenderDiagrams(id string) ([]renderedDiagram, error) {
 	return w.diagrams.render(id, text), nil
 }
 
-// ReportViewport stores the newest browser measurement for a Markdown tab.
 func (w *Windows) ReportViewport(id string, report ViewportReport) error {
 	return w.documents.report(id, report)
 }
@@ -107,8 +104,6 @@ func (w *Windows) viewport(owner *sessionState, id string) (*workbench.DocumentV
 	return w.documents.viewport(owner, id)
 }
 
-// stopAll tears every window down, so closing the conversation leaves nothing
-// running behind it.
 func (w *Windows) stopAll() {
 	w.registry.stopAll()
 	w.stopFollow()

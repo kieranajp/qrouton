@@ -11,8 +11,6 @@ var (
 	ErrMessageRequired = errors.New("message is required")
 	ErrNameRequired    = errors.New("name is required")
 
-	// ErrReservedWindowName means the agent tried to claim the editor window's
-	// registry key for a command window.
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
 

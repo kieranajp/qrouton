@@ -1,7 +1,5 @@
 package config
 
-// Paths, environment overrides, and the defaults a launch never asks about.
-
 const (
 	// appDirName is the directory qrouton owns inside each XDG base directory.
 	appDirName = "qrouton"

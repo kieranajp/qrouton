@@ -1,5 +1,4 @@
 // qrouton — assemble a multi-repo session (worktrees off local mirrors) and launch an agent runner in it.
-// See AGENTS.md for the package layout and the invariants a change must hold.
 package main
 
 import (
@@ -126,8 +125,6 @@ var (
 	discoverProcess = workbench.Discover
 )
 
-// pickRunner resolves the runner headlessly: the requested one if given and
-// installed, otherwise the first installed built-in.
 func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 	if id != "" {
 		return launch.ByID(cfg, id)
@@ -254,7 +251,6 @@ func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOpti
 	return launch.DocumentWindow(sessionRoot, name, p.spec.Editor, workbench.LineSpan{})
 }
 
-// Runners maps launch's runners onto the row the overlay draws.
 func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
 	runners, err := launch.Runners(p.cfg)
 	if err != nil {
@@ -312,7 +308,6 @@ func workbenchLog(spec launch.WorkbenchSpec) string {
 	return sessionpaths.WorkbenchLog(spec.SessionRoot)
 }
 
-// subject names what was opened in the one line the user gets back.
 func subject(sessionRoot string) string {
 	if sessionRoot == "" {
 		return noSessionSubject

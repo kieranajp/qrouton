@@ -207,7 +207,6 @@ func (r *registry) list() []string {
 	return ids
 }
 
-// discard forgets a window and stops whatever it was running.
 func (r *registry) discard(id string) {
 	r.mu.Lock()
 	window, ok := r.open[id]
@@ -266,7 +265,6 @@ func (r *registry) announce(owner *sessionState) {
 	r.emit(windowsEvent, r.surfaces(owner))
 }
 
-// drawnWindow is one window as its surface draws it.
 type drawnWindow struct {
 	ID     string `json:"id"`
 	Label  string `json:"label"`

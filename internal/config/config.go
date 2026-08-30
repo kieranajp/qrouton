@@ -72,7 +72,6 @@ func Load() (*Config, error) {
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
 
-// Save writes the whole config back to disk, creating its directory.
 func Save(cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {
 		return err
