@@ -78,17 +78,16 @@ func (a Assembler) CheckSlug(d Draft) []Problem {
 }
 
 func hasEditingRepo(d Draft) bool {
-	for _, sel := range d.Repos {
-		if sel.Role.Effective() == session.RepoRoleEditing {
-			return true
-		}
-	}
-	return false
+	return anyEditing(d.Repos, func(sel session.RepoSelection) session.RepoRole { return sel.Role })
 }
 
 func holdsEditingRepo(m session.Manifest) bool {
-	for _, r := range m.Repos {
-		if r.Role.Effective() == session.RepoRoleEditing {
+	return anyEditing(m.Repos, func(r session.ManifestRepo) session.RepoRole { return r.Role })
+}
+
+func anyEditing[T any](repos []T, role func(T) session.RepoRole) bool {
+	for _, repo := range repos {
+		if role(repo).Effective() == session.RepoRoleEditing {
 			return true
 		}
 	}

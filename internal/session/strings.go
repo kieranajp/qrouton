@@ -46,9 +46,8 @@ const (
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
 
-	// tmpSuffix ends the name of a staging file, which is created uniquely so two
-	// processes staging at once cannot share one.
-	tmpSuffix = ".tmp"
+	// manifestLockName is the flock file every manifest read-modify-write holds.
+	manifestLockName = "manifest.lock"
 )
 
 // Git subcommands, in the order the lifecycle uses them.

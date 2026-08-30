@@ -3,8 +3,8 @@ package session
 // The on-disk contract: the manifest schema and the reads and writes that
 // maintain it. qrouton.json is what makes a directory a session and what every
 // other process — the launcher, the window chrome, the escalate tool — polls, so
-// the schema and its atomic write live together, apart from the assembly
-// behaviour that produces them.
+// the schema and the serialised write that maintains it live together, apart
+// from the assembly behaviour that produces them.
 
 import (
 	"encoding/json"
@@ -12,8 +12,10 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"golang.org/x/sys/unix"
 )
 
 const manifestName = sessionpaths.ManifestName
@@ -204,12 +206,10 @@ func decode(b []byte) (Manifest, error) {
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
 // assistant — so the next launch stamps the new prompt instead of reverting.
 func SetMode(dir string, mode SessionMode) error {
-	m, err := Load(dir)
-	if err != nil {
-		return err
-	}
-	m.Mode = mode.effective()
-	return WriteManifest(dir, m)
+	return UpdateManifest(dir, func(m Manifest) (Manifest, error) {
+		m.Mode = mode.effective()
+		return m, nil
+	})
 }
 
 // Load reads one session directory's manifest.
@@ -221,18 +221,39 @@ func Load(dir string) (Manifest, error) {
 	return decode(b)
 }
 
-// WriteManifest replaces a session's manifest.
+// UpdateManifest applies mutate to a session's manifest under a lock the other
+// writing processes take too, so a load, an edit and the replace that follows
+// it are one step rather than three a concurrent writer can interleave with.
+func UpdateManifest(dir string, mutate func(Manifest) (Manifest, error)) error {
+	return withManifestLock(dir, func() error {
+		prev, err := Load(dir)
+		if err != nil {
+			return err
+		}
+		m, err := mutate(prev)
+		if err != nil {
+			return err
+		}
+		return writeManifest(dir, prev, m)
+	})
+}
+
+// WriteManifest replaces a session's manifest with one composed from nothing on
+// disk. Changing a manifest that already exists goes through UpdateManifest.
 func WriteManifest(dir string, m Manifest) error {
+	prev, _ := Load(dir)
+	return writeManifest(dir, prev, m)
+}
+
+func writeManifest(dir string, prev, m Manifest) error {
 	b, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		return err
 	}
-	// Read before the write: it compares m against what is still on disk.
-	handoff := escalatesToRPI(dir, m)
-	if err := replaceFile(sessionpaths.Manifest(dir), b); err != nil {
+	if err := atomicfile.Replace(sessionpaths.Manifest(dir), b, fileMode); err != nil {
 		return err
 	}
-	if handoff {
+	if escalatesToRPI(prev, m) {
 		// The session-private directory need not exist yet: a manifest can be
 		// written before the launcher stages anything. Best-effort beyond that —
 		// losing the marker costs the fresh context, not the escalation itself.
@@ -242,42 +263,28 @@ func WriteManifest(dir string, m Manifest) error {
 	return nil
 }
 
-// replaceFile puts b at path whole — temp file plus rename — so a poller
-// re-reading it every few seconds never sees a torn write. Several processes
-// write these files, so the temp name is unique per call: a shared one lets a
-// short write land inside a long one and be renamed over.
-func replaceFile(path string, b []byte) error {
-	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*"+tmpSuffix)
+// withManifestLock serialises a read-modify-write against the desktop, the mode
+// verb and assembly, which are separate processes editing the same file.
+func withManifestLock(dir string, fn func() error) error {
+	if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
+		return err
+	}
+	file, err := os.OpenFile(filepath.Join(sessionpaths.Dir(dir), manifestLockName), os.O_CREATE|os.O_RDWR, fileMode)
 	if err != nil {
 		return err
 	}
-	tmp := f.Name()
-	if _, err := f.Write(b); err != nil {
-		f.Close()
-		os.Remove(tmp)
+	defer file.Close()
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
 		return err
 	}
-	if err := f.Chmod(fileMode); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, path); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	return nil
+	defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
+	return fn()
 }
 
-// escalatesToRPI reports whether writing m turns an assistant session into an
-// RPI one. That transition alone hands the next runner a fresh conversation, so
-// it is marked here — the one place every mode change passes through, rather
-// than in each caller that happens to set a mode.
-func escalatesToRPI(dir string, m Manifest) bool {
-	prev, err := Load(dir)
-	return err == nil && prev.Mode.effective() == ModeAssistant && m.Mode.effective() == ModeRPI
+// escalatesToRPI reports whether replacing prev with m turns an assistant
+// session into an RPI one. That transition alone hands the next runner a fresh
+// conversation, so it is marked here — the one place every mode change passes
+// through, rather than in each caller that happens to set a mode.
+func escalatesToRPI(prev, m Manifest) bool {
+	return prev.Mode.effective() == ModeAssistant && m.Mode.effective() == ModeRPI
 }

@@ -132,3 +132,16 @@ func TestAdditionsAcceptAnUpgradeInsteadOfANewEditingRepo(t *testing.T) {
 		t.Fatalf("an upgrade did not satisfy the editing-repo rule: %+v", problems)
 	}
 }
+
+// An unset role reads as editing, on the draft and on the manifest alike.
+func TestAnUnsetRoleSatisfiesTheEditingRepositoryRule(t *testing.T) {
+	d := Draft{Name: "Cleanup", Prefix: "feat",
+		Repos: []session.RepoSelection{{Repo: repoNamed("api")}}}
+	if problems := Check(d); len(problems) != 0 {
+		t.Fatalf("a draft whose only repo has no role rejected: %+v", problems)
+	}
+	legacy := session.Manifest{Repos: []session.ManifestRepo{{Org: "acme", Name: "api"}}}
+	if problems := CheckAdditions(legacy, Draft{Name: "Research", Prefix: "feat"}); len(problems) != 0 {
+		t.Fatalf("addition to a session whose only repo has no role rejected: %+v", problems)
+	}
+}

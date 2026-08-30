@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kieranajp/qrouton/internal/atomicfile"
 )
 
 type Config struct {
@@ -79,7 +81,7 @@ func Save(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(Path(), b, fileMode)
+	return atomicfile.Replace(Path(), b, fileMode)
 }
 
 // WithoutOverrides drops the runtime overrides from an environment, so a process

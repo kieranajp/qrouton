@@ -20,10 +20,6 @@ import (
 // leaves Repos, Activity and Sessions empty: the first costs subprocesses, the
 // second needs a live PTY, and the last is the app's rather than a session's.
 // Agents carries only the manifest provider until the workbench overlays live data.
-//
-// No slice here may be nil. A nil one marshals as JSON null, and the page's
-// defaults only fill keys the payload omits, so null reaches a .length and
-// takes the whole window down with it.
 type Fields struct {
 	Mode     string `json:"mode"`
 	Phase    string `json:"phase"`
@@ -46,6 +42,20 @@ type Fields struct {
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
 	Welcoming bool `json:"welcoming"`
+}
+
+// EmptyFields is the value every producer starts from, and the one place a slice
+// field of it is initialised. No slice may be nil: a nil one marshals as JSON
+// null, and the page's defaults only fill keys the payload omits, so null reaches
+// a .length and takes the whole window down with it.
+func EmptyFields() Fields {
+	return Fields{
+		Sessions:            []SessionRow{},
+		Documents:           []Document{},
+		RepositoryDocuments: []RepositoryDocuments{},
+		Repos:               []RepoStat{},
+		Agents:              AgentPanel{Agents: []AgentRecord{}},
+	}
 }
 
 // SessionRow is one session under the sessions root. A Terminal means this
@@ -128,18 +138,12 @@ type RepoStat struct {
 // Read reports everything a file read can answer about a session. A root with no
 // manifest answers with the session-level fields empty rather than nothing at all.
 func Read(root string) Fields {
-	fields := Fields{
-		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
-		Agents: AgentPanel{Agents: []AgentRecord{}},
-	}
+	fields := EmptyFields()
 	m, err := session.Load(root)
 	if err != nil {
 		return fields
 	}
-	fields.Mode = modeAssistantLabel
-	if m.EffectiveMode() == session.ModeRPI {
-		fields.Mode = modeRPILabel
-	}
+	fields.Mode = modeLabel(m)
 	fields.Phase = phase(root, m)
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
@@ -171,6 +175,13 @@ func Repos(ctx context.Context, root string) []RepoStat {
 	return out
 }
 
+func modeLabel(m session.Manifest) string {
+	if m.EffectiveMode() == session.ModeRPI {
+		return modeRPILabel
+	}
+	return modeAssistantLabel
+}
+
 // phase is the macro-phase only: scratch until repositories exist, then the
 // stage the session's durable documents put it in — a research doc means
 // planning, a plan means implementing.
@@ -200,13 +211,9 @@ func Sessions(root string) []SessionRow {
 	rows := make([]SessionRow, 0, len(found))
 	for _, m := range found {
 		name := m.DisplayName()
-		mode := modeAssistantLabel
-		if m.EffectiveMode() == session.ModeRPI {
-			mode = modeRPILabel
-		}
 		opened, _ := session.LastOpened(filepath.Join(root, m.Slug))
 		rows = append(rows, SessionRow{
-			Name: name, Slug: m.Slug, Initials: initials(name), Mode: mode,
+			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
@@ -354,42 +361,44 @@ func documentsUnder(root, dir string, name func(string) string) []Document {
 	return out
 }
 
+// artifactKinds is the whole artifact taxonomy: the directory a kind is filed
+// under, the label it carries, and the letter its filenames are numbered from.
+// A new kind is this one entry; the lookups and the filename pattern derive.
+var artifactKinds = []struct{ dir, kind, letter string }{
+	{dir: "plans", kind: KindPlan, letter: "p"},
+	{dir: "specs", kind: KindSpec, letter: "s"},
+	{dir: "research", kind: KindResearch, letter: "r"},
+	{dir: "explainers", kind: KindExplainer, letter: "e"},
+}
+
+var kindByDir, kindByLetter, artifactPrefix = indexArtifacts()
+
+func indexArtifacts() (map[string]string, map[string]string, *regexp.Regexp) {
+	dirs := make(map[string]string, len(artifactKinds))
+	letters := make(map[string]string, len(artifactKinds))
+	class := strings.Builder{}
+	for _, a := range artifactKinds {
+		dirs[a.dir] = a.kind
+		letters[a.letter] = a.kind
+		class.WriteString(a.letter)
+	}
+	return dirs, letters, regexp.MustCompile(`(?i)^(([` + class.String() + `])\d+)[-_.]`)
+}
+
 // DocumentKind reads the shared artifact taxonomy first and the workflow's
 // filename prefix second. Anything outside both is a note.
 func DocumentKind(path string) string {
 	for _, part := range strings.Split(strings.ToLower(filepath.ToSlash(path)), "/") {
-		switch part {
-		case "plans":
-			return KindPlan
-		case "specs":
-			return KindSpec
-		case "research":
-			return KindResearch
-		case "explainers":
-			return KindExplainer
+		if kind, ok := kindByDir[part]; ok {
+			return kind
 		}
 	}
-	name := filepath.Base(path)
-	switch {
-	case planPrefix.MatchString(name):
-		return KindPlan
-	case specPrefix.MatchString(name):
-		return KindSpec
-	case researchPrefix.MatchString(name):
-		return KindResearch
-	case explainerPrefix.MatchString(name):
-		return KindExplainer
-	default:
+	match := artifactPrefix.FindStringSubmatch(filepath.Base(path))
+	if match == nil {
 		return KindNote
 	}
+	return kindByLetter[strings.ToLower(match[2])]
 }
-
-var (
-	planPrefix      = regexp.MustCompile(`(?i)^p\d+[-_.]`)
-	specPrefix      = regexp.MustCompile(`(?i)^s\d+[-_.]`)
-	researchPrefix  = regexp.MustCompile(`(?i)^r\d+[-_.]`)
-	explainerPrefix = regexp.MustCompile(`(?i)^e\d+[-_.]`)
-)
 
 // ArtifactID is the numbered prefix a workflow artifact's filename opens with,
 // uppercased, and empty for a filename that opens with anything else.
@@ -400,5 +409,3 @@ func ArtifactID(path string) string {
 	}
 	return strings.ToUpper(match[1])
 }
-
-var artifactPrefix = regexp.MustCompile(`(?i)^([psre]\d+)[-_.]`)
