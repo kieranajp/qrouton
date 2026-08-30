@@ -81,103 +81,183 @@ func (c *control) answer(conn net.Conn, res workbench.Response) {
 	_, _ = conn.Write(append(body, '\n'))
 }
 
-func (c *control) dispatch(req workbench.Request) workbench.Response {
-	switch req.Op {
-	case workbench.OpOpen:
-		if req.Options == nil {
-			return workbench.Response{Error: ErrNoWindowOptions.Error()}
-		}
-		if c.owner == nil {
-			return workbench.Response{Error: ErrNoSession.Error()}
-		}
-		id, err := c.windows.openWindow(c.owner, *req.Options)
-		if err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		return workbench.Response{ID: id}
-	case workbench.OpClose:
-		if err := c.windows.Close(req.ID); err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		return workbench.Response{ID: req.ID}
-	case workbench.OpRead:
-		text, err := c.windows.readWindow(req.ID, req.Full)
-		if err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		return workbench.Response{ID: req.ID, Text: text}
-	case workbench.OpViewport:
-		if c.owner == nil {
-			return workbench.Response{Error: ErrNoSession.Error()}
-		}
-		viewport, err := c.windows.viewport(c.owner, req.ID)
-		if err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		return workbench.Response{ID: req.ID, Viewport: viewport}
-	case workbench.OpExists:
-		return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}
-	case workbench.OpList:
-		return workbench.Response{IDs: c.windows.list()}
-	case workbench.OpPicker:
-		if req.Root == "" || req.Picker == nil {
-			return workbench.Response{Error: ErrNoSessionRoot.Error()}
-		}
-		if c.hooks.picker != nil {
-			if err := c.hooks.picker(*req.Picker); err != nil {
+// guard is a precondition on a request, checked in the order its operation
+// lists them.
+type guard func(*control, workbench.Request) error
+
+type handler struct {
+	guards []guard
+	run    func(*control, workbench.Request) workbench.Response
+}
+
+// handlers is every operation the control socket serves. An operation is one
+// entry: its guards, and a body that may assume they passed.
+var handlers = map[string]handler{
+	workbench.OpOpen: {
+		guards: []guard{needsOptions, needsSession},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			id, err := c.windows.openWindow(c.owner, *req.Options)
+			if err != nil {
 				return workbench.Response{Error: err.Error()}
 			}
-		}
-		return workbench.Response{}
-	case workbench.OpAttention:
-		if c.hooks.attention != nil {
-			c.hooks.attention(req.Activity, req.Generation)
-		}
-		return workbench.Response{}
-	case workbench.OpRunnerGeneration:
-		if c.owner == nil {
-			return workbench.Response{Error: ErrNoSession.Error()}
-		}
-		if req.RunnerGeneration == nil || req.RunnerGeneration.Generation == 0 {
-			return workbench.Response{Error: ErrNoRunnerGeneration.Error()}
-		}
-		if c.hooks.generation != nil {
-			c.hooks.generation(*req.RunnerGeneration)
-		}
-		return workbench.Response{}
-	case workbench.OpDelegatedLifecycle:
-		if c.owner == nil {
-			return workbench.Response{Error: ErrNoSession.Error()}
-		}
-		if req.Lifecycle == nil {
-			return workbench.Response{Error: ErrNoDelegatedLifecycle.Error()}
-		}
-		if c.hooks.lifecycle != nil {
-			c.hooks.lifecycle(*req.Lifecycle)
-		}
-		return workbench.Response{}
-	case workbench.OpOpenLinearIssue:
-		if c.owner != nil || c.hooks.linearIssue == nil {
-			return workbench.Response{Error: ErrProcessIngressOnly.Error()}
-		}
-		if req.LinearIssue == nil || req.LinearIssue.Ticket == "" {
-			return workbench.Response{Error: ErrNoLinearIssue.Error()}
-		}
-		canonical, err := ticket.CanonicalLinearURL(req.LinearIssue.Ticket)
-		if err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		outcome, err := c.hooks.linearIssue(canonical, req.LinearIssue.Prompt)
-		if c.hooks.focus != nil && (err == nil || errors.Is(err, ErrAssemblyDraftConflict)) {
-			c.hooks.focus()
-		}
-		if err != nil {
-			return workbench.Response{Error: err.Error()}
-		}
-		return workbench.Response{Outcome: outcome}
-	default:
+			return workbench.Response{ID: id}
+		},
+	},
+	workbench.OpClose: {
+		run: func(c *control, req workbench.Request) workbench.Response {
+			if err := c.windows.Close(req.ID); err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			return workbench.Response{ID: req.ID}
+		},
+	},
+	workbench.OpRead: {
+		run: func(c *control, req workbench.Request) workbench.Response {
+			text, err := c.windows.readWindow(req.ID, req.Full)
+			if err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			return workbench.Response{ID: req.ID, Text: text}
+		},
+	},
+	workbench.OpViewport: {
+		guards: []guard{needsSession},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			viewport, err := c.windows.viewport(c.owner, req.ID)
+			if err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			return workbench.Response{ID: req.ID, Viewport: viewport}
+		},
+	},
+	workbench.OpExists: {
+		run: func(c *control, req workbench.Request) workbench.Response {
+			return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}
+		},
+	},
+	workbench.OpList: {
+		run: func(c *control, _ workbench.Request) workbench.Response {
+			return workbench.Response{IDs: c.windows.list()}
+		},
+	},
+	workbench.OpPicker: {
+		guards: []guard{needsPickerRequest},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			if c.hooks.picker != nil {
+				if err := c.hooks.picker(*req.Picker); err != nil {
+					return workbench.Response{Error: err.Error()}
+				}
+			}
+			return workbench.Response{}
+		},
+	},
+	workbench.OpAttention: {
+		run: func(c *control, req workbench.Request) workbench.Response {
+			if c.hooks.attention != nil {
+				c.hooks.attention(req.Activity, req.Generation)
+			}
+			return workbench.Response{}
+		},
+	},
+	workbench.OpRunnerGeneration: {
+		guards: []guard{needsSession, needsRunnerGeneration},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			if c.hooks.generation != nil {
+				c.hooks.generation(*req.RunnerGeneration)
+			}
+			return workbench.Response{}
+		},
+	},
+	workbench.OpDelegatedLifecycle: {
+		guards: []guard{needsSession, needsLifecycle},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			if c.hooks.lifecycle != nil {
+				c.hooks.lifecycle(*req.Lifecycle)
+			}
+			return workbench.Response{}
+		},
+	},
+	workbench.OpOpenLinearIssue: {
+		guards: []guard{needsProcessIngress, needsLinearIssue},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			canonical, err := ticket.CanonicalLinearURL(req.LinearIssue.Ticket)
+			if err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			outcome, err := c.hooks.linearIssue(canonical, req.LinearIssue.Prompt)
+			if c.hooks.focus != nil && (err == nil || errors.Is(err, ErrAssemblyDraftConflict)) {
+				c.hooks.focus()
+			}
+			if err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			return workbench.Response{Outcome: outcome}
+		},
+	},
+}
+
+func needsSession(c *control, _ workbench.Request) error {
+	if c.owner == nil {
+		return ErrNoSession
+	}
+	return nil
+}
+
+// needsProcessIngress admits only the published process endpoint: a session's
+// listener has an owner, and the hook is installed on that one endpoint alone.
+func needsProcessIngress(c *control, _ workbench.Request) error {
+	if c.owner != nil || c.hooks.linearIssue == nil {
+		return ErrProcessIngressOnly
+	}
+	return nil
+}
+
+func needsOptions(_ *control, req workbench.Request) error {
+	if req.Options == nil {
+		return ErrNoWindowOptions
+	}
+	return nil
+}
+
+func needsPickerRequest(_ *control, req workbench.Request) error {
+	if req.Root == "" || req.Picker == nil {
+		return ErrNoSessionRoot
+	}
+	return nil
+}
+
+func needsRunnerGeneration(_ *control, req workbench.Request) error {
+	if req.RunnerGeneration == nil || req.RunnerGeneration.Generation == 0 {
+		return ErrNoRunnerGeneration
+	}
+	return nil
+}
+
+func needsLifecycle(_ *control, req workbench.Request) error {
+	if req.Lifecycle == nil {
+		return ErrNoDelegatedLifecycle
+	}
+	return nil
+}
+
+func needsLinearIssue(_ *control, req workbench.Request) error {
+	if req.LinearIssue == nil || req.LinearIssue.Ticket == "" {
+		return ErrNoLinearIssue
+	}
+	return nil
+}
+
+func (c *control) dispatch(req workbench.Request) workbench.Response {
+	h, ok := handlers[req.Op]
+	if !ok {
 		return workbench.Response{Error: unknownOperation(req.Op).Error()}
 	}
+	for _, check := range h.guards {
+		if err := check(c, req); err != nil {
+			return workbench.Response{Error: err.Error()}
+		}
+	}
+	return h.run(c, req)
 }
 
 func (c *control) Close() error {

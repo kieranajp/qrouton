@@ -28,8 +28,6 @@ var (
 	ErrNoDirectoryPicker     = errors.New("workbench has no directory picker to choose a sessions root with")
 	ErrNoViewport            = errors.New("window has no source-mapped viewport")
 	ErrInvalidViewport       = errors.New("invalid document viewport report")
-	ErrNoLinearCommand       = errors.New("workbench has no command for Linear custom scripts")
-	ErrLinearConfigObject    = errors.New("must be a JSON object")
 	ErrAssemblyDraftConflict = errors.New("another New session draft is already open; finish or cancel it before opening a different Linear issue")
 	ErrNoLinearIssue         = errors.New("open Linear issue request carries no ticket")
 	ErrProcessIngressOnly    = errors.New("open Linear issue is available only on the published process socket")

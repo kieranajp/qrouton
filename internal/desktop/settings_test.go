@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/lineartools"
 )
 
 func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string) error,
@@ -20,7 +21,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
 	}, []string{"LINEAR_PROMPT"}, quit)
-	s.linearFile = filepath.Join(t.TempDir(), "coding-tools.json")
+	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
 
@@ -59,50 +60,33 @@ func TestSettingsLoadAnswersEmptyStringForNoLaunchOverrides(t *testing.T) {
 	}
 }
 
-func TestSettingsLoadPrefillsTheLinearConfigWithThisExecutable(t *testing.T) {
+func TestSettingsLoadCarriesTheLinearDocumentAndWhereItLives(t *testing.T) {
 	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	document := "{\n  \"openIssue\": {\"path\": \"/other/tool\"}\n}\n"
+	if err := os.WriteFile(s.linear.File, []byte(document), 0o644); err != nil {
+		t.Fatal(err)
+	}
 
 	got := s.Load()
-	if got.LinearPath != linearConfigPath {
-		t.Fatalf("linear path = %q, want %q", got.LinearPath, linearConfigPath)
+	if got.Linear != document {
+		t.Fatalf("linear = %q, want %q", got.Linear, document)
+	}
+	if got.LinearPath != lineartools.ConfigPath {
+		t.Fatalf("linear path = %q, want %q", got.LinearPath, lineartools.ConfigPath)
 	}
 	if got.LinearError != "" {
 		t.Fatalf("linear error = %q", got.LinearError)
 	}
-	var document linearConfig
-	if err := json.Unmarshal([]byte(got.Linear), &document); err != nil {
-		t.Fatalf("linear starter is not valid JSON: %v (%q)", err, got.Linear)
-	}
-	if document.OpenIssue.Path != s.linearCommand[0] {
-		t.Fatalf("linear executable = %q, want %q", document.OpenIssue.Path, s.linearCommand[0])
-	}
-	wantArgs := []string{s.linearCommand[1], linearIssueTemplate}
-	if !reflect.DeepEqual(document.OpenIssue.Args, wantArgs) {
-		t.Fatalf("linear args = %#v, want %#v", document.OpenIssue.Args, wantArgs)
-	}
-	if !reflect.DeepEqual(document.OpenIssue.Env, s.linearEnv) {
-		t.Fatalf("linear env = %#v, want %#v", document.OpenIssue.Env, s.linearEnv)
-	}
 }
 
-func TestSettingsLoadKeepsAnExistingLinearConfigVerbatim(t *testing.T) {
+// The panel draws the reason in place of the document, so a Linear file that
+// cannot be read or generated has to reach the view as text.
+func TestSettingsLoadReportsWhyTheLinearDocumentIsUnavailable(t *testing.T) {
 	s := testSettings(t, &config.Config{}, nil, nil, nil)
-	existing := "{\n  \"openIssue\": {\"path\": \"/other/tool\"}\n}\n\n"
-	if err := os.WriteFile(s.linearFile, []byte(existing), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	if got := s.Load().Linear; got != existing {
-		t.Fatalf("linear config = %q, want %q", got, existing)
-	}
-}
-
-func TestSettingsLoadNamesAMissingLinearCommandInsteadOfWritingABrokenStarter(t *testing.T) {
-	s := testSettings(t, &config.Config{}, nil, nil, nil)
-	s.linearCommand = nil
+	s.linear.Command = nil
 
 	got := s.Load()
-	if got.Linear != "" || got.LinearError != ErrNoLinearCommand.Error() {
+	if got.Linear != "" || got.LinearError != lineartools.ErrNoCommand.Error() {
 		t.Fatalf("linear = %q, error = %q", got.Linear, got.LinearError)
 	}
 }
@@ -206,7 +190,7 @@ func TestSettingsSaveRefusesAnEmptyOwnerListAndWritesNothing(t *testing.T) {
 	if _, err := os.Stat(root); !os.IsNotExist(err) {
 		t.Fatal("a refused save created the sessions root it was given")
 	}
-	if _, err := os.Stat(s.linearFile); !os.IsNotExist(err) {
+	if _, err := os.Stat(s.linear.File); !os.IsNotExist(err) {
 		t.Fatal("a refused save wrote coding-tools.json")
 	}
 }
@@ -245,53 +229,29 @@ func TestSettingsSaveRefusesAnInvalidLinearConfigBeforeWritingEitherFile(t *test
 		if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
 			t.Fatalf("Save(%q) wrote config.json despite refusing Linear", raw)
 		}
-		if _, statErr := os.Stat(s.linearFile); !os.IsNotExist(statErr) {
+		if _, statErr := os.Stat(s.linear.File); !os.IsNotExist(statErr) {
 			t.Fatalf("Save(%q) wrote coding-tools.json despite refusing Linear", raw)
 		}
 	}
 }
 
-func TestSettingsSaveCreatesTheLinearStarterAndItsDirectory(t *testing.T) {
+// Save writes both files, so the Linear document the panel handed back lands on
+// disk beside config.json.
+func TestSettingsSaveWritesTheLinearDocumentBesideTheConfig(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	s := testSettings(t, &config.Config{Root: root}, nil, nil, nil)
-	s.linearFile = filepath.Join(t.TempDir(), ".linear", "coding-tools.json")
-	starter := s.Load().Linear
+	document := `{"openIssue": {"path": "/bin/true"}}`
 
-	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root, Linear: starter}); err != nil {
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root, Linear: document}); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(s.linearFile)
+	raw, err := os.ReadFile(s.linear.File)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var document linearConfig
-	if err := json.Unmarshal(raw, &document); err != nil {
-		t.Fatal(err)
-	}
-	if document.OpenIssue.Path != s.linearCommand[0] {
-		t.Fatalf("linear executable = %q, want %q", document.OpenIssue.Path, s.linearCommand[0])
-	}
-}
-
-func TestSettingsSaveDoesNotRewriteAnUnchangedLinearConfig(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	root := t.TempDir()
-	s := testSettings(t, &config.Config{Root: root}, nil, nil, nil)
-	existing := "{\n  \"custom\": true\n}\n\n"
-	if err := os.WriteFile(s.linearFile, []byte(existing), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	if _, err := s.Save(SettingsInput{Orgs: []string{"acme"}, Root: root, Linear: s.Load().Linear}); err != nil {
-		t.Fatal(err)
-	}
-	raw, err := os.ReadFile(s.linearFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(raw) != existing {
-		t.Fatalf("unchanged Linear config was rewritten as %q", raw)
+	if want := document + "\n"; string(raw) != want {
+		t.Fatalf("wrote %q, want %q", raw, want)
 	}
 }
 
