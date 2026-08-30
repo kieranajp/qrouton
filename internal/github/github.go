@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
@@ -27,11 +28,18 @@ type Repo struct {
 	PushedAt      time.Time `json:"pushed_at"`
 }
 
+// OwnerRepos is one owner's cached repositories and the moment they were
+// fetched. Each owner carries its own timestamp so an owner qrouton failed to
+// reach never presents as freshly fetched.
+type OwnerRepos struct {
+	FetchedAt time.Time `json:"fetchedAt"`
+	Repos     []Repo    `json:"repos"`
+}
+
 type repoCache struct {
-	SchemaVersion int       `json:"schemaVersion"`
-	FetchedAt     time.Time `json:"fetchedAt"`
-	Orgs          []string  `json:"orgs"`
-	Repos         []Repo    `json:"repos"`
+	SchemaVersion int                   `json:"schemaVersion"`
+	Orgs          []string              `json:"orgs"`
+	Owners        map[string]OwnerRepos `json:"owners"`
 }
 
 type RefreshState string
@@ -54,16 +62,41 @@ type RefreshMsg struct {
 }
 
 // CachedRepos is deliberately cache-first: it returns usable cached data even
-// when stale. The bool reports whether a matching cache exists.
+// when stale. The bool reports whether a matching cache exists. The timestamp is
+// the oldest owner's, which is how fresh the whole list is; an owner the cache
+// has never held counts as never fetched.
 func CachedRepos(orgs []string) ([]Repo, time.Time, bool) {
+	owners, ok := CachedOwnerRepos(orgs)
+	if !ok {
+		return nil, time.Time{}, false
+	}
+	var repos []Repo
+	var oldest time.Time
+	for i, owner := range orgs {
+		entry := owners[cacheKey(owner)]
+		repos = append(repos, entry.Repos...)
+		if i == 0 || entry.FetchedAt.Before(oldest) {
+			oldest = entry.FetchedAt
+		}
+	}
+	SortReposByActivity(repos)
+	return repos, oldest, true
+}
+
+// CachedOwnerRepos answers per owner, so a caller can say which owners are stale
+// and by how much. Keys are lowercased owners; an owner the cache has never held
+// is absent.
+func CachedOwnerRepos(orgs []string) (map[string]OwnerRepos, bool) {
 	var c repoCache
 	b, err := os.ReadFile(config.CachePath())
 	if err != nil || json.Unmarshal(b, &c) != nil || c.SchemaVersion != cacheSchemaVersion || !slices.Equal(c.Orgs, orgs) {
-		return nil, time.Time{}, false
+		return nil, false
 	}
-	repos := slices.Clone(c.Repos)
-	SortReposByActivity(repos)
-	return repos, c.FetchedAt, true
+	owners := make(map[string]OwnerRepos, len(c.Owners))
+	for owner, entry := range c.Owners {
+		owners[cacheKey(owner)] = entry
+	}
+	return owners, true
 }
 
 // RefreshRepos fetches configured owners concurrently. Successful results are
@@ -90,6 +123,7 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		}
 
 		merged := OwnedBy(cached, orgs)
+		fresh := map[string]bool{}
 		for range orgs {
 			r := <-results
 			if r.err != nil {
@@ -98,12 +132,14 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 			}
 			merged = ReplaceOwnerRepos(merged, r.owner, r.repos)
 			SortReposByActivity(merged)
+			fresh[cacheKey(r.owner)] = true
 			out <- RefreshMsg{Owner: r.owner, State: RefreshSucceeded, Repos: slices.Clone(merged)}
 		}
-		if ctx.Err() == nil {
-			WriteRepoCache(orgs, merged)
+		var err error
+		if ctx.Err() == nil && len(fresh) > 0 {
+			err = writeOwnerCaches(orgs, merged, fresh)
 		}
-		out <- RefreshMsg{State: RefreshComplete, Repos: merged}
+		out <- RefreshMsg{State: RefreshComplete, Repos: merged, Err: err}
 	}()
 	return out
 }
@@ -128,13 +164,52 @@ func ReplaceOwnerRepos(repos []Repo, owner string, replacement []Repo) []Repo {
 	return append(merged, replacement...)
 }
 
-func WriteRepoCache(orgs []string, repos []Repo) {
-	_ = os.MkdirAll(filepath.Dir(config.CachePath()), cacheDirMode)
-	b, err := json.MarshalIndent(repoCache{SchemaVersion: cacheSchemaVersion, FetchedAt: time.Now(), Orgs: orgs, Repos: repos}, "", "  ")
-	if err == nil {
-		_ = os.WriteFile(config.CachePath(), b, cacheFileMode) // cache write failure is not fatal
+// WriteRepoCache records repos as the current result for every listed owner, so
+// each one is stamped as fetched now.
+func WriteRepoCache(orgs []string, repos []Repo) error {
+	fresh := make(map[string]bool, len(orgs))
+	for _, owner := range orgs {
+		fresh[cacheKey(owner)] = true
 	}
+	return writeOwnerCaches(orgs, repos, fresh)
 }
+
+// writeOwnerCaches stamps the owners in fresh as fetched now and leaves every
+// other owner's timestamp at whatever the cache already held, so an owner that
+// could not be reached keeps saying how old its list really is.
+func writeOwnerCaches(orgs []string, repos []Repo, fresh map[string]bool) error {
+	previous, _ := CachedOwnerRepos(orgs)
+	now := time.Now()
+	owners := make(map[string]OwnerRepos, len(orgs))
+	for _, owner := range orgs {
+		key := cacheKey(owner)
+		at := previous[key].FetchedAt
+		if fresh[key] {
+			at = now
+		}
+		owners[key] = OwnerRepos{FetchedAt: at, Repos: ownerRepos(repos, owner)}
+	}
+	if err := os.MkdirAll(filepath.Dir(config.CachePath()), cacheDirMode); err != nil {
+		return err
+	}
+	b, err := json.MarshalIndent(repoCache{SchemaVersion: cacheSchemaVersion, Orgs: orgs, Owners: owners}, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicfile.Replace(config.CachePath(), b, cacheFileMode)
+}
+
+func ownerRepos(repos []Repo, owner string) []Repo {
+	var out []Repo
+	for _, repo := range repos {
+		if strings.EqualFold(repo.Org, owner) {
+			out = append(out, repo)
+		}
+	}
+	return out
+}
+
+func cacheKey(owner string) string { return strings.ToLower(owner) }
 
 // Token resolves credentials: gh auth token, then the environment.
 func Token() (string, error) {

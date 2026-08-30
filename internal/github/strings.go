@@ -31,7 +31,7 @@ const (
 	ownerTypeUser         = "User"
 
 	// cacheSchemaVersion invalidates a cache whose shape predates this build.
-	cacheSchemaVersion = 2
+	cacheSchemaVersion = 3
 
 	// Token discovery: gh owns keychain and hosts.yml resolution, so ask it
 	// first and fall back to the environment.

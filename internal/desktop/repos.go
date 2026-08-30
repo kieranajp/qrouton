@@ -16,7 +16,7 @@ type gh struct {
 	token func() (string, error)
 	all   func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg
 	one   func(ctx context.Context, token, owner string) ([]github.Repo, error)
-	cache func(orgs []string, repos []github.Repo)
+	cache func(orgs []string, repos []github.Repo) error
 }
 
 func liveGitHub() gh {
@@ -154,7 +154,7 @@ func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached
 	}
 	github.SortReposByActivity(merged)
 	if r.clean() && ctx.Err() == nil {
-		r.gh.cache(r.cfg.Orgs, merged)
+		_ = r.gh.cache(r.cfg.Orgs, merged)
 	}
 	r.push(gen, github.RefreshMsg{State: github.RefreshComplete, Repos: merged})
 }
