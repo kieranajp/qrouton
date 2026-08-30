@@ -260,8 +260,8 @@ func (r *registry) stopAll() {
 	}
 }
 
-// announce tells one session's pages what it has open. A background session
-// docking a tab must not redraw the foreground's tab strip.
+// announce tells every page what one session has open. The payload names that
+// session, and a page draws only the tab strip of the one it is showing.
 func (r *registry) announce(owner *sessionState) {
 	r.emit(windowsEvent, r.surfaces(owner))
 }

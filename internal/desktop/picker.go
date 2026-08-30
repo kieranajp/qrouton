@@ -50,7 +50,7 @@ func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal fu
 }
 
 func (p *Picker) Load(slug string) (pickerFields, error) {
-	root, err := p.root(slug)
+	_, root, err := p.root(slug)
 	if err != nil {
 		return pickerFields{}, err
 	}
@@ -72,11 +72,10 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 // Confirm gives the session the picked repositories and takes up the named ones
 // it already reads, escalating it when an escalation is what asked for the picker.
 func (p *Picker) Confirm(slug string, in pickerInput) error {
-	root, err := p.root(slug)
+	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
-	state := p.sessions.bySlug(slug)
 	escalation := state.pendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
@@ -95,11 +94,10 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 }
 
 func (p *Picker) Cancel(slug string) error {
-	root, err := p.root(slug)
+	state, root, err := p.root(slug)
 	if err != nil {
 		return err
 	}
-	state := p.sessions.bySlug(slug)
 	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
 		return err
 	}
@@ -151,12 +149,13 @@ func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
 
 // root is the session the picker is about, which is only ever one this workbench
 // is running.
-func (p *Picker) root(slug string) (string, error) {
+func (p *Picker) root(slug string) (*sessionState, string, error) {
 	state := p.sessions.bySlug(slug)
-	if state == nil || state.root() == "" {
-		return "", unknownSession(slug)
+	root := state.root()
+	if root == "" {
+		return nil, "", unknownSession(slug)
 	}
-	return state.root(), nil
+	return state, root, nil
 }
 
 // queuePicker records an escalation on the session it names and raises nothing.

@@ -204,6 +204,21 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	}
 }
 
+// Every answer is for a session this workbench is running, so a slug it does not
+// hold is refused rather than answered against a session that is not there.
+func TestConfirmAndCancelRefuseASessionThisWorkbenchIsNotRunning(t *testing.T) {
+	reg, shown, _ := pickerWorkbench(t)
+	cfg := &config.Config{Root: filepath.Dir(shown)}
+	p := newPicker(cfg, reg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil)
+
+	if err := p.Confirm("kraken", pickerInput{}); err == nil {
+		t.Fatal("a picker confirmed for a session this workbench is not running")
+	}
+	if err := p.Cancel("kraken"); err == nil {
+		t.Fatal("a picker cancelled for a session this workbench is not running")
+	}
+}
+
 func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 	t.Helper()
 	var fields status.Fields

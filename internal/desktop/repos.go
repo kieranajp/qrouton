@@ -108,8 +108,9 @@ func (r *Repositories) Refresh() int {
 }
 
 // run fans out over every owner, or walks the failed ones alone. The retry half
-// writes the cache itself, and only once every owner is clean — a cache holding
-// one owner's stale list beside another's fresh one is worse than no write.
+// writes the cache itself, and only once every owner is clean: the write stamps
+// every configured owner as fetched now, so writing with one still failing would
+// date its stale list to this moment.
 func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached []github.Repo) {
 	if r.done != nil {
 		defer r.done(gen)
