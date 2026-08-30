@@ -1,11 +1,13 @@
 <script>
   import StatusDot from "../core/StatusDot.svelte";
+  import { artifactTone } from "../artifacts.js";
   import { tabLabel } from "./tabs.js";
 
   // An unfocused tab that cannot report a red test run is one you must click to
   // trust, so the process's state rides along with the label.
-  /** @type {{label?: string, badge?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, onSelect?: () => void, onClose?: () => void, [attribute: string]: any}} */
-  let { label, badge, status, selected = false, closable = true, onSelect, onClose, ...rest } = $props();
+  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, onSelect?: () => void, onClose?: () => void, [attribute: string]: any}} */
+  let { label, badge, artifact, status, selected = false, closable = true, onSelect, onClose, ...rest } =
+    $props();
 
   let whole = $derived(tabLabel({ badge, label }));
 </script>
@@ -13,7 +15,7 @@
 <div class="tab" class:selected title={whole} {...rest}>
   <button type="button" class="select" onclick={onSelect}>
     {#if status}<StatusDot state={status === "succeeded" ? "success" : status} size={7} />{/if}
-    <span class="label">{#if badge}<span class="badge">{badge}</span>{/if}{label}</span>
+    <span class="label">{#if badge}<span class="badge" style:color={artifactTone(artifact)}>{badge}</span>{/if}{label}</span>
   </button>
   {#if closable}
     <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}
@@ -74,11 +76,10 @@
     color: var(--text-primary);
   }
 
-  /* A badge is a plan's id, so it wears the plan artifact's colour whether the
+  /* A badge is an artifact's id, so it wears that artifact's colour whether the
      tab is selected or not. */
   .badge {
     margin-right: 0.5ch;
-    color: var(--artifact-plan);
   }
 
   .close {

@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -24,7 +25,7 @@ func Status(root string, m Manifest) WorkflowStatus {
 	plans := markdownFiles(filepath.Join(dir, scaffoldPlans))
 	status := WorkflowStatus{Plan: len(plans) > 0}
 	for _, path := range research {
-		if !strings.Contains(strings.ToLower(filepath.Base(path)), questionsMarker) {
+		if researched(path) {
 			status.Research = true
 			break
 		}
@@ -40,6 +41,28 @@ func Status(root string, m Manifest) WorkflowStatus {
 		}
 	}
 	return status
+}
+
+// researched reports whether a research document holds findings. Framing writes
+// the document first, carrying its questions as headings with only the context a
+// researcher needs under them, so headings alone are not research. A document
+// that opens no sections is prose findings, and an empty one is a file still
+// being written. Older sessions keep their questions in a file named for them.
+func researched(path string) bool {
+	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
+		return false
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	sections := markdown.Sections(string(body))
+	for _, section := range sections {
+		if section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summaryHeading) {
+			return true
+		}
+	}
+	return len(sections) == 0 && strings.TrimSpace(markdown.Body(string(body))) != ""
 }
 
 func markdownFiles(dir string) []string {

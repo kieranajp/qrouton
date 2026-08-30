@@ -1,6 +1,9 @@
 package markdown
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestTitleIsTheHeadingTheDocumentOpensWith(t *testing.T) {
 	for _, tc := range []struct {
@@ -38,6 +41,65 @@ func TestTitleIsTheHeadingTheDocumentOpensWith(t *testing.T) {
 			got, ok := Title(tc.text)
 			if got != tc.want || ok != tc.found {
 				t.Fatalf("Title(%q) = %q, %v; want %q, %v", tc.text, got, ok, tc.want, tc.found)
+			}
+		})
+	}
+}
+
+func TestSectionsSeparatesFramingFromWhatWasWritten(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want []Section
+	}{
+		{"nothing to open", "# Title\n\nJust prose.\n", nil},
+		{"a section with prose", "## How does it retry?\n\nThree times.\n", []Section{{"How does it retry?", SectionAnswered}}},
+		{"a heading with nothing under it", "## Open Questions\n", []Section{{"Open Questions", SectionEmpty}}},
+		{"framing is not an answer", "## How?\n\n> Start in retry.go.\n", []Section{{"How?", SectionFramed}}},
+		{
+			"an answer beside its framing",
+			"## How?\n\n> Start in retry.go.\n\nIt doubles the wait.\n",
+			[]Section{{"How?", SectionAnswered}},
+		},
+		{
+			"a fenced heading opens nothing and answers its own section",
+			"## How?\n\n```go\n## not a heading\n```\n",
+			[]Section{{"How?", SectionAnswered}},
+		},
+		{
+			"frontmatter naming a section opens nothing",
+			"---\n## not a section\n---\n\n## Real\n\nBody.\n",
+			[]Section{{"Real", SectionAnswered}},
+		},
+		{"unclosed frontmatter leaves no document to read", "---\n## Real\n\nBody.\n", nil},
+		{"empty", "", nil},
+		{"prose above the first heading belongs to no section", "Lead prose.\n\n## First\n", []Section{{"First", SectionEmpty}}},
+		{
+			"each section is judged on its own",
+			"## One\n\nAnswered.\n\n## Two\n\n> Framed.\n\n## Three\n",
+			[]Section{{"One", SectionAnswered}, {"Two", SectionFramed}, {"Three", SectionEmpty}},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Sections(tc.text)
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("Sections(%q) = %#v; want %#v", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestBodyIsWhatIsLeftAfterFrontmatter(t *testing.T) {
+	for _, tc := range []struct{ name, text, want string }{
+		{"no frontmatter", "# Retry\n\nbody\n", "# Retry\n\nbody\n"},
+		{"behind frontmatter", "---\na: 1\n---\n# Retry\n", "# Retry\n"},
+		{"frontmatter is the whole file", "---\na: 1\n---\n", ""},
+		{"unclosed frontmatter", "---\n# Retry\n", ""},
+		{"empty", "", ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Body(tc.text); got != tc.want {
+				t.Fatalf("Body(%q) = %q; want %q", tc.text, got, tc.want)
 			}
 		})
 	}

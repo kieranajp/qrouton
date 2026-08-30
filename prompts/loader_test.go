@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
@@ -169,6 +171,39 @@ func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
 	}
 }
 
+// The research document's shape is one file, read by the workbench pane and
+// written by the lead, so the skill points at it rather than restating it.
+func TestResearchSkillDefersItsShapeToAReference(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	headings := []string{"## Summary", "## Open Questions"}
+	for _, heading := range headings {
+		if strings.Contains(string(prompt.Content), heading) {
+			t.Errorf("SKILL.md still holds %q from the research template", heading)
+		}
+	}
+	if !strings.Contains(string(prompt.Content), "references/research-shape.md") {
+		t.Error("SKILL.md does not point at its reference")
+	}
+	var found bool
+	for _, file := range prompt.Files {
+		if file.Path != "references/research-shape.md" {
+			continue
+		}
+		found = true
+		for _, heading := range headings {
+			if !strings.Contains(string(file.Content), heading) {
+				t.Errorf("the shape reference is missing %q", heading)
+			}
+		}
+	}
+	if !found {
+		t.Errorf("the research skill ships %#v, none of them the shape", prompt.Files)
+	}
+}
+
 // With whole folders embedded, a SKILL.md deeper inside a skill is one of that
 // skill's files rather than a skill the loader lists twice.
 func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
@@ -185,5 +220,43 @@ func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
 	}
 	if len(listed[0].Files) != 1 || listed[0].Files[0].Path != "references/SKILL.md" {
 		t.Fatalf("the nested file is not the skill's own: %#v", listed[0].Files)
+	}
+}
+
+// The template is the contract between the step that frames a research document
+// and the readers that ask whether it has been answered yet, so read it the way
+// they do.
+func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var shape string
+	for _, file := range prompt.Files {
+		if file.Path == "references/research-shape.md" {
+			shape = string(file.Content)
+		}
+	}
+	template, _, found := strings.Cut(shape, "\n```\n")
+	if !found {
+		t.Fatal("the shape reference holds no fenced template")
+	}
+	_, template, found = strings.Cut(template, "```markdown\n")
+	if !found {
+		t.Fatal("the shape reference's template is not fenced as markdown")
+	}
+
+	sections := markdown.Sections(template)
+	if len(sections) != 3 {
+		t.Fatalf("the template opens %#v", sections)
+	}
+	if sections[0].Name != "Summary" || sections[0].State != markdown.SectionAnswered {
+		t.Errorf("the pinned summary reads as %#v", sections[0])
+	}
+	if sections[1].State != markdown.SectionFramed {
+		t.Errorf("a question reads as %#v rather than framing awaiting an answer", sections[1])
+	}
+	if sections[2].Name != "Open Questions" || sections[2].State != markdown.SectionEmpty {
+		t.Errorf("the closing section reads as %#v", sections[2])
 	}
 }

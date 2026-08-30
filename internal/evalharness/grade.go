@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\b(QRSPI|qrspi-[a-z-]+|agent depth|document numbering)\b`)
@@ -86,8 +88,8 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return artifactContains(workspace, check.Path, check.Pattern)
 	case checkArtifactMaxLines:
 		return artifactMaxLines(workspace, check.Path, check.MaxLines)
-	case checkResearchPair:
-		return researchPair(workspace, check.Path)
+	case checkResearchAnswered:
+		return researchAnswered(workspace, check.Path)
 	case checkSentinelSafe:
 		return sentinelSafe(result, check.Pattern)
 	case checkOpenFile:
@@ -175,20 +177,44 @@ func sentinelSafe(result CaseResult, sentinel string) Assertion {
 	}
 }
 
-func researchPair(workspace, questionsPattern string) Assertion {
-	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(questionsPattern)))
-	var pairs []string
-	for _, questions := range matches {
-		findings := strings.Replace(strings.TrimSuffix(questions, markdownExt), researchQuestionsSuffix, "", 1) + markdownExt
-		if fileExists(findings) {
-			pairs = append(pairs, questions+" + "+findings)
+// researchAnswered separates a research document that was filled in from one
+// that was only framed. A section left holding the blockquote a researcher was
+// given is the framing surviving unconsumed; an empty one is tolerated, since a
+// finished document may have nothing outstanding to say under its last heading.
+func researchAnswered(workspace, pattern string) Assertion {
+	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(pattern)))
+	if err != nil {
+		return Assertion{Name: assertResearchAnswered, Evidence: err.Error()}
+	}
+	if len(matches) == 0 {
+		return Assertion{Name: assertResearchAnswered, Evidence: evidenceNoArtifacts}
+	}
+
+	var framed []string
+	answered := false
+	for _, match := range matches {
+		content, readErr := os.ReadFile(match)
+		if readErr != nil {
+			framed = append(framed, readErr.Error())
+			continue
+		}
+		relative, relErr := filepath.Rel(workspace, match)
+		if relErr != nil {
+			relative = match
+		}
+		for _, section := range markdown.Sections(string(content)) {
+			switch {
+			case section.State == markdown.SectionFramed:
+				framed = append(framed, filepath.ToSlash(relative)+": "+section.Name)
+			case section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summarySection):
+				answered = true
+			}
 		}
 	}
-	evidence := strings.Join(pairs, evidenceJoiner)
-	if err != nil {
-		evidence = err.Error()
+	if !answered {
+		framed = append(framed, evidenceNothingAnswered)
 	}
-	return Assertion{Name: assertResearchPair, Passed: err == nil && len(pairs) > 0, Evidence: evidence}
+	return Assertion{Name: assertResearchAnswered, Passed: len(framed) == 0, Evidence: strings.Join(framed, evidenceJoiner)}
 }
 
 func fileAssertion(workspace, pattern string, expected bool) Assertion {

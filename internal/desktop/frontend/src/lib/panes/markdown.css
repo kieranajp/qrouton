@@ -1,9 +1,3 @@
-/* The gutter is declared on the wrapper because the pane's own heading lines up
-   against it too, and a sibling cannot read what .markdown declares. */
-.document {
-  --gutter: 4.5ch;
-}
-
 /* Global: the body is html the pipeline made, out of scoped styles' reach. */
 .markdown {
   font: var(--machine-lg);

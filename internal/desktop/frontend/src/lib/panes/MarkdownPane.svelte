@@ -3,10 +3,9 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
-  import { openDocument } from "../docked.svelte.js";
-  import { Call, Events, copyText, openURL } from "../wails.js";
-  import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
-  import { documentPath, linkKind, marks, render } from "./markdown.js";
+  import { Call, copyText } from "../wails.js";
+  import { diagrams, links } from "./actions.js";
+  import { marks, render } from "./markdown.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
 
@@ -27,47 +26,6 @@
       copied = true;
       setTimeout(() => (copied = false), 1200);
     } catch {}
-  }
-
-  /** @param {HTMLElement} body */
-  function links(body) {
-    /** @param {MouseEvent} event */
-    const click = (event) => {
-      const anchor = /** @type {HTMLElement} */ (event.target)?.closest("a");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href");
-      // Following it would replace the app with a file the webview cannot draw.
-      event.preventDefault();
-      if (linkKind(href) === "document") {
-        openDocument(documentPath(href ?? "", doc.source)).catch(() => {});
-      } else if (linkKind(href) === "external") {
-        openURL(href ?? "");
-      }
-    };
-    body.addEventListener("click", click);
-    return { destroy: () => body.removeEventListener("click", click) };
-  }
-
-  // Subscribed before the call, so a diagram that lands between the two is
-  // heard rather than missed. The reply names every fence, so the ones still
-  // being laid out are marked as such.
-  /** @param {HTMLElement} body */
-  function diagrams(body, _text) {
-    const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(body, [event.data]));
-    // Rendered markup does not survive a content push, so the fences are asked
-    // for again whenever the text behind them changes.
-    const draw = () =>
-      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-        .then((found) => applyDiagrams(body, found ?? []))
-        .catch(() => {});
-    draw();
-    return {
-      update: draw,
-      destroy: () => {
-        off();
-        teardownDiagrams(body);
-      },
-    };
   }
 
   /** @param {HTMLElement} body */
@@ -119,8 +77,8 @@
   <div
     class="markdown"
     data-document-source={doc.source}
-    use:links
-    use:diagrams={doc.text}
+    use:links={doc.source}
+    use:diagrams={{ id, text: doc.text }}
     use:viewport={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>

@@ -6,12 +6,12 @@
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
   import { chrome } from "../chrome.svelte.js";
-  import { openDocument } from "../docked.svelte.js";
-  import { Call, Events, copyText, openURL } from "../wails.js";
-  import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
+  import { Call, copyText } from "../wails.js";
+  import { diagrams, links } from "./actions.js";
   import MarkdownPane from "./MarkdownPane.svelte";
-  import { documentPath, linkKind, marks, render } from "./markdown.js";
+  import { marks, render } from "./markdown.js";
   import { criteriaSpans, parsePlan } from "./plan.js";
+  import { dealt } from "./sections.js";
   import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
 
@@ -93,47 +93,28 @@
     return slide.number === null ? slide.name : `${slide.number} / ${plan.phases.length}`;
   }
 
-  /** @param {Element} node */
-  function spanOf(node) {
-    const own = Number(/** @type {HTMLElement} */ (node).dataset?.line);
-    if (own > 0) {
-      return { from: own, to: Number(/** @type {HTMLElement} */ (node).dataset.lineEnd) || own };
-    }
-    const inside = [...node.querySelectorAll("[data-line]")].map((el) => ({
-      from: Number(/** @type {HTMLElement} */ (el).dataset.line),
-      to: Number(/** @type {HTMLElement} */ (el).dataset.lineEnd),
-    }));
-    if (inside.length === 0) return null;
-    return {
-      from: Math.min(...inside.map((at) => at.from)),
-      to: Math.max(...inside.map((at) => at.to || at.from)),
-    };
-  }
-
   // The deck is one rendered document dealt out by the source lines its blocks
-  // already carry. A block the parser numbered nowhere takes the range of the
-  // numbered blocks inside it, or failing that the range of the block before it.
+  // already carry: the opening heading, the body, and the criteria the phase
+  // states, each into the slide whose span holds it.
   function partition(html, parsed) {
-    const holder = document.createElement("div");
-    holder.innerHTML = html;
     const preamble = [];
     const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
-    let at = { from: 0, to: 0 };
-    for (const node of [...holder.children]) {
-      at = spanOf(node) ?? at;
-      const index = parsed.slides.findIndex((slide) => at.from >= slide.from && at.from <= slide.to);
+    for (const block of dealt(html)) {
+      const index = parsed.slides.findIndex(
+        (slide) => block.from >= slide.from && block.from <= slide.to,
+      );
       if (index < 0) {
-        preamble.push(node.outerHTML);
+        preamble.push(block.html);
         continue;
       }
       const verify = criteriaSpans(parsed.slides[index]);
       const bucket =
-        at.from === parsed.slides[index].from
+        block.from === parsed.slides[index].from
           ? "opening"
-          : verify && at.from >= verify.from && at.to <= verify.to
+          : verify && block.from >= verify.from && block.to <= verify.to
             ? "criteria"
             : "body";
-      slides[index][bucket].push(node.outerHTML);
+      slides[index][bucket].push(block.html);
     }
     return {
       preamble: preamble.join(""),
@@ -231,43 +212,6 @@
     } catch {}
   }
 
-  /** @param {HTMLElement} deckBody */
-  function links(deckBody) {
-    /** @param {MouseEvent} event */
-    const click = (event) => {
-      const anchor = /** @type {HTMLElement} */ (event.target)?.closest("a");
-      if (!anchor) return;
-      const href = anchor.getAttribute("href");
-      event.preventDefault();
-      if (linkKind(href) === "document") {
-        openDocument(documentPath(href ?? "", doc.source)).catch(() => {});
-      } else if (linkKind(href) === "external") {
-        openURL(href ?? "");
-      }
-    };
-    deckBody.addEventListener("click", click);
-    return { destroy: () => deckBody.removeEventListener("click", click) };
-  }
-
-  /** @param {HTMLElement} deckBody */
-  function diagrams(deckBody, _text) {
-    const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(deckBody, [event.data]));
-    // Rendered markup does not survive a content push, so the fences are asked
-    // for again whenever the text behind them changes.
-    const draw = () =>
-      Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
-        .then((found) => applyDiagrams(deckBody, found ?? []))
-        .catch(() => {});
-    draw();
-    return {
-      update: draw,
-      destroy: () => {
-        off();
-        teardownDiagrams(deckBody);
-      },
-    };
-  }
-
   // A span running past a phase boundary says nothing about the phase after
   // it, so the pane neither marks that part nor scrolls to it.
   function requested() {
@@ -363,8 +307,8 @@
         class="deck"
         bind:this={body}
         data-document-source={doc.source}
-        use:links
-        use:diagrams={doc.text}
+        use:links={doc.source}
+        use:diagrams={{ id, text: doc.text }}
         use:viewport={{ id, active, scrollRoot, screen: current }}>
         <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
           <CapsLabel
@@ -505,7 +449,6 @@
 
 <style>
   .document {
-    --gutter: 4.5ch;
     --pane-pad: 34px;
     display: flex;
     flex-direction: column;

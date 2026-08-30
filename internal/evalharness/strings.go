@@ -66,7 +66,7 @@ const (
 	checkArtifactMaxLines = "artifact_max_lines"
 	checkResponseContains = "response_contains"
 	checkResponseExcludes = "response_excludes"
-	checkResearchPair     = "research_pair"
+	checkResearchAnswered = "research_answered"
 	checkSentinelSafe     = "sentinel_safe"
 	checkOpenFile         = "open_file"
 	checkDelegation       = "delegation"
@@ -86,7 +86,7 @@ const (
 	assertArtifactMaxLines = "artifact within line limit: "
 	assertArtifactExists   = "artifact exists: "
 	assertArtifactAbsent   = "artifact absent: "
-	assertResearchPair     = "paired research questions and findings"
+	assertResearchAnswered = "every question in the research document answered"
 	assertSentinelSafe     = "ticket sentinel absent from research briefs and artifacts"
 	assertOpenFile         = "completed document presented with open_file"
 	assertDelegatedTo      = "delegated to "
@@ -98,6 +98,7 @@ const (
 	evidenceUnsupportedCheck = "unsupported check kind"
 	evidenceInvalidLineLimit = "max_lines must be greater than zero"
 	evidenceNoArtifacts      = "no matching artifacts"
+	evidenceNothingAnswered  = "no question answered outside the summary"
 	evidenceNoTestManifest   = "no supported test manifest"
 	evidenceCollaboration    = "collaboration=%t target=%t"
 	evidenceTimeoutFormat    = "test run exceeded %s: %s"
@@ -113,9 +114,9 @@ const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
 
-	// researchQuestionsSuffix pairs a questions document with its findings.
-	researchQuestionsSuffix = "-questions"
-	markdownExt             = ".md"
+	// summarySection is the research document's pinned first section, which
+	// carries the framing before it carries the findings.
+	summarySection = "Summary"
 
 	researchPathSegment = "/research/"
 

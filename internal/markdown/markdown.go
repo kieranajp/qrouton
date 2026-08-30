@@ -1,7 +1,8 @@
-// Package markdown answers the one question qrouton asks of a document's text:
-// what does it call itself. A tab label and a shared page's title are the same
-// question, so they are the same answer. Nothing here renders anything — the
-// workbench's page and the share bundle each do their own.
+// Package markdown answers what qrouton asks of a document's text: what it
+// calls itself, and which of its sections have been written. A tab label and a
+// shared page's title are the same question, so they are the same answer.
+// Nothing here renders anything — the workbench's page and the share bundle
+// each do their own.
 package markdown
 
 import "strings"
@@ -9,8 +10,15 @@ import "strings"
 // fence opens and closes a frontmatter block.
 const fence = "---"
 
-// heading marks the level-one heading a document titles itself with.
-const heading = "# "
+// heading names the document and subheading opens a section; a code fence
+// suspends subheading, and a blockquote under one is framing rather than an
+// answer.
+const (
+	heading    = "# "
+	subheading = "## "
+	codeFence  = "```"
+	quote      = ">"
+)
 
 // Title is the level-one heading a document opens with, after any frontmatter,
 // and false for a document that opens with anything else — prose, a lower
@@ -29,6 +37,12 @@ func Title(text string) (string, bool) {
 		return "", false
 	}
 	return "", false
+}
+
+// Body is the document with any frontmatter dropped: what a reader would see.
+// Empty for a document that is nothing but frontmatter, closed or not.
+func Body(text string) string {
+	return strings.Join(body(text), "\n")
 }
 
 // body is text's lines with any frontmatter block dropped, which is parsed but
@@ -52,4 +66,53 @@ func body(text string) []string {
 		return nil
 	}
 	return nil
+}
+
+// SectionState is how far a section has been taken. A research document is
+// framed before it is answered: its questions are written as headings with the
+// context a researcher needs in a blockquote, and answering replaces that
+// blockquote with the finding.
+type SectionState int
+
+const (
+	SectionEmpty SectionState = iota
+	SectionFramed
+	SectionAnswered
+)
+
+// Section is one second-level heading and what stands under it.
+type Section struct {
+	Name  string
+	State SectionState
+}
+
+// Sections reads a document's second-level headings in order. A heading inside
+// a fenced block opens nothing, and text above the first heading belongs to no
+// section.
+func Sections(text string) []Section {
+	var sections []Section
+	fenced := false
+	for _, line := range body(text) {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, codeFence) {
+			fenced = !fenced
+		} else if !fenced {
+			if name, ok := strings.CutPrefix(line, subheading); ok {
+				sections = append(sections, Section{Name: strings.TrimSpace(name)})
+				continue
+			}
+		}
+		if len(sections) == 0 || trimmed == "" {
+			continue
+		}
+		section := &sections[len(sections)-1]
+		if strings.HasPrefix(trimmed, quote) {
+			if section.State == SectionEmpty {
+				section.State = SectionFramed
+			}
+			continue
+		}
+		section.State = SectionAnswered
+	}
+	return sections
 }

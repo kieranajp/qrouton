@@ -16,17 +16,55 @@ func TestStatusInfersRPIFromDocuments(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	os.WriteFile(filepath.Join(shared, "research", "R1-questions.md"), []byte("questions"), 0o644)
+	research := filepath.Join(shared, "research", "R1-retry.md")
+	os.WriteFile(research, []byte("# Retry\n\n## Summary\n\nWhat is being looked at.\n\n## How does it retry?\n\n> Start in retry.go.\n"), 0o644)
 	os.WriteFile(filepath.Join(shared, "plans", "P1.md"), []byte("- [x] first\n- [ ] second\n"), 0o644)
 	got := Status(root, m)
 	if got.Research || !got.Plan || got.Implement {
-		t.Fatalf("questions and partial plan status = %#v", got)
+		t.Fatalf("framed research and partial plan status = %#v", got)
 	}
-	os.WriteFile(filepath.Join(shared, "research", "R1-findings.md"), []byte("findings"), 0o644)
+	os.WriteFile(research, []byte("# Retry\n\n## Summary\n\nIt backs off three times.\n\n## How does it retry?\n\nThree attempts, doubling the wait.\n"), 0o644)
 	os.WriteFile(filepath.Join(shared, "plans", "P1.md"), []byte("- [x] first\n- [x] second\n"), 0o644)
 	got = Status(root, m)
 	if !got.Research || !got.Plan || !got.Implement {
-		t.Fatalf("complete document status = %#v", got)
+		t.Fatalf("answered document status = %#v", got)
+	}
+}
+
+// Sessions older than the single document keep their questions in a file named
+// for them and their findings in prose that opens no sections at all.
+func TestStatusReadsResearchWrittenAsAPair(t *testing.T) {
+	root := t.TempDir()
+	m := Manifest{Slug: "checkout"}
+	research := filepath.Join(root, m.Slug, "thoughts", "shared", "research")
+	if err := os.MkdirAll(research, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(research, "R1-retry-questions.md"), []byte("# Retry questions\n\n- Where is cancellation enforced?\n"), 0o644)
+	if got := Status(root, m); got.Research {
+		t.Fatalf("a questions file alone read as research: %#v", got)
+	}
+
+	os.WriteFile(filepath.Join(research, "R1-retry.md"), []byte("# Retry\n\nThe service bounds attempts but takes no context.\n"), 0o644)
+	if got := Status(root, m); !got.Research {
+		t.Fatalf("prose findings did not read as research: %#v", got)
+	}
+}
+
+// A file the framing step is midway through writing is not research, and the
+// research directory is where a half-written one lands.
+func TestStatusIgnoresAResearchFileWithNothingInIt(t *testing.T) {
+	root := t.TempDir()
+	m := Manifest{Slug: "checkout"}
+	research := filepath.Join(root, m.Slug, "thoughts", "shared", "research")
+	if err := os.MkdirAll(research, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{"", "---\nkind: research\n"} {
+		os.WriteFile(filepath.Join(research, "R1-retry.md"), []byte(body), 0o644)
+		if got := Status(root, m); got.Research {
+			t.Fatalf("a document holding %q read as research: %#v", body, got)
+		}
 	}
 }
 
