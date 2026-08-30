@@ -270,7 +270,7 @@ func withManifestLock(dir string, fn func() error) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
 		return err
 	}
-	return atomicfile.WithLock(filepath.Join(sessionpaths.Dir(dir), manifestLockName), fileMode, fn)
+	return atomicfile.WithLock(sessionpaths.ManifestLock(dir), fileMode, fn)
 }
 
 // escalatesToRPI reports whether replacing prev with m turns an assistant

@@ -45,9 +45,6 @@ const (
 	// notARepositoryMessage appears in git's output when a checkout has outlived
 	// its worktree metadata.
 	notARepositoryMessage = "not a git repository"
-
-	// manifestLockName is the flock file every manifest read-modify-write holds.
-	manifestLockName = "manifest.lock"
 )
 
 // Git subcommands, in the order the lifecycle uses them.

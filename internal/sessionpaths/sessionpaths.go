@@ -26,6 +26,7 @@ const (
 	// discovery files link to.
 	canonicalPromptsDirName = "qrspi"
 
+	manifestLockName   = "manifest.lock"
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
 	handoffName        = "handoff.md"
@@ -44,6 +45,11 @@ func Dir(root string) string { return filepath.Join(root, DirName) }
 
 // Manifest is the session manifest's path.
 func Manifest(root string) string { return filepath.Join(root, ManifestName) }
+
+// ManifestLock is the advisory lock every manifest read-modify-write holds.
+func ManifestLock(root string) string {
+	return filepath.Join(Dir(root), manifestLockName)
+}
 
 // Src is the directory holding a session's repository worktrees.
 func Src(root string) string { return filepath.Join(root, SrcDirName) }
