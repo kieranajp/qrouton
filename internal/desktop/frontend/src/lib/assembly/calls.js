@@ -29,7 +29,11 @@ export const check = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Check", draft);
  * @param {Draft} draft */
 export const checkSlug = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".CheckSlug", draft);
 
-/** @param {Draft} draft */
+/**
+ * preview is the branch, which Go derives from the prefix and the slug alone.
+ * @param {{name: string, entropy: string, prefix: string}} draft
+ * @returns {Promise<string>}
+ */
 export const preview = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Preview", draft);
 
 /** @param {Draft} draft */

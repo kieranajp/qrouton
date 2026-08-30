@@ -5,17 +5,13 @@
   import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
-  import { chrome } from "../chrome.svelte.js";
-  import { Call, copyText } from "../wails.js";
-  import { diagrams, links } from "./actions.js";
+  import { diagrams, links, viewport } from "./actions.js";
+  import CopyPath from "./CopyPath.svelte";
+  import { counterFor, partition, screenFor } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
-  import { marks, render } from "./markdown.js";
-  import { criteriaSpans, parsePlan } from "./plan.js";
-  import { dealt } from "./sections.js";
-  import { createViewportController, nextViewportSequence } from "./viewport.js";
+  import { render } from "./markdown.js";
+  import { parsePlan } from "./plan.js";
   import "./markdown.css";
-
-  const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
   const DOT = {
     met: "var(--state-success)",
@@ -24,22 +20,20 @@
   };
   const WORD = { met: "Met", working: "Working", "not-started": "Not started" };
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id, active = false, scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean}} */
+  let { doc, id, active = false, scrollRoot, agentWorking = false } = $props();
 
   let rendered = $derived(render(doc.text));
   let plan = $derived(parsePlan(doc.text));
   let deck = $derived(partition(rendered.body, plan));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
-  let copied = $state(false);
   let mode = $state("plan");
   let pinned = $state(false);
   // A mark answers the request that opened the pane; a remount must not revive
   // one the reader has already navigated away from.
   let retired = $state(false);
 
-  const session = chrome();
   let allMet = $derived(plan.phases.length > 0 && plan.phases.every((phase) => phase.state === "met"));
   // The phase the meter rests on, and with nothing unmet left to point at, the
   // last one. The bar names it from the phase itself: a screen counts sections
@@ -49,9 +43,8 @@
   // An agent is working somewhere in this session. Nothing here knows whether
   // it is working on this plan, and the bar must not say that it does. A deck
   // of nothing but sections has no meter, so it has nothing to report.
-  let live = $derived((session.fields.activity === "working" || allMet) && Boolean(metered));
+  let live = $derived((agentWorking || allMet) && Boolean(metered));
 
-  /** Screen 0 is the overview; phase at index n is screen n + 1. */
   let current = $state(untrack(() => screenFor(plan.slides, doc.line ?? 0)));
   // The pane is on the meter's phase and will stay with it. Anything that moves
   // the reader off it, or pins them to it, ends that.
@@ -77,54 +70,6 @@
       if (current > count) current = count;
     });
   });
-
-  function screenFor(slides, line) {
-    if (!line || line < 1) return 0;
-    const at = slides.findIndex((slide) => line >= slide.from && line <= slide.to);
-    return at < 0 ? 0 : at + 1;
-  }
-
-  // A phase slide counts in phases, because that is what its heading numbers.
-  // Anything else answers with its own name, which is the only honest label a
-  // section has: it has no position in a sequence the document defines.
-  function counterFor(screen) {
-    if (screen === 0) return "Overview";
-    const slide = plan.slides[screen - 1];
-    return slide.number === null ? slide.name : `${slide.number} / ${plan.phases.length}`;
-  }
-
-  // The deck is one rendered document dealt out by the source lines its blocks
-  // already carry: the opening heading, the body, and the criteria the phase
-  // states, each into the slide whose span holds it.
-  function partition(html, parsed) {
-    const preamble = [];
-    const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
-    for (const block of dealt(html)) {
-      const index = parsed.slides.findIndex(
-        (slide) => block.from >= slide.from && block.from <= slide.to,
-      );
-      if (index < 0) {
-        preamble.push(block.html);
-        continue;
-      }
-      const verify = criteriaSpans(parsed.slides[index]);
-      const bucket =
-        block.from === parsed.slides[index].from
-          ? "opening"
-          : verify && block.from >= verify.from && block.to <= verify.to
-            ? "criteria"
-            : "body";
-      slides[index][bucket].push(block.html);
-    }
-    return {
-      preamble: preamble.join(""),
-      slides: slides.map((slide) => ({
-        opening: slide.opening.join(""),
-        body: slide.body.join(""),
-        criteria: slide.criteria.join(""),
-      })),
-    };
-  }
 
   // A mark answers one open_file request, so navigating retires it. Every
   // control pins the reader; the bar's Follow button hands the position back.
@@ -203,15 +148,6 @@
     event.preventDefault();
   }
 
-  async function copyPath() {
-    if (!doc.path) return;
-    try {
-      await copyText(doc.path);
-      copied = true;
-      setTimeout(() => (copied = false), 1200);
-    } catch {}
-  }
-
   // A span running past a phase boundary says nothing about the phase after
   // it, so the pane neither marks that part nor scrolls to it.
   function requested() {
@@ -221,57 +157,11 @@
     return { line, to: to > line ? Math.min(to, opened.to) : to };
   }
 
-  /** @param {HTMLElement} deckBody */
-  function viewport(deckBody, initial) {
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (deckBody.querySelectorAll("[data-line]")),
-    ];
-    const span = requested();
-    const { marked, at } = marks(
-      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      span,
-    );
-    if (!untrack(() => retired)) for (const index of marked) blocks[index].classList.add("marked");
-    const target = blocks[at];
-    let controller;
-    let root;
-    let windowID;
-    let screen;
-    const apply = (params) => {
-      if (!params.scrollRoot) return;
-      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
-        controller?.destroy();
-        root = params.scrollRoot;
-        windowID = params.id;
-        screen = params.screen;
-        controller = createViewportController({
-          root,
-          content: deckBody,
-          target,
-          span,
-          selected: params.active,
-          nextSequence: () => nextViewportSequence(windowID),
-          report: (report) =>
-            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
-              epoch: doc.viewportEpoch,
-              ...report,
-            }).catch(() => {}),
-        });
-        return;
-      }
-      controller.setSelected(params.active);
-      // Changing screens changes what can be measured, never where to scroll.
-      if (screen !== params.screen) {
-        screen = params.screen;
-        controller.schedule();
-      }
-    };
-    apply(initial);
-    return {
-      update: apply,
-      destroy: () => controller?.destroy(),
-    };
-  }
+  const port = viewport({
+    span: requested,
+    epoch: () => doc.viewportEpoch,
+    marking: () => !untrack(() => retired),
+  });
 </script>
 
 <svelte:window onkeydown={onKey} />
@@ -286,14 +176,7 @@
       {#if doc.source}
         <CapsLabel tone="dim">{doc.source}</CapsLabel>
       {/if}
-      {#if doc.path}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Copy absolute path"
-          title={doc.path}
-          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-      {/if}
+      <CopyPath path={doc.path} />
     </div>
     {#if mode === "document"}
       <div class="reading" bind:this={reading}>
@@ -309,7 +192,7 @@
         data-document-source={doc.source}
         use:links={doc.source}
         use:diagrams={{ id, text: doc.text }}
-        use:viewport={{ id, active, scrollRoot, screen: current }}>
+        use:port={{ id, active, scrollRoot, key: current }}>
         <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
           <CapsLabel
             >Plan · {plan.phases.length}
@@ -425,7 +308,7 @@
         </div>
         <!-- A truncated section name is unidentifiable, so the whole of it
              stays reachable on hover. -->
-        <span class="counter" title={counterFor(viewing)}>{counterFor(viewing)}</span>
+        <span class="counter" title={counterFor(plan, viewing)}>{counterFor(plan, viewing)}</span>
         {#if mode === "plan"}
           <div class="steps">
             <Button

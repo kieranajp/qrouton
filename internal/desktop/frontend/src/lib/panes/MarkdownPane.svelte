@@ -1,15 +1,11 @@
 <script>
-  import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
-  import { Call, copyText } from "../wails.js";
-  import { diagrams, links } from "./actions.js";
-  import { marks, render } from "./markdown.js";
-  import { createViewportController, nextViewportSequence } from "./viewport.js";
+  import { diagrams, links, viewport } from "./actions.js";
+  import CopyPath from "./CopyPath.svelte";
+  import { render } from "./markdown.js";
   import "./markdown.css";
-
-  const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
   /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown}} */
   let { doc, id, active = false, scrollRoot, bare = false, onMeasure } = $props();
@@ -17,60 +13,12 @@
   let rendered = $derived(render(doc.text));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
-  let copied = $state(false);
 
-  async function copyPath() {
-    if (!doc.path) return;
-    try {
-      await copyText(doc.path);
-      copied = true;
-      setTimeout(() => (copied = false), 1200);
-    } catch {}
-  }
-
-  /** @param {HTMLElement} body */
-  function viewport(body, initial) {
-    const blocks = [.../** @type {NodeListOf<HTMLElement>} */ (body.querySelectorAll("[data-line]"))];
-    const span = { line: doc.line ?? 0, to: doc.to ?? 0 };
-    const { marked, at } = marks(
-      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      span,
-    );
-    for (const index of marked) blocks[index].classList.add("marked");
-    const target = blocks[at];
-    let controller;
-    let root;
-    let windowID;
-    const apply = (params) => {
-      if (!params.scrollRoot) return;
-      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
-        controller?.destroy();
-        root = params.scrollRoot;
-        windowID = params.id;
-        controller = createViewportController({
-          root,
-          content: body,
-          target,
-          span,
-          selected: params.active,
-          nextSequence: () => nextViewportSequence(windowID),
-          onMeasure: (state) => onMeasure?.(state),
-          report: (report) =>
-            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
-              epoch: doc.viewportEpoch,
-              ...report,
-            }).catch(() => {}),
-        });
-        return;
-      }
-      controller.setSelected(params.active);
-    };
-    apply(initial);
-    return {
-      update: apply,
-      destroy: () => controller?.destroy(),
-    };
-  }
+  const port = viewport({
+    span: () => ({ line: doc.line ?? 0, to: doc.to ?? 0 }),
+    epoch: () => doc.viewportEpoch,
+    onMeasure: (state) => onMeasure?.(state),
+  });
 </script>
 
 {#snippet prose()}
@@ -79,7 +27,7 @@
     data-document-source={doc.source}
     use:links={doc.source}
     use:diagrams={{ id, text: doc.text }}
-    use:viewport={{ id, active, scrollRoot }}>
+    use:port={{ id, active, scrollRoot }}>
     {@html rendered.body}
   </div>
 {/snippet}
@@ -91,14 +39,7 @@
     {#if doc.source}
       <div class="source">
         <CapsLabel tone="dim">{doc.source}</CapsLabel>
-        {#if doc.path}
-          <Button
-            variant="ghost"
-            size="sm"
-            aria-label="Copy absolute path"
-            title={doc.path}
-            onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-        {/if}
+        <CopyPath path={doc.path} />
       </div>
     {/if}
     {#if heading}

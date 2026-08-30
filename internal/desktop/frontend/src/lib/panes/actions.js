@@ -1,7 +1,8 @@
 import { openDocument } from "../docked.svelte.js";
 import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
-import { documentPath, linkKind } from "./markdown.js";
+import { documentPath, linkKind, marks } from "./markdown.js";
+import { createViewportController, nextViewportSequence } from "./viewport.js";
 
 const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
@@ -56,5 +57,77 @@ export function diagrams(body, { id }) {
       off();
       teardownDiagrams(body);
     },
+  };
+}
+
+/**
+ * What the pane can see, reported to the window it draws for, and the reveal of
+ * the span that opened it. The span and its marks are read as the action
+ * attaches, so a pane that swaps its body reveals the position it holds then;
+ * the epoch is read per report, because a reload moves it under a body that
+ * stays mounted.
+ * @param {{
+ *   span: () => {line: number, to: number},
+ *   epoch: () => number | undefined,
+ *   marking?: () => boolean,
+ *   onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown,
+ * }} options
+ */
+export function viewport({ span, epoch, marking, onMeasure }) {
+  /**
+   * @param {HTMLElement} content
+   * @param {{id: string, active?: boolean, scrollRoot?: HTMLElement, key?: unknown}} initial
+   */
+  return (content, initial) => {
+    const blocks = [
+      .../** @type {NodeListOf<HTMLElement>} */ (content.querySelectorAll("[data-line]")),
+    ];
+    const asked = span();
+    const { marked, at } = marks(
+      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
+      asked,
+    );
+    if (marking?.() ?? true) for (const index of marked) blocks[index].classList.add("marked");
+    const target = blocks[at];
+    let controller;
+    let root;
+    let windowID;
+    let key;
+    const apply = (params) => {
+      if (!params.scrollRoot) return;
+      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
+        controller?.destroy();
+        root = params.scrollRoot;
+        windowID = params.id;
+        key = params.key;
+        controller = createViewportController({
+          root,
+          content,
+          target,
+          span: asked,
+          selected: params.active,
+          nextSequence: () => nextViewportSequence(windowID),
+          onMeasure,
+          report: (report) =>
+            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
+              epoch: epoch(),
+              ...report,
+            }).catch(() => {}),
+        });
+        return;
+      }
+      controller.setSelected(params.active);
+      // Hiding part of the content changes what can be measured, never where to
+      // scroll.
+      if (key !== params.key) {
+        key = params.key;
+        controller.schedule();
+      }
+    };
+    apply(initial);
+    return {
+      update: apply,
+      destroy: () => controller?.destroy(),
+    };
   };
 }

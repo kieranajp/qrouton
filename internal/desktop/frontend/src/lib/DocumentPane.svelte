@@ -5,8 +5,8 @@
 
   const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
-  /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, onReady?: () => void}} */
-  let { id, active = false, scrollRoot, onReady } = $props();
+  /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void}} */
+  let { id, active = false, scrollRoot, agentWorking = false, onReady } = $props();
 
   /** @type {{text: string, format: string, source: string, path?: string, kind?: string, line: number, to: number, viewportEpoch?: number} | undefined} */
   let doc = $state();
@@ -33,5 +33,5 @@
 
 {#if doc}
   {@const Pane = paneFor(doc.format, doc.kind)}
-  <Pane {doc} {id} {active} {scrollRoot} />
+  <Pane {doc} {id} {active} {scrollRoot} {agentWorking} />
 {/if}

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { fieldError, saveOutcome } from "./errors.js";
+import { fieldError, loadFailure, saveOutcome } from "./errors.js";
 
 test("a field: message error splits into both parts", () => {
   assert.deepEqual(fieldError(new Error("root: cannot be empty")), {
@@ -54,4 +54,14 @@ test("a refusal with no field name still shows in the footer", () => {
   const outcome = saveOutcome(undefined, new Error("disk is full"));
   assert.deepEqual(outcome.fields, {});
   assert.equal(outcome.status, "disk is full");
+});
+
+test("a load that never answered says so rather than leaving the panel blank", () => {
+  const status = loadFailure(new Error("permission denied"));
+  assert.match(status, /permission denied/);
+  assert.notEqual(status, "");
+});
+
+test("a load refusal naming a field reads without the field prefix", () => {
+  assert.equal(loadFailure(new Error("root: cannot be read")), "Settings could not be read: cannot be read");
 });

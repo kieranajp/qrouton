@@ -1,4 +1,4 @@
-import { Call, Events } from "./wails.js";
+import { call, Call, Events } from "./wails.js";
 
 const CHROME_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Chrome";
 
@@ -55,8 +55,10 @@ function observing() {
     live = true;
     apply(event.data);
   });
-  Call.ByName(CHROME_SERVICE + ".Snapshot").then((value) => {
-    if (!live) apply(value);
+  // A workbench that cannot say what it holds reads as one holding no session,
+  // which is a window with something on it rather than a permanently blank one.
+  call(Call.ByName(CHROME_SERVICE + ".Snapshot")).then((answer) => {
+    if (!live) apply(answer.ok ? answer.value : undefined);
   });
   return {
     get fields() {

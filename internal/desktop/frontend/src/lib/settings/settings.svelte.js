@@ -1,5 +1,6 @@
+import { call } from "../wails.js";
 import * as go from "./calls.js";
-import { saveOutcome } from "./errors.js";
+import { loadFailure, saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
 
 /**
@@ -23,7 +24,12 @@ export function settings(onClose) {
   let saving = $state(false);
   let restartRequired = $state(false);
 
-  go.load().then((loaded) => {
+  call(go.load()).then((answer) => {
+    if (!answer.ok) {
+      status = loadFailure(answer.error);
+      return;
+    }
+    const loaded = answer.value;
     form.orgs = loaded?.orgs ?? [];
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";

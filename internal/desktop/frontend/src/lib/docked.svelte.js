@@ -1,6 +1,11 @@
-import { Call, Events } from "./wails.js";
-
-const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
+import {
+  CLOSE_WINDOW,
+  OPEN_DOCUMENT,
+  OPEN_SHELL,
+  SELECT_WINDOW,
+  SURFACES,
+} from "./session/services.js";
+import { Call, Events, call } from "./wails.js";
 
 const NONE = { tabs: [], selected: "" };
 
@@ -23,8 +28,8 @@ export function surfaces(slug) {
     pulled = session;
     live = false;
     apply(NONE);
-    Call.ByName(WINDOWS_SERVICE + ".Surfaces", session).then((value) => {
-      if (!live && pulled === session) apply(value);
+    call(Call.ByName(SURFACES, session)).then((answer) => {
+      if (answer.ok && !live && pulled === session) apply(answer.value);
     });
   });
   return {
@@ -37,11 +42,10 @@ export function surfaces(slug) {
   };
 }
 
-export const closeWindow = (id) => Call.ByName(WINDOWS_SERVICE + ".Close", id);
-export const openShell = () => Call.ByName(WINDOWS_SERVICE + ".OpenShell");
+export const closeWindow = (id) => Call.ByName(CLOSE_WINDOW, id);
+export const openShell = () => Call.ByName(OPEN_SHELL);
 
-export const selectWindow = (slug, id) =>
-  Call.ByName(WINDOWS_SERVICE + ".Select", slug, id);
+export const selectWindow = (slug, id) => Call.ByName(SELECT_WINDOW, slug, id);
 
 /** openDocument opens a session document, or selects the tab already on it. */
-export const openDocument = (path) => Call.ByName(WINDOWS_SERVICE + ".OpenDocument", path);
+export const openDocument = (path) => Call.ByName(OPEN_DOCUMENT, path);

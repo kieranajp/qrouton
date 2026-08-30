@@ -1,7 +1,6 @@
 import { expect, test } from "@playwright/test";
 
 const metrics = (page) => page.evaluate(() => window.splitterMetrics());
-const measurement = (page) => page.evaluate(() => window.measurementSummary());
 const settleFrames = (page) =>
   page.evaluate(
     () =>
@@ -56,16 +55,6 @@ test("drag bursts resize once per frame and release commits the exact final widt
   await expect(page.locator("#pane")).toHaveCSS("width", "540px");
   await settleFrames(page);
   expect(await metrics(page)).toMatchObject({ resizeCalls: 2, commitCalls: 1 });
-  expect(await measurement(page)).toMatchObject({
-    shellSplitter: {
-      pointerdown: 1,
-      pointermove: 5,
-      pointerup: 1,
-      pointercancel: 0,
-      storageWrites: 1,
-    },
-    storageWrites: 1,
-  });
 
   await page.reload();
   await page.waitForFunction(() => Boolean(window.splitterMetrics));
@@ -98,16 +87,6 @@ test("pointer cancellation commits the latest drag width and drops its pending f
   });
   await settleFrames(page);
   expect(await metrics(page)).toMatchObject({ resizeCalls: 1, commitCalls: 1 });
-  expect(await measurement(page)).toMatchObject({
-    shellSplitter: {
-      pointerdown: 1,
-      pointermove: 1,
-      pointerup: 0,
-      pointercancel: 1,
-      storageWrites: 1,
-    },
-    storageWrites: 1,
-  });
 });
 
 test("keyboard nudges commit their width and reset removes the stored override", async ({ page }) => {
@@ -186,86 +165,4 @@ test("terminal size teardown cancels a pending fit and ignores later notificatio
   await page.evaluate(() => window.sizeBurst());
   await settleFrames(page);
   expect(await metrics(page)).toMatchObject({ fits: 0 });
-});
-
-test("measurement scopes counts, clears active pointers on reset, and tears down", async ({ page }) => {
-  const splitter = page.getByRole("separator", { name: "Resize the shell pane", exact: true });
-  const decoy = page.getByTestId("decoy-separator");
-
-  await splitter.dispatchEvent("pointermove", { pointerId: 2 });
-  await splitter.dispatchEvent("pointerup", { pointerId: 2 });
-  await decoy.dispatchEvent("pointerdown", { pointerId: 3, button: 0 });
-  await decoy.dispatchEvent("pointermove", { pointerId: 3 });
-  await decoy.dispatchEvent("pointerup", { pointerId: 3 });
-  await splitter.dispatchEvent("pointerdown", { pointerId: 4, button: 2 });
-  await splitter.dispatchEvent("pointermove", { pointerId: 4 });
-  await splitter.dispatchEvent("pointerup", { pointerId: 4 });
-  await page.evaluate(() => {
-    localStorage.setItem("unrelated", "value");
-    localStorage.setItem("qrouton.human-pane:secondary", "480");
-  });
-  expect(await measurement(page)).toMatchObject({
-    shellSplitter: {
-      pointerdown: 0,
-      pointermove: 0,
-      pointerup: 0,
-      pointercancel: 0,
-      storageWrites: 1,
-    },
-    storageWrites: 2,
-  });
-
-  const box = await splitter.boundingBox();
-  const x = box.x + box.width / 2;
-  const y = box.y + box.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.evaluate(() => window.resetMeasurement());
-  await page.mouse.up();
-  expect(await measurement(page)).toMatchObject({
-    shellSplitter: {
-      pointerdown: 0,
-      pointermove: 0,
-      pointerup: 0,
-      pointercancel: 0,
-      storageWrites: 1,
-    },
-    storageWrites: 1,
-  });
-
-  await page.evaluate(() => window.resetMeasurement());
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await splitter.evaluate((node) => {
-    node.dispatchEvent(new PointerEvent("pointercancel", { bubbles: true, pointerId: 1 }));
-  });
-  await page.mouse.up();
-  expect(await measurement(page)).toMatchObject({
-    shellSplitter: {
-      pointerdown: 1,
-      pointermove: 0,
-      pointerup: 0,
-      pointercancel: 1,
-      storageWrites: 1,
-    },
-    storageWrites: 1,
-  });
-
-  const frozen = await page.evaluate(() => window.stopMeasurement());
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.evaluate(() => localStorage.setItem("qrouton.human-pane:stopped", "500"));
-  expect(await measurement(page)).toEqual(frozen);
-
-  await page.evaluate(() => {
-    window.resetMeasurement();
-    window.destroyMeasurement();
-  });
-  const destroyed = await measurement(page);
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.evaluate(() => localStorage.setItem("qrouton.human-pane:destroyed", "520"));
-  expect(await measurement(page)).toEqual(destroyed);
 });

@@ -1,5 +1,6 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
+  import { chrome } from "./chrome.svelte.js";
   import DocumentPane from "./DocumentPane.svelte";
   import FindBar from "./FindBar.svelte";
   import { activateMatch, clearMatches, findShortcut, markMatches } from "./find.js";
@@ -7,6 +8,8 @@
 
   /** @type {{id: string, active?: boolean}} */
   let { id, active = false } = $props();
+
+  const session = chrome();
 
   /** @type {HTMLElement} */
   let scrollRoot = $state();
@@ -93,7 +96,12 @@
   {/if}
   <div class="body" bind:this={scrollRoot} tabindex="-1">
     <div bind:this={content}>
-      <DocumentPane {id} {active} {scrollRoot} onReady={documentReady} />
+      <DocumentPane
+        {id}
+        {active}
+        {scrollRoot}
+        agentWorking={session.fields.activity === "working"}
+        onReady={documentReady} />
     </div>
   </div>
 </TerminalPane>

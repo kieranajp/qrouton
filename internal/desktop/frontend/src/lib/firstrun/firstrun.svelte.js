@@ -1,5 +1,7 @@
 import * as settings from "../settings/calls.js";
+import { loadFailure } from "../settings/errors.js";
 import { addOrg, removeOrg } from "../settings/orgs.js";
+import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { firstRunOutcome } from "./outcome.js";
 import { last } from "./screens.js";
@@ -22,13 +24,18 @@ export function firstRun() {
 
   // The prefill is Settings' own Load: the same config, so asking twice would be
   // two owners of one fact.
-  settings.load().then((loaded) => {
-    form.orgs = loaded?.orgs ?? [];
-    form.root = loaded?.root ?? "";
+  call(settings.load()).then((answer) => {
+    if (!answer.ok) {
+      status = loadFailure(answer.error);
+      return;
+    }
+    form.orgs = answer.value?.orgs ?? [];
+    form.root = answer.value?.root ?? "";
   });
 
-  // Resolved off the render: shelling out to gh costs more than the screen does.
-  go.login().then((resolved) => (login = resolved ?? ""));
+  // Resolved off the render: shelling out to gh costs more than the screen does,
+  // and an account it cannot name is one the screen offers to sign in.
+  call(go.login()).then((answer) => (login = answer.ok ? (answer.value ?? "") : ""));
 
   function add() {
     form.orgs = addOrg(form.orgs, orgInput);

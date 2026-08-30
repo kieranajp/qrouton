@@ -1,3 +1,4 @@
+import { call } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
 import { refusal } from "./steps.js";
@@ -15,39 +16,42 @@ export function picking(slug, done) {
   let status = $state("");
   let answering = $state(false);
 
-  const repos = browsing(() => branch);
+  /** @param {string} text */
+  const report = (text) => (status = text);
 
-  go.held(slug())
-    .then((held) => {
-      branch = held?.branch ?? "";
-      repos.hold(held?.repos ?? []);
-    })
-    .catch((err) => (status = refusal(err)));
+  const repos = browsing(() => branch, report);
+
+  call(go.held(slug())).then((answer) => {
+    if (!answer.ok) return report(refusal(answer.error));
+    branch = answer.value?.branch ?? "";
+    repos.hold(answer.value?.repos ?? []);
+  });
 
   // answering stays set once Go has the answer: the manifest now holds what this
   // visit picked, and asking again would compose it a second time.
   async function confirm() {
     if (answering) return;
     answering = true;
-    try {
-      await go.addRepos(slug(), { repos: repos.ordered, upgrades: repos.upgrading });
-      done();
-    } catch (err) {
+    const picked = { repos: repos.ordered, upgrades: repos.upgrading };
+    const added = await call(go.addRepos(slug(), picked));
+    if (!added.ok) {
       answering = false;
-      status = refusal(err);
+      status = refusal(added.error);
+      return;
     }
+    done();
   }
 
   async function cancel() {
     if (answering) return;
     answering = true;
-    try {
-      await go.cancelPicker(slug());
-      done();
-    } catch (err) {
+    const cancelled = await call(go.cancelPicker(slug()));
+    if (!cancelled.ok) {
       answering = false;
-      status = refusal(err);
+      status = refusal(cancelled.error);
+      return;
     }
+    done();
   }
 
   return {

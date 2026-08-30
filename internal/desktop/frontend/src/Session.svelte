@@ -1,10 +1,10 @@
 <script>
-  import { onMount } from "svelte";
   import Button from "./lib/core/Button.svelte";
   import CapsLabel from "./lib/core/CapsLabel.svelte";
   import Chip from "./lib/core/Chip.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import Rail from "./lib/session/Rail.svelte";
+  import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
   import LatestDocument from "./lib/shell/LatestDocument.svelte";
   import Menu from "./lib/shell/Menu.svelte";
@@ -12,205 +12,16 @@
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
   import DockedDocument from "./lib/DockedDocument.svelte";
-  import DockedTerminal from "./lib/DockedTerminal.svelte";
-  import SessionTerminal from "./lib/SessionTerminal.svelte";
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
-  import { pending as pendingAssembly } from "./lib/assembly/calls.js";
-  import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
-  import { chrome } from "./lib/chrome.svelte.js";
-  import {
-    consumeTerminalFocus,
-    focusGenerationIn,
-    focusPendingIn,
-    focusTerminal,
-    humanWidth,
-    MAX_SIDEBAR,
-    MIN_HUMAN,
-    MIN_SIDEBAR,
-    readStored,
-    roomFor,
-    selectedIn,
-    selectIn,
-    sidebarWidth,
-    sidebarWidthKey,
-    storedSidebarWidth,
-    storedWidth,
-    widthKey,
-    writeStored,
-  } from "./lib/layout.js";
-  import {
-    closeWindow,
-    openDocument,
-    openShell,
-    selectWindow,
-    surfaces,
-  } from "./lib/docked.svelte.js";
-  import { opensSettings } from "./lib/shortcuts.js";
-  import { relative } from "./lib/relative.js";
-  import { Events } from "./lib/wails.js";
+  import { conversationPTY, tabPTY } from "./lib/session/services.js";
+  import { shell } from "./lib/session/shell.svelte.js";
+  import { MAX_SIDEBAR, MIN_HUMAN, MIN_SIDEBAR } from "./lib/layout.js";
 
-  const session = chrome();
-  let fields = $derived(session.fields);
-  const open = surfaces(() => fields.slug);
-  let dragged = $state({});
-  let width = $derived(dragged[fields.slug] ?? storedWidth(readStored, fields.slug));
-  let sidebarDragged = $state(storedSidebarWidth(readStored));
-  let sidebarSize = $derived(sidebarWidth(sidebarDragged));
-  let panels = $state(0);
-  let railMeasured = $state(0);
-  let rail = $derived(sidebarSize || railMeasured);
-  let measured = $state(0);
-  let room = $derived(roomFor(panels, rail));
-  let human = $derived(humanWidth(width, room));
-
-  function resize(next) {
-    dragged = { ...dragged, [fields.slug]: next };
-  }
-
-  function commit(next) {
-    resize(next);
-    writeStored(widthKey(fields.slug), next);
-  }
-
-  function reset() {
-    resize(0);
-    writeStored(widthKey(fields.slug), 0);
-  }
-
-  function resizeSidebar(next) {
-    sidebarDragged = next;
-  }
-
-  function commitSidebar(next) {
-    resizeSidebar(next);
-    writeStored(sidebarWidthKey(), next);
-  }
-
-  function resetSidebar() {
-    resizeSidebar(0);
-    writeStored(sidebarWidthKey(), 0);
-  }
-
-  let selection = $state({});
-  let applied = $state({});
-  let terminalFocus = $state({});
-  let selectedID = $derived(selectedIn(selection, fields.slug));
-  let selected = $derived(Math.max(0, open.tabs.findIndex((tab) => tab.id === selectedID)));
-
-  $effect(() => {
-    const slug = fields.slug;
-    const id = open.selected;
-    if (selectedIn(applied, slug) === id) return;
-    applied = selectIn(applied, slug, id);
-    selection = selectIn(selection, slug, id);
-  });
-
-  const showTab = (id) => (selection = selectIn(selection, fields.slug, id));
-
-  function userSelect(tab) {
-    showTab(tab.id);
-    if (tab.kind === "terminal") terminalFocus = focusTerminal(terminalFocus, tab.id);
-    selectWindow(fields.slug, tab.id).catch(() => {});
-  }
-
-  function terminalFocused(id, generation) {
-    terminalFocus = consumeTerminalFocus(terminalFocus, id, generation);
-  }
-
-  // The session on screen may have no rail row yet: a session is named by
-  // adopting it, which happens once the window is already up.
-  let mounted = $derived([
-    ...(fields.terminal ? [{ terminal: fields.terminal, slug: fields.slug }] : []),
-    ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
-  ]);
-
-  let latest = $derived(
-    fields.documents.length
-      ? {
-          tag: fields.documents[0].kind,
-          name: fields.documents[0].name,
-          age: relative(fields.documents[0].at, "compact"),
-        }
-      : undefined,
-  );
-  let written = $derived(
-    fields.documents.map((doc) => ({
-      tag: doc.kind,
-      label: doc.name,
-      meta: relative(doc.at, "compact"),
-      path: doc.path,
-    })),
-  );
-  let repositoryDocuments = $derived(
-    fields.repositoryDocuments.map((repo) => ({
-      label: repo.name,
-      items: repo.documents.map((doc) => ({ tag: doc.kind, label: doc.name, path: doc.path })),
-    })),
-  );
-  let documentMenu = $derived([
-    ...written,
-    ...(repositoryDocuments.length
-      ? ["-", { heading: "In-repo" }, ...repositoryDocuments]
-      : []),
-  ]);
-  let hasDocuments = $derived(fields.documents.length > 0 || repositoryDocuments.length > 0);
-  let listing = $state(false);
-
-  // A session with no editor has nothing to open and no room here to say so.
-  async function read(path) {
-    listing = false;
-    try {
-      showTab(await openDocument(path));
-    } catch {}
-  }
-  // A token the agent terminal watches: bumping it is what hands the keyboard
-  // back when whatever covered it goes away — an overlay, or one of the rail's
-  // own menus.
-  let keyboard = $state(0);
-  let requested = $state(false);
-
-  onMount(() => {
-    let live = true;
-    const off = Events.On("assembly:requested", () => (requested = true));
-    pendingAssembly()
-      .then((ticket) => {
-        if (live && ticket) requested = true;
-      })
-      .catch(() => {});
-    const onKey = (event) => {
-      if (!opensSettings(event)) return;
-      event.preventDefault();
-      if (!fields.welcoming) settingsOpen = true;
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      live = false;
-      off();
-      window.removeEventListener("keydown", onKey);
-    };
-  });
-
-  let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
-  let settingsOpen = $state(false);
-  // An escalation is the shown session's own pending request, so switching
-  // session takes its picker with it. Add-repos is this page's, and belongs to
-  // the session it was pressed on for the same reason.
-  let added = $state("");
-  let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
-
-  // An overlay covering the terminal hands the keyboard back when it goes, the
-  // same way the rail's menu and its confirm do. Watching the state rather than
-  // the dismissal catches the picker the backend closes, which no handler here
-  // ever sees.
-  let covered = $derived(fields.welcoming || assembling || picker || settingsOpen);
-  let wasCovered = false;
-  $effect(() => {
-    if (wasCovered && !covered) keyboard++;
-    wasCovered = covered;
-  });
+  const view = shell();
+  let fields = $derived(view.fields);
 </script>
 
 <div class="session">
@@ -219,30 +30,30 @@
     <span class="name">{fields.identity}</span>
     {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
     <span class="tools">
-      <Button variant="ghost" size="sm" onclick={() => (settingsOpen = true)}>Settings</Button>
+      <Button variant="ghost" size="sm" onclick={() => (view.settingsOpen = true)}>Settings</Button>
     </span>
   </div>
 
-  <div class="panels" bind:clientWidth={panels}>
+  <div class="panels" bind:clientWidth={view.panels}>
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
       repos={fields.repos}
       agents={fields.agents}
-      onNewSession={() => (requested = true)}
-      onAddRepos={() => (added = fields.slug)}
-      onDismissed={() => keyboard++}
-      size={sidebarSize}
-      bind:width={railMeasured} />
+      onNewSession={() => (view.requested = true)}
+      onAddRepos={() => (view.added = fields.slug)}
+      onDismissed={view.handBack}
+      size={view.sidebarSize}
+      bind:width={view.railMeasured} />
 
     <Splitter
-      size={rail || MIN_SIDEBAR}
+      size={view.rail || MIN_SIDEBAR}
       min={MIN_SIDEBAR}
       max={MAX_SIDEBAR}
       side="left"
-      onResize={resizeSidebar}
-      onCommit={commitSidebar}
-      onReset={resetSidebar}
+      onResize={view.resizeSidebar}
+      onCommit={view.commitSidebar}
+      onReset={view.resetSidebar}
       label="Resize the sidebar" />
 
     <div class="agent">
@@ -251,54 +62,61 @@
         <Chip tone={fields.mode === "RPI" ? "guided" : "assistant"} selected>{fields.mode}</Chip>
         {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
         <LatestDocument
-          {latest}
+          latest={view.latest}
           count={fields.documents.length}
-          open={listing}
-          onToggle={hasDocuments ? () => (listing = !listing) : undefined}>
+          open={view.listing}
+          onToggle={view.hasDocuments ? () => (view.listing = !view.listing) : undefined}>
           <Menu
             label="Written this session"
-            items={documentMenu}
+            items={view.documentMenu}
             align="right"
             width={320}
-            onSelect={(item) => read(item.path)} />
+            onSelect={(item) => view.read(item.path)} />
         </LatestDocument>
       </PaneHeader>
-      {#each mounted as row (row.terminal)}
-        <SessionTerminal
+      {#each view.conversations as row (row.terminal)}
+        <Terminal
           id={row.terminal}
+          pty={conversationPTY}
           active={row.terminal === fields.terminal}
-          focus={keyboard} />
+          focus={view.focusOf(row.terminal)}
+          focusPending={view.focusPendingOf(row.terminal)}
+          onFocused={(generation) => view.focused(row.terminal, generation)} />
       {/each}
     </div>
 
     <Splitter
-      size={human || measured}
+      size={view.human || view.measured}
       min={MIN_HUMAN}
-      max={room}
-      onResize={resize}
-      onCommit={commit}
-      onReset={reset}
+      max={view.room}
+      onResize={view.resize}
+      onCommit={view.commit}
+      onReset={view.reset}
       label="Resize the shell pane" />
 
-    <div class="human" style:width={human ? human + "px" : null} bind:clientWidth={measured}>
+    <div
+      class="human"
+      style:width={view.human ? view.human + "px" : null}
+      bind:clientWidth={view.measured}>
       <TabStrip
-        tabs={open.tabs}
-        {selected}
-        onSelect={(i) => userSelect(open.tabs[i])}
-        onClose={(i) => closeWindow(open.tabs[i].id)}
-        onNew={async () => userSelect({ id: await openShell(), kind: "terminal" })}
+        tabs={view.tabs}
+        selected={view.selected}
+        onSelect={(i) => view.select(view.tabs[i])}
+        onClose={(i) => view.close(view.tabs[i])}
+        onNew={view.newShell}
         newLabel="Shell" />
-      {#each open.tabs as tab, i (tab.id)}
+      {#each view.tabs as tab, i (tab.id)}
         <!-- Only a terminal may be Started; a document tab has no process behind it. -->
         {#if tab.kind === "terminal"}
-          <DockedTerminal
+          <Terminal
             id={tab.id}
-            active={i === selected}
-            focus={focusGenerationIn(terminalFocus, tab.id)}
-            focusPending={focusPendingIn(terminalFocus, tab.id)}
-            onFocused={(generation) => terminalFocused(tab.id, generation)} />
+            pty={tabPTY}
+            active={i === view.selected}
+            focus={view.focusOf(tab.id)}
+            focusPending={view.focusPendingOf(tab.id)}
+            onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else}
-          <DockedDocument id={tab.id} active={i === selected} />
+          <DockedDocument id={tab.id} active={i === view.selected} />
         {/if}
       {/each}
     </div>
@@ -308,19 +126,19 @@
 
   {#if fields.welcoming}
     <FirstRunOverlay />
-  {:else if assembling}
-    <Overlay gated={!fields.slug} onClose={() => (requested = false)} />
-  {:else if picker}
+  {:else if view.assembling}
+    <Overlay gated={!fields.slug} onClose={() => (view.requested = false)} />
+  {:else if view.picker}
     <!-- Keyed on the session, so arriving at another one draws that session's
          picker rather than keeping this one over it. -->
     {#key fields.slug}
-      <PickerOverlay slug={fields.slug} onClose={() => (added = "")} />
+      <PickerOverlay slug={fields.slug} onClose={() => (view.added = "")} />
     {/key}
   {/if}
 
   <!-- Stacked rather than branched: unmounting the assembly overlay ends its draft. -->
-  {#if settingsOpen}
-    <SettingsOverlay onClose={() => (settingsOpen = false)} />
+  {#if view.settingsOpen}
+    <SettingsOverlay onClose={() => (view.settingsOpen = false)} />
   {/if}
 </div>
 

@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createTerminalActivation } from "./terminal-focus.js";
+import {
+  consumeTerminalFocus,
+  createTerminalActivation,
+  focusGenerationIn,
+  focusPendingIn,
+  focusTerminal,
+} from "./terminal-focus.js";
 
 function frames() {
   let sequence = 0;
@@ -77,4 +83,26 @@ test("destroy cancels queued refit and focus work", () => {
   assert.equal(queue.size, 0);
   queue.flush();
   assert.equal(calls, 0);
+});
+
+test("each user terminal choice increments only that terminal's focus generation", () => {
+  let generations = focusTerminal({}, "window-3");
+  generations = focusTerminal(generations, "window-7");
+  generations = focusTerminal(generations, "window-3");
+  assert.equal(focusGenerationIn(generations, "window-3"), 2);
+  assert.equal(focusGenerationIn(generations, "window-7"), 1);
+});
+
+test("an unrequested terminal is never pending, so activation alone takes no keyboard", () => {
+  assert.equal(focusGenerationIn({}, "window-3"), 0);
+  assert.equal(focusPendingIn({}, "window-3"), false);
+});
+
+test("focus requested before a terminal mounts stays pending and does not replay once handled", () => {
+  let generations = focusTerminal({}, "window-3");
+  assert.equal(focusPendingIn(generations, "window-3"), true);
+
+  generations = consumeTerminalFocus(generations, "window-3", 1);
+  assert.equal(focusPendingIn(generations, "window-3"), false);
+  assert.equal(consumeTerminalFocus(generations, "window-3", 0), generations);
 });
