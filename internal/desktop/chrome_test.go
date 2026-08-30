@@ -32,7 +32,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	shown.agents.begin(agentProviderCodex, 2)
 
 	renderer := newFakeRenderer()
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{"background": 3}, renderer.Emit)
+	pushChrome(reg, root, nil, nil, map[string][]status.RepoStat{}, map[string]int{"background": 3}, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	rows := map[string]status.SessionRow{}
 	for _, row := range fields.Sessions {
@@ -70,7 +70,7 @@ func TestSelectedAgentDetailFollowsTheSelectedSlugAndKeepsReferenceStats(t *test
 	reference := status.RepoStat{Name: "lifesum/contracts", Role: "reference"}
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	if fields.Agents.Provider != agentProviderClaude || len(fields.Agents.Agents) != 1 {
 		t.Fatalf("alpha detail = %+v", fields.Agents)
@@ -80,7 +80,7 @@ func TestSelectedAgentDetailFollowsTheSelectedSlugAndKeepsReferenceStats(t *test
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, map[string][]status.RepoStat{}, nil, renderer.Emit)
 	fields = pushedChrome(t, renderer)
 	if fields.Agents.Provider != agentProviderOpenCode || len(fields.Agents.Agents) != 1 {
 		t.Fatalf("beta detail = %+v", fields.Agents)
@@ -95,7 +95,7 @@ func TestSelectedColdSessionKeepsKnownManifestProvider(t *testing.T) {
 	}
 	reg := testRegistry(t, dir)
 	renderer := newFakeRenderer()
-	pushChrome(reg, root, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
 	panel := pushedChrome(t, renderer).Agents
 	if panel.Provider != agentProviderCodex || len(panel.Agents) != 0 || panel.AttentionKnown || panel.ChildrenKnown {
 		t.Fatalf("cold known-provider panel = %+v", panel)
@@ -177,7 +177,7 @@ func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watchWithExpiryTimer(ctx, reg, root, nil, emit, time.Hour, time.Hour, counts, timer)
+	go watchWithExpiryTimer(ctx, reg, root, nil, nil, emit, time.Hour, time.Hour, counts, timer)
 
 	initial := <-updates
 	if len(initial.Agents.Agents) != 1 {
@@ -187,7 +187,7 @@ func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
 		t.Fatalf("expiry timer reset to %s, want %s", after, retention)
 	}
 	clock.advance(retention - time.Millisecond)
-	pushChrome(reg, root, nil, nil, nil, emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emit)
 	if before := <-updates; len(before.Agents.Agents) != 1 {
 		t.Fatalf("record pruned before boundary: %+v", before.Agents.Agents)
 	}
@@ -208,7 +208,7 @@ func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
 func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
 	reg := testRegistry(t, filepath.Join(t.TempDir(), "octopus"))
 	renderer := newFakeRenderer()
-	pushChrome(reg, "", nil, nil, nil, renderer.Emit)
+	pushChrome(reg, "", nil, nil, nil, nil, renderer.Emit)
 	if fields := pushedChrome(t, renderer); fields.Agents.Agents == nil {
 		t.Fatal("chrome emitted a nil agent record list")
 	}

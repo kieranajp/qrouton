@@ -746,7 +746,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 	reg := testRegistry(t, dir)
 	state := reg.current()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -767,7 +767,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
 	t.Helper()
 	r := newFakeRenderer()
-	pushChrome(reg, root, cfg, nil, nil, r.Emit)
+	pushChrome(reg, root, cfg, nil, nil, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	fields, ok := r.events[chromeEvent].(status.Fields)
@@ -820,7 +820,7 @@ func TestWatchChromeStopsWithItsContext(t *testing.T) {
 	cancel()
 	done := make(chan struct{})
 	go func() {
-		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, func(string, any) {})
+		watchChrome(ctx, testRegistry(t, t.TempDir()), t.TempDir(), nil, nil, func(string, any) {})
 		close(done)
 	}()
 	<-done
@@ -839,7 +839,7 @@ func TestChromeNamesTheTerminalOfEveryBootedSessionAndTheSlugOnScreen(t *testing
 	}
 
 	reg := testRegistry(t, filepath.Join(root, "octopus"))
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -883,7 +883,7 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -919,7 +919,7 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 	}
 
 	measured := status.RepoStat{Name: "lifesum/svc", Role: "editing", Commits: 3, Measured: true}
-	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, r.Emit)
+	pushChrome(testRegistry(t, shown), root, nil, nil, map[string][]status.RepoStat{shown: {measured}}, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -992,13 +992,13 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 
 	reg := testRegistry(t, first)
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, measured, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 1 || repos[0].Name != "lifesum/svc" {
 		t.Fatalf("chrome repos = %+v, want what was measured for the session on screen", repos)
 	}
 
 	reg.reveal(reg.add(second, []string{"/bin/cat"}, os.Environ()))
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, measured, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 0 {
 		t.Fatalf("chrome repos = %+v after the switch, want none of the previous session's", repos)
 	}
@@ -1032,7 +1032,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts)
+	go watch(ctx, reg, root, nil, nil, emit, time.Millisecond, time.Hour, counts)
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -1831,7 +1831,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts)
+	go watch(ctx, reg, root, nil, nil, emit, time.Millisecond, 2*time.Millisecond, counts)
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())
@@ -2008,7 +2008,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 // does not race the background poller's own tick.
 func polledRail(t *testing.T, r *fakeRenderer, reg *Sessions, root string) []string {
 	t.Helper()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	var slugs []string
 	for _, row := range lastChrome(t, r).Sessions {
 		slugs = append(slugs, row.Slug)

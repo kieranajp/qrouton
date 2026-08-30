@@ -155,7 +155,7 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 	}
 
 	r := newFakeRenderer()
-	pushChrome(reg, cfg.Root, cfg, nil, nil, r.Emit)
+	pushChrome(reg, cfg.Root, cfg, nil, nil, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if fields, ok := r.events[chromeEvent].(status.Fields); !ok || !fields.Welcoming {

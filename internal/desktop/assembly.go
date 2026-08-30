@@ -111,6 +111,14 @@ func (a *Assembly) Fetch(url string) (ticketFields, error) {
 }
 
 // Pending is the external ticket waiting for the page to open an overlay.
+// drafting reports whether a session draft is open, which is a screen with
+// half an answer on it that a relaunch would throw away.
+func (a *Assembly) drafting() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.draftOpen
+}
+
 func (a *Assembly) Pending() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
