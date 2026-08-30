@@ -273,7 +273,7 @@ func writtenSince(root string, since time.Time) int {
 func sessionRepos(m session.Manifest) []SessionRepo {
 	out := make([]SessionRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
-		if r.Role.Effective() != session.RepoRoleEditing {
+		if !r.Role.IsEditing() {
 			continue
 		}
 		out = append(out, SessionRepo{Name: r.Org + repoSeparator + r.Name, Role: string(session.RepoRoleEditing)})

@@ -15,7 +15,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
-	"golang.org/x/sys/unix"
 )
 
 const manifestName = sessionpaths.ManifestName
@@ -37,6 +36,8 @@ func (r RepoRole) Effective() RepoRole {
 	}
 	return r
 }
+
+func (r RepoRole) IsEditing() bool { return r.Effective() == RepoRoleEditing }
 
 // SessionMode selects the system prompt (and opening message) the runner starts
 // under. RPI is the default orchestrated Research→Plan→Implement workflow;
@@ -269,16 +270,7 @@ func withManifestLock(dir string, fn func() error) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(filepath.Join(sessionpaths.Dir(dir), manifestLockName), os.O_CREATE|os.O_RDWR, fileMode)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
-		return err
-	}
-	defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
-	return fn()
+	return atomicfile.WithLock(filepath.Join(sessionpaths.Dir(dir), manifestLockName), fileMode, fn)
 }
 
 // escalatesToRPI reports whether replacing prev with m turns an assistant

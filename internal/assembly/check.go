@@ -87,7 +87,7 @@ func holdsEditingRepo(m session.Manifest) bool {
 
 func anyEditing[T any](repos []T, role func(T) session.RepoRole) bool {
 	for _, repo := range repos {
-		if role(repo).Effective() == session.RepoRoleEditing {
+		if role(repo).IsEditing() {
 			return true
 		}
 	}

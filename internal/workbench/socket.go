@@ -15,7 +15,7 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/sys/unix"
+	"github.com/kieranajp/qrouton/internal/atomicfile"
 )
 
 // Discovery is the one process endpoint external launchers may use. Legacy is
@@ -250,16 +250,7 @@ func withFileLock(dir, name string, fn func() error) error {
 	if err := os.MkdirAll(dir, socketDirMode); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(filepath.Join(dir, name), os.O_CREATE|os.O_RDWR, descriptorMode)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
-		return err
-	}
-	defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
-	return fn()
+	return atomicfile.WithLock(filepath.Join(dir, name), descriptorMode, fn)
 }
 
 // ProcessLog is where a workbench process's stdio lands before it belongs to a

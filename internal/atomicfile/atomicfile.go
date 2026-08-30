@@ -5,6 +5,8 @@ package atomicfile
 import (
 	"os"
 	"path/filepath"
+
+	"golang.org/x/sys/unix"
 )
 
 // tmpSuffix ends the name of a staging file.
@@ -45,4 +47,20 @@ func Replace(path string, b []byte, mode os.FileMode) error {
 		return err
 	}
 	return nil
+}
+
+// WithLock runs fn holding an exclusive advisory lock on path, which it creates
+// if absent. The lock is per open file description, so a nested acquire from
+// the same process blocks against itself.
+func WithLock(path string, mode os.FileMode, fn func() error) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, mode)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+	if err := unix.Flock(int(file.Fd()), unix.LOCK_EX); err != nil {
+		return err
+	}
+	defer unix.Flock(int(file.Fd()), unix.LOCK_UN)
+	return fn()
 }

@@ -24,7 +24,7 @@ The invariants below are mechanical rules. These are the reasons they exist; whe
 
 Dependency direction: `config ← github ← session ← assembly`; `launch`, `agents`, and `mcpserver` sit above the shared leaves. `assembly` sits where the old TUI did — above `session`, below `desktop` — and imports no display and no `launch`: it reaches the supervisor signal through a function field, because everything it imports is linked into the workbench with it. `workbench` carries the window port: `launch` and `mcpserver` reach the running workbench only through `WindowHost` and the `Handle` naming its control socket, so neither links a webview and the window tools keep a fakeable seam. `desktop` is the workbench itself — the Wails application, the conversation PTY, the window registry and the socket server — and it is the only package that imports Wails, imported only by `main.go`. That split is load-bearing: put the two together and every test that touches a window tool links WebKit through cgo.
 
-The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's home, its config, and the nesting depth launch raises), `theme` (the palette and what each accent is for), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
+The shared leaves import nothing of qrouton's own, so anything may depend on them: `sessionpaths` (a session's on-disk layout), `codex` (the Codex CLI's home, its config, and the nesting depth launch raises), `theme` (the palette and what each accent is for), `atomicfile` (whole-file replace and the advisory lock every multi-writer file is guarded by), and `prompts` (canonical prompts, provider rendering, and the discovery-tree stamper).
 
 - `main.go`: urfave/cli app; the root action opens the workbench on the session last shown — or on no session at all, whose window is the assembly overlay — and re-execs the binary behind a hidden marker flag, so the workbench owns a process of its own and the prompt comes back. It takes no arguments: sessions are assembled in the window. Subcommands come from `cmd/*`.
 - `cmd/mcp/`, `cmd/agentevent/`, `cmd/mode/`, `cmd/agent/`, `cmd/shell/`: `*cli.Command` definitions (flags only) delegating to `internal/*`.
@@ -38,7 +38,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - `internal/mcpserver/`, `internal/agentevent/`: the agent's window tools; and the runner subagent hook collector, which is a write path only — the log has no reader yet, so nothing scans it.
 - `internal/sessionpaths/`, `internal/codex/`, `internal/theme/`: the shared leaves above.
 - `internal/config/`: config file and XDG paths. `Load` never prompts and never fails for a missing value — a zero-repo session needs neither a root nor owners, so the root defaults and an empty owner list is simply an empty repository list. A workbench opening on no session asks for the owners and the sessions root once, then marks the config `welcomed`; one opening on a session never asks, so an install that always resumes stays unasked.
-- `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary; deliberately decoupled from the packages above.
+- `cmd/qrouton-eval/`, `internal/evalharness/`: standalone prompt-eval binary. It owns its own run loop, but takes the runner's MCP wiring from `launch` rather than rebuilding it, so an eval grades the agent a launch would produce.
 
 ## Invariants
 
@@ -48,6 +48,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - Focus is never taken *from* the user. An agent surface is a tab and leaves the keyboard where it was. The main conversation is the sole desktop window. A surface the user asked for may take the keyboard.
 - Mirrors live under `<root>/.mirrors`; session worktrees live under `<session>/src`.
 - Write `qrouton.json` last. A directory without it must not appear resumable.
+- Three processes write the manifest, so every change to an existing one goes through `session.UpdateManifest`, which holds an advisory lock across load, mutate and replace. It is not re-entrant: the lock is per open file description, so calling it from inside its own mutate self-deadlocks, and slow work (cloning, checkout) belongs outside it.
 - Never silently overwrite user-owned agent files; only replace qrouton-marked assets.
 - One owner per fact: a path convention, a helper, or a piece of copy lives in exactly one place. `sessionpaths` owns the session layout, `codex` owns Codex's, and each package keeps its literals in `strings.go` and its sentinel errors in `errors.go` rather than inline.
 - Eval and launch must stamp identical trees. Both go through `prompts.Stamp`; fixtures carry real `session.Manifest` documents, and the fixture-schema test fails if they drift.
