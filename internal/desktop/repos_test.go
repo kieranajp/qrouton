@@ -55,10 +55,11 @@ func (f *fakeGitHub) calls() gh {
 			}
 			return []github.Repo{{Org: owner, Name: "repo"}}, nil
 		},
-		cache: func(_ []string, repos []github.Repo) {
+		cache: func(_ []string, repos []github.Repo) error {
 			f.mu.Lock()
 			f.cached = append(f.cached, repos)
 			f.mu.Unlock()
+			return nil
 		},
 	}
 }

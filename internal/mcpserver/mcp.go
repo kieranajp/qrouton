@@ -1,14 +1,12 @@
 package mcpserver
 
-// The MCP tool surface served to the agent over stdio: tool schemas,
-// descriptions, and registration.
-
 import (
 	"context"
 	"fmt"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -83,7 +81,6 @@ func addTool[In any](server *mcp.Server, name, description, key string, fn answe
 		})
 }
 
-// messageOnly adapts a tool that has no viewport to report.
 func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
 	return func(ctx context.Context, input In) (string, *workbench.DocumentViewport, error) {
 		message, err := fn(ctx, input)
@@ -91,7 +88,7 @@ func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In
 	}
 }
 
-func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost, mode session.SessionMode) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,
 	})
@@ -107,7 +104,12 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
 	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
 	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))
-	addTool(server, toolEscalate, descEscalate, keyMessage, messageOnly(windows.escalate))
+
+	// Escalation is the assistant's way out of its own mode. An RPI session is
+	// already where it leads, so the tool is not offered there at all.
+	if mode == session.ModeAssistant {
+		addTool(server, toolEscalate, descEscalate, keyMessage, messageOnly(windows.escalate))
+	}
 
 	// list_windows is the one tool whose payload is a list rather than a line,
 	// so it stays hand-written rather than bending the shape above.
@@ -138,6 +140,19 @@ func Run(root, editorJSON, workbenchJSON string) error {
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
-	return newMCPServer(root, editor, handle.WindowHost()).
+	return newMCPServer(root, editor, handle.WindowHost(), sessionMode(root)).
 		Run(context.Background(), &mcp.StdioTransport{})
+}
+
+// sessionMode is the mode this server serves, read once at startup: an
+// escalation replaces the runner process and this server with it, so the mode
+// cannot change under a server that is already running. A manifest that will not
+// load reads as RPI, which withholds a tool rather than offering the agent one
+// its own prompt says it does not have.
+func sessionMode(root string) session.SessionMode {
+	manifest, err := session.Load(root)
+	if err != nil {
+		return session.ModeRPI
+	}
+	return manifest.EffectiveMode()
 }

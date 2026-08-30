@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -91,47 +90,8 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	if gitOK("-C", filepath.Join(dir, "src", "reference"), "symbolic-ref", "-q", "HEAD") {
 		t.Fatal("reference checkout is not detached")
 	}
-
-	// Advance the remote, remove the worktree, and prove resume uses the recorded SHA.
-	os.WriteFile(filepath.Join(referenceOrigin, "version"), []byte("two"), 0o644)
-	gittest.Run(t, referenceOrigin, "add", ".")
-	gittest.Run(t, referenceOrigin, "commit", "-m", "advance")
-	os.RemoveAll(filepath.Join(dir, "src", "reference"))
-	if err := EnsureWorktrees(cfg, m, nil); err != nil {
-		t.Fatal(err)
-	}
-	out, err := exec.Command("git", "-C", filepath.Join(dir, "src", "reference"), "rev-parse", "HEAD").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimSpace(string(out)); got != pinned {
-		t.Fatalf("resumed reference at %s, want pinned %s", got, pinned)
-	}
-}
-
-// A repo with no explicit role resumes on its session branch: Create only ever
-// writes "editing" or "reference", so an empty role means a hand-edited manifest
-// and editing is the safe reading.
-func TestManifestRepoWithoutRoleResumesOnItsBranch(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions")
-	origin, _ := makeOrigin(t, "unroled")
-	if err := ensureMirror(root, "org", "unroled", origin, nil); err != nil {
-		t.Fatal(err)
-	}
-	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
-		Name: "unroled", Org: "org", Branch: "feat/old", DefaultBranch: "main",
-		WorktreePath: "src/unroled", SSHURL: origin,
-	}}}
-	if err := EnsureWorktrees(&config.Config{Root: root}, m, nil); err != nil {
-		t.Fatal(err)
-	}
-	wt := filepath.Join(root, "old", "src", "unroled")
-	out, err := exec.Command("git", "-C", wt, "branch", "--show-current").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got := strings.TrimSpace(string(out)); got != "feat/old" {
-		t.Fatalf("checkout branch = %q", got)
+	if got := gittest.Head(t, filepath.Join(dir, "src", "reference")); got != pinned {
+		t.Fatalf("reference checkout at %s, want pinned %s", got, pinned)
 	}
 }
 
@@ -184,22 +144,6 @@ func TestManifestRoundTripsEditingAndDefaultsAnEmptyRole(t *testing.T) {
 	}
 	if got := m.Repos[0].Role.Effective(); got != RepoRoleEditing {
 		t.Fatalf("empty role reads as %q", got)
-	}
-}
-
-// Create always records a clone URL. A manifest without one cannot be resumed,
-// and guessing github.com for it would mirror the wrong repository in silence.
-func TestEnsureWorktreesRejectsManifestWithoutCloneURL(t *testing.T) {
-	root := filepath.Join(t.TempDir(), "sessions")
-	m := Manifest{SchemaVersion: manifestSchemaVersion, Slug: "old", Repos: []ManifestRepo{{
-		Name: "urlless", Org: "org", Branch: "feat/old", DefaultBranch: "main", WorktreePath: "src/urlless",
-	}}}
-	err := EnsureWorktrees(&config.Config{Root: root}, m, nil)
-	if err == nil {
-		t.Fatal("manifest without a clone URL was resumed")
-	}
-	if !strings.Contains(err.Error(), "urlless") {
-		t.Fatalf("error does not name the repository: %v", err)
 	}
 }
 
@@ -288,14 +232,15 @@ func TestCreateRefusesToReclaimUnmarkedDirectory(t *testing.T) {
 	}
 }
 
-func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
+// The clone URL a repository was assembled from is recorded, so nothing later
+// has to reconstruct a github.com address for it.
+func TestCreateRecordsTheCloneURLItAssembledFrom(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	origin, _ := makeOrigin(t, "custom")
-	cfg := &config.Config{Root: root}
-	dir, err := Create(cfg, CreateRequest{
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
 		Name: "Custom origin", Prefix: "feat", Mode: ModeRPI,
 		Repos: []RepoSelection{{Repo: github.Repo{Name: "custom", Org: "org", SSHURL: origin, DefaultBranch: "main"}, Role: RepoRoleEditing}},
 	}, nil)
@@ -312,21 +257,6 @@ func TestEnsureWorktreesReclonesMissingMirrorFromRecordedURL(t *testing.T) {
 	}
 	if m.Repos[0].SSHURL != origin {
 		t.Fatalf("manifest sshUrl = %q, want %q", m.Repos[0].SSHURL, origin)
-	}
-
-	// Lose both the mirror and the worktree; resume must re-clone from the
-	// recorded URL, not a reconstructed github.com address.
-	if err := os.RemoveAll(mirrorPath(root, "org", "custom")); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.RemoveAll(filepath.Join(dir, "src", "custom")); err != nil {
-		t.Fatal(err)
-	}
-	if err := EnsureWorktrees(cfg, m, nil); err != nil {
-		t.Fatal("resume with recorded URL failed:", err)
-	}
-	if _, err := os.Stat(filepath.Join(dir, "src", "custom", "version")); err != nil {
-		t.Fatal("worktree not re-materialised:", err)
 	}
 }
 

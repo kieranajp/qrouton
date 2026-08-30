@@ -1,5 +1,4 @@
 // qrouton — assemble a multi-repo session (worktrees off local mirrors) and launch an agent runner in it.
-// See AGENTS.md for the package layout and the invariants a change must hold.
 package main
 
 import (
@@ -126,8 +125,6 @@ var (
 	discoverProcess = workbench.Discover
 )
 
-// pickRunner resolves the runner headlessly: the requested one if given and
-// installed, otherwise the first installed built-in.
 func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 	if id != "" {
 		return launch.ByID(cfg, id)
@@ -189,6 +186,7 @@ func workbenchProcess(marshalled string) error {
 	if err != nil {
 		return err
 	}
+	ports := workbenchPorts{cfg: cfg, bin: bin, spec: spec, env: os.Environ()}
 	return desktop.Run(desktop.Options{
 		Icon:         applicationIcon,
 		SessionRoot:  spec.SessionRoot,
@@ -203,89 +201,101 @@ func workbenchProcess(marshalled string) error {
 		},
 		LinearEnvironment: []string{linearPromptEnvVar},
 		Env:               os.Environ(),
-		Agent:             agentCommand(cfg, bin, spec.Runner, spec.Editor),
-		Shell:             shellArgv(bin),
-		Reveal:            launch.RevealArgv,
-		Document:          documentWindow(spec.Editor),
 		Config:            cfg,
-		Runners:           assemblyRunners(cfg),
-		Signal:            launch.SignalSupervisor,
-		Relaunch:          relaunchWorkbench(bin, spec, os.Environ()),
-		ValidateEditor: func(argv []string) error {
-			if len(argv) == 0 {
-				return nil
-			}
-			_, err := launch.ResolveEditor(argv)
-			return err
-		},
-		ValidateLaunch: func(overrides map[string][]string) error {
-			_, err := launch.Runners(&config.Config{Launch: overrides})
-			return err
-		},
+		Launcher:          ports,
+		Validator:         ports,
+		Relauncher:        ports,
 	})
 }
 
-// relaunchWorkbench replaces this workbench with one that loads the config
-// again, on no session. Detach returns only once the child answers, so the two
-// overlap for that wait — safe because the successor holds no session, and so
-// claims no supervisor the caller might still own.
-func relaunchWorkbench(bin string, spec launch.WorkbenchSpec, env []string) func(func() (string, string)) error {
-	return func(linearIssue func() (string, string)) error {
-		return workbench.WithLaunchLock(func() error {
-			socket, err := workbench.NewSocketPath()
-			if err != nil {
-				return err
-			}
-			next := spec
-			next.SessionRoot, next.Resume, next.Socket = "", false, socket
-			if linearIssue != nil {
-				next.LinearIssue, next.LinearPrompt = linearIssue()
-			}
-			return launch.Detach(launch.WorkbenchArgv(bin, next), config.WithoutOverrides(env),
-				socket, workbenchLog(next))
-		})
-	}
+// workbenchPorts is launch, as the workbench reaches it. desktop names the ports
+// and this answers them, so the package linked against a webview never links
+// launch.
+type workbenchPorts struct {
+	cfg  *config.Config
+	bin  string
+	spec launch.WorkbenchSpec
+	env  []string
 }
 
-// agentCommand builds a session's supervisor command when the workbench boots it,
-// so the socket it is served on and the manifest it reads are the current ones.
-// A session assembled in the overlay names its own agent; anything else takes the
+// Agent builds a session's supervisor command when the workbench boots it, so
+// the socket it is served on and the manifest it reads are the current ones. A
+// session assembled in the overlay names its own agent; anything else takes the
 // workbench's.
-func agentCommand(cfg *config.Config, bin, workbenchRunner string, editor launch.EditorCommand) func(string, string, string, bool) ([]string, []string, string, error) {
-	return func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
-		if runnerID == "" {
-			runnerID = workbenchRunner
-		}
-		runner, err := pickRunner(cfg, runnerID)
-		if err != nil {
-			return nil, nil, "", err
-		}
-		argv, env, err := launch.Launch(sessionRoot, runner, bin, socket, editor, resume)
-		return argv, env, runner.ID, err
+func (p workbenchPorts) Agent(req desktop.AgentRequest) (desktop.AgentCommand, error) {
+	id := req.RunnerID
+	if id == "" {
+		id = p.spec.Runner
 	}
+	runner, err := pickRunner(p.cfg, id)
+	if err != nil {
+		return desktop.AgentCommand{}, err
+	}
+	argv, env, err := launch.Launch(req.SessionRoot, runner, p.bin, req.Socket, p.spec.Editor, req.Resume)
+	if err != nil {
+		return desktop.AgentCommand{}, err
+	}
+	return desktop.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID}, nil
 }
 
-// assemblyRunners maps launch's runners onto the row the overlay draws, which is
-// how desktop offers agents without importing launch.
-func assemblyRunners(cfg *config.Config) func() ([]assembly.Runner, error) {
-	return func() ([]assembly.Runner, error) {
-		runners, err := launch.Runners(cfg)
-		if err != nil {
-			return nil, err
-		}
-		out := make([]assembly.Runner, len(runners))
-		for i, r := range runners {
-			out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
-		}
-		return out, nil
-	}
+// Shell and Reveal are built per session, because the landing-list path does not
+// know which one the workbench settles on when it opens.
+func (p workbenchPorts) Shell(sessionRoot string) []string {
+	return launch.ShellArgv(p.bin, sessionRoot)
 }
 
-// documentWindow reaches the same decision the agent's file tool does.
-func documentWindow(editor launch.EditorCommand) func(string, string) (workbench.WindowOptions, error) {
-	return func(sessionRoot, name string) (workbench.WindowOptions, error) {
-		return launch.DocumentWindow(sessionRoot, name, editor, workbench.LineSpan{})
+func (p workbenchPorts) Reveal(sessionRoot string) []string { return launch.RevealArgv(sessionRoot) }
+
+// Document reaches the same decision the agent's file tool does.
+func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOptions, error) {
+	return launch.DocumentWindow(sessionRoot, name, p.spec.Editor, workbench.LineSpan{})
+}
+
+func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
+	runners, err := launch.Runners(p.cfg)
+	if err != nil {
+		return nil, err
 	}
+	out := make([]assembly.Runner, len(runners))
+	for i, r := range runners {
+		out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+	}
+	return out, nil
+}
+
+func (p workbenchPorts) Signal(sessionRoot string) { launch.SignalSupervisor(sessionRoot) }
+
+func (p workbenchPorts) ValidateEditor(argv []string) error {
+	if len(argv) == 0 {
+		return nil
+	}
+	_, err := launch.ResolveEditor(argv)
+	return err
+}
+
+func (p workbenchPorts) ValidateLaunch(overrides map[string][]string) error {
+	_, err := launch.Runners(&config.Config{Launch: overrides})
+	return err
+}
+
+// Relaunch replaces this workbench with one that loads the config again, on no
+// session. Detach returns only once the child answers, so the two overlap for
+// that wait — safe because the successor holds no session, and so claims no
+// supervisor the caller might still own.
+func (p workbenchPorts) Relaunch(linearIssue func() (string, string)) error {
+	return workbench.WithLaunchLock(func() error {
+		socket, err := workbench.NewSocketPath()
+		if err != nil {
+			return err
+		}
+		next := p.spec
+		next.SessionRoot, next.Resume, next.Socket = "", false, socket
+		if linearIssue != nil {
+			next.LinearIssue, next.LinearPrompt = linearIssue()
+		}
+		return launch.Detach(launch.WorkbenchArgv(p.bin, next), config.WithoutOverrides(p.env),
+			socket, workbenchLog(next))
+	})
 }
 
 // workbenchLog is where the detached process's stdio lands: inside the session
@@ -298,16 +308,9 @@ func workbenchLog(spec launch.WorkbenchSpec) string {
 	return sessionpaths.WorkbenchLog(spec.SessionRoot)
 }
 
-// subject names what was opened in the one line the user gets back.
 func subject(sessionRoot string) string {
 	if sessionRoot == "" {
 		return noSessionSubject
 	}
 	return filepath.Base(sessionRoot)
-}
-
-// shellArgv builds the user shell's command for whichever session the workbench
-// settles on, which the landing-list path does not know when it opens.
-func shellArgv(bin string) func(string) []string {
-	return func(dir string) []string { return launch.ShellArgv(bin, dir) }
 }

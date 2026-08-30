@@ -3,6 +3,7 @@ package desktop
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -247,7 +248,11 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	start := make(chan struct{})
-	results := make(chan error, 2)
+	type answer struct {
+		issue string
+		err   error
+	}
+	results := make(chan answer, 2)
 	var ready sync.WaitGroup
 	ready.Add(2)
 	for _, issue := range []string{"LIF-2841", "LIF-2842"} {
@@ -255,25 +260,75 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 			ready.Done()
 			<-start
 			_, err := a.offer(issue, "")
-			results <- err
+			results <- answer{issue: issue, err: err}
 		}()
 	}
 	ready.Wait()
 	close(start)
 	var accepted, refused int
+	var queued string
 	for range 2 {
-		err := <-results
+		got := <-results
 		switch {
-		case err == nil:
+		case got.err == nil:
 			accepted++
-		case errors.Is(err, ErrAssemblyDraftConflict):
+			queued = got.issue
+		case errors.Is(got.err, ErrAssemblyDraftConflict):
 			refused++
 		default:
-			t.Fatalf("simultaneous offer = %v", err)
+			t.Fatalf("simultaneous offer = %v", got.err)
 		}
 	}
 	if accepted != 1 || refused != 1 {
 		t.Fatalf("simultaneous offers: %d accepted, %d refused", accepted, refused)
+	}
+	if pending := a.Pending(); pending != "https://linear.app/issue/"+queued {
+		t.Fatalf("pending = %q after %q was the accepted offer", pending, queued)
+	}
+}
+
+// A ticket already carried by a session boots it: a supervisor process and a
+// control socket. An offer of another issue arriving during that boot is
+// answered rather than stalled behind it.
+func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := sessionDir(t, root, "shown")
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
+		TicketURL: "https://linear.app/acme/issue/LIF-2841/title", Mode: session.ModeAssistant,
+		CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
+
+	during := make(chan error, 1)
+	reg.boot.agent = func(req AgentRequest) (AgentCommand, error) {
+		offered := make(chan error, 1)
+		go func() {
+			outcome, err := a.offer("LIF-2842", "")
+			if err == nil && outcome != assemblyOutcomeQueued {
+				err = fmt.Errorf("offer during a boot = %q", outcome)
+			}
+			offered <- err
+		}()
+		select {
+		case err := <-offered:
+			during <- err
+		case <-time.After(2 * time.Second):
+			during <- errors.New("an offer could not proceed while a matching session booted")
+		}
+		return boot.Agent(req)
+	}
+
+	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {
+		t.Fatalf("matching offer = %q, %v", got, err)
+	}
+	if err := <-during; err != nil {
+		t.Fatal(err)
+	}
+	if pending := a.Pending(); pending != "https://linear.app/issue/LIF-2842" {
+		t.Fatalf("pending = %q, want the issue offered during the boot", pending)
 	}
 }
 

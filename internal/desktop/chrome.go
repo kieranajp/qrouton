@@ -20,27 +20,27 @@ type Chrome struct {
 }
 
 func newChrome(emit emitter) *Chrome {
-	return &Chrome{
-		fields: status.Fields{
-			Sessions:            []status.SessionRow{},
-			Documents:           []status.Document{},
-			RepositoryDocuments: []status.RepositoryDocuments{},
-			Repos:               []status.RepoStat{},
-			Agents:              status.AgentPanel{Agents: []status.AgentRecord{}},
-		},
-		emit: emit,
-	}
+	return &Chrome{fields: status.EmptyFields(), emit: emit}
 }
 
-// Snapshot returns the most recently published chrome state.
 func (c *Chrome) Snapshot() status.Fields {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.fields
 }
 
+// publish adapts Chrome to the emitter seam. A payload that is not chrome state
+// belongs to some other producer sharing the seam, so it goes out untouched.
 func (c *Chrome) publish(event string, payload any) {
-	fields := payload.(status.Fields)
+	fields, ok := payload.(status.Fields)
+	if !ok {
+		c.emit(event, payload)
+		return
+	}
+	c.publishFields(fields)
+}
+
+func (c *Chrome) publishFields(fields status.Fields) {
 	c.mu.Lock()
 	if c.initialized && reflect.DeepEqual(c.fields, fields) {
 		c.mu.Unlock()
@@ -49,7 +49,7 @@ func (c *Chrome) publish(event string, payload any) {
 	c.fields = fields
 	c.initialized = true
 	c.mu.Unlock()
-	c.emit(event, fields)
+	c.emit(chromeEvent, fields)
 }
 
 // watchChrome pushes what the window can observe about the session on screen
@@ -180,20 +180,21 @@ func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
 // attach to a conversation whose terminal id it has not been told.
 func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
 	shown := reg.current()
-	fields := status.Read(shown.root())
+	shownRoot := shown.root()
+	fields := status.Read(shownRoot)
+	if shown != nil {
+		fields.Terminal, fields.Activity = shown.terminal, shown.agents.state()
+		fields.Picker = shown.pendingPicker() != nil
+	}
+	if repos, ok := measured[shownRoot]; ok {
+		fields.Repos = repos
+	}
 	agentSnapshots := reg.agentActivitySnapshots()
 	// Dereferenced on every tick: a value captured at wiring time re-raises the
 	// overlay two seconds after it closes. A window holding a session never asks,
 	// so the questions can never land over a live conversation — and an install
 	// that always opens on one stays unasked until it opens on none.
 	fields.Welcoming = cfg != nil && !cfg.Welcomed && fields.Slug == ""
-	if repos, ok := measured[shown.root()]; ok {
-		fields.Repos = repos
-	}
-	if shown != nil {
-		fields.Terminal, fields.Activity = shown.terminal, shown.activity.state()
-		fields.Picker = shown.pendingPicker() != nil
-	}
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		panel := agentPanel(snapshot)
 		if panel.Provider == "" {
@@ -209,7 +210,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		// the sessions it has booted carry them.
 		if state := reg.bySlug(row.Slug); state != nil {
 			fields.Sessions[i].Terminal = state.terminal
-			fields.Sessions[i].Activity = state.activity.state()
+			fields.Sessions[i].Activity = state.agents.state()
 		}
 		if snapshot, ok := agentSnapshots[row.Slug]; ok {
 			fields.Sessions[i].Summary = agentSummary(snapshot)

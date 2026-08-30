@@ -1,28 +1,9 @@
-import { Call, Events } from "./wails.js";
+import { CHROME_DEFAULTS, CHROME_EVENT, CHROME_SNAPSHOT } from "./bridge/generated.js";
+import { call, Call, Events } from "./wails.js";
 
-const CHROME_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Chrome";
-
-/** @type {{mode: string, phase: string, identity: string, branch: string,
- *   slug: string, terminal: string,
- *   sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[],
- *   activity: 'working'|'waiting'|'idle', agents: {provider: string, agents: any[]},
- *   picker: boolean, welcoming: boolean}} */
-const NOTHING = {
-  mode: "",
-  phase: "",
-  identity: "",
-  branch: "",
-  slug: "",
-  terminal: "",
-  sessions: [],
-  documents: [],
-  repositoryDocuments: [],
-  repos: [],
-  activity: "idle",
-  agents: { provider: "", agents: [] },
-  picker: false,
-  welcoming: false,
-};
+// Idle rather than the payload's zero value: a page that has heard nothing is
+// not a page reporting an agent at work.
+const NOTHING = { ...CHROME_DEFAULTS, activity: "idle" };
 
 // Spreading over the defaults is not enough: a slice Go leaves nil arrives as
 // an explicit null, which fills the key rather than leaving it absent, and the
@@ -51,12 +32,14 @@ function observing() {
     fields = observed(value);
     settled = true;
   };
-  Events.On("chrome:update", (event) => {
+  Events.On(CHROME_EVENT, (event) => {
     live = true;
     apply(event.data);
   });
-  Call.ByName(CHROME_SERVICE + ".Snapshot").then((value) => {
-    if (!live) apply(value);
+  // A workbench that cannot say what it holds reads as one holding no session,
+  // which is a window with something on it rather than a permanently blank one.
+  call(Call.ByName(CHROME_SNAPSHOT)).then((answer) => {
+    if (!live) apply(answer.ok ? answer.value : undefined);
   });
   return {
     get fields() {
@@ -68,14 +51,4 @@ function observing() {
       return settled;
     },
   };
-}
-
-/** age is how long ago something was written, never more precise than it is. */
-export function age(at) {
-  const minutes = Math.floor((Date.now() - new Date(at).getTime()) / 60000);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }

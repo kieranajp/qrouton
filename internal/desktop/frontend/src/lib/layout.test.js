@@ -5,14 +5,9 @@ import {
   MIN_HUMAN,
   MAX_SIDEBAR,
   MIN_SIDEBAR,
-  consumeTerminalFocus,
-  focusGenerationIn,
-  focusPendingIn,
-  focusTerminal,
   humanWidth,
   roomFor,
-  selectedIn,
-  selectIn,
+  selectedTab,
   sidebarWidth,
   sidebarWidthKey,
   storedSidebarWidth,
@@ -48,38 +43,21 @@ test("the sidebar keeps one persisted width across sessions", () => {
   assert.equal(sidebarWidth(0), 0);
 });
 
-// Switching sessions and back has to land on the tab you left up.
-test("complete snapshots restore missed selections and keep sessions separate", () => {
-  let selection = selectIn({}, "octopus", "window-3");
-  selection = selectIn(selection, "webhook", "window-7");
-  selection = selectIn(selection, "octopus", "window-5");
-  assert.equal(selectedIn(selection, "octopus"), "window-5");
-  assert.equal(selectedIn(selection, "webhook"), "window-7");
-  assert.equal(selectedIn(selection, "never-opened"), "");
+const TABS = [{ id: "window-1" }, { id: "window-3" }, { id: "window-7" }];
+
+test("the strip follows the selection Go published", () => {
+  assert.equal(selectedTab(TABS, "window-7"), 2);
 });
 
-test("agent selection changes visibility without keyboard focus intent", () => {
-  const selection = selectIn({}, "octopus", "window-3");
-  assert.equal(selectedIn(selection, "octopus"), "window-3");
-  assert.equal(focusGenerationIn({}, "window-3"), 0);
+// The first shell opens without a selection, and there is a tab to draw.
+test("no selection yet opens on the leftmost tab", () => {
+  assert.equal(selectedTab(TABS, ""), 0);
+  assert.equal(selectedTab([], ""), -1);
 });
 
-test("each user terminal choice increments only that terminal's focus generation", () => {
-  let generations = focusTerminal({}, "window-3");
-  generations = focusTerminal(generations, "window-7");
-  generations = focusTerminal(generations, "window-3");
-  assert.equal(focusGenerationIn(generations, "window-3"), 2);
-  assert.equal(focusGenerationIn(generations, "window-7"), 1);
-});
-
-test("focus requested before a terminal mounts stays pending and does not replay once handled", () => {
-  let generations = focusTerminal({}, "window-3");
-  assert.equal(focusGenerationIn(generations, "window-3"), 1);
-  assert.equal(focusPendingIn(generations, "window-3"), true);
-
-  generations = consumeTerminalFocus(generations, "window-3", 1);
-  assert.equal(focusPendingIn(generations, "window-3"), false);
-  assert.equal(consumeTerminalFocus(generations, "window-3", 0), generations);
+// Claiming tab 0 instead would show a selection Go never made.
+test("a selection naming no open tab selects nothing", () => {
+  assert.equal(selectedTab(TABS, "window-9"), -1);
 });
 
 // The pane arithmetic below moved out of Session.svelte, where nothing could

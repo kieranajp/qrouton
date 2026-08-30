@@ -1,4 +1,5 @@
-import { Events } from "../wails.js";
+import { debounced } from "../async.js";
+import { call, Events } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
 import { record } from "./progress.js";
@@ -6,6 +7,10 @@ import { blocks, folder, last, refusal } from "./steps.js";
 import { loader } from "./ticket.js";
 
 const TICKET_LOADED = "✓ Loaded — name and description filled in";
+const NO_RUNNERS = "No agent was found on your PATH, so there is nothing to run this session with.";
+
+// Long enough that a typed word is one branch preview rather than six.
+const PREVIEW_DELAY = 150;
 
 // A ticket tracker's answer, which names no field of the form.
 const message = (err) => String(err?.message ?? err ?? "");
@@ -30,40 +35,49 @@ export function assembling(done) {
   let step = $state(0);
   let prefixes = $state(/** @type {string[]} */ ([]));
   let runners = $state(/** @type {{id: string, label: string}[]} */ ([]));
-  let problems = $state(/** @type {{field: string, message: string}[]} */ ([]));
   let branch = $state("");
   let status = $state("");
+  let failure = $state("");
   /** @type {{text: string, tone: 'muted'|'success'|'failed'}} */
   let hint = $state({ text: "", tone: "success" });
   let fetching = $state(false);
   let creating = $state(false);
   let progress = $state(/** @type {import("./progress.js").Row[]} */ ([]));
 
-  const repos = browsing(() => branch);
+  /** @param {string} text */
+  const report = (text) => (failure ||= text);
 
-  go.prefixes().then((list) => {
-    prefixes = list ?? [];
+  const repos = browsing(() => branch, report);
+
+  call(go.prefixes()).then((answer) => {
+    if (!answer.ok) return report(refusal(answer.error));
+    prefixes = answer.value ?? [];
     form.prefix = form.prefix || prefixes[0] || "";
   });
-  go.runners().then((list) => {
-    runners = list ?? [];
+  call(go.runners()).then((answer) => {
+    if (!answer.ok) return report(refusal(answer.error));
+    runners = answer.value ?? [];
     form.runner = form.runner || runners[0]?.id || "";
+    if (!runners.length) report(NO_RUNNERS);
   });
 
   const payload = () => ({ ...form, repos: repos.ordered });
 
-  // Only the newest answer may land: two keystrokes are two calls, and they
-  // come back in whatever order Go finishes them.
-  let asked = 0;
+  const branches = debounced(
+    PREVIEW_DELAY,
+    (draft) => call(go.preview(draft)),
+    (answer) => {
+      if (!answer.ok) return report(refusal(answer.error));
+      branch = answer.value ?? "";
+    },
+  );
+
+  // The branch is the prefix and the slug; nothing else on the form moves it, and
+  // a description that re-asked would be a round trip per keystroke.
   $effect(() => {
-    const draft = payload();
-    const mine = ++asked;
-    go.check(draft).then((found) => {
-      if (mine === asked) problems = found ?? [];
-    });
-    go.preview(draft).then((value) => {
-      if (mine === asked) branch = value ?? "";
-    });
+    const { name, entropy, prefix } = form;
+    branches.schedule({ name, entropy, prefix });
+    return branches.cancel;
   });
 
   // Every page in the process hears this, and the slug the session will have is
@@ -95,18 +109,29 @@ export function assembling(done) {
   /** @param {string} ticket */
   const seed = (ticket) => tickets.seed(ticket);
 
+  // Nothing reads the rules between advances, so they are asked for on the press
+  // that acts on them rather than on every keystroke.
   async function next() {
     if (creating) return;
-    const blocked = blocks(problems, step);
+    const found = await call(go.check(payload()));
+    if (!found.ok) {
+      status = refusal(found.error);
+      return;
+    }
+    const blocked = blocks(found.value ?? [], step);
     if (blocked) {
       status = blocked.message;
       return;
     }
     status = "";
     if (step === 0) {
-      const found = await go.checkSlug(payload());
-      if (found?.length) {
-        status = found[0].message;
+      const slug = await call(go.checkSlug(payload()));
+      if (!slug.ok) {
+        status = refusal(slug.error);
+        return;
+      }
+      if (slug.value?.length) {
+        status = slug.value[0].message;
         return;
       }
     }
@@ -115,13 +140,13 @@ export function assembling(done) {
       return;
     }
     creating = true;
-    try {
-      await go.create(payload());
-      done();
-    } catch (err) {
+    const created = await call(go.create(payload()));
+    if (!created.ok) {
       creating = false;
-      status = refusal(err);
+      status = refusal(created.error);
+      return;
     }
+    done();
   }
 
   function back() {
@@ -144,8 +169,10 @@ export function assembling(done) {
     get branch() {
       return branch;
     },
+    // A step clears what it was told off for; what could not be loaded at all
+    // outlives the step the user was on when it failed.
     get status() {
-      return status;
+      return status || failure;
     },
     get hint() {
       return hint;

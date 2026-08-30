@@ -2,32 +2,21 @@ package launch
 
 import (
 	"context"
-	"errors"
 	"os"
 	"os/exec"
 )
 
-// The seams below keep the interactive shell loop testable without starting a
-// real login shell or printing a directory tree into the test process.
+// The seams below keep the interactive shell testable without starting a real
+// login shell or printing a directory tree into the test process.
 var (
 	showShellTree = printShellTree
 	runLoginShell = startLoginShell
 )
 
-// Shell runs the session's user shell. It restarts after the shell exits,
-// because the affordance that matters is having a shell at all.
+// Shell runs the session's user shell; the tab ends when it exits.
 func Shell(ctx context.Context, dir string) error {
 	showShellTree(dir)
-	for {
-		err := runLoginShell(ctx, dir)
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		var exitErr *exec.ExitError
-		if err != nil && !errors.As(err, &exitErr) {
-			return err
-		}
-	}
+	return runLoginShell(ctx, dir)
 }
 
 func printShellTree(dir string) {

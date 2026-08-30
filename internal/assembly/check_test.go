@@ -39,13 +39,6 @@ func TestCheckRequiresAnEditingRepository(t *testing.T) {
 	}
 }
 
-// A refresh can drop a repository between picking it and advancing. Resolving
-// the selection against the live list is what leaves the draft short of one.
-func TestCheckRejectsADraftWhoseOnlyEditingRepoHasGone(t *testing.T) {
-	d := Draft{Name: "Cleanup", Prefix: "feat"}
-	problemOn(t, Check(d), FieldRepos)
-}
-
 // The rows a picker opens holding are the session's, not the visit's: an
 // escalation over a session already being worked in adds reference repositories
 // alone, or confirms adding nothing at all.
@@ -130,5 +123,18 @@ func TestAdditionsAcceptAnUpgradeInsteadOfANewEditingRepo(t *testing.T) {
 		Upgrades: []session.RepoRef{{Org: "acme", Name: "docs"}}}
 	if problems := CheckAdditions(reading, upgrade); len(problems) != 0 {
 		t.Fatalf("an upgrade did not satisfy the editing-repo rule: %+v", problems)
+	}
+}
+
+// An unset role reads as editing, on the draft and on the manifest alike.
+func TestAnUnsetRoleSatisfiesTheEditingRepositoryRule(t *testing.T) {
+	d := Draft{Name: "Cleanup", Prefix: "feat",
+		Repos: []session.RepoSelection{{Repo: repoNamed("api")}}}
+	if problems := Check(d); len(problems) != 0 {
+		t.Fatalf("a draft whose only repo has no role rejected: %+v", problems)
+	}
+	legacy := session.Manifest{Repos: []session.ManifestRepo{{Org: "acme", Name: "api"}}}
+	if problems := CheckAdditions(legacy, Draft{Name: "Research", Prefix: "feat"}); len(problems) != 0 {
+		t.Fatalf("addition to a session whose only repo has no role rejected: %+v", problems)
 	}
 }

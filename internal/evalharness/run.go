@@ -1,8 +1,5 @@
 package evalharness
 
-// Suite orchestration: resolve configuration, run every scenario × runner ×
-// sample (caserun.go), pairwise-judge the results, and write the report.
-
 import (
 	"context"
 	"fmt"

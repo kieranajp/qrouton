@@ -1,9 +1,5 @@
 package evalharness
 
-// Literal values the harness matches on or shells out to. Runner names, check
-// kinds, and manifest roles are contract with the scenario files and the
-// session manifest, so they live here rather than inline at each use.
-
 const (
 	gitBin     = "git"
 	srcDirName = "src"
@@ -20,7 +16,6 @@ const (
 	gitDiffCmd     = "diff"
 	gitLsFilesCmd  = "ls-files"
 
-	gitDirFlag        = "-C"
 	gitPorcelainFlag  = "--porcelain"
 	gitQuietFlag      = "-q"
 	gitQuietMsgFlag   = "-qm"
@@ -194,16 +189,6 @@ const (
 	mockMCPSubcommand = "mock-mcp"
 	mockMCPLogFlag    = "--log"
 	mockMCPRootFlag   = "--root"
-
-	mcpServerName = "qrouton"
-	mcpServersKey = "mcpServers"
-	mcpTypeKey    = "type"
-	mcpCommandKey = "command"
-	mcpArgsKey    = "args"
-	mcpStdioType  = "stdio"
-
-	codexMCPCommandKey = "mcp_servers.qrouton.command="
-	codexMCPArgsKey    = "mcp_servers.qrouton.args="
 )
 
 // Claude and Codex invocation flags. Both are run non-interactively, streaming
@@ -229,13 +214,11 @@ var (
 )
 
 const (
-	claudeMCPConfigFlag = "--mcp-config"
-	claudeResumeFlag    = "--resume"
-	codexExecCmd        = "exec"
-	codexResumeCmd      = "resume"
-	codexConfigFlag     = "-c"
-	modelFlag           = "--model"
-	versionFlag         = "--version"
+	claudeResumeFlag = "--resume"
+	codexExecCmd     = "exec"
+	codexResumeCmd   = "resume"
+	modelFlag        = "--model"
+	versionFlag      = "--version"
 
 	// Event kinds the harness synthesises itself, rather than reading from a
 	// provider stream.

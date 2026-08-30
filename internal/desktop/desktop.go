@@ -7,24 +7,18 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// Options is the workbench: where its sessions live, which one it opens on, and
-// how it builds what each of them runs.
 type Options struct {
-	// Icon is the application mark shown by the desktop and its default dialogs.
 	Icon []byte
 	// SessionRoot is empty when there is no session to open on, which is the
 	// window whose only content is the assembly overlay.
@@ -47,44 +41,13 @@ type Options struct {
 	LinearCommand     []string
 	LinearEnvironment []string
 	Env               []string
-	// Config is the sessions root and the configured owners the overlay assembles
-	// against.
-	Config *config.Config
+	Config            *config.Config
 
-	// The fields below are launch's, reached as functions because desktop must
-	// not import it: everything desktop imports is linked into the workbench,
-	// and launch pulls in no webview. A nil one means the workbench simply
-	// cannot do that thing, and says so through the matching sentinel error —
-	// which is why these are optional slots rather than one interface.
-	//
-	// Agent builds a session's supervisor command and environment against the
-	// control socket the workbench will serve that session on. runnerID names
-	// the agent the session was assembled with; empty means the workbench's own.
-	// resolvedRunner is the provider actually selected for legacy empty values.
-	Agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, resolvedRunner string, err error)
-	// Shell builds the user shell window's command for a session root, which is
-	// why it is a function rather than an argv.
-	Shell func(sessionRoot string) []string
-	// Document is the window one of the session's own files opens in, named
-	// relative to its root; it errors on a name resolving outside the session.
-	Document func(sessionRoot, name string) (workbench.WindowOptions, error)
-	// Reveal builds the command that shows a session's directory in the file
-	// manager, and is a function for the same reason Shell is.
-	Reveal func(sessionRoot string) []string
-	// Runners is the agents the overlay offers, mapped off launch's own rows.
-	Runners func() ([]assembly.Runner, error)
-	// Signal relaunches a session's runner after an escalation:
-	// launch.SignalSupervisor.
-	Signal func(sessionRoot string)
-	// Relaunch replaces this workbench with one reading the config file afresh,
-	// and returns only once the successor is serving. First run needs it because
-	// a changed sessions root cannot take effect in a running process. The ticket
-	// supplier is read after the relaunch owns launch serialization.
-	Relaunch func(linearIssue func() (ticket, prompt string)) error
-	// ValidateEditor and ValidateLaunch are launch.ResolveEditor and
-	// launch.Runners, called for their errors alone.
-	ValidateEditor func(argv []string) error
-	ValidateLaunch func(overrides map[string][]string) error
+	// Launcher builds every command the workbench runs; Validator and Relauncher
+	// answer the settings panel and first run.
+	Launcher   Launcher
+	Validator  Validator
+	Relauncher Relauncher
 
 	assembly *Assembly
 	chrome   *Chrome
@@ -95,7 +58,7 @@ type Options struct {
 func Run(opts Options) error {
 	// A workbench with no way to build an agent command is an error; a workbench
 	// with no session is the ordinary case.
-	if opts.Agent == nil {
+	if opts.Launcher == nil {
 		return ErrNoAgentCommand
 	}
 	if opts.Socket == "" {
@@ -113,7 +76,7 @@ func Run(opts Options) error {
 	term := newTerm(reg, r.Emit)
 	windows := newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
-	picker := newPicker(opts.Config, reg, repos, opts.Signal)
+	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)
 	// The same teardown the main window's OnClose runs, shared with Settings.Quit
 	// so quitting from the panel is no worse than closing the window.
 	quit := sync.OnceFunc(func() {
@@ -129,15 +92,16 @@ func Run(opts Options) error {
 	chrome := newChrome(r.Emit)
 	opts.chrome = chrome
 	r.register(application.NewService(chrome))
-	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Signal, opts.Runners)
+	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
+	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
-		opts.Config, r.Emit, opts.ValidateEditor, opts.ValidateLaunch,
+		opts.Config, r.Emit, validateEditor, validateLaunch,
 		opts.LinearCommand, opts.LinearEnvironment, quit,
 	)))
-	relaunch := pendingRelaunch(opts.Relaunch, assemblyService)
+	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)
 }
@@ -149,35 +113,41 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 	return func() error { return relaunch(assembly.pendingLinear) }
 }
 
+// validators are the settings panel's checks, which a workbench without a
+// Validator simply does not make.
+func validators(v Validator) (func([]string) error, func(map[string][]string) error) {
+	if v == nil {
+		return nil, nil
+	}
+	return v.ValidateEditor, v.ValidateLaunch
+}
+
+// relaunchWith is the successor first run opens, and nil in a workbench with no
+// way to open one.
+func relaunchWith(r Relauncher) func(func() (string, string)) error {
+	if r == nil {
+		return nil
+	}
+	return r.Relaunch
+}
+
 // run is Run with the renderer already built, so the window lifecycle and the
-// control socket are exercised against a double instead of a display. quit is
-// the same teardown Run wires into Settings.Quit.
+// control socket are exercised against a double instead of a display.
 func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	reg := term.sessions
-	shell := &shellWindow{windows: windows, argv: opts.Shell}
+	launcher := opts.Launcher
+	shell := &shellWindow{windows: windows, launcher: launcher}
 
 	reg.boot = booting{
-		root: func(slug string) string {
-			if opts.Root == "" || slug == "" {
-				return ""
-			}
-			root := filepath.Join(opts.Root, slug)
-			// A rail row can outlive the directory it names, and a directory
-			// without a manifest is not resumable.
-			if _, err := os.Stat(sessionpaths.Manifest(root)); err != nil {
-				return ""
-			}
-			return root
-		},
-		agent: opts.Agent,
+		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
+		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			return serveControl(socket, windows, state, controlHooks{
 				attention: func(value string, generation uint64) {
 					if state.agents.attention(generation, value) {
-						state.activity.hook(value)
 						reg.touch()
 					}
 				},
@@ -186,7 +156,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 						return
 					}
 					if state.agents.begin(req.Provider, req.Generation) {
-						state.activity.reset()
 						reg.touch()
 					}
 				},
@@ -209,37 +178,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			shell.open(state)
 		},
 		teardown: windows.stop,
-		// The destructive path addresses a session by the sessions root and the
-		// manifest's slug, so opts.Root is what it takes and not the session's own.
-		uncommitted: func(root string) ([]string, error) {
-			m, err := session.Load(root)
-			if err != nil {
-				return nil, err
-			}
-			return session.DirtyWorktrees(opts.Root, m)
-		},
-		cleanup: func(root string) error {
-			m, err := session.Load(root)
-			if err != nil {
-				return err
-			}
-			if dir := filepath.Base(root); m.Slug != dir {
-				return mismatchedManifest(dir, m.Slug)
-			}
-			return session.Delete(opts.Root, m)
-		},
-		reveal: func(root string) error {
-			if opts.Reveal == nil {
-				return ErrNoRevealCommand
-			}
-			argv := opts.Reveal(root)
-			if len(argv) == 0 {
-				return ErrNoRevealCommand
-			}
-			// open(1) hands the request to the desktop and exits, so waiting on it
-			// costs nothing and turns a bad path into an error the page can show.
-			return exec.Command(argv[0], argv[1:]...).Run()
-		},
+		// The destructive paths address a session by the sessions root and the
+		// manifest's slug, so opts.Root is what they take and not the session's own.
+		uncommitted: func(root string) ([]string, error) { return session.Uncommitted(opts.Root, root) },
+		cleanup:     func(root string) error { return session.Remove(opts.Root, root) },
+		reveal:      func(root string) error { return reveal(launcher.Reveal(root)) },
 	}
 	chromeEmit := r.Emit
 	if opts.chrome != nil {
@@ -251,7 +194,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	// only its own session, and a failed one keeps its terminal readable.
 	term.whenChildExits(func(state *sessionState, code int) {
 		if state.agents.exitWithProvider(state.provider, code) {
-			state.activity.reset()
 			reg.touch()
 		}
 		if code == 0 {
@@ -261,7 +203,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 
 	windows.newShell = func() (string, error) { return shell.another(reg.current()) }
 	windows.newDocument = func(name string) (string, error) {
-		return openDocument(windows, reg.current(), opts.Document, name)
+		return openDocument(windows, reg.current(), launcher, name)
 	}
 	processHooks := controlHooks{picker: reg.queuePicker}
 	if opts.assembly != nil {
@@ -314,8 +256,8 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 // shellWindow opens a session's user shells: one unasked, and however many more
 // the user asks for. The numbering is the session's, so a second one restarts it.
 type shellWindow struct {
-	windows *Windows
-	argv    func(string) []string
+	windows  *Windows
+	launcher Launcher
 }
 
 // open gives a session a shell without being asked. Adoption may call it again
@@ -350,32 +292,44 @@ func (s *shellWindow) another(owner *sessionState) (string, error) {
 // order the tabs open in.
 func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 	root := owner.root()
-	if root == "" || s.argv == nil {
+	if root == "" || s.launcher == nil {
+		return "", ErrNoShellCommand
+	}
+	argv := s.launcher.Shell(root)
+	if len(argv) == 0 {
 		return "", ErrNoShellCommand
 	}
 	owner.shells++
 	return s.windows.openStructural(owner, workbench.WindowOptions{
-		Kind:    workbench.KindTerminal,
-		Label:   shellLabel(owner.shells),
-		Cwd:     root,
-		Command: s.argv(root),
+		Kind:        workbench.KindTerminal,
+		Label:       shellLabel(owner.shells),
+		Cwd:         root,
+		Command:     argv,
+		CloseOnExit: true,
 	})
 }
 
-// openDocument puts a document in the right pane, as a workbench-owned tab.
-func openDocument(windows *Windows, owner *sessionState, window func(string, string) (workbench.WindowOptions, error), name string) (string, error) {
-	if owner == nil || window == nil {
+func openDocument(windows *Windows, owner *sessionState, launcher Launcher, name string) (string, error) {
+	if owner == nil || launcher == nil {
 		return "", ErrNoEditorCommand
 	}
-	opts, err := window(owner.root(), name)
+	opts, err := launcher.Document(owner.root(), name)
 	if err != nil {
 		return "", err
 	}
 	return windows.openStructural(owner, opts)
 }
 
-// shellLabel leaves the first shell unnumbered, so a session with one reads as
-// it always did.
+// reveal shows a session's directory in the file manager. open(1) hands the
+// request to the desktop and exits, so waiting on it costs nothing and turns a
+// bad path into an error the page can show.
+func reveal(argv []string) error {
+	if len(argv) == 0 {
+		return ErrNoRevealCommand
+	}
+	return exec.Command(argv[0], argv[1:]...).Run()
+}
+
 func shellLabel(n int) string {
 	if n <= 1 {
 		return shellWindowLabel
@@ -392,7 +346,6 @@ func windowTitle(root string) string {
 	return mainWindowTitle + titleSeparator + filepath.Base(root)
 }
 
-// frontend is the embedded page tree the webview serves.
 func frontend() (fs.FS, error) {
 	assets, err := fs.Sub(assetFS, assetRoot)
 	if err != nil {

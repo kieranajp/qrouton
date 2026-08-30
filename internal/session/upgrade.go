@@ -12,7 +12,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 )
 
-// RepoRef names one repository a session already holds.
 type RepoRef struct {
 	Org, Name string
 }
@@ -159,7 +158,6 @@ func currentBranch(wt string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
-// indexOfRepo locates a repository by owner and name together, case-insensitively.
 func indexOfRepo(repos []ManifestRepo, org, name string) int {
 	return slices.IndexFunc(repos, func(r ManifestRepo) bool {
 		return strings.EqualFold(r.Org, org) && strings.EqualFold(r.Name, name)

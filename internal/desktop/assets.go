@@ -49,7 +49,6 @@ func validateFrontend(assets fs.FS) error {
 	return nil
 }
 
-// assetHandler serves the built pages, plus the palette rendered on demand.
 func assetHandler(assets fs.FS) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))

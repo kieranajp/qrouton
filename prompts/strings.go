@@ -1,8 +1,5 @@
 package prompts
 
-// Provider-specific rendering details: where each runner discovers agent
-// definitions, and the TOML shape Codex expects.
-
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
@@ -10,8 +7,12 @@ const (
 	frontmatterKeySep         = ":"
 	frontmatterNameKey        = "name"
 	frontmatterDescriptionKey = "description"
+
 	subagentChoiceFileName    = "subagent-choice.md"
 	subagentChoicePlaceholder = "{{subagent-choice}}"
+
+	workspaceWindowsFileName    = "workspace-windows.md"
+	workspaceWindowsPlaceholder = "{{workspace-windows}}"
 
 	codexNameFormat        = "name = %s\ndescription = %s\n"
 	codexSandboxFormat     = "sandbox_mode = %s\n"
@@ -21,14 +22,18 @@ const (
 	tomlTripleQuote        = `"""`
 	tomlEscapedTripleQuote = `\"\"\"`
 
-	// Codex sandbox modes. Research and review agents only read; the leads that
-	// write artifacts need the workspace.
 	sandboxReadOnly       = "read-only"
 	sandboxWorkspaceWrite = "workspace-write"
 )
 
-// Which agents get which sandbox. An agent absent from both sets inherits
-// Codex's default.
+// partials are the prose more than one prompt has to say, keyed by the
+// placeholder that pulls each in. A partial holds no placeholder of its own, so
+// one pass over this map expands them all.
+var partials = map[string]string{
+	subagentChoicePlaceholder:   subagentChoiceFileName,
+	workspaceWindowsPlaceholder: workspaceWindowsFileName,
+}
+
 var (
 	readOnlyAgents = map[string]bool{
 		"code-reviewer":       true,

@@ -1,6 +1,7 @@
 // Which repositories a session takes and in what order, kept pure: node --test
 // is the whole frontend harness.
 
+import { GLYPHS, READ_ONLY } from "../roles.js";
 import { repoID } from "./filter.js";
 
 /** @typedef {'off'|'editing'|'reference'} Role */
@@ -12,8 +13,6 @@ import { repoID } from "./filter.js";
  * @property {string[]} upgrades the held ids to take up for editing
  */
 
-const GLYPHS = { editing: "●", reference: "◐" };
-const READ_ONLY = "read-only";
 const IN_SESSION = "in session";
 const READING = "in session, read-only";
 const TAKING_UP = "in session, taking it up to edit";

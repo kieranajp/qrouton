@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +10,7 @@ import (
 
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/lineartools"
 )
 
 // SettingsView is config.Config plus Linear's coding-tools.json on the wire:
@@ -25,8 +25,6 @@ type SettingsView struct {
 	LinearError string   `json:"linearError,omitempty"`
 }
 
-// SettingsInput is what Save receives back: the same shape SettingsView hands
-// out, filled in by the user.
 type SettingsInput struct {
 	Orgs   []string `json:"orgs"`
 	Root   string   `json:"root"`
@@ -41,17 +39,13 @@ type SaveResult struct {
 	RestartRequired bool `json:"restartRequired"`
 }
 
-// Settings is the panel's service: config.Config, Linear's custom-script file,
-// and the process teardown its Root banner offers instead of a relaunch.
 type Settings struct {
 	cfg            *config.Config
 	emit           emitter
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	quit           func()
-	linearFile     string
-	linearCommand  []string
-	linearEnv      []string
+	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
@@ -62,13 +56,10 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 		validateEditor: validateEditor,
 		validateLaunch: validateLaunch,
 		quit:           quit,
-		linearFile:     filepath.Clean(config.ExpandHome(linearConfigPath)),
-		linearCommand:  append([]string(nil), linearCommand...),
-		linearEnv:      append([]string(nil), linearEnv...),
+		linear:         lineartools.New(linearCommand, linearEnv),
 	}
 }
 
-// Load reads the live config as the panel draws it.
 func (s *Settings) Load() SettingsView {
 	launch := ""
 	if len(s.cfg.Launch) > 0 {
@@ -76,21 +67,18 @@ func (s *Settings) Load() SettingsView {
 			launch = string(b)
 		}
 	}
-	linear, linearErr := s.loadLinear()
+	linear, linearErr := s.linear.Load()
 	return SettingsView{
 		Orgs:        append([]string(nil), s.cfg.Orgs...),
 		Root:        s.cfg.Root,
 		Editor:      strings.Join(s.cfg.Editor, " "),
 		Launch:      launch,
 		Linear:      linear,
-		LinearPath:  linearConfigPath,
+		LinearPath:  lineartools.ConfigPath,
 		LinearError: errorText(linearErr),
 	}
 }
 
-// Save validates Orgs, Root, Editor, Launch, then Linear, refusing on the first
-// problem and writing nothing if any field fails. On success it writes both
-// files and updates every live config field except Root.
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
@@ -119,30 +107,28 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		}
 	}
 
-	linear, err := validateLinear(in.Linear)
+	linear, err := lineartools.Validate(in.Linear)
+	if err != nil {
+		return SaveResult{}, fmt.Errorf("linear: %w", err)
+	}
+	if err := s.linear.Save(linear); err != nil {
+		return SaveResult{}, fmt.Errorf("linear: %w", err)
+	}
+
+	apply, err := saveConfig(s.cfg, func(next *config.Config) {
+		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
+	})
 	if err != nil {
 		return SaveResult{}, err
 	}
-
-	next := *s.cfg
-	next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
-	if err := s.saveLinear(linear); err != nil {
-		return SaveResult{}, err
-	}
-	if err := config.Save(&next); err != nil {
-		return SaveResult{}, err
-	}
-
-	// Root stays off the live pointer: the rail's scanner and boot path closed
-	// over it at process start, so a session created against a live-mutated
-	// root would not appear in a rail still scanning the old one.
 	changed := !slices.Equal(s.cfg.Orgs, orgs)
-	s.cfg.Orgs, s.cfg.Editor, s.cfg.Launch = orgs, editor, launch
+	restart := expandedRoot != filepath.Clean(s.cfg.Root)
+	apply()
 	if changed {
 		s.emit(orgsChangedEvent, orgs)
 	}
 
-	return SaveResult{RestartRequired: expandedRoot != filepath.Clean(s.cfg.Root)}, nil
+	return SaveResult{RestartRequired: restart}, nil
 }
 
 // Quit runs the same teardown closing the conversation window runs, not a bare
@@ -150,68 +136,22 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 // the process does.
 func (s *Settings) Quit() { s.quit() }
 
-func (s *Settings) loadLinear() (string, error) {
-	b, err := os.ReadFile(s.linearFile)
-	if err == nil {
-		return string(b), nil
+// saveConfig writes cfg with mutate applied, and answers the mirror of that
+// write onto the live pointer. Root is written but never applied: the rail's
+// scanner and boot path closed over the boot value, so a session created
+// against a live-mutated root would not appear in a rail still scanning the old
+// one.
+func saveConfig(cfg *config.Config, mutate func(*config.Config)) (apply func(), err error) {
+	next := *cfg
+	mutate(&next)
+	if err := config.Save(&next); err != nil {
+		return nil, err
 	}
-	if !os.IsNotExist(err) {
-		return "", err
-	}
-	if len(s.linearCommand) == 0 {
-		return "", ErrNoLinearCommand
-	}
-	args := append(append([]string(nil), s.linearCommand[1:]...), linearIssueTemplate)
-	b, err = json.MarshalIndent(linearConfig{
-		OpenIssue: linearCommand{
-			Path: s.linearCommand[0],
-			Args: args,
-			Env:  append([]string(nil), s.linearEnv...),
-		},
-	}, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-func validateLinear(raw string) ([]byte, error) {
-	trimmed := strings.TrimSpace(raw)
-	var document map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(trimmed), &document); err != nil {
-		return nil, fmt.Errorf("linear: %s", err)
-	}
-	if document == nil {
-		return nil, fmt.Errorf("linear: %w", ErrLinearConfigObject)
-	}
-	return append([]byte(trimmed), '\n'), nil
-}
-
-func (s *Settings) saveLinear(body []byte) error {
-	current, err := os.ReadFile(s.linearFile)
-	if err == nil && bytes.Equal(bytes.TrimSpace(current), bytes.TrimSpace(body)) {
-		return nil
-	}
-	if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("linear: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(s.linearFile), linearConfigDirMode); err != nil {
-		return fmt.Errorf("linear: %w", err)
-	}
-	if err := os.WriteFile(s.linearFile, body, linearConfigFileMode); err != nil {
-		return fmt.Errorf("linear: %w", err)
-	}
-	return nil
-}
-
-type linearConfig struct {
-	OpenIssue linearCommand `json:"openIssue"`
-}
-
-type linearCommand struct {
-	Path string   `json:"path"`
-	Args []string `json:"args"`
-	Env  []string `json:"env,omitempty"`
+	return func() {
+		root := cfg.Root
+		*cfg = next
+		cfg.Root = root
+	}, nil
 }
 
 // validateOwnersAndRoot is the two answers both the settings panel and the
@@ -243,8 +183,6 @@ func validateRoot(raw string) (stored, expanded string, err error) {
 	return stored, expanded, nil
 }
 
-// dedupOrgs trims and deduplicates the way config's own QROUTON_ORGS parsing
-// does, over a slice rather than a CSV string.
 func dedupOrgs(orgs []string) []string {
 	var out []string
 	seen := make(map[string]bool)

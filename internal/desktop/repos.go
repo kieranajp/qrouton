@@ -16,7 +16,7 @@ type gh struct {
 	token func() (string, error)
 	all   func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg
 	one   func(ctx context.Context, token, owner string) ([]github.Repo, error)
-	cache func(orgs []string, repos []github.Repo)
+	cache func(orgs []string, repos []github.Repo) error
 }
 
 func liveGitHub() gh {
@@ -32,8 +32,6 @@ func liveGitHub() gh {
 	}
 }
 
-// Repositories is the list the second step chooses from: the cache it opens on,
-// and the refresh its button drives.
 type Repositories struct {
 	cfg  *config.Config
 	emit emitter
@@ -65,8 +63,7 @@ func (r *Repositories) Cached() []github.Repo {
 
 // Select resolves picked rows against the list the step was drawn from, in the
 // order they were picked. A repository a refresh has dropped simply is not there
-// any more, which is what leaves a draft short of an editing repo for Check to
-// refuse.
+// any more.
 func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 	byID := make(map[string]github.Repo)
 	for _, repo := range r.Cached() {
@@ -109,8 +106,9 @@ func (r *Repositories) Refresh() int {
 }
 
 // run fans out over every owner, or walks the failed ones alone. The retry half
-// writes the cache itself, and only once every owner is clean — a cache holding
-// one owner's stale list beside another's fresh one is worse than no write.
+// writes the cache itself, and only once every owner is clean: the write stamps
+// every configured owner as fetched now, so writing with one still failing would
+// date its stale list to this moment.
 func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached []github.Repo) {
 	if r.done != nil {
 		defer r.done(gen)
@@ -154,7 +152,7 @@ func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached
 	}
 	github.SortReposByActivity(merged)
 	if r.clean() && ctx.Err() == nil {
-		r.gh.cache(r.cfg.Orgs, merged)
+		_ = r.gh.cache(r.cfg.Orgs, merged)
 	}
 	r.push(gen, github.RefreshMsg{State: github.RefreshComplete, Repos: merged})
 }

@@ -1,16 +1,10 @@
 package mcpserver
 
-// Window labels and the messages qrouton returns to the agent after driving a
-// window. The messages double as instructions — they tell the agent what it can
-// do next with the window it just opened — so they are worded here rather than
-// assembled inline.
-
 const (
 	// editorWindowName is the reserved registry key for the single editor
 	// window; others are keyed by the caller-supplied name.
 	editorWindowName = "editor"
 
-	// defaultCommandWindowName is used when run_command is called without a name.
 	defaultCommandWindowName = "command"
 
 	// diffWindowName labels an all-repos diff; a single repo appends its basename.
@@ -18,10 +12,6 @@ const (
 	diffWindowSeparator = ":"
 
 	notifyWindowName = "notify"
-
-	// escalateWindowName is the reserved registry key for the picker; a second
-	// escalate replaces a stale one.
-	escalateWindowName = "escalate"
 
 	// readWindowLimit caps how much output read_window returns to the agent. The
 	// tail is kept, because that is where fresh output lands.
@@ -31,26 +21,14 @@ const (
 	shellLoginFlag = "-lc"
 
 	currentDir = "."
-
-	// The picker subcommand and flags escalate opens, resolved against the
-	// running qrouton binary rather than a bare "qrouton" on PATH.
-	pickSubcommand = "pick"
-	sessionRootArg = "--session-root"
-	nameArg        = "--name"
-	prefixArg      = "--prefix"
-	escalateArg    = "--escalate"
 )
 
-// Window titles, as they appear in the title bar.
 const (
-	editorWindowLabel   = "Editor"
-	commandWindowLabel  = "▶ "
-	diffWindowLabel     = "◆ "
-	notifyWindowLabel   = "🔔 qrouton"
-	escalateWindowLabel = "escalate"
+	commandWindowLabel = "▶ "
+	diffWindowLabel    = "◆ "
+	notifyWindowLabel  = "🔔 qrouton"
 )
 
-// Messages returned to the agent.
 const (
 	openedFileFormat = "Opened %s at line %d in an editor tab " +
 		"(it stays open until the user quits the editor; the conversation keeps focus)."
@@ -111,8 +89,6 @@ const (
 
 const toastFormat = "🔔  %s"
 
-// The shell show_diff captures. Both forms disable Git's pager; the all-repos
-// form walks the worktrees.
 const (
 	allReposDiffFormat = `for d in %s/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; ` +
 		`printf '\n=== %%s ===\n' "$d"; git -C "$d" --no-pager diff%s; done`
@@ -122,8 +98,6 @@ const (
 	stagedFlag = " --staged"
 )
 
-// Keys the tools' structured payloads carry their text under. read_window is
-// returning a window's output; everything else is talking to the agent.
 const (
 	keyMessage = "message"
 	keyOutput  = "output"

@@ -102,7 +102,7 @@ func SessionRelative(root, path, name string) string {
 	if real, err := filepath.EvalSymlinks(root); err == nil {
 		root = real
 	}
-	if rel, ok := under(root, path); ok {
+	if rel, ok := relativeUnder(root, path); ok {
 		return rel
 	}
 	// thoughts/ is a symlink out of the session, so every document resolves
@@ -110,17 +110,9 @@ func SessionRelative(root, path, name string) string {
 	// falling back to whatever absolute path the caller happened to pass.
 	thoughts := filepath.Join(root, sessionpaths.ThoughtsDirName)
 	if real, err := filepath.EvalSymlinks(thoughts); err == nil {
-		if rel, ok := under(real, path); ok {
+		if rel, ok := relativeUnder(real, path); ok {
 			return filepath.Join(sessionpaths.ThoughtsDirName, rel)
 		}
 	}
 	return name
-}
-
-func under(dir, path string) (string, bool) {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", false
-	}
-	return rel, true
 }

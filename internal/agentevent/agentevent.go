@@ -3,10 +3,7 @@ package agentevent
 import (
 	"encoding/json"
 	"io"
-	"os"
 	"time"
-
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type Event struct {
@@ -19,9 +16,10 @@ type Event struct {
 	Timestamp     string `json:"timestamp,omitempty"`
 }
 
-// Record appends one subagent hook event read from input to the session's log
-// and returns the decoded live event even if the append fails.
-func Record(root, provider string, input io.Reader) (Event, string, error) {
+// Record decodes one subagent hook event from input and returns it alongside
+// the hook name, which the caller maps to an attention state even for the hooks
+// no lifecycle is derived from.
+func Record(provider string, input io.Reader) (Event, string, error) {
 	var event Event
 	if err := json.NewDecoder(input).Decode(&event); err != nil {
 		return Event{}, "", err
@@ -34,15 +32,5 @@ func Record(root, provider string, input io.Reader) (Event, string, error) {
 		return event, event.HookEventName, nil
 	}
 	event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
-	b, err := json.Marshal(event)
-	if err != nil {
-		return event, event.HookEventName, err
-	}
-	f, err := os.OpenFile(sessionpaths.AgentEventLog(root), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return event, event.HookEventName, err
-	}
-	defer f.Close()
-	_, err = f.Write(append(b, '\n'))
-	return event, event.HookEventName, err
+	return event, event.HookEventName, nil
 }

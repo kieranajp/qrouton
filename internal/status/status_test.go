@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -614,5 +615,54 @@ func TestArtifactIDIsTheNumberedPrefixTheFilenameStates(t *testing.T) {
 		if got := ArtifactID(path); got != want {
 			t.Errorf("ArtifactID(%q) = %q, want %q", path, got, want)
 		}
+	}
+}
+
+// Every producer starts from EmptyFields, so a slice added to Fields and left
+// out of it reaches the page as JSON null.
+func TestEmptyFieldsLeavesNoSliceNil(t *testing.T) {
+	noNilSlice(t, reflect.ValueOf(EmptyFields()), "EmptyFields()")
+	noNilSlice(t, reflect.ValueOf(Read(t.TempDir())), "Read()")
+}
+
+func noNilSlice(t *testing.T, v reflect.Value, path string) {
+	t.Helper()
+	switch v.Kind() {
+	case reflect.Slice, reflect.Map:
+		if v.IsNil() {
+			t.Errorf("%s is nil, and marshals as null", path)
+		}
+	case reflect.Struct:
+		for i := 0; i < v.NumField(); i++ {
+			noNilSlice(t, v.Field(i), path+"."+v.Type().Field(i).Name)
+		}
+	}
+}
+
+// A kind filed under a directory has to answer to its filename prefix and carry
+// an ID as well, or a new one lands half-wired — and the prefix fails silently.
+func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
+	if len(kindByDir) != len(artifactKinds) || len(kindByLetter) != len(artifactKinds) {
+		t.Fatalf("%d kinds share %d directories and %d letters", len(artifactKinds), len(kindByDir), len(kindByLetter))
+	}
+	for _, a := range artifactKinds {
+		dir := "thoughts/shared/" + a.dir + "/notes.md"
+		if got := DocumentKind(dir); got != a.kind {
+			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, a.kind)
+		}
+		for _, name := range []string{a.letter + "007-shape.md", strings.ToUpper(a.letter) + "007_shape.md"} {
+			if got := DocumentKind(name); got != a.kind {
+				t.Errorf("DocumentKind(%q) = %q, want %q", name, got, a.kind)
+			}
+			if got, want := ArtifactID(name), strings.ToUpper(a.letter)+"007"; got != want {
+				t.Errorf("ArtifactID(%q) = %q, want %q", name, got, want)
+			}
+		}
+	}
+	if got := DocumentKind("research/P002-shape.md"); got != KindResearch {
+		t.Errorf("the filename prefix beat the directory: got %q", got)
+	}
+	if got := DocumentKind("thoughts/shared/escalation-notes.md"); got != KindNote {
+		t.Errorf("DocumentKind of an unclassified document = %q, want %q", got, KindNote)
 	}
 }

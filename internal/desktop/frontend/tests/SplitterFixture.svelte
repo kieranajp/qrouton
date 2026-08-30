@@ -1,6 +1,5 @@
 <script>
   import { onMount } from "svelte";
-  import { createMeasurementController } from "../src/lib/measure.js";
   import Splitter from "../src/lib/shell/Splitter.svelte";
   import { watchSize } from "../src/lib/xterm.js";
 
@@ -38,7 +37,6 @@
   }
 
   onMount(() => {
-    const measurement = createMeasurementController({ window, document, Storage });
     let stopSize = watchSize(sizeHost, () => fits++);
     window.splitterMetrics = () => ({
       width,
@@ -52,10 +50,9 @@
       sidebarCommits,
     });
     window.resetFits = () => (fits = 0);
-    window.measurementSummary = () => measurement.snapshot();
-    window.resetMeasurement = () => measurement.reset();
-    window.stopMeasurement = () => measurement.stop();
-    window.destroyMeasurement = () => measurement.destroy();
+
+
+
     window.sizeBurst = () => {
       window.dispatchEvent(new Event("resize"));
       window.dispatchEvent(new Event("resize"));
@@ -68,7 +65,6 @@
     };
     return () => {
       stopSize?.();
-      measurement.destroy();
     };
   });
 </script>
@@ -100,7 +96,6 @@
     label="Resize the sidebar" />
   <div class="agent"></div>
 </div>
-<div role="separator" aria-label="Resize the shell panes" data-testid="decoy-separator"></div>
 <div id="size-host" bind:this={sizeHost}></div>
 
 <style>

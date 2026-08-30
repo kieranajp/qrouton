@@ -47,7 +47,7 @@ func Status(root string, m Manifest) WorkflowStatus {
 // the document first, carrying its questions as headings with only the context a
 // researcher needs under them, so headings alone are not research. A document
 // that opens no sections is prose findings, and an empty one is a file still
-// being written. Older sessions keep their questions in a file named for them.
+// being written.
 func researched(path string) bool {
 	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
 		return false
@@ -70,7 +70,6 @@ func markdownFiles(dir string) []string {
 	return files
 }
 
-// DirtyWorktrees returns repositories with staged, unstaged, or untracked files.
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	var dirty []string
 	for _, repo := range m.Repos {
@@ -89,10 +88,9 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	return dirty, nil
 }
 
-// worktreeDirty reports staged, unstaged, or untracked files. A checkout can
-// outlive its worktree metadata when a mirror was manually removed or corrupted;
-// there is no dirty state left to read then, and a session carrying one must
-// still be deletable.
+// A checkout can outlive its worktree metadata when a mirror was manually
+// removed or corrupted; there is no dirty state left to read then, and a
+// session carrying one must still be deletable.
 func worktreeDirty(path string) (bool, error) {
 	out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
 	if err != nil {
@@ -104,7 +102,6 @@ func worktreeDirty(path string) (bool, error) {
 	return len(bytes.TrimSpace(out)) > 0, nil
 }
 
-// Delete removes registered worktrees and then the remaining session files.
 func Delete(root string, m Manifest) error {
 	dir := filepath.Join(root, m.Slug)
 	for _, repo := range m.Repos {
@@ -126,6 +123,44 @@ func Delete(root string, m Manifest) error {
 		return fmt.Errorf("remove session %q: %w", m.Slug, err)
 	}
 	return nil
+}
+
+// Resumable is the directory slug names under the sessions root, and empty when
+// nothing there can be resumed: the manifest is written last, so a directory
+// without one is not a session — and a row naming one can outlive it.
+func Resumable(root, slug string) string {
+	if root == "" || slug == "" {
+		return ""
+	}
+	dir := filepath.Join(root, slug)
+	if _, err := os.Stat(filepath.Join(dir, manifestName)); err != nil {
+		return ""
+	}
+	return dir
+}
+
+// Uncommitted names the repositories a removal of the session in dir would take
+// changes from.
+func Uncommitted(root, dir string) ([]string, error) {
+	m, err := Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	return DirtyWorktrees(root, m)
+}
+
+// Remove deletes the session in dir. Delete resolves its target from the
+// manifest, so a directory holding another session's manifest is refused rather
+// than taking that session's worktrees.
+func Remove(root, dir string) error {
+	m, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if base := filepath.Base(dir); m.Slug != base {
+		return mismatchedManifest(base, m.Slug)
+	}
+	return Delete(root, m)
 }
 
 // RepoStat is how far one repository has moved since it was branched.
@@ -169,7 +204,6 @@ func measure(ctx context.Context, path, base string, stat *RepoStat) {
 	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
 }
 
-// countCommits counts what the session branch has that its base does not.
 func countCommits(ctx context.Context, path, base string) (int, bool) {
 	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
 	defer cancel()

@@ -24,10 +24,6 @@ type Runner struct {
 	Override bool
 }
 
-// runnerSpec is everything qrouton knows about one coding agent: how to start
-// it, how to ask it to continue a conversation, how it takes a first prompt, and
-// how its MCP servers and hooks are configured. One entry per runner, so adding
-// a fourth is one literal rather than an edit in four places.
 type runnerSpec struct {
 	ID      string
 	Label   string
@@ -36,13 +32,14 @@ type runnerSpec struct {
 	Resume func(argv []string) []string
 	// Prompt appends the opening message the way this runner accepts it.
 	Prompt func(argv []string, message string) []string
+	// MCP points the runner at a qrouton MCP server, which is the part of the
+	// wiring an eval stands its own binary into.
+	MCP func(bin string, args []string) (MCPWiring, error)
 	// Inject adds MCP and hook configuration, and answers the environment the
 	// runner is launched with.
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
 }
 
-// injectContext is what an Inject needs beyond the argv: where this binary and
-// the session are, and the arguments the MCP child is started with.
 type injectContext struct {
 	qroutonBin string
 	dir        string
@@ -60,6 +57,7 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
 		Resume:  resumeWith(claudeContinueFlag),
 		Prompt:  promptAsArgument,
+		MCP:     claudeMCP,
 		Inject:  injectClaude,
 	},
 	{
@@ -67,6 +65,7 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
 		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
 		Prompt:  promptAsArgument,
+		MCP:     codexMCP,
 		Inject:  injectCodex,
 	},
 	{
@@ -74,12 +73,11 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDOpenCode, openCodeAutoFlag},
 		Resume:  resumeWith(claudeContinueFlag),
 		Prompt:  promptBehindFlag(openCodePromptFlag),
+		MCP:     openCodeMCP,
 		Inject:  injectOpenCode,
 	},
 }
 
-// builtinRunners is the spec table as the resolver sees it: identity and command
-// only, with the behaviour left behind.
 var builtinRunners = builtins()
 
 func builtins() []Runner {
@@ -171,8 +169,6 @@ func ByID(cfg *config.Config, id string) (Runner, error) {
 	return Runner{}, fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
 }
 
-// FirstInstalled returns the first supported runner present on the system, for
-// callers that did not ask for a particular one.
 func FirstInstalled(cfg *config.Config) (Runner, error) {
 	runners, err := Runners(cfg)
 	if err != nil {
@@ -193,7 +189,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(r, resume, sessionMode(dir), initialPrompt), injectContext{
+	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), initialPrompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
@@ -205,18 +201,19 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 }
 
 func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
-	mcp := map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
-		claudeTypeKey: claudeStdioType, claudeCommandKey: c.qroutonBin, claudeArgsKey: c.mcpArgs}}}
-	b, _ := json.Marshal(mcp)
-	argv = append(argv, claudeMCPConfigFlag, string(b))
+	mcp, err := claudeMCP(c.qroutonBin, c.mcpArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	argv = append(argv, mcp.Args...)
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
-		" " + sessionRootFlag + " " + ShellQuote(c.dir) +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
-	// Chime only when the agent asks for attention (not on every turn), so the user
-	// can step away; notify.sh is stamped into .qrouton by writeSupport.
+	// Chime only when the agent asks for attention, not on every turn, so the
+	// user can step away.
 	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))
+	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
 		claudeSubagentStartHook: commandHook(hookCommand),
 		claudeSubagentStopHook:  commandHook(hookCommand),
@@ -226,10 +223,11 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 }
 
 func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
-	command, _ := json.Marshal(c.qroutonBin)
-	args, _ := json.Marshal(c.mcpArgs)
-	argv = append(argv, codex.ConfigFlag, codexMCPCommandKey+string(command),
-		codex.ConfigFlag, codexMCPArgsKey+string(args))
+	mcp, err := codexMCP(c.qroutonBin, c.mcpArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	argv = append(argv, mcp.Args...)
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
@@ -249,14 +247,13 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 }
 
 func quotedConfigString(value string) string {
-	quoted, _ := json.Marshal(value)
+	quoted, _ := json.Marshal(value) // marshalling a string cannot fail
 	return string(quoted)
 }
 
 func agentEventEnv(c injectContext, provider string) []string {
 	env := os.Environ()
 	env = workbench.WithEnv(env, agentevent.QroutonBinEnvVar, c.qroutonBin)
-	env = workbench.WithEnv(env, agentevent.SessionRootEnvVar, c.dir)
 	env = workbench.WithEnv(env, agentevent.WorkbenchEnvVar, c.handle.Marshal())
 	env = workbench.WithEnv(env, agentevent.GenerationEnvVar, fmt.Sprint(c.generation))
 	env = workbench.WithEnv(env, agentevent.ProviderEnvVar, provider)
@@ -267,10 +264,66 @@ func agentEventEnv(c injectContext, provider string) []string {
 // than argv, and the one qrouton has to merge into a config the user may
 // already be passing.
 func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) {
+	var extra map[string]any
+	if !c.override {
+		extra = map[string]any{openCodePermissionKey: openCodeAllowValue}
+	}
+	config, err := openCodeConfig(c.qroutonBin, c.mcpArgs, extra)
+	if err != nil {
+		return nil, nil, err
+	}
+	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, config), nil
+}
+
+// MCPWiring is how one runner is told about a qrouton MCP server: arguments for
+// its command line, and environment entries for the runner configured that way.
+type MCPWiring struct {
+	Args []string
+	Env  []string
+}
+
+// RunnerMCPWiring points runner id at bin, invoked with args, as its qrouton MCP
+// server. An eval stands its own binary and mock arguments in here, so a graded
+// run reaches the tool surface the way a launched one does.
+func RunnerMCPWiring(id, bin string, args []string) (MCPWiring, error) {
+	spec, ok := specFor(id)
+	if !ok {
+		return MCPWiring{}, fmt.Errorf("%w: %q", ErrUnsupportedRunner, id)
+	}
+	return spec.MCP(bin, args)
+}
+
+func claudeMCP(bin string, args []string) (MCPWiring, error) {
+	// Strings and maps of them: marshalling cannot fail.
+	config, _ := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
+		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}}})
+	return MCPWiring{Args: []string{claudeMCPConfigFlag, string(config)}}, nil
+}
+
+func codexMCP(bin string, args []string) (MCPWiring, error) {
+	// A string and a slice of them: marshalling cannot fail.
+	command, _ := json.Marshal(bin)
+	encoded, _ := json.Marshal(args)
+	return MCPWiring{Args: []string{
+		codex.ConfigFlag, codexMCPCommandKey + string(command),
+		codex.ConfigFlag, codexMCPArgsKey + string(encoded)}}, nil
+}
+
+func openCodeMCP(bin string, args []string) (MCPWiring, error) {
+	config, err := openCodeConfig(bin, args, nil)
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	return MCPWiring{Env: workbench.WithEnv(nil, openCodeConfigEnvVar, config)}, nil
+}
+
+// openCodeConfig merges the qrouton MCP server, and whatever else the launch
+// asks for, into the config OpenCode is already being passed.
+func openCodeConfig(bin string, args []string, extra map[string]any) (string, error) {
 	content := map[string]any{}
 	if existing := os.Getenv(openCodeConfigEnvVar); existing != "" {
 		if err := json.Unmarshal([]byte(existing), &content); err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
+			return "", fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
 		}
 	}
 	servers, _ := content[openCodeMCPKey].(map[string]any)
@@ -278,17 +331,18 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 		servers = map[string]any{}
 	}
 	servers[serverName] = map[string]any{
-		claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{c.qroutonBin}, c.mcpArgs...), openCodeEnabledKey: true}
+		claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{bin}, args...), openCodeEnabledKey: true}
 	content[openCodeMCPKey] = servers
-	if !c.override {
-		content[openCodePermissionKey] = openCodeAllowValue
+	for key, value := range extra {
+		content[key] = value
 	}
-	b, _ := json.Marshal(content)
-	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
+	b, err := json.Marshal(content)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
-// commandHook is one Claude hook entry running the given shell commands in
-// order.
 func commandHook(commands ...string) []map[string]any {
 	entries := make([]map[string]string, len(commands))
 	for i, command := range commands {
@@ -304,20 +358,14 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(r Runner, resume bool, mode, initialPrompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, initialPrompt string) []string {
 	argv := slices.Clone(r.Command)
-	spec, ok := specFor(r.ID)
-	if !ok {
-		return argv
-	}
 	if resume {
 		return spec.Resume(argv)
 	}
 	return spec.Prompt(argv, openingMessage(mode, initialPrompt))
 }
 
-// openingMessage is the fresh-session greeting injected as the runner's first
-// prompt.
 func openingMessage(mode, initialPrompt string) string {
 	message := openingMessageRPI
 	if mode == modeAssistant {

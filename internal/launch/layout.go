@@ -21,9 +21,6 @@ func writeSupport(dir string) error {
 	return os.WriteFile(sessionpaths.NotifyScript(dir), []byte(notifyScript), scriptMode)
 }
 
-// superviseArgv is the conversation terminal's command: the supervisor that
-// stamps the session's assets and launches (and, when signalled, relaunches)
-// the runner.
 func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, editor EditorCommand, resume bool) []string {
 	argv := []string{qroutonBin, agentSubcommand, sessionRootFlag, dir, runnerFlag, r.ID,
 		workbenchJSONFlag, handle.Marshal(), editorJSONFlag, editor.Marshal()}
@@ -33,7 +30,6 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, ed
 	return argv
 }
 
-// ShellArgv is a user shell window's command, rooted in the session.
 func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
 }

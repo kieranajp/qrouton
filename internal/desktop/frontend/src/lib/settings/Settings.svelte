@@ -1,7 +1,10 @@
 <script>
   import Button from "../core/Button.svelte";
   import Chip from "../core/Chip.svelte";
+  import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
+
+  const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
   /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
@@ -11,7 +14,7 @@
     editor = $bindable(""),
     launch = $bindable(""),
     linear = $bindable(""),
-    linearPath = "~/.linear/coding-tools.json",
+    linearPath = "",
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -20,10 +23,7 @@
   } = $props();
 </script>
 
-<div class="heading">
-  <span class="title">Settings</span>
-  <span class="helper">Written to config.json.</span>
-</div>
+<StepHeading title="Settings">Written to config.json.</StepHeading>
 
 <TextField label="GitHub orgs" bind:value={orgInput} placeholder="org-name">
   {#snippet trailing()}
@@ -69,7 +69,7 @@
   rows="6"
   bind:value={linear}
   valueVoice="literal"
-  help={fields.linear ?? "Used by Work on issue → Custom script. Save writes"}
+  help={fields.linear ?? (linearPath ? `${LINEAR_HELP} Save writes` : LINEAR_HELP)}
   helpLiteral={fields.linear ? "" : linearPath}
   helpTone={fields.linear ? "failed" : "muted"} />
 
@@ -81,25 +81,6 @@
 {/if}
 
 <style>
-  .heading {
-    display: flex;
-    align-items: flex-end;
-    gap: 18px;
-  }
-
-  .title {
-    font: var(--display-md);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .helper {
-    flex: 1;
-    font: var(--machine-sm);
-    color: var(--text-muted);
-    padding-bottom: 5px;
-  }
-
   .orgs {
     display: flex;
     flex-wrap: wrap;

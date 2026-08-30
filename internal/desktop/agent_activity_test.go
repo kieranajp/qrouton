@@ -25,8 +25,8 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
 		ID: "agent-1", Type: "qrouton-research-lead", Timestamp: clock.now(),
 	}
-	if !tracker.lifecycle(start) || tracker.activeCount() != 2 {
-		t.Fatalf("start left %d active records, want root and child", tracker.activeCount())
+	if !tracker.lifecycle(start) || tracker.snapshot().Active != 2 {
+		t.Fatalf("start left %d active records, want root and child", tracker.snapshot().Active)
 	}
 	if tracker.lifecycle(start) {
 		t.Fatal("duplicate start changed the tracker")
@@ -40,8 +40,8 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	clock.at = clock.at.Add(time.Second)
 	stop := start
 	stop.Kind = workbench.LifecycleStop
-	if !tracker.lifecycle(stop) || tracker.activeCount() != 1 {
-		t.Fatalf("stop left %d active records, want only root", tracker.activeCount())
+	if !tracker.lifecycle(stop) || tracker.snapshot().Active != 1 {
+		t.Fatalf("stop left %d active records, want only root", tracker.snapshot().Active)
 	}
 	finishedAt := delegatedRecord(t, tracker.snapshot(), "agent-1").FinishedAt
 	clock.at = clock.at.Add(time.Second)
@@ -100,7 +100,7 @@ func TestDelegatedStopRemainsTerminalAfterItsDisplayRetentionExpires(t *testing.
 	if tracker.lifecycle(event) {
 		t.Fatal("a duplicate stop recreated an expired tombstone")
 	}
-	if got := tracker.activeCount(); got != 1 {
+	if got := tracker.snapshot().Active; got != 1 {
 		t.Fatalf("active records = %d, want only the root", got)
 	}
 	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
@@ -151,8 +151,8 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 		t.Fatal("new generation was rejected")
 	}
 	view := tracker.snapshot()
-	if !view.Running || view.Attention || tracker.activeCount() != 1 {
-		t.Fatalf("new generation snapshot = %+v, active %d", view, tracker.activeCount())
+	if !view.Running || view.Attention || tracker.snapshot().Active != 1 {
+		t.Fatalf("new generation snapshot = %+v, active %d", view, tracker.snapshot().Active)
 	}
 	for _, id := range []string{agentRootID, "agent-1"} {
 		old := recordForRun(t, view, id, 1)
@@ -185,12 +185,12 @@ func TestRootExitFinalizesChildrenAndRetentionPrunesAtTheExactBoundary(t *testin
 	})
 	tracker.attention(1, status.ActivityWaiting)
 	clock.at = clock.at.Add(time.Second)
-	if !tracker.exit(9) {
+	if !tracker.exitWithProvider("", 9) {
 		t.Fatal("root exit was ignored")
 	}
 	view := tracker.snapshot()
-	if view.Running || view.Attention || tracker.activeCount() != 0 {
-		t.Fatalf("exit snapshot = %+v, active %d", view, tracker.activeCount())
+	if view.Running || view.Attention || tracker.snapshot().Active != 0 {
+		t.Fatalf("exit snapshot = %+v, active %d", view, tracker.snapshot().Active)
 	}
 	if root := recordForRun(t, view, agentRootID, 1); root.State != agentStateFailed {
 		t.Fatalf("failed root = %+v", root)
@@ -219,7 +219,7 @@ func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 88, Kind: workbench.LifecycleStart, ID: "reused-id",
 	})
-	tracker.exit(0)
+	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
 	if !tracker.begin(agentProviderClaude, 7) {
 		t.Fatal("a new supervisor generation was mistaken for an old numeric generation")
@@ -310,17 +310,17 @@ func TestSessionSwitchKeepsRecentActivityAndCleanupDropsIt(t *testing.T) {
 	alpha.agents.begin(agentProviderClaude, 1)
 	reg.reveal(alpha)
 	reg.reveal(beta)
-	if got := reg.agentActivity("alpha"); got != alpha.agents || !got.snapshot().Running {
-		t.Fatal("switching sessions reset alpha activity")
+	if got, ok := reg.agentActivitySnapshots()["alpha"]; !ok || !got.Running {
+		t.Fatalf("switching sessions reset alpha activity: %+v", got)
 	}
 	reg.retire(alpha)
-	if got := reg.agentActivity("alpha"); got != alpha.agents {
-		t.Fatal("retirement discarded retained activity")
+	if got, ok := reg.agentActivitySnapshots()["alpha"]; !ok || !got.Running {
+		t.Fatalf("retirement discarded retained activity: %+v", got)
 	}
 	if err := reg.Cleanup("alpha"); err != nil {
 		t.Fatal(err)
 	}
-	if got := reg.agentActivity("alpha"); got != nil {
+	if _, ok := reg.agentActivitySnapshots()["alpha"]; ok {
 		t.Fatal("cleanup retained session activity")
 	}
 }
@@ -358,8 +358,8 @@ func TestLifecycleSocketMutatesOnlyItsOwningSession(t *testing.T) {
 			}
 		}
 	}
-	if trackers[0].activeCount() != 2 || trackers[1].activeCount() != 0 {
-		t.Fatalf("active counts = %d, %d", trackers[0].activeCount(), trackers[1].activeCount())
+	if trackers[0].snapshot().Active != 2 || trackers[1].snapshot().Active != 0 {
+		t.Fatalf("active counts = %d, %d", trackers[0].snapshot().Active, trackers[1].snapshot().Active)
 	}
 }
 
@@ -405,4 +405,105 @@ func recordForRunID(t *testing.T, snapshot agentActivitySnapshot, id, runID stri
 	}
 	t.Fatalf("no record %q run %q in %+v", id, runID, snapshot.Records)
 	return agentRecord{}
+}
+
+func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a terminal that has never spoken = %q, want idle", got)
+	}
+
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("output before any generation = %q, want working", got)
+	}
+
+	tracker.begin(agentProviderClaude, 1)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a new run left stale state %q, want idle", got)
+	}
+
+	// An agent drawing a permission prompt is producing output, so waiting has
+	// to beat working rather than merely arrive after it.
+	tracker.attention(1, status.ActivityWaiting)
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWaiting {
+		t.Fatalf("hook says waiting but state = %q", got)
+	}
+
+	tracker.input()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("after typing = %q, want working", got)
+	}
+
+	tracker.attention(1, status.ActivityWorking)
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("a subagent starting = %q, want working", got)
+	}
+
+	clock.at = clock.at.Add(activityQuiet)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("after silence = %q, want idle", got)
+	}
+
+	tracker.output()
+	tracker.attention(1, status.ActivityWaiting)
+	tracker.exitWithProvider(agentProviderClaude, 0)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a root exit left stale state %q, want idle", got)
+	}
+
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("a terminal still writing after its supervisor exited = %q, want working", got)
+	}
+}
+
+func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
+	windows, _ := testWindows(t)
+	clock := &activityClock{at: time.Now()}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker.begin(agentProviderClaude, 1)
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
+		attention: func(value string, generation uint64) { tracker.attention(generation, value) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	handle := workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}
+	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := tracker.state(); got != status.ActivityWaiting {
+		t.Fatalf("state after the hook = %q, want waiting", got)
+	}
+}
+
+// A session's tracker outlives the session, so what the rail says about a
+// reopened one is the new run's activity and never the retired run's.
+func TestAReopenedSessionRejoinsTheRailIdle(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg.boot.teardown = func(*sessionState) {}
+	first := reg.add(filepath.Join(root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	first.agents.begin(agentProviderClaude, 1)
+	first.agents.output()
+	first.agents.exitWithProvider(agentProviderClaude, 0)
+	reg.retire(first)
+
+	second := reg.add(filepath.Join(root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	if second.agents != first.agents {
+		t.Fatal("a reopened session was given a tracker without its retained runs")
+	}
+	if got := second.agents.state(); got != status.ActivityIdle {
+		t.Fatalf("a reopened session rejoins the rail as %q, want idle", got)
+	}
 }

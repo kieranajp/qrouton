@@ -1,14 +1,12 @@
 package mcpserver
 
-// The MCP surface as the agent reads it: the server instructions, and each
-// tool's name and description. These are prompt text, not code — the agent's
-// only guide to when a window is the right move — so they live together where
-// they can be read and revised as a set.
+// The mode prompt already describes the workbench and when a window is worth
+// opening, and each description below owns its own tool's mechanics. What is
+// left for the server to say is the one rule neither of them can: the session
+// bounds every path this server will accept.
 
-const serverInstructions = "Drive the user's qrouton workbench. Every tool surface is a tab in the session's right pane beside the conversation. Opening one leaves the keyboard where it is, so the user can watch while you work and keep chatting. A tab whose command exits cleanly goes with it; one whose command fails stays so the error remains readable, and either way the tab says whether its process is running, succeeded or failed. Use open_file to show a document (especially after creating one); run_command to run work the user would want to watch (test suites, builds, dev servers, watchers, log tails) where they can see it instead of in your own shell, which they cannot — prefer a tab whenever the output is the point, since it reports the outcome itself and keeps a failure on screen in full; that tab is interactive, so Ctrl-C there reaches the process; read_window to inspect its output; show_diff to display a repo's changes for review; notify to get the user's attention when you finish or need them; share_page to render a document as a self-contained page in qrouton's styling for somebody outside the session, which you then publish yourself; close_window/list_windows to manage what you have open; escalate to hand a piece of work off to the full RPI workflow once you've drafted a brief. Escalation uses the repository picker in the workbench. All paths and working directories must belong to this session."
+const serverInstructions = "Drive the user's qrouton workbench: each tool here opens or reads a tab in the session's right pane, beside the conversation and without taking the keyboard. All paths and working directories must belong to this session."
 
-// Tool names, as the agent calls them and as qrouton reports them back in its
-// own messages.
 const (
 	toolOpenFile    = "open_file"
 	toolRunCommand  = "run_command"
@@ -21,7 +19,6 @@ const (
 	toolSharePage   = "share_page"
 )
 
-// Tool descriptions.
 const (
 	descOpenFile = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later."
 

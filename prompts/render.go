@@ -12,7 +12,6 @@ type Rendered struct {
 	Content []byte
 }
 
-// Render produces runner discovery assets from one canonical prompt.
 func Render(prompt Prompt) ([]Rendered, error) {
 	id := string(prompt.ID)
 	switch {

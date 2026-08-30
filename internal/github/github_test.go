@@ -2,8 +2,12 @@ package github
 
 import (
 	"context"
+	"encoding/json"
+	"github.com/kieranajp/qrouton/internal/config"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -113,40 +117,6 @@ func githubTestClient(t *testing.T, responses map[string]string, paths *requestP
 			Header:     make(http.Header),
 		}, nil
 	})}
-}
-
-func TestFetchRepoResolvesSingleRepository(t *testing.T) {
-	var paths requestPaths
-	client := githubTestClient(t, map[string]string{
-		"/repos/KieranAJP/qrouton": `{"name":"qrouton","ssh_url":"git@github.com:kieranajp/qrouton.git","default_branch":"main","pushed_at":"2026-03-02T00:00:00Z","owner":{"login":"kieranajp"}}`,
-	}, &paths)
-	oldBase := githubAPIBase
-	githubAPIBase = "https://api.test"
-	t.Cleanup(func() { githubAPIBase = oldBase })
-
-	repo, err := FetchRepo(context.Background(), client, "token", "KieranAJP", "qrouton")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The canonical owner login from the payload wins over the typed casing.
-	if repo.Org != "kieranajp" || repo.Name != "qrouton" || repo.DefaultBranch != "main" {
-		t.Fatalf("repo = %+v", repo)
-	}
-	if repo.SSHURL != "git@github.com:kieranajp/qrouton.git" {
-		t.Fatalf("ssh url = %q", repo.SSHURL)
-	}
-}
-
-func TestFetchRepoReportsMissingRepository(t *testing.T) {
-	var paths requestPaths
-	client := githubTestClient(t, map[string]string{}, &paths) // everything 404s
-	oldBase := githubAPIBase
-	githubAPIBase = "https://api.test"
-	t.Cleanup(func() { githubAPIBase = oldBase })
-
-	if _, err := FetchRepo(context.Background(), client, "token", "who", "what"); err == nil {
-		t.Fatal("expected error for a repository that does not resolve")
-	}
 }
 
 func TestSortReposByActivityNewestPushFirst(t *testing.T) {
@@ -306,4 +276,136 @@ func repoIDs(repos []Repo) []string {
 		out = append(out, repo.ID())
 	}
 	return out
+}
+func seedRepoCache(t *testing.T, orgs []string, owners map[string]OwnerRepos) {
+	t.Helper()
+	b, err := json.Marshal(repoCache{SchemaVersion: cacheSchemaVersion, Orgs: orgs, Owners: owners})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(config.CachePath()), cacheDirMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.CachePath(), b, cacheFileMode); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// An expired token fails every owner, and the list the picker draws is then
+// exactly the one it already had. Re-stamping it as fetched now would tell the
+// user a week-old list is current.
+func TestRefreshReposLeavesEveryTimestampAloneWhenEveryOwnerFails(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	var paths requestPaths
+	client := githubTestClient(t, nil, &paths) // every owner 404s
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	orgs := []string{"acme", "globex"}
+	fetched := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	seedRepoCache(t, orgs, map[string]OwnerRepos{
+		"acme":   {FetchedAt: fetched, Repos: []Repo{{Org: "acme", Name: "api"}}},
+		"globex": {FetchedAt: fetched, Repos: []Repo{{Org: "globex", Name: "web"}}},
+	})
+	cached, _, _ := CachedRepos(orgs)
+	for range RefreshRepos(context.Background(), client, "token", orgs, cached) {
+	}
+
+	owners, ok := CachedOwnerRepos(orgs)
+	if !ok {
+		t.Fatal("a wholly failed refresh discarded the cache")
+	}
+	for _, owner := range orgs {
+		if got := owners[owner].FetchedAt; !got.Equal(fetched) {
+			t.Fatalf("%s fetched at %s, want the cache left at %s", owner, got, fetched)
+		}
+	}
+	if _, at, _ := CachedRepos(orgs); !at.Equal(fetched) {
+		t.Fatalf("aggregate fetched at %s, want %s", at, fetched)
+	}
+}
+
+func TestRefreshReposAdvancesOnlyTheOwnersThatFetched(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/users/good": `{"login":"good","type":"Organization"}`,
+		"/orgs/good/repos?type=all&per_page=100&page=1": `[{"name":"fresh","pushed_at":"2026-02-01T00:00:00Z"}]`,
+		// /users/bad intentionally returns 404.
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	orgs := []string{"good", "bad"}
+	fetched := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	seedRepoCache(t, orgs, map[string]OwnerRepos{
+		"good": {FetchedAt: fetched, Repos: []Repo{{Org: "good", Name: "stale"}}},
+		"bad":  {FetchedAt: fetched, Repos: []Repo{{Org: "bad", Name: "cached"}}},
+	})
+	cached, _, _ := CachedRepos(orgs)
+	started := time.Now()
+	for range RefreshRepos(context.Background(), client, "token", orgs, cached) {
+	}
+
+	owners, ok := CachedOwnerRepos(orgs)
+	if !ok {
+		t.Fatal("a partly failed refresh discarded the cache")
+	}
+	if owners["good"].FetchedAt.Before(started) {
+		t.Fatalf("good fetched at %s, want a successful refetch stamped after %s", owners["good"].FetchedAt, started)
+	}
+	if got := repoIDs(owners["good"].Repos); !reflect.DeepEqual(got, []string{"good/fresh"}) {
+		t.Fatalf("good repos = %#v", got)
+	}
+	if got := owners["bad"].FetchedAt; !got.Equal(fetched) {
+		t.Fatalf("bad fetched at %s, want the cache left at %s", got, fetched)
+	}
+	if got := repoIDs(owners["bad"].Repos); !reflect.DeepEqual(got, []string{"bad/cached"}) {
+		t.Fatalf("bad repos = %#v", got)
+	}
+	if _, at, _ := CachedRepos(orgs); !at.Equal(fetched) {
+		t.Fatalf("aggregate fetched at %s, want the oldest owner's %s", at, fetched)
+	}
+}
+
+func TestCachedReposReadsACachePredatingPerOwnerTimestampsAsAbsent(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	orgs := []string{"acme"}
+	if err := os.MkdirAll(filepath.Dir(config.CachePath()), cacheDirMode); err != nil {
+		t.Fatal(err)
+	}
+	flat := `{"schemaVersion":2,"fetchedAt":"2026-01-02T03:04:05Z","orgs":["acme"],"repos":[{"name":"api","org":"acme"}]}`
+	if err := os.WriteFile(config.CachePath(), []byte(flat), cacheFileMode); err != nil {
+		t.Fatal(err)
+	}
+	repos, at, ok := CachedRepos(orgs)
+	if ok || repos != nil || !at.IsZero() {
+		t.Fatalf("CachedRepos = %#v, %s, %v; want a flat cache to read as absent", repos, at, ok)
+	}
+}
+
+func TestWriteRepoCacheStampsEveryListedOwner(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	orgs := []string{"acme", "globex"}
+	started := time.Now()
+	if err := WriteRepoCache(orgs, []Repo{{Org: "acme", Name: "api"}}); err != nil {
+		t.Fatal(err)
+	}
+	owners, ok := CachedOwnerRepos(orgs)
+	if !ok {
+		t.Fatal("WriteRepoCache wrote nothing readable")
+	}
+	for _, owner := range orgs {
+		if owners[owner].FetchedAt.Before(started) {
+			t.Fatalf("%s fetched at %s, want a stamp after %s", owner, owners[owner].FetchedAt, started)
+		}
+	}
+	if got := repoIDs(owners["acme"].Repos); !reflect.DeepEqual(got, []string{"acme/api"}) {
+		t.Fatalf("acme repos = %#v", got)
+	}
+	if len(owners["globex"].Repos) != 0 {
+		t.Fatalf("globex repos = %#v, want an owner with nothing to be empty", owners["globex"].Repos)
+	}
 }

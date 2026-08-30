@@ -2,9 +2,12 @@ package launch
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -280,5 +283,129 @@ func TestSuperviseEndsTheTerminalOnUnsignalledExit(t *testing.T) {
 	}
 	if _, err := os.Stat(sessionpaths.AgentPID(dir)); !os.IsNotExist(err) {
 		t.Fatal("agent pid file not removed after the supervisor exits")
+	}
+}
+
+// signalCatcher starts a child that records SIGUSR1 and exits, answering with
+// its pid and a wait on what it recorded. It reports itself ready first, so a
+// signal cannot land before the handler that has to survive it is installed.
+func signalCatcher(t *testing.T) (int, func(time.Duration) bool) {
+	t.Helper()
+	marker := filepath.Join(t.TempDir(), "usr1")
+	cmd := exec.Command("/bin/sh", "-c",
+		`trap 'printf caught > "$0"; exit 0' USR1; printf ready > "$0.ready"; while :; do sleep 0.02; done`,
+		marker)
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = cmd.Process.Kill()
+		_ = cmd.Wait()
+	})
+	if !appears(marker+".ready", 10*time.Second) {
+		t.Fatal("the child never installed a SIGUSR1 handler")
+	}
+	return cmd.Process.Pid, func(within time.Duration) bool { return appears(marker, within) }
+}
+
+func appears(path string, within time.Duration) bool {
+	deadline := time.Now().Add(within)
+	for {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
+func writeAgentPID(t *testing.T, dir, content string) {
+	t.Helper()
+	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionpaths.AgentPID(dir), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// exitedPID is the pid of a child that has already been reaped, which is what a
+// pid file outliving its supervisor names.
+func exitedPID(t *testing.T) int {
+	t.Helper()
+	cmd := exec.Command("/bin/sh", "-c", "exit 0")
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	pid := cmd.Process.Pid
+	if err := cmd.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	return pid
+}
+
+// The escalation reaches a running supervisor by this signal alone: the manifest
+// is already rewritten, and only SIGUSR1 at the recorded pid relaunches the
+// runner against it.
+func TestSignalSupervisorSignalsTheRecordedSupervisor(t *testing.T) {
+	dir := t.TempDir()
+	pid, caught := signalCatcher(t)
+	writeAgentPID(t, dir, strconv.Itoa(pid))
+
+	SignalSupervisor(dir)
+
+	if !caught(10 * time.Second) {
+		t.Fatal("no SIGUSR1 reached the recorded pid, so an escalation would leave the old runner running")
+	}
+}
+
+// The supervisor writes the pid file itself, and a signaller reading it has to
+// find the process it named.
+func TestSignalSupervisorReachesASupervisorThroughTheFileItWrote(t *testing.T) {
+	dir := t.TempDir()
+	if err := writePID(dir); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(sessionpaths.AgentPID(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.TrimSpace(string(b)); got != strconv.Itoa(os.Getpid()) {
+		t.Fatalf("recorded pid = %q, want this process (%d)", got, os.Getpid())
+	}
+}
+
+// An unusable pid file is not an error: the mode change is already on disk and
+// takes effect at the next launch. What it must never do is signal something
+// else — a pid of 0 or -1 handed to kill reaches a whole process group.
+func TestSignalSupervisorSignalsNobodyWithoutALiveSupervisor(t *testing.T) {
+	dead := strconv.Itoa(exitedPID(t))
+	for _, tc := range []struct {
+		name    string
+		pidFile string
+		write   bool
+	}{
+		{name: "no pid file"},
+		{name: "empty", write: true},
+		{name: "not a number", pidFile: "supervisor", write: true},
+		{name: "zero", pidFile: "0", write: true},
+		{name: "whole process group", pidFile: "-1", write: true},
+		{name: "supervisor already exited", pidFile: dead, write: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			bystander, caught := signalCatcher(t)
+			if tc.write {
+				writeAgentPID(t, dir, tc.pidFile)
+			}
+
+			SignalSupervisor(dir)
+
+			if caught(200 * time.Millisecond) {
+				t.Fatalf("a %s pid file signalled process %d", tc.name, bystander)
+			}
+		})
 	}
 }

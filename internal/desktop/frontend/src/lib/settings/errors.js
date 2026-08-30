@@ -1,6 +1,8 @@
 // What a Save refusal means for the panel's fields, kept pure: node --test is
 // the whole frontend harness.
 
+const msgLoadFailed = "Settings could not be read:";
+
 /**
  * fieldError splits a `field: message` refusal into both parts, so the
  * footer and the named field can agree. A message with no leading field name
@@ -12,6 +14,16 @@ export function fieldError(err) {
   const text = String(err?.message ?? err ?? "");
   const found = text.match(/^([a-z]+): (.*)$/s);
   return found ? { field: found[1], message: found[2] } : null;
+}
+
+/**
+ * loadFailure is what the panel says when the config could not be read at all:
+ * every field is empty for a reason nothing else on screen gives.
+ * @param {any} err
+ */
+export function loadFailure(err) {
+  const found = fieldError(err);
+  return `${msgLoadFailed} ${found ? found.message : String(err?.message ?? err ?? "")}`;
 }
 
 /**

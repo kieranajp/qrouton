@@ -9,8 +9,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/github"
 )
 
-// FirstRunInput is the two answers the flow collects: the owners to search and
-// where sessions live.
 type FirstRunInput struct {
 	Orgs []string `json:"orgs"`
 	Root string   `json:"root"`
@@ -22,8 +20,6 @@ type FirstRunResult struct {
 	Relaunching bool `json:"relaunching"`
 }
 
-// FirstRun is the gate's service: one save, and the two things the screens
-// promise but config cannot answer.
 type FirstRun struct {
 	cfg      *config.Config
 	reg      *Sessions
@@ -64,10 +60,9 @@ func (f *FirstRun) ChooseRoot() (string, error) {
 }
 
 // Save writes both answers and the welcomed marker together, then either drops
-// the gate or replaces the workbench: a changed root cannot take effect in this
-// process, since the rail's scanner and boot path closed over the boot value.
-// The marker reaches the live pointer only when this process is carrying on, so
-// a failed relaunch leaves the gate up rather than a workbench on the old root.
+// the gate or replaces the workbench. The marker reaches the live pointer only
+// when this process is carrying on, so a failed relaunch leaves the gate up
+// rather than a workbench on the old root.
 func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	orgs, root, expanded, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
@@ -75,14 +70,15 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	}
 	changed := expanded != filepath.Clean(f.cfg.Root)
 
-	next := *f.cfg
-	next.Orgs, next.Root, next.Welcomed = orgs, root, true
-	if err := config.Save(&next); err != nil {
+	apply, err := saveConfig(f.cfg, func(next *config.Config) {
+		next.Orgs, next.Root, next.Welcomed = orgs, root, true
+	})
+	if err != nil {
 		return FirstRunResult{}, err
 	}
 
 	if !changed {
-		f.cfg.Orgs, f.cfg.Welcomed = next.Orgs, true
+		apply()
 		// Without the touch the overlay stays up until the next chrome tick.
 		f.reg.touch()
 		return FirstRunResult{}, nil

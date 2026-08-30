@@ -131,8 +131,8 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 }
 
 // The picker can sit open for the escalate tool's full ~30 minutes while
-// something else rewrites the manifest underneath it. Confirm used to write back
-// the snapshot the picker loaded on open, discarding anything written since.
+// something else rewrites the manifest underneath it, so Confirm merges into the
+// manifest as it stands rather than writing back the snapshot it opened on.
 func TestConfirmPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	a, dir := scratch(t)
 	if err := setRunner(dir, "codex"); err != nil {
@@ -162,9 +162,9 @@ func setRunner(dir, runner string) error {
 	return session.WriteManifest(dir, m)
 }
 
-// A second trip through the picker used to derive a branch from the form's
-// prefix, which defaults to feat — so a fix/… session's fourth repository
-// landed on a branch of its own.
+// A repository added on a second trip through the picker joins the session's own
+// branch, not one derived from the form's prefix — which defaults to feat
+// whatever prefix the session was cut with.
 func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"org"}, Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}
@@ -193,9 +193,9 @@ func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 }
 
 // Escalating a session that has already been worked in must not disturb the
-// checkout the work is in. Selecting the repo you are working on is the obvious
-// move in the picker, and it used to produce a second clone of it on a second
-// branch, leaving the original's commits behind on the old one.
+// checkout the work is in. Selecting the repo you are working in is the obvious
+// move in the picker, so a repository the session already holds is left where it
+// stands rather than cloned again onto a second branch.
 func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := Assembler{Cfg: cfg}

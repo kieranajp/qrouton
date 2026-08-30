@@ -54,11 +54,37 @@ type fakeHost struct {
 	existsErr   error
 	listIDs     []string
 	listErr     error
+	openErr     error
+
+	openEntered chan struct{}
+	openGate    chan struct{}
+}
+
+// blockOpen holds the next Open until release is called, without holding the
+// fake's own lock, so the rest of the host stays answerable meanwhile.
+func (h *fakeHost) blockOpen() (entered <-chan struct{}, release func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.openEntered, h.openGate = make(chan struct{}), make(chan struct{})
+	gate := h.openGate
+	return h.openEntered, sync.OnceFunc(func() { close(gate) })
 }
 
 func (h *fakeHost) Open(_ context.Context, opts workbench.WindowOptions) (string, error) {
 	h.mu.Lock()
+	entered, gate := h.openEntered, h.openGate
+	h.openEntered, h.openGate = nil, nil
+	h.mu.Unlock()
+	if gate != nil {
+		close(entered)
+		<-gate
+	}
+
+	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.openErr != nil {
+		return "", h.openErr
+	}
 	id := fmt.Sprintf("window-%d", len(h.opens)+1)
 	h.opens = append(h.opens, opts)
 	h.ids = append(h.ids, id)
@@ -545,12 +571,10 @@ func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, host, _ := newTestManager(t)
-			m.mu.Lock()
 			_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
 				Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
 				Source: "P007.md", Content: "# Plan\n\nText\n",
 			})
-			m.mu.Unlock()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -572,11 +596,9 @@ func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
 
 func TestReadWindowKeepsMarkdownViewportAfterTruncatedSource(t *testing.T) {
 	m, host, _ := newTestManager(t)
-	m.mu.Lock()
 	_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
 		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Source: "P007.md",
 	})
-	m.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -927,9 +949,147 @@ func TestListWindowsKeepsEverythingWhenTheHostCannotList(t *testing.T) {
 	}
 }
 
-func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
+// A window tool waiting on the desktop process holds up its own caller and
+// nothing else: the registry lock is not carried across the socket round trip.
+func TestASlowOpenDoesNotStallTheOtherWindowTools(t *testing.T) {
+	m, host, _ := newTestManager(t)
 	ctx := context.Background()
-	server := newMCPServer(t.TempDir(), testEditor, &fakeHost{})
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+
+	entered, release := host.blockOpen()
+	defer release()
+	slow := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "build", Name: "build"})
+		slow <- err
+	}()
+	<-entered
+
+	done := make(chan []string, 1)
+	go func() {
+		names := m.list(ctx)
+		if _, err := m.closeWindow(ctx, windowNameInput{Name: "dev"}); err != nil {
+			t.Error(err)
+		}
+		done <- names
+	}()
+	select {
+	case names := <-done:
+		if !slices.Equal(names, []string{"dev"}) {
+			t.Fatalf("list = %v, want [dev] while an open is in flight", names)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("list_windows and close_window blocked behind an open that had not returned")
+	}
+
+	release()
+	if err := <-slow; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Two opens racing on one name settle on the later claim, and the window the
+// slower one opened is closed rather than left adrift.
+func TestConcurrentOpensOfOneNameKeepTheLaterClaim(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+
+	entered, release := host.blockOpen()
+	defer release()
+	slow := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "first", Name: "dev"})
+		slow <- err
+	}()
+	<-entered
+
+	second := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "second", Name: "dev"})
+		second <- err
+	}()
+	select {
+	case err := <-second:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a second open on the same name blocked behind the first")
+	}
+	winner, err := m.liveWindow(ctx, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	release()
+	if err := <-slow; err != nil {
+		t.Fatal(err)
+	}
+	got, err := m.liveWindow(ctx, "dev")
+	if err != nil || got != winner {
+		t.Fatalf("dev resolves to %q (%v), want the later open's window %q", got, err, winner)
+	}
+	loser := host.ids[len(host.ids)-1]
+	if loser == winner || !slices.Contains(host.closes, loser) {
+		t.Fatalf("window %q from the earlier open was left adrift; closes = %v", loser, host.closes)
+	}
+	if names := m.list(ctx); !slices.Equal(names, []string{"dev"}) {
+		t.Fatalf("list = %v, want [dev]", names)
+	}
+}
+
+// A refused open leaves no name behind for the agent to read from.
+func TestAFailedOpenRegistersNothing(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	host.openErr = errors.New("workbench unreachable")
+
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "dev"}); err == nil {
+		t.Fatal("run reported a window the host refused to open")
+	}
+	if names := m.list(ctx); len(names) != 0 {
+		t.Fatalf("list = %v, want no windows", names)
+	}
+	if _, _, err := m.read(ctx, readWindowInput{Name: "dev"}); err == nil {
+		t.Fatal("read found a window the host never opened")
+	}
+}
+
+// The window tools are the same in both modes; escalate is the assistant's
+// alone, because the orchestrator's own prompt tells it it has no such tool and
+// the workflow it would escalate into is the one it is already running.
+func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
+	window := []string{
+		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+	}
+	for _, tc := range []struct {
+		mode session.SessionMode
+		want []string
+	}{
+		{session.ModeAssistant, append(slices.Clone(window), toolEscalate)},
+		{session.ModeRPI, window},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, tc.mode))
+			for _, name := range tc.want {
+				if !advertised[name] {
+					t.Errorf("tool %q was not advertised", name)
+				}
+				delete(advertised, name)
+			}
+			for name := range advertised {
+				t.Errorf("tool %q is advertised but no longer part of the surface", name)
+			}
+		})
+	}
+}
+
+func advertisedTools(t *testing.T, server *mcp.Server) map[string]bool {
+	t.Helper()
+	ctx := context.Background()
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
@@ -950,18 +1110,38 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 		}
 		advertised[tool.Name] = true
 	}
-	for _, name := range []string{
-		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
-		toolNotify, toolCloseWindow, toolListWindows, toolEscalate,
-		toolSharePage,
+	return advertised
+}
+
+// The mode comes off disk, so a session escalated before this server started
+// gets the surface its fresh orchestrator prompt describes. An unreadable
+// manifest is not a licence to hand out the assistant's tool.
+func TestServerModeFollowsTheManifest(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		manifest *session.Manifest
+		want     session.SessionMode
+	}{
+		{"assistant", &session.Manifest{Mode: session.ModeAssistant}, session.ModeAssistant},
+		{"rpi", &session.Manifest{Mode: session.ModeRPI}, session.ModeRPI},
+		{"unset", &session.Manifest{}, session.ModeRPI},
+		{"no manifest", nil, session.ModeRPI},
 	} {
-		if !advertised[name] {
-			t.Errorf("tool %q was not advertised", name)
-		}
-		delete(advertised, name)
-	}
-	for name := range advertised {
-		t.Errorf("tool %q is advertised but no longer part of the surface", name)
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.manifest != nil {
+				if err := session.WriteManifest(dir, *tc.manifest); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := sessionMode(dir); got != tc.want {
+				t.Fatalf("sessionMode = %q, want %q", got, tc.want)
+			}
+			advertised := advertisedTools(t, newMCPServer(dir, testEditor, &fakeHost{}, sessionMode(dir)))
+			if advertised[toolEscalate] != (tc.want == session.ModeAssistant) {
+				t.Fatalf("%s session advertises %s = %v", tc.want, toolEscalate, advertised[toolEscalate])
+			}
+		})
 	}
 }
 
@@ -975,7 +1155,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 		Source: "P007.md", Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
 	}}}
-	server := newMCPServer(dir, testEditor, host)
+	server := newMCPServer(dir, testEditor, host, session.ModeAssistant)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)

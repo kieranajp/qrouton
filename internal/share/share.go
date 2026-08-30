@@ -42,7 +42,6 @@ func Page(source string, markdown []byte) ([]byte, error) {
 	return page.Bytes(), nil
 }
 
-// Write renders the page into dir and returns the path it wrote.
 func Write(dir, source string, markdown []byte) (string, error) {
 	page, err := Page(source, markdown)
 	if err != nil {

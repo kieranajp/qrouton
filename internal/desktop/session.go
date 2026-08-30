@@ -21,13 +21,10 @@ type identity struct {
 	root string
 }
 
-// sessionState is one session's workbench-side state: what it is, the PTY its
-// conversation runs in, and what the workbench has opened for it.
 type sessionState struct {
 	// terminal addresses the conversation PTY. Onboarding execs the supervisor
 	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
 	terminal string
-	activity *activity
 	agents   *agentActivity
 	provider string
 	argv     []string
@@ -111,7 +108,6 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	// JSON marshalling corrupts it.
 	go process.pump(
 		func(b []byte) {
-			s.activity.wrote()
 			s.agents.output()
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
@@ -126,7 +122,6 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 }
 
 func (s *sessionState) write(data []byte) error {
-	s.activity.answered()
 	s.agents.input()
 	s.mu.Lock()
 	process := s.process
@@ -175,15 +170,10 @@ func (s *sessionState) stop() {
 	}
 }
 
-// booting is what a session needs to come up and to be put on screen.
 type booting struct {
-	root func(slug string) string
-	// agent builds a session's supervisor command against the control socket it
-	// will be served on. runnerID is the agent the session was assembled with;
-	// empty means the workbench's own, and resolvedRunner names the actual choice.
-	agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, resolvedRunner string, err error)
-	serve func(state *sessionState, socket string) (io.Closer, error)
-	// shown puts a session on screen: its title, its shell, its record.
+	root        func(slug string) string
+	agent       func(AgentRequest) (AgentCommand, error)
+	serve       func(state *sessionState, socket string) (io.Closer, error)
 	shown       func(state *sessionState)
 	teardown    func(state *sessionState)
 	uncommitted func(sessionRoot string) ([]string, error)
@@ -191,8 +181,6 @@ type booting struct {
 	reveal      func(sessionRoot string) error
 }
 
-// Sessions is the workbench's sessions, which of them is on screen, and the
-// service the rail calls to change that.
 type Sessions struct {
 	boot booting
 	// showMu serialises the check and the boot, so a doubled rail click cannot
@@ -235,8 +223,6 @@ func newSessionsWithActivity(now func() time.Time, retention time.Duration) *Ses
 	}
 }
 
-// Show makes a session the one on screen, booting it if this workbench has not
-// run it yet.
 func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
@@ -328,12 +314,14 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*sessionState, err
 	if err != nil {
 		return nil, err
 	}
-	argv, env, resolvedRunner, err := s.boot.agent(root, socket, runnerID, resume)
+	command, err := s.boot.agent(AgentRequest{
+		SessionRoot: root, Socket: socket, RunnerID: runnerID, Resume: resume,
+	})
 	if err != nil {
 		return nil, err
 	}
-	state := s.add(root, argv, withTerminalEnv(env))
-	state.provider = resolvedRunner
+	state := s.add(root, command.Argv, withTerminalEnv(command.Env))
+	state.provider = command.RunnerID
 	control, err := s.boot.serve(state, socket)
 	if err != nil {
 		s.forget(state)
@@ -364,8 +352,7 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	return nil
 }
 
-// retire ends one session without ending the app. The window falls back to the
-// session shown before it, and to no session at all when that was the last one.
+// retire ends one session without ending the app.
 func (s *Sessions) retire(state *sessionState) {
 	s.boot.teardown(state)
 	state.stop()
@@ -377,7 +364,6 @@ func (s *Sessions) retire(state *sessionState) {
 	s.reveal(fallback)
 }
 
-// stopAll ends every session, which is what closing the conversation window does.
 func (s *Sessions) stopAll() {
 	for _, state := range s.all() {
 		state.stop()
@@ -387,7 +373,6 @@ func (s *Sessions) stopAll() {
 	s.mu.Unlock()
 }
 
-// add registers a session and mints the id its conversation is addressed by.
 func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -400,7 +385,6 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	}
 	state := &sessionState{
 		terminal: fmt.Sprintf(terminalIDFormat, s.seq),
-		activity: &activity{},
 		agents:   tracker,
 		argv:     argv,
 		env:      env,
@@ -409,12 +393,6 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	s.slugs[state.slug()] = state
 	s.terms[state.terminal] = state
 	return state
-}
-
-func (s *Sessions) agentActivity(slug string) *agentActivity {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.agents[slug]
 }
 
 func (s *Sessions) agentActivitySnapshots() map[string]agentActivitySnapshot {
@@ -453,8 +431,6 @@ func (s *Sessions) dropAgentActivity(slug string) {
 	delete(s.agents, slug)
 }
 
-// forget unregisters a session and names the one the window falls back to, if
-// the retired session was the one on screen.
 func (s *Sessions) forget(state *sessionState) (fallback *sessionState, wasShown bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

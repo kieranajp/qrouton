@@ -22,26 +22,28 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	if err := a.takeUp(dir, d, branch, progress); err != nil {
 		return err
 	}
+	// Composed outside the update: cloning takes minutes, and no other process
+	// may be kept off the manifest for them.
 	composed, err := session.ComposeRepos(a.Cfg, m, d.Repos, branch, progress)
 	if err != nil {
 		return err
 	}
-	out, err := session.Load(dir)
-	if err != nil {
+	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
+		out = session.MergeRepos(out, composed.Repos)
+		out.Name, out.Description, out.TicketURL = d.Name, d.Description, d.Ticket
+		if escalate {
+			out.Mode = session.ModeRPI
+			out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
+		}
+		return out, nil
+	}); err != nil {
 		return err
 	}
-	out = session.MergeRepos(out, composed.Repos)
-	out.Name, out.Description, out.TicketURL = d.Name, d.Description, d.Ticket
 	if !escalate {
 		// Adding repositories is not a mode change, and the running agent reads
 		// the manifest for itself — relaunching it would cost the user a
 		// conversation to tell it something it can already see.
-		return session.WriteManifest(dir, out)
-	}
-	out.Mode = session.ModeRPI
-	out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
-	if err := session.WriteManifest(dir, out); err != nil {
-		return err
+		return nil
 	}
 	if a.Signal != nil {
 		// Best-effort: the supervisor replaces the assistant with a fresh
@@ -67,15 +69,9 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 	if err := session.UpgradeRepos(a.Cfg, m, d.Upgrades, branch, progress); err != nil {
 		return err
 	}
-	// Reloaded rather than reused: the checkouts took a while, and the workbench
-	// keeps writing the window record underneath.
-	if m, err = session.Load(dir); err != nil {
-		return err
-	}
-	if m, err = session.ApplyUpgrades(m, d.Upgrades, branch); err != nil {
-		return err
-	}
-	return session.WriteManifest(dir, m)
+	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		return session.ApplyUpgrades(m, d.Upgrades, branch)
+	})
 }
 
 // Cancel records the cancelled outcome — the stanza alone, mode and
@@ -85,10 +81,8 @@ func Cancel(dir string, escalate bool) error {
 	if !escalate {
 		return nil
 	}
-	out, err := session.Load(dir)
-	if err != nil {
-		return err
-	}
-	out.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
-	return session.WriteManifest(dir, out)
+	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
+		return m, nil
+	})
 }

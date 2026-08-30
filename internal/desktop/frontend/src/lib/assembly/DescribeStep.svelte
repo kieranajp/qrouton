@@ -1,6 +1,7 @@
 <script>
   import Button from "../core/Button.svelte";
   import ChoiceChips from "../forms/ChoiceChips.svelte";
+  import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
   import { folder } from "./steps.js";
 
@@ -18,10 +19,9 @@
   } = $props();
 </script>
 
-<div class="heading">
-  <span class="title">What are you working on?</span>
-  <span class="helper">The name becomes the folder and the branch, so keep it short.</span>
-</div>
+<StepHeading title="What are you working on?">
+  The name becomes the folder and the branch, so keep it short.
+</StepHeading>
 
 <div class="pair">
   <TextField
@@ -57,25 +57,6 @@
   onSelect={(option) => (prefix = option)} />
 
 <style>
-  .heading {
-    display: flex;
-    align-items: flex-end;
-    gap: 18px;
-  }
-
-  .title {
-    font: var(--display-md);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .helper {
-    flex: 1;
-    font: var(--machine-sm);
-    color: var(--text-muted);
-    padding-bottom: 5px;
-  }
-
   .pair {
     display: grid;
     grid-template-columns: 1fr 1fr;

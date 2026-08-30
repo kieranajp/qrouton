@@ -1,12 +1,5 @@
 package launch
 
-// The conversation terminal's command is a supervisor rather than the runner
-// itself, so escalation can replace the agent's process without touching the
-// terminal: the picker (or `qrouton mode`) rewrites the manifest and signals,
-// and the supervisor re-stamps and relaunches from the fresh value. Escalation
-// relaunches fresh — the handoff brief, not the conversation, carries over —
-// while de-escalation keeps the conversation with the runner's continue flag.
-
 import (
 	"context"
 	"os"
@@ -60,11 +53,9 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err := StampAssets(dir); err != nil {
 			return err
 		}
-		// An escalation hands over the brief, not the conversation. The marker is
-		// on disk, so a restart between the escalation and this launch still gets
-		// the fresh context the handoff promised — the decision used to live in
-		// this loop's memory, and any relaunch it did not perform resumed a
-		// conversation the new orchestrator was never meant to see.
+		// An escalation hands over the brief, not the conversation. The marker is on
+		// disk rather than in this loop, so a restart between the escalation and
+		// this launch still starts the orchestrator fresh.
 		if tookHandoff(dir) {
 			resume = false
 		}
@@ -146,7 +137,6 @@ var runAgent = func(argv, env []string, dir string, relaunch <-chan os.Signal) (
 	}
 }
 
-// writePID records the supervisor's pid for SignalSupervisor.
 func writePID(dir string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err

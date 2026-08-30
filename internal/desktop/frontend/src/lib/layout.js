@@ -16,23 +16,16 @@ export const storedWidth = (read, slug) => Number(read(widthKey(slug))) || 0;
 
 export const storedSidebarWidth = (read) => Number(read(SIDEBAR_WIDTH_KEY)) || 0;
 
-export const selectedIn = (selection, slug) => selection[slug] ?? "";
-
-export const selectIn = (selection, slug, id) => ({ ...selection, [slug]: id });
-
-export const focusGenerationIn = (generations, id) => generations[id]?.generation ?? 0;
-
-export const focusPendingIn = (generations, id) => generations[id]?.pending ?? false;
-
-export const focusTerminal = (generations, id) => ({
-  ...generations,
-  [id]: { generation: focusGenerationIn(generations, id) + 1, pending: true },
-});
-
-export function consumeTerminalFocus(generations, id, generation) {
-  const current = generations[id];
-  if (!current || current.generation !== generation || !current.pending) return generations;
-  return { ...generations, [id]: { generation, pending: false } };
+/**
+ * selectedTab is the strip position Go's selection names. A session Go has no
+ * opinion on yet opens on its leftmost tab, the same tab closing one falls back
+ * to; a selection naming no open tab selects nothing rather than inventing one.
+ * @param {{id?: string}[]} tabs
+ * @param {string} selected
+ */
+export function selectedTab(tabs, selected) {
+  if (!selected) return tabs.length ? 0 : -1;
+  return tabs.findIndex((tab) => tab.id === selected);
 }
 
 // Neither pane is worth having below these; the divider stops rather than

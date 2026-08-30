@@ -2,14 +2,38 @@ package prompts
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 )
+
+// embeddedPromptIDs is every prompt the binary carries, in the order List sorts
+// them. Naming them is what makes an addition or a loss legible in the failure.
+var embeddedPromptIDs = []string{
+	"agents/code-reviewer",
+	"agents/codebase-researcher",
+	"agents/external-researcher",
+	"agents/pattern-finder",
+	"agents/qrouton-implementation-lead",
+	"agents/qrouton-planning-lead",
+	"agents/qrouton-research-lead",
+	"agents/qrouton-researcher",
+	"agents/test-verifier",
+	"agents/thoughts-researcher",
+	"assistant",
+	"orchestrator",
+	"skills/qrspi-implement",
+	"skills/qrspi-plan",
+	"skills/qrspi-questions",
+	"skills/qrspi-research",
+	"skills/qrspi-spec",
+}
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	loader := NewEmbeddedLoader()
@@ -31,8 +55,12 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 17 {
-		t.Fatalf("embedded prompt count = %d, want 17", len(all))
+	ids := make([]string, len(all))
+	for i, p := range all {
+		ids[i] = string(p.ID)
+	}
+	if !slices.Equal(ids, embeddedPromptIDs) {
+		t.Fatalf("embedded prompts = %#v, want %#v", ids, embeddedPromptIDs)
 	}
 }
 
@@ -57,6 +85,47 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 		if strings.Contains(content, subagentChoicePlaceholder) {
 			t.Errorf("prompt %q retained subagent choice placeholder", id)
 		}
+	}
+}
+
+// Both modes drive the same workbench, so the description of it is one text.
+// What differs is escalation: only the assistant has the tool, and only its
+// prompt may say so.
+func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	rendered := map[ID]string{}
+	for _, id := range []ID{Orchestrator, Assistant} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(prompt.Content)
+		// Any surviving brace pair is a partial that did not expand — including
+		// one a partial itself named, which a single expansion pass cannot reach.
+		if i := strings.Index(content, "{{"); i >= 0 {
+			t.Errorf("prompt %q ships an unexpanded partial: %.32q", id, content[i:])
+		}
+		if !strings.Contains(content, "## The workspace windows") {
+			t.Errorf("prompt %q does not describe the workspace windows", id)
+		}
+		rendered[id] = content
+	}
+
+	shared, err := fs.ReadFile(embedded, workspaceWindowsFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, content := range rendered {
+		if !strings.Contains(content, string(shared)) {
+			t.Errorf("prompt %q carries its own copy of the workspace windows section", id)
+		}
+	}
+
+	if strings.Contains(rendered[Orchestrator], "escalat") {
+		t.Error("the orchestrator prompt offers escalation, which is the assistant's alone")
+	}
+	if !strings.Contains(rendered[Assistant], "`escalate`") {
+		t.Error("the assistant prompt does not name the escalate tool")
 	}
 }
 

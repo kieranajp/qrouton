@@ -1,6 +1,5 @@
+import { SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE } from "../bridge/generated.js";
 import { Call } from "../wails.js";
-
-const SETTINGS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Settings";
 
 /**
  * @typedef {object} SettingsFields
@@ -14,12 +13,12 @@ const SETTINGS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Settings
  */
 
 /** @returns {Promise<SettingsFields>} */
-export const load = () => Call.ByName(SETTINGS_SERVICE + ".Load");
+export const load = () => Call.ByName(SETTINGS_LOAD);
 
 /**
  * @param {SettingsFields} input
  * @returns {Promise<{restartRequired: boolean}>}
  */
-export const save = (input) => Call.ByName(SETTINGS_SERVICE + ".Save", input);
+export const save = (input) => Call.ByName(SETTINGS_SAVE, input);
 
-export const quit = () => Call.ByName(SETTINGS_SERVICE + ".Quit");
+export const quit = () => Call.ByName(SETTINGS_QUIT);

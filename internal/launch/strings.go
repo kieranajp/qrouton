@@ -6,10 +6,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/codex"
 )
 
-// Literals the launch path depends on: runner identifiers and their arguments,
-// the environment variables and shell fragments qrouton injects, and the
-// subcommands qrouton launches against itself.
-
 const (
 	// EditorEnvVar carries the resolved editor into the MCP child, which the
 	// runner spawns beyond qrouton's own argument list.
@@ -37,24 +33,19 @@ const (
 	generationFlag    = "--generation"
 	providerFlag      = "--provider"
 	resumeFlag        = "--resume"
-	socketFlag        = "--socket"
 
 	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
-	// loop rather than assemble a session. Its literal is duplicated in main,
-	// which defines the flag it names.
+	// loop rather than assemble a session.
 	workbenchSpecFlag = "--workbench-spec"
 )
 
 const generationSignalTimeout = 2 * time.Second
 
-// The detached workbench's own plumbing: how a failure to start names the log
-// that explains it, and the socket's network.
 const (
 	workbenchFailureFormat = "%w: see %s"
 	specParseError         = "parse workbench spec"
 )
 
-// scriptMode is the permission bit the generated support scripts need.
 const scriptMode = 0o755
 
 const (
@@ -97,8 +88,6 @@ const (
 	openCodeAutoFlag          = "--auto"
 	openCodePromptFlag        = "--prompt"
 
-	// Resume arguments: each runner spells "continue the last conversation"
-	// differently.
 	claudeContinueFlag = "--continue"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
@@ -120,9 +109,6 @@ const (
 	claudeHooksKey      = "hooks"
 	claudeCommandType   = "command"
 
-	// Claude hook events qrouton subscribes to: the subagent pair feeds the
-	// event log, and Notification chimes only when the agent asks for
-	// attention, so the user can step away.
 	claudeSubagentStartHook = "SubagentStart"
 	claudeSubagentStopHook  = "SubagentStop"
 	claudeNotificationHook  = "Notification"
@@ -168,7 +154,6 @@ const (
 	firstLine = 1
 )
 
-// How a session file's window is named.
 const (
 	editorWindowLabel   = "Editor"
 	documentLabelFormat = "◆ %s"

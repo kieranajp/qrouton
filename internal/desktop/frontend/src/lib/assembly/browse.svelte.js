@@ -1,4 +1,4 @@
-import { Events } from "../wails.js";
+import { call, Events } from "../wails.js";
 import * as go from "./calls.js";
 import { filter, repoID } from "./filter.js";
 import { pushed } from "./pushed.js";
@@ -15,6 +15,7 @@ import {
   summary,
   upgrading,
 } from "./selection.js";
+import { refusal } from "./steps.js";
 
 // Search narrows the list; the rows never outgrow the region they scroll in.
 const SHOWN = 50;
@@ -23,20 +24,27 @@ const SHOWN = 50;
  * browsing is step 2's state, which the wizard and the picker both draw: the
  * repository list, the owners it is narrowed to, and the roles picked over it.
  * branch is what an editing row joins, which the two arrive at differently.
+ * report is where a list that could not be fetched is said out loud, since the
+ * two owners each have a footer of their own.
  * @param {() => string} branch
+ * @param {(text: string) => void} [report]
  */
-export function browsing(branch) {
+export function browsing(branch, report = () => {}) {
   let query = $state("");
   let orgs = $state(/** @type {string[]} */ ([]));
   let owners = $state(/** @type {string[]} */ ([]));
   let refresh = $state(idle());
   let selection = $state(seed());
 
-  go.orgs().then((list) => {
-    orgs = list ?? [];
+  call(go.orgs()).then((answer) => {
+    if (!answer.ok) return report(refusal(answer.error));
+    orgs = answer.value ?? [];
     owners = [...orgs];
   });
-  go.cached().then((list) => (refresh = idle(list ?? [])));
+  call(go.cached()).then((answer) => {
+    if (!answer.ok) return report(refusal(answer.error));
+    refresh = idle(answer.value ?? []);
+  });
 
   // Pinning the locked rows rather than every picked one: a selection that
   // re-sorted as it was made would move the next row under the pointer.
@@ -71,7 +79,9 @@ export function browsing(branch) {
   // The events say when a run is live; a run already finished by the time its
   // generation came back must not be reported as one.
   async function refetch() {
-    const generation = await go.refresh();
+    const answer = await call(go.refresh());
+    if (!answer.ok) return report(refusal(answer.error));
+    const generation = answer.value ?? 0;
     if (generation > refresh.generation) refresh = { ...refresh, generation };
   }
 

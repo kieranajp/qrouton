@@ -2,6 +2,8 @@ import { expect, test } from "@playwright/test";
 
 const PLAN_LAVENDER = "rgb(183, 189, 248)";
 const RESEARCH_SKY = "rgb(145, 215, 227)";
+const RUNNING_TEAL = "rgb(139, 213, 202)";
+const SUCCESS_GREEN = "rgb(166, 218, 149)";
 
 const open = async (page, query = "") => {
   await page.goto("/tests/tabs.html" + query);
@@ -36,4 +38,22 @@ test("a tab the strip cannot fit keeps its id in the overflow menu", async ({ pa
   await expect.poll(() => page.evaluate(() => window.menuLabels())).toContain(
     "[P002] Pane smoke test",
   );
+});
+
+test("a finished run is green under the word the workbench sends for it", async ({ page }) => {
+  await open(page);
+
+  await expect.poll(() => page.evaluate(() => window.dots())).toEqual([
+    RUNNING_TEAL,
+    "",
+    "",
+    SUCCESS_GREEN,
+  ]);
+});
+
+test("the overflow menu keeps a hidden run's colour", async ({ page }) => {
+  await open(page, "?narrow");
+
+  await page.getByRole("button", { name: /more tabs/ }).click();
+  await expect.poll(() => page.evaluate(() => window.menuDots())).toContain(SUCCESS_GREEN);
 });

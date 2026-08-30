@@ -3,7 +3,13 @@ package desktop
 import (
 	"context"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +283,121 @@ func TestLinearIssueOpIsRefusedOnSessionSocketsAndWithoutItsPayload(t *testing.T
 			}}
 			if res := control.dispatch(tc.req); res.Error == "" {
 				t.Fatalf("dispatch(%+v) = %+v, want a refusal", tc.req, res)
+			}
+		})
+	}
+}
+
+// The table is the only place an operation becomes servable, so a constant the
+// port declares without an entry answers "unknown workbench operation".
+func TestEveryDeclaredOperationHasAHandler(t *testing.T) {
+	declared := declaredOperations(t)
+	if len(declared) == 0 {
+		t.Fatal("no operations found; the port's constants moved")
+	}
+	for op, name := range declared {
+		if _, ok := handlers[op]; !ok {
+			t.Errorf("workbench.%s (%q) has no handler", name, op)
+		}
+	}
+	for op := range handlers {
+		if _, ok := declared[op]; !ok {
+			t.Errorf("handler %q is not an operation the port declares", op)
+		}
+	}
+}
+
+// declaredOperations answers the wire value of every Op constant the workbench
+// port declares, against the identifier that named it.
+func declaredOperations(t *testing.T) map[string]string {
+	t.Helper()
+	const dir = "../workbench"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ops := make(map[string]string)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, name), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, decl := range file.Decls {
+			gen, ok := decl.(*ast.GenDecl)
+			if !ok || gen.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range gen.Specs {
+				value, ok := spec.(*ast.ValueSpec)
+				if !ok {
+					continue
+				}
+				for i, ident := range value.Names {
+					if !strings.HasPrefix(ident.Name, "Op") || i >= len(value.Values) {
+						continue
+					}
+					literal, ok := value.Values[i].(*ast.BasicLit)
+					if !ok || literal.Kind != token.STRING {
+						continue
+					}
+					op, err := strconv.Unquote(literal.Value)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ops[op] = ident.Name
+				}
+			}
+		}
+	}
+	return ops
+}
+
+// Each operation's guards are declared beside it, so the refusal a malformed or
+// misdirected request gets has to stay the one that names what it lacks.
+func TestDispatchRefusesEachOperationWithItsOwnSentinel(t *testing.T) {
+	windows, _ := testWindows(t)
+	owner := windows.shown()
+	options := &workbench.WindowOptions{Kind: workbench.KindDocument, Label: "◆ plan", Content: "one"}
+
+	for _, tc := range []struct {
+		name  string
+		owner *sessionState
+		req   workbench.Request
+		want  error
+	}{
+		{name: "open without options", owner: owner,
+			req: workbench.Request{Op: workbench.OpOpen}, want: ErrNoWindowOptions},
+		{name: "open on a session-less socket",
+			req: workbench.Request{Op: workbench.OpOpen, Options: options}, want: ErrNoSession},
+		{name: "viewport on a session-less socket",
+			req: workbench.Request{Op: workbench.OpViewport, ID: "window-1"}, want: ErrNoSession},
+		{name: "picker without a root", owner: owner,
+			req: workbench.Request{Op: workbench.OpPicker, Picker: &workbench.PickerRequest{}}, want: ErrNoSessionRoot},
+		{name: "runner generation on a session-less socket",
+			req: workbench.Request{Op: workbench.OpRunnerGeneration,
+				RunnerGeneration: &workbench.RunnerGenerationRequest{Generation: 3}}, want: ErrNoSession},
+		{name: "runner generation without a payload", owner: owner,
+			req: workbench.Request{Op: workbench.OpRunnerGeneration}, want: ErrNoRunnerGeneration},
+		{name: "runner generation at generation zero", owner: owner,
+			req: workbench.Request{Op: workbench.OpRunnerGeneration,
+				RunnerGeneration: &workbench.RunnerGenerationRequest{Provider: agentProviderClaude}},
+			want: ErrNoRunnerGeneration},
+		{name: "delegated lifecycle on a session-less socket",
+			req: workbench.Request{Op: workbench.OpDelegatedLifecycle,
+				Lifecycle: &workbench.DelegatedLifecycleRequest{Kind: workbench.LifecycleStart}}, want: ErrNoSession},
+		{name: "delegated lifecycle without a payload", owner: owner,
+			req: workbench.Request{Op: workbench.OpDelegatedLifecycle}, want: ErrNoDelegatedLifecycle},
+		{name: "an operation nothing serves", owner: owner,
+			req: workbench.Request{Op: "teleport"}, want: unknownOperation("teleport")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			control := &control{windows: windows, owner: tc.owner}
+			if res := control.dispatch(tc.req); res.Error != tc.want.Error() {
+				t.Fatalf("dispatch(%+v) = %q, want %q", tc.req, res.Error, tc.want)
 			}
 		})
 	}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/desktop"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -40,25 +41,25 @@ func TestOpenedLineNamesTheSessionAndItsLog(t *testing.T) {
 // as it boots that session.
 func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 	cfg := &config.Config{Launch: map[string][]string{"codex": {"/bin/echo"}}}
-	agent := agentCommand(cfg, "/bin/qrouton", "codex", launch.EditorCommand{Argv: []string{"vi"}})
+	ports := testPorts(cfg, "codex", launch.EditorCommand{Argv: []string{"vi"}})
 
 	sockets := map[string]string{}
 	for _, slug := range []string{"alpha", "beta"} {
 		root := t.TempDir()
 		socket := "/tmp/qrouton-sock/501/" + slug + ".sock"
-		argv, _, resolved, err := agent(root, socket, "", false)
+		command, err := ports.Agent(desktop.AgentRequest{SessionRoot: root, Socket: socket})
 		if err != nil {
 			t.Fatal(err)
 		}
-		handle, err := workbench.ParseHandle(flagValue(t, argv, "--workbench-json"))
+		handle, err := workbench.ParseHandle(flagValue(t, command.Argv, "--workbench-json"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if handle.Socket != socket || handle.SessionRoot != root {
 			t.Fatalf("%s's supervisor got %#v, want the socket %q rooted at %q", slug, handle, socket, root)
 		}
-		if resolved != "codex" {
-			t.Fatalf("%s resolved provider = %q, want codex", slug, resolved)
+		if command.RunnerID != "codex" {
+			t.Fatalf("%s resolved provider = %q, want codex", slug, command.RunnerID)
 		}
 		sockets[slug] = handle.Socket
 	}
@@ -71,19 +72,18 @@ func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.
 	cfg := &config.Config{Launch: map[string][]string{
 		"claude": {"/bin/echo"}, "codex": {"/bin/echo"}, "opencode": {"/bin/echo"},
 	}}
-	agent := agentCommand(cfg, "/bin/qrouton", "", launch.EditorCommand{})
-	_, _, resolved, err := agent(t.TempDir(), "/tmp/s.sock", "", false)
+	ports := testPorts(cfg, "", launch.EditorCommand{})
+	command, err := ports.Agent(desktop.AgentRequest{SessionRoot: t.TempDir(), Socket: "/tmp/s.sock"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resolved != "claude" {
-		t.Fatalf("legacy manifest resolved provider = %q, want the first installed provider", resolved)
+	if command.RunnerID != "claude" {
+		t.Fatalf("legacy manifest resolved provider = %q, want the first installed provider", command.RunnerID)
 	}
 }
 
-// Every path that opens a workbench opens it, editor or no editor. Resuming a
-// session used to be the one that refused, so an install with nothing on PATH
-// to edit with got a terminal error where a fresh one got a window.
+// Every path that opens a workbench opens it, editor or no editor: resuming a
+// session with nothing on PATH to edit with gets a window, not a terminal error.
 func TestOpeningASessionWithNoEditorStillOpensTheWorkbench(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
@@ -334,13 +334,21 @@ func flagValue(t *testing.T, argv []string, flag string) string {
 // session was never assembled for, silently.
 func TestTheAgentCommandRefusesARunnerThatIsGone(t *testing.T) {
 	cfg := &config.Config{Launch: map[string][]string{"codex": {"/bin/echo"}}}
-	agent := agentCommand(cfg, "/bin/qrouton", "codex", launch.EditorCommand{Argv: []string{"vi"}})
+	ports := testPorts(cfg, "codex", launch.EditorCommand{Argv: []string{"vi"}})
 
-	_, _, _, err := agent(t.TempDir(), "/tmp/s.sock", "no-such-agent", false)
+	_, err := ports.Agent(desktop.AgentRequest{
+		SessionRoot: t.TempDir(), Socket: "/tmp/s.sock", RunnerID: "no-such-agent",
+	})
 	if !errors.Is(err, launch.ErrRunnerUnavailable) {
 		t.Fatalf("booting a session against a missing agent = %v, want %v", err, launch.ErrRunnerUnavailable)
 	}
 	if err != nil && !strings.Contains(err.Error(), "no-such-agent") {
 		t.Fatalf("refusal %q does not name the agent the session recorded", err)
 	}
+}
+
+// testPorts is the workbench's launch adapter, as workbenchProcess builds it.
+func testPorts(cfg *config.Config, runner string, editor launch.EditorCommand) workbenchPorts {
+	return workbenchPorts{cfg: cfg, bin: "/bin/qrouton",
+		spec: launch.WorkbenchSpec{Runner: runner, Editor: editor}}
 }

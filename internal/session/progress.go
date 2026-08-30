@@ -11,10 +11,6 @@ type reporter struct {
 	role RepoRole
 }
 
-// step reports the start of one step, runs it, then reports how it ended. work
-// is handed the callback git's own clone and fetch progress goes to; that
-// callback is nil when nobody is listening, which is what tells gitOK's callers
-// to ask git for --quiet rather than --progress.
 func (r reporter) step(step ProgressStep, work func(advance func(phase string, percent int)) error) error {
 	var advance func(string, int)
 	if r.fn != nil {
@@ -31,7 +27,6 @@ func (r reporter) step(step ProgressStep, work func(advance func(phase string, p
 	return nil
 }
 
-// emit fills in the repository this reporter speaks for and delivers the event.
 func (r reporter) emit(event Progress) {
 	if r.fn == nil {
 		return

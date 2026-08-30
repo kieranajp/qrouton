@@ -138,9 +138,8 @@ func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
 	}
 }
 
-// The S004 regression guard: escalation rewrites the manifest's mode, and the
-// next stamp must follow the rewritten value — not revert to the mode the
-// session was created with.
+// Escalation rewrites the manifest's mode, and the next stamp follows the
+// rewritten value rather than the mode the session was created with.
 func TestStampAssetsFollowsModeRewrittenAfterCreation(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "qrouton.json"), []byte(`{"mode":"assistant"}`), 0o644); err != nil {

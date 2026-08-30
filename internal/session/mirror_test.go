@@ -8,9 +8,9 @@ import (
 	"github.com/kieranajp/qrouton/internal/gittest"
 )
 
-// The one non-obvious correctness hazard (S001 / design discussion): a --mirror-style
-// +refs/*:refs/* refspec would prune session branches on the next fetch, silently breaking
-// earlier sessions' worktrees. Prove our bare-clone + remote-tracking-only refspec doesn't.
+// A --mirror-style +refs/*:refs/* refspec would prune session branches on the next
+// fetch, silently breaking earlier sessions' worktrees. The bare clone's
+// remote-tracking-only refspec leaves them alone.
 func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 	tmp := t.TempDir()
 

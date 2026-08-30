@@ -1,8 +1,5 @@
 // Package gittest builds the throwaway repositories qrouton's tests assemble
-// sessions from. Six packages each grew their own builder, two of them
-// byte-identical, and they had begun to drift on the settings that decide
-// whether a commit succeeds on a contributor's machine at all — a global
-// commit.gpgsign, or no user.name configured.
+// sessions from.
 //
 // Not a _test.go file, so the packages under test can import it.
 package gittest
@@ -24,7 +21,6 @@ var identity = []string{
 	"-c", "commit.gpgsign=false",
 }
 
-// Run runs one git command in dir, failing the test with git's own output.
 func Run(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	if out, err := run(dir, args...); err != nil {
@@ -39,9 +35,7 @@ func run(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
-// Output is one git command's trimmed stdout, for the tests that read a ref
-// rather than assert on one.
-func Output(t *testing.T, dir string, args ...string) string {
+func output(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := run(dir, args...)
 	if err != nil {
@@ -50,7 +44,6 @@ func Output(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(out)
 }
 
-// options is how a repository differs from the bare minimum.
 type options struct {
 	files   map[string][]string
 	message string
@@ -59,12 +52,10 @@ type options struct {
 
 type Option func(*options)
 
-// WithFile commits one file of the given lines. Repeatable.
 func WithFile(name string, lines ...string) Option {
 	return func(o *options) { o.files[name] = lines }
 }
 
-// WithMessage names the first commit, for a test that reads the log.
 func WithMessage(message string) Option {
 	return func(o *options) { o.message = message }
 }
@@ -124,15 +115,7 @@ func Worktree(t *testing.T, path string, opts ...Option) string {
 	return path
 }
 
-// Head is dir's current commit, in full.
 func Head(t *testing.T, dir string) string {
 	t.Helper()
-	return Output(t, dir, "rev-parse", "HEAD")
-}
-
-// Commit stages everything in dir and commits it.
-func Commit(t *testing.T, dir, message string) {
-	t.Helper()
-	Run(t, dir, "add", ".")
-	Run(t, dir, "commit", "-m", message)
+	return output(t, dir, "rev-parse", "HEAD")
 }

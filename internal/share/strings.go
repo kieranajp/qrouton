@@ -1,7 +1,5 @@
 package share
 
-// The assembled page and the names of the parts it is built from.
-
 const (
 	scriptAsset = "assets/share.js"
 	styleAsset  = "assets/share.css"
@@ -13,11 +11,6 @@ const (
 	styleFormat   = "<style>\n%s</style>\n"
 	payloadFormat = "<script type=\"application/json\" id=\"qrouton-document\">%s</script>\n"
 	scriptFormat  = "<script>%s</script>\n"
-
-	// headingPrefix marks the level-one heading the renderer lifts out of the
-	// body and shows as the document's own title.
-	headingPrefix   = "# "
-	frontmatterRule = "---"
 
 	pageSuffix    = ".html"
 	slugSeparator = "-"

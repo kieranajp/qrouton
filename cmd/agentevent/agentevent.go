@@ -20,15 +20,12 @@ var EventCommand = &cli.Command{
 	Name:  eventCommandName,
 	Usage: eventCommandUsage,
 	Flags: []cli.Flag{
-		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, EnvVars: []string{eventlog.SessionRootEnvVar}, Required: true},
 		&cli.StringFlag{Name: workbenchJSONFlag, Usage: workbenchJSONUsage, EnvVars: []string{eventlog.WorkbenchEnvVar}},
 		&cli.Uint64Flag{Name: generationFlag, Usage: generationUsage, EnvVars: []string{eventlog.GenerationEnvVar}, Required: true},
 		&cli.StringFlag{Name: providerFlag, Usage: providerUsage, EnvVars: []string{eventlog.ProviderEnvVar}, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		// A log that could not be written must not also cost the window the
-		// only signal it gets: the hook name survives the failure.
-		event, hook, err := eventlog.Record(c.String(sessionRootFlag), c.String(providerFlag), os.Stdin)
+		event, hook, err := eventlog.Record(c.String(providerFlag), os.Stdin)
 		signal(c.String(workbenchJSONFlag), c.Uint64(generationFlag), event, attention[hook])
 		return err
 	},

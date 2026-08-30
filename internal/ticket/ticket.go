@@ -32,7 +32,6 @@ type Ticket struct {
 	Body  string
 }
 
-// Fetch resolves a Linear or Asana browser URL and loads the ticket metadata.
 func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, error) {
 	u, err := ParseURL(rawURL)
 	if err != nil {
@@ -46,7 +45,6 @@ func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, err
 	}
 }
 
-// ParseURL validates the ticket providers and browser URL shapes accepted by qrouton.
 func ParseURL(rawURL string) (*url.URL, error) {
 	trimmed := strings.TrimSpace(rawURL)
 	u, err := url.Parse(trimmed)

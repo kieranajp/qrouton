@@ -106,7 +106,7 @@ func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	tracker := newAgentActivity(clock.now, time.Minute)
 	tracker.begin(agentProviderClaude, 1)
-	tracker.exit(0)
+	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
 	tracker.begin(agentProviderCodex, 2)
 	panel := agentPanel(tracker.snapshot())
@@ -158,7 +158,7 @@ func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
 	state := reg.add(dir, []string{"/bin/cat"}, os.Environ())
 	reg.reveal(state)
 	state.agents.begin(agentProviderClaude, 1)
-	state.agents.exit(0)
+	state.agents.exitWithProvider("", 0)
 	select {
 	case <-reg.touched:
 	default:
@@ -212,4 +212,83 @@ func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
 	if fields := pushedChrome(t, renderer); fields.Agents.Agents == nil {
 		t.Fatal("chrome emitted a nil agent record list")
 	}
+}
+
+// Chrome sits on the emitter seam, so a payload it does not recognise has to
+// reach the page rather than take the workbench down.
+func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
+	var events []string
+	var payloads []any
+	chrome := newChrome(func(event string, payload any) {
+		events = append(events, event)
+		payloads = append(payloads, payload)
+	})
+
+	foreign := windowDataEvent + "w1"
+	chrome.publish(foreign, "cGluZw==")
+	if len(events) != 1 || events[0] != foreign || payloads[0] != "cGluZw==" {
+		t.Fatalf("forwarded events = %v, payloads = %v", events, payloads)
+	}
+	if snapshot := chrome.Snapshot(); snapshot.Activity != "" || len(snapshot.Sessions) != 0 {
+		t.Fatalf("a foreign payload changed the stored chrome: %+v", snapshot)
+	}
+
+	fields := status.EmptyFields()
+	fields.Activity = "working"
+	chrome.publishFields(fields)
+	chrome.publishFields(fields)
+	if len(events) != 2 || events[1] != chromeEvent {
+		t.Fatalf("typed publishes = %v, want one chrome event", events)
+	}
+	if chrome.Snapshot().Activity != "working" {
+		t.Fatalf("snapshot = %+v", chrome.Snapshot())
+	}
+}
+
+// The rail row and the agent panel read one tracker, so a session's activity
+// reaches the page as one answer in two vocabularies.
+func TestRailRowAndAgentPanelAgreeOnOneSessionsActivity(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now, time.Minute)
+	shown := reg.add(sessionDir(t, root, "octopus"), []string{"/bin/cat"}, os.Environ())
+	reg.reveal(shown)
+	shown.agents.begin(agentProviderClaude, 1)
+
+	for _, step := range []struct {
+		name   string
+		poke   func()
+		rail   string
+		record string
+	}{
+		{"output", shown.agents.output, status.ActivityWorking, agentStateWorking},
+		{"attention", func() { shown.agents.attention(1, status.ActivityWaiting) }, status.ActivityWaiting, agentStateWaiting},
+		{"typing", shown.agents.input, status.ActivityWorking, agentStateWorking},
+		{"silence", func() { clock.at = clock.at.Add(activityQuiet) }, status.ActivityIdle, agentStateIdle},
+	} {
+		step.poke()
+		renderer := newFakeRenderer()
+		pushChrome(reg, root, nil, nil, nil, renderer.Emit)
+		fields := pushedChrome(t, renderer)
+		if fields.Activity != step.rail {
+			t.Fatalf("%s: chrome activity = %q, want %q", step.name, fields.Activity, step.rail)
+		}
+		if len(fields.Sessions) != 1 || fields.Sessions[0].Activity != step.rail {
+			t.Fatalf("%s: rail rows = %+v, want activity %q", step.name, fields.Sessions, step.rail)
+		}
+		if got := panelRoot(t, fields.Agents).State; got != step.record {
+			t.Fatalf("%s: panel root reads %q while the rail reads %q", step.name, got, step.rail)
+		}
+	}
+}
+
+func panelRoot(t *testing.T, panel status.AgentPanel) status.AgentRecord {
+	t.Helper()
+	for _, record := range panel.Agents {
+		if record.ID == agentRootID {
+			return record
+		}
+	}
+	t.Fatalf("no root record in %+v", panel.Agents)
+	return status.AgentRecord{}
 }

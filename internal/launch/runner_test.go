@@ -49,8 +49,8 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 	}
 }
 
-// An override qrouton cannot wire up used to be dropped in silence, so a user
-// who configured one got the built-in default and no explanation.
+// MCP and hook injection is per-runner, so an override naming a runner qrouton
+// cannot wire up is refused by name rather than replaced by the built-in.
 func TestRunnersRejectUnsupportedOverride(t *testing.T) {
 	old := findExecutable
 	t.Cleanup(func() { findExecutable = old })
@@ -71,14 +71,14 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["codex"], false, modeRPI, "")
+	argv := argvFor(t, byID["codex"], false, modeRPI, "")
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := runnerArgv(byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
+	if argv := argvFor(t, byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
 		!strings.Contains(argv[len(argv)-1], "Research, Plan, or Implement") {
 		t.Fatalf("OpenCode should receive the opening through --prompt: %#v", argv)
 	}
@@ -90,7 +90,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["claude"], false, modeAssistant, "")
+	argv := argvFor(t, byID["claude"], false, modeAssistant, "")
 	msg := argv[len(argv)-1]
 	if strings.Contains(msg, "Present the work as Research, Plan, or Implement") {
 		t.Fatalf("assistant opening should not mandate the RPI presentation: %q", msg)
@@ -102,7 +102,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 
 func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, false, modeAssistant, "  Fix the login regression.  ")
+		argv := argvFor(t, runner, false, modeAssistant, "  Fix the login regression.  ")
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
 			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {
@@ -118,7 +118,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"opencode": {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, true, modeRPI, "must not be repeated")
+		argv := argvFor(t, runner, true, modeRPI, "must not be repeated")
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
@@ -151,7 +151,7 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(argv, " ")
-	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event", "--session-root"} {
+	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Claude launch missing %q: %v", want, argv)
 		}
@@ -189,7 +189,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
 	callback := settings.Hooks["SubagentStart"][0].Hooks[0].Command
-	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal(), "--generation", "7", "--provider", "claude"}
+	want := []string{bin, "agent-event", "--workbench-json", handle.Marshal(), "--generation", "7", "--provider", "claude"}
 	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
 		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
@@ -226,11 +226,10 @@ func TestRunnerLaunchInjectsCodexAgentHooks(t *testing.T) {
 		}
 	}
 	for key, value := range map[string]string{
-		agentevent.QroutonBinEnvVar:  "/tmp/qrouton",
-		agentevent.SessionRootEnvVar: "/tmp/session",
-		agentevent.WorkbenchEnvVar:   handle.Marshal(),
-		agentevent.GenerationEnvVar:  "7",
-		agentevent.ProviderEnvVar:    runnerIDCodex,
+		agentevent.QroutonBinEnvVar: "/tmp/qrouton",
+		agentevent.WorkbenchEnvVar:  handle.Marshal(),
+		agentevent.GenerationEnvVar: "7",
+		agentevent.ProviderEnvVar:   runnerIDCodex,
 	} {
 		if !slices.Contains(env, key+"="+value) {
 			t.Errorf("Codex hook environment missing %s=%q", key, value)
@@ -371,9 +370,30 @@ func TestEverySpecIsCompletelyWired(t *testing.T) {
 			t.Errorf("two specs claim id %q, so specFor answers with whichever is first", spec.ID)
 		}
 		seen[spec.ID] = true
-		if spec.Resume == nil || spec.Prompt == nil || spec.Inject == nil {
-			t.Errorf("spec %q is missing Resume, Prompt or Inject", spec.ID)
+		if spec.Resume == nil || spec.Prompt == nil || spec.MCP == nil || spec.Inject == nil {
+			t.Errorf("spec %q is missing Resume, Prompt, MCP or Inject", spec.ID)
 		}
+	}
+}
+
+// The eval reaches the qrouton MCP server through this, standing its own binary
+// and mock arguments in: a runner missing from it is a runner the eval cannot
+// grade as it ships.
+func TestEveryRunnerPointsAtAQroutonMCPServer(t *testing.T) {
+	for _, spec := range runnerSpecs {
+		wiring, err := RunnerMCPWiring(spec.ID, "/opt/qrouton", []string{"mcp", "--session-root", "/s"})
+		if err != nil {
+			t.Fatalf("%s: %v", spec.ID, err)
+		}
+		configured := strings.Join(append(append([]string(nil), wiring.Args...), wiring.Env...), " ")
+		for _, want := range []string{serverName, "/opt/qrouton", "--session-root"} {
+			if !strings.Contains(configured, want) {
+				t.Errorf("%s wiring %q does not carry %q", spec.ID, configured, want)
+			}
+		}
+	}
+	if _, err := RunnerMCPWiring("aider", "/opt/qrouton", nil); !errors.Is(err, ErrUnsupportedRunner) {
+		t.Fatalf("wiring an unknown runner = %v, want %v", err, ErrUnsupportedRunner)
 	}
 }
 
@@ -405,14 +425,6 @@ func TestAnUnregisteredRunnerIsRefusedRatherThanLaunchedBare(t *testing.T) {
 		"/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 1, false, "")
 	if !errors.Is(err, ErrUnsupportedRunner) {
 		t.Fatalf("runnerLaunch error = %v, want ErrUnsupportedRunner", err)
-	}
-}
-
-// The same runner, unregistered, must not silently get a bare argv either.
-func TestAnUnregisteredRunnerArgvIsJustItsCommand(t *testing.T) {
-	r := Runner{ID: "handrolled", Command: []string{"echo", "--flag"}}
-	if got := runnerArgv(r, false, modeRPI, ""); !reflect.DeepEqual(got, r.Command) {
-		t.Fatalf("argv = %v, want the command untouched", got)
 	}
 }
 
@@ -484,5 +496,96 @@ func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
 		if strings.Contains(strings.Join(argv, " "), setting) {
 			t.Errorf("%s was handed %q", id, setting)
 		}
+	}
+}
+
+// argvFor is runnerArgv with the spec the launch path resolves for it.
+func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []string {
+	t.Helper()
+	spec, ok := specFor(r.ID)
+	if !ok {
+		t.Fatalf("no spec for runner %q", r.ID)
+	}
+	return runnerArgv(spec, r, resume, mode, initialPrompt)
+}
+
+// ByID answers the runner the caller named, whether that is the identifier, the
+// command it was overridden to, or the basename of a path to it.
+func TestByIDResolvesIdentifierOverriddenCommandOrBasename(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) {
+		if filepath.Base(name) == runnerIDCodex {
+			return name, nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	cfg := &config.Config{Launch: map[string][]string{runnerIDCodex: {"/opt/beta/codex", "--search"}}}
+	for _, id := range []string{runnerIDCodex, "/opt/beta/codex"} {
+		runner, err := ByID(cfg, id)
+		if err != nil {
+			t.Fatalf("ByID(%q): %v", id, err)
+		}
+		if runner.ID != runnerIDCodex || runner.Path == "" {
+			t.Fatalf("ByID(%q) = %+v", id, runner)
+		}
+		if !reflect.DeepEqual(runner.Command, []string{"/opt/beta/codex", "--search"}) {
+			t.Fatalf("ByID(%q) lost the override: %#v", id, runner.Command)
+		}
+	}
+}
+
+// A caller that named a runner asked for that one. Answering with another that
+// happens to be installed would launch an agent nobody chose.
+func TestByIDRefusesARunnerThatIsNotInstalled(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) {
+		if name == runnerIDClaude {
+			return "/bin/claude", nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	for _, id := range []string{runnerIDCodex, "aider"} {
+		if _, err := ByID(&config.Config{}, id); !errors.Is(err, ErrRunnerUnavailable) {
+			t.Fatalf("ByID(%q) error = %v, want ErrRunnerUnavailable", id, err)
+		}
+	}
+	broken := &config.Config{Launch: map[string][]string{"aider": {"aider"}}}
+	if _, err := ByID(broken, runnerIDClaude); !errors.Is(err, ErrUnsupportedOverride) {
+		t.Fatalf("a runner named against a broken config = %v, want ErrUnsupportedOverride", err)
+	}
+}
+
+// A caller that named nothing gets the first installed runner in the spec
+// table's order, so the choice does not move with PATH.
+func TestFirstInstalledFollowsTheSpecTableOrder(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	installed := map[string]bool{runnerIDCodex: true, runnerIDOpenCode: true}
+	findExecutable = func(name string) (string, error) {
+		if installed[name] {
+			return "/bin/" + name, nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	runner, err := FirstInstalled(&config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runner.ID != runnerIDCodex {
+		t.Fatalf("first installed = %q, want %q — the earlier entry in the table", runner.ID, runnerIDCodex)
+	}
+
+	installed = nil
+	if _, err := FirstInstalled(&config.Config{}); !errors.Is(err, ErrNoRunnerInstalled) {
+		t.Fatalf("nothing installed = %v, want ErrNoRunnerInstalled", err)
+	}
+	broken := &config.Config{Launch: map[string][]string{"aider": {"aider"}}}
+	if _, err := FirstInstalled(broken); !errors.Is(err, ErrUnsupportedOverride) {
+		t.Fatalf("a broken config = %v, want ErrUnsupportedOverride", err)
 	}
 }

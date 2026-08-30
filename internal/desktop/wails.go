@@ -28,7 +28,6 @@ func newWailsRenderer(assets fs.FS, icon []byte) *wailsRenderer {
 	return r
 }
 
-// register binds a service so the frontend can call its methods by name.
 func (r *wailsRenderer) register(service application.Service) {
 	r.app.RegisterService(service)
 }

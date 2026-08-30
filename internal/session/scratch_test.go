@@ -5,13 +5,12 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
-var scratchSuffix = regexp.MustCompile(`-[0-9a-f]{4}$`)
+var entropySuffix = regexp.MustCompile(`^[0-9a-f]{4}$`)
 
 func TestSessionSlugAddsSuppliedEntropyWithoutChangingTheDisplayName(t *testing.T) {
 	if got := SessionSlug("API Cleanup!", "4F3A"); got != "api-cleanup-4f3a" {
@@ -22,25 +21,18 @@ func TestSessionSlugAddsSuppliedEntropyWithoutChangingTheDisplayName(t *testing.
 	}
 }
 
-func TestScratchNameDerivesFromInvokingDirectory(t *testing.T) {
-	got := ScratchName("/home/kieran/Work/Lifesum App")
-	if !strings.HasPrefix(got, "lifesum-app-") || !scratchSuffix.MatchString(got) {
-		t.Fatalf("scratch name = %q", got)
-	}
-	// The suffix is entropy, not a constant: a handful of names must not all agree.
-	seen := map[string]bool{got: true}
-	for range 4 {
-		seen[ScratchName("/home/kieran/Work/Lifesum App")] = true
+// The suffix is entropy, not a constant: a handful of them must not all agree.
+func TestNewEntropyIsShortAndVaries(t *testing.T) {
+	seen := map[string]bool{}
+	for range 5 {
+		got := NewEntropy()
+		if !entropySuffix.MatchString(got) {
+			t.Fatalf("entropy = %q", got)
+		}
+		seen[got] = true
 	}
 	if len(seen) < 2 {
-		t.Fatalf("scratch names carry no entropy: %v", seen)
-	}
-}
-
-func TestScratchNameFallsBackWhenBasenameSlugifiesToNothing(t *testing.T) {
-	got := ScratchName("/")
-	if !strings.HasPrefix(got, "scratch-") || !scratchSuffix.MatchString(got) {
-		t.Fatalf("fallback scratch name = %q", got)
+		t.Fatalf("session slugs carry no entropy: %v", seen)
 	}
 }
 

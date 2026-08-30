@@ -5,16 +5,13 @@
   import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
-  import { Call, copyText } from "../wails.js";
-  import { diagrams, links } from "./actions.js";
+  import { diagrams, links, viewport } from "./actions.js";
+  import CopyPath from "./CopyPath.svelte";
   import MarkdownPane from "./MarkdownPane.svelte";
-  import { marks, render } from "./markdown.js";
+  import { render } from "./markdown.js";
   import { parseResearch } from "./research.js";
   import { dealt } from "./sections.js";
-  import { createViewportController, nextViewportSequence } from "./viewport.js";
   import "./markdown.css";
-
-  const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
   /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, active = false, scrollRoot } = $props();
@@ -24,7 +21,6 @@
   let parts = $derived(partition(rendered.body, research));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
-  let copied = $state(false);
   let mode = $state("research");
 
   // Closed is the resting state: the accordion is an index, and an index the
@@ -94,15 +90,6 @@
     open = on ? new Set(research.items.map((item) => item.index)) : new Set();
   }
 
-  async function copyPath() {
-    if (!doc.path) return;
-    try {
-      await copyText(doc.path);
-      copied = true;
-      setTimeout(() => (copied = false), 1200);
-    } catch {}
-  }
-
   // A span running past the end of the item it opens in says nothing about the
   // one after it, so the pane neither marks that part nor scrolls to it.
   function requested() {
@@ -114,55 +101,10 @@
     return { line, to: to > line ? Math.min(to, opened.to) : to };
   }
 
-  /** @param {HTMLElement} sheet */
-  function viewport(sheet, initial) {
-    const blocks = [.../** @type {NodeListOf<HTMLElement>} */ (sheet.querySelectorAll("[data-line]"))];
-    const span = requested();
-    const { marked, at } = marks(
-      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      span,
-    );
-    for (const index of marked) blocks[index].classList.add("marked");
-    const target = blocks[at];
-    let controller;
-    let root;
-    let windowID;
-    let shown;
-    const apply = (params) => {
-      if (!params.scrollRoot) return;
-      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
-        controller?.destroy();
-        root = params.scrollRoot;
-        windowID = params.id;
-        shown = params.shown;
-        controller = createViewportController({
-          root,
-          content: sheet,
-          target,
-          span,
-          selected: params.active,
-          nextSequence: () => nextViewportSequence(windowID),
-          report: (report) =>
-            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
-              epoch: doc.viewportEpoch,
-              ...report,
-            }).catch(() => {}),
-        });
-        return;
-      }
-      controller.setSelected(params.active);
-      // Opening an item changes what can be measured, never where to scroll.
-      if (shown !== params.shown) {
-        shown = params.shown;
-        controller.schedule();
-      }
-    };
-    apply(initial);
-    return {
-      update: apply,
-      destroy: () => controller?.destroy(),
-    };
-  }
+  const port = viewport({
+    span: requested,
+    epoch: () => doc.viewportEpoch,
+  });
 </script>
 
 {#if !research.summary && research.items.length === 0}
@@ -175,14 +117,7 @@
       {#if doc.source}
         <CapsLabel tone="dim">{doc.source}</CapsLabel>
       {/if}
-      {#if doc.path}
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label="Copy absolute path"
-          title={doc.path}
-          onclick={copyPath}>{copied ? "Copied" : "Copy"}</Button>
-      {/if}
+      <CopyPath path={doc.path} />
     </div>
     {#if mode === "document"}
       <div class="reading">
@@ -197,7 +132,7 @@
         data-document-source={doc.source}
         use:links={doc.source}
         use:diagrams={{ id, text: doc.text }}
-        use:viewport={{ id, active, scrollRoot, shown: [...open].sort().join(",") }}>
+        use:port={{ id, active, scrollRoot, key: [...open].sort().join(",") }}>
         <h1 class="display-lg">{research.title || heading}</h1>
         <div class="markdown lead">{@html parts.preamble}</div>
         {#if research.summary}

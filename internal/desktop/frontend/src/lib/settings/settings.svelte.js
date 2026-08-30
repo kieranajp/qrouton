@@ -1,5 +1,6 @@
+import { call } from "../wails.js";
 import * as go from "./calls.js";
-import { saveOutcome } from "./errors.js";
+import { loadFailure, saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
 
 /**
@@ -15,7 +16,7 @@ export function settings(onClose) {
     editor: "",
     launch: "",
     linear: "",
-    linearPath: "~/.linear/coding-tools.json",
+    linearPath: "",
   });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -23,13 +24,18 @@ export function settings(onClose) {
   let saving = $state(false);
   let restartRequired = $state(false);
 
-  go.load().then((loaded) => {
+  call(go.load()).then((answer) => {
+    if (!answer.ok) {
+      status = loadFailure(answer.error);
+      return;
+    }
+    const loaded = answer.value;
     form.orgs = loaded?.orgs ?? [];
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
     form.linear = loaded?.linear ?? "";
-    form.linearPath = loaded?.linearPath ?? form.linearPath;
+    form.linearPath = loaded?.linearPath ?? "";
     if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
   });
 

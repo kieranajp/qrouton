@@ -26,9 +26,9 @@ const (
 	// discovery files link to.
 	canonicalPromptsDirName = "qrspi"
 
+	manifestLockName   = "manifest.lock"
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
-	agentEventLogName  = "agent-events.jsonl"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	initialPromptName  = "initial-prompt"
@@ -45,6 +45,11 @@ func Dir(root string) string { return filepath.Join(root, DirName) }
 
 // Manifest is the session manifest's path.
 func Manifest(root string) string { return filepath.Join(root, ManifestName) }
+
+// ManifestLock is the advisory lock every manifest read-modify-write holds.
+func ManifestLock(root string) string {
+	return filepath.Join(Dir(root), manifestLockName)
+}
 
 // Src is the directory holding a session's repository worktrees.
 func Src(root string) string { return filepath.Join(root, SrcDirName) }
@@ -71,11 +76,6 @@ func NotifyScript(root string) string {
 // read here.
 func WorkbenchLog(root string) string {
 	return filepath.Join(Dir(root), workbenchLogName)
-}
-
-// AgentEventLog records runner subagent lifecycle hook events.
-func AgentEventLog(root string) string {
-	return filepath.Join(Dir(root), agentEventLogName)
 }
 
 // Handoff is the assistant's escalation brief. When it exists, the prompt

@@ -9,8 +9,6 @@ import (
 const (
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"
-	linearConfigPath       = "~/.linear/coding-tools.json"
-	linearIssueTemplate    = "{{issue.identifier}}"
 
 	mainWindowName   = "conversation"
 	mainWindowTitle  = "qrouton"
@@ -35,18 +33,12 @@ const (
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 
-	// rootPath is the mux pattern the embedded tree is served under.
 	rootPath          = "/"
 	contentTypeHeader = "Content-Type"
 
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
-)
-
-const (
-	linearConfigDirMode  = 0o755
-	linearConfigFileMode = 0o644
 )
 
 // Events the Go side emits at the pages; a window's or a conversation's own id
@@ -93,7 +85,6 @@ const (
 	// frame produces well under this, so a repaint arrives as one event.
 	ptyReadBuffer = 32 * 1024
 
-	// windowScrollback caps what a window keeps for the agent to read back.
 	windowScrollback = 256 * 1024
 
 	// windowScreenLines is what a read without full returns.

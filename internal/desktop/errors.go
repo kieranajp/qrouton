@@ -28,8 +28,6 @@ var (
 	ErrNoDirectoryPicker     = errors.New("workbench has no directory picker to choose a sessions root with")
 	ErrNoViewport            = errors.New("window has no source-mapped viewport")
 	ErrInvalidViewport       = errors.New("invalid document viewport report")
-	ErrNoLinearCommand       = errors.New("workbench has no command for Linear custom scripts")
-	ErrLinearConfigObject    = errors.New("must be a JSON object")
 	ErrAssemblyDraftConflict = errors.New("another New session draft is already open; finish or cancel it before opening a different Linear issue")
 	ErrNoLinearIssue         = errors.New("open Linear issue request carries no ticket")
 	ErrProcessIngressOnly    = errors.New("open Linear issue is available only on the published process socket")
@@ -59,13 +57,6 @@ func unknownSession(slug string) error {
 // workbench at a time means cannot happen — so it is reported rather than shown.
 func agentAlreadyRunning(slug string, pid int) error {
 	return fmt.Errorf("session %q already has an agent running as pid %d", slug, pid)
-}
-
-// mismatchedManifest is a session directory holding another session's manifest.
-// A removal resolves its target from the manifest, so it would take that other
-// session's worktrees rather than this directory's.
-func mismatchedManifest(dir, slug string) error {
-	return fmt.Errorf("session directory %q holds the manifest of %q, so nothing was removed", dir, slug)
 }
 
 func unknownOperation(op string) error {

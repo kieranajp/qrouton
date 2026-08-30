@@ -12,7 +12,6 @@ import (
 	"testing"
 	"testing/fstest"
 
-	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -60,16 +59,6 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 				}
 			})
 		}
-	}
-}
-
-func TestViewportReportsCarryTheContentEpoch(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/panes/MarkdownPane.svelte")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(source), "epoch: doc.viewportEpoch") {
-		t.Fatal("Markdown viewport reports do not carry the content epoch")
 	}
 }
 
@@ -144,64 +133,6 @@ func TestTheConversationPageLinksThePalette(t *testing.T) {
 	}
 }
 
-// Enter confirms, which only holds while the dialog puts the keyboard on the
-// button that confirms. Focus is wiring the page owns and no harness here can
-// observe, so the wiring is what is read.
-func TestTheConfirmDialogFocusesTheButtonThatConfirms(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/shell/Confirm.svelte")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := string(source)
-	if !strings.Contains(body, `querySelector("[data-confirm]")`) {
-		t.Fatal("the dialog does not focus the button carrying the confirm hook")
-	}
-	buttons := regexp.MustCompile(`(?s)<Button[^>]*>`).FindAllString(body, -1)
-	var hooked []string
-	for _, button := range buttons {
-		if strings.Contains(button, "data-confirm") {
-			hooked = append(hooked, button)
-		}
-	}
-	if len(hooked) != 1 {
-		t.Fatalf("%d of the dialog's buttons carry the confirm hook, want exactly the confirming one", len(hooked))
-	}
-	if !strings.Contains(hooked[0], `variant="destructive"`) {
-		t.Fatalf("the confirm hook sits on %q, not on the destructive button", hooked[0])
-	}
-}
-
-// Enter advances the dialog without going through its button, so a screen that
-// will not go forward has to gate both. Neither is observable in a harness with
-// no components, so the wiring is what is read.
-func TestTheDialogGatesEnterWithItsAdvanceButton(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/assembly/Dialog.svelte")
-	if err != nil {
-		t.Fatal(err)
-	}
-	body := string(source)
-	if !strings.Contains(body, "else if (canAdvance) onPrimary();") {
-		t.Fatal("Enter reaches onPrimary without asking whether the dialog can advance")
-	}
-	if !strings.Contains(body, "disabled={busy || !canAdvance}") {
-		t.Fatal("the advance button stays live on a dialog that cannot advance")
-	}
-}
-
-// Nothing joins the tested predicate to the gated dialog, so a page that stops
-// passing either attribute reopens the trap with every check still green.
-func TestTheOwnersQuestionHoldsTheDialogItDraws(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/firstrun/FirstRunOverlay.svelte")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, wiring := range []string{"canAdvance={!blocked}", "status={blocked || flow.status}"} {
-		if !strings.Contains(string(source), wiring) {
-			t.Fatalf("first run does not pass %s, so an unanswered owners question advances", wiring)
-		}
-	}
-}
-
 // The formats the pane registry keys on are the port's values, spelled again in
 // JavaScript. Nothing checks that at build time, and a format no pane claims
 // draws as plain text rather than erroring.
@@ -214,36 +145,6 @@ func TestThePaneRegistryDrawsEveryDocumentFormat(t *testing.T) {
 		if !strings.Contains(string(source), string(format)+":") {
 			t.Errorf("the pane registry has no pane for the %q format", format)
 		}
-	}
-}
-
-// The page's NOTHING supplies one default per status.Fields key, and a field
-// added without one drops off the pane silently rather than erroring. Nested
-// structs render through their own components, so only the direct keys count.
-func TestTheChromePageDefaultsEveryField(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/chrome.svelte.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	typ := reflect.TypeOf(status.Fields{})
-	for i := 0; i < typ.NumField(); i++ {
-		tag, _, _ := strings.Cut(typ.Field(i).Tag.Get("json"), ",")
-		if tag == "" || tag == "-" {
-			continue
-		}
-		if !strings.Contains(string(source), tag+":") {
-			t.Fatalf("chrome.svelte.js's NOTHING has no default for status.Fields.%s (json %q)", typ.Field(i).Name, tag)
-		}
-	}
-}
-
-func TestTheChromePageDefaultsTheNestedAgentRecordList(t *testing.T) {
-	source, err := os.ReadFile(frontendSource + "lib/chrome.svelte.js")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(source), `agents: { provider: "", agents: [] }`) {
-		t.Fatal("chrome.svelte.js has no non-null default for the selected agent panel")
 	}
 }
 

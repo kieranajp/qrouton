@@ -1,9 +1,5 @@
 package github
 
-// GitHub API endpoints, query parameters, and the shell-outs qrouton uses to
-// find a token. Endpoint paths are built from these rather than spelled out at
-// each call, so githubAPIBase stays the only thing a test has to swap.
-
 const (
 	// apiBaseDefault is overridable in tests via githubAPIBase.
 	apiBaseDefault = "https://api.github.com"
@@ -31,7 +27,7 @@ const (
 	ownerTypeUser         = "User"
 
 	// cacheSchemaVersion invalidates a cache whose shape predates this build.
-	cacheSchemaVersion = 2
+	cacheSchemaVersion = 3
 
 	// Token discovery: gh owns keychain and hosts.yml resolution, so ask it
 	// first and fall back to the environment.
