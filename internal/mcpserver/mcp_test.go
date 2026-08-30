@@ -1005,8 +1005,18 @@ func TestConcurrentOpensOfOneNameKeepTheLaterClaim(t *testing.T) {
 	}()
 	<-entered
 
-	if _, err := m.run(ctx, runCommandInput{Command: "second", Name: "dev"}); err != nil {
-		t.Fatal(err)
+	second := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "second", Name: "dev"})
+		second <- err
+	}()
+	select {
+	case err := <-second:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a second open on the same name blocked behind the first")
 	}
 	winner, err := m.liveWindow(ctx, "dev")
 	if err != nil {
