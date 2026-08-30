@@ -20,16 +20,7 @@ type Chrome struct {
 }
 
 func newChrome(emit emitter) *Chrome {
-	return &Chrome{
-		fields: status.Fields{
-			Sessions:            []status.SessionRow{},
-			Documents:           []status.Document{},
-			RepositoryDocuments: []status.RepositoryDocuments{},
-			Repos:               []status.RepoStat{},
-			Agents:              status.AgentPanel{Agents: []status.AgentRecord{}},
-		},
-		emit: emit,
-	}
+	return &Chrome{fields: status.EmptyFields(), emit: emit}
 }
 
 // Snapshot returns the most recently published chrome state.

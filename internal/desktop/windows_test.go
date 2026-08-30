@@ -76,7 +76,7 @@ func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
 		t.Fatalf("selection emitted %d times, want one more", emissions)
 	}
 
-	w.processExited(id, 7)
+	w.terminals.exited(id, 7)
 	if emissions != 3 || len(latest.Tabs) != 1 || latest.Tabs[0].Status != tabStatusFailed {
 		t.Fatalf("failed exit emitted %d times with payload %+v", emissions, latest)
 	}
@@ -833,7 +833,7 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	w.rescan()
+	w.documents.rescan()
 	mu.Lock()
 	untouched := len(pushed)
 	mu.Unlock()
@@ -856,7 +856,7 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 		}
 	}
 
-	w.rescan()
+	w.documents.rescan()
 	mu.Lock()
 	sent, ok := pushed[id]
 	count := len(pushed)
@@ -886,7 +886,7 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 	if err := os.Chtimes(path, grown, grown); err != nil {
 		t.Fatal(err)
 	}
-	w.rescan()
+	w.documents.rescan()
 	mu.Lock()
 	still := pushed[id].Text
 	mu.Unlock()
@@ -908,4 +908,51 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 	if window.viewportEpoch != epoch+1 || window.viewportSeq != 0 {
 		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", window.viewportEpoch, window.viewportSeq, epoch+1)
 	}
+}
+
+// The poller rewrites an open document's text under the registry lock, so
+// everything that serves that text has to read it under the same lock.
+func TestRescanCannotRaceTheReadsOfTheTextItRewrites(t *testing.T) {
+	root := t.TempDir()
+	w := newWindows(func(string, any) {}, testRegistry(t, root))
+	t.Cleanup(w.stopAll)
+	const source = "P001.md"
+	path := filepath.Join(root, source)
+	if err := os.WriteFile(path, []byte("# one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
+		Label: "P001", Source: source, Content: "# one\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := range 40 {
+			if err := os.WriteFile(path, []byte(strings.Repeat("# plan\n", i+1)), 0o644); err != nil {
+				t.Error(err)
+				return
+			}
+			w.documents.rescan()
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for range 40 {
+			if _, err := w.readWindow(id, true); err != nil {
+				t.Error(err)
+				return
+			}
+			if _, err := w.RenderDiagrams(id); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	wg.Wait()
 }
