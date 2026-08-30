@@ -189,20 +189,37 @@ func (a *agentActivity) attention(generation uint64, state string) bool {
 	return true
 }
 
+// output and input are the conversation PTY's own timing, which the workbench
+// reads whether or not a runner has announced a generation to attribute it to.
 func (a *agentActivity) output() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.running {
-		a.spoke = a.now()
-	}
+	a.spoke = a.now()
 }
 
 func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if a.running {
-		a.waiting = false
-		a.spoke = a.now()
+	a.waiting = false
+	a.spoke = a.now()
+}
+
+// state is what the rail says about this session: waiting comes from the
+// runner's own hook, working and idle are the PTY's timing, never its contents.
+func (a *agentActivity) state() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.stateLocked(a.now())
+}
+
+func (a *agentActivity) stateLocked(now time.Time) string {
+	switch {
+	case a.waiting:
+		return status.ActivityWaiting
+	case !a.spoke.IsZero() && now.Sub(a.spoke) < activityQuiet:
+		return status.ActivityWorking
+	default:
+		return status.ActivityIdle
 	}
 }
 
@@ -244,6 +261,7 @@ func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 	}
 	a.running = false
 	a.waiting = false
+	a.spoke = time.Time{}
 	return true
 }
 
@@ -260,14 +278,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		}
 		copy := *record
 		if copy.Root && copy.State == agentStateActive {
-			switch {
-			case a.waiting:
-				copy.State = agentStateWaiting
-			case !a.spoke.IsZero() && now.Sub(a.spoke) < activityQuiet:
-				copy.State = agentStateWorking
-			default:
-				copy.State = agentStateIdle
-			}
+			copy.State = agentStateFor(a.stateLocked(now))
 		}
 		records = append(records, copy)
 	}
@@ -342,6 +353,17 @@ func (a *agentActivity) pruneLocked(now time.Time) {
 		if !record.FinishedAt.IsZero() && !now.Before(record.FinishedAt.Add(a.retention)) {
 			delete(a.records, key)
 		}
+	}
+}
+
+func agentStateFor(activity string) string {
+	switch activity {
+	case status.ActivityWaiting:
+		return agentStateWaiting
+	case status.ActivityWorking:
+		return agentStateWorking
+	default:
+		return agentStateIdle
 	}
 }
 

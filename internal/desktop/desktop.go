@@ -154,7 +154,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return serveControl(socket, windows, state, controlHooks{
 				attention: func(value string, generation uint64) {
 					if state.agents.attention(generation, value) {
-						state.activity.hook(value)
 						reg.touch()
 					}
 				},
@@ -163,7 +162,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 						return
 					}
 					if state.agents.begin(req.Provider, req.Generation) {
-						state.activity.reset()
 						reg.touch()
 					}
 				},
@@ -202,7 +200,6 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	// only its own session, and a failed one keeps its terminal readable.
 	term.whenChildExits(func(state *sessionState, code int) {
 		if state.agents.exitWithProvider(state.provider, code) {
-			state.activity.reset()
 			reg.touch()
 		}
 		if code == 0 {

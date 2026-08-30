@@ -27,7 +27,6 @@ type sessionState struct {
 	// terminal addresses the conversation PTY. Onboarding execs the supervisor
 	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
 	terminal string
-	activity *activity
 	agents   *agentActivity
 	provider string
 	argv     []string
@@ -111,7 +110,6 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	// JSON marshalling corrupts it.
 	go process.pump(
 		func(b []byte) {
-			s.activity.wrote()
 			s.agents.output()
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
@@ -126,7 +124,6 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 }
 
 func (s *sessionState) write(data []byte) error {
-	s.activity.answered()
 	s.agents.input()
 	s.mu.Lock()
 	process := s.process
@@ -399,7 +396,6 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	}
 	state := &sessionState{
 		terminal: fmt.Sprintf(terminalIDFormat, s.seq),
-		activity: &activity{},
 		agents:   tracker,
 		argv:     argv,
 		env:      env,

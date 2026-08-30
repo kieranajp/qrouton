@@ -256,7 +256,12 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 		agent: boot.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			boot.served()
-			return serveControl(socket, windows, state, controlHooks{attention: func(value string, _ uint64) { state.activity.hook(value) }})
+			return serveControl(socket, windows, state, controlHooks{
+				attention: func(value string, generation uint64) { state.agents.attention(generation, value) },
+				generation: func(req workbench.RunnerGenerationRequest) {
+					state.agents.begin(req.Provider, req.Generation)
+				},
+			})
 		},
 		teardown: windows.stop,
 	}
@@ -902,6 +907,9 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 
 	dir := filepath.Join(root, "background")
 	handle := workbench.Handle{Socket: boot.socket(t, dir), SessionRoot: dir}
+	if err := handle.RunnerGeneration(context.Background(), agentProviderCodex, 1); err != nil {
+		t.Fatal(err)
+	}
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}

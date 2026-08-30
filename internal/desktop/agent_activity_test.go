@@ -406,3 +406,104 @@ func recordForRunID(t *testing.T, snapshot agentActivitySnapshot, id, runID stri
 	t.Fatalf("no record %q run %q in %+v", id, runID, snapshot.Records)
 	return agentRecord{}
 }
+
+func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a terminal that has never spoken = %q, want idle", got)
+	}
+
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("output before any generation = %q, want working", got)
+	}
+
+	tracker.begin(agentProviderClaude, 1)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a new run left stale state %q, want idle", got)
+	}
+
+	// An agent drawing a permission prompt is producing output, so waiting has
+	// to beat working rather than merely arrive after it.
+	tracker.attention(1, status.ActivityWaiting)
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWaiting {
+		t.Fatalf("hook says waiting but state = %q", got)
+	}
+
+	tracker.input()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("after typing = %q, want working", got)
+	}
+
+	tracker.attention(1, status.ActivityWorking)
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("a subagent starting = %q, want working", got)
+	}
+
+	clock.at = clock.at.Add(activityQuiet)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("after silence = %q, want idle", got)
+	}
+
+	tracker.output()
+	tracker.attention(1, status.ActivityWaiting)
+	tracker.exitWithProvider(agentProviderClaude, 0)
+	if got := tracker.state(); got != status.ActivityIdle {
+		t.Fatalf("a root exit left stale state %q, want idle", got)
+	}
+
+	tracker.output()
+	if got := tracker.state(); got != status.ActivityWorking {
+		t.Fatalf("a terminal still writing after its supervisor exited = %q, want working", got)
+	}
+}
+
+func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
+	windows, _ := testWindows(t)
+	clock := &activityClock{at: time.Now()}
+	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker.begin(agentProviderClaude, 1)
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
+		attention: func(value string, generation uint64) { tracker.attention(generation, value) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	handle := workbench.Handle{Socket: socket, SessionRoot: t.TempDir()}
+	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
+		t.Fatal(err)
+	}
+	if got := tracker.state(); got != status.ActivityWaiting {
+		t.Fatalf("state after the hook = %q, want waiting", got)
+	}
+}
+
+// A session's tracker outlives the session, so what the rail says about a
+// reopened one is the new run's activity and never the retired run's.
+func TestAReopenedSessionRejoinsTheRailIdle(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg.boot.teardown = func(*sessionState) {}
+	first := reg.add(filepath.Join(root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	first.agents.begin(agentProviderClaude, 1)
+	first.agents.output()
+	first.agents.exitWithProvider(agentProviderClaude, 0)
+	reg.retire(first)
+
+	second := reg.add(filepath.Join(root, "alpha"), []string{"/bin/cat"}, os.Environ())
+	if second.agents != first.agents {
+		t.Fatal("a reopened session was given a tracker without its retained runs")
+	}
+	if got := second.agents.state(); got != status.ActivityIdle {
+		t.Fatalf("a reopened session rejoins the rail as %q, want idle", got)
+	}
+}
