@@ -61,13 +61,6 @@ func agentAlreadyRunning(slug string, pid int) error {
 	return fmt.Errorf("session %q already has an agent running as pid %d", slug, pid)
 }
 
-// mismatchedManifest is a session directory holding another session's manifest.
-// A removal resolves its target from the manifest, so it would take that other
-// session's worktrees rather than this directory's.
-func mismatchedManifest(dir, slug string) error {
-	return fmt.Errorf("session directory %q holds the manifest of %q, so nothing was removed", dir, slug)
-}
-
 func unknownOperation(op string) error {
 	return fmt.Errorf("unknown workbench operation %q", op)
 }

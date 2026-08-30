@@ -128,6 +128,44 @@ func Delete(root string, m Manifest) error {
 	return nil
 }
 
+// Resumable is the directory slug names under the sessions root, and empty when
+// nothing there can be resumed: the manifest is written last, so a directory
+// without one is not a session — and a row naming one can outlive it.
+func Resumable(root, slug string) string {
+	if root == "" || slug == "" {
+		return ""
+	}
+	dir := filepath.Join(root, slug)
+	if _, err := os.Stat(filepath.Join(dir, manifestName)); err != nil {
+		return ""
+	}
+	return dir
+}
+
+// Uncommitted names the repositories a removal of the session in dir would take
+// changes from.
+func Uncommitted(root, dir string) ([]string, error) {
+	m, err := Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	return DirtyWorktrees(root, m)
+}
+
+// Remove deletes the session in dir. Delete resolves its target from the
+// manifest, so a directory holding another session's manifest is refused rather
+// than taking that session's worktrees.
+func Remove(root, dir string) error {
+	m, err := Load(dir)
+	if err != nil {
+		return err
+	}
+	if base := filepath.Base(dir); m.Slug != base {
+		return mismatchedManifest(base, m.Slug)
+	}
+	return Delete(root, m)
+}
+
 // RepoStat is how far one repository has moved since it was branched.
 // Uncommitted work is left out; the commit and diff figures answer the question.
 type RepoStat struct {

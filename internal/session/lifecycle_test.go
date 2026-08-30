@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -133,6 +134,91 @@ func TestDeleteContinuesWhenWorktreeMetadataIsBroken(t *testing.T) {
 	}
 	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Fatalf("session still exists after fallback delete: %v", err)
+	}
+}
+
+// The manifest lands last, so a directory without one is a session still being
+// assembled or one whose row has outlived it. Either way there is nothing to
+// resume.
+func TestResumableNamesOnlyADirectoryHoldingAManifest(t *testing.T) {
+	root := t.TempDir()
+	half := filepath.Join(root, "octopus")
+	if err := os.MkdirAll(half, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if got := Resumable(root, "octopus"); got != "" {
+		t.Fatalf("a directory with no manifest resumed as %q", got)
+	}
+	if err := WriteManifest(half, Manifest{Slug: "octopus", Mode: ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
+	if got := Resumable(root, "octopus"); got != half {
+		t.Fatalf("Resumable = %q, want %q", got, half)
+	}
+	for _, tc := range [][2]string{{"", "octopus"}, {root, ""}, {root, "never-existed"}} {
+		if got := Resumable(tc[0], tc[1]); got != "" {
+			t.Fatalf("Resumable(%q, %q) = %q, want nothing", tc[0], tc[1], got)
+		}
+	}
+}
+
+// Remove resolves its target from the manifest, so a directory holding another
+// session's manifest would take that session's worktrees.
+func TestRemoveRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
+	root := t.TempDir()
+	kraken := filepath.Join(root, "kraken")
+	stray := filepath.Join(root, "webhook")
+	for _, dir := range []string{kraken, stray} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, dir := range []string{kraken, stray} {
+		if err := WriteManifest(dir, Manifest{Slug: "kraken", Mode: ModeAssistant}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	err := Remove(root, stray)
+	if err == nil {
+		t.Fatal("a directory holding another session's manifest was removed anyway")
+	}
+	for _, name := range []string{"webhook", "kraken"} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("refusal %q names neither the directory asked for nor the one its manifest claims", err)
+		}
+	}
+	for _, dir := range []string{kraken, stray} {
+		if _, err := os.Stat(dir); err != nil {
+			t.Fatalf("%s was removed by the refused cleanup: %v", dir, err)
+		}
+	}
+
+	if err := Remove(root, kraken); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(kraken); !os.IsNotExist(err) {
+		t.Fatal("the session naming its own directory survived its removal")
+	}
+}
+
+// Uncommitted reads the session's own manifest, so a directory with none is a
+// refusal rather than a clean answer.
+func TestUncommittedRefusesADirectoryWithNoManifest(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "octopus")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Uncommitted(root, dir); err == nil {
+		t.Fatal("a directory with no manifest reported its repositories clean")
+	}
+	if err := WriteManifest(dir, Manifest{Slug: "octopus", Mode: ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
+	dirty, err := Uncommitted(root, dir)
+	if err != nil || len(dirty) != 0 {
+		t.Fatalf("a session holding no repositories = %v, %v", dirty, err)
 	}
 }
 

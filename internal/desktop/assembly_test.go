@@ -303,7 +303,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 
 	during := make(chan error, 1)
-	reg.boot.agent = func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
+	reg.boot.agent = func(req AgentRequest) (AgentCommand, error) {
 		offered := make(chan error, 1)
 		go func() {
 			outcome, err := a.offer("LIF-2842", "")
@@ -318,7 +318,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 		case <-time.After(2 * time.Second):
 			during <- errors.New("an offer could not proceed while a matching session booted")
 		}
-		return boot.command(sessionRoot, socket, runnerID, resume)
+		return boot.Agent(req)
 	}
 
 	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {

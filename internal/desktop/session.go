@@ -177,11 +177,8 @@ func (s *sessionState) stop() {
 
 // booting is what a session needs to come up and to be put on screen.
 type booting struct {
-	root func(slug string) string
-	// agent builds a session's supervisor command against the control socket it
-	// will be served on. runnerID is the agent the session was assembled with;
-	// empty means the workbench's own, and resolvedRunner names the actual choice.
-	agent func(sessionRoot, socket, runnerID string, resume bool) (argv, env []string, resolvedRunner string, err error)
+	root  func(slug string) string
+	agent func(AgentRequest) (AgentCommand, error)
 	serve func(state *sessionState, socket string) (io.Closer, error)
 	// shown puts a session on screen: its title, its shell, its record.
 	shown       func(state *sessionState)
@@ -328,12 +325,14 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*sessionState, err
 	if err != nil {
 		return nil, err
 	}
-	argv, env, resolvedRunner, err := s.boot.agent(root, socket, runnerID, resume)
+	command, err := s.boot.agent(AgentRequest{
+		SessionRoot: root, Socket: socket, RunnerID: runnerID, Resume: resume,
+	})
 	if err != nil {
 		return nil, err
 	}
-	state := s.add(root, argv, withTerminalEnv(env))
-	state.provider = resolvedRunner
+	state := s.add(root, command.Argv, withTerminalEnv(command.Env))
+	state.provider = command.RunnerID
 	control, err := s.boot.serve(state, socket)
 	if err != nil {
 		s.forget(state)

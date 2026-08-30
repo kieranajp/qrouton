@@ -39,3 +39,8 @@ func invalidRole(role RepoRole, org, name string) error {
 func refuseUpgrade(err error, org, name string) error {
 	return fmt.Errorf("%s/%s: %w", org, name, err)
 }
+
+// mismatchedManifest is a session directory holding another session's manifest.
+func mismatchedManifest(dir, slug string) error {
+	return fmt.Errorf("session directory %q holds the manifest of %q, so nothing was removed", dir, slug)
+}

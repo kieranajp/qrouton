@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -87,9 +88,14 @@ func (f *fakeRenderer) Quit() {
 }
 
 // stubBoot stands in for what a session needs to come up, counting the
-// supervisor commands and the listeners asked for and keeping each address.
+// supervisor commands and the listeners asked for and keeping each address. The
+// window commands are unset until a test sets one, which is the workbench that
+// cannot do that thing.
 type stubBoot struct {
-	argv []string
+	argv     []string
+	shell    func(sessionRoot string) []string
+	reveal   func(sessionRoot string) []string
+	document func(sessionRoot, name string) (workbench.WindowOptions, error)
 
 	mu      sync.Mutex
 	sockets map[string]string
@@ -104,19 +110,44 @@ func newStubBoot(argv ...string) *stubBoot {
 		runners: map[string]string{}}
 }
 
-func (b *stubBoot) command(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
+func (b *stubBoot) Agent(req AgentRequest) (AgentCommand, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.agents++
-	b.sockets[sessionRoot] = socket
-	b.resumes[sessionRoot] = resume
-	b.runners[sessionRoot] = runnerID
-	resolved := runnerID
+	b.sockets[req.SessionRoot] = req.Socket
+	b.resumes[req.SessionRoot] = req.Resume
+	b.runners[req.SessionRoot] = req.RunnerID
+	resolved := req.RunnerID
 	if resolved == "" {
 		resolved = "codex"
 	}
-	return b.argv, os.Environ(), resolved, nil
+	return AgentCommand{Argv: b.argv, Env: os.Environ(), RunnerID: resolved}, nil
 }
+
+func (b *stubBoot) Shell(sessionRoot string) []string {
+	if b.shell == nil {
+		return nil
+	}
+	return b.shell(sessionRoot)
+}
+
+func (b *stubBoot) Reveal(sessionRoot string) []string {
+	if b.reveal == nil {
+		return nil
+	}
+	return b.reveal(sessionRoot)
+}
+
+func (b *stubBoot) Document(sessionRoot, name string) (workbench.WindowOptions, error) {
+	if b.document == nil {
+		return workbench.WindowOptions{}, ErrNoEditorCommand
+	}
+	return b.document(sessionRoot, name)
+}
+
+func (b *stubBoot) Runners() ([]assembly.Runner, error) { return nil, nil }
+
+func (b *stubBoot) Signal(string) {}
 
 func (b *stubBoot) served() {
 	b.mu.Lock()
@@ -168,7 +199,7 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 		Root:        root,
 		Socket:      socket,
 		Env:         os.Environ(),
-		Agent:       boot.command,
+		Launcher:    boot,
 	}, boot
 }
 
@@ -221,17 +252,8 @@ func testSessions(t *testing.T, root string, boot *stubBoot) (*Sessions, *Window
 	t.Cleanup(reg.stopAll)
 	t.Cleanup(windows.stopAll)
 	reg.boot = booting{
-		root: func(slug string) string {
-			if root == "" || slug == "" {
-				return ""
-			}
-			dir := filepath.Join(root, slug)
-			if _, err := os.Stat(sessionpaths.Manifest(dir)); err != nil {
-				return ""
-			}
-			return dir
-		},
-		agent: boot.command,
+		root:  func(slug string) string { return session.Resumable(root, slug) },
+		agent: boot.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			boot.served()
 			return serveControl(socket, windows, state, controlHooks{attention: func(value string, _ uint64) { state.activity.hook(value) }})
@@ -484,8 +506,8 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 // asked for. Asking gets you another; adoption running twice does not.
 func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts, boot := testOptions(t)
+	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
 	startWorkbench(t, r, term, windows, opts)
@@ -542,9 +564,9 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 // failure the user sees.
 func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	opts.Document = func(root, name string) (workbench.WindowOptions, error) {
+	opts, boot := testOptions(t)
+	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	boot.document = func(root, name string) (workbench.WindowOptions, error) {
 		return workbench.WindowOptions{
 			Kind: workbench.KindDocument, Label: "◆ " + filepath.Base(name),
 			Source: name, Content: "# " + name, Format: workbench.FormatMarkdown,
@@ -688,8 +710,8 @@ func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
 // agree with the tab strip.
 func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	opts.Shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	opts, boot := testOptions(t)
+	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 
 	startWorkbench(t, r, term, windows, opts)
@@ -719,14 +741,14 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 }
 
 func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
-	agent := newStubBoot("/bin/cat").command
+	launcher := newStubBoot("/bin/cat")
 	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock"}); err != ErrNoAgentCommand {
 		t.Fatalf("Run with no way to build an agent command returned %v, want ErrNoAgentCommand", err)
 	}
-	if err := Run(Options{SessionRoot: t.TempDir(), Agent: agent}); err != ErrNoControlSocket {
+	if err := Run(Options{SessionRoot: t.TempDir(), Launcher: launcher}); err != ErrNoControlSocket {
 		t.Fatalf("Run with no socket returned %v, want ErrNoControlSocket", err)
 	}
-	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock", Agent: agent}); err != ErrNoConfig {
+	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock", Launcher: launcher}); err != ErrNoConfig {
 		t.Fatalf("Run with nothing to assemble against returned %v, want ErrNoConfig", err)
 	}
 }
@@ -1139,10 +1161,10 @@ func TestConcurrentShowsOfOneSessionBootItOnce(t *testing.T) {
 	command := reg.boot.agent
 	entered := make(chan struct{}, 2)
 	release := make(chan struct{})
-	reg.boot.agent = func(sessionRoot, socket, runnerID string, resume bool) ([]string, []string, string, error) {
+	reg.boot.agent = func(req AgentRequest) (AgentCommand, error) {
 		entered <- struct{}{}
 		<-release
-		return command(sessionRoot, socket, runnerID, resume)
+		return command(req)
 	}
 
 	shows := make(chan error, 2)
@@ -1460,8 +1482,8 @@ func TestBootingASessionRacesTeardownSafely(t *testing.T) {
 		var reserved string
 		reg.boot = booting{
 			root: func(slug string) string { return filepath.Join(root, slug) },
-			agent: func(string, string, string, bool) ([]string, []string, string, error) {
-				return []string{"/bin/cat"}, os.Environ(), "codex", nil
+			agent: func(AgentRequest) (AgentCommand, error) {
+				return AgentCommand{Argv: []string{"/bin/cat"}, Env: os.Environ(), RunnerID: "codex"}, nil
 			},
 			serve: func(state *sessionState, socket string) (io.Closer, error) {
 				reserved = socket
@@ -1926,9 +1948,9 @@ func TestRevealNamesTheRowsOwnDirectoryAndDisturbsNothing(t *testing.T) {
 // silently does nothing, which is what waiting on the command buys.
 func TestTheWorkbenchRunsTheRevealCommandAndRefusesWithoutOne(t *testing.T) {
 	r := newFakeRenderer()
-	opts, _ := testOptions(t)
+	opts, boot := testOptions(t)
 	marker := filepath.Join(t.TempDir(), "revealed")
-	opts.Reveal = func(sessionRoot string) []string {
+	boot.reveal = func(sessionRoot string) []string {
 		if filepath.Base(sessionRoot) == "kraken" {
 			return []string{"/bin/sh", "-c", "exit 3"}
 		}
@@ -1949,6 +1971,29 @@ func TestTheWorkbenchRunsTheRevealCommandAndRefusesWithoutOne(t *testing.T) {
 	}
 	if err := reg.Reveal(filepath.Base(kraken)); err == nil {
 		t.Fatal("a reveal command that failed came back as a success")
+	}
+}
+
+// A launcher that builds no command for a session is a workbench that cannot do
+// that thing: the page gets the sentinel rather than an empty argv reaching exec.
+func TestAWorkbenchWithNoShellCommandRefuses(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	boot.shell = func(string) []string { return nil }
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+
+	if _, err := windows.OpenShell(); !errors.Is(err, ErrNoShellCommand) {
+		t.Fatalf("a shell with nothing to run = %v, want ErrNoShellCommand", err)
+	}
+	if tabs := windows.surfaces(owner).Tabs; len(tabs) != 0 {
+		t.Fatalf("the refused shell opened %d tabs", len(tabs))
+	}
+	if _, err := windows.OpenDocument("thoughts/shared/plans/P1.md"); !errors.Is(err, ErrNoEditorCommand) {
+		t.Fatalf("a document with no editor = %v, want ErrNoEditorCommand", err)
 	}
 }
 
