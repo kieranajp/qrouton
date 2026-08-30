@@ -28,7 +28,6 @@ const (
 
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
-	agentEventLogName  = "agent-events.jsonl"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	initialPromptName  = "initial-prompt"
@@ -71,11 +70,6 @@ func NotifyScript(root string) string {
 // read here.
 func WorkbenchLog(root string) string {
 	return filepath.Join(Dir(root), workbenchLogName)
-}
-
-// AgentEventLog records runner subagent lifecycle hook events.
-func AgentEventLog(root string) string {
-	return filepath.Join(Dir(root), agentEventLogName)
 }
 
 // Handoff is the assistant's escalation brief. When it exists, the prompt

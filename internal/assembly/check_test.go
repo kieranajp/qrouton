@@ -39,13 +39,6 @@ func TestCheckRequiresAnEditingRepository(t *testing.T) {
 	}
 }
 
-// A refresh can drop a repository between picking it and advancing. Resolving
-// the selection against the live list is what leaves the draft short of one.
-func TestCheckRejectsADraftWhoseOnlyEditingRepoHasGone(t *testing.T) {
-	d := Draft{Name: "Cleanup", Prefix: "feat"}
-	problemOn(t, Check(d), FieldRepos)
-}
-
 // The rows a picker opens holding are the session's, not the visit's: an
 // escalation over a session already being worked in adds reference repositories
 // alone, or confirms adding nothing at all.

@@ -65,8 +65,7 @@ func (r *Repositories) Cached() []github.Repo {
 
 // Select resolves picked rows against the list the step was drawn from, in the
 // order they were picked. A repository a refresh has dropped simply is not there
-// any more, which is what leaves a draft short of an editing repo for Check to
-// refuse.
+// any more.
 func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 	byID := make(map[string]github.Repo)
 	for _, repo := range r.Cached() {

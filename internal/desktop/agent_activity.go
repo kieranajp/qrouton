@@ -223,10 +223,6 @@ func (a *agentActivity) stateLocked(now time.Time) string {
 	}
 }
 
-func (a *agentActivity) exit(code int) bool {
-	return a.exitWithProvider("", code)
-}
-
 func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -306,18 +302,6 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		Provider: a.provider, Running: a.running, Attention: a.running && a.waiting,
 		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
 	}
-}
-
-func (a *agentActivity) activeCount() int {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	count := 0
-	for _, record := range a.records {
-		if record.State == agentStateActive {
-			count++
-		}
-	}
-	return count
 }
 
 func (a *agentActivity) earliestExpiry() time.Time {

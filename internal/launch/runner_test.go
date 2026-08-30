@@ -71,14 +71,14 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["codex"], false, modeRPI, "")
+	argv := argvFor(t, byID["codex"], false, modeRPI, "")
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
 	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := runnerArgv(byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
+	if argv := argvFor(t, byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
 		!strings.Contains(argv[len(argv)-1], "Research, Plan, or Implement") {
 		t.Fatalf("OpenCode should receive the opening through --prompt: %#v", argv)
 	}
@@ -90,7 +90,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 		byID[r.ID] = r
 	}
 
-	argv := runnerArgv(byID["claude"], false, modeAssistant, "")
+	argv := argvFor(t, byID["claude"], false, modeAssistant, "")
 	msg := argv[len(argv)-1]
 	if strings.Contains(msg, "Present the work as Research, Plan, or Implement") {
 		t.Fatalf("assistant opening should not mandate the RPI presentation: %q", msg)
@@ -102,7 +102,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 
 func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, false, modeAssistant, "  Fix the login regression.  ")
+		argv := argvFor(t, runner, false, modeAssistant, "  Fix the login regression.  ")
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
 			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {
@@ -118,7 +118,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"opencode": {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := runnerArgv(runner, true, modeRPI, "must not be repeated")
+		argv := argvFor(t, runner, true, modeRPI, "must not be repeated")
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
@@ -151,7 +151,7 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	joined := strings.Join(argv, " ")
-	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event", "--session-root"} {
+	for _, want := range []string{"--settings", "SubagentStart", "SubagentStop", "agent-event"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Claude launch missing %q: %v", want, argv)
 		}
@@ -189,7 +189,7 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 		t.Fatalf("settings not parseable: %v\n%s", err, raw)
 	}
 	callback := settings.Hooks["SubagentStart"][0].Hooks[0].Command
-	want := []string{bin, "agent-event", "--session-root", dir, "--workbench-json", handle.Marshal(), "--generation", "7", "--provider", "claude"}
+	want := []string{bin, "agent-event", "--workbench-json", handle.Marshal(), "--generation", "7", "--provider", "claude"}
 	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
 		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
@@ -226,11 +226,10 @@ func TestRunnerLaunchInjectsCodexAgentHooks(t *testing.T) {
 		}
 	}
 	for key, value := range map[string]string{
-		agentevent.QroutonBinEnvVar:  "/tmp/qrouton",
-		agentevent.SessionRootEnvVar: "/tmp/session",
-		agentevent.WorkbenchEnvVar:   handle.Marshal(),
-		agentevent.GenerationEnvVar:  "7",
-		agentevent.ProviderEnvVar:    runnerIDCodex,
+		agentevent.QroutonBinEnvVar: "/tmp/qrouton",
+		agentevent.WorkbenchEnvVar:  handle.Marshal(),
+		agentevent.GenerationEnvVar: "7",
+		agentevent.ProviderEnvVar:   runnerIDCodex,
 	} {
 		if !slices.Contains(env, key+"="+value) {
 			t.Errorf("Codex hook environment missing %s=%q", key, value)
@@ -429,14 +428,6 @@ func TestAnUnregisteredRunnerIsRefusedRatherThanLaunchedBare(t *testing.T) {
 	}
 }
 
-// The same runner, unregistered, must not silently get a bare argv either.
-func TestAnUnregisteredRunnerArgvIsJustItsCommand(t *testing.T) {
-	r := Runner{ID: "handrolled", Command: []string{"echo", "--flag"}}
-	if got := runnerArgv(r, false, modeRPI, ""); !reflect.DeepEqual(got, r.Command) {
-		t.Fatalf("argv = %v, want the command untouched", got)
-	}
-}
-
 // codexArgv is what the launch path hands Codex, with CODEX_HOME pointed at a
 // config qrouton controls so the test reads its own depth rather than the
 // developer's.
@@ -506,4 +497,14 @@ func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
 			t.Errorf("%s was handed %q", id, setting)
 		}
 	}
+}
+
+// argvFor is runnerArgv with the spec the launch path resolves for it.
+func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []string {
+	t.Helper()
+	spec, ok := specFor(r.ID)
+	if !ok {
+		t.Fatalf("no spec for runner %q", r.ID)
+	}
+	return runnerArgv(spec, r, resume, mode, initialPrompt)
 }

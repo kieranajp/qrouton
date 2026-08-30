@@ -74,7 +74,6 @@ const (
 	quietFlag    = "-q"
 	shortFlag    = "--short"
 	pruneFlag    = "--prune"
-	tagsFlag     = "--tags"
 	porcelainArg = "--porcelain"
 	statusCmd    = "status"
 
@@ -134,10 +133,7 @@ const repoStatTimeout = 5 * time.Second
 
 // Session slugs use a short entropy suffix to avoid collisions without making
 // paths and branches cumbersome.
-const (
-	scratchFallbackName = "scratch"
-	sessionEntropyBytes = 2 // 4 hex characters
-)
+const sessionEntropyBytes = 2 // 4 hex characters
 
 // The durable-artifact directories every session starts with, under
 // thoughts/shared — a symlink into <root>/thoughts/<slug>/shared, so documents

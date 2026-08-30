@@ -19,10 +19,6 @@ const (
 
 	notifyWindowName = "notify"
 
-	// escalateWindowName is the reserved registry key for the picker; a second
-	// escalate replaces a stale one.
-	escalateWindowName = "escalate"
-
 	// readWindowLimit caps how much output read_window returns to the agent. The
 	// tail is kept, because that is where fresh output lands.
 	readWindowLimit = 20000
@@ -31,23 +27,13 @@ const (
 	shellLoginFlag = "-lc"
 
 	currentDir = "."
-
-	// The picker subcommand and flags escalate opens, resolved against the
-	// running qrouton binary rather than a bare "qrouton" on PATH.
-	pickSubcommand = "pick"
-	sessionRootArg = "--session-root"
-	nameArg        = "--name"
-	prefixArg      = "--prefix"
-	escalateArg    = "--escalate"
 )
 
 // Window titles, as they appear in the title bar.
 const (
-	editorWindowLabel   = "Editor"
-	commandWindowLabel  = "▶ "
-	diffWindowLabel     = "◆ "
-	notifyWindowLabel   = "🔔 qrouton"
-	escalateWindowLabel = "escalate"
+	commandWindowLabel = "▶ "
+	diffWindowLabel    = "◆ "
+	notifyWindowLabel  = "🔔 qrouton"
 )
 
 // Messages returned to the agent.

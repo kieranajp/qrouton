@@ -37,7 +37,6 @@ const (
 	generationFlag    = "--generation"
 	providerFlag      = "--provider"
 	resumeFlag        = "--resume"
-	socketFlag        = "--socket"
 
 	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
 	// loop rather than assemble a session. Its literal is duplicated in main,

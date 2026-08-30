@@ -406,12 +406,6 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	return state
 }
 
-func (s *Sessions) agentActivity(slug string) *agentActivity {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.agents[slug]
-}
-
 func (s *Sessions) agentActivitySnapshots() map[string]agentActivitySnapshot {
 	s.mu.Lock()
 	trackers := make(map[string]*agentActivity, len(s.agents))

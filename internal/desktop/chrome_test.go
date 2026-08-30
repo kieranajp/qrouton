@@ -106,7 +106,7 @@ func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	tracker := newAgentActivity(clock.now, time.Minute)
 	tracker.begin(agentProviderClaude, 1)
-	tracker.exit(0)
+	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
 	tracker.begin(agentProviderCodex, 2)
 	panel := agentPanel(tracker.snapshot())
@@ -158,7 +158,7 @@ func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
 	state := reg.add(dir, []string{"/bin/cat"}, os.Environ())
 	reg.reveal(state)
 	state.agents.begin(agentProviderClaude, 1)
-	state.agents.exit(0)
+	state.agents.exitWithProvider("", 0)
 	select {
 	case <-reg.touched:
 	default:

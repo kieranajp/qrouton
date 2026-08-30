@@ -56,18 +56,6 @@ func NewEntropy() string {
 	return hex.EncodeToString(b)
 }
 
-// ScratchName names a zero-repo scratch session after the directory qrouton
-// was invoked from, plus entropy to dodge collisions: running from
-// ~/Work/lifesum yields "lifesum-4f3a". A basename that slugifies to nothing
-// (e.g. "/") falls back to "scratch-<hex>".
-func ScratchName(cwd string) string {
-	base := Slugify(filepath.Base(cwd))
-	if base == "" {
-		base = scratchFallbackName
-	}
-	return SessionSlug(base, NewEntropy())
-}
-
 // CreateRequest is the work a session is being assembled for. Only Name is
 // required: a scratch session has no repositories, no ticket and no prefix.
 type CreateRequest struct {
@@ -271,43 +259,6 @@ func MergeRepos(m Manifest, repos []ManifestRepo) Manifest {
 // hasRepo reports whether the session already holds this repository.
 func hasRepo(repos []ManifestRepo, org, name string) bool {
 	return indexOfRepo(repos, org, name) >= 0
-}
-
-// EnsureWorktrees re-materialises any pruned worktrees on resume (fresh fetch
-// either way). progress reports the fetch — and, if a mirror has been deleted,
-// a full re-clone — so a slow resume is not silent.
-func EnsureWorktrees(cfg *config.Config, m Manifest, progress ProgressFunc) error {
-	dir := filepath.Join(cfg.Root, m.Slug)
-	for _, r := range m.Repos {
-		if r.SSHURL == "" {
-			return fmt.Errorf("%s: %w: %s/%s", manifestName, ErrNoCloneURL, r.Org, r.Name)
-		}
-		repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
-		rep := reporter{fn: progress, repo: &repo, role: r.Role}
-		if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
-			return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)
-		}); err != nil {
-			return err
-		}
-		wt := filepath.Join(dir, r.WorktreePath)
-		if _, err := os.Stat(wt); err == nil {
-			continue
-		}
-		mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-		var err error
-		if r.Role == RepoRoleReference {
-			if r.Revision == "" {
-				return fmt.Errorf("%w: %s/%s", ErrNoPinnedRevision, r.Org, r.Name)
-			}
-			err = addDetachedWorktree(mirror, wt, r.Revision)
-		} else {
-			err = addWorktree(mirror, wt, r.Branch, remoteRefPrefix+r.DefaultBranch)
-		}
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func resolveRevision(mirror, ref string) (string, error) {

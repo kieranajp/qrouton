@@ -76,8 +76,7 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 }
 
 // A base branch that moved on since the session was cut is not the session's
-// work: the diff is measured from the merge base, and a fetch on resume is what
-// makes that distinction observable.
+// work: the diff is measured from the merge base.
 func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	requireGit(t)
 	root := sessionsRoot(t)
@@ -102,12 +101,12 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := EnsureWorktrees(cfg, m, nil); err != nil {
+	if err := ensureMirror(root, "org", "svc", origin, nil); err != nil {
 		t.Fatal(err)
 	}
-	// Without the resume fetch the base never moves and the rest proves nothing.
+	// Without the fetch the base never moves and the rest proves nothing.
 	if base, _ := resolveRevision(worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
-		t.Fatal("the fetch on resume left the base branch where it was")
+		t.Fatal("the fetch left the base branch where it was")
 	}
 	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleEditing, Commits: 1, Insertions: 2, Measured: true}
 	if stats := RepoStats(t.Context(), root, m); len(stats) != 1 || stats[0] != want {

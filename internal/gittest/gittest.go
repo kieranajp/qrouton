@@ -39,9 +39,8 @@ func run(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
-// Output is one git command's trimmed stdout, for the tests that read a ref
-// rather than assert on one.
-func Output(t *testing.T, dir string, args ...string) string {
+// output is one git command's trimmed stdout.
+func output(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := run(dir, args...)
 	if err != nil {
@@ -127,12 +126,5 @@ func Worktree(t *testing.T, path string, opts ...Option) string {
 // Head is dir's current commit, in full.
 func Head(t *testing.T, dir string) string {
 	t.Helper()
-	return Output(t, dir, "rev-parse", "HEAD")
-}
-
-// Commit stages everything in dir and commits it.
-func Commit(t *testing.T, dir, message string) {
-	t.Helper()
-	Run(t, dir, "add", ".")
-	Run(t, dir, "commit", "-m", message)
+	return output(t, dir, "rev-parse", "HEAD")
 }

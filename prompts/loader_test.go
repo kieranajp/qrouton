@@ -4,12 +4,35 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"testing/fstest"
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 )
+
+// embeddedPromptIDs is every prompt the binary carries, in the order List sorts
+// them. Naming them is what makes an addition or a loss legible in the failure.
+var embeddedPromptIDs = []string{
+	"agents/code-reviewer",
+	"agents/codebase-researcher",
+	"agents/external-researcher",
+	"agents/pattern-finder",
+	"agents/qrouton-implementation-lead",
+	"agents/qrouton-planning-lead",
+	"agents/qrouton-research-lead",
+	"agents/qrouton-researcher",
+	"agents/test-verifier",
+	"agents/thoughts-researcher",
+	"assistant",
+	"orchestrator",
+	"skills/qrspi-implement",
+	"skills/qrspi-plan",
+	"skills/qrspi-questions",
+	"skills/qrspi-research",
+	"skills/qrspi-spec",
+}
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	loader := NewEmbeddedLoader()
@@ -31,8 +54,12 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(all) != 17 {
-		t.Fatalf("embedded prompt count = %d, want 17", len(all))
+	ids := make([]string, len(all))
+	for i, p := range all {
+		ids[i] = string(p.ID)
+	}
+	if !slices.Equal(ids, embeddedPromptIDs) {
+		t.Fatalf("embedded prompts = %#v, want %#v", ids, embeddedPromptIDs)
 	}
 }
 

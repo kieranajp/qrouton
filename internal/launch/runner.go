@@ -199,7 +199,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(r, resume, sessionMode(dir), initialPrompt), injectContext{
+	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), initialPrompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
@@ -217,13 +217,13 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	}
 	argv = append(argv, mcp.Args...)
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
-		" " + sessionRootFlag + " " + ShellQuote(c.dir) +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
 	// Chime only when the agent asks for attention (not on every turn), so the user
 	// can step away; notify.sh is stamped into .qrouton by writeSupport.
 	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))
+	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
 		claudeSubagentStartHook: commandHook(hookCommand),
 		claudeSubagentStopHook:  commandHook(hookCommand),
@@ -257,14 +257,13 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 }
 
 func quotedConfigString(value string) string {
-	quoted, _ := json.Marshal(value)
+	quoted, _ := json.Marshal(value) // marshalling a string cannot fail
 	return string(quoted)
 }
 
 func agentEventEnv(c injectContext, provider string) []string {
 	env := os.Environ()
 	env = workbench.WithEnv(env, agentevent.QroutonBinEnvVar, c.qroutonBin)
-	env = workbench.WithEnv(env, agentevent.SessionRootEnvVar, c.dir)
 	env = workbench.WithEnv(env, agentevent.WorkbenchEnvVar, c.handle.Marshal())
 	env = workbench.WithEnv(env, agentevent.GenerationEnvVar, fmt.Sprint(c.generation))
 	env = workbench.WithEnv(env, agentevent.ProviderEnvVar, provider)
@@ -305,23 +304,16 @@ func RunnerMCPWiring(id, bin string, args []string) (MCPWiring, error) {
 }
 
 func claudeMCP(bin string, args []string) (MCPWiring, error) {
-	config, err := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
+	// Strings and maps of them: marshalling cannot fail.
+	config, _ := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
 		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}}})
-	if err != nil {
-		return MCPWiring{}, err
-	}
 	return MCPWiring{Args: []string{claudeMCPConfigFlag, string(config)}}, nil
 }
 
 func codexMCP(bin string, args []string) (MCPWiring, error) {
-	command, err := json.Marshal(bin)
-	if err != nil {
-		return MCPWiring{}, err
-	}
-	encoded, err := json.Marshal(args)
-	if err != nil {
-		return MCPWiring{}, err
-	}
+	// A string and a slice of them: marshalling cannot fail.
+	command, _ := json.Marshal(bin)
+	encoded, _ := json.Marshal(args)
 	return MCPWiring{Args: []string{
 		codex.ConfigFlag, codexMCPCommandKey + string(command),
 		codex.ConfigFlag, codexMCPArgsKey + string(encoded)}}, nil
@@ -378,12 +370,8 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(r Runner, resume bool, mode, initialPrompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, initialPrompt string) []string {
 	argv := slices.Clone(r.Command)
-	spec, ok := specFor(r.ID)
-	if !ok {
-		return argv
-	}
 	if resume {
 		return spec.Resume(argv)
 	}

@@ -20,7 +20,6 @@ const (
 	gitDiffCmd     = "diff"
 	gitLsFilesCmd  = "ls-files"
 
-	gitDirFlag        = "-C"
 	gitPorcelainFlag  = "--porcelain"
 	gitQuietFlag      = "-q"
 	gitQuietMsgFlag   = "-qm"
