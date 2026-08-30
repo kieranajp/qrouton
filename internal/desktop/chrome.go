@@ -30,8 +30,20 @@ func (c *Chrome) Snapshot() status.Fields {
 	return c.fields
 }
 
+// publish adapts Chrome to the emitter seam. A payload that is not chrome state
+// belongs to some other producer sharing the seam, so it goes out untouched.
 func (c *Chrome) publish(event string, payload any) {
-	fields := payload.(status.Fields)
+	fields, ok := payload.(status.Fields)
+	if !ok {
+		c.emit(event, payload)
+		return
+	}
+	c.publishFields(fields)
+}
+
+// publishFields stores the newest chrome state and pushes it, unless it is what
+// the page was last sent.
+func (c *Chrome) publishFields(fields status.Fields) {
 	c.mu.Lock()
 	if c.initialized && reflect.DeepEqual(c.fields, fields) {
 		c.mu.Unlock()
@@ -40,7 +52,7 @@ func (c *Chrome) publish(event string, payload any) {
 	c.fields = fields
 	c.initialized = true
 	c.mu.Unlock()
-	c.emit(event, fields)
+	c.emit(chromeEvent, fields)
 }
 
 // watchChrome pushes what the window can observe about the session on screen

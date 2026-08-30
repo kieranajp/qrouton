@@ -213,3 +213,34 @@ func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
 		t.Fatal("chrome emitted a nil agent record list")
 	}
 }
+
+// Chrome sits on the emitter seam, so a payload it does not recognise has to
+// reach the page rather than take the workbench down.
+func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
+	var events []string
+	var payloads []any
+	chrome := newChrome(func(event string, payload any) {
+		events = append(events, event)
+		payloads = append(payloads, payload)
+	})
+
+	foreign := windowDataEvent + "w1"
+	chrome.publish(foreign, "cGluZw==")
+	if len(events) != 1 || events[0] != foreign || payloads[0] != "cGluZw==" {
+		t.Fatalf("forwarded events = %v, payloads = %v", events, payloads)
+	}
+	if snapshot := chrome.Snapshot(); snapshot.Activity != "" || len(snapshot.Sessions) != 0 {
+		t.Fatalf("a foreign payload changed the stored chrome: %+v", snapshot)
+	}
+
+	fields := status.EmptyFields()
+	fields.Activity = "working"
+	chrome.publishFields(fields)
+	chrome.publishFields(fields)
+	if len(events) != 2 || events[1] != chromeEvent {
+		t.Fatalf("typed publishes = %v, want one chrome event", events)
+	}
+	if chrome.Snapshot().Activity != "working" {
+		t.Fatalf("snapshot = %+v", chrome.Snapshot())
+	}
+}
