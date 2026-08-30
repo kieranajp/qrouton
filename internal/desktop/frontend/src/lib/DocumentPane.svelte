@@ -1,9 +1,8 @@
 <script>
   import { onMount, tick } from "svelte";
+  import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT } from "./bridge/generated.js";
   import { paneFor } from "./panes/index.js";
   import { Call, Events } from "./wails.js";
-
-  const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
   /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void}} */
   let { id, active = false, scrollRoot, agentWorking = false, onReady } = $props();
@@ -16,13 +15,13 @@
   // epoch still stands: it is the one the workbench is fencing reports against.
   let live = false;
   onMount(() => {
-    const off = Events.On("window:content:" + id, (event) => {
+    const off = Events.On(WINDOW_CONTENT_EVENT + id, (event) => {
       if (!event?.data) return;
       live = true;
       doc = event.data;
     });
     (async () => {
-      const content = await Call.ByName(WINDOWS_SERVICE + ".Content", id);
+      const content = await Call.ByName(WINDOWS_CONTENT, id);
       doc = live && doc ? { ...content, text: doc.text } : content;
       await tick();
       onReady?.();

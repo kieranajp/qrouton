@@ -1,7 +1,7 @@
 <script>
   const TONES = {
     selected: "var(--state-selected)",
-    success: "var(--state-success)",
+    succeeded: "var(--state-success)",
     running: "var(--state-running)",
     failed: "var(--state-failed)",
     waiting: "var(--state-waiting)",
@@ -9,7 +9,7 @@
     idle: "var(--ctp-surface-2)",
   };
 
-  /** @type {{state?: 'selected'|'success'|'running'|'failed'|'waiting'|'guided'|'idle', size?: number, [attribute: string]: any}} */
+  /** @type {{state?: 'selected'|'succeeded'|'running'|'failed'|'waiting'|'guided'|'idle', size?: number, [attribute: string]: any}} */
   let { state = "running", size = 9, ...rest } = $props();
 </script>
 

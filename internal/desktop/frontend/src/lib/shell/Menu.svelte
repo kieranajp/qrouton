@@ -29,7 +29,7 @@
           aria-haspopup={item.items?.length ? "menu" : undefined}
           onclick={item.items?.length ? undefined : () => onSelect?.(item, i)}>
           {#if item.status}
-            <StatusDot state={item.status === "succeeded" ? "success" : item.status} size={7} />
+            <StatusDot state={item.status} size={7} />
           {/if}
           {#if item.tag}
             <span class="tag" style:--artifact={artifactTone(item.tag)}>{item.tag}</span>

@@ -1,10 +1,13 @@
+import {
+  WINDOW_DIAGRAM_EVENT,
+  WINDOWS_RENDER_DIAGRAMS,
+  WINDOWS_REPORT_VIEWPORT,
+} from "../bridge/generated.js";
 import { openDocument } from "../docked.svelte.js";
 import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
-
-const WINDOWS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Windows";
 
 /**
  * Anchors in rendered markdown, resolved against the document they were written
@@ -43,11 +46,11 @@ export function links(body, source) {
  *   fixed; the text is what a redraw hangs on.
  */
 export function diagrams(body, { id }) {
-  const off = Events.On("window:diagram:" + id, (event) => applyDiagrams(body, [event.data]));
+  const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) => applyDiagrams(body, [event.data]));
   // Rendered markup does not survive a content push, so the fences are asked
   // for again whenever the text behind them changes.
   const draw = () =>
-    Call.ByName(WINDOWS_SERVICE + ".RenderDiagrams", id)
+    Call.ByName(WINDOWS_RENDER_DIAGRAMS, id)
       .then((found) => applyDiagrams(body, found ?? []))
       .catch(() => {});
   draw();
@@ -109,7 +112,7 @@ export function viewport({ span, epoch, marking, onMeasure }) {
           nextSequence: () => nextViewportSequence(windowID),
           onMeasure,
           report: (report) =>
-            Call.ByName(WINDOWS_SERVICE + ".ReportViewport", windowID, {
+            Call.ByName(WINDOWS_REPORT_VIEWPORT, windowID, {
               epoch: epoch(),
               ...report,
             }).catch(() => {}),

@@ -1,10 +1,11 @@
 import {
-  CLOSE_WINDOW,
-  OPEN_DOCUMENT,
-  OPEN_SHELL,
-  SELECT_WINDOW,
-  SURFACES,
-} from "./session/services.js";
+  WINDOWS_CLOSE,
+  WINDOWS_EVENT,
+  WINDOWS_OPEN_DOCUMENT,
+  WINDOWS_OPEN_SHELL,
+  WINDOWS_SELECT,
+  WINDOWS_SURFACES,
+} from "./bridge/generated.js";
 import { Call, Events, call } from "./wails.js";
 
 const NONE = { tabs: [], selected: "" };
@@ -14,7 +15,7 @@ export function surfaces(slug) {
   let open = $state(NONE);
   let live = false;
   const apply = (value) => (open = { ...NONE, ...(value || {}) });
-  Events.On("window:open", (event) => {
+  Events.On(WINDOWS_EVENT, (event) => {
     if (event.data?.session !== slug()) return;
     live = true;
     apply(event.data);
@@ -28,7 +29,7 @@ export function surfaces(slug) {
     pulled = session;
     live = false;
     apply(NONE);
-    call(Call.ByName(SURFACES, session)).then((answer) => {
+    call(Call.ByName(WINDOWS_SURFACES, session)).then((answer) => {
       if (answer.ok && !live && pulled === session) apply(answer.value);
     });
   });
@@ -42,10 +43,10 @@ export function surfaces(slug) {
   };
 }
 
-export const closeWindow = (id) => Call.ByName(CLOSE_WINDOW, id);
-export const openShell = () => Call.ByName(OPEN_SHELL);
+export const closeWindow = (id) => Call.ByName(WINDOWS_CLOSE, id);
+export const openShell = () => Call.ByName(WINDOWS_OPEN_SHELL);
 
-export const selectWindow = (slug, id) => Call.ByName(SELECT_WINDOW, slug, id);
+export const selectWindow = (slug, id) => Call.ByName(WINDOWS_SELECT, slug, id);
 
 /** openDocument opens a session document, or selects the tab already on it. */
-export const openDocument = (path) => Call.ByName(OPEN_DOCUMENT, path);
+export const openDocument = (path) => Call.ByName(WINDOWS_OPEN_DOCUMENT, path);

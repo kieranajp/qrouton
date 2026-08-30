@@ -3,12 +3,14 @@ EVAL     := qrouton-eval
 BINDIR   ?= $(HOME)/.local/bin
 FRONTEND := internal/desktop/frontend
 PAGES    := internal/desktop/assets/index.html
+BRIDGE   := internal/desktop/frontend/src/lib/bridge/generated.js
 SHARE    := internal/share/assets/share.js
 VERSION  ?= 0.1.0
 BUILD_NUMBER ?= 1
 SIGN_IDENTITY ?= -
 MACOSX_DEPLOYMENT_TARGET ?= 12.0
 export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
+BOUND    := $(wildcard internal/desktop/*.go internal/status/*.go internal/desktop/bridge/*.go)
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
@@ -18,16 +20,21 @@ SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.h
 # a directory with nothing in it — so every Go target below depends on `front`.
 front: $(PAGES) $(SHARE)
 
+# The page calls the workbench by name, and the names are Go's. Generated before
+# the pages that import them, so a rename cannot reach a build.
+$(BRIDGE): $(BOUND) go.mod
+	go generate ./internal/desktop/bridge/
+
 $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
 	cd $(FRONTEND) && npm ci
 	touch $@
 
-$(PAGES): $(FRONTEND)/node_modules $(SOURCES)
+$(PAGES): $(FRONTEND)/node_modules $(BRIDGE) $(SOURCES)
 	cd $(FRONTEND) && npm run build
 
 # The shared page carries its fonts, so it is built apart from the workbench's
 # own pages, which are served theirs.
-$(SHARE): $(FRONTEND)/node_modules $(SOURCES)
+$(SHARE): $(FRONTEND)/node_modules $(BRIDGE) $(SOURCES)
 	cd $(FRONTEND) && npm run build:share
 
 build: front

@@ -1,9 +1,22 @@
+import {
+  ASSEMBLY_BEGIN,
+  ASSEMBLY_CHECK,
+  ASSEMBLY_CHECK_SLUG,
+  ASSEMBLY_CREATE,
+  ASSEMBLY_END,
+  ASSEMBLY_FETCH,
+  ASSEMBLY_PENDING,
+  ASSEMBLY_PREFIXES,
+  ASSEMBLY_PREVIEW,
+  ASSEMBLY_RUNNERS,
+  ORGS_LIST,
+  PICKER_CANCEL,
+  PICKER_CONFIRM,
+  PICKER_LOAD,
+  REPOSITORIES_CACHED,
+  REPOSITORIES_REFRESH,
+} from "../bridge/generated.js";
 import { Call } from "../wails.js";
-
-const ASSEMBLY_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Assembly";
-const REPOSITORIES_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Repositories";
-const ORGS_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Orgs";
-const PICKER_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Picker";
 
 /**
  * @typedef {object} Draft
@@ -17,34 +30,34 @@ const PICKER_SERVICE = "github.com/kieranajp/qrouton/internal/desktop.Picker";
  */
 
 /** prefixes is the branch-prefix vocabulary, which Go owns the only copy of. */
-export const prefixes = () => Call.ByName(ASSEMBLY_SERVICE + ".Prefixes");
+export const prefixes = () => Call.ByName(ASSEMBLY_PREFIXES);
 
 /** runners are the agents with a resolved path, already filtered. */
-export const runners = () => Call.ByName(ASSEMBLY_SERVICE + ".Runners");
+export const runners = () => Call.ByName(ASSEMBLY_RUNNERS);
 
 /** @param {Draft} draft */
-export const check = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Check", draft);
+export const check = (draft) => Call.ByName(ASSEMBLY_CHECK, draft);
 
 /** checkSlug is the half that stats the disk, so it runs on advance.
  * @param {Draft} draft */
-export const checkSlug = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".CheckSlug", draft);
+export const checkSlug = (draft) => Call.ByName(ASSEMBLY_CHECK_SLUG, draft);
 
 /**
  * preview is the branch, which Go derives from the prefix and the slug alone.
  * @param {{name: string, entropy: string, prefix: string}} draft
  * @returns {Promise<string>}
  */
-export const preview = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Preview", draft);
+export const preview = (draft) => Call.ByName(ASSEMBLY_PREVIEW, draft);
 
 /** @param {Draft} draft */
-export const create = (draft) => Call.ByName(ASSEMBLY_SERVICE + ".Create", draft);
+export const create = (draft) => Call.ByName(ASSEMBLY_CREATE, draft);
 
-export const pending = () => Call.ByName(ASSEMBLY_SERVICE + ".Pending");
+export const pending = () => Call.ByName(ASSEMBLY_PENDING);
 
-export const begin = () => Call.ByName(ASSEMBLY_SERVICE + ".Begin");
+export const begin = () => Call.ByName(ASSEMBLY_BEGIN);
 
 /** @param {number} generation */
-export const end = (generation) => Call.ByName(ASSEMBLY_SERVICE + ".End", generation);
+export const end = (generation) => Call.ByName(ASSEMBLY_END, generation);
 
 /**
  * fetchTicket answers with the URL it asked about, which is what lets a result
@@ -53,15 +66,15 @@ export const end = (generation) => Call.ByName(ASSEMBLY_SERVICE + ".End", genera
  */
 export const fetchTicket = async (url) => ({
   url,
-  ...(await Call.ByName(ASSEMBLY_SERVICE + ".Fetch", url)),
+  ...(await Call.ByName(ASSEMBLY_FETCH, url)),
 });
 
-export const cached = () => Call.ByName(REPOSITORIES_SERVICE + ".Cached");
+export const cached = () => Call.ByName(REPOSITORIES_CACHED);
 
 /** refresh answers with the generation its events will carry. */
-export const refresh = () => Call.ByName(REPOSITORIES_SERVICE + ".Refresh");
+export const refresh = () => Call.ByName(REPOSITORIES_REFRESH);
 
-export const orgs = () => Call.ByName(ORGS_SERVICE + ".List");
+export const orgs = () => Call.ByName(ORGS_LIST);
 
 /**
  * held is what the picker draws itself from: the branch anything added joins,
@@ -69,7 +82,7 @@ export const orgs = () => Call.ByName(ORGS_SERVICE + ".List");
  * @param {string} slug
  * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[]}>}
  */
-export const held = (slug) => Call.ByName(PICKER_SERVICE + ".Load", slug);
+export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
 
 /**
  * addRepos gives the session the picked repositories, takes up the held ones
@@ -77,7 +90,7 @@ export const held = (slug) => Call.ByName(PICKER_SERVICE + ".Load", slug);
  * @param {string} slug
  * @param {{repos: {id: string, role: string}[], upgrades: string[]}} answer
  */
-export const addRepos = (slug, answer) => Call.ByName(PICKER_SERVICE + ".Confirm", slug, answer);
+export const addRepos = (slug, answer) => Call.ByName(PICKER_CONFIRM, slug, answer);
 
 /** @param {string} slug */
-export const cancelPicker = (slug) => Call.ByName(PICKER_SERVICE + ".Cancel", slug);
+export const cancelPicker = (slug) => Call.ByName(PICKER_CANCEL, slug);

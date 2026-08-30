@@ -1,28 +1,32 @@
+import {
+  PTY_DATA_EVENT,
+  PTY_EXIT_EVENT,
+  TERM_RESIZE,
+  TERM_START,
+  TERM_WRITE,
+  WINDOW_DATA_EVENT,
+  WINDOW_EXIT_EVENT,
+  WINDOWS_RESIZE,
+  WINDOWS_START,
+  WINDOWS_WRITE,
+} from "../bridge/generated.js";
+
 /** @typedef {{start: string, write: string, resize: string, data: string, exit: string}} PTY */
 
-// Whole names, not a base the callers append to: the Go side greps the built
-// page for every bound method, and a name assembled across a module boundary
-// survives bundling as a concatenation it cannot find.
 /** @type {PTY} */
 export const conversationPTY = {
-  start: "github.com/kieranajp/qrouton/internal/desktop.Term.Start",
-  write: "github.com/kieranajp/qrouton/internal/desktop.Term.Write",
-  resize: "github.com/kieranajp/qrouton/internal/desktop.Term.Resize",
-  data: "pty:data:",
-  exit: "pty:exit:",
+  start: TERM_START,
+  write: TERM_WRITE,
+  resize: TERM_RESIZE,
+  data: PTY_DATA_EVENT,
+  exit: PTY_EXIT_EVENT,
 };
 
 /** @type {PTY} */
 export const tabPTY = {
-  start: "github.com/kieranajp/qrouton/internal/desktop.Windows.Start",
-  write: "github.com/kieranajp/qrouton/internal/desktop.Windows.Write",
-  resize: "github.com/kieranajp/qrouton/internal/desktop.Windows.Resize",
-  data: "window:data:",
-  exit: "window:exit:",
+  start: WINDOWS_START,
+  write: WINDOWS_WRITE,
+  resize: WINDOWS_RESIZE,
+  data: WINDOW_DATA_EVENT,
+  exit: WINDOW_EXIT_EVENT,
 };
-
-export const SURFACES = "github.com/kieranajp/qrouton/internal/desktop.Windows.Surfaces";
-export const CLOSE_WINDOW = "github.com/kieranajp/qrouton/internal/desktop.Windows.Close";
-export const OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
-export const SELECT_WINDOW = "github.com/kieranajp/qrouton/internal/desktop.Windows.Select";
-export const OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";

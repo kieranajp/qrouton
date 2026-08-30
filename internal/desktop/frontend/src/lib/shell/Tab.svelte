@@ -5,7 +5,7 @@
 
   // An unfocused tab that cannot report a red test run is one you must click to
   // trust, so the process's state rides along with the label.
-  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'success'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, onSelect?: () => void, onClose?: () => void, [attribute: string]: any}} */
+  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, onSelect?: () => void, onClose?: () => void, [attribute: string]: any}} */
   let { label, badge, artifact, status, selected = false, closable = true, onSelect, onClose, ...rest } =
     $props();
 
@@ -14,7 +14,7 @@
 
 <div class="tab" class:selected title={whole} {...rest}>
   <button type="button" class="select" onclick={onSelect}>
-    {#if status}<StatusDot state={status === "succeeded" ? "success" : status} size={7} />{/if}
+    {#if status}<StatusDot state={status} size={7} />{/if}
     <span class="label">{#if badge}<span class="badge" style:color={artifactTone(artifact)}>{badge}</span>{/if}{label}</span>
   </button>
   {#if closable}
