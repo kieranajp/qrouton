@@ -7,11 +7,12 @@ package evalharness
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"os/exec"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/launch"
 )
 
 type Adapter struct {
@@ -96,21 +97,12 @@ func (a Adapter) args(workspace, mcpLog, session string) ([]string, error) {
 }
 
 func (a Adapter) claudeArgs(workspace, mcpLog, session string) ([]string, error) {
-	mcpConfig := map[string]any{
-		mcpServersKey: map[string]any{
-			mcpServerName: map[string]any{
-				mcpTypeKey:    mcpStdioType,
-				mcpCommandKey: a.SelfPath,
-				mcpArgsKey:    mockMCPArgs(mcpLog, workspace),
-			},
-		},
-	}
-	encodedConfig, err := json.Marshal(mcpConfig)
+	mcp, err := a.mcpWiring(runnerClaude, workspace, mcpLog)
 	if err != nil {
-		return nil, fmt.Errorf("encode Claude MCP config: %w", err)
+		return nil, err
 	}
 
-	args := append(append([]string(nil), claudeBaseArgs...), claudeMCPConfigFlag, string(encodedConfig))
+	args := append(append([]string(nil), claudeBaseArgs...), mcp.Args...)
 	if a.Model != "" {
 		args = append(args, modelFlag, a.Model)
 	}
@@ -123,13 +115,9 @@ func (a Adapter) claudeArgs(workspace, mcpLog, session string) ([]string, error)
 }
 
 func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) {
-	command, err := json.Marshal(a.SelfPath)
+	mcp, err := a.mcpWiring(runnerCodex, workspace, mcpLog)
 	if err != nil {
-		return nil, fmt.Errorf("encode Codex MCP command: %w", err)
-	}
-	mcpArgs, err := json.Marshal(mockMCPArgs(mcpLog, workspace))
-	if err != nil {
-		return nil, fmt.Errorf("encode Codex MCP args: %w", err)
+		return nil, err
 	}
 
 	args := []string{codexExecCmd}
@@ -137,10 +125,7 @@ func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) 
 		args = append(args, codexResumeCmd)
 	}
 	args = append(args, codexBaseArgs...)
-	args = append(args,
-		codexConfigFlag, codexMCPCommandKey+string(command),
-		codexConfigFlag, codexMCPArgsKey+string(mcpArgs),
-	)
+	args = append(args, mcp.Args...)
 	if a.Model != "" {
 		args = append(args, modelFlag, a.Model)
 	}
@@ -149,6 +134,17 @@ func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) 
 	}
 	// "-" makes codex exec read the prompt from stdin (see RunTurn).
 	return append(args, "-"), nil
+}
+
+// mcpWiring points the runner at the harness binary as its qrouton MCP server,
+// through the launch path's own wiring: a graded run has to reach the tool
+// surface the way a launched agent does, or it grades a different agent.
+func (a Adapter) mcpWiring(runner, workspace, mcpLog string) (launch.MCPWiring, error) {
+	wiring, err := launch.RunnerMCPWiring(runner, a.SelfPath, mockMCPArgs(mcpLog, workspace))
+	if err != nil {
+		return launch.MCPWiring{}, fmt.Errorf("%s: %w", a.Name, err)
+	}
+	return wiring, nil
 }
 
 // mockMCPArgs invokes the harness binary as the mock qrouton MCP server.

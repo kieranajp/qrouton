@@ -54,11 +54,37 @@ type fakeHost struct {
 	existsErr   error
 	listIDs     []string
 	listErr     error
+	openErr     error
+
+	openEntered chan struct{}
+	openGate    chan struct{}
+}
+
+// blockOpen holds the next Open until release is called, without holding the
+// fake's own lock, so the rest of the host stays answerable meanwhile.
+func (h *fakeHost) blockOpen() (entered <-chan struct{}, release func()) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.openEntered, h.openGate = make(chan struct{}), make(chan struct{})
+	gate := h.openGate
+	return h.openEntered, sync.OnceFunc(func() { close(gate) })
 }
 
 func (h *fakeHost) Open(_ context.Context, opts workbench.WindowOptions) (string, error) {
 	h.mu.Lock()
+	entered, gate := h.openEntered, h.openGate
+	h.openEntered, h.openGate = nil, nil
+	h.mu.Unlock()
+	if gate != nil {
+		close(entered)
+		<-gate
+	}
+
+	h.mu.Lock()
 	defer h.mu.Unlock()
+	if h.openErr != nil {
+		return "", h.openErr
+	}
 	id := fmt.Sprintf("window-%d", len(h.opens)+1)
 	h.opens = append(h.opens, opts)
 	h.ids = append(h.ids, id)
@@ -545,12 +571,10 @@ func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, host, _ := newTestManager(t)
-			m.mu.Lock()
 			_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
 				Kind: workbench.KindDocument, Format: workbench.FormatMarkdown,
 				Source: "P007.md", Content: "# Plan\n\nText\n",
 			})
-			m.mu.Unlock()
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -572,11 +596,9 @@ func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
 
 func TestReadWindowKeepsMarkdownViewportAfterTruncatedSource(t *testing.T) {
 	m, host, _ := newTestManager(t)
-	m.mu.Lock()
 	_, err := m.open(context.Background(), editorWindowName, workbench.WindowOptions{
 		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Source: "P007.md",
 	})
-	m.mu.Unlock()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -924,6 +946,104 @@ func TestListWindowsKeepsEverythingWhenTheHostCannotList(t *testing.T) {
 	}
 	if host.lists != 1 {
 		t.Fatalf("host asked for its window list %d times, want 1", host.lists)
+	}
+}
+
+// A window tool waiting on the desktop process holds up its own caller and
+// nothing else: the registry lock is not carried across the socket round trip.
+func TestASlowOpenDoesNotStallTheOtherWindowTools(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+
+	entered, release := host.blockOpen()
+	defer release()
+	slow := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "build", Name: "build"})
+		slow <- err
+	}()
+	<-entered
+
+	done := make(chan []string, 1)
+	go func() {
+		names := m.list(ctx)
+		if _, err := m.closeWindow(ctx, windowNameInput{Name: "dev"}); err != nil {
+			t.Error(err)
+		}
+		done <- names
+	}()
+	select {
+	case names := <-done:
+		if !slices.Equal(names, []string{"dev"}) {
+			t.Fatalf("list = %v, want [dev] while an open is in flight", names)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("list_windows and close_window blocked behind an open that had not returned")
+	}
+
+	release()
+	if err := <-slow; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Two opens racing on one name settle on the later claim, and the window the
+// slower one opened is closed rather than left adrift.
+func TestConcurrentOpensOfOneNameKeepTheLaterClaim(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+
+	entered, release := host.blockOpen()
+	defer release()
+	slow := make(chan error, 1)
+	go func() {
+		_, err := m.run(ctx, runCommandInput{Command: "first", Name: "dev"})
+		slow <- err
+	}()
+	<-entered
+
+	if _, err := m.run(ctx, runCommandInput{Command: "second", Name: "dev"}); err != nil {
+		t.Fatal(err)
+	}
+	winner, err := m.liveWindow(ctx, "dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	release()
+	if err := <-slow; err != nil {
+		t.Fatal(err)
+	}
+	got, err := m.liveWindow(ctx, "dev")
+	if err != nil || got != winner {
+		t.Fatalf("dev resolves to %q (%v), want the later open's window %q", got, err, winner)
+	}
+	loser := host.ids[len(host.ids)-1]
+	if loser == winner || !slices.Contains(host.closes, loser) {
+		t.Fatalf("window %q from the earlier open was left adrift; closes = %v", loser, host.closes)
+	}
+	if names := m.list(ctx); !slices.Equal(names, []string{"dev"}) {
+		t.Fatalf("list = %v, want [dev]", names)
+	}
+}
+
+// A refused open leaves no name behind for the agent to read from.
+func TestAFailedOpenRegistersNothing(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	host.openErr = errors.New("workbench unreachable")
+
+	if _, err := m.run(ctx, runCommandInput{Command: "serve", Name: "dev"}); err == nil {
+		t.Fatal("run reported a window the host refused to open")
+	}
+	if names := m.list(ctx); len(names) != 0 {
+		t.Fatalf("list = %v, want no windows", names)
+	}
+	if _, _, err := m.read(ctx, readWindowInput{Name: "dev"}); err == nil {
+		t.Fatal("read found a window the host never opened")
 	}
 }
 

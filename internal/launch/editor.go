@@ -135,19 +135,24 @@ func resolveWithinSession(root, name string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("%w: %q", ErrOutsideSessionMissing, name)
 	}
-	if within(root, real) {
+	if _, ok := relativeUnder(root, real); ok {
 		return real, nil
 	}
 	// session.Create parks documents outside the session dir so Delete keeps them.
-	if home, err := filepath.EvalSymlinks(filepath.Join(root, sessionpaths.ThoughtsDirName)); err == nil && within(home, real) {
-		return real, nil
+	if home, err := filepath.EvalSymlinks(filepath.Join(root, sessionpaths.ThoughtsDirName)); err == nil {
+		if _, ok := relativeUnder(home, real); ok {
+			return real, nil
+		}
 	}
 	return "", fmt.Errorf("%w: %q", ErrOutsideSession, name)
 }
 
-// within reports whether real is base or sits underneath it; both absolute and
-// already symlink-resolved.
-func within(base, real string) bool {
-	rel, err := filepath.Rel(base, real)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+// relativeUnder reports whether path is base or sits underneath it, and where it
+// sits relative to base. Both absolute and already symlink-resolved.
+func relativeUnder(base, path string) (string, bool) {
+	rel, err := filepath.Rel(base, path)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
 }

@@ -150,6 +150,21 @@ func TestDocumentWindowNamesAParkedDocumentRelativeToTheSession(t *testing.T) {
 	}
 }
 
+// A leading dot pair is a filename, not an escape: the window that names such a
+// file by its absolute path is a second tab for a file already open.
+func TestDocumentWindowNamesADottedFileRelativeToTheSession(t *testing.T) {
+	root := documentRoot(t, map[string]string{"..draft.md": "# Draft\n"})
+	for _, name := range []string{"..draft.md", filepath.Join(root, "..draft.md")} {
+		opts, err := DocumentWindow(root, name, testDocumentEditor, workbench.LineSpan{Line: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if opts.Source != "..draft.md" {
+			t.Errorf("opening %q sourced the pane at %q, want %q", name, opts.Source, "..draft.md")
+		}
+	}
+}
+
 // The tab has room for a title, not a path — and the heading a document opens
 // with is the title it chose. Only the opening one: a `# ` further down is a
 // later section or the inside of a code fence, and a tab named after either

@@ -272,18 +272,18 @@ func ProcessLog(socket string) string {
 // Attention carries what the runner's own hooks said about its state. No tool
 // exposes it, so nothing reads model output to work it out.
 func (h Handle) Attention(ctx context.Context, activity string, generation uint64) error {
-	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpAttention, Activity: activity, Generation: generation})
+	_, err := h.client().call(ctx, Request{Op: OpAttention, Activity: activity, Generation: generation})
 	return err
 }
 
 func (h Handle) RunnerGeneration(ctx context.Context, provider string, generation uint64) error {
-	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpRunnerGeneration,
+	_, err := h.client().call(ctx, Request{Op: OpRunnerGeneration,
 		RunnerGeneration: &RunnerGenerationRequest{Provider: provider, Generation: generation}})
 	return err
 }
 
 func (h Handle) DelegatedLifecycle(ctx context.Context, event DelegatedLifecycleRequest) error {
-	_, err := (&client{socket: h.Socket}).call(ctx, Request{Op: OpDelegatedLifecycle, Lifecycle: &event})
+	_, err := h.client().call(ctx, Request{Op: OpDelegatedLifecycle, Lifecycle: &event})
 	return err
 }
 
@@ -301,6 +301,8 @@ type client struct {
 }
 
 func newClient(socket string) WindowHost { return &client{socket: socket} }
+
+func (h Handle) client() *client { return &client{socket: h.Socket} }
 
 func (c *client) Open(ctx context.Context, opts WindowOptions) (string, error) {
 	res, err := c.call(ctx, Request{Op: OpOpen, Options: &opts})

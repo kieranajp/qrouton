@@ -371,9 +371,30 @@ func TestEverySpecIsCompletelyWired(t *testing.T) {
 			t.Errorf("two specs claim id %q, so specFor answers with whichever is first", spec.ID)
 		}
 		seen[spec.ID] = true
-		if spec.Resume == nil || spec.Prompt == nil || spec.Inject == nil {
-			t.Errorf("spec %q is missing Resume, Prompt or Inject", spec.ID)
+		if spec.Resume == nil || spec.Prompt == nil || spec.MCP == nil || spec.Inject == nil {
+			t.Errorf("spec %q is missing Resume, Prompt, MCP or Inject", spec.ID)
 		}
+	}
+}
+
+// The eval reaches the qrouton MCP server through this, standing its own binary
+// and mock arguments in: a runner missing from it is a runner the eval cannot
+// grade as it ships.
+func TestEveryRunnerPointsAtAQroutonMCPServer(t *testing.T) {
+	for _, spec := range runnerSpecs {
+		wiring, err := RunnerMCPWiring(spec.ID, "/opt/qrouton", []string{"mcp", "--session-root", "/s"})
+		if err != nil {
+			t.Fatalf("%s: %v", spec.ID, err)
+		}
+		configured := strings.Join(append(append([]string(nil), wiring.Args...), wiring.Env...), " ")
+		for _, want := range []string{serverName, "/opt/qrouton", "--session-root"} {
+			if !strings.Contains(configured, want) {
+				t.Errorf("%s wiring %q does not carry %q", spec.ID, configured, want)
+			}
+		}
+	}
+	if _, err := RunnerMCPWiring("aider", "/opt/qrouton", nil); !errors.Is(err, ErrUnsupportedRunner) {
+		t.Fatalf("wiring an unknown runner = %v, want %v", err, ErrUnsupportedRunner)
 	}
 }
 

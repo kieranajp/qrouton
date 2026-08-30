@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/launch"
 )
 
 func TestNormalizeClaudeAndCodexEvents(t *testing.T) {
@@ -167,6 +169,31 @@ func TestCodexIgnoresUserConfig(t *testing.T) {
 	}
 	if !strings.Contains(joined, "--skip-git-repo-check") {
 		t.Fatalf("Codex cannot run in an isolated judge directory: %s", joined)
+	}
+}
+
+// A graded run has to reach the qrouton tool surface the way a launched agent
+// does. Wiring the mock server by hand here is how the eval ends up grading a
+// differently configured agent than the one that ships.
+func TestAdapterWiresMCPTheWayLaunchDoes(t *testing.T) {
+	const self = "/tmp/qrouton-eval"
+	workspace, mcpLog := "/tmp/workspace", "/tmp/mcp.log"
+	for _, runner := range []string{runnerClaude, runnerCodex} {
+		adapter := Adapter{Name: runner, Bin: runner, SelfPath: self}
+		args, err := adapter.args(workspace, mcpLog, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		wiring, err := launch.RunnerMCPWiring(runner, self, mockMCPArgs(mcpLog, workspace))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(wiring.Args) == 0 {
+			t.Fatalf("%s has no MCP arguments to carry", runner)
+		}
+		if !strings.Contains(strings.Join(args, "\x00"), strings.Join(wiring.Args, "\x00")) {
+			t.Errorf("%s argv %q does not carry the launch wiring %q", runner, args, wiring.Args)
+		}
 	}
 }
 

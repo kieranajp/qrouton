@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -90,18 +91,30 @@ func detach(argv, env []string, socket, log string, timeout, interval time.Durat
 	if err := cmd.Start(); err != nil {
 		return err
 	}
+	var reaped atomic.Bool
 	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
+	go func() {
+		err := cmd.Wait()
+		reaped.Store(true)
+		exited <- err
+	}()
 
 	if err := waitReady(socket, exited, timeout, interval, ready); err != nil {
 		// A workbench that never answered has no window and no way to be found
-		// again, so it does not get to linger.
-		if cmd.Process != nil {
-			_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+		// again, so it does not get to linger. Once the child is reaped its group
+		// id is the kernel's to hand to somebody else, so only a live one is signalled.
+		if cmd.Process != nil && !reaped.Load() {
+			killProcessGroup(cmd.Process.Pid)
 		}
 		return fmt.Errorf(workbenchFailureFormat, err, log)
 	}
 	return nil
+}
+
+// killProcessGroup ends a Setsid'd child and everything it spawned. A package
+// variable so tests can watch for the signal instead of taking it.
+var killProcessGroup = func(pid int) {
+	_ = syscall.Kill(-pid, syscall.SIGKILL)
 }
 
 // waitReady blocks until the process endpoint is published, the child dies, or

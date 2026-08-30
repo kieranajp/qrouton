@@ -36,6 +36,9 @@ type runnerSpec struct {
 	Resume func(argv []string) []string
 	// Prompt appends the opening message the way this runner accepts it.
 	Prompt func(argv []string, message string) []string
+	// MCP points the runner at a qrouton MCP server, which is the part of the
+	// wiring an eval stands its own binary into.
+	MCP func(bin string, args []string) (MCPWiring, error)
 	// Inject adds MCP and hook configuration, and answers the environment the
 	// runner is launched with.
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
@@ -60,6 +63,7 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
 		Resume:  resumeWith(claudeContinueFlag),
 		Prompt:  promptAsArgument,
+		MCP:     claudeMCP,
 		Inject:  injectClaude,
 	},
 	{
@@ -67,6 +71,7 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
 		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
 		Prompt:  promptAsArgument,
+		MCP:     codexMCP,
 		Inject:  injectCodex,
 	},
 	{
@@ -74,6 +79,7 @@ var runnerSpecs = []runnerSpec{
 		Command: []string{runnerIDOpenCode, openCodeAutoFlag},
 		Resume:  resumeWith(claudeContinueFlag),
 		Prompt:  promptBehindFlag(openCodePromptFlag),
+		MCP:     openCodeMCP,
 		Inject:  injectOpenCode,
 	},
 }
@@ -205,10 +211,11 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 }
 
 func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
-	mcp := map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
-		claudeTypeKey: claudeStdioType, claudeCommandKey: c.qroutonBin, claudeArgsKey: c.mcpArgs}}}
-	b, _ := json.Marshal(mcp)
-	argv = append(argv, claudeMCPConfigFlag, string(b))
+	mcp, err := claudeMCP(c.qroutonBin, c.mcpArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	argv = append(argv, mcp.Args...)
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
 		" " + sessionRootFlag + " " + ShellQuote(c.dir) +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
@@ -226,10 +233,11 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 }
 
 func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
-	command, _ := json.Marshal(c.qroutonBin)
-	args, _ := json.Marshal(c.mcpArgs)
-	argv = append(argv, codex.ConfigFlag, codexMCPCommandKey+string(command),
-		codex.ConfigFlag, codexMCPArgsKey+string(args))
+	mcp, err := codexMCP(c.qroutonBin, c.mcpArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	argv = append(argv, mcp.Args...)
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
@@ -267,10 +275,73 @@ func agentEventEnv(c injectContext, provider string) []string {
 // than argv, and the one qrouton has to merge into a config the user may
 // already be passing.
 func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) {
+	var extra map[string]any
+	if !c.override {
+		extra = map[string]any{openCodePermissionKey: openCodeAllowValue}
+	}
+	config, err := openCodeConfig(c.qroutonBin, c.mcpArgs, extra)
+	if err != nil {
+		return nil, nil, err
+	}
+	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, config), nil
+}
+
+// MCPWiring is how one runner is told about a qrouton MCP server: arguments for
+// its command line, and environment entries for the runner configured that way.
+type MCPWiring struct {
+	Args []string
+	Env  []string
+}
+
+// RunnerMCPWiring points runner id at bin, invoked with args, as its qrouton MCP
+// server. An eval stands its own binary and mock arguments in here, so a graded
+// run reaches the tool surface the way a launched one does.
+func RunnerMCPWiring(id, bin string, args []string) (MCPWiring, error) {
+	spec, ok := specFor(id)
+	if !ok {
+		return MCPWiring{}, fmt.Errorf("%w: %q", ErrUnsupportedRunner, id)
+	}
+	return spec.MCP(bin, args)
+}
+
+func claudeMCP(bin string, args []string) (MCPWiring, error) {
+	config, err := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
+		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}}})
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	return MCPWiring{Args: []string{claudeMCPConfigFlag, string(config)}}, nil
+}
+
+func codexMCP(bin string, args []string) (MCPWiring, error) {
+	command, err := json.Marshal(bin)
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	encoded, err := json.Marshal(args)
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	return MCPWiring{Args: []string{
+		codex.ConfigFlag, codexMCPCommandKey + string(command),
+		codex.ConfigFlag, codexMCPArgsKey + string(encoded)}}, nil
+}
+
+func openCodeMCP(bin string, args []string) (MCPWiring, error) {
+	config, err := openCodeConfig(bin, args, nil)
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	return MCPWiring{Env: workbench.WithEnv(nil, openCodeConfigEnvVar, config)}, nil
+}
+
+// openCodeConfig merges the qrouton MCP server, and whatever else the launch
+// asks for, into the config OpenCode is already being passed.
+func openCodeConfig(bin string, args []string, extra map[string]any) (string, error) {
 	content := map[string]any{}
 	if existing := os.Getenv(openCodeConfigEnvVar); existing != "" {
 		if err := json.Unmarshal([]byte(existing), &content); err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
+			return "", fmt.Errorf("%s: %w", openCodeConfigEnvVar, err)
 		}
 	}
 	servers, _ := content[openCodeMCPKey].(map[string]any)
@@ -278,13 +349,16 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 		servers = map[string]any{}
 	}
 	servers[serverName] = map[string]any{
-		claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{c.qroutonBin}, c.mcpArgs...), openCodeEnabledKey: true}
+		claudeTypeKey: openCodeLocalType, claudeCommandKey: append([]string{bin}, args...), openCodeEnabledKey: true}
 	content[openCodeMCPKey] = servers
-	if !c.override {
-		content[openCodePermissionKey] = openCodeAllowValue
+	for key, value := range extra {
+		content[key] = value
 	}
-	b, _ := json.Marshal(content)
-	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, string(b)), nil
+	b, err := json.Marshal(content)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // commandHook is one Claude hook entry running the given shell commands in

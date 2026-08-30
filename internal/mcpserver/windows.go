@@ -36,28 +36,67 @@ type windowManager struct {
 	editor  launch.EditorCommand
 	host    workbench.WindowHost
 	mu      sync.Mutex
-	windows map[string]string
+	claims  uint64
+	windows map[string]windowEntry
+}
+
+// windowEntry is a registered window, or — while id is empty — an open still in
+// flight. claim orders opens racing on one name.
+type windowEntry struct {
+	id    string
+	claim uint64
 }
 
 func newWindowManager(root string, editor launch.EditorCommand, host workbench.WindowHost) *windowManager {
-	return &windowManager{root: root, editor: editor, host: host, windows: map[string]string{}}
+	return &windowManager{root: root, editor: editor, host: host, windows: map[string]windowEntry{}}
 }
 
-// open replaces any window registered under name with a fresh one. Callers hold m.mu.
+// open replaces any window registered under name with a fresh one, running the
+// host round trips off m.mu so one slow open cannot stall every other window
+// tool. Opens racing on one name resolve to the later claim; the loser's window
+// is closed rather than left behind.
 func (m *windowManager) open(ctx context.Context, name string, opts workbench.WindowOptions) (string, error) {
-	m.closeLocked(ctx, name)
+	previous, claim := m.claim(name)
+	if previous != "" {
+		_ = m.host.Close(ctx, previous)
+	}
 	id, err := m.host.Open(ctx, opts)
 	if err != nil {
+		m.release(name, claim)
 		return "", err
 	}
-	m.windows[name] = id
+	if !m.commit(name, claim, id) {
+		_ = m.host.Close(ctx, id)
+	}
 	return id, nil
 }
 
-// closeLocked closes and forgets the window registered under name. Callers hold m.mu.
-func (m *windowManager) closeLocked(ctx context.Context, name string) {
-	if id, ok := m.windows[name]; ok {
-		_ = m.host.Close(ctx, id)
+func (m *windowManager) claim(name string) (previous string, claim uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.claims++
+	displaced := m.windows[name]
+	m.windows[name] = windowEntry{claim: m.claims}
+	return displaced.id, m.claims
+}
+
+// commit registers an opened window, reporting false if a later claim on the
+// same name has already overtaken it.
+func (m *windowManager) commit(name string, claim uint64, id string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.windows[name].claim != claim {
+		return false
+	}
+	m.windows[name] = windowEntry{id: id, claim: claim}
+	return true
+}
+
+// release drops a claim whose open never produced a window.
+func (m *windowManager) release(name string, claim uint64) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if entry, ok := m.windows[name]; ok && entry.claim == claim {
 		delete(m.windows, name)
 	}
 }
@@ -68,9 +107,7 @@ func (m *windowManager) openFile(ctx context.Context, input openFileInput) (stri
 	if err != nil {
 		return "", nil, err
 	}
-	m.mu.Lock()
 	id, err := m.open(ctx, editorWindowName, opts)
-	m.mu.Unlock()
 	if err != nil {
 		return "", nil, fmt.Errorf("open file window: %w", err)
 	}
@@ -165,8 +202,6 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 		}
 		cwd = dir
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if _, err := m.open(ctx, name, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
 		Label:       commandWindowLabel + name,
@@ -232,12 +267,12 @@ func viewportSummary(viewport *workbench.DocumentViewport) string {
 
 func (m *windowManager) closeWindow(ctx context.Context, input windowNameInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
-	if _, err := m.liveWindow(ctx, name); err != nil {
+	id, err := m.liveWindow(ctx, name)
+	if err != nil {
 		return "", err
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	m.closeLocked(ctx, name)
+	m.forget(name, id)
+	_ = m.host.Close(ctx, id)
 	return fmt.Sprintf(closedFormat, name), nil
 }
 
@@ -248,24 +283,24 @@ func (m *windowManager) closeWindow(ctx context.Context, input windowNameInput) 
 // transport failure instead of a reason.
 func (m *windowManager) liveWindow(ctx context.Context, name string) (string, error) {
 	m.mu.Lock()
-	id, ok := m.windows[name]
+	entry := m.windows[name]
 	m.mu.Unlock()
-	if !ok {
+	if entry.id == "" {
 		return "", noSuchWindow(name)
 	}
 	// A failing check is not evidence of absence: keep the window and let the
 	// caller's own action report whatever is actually wrong.
-	if live, err := m.host.Exists(ctx, id); err == nil && !live {
-		m.forget(name, id)
+	if live, err := m.host.Exists(ctx, entry.id); err == nil && !live {
+		m.forget(name, entry.id)
 		return "", windowGone(name)
 	}
-	return id, nil
+	return entry.id, nil
 }
 
 func (m *windowManager) forget(name, id string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if current, exists := m.windows[name]; exists && current == id {
+	if current, exists := m.windows[name]; exists && current.id == id {
 		delete(m.windows, name)
 	}
 }
@@ -283,8 +318,6 @@ func (m *windowManager) showDiff(ctx context.Context, input showDiffInput) (stri
 	if strings.TrimSpace(text) == "" {
 		text = fmt.Sprintf(emptyDiffFormat, scope)
 	}
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if _, err := m.open(ctx, label, workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
 		Label:   diffWindowLabel + label,
@@ -302,8 +335,6 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 		return "", ErrMessageRequired
 	}
 	playSound(sessionpaths.NotifyScript(m.root))
-	m.mu.Lock()
-	defer m.mu.Unlock()
 	if _, err := m.open(ctx, notifyWindowName, workbench.WindowOptions{
 		Kind:      workbench.KindDocument,
 		Label:     notifyWindowLabel,
@@ -384,8 +415,8 @@ func escalationOutcome(root string, spawnedAt time.Time) (string, bool) {
 func (m *windowManager) list(ctx context.Context) []string {
 	m.mu.Lock()
 	asked := make(map[string]bool, len(m.windows))
-	for _, id := range m.windows {
-		asked[id] = true
+	for _, entry := range m.windows {
+		asked[entry.id] = true
 	}
 	m.mu.Unlock()
 
@@ -398,8 +429,11 @@ func (m *windowManager) list(ctx context.Context) []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	names := make([]string, 0, len(m.windows))
-	for name, id := range m.windows {
-		if err != nil || open[id] || !asked[id] {
+	for name, entry := range m.windows {
+		if entry.id == "" {
+			continue
+		}
+		if err != nil || open[entry.id] || !asked[entry.id] {
 			names = append(names, name)
 			continue
 		}

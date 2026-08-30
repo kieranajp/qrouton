@@ -2,40 +2,32 @@ package launch
 
 import (
 	"context"
+	"errors"
+	"os/exec"
 	"testing"
 )
 
-func stubShellProcess(t *testing.T) *int {
-	t.Helper()
+// A shell that exits is done. The tab's own lifecycle takes it from there, and
+// another shell is one button away.
+func TestShellEndsWhenTheLoginShellExits(t *testing.T) {
 	originalTree, originalShell := showShellTree, runLoginShell
-	runs := 0
+	t.Cleanup(func() { showShellTree, runLoginShell = originalTree, originalShell })
 	showShellTree = func(string) {}
-	runLoginShell = func(ctx context.Context, _ string) error {
-		runs++
-		return ctx.Err()
-	}
-	t.Cleanup(func() {
-		showShellTree, runLoginShell = originalTree, originalShell
-	})
-	return &runs
-}
 
-// The affordance is having a shell at all, so exiting one starts the next.
-func TestShellRestartsAfterTheLoginShellExits(t *testing.T) {
-	runs := stubShellProcess(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	originalShell := runLoginShell
-	runLoginShell = func(c context.Context, dir string) error {
-		err := originalShell(c, dir)
-		if *runs == 2 {
-			cancel()
+	exited := exec.Command("/bin/sh", "-c", "exit 1").Run()
+	runs := 0
+	runLoginShell = func(context.Context, string) error {
+		runs++
+		if runs > 1 {
+			return errors.New("the shell was started again")
 		}
-		return err
+		return exited
 	}
-	if err := Shell(ctx, t.TempDir()); err != context.Canceled {
-		t.Fatalf("Shell returned %v, want the cancelled context", err)
+
+	if err := Shell(context.Background(), t.TempDir()); !errors.Is(err, exited) {
+		t.Fatalf("Shell returned %v, want %v", err, exited)
 	}
-	if *runs != 2 {
-		t.Fatalf("login shell ran %d times, want 2", *runs)
+	if runs != 1 {
+		t.Fatalf("login shell ran %d times, want 1", runs)
 	}
 }

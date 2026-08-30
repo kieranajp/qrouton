@@ -103,6 +103,38 @@ func TestDetachKillsAWorkbenchThatNeverAnswers(t *testing.T) {
 	}
 }
 
+// The group signal belongs to the timeout path alone. A child that has already
+// been waited for is reaped, and the kernel is free to have given its group id
+// to somebody else's processes by the time qrouton signals it.
+func TestDetachSignalsTheGroupOnlyWhileTheChildIsAlive(t *testing.T) {
+	dir := shortDir(t)
+	var killed []int
+	original := killProcessGroup
+	killProcessGroup = func(pid int) { killed = append(killed, pid) }
+	t.Cleanup(func() { killProcessGroup = original })
+
+	err := detach([]string{"/bin/sh", "-c", "exit 3"}, os.Environ(),
+		filepath.Join(dir, "never.sock"), filepath.Join(dir, "exited.log"),
+		2*time.Second, 10*time.Millisecond, workbench.Answered)
+	if !errors.Is(err, ErrWorkbenchExited) {
+		t.Fatalf("error = %v, want %v", err, ErrWorkbenchExited)
+	}
+	if len(killed) != 0 {
+		t.Fatalf("a reaped child's group was signalled: %v", killed)
+	}
+
+	err = detach([]string{"/bin/sh", "-c", "sleep 5"}, os.Environ(),
+		filepath.Join(dir, "never.sock"), filepath.Join(dir, "hung.log"),
+		100*time.Millisecond, 10*time.Millisecond, workbench.Answered)
+	if !errors.Is(err, ErrWorkbenchNotReady) {
+		t.Fatalf("error = %v, want %v", err, ErrWorkbenchNotReady)
+	}
+	if len(killed) != 1 {
+		t.Fatalf("a workbench that never answered was signalled %d times, want once", len(killed))
+	}
+	original(killed[0])
+}
+
 func TestWaitReadyReportsWhatWentWrong(t *testing.T) {
 	dir := shortDir(t)
 	socket := filepath.Join(dir, "control.sock")
