@@ -60,11 +60,9 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err := StampAssets(dir); err != nil {
 			return err
 		}
-		// An escalation hands over the brief, not the conversation. The marker is
-		// on disk, so a restart between the escalation and this launch still gets
-		// the fresh context the handoff promised — the decision used to live in
-		// this loop's memory, and any relaunch it did not perform resumed a
-		// conversation the new orchestrator was never meant to see.
+		// An escalation hands over the brief, not the conversation. The marker is on
+		// disk rather than in this loop, so a restart between the escalation and
+		// this launch still starts the orchestrator fresh.
 		if tookHandoff(dir) {
 			resume = false
 		}

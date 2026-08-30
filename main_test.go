@@ -82,9 +82,8 @@ func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.
 	}
 }
 
-// Every path that opens a workbench opens it, editor or no editor. Resuming a
-// session used to be the one that refused, so an install with nothing on PATH
-// to edit with got a terminal error where a fresh one got a window.
+// Every path that opens a workbench opens it, editor or no editor: resuming a
+// session with nothing on PATH to edit with gets a window, not a terminal error.
 func TestOpeningASessionWithNoEditorStillOpensTheWorkbench(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())

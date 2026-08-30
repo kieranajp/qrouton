@@ -49,8 +49,8 @@ func TestRunnersDetectBuiltinsAndApplyConfiguredArguments(t *testing.T) {
 	}
 }
 
-// An override qrouton cannot wire up used to be dropped in silence, so a user
-// who configured one got the built-in default and no explanation.
+// MCP and hook injection is per-runner, so an override naming a runner qrouton
+// cannot wire up is refused by name rather than replaced by the built-in.
 func TestRunnersRejectUnsupportedOverride(t *testing.T) {
 	old := findExecutable
 	t.Cleanup(func() { findExecutable = old })
@@ -507,4 +507,85 @@ func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []
 		t.Fatalf("no spec for runner %q", r.ID)
 	}
 	return runnerArgv(spec, r, resume, mode, initialPrompt)
+}
+
+// ByID answers the runner the caller named, whether that is the identifier, the
+// command it was overridden to, or the basename of a path to it.
+func TestByIDResolvesIdentifierOverriddenCommandOrBasename(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) {
+		if filepath.Base(name) == runnerIDCodex {
+			return name, nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	cfg := &config.Config{Launch: map[string][]string{runnerIDCodex: {"/opt/beta/codex", "--search"}}}
+	for _, id := range []string{runnerIDCodex, "/opt/beta/codex"} {
+		runner, err := ByID(cfg, id)
+		if err != nil {
+			t.Fatalf("ByID(%q): %v", id, err)
+		}
+		if runner.ID != runnerIDCodex || runner.Path == "" {
+			t.Fatalf("ByID(%q) = %+v", id, runner)
+		}
+		if !reflect.DeepEqual(runner.Command, []string{"/opt/beta/codex", "--search"}) {
+			t.Fatalf("ByID(%q) lost the override: %#v", id, runner.Command)
+		}
+	}
+}
+
+// A caller that named a runner asked for that one. Answering with another that
+// happens to be installed would launch an agent nobody chose.
+func TestByIDRefusesARunnerThatIsNotInstalled(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) {
+		if name == runnerIDClaude {
+			return "/bin/claude", nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	for _, id := range []string{runnerIDCodex, "aider"} {
+		if _, err := ByID(&config.Config{}, id); !errors.Is(err, ErrRunnerUnavailable) {
+			t.Fatalf("ByID(%q) error = %v, want ErrRunnerUnavailable", id, err)
+		}
+	}
+	broken := &config.Config{Launch: map[string][]string{"aider": {"aider"}}}
+	if _, err := ByID(broken, runnerIDClaude); !errors.Is(err, ErrUnsupportedOverride) {
+		t.Fatalf("a runner named against a broken config = %v, want ErrUnsupportedOverride", err)
+	}
+}
+
+// A caller that named nothing gets the first installed runner in the spec
+// table's order, so the choice does not move with PATH.
+func TestFirstInstalledFollowsTheSpecTableOrder(t *testing.T) {
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	installed := map[string]bool{runnerIDCodex: true, runnerIDOpenCode: true}
+	findExecutable = func(name string) (string, error) {
+		if installed[name] {
+			return "/bin/" + name, nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+
+	runner, err := FirstInstalled(&config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runner.ID != runnerIDCodex {
+		t.Fatalf("first installed = %q, want %q — the earlier entry in the table", runner.ID, runnerIDCodex)
+	}
+
+	installed = nil
+	if _, err := FirstInstalled(&config.Config{}); !errors.Is(err, ErrNoRunnerInstalled) {
+		t.Fatalf("nothing installed = %v, want ErrNoRunnerInstalled", err)
+	}
+	broken := &config.Config{Launch: map[string][]string{"aider": {"aider"}}}
+	if _, err := FirstInstalled(broken); !errors.Is(err, ErrUnsupportedOverride) {
+		t.Fatalf("a broken config = %v, want ErrUnsupportedOverride", err)
+	}
 }

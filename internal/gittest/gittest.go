@@ -1,8 +1,5 @@
 // Package gittest builds the throwaway repositories qrouton's tests assemble
-// sessions from. Six packages each grew their own builder, two of them
-// byte-identical, and they had begun to drift on the settings that decide
-// whether a commit succeeds on a contributor's machine at all — a global
-// commit.gpgsign, or no user.name configured.
+// sessions from.
 //
 // Not a _test.go file, so the packages under test can import it.
 package gittest
