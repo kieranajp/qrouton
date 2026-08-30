@@ -1,6 +1,7 @@
 <script>
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import { GLYPHS, READ_ONLY } from "../roles.js";
 
   /** @type {{repos: any[], onAddRepos: () => void}} */
   let { repos, onAddRepos } = $props();
@@ -14,12 +15,12 @@
   {#each repos as repo (repo.name)}
     <div class="repo">
       <div class="repo-name {repo.role}">
-        {repo.role === "editing" ? "●" : "◐"}
+        {GLYPHS[repo.role]}
         {repo.name}
       </div>
       <div class="repo-stat">
         {#if repo.role === "reference"}
-          read-only
+          {READ_ONLY}
         {:else if repo.measured === false}
           unmeasured
         {:else}

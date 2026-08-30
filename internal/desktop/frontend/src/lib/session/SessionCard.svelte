@@ -1,6 +1,7 @@
 <script>
   import Button from "../core/Button.svelte";
   import Chip from "../core/Chip.svelte";
+  import { GLYPHS, READ_ONLY } from "../roles.js";
 
   /** @type {{initials?: string, name?: string, mode?: string, lastOpened?: string, description?: string, repos?: {name: string, role: string}[], progress?: {label: string, state: string}[], selected?: boolean, actions?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
@@ -36,8 +37,8 @@
         {#each repos as repo (repo.name)}
           <Chip
             tone={repo.role}
-            glyph={repo.role === "editing" ? "●" : "◐"}
-            meta={repo.role === "editing" ? "editing" : "read-only"}>{repo.name}</Chip>
+            glyph={GLYPHS[repo.role]}
+            meta={repo.role === "editing" ? "editing" : READ_ONLY}>{repo.name}</Chip>
         {/each}
       </div>
     {/if}

@@ -3,6 +3,7 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import SegmentedControl from "../forms/SegmentedControl.svelte";
+  import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
   import RepoRow from "../session/RepoRow.svelte";
 
@@ -32,13 +33,10 @@
   );
 </script>
 
-<div class="heading">
-  <span class="title">Which repositories?</span>
-  <span class="helper">
-    <span class="editing">Editing</span> means the agent may change it, on a new branch.
-    <span class="reference">Reference</span> is checked out read-only, for context.
-  </span>
-</div>
+<StepHeading title="Which repositories?">
+  <span class="editing">Editing</span> means the agent may change it, on a new branch.
+  <span class="reference">Reference</span> is checked out read-only, for context.
+</StepHeading>
 
 <div class="controls">
   <div class="search">
@@ -76,25 +74,6 @@
 </div>
 
 <style>
-  .heading {
-    display: flex;
-    align-items: flex-end;
-    gap: 18px;
-  }
-
-  .title {
-    font: var(--display-md);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .helper {
-    flex: 1;
-    font: var(--machine-sm);
-    color: var(--text-muted);
-    padding-bottom: 5px;
-  }
-
   .editing {
     color: var(--role-editing);
   }

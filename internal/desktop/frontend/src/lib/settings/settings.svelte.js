@@ -15,7 +15,7 @@ export function settings(onClose) {
     editor: "",
     launch: "",
     linear: "",
-    linearPath: "~/.linear/coding-tools.json",
+    linearPath: "",
   });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -29,7 +29,7 @@ export function settings(onClose) {
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
     form.linear = loaded?.linear ?? "";
-    form.linearPath = loaded?.linearPath ?? form.linearPath;
+    form.linearPath = loaded?.linearPath ?? "";
     if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
   });
 

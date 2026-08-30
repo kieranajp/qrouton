@@ -1,6 +1,7 @@
 <script>
   import CapsLabel from "../core/CapsLabel.svelte";
   import OptionCard from "../forms/OptionCard.svelte";
+  import StepHeading from "../forms/StepHeading.svelte";
 
   // qrouton wires MCP and hooks per runner, so the set is closed and so is the
   // copy for it.
@@ -14,11 +15,9 @@
   let { runners = [], runner = $bindable(""), mode = $bindable("rpi") } = $props();
 </script>
 
-<div class="heading">
-  <span class="title">Who runs it, and how?</span>
-  <span class="helper"
-    >Only agents found on your PATH are listed. Both choices can be changed later.</span>
-</div>
+<StepHeading title="Who runs it, and how?">
+  Only agents found on your PATH are listed. Both choices can be changed later.
+</StepHeading>
 
 <div class="group">
   <CapsLabel>Agent</CapsLabel>
@@ -54,25 +53,6 @@
 </div>
 
 <style>
-  .heading {
-    display: flex;
-    align-items: flex-end;
-    gap: 18px;
-  }
-
-  .title {
-    font: var(--display-md);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .helper {
-    flex: 1;
-    font: var(--machine-sm);
-    color: var(--text-muted);
-    padding-bottom: 5px;
-  }
-
   .group {
     display: flex;
     flex-direction: column;

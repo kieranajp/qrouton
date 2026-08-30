@@ -20,7 +20,7 @@
   import { assemblyOpen, pickerOpen } from "./lib/assembly/steps.js";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
-  import { age, chrome } from "./lib/chrome.svelte.js";
+  import { chrome } from "./lib/chrome.svelte.js";
   import {
     consumeTerminalFocus,
     focusGenerationIn,
@@ -49,6 +49,7 @@
     surfaces,
   } from "./lib/docked.svelte.js";
   import { opensSettings } from "./lib/shortcuts.js";
+  import { relative } from "./lib/relative.js";
   import { Events } from "./lib/wails.js";
 
   const session = chrome();
@@ -131,7 +132,7 @@
       ? {
           tag: fields.documents[0].kind,
           name: fields.documents[0].name,
-          age: age(fields.documents[0].at),
+          age: relative(fields.documents[0].at, "compact"),
         }
       : undefined,
   );
@@ -139,7 +140,7 @@
     fields.documents.map((doc) => ({
       tag: doc.kind,
       label: doc.name,
-      meta: age(doc.at),
+      meta: relative(doc.at, "compact"),
       path: doc.path,
     })),
   );
