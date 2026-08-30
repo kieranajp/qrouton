@@ -355,10 +355,11 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 	}
 	owner.shells++
 	return s.windows.openStructural(owner, workbench.WindowOptions{
-		Kind:    workbench.KindTerminal,
-		Label:   shellLabel(owner.shells),
-		Cwd:     root,
-		Command: s.argv(root),
+		Kind:        workbench.KindTerminal,
+		Label:       shellLabel(owner.shells),
+		Cwd:         root,
+		Command:     s.argv(root),
+		CloseOnExit: true,
 	})
 }
 

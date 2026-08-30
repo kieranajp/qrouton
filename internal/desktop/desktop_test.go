@@ -507,8 +507,8 @@ func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
 	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat "+opts.SessionRoot {
 		t.Fatalf("shell command = %q", got)
 	}
-	if window.opts.CloseOnExit {
-		t.Fatal("the shell closes on exit; qrouton shell restarts the shell instead")
+	if !window.opts.CloseOnExit {
+		t.Fatal("a shell that exits cleanly leaves its tab behind")
 	}
 	if len(r.opened) != 0 {
 		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
