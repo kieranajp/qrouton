@@ -1057,9 +1057,39 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 	}
 }
 
+// The window tools are the same in both modes; escalate is the assistant's
+// alone, because the orchestrator's own prompt tells it it has no such tool and
+// the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
+	window := []string{
+		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+	}
+	for _, tc := range []struct {
+		mode session.SessionMode
+		want []string
+	}{
+		{session.ModeAssistant, append(slices.Clone(window), toolEscalate)},
+		{session.ModeRPI, window},
+	} {
+		t.Run(string(tc.mode), func(t *testing.T) {
+			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, tc.mode))
+			for _, name := range tc.want {
+				if !advertised[name] {
+					t.Errorf("tool %q was not advertised", name)
+				}
+				delete(advertised, name)
+			}
+			for name := range advertised {
+				t.Errorf("tool %q is advertised but no longer part of the surface", name)
+			}
+		})
+	}
+}
+
+func advertisedTools(t *testing.T, server *mcp.Server) map[string]bool {
+	t.Helper()
 	ctx := context.Background()
-	server := newMCPServer(t.TempDir(), testEditor, &fakeHost{})
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
@@ -1080,18 +1110,38 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 		}
 		advertised[tool.Name] = true
 	}
-	for _, name := range []string{
-		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
-		toolNotify, toolCloseWindow, toolListWindows, toolEscalate,
-		toolSharePage,
+	return advertised
+}
+
+// The mode comes off disk, so a session escalated before this server started
+// gets the surface its fresh orchestrator prompt describes. An unreadable
+// manifest is not a licence to hand out the assistant's tool.
+func TestServerModeFollowsTheManifest(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		manifest *session.Manifest
+		want     session.SessionMode
+	}{
+		{"assistant", &session.Manifest{Mode: session.ModeAssistant}, session.ModeAssistant},
+		{"rpi", &session.Manifest{Mode: session.ModeRPI}, session.ModeRPI},
+		{"unset", &session.Manifest{}, session.ModeRPI},
+		{"no manifest", nil, session.ModeRPI},
 	} {
-		if !advertised[name] {
-			t.Errorf("tool %q was not advertised", name)
-		}
-		delete(advertised, name)
-	}
-	for name := range advertised {
-		t.Errorf("tool %q is advertised but no longer part of the surface", name)
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.manifest != nil {
+				if err := session.WriteManifest(dir, *tc.manifest); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := sessionMode(dir); got != tc.want {
+				t.Fatalf("sessionMode = %q, want %q", got, tc.want)
+			}
+			advertised := advertisedTools(t, newMCPServer(dir, testEditor, &fakeHost{}, sessionMode(dir)))
+			if advertised[toolEscalate] != (tc.want == session.ModeAssistant) {
+				t.Fatalf("%s session advertises %s = %v", tc.want, toolEscalate, advertised[toolEscalate])
+			}
+		})
 	}
 }
 
@@ -1105,7 +1155,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 		Source: "P007.md", Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
 	}}}
-	server := newMCPServer(dir, testEditor, host)
+	server := newMCPServer(dir, testEditor, host, session.ModeAssistant)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)

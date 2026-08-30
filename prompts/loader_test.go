@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -84,6 +85,47 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 		if strings.Contains(content, subagentChoicePlaceholder) {
 			t.Errorf("prompt %q retained subagent choice placeholder", id)
 		}
+	}
+}
+
+// Both modes drive the same workbench, so the description of it is one text.
+// What differs is escalation: only the assistant has the tool, and only its
+// prompt may say so.
+func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	rendered := map[ID]string{}
+	for _, id := range []ID{Orchestrator, Assistant} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(prompt.Content)
+		// Any surviving brace pair is a partial that did not expand — including
+		// one a partial itself named, which a single expansion pass cannot reach.
+		if i := strings.Index(content, "{{"); i >= 0 {
+			t.Errorf("prompt %q ships an unexpanded partial: %.32q", id, content[i:])
+		}
+		if !strings.Contains(content, "## The workspace windows") {
+			t.Errorf("prompt %q does not describe the workspace windows", id)
+		}
+		rendered[id] = content
+	}
+
+	shared, err := fs.ReadFile(embedded, workspaceWindowsFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, content := range rendered {
+		if !strings.Contains(content, string(shared)) {
+			t.Errorf("prompt %q carries its own copy of the workspace windows section", id)
+		}
+	}
+
+	if strings.Contains(rendered[Orchestrator], "escalat") {
+		t.Error("the orchestrator prompt offers escalation, which is the assistant's alone")
+	}
+	if !strings.Contains(rendered[Assistant], "`escalate`") {
+		t.Error("the assistant prompt does not name the escalate tool")
 	}
 }
 

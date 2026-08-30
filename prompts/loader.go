@@ -55,7 +55,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md subagent-choice.md agents/*.md all:skills
+//go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md agents/*.md all:skills
 var embedded embed.FS
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
@@ -82,22 +82,25 @@ func (l *FSLoader) Load(ctx context.Context, id ID) (Prompt, error) {
 	return prompt, nil
 }
 
-// read is one prompt file with the shared subagent-choice block expanded into
-// it. Every file is offered the block, references included, so a skill that
-// defers the delegation guidance to one reads the same words as the entry file.
+// read is one prompt file with the shared partials it names expanded into it.
+// Every file is offered them, references included, so a skill that defers a
+// passage to a partial reads the same words as the entry file.
 func (l *FSLoader) read(path string) ([]byte, error) {
 	content, err := fs.ReadFile(l.fsys, path)
 	if err != nil {
 		return nil, err
 	}
-	if !bytes.Contains(content, []byte(subagentChoicePlaceholder)) {
-		return content, nil
+	for placeholder, name := range partials {
+		if !bytes.Contains(content, []byte(placeholder)) {
+			continue
+		}
+		partial, err := fs.ReadFile(l.fsys, name)
+		if err != nil {
+			return nil, err
+		}
+		content = bytes.ReplaceAll(content, []byte(placeholder), partial)
 	}
-	choice, err := fs.ReadFile(l.fsys, subagentChoiceFileName)
-	if err != nil {
-		return nil, err
-	}
-	return bytes.ReplaceAll(content, []byte(subagentChoicePlaceholder), choice), nil
+	return content, nil
 }
 
 // skillFiles is everything in a skill's folder other than its entry file, in
