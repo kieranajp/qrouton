@@ -3,7 +3,7 @@ import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { latestPerFrame } from "./frame.js";
-import { position } from "./shortcuts.js";
+import { opensSettings, position } from "./shortcuts.js";
 
 export { Terminal };
 
@@ -77,7 +77,7 @@ export function mount(host, { write, background = "--ctp-base" }) {
     if (event.type !== "keydown") return true;
     // Returning false without preventing the default leaves the keystroke to
     // bubble, which is how the session shortcut reaches the page from in here.
-    if (position(event)) return false;
+    if (position(event) || opensSettings(event)) return false;
     if (event.key === "Enter" && event.shiftKey) {
       // Returning false stops xterm's keydown handling but not the browser's
       // own keypress, which would append a CR and submit.

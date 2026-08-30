@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NUMBERED, position, rowAt, shortcut } from "./shortcuts.js";
+import { NUMBERED, opensSettings, position, rowAt, shortcut } from "./shortcuts.js";
 
 const cmd = (key, extra = {}) => ({ key, metaKey: true, ...extra });
 
@@ -48,4 +48,18 @@ test("a shortcut past the last row, or no shortcut at all, names nothing", () =>
   assert.equal(rowAt(rows, cmd("0")), undefined);
   assert.equal(rowAt(rows, { key: "1" }), undefined);
   assert.equal(rowAt([], cmd("1")), undefined);
+});
+
+test("comma with the platform's own modifier asks for settings", () => {
+  assert.equal(opensSettings(cmd(",")), true);
+  assert.equal(opensSettings({ key: ",", ctrlKey: true }), true);
+});
+
+test("a comma the settings panel has no claim on", () => {
+  assert.equal(opensSettings({ key: "," }), false);
+  assert.equal(opensSettings(cmd(",", { ctrlKey: true })), false);
+  assert.equal(opensSettings(cmd(",", { shiftKey: true })), false);
+  assert.equal(opensSettings(cmd(",", { altKey: true })), false);
+  assert.equal(opensSettings(cmd(".")), false);
+  assert.equal(opensSettings(undefined), false);
 });

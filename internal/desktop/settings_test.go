@@ -16,7 +16,7 @@ import (
 func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, quit func()) *Settings {
 	t.Helper()
-	s := newSettings(cfg, validateEditor, validateLaunch, []string{
+	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
 	}, []string{"LINEAR_PROMPT"}, quit)
@@ -480,5 +480,29 @@ func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	state.mu.Unlock()
 	if !stoppedSession {
 		t.Fatal("Settings.Quit did not stop the session registry")
+	}
+}
+
+func TestSettingsSaveAnnouncesOrgsThatChanged(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	var announced [][]string
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.emit = func(event string, payload any) {
+		if event == orgsChangedEvent {
+			announced = append(announced, payload.([]string))
+		}
+	}
+
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme", "other"}, Root: cfg.Root, Linear: `{}`}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	if _, err := s.Save(SettingsInput{Orgs: []string{"acme", "other"}, Root: cfg.Root, Linear: `{}`}); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	want := [][]string{{"acme", "other"}}
+	if !reflect.DeepEqual(announced, want) {
+		t.Fatalf("announced = %#v, want %#v — once, for the save that changed them", announced, want)
 	}
 }

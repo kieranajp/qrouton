@@ -48,6 +48,7 @@
     selectWindow,
     surfaces,
   } from "./lib/docked.svelte.js";
+  import { opensSettings } from "./lib/shortcuts.js";
   import { Events } from "./lib/wails.js";
 
   const session = chrome();
@@ -178,9 +179,16 @@
         if (live && ticket) requested = true;
       })
       .catch(() => {});
+    const onKey = (event) => {
+      if (!opensSettings(event)) return;
+      event.preventDefault();
+      if (!fields.welcoming) settingsOpen = true;
+    };
+    window.addEventListener("keydown", onKey);
     return () => {
       live = false;
       off();
+      window.removeEventListener("keydown", onKey);
     };
   });
 
@@ -307,7 +315,10 @@
     {#key fields.slug}
       <PickerOverlay slug={fields.slug} onClose={() => (added = "")} />
     {/key}
-  {:else if settingsOpen}
+  {/if}
+
+  <!-- Stacked rather than branched: unmounting the assembly overlay ends its draft. -->
+  {#if settingsOpen}
     <SettingsOverlay onClose={() => (settingsOpen = false)} />
   {/if}
 </div>

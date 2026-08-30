@@ -16,3 +16,18 @@ test("the overlay stays hidden until the backend owns its draft generation", asy
     window.assembly.calls().some(({ name, args }) => name.endsWith(".End") && args[0] === 7),
   )).toBe(true);
 });
+
+test("saved orgs reach the repositories step without it being rebuilt", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await expect(page.locator(".controls .segment")).toHaveText(["acme"]);
+
+  await page.evaluate(() => window.assembly.emit("orgs:changed", ["acme", "other"]));
+
+  await expect(page.locator(".controls .segment")).toHaveText(["acme", "other"]);
+  await expect.poll(() => page.evaluate(() =>
+    window.assembly.calls().filter(({ name }) => name.endsWith("Repositories.Refresh")).length,
+  )).toBe(1);
+});

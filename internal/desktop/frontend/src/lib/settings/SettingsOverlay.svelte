@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from "svelte";
   import Dialog from "../assembly/Dialog.svelte";
   import Settings from "./Settings.svelte";
   import { settings } from "./settings.svelte.js";
@@ -7,6 +8,12 @@
   let { onClose } = $props();
 
   const panel = settings(() => onClose());
+
+  // A Dialog focuses its layer on mount alone, so the one underneath needs it back.
+  onMount(() => {
+    const beneath = /** @type {HTMLElement | null} */ (document.activeElement);
+    return () => beneath?.focus?.();
+  });
 </script>
 
 <Dialog

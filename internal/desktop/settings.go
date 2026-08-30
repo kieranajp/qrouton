@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/google/shlex"
@@ -44,6 +45,7 @@ type SaveResult struct {
 // and the process teardown its Root banner offers instead of a relaunch.
 type Settings struct {
 	cfg            *config.Config
+	emit           emitter
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	quit           func()
@@ -52,10 +54,11 @@ type Settings struct {
 	linearEnv      []string
 }
 
-func newSettings(cfg *config.Config, validateEditor func([]string) error,
+func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit func()) *Settings {
 	return &Settings{
 		cfg:            cfg,
+		emit:           emit,
 		validateEditor: validateEditor,
 		validateLaunch: validateLaunch,
 		quit:           quit,
@@ -133,7 +136,11 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	// Root stays off the live pointer: the rail's scanner and boot path closed
 	// over it at process start, so a session created against a live-mutated
 	// root would not appear in a rail still scanning the old one.
+	changed := !slices.Equal(s.cfg.Orgs, orgs)
 	s.cfg.Orgs, s.cfg.Editor, s.cfg.Launch = orgs, editor, launch
+	if changed {
+		s.emit(orgsChangedEvent, orgs)
+	}
 
 	return SaveResult{RestartRequired: expandedRoot != filepath.Clean(s.cfg.Root)}, nil
 }
