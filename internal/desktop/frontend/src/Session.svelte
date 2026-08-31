@@ -26,9 +26,11 @@
 
 <div class="session">
   <div class="titlebar">
-    <CubeMark size={20} />
-    <span class="name">{fields.identity}</span>
-    {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
+    <div class="identity">
+      <CubeMark size={20} />
+      <span class="name">{fields.identity}</span>
+      {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
+    </div>
     <span class="tools">
       <Button variant="ghost" size="sm" onclick={() => (view.settingsOpen = true)}>Settings</Button>
     </span>
@@ -151,18 +153,30 @@
     overflow: hidden;
   }
 
-  /* No traffic lights: on Linux the compositor draws the decorations, and
-     painting fake ones is a button that does nothing. */
+  /* macOS draws its real traffic lights over the left of this band, so that
+     strip is theirs and the rest of it drags the window. */
   .titlebar {
     height: var(--h-titlebar);
     flex: none;
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 14px;
+    padding: 0 14px 0 var(--w-traffic-lights);
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
+    --wails-draggable: drag;
+  }
+
+  /* Centred on the window rather than on the room the lights and the tools
+     leave, so the name does not shift when either changes width. */
+  .identity {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
   }
 
   .name {
@@ -181,6 +195,7 @@
     margin-left: auto;
     display: flex;
     gap: 8px;
+    --wails-draggable: no-drag;
   }
 
   .panels {

@@ -24,6 +24,10 @@
   --h-footer: 36px;
   --h-form-footer: 52px;
 
+  /* The strip macOS paints its traffic lights into, over the session's own
+     titlebar. Clears the zoom button with room to spare. */
+  --w-traffic-lights: 78px;
+
   /* starting widths; both panes can move from these with their dividers */
   --w-rail: 200px;
   --w-human-pane: 560px;

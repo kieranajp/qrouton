@@ -40,6 +40,12 @@ func (r *wailsRenderer) Open(spec windowSpec) error {
 			URL:    spec.URL,
 			Width:  spec.Width,
 			Height: spec.Height,
+			// The frontend draws the titlebar, so macOS must not draw one too:
+			// the lights float over the band the session paints.
+			Mac: application.MacWindow{
+				TitleBar:   application.MacTitleBarHidden,
+				Appearance: application.NSAppearanceNameDarkAqua,
+			},
 		})
 		if spec.OnClose != nil {
 			window.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { spec.OnClose() })
