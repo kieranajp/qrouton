@@ -157,6 +157,37 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	}
 }
 
+func TestHeaderEscalationQueuesAPersistentPickerOnlyForAssistant(t *testing.T) {
+	reg, shown, _ := pickerWorkbench(t)
+	p := newPicker(&config.Config{Root: filepath.Dir(shown)}, reg,
+		&Repositories{errs: map[string]error{}}, nil)
+
+	if err := p.Escalate("shown"); err != nil {
+		t.Fatal(err)
+	}
+	request := reg.current().pendingPicker()
+	if request == nil || !request.Deadline.IsZero() {
+		t.Fatalf("header escalation request = %+v, want a persistent picker", request)
+	}
+	if fields := chromeOf(t, reg); !fields.Picker {
+		t.Fatal("header escalation did not reach the shown session's chrome")
+	}
+
+	reg.current().clearPicker()
+	if err := session.SetMode(shown, session.ModeRPI); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Escalate("shown"); err != nil {
+		t.Fatal(err)
+	}
+	if request := reg.current().pendingPicker(); request != nil {
+		t.Fatalf("RPI session queued another escalation: %+v", request)
+	}
+	if err := p.Escalate("kraken"); err == nil {
+		t.Fatal("header escalation accepted a session this workbench is not running")
+	}
+}
+
 // Answering clears the request, so arriving at the session again draws nothing.
 func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	reg, shown, _ := pickerWorkbench(t)

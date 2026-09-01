@@ -11,10 +11,13 @@ import (
 )
 
 type agentWindow struct {
-	opts          workbench.WindowOptions
-	session       *sessionState
-	seq           int
-	buffer        *ring
+	opts    workbench.WindowOptions
+	session *sessionState
+	seq     int
+	buffer  *ring
+	// stream orders a terminal's retained bytes and emitted chunks. A remounted
+	// page can therefore reset to one replay without racing live output around it.
+	stream        sync.Mutex
 	process       *ptyProcess
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64

@@ -126,9 +126,9 @@ type WindowHost interface {
 
 // PickerRequest is an escalation waiting on a session. Name is what the agent
 // proposes to call the work and Prefix the prefix a branch is cut with, both of
-// which a session with repositories already has answers for. Deadline travels
-// with the request because the workbench never learns that the caller gave up
-// waiting: past it, drawing the picker asks for an answer nobody is polling for.
+// which a session with repositories already has answers for. A caller's
+// deadline keeps a stale request from being drawn; zero is a picker the user
+// opened directly and remains live until they answer it.
 type PickerRequest struct {
 	SessionRoot string    `json:"session_root"`
 	Name        string    `json:"name,omitempty"`

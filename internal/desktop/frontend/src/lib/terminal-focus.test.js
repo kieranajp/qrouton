@@ -85,6 +85,26 @@ test("destroy cancels queued refit and focus work", () => {
   assert.equal(calls, 0);
 });
 
+test("revealing a hidden terminal refits and then redraws its retained rows", () => {
+  const queue = frames();
+  const calls = [];
+  const activation = createTerminalActivation({
+    ...queue,
+    refit() {
+      calls.push("refit");
+    },
+    redraw() {
+      calls.push("redraw");
+    },
+    focus() {},
+    handled() {},
+  });
+
+  activation.update(true, 0, false);
+  queue.flush();
+  assert.deepEqual(calls, ["refit", "redraw"]);
+});
+
 test("each user terminal choice increments only that terminal's focus generation", () => {
   let generations = focusTerminal({}, "window-3");
   generations = focusTerminal(generations, "window-7");

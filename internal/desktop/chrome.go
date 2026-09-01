@@ -191,6 +191,12 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	}
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
+		for _, repo := range repos {
+			if repo.Pushed {
+				fields.Stages.Implement = true
+				break
+			}
+		}
 	}
 	agentSnapshots := reg.agentActivitySnapshots()
 	// Dereferenced on every tick: a value captured at wiring time re-raises the

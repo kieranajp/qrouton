@@ -12,6 +12,7 @@ import {
   ORGS_LIST,
   PICKER_CANCEL,
   PICKER_CONFIRM,
+  PICKER_ESCALATE,
   PICKER_LOAD,
   REPOSITORIES_CACHED,
   REPOSITORIES_REFRESH,
@@ -84,6 +85,9 @@ export const orgs = () => Call.ByName(ORGS_LIST);
  * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[]}>}
  */
 export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
+
+/** @param {string} slug */
+export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 
 /**
  * addRepos gives the session the picked repositories, takes up the held ones

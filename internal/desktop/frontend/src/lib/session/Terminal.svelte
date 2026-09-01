@@ -3,7 +3,7 @@
   import TerminalPane from "../shell/TerminalPane.svelte";
   import { createTerminalActivation } from "../terminal-focus.js";
   import { Call, Events } from "../wails.js";
-  import { decode, encode, mount, watchSize } from "../xterm.js";
+  import { encode, mount, paint, watchSize } from "../xterm.js";
 
   /** @type {{id: string, pty: import("./services.js").PTY, active?: boolean,
    *   focus?: number, focusPending?: boolean, onFocused?: (generation: number) => void}} */
@@ -18,6 +18,7 @@
     frame: requestAnimationFrame,
     cancelFrame: cancelAnimationFrame,
     refit: () => fit?.(),
+    redraw: () => term?.refresh(0, term.rows - 1),
     focus: () => term?.focus(),
     handled: (generation) => onFocused?.(generation),
   });
@@ -35,7 +36,7 @@
       fit = () => refit((cols, rows) => Call.ByName(pty.resize, id, cols, rows));
 
       term.onBinary((data) => Call.ByName(pty.write, id, btoa(data)));
-      const offData = Events.On(pty.data + id, (event) => term.write(decode(event.data)));
+      const offData = Events.On(pty.data + id, (event) => paint(term, event.data));
       const offExit = Events.On(pty.exit + id, (event) => {
         term.write("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n");
       });

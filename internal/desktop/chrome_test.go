@@ -102,6 +102,22 @@ func TestSelectedColdSessionKeepsKnownManifestProvider(t *testing.T) {
 	}
 }
 
+func TestAPushedSessionCommitLightsImplementation(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, "shared")
+	reg := testRegistry(t, dir)
+	renderer := newFakeRenderer()
+	repos := map[string][]status.RepoStat{
+		dir: {{Name: "lifesum/svc", Role: "editing", Commits: 1, Measured: true, Pushed: true}},
+	}
+
+	pushChrome(reg, root, nil, repos, nil, renderer.Emit)
+	fields := pushedChrome(t, renderer)
+	if !fields.Stages.Implement {
+		t.Fatalf("stages = %+v, want pushed work to complete implementation", fields.Stages)
+	}
+}
+
 func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	tracker := newAgentActivity(clock.now, time.Minute)

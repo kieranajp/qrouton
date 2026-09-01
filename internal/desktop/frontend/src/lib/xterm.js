@@ -35,6 +35,21 @@ export function decode(encoded) {
   return buffer;
 }
 
+/**
+ * paint writes one PTY event. A retained replay replaces the empty terminal a
+ * remount creates; ordinary chunks remain compatible with the conversation's
+ * string payload.
+ * @param {Terminal} term
+ * @param {string | {encoded: string, replay?: boolean}} payload
+ */
+export function paint(term, payload) {
+  const chunk = typeof payload === "string" ? { encoded: payload } : payload;
+  // Keep the reset in xterm's write queue. Calling reset() synchronously could
+  // overtake an ordinary chunk which the parser has accepted but not painted.
+  if (chunk.replay) term.write("\x1bc");
+  term.write(decode(chunk.encoded));
+}
+
 const mounted = new WeakMap();
 
 /** terminalAt is the terminal a node sits inside, and undefined outside one. */

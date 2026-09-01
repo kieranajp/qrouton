@@ -1,4 +1,11 @@
-export function createTerminalActivation({ frame, cancelFrame, refit, focus, handled }) {
+export function createTerminalActivation({
+  frame,
+  cancelFrame,
+  refit,
+  redraw = () => {},
+  focus,
+  handled,
+}) {
   let active = false;
   let generation = 0;
   let focusFrame;
@@ -8,7 +15,10 @@ export function createTerminalActivation({ frame, cancelFrame, refit, focus, han
     if (refitFrame !== undefined) return;
     refitFrame = frame(() => {
       refitFrame = undefined;
-      if (active) refit();
+      if (active) {
+        refit();
+        redraw();
+      }
     });
   };
 

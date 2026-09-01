@@ -163,8 +163,8 @@ func Remove(root, dir string) error {
 	return Delete(root, m)
 }
 
-// RepoStat is how far one repository has moved since it was branched.
-// Uncommitted work is left out; the commit and diff figures answer the question.
+// RepoStat is how far one repository has moved since it was branched. Pushed
+// means its remote-tracking session branch contains work beyond the base.
 type RepoStat struct {
 	Org, Name  string
 	Role       RepoRole
@@ -173,6 +173,7 @@ type RepoStat struct {
 	Insertions int
 	Deletions  int
 	Measured   bool
+	Pushed     bool
 }
 
 // RepoStats measures each repository against the branch it was cut from. A
@@ -187,14 +188,15 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 			Path: filepath.Join(dir, repo.WorktreePath),
 		}
 		if stat.Role == RepoRoleEditing && repo.DefaultBranch != "" {
-			measure(ctx, stat.Path, remoteRefPrefix+repo.DefaultBranch, &stat)
+			measure(ctx, stat.Path, remoteRefPrefix+repo.DefaultBranch,
+				remoteRefPrefix+repo.Branch, &stat)
 		}
 		stats = append(stats, stat)
 	}
 	return stats
 }
 
-func measure(ctx context.Context, path, base string, stat *RepoStat) {
+func measure(ctx context.Context, path, base, branch string, stat *RepoStat) {
 	commits, ok := countCommits(ctx, path, base)
 	if !ok {
 		return
@@ -204,17 +206,30 @@ func measure(ctx context.Context, path, base string, stat *RepoStat) {
 		return
 	}
 	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
+	stat.Pushed = branch != remoteRefPrefix && countPushedCommits(ctx, path, base, branch) > 0
 }
 
 func countCommits(ctx context.Context, path, base string) (int, bool) {
+	return countRange(ctx, path, base+rangeSeparator+headRef)
+}
+
+func countRange(ctx context.Context, path, revisionRange string) (int, bool) {
 	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, revListCmd, countFlag, base+rangeSeparator+headRef).Output()
+	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, revListCmd, countFlag, revisionRange).Output()
 	if err != nil {
 		return 0, false
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
 	return count, err == nil
+}
+
+func countPushedCommits(ctx context.Context, path, base, branch string) int {
+	commits, ok := countRange(ctx, path, base+rangeSeparator+branch)
+	if !ok {
+		return 0
+	}
+	return commits
 }
 
 // countLines totals the diff since the merge base, so a base branch that has

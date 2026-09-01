@@ -98,7 +98,7 @@ const (
 	// escalation.
 	chromeInterval = 2 * time.Second
 
-	// repoStatInterval paces the git stats: two subprocesses per active repo.
+	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
 
 	// activityQuiet is how long the conversation PTY has to stay silent before

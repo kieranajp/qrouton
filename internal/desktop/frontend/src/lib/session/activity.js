@@ -10,13 +10,6 @@ const STATES = new Set([
 
 const WORKING = ["Waiting for you", "Working", "Idle", "Active"];
 
-/** @param {string[]} values */
-function sentenceList(values) {
-  if (values.length < 2) return values[0] ?? "";
-  if (values.length === 2) return values.join(" and ");
-  return `${values.slice(0, -1).join(", ")}, and ${values.at(-1)}`;
-}
-
 /** @param {string} value */
 function humanize(value) {
   return value
@@ -179,22 +172,11 @@ export function rowLabel(name, repos, facts) {
     .join(" · ");
 }
 
-/**
- * @param {{provider?: string, attention_known?: boolean, children_known?: boolean,
- * parents_known?: boolean, outcomes_known?: boolean}} panel
- */
+/** @param {{provider?: string, children_known?: boolean}} panel */
 export function capabilityNote(panel = {}) {
   if (!panel.provider) return "Provider unknown · live activity unavailable";
-  const unavailable = [];
-  if (!panel.attention_known) unavailable.push("attention");
-  if (!panel.children_known) unavailable.push("delegated agents");
-  if (!unavailable.length) return "";
-  const prefix = panel.children_known
-    ? ""
-    : `${providerLabel(panel.provider)} provides root activity only. `;
-  const missing = sentenceList(unavailable);
-  const sentence = missing[0].toUpperCase() + missing.slice(1);
-  return `${prefix}${sentence} unavailable.`;
+  if (panel.children_known) return "";
+  return `${providerLabel(panel.provider)} provides root activity only.`;
 }
 
 /** @typedef {{id?: string, run_id?: string, provider?: string, parent_id?: string,

@@ -15,6 +15,11 @@ type terminals struct {
 	registry *registry
 }
 
+type terminalChunk struct {
+	Encoded string `json:"encoded"`
+	Replay  bool   `json:"replay,omitempty"`
+}
+
 func newTerminals(emit emitter, reg *registry) *terminals {
 	return &terminals{emit: emit, registry: reg}
 }
@@ -23,7 +28,7 @@ func newTerminals(emit emitter, reg *registry) *terminals {
 // The page calls it on load, so a reload must not fork a second process.
 func (t *terminals) start(id string, cols, rows int) error {
 	var started *ptyProcess
-	var buffer *ring
+	var terminal *agentWindow
 	err := t.registry.with(id, func(window *agentWindow) error {
 		// A document has no command, and a page that asks anyway must not take the
 		// workbench down with it.
@@ -31,6 +36,7 @@ func (t *terminals) start(id string, cols, rows int) error {
 			return ErrNotATerminal
 		}
 		if window.process != nil {
+			terminal = window
 			return nil
 		}
 		process, err := startPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, cols, rows)
@@ -38,17 +44,36 @@ func (t *terminals) start(id string, cols, rows int) error {
 			return err
 		}
 		window.process = process
-		started, buffer = process, window.buffer
+		started, terminal = process, window
 		return nil
 	})
-	// started is nil when the window already had a process, which a reload does.
-	if err != nil || started == nil {
+	if err != nil {
 		return err
+	}
+	// A session switch unmounts this xterm, not its PTY. Reset the fresh view to
+	// the retained byte stream before any later chunk can pass it. Resize under
+	// the same ordering lock: a shell repainting for SIGWINCH must follow replay.
+	if started == nil {
+		terminal.stream.Lock()
+		if err := terminal.process.resize(cols, rows); err != nil {
+			terminal.stream.Unlock()
+			return err
+		}
+		t.emit(windowDataEvent+id, terminalChunk{
+			Encoded: base64.StdEncoding.EncodeToString(terminal.buffer.bytes()),
+			Replay:  true,
+		})
+		terminal.stream.Unlock()
+		return nil
 	}
 	go started.pump(
 		func(b []byte) {
-			buffer.write(b)
-			t.emit(windowDataEvent+id, base64.StdEncoding.EncodeToString(b))
+			terminal.stream.Lock()
+			terminal.buffer.write(b)
+			t.emit(windowDataEvent+id, terminalChunk{
+				Encoded: base64.StdEncoding.EncodeToString(b),
+			})
+			terminal.stream.Unlock()
 		},
 		func(code int) { t.exited(id, code) },
 	)
@@ -121,6 +146,12 @@ func (r *ring) write(b []byte) {
 	if len(r.buf) > r.limit {
 		r.buf = r.buf[len(r.buf)-r.limit:]
 	}
+}
+
+func (r *ring) bytes() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]byte(nil), r.buf...)
 }
 
 // text renders the buffer as the agent reads it: escape sequences stripped, and

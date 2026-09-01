@@ -4,8 +4,8 @@
   import { picking } from "./picker.svelte.js";
   import { joining } from "./steps.js";
 
-  /** @type {{slug: string, onClose: () => void}} */
-  let { slug, onClose } = $props();
+  /** @type {{slug: string, escalating?: boolean, onClose: () => void}} */
+  let { slug, escalating = false, onClose } = $props();
 
   const picker = picking(() => slug, () => onClose());
   const repos = picker.repos;
@@ -15,7 +15,7 @@
 
 <Dialog
   secondary="Cancel"
-  primary="Add repositories →"
+  primary={escalating ? "Escalate →" : "Add repositories →"}
   status={footer}
   busy={picker.answering}
   onSecondary={picker.cancel}

@@ -30,5 +30,5 @@
 
   /* starting widths; both panes can move from these with their dividers */
   --w-rail: 200px;
-  --w-human-pane: 560px;
+  --w-human-pane: 640px;
 }
