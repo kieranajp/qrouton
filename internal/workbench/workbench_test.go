@@ -102,7 +102,7 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 	host := newClient(socket)
 	ctx := context.Background()
 
-	id, err := host.Open(ctx, WindowOptions{Kind: KindTerminal, Label: "dev", Command: []string{"npm", "run", "dev"}})
+	id, err := host.Open(ctx, WindowOptions{Kind: KindTerminal, Label: "dev", Command: []string{"npm", "run", "dev"}, Select: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 	}
 
 	got := <-requests
-	if got.Op != OpOpen || got.Options == nil || got.Options.Kind != KindTerminal || got.Options.Label != "dev" {
+	if got.Op != OpOpen || got.Options == nil || got.Options.Kind != KindTerminal || got.Options.Label != "dev" || !got.Options.Select {
 		t.Fatalf("open request = %+v", got)
 	}
 	for _, want := range []struct {

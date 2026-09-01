@@ -12,15 +12,17 @@ import (
 )
 
 type openFileInput struct {
-	Path    string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
-	Line    int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
-	Through int    `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
+	Path       string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
+	Line       int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
+	Through    int    `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
+	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 type runCommandInput struct {
-	Command string `json:"command" jsonschema:"Shell command to run in a window the user can watch"`
-	Name    string `json:"name,omitempty" jsonschema:"Window name; reusing a name replaces that window. Defaults to \"command\""`
-	Cwd     string `json:"cwd,omitempty" jsonschema:"Working directory within the session; defaults to the session root"`
+	Command    string `json:"command" jsonschema:"Shell command to run in a window the user can watch"`
+	Name       string `json:"name,omitempty" jsonschema:"Window name; reusing a name replaces that window. Defaults to \"command\""`
+	Cwd        string `json:"cwd,omitempty" jsonschema:"Working directory within the session; defaults to the session root"`
+	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 type readWindowInput struct {
@@ -33,9 +35,10 @@ type windowNameInput struct {
 }
 
 type showDiffInput struct {
-	Repo   string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every session repo"`
-	Staged bool   `json:"staged,omitempty" jsonschema:"Show staged (index) changes instead of the working tree"`
-	Base   string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
+	Repo       string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every session repo"`
+	Staged     bool   `json:"staged,omitempty" jsonschema:"Show staged (index) changes instead of the working tree"`
+	Base       string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
+	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 type sharePageInput struct {
@@ -43,7 +46,8 @@ type sharePageInput struct {
 }
 
 type notifyInput struct {
-	Message string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
+	Message    string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
+	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 // escalateInput's branch_prefix values are the picker's own list: anything else

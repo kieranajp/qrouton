@@ -119,6 +119,17 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 		if !strings.Contains(content, string(shared)) {
 			t.Errorf("prompt %q carries its own copy of the workspace windows section", id)
 		}
+		for _, guidance := range []string{
+			"begins in the background",
+			"`foreground: true`",
+			"never takes the keyboard",
+			"automatically selects `thoughts/` artifacts",
+			"waiting marker",
+		} {
+			if !strings.Contains(content, guidance) {
+				t.Errorf("prompt %q is missing window attention guidance %q", id, guidance)
+			}
+		}
 	}
 
 	if strings.Contains(rendered[Orchestrator], "escalat") {

@@ -54,17 +54,19 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // so a second request for that file selects this window instead of opening
 // another. Badge leads the tab in the artifact's own colour, ahead of Label.
 type WindowOptions struct {
-	Kind        WindowKind     `json:"kind"`
-	Label       string         `json:"label"`
-	Badge       string         `json:"badge,omitempty"`
-	Source      string         `json:"source,omitempty"`
-	Cwd         string         `json:"cwd,omitempty"`
-	Command     []string       `json:"command,omitempty"`
-	Content     string         `json:"content,omitempty"`
-	Format      DocumentFormat `json:"format,omitempty"`
-	Span        LineSpan       `json:"span,omitzero"`
-	Attention   bool           `json:"attention,omitempty"`
-	CloseOnExit bool           `json:"close_on_exit,omitempty"`
+	Kind    WindowKind     `json:"kind"`
+	Label   string         `json:"label"`
+	Badge   string         `json:"badge,omitempty"`
+	Source  string         `json:"source,omitempty"`
+	Cwd     string         `json:"cwd,omitempty"`
+	Command []string       `json:"command,omitempty"`
+	Content string         `json:"content,omitempty"`
+	Format  DocumentFormat `json:"format,omitempty"`
+	Span    LineSpan       `json:"span,omitzero"`
+	// Select changes the session's selected tab without requesting native focus.
+	Select      bool `json:"select,omitempty"`
+	Attention   bool `json:"attention,omitempty"`
+	CloseOnExit bool `json:"close_on_exit,omitempty"`
 }
 
 // LineSpan is the part of a document the user should be looking at, in

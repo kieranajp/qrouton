@@ -195,6 +195,144 @@ func shortViewportPoll(t *testing.T, timeout time.Duration) {
 	t.Cleanup(func() { viewportWaitTimeout, viewportPollInterval = originalTimeout, originalInterval })
 }
 
+func boolPtr(value bool) *bool { return &value }
+
+func TestForegroundResolvesEveryOpeningTool(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		foreground *bool
+		want       bool
+	}{
+		{"omitted", nil, false},
+		{"false", boolPtr(false), false},
+		{"true", boolPtr(true), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Run("open file", func(t *testing.T) {
+				m, host, dir := newTestManager(t)
+				if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				if _, _, err := m.openFile(context.Background(), openFileInput{Path: "main.go", Foreground: tc.foreground}); err != nil {
+					t.Fatal(err)
+				}
+				if got := host.opens[0].Select; got != tc.want {
+					t.Fatalf("Select = %v, want %v", got, tc.want)
+				}
+			})
+			t.Run("run command", func(t *testing.T) {
+				m, host, _ := newTestManager(t)
+				if _, err := m.run(context.Background(), runCommandInput{Command: "serve", Foreground: tc.foreground}); err != nil {
+					t.Fatal(err)
+				}
+				if got := host.opens[0].Select; got != tc.want {
+					t.Fatalf("Select = %v, want %v", got, tc.want)
+				}
+			})
+			t.Run("show diff", func(t *testing.T) {
+				m, host, _ := newTestManager(t)
+				if _, err := m.showDiff(context.Background(), showDiffInput{Foreground: tc.foreground}); err != nil {
+					t.Fatal(err)
+				}
+				if got := host.opens[0].Select; got != tc.want {
+					t.Fatalf("Select = %v, want %v", got, tc.want)
+				}
+			})
+			t.Run("notify", func(t *testing.T) {
+				m, host, _ := newTestManager(t)
+				original := playSound
+				playSound = func(string) {}
+				t.Cleanup(func() { playSound = original })
+				if _, err := m.notify(context.Background(), notifyInput{Message: "done", Foreground: tc.foreground}); err != nil {
+					t.Fatal(err)
+				}
+				if got := host.opens[0].Select; got != tc.want {
+					t.Fatalf("Select = %v, want %v", got, tc.want)
+				}
+			})
+		})
+	}
+}
+
+func TestOpenFileForegroundDefaultsToCanonicalThoughtsSource(t *testing.T) {
+	m, host, root := newTestManager(t)
+	parked := filepath.Join(t.TempDir(), "parked")
+	if err := os.MkdirAll(filepath.Join(parked, "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	thought := filepath.Join(parked, "shared", "P007.md")
+	if err := os.WriteFile(thought, []byte("# Plan\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(parked, filepath.Join(root, sessionpaths.ThoughtsDirName)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "thoughts-old"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "thoughts-old", "P008.md"), []byte("# Not thoughts\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, tc := range []struct {
+		name       string
+		path       string
+		foreground *bool
+		want       bool
+	}{
+		{"thoughts relative", filepath.Join("thoughts", "shared", "P007.md"), nil, true},
+		{"thoughts explicit background", filepath.Join("thoughts", "shared", "P007.md"), boolPtr(false), false},
+		{"thoughts absolute", thought, nil, true},
+		{"thoughts lookalike", filepath.Join("thoughts-old", "P008.md"), nil, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, err := m.openFile(context.Background(), openFileInput{Path: tc.path, Foreground: tc.foreground}); err != nil {
+				t.Fatal(err)
+			}
+			got := host.opens[len(host.opens)-1]
+			if got.Select != tc.want {
+				t.Fatalf("Select = %v, want %v", got.Select, tc.want)
+			}
+			if tc.want && got.Source != filepath.Join("thoughts", "shared", "P007.md") {
+				t.Fatalf("Source = %q, want canonical thoughts source", got.Source)
+			}
+		})
+	}
+}
+
+func TestBackgroundMarkdownOpenReadsOneUnselectedViewport(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(dir, "P007.md"), []byte("# Plan\n\nText\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host.viewports = []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
+	}}
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(host.views) != 1 || viewport == nil || viewport.Selected || viewport.Available || len(viewport.Intervals) != 0 {
+		t.Fatalf("background viewport reads = %d, viewport = %+v", len(host.views), viewport)
+	}
+	if strings.Contains(message, "visible in a measured block") || strings.Contains(message, "scrolled") {
+		t.Fatalf("background response claims visibility: %q", message)
+	}
+
+	host.viewports = []*workbench.DocumentViewport{{
+		Source: "P007.md", Available: true, Selected: true,
+		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
+	}}
+	message, viewport, err = m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if viewport == nil || !viewport.Selected || !strings.Contains(message, "visible in a measured block") {
+		t.Fatalf("selected response = %q, viewport = %+v", message, viewport)
+	}
+}
+
 func TestOpenFileOpensTheEditorWindowAndReplacesTheLastOne(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\n"), 0o644); err != nil {
@@ -249,7 +387,7 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 		Source: "P007.md", Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
 	}}
-	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md"})
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Foreground: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,7 +428,7 @@ func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 		{Source: "P007.md", Available: true, Selected: true, Intervals: []workbench.LineInterval{{Line: 7, To: 19}}},
 	}
 
-	message, _, err := m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7})
+	message, _, err := m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Foreground: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -301,7 +439,7 @@ func TestOpenFileAimsARenderedPaneAtTheLinesTheAgentAsksFor(t *testing.T) {
 		t.Fatalf("message = %q, want the marked line named", message)
 	}
 
-	message, _, err = m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Through: 19})
+	message, _, err = m.openFile(ctx, openFileInput{Path: "P007.md", Line: 7, Through: 19, Foreground: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +461,7 @@ func TestOpenFileDoesNotClaimLiftedBlankOrPastEndLinesAreVisible(t *testing.T) {
 			Source: "P007.md", Available: true, Selected: true,
 			Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
 		}}
-		message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: line})
+		message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: line, Foreground: boolPtr(true)})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -413,7 +551,7 @@ func TestOpenFilePollsPastUnavailableUntilTheRequestedBlockIsMeasured(t *testing
 		{Source: "P007.md", Available: true, Selected: true,
 			Intervals: []workbench.LineInterval{{Line: 3, To: 4}}},
 	}
-	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 4})
+	message, viewport, err := m.openFile(context.Background(), openFileInput{Path: "P007.md", Line: 4, Foreground: boolPtr(true)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1089,6 +1227,15 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 
 func advertisedTools(t *testing.T, server *mcp.Server) map[string]bool {
 	t.Helper()
+	advertised := map[string]bool{}
+	for name := range listedTools(t, server) {
+		advertised[name] = true
+	}
+	return advertised
+}
+
+func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
+	t.Helper()
 	ctx := context.Background()
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
@@ -1103,14 +1250,41 @@ func advertisedTools(t *testing.T, server *mcp.Server) map[string]bool {
 	}
 	defer cs.Close()
 
-	advertised := map[string]bool{}
+	advertised := map[string]*mcp.Tool{}
 	for tool, err := range cs.Tools(ctx, nil) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		advertised[tool.Name] = true
+		advertised[tool.Name] = tool
 	}
 	return advertised
+}
+
+func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
+	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
+	want := map[string]bool{toolOpenFile: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
+	for name, tool := range tools {
+		schema := structuredOutput(t, tool.InputSchema)
+		properties, _ := schema["properties"].(map[string]any)
+		foreground, present := properties["foreground"]
+		if present != want[name] {
+			t.Errorf("tool %q foreground schema = %v, want %v", name, present, want[name])
+			continue
+		}
+		if !present {
+			continue
+		}
+		property, _ := foreground.(map[string]any)
+		if description, _ := property["description"].(string); !strings.Contains(description, "Sparse logical-selection override") {
+			t.Errorf("tool %q foreground description = %q", name, description)
+		}
+		required, _ := schema["required"].([]any)
+		for _, required := range required {
+			if required == "foreground" {
+				t.Errorf("tool %q makes foreground required", name)
+			}
+		}
+	}
 }
 
 // The mode comes off disk, so a session escalated before this server started
@@ -1170,7 +1344,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 	defer cs.Close()
 
 	opened, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name: toolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3},
+		Name: toolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)},
 	})
 	if err != nil || opened.IsError {
 		t.Fatalf("open_file = %+v, %v", opened, err)

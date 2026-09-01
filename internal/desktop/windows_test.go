@@ -29,6 +29,7 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 		Label:   "▶ dev",
 		Cwd:     t.TempDir(),
 		Command: []string{"/bin/cat"},
+		Select:  true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -88,7 +89,7 @@ func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
 	}
 }
 
-func TestEveryAgentWindowIsSelectedAndStructuralWindowsAreNot(t *testing.T) {
+func TestAgentWindowSelectionFollowsItsOptions(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		opts workbench.WindowOptions
@@ -114,12 +115,28 @@ func TestEveryAgentWindowIsSelectedAndStructuralWindowsAreNot(t *testing.T) {
 			if got := w.Surfaces(w.shown().slug()).Selected; got != "" {
 				t.Fatalf("structural shell selected %q", got)
 			}
-			id, err := w.openWindow(w.shown(), tc.opts)
+			baseline, err := w.openStructural(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindTerminal, Label: "$ selected", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+			})
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := w.Surfaces(w.shown().slug()).Selected; got != id {
-				t.Fatalf("selected = %q, want agent window %q", got, id)
+			if err := w.Select(w.shown().slug(), baseline); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.openWindow(w.shown(), tc.opts); err != nil {
+				t.Fatal(err)
+			}
+			if got := w.Surfaces(w.shown().slug()).Selected; got != baseline {
+				t.Fatalf("selected = %q, want baseline %q", got, baseline)
+			}
+			tc.opts.Select = true
+			selected, err := w.openWindow(w.shown(), tc.opts)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := w.Surfaces(w.shown().slug()).Selected; got != selected {
+				t.Fatalf("selected = %q, want opted-in agent window %q", got, selected)
 			}
 		})
 	}
@@ -601,7 +618,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 		label string
 	}{{alpha, "▶ alpha dev"}, {beta, "▶ beta dev"}} {
 		if _, err := w.openWindow(tc.owner, workbench.WindowOptions{
-			Kind: workbench.KindTerminal, Label: tc.label, Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+			Kind: workbench.KindTerminal, Label: tc.label, Cwd: t.TempDir(), Command: []string{"/bin/cat"}, Select: true,
 		}); err != nil {
 			t.Fatal(err)
 		}
@@ -638,7 +655,7 @@ func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
 	owner := w.shown()
 
 	id, err := w.openWindow(owner, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md", Content: "# P006\n",
+		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md", Content: "# P006\n", Select: true,
 	})
 	if err != nil {
 		t.Fatal(err)

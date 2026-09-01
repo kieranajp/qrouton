@@ -106,13 +106,14 @@ func (m *windowManager) openFile(ctx context.Context, input openFileInput) (stri
 	if err != nil {
 		return "", nil, err
 	}
+	opts.Select = resolveForeground(input.Foreground, thoughtsSource(opts.Source))
 	id, err := m.open(ctx, editorWindowName, opts)
 	if err != nil {
 		return "", nil, fmt.Errorf("open file window: %w", err)
 	}
 	first, last, focused := opts.Span.Bounds()
 	if opts.Kind == workbench.KindDocument {
-		viewport, err := m.awaitViewport(ctx, id, opts.Source)
+		viewport, err := m.openedViewport(ctx, id, opts.Source, opts.Select)
 		if err != nil {
 			return "", nil, fmt.Errorf("read opened file viewport: %w", err)
 		}
@@ -129,6 +130,40 @@ func (m *windowManager) openFile(ctx context.Context, input openFileInput) (stri
 		line = 1
 	}
 	return fmt.Sprintf(openedFileFormat, opts.Source, line), nil, nil
+}
+
+func resolveForeground(foreground *bool, defaultSelect bool) bool {
+	if foreground != nil {
+		return *foreground
+	}
+	return defaultSelect
+}
+
+func thoughtsSource(source string) bool {
+	clean := filepath.Clean(source)
+	if filepath.IsAbs(clean) {
+		return false
+	}
+	parts := strings.Split(clean, string(filepath.Separator))
+	return len(parts) > 1 && parts[0] == sessionpaths.ThoughtsDirName
+}
+
+func (m *windowManager) openedViewport(ctx context.Context, id, source string, selected bool) (*workbench.DocumentViewport, error) {
+	if selected {
+		return m.awaitViewport(ctx, id, source)
+	}
+	viewport, err := m.host.Viewport(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if viewport == nil {
+		return &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}, nil
+	}
+	copy := *viewport
+	copy.Available = false
+	copy.Selected = false
+	copy.Intervals = []workbench.LineInterval{}
+	return &copy, nil
 }
 
 func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*workbench.DocumentViewport, error) {
@@ -205,6 +240,7 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 		Cwd:         cwd,
 		Command:     []string{shellBin, shellLoginFlag, input.Command},
 		CloseOnExit: true,
+		Select:      resolveForeground(input.Foreground, false),
 	}); err != nil {
 		return "", fmt.Errorf("run command: %w", err)
 	}
@@ -320,6 +356,7 @@ func (m *windowManager) showDiff(ctx context.Context, input showDiffInput) (stri
 		Label:   diffWindowLabel + label,
 		Content: text,
 		Format:  workbench.FormatDiff,
+		Select:  resolveForeground(input.Foreground, false),
 	}); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
@@ -337,6 +374,7 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 		Label:     notifyWindowLabel,
 		Content:   fmt.Sprintf(toastFormat, message),
 		Attention: true,
+		Select:    resolveForeground(input.Foreground, false),
 	}); err != nil {
 		return "", fmt.Errorf("notify: %w", err)
 	}

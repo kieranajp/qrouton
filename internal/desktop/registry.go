@@ -82,7 +82,7 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 			r.discard(id)
 		}
 	}
-	return r.spawn(owner, opts, true)
+	return r.spawn(owner, opts, opts.Select)
 }
 
 // openStructural opens a tab the workbench owns rather than the agent. It
