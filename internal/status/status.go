@@ -35,6 +35,13 @@ type Fields struct {
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
 	Agents              AgentPanel            `json:"agents"`
+	// Stages is which of the three has produced its document, read off the
+	// session's own files. The window draws them as marks, so a stage is done or
+	// it is not; there is no fraction to report.
+	Stages Stages `json:"stages"`
+	// Root is where the session lives on disk, so the window can hand its path
+	// over and open it. Empty for a window holding no session.
+	Root string `json:"root"`
 	// Picker means the shown session has an escalation waiting on it. It is
 	// workbench-side knowledge, so a file read never sets it.
 	Picker bool `json:"picker"`
@@ -74,6 +81,15 @@ type SessionRow struct {
 	Opened   time.Time     `json:"opened"`
 }
 
+// Stages is the R, P and I of a session's workflow. Research means a research
+// document holds findings, Plan means a plan exists, and Implement means every
+// box in one is ticked.
+type Stages struct {
+	Research  bool `json:"research"`
+	Plan      bool `json:"plan"`
+	Implement bool `json:"implement"`
+}
+
 type AgentSummary struct {
 	Attention string `json:"attention"`
 	Active    int    `json:"active"`
@@ -109,11 +125,13 @@ type SessionRepo struct {
 }
 
 // Document is one durable artifact under thoughts/shared, its Path relative to
-// the session root.
+// the session root. ID is the numbered prefix its filename opens with, which is
+// how a tab or a menu row names it in the room it has; a loose note has none.
 type Document struct {
 	Name string    `json:"name"`
 	Path string    `json:"path"`
 	Kind string    `json:"kind"`
+	ID   string    `json:"id"`
 	At   time.Time `json:"at"`
 }
 
@@ -122,10 +140,12 @@ type RepositoryDocuments struct {
 	Documents []Document `json:"documents"`
 }
 
-// RepoStat is how far one repository has moved, in the window's vocabulary.
+// RepoStat is how far one repository has moved, in the window's vocabulary. Path
+// is the worktree itself, which the titlebar menu copies and reveals.
 type RepoStat struct {
 	Name       string `json:"name"`
 	Role       string `json:"role"`
+	Path       string `json:"path"`
 	Commits    int    `json:"commits"`
 	Insertions int    `json:"insertions"`
 	Deletions  int    `json:"deletions"`
@@ -141,7 +161,8 @@ func Read(root string) Fields {
 		return fields
 	}
 	fields.Mode = modeLabel(m)
-	fields.Phase = phase(root, m)
+	fields.Stages = stages(root, m)
+	fields.Phase = phase(fields.Stages, m)
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
@@ -149,6 +170,7 @@ func Read(root string) Fields {
 	fields.Repos = manifestRepos(m.Repos)
 	fields.Documents = documents(root)
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
+	fields.Root = root
 	return fields
 }
 
@@ -175,6 +197,7 @@ func Repos(ctx context.Context, root string) []RepoStat {
 		out = append(out, RepoStat{
 			Name:       stat.Org + repoSeparator + stat.Name,
 			Role:       string(stat.Role),
+			Path:       stat.Path,
 			Commits:    stat.Commits,
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
@@ -191,18 +214,26 @@ func modeLabel(m session.Manifest) string {
 	return modeAssistantLabel
 }
 
+// stages is which of the three has produced its document. It walks the
+// session's thoughts tree, so phase is derived from it rather than repeating it.
+func stages(root string, m session.Manifest) Stages {
+	if len(m.Repos) == 0 {
+		return Stages{}
+	}
+	ws := session.Status(filepath.Dir(root), m)
+	return Stages{Research: ws.Research, Plan: ws.Plan, Implement: ws.Implement}
+}
+
 // phase is the macro-phase only: scratch until repositories exist, then the
 // stage the session's durable documents put it in — a research doc means
 // planning, a plan means implementing.
-func phase(root string, m session.Manifest) string {
-	if len(m.Repos) == 0 {
-		return phaseScratch
-	}
-	ws := session.Status(filepath.Dir(root), m)
+func phase(done Stages, m session.Manifest) string {
 	switch {
-	case ws.Plan:
+	case len(m.Repos) == 0:
+		return phaseScratch
+	case done.Plan:
 		return phaseImplement
-	case ws.Research:
+	case done.Research:
 		return phasePlan
 	default:
 		return phaseResearch
@@ -362,7 +393,8 @@ func documentsUnder(root, dir string, name func(string) string) []Document {
 			return nil
 		}
 		out = append(out, Document{
-			Name: name(path), Path: rel, Kind: DocumentKind(rel), At: info.ModTime(),
+			Name: name(path), Path: rel, Kind: DocumentKind(rel), ID: ArtifactID(rel),
+			At: info.ModTime(),
 		})
 		return nil
 	})

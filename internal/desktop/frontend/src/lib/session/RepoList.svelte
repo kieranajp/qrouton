@@ -8,7 +8,7 @@
 </script>
 
 <div class="repos">
-  <CapsLabel tone="dim">This session</CapsLabel>
+  <CapsLabel tone="dim" centred>This session</CapsLabel>
   {#if !repos.length}
     <div class="empty">no repositories yet</div>
   {/if}
@@ -33,18 +33,24 @@
       </div>
     </div>
   {/each}
-  <Button variant="dashed" size="sm" glyph="+" onclick={onAddRepos} style="margin-top: 6px"
-    >Add repos</Button>
+  <span class="allowance"></span>
+  <Button variant="cube" size="sm" glyph="+" wide onclick={onAddRepos}>Add repos</Button>
 </div>
 
 <style>
   .repos {
-    margin-top: auto;
+    min-height: 0;
     padding-top: 10px;
     border-top: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
     gap: 2px;
+    overflow: hidden auto;
+  }
+
+  .allowance {
+    flex: none;
+    height: 6px;
   }
 
   .repo {

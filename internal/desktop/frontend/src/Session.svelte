@@ -1,14 +1,15 @@
 <script>
   import Button from "./lib/core/Button.svelte";
   import CapsLabel from "./lib/core/CapsLabel.svelte";
-  import Chip from "./lib/core/Chip.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
+  import { dismissible } from "./lib/core/dismiss.js";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
-  import LatestDocument from "./lib/shell/LatestDocument.svelte";
+  import DocumentIndex from "./lib/shell/DocumentIndex.svelte";
   import Menu from "./lib/shell/Menu.svelte";
   import PaneHeader from "./lib/shell/PaneHeader.svelte";
+  import StageMarks from "./lib/shell/StageMarks.svelte";
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
   import DockedDocument from "./lib/DockedDocument.svelte";
@@ -28,8 +29,22 @@
   <div class="titlebar">
     <div class="identity">
       <CubeMark size={20} />
-      <span class="name">{fields.identity}</span>
-      {#if fields.branch}<span class="branch">{fields.branch}</span>{/if}
+      <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
+        <button
+          class="name"
+          aria-expanded={view.identityOpen}
+          onclick={() => (view.identityOpen = !view.identityOpen)}>
+          <span class="said">{fields.identity}</span>
+          <span class="caret" aria-hidden="true">&#9662;</span>
+        </button>
+        {#if view.identityOpen}
+          <Menu
+            items={view.identityMenu}
+            width={280}
+            offsetY={34}
+            onSelect={(item) => view.chose(item)} />
+        {/if}
+      </div>
     </div>
     <span class="tools">
       <Button variant="ghost" size="sm" onclick={() => (view.settingsOpen = true)}>Settings</Button>
@@ -60,21 +75,23 @@
 
     <div class="agent">
       <PaneHeader>
-        <CapsLabel>Agent</CapsLabel>
-        <Chip tone={fields.mode === "RPI" ? "guided" : "assistant"} selected>{fields.mode}</Chip>
-        {#if fields.phase}<Chip>{fields.phase}</Chip>{/if}
-        <LatestDocument
-          latest={view.latest}
-          count={fields.documents.length}
-          open={view.listing}
-          onToggle={view.hasDocuments ? () => (view.listing = !view.listing) : undefined}>
-          <Menu
-            label="Written this session"
-            items={view.documentMenu}
-            align="right"
-            width={320}
-            onSelect={(item) => view.read(item.path)} />
-        </LatestDocument>
+        {#snippet lead()}
+          <StageMarks stages={fields.stages} />
+        {/snippet}
+        <CapsLabel tone="dim">Agent</CapsLabel>
+        {#snippet actions()}
+          <DocumentIndex
+            count={fields.documents.length}
+            open={view.listing}
+            onToggle={view.hasDocuments ? () => (view.listing = !view.listing) : undefined}>
+            <Menu
+              label="Written this session"
+              items={view.documentMenu}
+              align="right"
+              width={320}
+              onSelect={(item) => item.path && view.read(item.path)} />
+          </DocumentIndex>
+        {/snippet}
       </PaneHeader>
       {#each view.conversations as row (row.terminal)}
         <Terminal
@@ -166,10 +183,14 @@
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
     --wails-draggable: drag;
+    /* Above the panes, so the menu the session name opens is not painted over by
+       a pane header or a tab strip, each of which stacks itself above the pane. */
+    z-index: 6;
   }
 
   /* Centred on the window rather than on the room the lights and the tools
-     leave, so the name does not shift when either changes width. */
+     leave, so the name does not shift when either changes width. Capped at 60%
+     of it, so a long name truncates instead of pushing the group off centre. */
   .identity {
     position: absolute;
     left: 50%;
@@ -177,17 +198,45 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    max-width: 60%;
+    min-width: 0;
+    --wails-draggable: no-drag;
+  }
+
+  .anchored {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-width: 0;
   }
 
   .name {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: 460px;
+    padding: 4px 8px;
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+  }
+
+  .name:hover {
+    border-color: var(--border-subtle);
+  }
+
+  .said {
     font: var(--display-xs);
     letter-spacing: -0.01em;
     color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .branch {
-    font: var(--machine-sm);
-    font-size: 11px;
+  .caret {
+    flex: none;
     color: var(--text-muted);
   }
 
@@ -204,11 +253,15 @@
     display: flex;
   }
 
+  /* Bordered on both sides, so the pane header terminates against the rail and
+     the docked pane instead of bleeding into them. */
   .agent {
     flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
+    border-left: 1px solid var(--border-subtle);
+    border-right: 1px solid var(--border-subtle);
   }
 
   /* A zero-size point for the menu to resolve its own position against. */

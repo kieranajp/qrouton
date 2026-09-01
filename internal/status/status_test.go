@@ -37,6 +37,7 @@ func TestReadScratchAssistant(t *testing.T) {
 	want := Fields{
 		Mode:                "ASSISTANT",
 		Phase:               "scratch",
+		Root:                dir,
 		Identity:            "lifesum-4f3a",
 		Slug:                "lifesum-4f3a",
 		Sessions:            []SessionRow{},
@@ -542,13 +543,16 @@ func TestReposMeasuresEditingRepositoriesAndSkipsReferences(t *testing.T) {
 	if len(stats) != 3 {
 		t.Fatalf("measured %d repositories, want 3", len(stats))
 	}
-	if stats[0] != (RepoStat{Name: "org/svc", Role: "editing", Commits: 1, Insertions: 1, Measured: true}) {
+	worktree := func(name string) string { return filepath.Join(dir, "src", name) }
+	if stats[0] != (RepoStat{Name: "org/svc", Role: "editing", Path: worktree("svc"),
+		Commits: 1, Insertions: 1, Measured: true}) {
 		t.Errorf("svc = %#v", stats[0])
 	}
-	if stats[1] != (RepoStat{Name: "org/quiet", Role: "editing", Commits: 1, Measured: true}) {
+	if stats[1] != (RepoStat{Name: "org/quiet", Role: "editing", Path: worktree("quiet"),
+		Commits: 1, Measured: true}) {
 		t.Errorf("quiet = %#v", stats[1])
 	}
-	if stats[2] != (RepoStat{Name: "org/docs", Role: "reference"}) {
+	if stats[2] != (RepoStat{Name: "org/docs", Role: "reference", Path: worktree("docs")}) {
 		t.Errorf("docs = %#v", stats[2])
 	}
 }

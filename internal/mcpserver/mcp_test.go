@@ -404,7 +404,7 @@ func TestOpenFileRendersMarkdownInsteadOfLaunchingTheEditor(t *testing.T) {
 	if opts.Content != body || opts.Source != "P007.md" {
 		t.Fatalf("pane content = %q from %q", opts.Content, opts.Source)
 	}
-	if opts.Badge != "[P007]" || opts.Label != "Document panes" {
+	if opts.Badge != "P007" || opts.Label != "Document panes" {
 		t.Fatalf("pane tab = %q %q", opts.Badge, opts.Label)
 	}
 	if opts.Span != (workbench.LineSpan{}) {

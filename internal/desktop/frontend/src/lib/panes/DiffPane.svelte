@@ -2,8 +2,8 @@
   import "../diff.css";
   import { parseDiff } from "../diff.js";
 
-  /** @type {{doc: {text: string, format: string, source: string}, id?: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id: _id, active: _active, scrollRoot: _scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string}, id?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  let { doc, id: _id, active: _active, scrollRoot: _scrollRoot, onScroller: _onScroller } = $props();
 
   let parsed = $derived(parseDiff(doc.text));
 </script>

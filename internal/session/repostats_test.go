@@ -58,11 +58,14 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	worktree := func(name string) string {
+		return filepath.Join(root, m.Slug, "src", name)
+	}
 	want := map[string]RepoStat{
-		"svc":   {Org: "org", Name: "svc", Role: RepoRoleEditing, Commits: 2, Insertions: 2, Deletions: 1, Measured: true},
-		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleEditing, Commits: 1, Measured: true},
-		"level": {Org: "org", Name: "level", Role: RepoRoleEditing, Measured: true},
-		"docs":  {Org: "org", Name: "docs", Role: RepoRoleReference},
+		"svc":   {Org: "org", Name: "svc", Role: RepoRoleEditing, Path: worktree("svc"), Commits: 2, Insertions: 2, Deletions: 1, Measured: true},
+		"quiet": {Org: "org", Name: "quiet", Role: RepoRoleEditing, Path: worktree("quiet"), Commits: 1, Measured: true},
+		"level": {Org: "org", Name: "level", Role: RepoRoleEditing, Path: worktree("level"), Measured: true},
+		"docs":  {Org: "org", Name: "docs", Role: RepoRoleReference, Path: worktree("docs")},
 	}
 	stats := RepoStats(t.Context(), root, m)
 	if len(stats) != len(want) {
@@ -108,7 +111,8 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if base, _ := resolveRevision(worktree, remoteRefPrefix+"main"); base != revisionOf(t, upstream, headRef) {
 		t.Fatal("the fetch left the base branch where it was")
 	}
-	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleEditing, Commits: 1, Insertions: 2, Measured: true}
+	want := RepoStat{Org: "org", Name: "svc", Role: RepoRoleEditing, Path: worktree,
+		Commits: 1, Insertions: 2, Measured: true}
 	if stats := RepoStats(t.Context(), root, m); len(stats) != 1 || stats[0] != want {
 		t.Fatalf("stats = %#v, want %#v", stats, want)
 	}

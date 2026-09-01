@@ -20,6 +20,19 @@ window.wailsCall = (name, ...args) => {
 
 mount(Session, { target: document.querySelector("#fixture") });
 
+// What paints over what, at the one point the titlebar's menu and the pane
+// chrome below it both cover. A pane header and a tab strip each carry a
+// stacking order of their own, so the titlebar has to outrank the panes.
+window.overlapOwner = () => {
+  const menu = document.querySelector(".menu").getBoundingClientRect();
+  const chrome = document.querySelector(".header, .strip").getBoundingClientRect();
+  if (menu.bottom <= chrome.top) return "no overlap";
+  const y = (Math.max(menu.top, chrome.top) + Math.min(menu.bottom, chrome.bottom)) / 2;
+  const hit = document.elementFromPoint(menu.left + menu.width / 2, y);
+  if (hit?.closest(".menu")) return "menu";
+  return hit?.closest(".header, .strip") ? "pane chrome" : (hit?.tagName ?? "nothing");
+};
+
 window.shell = {
   chrome: (fields) => emitWailsEvent("chrome:update", { slug: "octopus", ...fields }),
   windows: (selected, tabs) =>

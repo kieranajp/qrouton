@@ -207,14 +207,14 @@ func TestDocumentWindowBadgesAnArtifactTabWithItsID(t *testing.T) {
 		badge string
 		label string
 	}{
-		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "[P002]", "Pane smoke test"},
-		{"thoughts/shared/plans/p002-lowercase.md", titled, "[P002]", "Pane smoke test"},
+		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "P002", "Pane smoke test"},
+		{"thoughts/shared/plans/p002-lowercase.md", titled, "P002", "Pane smoke test"},
 		// Nothing to name the tab after but the file, and the badge already
 		// carries the part of that name it would otherwise say twice.
-		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "[P002]", "2026-08-29-untitled.md"},
-		{"thoughts/shared/research/R002-findings.md", titled, "[R002]", "Pane smoke test"},
-		{"thoughts/shared/specs/S002-shape.md", titled, "[S002]", "Pane smoke test"},
-		{"thoughts/shared/explainers/E002-how.md", titled, "[E002]", "Pane smoke test"},
+		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "P002", "2026-08-29-untitled.md"},
+		{"thoughts/shared/research/R002-findings.md", titled, "R002", "Pane smoke test"},
+		{"thoughts/shared/specs/S002-shape.md", titled, "S002", "Pane smoke test"},
+		{"thoughts/shared/explainers/E002-how.md", titled, "E002", "Pane smoke test"},
 		// Unnumbered, wherever it sits: nothing to badge with.
 		{"thoughts/shared/plans/notes.md", titled, "", "◆ Pane smoke test"},
 		{"thoughts/shared/scratch.md", titled, "", "◆ Pane smoke test"},

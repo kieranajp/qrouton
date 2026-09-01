@@ -157,7 +157,6 @@ const (
 const (
 	editorWindowLabel   = "Editor"
 	documentLabelFormat = "◆ %s"
-	documentBadgeFormat = "[%s]"
 )
 
 var (

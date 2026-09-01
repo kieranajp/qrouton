@@ -168,6 +168,7 @@ func Remove(root, dir string) error {
 type RepoStat struct {
 	Org, Name  string
 	Role       RepoRole
+	Path       string
 	Commits    int
 	Insertions int
 	Deletions  int
@@ -181,11 +182,12 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	dir := filepath.Join(root, m.Slug)
 	stats := make([]RepoStat, 0, len(m.Repos))
 	for _, repo := range m.Repos {
-		stat := RepoStat{Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective()}
+		stat := RepoStat{
+			Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective(),
+			Path: filepath.Join(dir, repo.WorktreePath),
+		}
 		if stat.Role == RepoRoleEditing && repo.DefaultBranch != "" {
-			base := remoteRefPrefix + repo.DefaultBranch
-			path := filepath.Join(dir, repo.WorktreePath)
-			measure(ctx, path, base, &stat)
+			measure(ctx, stat.Path, remoteRefPrefix+repo.DefaultBranch, &stat)
 		}
 		stats = append(stats, stat)
 	}

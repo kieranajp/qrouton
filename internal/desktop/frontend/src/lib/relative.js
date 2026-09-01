@@ -18,6 +18,28 @@ const STYLES = {
   },
 };
 
+const WEEK = 7 * DAY;
+const MONTH = 30 * DAY;
+
+/**
+ * age is the same reading with the words taken out, for a column that has room
+ * for a number and a letter. It coarsens as it goes — minutes, hours, days,
+ * weeks, months — because a rail row is chosen on rough recency.
+ * @param {string|number|Date} at
+ * @param {number} [now]
+ */
+export function age(at, now = Date.now()) {
+  const then = new Date(at).getTime();
+  if (!Number.isFinite(then) || then <= 0) return "";
+  const since = now - then;
+  if (since < MINUTE) return "now";
+  if (since < HOUR) return `${Math.floor(since / MINUTE)}m`;
+  if (since < DAY) return `${Math.floor(since / HOUR)}h`;
+  if (since < WEEK) return `${Math.floor(since / DAY)}d`;
+  if (since < MONTH) return `${Math.floor(since / WEEK)}w`;
+  return `${Math.floor(since / MONTH)}mo`;
+}
+
 /**
  * relative is an age in words, never more precise than it is. A compact age
  * counts minutes and stays a count however old it gets; a prose age spells its

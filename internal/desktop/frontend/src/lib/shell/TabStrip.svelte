@@ -70,7 +70,7 @@
   {/if}
   {#if onNew}
     <span class="new" bind:clientWidth={reserved}>
-      <Button variant="dashed" size="sm" glyph="+" onclick={onNew}>{newLabel}</Button>
+      <Button variant="cube" size="sm" glyph="+" onclick={onNew}>{newLabel}</Button>
     </span>
   {/if}
 </div>
@@ -95,9 +95,11 @@
     padding-left: 4px;
   }
 
+  /* Three pixels off the right edge, so the cube's shadow has somewhere to fall. */
   .new {
     margin-left: auto;
     align-self: center;
     flex: none;
+    padding-right: 3px;
   }
 </style>

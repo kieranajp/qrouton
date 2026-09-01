@@ -368,8 +368,23 @@ window.pipKinds = () =>
     label: pip.getAttribute("aria-label"),
     outline: pip.classList.contains("summary"),
   }));
+// The pane with a footer scrolls inside itself, so the scroller is whichever
+// screen is showing rather than the port around it.
+window.scrollers = () => {
+  const measure = (el) =>
+    el && {
+      overflows: el.scrollHeight > el.clientHeight,
+      bottom: Math.round(el.getBoundingClientRect().bottom),
+    };
+  return {
+    port: measure(document.querySelector(".body")),
+    pane: measure(document.querySelector(".reading, .deck")),
+    footerTop: Math.round(document.querySelector(".footer").getBoundingClientRect().top),
+  };
+};
+
 window.scrollTo_ = (top) => {
-  document.querySelector(".body").scrollTop = top;
+  (document.querySelector(".reading, .deck") ?? document.querySelector(".body")).scrollTop = top;
 };
 window.pips = () =>
   [...document.querySelectorAll(".pip")].map((pip) => ({

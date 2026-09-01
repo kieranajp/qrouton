@@ -9,8 +9,8 @@ import TabsFixture from "./TabsFixture.svelte";
 // document with no id to badge with.
 const TABS = [
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
-  { id: "w2", label: "Pane smoke test", badge: "[P002]", artifact: "PLAN", kind: "document" },
-  { id: "w3", label: "Pane selection", badge: "[R001]", artifact: "RESEARCH", kind: "document" },
+  { id: "w2", label: "Pane smoke test", badge: "P002", artifact: "PLAN", kind: "document" },
+  { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document" },
   { id: "w4", label: "◆ Findings", kind: "document", status: "succeeded" },
 ];
 
@@ -42,9 +42,9 @@ window.labels = () =>
   [...document.querySelectorAll(".tab")].map((tab) => ({
     text: tab.querySelector(".label").textContent,
     title: tab.getAttribute("title"),
-    badge: tab.querySelector(".badge")?.textContent ?? "",
-    badgeColour: tab.querySelector(".badge")
-      ? getComputedStyle(tab.querySelector(".badge")).color
+    badge: tab.querySelector(".tag")?.textContent ?? "",
+    badgeColour: tab.querySelector(".tag")
+      ? getComputedStyle(tab.querySelector(".tag")).backgroundColor
       : "",
   }));
 window.menuLabels = () =>

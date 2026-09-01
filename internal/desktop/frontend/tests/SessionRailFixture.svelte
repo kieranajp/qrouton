@@ -11,6 +11,7 @@
     ],
     summary: { attention: "needs-you", active: 2, coverage: "full", running: true },
     unseen: 3,
+    opened: new Date(Date.now() - 120000).toISOString(),
   };
   let sessions = $state([
     first,
@@ -21,6 +22,7 @@
       repos: [],
       summary: { attention: "none", active: 0, coverage: "none", running: false },
       unseen: 0,
+      opened: new Date(Date.now() - (index + 1) * 86400000).toISOString(),
     })),
   ]);
   let agents = $state({
@@ -115,6 +117,9 @@
   }
 
   window.sessionRail = {
+    quiet: () => {
+      agents = { ...agents, agents: [] };
+    },
     removeFinished: () => {
       agents = { ...agents, agents: agents.agents.filter((agent) => agent.state !== "Finished") };
     },

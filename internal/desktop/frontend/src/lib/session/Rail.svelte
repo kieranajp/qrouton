@@ -10,6 +10,7 @@
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
   import { cleanup, reveal, show, uncommitted } from "../sessions.js";
+  import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
 
   /**
@@ -130,8 +131,14 @@
 </script>
 
 <div class="rail" style:width={size ? size + "px" : null} bind:clientWidth={width}>
+  <!-- A band the height of a pane header, so the first session row starts on the
+       same line as the transcript and the tab strip beside it. No bottom border:
+       the alignment is the point, and a rule would make it read as a header cell. -->
+  <div class="band">
+    <CapsLabel tone="dim" centred>Sessions</CapsLabel>
+  </div>
+
   <div class="session-list" aria-label="Sessions">
-    <CapsLabel>Sessions</CapsLabel>
     {#each sessions as row, i (row.slug)}
       <RailItem
         initials={row.initials}
@@ -139,13 +146,15 @@
         name={row.name}
         repos={row.repos}
         summary={row.summary}
+        idle={row.summary?.running ? "" : age(row.opened)}
         selected={row.slug === slug}
         unseen={row.unseen}
         onclick={() => show(row.slug)}
         oncontextmenu={(event) => openMenu(event, row)} />
     {/each}
 
-    <Button variant="dashed" size="sm" glyph="+" onclick={onNewSession}>New session</Button>
+    <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>
+    <span class="allowance"></span>
   </div>
 
   <div class="detail-stack" aria-label="Selected session details">
@@ -212,35 +221,55 @@
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 14px 12px;
     background: var(--surface-chrome);
     overflow: hidden;
   }
 
-  .session-list,
-  .detail-stack {
+  /* Centred in the band, not sat on its floor: AGENT is centred in the pane
+     header beside it, so this is where the two headings share a line. */
+  .band {
+    height: var(--h-pane-header);
+    box-sizing: border-box;
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+  }
+
+  /* Sessions is the only greedy child. Activity and this-session size to what
+     they hold, so an empty panel occupies nothing rather than a share of the
+     rail. */
+  .session-list {
+    flex: 1 1 auto;
     min-height: 0;
     overflow: hidden auto;
-  }
-
-  .session-list {
-    flex: 1 1 50%;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 4px;
+    padding: 0 12px;
+  }
+
+  .allowance {
+    flex: none;
+    height: 12px;
   }
 
   .detail-stack {
-    flex: 1 1 50%;
+    flex: 0 1 auto;
+    min-height: 0;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    padding: 0 12px 12px;
   }
 
+  /* Live work outranks the repository list, which is reference: activity takes
+     what it needs up to its cap, and the list below scrolls for the rest. */
   .activity-scroll {
-    flex: 0 0 30%;
+    flex: 0 0 auto;
     min-height: 0;
+    max-height: 250px;
     overflow: hidden auto;
   }
 

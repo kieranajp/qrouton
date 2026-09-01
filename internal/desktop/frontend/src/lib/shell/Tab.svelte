@@ -1,6 +1,6 @@
 <script>
   import StatusDot from "../core/StatusDot.svelte";
-  import { artifactTone } from "../artifacts.js";
+  import ArtifactTag from "../core/ArtifactTag.svelte";
   import { tabLabel } from "./tabs.js";
 
   // An unfocused tab that cannot report a red test run is one you must click to
@@ -15,7 +15,8 @@
 <div class="tab" class:selected title={whole} {...rest}>
   <button type="button" class="select" onclick={onSelect}>
     {#if status}<StatusDot state={status} size={7} />{/if}
-    <span class="label">{#if badge}<span class="badge" style:color={artifactTone(artifact)}>{badge}</span>{/if}{label}</span>
+    {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
+    <span class="label">{label}</span>
   </button>
   {#if closable}
     <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}
@@ -58,7 +59,7 @@
   }
 
   .select {
-    gap: 9px;
+    gap: 8px;
     min-width: 0;
     flex: 1 1 auto;
   }
@@ -74,12 +75,6 @@
 
   .selected .label {
     color: var(--text-primary);
-  }
-
-  /* A badge is an artifact's id, so it wears that artifact's colour whether the
-     tab is selected or not. */
-  .badge {
-    margin-right: 0.5ch;
   }
 
   .close {

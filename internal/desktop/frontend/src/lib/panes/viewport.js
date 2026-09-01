@@ -155,7 +155,10 @@ export function createViewportController(options) {
   const scroll = schedule;
   const invalidate = () => queue("layout");
 
-  root.addEventListener("scroll", scroll, { passive: true });
+  // Captured, not bubbled: a scroll event never bubbles, but a pane that scrolls
+  // inside itself is a descendant of the root, so the capture phase is the only
+  // way the root hears it.
+  root.addEventListener("scroll", scroll, { passive: true, capture: true });
   content.addEventListener("load", invalidate, true);
   content.addEventListener("error", invalidate, true);
   view?.addEventListener("resize", invalidate);
@@ -182,7 +185,7 @@ export function createViewportController(options) {
     cancel();
     publish({ available: false, selected: false, intervals: [] });
     destroyed = true;
-    root.removeEventListener("scroll", scroll);
+    root.removeEventListener("scroll", scroll, { capture: true });
     content.removeEventListener("load", invalidate, true);
     content.removeEventListener("error", invalidate, true);
     view?.removeEventListener("resize", invalidate);

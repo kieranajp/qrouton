@@ -10,21 +10,21 @@ const open = async (page, query = "") => {
   await page.waitForSelector(".tab");
 };
 
-test("a badged tab leads with its id in its own artifact's colour", async ({ page }) => {
+test("a badged tab leads with its id in a filled block of its own hue", async ({ page }) => {
   await open(page);
 
   await expect.poll(() => page.evaluate(() => window.labels())).toEqual([
     { text: "Shell", title: "Shell", badge: "", badgeColour: "" },
     {
-      text: "[P002]Pane smoke test",
-      title: "[P002] Pane smoke test",
-      badge: "[P002]",
+      text: "Pane smoke test",
+      title: "P002 Pane smoke test",
+      badge: "P002",
       badgeColour: PLAN_LAVENDER,
     },
     {
-      text: "[R001]Pane selection",
-      title: "[R001] Pane selection",
-      badge: "[R001]",
+      text: "Pane selection",
+      title: "R001 Pane selection",
+      badge: "R001",
       badgeColour: RESEARCH_SKY,
     },
     { text: "◆ Findings", title: "◆ Findings", badge: "", badgeColour: "" },
@@ -36,7 +36,7 @@ test("a tab the strip cannot fit keeps its id in the overflow menu", async ({ pa
 
   await page.getByRole("button", { name: /more tabs/ }).click();
   await expect.poll(() => page.evaluate(() => window.menuLabels())).toContain(
-    "[P002] Pane smoke test",
+    "P002 Pane smoke test",
   );
 });
 
