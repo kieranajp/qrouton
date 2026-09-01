@@ -83,7 +83,8 @@ func (p *Picker) Escalate(slug string) error {
 	if m.EffectiveMode() != session.ModeAssistant {
 		return nil
 	}
-	state.requestPicker(workbench.PickerRequest{SessionRoot: root})
+	// No agent is waiting on a header-initiated escalation, so it answers nobody.
+	state.requestPicker(workbench.PickerRequest{SessionRoot: root}, nil)
 	p.sessions.touch()
 	return nil
 }
