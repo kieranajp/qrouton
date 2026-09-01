@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -251,6 +252,30 @@ func (s *Sessions) Reveal(slug string) error {
 		return unknownSession(slug)
 	}
 	return s.boot.reveal(root)
+}
+
+// RevealPath shows one directory inside a session in the file manager. The path
+// is the page's, so it is refused unless it resolves inside the session it names.
+func (s *Sessions) RevealPath(slug, path string) error {
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	inside, err := within(root, path)
+	if err != nil || !inside {
+		return ErrPathOutsideSession
+	}
+	return s.boot.reveal(path)
+}
+
+// within reports whether path resolves inside root, with both cleaned so a
+// climbing path cannot leave the session by spelling.
+func within(root, path string) (bool, error) {
+	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
+	if err != nil {
+		return false, err
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 // Uncommitted names the repositories a cleanup would take changes from. It is a

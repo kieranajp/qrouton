@@ -24,6 +24,7 @@ var (
 	ErrNoDocumentName        = errors.New("open request names no document")
 	ErrNoEditorCommand       = errors.New("workbench has no editor command to open a document with")
 	ErrNoRevealCommand       = errors.New("workbench has no command to reveal a session's directory with")
+	ErrPathOutsideSession    = errors.New("that path is not inside the session it names")
 	ErrNoRelaunch            = errors.New("workbench has no way to relaunch itself into a new sessions root")
 	ErrNoDirectoryPicker     = errors.New("workbench has no directory picker to choose a sessions root with")
 	ErrNoViewport            = errors.New("window has no source-mapped viewport")

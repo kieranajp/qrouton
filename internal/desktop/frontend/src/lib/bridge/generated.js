@@ -23,6 +23,7 @@ export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/deskt
 export const REPOSITORIES_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Select";
 export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Cleanup";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
+export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
@@ -56,7 +57,7 @@ export const WINDOW_DIAGRAM_EVENT = "window:diagram:";
 export const WINDOW_EXIT_EVENT = "window:exit:";
 export const WINDOWS_EVENT = "window:open";
 
-/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, picker: boolean, welcoming: boolean}} */
+/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean}} */
 export const CHROME_DEFAULTS = {
   mode: "",
   phase: "",
@@ -77,6 +78,12 @@ export const CHROME_DEFAULTS = {
     outcomes_known: false,
     agents: [],
   },
+  stages: {
+    research: false,
+    plan: false,
+    implement: false,
+  },
+  root: "",
   picker: false,
   welcoming: false,
 };

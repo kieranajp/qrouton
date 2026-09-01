@@ -64,15 +64,13 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	}
 	// A tab leads with the artifact's id, so its number is how the reader tells
 	// one from another. A document without one, a loose note, simply has none.
+	// The page draws it as a filled block, which is the bracketing the id used to
+	// carry for itself.
 	id := status.ArtifactID(rel)
-	var badge string
-	if id != "" {
-		badge = fmt.Sprintf(documentBadgeFormat, id)
-	}
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
 		Label:   documentLabel(string(text), rel, id),
-		Badge:   badge,
+		Badge:   id,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
 		Content: string(text),
