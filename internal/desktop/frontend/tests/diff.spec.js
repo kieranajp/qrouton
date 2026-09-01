@@ -101,7 +101,46 @@ test("Find reveals only its current closed file and Raw patch can match across l
   await expect(page.locator(".diff-file-body")).toHaveCount(1);
   expect(await page.evaluate(() => window.diffFindAdapter.move(1))).toEqual({ count: 2, current: 1 });
   await expect(page.locator(".diff-file-body")).toHaveCount(1);
+  expect(await page.evaluate(() => window.diffFindAdapter.refresh("old two\n+needle"))).toEqual({ count: 0, current: -1 });
   await page.getByRole("button", { name: "Raw patch" }).click();
   expect(await page.evaluate(() => window.diffFindAdapter.refresh("old two\n+needle"))).toEqual({ count: 1, current: 0 });
   await expect(page.locator(".diff-raw mark")).toHaveCount(1);
+});
+
+test("keeps clean all-repository output structured and sends every warning placement to Raw", async ({ page }) => {
+  const ordinary = (name) => [
+    `diff --git a/${name}.txt b/${name}.txt`,
+    `--- a/${name}.txt`,
+    `+++ b/${name}.txt`,
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+  ].join("\n");
+  const clean = `\n=== src/one/ ===\n${ordinary("one")}\n\n=== src/two/ ===\n${ordinary("two")}`;
+  await page.evaluate(async (text) => window.setDiff(text), clean);
+  await expect(page.getByRole("button", { name: "Files" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".diff-notice")).toHaveCount(0);
+  await expect(page.locator(".diff-repositories")).toContainText("one · 1 files");
+  await expect(page.locator(".diff-repositories")).toContainText("two · 1 files");
+
+  for (const text of [
+    `leading warning\n${clean}`,
+    `\n=== src/one/ ===\n${ordinary("one")}\ninter-file warning\n${ordinary("two")}`,
+    `${clean}\ntrailing warning\n`,
+  ]) {
+    await page.evaluate(async (value) => window.setDiff(value), text);
+    await expect(page.getByRole("button", { name: "Raw patch" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".diff-raw")).toHaveText(text);
+  }
+});
+
+test("makes mixed valid and malformed totals unavailable in Files", async ({ page }) => {
+  const text = [
+    "diff --git a/good.txt b/good.txt", "--- a/good.txt", "+++ b/good.txt", "@@ -1 +1 @@", "-old", "+new",
+    "diff --git a/bad.txt b/bad.txt", "--- a/bad.txt", "+++ b/bad.txt", "@@ -1,2 +1,2 @@", " only one",
+  ].join("\n");
+  await page.evaluate(async (value) => window.setDiff(value), text);
+  await page.getByRole("button", { name: "Files" }).click();
+  await expect(page.locator(".diff-overview")).toContainText("Counts unavailable");
+  await expect(page.locator(".diff-notice")).toBeVisible();
 });
