@@ -46,6 +46,9 @@ type fakeHost struct {
 
 	pickers   []workbench.PickerRequest
 	pickerErr error
+	// onPicker answers from inside the Picker call, which is the only place a
+	// test can stamp an outcome that escalate's poll will not read as stale.
+	onPicker func(workbench.PickerRequest)
 
 	adds      []workbench.AddReposRequest
 	addResult workbench.AddReposResult
@@ -163,9 +166,13 @@ func (h *fakeHost) Adopt(context.Context, string, bool) error { return nil }
 
 func (h *fakeHost) Picker(_ context.Context, req workbench.PickerRequest) error {
 	h.mu.Lock()
-	defer h.mu.Unlock()
 	h.pickers = append(h.pickers, req)
-	return h.pickerErr
+	hook, err := h.onPicker, h.pickerErr
+	h.mu.Unlock()
+	if hook != nil {
+		hook(req)
+	}
+	return err
 }
 
 func (h *fakeHost) AddRepos(_ context.Context, req workbench.AddReposRequest) (workbench.AddReposResult, error) {
@@ -952,16 +959,19 @@ func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 // window at all.
 func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	shortEscalatePoll(t, 200*time.Millisecond)
+	shortEscalatePoll(t, 2*time.Second)
 
-	// A cancelled stanza lets escalate return promptly once its poll notices it,
-	// so the test doesn't wait out the full timeout.
-	go func() {
-		time.Sleep(20 * time.Millisecond)
+	// Cancelled from inside the picker call, so the stanza is stamped after the
+	// spawn escalationOutcome compares against. A goroutine sleeping against that
+	// timestamp instead is a race the machine decides: delay the caller past the
+	// sleep and the outcome is written first, read as stale, and polled until the
+	// timeout returns the wrong message. The budget above is now only the failure
+	// path's, since the answer arrives before the first tick.
+	host.onPicker = func(workbench.PickerRequest) {
 		_ = session.WriteManifest(dir, session.Manifest{
 			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
 		})
-	}()
+	}
 
 	before := time.Now()
 	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry", BranchPrefix: "fix"})
