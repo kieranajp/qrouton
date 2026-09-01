@@ -1623,9 +1623,11 @@ func TestAddReposRefusesAnEmptyListAndABlankName(t *testing.T) {
 func TestAddReposReportsPromotedHeldAndAddedApart(t *testing.T) {
 	m, host, _ := newTestManager(t)
 	host.addResult = workbench.AddReposResult{
+		Status:   workbench.AddReposConfirmed,
 		Added:    []string{"org/extra"},
 		Promoted: []string{"org/docs"},
 		Held:     []string{"org/svc"},
+		Dropped:  []string{"org/kraken"},
 	}
 
 	message, err := m.addRepos(context.Background(), addReposInput{Repos: []repoAdditionInput{
@@ -1638,6 +1640,7 @@ func TestAddReposReportsPromotedHeldAndAddedApart(t *testing.T) {
 		"Added org/extra.",
 		"Took up for editing on the session branch: org/docs.",
 		"Already held, unchanged: org/svc.",
+		"Not added, because the user did not approve them: org/kraken.",
 	} {
 		if !strings.Contains(message, want) {
 			t.Errorf("message %q does not carry %q", message, want)
@@ -1647,7 +1650,8 @@ func TestAddReposReportsPromotedHeldAndAddedApart(t *testing.T) {
 
 func TestAddReposSaysWhenNothingChanged(t *testing.T) {
 	m, host, _ := newTestManager(t)
-	host.addResult = workbench.AddReposResult{Held: []string{"org/svc"}}
+	host.addResult = workbench.AddReposResult{
+		Status: workbench.AddReposConfirmed, Held: []string{"org/svc"}}
 
 	message, err := m.addRepos(context.Background(), addReposInput{
 		Repos: []repoAdditionInput{{Name: "org/svc"}},
@@ -1659,7 +1663,7 @@ func TestAddReposSaysWhenNothingChanged(t *testing.T) {
 		t.Fatalf("message = %q", message)
 	}
 
-	host.addResult = workbench.AddReposResult{}
+	host.addResult = workbench.AddReposResult{Status: workbench.AddReposConfirmed}
 	message, err = m.addRepos(context.Background(), addReposInput{
 		Repos: []repoAdditionInput{{Name: "org/svc"}},
 	})
@@ -1675,7 +1679,8 @@ func TestAddReposSaysWhenNothingChanged(t *testing.T) {
 // opened before the wait and replaced with the outcome — one name, not two tabs.
 func TestAddReposOpensTheReposTabAndReplacesItWithTheOutcome(t *testing.T) {
 	m, host, _ := newTestManager(t)
-	host.addResult = workbench.AddReposResult{Added: []string{"org/extra"}}
+	host.addResult = workbench.AddReposResult{
+		Status: workbench.AddReposConfirmed, Added: []string{"org/extra"}}
 
 	if _, err := m.addRepos(context.Background(), addReposInput{
 		Repos: []repoAdditionInput{{Name: "org/extra"}},
@@ -1685,8 +1690,10 @@ func TestAddReposOpensTheReposTabAndReplacesItWithTheOutcome(t *testing.T) {
 	if len(host.opens) != 2 {
 		t.Fatalf("opened %d windows, want the repos tab then its replacement: %+v", len(host.opens), host.opens)
 	}
+	// The tab is the user's cue to go and answer, so it has to name what is being
+	// asked for and say that something is waiting on them.
 	if !strings.Contains(host.opens[0].Content, "org/extra") ||
-		!strings.Contains(host.opens[0].Content, "can take minutes") {
+		!strings.Contains(host.opens[0].Content, "waiting for your answer") {
 		t.Errorf("the waiting tab = %q", host.opens[0].Content)
 	}
 	if !strings.Contains(host.opens[1].Content, "Added org/extra.") {
@@ -1724,5 +1731,53 @@ func TestAddReposSurfacesAWorkbenchFailureAsAToolError(t *testing.T) {
 	// The tab says so too, rather than leaving the fetching line up.
 	if len(host.opens) != 2 || !strings.Contains(host.opens[1].Content, "failed") {
 		t.Fatalf("the tab was not replaced with the failure: %+v", host.opens)
+	}
+}
+
+// A refusal and a timeout are outcomes the agent can act on, not failures: it
+// must not retry them as though the call had broken.
+func TestAddReposReportsADeclinedProposalAndATimeoutAsNormalResults(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		says   string
+	}{
+		{workbench.AddReposDeclined, "declined"},
+		{workbench.AddReposExpired, "timed out"},
+	} {
+		t.Run(tc.status, func(t *testing.T) {
+			m, host, _ := newTestManager(t)
+			host.addResult = workbench.AddReposResult{Status: tc.status}
+
+			message, err := m.addRepos(context.Background(), addReposInput{
+				Repos: []repoAdditionInput{{Name: "org/extra"}},
+			})
+			if err != nil {
+				t.Fatalf("a %s proposal returned an error: %v", tc.status, err)
+			}
+			if !strings.Contains(message, tc.says) {
+				t.Fatalf("message = %q, want it to say %q", message, tc.says)
+			}
+		})
+	}
+}
+
+// The deadline is the agent's, and it travels with the request so the workbench
+// never draws an overlay for an answer nobody is waiting for.
+func TestAddReposSendsItsDeadlineWithTheProposal(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addResult = workbench.AddReposResult{Status: workbench.AddReposConfirmed}
+
+	before := time.Now()
+	if _, err := m.addRepos(context.Background(), addReposInput{
+		Repos: []repoAdditionInput{{Name: "org/extra"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.adds) != 1 {
+		t.Fatalf("host received %d requests", len(host.adds))
+	}
+	got := host.adds[0].Deadline
+	if got.Before(before.Add(addReposTimeout-time.Minute)) || got.After(time.Now().Add(addReposTimeout)) {
+		t.Fatalf("deadline = %s, want about %s out", got, addReposTimeout)
 	}
 }

@@ -10,10 +10,13 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// addReposTimeout bounds the whole add, cloning included. The socket falls back to
-// a much shorter timeout only when the caller sets no deadline, so a first clone
-// needs this said explicitly or it is cut off partway.
-const addReposTimeout = 15 * time.Minute
+// addReposTimeout is how long the agent waits for the user. It matches
+// escalateTimeout rather than the old clone-sized budget because the dominant
+// term is now a human who may have stepped away, and escalate is the precedent
+// for exactly that wait. The clone that follows the click sits inside the same
+// window; a confirm at the very edge whose clone overruns it is why the timeout
+// message declines to claim nothing happened.
+const addReposTimeout = 30 * time.Minute
 
 type addReposInput struct {
 	Repos []repoAdditionInput `json:"repos" jsonschema:"Repositories to add to this session's workspace"`
@@ -102,11 +105,14 @@ func (m *windowManager) addRepos(ctx context.Context, input addReposInput) (stri
 	for _, repo := range requested {
 		names = append(names, repo.Name)
 	}
-	m.reportRepos(ctx, fmt.Sprintf(addingReposFormat, strings.Join(names, repoListJoiner)))
+	m.reportRepos(ctx, fmt.Sprintf(awaitingReposFormat, strings.Join(names, repoListJoiner)))
 
-	deadlined, cancel := context.WithTimeout(ctx, addReposTimeout)
+	deadline := time.Now().Add(addReposTimeout)
+	deadlined, cancel := context.WithDeadline(ctx, deadline)
 	defer cancel()
-	result, err := m.host.AddRepos(deadlined, workbench.AddReposRequest{Repos: requested})
+	result, err := m.host.AddRepos(deadlined, workbench.AddReposRequest{
+		Repos: requested, Deadline: deadline,
+	})
 	if err != nil {
 		m.reportRepos(ctx, fmt.Sprintf(addReposFailedFormat, err))
 		return "", fmt.Errorf("add repos: %w", err)
@@ -127,6 +133,12 @@ func (m *windowManager) reportRepos(ctx context.Context, text string) {
 }
 
 func addReposOutcome(result workbench.AddReposResult) string {
+	switch result.Status {
+	case workbench.AddReposDeclined:
+		return reposDeclined
+	case workbench.AddReposExpired:
+		return reposExpired
+	}
 	var parts []string
 	say := func(format string, names []string) {
 		if len(names) > 0 {
@@ -136,6 +148,7 @@ func addReposOutcome(result workbench.AddReposResult) string {
 	say(addedReposFormat, result.Added)
 	say(promotedReposFormat, result.Promoted)
 	say(heldReposFormat, result.Held)
+	say(droppedReposFormat, result.Dropped)
 	if len(parts) == 0 {
 		return noReposChanged
 	}

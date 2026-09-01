@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -28,6 +29,17 @@ type heldRepo struct {
 type pickerFields struct {
 	Branch string     `json:"branch"`
 	Repos  []heldRepo `json:"repos"`
+	// Proposed are the repositories an agent asked for, to be drawn pre-selected
+	// at the roles it wants. Empty for the user's own visit to the picker, which
+	// is what tells the page whose selection it is showing.
+	Proposed []proposedRepo `json:"proposed"`
+}
+
+// proposedRepo is one row of an agent's proposal, keyed the way the page keys its
+// rows so a pre-selection lands on the row it names.
+type proposedRepo struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
 // pickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
@@ -77,7 +89,7 @@ func (p *Picker) Escalate(slug string) error {
 }
 
 func (p *Picker) Load(slug string) (pickerFields, error) {
-	_, root, err := p.root(slug)
+	state, root, err := p.root(slug)
 	if err != nil {
 		return pickerFields{}, err
 	}
@@ -93,7 +105,11 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 			Locked: true,
 		})
 	}
-	return pickerFields{Branch: m.Branch(), Repos: held}, nil
+	proposed := make([]proposedRepo, 0, len(state.proposedRepos()))
+	for _, row := range state.proposedRepos() {
+		proposed = append(proposed, proposedRepo{ID: row.Name, Role: row.Role})
+	}
+	return pickerFields{Branch: m.Branch(), Repos: held, Proposed: proposed}, nil
 }
 
 func (p *Picker) Confirm(slug string, in pickerInput) error {
@@ -103,16 +119,26 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if err != nil {
 		return err
 	}
-	escalation := state.pendingPicker()
-	m, err := session.Load(root)
+	pending := state.pendingPicker()
+	// A pending request carrying repositories is an agent's proposal, not an
+	// escalation. Reading it as one would switch the session to RPI mode because
+	// the agent asked for a checkout.
+	proposal := pending != nil && len(pending.Repos) > 0
+	var asked []workbench.RepoAddition
+	if proposal {
+		asked = pending.Repos
+	}
+	before, err := session.Load(root)
+	if err == nil {
+		err = p.compose(root, before, pending, proposal, in)
+	}
+	// Whatever happened, an agent blocked on this proposal is told — including a
+	// refusal, or it would wait out its whole deadline for an answer that already
+	// exists. The user who pressed the button still sees the error too.
+	if proposal {
+		p.answerProposal(state, root, before, asked, err)
+	}
 	if err != nil {
-		return err
-	}
-	draft := p.draft(m, escalation, in)
-	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
-		return draftRefused(problems[0])
-	}
-	if err := p.assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
 		return err
 	}
 	state.clearPicker()
@@ -120,38 +146,146 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	return nil
 }
 
+// compose validates the draft and lands it. A proposal goes through
+// ConfirmForAgent: the agent is blocked on this decision, so signalling would
+// SIGTERM the process waiting for it, and a notice would tell the user what they
+// just confirmed on screen.
+func (p *Picker) compose(root string, before session.Manifest,
+	pending *workbench.PickerRequest, proposal bool, in pickerInput) error {
+	draft := p.draft(before, pending, in)
+	if proposal {
+		// A proposal of only what the session already holds asks for nothing, so
+		// there is nothing for the editing-repo rule to judge and nothing to write.
+		// Refusing it would make re-proposing a held repository an error, which is
+		// the retry an agent reaches for after a partial failure.
+		if len(draft.Repos) == 0 && len(draft.Upgrades) == 0 {
+			return nil
+		}
+	}
+	if problems := assembly.CheckAdditions(before, draft); len(problems) > 0 {
+		return draftRefused(problems[0])
+	}
+	if proposal {
+		return p.assembler.ConfirmForAgent(root, draft, nil)
+	}
+	return p.assembler.Confirm(root, draft, pending != nil, nil)
+}
+
+// answerProposal delivers a proposal's outcome to the agent blocked on it. A
+// compose that failed travels as the error it was, so the agent gets the refusal
+// rather than an empty result that reads as "nothing to do".
+func (p *Picker) answerProposal(state *sessionState, root string,
+	before session.Manifest, asked []workbench.RepoAddition, composeErr error) {
+	answer := state.takeAnswer()
+	if answer == nil {
+		return
+	}
+	if composeErr != nil {
+		answer <- addReposDecision{Err: composeErr}
+		return
+	}
+	after, err := session.Load(root)
+	if err != nil {
+		answer <- addReposDecision{Err: err}
+		return
+	}
+	answer <- addReposDecision{
+		Status:  workbench.AddReposConfirmed,
+		Outcome: addReposOutcome(asked, before, after),
+	}
+}
+
+// addReposOutcome is the session diffed across the user's answer. Added is
+// everything newly present, the user's own choices included, because that is what
+// the workspace now holds; Dropped is what the agent asked for and did not get.
+func addReposOutcome(asked []workbench.RepoAddition, before, after session.Manifest) addReposResult {
+	was := rolesByKey(before)
+	now := rolesByKey(after)
+	out := addReposResult{
+		Status:   workbench.AddReposConfirmed,
+		Added:    []string{},
+		Promoted: []string{},
+		Held:     []string{},
+		Dropped:  []string{},
+	}
+	for _, r := range after.Repos {
+		key := repoKey(r.Org, r.Name)
+		previous, existed := was[key]
+		id := (github.Repo{Org: r.Org, Name: r.Name}).ID()
+		switch {
+		case !existed:
+			out.Added = append(out.Added, id)
+		case previous == session.RepoRoleReference && r.Role.Effective() == session.RepoRoleEditing:
+			out.Promoted = append(out.Promoted, id)
+		}
+	}
+	for _, want := range asked {
+		key := strings.ToLower(want.Name)
+		if _, present := now[key]; !present {
+			out.Dropped = append(out.Dropped, want.Name)
+			continue
+		}
+		// Present and neither added nor promoted by this confirm: the session
+		// already held it in the role asked for.
+		if was[key] == now[key] {
+			out.Held = append(out.Held, want.Name)
+		}
+	}
+	return out
+}
+
+func rolesByKey(m session.Manifest) map[string]session.RepoRole {
+	roles := make(map[string]session.RepoRole, len(m.Repos))
+	for _, r := range m.Repos {
+		roles[repoKey(r.Org, r.Name)] = r.Role.Effective()
+	}
+	return roles
+}
+
 // addReposHook adapts the picker to the control socket. A workbench built
 // without a picker serves no add rather than panicking on one.
-func addReposHook(p *Picker) func(string, []repoAddition) (addReposResult, error) {
+func addReposHook(p *Picker) func(context.Context, string, []repoAddition, time.Time) (addReposResult, error) {
 	if p == nil {
 		return nil
 	}
 	return p.add
 }
 
-// addReposResult is what one agent-initiated add did. The three lists are
-// disjoint: a repository was cloned, taken up, or already there. A successful add
-// fills all three rather than leaving any nil, so the reply reads as empty lists
-// and not as nulls.
+// addReposResult is what became of a proposal, as a diff of the session across
+// the user's answer. Added can name a repository the user chose and the agent
+// never asked for; Dropped names one it asked for that they declined. The lists
+// are filled rather than left nil, so a reply reads as empty lists not nulls.
 type addReposResult struct {
+	Status   string
 	Added    []string
 	Promoted []string
 	Held     []string
+	Dropped  []string
 }
 
-// add is the unattended half of this picker: the agent names repositories and
-// they are composed with no overlay and no human gate. It refuses the whole batch
-// rather than part of it, so a mistyped name costs a clone nobody asked for.
-func (p *Picker) add(slug string, additions []repoAddition) (addReposResult, error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	_, root, err := p.root(slug)
+// addReposDecision is one answer to one proposal, travelling in memory from the
+// overlay's confirm back to the blocked tool call. Status is the authority on how
+// it ended; Outcome carries the diff only when something was composed.
+type addReposDecision struct {
+	Status  string
+	Outcome addReposResult
+	Err     error
+}
+
+// add proposes repositories to the user and waits for the answer. It takes no
+// lock: the wait is on a human, and holding p.mu across it would block the very
+// Confirm the wait exists for. Names are resolved first so a mistyped one is
+// refused before anybody is interrupted, and nothing is composed here — that
+// happens on the confirm path, which is what makes an unanswered proposal a
+// guaranteed no-op.
+func (p *Picker) add(ctx context.Context, slug string, additions []repoAddition, deadline time.Time) (addReposResult, error) {
+	state, root, err := p.root(slug)
 	if err != nil {
 		return addReposResult{}, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), repoRefreshTimeout)
+	refreshCtx, cancel := context.WithTimeout(ctx, repoRefreshTimeout)
 	defer cancel()
-	if err := p.repos.refreshAndWait(ctx); err != nil {
+	if err := p.repos.refreshAndWait(refreshCtx); err != nil {
 		return addReposResult{}, fmt.Errorf("%w: %w", ErrRepoRefreshFailed, err)
 	}
 	selections, err := p.repos.resolve(additions)
@@ -162,27 +296,55 @@ func (p *Picker) add(slug string, additions []repoAddition) (addReposResult, err
 	if err != nil {
 		return addReposResult{}, err
 	}
-	fresh, promote, held, err := partitionAdditions(m, selections)
+	// Partitioned before proposing only to refuse a batch the rules reject —
+	// a role conflict, say — rather than drawing an overlay for it.
+	if _, _, _, err := partitionAdditions(m, selections); err != nil {
+		return addReposResult{}, err
+	}
+	answer, err := p.sessions.proposeRepos(workbench.PickerRequest{
+		SessionRoot: root, Deadline: deadline, Repos: proposalFor(selections),
+	})
 	if err != nil {
 		return addReposResult{}, err
 	}
-	outcome := addReposResult{Added: selectionIDs(fresh), Promoted: refIDs(promote), Held: held}
-	// Nothing to compose and nothing to take up: the session already had every
-	// repository named. Answering here keeps the call idempotent — CheckAdditions
-	// judges an empty draft, and would refuse a no-op for holding no editing repo.
-	if len(fresh) == 0 && len(promote) == 0 {
-		return outcome, nil
+	select {
+	case decision := <-answer:
+		if decision.Err != nil {
+			return addReposResult{}, decision.Err
+		}
+		return settled(decision), nil
+	case <-ctx.Done():
+		// Nobody answered, so nothing was composed: the confirm path is the only
+		// one that writes, and it would have delivered a decision here.
+		state.clearPicker()
+		state.takeAnswer()
+		return settled(addReposDecision{Status: workbench.AddReposExpired}), nil
 	}
-	draft := assembly.Draft{Name: m.DisplayName(), Description: m.Description, Ticket: m.TicketURL,
-		Prefix: assembly.Prefixes()[0], Mode: m.EffectiveMode(), Repos: fresh, Upgrades: promote}
-	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
-		return addReposResult{}, draftRefused(problems[0])
+}
+
+// settled stamps the decision's status onto its outcome and fills the lists a
+// refusal never built, so every answer reads the same shape.
+func settled(decision addReposDecision) addReposResult {
+	out := decision.Outcome
+	out.Status = decision.Status
+	for _, list := range []*[]string{&out.Added, &out.Promoted, &out.Held, &out.Dropped} {
+		if *list == nil {
+			*list = []string{}
+		}
 	}
-	if err := p.assembler.ConfirmForAgent(root, draft, nil); err != nil {
-		return addReposResult{}, err
+	return out
+}
+
+// proposalFor is the resolved selection as the overlay's pre-seed, carrying the
+// canonical org/name so a bare name the agent gave matches a drawn row.
+func proposalFor(selections []session.RepoSelection) []workbench.RepoAddition {
+	out := make([]workbench.RepoAddition, 0, len(selections))
+	for _, sel := range selections {
+		out = append(out, workbench.RepoAddition{
+			Name: sel.Repo.ID(), Role: string(sel.Role.Effective()),
+		})
 	}
-	p.sessions.repositoriesChanged(root)
-	return outcome, nil
+	return out
 }
 
 // partitionAdditions is the promotion rule. A repository the session does not
@@ -254,8 +416,15 @@ func (p *Picker) Cancel(slug string) error {
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
+	pending := state.pendingPicker()
+	// A declined proposal writes no cancellation stanza: only an escalation has a
+	// caller polling the manifest for one.
+	proposal := pending != nil && len(pending.Repos) > 0
+	if err := assembly.Cancel(root, pending != nil && !proposal); err != nil {
 		return err
+	}
+	if answer := state.takeAnswer(); answer != nil {
+		answer <- addReposDecision{Status: workbench.AddReposDeclined}
 	}
 	state.clearPicker()
 	p.sessions.touch()
@@ -318,12 +487,27 @@ func (p *Picker) root(slug string) (*sessionState, string, error) {
 // nothing. The overlay opens when the user next arrives there, so a request they
 // never arrive at expires unseen rather than taking the screen.
 func (s *Sessions) queuePicker(req workbench.PickerRequest) error {
+	return s.queue(req, nil)
+}
+
+// proposeRepos queues an agent's repository proposal and hands back the channel
+// its outcome arrives on. Same queue and same overlay as an escalation; what
+// differs is that somebody is waiting for the answer.
+func (s *Sessions) proposeRepos(req workbench.PickerRequest) (chan addReposDecision, error) {
+	answer := make(chan addReposDecision, 1)
+	if err := s.queue(req, answer); err != nil {
+		return nil, err
+	}
+	return answer, nil
+}
+
+func (s *Sessions) queue(req workbench.PickerRequest, answer chan addReposDecision) error {
 	slug := slugFor(req.SessionRoot)
 	state := s.bySlug(slug)
 	if state == nil {
 		return unknownSession(slug)
 	}
-	state.requestPicker(req)
+	state.requestPicker(req, answer)
 	s.touch()
 	return nil
 }

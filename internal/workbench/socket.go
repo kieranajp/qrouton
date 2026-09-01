@@ -72,6 +72,9 @@ type LinearIssueRequest struct {
 // another one.
 type AddReposRequest struct {
 	Repos []RepoAddition `json:"repos"`
+	// Deadline is when the caller stops waiting, so an overlay past it is not
+	// drawn to ask for an answer nobody will read.
+	Deadline time.Time `json:"deadline"`
 }
 
 // RepoAddition is one repository by bare name or org/name, and the role wanted.
@@ -81,13 +84,25 @@ type RepoAddition struct {
 	Role string `json:"role,omitempty"`
 }
 
-// AddReposResult splits an add three ways: cloned, taken up onto the session
-// branch, or already held and left alone.
+// AddReposResult is what a proposal came to. Status says whether the user
+// answered at all; the four lists are a diff of the session across their answer,
+// so Added can name a repository the user chose that the agent never asked for,
+// and Dropped names one the agent asked for that they declined to take.
 type AddReposResult struct {
+	Status   string   `json:"status"`
 	Added    []string `json:"added"`
 	Promoted []string `json:"promoted"`
 	Held     []string `json:"held"`
+	Dropped  []string `json:"dropped"`
 }
+
+// How a proposal ended. Declined and Expired are outcomes an agent can act on,
+// not failures: the workspace is untouched and it may carry on without them.
+const (
+	AddReposConfirmed = "confirmed"
+	AddReposDeclined  = "declined"
+	AddReposExpired   = "expired"
+)
 
 type RunnerGenerationRequest struct {
 	Provider   string `json:"provider"`

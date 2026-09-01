@@ -372,6 +372,98 @@ func assertUndisturbed(t *testing.T, dir string, signalled *[]string) {
 	}
 }
 
+// addAnswer is what a test's stand-in user does with a proposal: the picks the
+// overlay would send on confirm, or nil to decline it. held is what the session
+// already has, which is what decides whether a row is a fresh pick or a take-up.
+type addAnswer func(proposed []workbench.RepoAddition, held []heldRepo) *pickerInput
+
+// approve accepts a proposal exactly as drawn, which is what the pre-seeded
+// overlay sends when the user presses the button without editing anything.
+func approve(proposed []workbench.RepoAddition, held []heldRepo) *pickerInput {
+	return editedTo(proposed, held)
+}
+
+// decline is the user pressing Cancel.
+func decline([]workbench.RepoAddition, []heldRepo) *pickerInput { return nil }
+
+// editedTo turns rows into the picks the overlay sends for them, mirroring the
+// page's own selection: a held row stays out of the picks entirely, because
+// composing it again would clone a repository the session already has; a held
+// reference row wanted for editing is an upgrade instead.
+func editedTo(rows []workbench.RepoAddition, held []heldRepo) *pickerInput {
+	holds := make(map[string]string, len(held))
+	for _, row := range held {
+		holds[row.ID] = row.Role
+	}
+	in := &pickerInput{}
+	for _, row := range rows {
+		current, isHeld := holds[row.Name]
+		switch {
+		case isHeld && current == string(session.RepoRoleReference) && row.Role == string(session.RepoRoleEditing):
+			in.Upgrades = append(in.Upgrades, row.Name)
+		case isHeld:
+		default:
+			in.Repos = append(in.Repos, repoPick{ID: row.Name, Role: row.Role})
+		}
+	}
+	return in
+}
+
+// propose runs an add and answers its proposal, returning what the agent gets.
+// The add blocks on a human, so the answer has to come from another goroutine —
+// which is also what proves the wait holds no lock the confirm needs.
+func propose(t *testing.T, p *Picker, slug string, additions []repoAddition, answer addAnswer) (addReposResult, error) {
+	t.Helper()
+	done := make(chan addSettled, 1)
+	go func() {
+		result, err := p.add(context.Background(), slug, additions, time.Now().Add(time.Minute))
+		done <- addSettled{result, err}
+	}()
+
+	proposed, settled := awaitProposal(t, p, slug, done)
+	if settled != nil {
+		return settled.result, settled.err
+	}
+	fields, err := p.Load(slug)
+	if err != nil {
+		t.Fatalf("load = %v", err)
+	}
+	if picks := answer(proposed, fields.Repos); picks != nil {
+		if err := p.Confirm(slug, *picks); err != nil {
+			t.Logf("confirm reported %v", err)
+		}
+	} else if err := p.Cancel(slug); err != nil {
+		t.Fatalf("cancel = %v", err)
+	}
+	got := <-done
+	return got.result, got.err
+}
+
+// addSettled is an add that has returned, whether or not it ever proposed.
+type addSettled struct {
+	result addReposResult
+	err    error
+}
+
+// awaitProposal waits for the add to reach the overlay, or to fail before it —
+// a name that does not resolve never interrupts anybody.
+func awaitProposal(t *testing.T, p *Picker, slug string, done chan addSettled) ([]workbench.RepoAddition, *addSettled) {
+	t.Helper()
+	limit := time.After(10 * time.Second)
+	for {
+		if rows := p.sessions.bySlug(slug).proposedRepos(); len(rows) > 0 {
+			return rows, nil
+		}
+		select {
+		case settled := <-done:
+			return nil, &settled
+		case <-limit:
+			t.Fatal("the add never proposed anything and never returned")
+		case <-time.After(2 * time.Millisecond):
+		}
+	}
+}
+
 func orEmpty(in []string) []string {
 	if in == nil {
 		return []string{}
@@ -414,12 +506,15 @@ func TestAddComposesAFreshEditingRepoOntoTheSessionBranch(t *testing.T) {
 		Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
 	}, []github.Repo{svc, extra})
 
-	got, err := p.add("adding", []repoAddition{{Name: "org/extra", Role: "editing"}})
+	got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}}, approve)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, wantAdd([]string{"org/extra"}, nil, nil)) {
-		t.Fatalf("add = %+v, want org/extra added and nothing else", got)
+	if got.Status != workbench.AddReposConfirmed {
+		t.Fatalf("status = %q, want confirmed", got.Status)
+	}
+	if !reflect.DeepEqual(got.Added, []string{"org/extra"}) {
+		t.Fatalf("added = %v, want org/extra", got.Added)
 	}
 	m, err := session.Load(dir)
 	if err != nil {
@@ -452,7 +547,7 @@ func TestAddComposesAFreshReferenceRepoDetachedAndLeavesTheBranchAlone(t *testin
 		Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
 	}, []github.Repo{svc, extra})
 
-	got, err := p.add("adding", []repoAddition{{Name: "org/extra"}})
+	got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra"}}, approve)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -498,12 +593,15 @@ func TestAddReportsARepoItAlreadyHoldsWithoutRecomposingIt(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			got, err := p.add("adding", []repoAddition{{Name: "org/svc", Role: tc.role}})
+			got, err := propose(t, p, "adding", []repoAddition{{Name: "org/svc", Role: tc.role}}, approve)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if !reflect.DeepEqual(got, wantAdd(nil, nil, []string{"org/svc"})) {
+			if !reflect.DeepEqual(got.Held, []string{"org/svc"}) {
 				t.Fatalf("add = %+v, want org/svc held and nothing composed", got)
+			}
+			if len(got.Added) != 0 || len(got.Promoted) != 0 {
+				t.Fatalf("add = %+v, want nothing composed", got)
 			}
 			m, err := session.Load(dir)
 			if err != nil {
@@ -527,7 +625,7 @@ func TestAddRefusesAnAllReferenceAddToASessionThatEditsNothing(t *testing.T) {
 		Repos: []session.RepoSelection{{Role: session.RepoRoleReference, Repo: docs}},
 	}, []github.Repo{docs, extra})
 
-	_, err := p.add("reading", []repoAddition{{Name: "org/extra"}})
+	_, err := propose(t, p, "reading", []repoAddition{{Name: "org/extra"}}, approve)
 	if err == nil {
 		t.Fatal("an all-reference add to a session with no editing repo was allowed")
 	}
@@ -562,12 +660,15 @@ func TestAddPromotesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	// Untracked, so only an in-place switch keeps it.
 	gittest.WriteFile(t, wtBefore, "scratch.txt", "kept")
 
-	got, err := p.add("reading", []repoAddition{{Name: "org/docs", Role: "editing"}})
+	got, err := propose(t, p, "reading", []repoAddition{{Name: "org/docs", Role: "editing"}}, approve)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, wantAdd(nil, []string{"org/docs"}, nil)) {
-		t.Fatalf("add = %+v, want org/docs promoted and nothing composed", got)
+	if !reflect.DeepEqual(got.Promoted, []string{"org/docs"}) {
+		t.Fatalf("add = %+v, want org/docs promoted", got)
+	}
+	if len(got.Added) != 0 {
+		t.Fatalf("add = %+v, want nothing newly composed", got)
 	}
 	m, err := session.Load(dir)
 	if err != nil {
@@ -602,14 +703,15 @@ func TestAddPutsAFreshRepoAndAPromotionOnTheSameBranch(t *testing.T) {
 		Repos: []session.RepoSelection{{Role: session.RepoRoleReference, Repo: docs}},
 	}, []github.Repo{docs, extra})
 
-	got, err := p.add("reading", []repoAddition{
+	got, err := propose(t, p, "reading", []repoAddition{
 		{Name: "org/docs", Role: "editing"},
 		{Name: "org/extra", Role: "editing"},
-	})
+	}, approve)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(got, wantAdd([]string{"org/extra"}, []string{"org/docs"}, nil)) {
+	if !reflect.DeepEqual(got.Added, []string{"org/extra"}) ||
+		!reflect.DeepEqual(got.Promoted, []string{"org/docs"}) {
 		t.Fatalf("add = %+v, want extra added and docs promoted", got)
 	}
 	m, err := session.Load(dir)
@@ -651,10 +753,10 @@ func TestAddRefusesAPromotionOverUncommittedWorkAndComposesNothing(t *testing.T)
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
 	gittest.WriteFile(t, wt, "version", "mine")
 
-	_, err = p.add("reading", []repoAddition{
+	_, err = propose(t, p, "reading", []repoAddition{
 		{Name: "org/edited", Role: "editing"},
 		{Name: "org/extra", Role: "editing"},
-	})
+	}, approve)
 	if !errors.Is(err, session.ErrCheckoutHasWork) {
 		t.Fatalf("promotion over uncommitted work = %v, want ErrCheckoutHasWork", err)
 	}
@@ -685,13 +787,16 @@ func TestOpAddReposCarriesTheAdditionsAndTheOutcomeBack(t *testing.T) {
 	}
 	var got []repoAddition
 	var gotSlug string
+	var gotDeadline time.Time
 	server, err := serveControl(socket, windows, owner, controlHooks{
-		addRepos: func(slug string, additions []repoAddition) (addReposResult, error) {
-			gotSlug, got = slug, additions
+		addRepos: func(_ context.Context, slug string, additions []repoAddition, deadline time.Time) (addReposResult, error) {
+			gotSlug, got, gotDeadline = slug, additions, deadline
 			return addReposResult{
+				Status:   workbench.AddReposConfirmed,
 				Added:    []string{"org/extra"},
 				Promoted: []string{"org/docs"},
 				Held:     []string{"org/svc"},
+				Dropped:  []string{"org/kraken"},
 			}, nil
 		},
 	})
@@ -701,8 +806,10 @@ func TestOpAddReposCarriesTheAdditionsAndTheOutcomeBack(t *testing.T) {
 	defer server.Close()
 
 	host := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
+	sent := time.Now().Add(30 * time.Minute)
 	result, err := host.AddRepos(t.Context(), workbench.AddReposRequest{
-		Repos: []workbench.RepoAddition{{Name: "org/extra"}, {Name: "org/docs", Role: "editing"}},
+		Repos:    []workbench.RepoAddition{{Name: "org/extra"}, {Name: "org/docs", Role: "editing"}},
+		Deadline: sent,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -716,11 +823,18 @@ func TestOpAddReposCarriesTheAdditionsAndTheOutcomeBack(t *testing.T) {
 		t.Fatalf("hook was given slug %q, want the listener's own %q", gotSlug, owner.slug())
 	}
 	if !reflect.DeepEqual(result, workbench.AddReposResult{
+		Status:   workbench.AddReposConfirmed,
 		Added:    []string{"org/extra"},
 		Promoted: []string{"org/docs"},
 		Held:     []string{"org/svc"},
+		Dropped:  []string{"org/kraken"},
 	}) {
 		t.Fatalf("result = %+v", result)
+	}
+	// The deadline crosses the socket, so the overlay is not drawn for an answer
+	// the caller has already stopped waiting for.
+	if !gotDeadline.Equal(sent) {
+		t.Fatalf("hook was given deadline %s, want %s", gotDeadline, sent)
 	}
 }
 
@@ -733,7 +847,7 @@ func TestOpAddReposSurfacesTheHooksRefusal(t *testing.T) {
 		t.Fatal(err)
 	}
 	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
-		addRepos: func(string, []repoAddition) (addReposResult, error) {
+		addRepos: func(context.Context, string, []repoAddition, time.Time) (addReposResult, error) {
 			return addReposResult{}, ErrRepoNotFound
 		},
 	})
@@ -744,7 +858,7 @@ func TestOpAddReposSurfacesTheHooksRefusal(t *testing.T) {
 
 	host := (workbench.Handle{Socket: socket, SessionRoot: "/sessions/x"}).WindowHost()
 	_, err = host.AddRepos(t.Context(), workbench.AddReposRequest{
-		Repos: []workbench.RepoAddition{{Name: "org/kraken"}},
+		Repos: []workbench.RepoAddition{{Name: "org/kraken"}}, Deadline: time.Now().Add(time.Minute),
 	})
 	if err == nil {
 		t.Fatal("a refused add returned no error")
@@ -915,7 +1029,7 @@ func TestAddRefusesOneRepoNamedTwiceInTwoRoles(t *testing.T) {
 			Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
 		}, []github.Repo{svc, extra})
 
-		_, err := p.add("adding", order)
+		_, err := propose(t, p, "adding", order, approve)
 		if !errors.Is(err, ErrRepoRoleConflict) {
 			t.Fatalf("add(%+v) = %v, want ErrRepoRoleConflict", order, err)
 		}
@@ -943,11 +1057,11 @@ func TestAddOfOnlyHeldReposIsANoOpEvenWithNoEditingRepo(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := p.add("reading", []repoAddition{{Name: "org/docs"}})
+	got, err := propose(t, p, "reading", []repoAddition{{Name: "org/docs"}}, approve)
 	if err != nil {
 		t.Fatalf("re-adding a held repo = %v, want the held report", err)
 	}
-	if !reflect.DeepEqual(got, wantAdd(nil, nil, []string{"org/docs"})) {
+	if !reflect.DeepEqual(got.Held, []string{"org/docs"}) {
 		t.Fatalf("add = %+v, want org/docs held", got)
 	}
 	after, err := os.ReadFile(filepath.Join(dir, "qrouton.json"))
@@ -958,4 +1072,189 @@ func TestAddOfOnlyHeldReposIsANoOpEvenWithNoEditingRepo(t *testing.T) {
 		t.Error("a no-op add rewrote the manifest")
 	}
 	assertUndisturbed(t, dir, signalled)
+}
+
+// The lock is the trap here. add waits for a human, so holding p.mu across that
+// wait would block the very Confirm the wait exists for — a deadlock in which the
+// user cannot approve the thing the lock is waiting on.
+func TestAQueuedProposalDoesNotBlockTheUsersConfirm(t *testing.T) {
+	svc := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+	extra := github.Repo{Org: "org", Name: "extra", SSHURL: gittest.Origin(t, "extra"), DefaultBranch: "main"}
+	p, dir, signalled := agentPicker(t, session.CreateRequest{
+		Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+	}, []github.Repo{svc, extra})
+
+	got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}}, approve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Status != workbench.AddReposConfirmed || !reflect.DeepEqual(got.Added, []string{"org/extra"}) {
+		t.Fatalf("add = %+v, want a confirmed org/extra", got)
+	}
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Repos) != 2 {
+		t.Fatalf("confirm composed %+v", m.Repos)
+	}
+	assertUndisturbed(t, dir, signalled)
+}
+
+// Declining is an outcome, not a failure: the agent carries on without them.
+func TestADeclinedProposalComposesNothingAndIsNotAnError(t *testing.T) {
+	svc := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+	extra := github.Repo{Org: "org", Name: "extra", SSHURL: gittest.Origin(t, "extra"), DefaultBranch: "main"}
+	p, dir, signalled := agentPicker(t, session.CreateRequest{
+		Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+	}, []github.Repo{svc, extra})
+
+	got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}}, decline)
+	if err != nil {
+		t.Fatalf("a declined proposal returned an error: %v", err)
+	}
+	if got.Status != workbench.AddReposDeclined {
+		t.Fatalf("status = %q, want declined", got.Status)
+	}
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Repos) != 1 {
+		t.Fatalf("a declined proposal composed %+v", m.Repos)
+	}
+	// Nothing was written, so nothing should have been announced either.
+	assertUndisturbed(t, dir, signalled)
+}
+
+// The overlay exists so the user can edit, so the result has to describe their
+// answer and not the agent's request.
+func TestAnEditedProposalReportsWhatTheUserActuallyChose(t *testing.T) {
+	svc := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+	extra := github.Repo{Org: "org", Name: "extra", SSHURL: gittest.Origin(t, "extra"), DefaultBranch: "main"}
+	other := github.Repo{Org: "org", Name: "other", SSHURL: gittest.Origin(t, "other"), DefaultBranch: "main"}
+
+	t.Run("a dropped row is reported dropped and never composed", func(t *testing.T) {
+		p, dir, _ := agentPicker(t, session.CreateRequest{
+			Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+			Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+		}, []github.Repo{svc, extra, other})
+
+		// The user unticks org/extra and approves an empty selection.
+		got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}},
+			func([]workbench.RepoAddition, []heldRepo) *pickerInput { return &pickerInput{} })
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got.Dropped, []string{"org/extra"}) {
+			t.Fatalf("dropped = %v, want org/extra", got.Dropped)
+		}
+		if len(got.Added) != 0 {
+			t.Fatalf("added = %v, want nothing", got.Added)
+		}
+		m, err := session.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(m.Repos) != 1 {
+			t.Fatalf("a dropped row was composed anyway: %+v", m.Repos)
+		}
+	})
+
+	t.Run("a changed role composes the user's role, not the one asked for", func(t *testing.T) {
+		p, dir, _ := agentPicker(t, session.CreateRequest{
+			Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+			Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+		}, []github.Repo{svc, extra, other})
+
+		// Asked for editing; the user downgrades it to reference before approving.
+		got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}},
+			func(proposed []workbench.RepoAddition, held []heldRepo) *pickerInput {
+				return editedTo([]workbench.RepoAddition{{Name: "org/extra", Role: "reference"}}, held)
+			})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(got.Added, []string{"org/extra"}) {
+			t.Fatalf("added = %v, want org/extra", got.Added)
+		}
+		m, err := session.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		added := repoNamed(t, m, "extra")
+		if added.Role != session.RepoRoleReference || added.Branch != "" || added.Revision == "" {
+			t.Fatalf("composed %+v, want the reference the user chose", added)
+		}
+	})
+
+	t.Run("a repository the user added themselves is reported too", func(t *testing.T) {
+		p, dir, _ := agentPicker(t, session.CreateRequest{
+			Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+			Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+		}, []github.Repo{svc, extra, other})
+
+		got, err := propose(t, p, "adding", []repoAddition{{Name: "org/extra", Role: "editing"}},
+			func(proposed []workbench.RepoAddition, held []heldRepo) *pickerInput {
+				return editedTo(append(proposed,
+					workbench.RepoAddition{Name: "org/other", Role: "reference"}), held)
+			})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// What the workspace now holds, whoever asked for it.
+		if !reflect.DeepEqual(got.Added, []string{"org/extra", "org/other"}) {
+			t.Fatalf("added = %v, want both", got.Added)
+		}
+		m, err := session.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(m.Repos) != 3 {
+			t.Fatalf("composed %+v, want three", m.Repos)
+		}
+	})
+}
+
+// A proposal replaced by a later one must not leave its caller waiting out the
+// whole deadline for an overlay that will never be drawn for it.
+func TestASupersededProposalIsToldRatherThanLeftWaiting(t *testing.T) {
+	svc := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+	extra := github.Repo{Org: "org", Name: "extra", SSHURL: gittest.Origin(t, "extra"), DefaultBranch: "main"}
+	p, _, _ := agentPicker(t, session.CreateRequest{
+		Name: "adding", Prefix: "feat", Mode: session.ModeAssistant,
+		Repos: []session.RepoSelection{{Role: session.RepoRoleEditing, Repo: svc}},
+	}, []github.Repo{svc, extra})
+
+	first := make(chan addSettled, 1)
+	go func() {
+		result, err := p.add(context.Background(), "adding",
+			[]repoAddition{{Name: "org/extra", Role: "editing"}}, time.Now().Add(time.Minute))
+		first <- addSettled{result, err}
+	}()
+	if _, settled := awaitProposal(t, p, "adding", first); settled != nil {
+		t.Fatalf("the first proposal settled early: %+v", settled)
+	}
+
+	// A second proposal replaces the first on the same session.
+	if err := p.sessions.queuePicker(workbench.PickerRequest{
+		SessionRoot: p.sessions.bySlug("adding").root(),
+		Deadline:    time.Now().Add(time.Minute),
+		Repos:       []workbench.RepoAddition{{Name: "org/extra", Role: "reference"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-first:
+		if got.err != nil {
+			t.Fatalf("a superseded proposal errored: %v", got.err)
+		}
+		if got.result.Status != workbench.AddReposDeclined {
+			t.Fatalf("status = %q, want declined", got.result.Status)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("a superseded proposal was left waiting")
+	}
 }

@@ -35,8 +35,9 @@ var (
 	ErrNoRunnerGeneration    = errors.New("runner generation request carries no generation")
 	ErrNoDelegatedLifecycle  = errors.New("delegated lifecycle request carries no event")
 
-	ErrNoAddRepos      = errors.New("add repositories request names no repositories")
-	ErrNoRepositoryAdd = errors.New("workbench has no way to add repositories to a session")
+	ErrNoAddRepos         = errors.New("add repositories request names no repositories")
+	ErrNoAddReposDeadline = errors.New("add repositories request carries no deadline")
+	ErrNoRepositoryAdd    = errors.New("workbench has no way to add repositories to a session")
 
 	ErrRepoNameRequired  = errors.New("a repository addition needs a name")
 	ErrRepoNotFound      = errors.New("no such repository")

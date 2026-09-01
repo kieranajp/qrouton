@@ -122,9 +122,10 @@ type WindowHost interface {
 	// session rather than raising anything, so a background agent's escalation
 	// does not take the screen from whatever the user is watching.
 	Picker(ctx context.Context, req PickerRequest) error
-	// AddRepos composes repositories into the session unattended, with no picker
-	// and no human gate, and blocks until they are on disk — a first clone can
-	// take minutes. Like Picker, it is not a window operation.
+	// AddRepos proposes repositories to the user, who may edit the proposal before
+	// approving it, and blocks until they answer — which may be a long wait, and
+	// may end in a refusal that is an outcome rather than an error. Like Picker,
+	// it is not a window operation.
 	AddRepos(ctx context.Context, req AddReposRequest) (AddReposResult, error)
 }
 
@@ -138,6 +139,10 @@ type PickerRequest struct {
 	Name        string    `json:"name,omitempty"`
 	Prefix      string    `json:"prefix,omitempty"`
 	Deadline    time.Time `json:"deadline,omitempty"`
+	// Repos are the repositories an agent proposed, to be drawn pre-selected at
+	// the roles it asked for. The user may change or drop any of them before
+	// confirming, so this is what was requested and never what will land.
+	Repos []RepoAddition `json:"repos,omitempty"`
 }
 
 // Handle identifies a running desktop process across the exec boundary.
