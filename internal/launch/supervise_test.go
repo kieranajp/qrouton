@@ -1,6 +1,7 @@
 package launch
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -439,5 +440,102 @@ func TestSignalSupervisorSignalsNobodyWithoutALiveSupervisor(t *testing.T) {
 				t.Fatalf("a %s pid file signalled process %d", tc.name, bystander)
 			}
 		})
+	}
+}
+
+// A transcript can go missing under a live session — the sidecar directory is
+// left behind, the conversation file is not. `claude --continue` then exits
+// nonzero, and a session the launcher only ever opens with resume was shut out
+// of its own workspace for good: the terminal ended on the error, and the only
+// way back in was to hand-write an initial prompt.
+func TestSuperviseStartsFreshWhenThereIsNoConversationToResume(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if len(argvs) == 1 {
+			return false, errors.New("exit status 1")
+		}
+		return false, nil
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatalf("a resume with nothing to resume must not end the terminal: %v", err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("expected the failed resume to be followed by a fresh launch, got %d launches", len(argvs))
+	}
+	if first := strings.Join(argvs[0], " "); !strings.Contains(first, claudeContinueFlag) {
+		t.Fatalf("first launch = %v, want a resume", argvs[0])
+	}
+	if second := strings.Join(argvs[1], " "); strings.Contains(second, claudeContinueFlag) {
+		t.Fatalf("fallback launch = %v, want a fresh conversation", argvs[1])
+	}
+}
+
+// The fallback is spent once. A runner failing for its own reasons — a bad flag,
+// a missing binary — must still end the terminal rather than relaunch forever.
+func TestSuperviseEndsTheTerminalWhenTheFreshStartFailsToo(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	calls := 0
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		calls++
+		if calls > 8 {
+			t.Fatal("the supervisor is relaunching a failing runner without end")
+		}
+		return false, errors.New("exit status 1")
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err == nil {
+		t.Fatal("a runner that fails on a fresh conversation must surface its error")
+	}
+	if calls != 2 {
+		t.Fatalf("expected the resume and one fresh start, got %d launches", calls)
+	}
+}
+
+// Nothing to fall back to: a launch that never asked to resume has no lost
+// conversation to explain its failure, so its error is the runner's own.
+func TestSuperviseEndsTheTerminalWhenAFreshLaunchFails(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	calls := 0
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		calls++
+		return false, errors.New("exit status 1")
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, false); err == nil {
+		t.Fatal("a failing fresh launch must surface its error")
+	}
+	if calls != 1 {
+		t.Fatalf("a fresh launch has nothing to fall back to; runner launched %d times", calls)
+	}
+}
+
+// The notice is consumed by the launch that fails, so the fallback has to carry
+// it or a repository change is announced to nobody.
+func TestSuperviseCarriesTheNoticeOntoTheFreshStart(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if len(argvs) == 1 {
+			return false, errors.New("exit status 1")
+		}
+		return false, nil
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("expected a fresh launch after the failed resume, got %d", len(argvs))
+	}
+	if second := strings.Join(argvs[1], " "); !strings.Contains(second, notice) {
+		t.Fatalf("fallback launch dropped the notice: %v", argvs[1])
 	}
 }
