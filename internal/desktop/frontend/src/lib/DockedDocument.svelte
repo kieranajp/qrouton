@@ -3,7 +3,7 @@
   import { chrome } from "./chrome.svelte.js";
   import DocumentPane from "./DocumentPane.svelte";
   import FindBar from "./FindBar.svelte";
-  import { activateMatch, clearMatches, findShortcut, markMatches } from "./find.js";
+  import { clearMatches, createDOMFindAdapter, findShortcut } from "./find.js";
   import TerminalPane from "./shell/TerminalPane.svelte";
 
   /** @type {{id: string, active?: boolean}} */
@@ -24,18 +24,66 @@
   let query = $state("");
   let count = $state(0);
   let current = $state(-1);
-  /** @type {HTMLElement[][]} */
-  let matches = [];
+  /** @type {import("./find.js").FindAdapter | null} */
+  let paneFindAdapter = null;
+  /** @type {import("./find.js").FindAdapter | null} */
+  let domFindAdapter = null;
+  let findRevision = 0;
+  let findOperations = Promise.resolve();
+
+  function currentFindAdapter() {
+    if (paneFindAdapter) return paneFindAdapter;
+    if (!domFindAdapter && content) domFindAdapter = createDOMFindAdapter(content);
+    return domFindAdapter;
+  }
+
+  function enqueueFind(operation, apply) {
+    const revision = ++findRevision;
+    const result = findOperations.then(operation, operation);
+    findOperations = result.catch(() => {});
+    result.then(
+      (state) => {
+        if (revision === findRevision) apply?.(state);
+      },
+      () => {
+        if (revision !== findRevision) return;
+        count = 0;
+        current = -1;
+      },
+    );
+  }
 
   function refresh(value) {
     query = value;
-    matches = markMatches(content, query);
-    count = matches.length;
-    current = activateMatch(matches, 0);
+    const adapter = currentFindAdapter();
+    if (!adapter) return;
+    enqueueFind(
+      () => adapter.refresh(query),
+      (state) => {
+        count = state.count;
+        current = state.current;
+      },
+    );
   }
 
   function move(by) {
-    current = activateMatch(matches, current + by);
+    const adapter = currentFindAdapter();
+    if (!adapter) return;
+    enqueueFind(
+      () => adapter.move(by),
+      (state) => {
+        count = state.count;
+        current = state.current;
+      },
+    );
+  }
+
+  function registerFindAdapter(adapter) {
+    if (paneFindAdapter === adapter) return;
+    const previous = currentFindAdapter();
+    paneFindAdapter = adapter;
+    if (previous) enqueueFind(() => previous.clear());
+    if (finding) refresh(query);
   }
 
   async function openFind() {
@@ -50,8 +98,8 @@
   }
 
   function closeFind() {
-    clearMatches(content);
-    matches = [];
+    const adapter = currentFindAdapter();
+    if (adapter) enqueueFind(() => adapter.clear());
     count = 0;
     current = -1;
     finding = false;
@@ -82,7 +130,11 @@
     if (!active && finding) closeFind();
   });
 
-  onDestroy(() => clearMatches(content));
+  onDestroy(() => {
+    findRevision += 1;
+    currentFindAdapter()?.clear();
+    clearMatches(content);
+  });
 </script>
 
 <TerminalPane flush style="display: {active ? 'flex' : 'none'}">
@@ -105,7 +157,8 @@
         {scrollRoot}
         agentWorking={session.fields.activity === "working"}
         onReady={documentReady}
-        onScroller={(element) => (owned = element)} />
+        onScroller={(element) => (owned = element)}
+        onFindAdapter={registerFindAdapter} />
     </div>
   </div>
 </TerminalPane>

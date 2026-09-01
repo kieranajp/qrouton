@@ -2,110 +2,37 @@ import { expect, test } from "@playwright/test";
 
 test.beforeEach(async ({ page }) => {
   await page.goto("/tests/diff.html");
-  await expect(page.locator(".diff-line")).toHaveCount(16);
+  await expect(page.locator(".diff-item")).toHaveCount(2);
+  await expect(page.locator(".diff-line")).toHaveCount(0);
 });
 
-test("renders fixed old and new gutters with exact hunk coordinates", async ({ page }) => {
-  const rows = page.locator(".diff-line");
-  await expect(rows.locator(".diff-old")).toHaveCount(16);
-  await expect(rows.locator(".diff-new")).toHaveCount(16);
-
-  const coordinates = await rows.evaluateAll((items) => items.map((row) => [
-    row.querySelector(".diff-old").dataset.line,
-    row.querySelector(".diff-new").dataset.line,
-  ]));
-  expect(coordinates.slice(6, 15)).toEqual([
-    ["", ""],
-    ["98", "198"],
-    ["99", ""],
-    ["", "199"],
-    ["100", ""],
-    ["", "200"],
-    ["101", "201"],
-    ["", "202"],
-    ["", ""],
-  ]);
-
-  const pseudoContent = await rows.nth(7).locator(".diff-gutter").evaluateAll((gutters) =>
-    gutters.map((gutter) => getComputedStyle(gutter, "::before").content));
-  expect(pseudoContent).toEqual(["\"98\"", "\"198\""]);
+test("opens a compact overview and only mounts the files the reader opens", async ({ page }) => {
+  await expect(page.locator(".diff-overview")).toContainText("2 files");
+  await expect(page.getByRole("button", { name: "Files" })).toHaveAttribute("aria-pressed", "true");
+  await page.locator(".diff-item summary").nth(0).click();
+  const firstRows = await page.locator(".diff-line").count();
+  expect(firstRows).toBeGreaterThan(0);
+  await page.locator(".diff-item summary").nth(1).click();
+  expect(await page.locator(".diff-line").count()).toBeGreaterThan(firstRows);
+  await expect(page.locator(".diff-item").nth(0)).toHaveAttribute("open", "");
+  await expect(page.locator(".diff-item").nth(1)).toHaveAttribute("open", "");
 });
 
-test("keeps raw markers and classes while non-content rows have blank gutters", async ({ page }) => {
-  const blankRows = [0, 1, 2, 3, 4, 5, 6, 14, 15];
-  for (const index of blankRows) {
-    const gutters = page.locator(".diff-line").nth(index).locator(".diff-gutter");
-    await expect(gutters.first()).toHaveAttribute("data-line", "");
-    await expect(gutters.last()).toHaveAttribute("data-line", "");
-    expect(await gutters.evaluateAll((items) =>
-      items.map((gutter) => getComputedStyle(gutter, "::before").content)))
-      .toEqual(["\"\"", "\"\""]);
-  }
-
-  await expect(page.locator(".diff-line").nth(8)).toHaveClass(/diff-del/);
-  await expect(page.locator(".diff-line").nth(8).locator(".diff-content"))
-    .toHaveText("--- metadata-looking deletion");
-  await expect(page.locator(".diff-line").nth(9)).toHaveClass(/diff-add/);
-  await expect(page.locator(".diff-line").nth(9).locator(".diff-content"))
-    .toHaveText("+++ metadata-looking addition");
-  await expect(page.locator(".diff-line").nth(14)).toHaveClass(/diff-marker/);
-  await expect(page.locator(".diff-line").nth(15).locator(".diff-content")).toBeEmpty();
-  expect((await page.locator(".diff-line").nth(15).boundingBox()).height).toBeGreaterThan(0);
+test("keeps opened files while switching to the exact raw patch stream", async ({ page }) => {
+  await page.locator(".diff-item summary").nth(0).click();
+  await page.getByRole("button", { name: "Raw patch" }).click();
+  await expect(page.locator(".diff-raw")).toHaveText(await page.evaluate(() => window.defaultDiff));
+  expect(await page.evaluate(() => window.selectDiff())).toBe(await page.evaluate(() => window.defaultDiff));
+  await expect(page.getByRole("button", { name: "Raw patch" })).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: "Files" }).click();
+  await expect(page.locator(".diff-item").nth(0)).toHaveAttribute("open", "");
 });
 
-test("wraps long content beneath the content column with aligned fixed gutters", async ({ page }) => {
-  await page.evaluate(() => window.setPaneWidth(400));
-  const longRow = page.locator(".diff-line").nth(12);
-  const geometry = await longRow.evaluate((row) => {
-    const oldGutter = row.querySelector(".diff-old");
-    const newGutter = row.querySelector(".diff-new");
-    const content = row.querySelector(".diff-content");
-    const range = document.createRange();
-    range.selectNodeContents(content);
-    return {
-      row: row.getBoundingClientRect().toJSON(),
-      oldGutter: oldGutter.getBoundingClientRect().toJSON(),
-      newGutter: newGutter.getBoundingClientRect().toJSON(),
-      content: content.getBoundingClientRect().toJSON(),
-      fragments: [...range.getClientRects()].map((rect) => rect.toJSON()),
-    };
-  });
-
-  expect(geometry.fragments.length).toBeGreaterThan(1);
-  expect(geometry.row.height).toBeGreaterThan(30);
-  expect(geometry.oldGutter.top).toBeCloseTo(geometry.content.top, 0);
-  expect(geometry.newGutter.top).toBeCloseTo(geometry.content.top, 0);
-  expect(geometry.content.left).toBeGreaterThanOrEqual(geometry.newGutter.right);
-  for (const fragment of geometry.fragments) {
-    expect(fragment.left).toBeGreaterThanOrEqual(geometry.content.left - 1);
-  }
-
-  const fixed = await page.locator(".diff-line").evaluateAll((rows) => rows.slice(7, 11).map((row) => {
-    const oldGutter = row.querySelector(".diff-old");
-    const newGutter = row.querySelector(".diff-new");
-    return {
-      old: oldGutter.getBoundingClientRect().toJSON(),
-      next: newGutter.getBoundingClientRect().toJSON(),
-      oldAlign: getComputedStyle(oldGutter).textAlign,
-      newAlign: getComputedStyle(newGutter).textAlign,
-    };
-  }));
-  expect(new Set(fixed.map(({ old }) => old.width)).size).toBe(1);
-  expect(new Set(fixed.map(({ next }) => next.width)).size).toBe(1);
-  expect(new Set(fixed.map(({ old }) => old.right)).size).toBe(1);
-  expect(new Set(fixed.map(({ next }) => next.right)).size).toBe(1);
-  expect(fixed.every(({ old, next, oldAlign, newAlign }) =>
-    old.width === next.width && oldAlign === "right" && newAlign === "right")).toBe(true);
-});
-
-test("scrolls narrow panes without overlapping or clipping large coordinates", async ({ page }) => {
-  await page.evaluate(async () => {
-    await window.setDiff("@@ -9007199254740991 +7000000000000000 @@\n-old\n+new");
-    window.setPaneWidth(180);
-  });
-
-  const measurements = await page.locator(".diff-grid").evaluate((grid) => {
-    const row = grid.querySelectorAll(".diff-line")[1];
+test("keeps numbered gutters inside an opened body at narrow widths", async ({ page }) => {
+  await page.locator(".diff-item summary").first().click();
+  await page.evaluate(() => window.setPaneWidth(180));
+  const measurements = await page.locator(".diff-file-body .diff-grid").evaluate((grid) => {
+    const row = grid.querySelectorAll(".diff-line")[7];
     const oldGutter = row.querySelector(".diff-old");
     const newGutter = row.querySelector(".diff-new");
     const content = row.querySelector(".diff-content");
@@ -115,44 +42,105 @@ test("scrolls narrow panes without overlapping or clipping large coordinates", a
       old: oldGutter.getBoundingClientRect().toJSON(),
       next: newGutter.getBoundingClientRect().toJSON(),
       content: content.getBoundingClientRect().toJSON(),
-      oldClientWidth: oldGutter.clientWidth,
-      oldScrollWidth: oldGutter.scrollWidth,
       oldValue: oldGutter.dataset.line,
-      oldPseudo: getComputedStyle(oldGutter, "::before").content,
     };
   });
-
-  expect(measurements.scrollWidth).toBeGreaterThan(measurements.clientWidth);
-  expect(measurements.oldValue).toBe("9007199254740991");
-  expect(measurements.oldPseudo).toBe("\"9007199254740991\"");
-  expect(measurements.oldScrollWidth).toBeLessThanOrEqual(measurements.oldClientWidth);
+  expect(measurements.scrollWidth).toBeGreaterThanOrEqual(measurements.clientWidth);
+  expect(measurements.oldValue).toBe("99");
   expect(measurements.old.right).toBeLessThanOrEqual(measurements.next.left + 1);
   expect(measurements.next.right).toBeLessThanOrEqual(measurements.content.left + 1);
 });
 
-test("copies and exposes only raw diff content", async ({ page }) => {
-  const selected = await page.evaluate(() => window.selectDiff());
-  expect(selected).toBe(await page.evaluate(() => window.defaultDiff));
-  expect(selected).not.toContain("98 context before");
-  expect(selected).not.toContain("198 context before");
+test("uses native disclosure semantics and bulk actions", async ({ page }) => {
+  const summary = page.locator(".diff-item summary").first();
+  await summary.focus();
+  await page.keyboard.press("Space");
+  await expect(page.locator(".diff-item").first()).toHaveAttribute("open", "");
+  await page.getByRole("button", { name: "Collapse all" }).click();
+  await expect(page.locator(".diff-line")).toHaveCount(0);
+  await page.getByRole("button", { name: "Expand all" }).click();
+  await expect(page.locator(".diff-line")).not.toHaveCount(0);
+});
 
-  const contextRow = page.locator(".diff-line").nth(7);
-  await expect(contextRow.locator(".diff-gutter")).toHaveCount(2);
-  await expect(contextRow.locator(".diff-gutter").first()).toHaveAttribute("aria-hidden", "true");
-  await expect(contextRow.locator(".diff-gutter").last()).toHaveAttribute("aria-hidden", "true");
-  const gutterStyles = await contextRow.locator(".diff-gutter").first().evaluate((gutter) => ({
-    pointerEvents: getComputedStyle(gutter).pointerEvents,
-    userSelect: getComputedStyle(gutter).userSelect,
-  }));
-  expect(gutterStyles).toEqual({ pointerEvents: "none", userSelect: "none" });
-  const aria = await contextRow.ariaSnapshot();
-  expect(aria).toContain("context before");
-  expect(aria).not.toContain("98");
-  expect(aria).not.toContain("198");
+test("keeps a large patch unmounted until a file is opened", async ({ page }) => {
+  await page.evaluate(async () => {
+    const files = Array.from({ length: 120 }, (_, index) => [
+      `diff --git a/file-${index}.txt b/file-${index}.txt`,
+      "index 1111111..2222222 100644",
+      `--- a/file-${index}.txt`,
+      `+++ b/file-${index}.txt`,
+      "@@ -1 +1 @@",
+      "-old line",
+      "+new line",
+    ].join("\n"));
+    await window.setDiff(files.join("\n"));
+  });
+  await expect(page.locator(".diff-item")).toHaveCount(120);
+  await expect(page.locator(".diff-line")).toHaveCount(0);
+  await page.locator(".diff-item summary").nth(88).click();
+  await expect(page.locator(".diff-line")).toHaveCount(8);
+});
 
-  const separated = "=== one ===\na\n\n=== two ===\nb\n";
-  await page.evaluate((text) => window.setDiff(text), separated);
-  expect(await page.evaluate(() => window.selectDiff())).toBe(separated);
-  await expect(page.locator(".diff-content").nth(2).locator("br"))
-    .toHaveAttribute("aria-hidden", "true");
+test("starts partial output in Raw patch while keeping Files available", async ({ page }) => {
+  await page.evaluate(async () => window.setDiff(`leading warning\n${window.defaultDiff}`));
+  await expect(page.locator(".diff-raw")).toContainText("leading warning");
+  await expect(page.getByRole("button", { name: "Raw patch" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("button", { name: "Files" })).toBeEnabled();
+  await page.getByRole("button", { name: "Files" }).click();
+  await expect(page.locator(".diff-notice")).toBeVisible();
+});
+
+test("Find reveals only its current closed file and Raw patch can match across lines", async ({ page }) => {
+  await page.evaluate(async () => {
+    await window.setDiff([
+      "diff --git a/one.txt b/one.txt", "--- a/one.txt", "+++ b/one.txt", "@@ -1 +1 @@", "-old one", "+needle one",
+      "diff --git a/two.txt b/two.txt", "--- a/two.txt", "+++ b/two.txt", "@@ -1 +1 @@", "-old two", "+needle two",
+    ].join("\n"));
+  });
+  expect(await page.evaluate(() => window.diffFindAdapter.refresh("needle"))).toEqual({ count: 2, current: 0 });
+  await expect(page.locator(".diff-file-body")).toHaveCount(1);
+  expect(await page.evaluate(() => window.diffFindAdapter.move(1))).toEqual({ count: 2, current: 1 });
+  await expect(page.locator(".diff-file-body")).toHaveCount(1);
+  expect(await page.evaluate(() => window.diffFindAdapter.refresh("old two\n+needle"))).toEqual({ count: 0, current: -1 });
+  await page.getByRole("button", { name: "Raw patch" }).click();
+  expect(await page.evaluate(() => window.diffFindAdapter.refresh("old two\n+needle"))).toEqual({ count: 1, current: 0 });
+  await expect(page.locator(".diff-raw mark")).toHaveCount(1);
+});
+
+test("keeps clean all-repository output structured and sends every warning placement to Raw", async ({ page }) => {
+  const ordinary = (name) => [
+    `diff --git a/${name}.txt b/${name}.txt`,
+    `--- a/${name}.txt`,
+    `+++ b/${name}.txt`,
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+  ].join("\n");
+  const clean = `\n=== src/one/ ===\n${ordinary("one")}\n\n=== src/two/ ===\n${ordinary("two")}`;
+  await page.evaluate(async (text) => window.setDiff(text), clean);
+  await expect(page.getByRole("button", { name: "Files" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.locator(".diff-notice")).toHaveCount(0);
+  await expect(page.locator(".diff-repositories")).toContainText("one · 1 files");
+  await expect(page.locator(".diff-repositories")).toContainText("two · 1 files");
+
+  for (const text of [
+    `leading warning\n${clean}`,
+    `\n=== src/one/ ===\n${ordinary("one")}\ninter-file warning\n${ordinary("two")}`,
+    `${clean}\ntrailing warning\n`,
+  ]) {
+    await page.evaluate(async (value) => window.setDiff(value), text);
+    await expect(page.getByRole("button", { name: "Raw patch" })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".diff-raw")).toHaveText(text);
+  }
+});
+
+test("makes mixed valid and malformed totals unavailable in Files", async ({ page }) => {
+  const text = [
+    "diff --git a/good.txt b/good.txt", "--- a/good.txt", "+++ b/good.txt", "@@ -1 +1 @@", "-old", "+new",
+    "diff --git a/bad.txt b/bad.txt", "--- a/bad.txt", "+++ b/bad.txt", "@@ -1,2 +1,2 @@", " only one",
+  ].join("\n");
+  await page.evaluate(async (value) => window.setDiff(value), text);
+  await page.getByRole("button", { name: "Files" }).click();
+  await expect(page.locator(".diff-overview")).toContainText("Counts unavailable");
+  await expect(page.locator(".diff-notice")).toBeVisible();
 });

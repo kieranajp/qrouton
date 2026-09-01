@@ -21,6 +21,52 @@ const SKIP = "script, style, textarea, input, button, [aria-hidden='true']";
 const MATCH = "mark[data-document-find]";
 
 /**
+ * @typedef {{count: number, current: number}} FindState
+ * @typedef {{
+ *   refresh: (query: string) => FindState | Promise<FindState>,
+ *   move: (by: number) => FindState | Promise<FindState>,
+ *   clear: () => void | Promise<void>,
+ * }} FindAdapter
+ */
+
+/**
+ * @template Match
+ * @param {{
+ *   search: (query: string) => Match[] | Promise<Match[]>,
+ *   activate: (matches: Match[], index: number) => void | Promise<void>,
+ *   reset: () => void | Promise<void>,
+ * }} provider
+ * @returns {FindAdapter}
+ */
+export function createFindAdapter(provider) {
+  /** @type {Match[]} */
+  let matches = [];
+  let current = -1;
+
+  return {
+    async refresh(query) {
+      await provider.reset();
+      matches = await provider.search(query);
+      current = matches.length ? 0 : -1;
+      await provider.activate(matches, current);
+      return { count: matches.length, current };
+    },
+    async move(by) {
+      current = matches.length
+        ? (((current + by) % matches.length) + matches.length) % matches.length
+        : -1;
+      await provider.activate(matches, current);
+      return { count: matches.length, current };
+    },
+    async clear() {
+      matches = [];
+      current = -1;
+      await provider.reset();
+    },
+  };
+}
+
+/**
  * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
  */
 export function findShortcut(event) {
@@ -121,6 +167,22 @@ export function activateMatch(matches, index) {
   for (const mark of matches[current]) mark.classList.add("current");
   matches[current][0]?.scrollIntoView({ block: "center", inline: "nearest" });
   return current;
+}
+
+/**
+ * Creates the default adapter used by document panes that do not provide
+ * mode-specific find behavior.
+ * @param {HTMLElement} root
+ * @returns {FindAdapter}
+ */
+export function createDOMFindAdapter(root) {
+  return createFindAdapter({
+    search: (query) => markMatches(root, query),
+    activate(matches, index) {
+      activateMatch(matches, index);
+    },
+    reset: () => clearMatches(root),
+  });
 }
 
 /** @param {HTMLElement} root */
