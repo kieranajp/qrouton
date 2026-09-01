@@ -39,9 +39,8 @@ type sessionState struct {
 	stopped bool
 	process *ptyProcess
 	shell   string
-	// picker is the escalation waiting for the user to arrive at this session. The
-	// workbench never learns that the escalating agent gave up, so a request past
-	// its deadline is ignored rather than drawn for an answer nobody is polling for.
+	// picker is the escalation waiting for the user to arrive at this session.
+	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
 	// shells counts the shells the session has had rather than the ones still
 	// open: a number freed by a close would name two terminals at once.
@@ -63,7 +62,7 @@ func (s *sessionState) pendingPicker() *workbench.PickerRequest {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.picker == nil || !time.Now().Before(s.picker.Deadline) {
+	if s.picker == nil || (!s.picker.Deadline.IsZero() && !time.Now().Before(s.picker.Deadline)) {
 		return nil
 	}
 	return s.picker

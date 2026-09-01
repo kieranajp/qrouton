@@ -55,7 +55,7 @@ test("fetching a ticket keeps its title and fills an editable branch description
   await expect(name(page)).toHaveValue(
     "Stage 2 blocker: Verifier 401s the Gympass partner integration",
   );
-  await expect(page.getByPlaceholder("gympass verifier 401s")).toHaveValue(
+  await expect(page.getByPlaceholder("short change summary")).toHaveValue(
     "verifier-401s-gympass-partner",
   );
   await expect(page.locator("textarea")).toHaveValue("The verifier rejects the partner response.");

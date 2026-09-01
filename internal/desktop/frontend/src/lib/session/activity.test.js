@@ -105,19 +105,17 @@ test("the disclosure line counts the subagents and how many are through", () => 
   assert.equal(subagentTally([{ state: "Working" }]), "1 subagent · 0 done");
 });
 
-test("provider capability copy distinguishes child-aware and missing integrations", () => {
+test("provider capability copy reports coverage without mentioning attention", () => {
+  assert.equal(capabilityNote({ provider: "codex", children_known: true }), "");
   assert.equal(
-    capabilityNote({ provider: "codex", children_known: true }),
-    "Attention unavailable.",
+    capabilityNote({ provider: "opencode", children_known: false }),
+    "OpenCode provides root activity only.",
   );
   assert.equal(capabilityNote({}), "Provider unknown · live activity unavailable");
   assert.equal(
     capabilityNote({
       provider: "claude",
-      attention_known: true,
       children_known: true,
-      parents_known: false,
-      outcomes_known: false,
     }),
     "",
   );

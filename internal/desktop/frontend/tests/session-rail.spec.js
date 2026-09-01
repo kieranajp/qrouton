@@ -138,7 +138,7 @@ test("provider coverage and missing capabilities are textual", async ({ page }) 
   );
   await expect(activity).toContainText("Orchestrator");
   await expect(activity).toContainText("Codex");
-  await expect(activity).toContainText("Attention unavailable.");
+  await expect(activity).not.toContainText("Attention unavailable.");
   await expect(activity).not.toContainText("Codex provides root activity only.");
 
   await page.evaluate(() => window.sessionRail.rootOnly("opencode"));

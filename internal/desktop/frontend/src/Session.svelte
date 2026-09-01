@@ -76,7 +76,16 @@
     <div class="agent">
       <PaneHeader>
         {#snippet lead()}
-          <StageMarks stages={fields.stages} />
+          {#if fields.mode === "ASSISTANT"}
+            <span class="assistant-mode">Assistant</span>
+            <Button
+              variant="cube"
+              size="sm"
+              disabled={view.escalating}
+              onclick={view.escalate}>Escalate</Button>
+          {:else}
+            <StageMarks stages={fields.stages} />
+          {/if}
         {/snippet}
         <CapsLabel tone="dim">Agent</CapsLabel>
         {#snippet actions()}
@@ -151,7 +160,10 @@
     <!-- Keyed on the session, so arriving at another one draws that session's
          picker rather than keeping this one over it. -->
     {#key fields.slug}
-      <PickerOverlay slug={fields.slug} onClose={() => (view.added = "")} />
+      <PickerOverlay
+        slug={fields.slug}
+        escalating={fields.picker}
+        onClose={() => (view.added = "")} />
     {/key}
   {/if}
 
@@ -262,6 +274,12 @@
     flex-direction: column;
     border-left: 1px solid var(--border-subtle);
     border-right: 1px solid var(--border-subtle);
+  }
+
+  .assistant-mode {
+    font: var(--machine-sm);
+    font-size: 11px;
+    color: var(--text-primary);
   }
 
   /* A zero-size point for the menu to resolve its own position against. */

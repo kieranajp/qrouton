@@ -78,6 +78,33 @@ func TestRepoStatsMeasuresMirrorBackedWorktrees(t *testing.T) {
 	}
 }
 
+func TestRepoStatsRecognisesAPushedSessionCommit(t *testing.T) {
+	requireGit(t)
+	root := sessionsRoot(t)
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Shared retry", Prefix: "fix", Mode: ModeRPI,
+		Repos: []RepoSelection{selection(t, "svc", RepoRoleEditing)},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	worktree := filepath.Join(dir, "src", "svc")
+	gittest.Run(t, worktree, "commit", "--allow-empty", "-m", "implement retry")
+	if stats := RepoStats(t.Context(), root, m); len(stats) != 1 || stats[0].Pushed {
+		t.Fatalf("local-only stats = %#v, want no pushed work", stats)
+	}
+
+	gittest.Run(t, worktree, "push", "origin", headRef+":"+localBranchRef+m.Repos[0].Branch)
+	stats := RepoStats(t.Context(), root, m)
+	if len(stats) != 1 || !stats[0].Pushed {
+		t.Fatalf("pushed stats = %#v, want the session branch recognised", stats)
+	}
+}
+
 // A base branch that moved on since the session was cut is not the session's
 // work: the diff is measured from the merge base.
 func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {

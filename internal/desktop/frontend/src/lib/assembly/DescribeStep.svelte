@@ -32,7 +32,7 @@
   <TextField
     label="Branch description — optional"
     bind:value={branchDescription}
-    placeholder="gympass verifier 401s"
+    placeholder="short change summary"
     help="Short phrase for the folder and branch"
     helpLiteral={folder(branch)} />
 </div>

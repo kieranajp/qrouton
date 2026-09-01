@@ -1,18 +1,18 @@
 <script>
-  import { artifactTone } from "../artifacts.js";
+  import { workflowTone } from "../workflow.js";
 
   /** @type {{stages?: {research?: boolean, plan?: boolean, implement?: boolean}}} */
   let { stages = {} } = $props();
 
-  // Implement writes no document of its own: it is done when every box in the
-  // plan is ticked, so it wears the success colour rather than an artifact's.
+  // Implement writes no document of its own, so it wears the success colour
+  // rather than an artifact's.
   let marks = $derived([
-    { letter: "R", done: Boolean(stages.research), tone: artifactTone("RESEARCH") },
-    { letter: "P", done: Boolean(stages.plan), tone: artifactTone("PLAN") },
-    { letter: "I", done: Boolean(stages.implement), tone: "var(--state-success)" },
+    { letter: "R", done: Boolean(stages.research), tone: workflowTone("RESEARCH"), state: "written" },
+    { letter: "P", done: Boolean(stages.plan), tone: workflowTone("PLAN"), state: "written" },
+    { letter: "I", done: Boolean(stages.implement), tone: workflowTone("IMPLEMENT"), state: "complete" },
   ]);
 
-  const said = (mark) => `${mark.letter}: ${mark.done ? "written" : "not written yet"}`;
+  const said = (mark) => `${mark.letter}: ${mark.done ? mark.state : `not ${mark.state} yet`}`;
 </script>
 
 <div class="marks" aria-label="Workflow stages">

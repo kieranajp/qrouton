@@ -1,5 +1,5 @@
 import { untrack } from "svelte";
-import { pending as pendingAssembly } from "../assembly/calls.js";
+import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
 import { chrome } from "../chrome.svelte.js";
 import {
@@ -179,6 +179,7 @@ export function shell() {
   }
 
   let requested = $state(false);
+  let escalating = $state(false);
   let settingsOpen = $state(false);
   // An escalation is the shown session's own pending request, so switching
   // session takes its picker with it. Add-repos is this page's, and belongs to
@@ -187,6 +188,15 @@ export function shell() {
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
   let covered = $derived(fields.welcoming || assembling || picker || settingsOpen);
+
+  async function escalate() {
+    if (escalating || fields.mode !== "ASSISTANT") return;
+    escalating = true;
+    try {
+      await escalateSession(fields.slug);
+    } catch {}
+    escalating = false;
+  }
 
   $effect(() => {
     let live = true;
@@ -313,6 +323,11 @@ export function shell() {
       listing = value;
     },
     read,
+
+    get escalating() {
+      return escalating;
+    },
+    escalate,
 
     get assembling() {
       return assembling;

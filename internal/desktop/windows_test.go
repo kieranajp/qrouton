@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"encoding/base64"
 	"errors"
 	"os"
 	"path/filepath"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/creack/pty"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -454,6 +456,49 @@ func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
 				t.Fatal("a failed command's window closed, taking its error with it")
 			}
 		})
+	}
+}
+
+func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
+	w, renderer := testWindows(t)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	window, _ := w.window(id)
+	pid := window.process.cmd.Process.Pid
+	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("two-line prompt\n"))); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the prompt to reach retained output", func() bool {
+		text, _ := w.readWindow(id, true)
+		return strings.Contains(text, "two-line prompt")
+	})
+
+	if err := w.Start(id, 120, 36); err != nil {
+		t.Fatal(err)
+	}
+	if window.process.cmd.Process.Pid != pid {
+		t.Fatal("remounting a terminal forked another shell")
+	}
+	size, err := pty.GetsizeFull(window.process.file)
+	if err != nil || size.Cols != 120 || size.Rows != 36 {
+		t.Fatalf("remounted PTY size = %+v, %v, want 120x36", size, err)
+	}
+	renderer.mu.Lock()
+	replay, ok := renderer.events[windowDataEvent+id].(terminalChunk)
+	renderer.mu.Unlock()
+	if !ok || !replay.Replay {
+		t.Fatalf("remount event = %#v, want a retained replay", replay)
+	}
+	decoded, err := base64.StdEncoding.DecodeString(replay.Encoded)
+	if err != nil || !strings.Contains(string(decoded), "two-line prompt") {
+		t.Fatalf("replayed output = %q, %v", decoded, err)
 	}
 }
 

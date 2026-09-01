@@ -35,9 +35,9 @@ type Fields struct {
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
 	Agents              AgentPanel            `json:"agents"`
-	// Stages is which of the three has produced its document, read off the
-	// session's own files. The window draws them as marks, so a stage is done or
-	// it is not; there is no fraction to report.
+	// Stages is the durable progress the window draws as three marks. Research
+	// and Plan come from documents; Implement also incorporates pushed work when
+	// the workbench overlays repository measurements.
 	Stages Stages `json:"stages"`
 	// Root is where the session lives on disk, so the window can hand its path
 	// over and open it. Empty for a window holding no session.
@@ -83,7 +83,7 @@ type SessionRow struct {
 
 // Stages is the R, P and I of a session's workflow. Research means a research
 // document holds findings, Plan means a plan exists, and Implement means every
-// box in one is ticked.
+// box in one is ticked or the session branch has been pushed.
 type Stages struct {
 	Research  bool `json:"research"`
 	Plan      bool `json:"plan"`
@@ -150,6 +150,7 @@ type RepoStat struct {
 	Insertions int    `json:"insertions"`
 	Deletions  int    `json:"deletions"`
 	Measured   bool   `json:"measured"`
+	Pushed     bool   `json:"-"`
 }
 
 // Read reports everything a file read can answer about a session. A root with no
@@ -202,6 +203,7 @@ func Repos(ctx context.Context, root string) []RepoStat {
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
 			Measured:   stat.Measured,
+			Pushed:     stat.Pushed,
 		})
 	}
 	return out

@@ -35,8 +35,8 @@ type pickerInput struct {
 	Upgrades []string   `json:"upgrades"`
 }
 
-// Picker is the second step over a live session, serving both the escalate tool
-// and the add-repos button.
+// Picker is the second step over a live session, serving the agent and header
+// escalation actions as well as the add-repos button.
 type Picker struct {
 	cfg       *config.Config
 	sessions  *Sessions
@@ -47,6 +47,25 @@ type Picker struct {
 func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
 	return &Picker{cfg: cfg, sessions: reg, repos: repos,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
+}
+
+// Escalate opens a persistent escalation picker from the session header. An
+// RPI session can race a stale page click and is already at the destination.
+func (p *Picker) Escalate(slug string) error {
+	state, root, err := p.root(slug)
+	if err != nil {
+		return err
+	}
+	m, err := session.Load(root)
+	if err != nil {
+		return err
+	}
+	if m.EffectiveMode() != session.ModeAssistant {
+		return nil
+	}
+	state.requestPicker(workbench.PickerRequest{SessionRoot: root})
+	p.sessions.touch()
+	return nil
 }
 
 func (p *Picker) Load(slug string) (pickerFields, error) {
@@ -156,10 +175,9 @@ func (p *Picker) root(slug string) (*sessionState, string, error) {
 	return state, root, nil
 }
 
-// queuePicker records an escalation on the session it names and raises nothing.
-// The overlay opens when the user next arrives there, so an escalation he never
-// arrives at expires unseen — the accepted cost of never taking the screen from
-// a background agent's tool call.
+// queuePicker records an agent escalation on the session it names and raises
+// nothing. The overlay opens when the user next arrives there, so a request they
+// never arrive at expires unseen rather than taking the screen.
 func (s *Sessions) queuePicker(req workbench.PickerRequest) error {
 	slug := slugFor(req.SessionRoot)
 	state := s.bySlug(slug)

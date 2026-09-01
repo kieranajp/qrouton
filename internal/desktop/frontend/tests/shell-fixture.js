@@ -3,6 +3,7 @@ import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import Session from "../src/Session.svelte";
+import { encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
 const calls = [];
@@ -15,6 +16,8 @@ window.wailsCall = (name, ...args) => {
   }
   if (name.endsWith("Windows.Surfaces")) return { session: "octopus", selected: "", tabs: [] };
   if (name.endsWith("Windows.OpenShell")) return "window-9";
+  if (name.endsWith("Picker.Load")) return { branch: "fix/octopus-4b2a", repos: [] };
+  if (name.endsWith("Orgs.List") || name.endsWith("Repositories.Cached")) return [];
   return undefined;
 };
 
@@ -37,9 +40,22 @@ window.shell = {
   chrome: (fields) => emitWailsEvent("chrome:update", { slug: "octopus", ...fields }),
   windows: (selected, tabs) =>
     emitWailsEvent("window:open", { session: "octopus", selected, tabs }),
+  terminalData: (id, text, replay = false) =>
+    emitWailsEvent("window:data:" + id, { encoded: encode(text), replay }),
+  terminalText: () => {
+    const term = terminalAt(document.querySelector(".human .host"));
+    if (!term) return "";
+    const lines = [];
+    for (let i = 0; i < term.buffer.active.length; i++) {
+      lines.push(term.buffer.active.getLine(i)?.translateToString(true) ?? "");
+    }
+    return lines.join("\n");
+  },
   refuseSelect: (refuse) => (refuseSelect = refuse),
   selects: () =>
     calls.filter(({ name }) => name.endsWith("Windows.Select")).map(({ args }) => args),
+  escalations: () =>
+    calls.filter(({ name }) => name.endsWith("Picker.Escalate")).map(({ args }) => args),
   started: () =>
     calls
       .filter(({ name }) => name.endsWith(".Start"))
