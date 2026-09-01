@@ -118,15 +118,26 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"opencode": {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := argvFor(t, runner, true, modeRPI, "must not be repeated")
+		argv := argvFor(t, runner, true, modeRPI, "")
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
 		if strings.Contains(strings.Join(argv, " "), "just been launched") {
 			t.Errorf("%s resume argv included fresh-session greeting: %#v", runner.ID, argv)
 		}
-		if strings.Contains(strings.Join(argv, " "), "must not be repeated") {
-			t.Errorf("%s resume argv repeated the external prompt: %#v", runner.ID, argv)
+	}
+}
+
+func TestRunnerResumeArgvCarriesARepositoryNoticeWithoutAFreshOpening(t *testing.T) {
+	const notice = "qrouton: session repositories changed"
+	for _, runner := range builtinRunners {
+		argv := argvFor(t, runner, true, modeRPI, notice)
+		joined := strings.Join(argv, " ")
+		if !strings.Contains(joined, notice) {
+			t.Errorf("%s resume argv lost the notice: %#v", runner.ID, argv)
+		}
+		if strings.Contains(joined, openingMessageRPI) {
+			t.Errorf("%s resume argv included the fresh opening: %#v", runner.ID, argv)
 		}
 	}
 }

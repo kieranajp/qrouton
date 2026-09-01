@@ -203,9 +203,10 @@ type Sessions struct {
 	// that moved would rename every shortcut under the user's fingers.
 	rail []string
 
-	now       func() time.Time
-	retention time.Duration
-	agents    map[string]*agentActivity
+	now         func() time.Time
+	retention   time.Duration
+	agents      map[string]*agentActivity
+	repoChanges map[string]struct{}
 }
 
 func newSessions() *Sessions {
@@ -214,12 +215,13 @@ func newSessions() *Sessions {
 
 func newSessionsWithActivity(now func() time.Time, retention time.Duration) *Sessions {
 	return &Sessions{
-		touched:   make(chan struct{}, 1),
-		slugs:     map[string]*sessionState{},
-		terms:     map[string]*sessionState{},
-		now:       now,
-		retention: retention,
-		agents:    map[string]*agentActivity{},
+		touched:     make(chan struct{}, 1),
+		slugs:       map[string]*sessionState{},
+		terms:       map[string]*sessionState{},
+		now:         now,
+		retention:   retention,
+		agents:      map[string]*agentActivity{},
+		repoChanges: map[string]struct{}{},
 	}
 }
 
@@ -499,6 +501,24 @@ func (s *Sessions) touch() {
 	case s.touched <- struct{}{}:
 	default:
 	}
+}
+
+func (s *Sessions) repositoriesChanged(root string) {
+	s.mu.Lock()
+	s.repoChanges[root] = struct{}{}
+	s.mu.Unlock()
+	s.touch()
+}
+
+func (s *Sessions) takeRepositoryChanges() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	roots := make([]string, 0, len(s.repoChanges))
+	for root := range s.repoChanges {
+		roots = append(roots, root)
+	}
+	s.repoChanges = map[string]struct{}{}
+	return roots
 }
 
 // without is history with one session removed, filtered in place.

@@ -28,6 +28,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	if err != nil {
 		return err
 	}
+	var updated session.Manifest
 	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
 		out = session.MergeRepos(out, composed.Repos)
 		out.Name, out.Description, out.TicketURL = d.Name, d.Description, d.Ticket
@@ -35,14 +36,16 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 			out.Mode = session.ModeRPI
 			out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
 		}
+		updated = out
 		return out, nil
 	}); err != nil {
 		return err
 	}
 	if !escalate {
-		// Adding repositories is not a mode change, and the running agent reads
-		// the manifest for itself — relaunching it would cost the user a
-		// conversation to tell it something it can already see.
+		notice := repositoryNotice(m, updated)
+		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
+			a.Signal(dir)
+		}
 		return nil
 	}
 	if a.Signal != nil {

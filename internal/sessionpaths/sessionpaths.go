@@ -32,6 +32,7 @@ const (
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	initialPromptName  = "initial-prompt"
+	agentNoticeName    = "agent-notice"
 	agentPIDName       = "agent.pid"
 	openedName         = "opened"
 
@@ -109,6 +110,11 @@ func HandoffPending(root string) string {
 // from the durable manifest.
 func InitialPrompt(root string) string {
 	return filepath.Join(Dir(root), initialPromptName)
+}
+
+// AgentNotice carries a workbench event until the next resumed runner launch.
+func AgentNotice(root string) string {
+	return filepath.Join(Dir(root), agentNoticeName)
 }
 
 // SharePages stages the self-contained pages rendered from session documents,

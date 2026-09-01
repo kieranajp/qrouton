@@ -196,6 +196,38 @@ func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
 	}
 }
 
+func TestSuperviseDeliversARepositoryNoticeOnTheResumedConversationOnce(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeAssistant)
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		if len(argvs) == 1 {
+			if err := session.QueueAgentNotice(dir, notice); err != nil {
+				t.Fatal(err)
+			}
+			return true, nil
+		}
+		return false, nil
+	})
+
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(argvs) != 2 {
+		t.Fatalf("expected two launches, got %d", len(argvs))
+	}
+	if first := strings.Join(argvs[0], " "); strings.Contains(first, notice) {
+		t.Fatalf("notice reached the launch before it was queued: %v", argvs[0])
+	}
+	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) || !strings.Contains(second, notice) {
+		t.Fatalf("resumed launch = %v, want continue with notice", argvs[1])
+	}
+	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
+		t.Fatalf("consumed agent notice remains on disk: %v", err)
+	}
+}
+
 // The escalation can land while no supervisor is watching the transition — a
 // workspace restart between the picker's confirm and the next launch, or a
 // signal that never arrived. The launcher then passes resume, the manifest

@@ -238,9 +238,7 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	}
 }
 
-// Escalation signals the supervisor so the assistant is replaced by a fresh
-// orchestrator; adding repositories leaves the running conversation alone.
-func TestOnlyAnEscalationSignalsTheSupervisor(t *testing.T) {
+func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
 	a, dir := scratch(t)
 	var signalled []string
 	a.Signal = func(root string) { signalled = append(signalled, root) }
@@ -249,14 +247,47 @@ func TestOnlyAnEscalationSignalsTheSupervisor(t *testing.T) {
 	if err := a.Confirm(dir, draft, false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(signalled) != 0 {
-		t.Fatalf("adding repositories signalled the supervisor: %v", signalled)
+	if len(signalled) != 1 || signalled[0] != dir {
+		t.Fatalf("adding repositories signalled %v", signalled)
+	}
+	notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "qrouton: session repositories changed — added org/svc for editing at src/svc. " +
+		"Re-read qrouton.json before continuing with the updated workspace."
+	if string(notice) != want {
+		t.Fatalf("queued notice = %q, want %q", notice, want)
+	}
+	if err := os.Remove(sessionpaths.AgentNotice(dir)); err != nil {
+		t.Fatal(err)
 	}
 	if err := a.Confirm(dir, draft, true, nil); err != nil {
 		t.Fatal(err)
 	}
-	if len(signalled) != 1 || signalled[0] != dir {
+	if len(signalled) != 2 || signalled[1] != dir {
 		t.Fatalf("escalation signalled %v", signalled)
+	}
+}
+
+func TestRepositoryNoticeNamesReferenceAdditionsAndPromotions(t *testing.T) {
+	before := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "org", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"},
+		{Org: "org", Name: "svc", Role: session.RepoRoleEditing, WorktreePath: "src/svc"},
+	}}
+	after := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "org", Name: "docs", Role: session.RepoRoleEditing, WorktreePath: "src/docs"},
+		{Org: "org", Name: "svc", Role: session.RepoRoleEditing, WorktreePath: "src/svc"},
+		{Org: "org", Name: "contracts", Role: session.RepoRoleReference, WorktreePath: "src/contracts"},
+	}}
+	want := "qrouton: session repositories changed — promoted org/docs to editing at src/docs; " +
+		"added org/contracts as a read-only reference at src/contracts. " +
+		"Re-read qrouton.json before continuing with the updated workspace."
+	if got := repositoryNotice(before, after); got != want {
+		t.Fatalf("notice = %q, want %q", got, want)
+	}
+	if got := repositoryNotice(after, after); got != "" {
+		t.Fatalf("unchanged repositories produced notice %q", got)
 	}
 }
 

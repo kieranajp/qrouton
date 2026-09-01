@@ -31,9 +31,10 @@ func (d Draft) Slug() string {
 	return session.SessionSlug(d.Name, d.Entropy)
 }
 
-// Assembler carries what the rules cannot reach for themselves. Signal is
-// launch.SignalSupervisor: this package must not import launch, because
-// everything it imports is linked into the workbench with it.
+// Assembler carries what the rules cannot reach for themselves. Signal asks the
+// supervisor to relaunch after a mode or repository-context change; this package
+// must not import launch, because everything it imports is linked into the
+// workbench with it.
 type Assembler struct {
 	Cfg    *config.Config
 	Signal func(root string)

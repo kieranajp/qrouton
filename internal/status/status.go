@@ -17,9 +17,9 @@ import (
 )
 
 // Fields is the session the workbench window draws around its terminal. Read
-// leaves Repos, Activity and Sessions empty: the first costs subprocesses, the
-// second needs a live PTY, and the last is the app's rather than a session's.
-// Agents carries only the manifest provider until the workbench overlays live data.
+// leaves Activity and Sessions empty; Repos carries manifest-backed rows without
+// git measurements. Agents carries only the manifest provider until the
+// workbench overlays live data.
 type Fields struct {
 	Mode     string `json:"mode"`
 	Phase    string `json:"phase"`
@@ -146,9 +146,21 @@ func Read(root string) Fields {
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
 	fields.Agents.Provider = m.Runner
+	fields.Repos = manifestRepos(m.Repos)
 	fields.Documents = documents(root)
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	return fields
+}
+
+func manifestRepos(repos []session.ManifestRepo) []RepoStat {
+	out := make([]RepoStat, 0, len(repos))
+	for _, repo := range repos {
+		out = append(out, RepoStat{
+			Name: repo.Org + repoSeparator + repo.Name,
+			Role: string(repo.Role.Effective()),
+		})
+	}
+	return out
 }
 
 // Repos measures the session's repositories against the branches they were cut

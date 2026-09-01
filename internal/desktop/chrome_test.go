@@ -214,6 +214,60 @@ func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
 	}
 }
 
+func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, "octopus")
+	initial := session.Manifest{Slug: "octopus", Repos: []session.ManifestRepo{
+		{Org: "org", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"},
+	}}
+	if err := session.WriteManifest(dir, initial); err != nil {
+		t.Fatal(err)
+	}
+	reg := testRegistry(t, dir)
+	select {
+	case <-reg.touched:
+	default:
+	}
+	updates := make(chan status.Fields, 8)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go watch(ctx, reg, root, nil, func(event string, payload any) {
+		if event == chromeEvent {
+			updates <- payload.(status.Fields)
+		}
+	}, time.Hour, time.Hour, unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, false },
+	})
+
+	for pushes := 0; pushes < 2; pushes++ {
+		select {
+		case <-updates:
+		case <-time.After(5 * time.Second):
+			t.Fatal("initial repository measurement did not settle")
+		}
+	}
+	updated := initial
+	updated.Repos = append([]session.ManifestRepo(nil), initial.Repos...)
+	updated.Repos[0].Role = session.RepoRoleEditing
+	updated.Repos = append(updated.Repos,
+		session.ManifestRepo{Org: "org", Name: "svc", Role: session.RepoRoleEditing, WorktreePath: "src/svc"})
+	if err := session.WriteManifest(dir, updated); err != nil {
+		t.Fatal(err)
+	}
+	reg.repositoriesChanged(dir)
+
+	select {
+	case fields := <-updates:
+		if len(fields.Repos) != 2 || fields.Repos[0] != (status.RepoStat{Name: "org/docs", Role: "editing"}) ||
+			fields.Repos[1] != (status.RepoStat{Name: "org/svc", Role: "editing"}) {
+			t.Fatalf("repository change pushed %+v", fields.Repos)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("repository change did not push chrome immediately")
+	}
+}
+
 // Chrome sits on the emitter seam, so a payload it does not recognise has to
 // reach the page rather than take the workbench down.
 func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {

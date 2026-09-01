@@ -87,7 +87,7 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 		return err
 	}
 	state.clearPicker()
-	p.sessions.touch()
+	p.sessions.repositoriesChanged(root)
 	return nil
 }
 

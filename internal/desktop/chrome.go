@@ -147,6 +147,9 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 			refresh()
 			unseen = count.all(root)
 		case <-reg.touched:
+			for _, root := range reg.takeRepositoryChanges() {
+				delete(measured, root)
+			}
 			refresh()
 			// Arriving at a session is looking at what it wrote, and a marker still
 			// lit after that is a marker nobody reads.

@@ -67,6 +67,10 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	if got.Identity != "webhook retry backoff" || got.Branch != "fix/webhook-retry-backoff" {
 		t.Fatalf("identity = %q, branch = %q", got.Identity, got.Branch)
 	}
+	if len(got.Repos) != 2 || got.Repos[0] != (RepoStat{Name: "org/consumer", Role: "reference"}) ||
+		got.Repos[1] != (RepoStat{Name: "org/svc", Role: "editing"}) {
+		t.Fatalf("manifest repository rows = %+v", got.Repos)
+	}
 
 	// A research document moves the session into planning.
 	research := filepath.Join(dir, "thoughts", "shared", "research")

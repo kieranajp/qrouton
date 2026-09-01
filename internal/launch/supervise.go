@@ -59,10 +59,18 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if tookHandoff(dir) {
 			resume = false
 		}
+		notice, err := takeAgentNotice(dir)
+		if err != nil {
+			return err
+		}
+		prompt := initialPrompt
+		if resume {
+			prompt = notice
+		}
 		if err := announceRunnerGeneration(handle, r.ID, generation); err != nil {
 			return err
 		}
-		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, initialPrompt)
+		argv, env, err := runnerLaunch(r, qroutonBin, dir, editor, handle, generation, resume, prompt)
 		if err != nil {
 			return err
 		}
@@ -88,7 +96,14 @@ var announceRunnerGeneration = func(handle workbench.Handle, provider string, ge
 }
 
 func takeInitialPrompt(dir string) (string, error) {
-	path := sessionpaths.InitialPrompt(dir)
+	return takePrompt(sessionpaths.InitialPrompt(dir))
+}
+
+func takeAgentNotice(dir string) (string, error) {
+	return takePrompt(sessionpaths.AgentNotice(dir))
+}
+
+func takePrompt(path string) (string, error) {
 	prompt, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
 		return "", nil

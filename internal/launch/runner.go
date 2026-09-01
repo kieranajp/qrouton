@@ -182,14 +182,14 @@ func FirstInstalled(cfg *config.Config) (Runner, error) {
 	return Runner{}, ErrNoRunnerInstalled
 }
 
-func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, generation uint64, resume bool, initialPrompt string) ([]string, []string, error) {
+func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle workbench.Handle, generation uint64, resume bool, prompt string) ([]string, []string, error) {
 	// Runner's fields are exported, so a hand-built one can still reach here
 	// without the per-runner wiring the launch path needs.
 	spec, ok := specFor(r.ID)
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), initialPrompt), injectContext{
+	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
@@ -358,12 +358,16 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, initialPrompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, prompt string) []string {
 	argv := slices.Clone(r.Command)
 	if resume {
-		return spec.Resume(argv)
+		argv = spec.Resume(argv)
+		if resumed := strings.TrimSpace(prompt); resumed != "" {
+			argv = spec.Prompt(argv, resumed)
+		}
+		return argv
 	}
-	return spec.Prompt(argv, openingMessage(mode, initialPrompt))
+	return spec.Prompt(argv, openingMessage(mode, prompt))
 }
 
 func openingMessage(mode, initialPrompt string) string {
