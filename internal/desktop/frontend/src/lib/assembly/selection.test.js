@@ -5,6 +5,7 @@ import {
   isLocked,
   isUpgrading,
   ordered,
+  propose,
   reconcile,
   roleOf,
   roleOffers,
@@ -190,4 +191,33 @@ test("a row being taken up leads the chips, naming the branch it joins", () => {
   selection = setRole(selection, "acme/docs", "reference");
   assert.deepEqual(ordered(selection).map((row) => row.id), ["other/web"]);
   assert.equal(summary(selection, repos, "feat/extract-billing").length, 1);
+});
+
+// propose is what pre-seeds an escalation's picker: the agent's asked-for rows,
+// applied over the held seed as if the user had picked each one themselves.
+test("a proposed fresh row becomes a pick at the asked role", () => {
+  const selection = propose(seed(), [{ id: "acme/api", role: "editing" }]);
+  assert.equal(roleOf(selection, "acme/api"), "editing");
+  assert.equal(picked(selection), "acme/api");
+});
+
+test("a proposed row naming a held reference repo becomes an upgrade, not a second clone", () => {
+  const selection = propose(seed([{ id: "acme/docs", role: "reference" }]), [
+    { id: "acme/docs", role: "editing" },
+  ]);
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+  assert.equal(picked(selection), "");
+});
+
+test("a proposed row naming a repo already held at that role adds nothing", () => {
+  const held = seed([{ id: "acme/api", role: "editing" }]);
+  const selection = propose(held, [{ id: "acme/api", role: "editing" }]);
+  assert.deepEqual(selection, held);
+});
+
+test("an empty proposal changes nothing", () => {
+  const held = seed([{ id: "acme/api", role: "editing" }]);
+  assert.deepEqual(propose(held, []), held);
+  assert.deepEqual(propose(held), held);
 });

@@ -7,7 +7,7 @@
   import TextField from "../forms/TextField.svelte";
   import RepoRow from "../session/RepoRow.svelte";
 
-  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: {id: string, meta: string, role: 'off'|'editing'|'reference', offers: ('off'|'editing'|'reference')[]}[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void}} */
+  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: {id: string, meta: string, role: 'off'|'editing'|'reference', offers: ('off'|'editing'|'reference')[]}[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, proposed?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void}} */
   let {
     query = $bindable(""),
     orgs = [],
@@ -19,6 +19,7 @@
     tally = { editing: 0, reference: 0 },
     picks = [],
     refreshing = false,
+    proposed = false,
     onOwner,
     onRefresh,
     onRole,
@@ -37,6 +38,10 @@
   <span class="editing">Editing</span> means the agent may change it, on a new branch.
   <span class="reference">Reference</span> is checked out read-only, for context.
 </StepHeading>
+
+{#if proposed}
+  <p class="proposal">The agent asked for these repositories — change or drop any before adding them.</p>
+{/if}
 
 <div class="controls">
   <div class="search">
@@ -80,6 +85,12 @@
 
   .reference {
     color: var(--role-reference);
+  }
+
+  .proposal {
+    margin: 0;
+    font: var(--machine-sm);
+    color: var(--accent-label);
   }
 
   .controls {

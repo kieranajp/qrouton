@@ -25,6 +25,7 @@ export function picking(slug, done) {
     if (!answer.ok) return report(refusal(answer.error));
     branch = answer.value?.branch ?? "";
     repos.hold(answer.value?.repos ?? []);
+    repos.propose(answer.value?.proposed ?? []);
   });
 
   // answering stays set once Go has the answer: the manifest now holds what this

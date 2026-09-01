@@ -93,6 +93,19 @@ export function setRole(selection, id, role) {
 }
 
 /**
+ * propose applies an agent's proposed rows on top of a seeded selection, as if
+ * the user had picked each one at the role asked. Reusing setRole means a row
+ * naming a repository already held at that role changes nothing, and one naming
+ * a held reference repository takes the same upgrade path a manual click would.
+ * @param {Selection} selection
+ * @param {{id: string, role: Role}[]} [proposed]
+ * @returns {Selection}
+ */
+export function propose(selection, proposed = []) {
+  return proposed.reduce((next, row) => setRole(next, row.id, row.role), selection);
+}
+
+/**
  * takeUp marks a held reference row to be checked out for editing, or unmarks it.
  * The held role stays in roles, so the row can go back to what the session still
  * has on disk right up until confirm.
