@@ -4,8 +4,8 @@
   import { paneFor } from "./panes/index.js";
   import { Call, Events } from "./wails.js";
 
-  /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void}} */
-  let { id, active = false, scrollRoot, agentWorking = false, onReady } = $props();
+  /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void, onScroller?: (element: HTMLElement | null) => void}} */
+  let { id, active = false, scrollRoot, agentWorking = false, onReady, onScroller } = $props();
 
   /** @type {{text: string, format: string, source: string, path?: string, kind?: string, line: number, to: number, viewportEpoch?: number} | undefined} */
   let doc = $state();
@@ -32,5 +32,5 @@
 
 {#if doc}
   {@const Pane = paneFor(doc.format, doc.kind)}
-  <Pane {doc} {id} {active} {scrollRoot} {agentWorking} />
+  <Pane {doc} {id} {active} {scrollRoot} {agentWorking} {onScroller} />
 {/if}

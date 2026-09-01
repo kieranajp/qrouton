@@ -1,8 +1,8 @@
 <script>
   import "../diff.css";
 
-  /** @type {{doc: {text: string, format: string, source: string}, id?: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id: _id, active: _active, scrollRoot: _scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string}, id?: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  let { doc, id: _id, active: _active, scrollRoot: _scrollRoot, onScroller: _onScroller } = $props();
 
   let lines = $derived(doc.text.split("\n"));
 </script>

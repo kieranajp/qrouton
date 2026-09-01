@@ -1,22 +1,23 @@
 import { expect, test } from "@playwright/test";
 
-test("the artifact picker uses the design token for every kind", async ({ page }) => {
+test("every tag is a filled block of its kind's own hue", async ({ page }) => {
   await page.goto("/tests/artifact-picker.html");
-  const colours = await page.locator(".tag").evaluateAll((tags) =>
-    tags.map((tag) => ({
-      kind: tag.textContent,
+  const tags = await page.locator(".tag").evaluateAll((found) =>
+    found.map((tag) => ({
+      label: tag.textContent,
       colour: getComputedStyle(tag).backgroundColor,
+      ink: getComputedStyle(tag).color,
     })),
   );
 
-  expect(colours).toEqual([
-    { kind: "PLAN", colour: "rgb(183, 189, 248)" },
-    { kind: "PLAN", colour: "rgb(183, 189, 248)" },
-    { kind: "SPEC", colour: "rgb(245, 189, 230)" },
-    { kind: "RESEARCH", colour: "rgb(145, 215, 227)" },
-    { kind: "NOTE", colour: "rgb(240, 198, 198)" },
-    { kind: "PLAN", colour: "rgb(183, 189, 248)" },
-    { kind: "RESEARCH", colour: "rgb(145, 215, 227)" },
+  const CRUST = "rgb(24, 25, 38)";
+  expect(tags).toEqual([
+    { label: "P1", colour: "rgb(183, 189, 248)", ink: CRUST },
+    { label: "S1", colour: "rgb(245, 189, 230)", ink: CRUST },
+    { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
+    { label: "NOTE", colour: "rgb(240, 198, 198)", ink: CRUST },
+    { label: "P1", colour: "rgb(183, 189, 248)", ink: CRUST },
+    { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
   ]);
 });
 
@@ -40,7 +41,7 @@ test("the artifact picker groups repository thoughts in a nested menu", async ({
 test("repository thoughts remain available before the session writes anything", async ({ page }) => {
   await page.goto("/tests/artifact-picker.html?repository-only");
 
-  await expect(page.getByRole("button", { name: /nothing yet/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Documents 0/ })).toBeVisible();
   await expect(page.locator(".heading")).toHaveText(["Written this session", "In-repo"]);
   await expect(page.getByRole("button", { name: "qrouton" })).toBeVisible();
 });

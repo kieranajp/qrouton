@@ -3,13 +3,15 @@
   import {
     activeAgent,
     capabilityNote,
-    parentLabel,
-    projectAgents,
+    duration,
+    finishedAgent,
+    hierarchy,
     providerLabel,
     recordLabel,
     roleLabel,
     runningRoot,
     stateLabel,
+    subagentTally,
     typeLabel,
   } from "./activity.js";
 
@@ -17,74 +19,96 @@
   let { agents = {} } = $props();
 
   let records = $derived(agents.agents ?? []);
-  let projected = $derived(projectAgents(records));
+  let ranks = $derived(hierarchy(records));
   let running = $derived(records.some(runningRoot));
   let note = $derived(capabilityNote(agents));
 
   const key = (record) => `${record.provider ?? ""}:${record.run_id ?? ""}:${record.id ?? ""}`;
+
+  /** Which leads have had their subagents asked for. */
+  let opened = $state(/** @type {Record<string, boolean>} */ ({}));
+  const turn = (id) => (opened = { ...opened, [id]: !opened[id] });
+
+  /** @param {any} record */
+  function mark(record) {
+    if (finishedAgent(record)) return record.state === "Failed" ? "failed" : "done";
+    if (record.state === "Waiting for you" && record.role === "Orchestrator") return "waiting";
+    return "running";
+  }
 </script>
 
-{#snippet treeAgent(node)}
-  <li
-    role="treeitem"
-    aria-level={node.level}
-    aria-selected="false"
-    aria-label={recordLabel(node.record, agents.provider)}>
-    <div class="record" title={recordLabel(node.record, agents.provider)}>
-      {#if activeAgent(node.record)}<span class="agent-dot" aria-hidden="true">●</span>{/if}
-      <div class="identity">
-        <span class="role">{roleLabel(node.record.role)}</span>
-        <span class="type">
-          {node.record.role === "Orchestrator"
-            ? providerLabel(node.record.provider || agents.provider)
-            : typeLabel(node.record.type)}
-        </span>
-      </div>
-      <span class="state">{stateLabel(node.record.state)}</span>
-    </div>
-    {#if node.children.length}
-      <ul role="group">
-        {#each node.children as child (key(child.record))}
-          {@render treeAgent(child)}
-        {/each}
-      </ul>
-    {/if}
-  </li>
-{/snippet}
-
 <section class="activity" aria-labelledby="activity-heading">
-  <h2 id="activity-heading"><CapsLabel tone="dim">Activity</CapsLabel></h2>
+  <h2 id="activity-heading"><CapsLabel tone="dim" centred>Activity</CapsLabel></h2>
 
-  {#if !running}
+  {#if !running && !ranks.roots.length}
     <p class="empty">No agent running</p>
   {/if}
 
-  {#if projected.trees.length}
-    <ul class="tree" role="tree" aria-label="Agent hierarchy">
-      {#each projected.trees as root (key(root.record))}
-        {@render treeAgent(root)}
-      {/each}
-    </ul>
-  {/if}
+  {#each ranks.roots as root (key(root.record))}
+    <div class="rank">
+      <div class="row" aria-label={recordLabel(root.record, agents.provider)}>
+        <span class="dot {mark(root.record)}" aria-hidden="true"></span>
+        <span class="identity">
+          <span class="who">{roleLabel(root.record.role) || "Agent"}</span>
+          {#if providerLabel(root.record.provider || agents.provider)}
+            <span class="what">{providerLabel(root.record.provider || agents.provider)}</span>
+          {/if}
+        </span>
+        {#if stateLabel(root.record.state, root.record.role)}
+          <span class="aside">{stateLabel(root.record.state, root.record.role)}</span>
+        {/if}
+      </div>
 
-  {#if projected.observed.length}
+      {#each root.leads as lead (key(lead.record))}
+        <div class="row lead" aria-label={recordLabel(lead.record, agents.provider)}>
+          <span class="dot {mark(lead.record)}" aria-hidden="true"></span>
+          <span class="identity">
+            <span class="who">{typeLabel(lead.record.type) || roleLabel(lead.record.role) || "Agent"}</span>
+          </span>
+          {#if duration(lead.record)}<span class="aside">{duration(lead.record)}</span>{/if}
+        </div>
+
+        {#if lead.subagents.length}
+          <button
+            type="button"
+            class="disclose"
+            aria-expanded={Boolean(opened[key(lead.record)])}
+            onclick={() => turn(key(lead.record))}>
+            <span class="tally">{subagentTally(lead.subagents)}</span>
+            <span class="caret" class:open={opened[key(lead.record)]} aria-hidden="true"
+              >{opened[key(lead.record)] ? "▲" : "▸"}</span>
+          </button>
+          {#if opened[key(lead.record)]}
+            <div class="subagents">
+              {#each lead.subagents as sub (key(sub))}
+                <div class="row sub" aria-label={recordLabel(sub, agents.provider)}>
+                  <span class="dot small {mark(sub)}" aria-hidden="true"></span>
+                  <span class="name" class:spent={finishedAgent(sub)}
+                    >{typeLabel(sub.type) || "Subagent"}</span>
+                  <span class="aside">{finishedAgent(sub) ? "done" : duration(sub)}</span>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        {/if}
+      {/each}
+    </div>
+  {/each}
+
+  {#if ranks.observed.length}
     <div class="observed">
       <div class="group-label">Observed agents</div>
-      <ul aria-label="Observed agents">
-        {#each projected.observed as record (key(record))}
-          <li aria-label={`${recordLabel(record, agents.provider)} · ${parentLabel(record)}`}>
-            <div class="record" title={recordLabel(record, agents.provider)}>
-              {#if activeAgent(record)}<span class="agent-dot" aria-hidden="true">●</span>{/if}
-              <div class="identity">
-                <span class="role">{roleLabel(record.role)}</span>
-                <span class="type">{typeLabel(record.type)}</span>
-              </div>
-              <span class="state">{stateLabel(record.state)}</span>
-            </div>
-            <div class="parent" title={parentLabel(record)}>{parentLabel(record)}</div>
-          </li>
-        {/each}
-      </ul>
+      {#each ranks.observed as record (key(record))}
+        <div class="row" aria-label={recordLabel(record, agents.provider)}>
+          {#if activeAgent(record)}<span class="dot {mark(record)}" aria-hidden="true"></span>{/if}
+          <span class="identity">
+            <span class="who">{typeLabel(record.type) || roleLabel(record.role) || "Agent"}</span>
+          </span>
+          {#if stateLabel(record.state, record.role)}
+            <span class="aside">{stateLabel(record.state, record.role)}</span>
+          {/if}
+        </div>
+      {/each}
     </div>
   {/if}
 
@@ -101,35 +125,58 @@
   }
 
   h2,
-  p,
-  ul {
+  p {
     margin: 0;
   }
 
-  h2 {
+  /* Depth is an indent step. A tree rule down the left drew three ranks as a
+     structure to read rather than three facts to glance at. */
+  .rank {
     display: flex;
+    flex-direction: column;
   }
 
-  ul {
-    list-style: none;
-    padding: 0;
-  }
-
-  .tree [role="group"] {
-    margin-left: 8px;
-    padding-left: 7px;
-    border-left: 1px solid var(--border-subtle);
-  }
-
-  .record {
+  .row {
     min-width: 0;
     display: flex;
     align-items: baseline;
-    justify-content: space-between;
-    gap: 5px;
-    padding: 3px 0;
+    gap: 8px;
+    padding: 5px 0;
     font: var(--machine-xs);
     font-size: 9.5px;
+  }
+
+  .lead {
+    padding-left: 15px;
+  }
+
+  .sub {
+    padding: 3px 0;
+  }
+
+  .dot {
+    flex: none;
+    width: 7px;
+    height: 7px;
+    background: var(--state-running);
+  }
+
+  .dot.small {
+    width: 6px;
+    height: 6px;
+  }
+
+  .dot.waiting {
+    background: var(--state-waiting);
+  }
+
+  .dot.failed {
+    background: var(--state-failed);
+  }
+
+  .dot.done {
+    background: transparent;
+    box-shadow: inset 0 0 0 1px var(--ctp-surface-2);
   }
 
   .identity {
@@ -137,35 +184,87 @@
     flex: 1;
     display: flex;
     flex-direction: column;
+    gap: 1px;
   }
 
-  .agent-dot {
-    flex: none;
-    color: var(--state-running);
-    font-size: 8px;
-    line-height: 1;
-  }
-
-  .role {
-    color: var(--text-secondary);
-  }
-
-  .type,
-  .parent {
+  .who {
+    font-size: 10.5px;
+    color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    color: var(--text-faint);
   }
 
-  .state {
+  .what {
+    color: var(--text-faint);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .aside {
     flex: none;
     color: var(--text-muted);
   }
 
+  .disclose {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    padding: 4px 0 4px 30px;
+    background: transparent;
+    border: 0;
+    text-align: left;
+    cursor: pointer;
+    font: var(--machine-xs);
+    font-size: 9.5px;
+    color: var(--text-faint);
+  }
+
+  .disclose:hover {
+    color: var(--text-primary);
+  }
+
+  .tally {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .caret {
+    flex: none;
+    font: var(--terminal-sm);
+    color: var(--text-faint);
+  }
+
+  .caret.open {
+    color: var(--accent-action);
+  }
+
+  .subagents {
+    display: flex;
+    flex-direction: column;
+    padding-left: 30px;
+  }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .spent {
+    color: var(--text-faint);
+  }
+
   .empty,
   .capability,
-  .parent,
   .group-label {
     font: var(--machine-xs);
     font-size: 9.5px;

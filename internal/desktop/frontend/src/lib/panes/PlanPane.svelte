@@ -20,8 +20,8 @@
   };
   const WORD = { met: "Met", working: "Working", "not-started": "Not started" };
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean}} */
-  let { doc, id, active = false, scrollRoot, agentWorking = false } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onScroller?: (element: HTMLElement | null) => void}} */
+  let { doc, id, active = false, scrollRoot, agentWorking = false, onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
   let plan = $derived(parsePlan(doc.text));
@@ -53,6 +53,15 @@
   let body = $state();
   /** @type {HTMLElement | undefined} */
   let reading = $state();
+
+  // The pane scrolls inside itself so its bar stops at the footer, which makes
+  // whichever screen is showing the scroll root — not the port around it. A plan
+  // with no slides is plain markdown, and scrolls where every other pane does.
+  $effect(() => {
+    const scroller = mode === "document" ? reading : body;
+    onScroller?.(plan.slides.length === 0 ? null : (scroller ?? null));
+    return () => onScroller?.(null);
+  });
   let epoch = untrack(() => doc.viewportEpoch);
 
   // A push carries the span along with the text, so only a reload — which is
@@ -407,8 +416,7 @@
   /* Held on the pane's floor whatever the phase is tall enough to fill, so the
      arrows and pips stay under the same finger from one screen to the next. */
   .footer {
-    position: sticky;
-    bottom: 0;
+    flex: none;
     margin-top: auto;
     background: var(--surface-chrome);
     border-top: var(--border-width) solid var(--border-subtle);
@@ -556,9 +564,13 @@
     font: var(--display-md);
   }
 
+  /* The scroller ends where the footer begins, so its bar stops there too rather
+     than running the pane's full height with the footer floating over it. */
   .deck,
   .reading {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .rows {

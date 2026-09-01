@@ -444,6 +444,25 @@ test("the counter and the pip name the screen being viewed, not the meter", asyn
   expect(await page.evaluate(() => window.counter())).toBe("Overview");
 });
 
+// The port used to scroll the footer along with the deck, so its bar ran the
+// pane's whole height and left a strip of nothing beside and below the footer.
+test("the pane scrolls inside itself, so its bar stops at the footer", async ({ page }) => {
+  // Short enough that the screen genuinely overflows, which is when a bar shows.
+  await page.setViewportSize({ width: 700, height: 420 });
+  await open(page);
+
+  const deck = await page.evaluate(() => window.scrollers());
+  expect(deck.pane.overflows).toBe(true);
+  expect(deck.port.overflows).toBe(false);
+  expect(deck.pane.bottom).toBe(deck.footerTop);
+
+  await page.getByRole("button", { name: "Document", exact: true }).click();
+  await expect(page.locator(".reading")).toBeVisible();
+  const reading = await page.evaluate(() => window.scrollers());
+  expect(reading.port.overflows).toBe(false);
+  expect(reading.pane.bottom).toBe(reading.footerTop);
+});
+
 test("the footer holds the pane's floor and spans its width", async ({ page }) => {
   await open(page, "?done=true");
   // Phase 6 is the shortest screen; the footer must not ride up under it.

@@ -22,6 +22,7 @@ import {
   writeStored,
 } from "../layout.js";
 import { relative } from "../relative.js";
+import { revealPath } from "../sessions.js";
 import { opensSettings } from "../shortcuts.js";
 import {
   consumeTerminalFocus,
@@ -29,7 +30,7 @@ import {
   focusPendingIn,
   focusTerminal,
 } from "../terminal-focus.js";
-import { Events } from "../wails.js";
+import { copyText, Events } from "../wails.js";
 
 /**
  * shell is the session screen: the panes it splits the window into, the tabs Go
@@ -108,24 +109,22 @@ export function shell() {
     ...fields.sessions.filter((row) => row.terminal && row.terminal !== fields.terminal),
   ]);
 
-  let latest = $derived(
-    fields.documents.length
-      ? {
-          tag: fields.documents[0].kind,
-          name: fields.documents[0].name,
-          age: relative(fields.documents[0].at, "compact"),
-        }
-      : undefined,
-  );
   let repositoryDocuments = $derived(
     fields.repositoryDocuments.map((repo) => ({
       label: repo.name,
-      items: repo.documents.map((doc) => ({ tag: doc.kind, label: doc.name, path: doc.path })),
+      items: repo.documents.map((doc) => ({
+        tag: doc.kind,
+        id: doc.id,
+        label: doc.name,
+        path: doc.path,
+      })),
     })),
   );
+
   let documentMenu = $derived([
     ...fields.documents.map((doc) => ({
       tag: doc.kind,
+      id: doc.id,
       label: doc.name,
       meta: relative(doc.at, "compact"),
       path: doc.path,
@@ -133,6 +132,51 @@ export function shell() {
     ...(repositoryDocuments.length ? ["-", { heading: "In-repo" }, ...repositoryDocuments] : []),
   ]);
   let hasDocuments = $derived(fields.documents.length > 0 || repositoryDocuments.length > 0);
+
+  // The branch was reference material sitting in the titlebar as a label. It is
+  // now behind the session's name, where the things you do with it also live.
+  let identityOpen = $state(false);
+  let editing = $derived(fields.repos.filter((repo) => repo.role === "editing" && repo.path));
+  let identityMenu = $derived([
+    ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, disabled: true }, "-"] : []),
+    { label: "Copy branch name", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
+    ...worktreeItems(),
+  ]);
+
+  // One editing repository is one worktree and one item. Several are several, and
+  // naming them beats picking one and calling it the worktree.
+  function worktreeItems() {
+    if (!editing.length) return [];
+    if (editing.length === 1) {
+      const path = editing[0].path;
+      return [
+        { label: "Copy path to worktree", act: () => copyText(path) },
+        { label: "Open worktree in Finder", act: () => revealWorktree(path) },
+      ];
+    }
+    return [
+      {
+        label: "Copy path to worktree",
+        items: editing.map((repo) => ({ label: repo.name, act: () => copyText(repo.path) })),
+      },
+      {
+        label: "Open worktree in Finder",
+        items: editing.map((repo) => ({ label: repo.name, act: () => revealWorktree(repo.path) })),
+      },
+    ];
+  }
+
+  async function revealWorktree(path) {
+    identityOpen = false;
+    try {
+      await revealPath(fields.slug, path);
+    } catch {}
+  }
+
+  function chose(item) {
+    identityOpen = false;
+    item?.act?.();
+  }
 
   let requested = $state(false);
   let settingsOpen = $state(false);
@@ -246,9 +290,16 @@ export function shell() {
       (terminalFocus = consumeTerminalFocus(terminalFocus, id, generation)),
     handBack: () => request(fields.terminal),
 
-    get latest() {
-      return latest;
+    get identityOpen() {
+      return identityOpen;
     },
+    set identityOpen(value) {
+      identityOpen = value;
+    },
+    get identityMenu() {
+      return identityMenu;
+    },
+    chose,
     get documentMenu() {
       return documentMenu;
     },

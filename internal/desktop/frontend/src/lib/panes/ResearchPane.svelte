@@ -1,7 +1,7 @@
 <script>
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
-  import Chip from "../core/Chip.svelte";
+  import ArtifactTag from "../core/ArtifactTag.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
   import { artifactTone } from "../artifacts.js";
@@ -13,8 +13,8 @@
   import { dealt } from "./sections.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement}} */
-  let { doc, id, active = false, scrollRoot } = $props();
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
   let research = $derived(parseResearch(doc.text));
@@ -22,6 +22,21 @@
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
   let tone = $derived(artifactTone(doc.kind));
   let mode = $state("research");
+
+  /** @type {HTMLElement | undefined} */
+  let sheet = $state();
+  /** @type {HTMLElement | undefined} */
+  let reading = $state();
+
+  // The pane scrolls inside itself so its bar stops at the footer, which makes
+  // the sheet the scroll root rather than the port around it. Research with no
+  // sections is plain markdown, and scrolls where every other pane does.
+  $effect(() => {
+    const scroller = mode === "document" ? reading : sheet;
+    const structured = Boolean(research.summary) || research.items.length > 0;
+    onScroller?.(structured ? (scroller ?? null) : null);
+    return () => onScroller?.(null);
+  });
 
   // Closed is the resting state: the accordion is an index, and an index the
   // reader has to fold up again is no index at all.
@@ -113,14 +128,14 @@
   <article class="document research">
     <div class="head">
       <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
-      <Chip>{doc.kind ?? "RESEARCH"}</Chip>
+      <ArtifactTag kind={doc.kind ?? "RESEARCH"} long />
       {#if doc.source}
         <CapsLabel tone="dim">{doc.source}</CapsLabel>
       {/if}
       <CopyPath path={doc.path} />
     </div>
     {#if mode === "document"}
-      <div class="reading">
+      <div class="reading" bind:this={reading}>
         <!-- The renderer lifts the opening heading out of the body, so the
              document view states the research's name itself. -->
         <h1 class="display-lg">{research.title || heading}</h1>
@@ -129,6 +144,7 @@
     {:else}
       <div
         class="sheet"
+        bind:this={sheet}
         data-document-source={doc.source}
         use:links={doc.source}
         use:diagrams={{ id, text: doc.text }}
@@ -194,10 +210,14 @@
     min-height: 0;
   }
 
-  /* The footer spans the pane, so the padding belongs to what it frames. */
+  /* The footer spans the pane, so the padding belongs to what it frames. The
+     scroller ends where the footer begins, so its bar stops there too rather
+     than running the pane's full height with the footer floating over it. */
   .sheet,
   .reading {
     flex: 1;
+    min-height: 0;
+    overflow-y: auto;
     padding: 0 var(--pane-pad) 26px;
   }
 
@@ -220,9 +240,11 @@
   .display-lg {
     margin: 4px 0 18px;
     padding-left: var(--gutter);
+    text-align: center;
     font: var(--display-lg);
     letter-spacing: var(--display-tracking);
     color: var(--text-primary);
+    text-wrap: pretty;
   }
 
   .lead :global(p) {
@@ -304,8 +326,7 @@
 
   /* Held on the pane's floor however tall the sheet is. */
   .footer {
-    position: sticky;
-    bottom: 0;
+    flex: none;
     margin-top: auto;
     background: var(--surface-chrome);
     border-top: var(--border-width) solid var(--border-subtle);

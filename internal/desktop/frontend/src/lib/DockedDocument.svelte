@@ -12,7 +12,10 @@
   const session = chrome();
 
   /** @type {HTMLElement} */
-  let scrollRoot = $state();
+  let body = $state();
+  /** A pane with a footer scrolls inside itself; every other pane scrolls here. */
+  let owned = $state(/** @type {HTMLElement | null} */ (null));
+  let scrollRoot = $derived(owned ?? body);
   /** @type {HTMLElement} */
   let content = $state();
   /** @type {HTMLInputElement} */
@@ -94,14 +97,15 @@
       onNext={() => move(1)}
       onClose={closeFind} />
   {/if}
-  <div class="body" bind:this={scrollRoot} tabindex="-1">
+  <div class="body" class:bound={owned} bind:this={body} tabindex="-1">
     <div bind:this={content}>
       <DocumentPane
         {id}
         {active}
         {scrollRoot}
         agentWorking={session.fields.activity === "working"}
-        onReady={documentReady} />
+        onReady={documentReady}
+        onScroller={(element) => (owned = element)} />
     </div>
   </div>
 </TerminalPane>
@@ -120,6 +124,17 @@
     display: flex;
     flex-direction: column;
     min-height: 100%;
+  }
+
+  /* A pane that scrolls inside itself needs a floor to shrink against, and this
+     one must not scroll as well: two bars for one document. */
+  .bound {
+    overflow-y: hidden;
+  }
+
+  .bound > :global(div) {
+    height: 100%;
+    min-height: 0;
   }
 
   .body :global(mark[data-document-find]) {

@@ -1,5 +1,5 @@
 <script>
-  import { artifactTone } from "../artifacts.js";
+  import ArtifactTag from "../core/ArtifactTag.svelte";
   import StatusDot from "../core/StatusDot.svelte";
 
   /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
@@ -32,7 +32,7 @@
             <StatusDot state={item.status} size={7} />
           {/if}
           {#if item.tag}
-            <span class="tag" style:--artifact={artifactTone(item.tag)}>{item.tag}</span>
+            <ArtifactTag kind={item.tag} id={item.id ?? ""} fixed />
           {/if}
           <span class="label">{item.label}</span>
           {#if item.meta}<span class="meta">{item.meta}</span>{/if}
@@ -43,7 +43,7 @@
             {#each item.items as child, childIndex (childIndex)}
               <button class="item" onclick={() => onSelect?.(child, childIndex)}>
                 {#if child.tag}
-                  <span class="tag" style:--artifact={artifactTone(child.tag)}>{child.tag}</span>
+                  <ArtifactTag kind={child.tag} id={child.id ?? ""} fixed />
                 {/if}
                 <span class="label">{child.label}</span>
                 {#if child.meta}<span class="meta">{child.meta}</span>{/if}
@@ -144,16 +144,6 @@
     color: var(--text-muted);
     font-size: 16px;
     line-height: 0;
-    flex: none;
-  }
-
-  .tag {
-    font: 700 9px var(--font-machine);
-    color: var(--text-on-accent);
-    background: var(--artifact);
-    padding: 2px 6px;
-    width: 52px;
-    text-align: center;
     flex: none;
   }
 

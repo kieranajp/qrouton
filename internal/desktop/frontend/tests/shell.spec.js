@@ -10,7 +10,13 @@ const selected = (page) => page.locator(".tab.selected .label");
 async function open(page, selection = "") {
   await page.goto("/tests/shell.html");
   await page.evaluate(() =>
-    window.shell.chrome({ identity: "Octopus", mode: "RPI", terminal: "term-1" }),
+    window.shell.chrome({
+      identity: "Octopus",
+      mode: "RPI",
+      terminal: "term-1",
+      branch: "fix/octopus-4b2a",
+      repos: [{ name: "acme/web", role: "editing", path: "/sessions/octopus/src/web" }],
+    }),
   );
   await page.evaluate(
     ([selection, tabs]) => window.shell.windows(selection, tabs),
@@ -67,4 +73,19 @@ test("a selection naming no open tab selects none of them", async ({ page }) => 
     /** @type {const} */ ([TABS]),
   );
   await expect(selected(page)).toHaveCount(0);
+});
+
+// The menu dropped behind the agent pane's header, which carries a stacking
+// order of its own: the titlebar has to outrank the panes it sits above.
+test("the session name's menu paints over the pane chrome below it", async ({ page }) => {
+  await open(page, "window-1");
+  await page.getByRole("button", { name: /Octopus/ }).click();
+
+  const menu = page.locator(".menu");
+  await expect(menu).toBeVisible();
+  await expect(menu).toContainText("fix/octopus-4b2a");
+  await expect(menu).toContainText("Copy path to worktree");
+
+  // The menu overhangs the header, and the band they share belongs to the menu.
+  expect(await page.evaluate(() => window.overlapOwner())).toBe("menu");
 });
