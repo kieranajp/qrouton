@@ -44,6 +44,7 @@ type Request struct {
 	LinearIssue      *LinearIssueRequest        `json:"linear_issue,omitempty"`
 	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
 	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
+	AddRepos         *AddReposRequest           `json:"add_repos,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -55,6 +56,8 @@ type Response struct {
 	Viewport *DocumentViewport `json:"viewport,omitempty"`
 	Outcome  string            `json:"outcome,omitempty"`
 	Error    string            `json:"error,omitempty"`
+
+	AddedRepos *AddReposResult `json:"added_repos,omitempty"`
 }
 
 // LinearIssueRequest is the canonical ticket and the user-level request Linear
@@ -63,6 +66,43 @@ type LinearIssueRequest struct {
 	Ticket string `json:"ticket"`
 	Prompt string `json:"prompt,omitempty"`
 }
+
+// AddReposRequest is the repositories an agent asked for. It carries no session
+// root: the listener's owner names the session, so an agent cannot address
+// another one.
+type AddReposRequest struct {
+	Repos []RepoAddition `json:"repos"`
+	// Deadline is when the caller stops waiting, so an overlay past it is not
+	// drawn to ask for an answer nobody will read.
+	Deadline time.Time `json:"deadline"`
+}
+
+// RepoAddition is one repository by bare name or org/name, and the role wanted.
+// An empty Role reads as reference.
+type RepoAddition struct {
+	Name string `json:"name"`
+	Role string `json:"role,omitempty"`
+}
+
+// AddReposResult is what a proposal came to. Status says whether the user
+// answered at all; the four lists are a diff of the session across their answer,
+// so Added can name a repository the user chose that the agent never asked for,
+// and Dropped names one the agent asked for that they declined to take.
+type AddReposResult struct {
+	Status   string   `json:"status"`
+	Added    []string `json:"added"`
+	Promoted []string `json:"promoted"`
+	Held     []string `json:"held"`
+	Dropped  []string `json:"dropped"`
+}
+
+// How a proposal ended. Declined and Expired are outcomes an agent can act on,
+// not failures: the workspace is untouched and it may carry on without them.
+const (
+	AddReposConfirmed = "confirmed"
+	AddReposDeclined  = "declined"
+	AddReposExpired   = "expired"
+)
 
 type RunnerGenerationRequest struct {
 	Provider   string `json:"provider"`
@@ -349,6 +389,17 @@ func (c *client) List(ctx context.Context) ([]string, error) {
 func (c *client) Picker(ctx context.Context, req PickerRequest) error {
 	_, err := c.call(ctx, Request{Op: OpPicker, Root: req.SessionRoot, Picker: &req})
 	return err
+}
+
+func (c *client) AddRepos(ctx context.Context, req AddReposRequest) (AddReposResult, error) {
+	res, err := c.call(ctx, Request{Op: OpAddRepos, AddRepos: &req})
+	if err != nil {
+		return AddReposResult{}, err
+	}
+	if res.AddedRepos == nil {
+		return AddReposResult{}, ErrAddReposUnanswered
+	}
+	return *res.AddedRepos, nil
 }
 
 // call sends one request and reads its answer. The connection is the framing.

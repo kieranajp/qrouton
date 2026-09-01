@@ -5,7 +5,7 @@ package mcpserver
 // left for the server to say is the one rule neither of them can: the session
 // bounds every path this server will accept.
 
-const serverInstructions = "Drive the user's qrouton workbench: each tool here opens or reads a tab in the session's right pane, beside the conversation and without taking the keyboard. All paths and working directories must belong to this session."
+const serverInstructions = "Drive the user's qrouton workbench: most tools here open or read a tab in the session's right pane, beside the conversation and without taking the keyboard, while the repository tools read and grow the workspace itself. All paths and working directories must belong to this session."
 
 const (
 	toolOpenFile    = "open_file"
@@ -17,6 +17,8 @@ const (
 	toolListWindows = "list_windows"
 	toolEscalate    = "escalate"
 	toolSharePage   = "share_page"
+	toolListRepos   = "list_repos"
+	toolAddRepos    = "add_repos"
 )
 
 const (
@@ -35,6 +37,10 @@ const (
 	descListWindows = "List the tabs qrouton is holding for you, by name."
 
 	descSharePage = "Render a session document as a self-contained page carrying qrouton's own styling — its palette, its fonts and the same prose renderer the workbench draws with — so it can be handed to somebody outside this session. Give path, relative to the session root (e.g. thoughts/shared/plans/thing.md). This writes the page and returns its path; it does not send it anywhere. Publish that file yourself, verbatim, with whatever tool you have for it, and give the user the link. The page fetches nothing at runtime, so it survives a strict content-security policy, and it carries no html, head or body tag of its own."
+
+	descListRepos = "List the repositories this session holds, with each one's role (editing repos sit on the session branch and may be changed; reference repos are detached at a pinned commit and are read-only), its branch or pinned revision, and its worktree path relative to the session root. Reads the session manifest and opens no tab."
+
+	descAddRepos = "Propose adding repositories to this session's workspace. This does not add them: it opens the repository picker with your proposal pre-selected, and the user approves, edits or declines it. They may change a role, drop one you asked for, or add one you did not — so the result tells you what actually landed, which can differ from what you asked. Give repos as a list of {name, role}; name is org/name, or a bare name when it is unambiguous. role is editing (on the session branch, changes allowed) or reference (detached at a pinned commit, read-only) and defaults to reference. The two directions are not symmetric: naming a repository this session already reads with role editing takes it up onto the session branch, while naming one it already edits with role reference changes nothing at all — nothing here ever makes a repository read-only again. A repository already held in the role asked for is left exactly as it is and reported as such. A name that does not resolve fails the whole call before the user is interrupted. This blocks until they answer, which may be a long wait; a declined proposal and a timeout are both normal results that leave the workspace untouched, not errors. Say why you want a repository before calling this, so the user knows what they are approving."
 
 	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
 )

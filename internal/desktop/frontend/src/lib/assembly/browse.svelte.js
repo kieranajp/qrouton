@@ -6,6 +6,7 @@ import { apply, failedOwners, idle } from "./refresh.js";
 import {
   counts,
   ordered,
+  propose,
   reconcile,
   roleOf,
   roleOffers,
@@ -35,6 +36,7 @@ export function browsing(branch, report = () => {}) {
   let owners = $state(/** @type {string[]} */ ([]));
   let refresh = $state(idle());
   let selection = $state(seed());
+  let proposedCount = $state(0);
 
   call(go.orgs()).then((answer) => {
     if (!answer.ok) return report(refusal(answer.error));
@@ -125,8 +127,18 @@ export function browsing(branch, report = () => {}) {
     get upgrading() {
       return upgrading(selection);
     },
+    // Empty for the user's own visit through the add-repos button, which is what
+    // tells the overlay whose selection it is showing.
+    get proposed() {
+      return proposedCount > 0;
+    },
     /** @param {{id: string, role: 'editing'|'reference'}[]} rows */
     hold: (rows) => (selection = seed(rows)),
+    /** @param {{id: string, role: 'editing'|'reference'}[]} rows */
+    propose: (rows) => {
+      selection = propose(selection, rows);
+      proposedCount = rows.length;
+    },
     refetch,
     owner: (org) =>
       (owners = owners.includes(org) ? owners.filter((on) => on !== org) : [...owners, org]),

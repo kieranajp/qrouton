@@ -12,6 +12,18 @@ import (
 // confirmed stanza to that same write, so a polling reader never sees repos added
 // while the mode still says assistant.
 func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.ProgressFunc) error {
+	return a.confirm(dir, d, escalate, true, progress)
+}
+
+// ConfirmForAgent adds repositories the agent asked for itself, and tells nobody.
+// The notice exists to hand an agent facts it does not have; this caller is
+// blocked on a tool call that returns those same facts, and signalling would kill
+// the process waiting for the reply.
+func (a Assembler) ConfirmForAgent(dir string, d Draft, progress session.ProgressFunc) error {
+	return a.confirm(dir, d, false, false, progress)
+}
+
+func (a Assembler) confirm(dir string, d Draft, escalate, notify bool, progress session.ProgressFunc) error {
 	// Loaded here, not carried in: a picker can sit open for half an hour while
 	// the workbench keeps rewriting the manifest underneath it.
 	m, err := session.Load(dir)
@@ -42,6 +54,9 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 		return err
 	}
 	if !escalate {
+		if !notify {
+			return nil
+		}
 		notice := repositoryNotice(m, updated)
 		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
 			a.Signal(dir)

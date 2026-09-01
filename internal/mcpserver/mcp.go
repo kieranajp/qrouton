@@ -108,6 +108,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
 	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
 	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))
+	addTool(server, toolAddRepos, descAddRepos, keyMessage, messageOnly(windows.addRepos))
 
 	// Escalation is the assistant's way out of its own mode. An RPI session is
 	// already where it leads, so the tool is not offered there at all.
@@ -115,8 +116,20 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		addTool(server, toolEscalate, descEscalate, keyMessage, messageOnly(windows.escalate))
 	}
 
-	// list_windows is the one tool whose payload is a list rather than a line,
-	// so it stays hand-written rather than bending the shape above.
+	// list_windows and list_repos are the tools whose payload is a list rather
+	// than a line, so they stay hand-written rather than bending the shape above.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolListRepos,
+		Description: descListRepos,
+	}, func(context.Context, *mcp.CallToolRequest, struct{}) (*mcp.CallToolResult, any, error) {
+		listing, err := listRepos(root)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(listing.Message),
+			map[string]any{"repos": listing.Repos, "branch": listing.Branch}, nil
+	})
+
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolListWindows,
 		Description: descListWindows,

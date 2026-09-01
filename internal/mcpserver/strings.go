@@ -72,6 +72,34 @@ const (
 
 	notifiedFormat = "Notified the user: %s"
 
+	reposWindowName  = "repos"
+	reposWindowLabel = "◆ repos"
+
+	repoListJoiner    = ", "
+	repoOutcomeJoiner = " "
+
+	awaitingReposFormat = "Waiting for you to approve adding: %s\n\n" +
+		"The repository picker is open with these pre-selected. Change a role, drop one, " +
+		"or add another before approving — the agent is waiting for your answer."
+	addReposFailedFormat = "Adding repositories failed: %v"
+	addedReposFormat     = "Added %s."
+	promotedReposFormat  = "Took up for editing on the session branch: %s."
+	heldReposFormat      = "Already held, unchanged: %s."
+	droppedReposFormat   = "Not added, because the user did not approve them: %s."
+	noReposChanged       = "Nothing changed: this session already held every repository named, in the role asked for."
+
+	reposDeclined = "The user declined. Nothing was added and the workspace is unchanged — " +
+		"carry on without those repositories, or ask them why before proposing again."
+	reposExpired = "Nobody answered, so the picker timed out and nothing was composed. " +
+		"If the user approved it at the last moment the repositories may still have " +
+		"landed; call list_repos to see what the session holds before proposing again."
+
+	noReposHeld         = "This session holds no repositories."
+	reposHeldPrefix     = "Session repositories:\n"
+	repoLineFormat      = "- %s/%s (%s) at %s in %s"
+	repoLineJoiner      = "\n"
+	unknownRepoPosition = "no recorded branch or revision"
+
 	noWindowsOpen     = "No qrouton-managed windows are open."
 	openWindowsPrefix = "Open windows: "
 	openWindowsSuffix = "."

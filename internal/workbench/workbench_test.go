@@ -587,3 +587,64 @@ func TestPickerSurfacesARefusalRatherThanADialError(t *testing.T) {
 		t.Fatalf("a refusal reported as a transport failure: %v", err)
 	}
 }
+
+// AddRepos carries no session root of its own — the listener's owner names
+// the session — and a reply with no outcome must not read as an add that
+// changed nothing.
+func TestClientRoundTripsAnAddReposRequest(t *testing.T) {
+	socket, requests := echoServer(t, func(req Request) Response {
+		if req.Op != OpAddRepos {
+			return Response{}
+		}
+		first := ""
+		if len(req.AddRepos.Repos) > 0 {
+			first = req.AddRepos.Repos[0].Name
+		}
+		switch first {
+		case "unanswered":
+			return Response{}
+		case "org/refused":
+			return Response{Error: "repository \"org/refused\" is already held elsewhere"}
+		default:
+			return Response{AddedRepos: &AddReposResult{
+				Added:    []string{"org/svc"},
+				Promoted: []string{"org/docs"},
+				Held:     []string{"org/api"},
+			}}
+		}
+	})
+	host := newClient(socket)
+	ctx := context.Background()
+
+	result, err := host.AddRepos(ctx, AddReposRequest{
+		Repos: []RepoAddition{{Name: "org/svc", Role: "editing"}, {Name: "docs"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Added) != 1 || result.Added[0] != "org/svc" ||
+		len(result.Promoted) != 1 || result.Promoted[0] != "org/docs" ||
+		len(result.Held) != 1 || result.Held[0] != "org/api" {
+		t.Fatalf("AddRepos result = %+v", result)
+	}
+
+	got := <-requests
+	if got.Op != OpAddRepos || got.Root != "" || got.AddRepos == nil {
+		t.Fatalf("add repos request = %+v", got)
+	}
+	if len(got.AddRepos.Repos) != 2 ||
+		got.AddRepos.Repos[0] != (RepoAddition{Name: "org/svc", Role: "editing"}) ||
+		got.AddRepos.Repos[1] != (RepoAddition{Name: "docs", Role: ""}) {
+		t.Fatalf("add repos request repos = %+v", got.AddRepos.Repos)
+	}
+
+	if _, err := host.AddRepos(ctx, AddReposRequest{Repos: []RepoAddition{{Name: "unanswered"}}}); !errors.Is(err, ErrAddReposUnanswered) {
+		t.Fatalf("AddRepos with no outcome = %v, want ErrAddReposUnanswered", err)
+	}
+	<-requests
+
+	if _, err := host.AddRepos(ctx, AddReposRequest{Repos: []RepoAddition{{Name: "org/refused"}}}); err == nil {
+		t.Fatal("a refused add repos request succeeded")
+	}
+	<-requests
+}

@@ -80,9 +80,11 @@ export const orgs = () => Call.ByName(ORGS_LIST);
 
 /**
  * held is what the picker draws itself from: the branch anything added joins,
- * empty for a session with no repositories yet, and the rows already in it.
+ * empty for a session with no repositories yet, the rows already in it, and any
+ * rows an agent proposed — empty for the user's own visit through the
+ * add-repos button.
  * @param {string} slug
- * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[]}>}
+ * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[], proposed: {id: string, role: 'editing'|'reference'}[]}>}
  */
 export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
 

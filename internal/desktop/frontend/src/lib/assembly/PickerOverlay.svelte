@@ -32,6 +32,7 @@
     tally={repos.tally}
     picks={repos.picks}
     refreshing={repos.refreshing}
+    proposed={repos.proposed}
     onOwner={repos.owner}
     onRefresh={repos.refetch}
     onRole={repos.role} />

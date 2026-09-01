@@ -3,12 +3,15 @@ package desktop
 import (
 	"context"
 	"errors"
+	"reflect"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/session"
 )
 
 // fakeGitHub records which owners a refresh asked for and answers each with one
@@ -251,6 +254,252 @@ func TestOrgsListAnswersAnEmptyConfigurationWithAnEmptyList(t *testing.T) {
 	}
 	if got := (&Orgs{cfg: &config.Config{Orgs: []string{"acme"}}}).List(); len(got) != 1 || got[0] != "acme" {
 		t.Fatalf("orgs = %v", got)
+	}
+}
+
+// The point of refreshAndWait is that it does not return early, so the run is
+// gated open: a waiter released before the list lands would resolve names against
+// a stale cache and refuse one that exists.
+func TestARefreshWaiterIsReleasedOnlyOnceTheRunEnds(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, finished, _ := testRepositories(t, []string{"acme"}, fake)
+	release := make(chan struct{})
+	repos.gh.all = func(context.Context, string, []string, []github.Repo) <-chan github.RefreshMsg {
+		ch := make(chan github.RefreshMsg)
+		go func() {
+			defer close(ch)
+			<-release
+			ch <- github.RefreshMsg{State: github.RefreshComplete,
+				Repos: []github.Repo{{Org: "acme", Name: "repo"}}}
+		}()
+		return ch
+	}
+
+	returned := make(chan error, 1)
+	go func() { returned <- repos.refreshAndWait(context.Background()) }()
+
+	select {
+	case err := <-returned:
+		t.Fatalf("refreshAndWait returned %v before the run ended", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(release)
+	select {
+	case err := <-returned:
+		if err != nil {
+			t.Fatalf("refreshAndWait() error = %v, want nil", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("refreshAndWait never returned after the run ended")
+	}
+	// Released means the list is current, which is the only reason to wait at all.
+	if got := repos.Cached(); len(got) != 1 || got[0].ID() != "acme/repo" {
+		t.Fatalf("cached list on return = %+v, want the refreshed one", got)
+	}
+	<-finished
+}
+
+func TestAWaiterForASupersededGenerationIsReleased(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, finished, _ := testRepositories(t, []string{"acme"}, fake)
+
+	gen := repos.Refresh()
+	repos.Refresh()
+	ch := repos.waiter(gen)
+	select {
+	case <-ch:
+	default:
+		t.Fatal("a waiter for a superseded generation was not released")
+	}
+	<-finished
+	<-finished
+}
+
+func TestAWaiterForAnAlreadyFinishedGenerationIsReleased(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, finished, _ := testRepositories(t, []string{"acme"}, fake)
+
+	gen := repos.Refresh()
+	<-finished
+	ch := repos.waiter(gen)
+	select {
+	case <-ch:
+	default:
+		t.Fatal("a waiter for an already-finished generation was not released")
+	}
+}
+
+func TestContextCancellationReturnsItsErrorFromRefreshAndWait(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, _, _ := testRepositories(t, []string{"acme"}, fake)
+	// A channel that is never written to and never closed, so the run cannot
+	// finish and only ctx cancellation can end the wait.
+	repos.gh.all = func(_ context.Context, _ string, _ []string, _ []github.Repo) <-chan github.RefreshMsg {
+		return make(chan github.RefreshMsg)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if err := repos.refreshAndWait(ctx); !errors.Is(err, context.Canceled) {
+		t.Fatalf("refreshAndWait() error = %v, want context.Canceled", err)
+	}
+}
+
+func TestTheDoneSeamStillFiresWhenARunEnds(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, finished, _ := testRepositories(t, []string{"acme"}, fake)
+
+	gen := repos.Refresh()
+	select {
+	case got := <-finished:
+		if got != gen {
+			t.Fatalf("done fired with generation %d, want %d", got, gen)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("the done seam did not fire when the run ended")
+	}
+}
+
+// resolveFixture is a repository list with a fixed cache and no network, which is
+// all resolve reads.
+func resolveFixture(orgs []string, cached ...github.Repo) *Repositories {
+	return &Repositories{
+		cfg:   &config.Config{Orgs: orgs},
+		repos: cached,
+		errs:  map[string]error{},
+	}
+}
+
+func TestResolveMatchesNamesAndRefusesTheRest(t *testing.T) {
+	acme := github.Repo{Org: "acme", Name: "repo"}
+	other := github.Repo{Org: "other", Name: "repo"}
+	type resolved struct {
+		id   string
+		role session.RepoRole
+	}
+	for _, tc := range []struct {
+		name     string
+		orgs     []string
+		cached   []github.Repo
+		in       []repoAddition
+		want     []resolved
+		wantErrs []error
+	}{
+		{
+			name: "an exact org/name resolves, defaulting to reference",
+			orgs: []string{"acme"}, cached: []github.Repo{acme},
+			in:   []repoAddition{{Name: "acme/repo"}},
+			want: []resolved{{"acme/repo", session.RepoRoleReference}},
+		},
+		{
+			name: "a unique bare name resolves in the role asked for",
+			orgs: []string{"acme"}, cached: []github.Repo{acme},
+			in:   []repoAddition{{Name: "repo", Role: "editing"}},
+			want: []resolved{{"acme/repo", session.RepoRoleEditing}},
+		},
+		{
+			name: "a bare name matching two owners is ambiguous",
+			orgs: []string{"acme", "other"}, cached: []github.Repo{acme, other},
+			in:       []repoAddition{{Name: "repo"}},
+			wantErrs: []error{ErrRepoAmbiguous},
+		},
+		{
+			name: "an unknown name is refused",
+			orgs: []string{"acme"}, cached: []github.Repo{acme},
+			in:       []repoAddition{{Name: "nope"}},
+			wantErrs: []error{ErrRepoNotFound},
+		},
+		{
+			name: "a blank name is refused",
+			orgs: []string{"acme"}, cached: []github.Repo{acme},
+			in:       []repoAddition{{Name: "   "}},
+			wantErrs: []error{ErrRepoNameRequired},
+		},
+		{
+			name: "every failure in a batch is collected, not just the first",
+			orgs: []string{"acme"}, cached: []github.Repo{acme},
+			in:       []repoAddition{{Name: ""}, {Name: "repo", Role: "bogus"}},
+			wantErrs: []error{ErrRepoNameRequired, ErrRepoRoleUnknown},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := resolveFixture(tc.orgs, tc.cached...).resolve(tc.in)
+			if len(tc.wantErrs) > 0 {
+				for _, want := range tc.wantErrs {
+					if !errors.Is(err, want) {
+						t.Fatalf("resolve() error = %v, want %v", err, want)
+					}
+				}
+				if out != nil {
+					t.Fatalf("a refused resolve still returned %+v", out)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolve() error = %v, want nil", err)
+			}
+			got := make([]resolved, 0, len(out))
+			for _, sel := range out {
+				got = append(got, resolved{sel.Repo.ID(), sel.Role})
+			}
+			if !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("resolve() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestResolveNamesAFailedOwnerWhenAnUnknownNameMisses(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.fails["other"] = errors.New("unavailable")
+	repos, finished, _ := testRepositories(t, []string{"acme", "other"}, fake)
+
+	repos.Refresh()
+	<-finished
+
+	_, err := repos.resolve([]repoAddition{{Name: "nope"}})
+	if err == nil {
+		t.Fatal("resolve() of an unknown name succeeded")
+	}
+	// The owner's name alone proves nothing: every configured owner is already
+	// listed as one of those searched. The stale clause is the claim under test.
+	if !strings.Contains(err.Error(), "failed to refresh") {
+		t.Fatalf("resolve() error = %v, want it to say an owner failed to refresh", err)
+	}
+	if !strings.Contains(err.Error(), "short: other") {
+		t.Fatalf("resolve() error = %v, want the failed owner named in the stale clause", err)
+	}
+}
+
+func TestResolveDefaultsAndValidatesRole(t *testing.T) {
+	tests := []struct {
+		name    string
+		role    string
+		want    session.RepoRole
+		wantErr error
+	}{
+		{name: "empty defaults to reference", role: "", want: session.RepoRoleReference},
+		{name: "editing decodes as itself", role: "editing", want: session.RepoRoleEditing},
+		{name: "reference decodes as itself", role: "reference", want: session.RepoRoleReference},
+		{name: "anything else is refused", role: "bogus", wantErr: ErrRepoRoleUnknown},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveRole(tt.role, "repo")
+			if tt.wantErr != nil {
+				if !errors.Is(err, tt.wantErr) {
+					t.Fatalf("resolveRole(%q) error = %v, want %v", tt.role, err, tt.wantErr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("resolveRole(%q) error = %v, want nil", tt.role, err)
+			}
+			if got != tt.want {
+				t.Fatalf("resolveRole(%q) = %v, want %v", tt.role, got, tt.want)
+			}
+		})
 	}
 }
 

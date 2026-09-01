@@ -42,17 +42,39 @@ type sessionState struct {
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
+	// answer carries a proposal's outcome back to the add_repos call blocked on
+	// it. Buffered, so delivering never waits on a caller that has given up. Nil
+	// for an escalation, whose answer travels through the manifest instead.
+	answer chan addReposDecision
 	// shells counts the shells the session has had rather than the ones still
 	// open: a number freed by a close would name two terminals at once.
 	shells int
 }
 
-// requestPicker queues an escalation on this session. A later request replaces
-// an earlier one: both pollers then read the one stanza the confirm writes.
-func (s *sessionState) requestPicker(req workbench.PickerRequest) {
+// requestPicker queues a picker on this session. A later request replaces an
+// earlier one, and a replaced proposal's caller is told so rather than left
+// waiting out its deadline for an overlay that will never be drawn.
+func (s *sessionState) requestPicker(req workbench.PickerRequest, answer chan addReposDecision) {
+	s.mu.Lock()
+	superseded := s.answer
+	s.picker, s.answer = &req, answer
+	s.mu.Unlock()
+	if superseded != nil {
+		superseded <- addReposDecision{Status: workbench.AddReposDeclined}
+	}
+}
+
+// takeAnswer claims the channel a decision is owed on, so confirm and cancel
+// each deliver exactly once.
+func (s *sessionState) takeAnswer() chan addReposDecision {
+	if s == nil {
+		return nil
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.picker = &req
+	answer := s.answer
+	s.answer = nil
+	return answer
 }
 
 // pendingPicker is this session's escalation while it is still worth drawing.
@@ -74,6 +96,16 @@ func (s *sessionState) clearPicker() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.picker = nil
+}
+
+// proposedRepos are the repositories the pending picker asked to pre-select, or
+// none when no picker is waiting or it is an escalation carrying no proposal.
+func (s *sessionState) proposedRepos() []workbench.RepoAddition {
+	pending := s.pendingPicker()
+	if pending == nil {
+		return nil
+	}
+	return pending.Repos
 }
 
 // slug and root tolerate a nil session, which is the window showing none.

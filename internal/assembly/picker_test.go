@@ -270,6 +270,34 @@ func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
 	}
 }
 
+// An agent that asked for the repositories itself is blocked on the reply, so
+// signalling would kill the process waiting for it. The human path above still
+// notifies; this one must not.
+func TestConfirmForAgentQueuesNoNoticeAndSignalsNobody(t *testing.T) {
+	a, dir := scratch(t)
+	var signalled []string
+	a.Signal = func(root string) { signalled = append(signalled, root) }
+
+	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
+	if err := a.ConfirmForAgent(dir, draft, nil); err != nil {
+		t.Fatal(err)
+	}
+	if len(signalled) != 0 {
+		t.Fatalf("an agent-initiated add signalled %v; it would kill the caller", signalled)
+	}
+	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
+		t.Fatalf("an agent-initiated add queued a notice (stat err = %v)", err)
+	}
+	// The repositories still land: only the telling is suppressed.
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Repos) != 1 || m.Repos[0].Name != "svc" {
+		t.Fatalf("agent-initiated add composed %+v", m.Repos)
+	}
+}
+
 func TestRepositoryNoticeNamesReferenceAdditionsAndPromotions(t *testing.T) {
 	before := session.Manifest{Repos: []session.ManifestRepo{
 		{Org: "org", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"},
