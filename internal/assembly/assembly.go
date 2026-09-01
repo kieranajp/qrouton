@@ -5,22 +5,25 @@ package assembly
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
 // Draft is the work as it has been described, before any of it is on disk.
 // Repos is ordered: chosen first means worked in most, which is the ranking the
 // manifest keeps and the rail truncates against.
 type Draft struct {
-	Name        string
-	Entropy     string
-	Description string
-	Ticket      string
-	Prefix      string
-	Mode        session.SessionMode
-	Repos       []session.RepoSelection
+	Name              string
+	BranchDescription string
+	Entropy           string
+	Description       string
+	Ticket            string
+	Prefix            string
+	Mode              session.SessionMode
+	Repos             []session.RepoSelection
 	// Upgrades names repositories the session already holds and reads, to be
 	// checked out for editing instead. Only the picker fills it: a session that
 	// does not exist yet holds nothing.
@@ -28,7 +31,61 @@ type Draft struct {
 }
 
 func (d Draft) Slug() string {
+	description := session.Slugify(d.BranchDescription)
+	if key := session.Slugify(ticket.LinearKey(d.Ticket)); key != "" {
+		if description == "" {
+			return key
+		}
+		return session.SessionSlug(key, description)
+	}
+	if description != "" {
+		return session.SessionSlug(description, d.Entropy)
+	}
 	return session.SessionSlug(d.Name, d.Entropy)
+}
+
+// SuggestBranchDescription keeps the specific clause, drops articles, and
+// preserves word order in a compact, editable title fragment.
+func SuggestBranchDescription(title string) string {
+	clause := branchTitleClause(strings.TrimSpace(title))
+	words := make([]string, 0, branchDescriptionMaxWords)
+	length := 0
+	for _, field := range strings.Fields(clause) {
+		word := session.Slugify(field)
+		if word == "" || branchArticles[word] {
+			continue
+		}
+		added := len(word)
+		if len(words) > 0 {
+			added++
+		}
+		if len(words) == branchDescriptionMaxWords || length+added > branchDescriptionMaxLength {
+			if len(words) == 0 {
+				return word[:branchDescriptionMaxLength]
+			}
+			return session.Slugify(strings.Join(words, " "))
+		}
+		words = append(words, word)
+		length += added
+	}
+	return session.Slugify(strings.Join(words, " "))
+}
+
+func branchTitleClause(title string) string {
+	cut := len(title)
+	separator := ""
+	for _, candidate := range branchTitleSeparators {
+		if index := strings.Index(title, candidate); index >= 0 && index < cut {
+			suffix := strings.TrimSpace(title[index+len(candidate):])
+			if len(strings.Fields(suffix)) >= branchDescriptionMinClauseWords {
+				cut, separator = index, candidate
+			}
+		}
+	}
+	if separator == "" {
+		return title
+	}
+	return strings.TrimSpace(title[cut+len(separator):])
 }
 
 // Assembler carries what the rules cannot reach for themselves. Signal asks the

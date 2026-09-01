@@ -92,6 +92,16 @@ func CanonicalLinearURL(raw string) (string, error) {
 	return linearCanonicalPrefix + id, nil
 }
 
+// LinearKey returns the issue identifier carried by a Linear reference, and
+// empty for every other value.
+func LinearKey(raw string) string {
+	canonical, err := CanonicalLinearURL(raw)
+	if err != nil {
+		return ""
+	}
+	return strings.TrimPrefix(canonical, linearCanonicalPrefix)
+}
+
 func pathSegments(u *url.URL) []string {
 	return strings.Split(strings.Trim(u.Path, pathSeparator), pathSeparator)
 }

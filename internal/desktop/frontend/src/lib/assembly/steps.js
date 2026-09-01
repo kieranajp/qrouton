@@ -19,9 +19,9 @@ export const primary = (step = 0) => (STEPS[step] ?? STEPS[0]).primary;
 // The fields a step is in a position to fix. A missing repository must not stop
 // step 1, where there is nothing on screen to pick one with.
 const OWNED = [
-  ["name", "ticket"],
+  ["name", "branchDescription", "ticket"],
   ["repos"],
-  ["name", "ticket", "repos"],
+  ["name", "branchDescription", "ticket", "repos"],
 ];
 
 /**

@@ -6,7 +6,7 @@ import { record } from "./progress.js";
 import { blocks, folder, last, refusal } from "./steps.js";
 import { loader } from "./ticket.js";
 
-const TICKET_LOADED = "✓ Loaded — name and description filled in";
+const TICKET_LOADED = "✓ Loaded — session and branch details filled in";
 const NO_RUNNERS = "No agent was found on your PATH, so there is nothing to run this session with.";
 
 // Long enough that a typed word is one branch preview rather than six.
@@ -24,6 +24,7 @@ const message = (err) => String(err?.message ?? err ?? "");
 export function assembling(done) {
   const form = $state({
     name: "",
+    branchDescription: "",
     entropy: "",
     description: "",
     ticket: "",
@@ -72,11 +73,11 @@ export function assembling(done) {
     },
   );
 
-  // The branch is the prefix and the slug; nothing else on the form moves it, and
-  // a description that re-asked would be a round trip per keystroke.
+  // Prose and repository choices do not move the branch, so they do not ask for
+  // another preview on every keystroke.
   $effect(() => {
-    const { name, entropy, prefix } = form;
-    branches.schedule({ name, entropy, prefix });
+    const { name, branchDescription, ticket, entropy, prefix } = form;
+    branches.schedule({ name, branchDescription, ticket, entropy, prefix });
     return branches.cancel;
   });
 
@@ -96,6 +97,7 @@ export function assembling(done) {
     },
     loaded(filled) {
       form.name = filled.name;
+      form.branchDescription = filled.branchDescription;
       form.description = filled.description;
       hint = { text: TICKET_LOADED, tone: "success" };
     },

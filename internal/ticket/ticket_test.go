@@ -51,6 +51,17 @@ func TestLinearReferencesCanonicalizeToTheWorkspaceFreeURL(t *testing.T) {
 	}
 }
 
+func TestLinearKeyKeepsOnlyAValidatedLinearIdentifier(t *testing.T) {
+	if got := LinearKey("https://linear.app/lifesum/issue/lif-2841/title"); got != "LIF-2841" {
+		t.Fatalf("LinearKey() = %q", got)
+	}
+	for _, raw := range []string{"", "not-a-ticket", "https://app.asana.com/0/123/456"} {
+		if got := LinearKey(raw); got != "" {
+			t.Fatalf("LinearKey(%q) = %q", raw, got)
+		}
+	}
+}
+
 func TestLinearReferencesRejectAnythingOutsideTheIdentifierContract(t *testing.T) {
 	oversized := strings.Repeat("A", linearMaxReferenceBytes+1)
 	longID := strings.Repeat("A", linearMaxIdentifierBytes) + "-1"

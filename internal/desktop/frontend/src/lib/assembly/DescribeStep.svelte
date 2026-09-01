@@ -5,9 +5,10 @@
   import TextField from "../forms/TextField.svelte";
   import { folder } from "./steps.js";
 
-  /** @type {{name?: string, description?: string, ticket?: string, prefix?: string, prefixes?: string[], branch?: string, fetching?: boolean, hint?: {text: string, tone: 'muted'|'success'|'failed'}, onFetch?: () => void}} */
+  /** @type {{name?: string, branchDescription?: string, description?: string, ticket?: string, prefix?: string, prefixes?: string[], branch?: string, fetching?: boolean, hint?: {text: string, tone: 'muted'|'success'|'failed'}, onFetch?: () => void}} */
   let {
     name = $bindable(""),
+    branchDescription = $bindable(""),
     description = $bindable(""),
     ticket = $bindable(""),
     prefix = $bindable(""),
@@ -20,27 +21,33 @@
 </script>
 
 <StepHeading title="What are you working on?">
-  The name becomes the folder and the branch, so keep it short.
+  The session name can stay descriptive. The branch description keeps its folder and branch short.
 </StepHeading>
 
 <div class="pair">
   <TextField
     label="Name"
     bind:value={name}
-    help="Folder and branch will be named"
-    helpLiteral={folder(branch)} />
+    help="Shown in the session and given to the agent" />
   <TextField
-    label="Ticket — optional"
-    bind:value={ticket}
-    valueVoice="literal"
-    help={hint.text}
-    helpTone={hint.tone}>
-    {#snippet trailing()}
-      <Button variant="secondary" onclick={onFetch} disabled={fetching}
-        >{fetching ? "Fetching…" : "Fetch"}</Button>
-    {/snippet}
-  </TextField>
+    label="Branch description — optional"
+    bind:value={branchDescription}
+    placeholder="gympass verifier 401s"
+    help="Short phrase for the folder and branch"
+    helpLiteral={folder(branch)} />
 </div>
+
+<TextField
+  label="Ticket — optional"
+  bind:value={ticket}
+  valueVoice="literal"
+  help={hint.text}
+  helpTone={hint.tone}>
+  {#snippet trailing()}
+    <Button variant="secondary" onclick={onFetch} disabled={fetching}
+      >{fetching ? "Fetching…" : "Fetch"}</Button>
+  {/snippet}
+</TextField>
 
 <TextField
   label="Description"

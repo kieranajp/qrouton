@@ -15,14 +15,15 @@ import (
 // than carrying them, so resolving the names against the live list is what drops
 // anything a refresh has taken away.
 type draftInput struct {
-	Name        string     `json:"name"`
-	Entropy     string     `json:"entropy"`
-	Description string     `json:"description"`
-	Ticket      string     `json:"ticket"`
-	Prefix      string     `json:"prefix"`
-	Mode        string     `json:"mode"`
-	Runner      string     `json:"runner"`
-	Repos       []repoPick `json:"repos"`
+	Name              string     `json:"name"`
+	BranchDescription string     `json:"branchDescription"`
+	Entropy           string     `json:"entropy"`
+	Description       string     `json:"description"`
+	Ticket            string     `json:"ticket"`
+	Prefix            string     `json:"prefix"`
+	Mode              string     `json:"mode"`
+	Runner            string     `json:"runner"`
+	Repos             []repoPick `json:"repos"`
 }
 
 // repoPick is one row's answer, in the order it was picked: first picked means
@@ -35,8 +36,9 @@ type repoPick struct {
 // ticketFields is a fetched ticket on the wire. The domain type knows nothing
 // about pages and keeps it that way.
 type ticketFields struct {
-	Title string `json:"title"`
-	Body  string `json:"body"`
+	Title             string `json:"title"`
+	Body              string `json:"body"`
+	BranchDescription string `json:"branchDescription"`
 }
 
 type AssemblySeed struct {
@@ -102,7 +104,8 @@ func (a *Assembly) Fetch(url string) (ticketFields, error) {
 	if err != nil {
 		return ticketFields{}, err
 	}
-	return ticketFields{Title: loaded.Title, Body: loaded.Body}, nil
+	return ticketFields{Title: loaded.Title, Body: loaded.Body,
+		BranchDescription: assembly.SuggestBranchDescription(loaded.Title)}, nil
 }
 
 func (a *Assembly) Pending() string {
@@ -253,6 +256,7 @@ func (a *Assembly) Create(in draftInput) error {
 }
 
 func (a *Assembly) draft(in draftInput) assembly.Draft {
-	return assembly.Draft{Name: in.Name, Entropy: in.Entropy, Description: in.Description, Ticket: in.Ticket,
-		Prefix: in.Prefix, Mode: session.SessionMode(in.Mode), Repos: a.repos.Select(in.Repos)}
+	return assembly.Draft{Name: in.Name, BranchDescription: in.BranchDescription, Entropy: in.Entropy,
+		Description: in.Description, Ticket: in.Ticket, Prefix: in.Prefix,
+		Mode: session.SessionMode(in.Mode), Repos: a.repos.Select(in.Repos)}
 }

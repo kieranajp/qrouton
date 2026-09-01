@@ -14,9 +14,10 @@ import (
 type Field string
 
 const (
-	FieldName   Field = "name"
-	FieldTicket Field = "ticket"
-	FieldRepos  Field = "repos"
+	FieldName              Field = "name"
+	FieldBranchDescription Field = "branchDescription"
+	FieldTicket            Field = "ticket"
+	FieldRepos             Field = "repos"
 )
 
 // Problem is one reason a draft cannot be assembled yet, carrying its own copy.
@@ -72,7 +73,11 @@ func (a Assembler) CheckSlug(d Draft) []Problem {
 		return nil
 	}
 	if _, err := os.Stat(dir); err == nil {
-		return []Problem{{Field: FieldName, Message: msgSessionExists}}
+		field := FieldName
+		if session.Slugify(d.BranchDescription) != "" || ticket.LinearKey(d.Ticket) != "" {
+			field = FieldBranchDescription
+		}
+		return []Problem{{Field: field, Message: msgSessionExists}}
 	}
 	return nil
 }

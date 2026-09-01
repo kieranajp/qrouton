@@ -21,6 +21,7 @@ import { Call } from "../wails.js";
 /**
  * @typedef {object} Draft
  * @property {string} name
+ * @property {string} branchDescription
  * @property {string} description
  * @property {string} ticket
  * @property {string} prefix
@@ -44,7 +45,7 @@ export const checkSlug = (draft) => Call.ByName(ASSEMBLY_CHECK_SLUG, draft);
 
 /**
  * preview is the branch, which Go derives from the prefix and the slug alone.
- * @param {{name: string, entropy: string, prefix: string}} draft
+ * @param {{name: string, branchDescription: string, ticket: string, entropy: string, prefix: string}} draft
  * @returns {Promise<string>}
  */
 export const preview = (draft) => Call.ByName(ASSEMBLY_PREVIEW, draft);

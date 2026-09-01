@@ -17,6 +17,13 @@ window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Prefixes")) return ["feat"];
   if (name.endsWith(".Runners")) return agents;
   if (name.endsWith(".Preview")) return "feat/thing-4f3a";
+  if (name.endsWith(".Fetch")) {
+    return {
+      title: "Stage 2 blocker: Verifier 401s the Gympass partner integration",
+      body: "The verifier rejects the partner response.",
+      branchDescription: "verifier-401s-gympass-partner",
+    };
+  }
   if (name.endsWith(".Refresh")) return 0;
   return [];
 };
@@ -25,4 +32,5 @@ mount(Overlay, { target: document.querySelector("#fixture"), props: { onClose: (
 
 window.bridge = {
   count: (method) => calls.filter(({ name }) => name.endsWith("." + method)).length,
+  calls: () => [...calls],
 };

@@ -110,6 +110,17 @@ func TestCheckSlugRefusesAnOccupiedDirectoryAndReclaimsAnAbandonedOne(t *testing
 	}
 }
 
+func TestCheckSlugPointsAKeyedCollisionAtTheBranchDescription(t *testing.T) {
+	root := t.TempDir()
+	a := Assembler{Cfg: &config.Config{Root: root}}
+	d := Draft{Name: "Full ticket title", BranchDescription: "short title",
+		Ticket: "https://linear.app/issue/LIF-2841", Prefix: "feat"}
+	if err := os.Mkdir(filepath.Join(root, d.Slug()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	problemOn(t, a.CheckSlug(d), FieldBranchDescription)
+}
+
 // A session assembled for reading alone cannot be confirmed without acquiring
 // something to work in — and taking up one of the repositories it already reads
 // is one of the two ways to do that.

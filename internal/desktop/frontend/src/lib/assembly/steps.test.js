@@ -15,6 +15,7 @@ import {
 } from "./steps.js";
 
 const NAME = { field: "name", message: "A name is needed." };
+const BRANCH = { field: "branchDescription", message: "That folder already exists." };
 const REPOS = { field: "repos", message: "At least one editing repo is needed." };
 
 test("each step names itself and its own way forward", () => {
@@ -28,6 +29,7 @@ test("a step is only stopped by a problem it can be fixed on", () => {
   assert.equal(blocks([REPOS], 0), undefined);
   assert.deepEqual(blocks([REPOS], 1), REPOS);
   assert.deepEqual(blocks([NAME], 0), NAME);
+  assert.deepEqual(blocks([BRANCH], 0), BRANCH);
   assert.equal(blocks([NAME], 1), undefined);
 });
 

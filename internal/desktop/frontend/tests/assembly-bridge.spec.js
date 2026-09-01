@@ -46,6 +46,25 @@ test("typing the name asks for one branch preview, and for no rules until advanc
   await expect.poll(() => page.evaluate(() => window.bridge.count("Check"))).toBe(1);
 });
 
+test("fetching a ticket keeps its title and fills an editable branch description", async ({ page }) => {
+  await opened(page);
+  const ticket = "https://linear.app/issue/LIF-2841";
+  await page.locator(".field").filter({ hasText: "TICKET" }).locator("input").fill(ticket);
+  await page.getByRole("button", { name: "Fetch" }).click();
+
+  await expect(name(page)).toHaveValue(
+    "Stage 2 blocker: Verifier 401s the Gympass partner integration",
+  );
+  await expect(page.getByPlaceholder("gympass verifier 401s")).toHaveValue(
+    "verifier-401s-gympass-partner",
+  );
+  await expect(page.locator("textarea")).toHaveValue("The verifier rejects the partner response.");
+  await expect.poll(() => page.evaluate(({ ticket }) =>
+    window.bridge.calls().some(({ name, args }) =>
+      name.endsWith(".Preview") && args[0]?.ticket === ticket &&
+        args[0]?.branchDescription === "verifier-401s-gympass-partner"), { ticket })).toBe(true);
+});
+
 test("the description never crosses the bridge, since no rule reads it", async ({ page }) => {
   await opened(page);
   await expect.poll(() => page.evaluate(() => window.bridge.count("Preview"))).toBeGreaterThan(0);

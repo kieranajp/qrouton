@@ -71,6 +71,7 @@
   {:else if wizard.step === 0}
     <DescribeStep
       bind:name={wizard.form.name}
+      bind:branchDescription={wizard.form.branchDescription}
       bind:description={wizard.form.description}
       bind:ticket={wizard.form.ticket}
       bind:prefix={wizard.form.prefix}

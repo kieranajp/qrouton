@@ -111,6 +111,10 @@ func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 	if got := a.Preview(draftInput{Name: "API Cleanup!", Entropy: "4f3a", Prefix: "fix"}); got != "fix/api-cleanup-4f3a" {
 		t.Fatalf("preview = %q", got)
 	}
+	if got := a.Preview(draftInput{Name: "Full ticket title", BranchDescription: "short title", Entropy: "4f3a",
+		Ticket: "https://linear.app/issue/LIF-2841", Prefix: "fix"}); got != "fix/lif-2841-short-title" {
+		t.Fatalf("Linear preview = %q", got)
+	}
 	if got := a.Prefixes(); len(got) == 0 || got[0] != "feat" {
 		t.Fatalf("prefixes = %v", got)
 	}
