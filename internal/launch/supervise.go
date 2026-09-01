@@ -49,6 +49,10 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 	if generation == 0 {
 		generation = 1
 	}
+	// A resume whose conversation has gone is spent on the fallback below rather
+	// than ending the terminal. Once per supervisor, so a runner that keeps
+	// failing still stops instead of relaunching forever.
+	freshStart := true
 	for {
 		if err := StampAssets(dir); err != nil {
 			return err
@@ -77,6 +81,18 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
 		signalled, err := runAgent(argv, env, dir, relaunch)
+		// `claude --continue` against a session whose transcript is gone exits
+		// nonzero, and a session that can only be opened by resuming would then be
+		// shut out for good. There is no conversation left to protect, so the
+		// fallback starts one: the notice this launch consumed rides along, as the
+		// opening message is where a fresh conversation takes its prompt.
+		if err != nil && !signalled && resume && freshStart {
+			freshStart = false
+			resume = false
+			initialPrompt = notice
+			generation++
+			continue
+		}
 		if err != nil || !signalled {
 			return err
 		}
