@@ -1,7 +1,10 @@
 package desktop
 
 import (
+	"context"
+	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -42,6 +45,11 @@ type Picker struct {
 	sessions  *Sessions
 	repos     *Repositories
 	assembler assembly.Assembler
+
+	// mu serializes this picker's own two paths. Two of them at once could race on
+	// a mirror or a worktree, and the second Refresh would cancel the first. It
+	// says nothing about a new session being assembled beside them.
+	mu sync.Mutex
 }
 
 func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
@@ -89,6 +97,8 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 }
 
 func (p *Picker) Confirm(slug string, in pickerInput) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
@@ -108,6 +118,135 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	state.clearPicker()
 	p.sessions.repositoriesChanged(root)
 	return nil
+}
+
+// addReposHook adapts the picker to the control socket. A workbench built
+// without a picker serves no add rather than panicking on one.
+func addReposHook(p *Picker) func(string, []repoAddition) (addReposResult, error) {
+	if p == nil {
+		return nil
+	}
+	return p.add
+}
+
+// addReposResult is what one agent-initiated add did. The three lists are
+// disjoint: a repository was cloned, taken up, or already there. A successful add
+// fills all three rather than leaving any nil, so the reply reads as empty lists
+// and not as nulls.
+type addReposResult struct {
+	Added    []string
+	Promoted []string
+	Held     []string
+}
+
+// add is the unattended half of this picker: the agent names repositories and
+// they are composed with no overlay and no human gate. It refuses the whole batch
+// rather than part of it, so a mistyped name costs a clone nobody asked for.
+func (p *Picker) add(slug string, additions []repoAddition) (addReposResult, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	_, root, err := p.root(slug)
+	if err != nil {
+		return addReposResult{}, err
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), repoRefreshTimeout)
+	defer cancel()
+	if err := p.repos.refreshAndWait(ctx); err != nil {
+		return addReposResult{}, fmt.Errorf("%w: %w", ErrRepoRefreshFailed, err)
+	}
+	selections, err := p.repos.resolve(additions)
+	if err != nil {
+		return addReposResult{}, err
+	}
+	m, err := session.Load(root)
+	if err != nil {
+		return addReposResult{}, err
+	}
+	fresh, promote, held, err := partitionAdditions(m, selections)
+	if err != nil {
+		return addReposResult{}, err
+	}
+	outcome := addReposResult{Added: selectionIDs(fresh), Promoted: refIDs(promote), Held: held}
+	// Nothing to compose and nothing to take up: the session already had every
+	// repository named. Answering here keeps the call idempotent — CheckAdditions
+	// judges an empty draft, and would refuse a no-op for holding no editing repo.
+	if len(fresh) == 0 && len(promote) == 0 {
+		return outcome, nil
+	}
+	draft := assembly.Draft{Name: m.DisplayName(), Description: m.Description, Ticket: m.TicketURL,
+		Prefix: assembly.Prefixes()[0], Mode: m.EffectiveMode(), Repos: fresh, Upgrades: promote}
+	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
+		return addReposResult{}, draftRefused(problems[0])
+	}
+	if err := p.assembler.ConfirmForAgent(root, draft, nil); err != nil {
+		return addReposResult{}, err
+	}
+	p.sessions.repositoriesChanged(root)
+	return outcome, nil
+}
+
+// partitionAdditions is the promotion rule. A repository the session does not
+// hold is composed; one it reads and is now asked to edit is taken up; anything
+// else it already holds is left exactly as it is. That last case is what makes
+// this promotion-only: a repo held for editing and asked for as reference lands
+// there rather than being detached out from under uncommitted work.
+//
+// One repository named twice in two roles is refused rather than resolved. Acting
+// on either would hand the agent a role it did not ask for, and a detached
+// checkout it then commits into strands that work where nothing can reach it.
+// Named twice in one role, it is acted on once — which is why the roles asked for
+// and the names already handled are the same map.
+func partitionAdditions(m session.Manifest, selections []session.RepoSelection) ([]session.RepoSelection, []session.RepoRef, []string, error) {
+	byKey := make(map[string]session.ManifestRepo, len(m.Repos))
+	for _, r := range m.Repos {
+		byKey[repoKey(r.Org, r.Name)] = r
+	}
+	var fresh []session.RepoSelection
+	var promote []session.RepoRef
+	held := make([]string, 0, len(selections))
+	asked := make(map[string]session.RepoRole, len(selections))
+	for _, sel := range selections {
+		key := repoKey(sel.Repo.Org, sel.Repo.Name)
+		role := sel.Role.Effective()
+		if previous, named := asked[key]; named {
+			if previous != role {
+				return nil, nil, nil, fmt.Errorf("%w: %s", ErrRepoRoleConflict,
+					fmt.Sprintf(conflictingRoleFormat, sel.Repo.ID(), previous, role))
+			}
+			continue
+		}
+		asked[key] = role
+		current, isHeld := byKey[key]
+		switch {
+		case !isHeld:
+			fresh = append(fresh, sel)
+		case current.Role.Effective() == session.RepoRoleReference && role == session.RepoRoleEditing:
+			promote = append(promote, session.RepoRef{Org: current.Org, Name: current.Name})
+		default:
+			held = append(held, sel.Repo.ID())
+		}
+	}
+	return fresh, promote, held, nil
+}
+
+func repoKey(org, name string) string {
+	return strings.ToLower((github.Repo{Org: org, Name: name}).ID())
+}
+
+func selectionIDs(selections []session.RepoSelection) []string {
+	ids := make([]string, 0, len(selections))
+	for _, sel := range selections {
+		ids = append(ids, sel.Repo.ID())
+	}
+	return ids
+}
+
+func refIDs(refs []session.RepoRef) []string {
+	ids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		ids = append(ids, (github.Repo{Org: ref.Org, Name: ref.Name}).ID())
+	}
+	return ids
 }
 
 func (p *Picker) Cancel(slug string) error {

@@ -30,6 +30,17 @@ const (
 
 	noOwnersError = "add at least one organisation or username to search"
 
+	repoNameSeparator = "/"
+	repoListJoiner    = ", "
+
+	unknownRepoFormat      = "no repository %q among the owners searched (%s)"
+	unknownRepoStaleFormat = "; these owners failed to refresh and their lists may be short: %s"
+	ambiguousRepoFormat    = "%q matches more than one repository (%s); name it as org/name"
+	unknownRoleFormat      = "%q is not a role for %s; use editing or reference"
+	conflictingRoleFormat  = "%s is named twice, as %s and as %s; name it once"
+
+	repoRefreshFailedError = "could not refresh the repository list to resolve those names against"
+
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 
@@ -116,6 +127,11 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
+
+	// repoRefreshTimeout bounds the GitHub refresh an agent's add waits on before
+	// giving up. An owner that merely fails is not this case: that refresh still
+	// completes, and the add proceeds against the last-good list.
+	repoRefreshTimeout = 30 * time.Second
 )
 
 const (

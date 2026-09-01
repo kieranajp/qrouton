@@ -34,6 +34,16 @@ var (
 	ErrProcessIngressOnly    = errors.New("open Linear issue is available only on the published process socket")
 	ErrNoRunnerGeneration    = errors.New("runner generation request carries no generation")
 	ErrNoDelegatedLifecycle  = errors.New("delegated lifecycle request carries no event")
+
+	ErrNoAddRepos      = errors.New("add repositories request names no repositories")
+	ErrNoRepositoryAdd = errors.New("workbench has no way to add repositories to a session")
+
+	ErrRepoNameRequired  = errors.New("a repository addition needs a name")
+	ErrRepoNotFound      = errors.New("no such repository")
+	ErrRepoAmbiguous     = errors.New("ambiguous repository name")
+	ErrRepoRoleUnknown   = errors.New("unknown repository role")
+	ErrRepoRoleConflict  = errors.New("conflicting roles for one repository")
+	ErrRepoRefreshFailed = errors.New(repoRefreshFailedError)
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

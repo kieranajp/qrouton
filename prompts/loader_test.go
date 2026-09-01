@@ -132,6 +132,19 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 		}
 	}
 
+	// The stamped prompt is the only place an agent learns these exist, and the
+	// role vocabulary in it has to be the one the code recognises.
+	for id, content := range rendered {
+		for _, required := range []string{"`list_repos`", "`add_repos`", "`editing` repos may be changed"} {
+			if !strings.Contains(content, required) {
+				t.Errorf("prompt %q does not carry %q", id, required)
+			}
+		}
+		if strings.Contains(content, "`active` repos") {
+			t.Errorf("prompt %q still names the active role, which no code recognises", id)
+		}
+	}
+
 	if strings.Contains(rendered[Orchestrator], "escalat") {
 		t.Error("the orchestrator prompt offers escalation, which is the assistant's alone")
 	}

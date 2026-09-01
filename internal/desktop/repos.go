@@ -2,7 +2,11 @@ package desktop
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net/http"
+	"sort"
+	"strings"
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
@@ -46,6 +50,11 @@ type Repositories struct {
 	cancel context.CancelFunc
 	// done reports a run's end, so a test can wait on one.
 	done func(generation int)
+	// waiters are the refreshAndWait callers parked on a generation, and finished
+	// is the newest generation that has ended — together they let a waiter that
+	// registers after its run completed return rather than hang.
+	waiters  map[int][]chan struct{}
+	finished int
 }
 
 func newRepositories(cfg *config.Config, emit emitter) *Repositories {
@@ -80,6 +89,13 @@ func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 	return out
 }
 
+// repoAddition is one repository an agent asked for: a bare name or org/name, and
+// the role it wants. An empty role reads as reference.
+type repoAddition struct {
+	Name string
+	Role string
+}
+
 // Refresh refetches the owners whose last attempt failed if any did, and every
 // owner otherwise, so the user never has to know which of two kinds of refresh
 // he wants. It answers with the generation its events will carry.
@@ -110,9 +126,7 @@ func (r *Repositories) Refresh() int {
 // every configured owner as fetched now, so writing with one still failing would
 // date its stale list to this moment.
 func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached []github.Repo) {
-	if r.done != nil {
-		defer r.done(gen)
-	}
+	defer r.finish(gen)
 	token, err := r.gh.token()
 	if err != nil {
 		owners := failed
@@ -184,6 +198,162 @@ func (r *Repositories) clean() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.errs) == 0
+}
+
+// finish releases this generation's waiters and records it as ended, then hands
+// on to the done seam the tests wait on.
+func (r *Repositories) finish(gen int) {
+	r.mu.Lock()
+	if gen > r.finished {
+		r.finished = gen
+	}
+	parked := r.waiters[gen]
+	delete(r.waiters, gen)
+	done := r.done
+	r.mu.Unlock()
+	for _, ch := range parked {
+		close(ch)
+	}
+	if done != nil {
+		done(gen)
+	}
+}
+
+// waiter is a channel closed when gen ends. A generation that has already
+// finished, or one a later Refresh has superseded, answers with a closed channel
+// rather than one nothing will ever close.
+func (r *Repositories) waiter(gen int) <-chan struct{} {
+	ch := make(chan struct{})
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if gen <= r.finished || gen != r.gen {
+		close(ch)
+		return ch
+	}
+	if r.waiters == nil {
+		r.waiters = map[int][]chan struct{}{}
+	}
+	r.waiters[gen] = append(r.waiters[gen], ch)
+	return ch
+}
+
+// refreshAndWait refetches and blocks until that refresh ends. A partial refresh
+// is still an end: the owners that answered are current, and Cached() holds the
+// last-good list for any that did not.
+func (r *Repositories) refreshAndWait(ctx context.Context) error {
+	wait := r.waiter(r.Refresh())
+	select {
+	case <-wait:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
+// failures lets a name that did not resolve say the list it was matched against
+// may be short.
+func (r *Repositories) failures() []string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	owners := make([]string, 0, len(r.errs))
+	for owner := range r.errs {
+		owners = append(owners, owner)
+	}
+	sort.Strings(owners)
+	return owners
+}
+
+// resolve turns the names an agent gave into selections, or refuses the whole
+// batch. Unlike Select, which serves the picker and silently drops a row a
+// refresh has removed, every name here has to land: the agent named it from
+// outside the list and gets told when its guess missed.
+func (r *Repositories) resolve(additions []repoAddition) ([]session.RepoSelection, error) {
+	cached := r.Cached()
+	var problems []error
+	out := make([]session.RepoSelection, 0, len(additions))
+	for _, addition := range additions {
+		name := strings.TrimSpace(addition.Name)
+		if name == "" {
+			problems = append(problems, ErrRepoNameRequired)
+			continue
+		}
+		role, err := resolveRole(addition.Role, name)
+		if err != nil {
+			problems = append(problems, err)
+			continue
+		}
+		repo, err := r.match(name, cached)
+		if err != nil {
+			problems = append(problems, err)
+			continue
+		}
+		out = append(out, session.RepoSelection{Repo: repo, Role: role})
+	}
+	if len(problems) > 0 {
+		return nil, errors.Join(problems...)
+	}
+	return out, nil
+}
+
+// match finds the one repository a name means. An org-qualified name is exact;
+// a bare one has to be unique across every configured owner, because
+// ComposeRepos org-qualifies the worktree path precisely for the case where it
+// is not.
+func (r *Repositories) match(name string, cached []github.Repo) (github.Repo, error) {
+	if org, bare, qualified := strings.Cut(name, repoNameSeparator); qualified {
+		for _, repo := range cached {
+			if strings.EqualFold(repo.Org, org) && strings.EqualFold(repo.Name, bare) {
+				return repo, nil
+			}
+		}
+		return github.Repo{}, r.unresolved(name)
+	}
+	var found []github.Repo
+	for _, repo := range cached {
+		if strings.EqualFold(repo.Name, name) {
+			found = append(found, repo)
+		}
+	}
+	switch len(found) {
+	case 1:
+		return found[0], nil
+	case 0:
+		return github.Repo{}, r.unresolved(name)
+	default:
+		ids := make([]string, 0, len(found))
+		for _, repo := range found {
+			ids = append(ids, repo.ID())
+		}
+		sort.Strings(ids)
+		return github.Repo{}, fmt.Errorf("%w: %s", ErrRepoAmbiguous,
+			fmt.Sprintf(ambiguousRepoFormat, name, strings.Join(ids, repoListJoiner)))
+	}
+}
+
+// unresolved says what was searched as well as what was missed, and names any
+// owner whose refresh failed — a name absent only because its owner was
+// unreachable is a different problem from a name that was never right.
+func (r *Repositories) unresolved(name string) error {
+	detail := fmt.Sprintf(unknownRepoFormat, name, strings.Join(r.cfg.Orgs, repoListJoiner))
+	if failed := r.failures(); len(failed) > 0 {
+		detail += fmt.Sprintf(unknownRepoStaleFormat, strings.Join(failed, repoListJoiner))
+	}
+	return fmt.Errorf("%w: %s", ErrRepoNotFound, detail)
+}
+
+// resolveRole defaults an unstated role to reference: an agent pulling a repo in
+// mid-session is usually reading it, and editing is the heavier act to opt into.
+func resolveRole(role, name string) (session.RepoRole, error) {
+	switch session.RepoRole(strings.TrimSpace(role)) {
+	case "":
+		return session.RepoRoleReference, nil
+	case session.RepoRoleEditing:
+		return session.RepoRoleEditing, nil
+	case session.RepoRoleReference:
+		return session.RepoRoleReference, nil
+	default:
+		return "", fmt.Errorf("%w: %s", ErrRepoRoleUnknown, fmt.Sprintf(unknownRoleFormat, role, name))
+	}
 }
 
 // Orgs is the owner filter's vocabulary. An empty configuration answers with an

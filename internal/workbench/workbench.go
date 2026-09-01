@@ -122,6 +122,10 @@ type WindowHost interface {
 	// session rather than raising anything, so a background agent's escalation
 	// does not take the screen from whatever the user is watching.
 	Picker(ctx context.Context, req PickerRequest) error
+	// AddRepos composes repositories into the session unattended, with no picker
+	// and no human gate, and blocks until they are on disk — a first clone can
+	// take minutes. Like Picker, it is not a window operation.
+	AddRepos(ctx context.Context, req AddReposRequest) (AddReposResult, error)
 }
 
 // PickerRequest is an escalation waiting on a session. Name is what the agent

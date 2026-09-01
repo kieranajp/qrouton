@@ -44,6 +44,7 @@ type Request struct {
 	LinearIssue      *LinearIssueRequest        `json:"linear_issue,omitempty"`
 	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
 	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
+	AddRepos         *AddReposRequest           `json:"add_repos,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -55,6 +56,8 @@ type Response struct {
 	Viewport *DocumentViewport `json:"viewport,omitempty"`
 	Outcome  string            `json:"outcome,omitempty"`
 	Error    string            `json:"error,omitempty"`
+
+	AddedRepos *AddReposResult `json:"added_repos,omitempty"`
 }
 
 // LinearIssueRequest is the canonical ticket and the user-level request Linear
@@ -62,6 +65,28 @@ type Response struct {
 type LinearIssueRequest struct {
 	Ticket string `json:"ticket"`
 	Prompt string `json:"prompt,omitempty"`
+}
+
+// AddReposRequest is the repositories an agent asked for. It carries no session
+// root: the listener's owner names the session, so an agent cannot address
+// another one.
+type AddReposRequest struct {
+	Repos []RepoAddition `json:"repos"`
+}
+
+// RepoAddition is one repository by bare name or org/name, and the role wanted.
+// An empty Role reads as reference.
+type RepoAddition struct {
+	Name string `json:"name"`
+	Role string `json:"role,omitempty"`
+}
+
+// AddReposResult splits an add three ways: cloned, taken up onto the session
+// branch, or already held and left alone.
+type AddReposResult struct {
+	Added    []string `json:"added"`
+	Promoted []string `json:"promoted"`
+	Held     []string `json:"held"`
 }
 
 type RunnerGenerationRequest struct {
@@ -349,6 +374,17 @@ func (c *client) List(ctx context.Context) ([]string, error) {
 func (c *client) Picker(ctx context.Context, req PickerRequest) error {
 	_, err := c.call(ctx, Request{Op: OpPicker, Root: req.SessionRoot, Picker: &req})
 	return err
+}
+
+func (c *client) AddRepos(ctx context.Context, req AddReposRequest) (AddReposResult, error) {
+	res, err := c.call(ctx, Request{Op: OpAddRepos, AddRepos: &req})
+	if err != nil {
+		return AddReposResult{}, err
+	}
+	if res.AddedRepos == nil {
+		return AddReposResult{}, ErrAddReposUnanswered
+	}
+	return *res.AddedRepos, nil
 }
 
 // call sends one request and reads its answer. The connection is the framing.

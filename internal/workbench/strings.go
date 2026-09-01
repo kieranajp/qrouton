@@ -23,6 +23,7 @@ const (
 	OpExists             = "exists"
 	OpList               = "list"
 	OpPicker             = "picker"
+	OpAddRepos           = "add-repos"
 	OpAttention          = "attention"
 	OpRunnerGeneration   = "runner-generation"
 	OpDelegatedLifecycle = "delegated-lifecycle"

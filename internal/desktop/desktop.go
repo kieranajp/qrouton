@@ -51,6 +51,7 @@ type Options struct {
 
 	assembly *Assembly
 	chrome   *Chrome
+	picker   *Picker
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -95,6 +96,7 @@ func Run(opts Options) error {
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
+	opts.picker = picker
 	r.register(application.NewService(picker))
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
@@ -164,7 +166,8 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 						reg.touch()
 					}
 				},
-				picker: reg.queuePicker,
+				picker:   reg.queuePicker,
+				addRepos: addReposHook(opts.picker),
 			})
 		},
 		shown: func(state *sessionState) {

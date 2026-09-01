@@ -72,6 +72,25 @@ const (
 
 	notifiedFormat = "Notified the user: %s"
 
+	reposWindowName  = "repos"
+	reposWindowLabel = "◆ repos"
+
+	repoListJoiner    = ", "
+	repoOutcomeJoiner = " "
+
+	addingReposFormat    = "Fetching the repository list and composing: %s\n\nA repository with no local mirror yet is cloned now, which can take minutes."
+	addReposFailedFormat = "Adding repositories failed: %v"
+	addedReposFormat     = "Added %s."
+	promotedReposFormat  = "Took up for editing on the session branch: %s."
+	heldReposFormat      = "Already held, unchanged: %s."
+	noReposChanged       = "Nothing changed: this session already held every repository named, in the role asked for."
+
+	noReposHeld         = "This session holds no repositories."
+	reposHeldPrefix     = "Session repositories:\n"
+	repoLineFormat      = "- %s/%s (%s) at %s in %s"
+	repoLineJoiner      = "\n"
+	unknownRepoPosition = "no recorded branch or revision"
+
 	noWindowsOpen     = "No qrouton-managed windows are open."
 	openWindowsPrefix = "Open windows: "
 	openWindowsSuffix = "."

@@ -20,6 +20,7 @@ type controlHooks struct {
 	lifecycle   func(req workbench.DelegatedLifecycleRequest)
 	linearIssue func(ticket, prompt string) (string, error)
 	focus       func()
+	addRepos    func(slug string, additions []repoAddition) (addReposResult, error)
 }
 
 // control serves the workbench port over a unix socket: one request per
@@ -149,6 +150,24 @@ var handlers = map[string]handler{
 			return workbench.Response{}
 		},
 	},
+	// A first clone takes minutes, and each connection is served in its own
+	// goroutine, so blocking here stalls no other tool.
+	workbench.OpAddRepos: {
+		guards: []guard{needsSession, needsAddRepos},
+		run: func(c *control, req workbench.Request) workbench.Response {
+			additions := make([]repoAddition, 0, len(req.AddRepos.Repos))
+			for _, repo := range req.AddRepos.Repos {
+				additions = append(additions, repoAddition{Name: repo.Name, Role: repo.Role})
+			}
+			result, err := c.hooks.addRepos(c.owner.slug(), additions)
+			if err != nil {
+				return workbench.Response{Error: err.Error()}
+			}
+			return workbench.Response{AddedRepos: &workbench.AddReposResult{
+				Added: result.Added, Promoted: result.Promoted, Held: result.Held,
+			}}
+		},
+	},
 	workbench.OpAttention: {
 		run: func(c *control, req workbench.Request) workbench.Response {
 			if c.hooks.attention != nil {
@@ -220,6 +239,16 @@ func needsOptions(_ *control, req workbench.Request) error {
 func needsPickerRequest(_ *control, req workbench.Request) error {
 	if req.Root == "" || req.Picker == nil {
 		return ErrNoSessionRoot
+	}
+	return nil
+}
+
+func needsAddRepos(c *control, req workbench.Request) error {
+	if req.AddRepos == nil || len(req.AddRepos.Repos) == 0 {
+		return ErrNoAddRepos
+	}
+	if c.hooks.addRepos == nil {
+		return ErrNoRepositoryAdd
 	}
 	return nil
 }

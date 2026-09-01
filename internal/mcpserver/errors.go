@@ -11,6 +11,10 @@ var (
 	ErrMessageRequired = errors.New("message is required")
 	ErrNameRequired    = errors.New("name is required")
 
+	ErrManifestUnreadable = errors.New("this session's qrouton.json could not be read")
+	ErrReposRequired      = errors.New("name at least one repository to add")
+	ErrRepoNameRequired   = errors.New("a repository addition needs a name")
+
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
 

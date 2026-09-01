@@ -47,6 +47,10 @@ type fakeHost struct {
 	pickers   []workbench.PickerRequest
 	pickerErr error
 
+	adds      []workbench.AddReposRequest
+	addResult workbench.AddReposResult
+	addErr    error
+
 	text        string
 	readErr     error
 	viewports   []*workbench.DocumentViewport
@@ -162,6 +166,16 @@ func (h *fakeHost) Picker(_ context.Context, req workbench.PickerRequest) error 
 	defer h.mu.Unlock()
 	h.pickers = append(h.pickers, req)
 	return h.pickerErr
+}
+
+func (h *fakeHost) AddRepos(_ context.Context, req workbench.AddReposRequest) (workbench.AddReposResult, error) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.adds = append(h.adds, req)
+	if h.addErr != nil {
+		return workbench.AddReposResult{}, h.addErr
+	}
+	return h.addResult, nil
 }
 
 // drop takes a window away behind the manager's back, the way a user closing a
@@ -1202,6 +1216,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
 		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+		toolListRepos, toolAddRepos,
 	}
 	for _, tc := range []struct {
 		mode session.SessionMode
@@ -1223,6 +1238,110 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestListReposReportsEveryRoleFromTheManifest(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	if err := session.WriteManifest(dir, session.Manifest{
+		Name: "webhook retry",
+		Slug: "webhook-retry-1234",
+		Repos: []session.ManifestRepo{
+			{
+				Name: "api", Org: "acme", Role: session.RepoRoleEditing,
+				Branch: "fix/webhook-retry", DefaultBranch: "main", WorktreePath: "src/api",
+			},
+			{
+				Name: "docs", Org: "acme", Role: session.RepoRoleReference,
+				Revision: "deadbeef", DefaultBranch: "trunk", WorktreePath: "src/docs",
+			},
+		},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	cs := connectedClient(t, newMCPServer(dir, testEditor, &fakeHost{}, session.ModeRPI))
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolListRepos, Arguments: struct{}{}})
+	if err != nil || result.IsError {
+		t.Fatalf("list_repos = %+v, %v", result, err)
+	}
+
+	text, ok := result.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content = %#v, want a text block", result.Content[0])
+	}
+	for _, want := range []string{
+		"acme/api (editing) at fix/webhook-retry in src/api",
+		"acme/docs (reference) at deadbeef in src/docs",
+	} {
+		if !strings.Contains(text.Text, want) {
+			t.Errorf("text %q does not carry %q", text.Text, want)
+		}
+	}
+
+	output := structuredOutput(t, result.StructuredContent)
+	if got := output["branch"]; got != "fix/webhook-retry" {
+		t.Errorf("branch = %#v, want the session branch", got)
+	}
+	var repos []repoEntry
+	body, err := json.Marshal(output["repos"])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &repos); err != nil {
+		t.Fatal(err)
+	}
+	want := []repoEntry{
+		{
+			Name: "api", Org: "acme", Role: "editing", Branch: "fix/webhook-retry",
+			DefaultBranch: "main", WorktreePath: "src/api",
+		},
+		{
+			Name: "docs", Org: "acme", Role: "reference", Revision: "deadbeef",
+			DefaultBranch: "trunk", WorktreePath: "src/docs",
+		},
+	}
+	if !reflect.DeepEqual(repos, want) {
+		t.Errorf("repos = %+v, want %+v", repos, want)
+	}
+}
+
+// An empty session is a fact worth stating, not an error, and a manifest that
+// will not load is the error.
+func TestListReposSeparatesAnEmptySessionFromAnUnreadableOne(t *testing.T) {
+	ctx := context.Background()
+	empty := t.TempDir()
+	if err := session.WriteManifest(empty, session.Manifest{Name: "fresh", Slug: "fresh-0001"}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := listRepos(empty)
+	if err != nil || got.Message != noReposHeld || len(got.Repos) != 0 || got.Branch != "" {
+		t.Fatalf("listRepos on an empty session = %+v, %v", got, err)
+	}
+
+	cs := connectedClient(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolListRepos, Arguments: struct{}{}})
+	if err == nil && !result.IsError {
+		t.Fatalf("list_repos on a session with no manifest = %+v, want an error", result)
+	}
+}
+
+func connectedClient(t *testing.T, server *mcp.Server) *mcp.ClientSession {
+	t.Helper()
+	ctx := context.Background()
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { ss.Close() })
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { cs.Close() })
+	return cs
 }
 
 func advertisedTools(t *testing.T, server *mcp.Server) map[string]bool {
@@ -1460,5 +1579,150 @@ func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
 func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
 	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
 		t.Error("shared a document from outside the session")
+	}
+}
+
+// The wire carries the role the agent gave, empty included: the default belongs
+// to the desktop side, which is the one place that knows what a role means.
+func TestAddReposSendsEveryNameAndRoleAsGiven(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addResult = workbench.AddReposResult{Added: []string{"org/svc"}}
+
+	if _, err := m.addRepos(context.Background(), addReposInput{Repos: []repoAdditionInput{
+		{Name: "org/svc", Role: "editing"},
+		{Name: "docs"},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.adds) != 1 {
+		t.Fatalf("host received %d add requests, want one", len(host.adds))
+	}
+	want := []workbench.RepoAddition{{Name: "org/svc", Role: "editing"}, {Name: "docs"}}
+	if !reflect.DeepEqual(host.adds[0].Repos, want) {
+		t.Fatalf("request = %+v, want %+v", host.adds[0].Repos, want)
+	}
+}
+
+func TestAddReposRefusesAnEmptyListAndABlankName(t *testing.T) {
+	m, host, _ := newTestManager(t)
+
+	if _, err := m.addRepos(context.Background(), addReposInput{}); !errors.Is(err, ErrReposRequired) {
+		t.Fatalf("an empty list = %v, want ErrReposRequired", err)
+	}
+	_, err := m.addRepos(context.Background(), addReposInput{Repos: []repoAdditionInput{{Name: "  "}}})
+	if !errors.Is(err, ErrRepoNameRequired) {
+		t.Fatalf("a blank name = %v, want ErrRepoNameRequired", err)
+	}
+	if len(host.adds) != 0 {
+		t.Fatalf("a refused call still reached the workbench: %+v", host.adds)
+	}
+}
+
+// A promotion is not an addition. An agent that reads "added" for a repo it
+// already had would conclude it has two checkouts.
+func TestAddReposReportsPromotedHeldAndAddedApart(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addResult = workbench.AddReposResult{
+		Added:    []string{"org/extra"},
+		Promoted: []string{"org/docs"},
+		Held:     []string{"org/svc"},
+	}
+
+	message, err := m.addRepos(context.Background(), addReposInput{Repos: []repoAdditionInput{
+		{Name: "org/extra"}, {Name: "org/docs", Role: "editing"}, {Name: "org/svc"},
+	}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Added org/extra.",
+		"Took up for editing on the session branch: org/docs.",
+		"Already held, unchanged: org/svc.",
+	} {
+		if !strings.Contains(message, want) {
+			t.Errorf("message %q does not carry %q", message, want)
+		}
+	}
+}
+
+func TestAddReposSaysWhenNothingChanged(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addResult = workbench.AddReposResult{Held: []string{"org/svc"}}
+
+	message, err := m.addRepos(context.Background(), addReposInput{
+		Repos: []repoAdditionInput{{Name: "org/svc"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(message, "Already held") {
+		t.Fatalf("message = %q", message)
+	}
+
+	host.addResult = workbench.AddReposResult{}
+	message, err = m.addRepos(context.Background(), addReposInput{
+		Repos: []repoAdditionInput{{Name: "org/svc"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message != noReposChanged {
+		t.Fatalf("an add that changed nothing said %q", message)
+	}
+}
+
+// The tab is the user's only view of a call that blocks for minutes, so it is
+// opened before the wait and replaced with the outcome — one name, not two tabs.
+func TestAddReposOpensTheReposTabAndReplacesItWithTheOutcome(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addResult = workbench.AddReposResult{Added: []string{"org/extra"}}
+
+	if _, err := m.addRepos(context.Background(), addReposInput{
+		Repos: []repoAdditionInput{{Name: "org/extra"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.opens) != 2 {
+		t.Fatalf("opened %d windows, want the repos tab then its replacement: %+v", len(host.opens), host.opens)
+	}
+	if !strings.Contains(host.opens[0].Content, "org/extra") ||
+		!strings.Contains(host.opens[0].Content, "can take minutes") {
+		t.Errorf("the waiting tab = %q", host.opens[0].Content)
+	}
+	if !strings.Contains(host.opens[1].Content, "Added org/extra.") {
+		t.Errorf("the outcome tab = %q", host.opens[1].Content)
+	}
+	for i, opened := range host.opens {
+		if opened.Kind != workbench.KindDocument {
+			t.Errorf("window %d is %v, want a document", i, opened.Kind)
+		}
+		// Agent tabs are background by default, and this one wants nothing.
+		if opened.Select || opened.Attention {
+			t.Errorf("window %d takes the screen: select=%v attention=%v", i, opened.Select, opened.Attention)
+		}
+	}
+	// One logical name, so the outcome replaces the waiting line rather than
+	// stacking a second tab beside it: the first window is closed as it goes.
+	if !reflect.DeepEqual(host.closes, []string{host.ids[0]}) {
+		t.Fatalf("closed %v, want the waiting tab %q replaced", host.closes, host.ids[0])
+	}
+}
+
+func TestAddReposSurfacesAWorkbenchFailureAsAToolError(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.addErr = errors.New("no repository \"org/kraken\" among the owners searched")
+
+	_, err := m.addRepos(context.Background(), addReposInput{
+		Repos: []repoAdditionInput{{Name: "org/kraken"}},
+	})
+	if err == nil {
+		t.Fatal("a failed add returned no error")
+	}
+	if !strings.Contains(err.Error(), "org/kraken") {
+		t.Fatalf("error = %v, want the workbench's own refusal", err)
+	}
+	// The tab says so too, rather than leaving the fetching line up.
+	if len(host.opens) != 2 || !strings.Contains(host.opens[1].Content, "failed") {
+		t.Fatalf("the tab was not replaced with the failure: %+v", host.opens)
 	}
 }

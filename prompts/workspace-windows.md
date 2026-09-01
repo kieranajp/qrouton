@@ -11,3 +11,8 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `notify` — get the user's attention when you finish, need a decision, or are blocked. Use it sparingly.
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.
 - `close_window` / `list_windows` — manage what's open.
+
+The two repository tools are not windows: they read and grow the workspace itself.
+
+- `list_repos` — the repositories this session holds, each with its role, its branch or pinned revision, and its worktree path. Opens no tab.
+- `add_repos` — add repositories to this session yourself rather than asking the user to. Unattended: there is no picker and nobody confirms it. Each entry is a name (`org/name`, or a bare name where it is unambiguous) and a role, which defaults to `reference`. The two directions are not symmetric: naming a repository this session already reads with role `editing` takes it up onto the session branch, while naming one it already edits with role `reference` changes nothing at all — nothing here ever makes a repository read-only again. A repository already held in the role asked for is left exactly as it is and reported as such. The call blocks until the worktrees exist, and a repository with no local mirror yet is cloned now, which can take minutes; a `repos` tab shows the user what is happening meanwhile.
