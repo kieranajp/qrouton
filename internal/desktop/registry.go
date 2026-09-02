@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ type agentWindow struct {
 	opts    workbench.WindowOptions
 	session *sessionState
 	seq     int
+	order   int
 	buffer  *ring
 	// stream orders a terminal's retained bytes and emitted chunks. A remounted
 	// page can therefore reset to one replay without racing live output around it.
@@ -132,6 +134,38 @@ func (r *registry) selectWindow(owner *sessionState, id string) error {
 	return nil
 }
 
+func (r *registry) reorder(slug, id string, to int) error {
+	owner := r.sessions.bySlug(slug)
+	if owner == nil {
+		return unknownSession(slug)
+	}
+	r.mu.Lock()
+	window, ok := r.open[id]
+	if !ok || window.session != owner {
+		r.mu.Unlock()
+		return noSuchWindow(id)
+	}
+	live := r.ordered(owner)
+	from := slices.Index(live, window)
+	to = min(max(to, 0), len(live)-1)
+	if to == from {
+		r.mu.Unlock()
+		return nil
+	}
+	// The session's own order values, handed back out positionally rather than
+	// renumbered, so a tab opened later still sorts to the right of them all.
+	orders := make([]int, len(live))
+	for i, tab := range live {
+		orders[i] = tab.order
+	}
+	for i, tab := range slices.Insert(slices.Delete(live, from, from+1), to, window) {
+		tab.order = orders[i]
+	}
+	r.mu.Unlock()
+	r.announce(owner)
+	return nil
+}
+
 func (r *registry) showing(owner *sessionState, source string) (string, bool) {
 	if source == "" {
 		return "", false
@@ -153,7 +187,7 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	r.mu.Lock()
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
-	window := &agentWindow{opts: opts, session: owner, seq: r.seq}
+	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq}
 	if opts.Kind == workbench.KindTerminal {
 		window.buffer = &ring{limit: windowScrollback}
 	}
@@ -218,7 +252,7 @@ func (r *registry) discard(id string) {
 	if ok {
 		process = window.process
 		if r.selected[window.session] == id {
-			if fallback := r.oldest(window.session); fallback != "" {
+			if fallback := r.leftmost(window.session); fallback != "" {
 				r.selected[window.session] = fallback
 			} else {
 				delete(r.selected, window.session)
@@ -235,16 +269,24 @@ func (r *registry) discard(id string) {
 	r.announce(window.session)
 }
 
-func (r *registry) oldest(owner *sessionState) string {
-	oldestID := ""
-	oldestSeq := 0
-	for id, window := range r.open {
-		if window.session == owner && (oldestID == "" || window.seq < oldestSeq) {
-			oldestID = id
-			oldestSeq = window.seq
+func (r *registry) leftmost(owner *sessionState) string {
+	live := r.ordered(owner)
+	if len(live) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(windowIDFormat, live[0].seq)
+}
+
+// ordered lists one session's windows left to right. Callers hold mu.
+func (r *registry) ordered(owner *sessionState) []*agentWindow {
+	live := make([]*agentWindow, 0, len(r.open))
+	for _, window := range r.open {
+		if window.session == owner {
+			live = append(live, window)
 		}
 	}
-	return oldestID
+	sort.Slice(live, func(i, j int) bool { return live[i].order < live[j].order })
+	return live
 }
 
 // stop tears down one session's windows, so retiring it leaves the rest alone.
@@ -280,8 +322,7 @@ type drawnWindow struct {
 	Artifact string `json:"artifact,omitempty"`
 }
 
-// surfaces names one session's open tabs, oldest first so the shell stays
-// leftmost.
+// surfaces names one session's open tabs in tab order.
 type surfaces struct {
 	Session  string        `json:"session"`
 	Selected string        `json:"selected"`
@@ -295,13 +336,7 @@ func (r *registry) surfacesBySlug(slug string) surfaces {
 func (r *registry) surfaces(owner *sessionState) surfaces {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	live := make([]*agentWindow, 0, len(r.open))
-	for _, window := range r.open {
-		if window.session == owner {
-			live = append(live, window)
-		}
-	}
-	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
+	live := r.ordered(owner)
 	out := surfaces{Session: owner.slug(), Selected: r.selected[owner], Tabs: []drawnWindow{}}
 	for _, window := range live {
 		drawn := drawnWindow{

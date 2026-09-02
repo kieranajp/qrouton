@@ -39,6 +39,7 @@ export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Wi
 export const WINDOWS_OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";
 export const WINDOWS_OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
 export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/desktop.Windows.RenderDiagrams";
+export const WINDOWS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Windows.Reorder";
 export const WINDOWS_REPORT_VIEWPORT = "github.com/kieranajp/qrouton/internal/desktop.Windows.ReportViewport";
 export const WINDOWS_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Resize";
 export const WINDOWS_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Select";

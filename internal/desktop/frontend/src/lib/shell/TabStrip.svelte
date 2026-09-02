@@ -4,10 +4,19 @@
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
-  import { dominantStatus, split, tabLabel } from "./tabs.js";
+  import { dominantStatus, dropIndex, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
-  let { tabs = [], selected = 0, onSelect, onClose, onNew, newLabel = "New ▾", ...rest } = $props();
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  let {
+    tabs = [],
+    selected = 0,
+    onSelect,
+    onClose,
+    onReorder,
+    onNew,
+    newLabel = "New ▾",
+    ...rest
+  } = $props();
 
   // Below this a tab is a coloured rectangle; the rest go to the menu.
   const MIN_TAB = 104;
@@ -31,6 +40,25 @@
     listing = false;
     onSelect?.(index);
   }
+
+  // Held by key, not position: a tab that closes mid-drag never reports the drag
+  // ending, and a stale index would name whichever tab moved up into it.
+  let lifted = $state("");
+  let hovered = $state("");
+  const key = (tab) => tab.id ?? tab.label;
+
+  function settle() {
+    lifted = "";
+    hovered = "";
+  }
+
+  function dropped(index) {
+    const from = drawn.shown.find((entry) => key(entry.tab) === lifted)?.index ?? -1;
+    settle();
+    if (from < 0) return;
+    const to = dropIndex(drawn.shown, from, index);
+    if (to !== from) onReorder?.(from, to);
+  }
 </script>
 
 <div class="strip" bind:clientWidth={width} {...rest}>
@@ -42,8 +70,15 @@
       status={tab.status}
       selected={index === selected}
       closable={tab.closable !== false}
+      dragging={key(tab) === lifted}
+      over={key(tab) === hovered && key(tab) !== lifted}
       onSelect={() => onSelect?.(index)}
-      onClose={() => onClose?.(index)} />
+      onClose={() => onClose?.(index)}
+      onDragStart={() => (lifted = key(tab))}
+      onDragOver={() => (hovered = key(tab))}
+      onDragLeave={() => hovered === key(tab) && (hovered = "")}
+      onDrop={() => dropped(index)}
+      onDragEnd={settle} />
   {/each}
   {#if drawn.hidden.length}
     <span class="more" bind:clientWidth={chip} use:dismissible={() => (listing = false)}>

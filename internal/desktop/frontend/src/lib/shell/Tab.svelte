@@ -5,14 +5,66 @@
 
   // An unfocused tab that cannot report a red test run is one you must click to
   // trust, so the process's state rides along with the label.
-  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, onSelect?: () => void, onClose?: () => void, [attribute: string]: any}} */
-  let { label, badge, artifact, status, selected = false, closable = true, onSelect, onClose, ...rest } =
-    $props();
+  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
+  let {
+    label,
+    badge,
+    artifact,
+    status,
+    selected = false,
+    closable = true,
+    dragging = false,
+    over = false,
+    onSelect,
+    onClose,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onDragEnd,
+    ...rest
+  } = $props();
 
   let whole = $derived(tabLabel({ badge, label }));
+
+  /** @param {DragEvent} event */
+  function lift(event) {
+    // A drag carrying no data never starts. Which tab is moving is the strip's
+    // own state, so the payload is only ever read by whatever it is dropped on.
+    if (event.dataTransfer) {
+      event.dataTransfer.setData("text/plain", whole);
+      event.dataTransfer.effectAllowed = "move";
+    }
+    onDragStart?.();
+  }
+
+  /** @param {DragEvent} event */
+  function hover(event) {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    onDragOver?.();
+  }
+
+  /** @param {DragEvent} event */
+  function release(event) {
+    event.preventDefault();
+    onDrop?.();
+  }
 </script>
 
-<div class="tab" class:selected title={whole} {...rest}>
+<div
+  class="tab"
+  class:selected
+  class:dragging
+  class:over
+  title={whole}
+  draggable="true"
+  ondragstart={lift}
+  ondragover={hover}
+  ondragleave={() => onDragLeave?.()}
+  ondrop={release}
+  ondragend={() => onDragEnd?.()}
+  {...rest}>
   <button type="button" class="select" onclick={onSelect}>
     {#if status}<StatusDot state={status} size={7} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
@@ -37,6 +89,14 @@
     min-width: 0;
     max-width: 210px;
     overflow: hidden;
+  }
+
+  .dragging {
+    opacity: 0.4;
+  }
+
+  .over {
+    box-shadow: inset 0 0 0 1px var(--accent-action);
   }
 
   /* Selection is blue and separate from status. */
