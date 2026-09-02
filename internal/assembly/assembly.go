@@ -32,7 +32,7 @@ type Draft struct {
 
 func (d Draft) Slug() string {
 	description := session.Slugify(d.BranchDescription)
-	if key := session.Slugify(ticket.LinearKey(d.Ticket)); key != "" {
+	if key := session.Slugify(ticket.Key(d.Ticket)); key != "" {
 		if description == "" {
 			return key
 		}

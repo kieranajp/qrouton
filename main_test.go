@@ -311,6 +311,7 @@ func rootContext(t *testing.T, args ...string) *cli.Context {
 	set := flag.NewFlagSet(appName, flag.ContinueOnError)
 	set.String(runnerFlag, "", "")
 	set.String(linearIssueFlag, "", "")
+	set.String(ticketFlag, "", "")
 	set.String(workbenchSpecFlag, "", "")
 	if err := set.Parse(args); err != nil {
 		t.Fatal(err)
@@ -351,4 +352,81 @@ func TestTheAgentCommandRefusesARunnerThatIsGone(t *testing.T) {
 func testPorts(cfg *config.Config, runner string, editor launch.EditorCommand) workbenchPorts {
 	return workbenchPorts{cfg: cfg, bin: "/bin/qrouton",
 		spec: launch.WorkbenchSpec{Runner: runner, Editor: editor}}
+}
+
+func TestTicketFlagCarriesTheCanonicalReferenceAndNoPrompt(t *testing.T) {
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	// LINEAR_PROMPT belongs to Linear Desktop's own request. A ticket offered
+	// from a terminal carries none, and must not inherit a stale one.
+	t.Setenv("LINEAR_PROMPT", "Fix the login regression")
+	previous := detachProcess
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{} }
+	var got launch.WorkbenchSpec
+	detachProcess = func(spec launch.WorkbenchSpec, _ []string) error {
+		got = spec
+		return nil
+	}
+
+	for _, tc := range []struct{ raw, want string }{
+		{"https://github.com/Acme/API/issues/42", "https://github.com/acme/api/issues/42"},
+		{"https://app.asana.com/0/123/456", "https://app.asana.com/0/123/456"},
+		{"lif-2841", "https://linear.app/issue/LIF-2841"},
+	} {
+		t.Run(tc.raw, func(t *testing.T) {
+			got = launch.WorkbenchSpec{}
+			if err := open(rootContext(t, "--ticket", tc.raw)); err != nil {
+				t.Fatal(err)
+			}
+			if got.LinearIssue != tc.want || got.LinearPrompt != "" || got.Socket == "" {
+				t.Fatalf("cold workbench spec = %+v, want ticket %q and no prompt", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestLinearIssueOutranksTicketAndKeepsItsPrompt(t *testing.T) {
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LINEAR_PROMPT", "Fix the login regression")
+	previous := detachProcess
+	previousDiscovery := discoverProcess
+	defer func() { detachProcess, discoverProcess = previous, previousDiscovery }()
+	discoverProcess = func() workbench.Discovery { return workbench.Discovery{} }
+	var got launch.WorkbenchSpec
+	detachProcess = func(spec launch.WorkbenchSpec, _ []string) error {
+		got = spec
+		return nil
+	}
+
+	if err := open(rootContext(t, "--linear-issue", "lif-2841",
+		"--ticket", "https://github.com/acme/api/issues/42")); err != nil {
+		t.Fatal(err)
+	}
+	if got.LinearIssue != "https://linear.app/issue/LIF-2841" ||
+		got.LinearPrompt != "Fix the login regression" {
+		t.Fatalf("spec = %+v, want Linear Desktop's request to win", got)
+	}
+}
+
+func TestTicketRejectsAnUnownedReferenceBeforeLaunch(t *testing.T) {
+	previous := detachProcess
+	defer func() { detachProcess = previous }()
+	called := false
+	detachProcess = func(launch.WorkbenchSpec, []string) error { called = true; return nil }
+	for _, args := range [][]string{
+		{"--ticket", ""},
+		{"--ticket", "not-a-ticket"},
+		{"--ticket", "https://github.com/acme/api/pull/42"},
+		{"--ticket", "https://example.com/issues/42"},
+	} {
+		if err := open(rootContext(t, args...)); err == nil {
+			t.Fatalf("qrouton %v succeeded", args)
+		}
+	}
+	if called {
+		t.Fatal("an unowned ticket reached detach")
+	}
 }

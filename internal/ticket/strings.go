@@ -1,11 +1,18 @@
 package ticket
 
 const (
+	// Provider names, used to prefix the errors a user reads.
+	linearProvider = "linear"
+	asanaProvider  = "asana"
+	githubProvider = "github"
+
 	linearAPIDefault = "https://api.linear.app/graphql"
 	asanaAPIDefault  = "https://app.asana.com/api/1.0"
+	githubAPIDefault = "https://api.github.com"
 
 	linearHost = "linear.app"
 	asanaHost  = "app.asana.com"
+	githubHost = "github.com"
 
 	httpsScheme = "https"
 
@@ -21,15 +28,31 @@ const (
 	asanaRootSegment = "0"
 	asanaMinSegments = 3
 
+	githubIssuesSegment     = "issues"
+	githubOwnerIndex        = 0
+	githubRepoIndex         = 1
+	githubIssuesIndex       = 2
+	githubNumberIndex       = 3
+	githubIssueSegments     = 4
+	githubMaxReferenceBytes = 2048
+	githubCanonicalFormat   = "https://github.com/%s/%s/issues/%s"
+	githubIssuePathFormat   = "/repos/%s/%s/issues/%s"
+	githubKeyFormat         = "%s-%s"
+
 	pathSeparator = "/"
 
 	linearTokenEnvVar = "LINEAR_API_KEY"
 	asanaTokenEnvVar  = "ASANA_ACCESS_TOKEN"
 
+	acceptHeader        = "Accept"
+	acceptGitHubJSON    = "application/vnd.github+json"
 	authorizationHeader = "Authorization"
 	bearerPrefix        = "Bearer "
 	contentTypeHeader   = "Content-Type"
 	contentTypeJSON     = "application/json"
+
+	requestFailedFormat    = "request failed: %s"
+	decodingResponseFormat = "decoding response: %w"
 
 	asanaTasksPath  = "/tasks/"
 	asanaTaskFields = "?opt_fields=name,notes"

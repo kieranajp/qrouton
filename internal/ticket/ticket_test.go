@@ -3,6 +3,7 @@ package ticket
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -43,21 +44,21 @@ func TestLinearReferencesCanonicalizeToTheWorkspaceFreeURL(t *testing.T) {
 		"https://linear.app/lifesum/issue/lif-2841/fix-retries?source=custom#work",
 	} {
 		t.Run(raw, func(t *testing.T) {
-			got, err := CanonicalLinearURL(raw)
+			got, err := Canonical(raw)
 			if err != nil || got != want {
-				t.Fatalf("CanonicalLinearURL(%q) = %q, %v; want %q", raw, got, err, want)
+				t.Fatalf("Canonical(%q) = %q, %v; want %q", raw, got, err, want)
 			}
 		})
 	}
 }
 
-func TestLinearKeyKeepsOnlyAValidatedLinearIdentifier(t *testing.T) {
-	if got := LinearKey("https://linear.app/lifesum/issue/lif-2841/title"); got != "LIF-2841" {
-		t.Fatalf("LinearKey() = %q", got)
+func TestKeyKeepsOnlyAValidatedLinearIdentifier(t *testing.T) {
+	if got := Key("https://linear.app/lifesum/issue/lif-2841/title"); got != "LIF-2841" {
+		t.Fatalf("Key() = %q", got)
 	}
 	for _, raw := range []string{"", "not-a-ticket", "https://app.asana.com/0/123/456"} {
-		if got := LinearKey(raw); got != "" {
-			t.Fatalf("LinearKey(%q) = %q", raw, got)
+		if got := Key(raw); got != "" {
+			t.Fatalf("Key(%q) = %q", raw, got)
 		}
 	}
 }
@@ -95,10 +96,17 @@ func TestLinearReferencesRejectAnythingOutsideTheIdentifierContract(t *testing.T
 		"https://linear.app/acme/issue/LIF-2841/../OTHER-2",
 	} {
 		t.Run(raw, func(t *testing.T) {
-			if got, err := CanonicalLinearURL(raw); err == nil {
-				t.Fatalf("CanonicalLinearURL(%q) = %q, want an error", raw, got)
+			if got, err := Canonical(raw); err == nil {
+				t.Fatalf("Canonical(%q) = %q, want an error", raw, got)
 			}
 		})
+	}
+}
+
+func TestLinearRejectsAReferenceOverTheByteLimit(t *testing.T) {
+	raw := "https://linear.app/issue/LIF-2841?q=" + strings.Repeat("a", linearMaxReferenceBytes)
+	if got, err := Canonical(raw); err == nil {
+		t.Fatalf("Canonical(oversized) = %q, want an error", got)
 	}
 }
 
@@ -143,20 +151,122 @@ func TestFetchAsanaTicket(t *testing.T) {
 	}
 }
 
-func TestParseURLRejectsGitHub(t *testing.T) {
-	if _, err := ParseURL("https://github.com/acme/api/issues/42"); err == nil {
-		t.Fatal("GitHub ticket URL was accepted")
-	}
-}
-
-func TestParseURLKeepsAsanaAndAcceptsBothLinearShapes(t *testing.T) {
+func TestValidateAcceptsEveryProvidersLinkShape(t *testing.T) {
 	for _, raw := range []string{
 		"https://linear.app/issue/API-42",
 		"https://linear.app/acme/issue/API-42/fix-retries",
 		"https://app.asana.com/0/123/456",
+		"https://github.com/acme/api/issues/42",
 	} {
-		if _, err := ParseURL(raw); err != nil {
-			t.Fatalf("ParseURL(%q) = %v", raw, err)
+		if err := Validate(raw); err != nil {
+			t.Fatalf("Validate(%q) = %v", raw, err)
 		}
+	}
+}
+
+func statusResponse(code int, status string) *http.Response {
+	return &http.Response{StatusCode: code, Status: status, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}
+}
+
+func failingClient(code int, status string) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return statusResponse(code, status), nil
+	})}
+}
+
+func bodyClient(body string) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return response(body), nil
+	})}
+}
+
+func TestFetchWithoutACredentialNamesTheEnvironmentVariable(t *testing.T) {
+	for _, tc := range []struct {
+		env  string
+		raw  string
+		want error
+	}{
+		{"LINEAR_API_KEY", "https://linear.app/issue/LIF-2841", ErrNoLinearToken},
+		{"ASANA_ACCESS_TOKEN", "https://app.asana.com/0/123/456", ErrNoAsanaToken},
+	} {
+		t.Run(tc.env, func(t *testing.T) {
+			t.Setenv(tc.env, "")
+			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				t.Fatal("request issued without a credential")
+				return nil, nil
+			})}
+			if _, err := Fetch(context.Background(), client, tc.raw); !errors.Is(err, tc.want) {
+				t.Fatalf("Fetch() = %v, want %v", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFetchReportsANon2xxWithItsStatus(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		env    string
+		raw    string
+		code   int
+		status string
+		want   string
+	}{
+		{"linear", "LINEAR_API_KEY", "https://linear.app/issue/LIF-2841",
+			http.StatusInternalServerError, "500 Internal Server Error",
+			"linear: loading ticket: request failed: 500 Internal Server Error"},
+		{"asana", "ASANA_ACCESS_TOKEN", "https://app.asana.com/0/123/456",
+			http.StatusNotFound, "404 Not Found",
+			"asana: loading ticket: request failed: 404 Not Found"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.env, "token")
+			_, err := Fetch(context.Background(), failingClient(tc.code, tc.status), tc.raw)
+			if err == nil || err.Error() != tc.want {
+				t.Fatalf("Fetch() = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestFetchLinearSurfacesAGraphQLErrorVerbatim(t *testing.T) {
+	t.Setenv("LINEAR_API_KEY", "linear-token")
+	client := bodyClient(`{"errors":[{"message":"Entity not found"}]}`)
+	_, err := Fetch(context.Background(), client, "https://linear.app/issue/LIF-2841")
+	if err == nil || err.Error() != "linear: loading ticket: Entity not found" {
+		t.Fatalf("Fetch() = %v", err)
+	}
+}
+
+func TestFetchTreatsAnEmptyTitleAsANoSuchTicket(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		env  string
+		raw  string
+		body string
+		want string
+	}{
+		{"linear", "LINEAR_API_KEY", "https://linear.app/issue/LIF-2841",
+			`{"data":{"issue":{"title":"","description":"body"}}}`, "linear: ticket not found"},
+		{"asana", "ASANA_ACCESS_TOKEN", "https://app.asana.com/0/123/456",
+			`{"data":{"name":"","notes":"body"}}`, "asana: ticket not found"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.env, "token")
+			_, err := Fetch(context.Background(), bodyClient(tc.body), tc.raw)
+			if !errors.Is(err, ErrTicketNotFound) || err.Error() != tc.want {
+				t.Fatalf("Fetch() = %v, want %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestAsanaCanonicalizesToTheLinkAsGivenAndSeedsNoSlug(t *testing.T) {
+	raw := "  https://app.asana.com/0/123/456  "
+	got, err := Canonical(raw)
+	if err != nil || got != strings.TrimSpace(raw) {
+		t.Fatalf("Canonical(%q) = %q, %v", raw, got, err)
+	}
+	if key := Key(raw); key != "" {
+		t.Fatalf("Key(%q) = %q, want empty", raw, key)
 	}
 }

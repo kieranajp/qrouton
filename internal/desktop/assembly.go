@@ -152,7 +152,7 @@ func (a *Assembly) End(generation uint64) {
 }
 
 func (a *Assembly) offer(raw, prompt string) (string, error) {
-	canonical, err := ticket.CanonicalLinearURL(raw)
+	canonical, err := ticket.Canonical(raw)
 	if err != nil {
 		return "", err
 	}
@@ -169,7 +169,7 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 	}
 	matching := make([]session.Manifest, 0, len(manifests))
 	for _, manifest := range manifests {
-		persisted, err := ticket.CanonicalLinearURL(manifest.TicketURL)
+		persisted, err := ticket.Canonical(manifest.TicketURL)
 		if err == nil && persisted == canonical {
 			matching = append(matching, manifest)
 		}

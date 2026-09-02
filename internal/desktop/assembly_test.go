@@ -462,3 +462,33 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 		t.Fatalf("the rail booted the %q agent, not the one the session records", got)
 	}
 }
+
+func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	dir := sessionDir(t, root, "shown")
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
+		TicketURL: "https://github.com/Acme/API/issues/42", Mode: session.ModeAssistant,
+		CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
+	if got, err := a.offer("https://github.com/acme/api/issues/42?utm=x", ""); err != nil ||
+		got != assemblyOutcomeExisting {
+		t.Fatalf("matching offer = %q, %v", got, err)
+	}
+	if current := reg.current(); current == nil || current.slug() != "shown" {
+		t.Fatalf("shown session = %v, want the matching session", current)
+	}
+}
+
+func TestAssemblyOfferQueuesAnUnmatchedGitHubIssue(t *testing.T) {
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	if got, err := a.offer("https://github.com/Acme/API/issues/42", ""); err != nil ||
+		got != assemblyOutcomeQueued {
+		t.Fatalf("offer = %q, %v", got, err)
+	}
+	if pending := a.Pending(); pending != "https://github.com/acme/api/issues/42" {
+		t.Fatalf("pending = %q, want the canonical GitHub issue URL", pending)
+	}
+}
