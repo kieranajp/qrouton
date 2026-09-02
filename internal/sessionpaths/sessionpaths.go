@@ -29,6 +29,7 @@ const (
 	manifestLockName   = "manifest.lock"
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
+	agentLogName       = "agent.log"
 	handoffName        = "handoff.md"
 	handoffPendingName = "handoff.pending"
 	initialPromptName  = "initial-prompt"
@@ -77,6 +78,12 @@ func NotifyScript(root string) string {
 // read here.
 func WorkbenchLog(root string) string {
 	return filepath.Join(Dir(root), workbenchLogName)
+}
+
+// AgentLog records each exit of the session's agent supervisor, and what its
+// terminal last printed when one failed. Nothing else survives that death.
+func AgentLog(root string) string {
+	return filepath.Join(Dir(root), agentLogName)
 }
 
 // Handoff is the assistant's escalation brief. When it exists, the prompt

@@ -34,6 +34,9 @@ type sessionState struct {
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
+	// tail is the last of the conversation, kept back for the log a supervisor's
+	// exit writes. The pane itself keeps no scrollback.
+	tail *ring
 
 	mu      sync.Mutex
 	stopped bool
@@ -121,9 +124,17 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	go process.pump(
 		func(b []byte) {
 			s.agents.output()
+			if s.tail != nil {
+				s.tail.write(b)
+			}
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
 		func(code int) {
+			var tail string
+			if code != 0 && s.tail != nil {
+				tail = s.tail.text(false)
+			}
+			recordAgentExit(s.root(), s.provider, code, tail)
 			emit(ptyExitEvent+s.terminal, code)
 			if exited != nil {
 				exited(s, code)
@@ -478,6 +489,7 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 		agents:   tracker,
 		argv:     argv,
 		env:      env,
+		tail:     &ring{limit: agentTailBytes},
 	}
 	state.named.Store(&identity{slug: slugFor(root), root: root})
 	s.slugs[state.slug()] = state
