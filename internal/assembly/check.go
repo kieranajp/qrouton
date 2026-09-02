@@ -31,7 +31,7 @@ type Problem struct {
 func Check(d Draft) []Problem {
 	var problems []Problem
 	if url := strings.TrimSpace(d.Ticket); url != "" {
-		if _, err := ticket.ParseURL(url); err != nil {
+		if err := ticket.Validate(url); err != nil {
 			problems = append(problems, Problem{Field: FieldTicket, Message: err.Error()})
 		}
 	}
@@ -74,7 +74,7 @@ func (a Assembler) CheckSlug(d Draft) []Problem {
 	}
 	if _, err := os.Stat(dir); err == nil {
 		field := FieldName
-		if session.Slugify(d.BranchDescription) != "" || ticket.LinearKey(d.Ticket) != "" {
+		if session.Slugify(d.BranchDescription) != "" || ticket.Key(d.Ticket) != "" {
 			field = FieldBranchDescription
 		}
 		return []Problem{{Field: field, Message: msgSessionExists}}

@@ -93,10 +93,12 @@ Both are planned. Neither is built.
 
 ## Odds and ends
 
-Paste a Linear or Asana ticket into a new session and it names and describes
-itself. Linear Desktop can hand an issue straight to qrouton through **Work on
-issue**. Reopen a session weeks later and the repos, branches, mode and agent
-conversation come back.
+Paste a Linear, Asana or GitHub ticket into a new session and it names and
+describes itself, seeding the branch from the issue where the provider has an
+identifier to seed it with. Linear Desktop can hand an issue straight to qrouton
+through **Work on issue**, and `qrouton --ticket <url>` does the same for any of
+the three from a terminal. Reopen a session weeks later and the repos, branches,
+mode and agent conversation come back.
 
 Building, testing, configuring and releasing this thing are documented in
 [`AGENTS.md`](./AGENTS.md), for the agent. Prompt sources live in

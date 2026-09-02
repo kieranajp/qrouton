@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/kieranajp/qrouton/internal/config"
 	"io"
 	"net/http"
@@ -407,5 +408,19 @@ func TestWriteRepoCacheStampsEveryListedOwner(t *testing.T) {
 	}
 	if len(owners["globex"].Repos) != 0 {
 		t.Fatalf("globex repos = %#v, want an owner with nothing to be empty", owners["globex"].Repos)
+	}
+}
+
+// An empty PATH is how a gh that cannot answer is reproduced deterministically.
+func TestTokenFallsBackToTheEnvironmentWhenGhCannotAnswer(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("GITHUB_TOKEN", "env-token")
+	got, err := Token()
+	if err != nil || got != "env-token" {
+		t.Fatalf("Token() = %q, %v; want %q", got, err, "env-token")
+	}
+	t.Setenv("GITHUB_TOKEN", "")
+	if got, err := Token(); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("Token() = %q, %v; want %v", got, err, ErrNoToken)
 	}
 }

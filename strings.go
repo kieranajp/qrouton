@@ -13,6 +13,8 @@ const (
 	runnerFlagUsage      = "coding agent to launch (claude, codex, or opencode)"
 	linearIssueFlag      = "linear-issue"
 	linearIssueFlagUsage = "open a Linear issue in the New session flow"
+	ticketFlag           = "ticket"
+	ticketFlagUsage      = "open a Linear, Asana or GitHub ticket in the New session flow"
 	linearPromptEnvVar   = "LINEAR_PROMPT"
 	pathEnvVar           = "PATH"
 

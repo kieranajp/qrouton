@@ -178,7 +178,7 @@ var handlers = map[string]handler{
 	workbench.OpOpenLinearIssue: {
 		guards: []guard{needsProcessIngress, needsLinearIssue},
 		run: func(c *control, req workbench.Request) workbench.Response {
-			canonical, err := ticket.CanonicalLinearURL(req.LinearIssue.Ticket)
+			canonical, err := ticket.Canonical(req.LinearIssue.Ticket)
 			if err != nil {
 				return workbench.Response{Error: err.Error()}
 			}
