@@ -58,6 +58,11 @@ func (w *Windows) OpenDocument(name string) (string, error) {
 
 func (w *Windows) Select(slug, id string) error { return w.selectBySlug(slug, id) }
 
+// Reorder moves one of a session's tabs to a position in its whole strip. The
+// index counts every tab the session has open, not the ones the strip found
+// room to draw.
+func (w *Windows) Reorder(slug, id string, to int) error { return w.reorder(slug, id, to) }
+
 func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
 
 func (w *Windows) Write(id, encoded string) error { return w.terminals.write(id, encoded) }
