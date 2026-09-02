@@ -28,7 +28,6 @@ export function loadPolicy(file = policyPath) {
   validateList(value.pathExtensions, "pathExtensions", true);
   return value;
 }
-
 function validateList(values, name, extension = false) {
   if (!Array.isArray(values) || values.length === 0) throw new Error(`policy ${name} must not be empty`);
   const seen = new Set();
@@ -43,4 +42,3 @@ function validateList(values, name, extension = false) {
     seen.add(value);
   }
 }
-

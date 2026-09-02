@@ -15,17 +15,19 @@ func TestCheckGoSourceCommentRuns(t *testing.T) {
 		max    int
 		want   bool
 	}{
-		"single comment":           {source: "// one\npackage fixture\n", max: 1},
-		"adjacent comments":        {source: "// one\n// two\npackage fixture\n", max: 1, want: true},
-		"blank line splits":        {source: "// one\n\n// two\npackage fixture\n", max: 1},
-		"code splits":              {source: "package fixture\n// one\nvar x = 1\n// two\n", max: 1},
-		"trailing does not join":   {source: "package fixture\n// one\nvar x = 1 // two\n", max: 1},
-		"physical block height":    {source: "package fixture\n/* one\n two */\n", max: 1, want: true},
-		"block joins line comment": {source: "package fixture\n/* one */\n// two\n", max: 1, want: true},
-		"doc comment is prose":     {source: "package fixture\n// Fixture is a value.\n// It carries one.\ntype Fixture int\n", max: 1, want: true},
-		"go directive splits":      {source: "// one\n//go:build linux\n// two\npackage fixture\n", max: 1},
-		"build tag splits":         {source: "// one\n// +build linux\n// two\npackage fixture\n", max: 1},
-		"lint directive splits":    {source: "package fixture\n// one\n//nolint:gocyclo\n// two\nvar x = 1\n", max: 1},
+		"single comment":                 {source: "// one\npackage fixture\n", max: 1},
+		"adjacent comments":              {source: "// one\n// two\npackage fixture\n", max: 1, want: true},
+		"blank line splits":              {source: "// one\n\n// two\npackage fixture\n", max: 1},
+		"code splits":                    {source: "package fixture\n// one\nvar x = 1\n// two\n", max: 1},
+		"trailing does not join":         {source: "package fixture\n// one\nvar x = 1 // two\n", max: 1},
+		"physical block height":          {source: "package fixture\n/* one\n two */\n", max: 1, want: true},
+		"block joins line comment":       {source: "package fixture\n/* one */\n// two\n", max: 1, want: true},
+		"doc comment is prose":           {source: "package fixture\n// Fixture is a value.\n// It carries one.\ntype Fixture int\n", max: 1, want: true},
+		"go directive splits":            {source: "// one\n//go:build linux\n// two\npackage fixture\n", max: 1},
+		"build tag splits":               {source: "// one\n// +build linux\n// two\npackage fixture\n", max: 1},
+		"lint directive splits":          {source: "package fixture\n// one\n//nolint:gocyclo\n// two\nvar x = 1\n", max: 1},
+		"line prose does not split":      {source: "package fixture\n// one\n// line two\n// three\nvar x = 1\n", max: 1, want: true},
+		"spaced go prose does not split": {source: "package fixture\n// one\n// go: somewhere\n// three\nvar x = 1\n", max: 1, want: true},
 	}
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {

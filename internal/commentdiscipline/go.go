@@ -16,10 +16,7 @@ import (
 
 const guidance = "See AGENTS.md: comments default to none, state what IS, and stay one line where earned or two for a real trap."
 
-var (
-	goDirective = regexp.MustCompile(`(?i)^\s*(//|/\*+)?\s*(go:|\+build\b|line\b|nolint\b|lint:|revive:|gosec\b)`)
-	urlSpan     = regexp.MustCompile(`https?://[^\s<>()]+`)
-)
+var urlSpan = regexp.MustCompile(`https?://[^\s<>()]+`)
 
 type Diagnostic struct {
 	Path    string
@@ -162,7 +159,21 @@ func CheckGoTree(root string, policy Policy) ([]Diagnostic, error) {
 }
 
 func isGoDirective(text string) bool {
-	return goDirective.MatchString(text)
+	trimmed := strings.TrimSpace(text)
+	if strings.HasPrefix(trimmed, "//go:") || directivePrefix(trimmed, "//line") || directivePrefix(trimmed, "// +build") {
+		return true
+	}
+	body := strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(strings.TrimPrefix(trimmed, "//"), "/*"), "*/"))
+	body = strings.ToLower(body)
+	return body == "nolint" || strings.HasPrefix(body, "nolint:") || strings.HasPrefix(body, "lint:") ||
+		strings.HasPrefix(body, "revive:") || body == "#nosec" || strings.HasPrefix(body, "#nosec ")
+}
+
+func directivePrefix(text, prefix string) bool {
+	if !strings.HasPrefix(text, prefix) {
+		return false
+	}
+	return len(text) == len(prefix) || text[len(prefix)] == ' ' || text[len(prefix)] == '\t'
 }
 
 func normalizeComment(text string) string {
