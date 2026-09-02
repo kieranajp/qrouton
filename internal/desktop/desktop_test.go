@@ -1307,6 +1307,35 @@ func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
 	}
 }
 
+// A reboot that cannot start leaves the window on the session before it. An
+// empty window is the assembly overlay, and at its first step there is no way out.
+func TestARebootThatCannotStartFallsBackToThePreviousSession(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/sh", "-c", "exit 3")
+	reg, _, r := testSessions(t, root, boot)
+	for _, slug := range []string{"kraken", "octopus"} {
+		sessionDir(t, root, slug)
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous := reg.bySlug("kraken")
+	dead := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(dead.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
+
+	reg.boot.agent = func(AgentRequest) (AgentCommand, error) { return AgentCommand{}, ErrNoSession }
+	if err := reg.Show("octopus"); err == nil {
+		t.Fatal("Show reported a reboot that never happened")
+	}
+	if state := reg.current(); state != previous {
+		t.Fatalf("the window fell back to %q, want the session shown before the one that failed", state.slug())
+	}
+}
+
 func TestReloadRefusesASlugItCannotResolve(t *testing.T) {
 	reg, _, _ := testSessions(t, "", newStubBoot("/bin/cat"))
 	err := reg.Reload("octopus")

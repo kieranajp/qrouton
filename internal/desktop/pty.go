@@ -61,7 +61,6 @@ func (p *ptyProcess) pump(onData func([]byte), onExit func(code int)) {
 	}
 }
 
-// done reports whether the child has been reaped.
 func (p *ptyProcess) done() bool {
 	select {
 	case <-p.exited:

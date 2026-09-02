@@ -130,11 +130,7 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
 		func(code int) {
-			var tail string
-			if code != 0 && s.tail != nil {
-				tail = s.tail.text(false)
-			}
-			recordAgentExit(s.root(), s.provider, code, tail)
+			s.recordExit(code)
 			emit(ptyExitEvent+s.terminal, code)
 			if exited != nil {
 				exited(s, code)
@@ -142,6 +138,23 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 		},
 	)
 	return nil
+}
+
+// recordExit logs a death the workbench did not cause. A supervisor it stopped
+// itself has nothing to explain, and a line plus a tail for every reload and
+// every quit would rotate the one crash that mattered off the disk.
+func (s *sessionState) recordExit(code int) {
+	s.mu.Lock()
+	stopped, tail := s.stopped, s.tail
+	s.mu.Unlock()
+	if stopped {
+		return
+	}
+	var last string
+	if code != 0 && tail != nil {
+		last = tail.text(false)
+	}
+	recordAgentExit(s.root(), s.provider, code, last)
 }
 
 func (s *sessionState) write(data []byte) error {
@@ -253,9 +266,11 @@ func (s *Sessions) Show(slug string) error {
 	defer s.showMu.Unlock()
 	state := s.bySlug(slug)
 	// A supervisor that died left its state registered, and a pane drawn against
-	// it reaches nothing. Clearing it here is the way back to a live one.
+	// it reaches nothing.
+	var fallback *sessionState
+	var emptied bool
 	if state != nil && !state.alive() {
-		s.recycle(state)
+		fallback, emptied = s.recycle(state)
 		state = nil
 	}
 	if state == nil {
@@ -265,6 +280,9 @@ func (s *Sessions) Show(slug string) error {
 		}
 		booted, err := s.start(root, "", true)
 		if err != nil {
+			if emptied {
+				s.reveal(fallback)
+			}
 			return err
 		}
 		state = booted
@@ -274,9 +292,8 @@ func (s *Sessions) Show(slug string) error {
 }
 
 // Reload restarts a session's supervisor and resumes the conversation, which is
-// the way out of one that is wedged rather than dead. A supervisor this
-// workbench does not own answers to its pid, and start refuses rather than
-// killing it.
+// the way out of one that is wedged rather than dead. A supervisor left behind
+// by a previous workbench is refused rather than killed.
 func (s *Sessions) Reload(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
@@ -284,11 +301,16 @@ func (s *Sessions) Reload(slug string) error {
 	if root == "" {
 		return unknownSession(slug)
 	}
+	var fallback *sessionState
+	var emptied bool
 	if state := s.bySlug(slug); state != nil {
-		s.recycle(state)
+		fallback, emptied = s.recycle(state)
 	}
 	booted, err := s.start(root, "", true)
 	if err != nil {
+		if emptied {
+			s.reveal(fallback)
+		}
 		return err
 	}
 	s.reveal(booted)
@@ -466,13 +488,14 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	return nil
 }
 
-// recycle drops a session without putting anything in its place. The caller
-// reveals the replacement under the same showMu, so the window never falls back
-// to the session before this one on its way there.
-func (s *Sessions) recycle(state *sessionState) {
+// recycle drops a session without putting anything in its place, so the window
+// never falls back to the session before this one on its way to a replacement.
+// The caller reveals under the same showMu: the replacement it booted, or the
+// fallback returned here when that boot failed.
+func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShown bool) {
 	s.boot.teardown(state)
 	state.stop()
-	s.forget(state)
+	return s.forget(state)
 }
 
 // retire ends one session without ending the app.

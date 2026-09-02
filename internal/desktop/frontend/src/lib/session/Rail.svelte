@@ -146,7 +146,7 @@
     }
   }
 
-  // Nothing here changed, and the rail has no surface to report a refusal on.
+  // Nothing here changed, so a Finder that will not open is left silent.
   async function revealRow(row) {
     onDismissed();
     try {
