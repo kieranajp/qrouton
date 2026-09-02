@@ -34,6 +34,9 @@ type sessionState struct {
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
+	// tail is the last of the conversation, kept back for the log a supervisor's
+	// exit writes. The pane itself keeps no scrollback.
+	tail *ring
 
 	mu      sync.Mutex
 	stopped bool
@@ -91,6 +94,18 @@ func (s *sessionState) root() string {
 	return s.named.Load().root
 }
 
+// alive is whether the session still has a supervisor behind it. A session
+// between add and the page's first start has no PTY yet and counts as alive:
+// the page needs its terminal id to make that call.
+func (s *sessionState) alive() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.stopped && (s.process == nil || !s.process.done())
+}
+
 // start launches the supervisor under a PTY sized to the terminal displaying it.
 // The page calls it on load, so a reload must not fork a second agent.
 func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols, rows int) error {
@@ -109,9 +124,13 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	go process.pump(
 		func(b []byte) {
 			s.agents.output()
+			if s.tail != nil {
+				s.tail.write(b)
+			}
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
 		func(code int) {
+			s.recordExit(code)
 			emit(ptyExitEvent+s.terminal, code)
 			if exited != nil {
 				exited(s, code)
@@ -119,6 +138,23 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 		},
 	)
 	return nil
+}
+
+// recordExit logs a death the workbench did not cause. A supervisor it stopped
+// itself has nothing to explain, and a line plus a tail for every reload and
+// every quit would rotate the one crash that mattered off the disk.
+func (s *sessionState) recordExit(code int) {
+	s.mu.Lock()
+	stopped, tail := s.stopped, s.tail
+	s.mu.Unlock()
+	if stopped {
+		return
+	}
+	var last string
+	if code != 0 && tail != nil {
+		last = tail.text(false)
+	}
+	recordAgentExit(s.root(), s.provider, code, last)
 }
 
 func (s *sessionState) write(data []byte) error {
@@ -229,6 +265,14 @@ func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
 	state := s.bySlug(slug)
+	// A supervisor that died left its state registered, and a pane drawn against
+	// it reaches nothing.
+	var fallback *sessionState
+	var emptied bool
+	if state != nil && !state.alive() {
+		fallback, emptied = s.recycle(state)
+		state = nil
+	}
 	if state == nil {
 		root := s.boot.root(slug)
 		if root == "" {
@@ -236,11 +280,40 @@ func (s *Sessions) Show(slug string) error {
 		}
 		booted, err := s.start(root, "", true)
 		if err != nil {
+			if emptied {
+				s.reveal(fallback)
+			}
 			return err
 		}
 		state = booted
 	}
 	s.reveal(state)
+	return nil
+}
+
+// Reload restarts a session's supervisor and resumes the conversation, which is
+// the way out of one that is wedged rather than dead. A supervisor left behind
+// by a previous workbench is refused rather than killed.
+func (s *Sessions) Reload(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	var fallback *sessionState
+	var emptied bool
+	if state := s.bySlug(slug); state != nil {
+		fallback, emptied = s.recycle(state)
+	}
+	booted, err := s.start(root, "", true)
+	if err != nil {
+		if emptied {
+			s.reveal(fallback)
+		}
+		return err
+	}
+	s.reveal(booted)
 	return nil
 }
 
@@ -415,6 +488,16 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	return nil
 }
 
+// recycle drops a session without putting anything in its place, so the window
+// never falls back to the session before this one on its way to a replacement.
+// The caller reveals under the same showMu: the replacement it booted, or the
+// fallback returned here when that boot failed.
+func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShown bool) {
+	s.boot.teardown(state)
+	state.stop()
+	return s.forget(state)
+}
+
 // retire ends one session without ending the app.
 func (s *Sessions) retire(state *sessionState) {
 	s.boot.teardown(state)
@@ -451,6 +534,7 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 		agents:   tracker,
 		argv:     argv,
 		env:      env,
+		tail:     &ring{limit: agentTailBytes},
 	}
 	state.named.Store(&identity{slug: slugFor(root), root: root})
 	s.slugs[state.slug()] = state

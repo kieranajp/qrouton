@@ -24,6 +24,7 @@ export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/deskt
 export const REPOSITORIES_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Select";
 export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Cleanup";
 export const SESSIONS_CYCLE_STICKER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CycleSticker";
+export const SESSIONS_RELOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reload";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
