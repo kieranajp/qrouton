@@ -273,6 +273,28 @@ func (s *Sessions) Show(slug string) error {
 	return nil
 }
 
+// Reload restarts a session's supervisor and resumes the conversation, which is
+// the way out of one that is wedged rather than dead. A supervisor this
+// workbench does not own answers to its pid, and start refuses rather than
+// killing it.
+func (s *Sessions) Reload(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	if state := s.bySlug(slug); state != nil {
+		s.recycle(state)
+	}
+	booted, err := s.start(root, "", true)
+	if err != nil {
+		return err
+	}
+	s.reveal(booted)
+	return nil
+}
+
 func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
 	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\\`) {
 		return "", unknownSession(slug)

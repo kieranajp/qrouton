@@ -1270,6 +1270,54 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	}
 }
 
+// Reload is the way out of a session that is wedged rather than dead, so it
+// tears down a live supervisor and comes back on the same conversation.
+func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, r := testSessions(t, root, boot)
+	sessionDir(t, root, "octopus")
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	before := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(before.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	pid := before.process.cmd.Process.Pid
+
+	if err := reg.Reload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	after := reg.current()
+	if after == before || after.terminal == before.terminal {
+		t.Fatalf("Reload came back with terminal %q, want a session of its own", after.terminal)
+	}
+	if state, ok := reg.byTerminal(before.terminal); ok {
+		t.Fatalf("the reloaded session %q is still registered", state.terminal)
+	}
+	waitFor(t, "the previous supervisor to die", func() bool { return syscall.Kill(pid, 0) != nil })
+	if !boot.resumed(t, after.root()) {
+		t.Fatal("the reloaded session started a fresh conversation")
+	}
+	if agents, _ := boot.counts(); agents != 2 {
+		t.Fatalf("Reload asked for %d supervisors in total, want the first and its replacement", agents)
+	}
+}
+
+func TestReloadRefusesASlugItCannotResolve(t *testing.T) {
+	reg, _, _ := testSessions(t, "", newStubBoot("/bin/cat"))
+	err := reg.Reload("octopus")
+	if err == nil {
+		t.Fatal("Reload booted a session with no directory behind it")
+	}
+	if !strings.Contains(err.Error(), "octopus") {
+		t.Fatalf("refusal %q does not name the session asked for", err)
+	}
+}
+
 func rowTerminal(t *testing.T, fields status.Fields, slug string) string {
 	t.Helper()
 	for _, row := range fields.Sessions {
