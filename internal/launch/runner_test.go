@@ -174,6 +174,34 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	}
 }
 
+func TestRunnerLaunchNamesClaudeAfterTheQroutonSession(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		manifest string
+		want     string
+	}{
+		{name: "display name", manifest: `{"name":"Checkout slowdown","slug":"checkout-slowdown"}`, want: "Checkout slowdown"},
+		{name: "legacy slug", manifest: `{"slug":"checkout-slowdown"}`, want: "checkout-slowdown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(sessionpaths.Manifest(dir), []byte(tc.manifest), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, resume := range []bool{false, true} {
+				argv, _, err := runnerLaunch(Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}},
+					"/tmp/qrouton", dir, EditorCommand{}, testHandle(), 7, resume, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if i := slices.Index(argv, claudeNameFlag); i < 0 || i+1 == len(argv) || argv[i+1] != tc.want {
+					t.Fatalf("Claude launch name = %#v, want %q", argv, tc.want)
+				}
+			}
+		})
+	}
+}
+
 func TestRunnerLaunchKeepsClaudeInTheSessionRoot(t *testing.T) {
 	t.Setenv(claudeMaintainProjectWorkingDirEnvVar, "0")
 	r := Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}

@@ -89,6 +89,7 @@ const (
 	openCodePromptFlag        = "--prompt"
 
 	claudeContinueFlag = "--continue"
+	claudeNameFlag     = "--name"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
 
