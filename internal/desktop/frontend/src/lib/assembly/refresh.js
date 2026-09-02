@@ -23,10 +23,8 @@ const STATES = { started: "fetching", succeeded: "updated", failed: "failed" };
 /** @returns {Refresh} */
 export const idle = (repos = []) => ({ generation: 0, active: false, owners: {}, repos });
 
+// Events can precede their initiating call's response, but older generations are stale.
 /**
- * apply folds one event in. An event below the newest generation seen belongs to
- * a superseded run and is dropped; requiring equality instead would drop a live
- * run's first events, which can arrive before the call that started it returns.
  * @param {Refresh} refresh
  * @param {Event} event
  * @returns {Refresh}

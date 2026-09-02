@@ -15,12 +15,7 @@ const PREVIEW_DELAY = 150;
 // A ticket tracker's answer, which names no field of the form.
 const message = (err) => String(err?.message ?? err ?? "");
 
-/**
- * assembling is one run through the overlay: the state the three steps share,
- * with every rule left to the modules beside this one and to Go. done is called
- * once the session exists, because the workbench brings it on screen itself.
- * @param {() => void} done
- */
+/** @param {() => void} done */
 export function assembling(done) {
   const form = $state({
     name: "",

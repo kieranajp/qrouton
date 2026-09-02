@@ -59,6 +59,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 
 - Keep changes small and match existing package-level style.
 - Comments default to absent, in every language here. One line where earned, two for a real trap, never a paragraph. A comment earns its place only by saying what the code cannot: where the obvious reading is wrong, or why a non-obvious choice was made. Too many big ones drift and cry wolf until none get read — if a change comments most of the files it touches, delete the ones restating the code, the design system, or the plan. State what *is*, not the debugging journey. Never point at another file, symbol or line number.
+- `make comment-check` mechanically caps standalone prose runs at four lines and rejects narrow journey phrases and unstable file pointers. It covers authored Go plus JavaScript, Svelte template/script/style, and CSS beneath the frontend; generated Go, the generated bridge, machine directives, dependencies, and local eval results are excluded. The shared root policy is the sole ratchet. Passing checks comment shape only — whether a comment is earned, plain, and near the one-line/two-line standard remains review judgment.
 - New user-facing text goes in the package's `strings.go`; new failure modes get a sentinel in its `errors.go`, wrapped with `%w` at the call site.
 - `gofmt` changed Go files.
 - Add focused tests for behavior changes.

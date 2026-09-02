@@ -9,10 +9,8 @@ import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
 
+// Document links dock inside the workbench; external links open in a browser.
 /**
- * Anchors in rendered markdown, resolved against the document they were written
- * in. Following one would replace the app with a file the webview cannot draw,
- * so a link to another document docks it and a link out opens a browser.
  * @param {HTMLElement} body
  * @param {string} source
  */
@@ -37,13 +35,10 @@ export function links(body, source) {
   };
 }
 
+// Events are subscribed before the initial call so no completed diagram is missed.
 /**
- * The fences the workbench draws for itself. Subscribed before the call, so a
- * diagram that lands between the two is heard rather than missed; the reply
- * names every fence, so the ones still being laid out are marked as such.
  * @param {HTMLElement} body
- * @param {{id: string, text: string}} params The window a pane draws for is
- *   fixed; the text is what a redraw hangs on.
+ * @param {{id: string, text: string}} params
  */
 export function diagrams(body, { id }) {
   const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) => applyDiagrams(body, [event.data]));
@@ -63,19 +58,8 @@ export function diagrams(body, { id }) {
   };
 }
 
-/**
- * What the pane can see, reported to the window it draws for, and the reveal of
- * the span that opened it. The span and its marks are read as the action
- * attaches, so a pane that swaps its body reveals the position it holds then;
- * the epoch is read per report, because a reload moves it under a body that
- * stays mounted.
- * @param {{
- *   span: () => {line: number, to: number},
- *   epoch: () => number | undefined,
- *   marking?: () => boolean,
- *   onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown,
- * }} options
- */
+// The epoch is read per report because reloads can move beneath a mounted pane.
+/** @param {{span: () => {line: number, to: number}, epoch: () => number | undefined, marking?: () => boolean, onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown}} options */
 export function viewport({ span, epoch, marking, onMeasure }) {
   /**
    * @param {HTMLElement} content

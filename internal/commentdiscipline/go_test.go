@@ -111,6 +111,7 @@ func TestCheckGoTreeCoversNestedModulesAndSkipsSymlinks(t *testing.T) {
 	writeGo(t, root, "plain.go", "package root\n")
 	writeGo(t, root, "eval/fixture/go.mod", "module fixture\n")
 	writeGo(t, root, "eval/fixture/nested.go", "package fixture\n// one\n// two\n// three\n// four\n// five\n")
+	writeGo(t, root, "eval/results/local.go", "package results\n// one\n// two\n// three\n// four\n// five\n")
 	outside := filepath.Join(t.TempDir(), "outside.go")
 	if err := os.WriteFile(outside, []byte("package outside\n// one\n// two\n// three\n// four\n// five\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -142,6 +143,7 @@ func TestCheckGoTreeReturnsParseError(t *testing.T) {
 
 func testPolicy() Policy {
 	return Policy{
+		SchemaVersion:    1,
 		MaxCommentRun:    4,
 		NarrationPhrases: []string{"turns out", "we used to"},
 		PathExtensions:   []string{"go", "js", "svelte", "css", "md"},

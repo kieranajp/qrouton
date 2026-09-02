@@ -7,19 +7,14 @@ export const widthKey = (slug) => WIDTH_PREFIX + slug;
 
 export const sidebarWidthKey = () => SIDEBAR_WIDTH_KEY;
 
-/**
- * storedWidth is the width a session was left at. Zero means untouched, which
- * leaves the starting width the token's to own.
- * @param {(key: string) => string | null} read
- */
+// Zero means untouched, leaving the starting width to CSS.
+/** @param {(key: string) => string | null} read */
 export const storedWidth = (read, slug) => Number(read(widthKey(slug))) || 0;
 
 export const storedSidebarWidth = (read) => Number(read(SIDEBAR_WIDTH_KEY)) || 0;
 
+// A missing selection opens the first tab; a stale selection selects nothing.
 /**
- * selectedTab is the strip position Go's selection names. A session Go has no
- * opinion on yet opens on its leftmost tab, the same tab closing one falls back
- * to; a selection naming no open tab selects nothing rather than inventing one.
  * @param {{id?: string}[]} tabs
  * @param {string} selected
  */
@@ -38,19 +33,11 @@ export const MAX_SIDEBAR = 360;
 export const sidebarWidth = (width) =>
   width ? Math.min(Math.max(width, MIN_SIDEBAR), MAX_SIDEBAR) : 0;
 
-/**
- * roomFor is the widest the shell pane may be drawn: whatever is left once the
- * rail and the agent's minimum are taken out. Before the panels have been
- * measured there is no known limit, so nothing is clamped yet.
- */
+// Unmeasured panels impose no width limit.
 export const roomFor = (panels, rail) =>
   panels ? Math.max(MIN_HUMAN, panels - rail - MIN_AGENT) : Infinity;
 
-/**
- * humanWidth is the width the shell pane actually gets: the stored or dragged
- * one, never below its own minimum and never past the room there is. Zero means
- * untouched, which leaves the starting width to the pane itself.
- */
+// Zero leaves the shell pane at its intrinsic starting width.
 export const humanWidth = (width, room) =>
   width ? Math.min(Math.max(width, MIN_HUMAN), room) : 0;
 

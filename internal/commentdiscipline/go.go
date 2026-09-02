@@ -126,7 +126,12 @@ func CheckGoTree(root string, policy Policy) ([]Diagnostic, error) {
 			return nil
 		}
 		if entry.IsDir() {
-			if path != root && (entry.Name() == ".git" || entry.Name() == "node_modules") {
+			relative, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			relative = filepath.ToSlash(relative)
+			if path != root && (entry.Name() == ".git" || entry.Name() == "node_modules" || relative == "eval/results") {
 				return filepath.SkipDir
 			}
 			return nil

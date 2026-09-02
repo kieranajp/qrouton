@@ -9,6 +9,7 @@ import (
 
 func TestLoadPolicy(t *testing.T) {
 	path := writePolicy(t, `{
+  "schemaVersion": 1,
   "maxCommentRun": 4,
   "narrationPhrases": ["turns out"],
   "pathExtensions": ["go", "js"]
@@ -17,7 +18,7 @@ func TestLoadPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if policy.MaxCommentRun != 4 || len(policy.NarrationPhrases) != 1 || len(policy.PathExtensions) != 2 {
+	if policy.SchemaVersion != 1 || policy.MaxCommentRun != 4 || len(policy.NarrationPhrases) != 1 || len(policy.PathExtensions) != 2 {
 		t.Fatalf("LoadPolicy() = %+v", policy)
 	}
 }
@@ -26,12 +27,13 @@ func TestLoadPolicyRejectsInvalidInput(t *testing.T) {
 	cases := map[string]string{
 		"malformed JSON":      `{`,
 		"multiple values":     validPolicyJSON + `{}`,
-		"unknown field":       `{"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":["go"],"extra":true}`,
-		"zero cap":            `{"maxCommentRun":0,"narrationPhrases":["x"],"pathExtensions":["go"]}`,
-		"empty phrases":       `{"maxCommentRun":4,"narrationPhrases":[],"pathExtensions":["go"]}`,
-		"uppercase phrase":    `{"maxCommentRun":4,"narrationPhrases":["Turns out"],"pathExtensions":["go"]}`,
-		"invalid extension":   `{"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":[".go"]}`,
-		"duplicate extension": `{"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":["go","go"]}`,
+		"unknown version":     `{"schemaVersion":2,"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":["go"]}`,
+		"unknown field":       `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":["go"],"extra":true}`,
+		"zero cap":            `{"schemaVersion":1,"maxCommentRun":0,"narrationPhrases":["x"],"pathExtensions":["go"]}`,
+		"empty phrases":       `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":[],"pathExtensions":["go"]}`,
+		"uppercase phrase":    `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":["Turns out"],"pathExtensions":["go"]}`,
+		"invalid extension":   `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":[".go"]}`,
+		"duplicate extension": `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":["x"],"pathExtensions":["go","go"]}`,
 	}
 	for name, input := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -49,7 +51,7 @@ func TestLoadPolicyRequiresFile(t *testing.T) {
 	}
 }
 
-const validPolicyJSON = `{"maxCommentRun":4,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`
+const validPolicyJSON = `{"schemaVersion":1,"maxCommentRun":4,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`
 
 func writePolicy(t *testing.T, contents string) string {
 	t.Helper()

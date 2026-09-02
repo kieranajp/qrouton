@@ -1,10 +1,6 @@
 package session
 
-// The on-disk contract: the manifest schema and the reads and writes that
-// maintain it. qrouton.json is what makes a directory a session and what every
-// other process — the launcher, the window chrome, the escalate tool — polls, so
-// the schema and the serialised write that maintains it live together, apart
-// from the assembly behaviour that produces them.
+// The manifest is the polled on-disk session contract shared by all processes.
 
 import (
 	"encoding/json"

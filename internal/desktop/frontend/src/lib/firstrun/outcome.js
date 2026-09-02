@@ -3,10 +3,8 @@
 
 import { fieldError } from "../settings/errors.js";
 
+// Go owns dismissal of the first-run gate after a successful outcome.
 /**
- * firstRunOutcome names the field and the footer a refusal names, and says
- * nothing at all on success. There is no close: the gate is Go's, dropped by the
- * chrome payload or by the window going with the process.
  * @param {{relaunching?: boolean} | undefined} result
  * @param {any} err
  * @returns {{fields: Record<string, string>, status: string}}

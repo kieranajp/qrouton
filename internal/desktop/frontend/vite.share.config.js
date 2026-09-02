@@ -1,14 +1,8 @@
 import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
-// The bundle behind a shared document: the workbench's own renderer and prose
-// styles, built for a file that must open with nothing to fetch. Separate from
-// vite.config.js because the two disagree about assets — the workbench serves
-// its fonts, this page carries them.
-// The markdown parser carries U+FFFD literally, to stand in for input it
-// rejects. A page is published by uploading it, and a validator that meets a
-// replacement character reasonably assumes it is reading something already
-// broken — so the character is escaped to the sequence that means it.
+// Shared pages inline assets so the uploaded file has nothing to fetch.
+// U+FFFD is escaped because upload validators treat a literal replacement character as corruption.
 const escapeReplacementChar = {
   name: "qrouton-escape-replacement-char",
   generateBundle: (_, bundle) => {

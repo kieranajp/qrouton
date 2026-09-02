@@ -10,6 +10,7 @@ import (
 )
 
 type Policy struct {
+	SchemaVersion    int      `json:"schemaVersion"`
 	MaxCommentRun    int      `json:"maxCommentRun"`
 	NarrationPhrases []string `json:"narrationPhrases"`
 	PathExtensions   []string `json:"pathExtensions"`
@@ -32,6 +33,9 @@ func LoadPolicy(path string) (Policy, error) {
 			return Policy{}, fmt.Errorf("decode policy: multiple JSON values")
 		}
 		return Policy{}, fmt.Errorf("decode policy: %w", err)
+	}
+	if policy.SchemaVersion != 1 {
+		return Policy{}, fmt.Errorf("schemaVersion must be 1")
 	}
 	if policy.MaxCommentRun < 1 {
 		return Policy{}, fmt.Errorf("maxCommentRun must be at least 1")

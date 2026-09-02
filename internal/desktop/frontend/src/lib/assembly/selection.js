@@ -24,10 +24,8 @@ const UPGRADE_OFFERS = ["reference", "editing"];
 /** @type {Role[]} */
 const NO_OFFERS = [];
 
+// Held rows retain their roles but stay out of the new-selection order.
 /**
- * seed is the selection step 2 opens with. A held row carries its role and stays
- * out of the order: it reaches Go as a manifest entry to leave alone, and
- * composing it again clones a repository the agent is already working in.
  * @param {{id: string, role: Role}[]} [held]
  * @returns {Selection}
  */
@@ -46,10 +44,8 @@ export const isLocked = (selection, id) => selection.locked.includes(id);
 
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
 
+// Held editing repositories cannot be dropped or demoted from the picker.
 /**
- * roleOffers is what one row's toggle will answer to. A held editing repository
- * answers to nothing: its worktree can carry commits and uncommitted work, so
- * dropping or demoting it is not a thing to do from a picker.
  * @returns {Role[]}
  */
 export function roleOffers(selection, id) {
@@ -58,8 +54,6 @@ export function roleOffers(selection, id) {
 }
 
 /**
- * rowMeta is the line beside a repository's name. A held row says so, and one
- * being taken up says that before it happens: the toggle beside it has answered.
  * @param {Selection} selection
  * @param {string} id
  * @param {string} pushed
@@ -74,10 +68,8 @@ function heldNote(selection, id) {
   return selection.roles[id] === "reference" ? READING : IN_SESSION;
 }
 
+// Demotion preserves selection rank; turning a repository off discards it.
 /**
- * setRole records one row's role. A repository keeps the rank it was first given,
- * so demoting it to reference holds its place while turning it off and back sends
- * it last.
  * @returns {Selection}
  */
 export function setRole(selection, id, role) {
@@ -92,10 +84,8 @@ export function setRole(selection, id, role) {
   return { ...selection, roles, order };
 }
 
+// A pending upgrade retains its on-disk role until confirmation.
 /**
- * takeUp marks a held reference row to be checked out for editing, or unmarks it.
- * The held role stays in roles, so the row can go back to what the session still
- * has on disk right up until confirm.
  * @returns {Selection}
  */
 function takeUp(selection, id, role) {
@@ -104,9 +94,8 @@ function takeUp(selection, id, role) {
   return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
+// Reconciliation retains held repositories even when GitHub omits them.
 /**
- * reconcile drops the repositories a refreshed list no longer carries. Held rows
- * survive it, because the session holds them whatever GitHub now reports.
  * @param {Selection} selection
  * @param {string[]} ids
  * @returns {Selection}
@@ -143,10 +132,8 @@ export const ordered = (selection) =>
 /** upgrading is what Go takes up for editing, which it finds in the manifest. */
 export const upgrading = (selection) => [...selection.upgrades];
 
+// Pending upgrades lead the summary because their held rows may be filtered out.
 /**
- * summary is the selected chips. An editing chip names the branch it joins, and
- * says nothing while there is no branch to name. A row being taken up leads: it
- * is the one answer whose row a search can scroll out of sight.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
  * @param {string} branch

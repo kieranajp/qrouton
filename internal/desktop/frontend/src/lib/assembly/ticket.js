@@ -23,9 +23,7 @@ export const claimSeed = (current, external, claimed = "") => {
 /**
  * @param {Draft} draft
  * @param {(url: string) => Promise<Result>} fetchTicket
- * @param {{fetching?: (active: boolean) => void,
- *   loaded?: (fields: {name: string, branchDescription: string, description: string}) => void,
- *   failed?: (error: unknown) => void}} hooks
+ * @param {{fetching?: (active: boolean) => void, loaded?: (fields: {name: string, branchDescription: string, description: string}) => void, failed?: (error: unknown) => void}} hooks
  */
 export function loader(draft, fetchTicket, hooks = {}) {
   let fetching = false;
@@ -61,10 +59,8 @@ export function loader(draft, fetchTicket, hooks = {}) {
   return { load, seed };
 }
 
+// Ticket results only fill empty fields when the requested URL remains current.
 /**
- * fill applies a fetched ticket to the three fields it may touch. A result for a
- * URL the field has since moved off is dropped, and a fill only ever lands in an
- * empty field.
  * @param {Draft} draft
  * @param {Result} result
  * @returns {{name: string, branchDescription: string, description: string}}

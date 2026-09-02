@@ -25,8 +25,6 @@ const OWNED = [
 ];
 
 /**
- * blocks is the problem stopping a step, which is both what the footer says and
- * why the primary button did nothing.
  * @param {Problem[]} [problems]
  * @param {number} [step]
  * @returns {Problem | undefined}
@@ -38,8 +36,6 @@ export const blocks = (problems = [], step = 0) =>
 export const folder = (branch) => (branch ?? "").split("/").slice(1).join("/");
 
 /**
- * destination is the last thing the footer says before Create: how much is
- * going where.
  * @param {string} branch
  * @param {number} repos
  */
@@ -49,28 +45,19 @@ export function destination(branch, repos) {
   return `${repos} repo${repos === 1 ? "" : "s"} into ${into}`;
 }
 
-/**
- * joining is what the picker's footer says: the branch anything added lands on.
- * A session with no repositories yet has no branch, and nothing to say.
- * @param {string} branch
- */
+/** @param {string} branch */
 export const joining = (branch) => (branch ? `Added repositories join ${branch}` : "");
 
+// The empty-session fallback waits until the first payload settles.
 /**
- * assemblyOpen is whether the assembly overlay is drawn: asked for by the rail's
- * button, or because the window holds no session and so has nothing else to
- * offer. It waits for the first payload, since an unsettled window reads as
- * having no session too.
  * @param {boolean} requested
  * @param {boolean} settled
  * @param {string} slug
  */
 export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
+// An add-repositories picker closes when its originating session is no longer shown.
 /**
- * pickerOpen is whether the picker is drawn over the session on screen: an
- * escalation waiting on it, or the add-repos button pressed on that same
- * session. Pressing it on one session and switching to another closes it.
  * @param {string} shown
  * @param {boolean} pending
  * @param {string} added the session add-repos was pressed on
@@ -84,8 +71,6 @@ export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || ad
 export const refusal = (err) => String(err?.message ?? err ?? "").replace(/^[a-z]+: /, "");
 
 /**
- * intent is what a keypress in the dialog means. Enter advances, except while
- * typing prose or pressing a control that answers for itself.
  * @param {{key?: string, target?: any}} [event]
  * @returns {'advance'|'cancel'|''}
  */

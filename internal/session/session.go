@@ -205,13 +205,8 @@ func ComposeRepos(cfg *config.Config, m Manifest, sels []RepoSelection, branch s
 		nameCounts[sel.Repo.Name]++
 	}
 	for _, sel := range sels {
-		// A repository already in the session is left exactly as it stands —
-		// same worktree, same branch, same uncommitted work. Escalating a
-		// session that has been worked in must not disturb what it was working
-		// on, and the collision handling below cannot tell a repository from
-		// itself: it counts names, so it would dutifully org-qualify a second
-		// checkout of the same repo and clone it alongside the first, on a
-		// different branch.
+		// Existing repositories retain their worktree, branch, and uncommitted work.
+		// Skipping them also keeps name-collision handling from cloning duplicates.
 		if hasRepo(m.Repos, sel.Repo.Org, sel.Repo.Name) {
 			continue
 		}

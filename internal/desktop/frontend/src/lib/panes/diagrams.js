@@ -13,7 +13,6 @@ const EMITTED_SCALE = 0.65;
  */
 
 /**
- * Pairs each result with the block whose line it names; a result naming no block is dropped.
  * @param {{dataset?: DOMStringMap}[]} blocks In document order.
  * @param {Rendered[]} results
  */
@@ -32,7 +31,6 @@ export function place(blocks, results) {
 }
 
 /**
- * Parses an SVG viewBox's own width and height.
  * @param {string | null | undefined} viewBox
  * @returns {{width: number, height: number} | null}
  */
@@ -43,9 +41,8 @@ export function naturalSize(viewBox) {
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
+// Emitted dimensions are separate from the SVG's natural viewBox size.
 /**
- * The size the renderer asked the diagram to draw at, which d2 writes as
- * width/height beside a viewBox left at natural size.
  * @param {{getAttribute: (name: string) => string | null} | null | undefined} svg
  * @returns {{width: number, height: number} | null}
  */
@@ -68,9 +65,8 @@ function attributeSize(value) {
   return Number.parseFloat(value ?? "");
 }
 
+// Diagram blocks retain their element identity while their contents change.
 /**
- * Draws what the workbench has rendered and marks what it is still laying out.
- * The <pre> element itself is kept, never replaced: other code holds onto that exact instance.
  * @param {HTMLElement} container
  * @param {Rendered[]} results
  */
@@ -95,7 +91,6 @@ function wait(block) {
 }
 
 /**
- * States the failure reason under the block, as text — never as markup.
  * @param {HTMLElement} block
  * @param {string} message
  */
@@ -110,8 +105,8 @@ function fail(block, message) {
   if (!stated) block.append(note);
 }
 
+// SVG markup has passed the backend's safety check before reaching this renderer.
 /**
- * Parses the SVG as markup rather than escaping it as text: it arrives pre-vetted.
  * @param {HTMLElement} block
  * @param {string} svg
  */

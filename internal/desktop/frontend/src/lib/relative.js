@@ -22,9 +22,6 @@ const WEEK = 7 * DAY;
 const MONTH = 30 * DAY;
 
 /**
- * age is the same reading with the words taken out, for a column that has room
- * for a number and a letter. It coarsens as it goes — minutes, hours, days,
- * weeks, months — because a rail row is chosen on rough recency.
  * @param {string|number|Date} at
  * @param {number} [now]
  */
@@ -40,11 +37,8 @@ export function age(at, now = Date.now()) {
   return `${Math.floor(since / MONTH)}mo`;
 }
 
+// Compact ages remain numeric; prose ages switch to dates beyond useful day counts.
 /**
- * relative is an age in words, never more precise than it is. A compact age
- * counts minutes and stays a count however old it gets; a prose age spells its
- * days out and carries a date once counting them says nothing. Something with
- * no time behind it says nothing rather than dating itself to the epoch.
  * @param {string|number|Date} at
  * @param {Style} style
  * @param {number} [now]

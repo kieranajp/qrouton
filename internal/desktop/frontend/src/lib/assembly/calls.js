@@ -45,7 +45,6 @@ export const check = (draft) => Call.ByName(ASSEMBLY_CHECK, draft);
 export const checkSlug = (draft) => Call.ByName(ASSEMBLY_CHECK_SLUG, draft);
 
 /**
- * preview is the branch, which Go derives from the prefix and the slug alone.
  * @param {{name: string, branchDescription: string, ticket: string, entropy: string, prefix: string}} draft
  * @returns {Promise<string>}
  */
@@ -61,11 +60,7 @@ export const begin = () => Call.ByName(ASSEMBLY_BEGIN);
 /** @param {number} generation */
 export const end = (generation) => Call.ByName(ASSEMBLY_END, generation);
 
-/**
- * fetchTicket answers with the URL it asked about, which is what lets a result
- * for a URL the field has since moved off be dropped.
- * @param {string} url
- */
+/** @param {string} url */
 export const fetchTicket = async (url) => ({
   url,
   ...(await Call.ByName(ASSEMBLY_FETCH, url)),
@@ -79,8 +74,6 @@ export const refresh = () => Call.ByName(REPOSITORIES_REFRESH);
 export const orgs = () => Call.ByName(ORGS_LIST);
 
 /**
- * held is what the picker draws itself from: the branch anything added joins,
- * empty for a session with no repositories yet, and the rows already in it.
  * @param {string} slug
  * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[]}>}
  */
@@ -90,8 +83,6 @@ export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
 export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 
 /**
- * addRepos gives the session the picked repositories, takes up the held ones
- * named in upgrades, and gives the escalation waiting on it its answer.
  * @param {string} slug
  * @param {{repos: {id: string, role: string}[], upgrades: string[]}} answer
  */

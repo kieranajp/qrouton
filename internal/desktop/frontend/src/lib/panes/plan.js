@@ -1,9 +1,7 @@
 import { flatten, sliceSections, walk } from "./sections.js";
 
+// Phase headings are the sole source of slide numbering.
 /**
- * The one place the phase convention is written down: which slides are phases,
- * and what each is numbered and called. Everything downstream consumes slides,
- * so replacing the convention is this function and the planning prompt.
  * @param {string} name A slide's heading text.
  * @returns {{number: number, name: string} | null}
  */
@@ -75,23 +73,13 @@ function stateOf(met, total) {
   return met > 0 ? "working" : "not-started";
 }
 
-/**
- * A slide is one screen of a plan. Those whose heading names a phase carry a
- * number and a meter; the rest are sections and carry neither.
- * @typedef {{text: string, met: boolean, group: number}} Criterion
- * @typedef {{screen: number, name: string, number: number | null,
- *   from: number, to: number, criteria: Criterion[], met: number, total: number,
- *   state: "met" | "working" | "not-started" | null,
- *   verify: {from: number, to: number} | null}} Slide
- */
+/** @typedef {{text: string, met: boolean, group: number}} Criterion */
+/** @typedef {{screen: number, name: string, number: number | null, from: number, to: number, criteria: Criterion[], met: number, total: number, state: "met" | "working" | "not-started" | null, verify: {from: number, to: number} | null}} Slide */
 
+// A document without second-level headings has no slides and renders plainly.
 /**
- * Reads a plan document as an overview and the slides beneath it. A document
- * with no second-level heading comes back with none, which is the signal to
- * render it plainly.
  * @param {string} text
- * @returns {{title: string, preamble: {from: number, to: number},
- *   slides: Slide[], phases: Slide[]}}
+ * @returns {{title: string, preamble: {from: number, to: number}, slides: Slide[], phases: Slide[]}}
  */
 export function parsePlan(text) {
   const { title, preamble, sections } = sliceSections(text);
@@ -134,11 +122,7 @@ export function parsePlan(text) {
   };
 }
 
-/**
- * The source lines the criteria heading and its list occupy, so a renderer can
- * lift exactly those out of the phase body.
- * @param {Slide | undefined} slide
- */
+/** @param {Slide | undefined} slide */
 export function criteriaSpans(slide) {
   return slide?.verify ?? null;
 }

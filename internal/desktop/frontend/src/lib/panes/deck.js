@@ -1,12 +1,8 @@
 import { criteriaSpans } from "./plan.js";
 import { dealt } from "./sections.js";
 
+// Criteria spanning beyond their phase never claim blocks from the next slide.
 /**
- * The deck is one rendered document dealt out by the source lines its blocks
- * already carry: the opening heading, the body, and the criteria the phase
- * states, each into the slide whose span holds it. A criteria span reaching
- * past its own phase claims nothing in the next one, which is bucketed by the
- * line its blocks start on.
  * @param {string} html
  * @param {{slides: import("./plan.js").Slide[]}} parsed
  * @param {(html: string) => {html: string, from: number, to: number}[]} deal
@@ -43,7 +39,6 @@ export function partition(html, parsed, deal = dealt) {
 }
 
 /**
- * Screen 0 is the overview; slide at index n is screen n + 1.
  * @param {{from: number, to: number}[]} slides
  * @param {number} line
  */
@@ -53,10 +48,8 @@ export function screenFor(slides, line) {
   return at < 0 ? 0 : at + 1;
 }
 
+// Non-phase slides use their names because they have no defined sequence position.
 /**
- * A phase slide counts in phases, because that is what its heading numbers.
- * Anything else answers with its own name, which is the only honest label a
- * section has: it has no position in a sequence the document defines.
  * @param {{slides: {name: string, number: number | null}[], phases: unknown[]}} parsed
  * @param {number} screen
  */

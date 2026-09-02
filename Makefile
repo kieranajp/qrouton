@@ -14,7 +14,7 @@ BOUND    := $(wildcard internal/desktop/*.go internal/status/*.go internal/deskt
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
-.PHONY: build eval front front-check test race vet fmt check app archive dist install uninstall clean
+.PHONY: build eval front front-check comment-check test race vet fmt check app archive dist install uninstall clean
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
@@ -71,7 +71,11 @@ fmt:
 front-check: $(FRONTEND)/node_modules
 	cd $(FRONTEND) && npm run check && npm run test:unit && npm run test:browser
 
-check: test race vet build front-check
+comment-check: $(FRONTEND)/node_modules
+	go run ./cmd/commentdiscipline -policy comment-discipline.json -root .
+	cd $(FRONTEND) && npm run test:comments && npm run check:comments
+
+check: comment-check test race vet build front-check
 	@test -z "$$(gofmt -l .)" || { echo "gofmt:"; gofmt -l .; exit 1; }
 	git diff --check
 

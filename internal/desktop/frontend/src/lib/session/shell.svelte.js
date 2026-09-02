@@ -32,11 +32,6 @@ import {
 } from "../terminal-focus.js";
 import { copyText, Events } from "../wails.js";
 
-/**
- * shell is the session screen: the panes it splits the window into, the tabs Go
- * says are open, the documents this session has written, and whichever overlay
- * is covering the conversation.
- */
 export function shell() {
   const session = chrome();
   let fields = $derived(session.fields);

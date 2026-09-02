@@ -20,22 +20,12 @@ const BLOCK = [
 const SKIP = "script, style, textarea, input, button, [aria-hidden='true']";
 const MATCH = "mark[data-document-find]";
 
-/**
- * @typedef {{count: number, current: number}} FindState
- * @typedef {{
- *   refresh: (query: string) => FindState | Promise<FindState>,
- *   move: (by: number) => FindState | Promise<FindState>,
- *   clear: () => void | Promise<void>,
- * }} FindAdapter
- */
+/** @typedef {{count: number, current: number}} FindState */
+/** @typedef {{refresh: (query: string) => FindState | Promise<FindState>, move: (by: number) => FindState | Promise<FindState>, clear: () => void | Promise<void>}} FindAdapter */
 
 /**
  * @template Match
- * @param {{
- *   search: (query: string) => Match[] | Promise<Match[]>,
- *   activate: (matches: Match[], index: number) => void | Promise<void>,
- *   reset: () => void | Promise<void>,
- * }} provider
+ * @param {{search: (query: string) => Match[] | Promise<Match[]>, activate: (matches: Match[], index: number) => void | Promise<void>, reset: () => void | Promise<void>}} provider
  * @returns {FindAdapter}
  */
 export function createFindAdapter(provider) {
@@ -90,10 +80,8 @@ export function clearMatches(root) {
   for (const parent of parents) parent.normalize();
 }
 
+// A search unit preserves inline markup and never crosses block boundaries.
 /**
- * Marks literal, case-insensitive matches without flattening the document's
- * inline markup. A block is one search unit, so a phrase can cross emphasis or
- * syntax spans but cannot join the end of one paragraph to the next.
  * @param {HTMLElement} root
  * @param {string} query
  * @returns {HTMLElement[][]}
@@ -170,8 +158,6 @@ export function activateMatch(matches, index) {
 }
 
 /**
- * Creates the default adapter used by document panes that do not provide
- * mode-specific find behavior.
  * @param {HTMLElement} root
  * @returns {FindAdapter}
  */

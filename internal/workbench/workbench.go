@@ -46,13 +46,8 @@ func FormatFor(name string) (DocumentFormat, bool) {
 	return format, ok
 }
 
-// WindowOptions describes a window the agent opens. Command belongs to a
-// terminal window and Content to a document one. CloseOnExit closes a terminal
-// window whose process exits zero; a non-zero exit keeps it open regardless.
-// Attention marks a window that needs the user's eye without taking focus.
-// Source names the session file the window shows, relative to the session root,
-// so a second request for that file selects this window instead of opening
-// another. Badge leads the tab in the artifact's own colour, ahead of Label.
+// WindowOptions describes an agent-opened terminal or document.
+// Source deduplicates document windows; Badge precedes Label in the tab.
 type WindowOptions struct {
 	Kind    WindowKind     `json:"kind"`
 	Label   string         `json:"label"`
@@ -124,11 +119,7 @@ type WindowHost interface {
 	Picker(ctx context.Context, req PickerRequest) error
 }
 
-// PickerRequest is an escalation waiting on a session. Name is what the agent
-// proposes to call the work and Prefix the prefix a branch is cut with, both of
-// which a session with repositories already has answers for. A caller's
-// deadline keeps a stale request from being drawn; zero is a picker the user
-// opened directly and remains live until they answer it.
+// PickerRequest expires agent requests at Deadline; direct user requests have no deadline.
 type PickerRequest struct {
 	SessionRoot string    `json:"session_root"`
 	Name        string    `json:"name,omitempty"`

@@ -61,13 +61,8 @@ func copyFile(src, dst string) error {
 	return closeErr
 }
 
-// MaterializeAssets snapshots the prompt source directory, then stamps it into
-// the workspace through the same code a real launch uses, so a graded session
-// sees byte-identical discovery assets. It returns the snapshot's content hash,
-// which the report records to tie results to the prompts that produced them.
-//
-// Eval always exercises the RPI workflow, so the orchestrator prompt owns the
-// discovery files regardless of what the fixture manifest says.
+// MaterializeAssets stamps a hashed prompt snapshot with the production launch path.
+// Evals always give the orchestrator prompt ownership of discovery files.
 func MaterializeAssets(assetsDir, workspace, snapshot string) (string, error) {
 	if err := CopyTree(assetsDir, snapshot); err != nil {
 		return "", err

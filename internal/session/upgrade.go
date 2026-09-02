@@ -16,11 +16,8 @@ type RepoRef struct {
 	Org, Name string
 }
 
-// UpgradeRepos moves the named reference checkouts onto the session branch, cut
-// from each repository's own remote default branch as every other editing
-// repository's is — so a repo taken up shares its siblings' base rather than a
-// revision only it was pinned to. Every ref is checked before any is touched, and
-// the manifest is left to the caller to rewrite once these are on disk.
+// UpgradeRepos validates every reference before moving any checkout to the session branch.
+// The caller rewrites the manifest after all disk changes succeed.
 func UpgradeRepos(cfg *config.Config, m Manifest, refs []RepoRef, branch string, progress ProgressFunc) error {
 	if len(refs) == 0 {
 		return nil

@@ -6,11 +6,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-// Confirm adds the picked repositories to a live session: the composed
-// repositories and the work's details land in one atomic manifest write, after a
-// take-up that has already recorded itself. Escalating adds RPI mode and the
-// confirmed stanza to that same write, so a polling reader never sees repos added
-// while the mode still says assistant.
+// Confirm records repositories, work details, mode, and escalation atomically.
 func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.ProgressFunc) error {
 	// Loaded here, not carried in: a picker can sit open for half an hour while
 	// the workbench keeps rewriting the manifest underneath it.
@@ -56,11 +52,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	return nil
 }
 
-// takeUp re-checks out the repositories the session already reads and records
-// them, ahead of any clone and in a write of its own. Both halves matter: a
-// refusal leaves the session holding no checkout the manifest never learned
-// about, and a clone that then fails cannot leave the file calling a checkout
-// pinned that is sitting on the session branch.
+// takeUp records upgraded checkouts before cloning additions can fail.
 func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.ProgressFunc) error {
 	if len(d.Upgrades) == 0 {
 		return nil
@@ -77,9 +69,7 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 	})
 }
 
-// Cancel records the cancelled outcome — the stanza alone, mode and
-// repositories untouched. Only an escalation has a caller waiting on that
-// stanza; the add-repos button's cancel is nobody's business.
+// Cancel records only an escalation outcome; add-repository cancellation needs no record.
 func Cancel(dir string, escalate bool) error {
 	if !escalate {
 		return nil

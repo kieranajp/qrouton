@@ -309,11 +309,7 @@ func (m *windowManager) closeWindow(ctx context.Context, input windowNameInput) 
 	return fmt.Sprintf(closedFormat, name), nil
 }
 
-// liveWindow resolves a registered name to a window that is still open, pruning
-// the entry and saying so if it is not. Nothing in the registry learns that the
-// user closed a window by hand, or that a command finished and took its window
-// with it; without this the agent's next read reaches a dead id and surfaces a
-// transport failure instead of a reason.
+// liveWindow prunes registry entries for windows closed outside the manager.
 func (m *windowManager) liveWindow(ctx context.Context, name string) (string, error) {
 	m.mu.Lock()
 	entry := m.windows[name]
@@ -381,17 +377,8 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	return fmt.Sprintf(notifiedFormat, message), nil
 }
 
-// escalate opens the picker pre-filled with name, keeping keyboard focus on it —
-// the deliberate exception to the conversation keeping focus, since no agent is
-// waiting for the keyboard back once the picker is up. It then blocks until the
-// manifest records an escalation outcome newer than the spawn.
-//
-// On confirm, the agent supervisor kills and relaunches this MCP server's parent
-// process, so usually the handoff is the caller disappearing and this call never
-// returns. It is a race, not a guarantee: if the relaunch is slow or never
-// happens, the poll observes the confirmed outcome and the caller reads the
-// message below. The escalation holds either way — the fresh context is owed by
-// a marker on disk, not by this process dying.
+// escalate gives focus to a pre-filled picker and waits for a newer outcome.
+// Confirmation survives the race between polling and the supervisor replacing this process.
 func (m *windowManager) escalate(ctx context.Context, input escalateInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {

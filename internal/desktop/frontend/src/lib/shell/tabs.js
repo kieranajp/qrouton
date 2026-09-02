@@ -1,7 +1,5 @@
+// The selected tab remains visible even when it falls beyond capacity.
 /**
- * split divides the tabs into the ones the strip draws and the ones its menu
- * lists, each carrying its index in the whole strip so a click still names the
- * window it meant. The selected tab is always drawn.
  * @template T
  * @param {T[]} tabs
  * @param {number} selected
@@ -27,10 +25,5 @@ export function dominantStatus(tabs) {
   return STATUS_PRIORITY.find((status) => tabs.some((tab) => tab.status === status)) ?? "";
 }
 
-/**
- * tabLabel is a tab's whole text: its artifact badge, when it has one, then the
- * title. The strip draws the two apart so the badge can carry its own colour;
- * a tooltip and a menu row want them back together.
- * @param {{badge?: string, label?: string}} tab
- */
+/** @param {{badge?: string, label?: string}} tab */
 export const tabLabel = ({ badge, label }) => (badge ? `${badge} ${label}` : (label ?? ""));

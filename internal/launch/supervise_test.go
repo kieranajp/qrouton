@@ -229,11 +229,7 @@ func TestSuperviseDeliversARepositoryNoticeOnTheResumedConversationOnce(t *testi
 	}
 }
 
-// The escalation can land while no supervisor is watching the transition — a
-// workspace restart between the picker's confirm and the next launch, or a
-// signal that never arrived. The launcher then passes resume, the manifest
-// already reads "rpi", and there is no change left to observe: the handoff used
-// to silently resume the assistant's conversation into the fresh orchestrator.
+// A pending handoff prevents resume when escalation completed before this launch.
 func TestSuperviseStartsFreshWhenEscalationPrecedesTheLaunch(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)
 	if err := session.SetMode(dir, session.ModeRPI); err != nil {
@@ -443,11 +439,7 @@ func TestSignalSupervisorSignalsNobodyWithoutALiveSupervisor(t *testing.T) {
 	}
 }
 
-// A transcript can go missing under a live session — the sidecar directory is
-// left behind, the conversation file is not. `claude --continue` then exits
-// nonzero, and a session the launcher only ever opens with resume was shut out
-// of its own workspace for good: the terminal ended on the error, and the only
-// way back in was to hand-write an initial prompt.
+// A missing transcript gets a fresh launch instead of ending the terminal.
 func TestSuperviseStartsFreshWhenThereIsNoConversationToResume(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
 	var argvs [][]string

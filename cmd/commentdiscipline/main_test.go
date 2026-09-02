@@ -19,7 +19,7 @@ func TestRunReportsSortedDiagnostics(t *testing.T) {
 	writeFile(t, filepath.Join(root, "z.go"), "package z\n// one\n// two\n")
 	writeFile(t, filepath.Join(root, "a.go"), "package a\n// one\n// two\n")
 	policy := filepath.Join(root, "policy.json")
-	writeFile(t, policy, `{"maxCommentRun":1,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`)
+	writeFile(t, policy, `{"schemaVersion":1,"maxCommentRun":1,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`)
 	var stdout bytes.Buffer
 	err := run([]string{"-root", root, "-policy", policy}, &stdout, &bytes.Buffer{})
 	if err == nil {
@@ -35,7 +35,7 @@ func TestRunPassesCleanTree(t *testing.T) {
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "clean.go"), "package clean\n")
 	policy := filepath.Join(root, "policy.json")
-	writeFile(t, policy, `{"maxCommentRun":1,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`)
+	writeFile(t, policy, `{"schemaVersion":1,"maxCommentRun":1,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`)
 	if err := run([]string{"-root", root, "-policy", policy}, &bytes.Buffer{}, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}

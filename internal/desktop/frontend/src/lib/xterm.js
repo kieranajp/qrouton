@@ -35,10 +35,8 @@ export function decode(encoded) {
   return buffer;
 }
 
+// A retained replay replaces remounted terminal contents; ordinary chunks append.
 /**
- * paint writes one PTY event. A retained replay replaces the empty terminal a
- * remount creates; ordinary chunks remain compatible with the conversation's
- * string payload.
  * @param {Terminal} term
  * @param {string | {encoded: string, replay?: boolean}} payload
  */
