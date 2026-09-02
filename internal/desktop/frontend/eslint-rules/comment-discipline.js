@@ -1,6 +1,6 @@
 const GUIDANCE = "See AGENTS.md: comments default to none, state what IS, and stay one line where earned or two for a real trap.";
 
-const MACHINE_LINE = /^\s*(?:eslint-(?:disable|enable)(?:\b|$)|eslint-env\b|globals?\s|exported\s|(?:prettier|stylelint)-(?:ignore|disable|enable)\b|(?:istanbul|c8|v8)\s|@(?:ts-|jsx|typedef\b|type\b|param\b|returns?\b|template\b|property\b|arg(?:ument)?\b|return\b|import\b|implements\b|extends\b|satisfies\b)|#!|(?:url|source|component|props)=|svelte-(?:ignore|warning)\b)/i;
+const MACHINE_LINE = /^\s*(?:eslint-(?:disable|enable)(?:\b|$)|eslint-env\b|globals?\s|exported\s|(?:prettier|stylelint)-(?:ignore|disable|enable)\b|(?:istanbul|c8|v8)\s|@(?:ts-|jsx|typedef\b|type\b|param\b|returns?\b|template\b|property\b|arg(?:ument)?\b|return\b|import\b|implements\b|extends\b|satisfies\b)|(?:url|source|component|props)=|svelte-(?:ignore|warning)\b)/i;
 const URL = /https?:\/\/[^\s<>()]+/gi;
 
 const text = (comment) => {

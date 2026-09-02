@@ -18,6 +18,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     ],
     invalid: [
       { code: "// one\n// two\n// three\nconst value = 1;", options: [{ max: 2 }], errors: [{ messageId: "tooLong" }] },
+      { code: "// one\n// #! not a shebang\n// two\nconst value = 1;", options: [{ max: 1 }], errors: [{ messageId: "tooLong" }] },
       { code: "/**\n * one\n * two\n */\nconst value = 1;", options: [{ max: 2 }], errors: [{ messageId: "tooLong" }] },
     ],
   });
@@ -31,6 +32,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     ],
     invalid: [
       { code: "// The double render was a giveaway.", options: [{ phrases: ["was a giveaway"] }], errors: [{ messageId: "narration" }] },
+      { code: "// #! turns out this is ordinary prose", options: [{ phrases: ["turns out"] }], errors: [{ messageId: "narration" }] },
       { code: "/** @type {Thing}\n * The problem was a stale ref.\n */", options: [{ phrases: ["the problem was"] }], errors: [{ messageId: "narration" }] },
     ],
   });
@@ -44,6 +46,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     ],
     invalid: [
       { code: "// See models/journal-view.js for display shapes.", options: [{ extensions: ["js"] }], errors: [{ messageId: "pointer" }] },
+      { code: "// #! src/tool.js is ordinary prose", options: [{ extensions: ["js"] }], errors: [{ messageId: "pointer" }] },
       { code: "// See https://example.com/a/b.js and models/journal-view.js.", options: [{ extensions: ["js"] }], errors: [{ messageId: "pointer" }] },
       { code: "// The guard is at AuthStore.js:142.", options: [{ extensions: ["js"] }], errors: [{ messageId: "pointer" }] },
     ],
