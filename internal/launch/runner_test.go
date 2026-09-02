@@ -174,6 +174,19 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 	}
 }
 
+func TestRunnerLaunchKeepsClaudeInTheSessionRoot(t *testing.T) {
+	t.Setenv(claudeMaintainProjectWorkingDirEnvVar, "0")
+	r := Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}
+	_, env, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := claudeMaintainProjectWorkingDirEnvVar + "=" + claudeMaintainProjectWorkingDirValue
+	if !slices.Contains(env, want) {
+		t.Fatalf("Claude launch environment missing %q: %v", want, env)
+	}
+}
+
 func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	r := Runner{ID: "claude", Command: []string{"claude"}}
 	bin := "/opt/qro uton/$peculiar/qrouton"
