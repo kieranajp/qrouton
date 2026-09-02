@@ -13,24 +13,25 @@ import (
 	"github.com/kieranajp/qrouton/internal/lineartools"
 )
 
-// SettingsView is config.Config plus Linear's coding-tools.json on the wire:
-// each structured value collapses to the text field the panel edits.
+// SettingsView carries the editable config and Linear document on the wire.
 type SettingsView struct {
-	Orgs        []string `json:"orgs"`
-	Root        string   `json:"root"`
-	Editor      string   `json:"editor"`
-	Launch      string   `json:"launch"`
-	Linear      string   `json:"linear"`
-	LinearPath  string   `json:"linearPath"`
-	LinearError string   `json:"linearError,omitempty"`
+	Orgs          []string             `json:"orgs"`
+	Root          string               `json:"root"`
+	Editor        string               `json:"editor"`
+	Launch        string               `json:"launch"`
+	Linear        string               `json:"linear"`
+	LinearPath    string               `json:"linearPath"`
+	LinearError   string               `json:"linearError,omitempty"`
+	StickerLabels config.StickerLabels `json:"stickerLabels"`
 }
 
 type SettingsInput struct {
-	Orgs   []string `json:"orgs"`
-	Root   string   `json:"root"`
-	Editor string   `json:"editor"`
-	Launch string   `json:"launch"`
-	Linear string   `json:"linear"`
+	Orgs          []string             `json:"orgs"`
+	Root          string               `json:"root"`
+	Editor        string               `json:"editor"`
+	Launch        string               `json:"launch"`
+	Linear        string               `json:"linear"`
+	StickerLabels config.StickerLabels `json:"stickerLabels"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -45,37 +46,41 @@ type Settings struct {
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	quit           func()
+	wakeChrome     func()
 	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit func()) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func()) *Settings {
 	return &Settings{
 		cfg:            cfg,
 		emit:           emit,
 		validateEditor: validateEditor,
 		validateLaunch: validateLaunch,
 		quit:           quit,
+		wakeChrome:     wakeChrome,
 		linear:         lineartools.New(linearCommand, linearEnv),
 	}
 }
 
 func (s *Settings) Load() SettingsView {
+	cfg := s.cfg.Snapshot()
 	launch := ""
-	if len(s.cfg.Launch) > 0 {
-		if b, err := json.MarshalIndent(s.cfg.Launch, "", "  "); err == nil {
+	if len(cfg.Launch) > 0 {
+		if b, err := json.MarshalIndent(cfg.Launch, "", "  "); err == nil {
 			launch = string(b)
 		}
 	}
 	linear, linearErr := s.linear.Load()
 	return SettingsView{
-		Orgs:        append([]string(nil), s.cfg.Orgs...),
-		Root:        s.cfg.Root,
-		Editor:      strings.Join(s.cfg.Editor, " "),
-		Launch:      launch,
-		Linear:      linear,
-		LinearPath:  lineartools.ConfigPath,
-		LinearError: errorText(linearErr),
+		Orgs:          cfg.Orgs,
+		Root:          cfg.Root,
+		Editor:        strings.Join(cfg.Editor, " "),
+		Launch:        launch,
+		Linear:        linear,
+		LinearPath:    lineartools.ConfigPath,
+		LinearError:   errorText(linearErr),
+		StickerLabels: cfg.EffectiveStickerLabels(),
 	}
 }
 
@@ -106,29 +111,60 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 			}
 		}
 	}
+	stickerLabels, err := validateStickerLabels(in.StickerLabels)
+	if err != nil {
+		return SaveResult{}, err
+	}
 
 	linear, err := lineartools.Validate(in.Linear)
 	if err != nil {
 		return SaveResult{}, fmt.Errorf("linear: %w", err)
 	}
-	if err := s.linear.Save(linear); err != nil {
-		return SaveResult{}, fmt.Errorf("linear: %w", err)
-	}
-
-	apply, err := saveConfig(s.cfg, func(next *config.Config) {
+	result := SaveResult{}
+	err = saveConfig(s.cfg, func(next *config.Config) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
+		next.StickerLabels = &stickerLabels
+	}, func() error {
+		if err := s.linear.Save(linear); err != nil {
+			return fmt.Errorf("linear: %w", err)
+		}
+		return nil
+	}, func(current, _ *config.Config) {
+		changed := !slices.Equal(current.Orgs, orgs)
+		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
+		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)
+		if changed {
+			s.emit(orgsChangedEvent, orgs)
+		}
+		if labelsChanged && s.wakeChrome != nil {
+			s.wakeChrome()
+		}
 	})
 	if err != nil {
 		return SaveResult{}, err
 	}
-	changed := !slices.Equal(s.cfg.Orgs, orgs)
-	restart := expandedRoot != filepath.Clean(s.cfg.Root)
-	apply()
-	if changed {
-		s.emit(orgsChangedEvent, orgs)
-	}
+	return result, nil
+}
 
-	return SaveResult{RestartRequired: restart}, nil
+func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, error) {
+	labels.Star = strings.TrimSpace(labels.Star)
+	labels.Bookmark = strings.TrimSpace(labels.Bookmark)
+	labels.Question = strings.TrimSpace(labels.Question)
+	labels.Exclamation = strings.TrimSpace(labels.Exclamation)
+	for _, field := range []struct {
+		name  string
+		value string
+	}{
+		{name: "star", value: labels.Star},
+		{name: "bookmark", value: labels.Bookmark},
+		{name: "question", value: labels.Question},
+		{name: "exclamation", value: labels.Exclamation},
+	} {
+		if field.value == "" {
+			return config.StickerLabels{}, fmt.Errorf("%s: cannot be empty", field.name)
+		}
+	}
+	return labels, nil
 }
 
 // Quit runs the same teardown closing the conversation window runs, not a bare
@@ -141,17 +177,27 @@ func (s *Settings) Quit() { s.quit() }
 // scanner and boot path closed over the boot value, so a session created
 // against a live-mutated root would not appear in a rail still scanning the old
 // one.
-func saveConfig(cfg *config.Config, mutate func(*config.Config)) (apply func(), err error) {
-	next := *cfg
-	mutate(&next)
-	if err := config.Save(&next); err != nil {
-		return nil, err
-	}
-	return func() {
-		root := cfg.Root
-		*cfg = next
-		cfg.Root = root
-	}, nil
+func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
+	publish func(current, live *config.Config)) error {
+	return cfg.Transact(func(snapshot *config.Config) error {
+		next := snapshot.Snapshot()
+		mutate(next)
+		if persist != nil {
+			if err := persist(); err != nil {
+				return err
+			}
+		}
+		if err := config.Save(next); err != nil {
+			return err
+		}
+		live := next.Snapshot()
+		live.Root = snapshot.Root
+		cfg.Replace(live)
+		if publish != nil {
+			publish(snapshot, live)
+		}
+		return nil
+	})
 }
 
 // validateOwnersAndRoot is the two answers both the settings panel and the

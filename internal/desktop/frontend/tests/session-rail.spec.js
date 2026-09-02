@@ -40,6 +40,328 @@ test("a session that is not running says how long it has been idle", async ({ pa
   await expect(idle).not.toContainText("Not running");
 });
 
+test("session and sticker actions are sibling native buttons with separate names", async ({ page }) => {
+  const session = page.getByRole("button", { name: /^Checkout migration ·/ });
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await expect(session).toBeVisible();
+  await expect(sticker).toBeVisible();
+  expect(
+    await session.evaluate((button, stickerButton) => ({
+      sameParent: button.parentElement === stickerButton.parentElement,
+      nested: button.contains(stickerButton) || stickerButton.contains(button),
+    }), await sticker.elementHandle()),
+  ).toEqual({ sameParent: true, nested: false });
+  await expect(sticker).toHaveAttribute(
+    "title",
+    "Set sticker",
+  );
+});
+
+test("tooltips stay succinct while accessible names keep long session context", async ({ page }) => {
+  const longName = "Checkout migration for the international subscription storefront";
+  await page.evaluate((name) => window.sessionRail.rename("checkout", name), longName);
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await expect(sticker).toHaveAttribute("title", "Set sticker");
+  await expect(sticker).toHaveAccessibleName(
+    `Set sticker for ${longName}; current sticker: No sticker`,
+  );
+
+  await sticker.click();
+  await expect(sticker).toHaveAttribute("title", "Important");
+  await expect(sticker).toHaveAccessibleName(
+    `Change sticker for ${longName}; current sticker: Blue star — Important`,
+  );
+});
+
+test("sticker activation never selects or shows its session", async ({ page }) => {
+  const secondSticker = page.getByRole("button", {
+    name: "Set sticker for Session 2; current sticker: No sticker",
+  });
+  await secondSticker.click();
+  await expect(secondSticker).toHaveAttribute("aria-busy", "true");
+  await expect(
+    page.getByRole("button", {
+      name: "Change sticker for Session 2; current sticker: Blue star — Important",
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Checkout migration ·/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "cycle", slug: "session-2" },
+  ]);
+
+  await page.getByRole("button", { name: /^Session 2 ·/ }).click();
+  await expect(page.getByRole("button", { name: /^Session 2 ·/ })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "cycle", slug: "session-2" },
+    { method: "show", slug: "session-2" },
+  ]);
+});
+
+test("pointer sticker activation preserves conversation focus", async ({ page }) => {
+  const focus = page.getByRole("button", { name: "Conversation focus" });
+  await focus.focus();
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await sticker.click();
+  await expect(focus).toBeFocused();
+});
+
+test("Tab reaches the sticker and Enter and Space each queue one activation", async ({ page }) => {
+  const session = page.getByRole("button", { name: /^Checkout migration ·/ });
+  await session.focus();
+  await page.keyboard.press("Tab");
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await expect(sticker).toBeFocused();
+
+  await page.keyboard.press("Enter");
+  await expect(sticker).toHaveAccessibleName(
+    "Change sticker for Checkout migration; current sticker: Blue star — Important",
+  );
+  await page.keyboard.press("Space");
+  await expect(sticker).toHaveAccessibleName(
+    "Change sticker for Checkout migration; current sticker: Green bookmark — Read later",
+  );
+  await expect.poll(() => page.evaluate(() => window.sessionRailBridge.calls().length)).toBe(2);
+});
+
+test("the exact cycle renders fixed shapes and colours, including clear", async ({ page }) => {
+  let sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  const states = [
+    ["Blue star — Important", "Important", "--sticker-blue", "star"],
+    ["Green bookmark — Read later", "Read later", "--sticker-green", "bookmark"],
+    ["Orange question mark — Needs follow-up", "Needs follow-up", "--sticker-orange", "question"],
+    ["Red exclamation mark — Has bugs", "Has bugs", "--sticker-red", "exclamation"],
+  ];
+  for (const [current, meaning, colour, id] of states) {
+    await sticker.click();
+    sticker = page.getByRole("button", { name: `Change sticker for Checkout migration; current sticker: ${current}` });
+    await expect(sticker).toHaveAttribute("title", meaning);
+    await expect(sticker.locator("svg")).toHaveAttribute("aria-hidden", "true");
+    await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", id);
+    await expect(sticker.locator(`svg:has([d])`)).toHaveCount(1);
+    expect(await sticker.evaluate((button) => getComputedStyle(button).color)).toBe(
+      await token(page, colour),
+    );
+    expect(id).toBeTruthy();
+  }
+
+  await sticker.click();
+  sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "none");
+  await expect(sticker.locator("path")).toHaveAttribute("fill", "none");
+  await expect(sticker.locator("path")).toHaveAttribute("stroke", "currentColor");
+  await expect(page.getByRole("status")).toHaveText("No sticker");
+});
+
+test("rapid activations stay ordered in one per-session queue", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.setDelay(80));
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await sticker.click();
+  await sticker.click();
+  await sticker.click();
+  await sticker.click();
+  await expect(sticker).toHaveAttribute("aria-busy", "true");
+  await expect(
+    page.getByRole("button", {
+      name: "Change sticker for Checkout migration; current sticker: Red exclamation mark — Has bugs",
+    }),
+  ).not.toHaveAttribute("aria-busy", "true");
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "cycle", slug: "checkout" },
+    { method: "cycle", slug: "checkout" },
+    { method: "cycle", slug: "checkout" },
+    { method: "cycle", slug: "checkout" },
+  ]);
+});
+
+test("committed feedback is anchored to its sticker and uses current meanings", async ({ page }) => {
+  await page.evaluate(() => window.sessionRail.setStickerLabels({ star: "Ship today" }));
+  const sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await sticker.click();
+  const status = page.getByRole("status");
+  await expect(status).toHaveText("Ship today");
+  await expect(status).toHaveAttribute("aria-live", "polite");
+  await expect(status).toHaveAttribute("aria-atomic", "true");
+  expect(await status.evaluate((node) => Boolean(node.closest(".row")?.querySelector(".sticker")))).toBe(true);
+  await expect(status).toBeHidden({ timeout: 2500 });
+});
+
+test("a saved chrome label replacement updates an open rail without changing its sticker art", async ({ page }) => {
+  let sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await sticker.click();
+  sticker = page.getByRole("button", {
+    name: "Change sticker for Checkout migration; current sticker: Blue star — Important",
+  });
+  const before = await sticker.evaluate((button) => ({
+    colour: getComputedStyle(button).color,
+    shape: button.querySelector("svg")?.dataset.sticker,
+  }));
+
+  await page.evaluate(() =>
+    window.sessionRailBridge.saveStickerLabels({
+      star: "Ship today",
+      bookmark: "Read after launch",
+      question: "Needs an answer",
+      exclamation: "Broken here",
+    }),
+  );
+
+  sticker = page.getByRole("button", {
+    name: "Change sticker for Checkout migration; current sticker: Blue star — Ship today",
+  });
+  await expect(sticker).toBeVisible();
+  expect(
+    await sticker.evaluate((button) => ({
+      colour: getComputedStyle(button).color,
+      shape: button.querySelector("svg")?.dataset.sticker,
+    })),
+  ).toEqual(before);
+
+  await sticker.click();
+  await expect(page.getByRole("status")).toHaveText("Read after launch");
+});
+
+test("empty and selected stickers stay usable at minimum and default rail widths", async ({ page }) => {
+  const row = page.locator(".row").first();
+  const sticker = row.locator(".sticker");
+  const name = row.locator(".name");
+
+  for (const width of [160, 200]) {
+    await page.evaluate((value) =>
+      document.documentElement.style.setProperty("--w-rail", `${value}px`),
+    width);
+    await expect(sticker).toBeVisible();
+    const boxes = await row.evaluate((element) => {
+      const rowBox = element.getBoundingClientRect();
+      const textBox = element.querySelector(".text").getBoundingClientRect();
+      const stickerBox = element.querySelector(".sticker").getBoundingClientRect();
+      return {
+        topGap: stickerBox.top - rowBox.top,
+        rightGap: rowBox.right - stickerBox.right,
+        textRight: textBox.right,
+        stickerLeft: stickerBox.left,
+        stickerWidth: stickerBox.width,
+        stickerHeight: stickerBox.height,
+      };
+    });
+    expect(boxes.textRight).toBeLessThanOrEqual(boxes.stickerLeft);
+    expect(boxes.topGap).toBeLessThanOrEqual(6);
+    expect(boxes.rightGap).toBeLessThanOrEqual(4);
+    expect(boxes.stickerWidth).toBe(24);
+    expect(boxes.stickerHeight).toBe(24);
+    expect(
+      await name.evaluate((element) => {
+        const style = getComputedStyle(element);
+        return [style.overflowX, style.textOverflow, style.whiteSpace];
+      }),
+    ).toEqual(["hidden", "ellipsis", "nowrap"]);
+  }
+
+  await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "none");
+  await expect(sticker.locator("path")).toHaveAttribute("fill", "none");
+  await sticker.click();
+  await expect(sticker).toHaveAccessibleName(
+    "Change sticker for Checkout migration; current sticker: Blue star — Important",
+  );
+  await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "star");
+  await expect(sticker.locator("path")).toHaveAttribute("fill", "currentColor");
+  const feedback = page.getByRole("status");
+  await expect(feedback).toHaveText("Important");
+  await page.evaluate(() => document.documentElement.style.setProperty("--w-rail", "160px"));
+  await sticker.click();
+  await expect(feedback).toHaveText("Read later");
+  const longMeaning = "Needs follow-up with the international release notes";
+  await page.evaluate((question) => window.sessionRail.setStickerLabels({ question }), longMeaning);
+  await sticker.click();
+  await expect(sticker).toHaveAttribute("title", longMeaning);
+  await expect(feedback).toHaveText(longMeaning);
+  const [railBox, feedbackBox] = await Promise.all([
+    page.locator(".rail").boundingBox(),
+    feedback.boundingBox(),
+  ]);
+  expect(feedbackBox.x).toBeGreaterThanOrEqual(railBox.x);
+  expect(feedbackBox.x + feedbackBox.width).toBeLessThanOrEqual(railBox.x + railBox.width);
+});
+
+test("feedback flips above a fully visible row at the bottom of the scrollport", async ({ page }) => {
+  const list = page.getByLabel("Sessions");
+  const row = page.locator(".row").nth(8);
+  await row.evaluate((element) => {
+    const scrollport = element.closest(".session-list");
+    const rowBox = element.getBoundingClientRect();
+    const scrollBox = scrollport.getBoundingClientRect();
+    scrollport.scrollTop += rowBox.bottom - scrollBox.bottom;
+  });
+
+  const [listBox, rowBox] = await Promise.all([list.boundingBox(), row.boundingBox()]);
+  expect(rowBox.y).toBeGreaterThanOrEqual(listBox.y);
+  expect(rowBox.y + rowBox.height).toBeLessThanOrEqual(listBox.y + listBox.height + 1);
+
+  await row.locator(".sticker").click();
+  const feedback = row.getByRole("status");
+  await expect(feedback).toHaveText("Important");
+  const feedbackBox = await feedback.boundingBox();
+  expect(feedbackBox.y + feedbackBox.height).toBeLessThanOrEqual(rowBox.y);
+  expect(feedbackBox.y).toBeGreaterThanOrEqual(listBox.y);
+});
+
+test("an unbroken configured meaning wraps inside 160px feedback", async ({ page }) => {
+  const meaning = "NeedsFollowUpBeforeTheInternationalSubscriptionReleaseCanShip";
+  await page.evaluate(({ meaning }) => {
+    document.documentElement.style.setProperty("--w-rail", "160px");
+    window.sessionRail.setStickerLabels({ star: meaning });
+  }, { meaning });
+
+  await page.locator(".row").first().locator(".sticker").click();
+  const feedback = page.getByRole("status");
+  await expect(feedback).toHaveText(meaning);
+  const dimensions = await feedback.evaluate((node) => ({
+    clientWidth: node.clientWidth,
+    scrollWidth: node.scrollWidth,
+    clientHeight: node.clientHeight,
+    scrollHeight: node.scrollHeight,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.clientWidth);
+  expect(dimensions.scrollHeight).toBeLessThanOrEqual(dimensions.clientHeight);
+});
+
+test("a failed mutation keeps the icon and reports an anchored alert", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNext());
+  const sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await sticker.click();
+  const alert = page.getByRole("alert");
+  await expect(alert).toHaveText("Sticker could not be changed");
+  await expect(sticker).toHaveAccessibleName(
+    "Set sticker for Checkout migration; current sticker: No sticker",
+  );
+  await expect(sticker).not.toHaveAttribute("aria-busy", "true");
+  expect(await alert.evaluate((node) => Boolean(node.closest(".row")?.querySelector(".sticker")))).toBe(true);
+});
+
+test("the sticker control shares the row context menu", async ({ page }) => {
+  const sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await sticker.click({ button: "right" });
+  await expect(page.getByRole("button", { name: "Reveal in Finder" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Clean up…" })).toBeVisible();
+});
+
 test("the badge carries the row's state", async ({ page }) => {
   const avatar = (name) => page.getByRole("button", { name }).locator(".avatar");
   const background = (locator) =>

@@ -1214,6 +1214,206 @@ func TestShowRefusesASlugItCannotResolve(t *testing.T) {
 	}
 }
 
+func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := sessionDir(t, root, "octopus-0192")
+
+	if got, err := reg.CycleSticker("octopus-0192"); err != nil || got != session.StickerStar {
+		t.Fatalf("CycleSticker() = %q, %v", got, err)
+	}
+	select {
+	case <-reg.touched:
+	case <-time.After(time.Second):
+		t.Fatal("successful sticker cycle did not touch chrome")
+	}
+	loaded, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Sticker != session.StickerStar {
+		t.Fatalf("persisted sticker = %q", loaded.Sticker)
+	}
+
+	if _, err := reg.CycleSticker("missing"); err == nil {
+		t.Fatal("CycleSticker accepted an unknown session")
+	}
+	select {
+	case <-reg.touched:
+		t.Fatal("failed sticker cycle touched chrome")
+	default:
+	}
+}
+
+func TestCycleStickerRejectsUnsafeSessionIdentifiers(t *testing.T) {
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "sessions")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	valid := sessionDir(t, root, "octopus")
+	escaped := filepath.Join(workspace, "escaped")
+	if err := os.Mkdir(escaped, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(escaped, session.Manifest{Slug: "../escaped"}); err != nil {
+		t.Fatal(err)
+	}
+	nested := filepath.Join(root, "nested", "child")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(nested, session.Manifest{Slug: "nested/child"}); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, slug := range []string{
+		"", ".", "..", "../escaped", `..\\escaped`, "nested/child", `nested\\child`,
+	} {
+		t.Run(slug, func(t *testing.T) {
+			if _, err := reg.CycleSticker(slug); err == nil {
+				t.Fatalf("CycleSticker(%q) accepted an unsafe identifier", slug)
+			}
+		})
+	}
+	select {
+	case <-reg.touched:
+		t.Fatal("refused sticker cycle touched chrome")
+	default:
+	}
+	for _, dir := range []string{valid, escaped, nested} {
+		m, err := session.Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if m.Sticker != "" {
+			t.Fatalf("refused sticker cycle changed %q to %q", dir, m.Sticker)
+		}
+	}
+}
+
+func TestCycleStickerAcceptsExistingDirectChildSessionIdentifiers(t *testing.T) {
+	for _, slug := range []string{"Octopus", "octopus_0192", "octopus--0192", "-octopus", "octopus-"} {
+		t.Run(slug, func(t *testing.T) {
+			root := t.TempDir()
+			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+			dir := sessionDir(t, root, slug)
+
+			got, err := reg.CycleSticker(slug)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != session.StickerStar {
+				t.Fatalf("CycleSticker(%q) = %q, want %q", slug, got, session.StickerStar)
+			}
+			manifest, err := session.Load(dir)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if manifest.Slug != slug || manifest.Sticker != session.StickerStar {
+				t.Fatalf("manifest = slug %q, sticker %q", manifest.Slug, manifest.Sticker)
+			}
+		})
+	}
+}
+
+func TestCycleStickerRejectsASymlinkOutsideTheSessionsRoot(t *testing.T) {
+	workspace := t.TempDir()
+	root := filepath.Join(workspace, "sessions")
+	if err := os.Mkdir(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	escaped := filepath.Join(workspace, "octopus")
+	if err := os.Mkdir(escaped, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(escaped, session.Manifest{Slug: "octopus"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(escaped, filepath.Join(root, "octopus")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+
+	if _, err := reg.CycleSticker("octopus"); err == nil {
+		t.Fatal("CycleSticker accepted a session symlink outside the sessions root")
+	}
+	m, err := session.Load(escaped)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Sticker != "" {
+		t.Fatalf("refused sticker cycle changed the escaped manifest to %q", m.Sticker)
+	}
+	select {
+	case <-reg.touched:
+		t.Fatal("refused sticker cycle touched chrome")
+	default:
+	}
+}
+
+func TestCycleStickerRejectsAMismatchedManifestSlug(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	dir := sessionDir(t, root, "octopus")
+	if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.Slug = "kraken"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := reg.CycleSticker("octopus"); err == nil {
+		t.Fatal("CycleSticker accepted a manifest for another session")
+	}
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if m.Slug != "kraken" || m.Sticker != "" {
+		t.Fatalf("refused sticker cycle changed the manifest to slug %q, sticker %q", m.Slug, m.Sticker)
+	}
+	select {
+	case <-reg.touched:
+		t.Fatal("refused sticker cycle touched chrome")
+	default:
+	}
+}
+
+func TestConcurrentStickerCyclesCommitEachCall(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := sessionDir(t, root, "octopus")
+
+	var wg sync.WaitGroup
+	errs := make(chan error, 10)
+	for range 10 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, err := reg.CycleSticker("octopus")
+			errs <- err
+		}()
+	}
+	wg.Wait()
+	close(errs)
+	for err := range errs {
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	loaded, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Sticker != "" {
+		t.Fatalf("10 cycles left sticker %q, want none", loaded.Sticker)
+	}
+}
+
 // Two sessions are two agents on two addresses. Sharing either is two rail rows
 // drawing one conversation.
 func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {

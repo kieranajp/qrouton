@@ -131,6 +131,64 @@ func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {
 	}
 }
 
+func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	oldRoot := t.TempDir()
+	newRoot := filepath.Join(t.TempDir(), "new-root")
+	cfg := &config.Config{Orgs: []string{"initial"}, Root: oldRoot}
+	relaunchEntered := make(chan struct{})
+	successorReady := make(chan struct{})
+	firstDone := make(chan error, 1)
+	f := newFirstRun(cfg, newSessions(), func() error {
+		close(relaunchEntered)
+		<-successorReady
+		return nil
+	}, func() {}, nil)
+	go func() {
+		_, err := f.Save(FirstRunInput{Orgs: []string{"first"}, Root: newRoot})
+		firstDone <- err
+	}()
+	<-relaunchEntered
+
+	if disk := savedConfig(t); disk.Root != newRoot || !disk.Welcomed || !reflect.DeepEqual(disk.Orgs, []string{"first"}) {
+		t.Fatalf("disk before successor readiness = %+v", disk)
+	}
+	secondValidated := make(chan struct{})
+	secondDone := make(chan error, 1)
+	settings := testSettings(t, cfg, func([]string) error {
+		close(secondValidated)
+		return nil
+	}, nil, nil)
+	go func() {
+		_, err := settings.Save(SettingsInput{
+			Orgs: []string{"second"}, Root: oldRoot, Editor: "code", Linear: `{}`,
+			StickerLabels: config.DefaultStickerLabels,
+		})
+		secondDone <- err
+	}()
+	<-secondValidated
+	requireBlocked(t, secondDone, "queued Settings writer")
+	if disk := savedConfig(t); disk.Root != newRoot || !disk.Welcomed || !reflect.DeepEqual(disk.Orgs, []string{"first"}) {
+		t.Fatalf("queued writer changed disk before successor readiness: %+v", disk)
+	}
+
+	close(successorReady)
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatal(err)
+	}
+	live := cfg.Snapshot()
+	disk := savedConfig(t)
+	if !reflect.DeepEqual(live.Orgs, []string{"second"}) || !reflect.DeepEqual(disk.Orgs, live.Orgs) {
+		t.Fatalf("final disk/live orgs = %#v / %#v", disk.Orgs, live.Orgs)
+	}
+	if disk.Root != oldRoot || live.Root != oldRoot || disk.Welcomed != live.Welcomed {
+		t.Fatalf("final disk = %+v, live = %+v", disk, live)
+	}
+}
+
 // A relaunch that never came up must leave the gate raised: the old workbench
 // cannot carry on into assembly on a root it is no longer configured for.
 func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {

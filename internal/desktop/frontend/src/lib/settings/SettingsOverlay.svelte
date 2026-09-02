@@ -31,6 +31,7 @@
     bind:editor={panel.form.editor}
     bind:launch={panel.form.launch}
     bind:linear={panel.form.linear}
+    bind:stickerLabels={panel.form.stickerLabels}
     linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}

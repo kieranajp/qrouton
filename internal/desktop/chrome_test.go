@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -100,6 +101,72 @@ func TestSelectedColdSessionKeepsKnownManifestProvider(t *testing.T) {
 	if panel.Provider != agentProviderCodex || len(panel.Agents) != 0 || panel.AttentionKnown || panel.ChildrenKnown {
 		t.Fatalf("cold known-provider panel = %+v", panel)
 	}
+}
+
+func TestChromePublishesDefaultAndCustomStickerLabelsAndRefreshedRows(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, "octopus")
+	reg := testRegistry(t, dir)
+	renderer := newFakeRenderer()
+
+	pushChrome(reg, root, nil, nil, nil, renderer.Emit)
+	if got, want := pushedChrome(t, renderer).StickerLabels, (status.StickerLabels{
+		Star: "Important", Bookmark: "Read later", Question: "Needs follow-up", Exclamation: "Has bugs",
+	}); got != want {
+		t.Fatalf("default labels = %#v, want %#v", got, want)
+	}
+	if _, err := session.CycleSticker(dir); err != nil {
+		t.Fatal(err)
+	}
+	custom := &config.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}
+	pushChrome(reg, root, &config.Config{StickerLabels: custom}, nil, nil, renderer.Emit)
+	fields := pushedChrome(t, renderer)
+	if got := fields.StickerLabels; got != (status.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}) {
+		t.Fatalf("custom labels = %#v", got)
+	}
+	if len(fields.Sessions) != 1 || fields.Sessions[0].Sticker != string(session.StickerStar) {
+		t.Fatalf("refreshed row = %#v", fields.Sessions)
+	}
+}
+
+func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	first := config.StickerLabels{Star: "first", Bookmark: "first", Question: "first", Exclamation: "first"}
+	second := config.StickerLabels{Star: "second", Bookmark: "second", Question: "second", Exclamation: "second"}
+	cfg := &config.Config{Root: root, StickerLabels: &first}
+	firstGeneration := &config.Config{Root: root, StickerLabels: &first}
+	secondGeneration := &config.Config{Root: root, Welcomed: true, StickerLabels: &second}
+
+	start := make(chan struct{})
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		<-start
+		for range 1000 {
+			cfg.Replace(firstGeneration)
+			cfg.Replace(secondGeneration)
+		}
+	}()
+	close(start)
+	for range 1000 {
+		pushChrome(newSessions(), root, cfg, nil, nil, func(_ string, payload any) {
+			fields := payload.(status.Fields)
+			switch fields.StickerLabels.Star {
+			case "first":
+				if !fields.Welcoming {
+					t.Error("chrome mixed first labels with the second welcome state")
+				}
+			case "second":
+				if fields.Welcoming {
+					t.Error("chrome mixed second labels with the first welcome state")
+				}
+			default:
+				t.Errorf("chrome published unknown labels: %+v", fields.StickerLabels)
+			}
+		})
+	}
+	<-done
 }
 
 func TestAPushedSessionCommitLightsImplementation(t *testing.T) {

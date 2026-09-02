@@ -244,6 +244,43 @@ func (s *Sessions) Show(slug string) error {
 	return nil
 }
 
+func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
+	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\\`) {
+		return "", unknownSession(slug)
+	}
+	root := s.boot.root(slug)
+	if root == "" || !directSessionRoot(root, slug) {
+		return "", unknownSession(slug)
+	}
+	var sticker session.Sticker
+	err := session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+		if m.Slug != slug {
+			return m, unknownSession(slug)
+		}
+		m.Sticker = m.Sticker.Next()
+		sticker = m.Sticker
+		return m, nil
+	})
+	if err != nil {
+		return "", err
+	}
+	s.touch()
+	return sticker, nil
+}
+
+func directSessionRoot(root, slug string) bool {
+	clean := filepath.Clean(root)
+	if filepath.Base(clean) != slug {
+		return false
+	}
+	parent, err := filepath.EvalSymlinks(filepath.Dir(clean))
+	if err != nil {
+		return false
+	}
+	resolved, err := filepath.EvalSymlinks(clean)
+	return err == nil && resolved == filepath.Join(parent, slug)
+}
+
 // Reveal shows a session's directory in the file manager. It takes no lock and
 // wakes nothing: which session is on screen and what the rail draws are both
 // unchanged by it.

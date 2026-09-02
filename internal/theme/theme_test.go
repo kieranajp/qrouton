@@ -50,6 +50,20 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 	}
 }
 
+func TestStickersHaveFixedDedicatedColours(t *testing.T) {
+	want := map[string]string{
+		"sticker-blue": "ctp-blue", "sticker-green": "ctp-green",
+		"sticker-orange": "ctp-peach", "sticker-red": "ctp-red",
+	}
+	css := CSS()
+	for alias, palette := range want {
+		declaration := "  --" + alias + ": var(--" + palette + ");"
+		if !strings.Contains(css, declaration) {
+			t.Errorf("stylesheet is missing %q", declaration)
+		}
+	}
+}
+
 // An unresolved var() reports nothing anywhere.
 func TestEveryReferenceResolves(t *testing.T) {
 	css := CSS()

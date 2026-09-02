@@ -102,7 +102,9 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
-	if err := p.assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+	assembler := p.assembler
+	assembler.Cfg = p.cfg.Snapshot()
+	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
 		return err
 	}
 	state.clearPicker()

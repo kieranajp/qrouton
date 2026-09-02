@@ -284,6 +284,21 @@ func TestSessionsListsEverySessionUnderTheRoot(t *testing.T) {
 	}
 }
 
+func TestSessionRowsUseEffectiveManifestStickers(t *testing.T) {
+	root := t.TempDir()
+	sessionDir(t, root, session.Manifest{Slug: "old", Name: "Old"})
+	sessionDir(t, root, session.Manifest{Slug: "known", Name: "Known", Sticker: session.StickerBookmark})
+	sessionDir(t, root, session.Manifest{Slug: "unknown", Name: "Unknown", Sticker: "retired"})
+
+	stickers := map[string]string{}
+	for _, row := range Sessions(root) {
+		stickers[row.Slug] = row.Sticker
+	}
+	if stickers["old"] != "" || stickers["known"] != string(session.StickerBookmark) || stickers["unknown"] != "" {
+		t.Fatalf("row stickers = %#v", stickers)
+	}
+}
+
 // The rail has room for three repository names and counts the rest, so manifest
 // order is a ranking: reorder it and truncation keeps an arbitrary three.
 func TestSessionRowsCarryRepositoriesInManifestOrder(t *testing.T) {

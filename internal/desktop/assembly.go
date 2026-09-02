@@ -92,7 +92,9 @@ func (a *Assembly) Check(in draftInput) []assembly.Problem {
 }
 
 func (a *Assembly) CheckSlug(in draftInput) []assembly.Problem {
-	return a.assembler.CheckSlug(a.draft(in))
+	assembler := a.assembler
+	assembler.Cfg = a.cfg.Snapshot()
+	return assembler.CheckSlug(a.draft(in))
 }
 
 func (a *Assembly) Preview(in draftInput) string { return assembly.Preview(a.draft(in)) }
@@ -160,7 +162,8 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 	if a.cfg == nil || a.sessions == nil {
 		return "", ErrNoConfig
 	}
-	manifests, err := session.Scan(a.cfg.Root)
+	cfg := a.cfg.Snapshot()
+	manifests, err := session.Scan(cfg.Root)
 	if err != nil {
 		return "", err
 	}
@@ -171,7 +174,7 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 			matching = append(matching, manifest)
 		}
 	}
-	if preferred, ok := session.Preferred(a.cfg.Root, matching); ok {
+	if preferred, ok := session.Preferred(cfg.Root, matching); ok {
 		if err := a.sessions.Show(preferred.Slug); err != nil {
 			return "", err
 		}
@@ -232,6 +235,7 @@ func (a *Assembly) initialPrompt() string {
 }
 
 func (a *Assembly) Create(in draftInput) error {
+	cfg := a.cfg.Snapshot()
 	draft := a.draft(in)
 	if draft.Entropy == "" {
 		draft.Entropy = session.NewEntropy()
@@ -239,12 +243,14 @@ func (a *Assembly) Create(in draftInput) error {
 	if problems := assembly.Check(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
-	if problems := a.assembler.CheckSlug(draft); len(problems) > 0 {
+	assembler := a.assembler
+	assembler.Cfg = cfg
+	if problems := assembler.CheckSlug(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
 	slug := draft.Slug()
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
-	root, err := session.Create(a.cfg, session.CreateRequest{
+	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
 		InitialPrompt: a.initialPrompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
 		Repos: draft.Repos,

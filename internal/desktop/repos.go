@@ -49,7 +49,7 @@ type Repositories struct {
 }
 
 func newRepositories(cfg *config.Config, emit emitter) *Repositories {
-	repos, _, _ := github.CachedRepos(cfg.Orgs)
+	repos, _, _ := github.CachedRepos(cfg.Snapshot().Orgs)
 	return &Repositories{cfg: cfg, emit: emit, gh: liveGitHub(), repos: repos, errs: map[string]error{}}
 }
 
@@ -84,6 +84,7 @@ func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 // owner otherwise, so the user never has to know which of two kinds of refresh
 // he wants. It answers with the generation its events will carry.
 func (r *Repositories) Refresh() int {
+	owners := r.cfg.Snapshot().Orgs
 	r.mu.Lock()
 	if r.cancel != nil {
 		r.cancel()
@@ -93,15 +94,15 @@ func (r *Repositories) Refresh() int {
 	ctx, cancel := context.WithCancel(context.Background())
 	r.cancel = cancel
 	var failed []string
-	for _, owner := range r.cfg.Orgs {
+	for _, owner := range owners {
 		if r.errs[owner] != nil {
 			failed = append(failed, owner)
 		}
 	}
-	cached := github.OwnedBy(r.repos, r.cfg.Orgs)
+	cached := github.OwnedBy(r.repos, owners)
 	r.mu.Unlock()
 
-	go r.run(ctx, gen, failed, cached)
+	go r.run(ctx, gen, owners, failed, cached)
 	return gen
 }
 
@@ -109,7 +110,7 @@ func (r *Repositories) Refresh() int {
 // writes the cache itself, and only once every owner is clean: the write stamps
 // every configured owner as fetched now, so writing with one still failing would
 // date its stale list to this moment.
-func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached []github.Repo) {
+func (r *Repositories) run(ctx context.Context, gen int, configured []string, failed []string, cached []github.Repo) {
 	if r.done != nil {
 		defer r.done(gen)
 	}
@@ -117,7 +118,7 @@ func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached
 	if err != nil {
 		owners := failed
 		if len(owners) == 0 {
-			owners = r.cfg.Orgs
+			owners = configured
 		}
 		for _, owner := range owners {
 			r.push(gen, github.RefreshMsg{Owner: owner, State: github.RefreshFailed, Err: err})
@@ -126,7 +127,7 @@ func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached
 		return
 	}
 	if len(failed) == 0 {
-		for msg := range r.gh.all(ctx, token, r.cfg.Orgs, cached) {
+		for msg := range r.gh.all(ctx, token, configured, cached) {
 			if !r.push(gen, msg) {
 				return
 			}
@@ -152,7 +153,7 @@ func (r *Repositories) run(ctx context.Context, gen int, failed []string, cached
 	}
 	github.SortReposByActivity(merged)
 	if r.clean() && ctx.Err() == nil {
-		_ = r.gh.cache(r.cfg.Orgs, merged)
+		_ = r.gh.cache(configured, merged)
 	}
 	r.push(gen, github.RefreshMsg{State: github.RefreshComplete, Repos: merged})
 }
@@ -192,5 +193,5 @@ func (r *Repositories) clean() bool {
 type Orgs struct{ cfg *config.Config }
 
 func (o *Orgs) List() []string {
-	return append([]string(nil), o.cfg.Orgs...)
+	return o.cfg.Snapshot().Orgs
 }

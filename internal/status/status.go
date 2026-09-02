@@ -48,7 +48,8 @@ type Fields struct {
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
-	Welcoming bool `json:"welcoming"`
+	Welcoming     bool          `json:"welcoming"`
+	StickerLabels StickerLabels `json:"stickerLabels"`
 }
 
 // EmptyFields is the value every producer starts from, and the one place a slice
@@ -79,6 +80,14 @@ type SessionRow struct {
 	Summary  AgentSummary  `json:"summary"`
 	Unseen   int           `json:"unseen"`
 	Opened   time.Time     `json:"opened"`
+	Sticker  string        `json:"sticker"`
+}
+
+type StickerLabels struct {
+	Star        string `json:"star"`
+	Bookmark    string `json:"bookmark"`
+	Question    string `json:"question"`
+	Exclamation string `json:"exclamation"`
 }
 
 // Stages is the R, P and I of a session's workflow. Research means a research
@@ -257,6 +266,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
+			Sticker: string(m.Sticker.Effective()),
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}

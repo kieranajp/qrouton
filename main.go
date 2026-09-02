@@ -227,7 +227,7 @@ func (p workbenchPorts) Agent(req desktop.AgentRequest) (desktop.AgentCommand, e
 	if id == "" {
 		id = p.spec.Runner
 	}
-	runner, err := pickRunner(p.cfg, id)
+	runner, err := pickRunner(p.cfg.Snapshot(), id)
 	if err != nil {
 		return desktop.AgentCommand{}, err
 	}
@@ -252,7 +252,7 @@ func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOpti
 }
 
 func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
-	runners, err := launch.Runners(p.cfg)
+	runners, err := launch.Runners(p.cfg.Snapshot())
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,12 @@ export function settings(onClose) {
     launch: "",
     linear: "",
     linearPath: "",
+    stickerLabels: {
+      star: "",
+      bookmark: "",
+      question: "",
+      exclamation: "",
+    },
   });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -36,6 +42,12 @@ export function settings(onClose) {
     form.launch = loaded?.launch ?? "";
     form.linear = loaded?.linear ?? "";
     form.linearPath = loaded?.linearPath ?? "";
+    form.stickerLabels = {
+      star: loaded?.stickerLabels?.star ?? "",
+      bookmark: loaded?.stickerLabels?.bookmark ?? "",
+      question: loaded?.stickerLabels?.question ?? "",
+      exclamation: loaded?.stickerLabels?.exclamation ?? "",
+    };
     if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
   });
 
@@ -59,6 +71,7 @@ export function settings(onClose) {
         editor: form.editor,
         launch: form.launch,
         linear: form.linear,
+        stickerLabels: { ...form.stickerLabels },
       });
     } catch (thrown) {
       err = thrown;

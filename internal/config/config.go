@@ -6,11 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 )
 
 type Config struct {
+	mu      *sync.RWMutex
+	writeMu *sync.Mutex
+
 	Orgs []string `json:"orgs"` // GitHub orgs for the repo picker
 	Root string   `json:"root"` // sessions live flat under it; mirrors under <root>/.mirrors
 
@@ -23,6 +27,115 @@ type Config struct {
 
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
+
+	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
+}
+
+type StickerLabels struct {
+	Star        string `json:"star"`
+	Bookmark    string `json:"bookmark"`
+	Question    string `json:"question"`
+	Exclamation string `json:"exclamation"`
+}
+
+var DefaultStickerLabels = StickerLabels{
+	Star:        "Important",
+	Bookmark:    "Read later",
+	Question:    "Needs follow-up",
+	Exclamation: "Has bugs",
+}
+
+var zeroConfigMutex sync.RWMutex
+var zeroConfigWriteMutex sync.Mutex
+
+func (c *Config) mutex() *sync.RWMutex {
+	if c.mu != nil {
+		return c.mu
+	}
+	return &zeroConfigMutex
+}
+
+func (c *Config) writeMutex() *sync.Mutex {
+	if c.writeMu != nil {
+		return c.writeMu
+	}
+	return &zeroConfigWriteMutex
+}
+
+// Transact holds the config writer boundary while fn works from one snapshot.
+func (c *Config) Transact(fn func(*Config) error) error {
+	c.writeMutex().Lock()
+	defer c.writeMutex().Unlock()
+	return fn(c.Snapshot())
+}
+
+// Snapshot answers an independent generation of the complete config.
+func (c *Config) Snapshot() *Config {
+	if c == nil {
+		return nil
+	}
+	c.mutex().RLock()
+	defer c.mutex().RUnlock()
+	return clone(c)
+}
+
+// Replace publishes every field from next as one live generation.
+func (c *Config) Replace(next *Config) {
+	replacement := next.Snapshot()
+	c.mutex().Lock()
+	defer c.mutex().Unlock()
+	c.Orgs = replacement.Orgs
+	c.Root = replacement.Root
+	c.Launch = replacement.Launch
+	c.Editor = replacement.Editor
+	c.Welcomed = replacement.Welcomed
+	c.StickerLabels = replacement.StickerLabels
+}
+
+func clone(c *Config) *Config {
+	out := &Config{
+		mu:       &sync.RWMutex{},
+		writeMu:  &sync.Mutex{},
+		Orgs:     append([]string(nil), c.Orgs...),
+		Root:     c.Root,
+		Editor:   append([]string(nil), c.Editor...),
+		Welcomed: c.Welcomed,
+	}
+	if c.Launch != nil {
+		out.Launch = make(map[string][]string, len(c.Launch))
+		for runner, argv := range c.Launch {
+			out.Launch[runner] = append([]string(nil), argv...)
+		}
+	}
+	if c.StickerLabels != nil {
+		labels := *c.StickerLabels
+		out.StickerLabels = &labels
+	}
+	return out
+}
+
+func (c *Config) EffectiveStickerLabels() StickerLabels {
+	return effectiveStickerLabels(c.Snapshot())
+}
+
+func effectiveStickerLabels(c *Config) StickerLabels {
+	labels := DefaultStickerLabels
+	if c.StickerLabels == nil {
+		return labels
+	}
+	if c.StickerLabels.Star != "" {
+		labels.Star = c.StickerLabels.Star
+	}
+	if c.StickerLabels.Bookmark != "" {
+		labels.Bookmark = c.StickerLabels.Bookmark
+	}
+	if c.StickerLabels.Question != "" {
+		labels.Question = c.StickerLabels.Question
+	}
+	if c.StickerLabels.Exclamation != "" {
+		labels.Exclamation = c.StickerLabels.Exclamation
+	}
+	return labels
 }
 
 // xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.
@@ -48,7 +161,7 @@ func CachePath() string {
 // owners, so nothing may block a launch here, and an empty owner list is simply
 // an empty repository list. QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {
-	cfg := &Config{}
+	cfg := &Config{mu: &sync.RWMutex{}, writeMu: &sync.Mutex{}}
 	b, err := os.ReadFile(Path())
 	switch {
 	case os.IsNotExist(err):
@@ -76,7 +189,7 @@ func Save(cfg *Config) error {
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(cfg, "", "  ")
+	b, err := json.MarshalIndent(cfg.Snapshot(), "", "  ")
 	if err != nil {
 		return err
 	}

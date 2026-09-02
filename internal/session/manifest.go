@@ -39,6 +39,39 @@ func (r RepoRole) Effective() RepoRole {
 
 func (r RepoRole) IsEditing() bool { return r.Effective() == RepoRoleEditing }
 
+type Sticker string
+
+const (
+	StickerStar        Sticker = "star"
+	StickerBookmark    Sticker = "bookmark"
+	StickerQuestion    Sticker = "question"
+	StickerExclamation Sticker = "exclamation"
+)
+
+func (s Sticker) Effective() Sticker {
+	switch s {
+	case StickerStar, StickerBookmark, StickerQuestion, StickerExclamation:
+		return s
+	default:
+		return ""
+	}
+}
+
+func (s Sticker) Next() Sticker {
+	switch s.Effective() {
+	case "":
+		return StickerStar
+	case StickerStar:
+		return StickerBookmark
+	case StickerBookmark:
+		return StickerQuestion
+	case StickerQuestion:
+		return StickerExclamation
+	default:
+		return ""
+	}
+}
+
 // SessionMode selects the system prompt (and opening message) the runner starts
 // under. RPI is the default orchestrated Research→Plan→Implement workflow;
 // Assistant is a lighter, open-ended coding session that can escalate to RPI
@@ -106,6 +139,7 @@ type Manifest struct {
 	Description   string      `json:"description"`
 	TicketURL     string      `json:"ticketUrl,omitempty"`
 	Mode          SessionMode `json:"mode,omitempty"`
+	Sticker       Sticker     `json:"sticker,omitempty"`
 	// Runner is the coding agent this session was assembled with, so every later
 	// boot starts the one that was chosen rather than the workbench's default.
 	Runner     string             `json:"runner,omitempty"`
@@ -211,6 +245,16 @@ func SetMode(dir string, mode SessionMode) error {
 		m.Mode = mode.effective()
 		return m, nil
 	})
+}
+
+func CycleSticker(dir string) (Sticker, error) {
+	var committed Sticker
+	err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
+		m.Sticker = m.Sticker.Next()
+		committed = m.Sticker
+		return m, nil
+	})
+	return committed, err
 }
 
 // Load reads one session directory's manifest.

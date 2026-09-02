@@ -6,7 +6,7 @@
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -15,6 +15,7 @@
     launch = $bindable(""),
     linear = $bindable(""),
     linearPath = "",
+    stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -55,6 +56,36 @@
   help={fields.editor ?? "One {} placeholder for the file path"}
   helpTone={fields.editor ? "failed" : "muted"} />
 
+<fieldset class="sticker-labels">
+  <legend>Session stickers</legend>
+  <div class="sticker-fields">
+    <TextField
+      label="Blue star"
+      aria-label="Blue star meaning"
+      bind:value={stickerLabels.star}
+      help={fields.star}
+      helpTone={fields.star ? "failed" : "muted"} />
+    <TextField
+      label="Green bookmark"
+      aria-label="Green bookmark meaning"
+      bind:value={stickerLabels.bookmark}
+      help={fields.bookmark}
+      helpTone={fields.bookmark ? "failed" : "muted"} />
+    <TextField
+      label="Orange question mark"
+      aria-label="Orange question mark meaning"
+      bind:value={stickerLabels.question}
+      help={fields.question}
+      helpTone={fields.question ? "failed" : "muted"} />
+    <TextField
+      label="Red exclamation mark"
+      aria-label="Red exclamation mark meaning"
+      bind:value={stickerLabels.exclamation}
+      help={fields.exclamation}
+      helpTone={fields.exclamation ? "failed" : "muted"} />
+  </div>
+</fieldset>
+
 <TextField
   label="Launch overrides"
   multiline
@@ -91,6 +122,25 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+  }
+
+  .sticker-labels {
+    margin: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .sticker-labels legend {
+    margin-bottom: 10px;
+    padding: 0;
+    font: var(--display-sm);
+    color: var(--text-primary);
+  }
+
+  .sticker-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 18px;
   }
 
   .banner {

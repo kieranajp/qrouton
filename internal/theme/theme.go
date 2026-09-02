@@ -127,6 +127,11 @@ var aliases = []token{
 	{"mac-close", ref("ctp-red")},
 	{"mac-min", ref("ctp-yellow")},
 	{"mac-zoom", ref("ctp-green")},
+
+	{"sticker-blue", ref("ctp-blue")},
+	{"sticker-green", ref("ctp-green")},
+	{"sticker-orange", ref("ctp-peach")},
+	{"sticker-red", ref("ctp-red")},
 }
 
 // CSS renders the palette as custom properties on :root. The workbench serves

@@ -68,30 +68,35 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	if err != nil {
 		return FirstRunResult{}, err
 	}
-	changed := expanded != filepath.Clean(f.cfg.Root)
-
-	apply, err := saveConfig(f.cfg, func(next *config.Config) {
+	changed := false
+	err = f.cfg.Transact(func(current *config.Config) error {
+		changed = expanded != filepath.Clean(current.Root)
+		next := current.Snapshot()
 		next.Orgs, next.Root, next.Welcomed = orgs, root, true
+		if err := config.Save(next); err != nil {
+			return err
+		}
+		if !changed {
+			live := next.Snapshot()
+			live.Root = current.Root
+			f.cfg.Replace(live)
+			return nil
+		}
+		if f.relaunch == nil || f.quit == nil {
+			return ErrNoRelaunch
+		}
+		return f.relaunch()
 	})
 	if err != nil {
 		return FirstRunResult{}, err
 	}
 
 	if !changed {
-		apply()
 		// Without the touch the overlay stays up until the next chrome tick.
 		f.reg.touch()
 		return FirstRunResult{}, nil
 	}
 
-	// Both, before either runs: relaunching and then finding nothing to quit with
-	// would leave two workbenches up.
-	if f.relaunch == nil || f.quit == nil {
-		return FirstRunResult{}, ErrNoRelaunch
-	}
-	if err := f.relaunch(); err != nil {
-		return FirstRunResult{}, err
-	}
 	f.quit()
 	return FirstRunResult{Relaunching: true}, nil
 }

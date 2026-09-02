@@ -185,6 +185,20 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	shown := reg.current()
 	shownRoot := shown.root()
 	fields := status.Read(shownRoot)
+	configSnapshot := cfg.Snapshot()
+	if configSnapshot != nil {
+		labels := configSnapshot.EffectiveStickerLabels()
+		fields.StickerLabels = status.StickerLabels{
+			Star: labels.Star, Bookmark: labels.Bookmark,
+			Question: labels.Question, Exclamation: labels.Exclamation,
+		}
+	} else {
+		labels := config.DefaultStickerLabels
+		fields.StickerLabels = status.StickerLabels{
+			Star: labels.Star, Bookmark: labels.Bookmark,
+			Question: labels.Question, Exclamation: labels.Exclamation,
+		}
+	}
 	if shown != nil {
 		fields.Terminal, fields.Activity = shown.terminal, shown.agents.state()
 		fields.Picker = shown.pendingPicker() != nil
@@ -203,7 +217,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	// overlay two seconds after it closes. A window holding a session never asks,
 	// so the questions can never land over a live conversation — and an install
 	// that always opens on one stays unasked until it opens on none.
-	fields.Welcoming = cfg != nil && !cfg.Welcomed && fields.Slug == ""
+	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		panel := agentPanel(snapshot)
 		if panel.Provider == "" {

@@ -57,6 +57,7 @@
       slug={fields.slug}
       repos={fields.repos}
       agents={fields.agents}
+      stickerLabels={fields.stickerLabels}
       onNewSession={() => (view.requested = true)}
       onAddRepos={() => (view.added = fields.slug)}
       onDismissed={view.handBack}

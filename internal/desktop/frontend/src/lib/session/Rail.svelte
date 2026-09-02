@@ -9,9 +9,10 @@
   import RailItem from "./RailItem.svelte";
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
-  import { cleanup, reveal, show, uncommitted } from "../sessions.js";
+  import { cleanup, cycleSticker, reveal, show, uncommitted } from "../sessions.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
+  import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
 
   /**
    * @type {{
@@ -19,6 +20,7 @@
    *   slug: string,
    *   repos: any[],
    *   agents: any,
+   *   stickerLabels: Record<string, string>,
    *   onNewSession: () => void,
    *   onAddRepos: () => void,
    *   onDismissed: () => void,
@@ -31,6 +33,7 @@
     slug,
     repos,
     agents,
+    stickerLabels = DEFAULT_STICKER_LABELS,
     onNewSession,
     onAddRepos,
     onDismissed,
@@ -47,6 +50,14 @@
     { label: "Clean up…", tone: "destructive", act: askCleanup },
   ];
 
+  const stickerQueues = new Map();
+  let pendingStickers = $state({});
+  /** @type {{slug: string, sequence: number, text: string, failed: boolean} | null} */
+  let stickerNotice = $state(null);
+  let stickerSequence = 0;
+  let stickerTimer;
+  let mounted = true;
+
   // A rail row's number is its position, so it moves when showing a session
   // re-sorts the list.
   onMount(() => {
@@ -57,8 +68,42 @@
       show(row.slug);
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    return () => {
+      mounted = false;
+      window.removeEventListener("keydown", onKey);
+      clearTimeout(stickerTimer);
+    };
   });
+
+  function showStickerNotice(slug, text, failed = false) {
+    if (!mounted) return;
+    clearTimeout(stickerTimer);
+    stickerNotice = { slug, text, failed, sequence: ++stickerSequence };
+    stickerTimer = setTimeout(() => {
+      stickerNotice = null;
+    }, 1500);
+  }
+
+  function changeSticker(event, row) {
+    event.stopPropagation();
+    const slug = row.slug;
+    pendingStickers = { ...pendingStickers, [slug]: (pendingStickers[slug] ?? 0) + 1 };
+
+    const previous = stickerQueues.get(slug) ?? Promise.resolve();
+    const queued = previous
+      .catch(() => {})
+      .then(() => cycleSticker(slug))
+      .then((committed) => showStickerNotice(slug, stickerFeedback(committed, stickerLabels)))
+      .catch(() => showStickerNotice(slug, "Sticker could not be changed", true))
+      .finally(() => {
+        pendingStickers = {
+          ...pendingStickers,
+          [slug]: Math.max(0, (pendingStickers[slug] ?? 1) - 1),
+        };
+        if (stickerQueues.get(slug) === queued) stickerQueues.delete(slug);
+      });
+    stickerQueues.set(slug, queued);
+  }
 
   /** @type {{row: any, x: number, y: number} | null} */
   let menu = $state(null);
@@ -149,8 +194,13 @@
         idle={row.summary?.running ? "" : age(row.opened)}
         selected={row.slug === slug}
         unseen={row.unseen}
-        onclick={() => show(row.slug)}
-        oncontextmenu={(event) => openMenu(event, row)} />
+        stickerId={row.sticker}
+        {stickerLabels}
+        stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
+        feedback={stickerNotice?.slug === row.slug ? stickerNotice : null}
+        onSelect={() => show(row.slug)}
+        onSticker={(event) => changeSticker(event, row)}
+        onContextMenu={(event) => openMenu(event, row)} />
     {/each}
 
     <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>

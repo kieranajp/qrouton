@@ -23,6 +23,7 @@ export const REPOSITORIES_CACHED = "github.com/kieranajp/qrouton/internal/deskto
 export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Refresh";
 export const REPOSITORIES_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Select";
 export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Cleanup";
+export const SESSIONS_CYCLE_STICKER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CycleSticker";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
@@ -58,7 +59,7 @@ export const WINDOW_DIAGRAM_EVENT = "window:diagram:";
 export const WINDOW_EXIT_EVENT = "window:exit:";
 export const WINDOWS_EVENT = "window:open";
 
-/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean}} */
+/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
   mode: "",
   phase: "",
@@ -87,4 +88,10 @@ export const CHROME_DEFAULTS = {
   root: "",
   picker: false,
   welcoming: false,
+  stickerLabels: {
+    star: "",
+    bookmark: "",
+    question: "",
+    exclamation: "",
+  },
 };

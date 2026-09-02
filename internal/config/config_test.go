@@ -191,3 +191,72 @@ func TestExpandHomeResolvesTildeAndLeavesAnAbsolutePathAlone(t *testing.T) {
 		t.Fatalf("ExpandHome(%q) = %q, want %q", "/srv/sessions", got, want)
 	}
 }
+
+func TestEffectiveStickerLabelsDefaultAbsentAndPartialValues(t *testing.T) {
+	defaults := StickerLabels{
+		Star: "Important", Bookmark: "Read later", Question: "Needs follow-up", Exclamation: "Has bugs",
+	}
+	if got := (&Config{}).EffectiveStickerLabels(); got != defaults {
+		t.Fatalf("absent labels = %#v, want %#v", got, defaults)
+	}
+	partial := Config{StickerLabels: &StickerLabels{Star: "Pin this", Question: "Ask someone"}}
+	if got, want := partial.EffectiveStickerLabels(), (StickerLabels{
+		Star: "Pin this", Bookmark: "Read later", Question: "Ask someone", Exclamation: "Has bugs",
+	}); got != want {
+		t.Fatalf("partial labels = %#v, want %#v", got, want)
+	}
+}
+
+func TestStickerLabelsLoadSaveAndReload(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+
+	custom := StickerLabels{Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken"}
+	if err := Save(&Config{Root: "unused", StickerLabels: &custom}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"stickerLabels"`) {
+		t.Fatalf("saved config has no sticker labels: %s", b)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.StickerLabels == nil || *loaded.StickerLabels != custom || loaded.EffectiveStickerLabels() != custom {
+		t.Fatalf("reloaded labels = %#v, want %#v", loaded.StickerLabels, custom)
+	}
+}
+
+func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
+	labels := StickerLabels{Star: "one", Bookmark: "two", Question: "three", Exclamation: "four"}
+	cfg := &Config{
+		Orgs: []string{"acme"}, Launch: map[string][]string{"codex": {"codex", "--search"}},
+		Editor: []string{"code", "--wait"}, StickerLabels: &labels,
+	}
+
+	snapshot := cfg.Snapshot()
+	cfg.Orgs[0] = "changed"
+	cfg.Launch["codex"][0] = "changed"
+	cfg.Editor[0] = "changed"
+	cfg.StickerLabels.Star = "changed"
+	if snapshot.Orgs[0] != "acme" || snapshot.Launch["codex"][0] != "codex" ||
+		snapshot.Editor[0] != "code" || snapshot.StickerLabels.Star != "one" {
+		t.Fatalf("snapshot shares nested values: %+v", snapshot)
+	}
+
+	cfg.Replace(snapshot)
+	snapshot.Orgs[0] = "mutated snapshot"
+	snapshot.Launch["codex"][0] = "mutated snapshot"
+	snapshot.Editor[0] = "mutated snapshot"
+	snapshot.StickerLabels.Star = "mutated snapshot"
+	got := cfg.Snapshot()
+	if got.Orgs[0] != "acme" || got.Launch["codex"][0] != "codex" ||
+		got.Editor[0] != "code" || got.StickerLabels.Star != "one" {
+		t.Fatalf("replacement shares nested values: %+v", got)
+	}
+}

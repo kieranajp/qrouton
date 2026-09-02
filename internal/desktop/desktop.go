@@ -99,7 +99,7 @@ func Run(opts Options) error {
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,
-		opts.LinearCommand, opts.LinearEnvironment, quit,
+		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
