@@ -11,6 +11,7 @@ const text = (comment) => {
 const lines = (comment) => text(comment).split("\n").map((line) => line.trim()).filter(Boolean);
 
 const isDirective = (comment) => {
+  if (comment.type === "Shebang") return true;
   const meaningful = lines(comment);
   return meaningful.length > 0 && meaningful.every((line) => MACHINE_LINE.test(line));
 };
@@ -33,7 +34,10 @@ function commentsFor(sourceCode) {
   const html = services?.getSvelteHtmlAst?.();
   if (!html) return comments;
 
+  const seen = new WeakSet();
   const visit = (node) => {
+    if (!node || typeof node !== "object" || seen.has(node)) return;
+    seen.add(node);
     if (node.type === "Comment") {
       const start = node.start;
       const end = node.end;
@@ -44,7 +48,13 @@ function commentsFor(sourceCode) {
         loc: { start: sourceCode.getLocFromIndex(start), end: sourceCode.getLocFromIndex(end) },
       });
     }
-    for (const child of node.nodes ?? node.fragment?.nodes ?? []) visit(child);
+    for (const value of Object.values(node)) {
+      if (Array.isArray(value)) {
+        for (const child of value) visit(child);
+      } else {
+        visit(value);
+      }
+    }
   };
   visit(html);
   return comments.sort((left, right) => left.range[0] - right.range[0]);

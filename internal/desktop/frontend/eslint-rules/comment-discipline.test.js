@@ -13,6 +13,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
       { code: "// one\n// two\nconst value = 1;", options: [{ max: 2 }] },
       { code: "// one\n// two\n\n// three\n// four\nconst value = 1;", options: [{ max: 2 }] },
       { code: "// one\n// eslint-disable-next-line no-console\n// two\nconst value = 1;", options: [{ max: 1 }] },
+      { code: "#!/usr/bin/env node\n// one\nconst value = 1;", options: [{ max: 1 }] },
       { code: "// one\nconst value = 1; // two\n", options: [{ max: 1 }] },
     ],
     invalid: [
@@ -25,6 +26,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     valid: [
       { code: "// Fixed for now; the caller still wins.", options: [{ phrases: ["turns out"] }] },
       { code: "// eslint-disable-next-line -- turns out this is needed", options: [{ phrases: ["turns out"] }] },
+      { code: "#!/usr/bin/env -S turns out src/tool.js", options: [{ phrases: ["turns out"] }] },
       { code: "/** @type {import(\"./model.js\").Thing} */\nconst value = 1;", options: [{ phrases: ["the problem was"] }] },
     ],
     invalid: [
@@ -37,6 +39,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     valid: [
       { code: "// See https://example.com/a/b.js for the upstream issue.", options: [{ extensions: ["js"] }] },
       { code: "// See https://example.com/a/b.js and keep the API stable.", options: [{ extensions: ["js"] }] },
+      { code: "#!/usr/bin/env -S node src/tool.js", options: [{ extensions: ["js"] }] },
       { code: "// source=src/components/onboarding/RadioGroup.svelte", options: [{ extensions: ["svelte"] }] },
     ],
     invalid: [
@@ -68,4 +71,19 @@ test("Svelte template comments are checked with source locations", () => {
   assert.equal(narration.length, 1);
   assert.equal(narration[0].line, 2);
   assert.equal(narration[0].column, 3);
+});
+
+test("Svelte template comments nested in block fragments are checked", () => {
+  const fixtures = [
+    { code: "{#if ready}<!-- The problem was ready. -->{:else}<!-- The problem was waiting. -->{/if}", count: 2 },
+    { code: "{#each items as item}<!-- The problem was an item. -->{:else}<!-- The problem was empty. -->{/each}", count: 2 },
+    { code: "{#await promise}<!-- The problem was pending. -->{:then value}<!-- The problem was resolved. -->{:catch error}<!-- The problem was rejected. -->{/await}", count: 3 },
+    { code: "{#key key}<!-- The problem was a keyed branch. -->{/key}", count: 1 },
+    { code: "{#snippet child()}<!-- The problem was a snippet. -->{/snippet}", count: 1 },
+  ];
+  for (const { code, count } of fixtures) {
+    const diagnostics = verifySvelte(code, "no-narration", { phrases: ["the problem was"] });
+    assert.equal(diagnostics.length, count, code);
+    assert.ok(diagnostics.every((diagnostic) => diagnostic.ruleId === "comment-discipline/no-narration"), code);
+  }
 });

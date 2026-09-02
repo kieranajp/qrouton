@@ -25,8 +25,11 @@ func TestCheckGoSourceCommentRuns(t *testing.T) {
 		"doc comment is prose":           {source: "package fixture\n// Fixture is a value.\n// It carries one.\ntype Fixture int\n", max: 1, want: true},
 		"go directive splits":            {source: "// one\n//go:build linux\n// two\npackage fixture\n", max: 1},
 		"build tag splits":               {source: "// one\n// +build linux\n// two\npackage fixture\n", max: 1},
+		"line directive splits":          {source: "// one\n//line fixture.go:100\n// two\npackage fixture\n", max: 1},
 		"lint directive splits":          {source: "package fixture\n// one\n//nolint:gocyclo\n// two\nvar x = 1\n", max: 1},
 		"line prose does not split":      {source: "package fixture\n// one\n// line two\n// three\nvar x = 1\n", max: 1, want: true},
+		"incomplete line does not split": {source: "package fixture\n// one\n//line fixture.go\n// three\nvar x = 1\n", max: 1, want: true},
+		"indented line does not split":   {source: "package fixture\n// one\n //line fixture.go:100\n// three\nvar x = 1\n", max: 1, want: true},
 		"spaced go prose does not split": {source: "package fixture\n// one\n// go: somewhere\n// three\nvar x = 1\n", max: 1, want: true},
 	}
 	for name, tc := range cases {
@@ -42,6 +45,30 @@ func TestCheckGoSourceCommentRuns(t *testing.T) {
 				t.Fatalf("max run finding = %v, want %v; diagnostics: %+v", got, tc.want, diagnostics)
 			}
 		})
+	}
+}
+
+func TestCheckGoSourceUsesPhysicalLocationsAfterLineDirective(t *testing.T) {
+	source := "package fixture\n//line generated.go:100\n// turns out src/runtime.go is required\n// second line\nvar value = 1\n"
+	policy := testPolicy()
+	policy.MaxCommentRun = 1
+	diagnostics, err := CheckGoSource("fixture.go", []byte(source), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Diagnostic{
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/max-comment-run"},
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-narration"},
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-path-pointer"},
+	}
+	if len(diagnostics) != len(want) {
+		t.Fatalf("CheckGoSource() = %+v", diagnostics)
+	}
+	for index := range want {
+		got := diagnostics[index]
+		if got.Path != want[index].Path || got.Line != want[index].Line || got.Column != want[index].Column || got.Rule != want[index].Rule {
+			t.Errorf("diagnostic %d = %+v, want location/rule %+v", index, got, want[index])
+		}
 	}
 }
 
