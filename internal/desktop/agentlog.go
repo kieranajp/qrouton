@@ -15,7 +15,9 @@ func recordAgentExit(root, provider string, code int, tail string) {
 	if root == "" {
 		return
 	}
-	if err := os.MkdirAll(sessionpaths.Dir(root), 0o755); err != nil {
+	// Cleanup removes the session directory without waiting for the pump, so a
+	// log written here must never be what puts it back.
+	if _, err := os.Stat(sessionpaths.Dir(root)); err != nil {
 		return
 	}
 	path := sessionpaths.AgentLog(root)
