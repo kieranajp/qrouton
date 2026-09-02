@@ -219,7 +219,9 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		claudeSubagentStopHook:  commandHook(hookCommand),
 		claudeNotificationHook:  commandHook(soundCommand, hookCommand),
 	}})
-	return append(argv, claudeSettingsFlag, string(settings)), os.Environ(), nil
+	env := workbench.WithEnv(os.Environ(), claudeMaintainProjectWorkingDirEnvVar,
+		claudeMaintainProjectWorkingDirValue)
+	return append(argv, claudeSettingsFlag, string(settings)), env, nil
 }
 
 func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
