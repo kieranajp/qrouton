@@ -69,3 +69,11 @@ test("a tab dragged onto another takes the place it was dropped on", async ({ pa
     .poll(() => titles(page))
     .toEqual(["Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
 });
+
+test("the middle mouse button closes a tab", async ({ page }) => {
+  await open(page);
+
+  await page.locator(".tab").nth(1).click({ button: "middle" });
+
+  await expect.poll(() => titles(page)).toEqual(["Shell", "Pane selection", "◆ Findings"]);
+});

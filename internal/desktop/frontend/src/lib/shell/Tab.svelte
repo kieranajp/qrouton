@@ -50,6 +50,13 @@
     event.preventDefault();
     onDrop?.();
   }
+
+  /** @param {MouseEvent} event */
+  function auxiliary(event) {
+    if (event.button !== 1 || !closable) return;
+    event.preventDefault();
+    onClose?.();
+  }
 </script>
 
 <div
@@ -64,6 +71,7 @@
   ondragleave={() => onDragLeave?.()}
   ondrop={release}
   ondragend={() => onDragEnd?.()}
+  onauxclick={auxiliary}
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
     {#if status}<StatusDot state={status} size={7} />{/if}

@@ -1,6 +1,6 @@
 <script>
   import TabStrip from "../src/lib/shell/TabStrip.svelte";
-  import { reorderWindow, surfaces } from "../src/lib/docked.svelte.js";
+  import { closeWindow, reorderWindow, surfaces } from "../src/lib/docked.svelte.js";
 
   // Fed by the surfaces store the workbench uses, so the tabs under test are
   // the payload Go sends and not a hand-written approximation of it.
@@ -11,6 +11,7 @@
 <TabStrip
   tabs={open.tabs}
   {selected}
+  onClose={(i) => closeWindow(open.tabs[i].id)}
   onReorder={(from, to) => reorderWindow("fixture", open.tabs[from].id, to)}
   onNew={() => {}}
   newLabel="Shell" />
