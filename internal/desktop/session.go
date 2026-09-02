@@ -91,6 +91,18 @@ func (s *sessionState) root() string {
 	return s.named.Load().root
 }
 
+// alive is whether the session still has a supervisor behind it. A session
+// between add and the page's first start has no PTY yet and counts as alive:
+// the page needs its terminal id to make that call.
+func (s *sessionState) alive() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.stopped && (s.process == nil || !s.process.done())
+}
+
 // start launches the supervisor under a PTY sized to the terminal displaying it.
 // The page calls it on load, so a reload must not fork a second agent.
 func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols, rows int) error {
@@ -229,6 +241,12 @@ func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
 	state := s.bySlug(slug)
+	// A supervisor that died left its state registered, and a pane drawn against
+	// it reaches nothing. Clearing it here is the way back to a live one.
+	if state != nil && !state.alive() {
+		s.recycle(state)
+		state = nil
+	}
 	if state == nil {
 		root := s.boot.root(slug)
 		if root == "" {
@@ -413,6 +431,15 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	}
 	s.reveal(state)
 	return nil
+}
+
+// recycle drops a session without putting anything in its place. The caller
+// reveals the replacement under the same showMu, so the window never falls back
+// to the session before this one on its way there.
+func (s *Sessions) recycle(state *sessionState) {
+	s.boot.teardown(state)
+	state.stop()
+	s.forget(state)
 }
 
 // retire ends one session without ending the app.

@@ -1214,6 +1214,73 @@ func TestShowRefusesASlugItCannotResolve(t *testing.T) {
 	}
 }
 
+// A supervisor that fails leaves its state registered, and a pane drawn against
+// a dead process swallows every keystroke. The row goes back to unloaded with
+// the session's tabs intact, and showing it again boots a replacement.
+func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/sh", "-c", "exit 3")
+	reg, windows, r := testSessions(t, root, boot)
+	sessionDir(t, root, "octopus")
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	dead := reg.current()
+	tab, err := windows.openStructural(dead, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Command: []string{"/bin/cat"}, Cwd: dead.root(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(dead.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
+
+	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	crashed := pushedChrome(t, r)
+	if crashed.Terminal != "" {
+		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
+	}
+	if got := rowTerminal(t, crashed, "octopus"); got != "" {
+		t.Fatalf("the row still names terminal %q after its supervisor died", got)
+	}
+	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 1 || tabs[0].ID != tab {
+		t.Fatalf("the crash took the session's tabs with it: %+v", tabs)
+	}
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	booted := reg.current()
+	if booted == dead || booted.terminal == dead.terminal {
+		t.Fatalf("showing the dead session came back with terminal %q", booted.terminal)
+	}
+	if !boot.resumed(t, booted.root()) {
+		t.Fatal("the replacement supervisor started a fresh conversation")
+	}
+	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
+		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
+	}
+	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
+		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
+	}
+}
+
+func rowTerminal(t *testing.T, fields status.Fields, slug string) string {
+	t.Helper()
+	for _, row := range fields.Sessions {
+		if row.Slug == slug {
+			return row.Terminal
+		}
+	}
+	t.Fatalf("no row for %q in %+v", slug, fields.Sessions)
+	return ""
+}
+
 func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")

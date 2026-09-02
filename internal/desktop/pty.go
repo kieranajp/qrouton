@@ -61,6 +61,16 @@ func (p *ptyProcess) pump(onData func([]byte), onExit func(code int)) {
 	}
 }
 
+// done reports whether the child has been reaped.
+func (p *ptyProcess) done() bool {
+	select {
+	case <-p.exited:
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *ptyProcess) write(data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

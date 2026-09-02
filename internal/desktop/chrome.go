@@ -200,8 +200,11 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		}
 	}
 	if shown != nil {
-		fields.Terminal, fields.Activity = shown.terminal, shown.agents.state()
+		fields.Activity = shown.agents.state()
 		fields.Picker = shown.pendingPicker() != nil
+		if shown.alive() {
+			fields.Terminal = shown.terminal
+		}
 	}
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
@@ -230,9 +233,12 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	fields.Sessions = reg.railOrder(status.Sessions(root))
 	for i, row := range fields.Sessions {
 		// A terminal id and an activity are this workbench's own knowledge, so only
-		// the sessions it has booted carry them.
+		// the sessions it has booted carry them. The id goes when the supervisor
+		// does: a pane drawn against a dead one takes keystrokes nothing reads.
 		if state := reg.bySlug(row.Slug); state != nil {
-			fields.Sessions[i].Terminal = state.terminal
+			if state.alive() {
+				fields.Sessions[i].Terminal = state.terminal
+			}
 			fields.Sessions[i].Activity = state.agents.state()
 		}
 		if snapshot, ok := agentSnapshots[row.Slug]; ok {
