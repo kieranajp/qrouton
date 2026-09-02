@@ -205,6 +205,9 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if name := sessionName(c.dir); name != "" {
+		argv = append(argv, claudeNameFlag, name)
+	}
 	argv = append(argv, mcp.Args...)
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
