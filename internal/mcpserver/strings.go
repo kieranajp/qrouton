@@ -77,6 +77,12 @@ const (
 	openWindowsSuffix = "."
 	windowNameJoiner  = ", "
 
+	noRepos           = "This session has no repositories yet."
+	reposHeaderFormat = "Session repositories (%d):\n%s"
+	repoLineFormat    = "- %s/%s (%s) at %s"
+	repoLineRefFormat = "- %s/%s (%s @ %s) at %s"
+	repoLineJoiner    = "\n"
+
 	// escalationConfirmedMessage is the confirm-path return. In practice the
 	// agent supervisor replaces this process before the poll observes a
 	// confirmed outcome, so this string exists for completeness and for tests.

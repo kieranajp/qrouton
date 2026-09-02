@@ -11,3 +11,4 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `notify` — get the user's attention when you finish, need a decision, or are blocked. Use it sparingly.
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.
 - `close_window` / `list_windows` — manage what's open.
+- `list_repos` — list the session's repositories: role, branch or pinned revision, and worktree path.

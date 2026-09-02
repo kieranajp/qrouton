@@ -1228,6 +1228,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
 		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+		toolListRepos,
 	}
 	for _, tc := range []struct {
 		mode session.SessionMode
@@ -1486,5 +1487,124 @@ func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
 func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
 	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
 		t.Error("shared a document from outside the session")
+	}
+}
+
+func TestReposMessageFormatsRoleAndReference(t *testing.T) {
+	if got := reposMessage(nil); got != noRepos {
+		t.Fatalf("reposMessage(nil) = %q, want %q", got, noRepos)
+	}
+	rows := []repoRow{
+		{Org: "lifesum", Name: "app", Role: "editing", Branch: "feat/thing", Worktree: "src/app"},
+		{Org: "lifesum", Name: "other", Role: "reference", Revision: "deadbeef", Worktree: "src/other"},
+	}
+	got := reposMessage(rows)
+	want := "Session repositories (2):\n" +
+		"- lifesum/app (editing @ feat/thing) at src/app\n" +
+		"- lifesum/other (reference @ deadbeef) at src/other"
+	if got != want {
+		t.Fatalf("reposMessage = %q, want %q", got, want)
+	}
+}
+
+func TestSessionReposDefaultsEmptyRoleToEditing(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{{Name: "app", Org: "lifesum", WorktreePath: "src/app"}},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Role != "editing" {
+		t.Fatalf("sessionRepos = %#v, want role editing", rows)
+	}
+}
+
+// sessionRepos re-reads qrouton.json on every call rather than caching it at
+// server construction, so a repo added mid-session appears without a restart.
+func TestListReposRereadsTheManifestEachCall(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{
+			{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/thing", WorktreePath: "src/app"},
+		},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	_ = newMCPServer(dir, testEditor, &fakeHost{}, session.ModeRPI)
+
+	first, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("first call repos = %#v, want 1", first)
+	}
+
+	manifest.Repos = append(manifest.Repos, session.ManifestRepo{
+		Name: "other", Org: "lifesum", Role: session.RepoRoleReference,
+		Revision: "deadbeef", WorktreePath: "src/other",
+	})
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != 2 {
+		t.Fatalf("second call repos = %#v, want 2 (rewritten manifest not seen)", second)
+	}
+}
+
+func TestListReposReturnsStructuredRepos(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{
+			{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/thing", WorktreePath: "src/app"},
+			{Name: "other", Org: "lifesum", Role: session.RepoRoleReference, Revision: "deadbeef", WorktreePath: "src/other"},
+		},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	server := newMCPServer(dir, testEditor, &fakeHost{}, session.ModeRPI)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolListRepos})
+	if err != nil || result.IsError {
+		t.Fatalf("list_repos = %+v, %v", result, err)
+	}
+	output := structuredOutput(t, result.StructuredContent)
+	repos, ok := output["repos"].([]any)
+	if !ok || len(repos) != 2 {
+		t.Fatalf("structured repos = %#v", output["repos"])
+	}
+	first, ok := repos[0].(map[string]any)
+	if !ok || first["name"] != "app" || first["org"] != "lifesum" || first["role"] != "editing" ||
+		first["branch"] != "feat/thing" || first["worktree"] != "src/app" {
+		t.Fatalf("first repo = %#v", first)
+	}
+	second, ok := repos[1].(map[string]any)
+	if !ok || second["role"] != "reference" || second["revision"] != "deadbeef" {
+		t.Fatalf("second repo = %#v", second)
 	}
 }

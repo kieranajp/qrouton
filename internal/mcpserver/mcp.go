@@ -129,6 +129,20 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		return textResult(message), map[string]any{"windows": names}, nil
 	})
 
+	// list_repos is a list too, and offered in every mode: an assistant
+	// session cannot escalate to add repositories, but still benefits from
+	// seeing the ones it has.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolListRepos,
+		Description: descListRepos,
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		rows, err := sessionRepos(root)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(reposMessage(rows)), map[string]any{"repos": rows}, nil
+	})
+
 	return server
 }
 
