@@ -433,13 +433,13 @@ func awaitEscalation(ctx context.Context, root string, spawnedAt time.Time) (str
 
 func escalationOutcome(root string, spawnedAt time.Time) (string, bool) {
 	m, err := session.Load(root)
-	if err != nil || m.Escalation == nil || !m.Escalation.At.After(spawnedAt) {
+	if err != nil || m.Picker == nil || !m.Picker.At.After(spawnedAt) {
 		return "", false
 	}
-	if m.Escalation.Status == session.EscalationCancelled {
-		return escalationCancelledMessage, true
+	if m.Picker.Status == session.PickerConfirmed {
+		return escalationConfirmedMessage, true
 	}
-	return escalationConfirmedMessage, true
+	return escalationCancelledMessage, true
 }
 
 // list names the windows still open, dropping any the user has closed. An

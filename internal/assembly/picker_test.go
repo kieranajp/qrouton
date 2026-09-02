@@ -57,8 +57,8 @@ func TestConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	if len(got.Repos) != 1 || got.Repos[0].Branch != "fix/webhook-retry-backoff" {
 		t.Fatalf("escalated repos = %+v", got.Repos)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed || got.Escalation.At.IsZero() {
-		t.Fatalf("confirmed stanza = %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerConfirmed || got.Picker.At.IsZero() {
+		t.Fatalf("confirmed stanza = %+v", got.Picker)
 	}
 }
 
@@ -78,8 +78,8 @@ func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 	if got.EffectiveMode() != session.ModeAssistant {
 		t.Fatalf("mode = %q, want assistant", got.Mode)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("adding repositories recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("adding repositories recorded an escalation: %+v", got.Picker)
 	}
 	if len(got.Repos) != 1 {
 		t.Fatalf("repos = %+v", got.Repos)
@@ -303,8 +303,8 @@ func TestCancelWritesTheCancelledStanzaOnlyOnAnEscalation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a plain add-repos cancel wrote a stanza: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("a plain add-repos cancel wrote a stanza: %+v", got.Picker)
 	}
 
 	if err := Cancel(dir, true); err != nil {
@@ -314,8 +314,8 @@ func TestCancelWritesTheCancelledStanzaOnlyOnAnEscalation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationCancelled || got.Escalation.At.IsZero() {
-		t.Fatalf("cancelled stanza = %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerCancelled || got.Picker.At.IsZero() {
+		t.Fatalf("cancelled stanza = %+v", got.Picker)
 	}
 	if got.EffectiveMode() != session.ModeAssistant || len(got.Repos) != 0 {
 		t.Fatalf("cancel touched the session beyond the stanza: %+v", got)
@@ -453,8 +453,8 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleReference || r.Branch != "" || r.Revision == "" {
 		t.Fatalf("a refused take-up rewrote the entry: %+v", r)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a refused take-up recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("a refused take-up recorded an escalation: %+v", got.Picker)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "src", "svc")); !os.IsNotExist(err) {
 		t.Fatalf("the addition was cloned before the take-up was refused (%v)", err)
@@ -526,8 +526,8 @@ func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "feat/half" || r.Revision != "" {
 		t.Fatalf("the manifest describes a checkout that is not on disk: %+v", r)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a failed addition recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("a failed addition recorded an escalation: %+v", got.Picker)
 	}
 	branch, err := exec.Command("git", "-C", filepath.Join(dir, "src", "docs"), "branch", "--show-current").Output()
 	if err != nil {

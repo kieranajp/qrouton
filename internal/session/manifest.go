@@ -142,26 +142,30 @@ type Manifest struct {
 	Sticker       Sticker     `json:"sticker,omitempty"`
 	// Runner is the coding agent this session was assembled with, so every later
 	// boot starts the one that was chosen rather than the workbench's default.
-	Runner     string             `json:"runner,omitempty"`
-	CreatedAt  time.Time          `json:"createdAt"`
-	Repos      []ManifestRepo     `json:"repos"`
-	Escalation *EscalationOutcome `json:"escalation,omitempty"`
+	Runner    string         `json:"runner,omitempty"`
+	CreatedAt time.Time      `json:"createdAt"`
+	Repos     []ManifestRepo `json:"repos"`
+	Picker    *PickerOutcome `json:"picker,omitempty"`
 }
 
-// EscalationStatus is how a picker-driven escalation attempt ended.
-type EscalationStatus string
+// PickerStatus is how a picker a Go-side request was awaiting ended. Readers
+// match Confirmed explicitly: everything else, a zero value included, is
+// not-confirmed.
+type PickerStatus string
 
 const (
-	EscalationConfirmed EscalationStatus = "confirmed"
-	EscalationCancelled EscalationStatus = "cancelled"
+	PickerConfirmed PickerStatus = "confirmed"
+	PickerCancelled PickerStatus = "cancelled"
 )
 
-// EscalationOutcome records the most recent escalation attempt. The picker
-// writes it as part of its single atomic manifest write; the escalate MCP tool
-// polls At to notice an outcome newer than the picker it spawned.
-type EscalationOutcome struct {
-	Status EscalationStatus `json:"status"`
-	At     time.Time        `json:"at"`
+// PickerOutcome records the most recent awaited picker. The picker writes it as
+// part of its single atomic manifest write, so the Repos a poller reads
+// alongside a fresh stanza are the set the user confirmed; the blocked MCP tool
+// polls At to notice an outcome newer than the picker it spawned. A picker the
+// user opened themselves records nothing — nothing is awaiting it.
+type PickerOutcome struct {
+	Status PickerStatus `json:"status"`
+	At     time.Time    `json:"at"`
 }
 
 // EffectiveMode is the session's runner mode, defaulting to RPI for manifests

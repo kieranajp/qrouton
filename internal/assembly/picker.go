@@ -34,7 +34,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 		out.Name, out.Description, out.TicketURL = d.Name, d.Description, d.Ticket
 		if escalate {
 			out.Mode = session.ModeRPI
-			out.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
+			out.Picker = &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now()}
 		}
 		updated = out
 		return out, nil
@@ -85,7 +85,7 @@ func Cancel(dir string, escalate bool) error {
 		return nil
 	}
 	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
-		m.Escalation = &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()}
+		m.Picker = &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()}
 		return m, nil
 	})
 }

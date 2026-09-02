@@ -945,7 +945,7 @@ func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()},
 		})
 	}()
 
@@ -998,7 +998,7 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 	go func() {
 		time.Sleep(40 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now()},
 		})
 	}()
 
@@ -1022,7 +1022,7 @@ func TestEscalateBlocksUntilCancelled(t *testing.T) {
 	go func() {
 		time.Sleep(40 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()},
 		})
 	}()
 
@@ -1048,6 +1048,32 @@ func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
 	}
 	if message != escalationTimeoutMessage {
 		t.Fatalf("message = %q, want the timeout message", message)
+	}
+}
+
+// Only "confirmed" is a confirm. A stanza carrying no status at all is a bug
+// somewhere upstream, and reading it as approval would escalate a session the
+// user never agreed to.
+func TestEscalateTreatsAStatuslessStanzaAsNotConfirmed(t *testing.T) {
+	m, _, dir := newTestManager(t)
+	shortEscalatePoll(t, time.Second)
+
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Picker: &session.PickerOutcome{At: time.Now()},
+		})
+	}()
+
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message == escalationConfirmedMessage {
+		t.Fatal("a stanza with no status read as a confirmed escalation")
+	}
+	if message != escalationCancelledMessage {
+		t.Fatalf("message = %q, want the cancelled message", message)
 	}
 }
 

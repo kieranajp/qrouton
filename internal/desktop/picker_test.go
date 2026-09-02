@@ -209,8 +209,8 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationCancelled {
-		t.Fatalf("cancelling an escalation wrote %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerCancelled {
+		t.Fatalf("cancelling an escalation wrote %+v", got.Picker)
 	}
 
 	if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
@@ -227,8 +227,8 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed {
-		t.Fatalf("confirming an escalation wrote %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerConfirmed {
+		t.Fatalf("confirming an escalation wrote %+v", got.Picker)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
 		t.Fatalf("confirm did not add the repository: %+v", got.Repos)
