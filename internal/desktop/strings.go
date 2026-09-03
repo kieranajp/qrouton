@@ -58,10 +58,6 @@ const (
 	assemblyProgressEvent  = "assembly:progress"
 	assemblyRequestedEvent = "assembly:requested"
 	orgsChangedEvent       = "orgs:changed"
-
-	assemblyOutcomeDraft    = "draft"
-	assemblyOutcomeExisting = "existing-session"
-	assemblyOutcomeQueued   = "queued"
 )
 
 // A tab may only stand in for a window if it reports its process's state.

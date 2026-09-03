@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -14,12 +15,12 @@ import (
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
-	picker      func(req workbench.PickerRequest) error
-	attention   func(activity string, generation uint64)
-	generation  func(req workbench.RunnerGenerationRequest)
-	lifecycle   func(req workbench.DelegatedLifecycleRequest)
-	linearIssue func(ticket, prompt string) (string, error)
-	focus       func()
+	picker     func(req workbench.PickerRequest) error
+	attention  func(activity string, generation uint64)
+	generation func(req workbench.RunnerGenerationRequest)
+	lifecycle  func(req workbench.DelegatedLifecycleRequest)
+	openTicket func(url, prompt string) (string, error)
+	focus      func()
 }
 
 // control serves the workbench port over a unix socket: one request per
@@ -85,111 +86,96 @@ type guard func(*control, workbench.Request) error
 
 type handler struct {
 	guards []guard
-	run    func(*control, workbench.Request) workbench.Response
+	run    func(*control, workbench.Request) (workbench.Response, error)
 }
 
 // handlers is every operation the control socket serves. An operation is one
-// entry: its guards, and a body that may assume they passed.
+// entry: its guards, and a body that may assume they passed. A returned error
+// becomes the response's Error; dispatch is the only place that conversion
+// happens.
 var handlers = map[string]handler{
 	workbench.OpOpen: {
 		guards: []guard{needsOptions, needsSession},
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			id, err := c.windows.openWindow(c.owner, *req.Options)
-			if err != nil {
-				return workbench.Response{Error: err.Error()}
-			}
-			return workbench.Response{ID: id}
+			return workbench.Response{ID: id}, err
 		},
 	},
 	workbench.OpClose: {
-		run: func(c *control, req workbench.Request) workbench.Response {
-			if err := c.windows.Close(req.ID); err != nil {
-				return workbench.Response{Error: err.Error()}
-			}
-			return workbench.Response{ID: req.ID}
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			return workbench.Response{ID: req.ID}, c.windows.Close(req.ID)
 		},
 	},
 	workbench.OpRead: {
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			text, err := c.windows.readWindow(req.ID, req.Full)
-			if err != nil {
-				return workbench.Response{Error: err.Error()}
-			}
-			return workbench.Response{ID: req.ID, Text: text}
+			return workbench.Response{ID: req.ID, Text: text}, err
 		},
 	},
 	workbench.OpViewport: {
 		guards: []guard{needsSession},
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			viewport, err := c.windows.viewport(c.owner, req.ID)
-			if err != nil {
-				return workbench.Response{Error: err.Error()}
-			}
-			return workbench.Response{ID: req.ID, Viewport: viewport}
+			return workbench.Response{ID: req.ID, Viewport: viewport}, err
 		},
 	},
 	workbench.OpExists: {
-		run: func(c *control, req workbench.Request) workbench.Response {
-			return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}, nil
 		},
 	},
 	workbench.OpList: {
-		run: func(c *control, _ workbench.Request) workbench.Response {
-			return workbench.Response{IDs: c.windows.list()}
+		run: func(c *control, _ workbench.Request) (workbench.Response, error) {
+			return workbench.Response{IDs: c.windows.list()}, nil
 		},
 	},
 	workbench.OpPicker: {
 		guards: []guard{needsPickerRequest},
-		run: func(c *control, req workbench.Request) workbench.Response {
-			if c.hooks.picker != nil {
-				if err := c.hooks.picker(*req.Picker); err != nil {
-					return workbench.Response{Error: err.Error()}
-				}
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			if c.hooks.picker == nil {
+				return workbench.Response{}, nil
 			}
-			return workbench.Response{}
+			return workbench.Response{}, c.hooks.picker(*req.Picker)
 		},
 	},
 	workbench.OpAttention: {
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			if c.hooks.attention != nil {
 				c.hooks.attention(req.Activity, req.Generation)
 			}
-			return workbench.Response{}
+			return workbench.Response{}, nil
 		},
 	},
 	workbench.OpRunnerGeneration: {
 		guards: []guard{needsSession, needsRunnerGeneration},
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			if c.hooks.generation != nil {
 				c.hooks.generation(*req.RunnerGeneration)
 			}
-			return workbench.Response{}
+			return workbench.Response{}, nil
 		},
 	},
 	workbench.OpDelegatedLifecycle: {
 		guards: []guard{needsSession, needsLifecycle},
-		run: func(c *control, req workbench.Request) workbench.Response {
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			if c.hooks.lifecycle != nil {
 				c.hooks.lifecycle(*req.Lifecycle)
 			}
-			return workbench.Response{}
+			return workbench.Response{}, nil
 		},
 	},
-	workbench.OpOpenLinearIssue: {
-		guards: []guard{needsProcessIngress, needsLinearIssue},
-		run: func(c *control, req workbench.Request) workbench.Response {
-			canonical, err := ticket.Canonical(req.LinearIssue.Ticket)
+	workbench.OpOpenTicket: {
+		guards: []guard{needsProcessIngress, needsTicket},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			canonical, err := ticket.Canonical(req.Ticket.URL)
 			if err != nil {
-				return workbench.Response{Error: err.Error()}
+				return workbench.Response{}, err
 			}
-			outcome, err := c.hooks.linearIssue(canonical, req.LinearIssue.Prompt)
-			if c.hooks.focus != nil && (err == nil || errors.Is(err, ErrAssemblyDraftConflict)) {
+			outcome, err := c.hooks.openTicket(canonical, req.Ticket.Prompt)
+			if c.hooks.focus != nil && (err == nil || errors.Is(err, assembly.ErrDraftConflict)) {
 				c.hooks.focus()
 			}
-			if err != nil {
-				return workbench.Response{Error: err.Error()}
-			}
-			return workbench.Response{Outcome: outcome}
+			return workbench.Response{Outcome: outcome}, err
 		},
 	},
 }
@@ -204,7 +190,7 @@ func needsSession(c *control, _ workbench.Request) error {
 // needsProcessIngress admits only the published process endpoint: a session's
 // listener has an owner, and the hook is installed on that one endpoint alone.
 func needsProcessIngress(c *control, _ workbench.Request) error {
-	if c.owner != nil || c.hooks.linearIssue == nil {
+	if c.owner != nil || c.hooks.openTicket == nil {
 		return ErrProcessIngressOnly
 	}
 	return nil
@@ -238,9 +224,9 @@ func needsLifecycle(_ *control, req workbench.Request) error {
 	return nil
 }
 
-func needsLinearIssue(_ *control, req workbench.Request) error {
-	if req.LinearIssue == nil || req.LinearIssue.Ticket == "" {
-		return ErrNoLinearIssue
+func needsTicket(_ *control, req workbench.Request) error {
+	if req.Ticket == nil || req.Ticket.URL == "" {
+		return ErrNoTicket
 	}
 	return nil
 }
@@ -255,7 +241,11 @@ func (c *control) dispatch(req workbench.Request) workbench.Response {
 			return workbench.Response{Error: err.Error()}
 		}
 	}
-	return h.run(c, req)
+	res, err := h.run(c, req)
+	if err != nil {
+		return workbench.Response{Error: err.Error()}
+	}
+	return res
 }
 
 func (c *control) Close() error {

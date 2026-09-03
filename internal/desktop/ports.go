@@ -45,5 +45,5 @@ type Validator interface {
 // changed sessions root cannot take effect in a running process; the ticket
 // supplier is read after the relaunch owns launch serialization.
 type Relauncher interface {
-	Relaunch(linearIssue func() (ticket, prompt string)) error
+	Relaunch(pending func() (url, prompt string)) error
 }

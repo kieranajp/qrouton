@@ -31,11 +31,11 @@ type Options struct {
 	Root string
 	// Socket answers the launcher's readiness poll.
 	Socket string
-	// LinearIssue is a canonical ticket offered after session boot is wired and
-	// before the page can claim a blank draft. LinearPrompt is the full prompt
-	// Linear generated for the eventual runner's first turn.
-	LinearIssue  string
-	LinearPrompt string
+	// Ticket is a canonical ticket offered after session boot is wired and
+	// before the page can claim a blank draft. TicketPrompt is the full prompt
+	// the external tool generated for the eventual runner's first turn.
+	Ticket       string
+	TicketPrompt string
 	// LinearCommand is the executable and fixed arguments written before
 	// Linear's issue identifier template in coding-tools.json.
 	LinearCommand     []string
@@ -110,7 +110,7 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 	if relaunch == nil {
 		return nil
 	}
-	return func() error { return relaunch(assembly.pendingLinear) }
+	return func() error { return relaunch(assembly.pendingTicket) }
 }
 
 // validators are the settings panel's checks, which a workbench without a
@@ -207,7 +207,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	processHooks := controlHooks{picker: reg.queuePicker}
 	if opts.assembly != nil {
-		processHooks.linearIssue = opts.assembly.offer
+		processHooks.openTicket = opts.assembly.offer
 		processHooks.focus = func() { r.Focus(mainWindowName) }
 	}
 	server, err := serveControl(opts.Socket, windows, nil, processHooks)
@@ -215,11 +215,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		return err
 	}
 	defer server.Close()
-	if opts.LinearIssue != "" {
+	if opts.Ticket != "" {
 		if opts.assembly == nil {
 			return ErrNoConfig
 		}
-		if _, err := opts.assembly.offer(opts.LinearIssue, opts.LinearPrompt); err != nil {
+		if _, err := opts.assembly.offer(opts.Ticket, opts.TicketPrompt); err != nil {
 			return err
 		}
 	}
@@ -243,7 +243,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}); err != nil {
 		return err
 	}
-	if opts.LinearIssue == "" && opts.SessionRoot != "" {
+	if opts.Ticket == "" && opts.SessionRoot != "" {
 		opened, err := reg.start(opts.SessionRoot, "", opts.Resume)
 		if err != nil {
 			return err

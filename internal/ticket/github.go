@@ -26,7 +26,8 @@ var (
 
 type github struct{}
 
-func (github) Name() string { return githubProvider }
+func (github) Name() string  { return githubProvider }
+func (github) Label() string { return githubLabel }
 
 func (github) Hosts() []string { return []string{githubHost} }
 

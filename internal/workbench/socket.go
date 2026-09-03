@@ -41,7 +41,7 @@ type Request struct {
 	Generation       uint64                     `json:"generation,omitempty"`
 	Options          *WindowOptions             `json:"options,omitempty"`
 	Picker           *PickerRequest             `json:"picker,omitempty"`
-	LinearIssue      *LinearIssueRequest        `json:"linear_issue,omitempty"`
+	Ticket           *TicketRequest             `json:"ticket,omitempty"`
 	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
 	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
 }
@@ -57,10 +57,10 @@ type Response struct {
 	Error    string            `json:"error,omitempty"`
 }
 
-// LinearIssueRequest is the canonical ticket and the user-level request Linear
-// generated for it.
-type LinearIssueRequest struct {
-	Ticket string `json:"ticket"`
+// TicketRequest is the canonical ticket URL and the user-level request the
+// external tool generated for it.
+type TicketRequest struct {
+	URL    string `json:"url"`
 	Prompt string `json:"prompt,omitempty"`
 }
 
@@ -278,11 +278,11 @@ func (h Handle) DelegatedLifecycle(ctx context.Context, event DelegatedLifecycle
 	return err
 }
 
-// OpenLinearIssue offers one canonical Linear ticket and its generated prompt
-// to the published process endpoint.
-func OpenLinearIssue(ctx context.Context, socket, ticket, prompt string) (string, error) {
+// OpenTicket offers one canonical ticket and its generated prompt to the
+// published process endpoint.
+func OpenTicket(ctx context.Context, socket, url, prompt string) (string, error) {
 	res, err := (&client{socket: socket}).call(ctx, Request{
-		Op: OpOpenLinearIssue, LinearIssue: &LinearIssueRequest{Ticket: ticket, Prompt: prompt},
+		Op: OpOpenTicket, Ticket: &TicketRequest{URL: url, Prompt: prompt},
 	})
 	return res.Outcome, err
 }
@@ -321,13 +321,7 @@ func (c *client) Read(ctx context.Context, id string, full bool) (string, error)
 
 func (c *client) Viewport(ctx context.Context, id string) (*DocumentViewport, error) {
 	res, err := c.call(ctx, Request{Op: OpViewport, ID: id})
-	if err != nil || res.Viewport == nil {
-		return res.Viewport, err
-	}
-	if res.Viewport.Intervals == nil {
-		res.Viewport.Intervals = []LineInterval{}
-	}
-	return res.Viewport, nil
+	return res.Viewport.Measured(), err
 }
 
 func (c *client) Exists(ctx context.Context, id string) (bool, error) {

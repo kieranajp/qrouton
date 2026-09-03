@@ -6,6 +6,10 @@ const (
 	asanaProvider  = "asana"
 	githubProvider = "github"
 
+	linearLabel = "Linear"
+	asanaLabel  = "Asana"
+	githubLabel = "GitHub"
+
 	linearAPIDefault = "https://api.linear.app/graphql"
 	asanaAPIDefault  = "https://app.asana.com/api/1.0"
 	githubAPIDefault = "https://api.github.com"

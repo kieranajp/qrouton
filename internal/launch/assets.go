@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
@@ -17,9 +18,10 @@ const (
 )
 
 type launchManifest struct {
-	Mode string `json:"mode"`
-	Name string `json:"name"`
-	Slug string `json:"slug"`
+	Mode   string `json:"mode"`
+	Name   string `json:"name"`
+	Slug   string `json:"slug"`
+	Ticket string `json:"ticketUrl"`
 }
 
 func sessionMode(dir string) string {
@@ -39,6 +41,16 @@ func sessionName(dir string) string {
 		return manifest.Name
 	}
 	return manifest.Slug
+}
+
+// sessionTicket is the provider a session's ticket belongs to, as a person
+// writes it, and empty for a session assembled without one.
+func sessionTicket(dir string) string {
+	manifest, ok := sessionManifest(dir)
+	if !ok {
+		return ""
+	}
+	return ticket.ProviderLabel(manifest.Ticket)
 }
 
 func sessionManifest(dir string) (launchManifest, bool) {

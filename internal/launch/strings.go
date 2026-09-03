@@ -135,7 +135,8 @@ const (
 // presents the orchestrated workflow; Assistant stays open-ended while pointing
 // at the workflow the user can escalate into.
 const (
-	linearRequestSeparator = "\n\nLinear request:\n"
+	requestSeparator         = "\n\nRequest:\n"
+	providerRequestSeparator = "\n\n%s request:\n"
 
 	openingMessageRPI = "You have just been launched in a qrouton session. " +
 		"Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, " +
