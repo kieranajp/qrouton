@@ -148,11 +148,7 @@ func Run(root, editorJSON, workbenchJSON string) error {
 		Run(context.Background(), &mcp.StdioTransport{})
 }
 
-// sessionMode is the mode this server serves, read once at startup: an
-// escalation replaces the runner process and this server with it, so the mode
-// cannot change under a server that is already running. A manifest that will not
-// load reads as RPI, which withholds a tool rather than offering the agent one
-// its own prompt says it does not have.
+// sessionMode is fixed for the server lifetime; unreadable manifests default to restrictive RPI.
 func sessionMode(root string) session.SessionMode {
 	manifest, err := session.Load(root)
 	if err != nil {

@@ -12,11 +12,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// DocumentWindow is how a session file reaches the user: a pane qrouton draws
-// for the formats it can, and the editor for everything else. Both the agent's
-// file tool and the window's own document chip come through here. span is the
-// part of the file to draw the eye to; a pane marks it, an editor opens on its
-// first line.
+// DocumentWindow opens supported formats in a pane and everything else in the editor.
+// A pane marks the full span; an editor opens at its first line.
 func DocumentWindow(root, name string, editor EditorCommand, span workbench.LineSpan) (workbench.WindowOptions, error) {
 	path, err := ResolveSessionFile(root, name)
 	if err != nil {

@@ -22,14 +22,9 @@ export function flatten(node) {
   return (node?.children ?? []).map(flatten).join("");
 }
 
-/**
- * Where one section ends and the next begins. Every second-level heading opens
- * one, whatever it is called, so a section before or after the ones a reader
- * came for is a section of its own rather than something spilled into a
- * neighbour.
+/** Every second-level heading bounds a section, including headings a reader ignores.
  * @param {any} node An mdast node.
- * @returns {{name: string} | null}
- */
+ * @returns {{name: string} | null} */
 function opensSection(node) {
   if (node?.type !== "heading" || node.depth !== 2) return null;
   const name = flatten(node).trim();
@@ -37,9 +32,6 @@ function opensSection(node) {
 }
 
 /**
- * The document convention every workbench artifact shares: frontmatter, a title,
- * a lead, then a section per second-level heading. What each reader makes of a
- * section is its own business.
  * @typedef {{name: string, from: number, to: number, nodes: any[]}} Section
  * @param {string} text
  * @returns {{title: string, preamble: {from: number, to: number}, sections: Section[]}}
@@ -97,14 +89,9 @@ function spanOf(node) {
   };
 }
 
-/**
- * One rendered document cut back into the blocks it was written as, by the
- * source lines they already carry. A block the parser numbered nowhere takes
- * the range of the numbered blocks inside it, or failing that the range of the
- * block before it.
+/** Unnumbered blocks inherit ranges from descendants, then from the preceding block.
  * @param {string} html
- * @returns {{html: string, from: number, to: number}[]}
- */
+ * @returns {{html: string, from: number, to: number}[]} */
 export function dealt(html) {
   const holder = document.createElement("div");
   holder.innerHTML = html;

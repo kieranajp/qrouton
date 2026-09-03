@@ -1,8 +1,4 @@
-// Package markdown answers what qrouton asks of a document's text: what it
-// calls itself, and which of its sections have been written. A tab label and a
-// shared page's title are the same question, so they are the same answer.
-// Nothing here renders anything — the workbench's page and the share bundle
-// each do their own.
+// Package markdown reads titles, bodies, and section state without rendering.
 package markdown
 
 import "strings"
@@ -20,11 +16,7 @@ const (
 	quote      = ">"
 )
 
-// Title is the level-one heading a document opens with, after any frontmatter,
-// and false for a document that opens with anything else — prose, a lower
-// heading, a code fence. Deliberately the opening heading rather than the first
-// one anywhere: a `# ` further down belongs to a later section or to the inside
-// of a fenced block, and neither names the document.
+// Title accepts only the first visible element after frontmatter as the document title.
 func Title(text string) (string, bool) {
 	for _, line := range body(text) {
 		trimmed := strings.TrimSpace(line)

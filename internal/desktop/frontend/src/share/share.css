@@ -1,7 +1,5 @@
-/* The shared page's own token layer. tokens/index.css is not imported: its
-   html/body rules pin the height and hide the overflow, which is right for a
-   window and wrong for a page someone scrolls. Colours arrive ahead of this
-   file, rendered by internal/theme. */
+/* Shared pages omit window-level height and overflow rules so they remain scrollable.
+   The backend emits the colour variables before this stylesheet. */
 @import "./fonts.css";
 @import "../tokens/typography.css";
 @import "../tokens/spacing.css";

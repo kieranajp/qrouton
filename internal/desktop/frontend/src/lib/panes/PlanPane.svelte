@@ -147,9 +147,8 @@
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const from = /** @type {HTMLElement} */ (event.target);
     const field = /^(input|textarea|select)$/i.test(from?.tagName ?? "");
-    // A field owns the arrows because they move its caret; a tick box has none,
-    // so the deck keeps them while the reader's focus rests on Follow.
-    const tick = /** @type {HTMLInputElement} */ (from)?.type === "checkbox";
+    const tick = /** A checkbox has no caret, so the deck keeps its arrow keys.
+     * @type {HTMLInputElement} */ (from)?.type === "checkbox";
     if (from?.isContentEditable || (field && !tick)) return;
     if (event.key === "ArrowRight") show(current + 1);
     else if (event.key === "ArrowLeft") show(current - 1);

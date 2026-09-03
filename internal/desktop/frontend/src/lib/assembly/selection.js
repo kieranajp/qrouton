@@ -24,13 +24,9 @@ const UPGRADE_OFFERS = ["reference", "editing"];
 /** @type {Role[]} */
 const NO_OFFERS = [];
 
-/**
- * seed is the selection step 2 opens with. A held row carries its role and stays
- * out of the order: it reaches Go as a manifest entry to leave alone, and
- * composing it again clones a repository the agent is already working in.
+/** Held rows retain their roles but stay out of the new-selection order.
  * @param {{id: string, role: Role}[]} [held]
- * @returns {Selection}
- */
+ * @returns {Selection} */
 export function seed(held = []) {
   /** @type {Record<string, Role>} */
   const roles = {};
@@ -46,20 +42,14 @@ export const isLocked = (selection, id) => selection.locked.includes(id);
 
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
 
-/**
- * roleOffers is what one row's toggle will answer to. A held editing repository
- * answers to nothing: its worktree can carry commits and uncommitted work, so
- * dropping or demoting it is not a thing to do from a picker.
- * @returns {Role[]}
- */
+/** Held editing repositories cannot be dropped or demoted from the picker.
+ * @returns {Role[]} */
 export function roleOffers(selection, id) {
   if (!isLocked(selection, id)) return OFFERS;
   return selection.roles[id] === "reference" ? UPGRADE_OFFERS : NO_OFFERS;
 }
 
 /**
- * rowMeta is the line beside a repository's name. A held row says so, and one
- * being taken up says that before it happens: the toggle beside it has answered.
  * @param {Selection} selection
  * @param {string} id
  * @param {string} pushed
@@ -74,12 +64,8 @@ function heldNote(selection, id) {
   return selection.roles[id] === "reference" ? READING : IN_SESSION;
 }
 
-/**
- * setRole records one row's role. A repository keeps the rank it was first given,
- * so demoting it to reference holds its place while turning it off and back sends
- * it last.
- * @returns {Selection}
- */
+/** Demotion preserves selection rank; turning a repository off discards it.
+ * @returns {Selection} */
 export function setRole(selection, id, role) {
   if (isLocked(selection, id)) return takeUp(selection, id, role);
   const roles = { ...selection.roles };
@@ -92,25 +78,18 @@ export function setRole(selection, id, role) {
   return { ...selection, roles, order };
 }
 
-/**
- * takeUp marks a held reference row to be checked out for editing, or unmarks it.
- * The held role stays in roles, so the row can go back to what the session still
- * has on disk right up until confirm.
- * @returns {Selection}
- */
+/** A pending upgrade retains its on-disk role until confirmation.
+ * @returns {Selection} */
 function takeUp(selection, id, role) {
   if (!roleOffers(selection, id).includes(role)) return selection;
   const upgrades = selection.upgrades.filter((seen) => seen !== id);
   return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
-/**
- * reconcile drops the repositories a refreshed list no longer carries. Held rows
- * survive it, because the session holds them whatever GitHub now reports.
+/** Reconciliation retains held repositories even when GitHub omits them.
  * @param {Selection} selection
  * @param {string[]} ids
- * @returns {Selection}
- */
+ * @returns {Selection} */
 export function reconcile(selection, ids) {
   const available = new Set(ids);
   /** @type {Record<string, Role>} */
@@ -143,15 +122,10 @@ export const ordered = (selection) =>
 /** upgrading is what Go takes up for editing, which it finds in the manifest. */
 export const upgrading = (selection) => [...selection.upgrades];
 
-/**
- * summary is the selected chips. An editing chip names the branch it joins, and
- * says nothing while there is no branch to name. A row being taken up leads: it
- * is the one answer whose row a search can scroll out of sight.
+/** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
- * @param {string} branch
- * @returns {{id: string, role: Role, glyph: string, meta: string}[]}
- */
+ * @param {string} branch @returns {{id: string, role: Role, glyph: string, meta: string}[]} */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
   const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));

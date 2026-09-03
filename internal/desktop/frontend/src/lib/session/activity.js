@@ -47,12 +47,9 @@ export function roleLabel(role) {
   return ROLES.has(role) ? role : "";
 }
 
-/**
- * stateLabel is an agent's own state, and waiting is the orchestrator's alone:
- * only it can be blocked on the user. A lead or a subagent works or finishes.
+/** Only orchestrators can present a waiting-for-user state.
  * @param {string} state
- * @param {string} [role]
- */
+ * @param {string} [role] */
 export function stateLabel(state, role = "") {
   if (!STATES.has(state)) return "";
   if (state === "Waiting for you" && role !== "Orchestrator") return "Working";
@@ -94,8 +91,6 @@ const MINUTE = 60 * SECOND;
 const HOUR = 60 * MINUTE;
 
 /**
- * duration is how long an agent has been at it, or was. A run with no start
- * stamp behind it says nothing.
  * @param {AgentRecord} record
  * @param {number} [now]
  */
@@ -116,11 +111,7 @@ export function duration(record, now = Date.now()) {
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
-/**
- * subagentTally is the disclosure line: how many a lead delegated to and how
- * many are through.
- * @param {AgentRecord[]} records
- */
+/** @param {AgentRecord[]} records */
 export function subagentTally(records = []) {
   const done = records.filter(finishedAgent).length;
   const plural = records.length === 1 ? "subagent" : "subagents";
@@ -150,11 +141,7 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   return facts;
 }
 
-/**
- * repositoryLine names one repository and counts the rest. One legible name
- * beats two cut mid-word.
- * @param {{name?: string}[]} repos
- */
+/** @param {{name?: string}[]} repos */
 export function repositoryLine(repos = []) {
   if (!repos.length) return { name: "No editing repositories", extra: "" };
   return { name: repos[0].name ?? "", extra: repos.length > 1 ? `+${repos.length - 1}` : "" };
@@ -184,11 +171,9 @@ export function capabilityNote(panel = {}) {
  * started_at?: string, finished_at?: string}} AgentRecord */
 /** @typedef {{record: AgentRecord, level: number, children: AgentNode[]}} AgentNode */
 
-/**
- * Projects only relationships whose exact parent record is present in the same provider run.
+/** Parent-child relationships never cross provider runs.
  * @param {AgentRecord[]} records
- * @returns {{trees: AgentNode[], observed: AgentRecord[]}}
- */
+ * @returns {{trees: AgentNode[], observed: AgentRecord[]}} */
 export function projectAgents(records = []) {
   const nodes = records.map((record) => ({ record, level: 0, children: [] }));
   const key = (record) => `${record.provider ?? ""}\u0000${record.run_id ?? ""}\u0000${record.id ?? ""}`;
@@ -219,12 +204,8 @@ export function projectAgents(records = []) {
   return { trees, observed };
 }
 
-/**
- * hierarchy is the three ranks the panel draws: an orchestrator, the leads it
- * delegated to, and each lead's subagents held behind a count. A subagent is a
- * detail, never a row of its own until asked for.
- * @param {AgentRecord[]} records
- */
+/** Subagents remain collapsed beneath their lead until requested.
+ * @param {AgentRecord[]} records */
 export function hierarchy(records = []) {
   const { trees, observed } = projectAgents(records);
   return {

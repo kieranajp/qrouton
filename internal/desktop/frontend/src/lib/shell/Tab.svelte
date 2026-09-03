@@ -3,9 +3,8 @@
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import { tabLabel } from "./tabs.js";
 
-  // An unfocused tab that cannot report a red test run is one you must click to
-  // trust, so the process's state rides along with the label.
-  /** @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
+  /** Status stays visible on unfocused tabs so failed runs remain apparent.
+   * @type {{label?: string, badge?: string, artifact?: string, status?: 'succeeded'|'running'|'failed'|'waiting'|'idle', selected?: boolean, closable?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
   let {
     label,
     badge,

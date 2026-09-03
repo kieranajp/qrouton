@@ -43,11 +43,7 @@ func Status(root string, m Manifest) WorkflowStatus {
 	return status
 }
 
-// researched reports whether a research document holds findings. Framing writes
-// the document first, carrying its questions as headings with only the context a
-// researcher needs under them, so headings alone are not research. A document
-// that opens no sections is prose findings, and an empty one is a file still
-// being written.
+// researched requires answered sections, or non-empty prose when there are no sections.
 func researched(path string) bool {
 	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
 		return false

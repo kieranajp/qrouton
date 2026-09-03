@@ -131,15 +131,10 @@ export function render(markdown) {
   return { title: typeof file.data.title === "string" ? file.data.title : "", body: String(file) };
 }
 
-/**
- * Chooses the blocks a focus span marks, and the one the pane scrolls to. A
- * span landing between two blocks marks nothing — a blank line belongs to
- * neither — and scrolls to the block that follows it, so pointing at roughly
- * the right line still lands the user in the right place.
+/** A span between blocks marks nothing and scrolls to the following block.
  * @param {{line: number, end: number}[]} blocks In document order.
  * @param {{line: number, to: number}} span
- * @returns {{marked: number[], at: number}} at is -1 when the span reaches nothing.
- */
+ * @returns {{marked: number[], at: number}} at is -1 when the span reaches nothing. */
 export function marks(blocks, span) {
   const first = span?.line ?? 0;
   if (first < 1) return { marked: [], at: -1 };

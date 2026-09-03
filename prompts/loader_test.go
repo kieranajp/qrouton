@@ -28,11 +28,116 @@ var embeddedPromptIDs = []string{
 	"agents/thoughts-researcher",
 	"assistant",
 	"orchestrator",
+	"skills/qrouton-development",
+	"skills/qrouton-evals",
+	"skills/qrouton-review",
 	"skills/qrspi-implement",
 	"skills/qrspi-plan",
 	"skills/qrspi-questions",
 	"skills/qrspi-research",
 	"skills/qrspi-spec",
+}
+
+func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
+	cases := []struct {
+		name              string
+		descriptionClaims []string
+		bodyClaims        []string
+	}{
+		{
+			name:              "qrouton-development",
+			descriptionClaims: []string{"Implement or debug qrouton's", "Do not use for operating qrouton on an unrelated project"},
+			bodyClaims:        []string{"nearest `AGENTS.md`", "src/lib/bridge/generated.js", "`prompts/`", "npm run test:unit", "npm run test:browser", "GOCACHE=/tmp/qrouton-go-cache make check", "do not infer that a release path runs"},
+		},
+		{
+			name:              "qrouton-evals",
+			descriptionClaims: []string{"eval/", "internal/evalharness/", "cmd/qrouton-eval/", "Do not use for ordinary application or unit-test work"},
+			bodyClaims:        []string{"`eval/README.md`", "`prompts.Stamp`", "`session.Manifest`", "--no-judge", "QROUTON_EVAL_SMOKE=1", "opt-in and do not run in CI"},
+		},
+		{
+			name:              "qrouton-review",
+			descriptionClaims: []string{"pre-merge diff review", "Do not use to implement"},
+			bodyClaims:        []string{"review read-only", "generated-source ownership", "launch/eval parity", "GOCACHE=/tmp/qrouton-go-cache make check", "UI, platform, authenticated eval"},
+		},
+	}
+
+	loader := NewEmbeddedLoader()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prompt, err := loader.Load(context.Background(), ID(skillIDPrefix+tc.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(prompt.Files) != 0 {
+				t.Fatalf("solo skill ships supporting files: %#v", prompt.Files)
+			}
+			name, description, body := skillParts(t, string(prompt.Content))
+			if name != tc.name {
+				t.Fatalf("skill name = %q", name)
+			}
+			if strings.TrimSpace(description) == "" {
+				t.Fatal("skill description is empty")
+			}
+			for _, claim := range tc.descriptionClaims {
+				if !strings.Contains(description, claim) {
+					t.Errorf("description is missing discovery boundary %q", claim)
+				}
+			}
+			for _, claim := range tc.bodyClaims {
+				if !strings.Contains(body, claim) {
+					t.Errorf("body is missing verified routing claim %q", claim)
+				}
+			}
+			for _, unsupported := range []string{"CI runs authenticated evals", "release runs make check", "comment checks decide comment quality"} {
+				if strings.Contains(strings.ToLower(body), strings.ToLower(unsupported)) {
+					t.Errorf("body makes unsupported claim %q", unsupported)
+				}
+			}
+		})
+	}
+}
+
+func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
+	dir := t.TempDir()
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		for _, name := range []string{"qrouton-development", "qrouton-evals", "qrouton-review"} {
+			entry := filepath.Join(dir, root, skillsDirName, name, skillFileName)
+			info, err := os.Lstat(entry)
+			if err != nil || info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("%s is not a stamped discovery link: %v", entry, err)
+			}
+			content, err := os.ReadFile(entry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(content), "name: "+name) || !strings.Contains(string(content), MarkerText) {
+				t.Fatalf("%s does not resolve to marked skill content:\n%s", entry, content)
+			}
+		}
+	}
+}
+
+func skillParts(t *testing.T, content string) (string, string, string) {
+	t.Helper()
+	if !strings.HasPrefix(content, frontmatterFence) {
+		t.Fatal("skill has no frontmatter")
+	}
+	end := strings.Index(content[len(frontmatterFence):], frontmatterClose)
+	if end < 0 {
+		t.Fatal("skill frontmatter is unterminated")
+	}
+	end += len(frontmatterFence)
+	fields := map[string]string{}
+	for _, line := range strings.Split(content[len(frontmatterFence):end], "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if ok {
+			fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	return fields["name"], fields["description"], content[end+len(frontmatterClose):]
 }
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {

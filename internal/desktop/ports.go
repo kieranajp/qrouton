@@ -22,12 +22,8 @@ type AgentCommand struct {
 	RunnerID string
 }
 
-// Launcher builds what the workbench runs. It is launch's, reached through an
-// interface because desktop must not import it: everything desktop imports is
-// linked into the workbench, and launch pulls in no webview.
-//
-// An empty Shell or Reveal argv is a workbench that cannot do that thing, and
-// says so through the matching sentinel error.
+// Launcher keeps launch out of the desktop dependency graph.
+// Empty Shell or Reveal commands report their matching unsupported-operation error.
 type Launcher interface {
 	Agent(AgentRequest) (AgentCommand, error)
 	Shell(sessionRoot string) []string

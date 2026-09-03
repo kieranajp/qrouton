@@ -21,11 +21,6 @@ import { refusal } from "./steps.js";
 const SHOWN = 50;
 
 /**
- * browsing is step 2's state, which the wizard and the picker both draw: the
- * repository list, the owners it is narrowed to, and the roles picked over it.
- * branch is what an editing row joins, which the two arrive at differently.
- * report is where a list that could not be fetched is said out loud, since the
- * two owners each have a footer of their own.
  * @param {() => string} branch
  * @param {(text: string) => void} [report]
  */

@@ -41,11 +41,7 @@ func Check(d Draft) []Problem {
 	return append(problems, checkRepos(d)...)
 }
 
-// CheckAdditions is the only one of these rules the picker shares. A session that
-// exists has already been named and branched, so its name and ticket are not the
-// picker's to judge again — and one already holding an editing repo cannot be
-// made to lack one by adding to it, so only a session still without one has to be
-// given one here.
+// CheckAdditions only requires an editing repo when the existing session has none.
 func CheckAdditions(m session.Manifest, d Draft) []Problem {
 	if holdsEditingRepo(m) || len(d.Upgrades) > 0 {
 		return nil
@@ -60,9 +56,7 @@ func checkRepos(d Draft) []Problem {
 	return []Problem{{Field: FieldRepos, Message: msgNoEditingRepo}}
 }
 
-// CheckSlug is the half that stats the disk, so it runs on advance rather than
-// on every keystroke. An abandoned half-assembly does not block the name;
-// session.Create reclaims it.
+// CheckSlug runs on advance because it stats the disk; abandoned assemblies are reusable.
 func (a Assembler) CheckSlug(d Draft) []Problem {
 	slug := d.Slug()
 	if slug == "" {

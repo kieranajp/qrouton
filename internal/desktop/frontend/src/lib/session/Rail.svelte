@@ -14,20 +14,7 @@
   import { rowAt, shortcut } from "../shortcuts.js";
   import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
 
-  /**
-   * @type {{
-   *   sessions: any[],
-   *   slug: string,
-   *   repos: any[],
-   *   agents: any,
-   *   stickerLabels: Record<string, string>,
-   *   onNewSession: () => void,
-   *   onAddRepos: () => void,
-   *   onDismissed: () => void,
-   *   size: number,
-   *   width: number,
-   * }}
-   */
+  /** @type {{sessions: any[], slug: string, repos: any[], agents: any, stickerLabels: Record<string, string>, onNewSession: () => void, onAddRepos: () => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,

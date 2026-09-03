@@ -24,14 +24,10 @@ const STATES = { started: "running", advanced: "running", completed: "done", fai
  * @property {number} [percent]
  */
 
-/**
- * record folds one event into the rows. Clone and fetch report continuously for
- * one step and repository, so a further advance replaces the row it is still
- * describing; an outcome always opens a row of its own.
+/** Progress replaces the current step row, while each outcome starts a new row.
  * @param {Row[]} rows
  * @param {Event} event
- * @returns {Row[]}
- */
+ * @returns {Row[]} */
 export function record(rows, event) {
   const row = toRow(event);
   const last = rows[rows.length - 1];

@@ -17,29 +17,20 @@ const STEP_MS = 120;
 /** @type {WeakMap<Element, {destroy: () => void}>} */
 const stages = new WeakMap();
 
-/**
- * The scale at which the whole diagram fits across the box, never enlarged: a
- * diagram carries its orientation in its shape, so opening it too small beats
- * opening it clipped.
+/** Diagrams open fully visible and never exceed their emitted size.
  * @param {{width: number, height: number} | null | undefined} emitted
  * @param {number} box
- * @returns {number}
- */
+ * @returns {number} */
 export function fitScale(emitted, box) {
   const width = emitted?.width ?? 0;
   if (!(width > 0) || !(box > 0)) return 1;
   return Math.min(box / width, 1);
 }
 
-/**
- * Content smaller than the box is pinned flush against its leading edge, in
- * line with the prose; content larger is held so neither of its edges comes
- * inside the box.
+/** Small content aligns with prose; large content stays within the stage.
  * @param {number} translate
  * @param {number} box
- * @param {number} content
- * @returns {number}
- */
+ * @param {number} content @returns {number} */
 export function clampTranslate(translate, box, content) {
   if (!Number.isFinite(translate)) return 0;
   return Math.min(0, Math.max(Math.min(0, box - content), translate));
@@ -56,7 +47,6 @@ export function clampScale(scale, base) {
 }
 
 /**
- * Holds the content under the pointer still while the scale changes around it.
  * @param {{scale: number, tx: number, ty: number}} state
  * @param {{x: number, y: number}} at Relative to the stage's origin.
  * @param {number} next
@@ -78,8 +68,6 @@ export function stepScale(scale, direction, base) {
 }
 
 /**
- * Where a drag moves the view, clamped so neither edge of the diagram comes
- * inside the stage.
  * @param {{tx: number, ty: number, button: number}} grab
  * @param {{x: number, y: number}} by
  * @param {{width: number, height: number}} box
@@ -94,15 +82,10 @@ export function panBy(grab, by, box, content) {
   };
 }
 
-/**
- * Installs the fixed-size stage the diagram is drawn inside, and opens it at
- * the scale that shows all of it. The stage's box is a function of pane width
- * and emitted size alone, so nothing the reader does to the view can move the
- * prose around it.
+/** Reader transforms never resize the stage or reflow surrounding prose.
  * @param {HTMLElement} block
  * @param {SVGSVGElement} svg
- * @param {{width: number, height: number}} emitted
- */
+ * @param {{width: number, height: number}} emitted */
 export function attach(block, svg, emitted) {
   detach(block);
   const doc = block.ownerDocument;
@@ -200,8 +183,8 @@ export function attach(block, svg, emitted) {
     if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
   };
 
-  // A drag that ends over a diagram must not reach the pane's link handler.
-  const clicked = (/** @type {MouseEvent} */ event) => {
+  const clicked = (/** A finished drag must not reach the pane's link handler.
+   * @type {MouseEvent} */ event) => {
     const swallow = dragged;
     dragged = false;
     if (!swallow || controls.contains(/** @type {Node} */ (event.target))) return;

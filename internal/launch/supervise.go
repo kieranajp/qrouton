@@ -19,13 +19,8 @@ import (
 // different processes and need not agree.
 const terminateGrace = 3 * time.Second
 
-// Supervise owns the conversation terminal: it stamps the session's assets,
-// launches the runner, and on SIGUSR1 kills it and relaunches from the manifest
-// as it now stands. An unsignalled exit is a real exit — the terminal ends
-// rather than resurrecting the agent.
-//
-// ponytail: pid file + SIGUSR1 — fine for one supervisor per session; a name
-// per terminal if a session ever hosts two agents.
+// Supervise owns one session runner and reloads its manifest on SIGUSR1.
+// An unsignalled runner exit ends the conversation terminal.
 func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorCommand, resume bool) error {
 	if err := writePID(dir); err != nil {
 		return err
@@ -81,11 +76,7 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		initialPrompt = ""
 		env = workbench.WithEnv(env, EditorEnvVar, editor.Marshal())
 		signalled, err := runAgent(argv, env, dir, relaunch)
-		// `claude --continue` against a session whose transcript is gone exits
-		// nonzero, and a session that can only be opened by resuming would then be
-		// shut out for good. There is no conversation left to protect, so the
-		// fallback starts one: the notice this launch consumed rides along, as the
-		// opening message is where a fresh conversation takes its prompt.
+		// A missing transcript gets one fresh start with the notice as its opening prompt.
 		if err != nil && !signalled && resume && freshStart {
 			freshStart = false
 			resume = false

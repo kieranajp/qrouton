@@ -12,11 +12,7 @@ type Fence struct {
 	Source  string
 }
 
-// Scan finds the d2 fences in raw markdown. Only top-level ones count — under
-// four columns of indent, outside any other open fence, and outside a
-// blockquote, whose marker stops the line looking like a fence at all. Both
-// directions of error are safe: a fence the page never stamped is dropped, and
-// one missed stays code.
+// Scan finds top-level d2 fences outside blockquotes and other fences.
 func Scan(document string) []Fence {
 	lines := strings.Split(document, "\n")
 	var found []Fence

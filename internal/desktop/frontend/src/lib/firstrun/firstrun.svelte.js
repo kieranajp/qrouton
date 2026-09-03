@@ -6,13 +6,7 @@ import * as go from "./calls.js";
 import { firstRunOutcome } from "./outcome.js";
 import { last } from "./screens.js";
 
-/**
- * firstRun is the five screens as one step machine. Both answers stay in frontend
- * state until the final button, so quitting partway leaves nothing
- * half-configured. A refusal keeps the user on the last screen with both answers
- * in hand and the gate still up; a success leaves the flow busy and waits for Go,
- * which either drops the gate or replaces the window.
- */
+// First-run answers remain provisional until the final screen succeeds.
 export function firstRun() {
   const form = $state({ orgs: /** @type {string[]} */ ([]), root: "" });
   let step = $state(0);

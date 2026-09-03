@@ -56,14 +56,8 @@ type assetLink struct {
 	target string
 }
 
-// Stamp renders every prompt the loader supplies into dir's discovery tree.
-// primary names the mode prompt that owns CLAUDE.md and AGENTS.md; the other
-// mode prompt is still written under the canonical directory, so a session can
-// escalate between modes without relaunching.
-//
-// User-authored files are never replaced: an existing agent file, discovery
-// file or symlink that does not carry the qrouton marker is an error, not
-// something to overwrite.
+// Stamp renders all prompts and links primary into both discovery locations.
+// Existing unmarked files and symlinks are user-owned and never replaced.
 func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string) error {
 	canonical := sessionpaths.CanonicalPrompts(dir)
 	loaded, err := loader.List(ctx)
