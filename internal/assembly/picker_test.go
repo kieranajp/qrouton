@@ -293,11 +293,21 @@ func TestRepositoryNoticeNamesReferenceAdditionsAndPromotions(t *testing.T) {
 
 // A repository request is awaited without escalating: the tool blocked on it
 // reads its answer from the stanza, and the session stays in the mode it was in.
+// It is also the one confirm that must not signal — the supervisor would
+// relaunch the runner, killing the tool call waiting for this answer.
 func TestConfirmingAnAwaitedPickerRecordsItWithoutMovingTheMode(t *testing.T) {
 	a, dir := scratch(t)
+	signalled := 0
+	a.Signal = func(string) { signalled++ }
 	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
 	if err := a.Confirm(dir, draft, Answer{Awaited: true}, nil); err != nil {
 		t.Fatal(err)
+	}
+	if signalled != 0 {
+		t.Fatalf("an awaited confirm signalled the supervisor %d times", signalled)
+	}
+	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); err == nil {
+		t.Fatal("an awaited confirm queued a notice; its caller already has the set")
 	}
 	got, err := session.Load(dir)
 	if err != nil {

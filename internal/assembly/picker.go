@@ -52,14 +52,17 @@ func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.Pro
 	}); err != nil {
 		return err
 	}
-	if !ans.Escalating {
+	// Only for a picker nothing was waiting on. The signal relaunches the runner,
+	// which would tear down the very tool call blocked on this answer, and an
+	// awaited caller has the resulting set in its return value anyway.
+	if !ans.Awaited {
 		notice := repositoryNotice(m, updated)
 		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
 			a.Signal(dir)
 		}
 		return nil
 	}
-	if a.Signal != nil {
+	if ans.Escalating && a.Signal != nil {
 		// Best-effort: the supervisor replaces the assistant with a fresh
 		// orchestrator; with no supervisor, the mode takes effect next launch.
 		a.Signal(dir)
