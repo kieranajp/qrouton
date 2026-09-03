@@ -15,6 +15,10 @@
   <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS</strong></a>
 </p>
 
+<p align="center">
+  or <code>brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton && brew install --cask qrouton</code>
+</p>
+
 A product change touches the app, a service, a shared library and a folder of
 architecture notes. Your agent sees one of those, and forgets the lot when the
 conversation dies.
