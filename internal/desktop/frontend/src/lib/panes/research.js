@@ -4,11 +4,9 @@ const SUMMARY = "summary";
 
 /** @typedef {{index: number, name: string, from: number, to: number}} Item */
 
-// A document without second-level headings has no summary or items and renders plainly.
-/**
+/** A document without second-level headings has no summary or items and renders plainly.
  * @param {string} text
- * @returns {{title: string, preamble: {from: number, to: number}, summary: Item | null, items: Item[]}}
- */
+ * @returns {{title: string, preamble: {from: number, to: number}, summary: Item | null, items: Item[]}} */
 export function parseResearch(text) {
   const { title, preamble, sections } = sliceSections(text);
 

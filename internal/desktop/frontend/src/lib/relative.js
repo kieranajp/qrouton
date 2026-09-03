@@ -37,12 +37,10 @@ export function age(at, now = Date.now()) {
   return `${Math.floor(since / MONTH)}mo`;
 }
 
-// Compact ages remain numeric; prose ages switch to dates beyond useful day counts.
-/**
+/** Compact ages remain numeric; prose ages switch to dates beyond useful day counts.
  * @param {string|number|Date} at
  * @param {Style} style
- * @param {number} [now]
- */
+ * @param {number} [now] */
 export function relative(at, style, now = Date.now()) {
   const voice = STYLES[style] ?? STYLES.compact;
   const then = new Date(at).getTime();

@@ -48,20 +48,16 @@ export function destination(branch, repos) {
 /** @param {string} branch */
 export const joining = (branch) => (branch ? `Added repositories join ${branch}` : "");
 
-// The empty-session fallback waits until the first payload settles.
-/**
+/** The empty-session fallback waits until the first payload settles.
  * @param {boolean} requested
  * @param {boolean} settled
- * @param {string} slug
- */
+ * @param {string} slug */
 export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
-// An add-repositories picker closes when its originating session is no longer shown.
-/**
+/** An add-repositories picker closes when its originating session is no longer shown.
  * @param {string} shown
  * @param {boolean} pending
- * @param {string} added the session add-repos was pressed on
- */
+ * @param {string} added the session add-repos was pressed on */
 export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || added === shown);
 
 /**

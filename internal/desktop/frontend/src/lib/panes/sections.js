@@ -22,11 +22,9 @@ export function flatten(node) {
   return (node?.children ?? []).map(flatten).join("");
 }
 
-// Every second-level heading bounds a section, including headings a reader ignores.
-/**
+/** Every second-level heading bounds a section, including headings a reader ignores.
  * @param {any} node An mdast node.
- * @returns {{name: string} | null}
- */
+ * @returns {{name: string} | null} */
 function opensSection(node) {
   if (node?.type !== "heading" || node.depth !== 2) return null;
   const name = flatten(node).trim();
@@ -91,11 +89,9 @@ function spanOf(node) {
   };
 }
 
-// Unnumbered blocks inherit ranges from descendants, then from the preceding block.
-/**
+/** Unnumbered blocks inherit ranges from descendants, then from the preceding block.
  * @param {string} html
- * @returns {{html: string, from: number, to: number}[]}
- */
+ * @returns {{html: string, from: number, to: number}[]} */
 export function dealt(html) {
   const holder = document.createElement("div");
   holder.innerHTML = html;

@@ -7,11 +7,9 @@
 /** repoID is the key a repository is known by: the `org/name` Go matches on too. */
 export const repoID = (repo) => repo.org + "/" + repo.name;
 
-// Pinned repositories sort before the cap so a session cannot hide its own rows.
-/**
+/** Pinned repositories sort before the cap so a session cannot hide its own rows.
  * @param {{repos?: Repo[], owners?: string[], query?: string, cap?: number, pinned?: string[]}} [options]
- * @returns {{rows: Row[], shown: number, total: number}}
- */
+ * @returns {{rows: Row[], shown: number, total: number}} */
 export function filter({ repos = [], owners = [], query = "", cap = 0, pinned = [] } = {}) {
   const included = new Set(owners);
   const first = new Set(pinned);

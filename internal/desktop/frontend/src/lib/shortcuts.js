@@ -5,8 +5,8 @@
 // click-only: there is no second modifier worth teaching and no digit left.
 export const NUMBERED = 9;
 
-// Numbered rail shortcuts require Command alone to avoid terminal bindings.
-/** @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event */
+/** Numbered rail shortcuts require Command alone to avoid terminal bindings.
+ * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event */
 export function position(event) {
   if (!event?.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return 0;
   const digit = Number(event.key);

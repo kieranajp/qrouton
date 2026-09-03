@@ -36,11 +36,9 @@ export const back = (step = 0) => (screen(step).back ? BACK : "");
 /** pip is which of the five pips is lit, which is the step itself. */
 export const pip = (step = 0) => Math.min(Math.max(step, 0), last);
 
-// A valid uncommitted organization input counts because advancing commits it.
-/**
+/** A valid uncommitted organization input counts because advancing commits it.
  * @param {number} [step]
  * @param {string[]} [orgs]
- * @param {string} [input]
- */
+ * @param {string} [input] */
 export const blocking = (step = 0, orgs = [], input = "") =>
   screen(step).owners && addOrg(orgs, input).length === 0 ? NEEDS_OWNER : "";

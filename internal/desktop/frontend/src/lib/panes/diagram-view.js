@@ -17,25 +17,20 @@ const STEP_MS = 120;
 /** @type {WeakMap<Element, {destroy: () => void}>} */
 const stages = new WeakMap();
 
-// Diagrams open fully visible and are never enlarged beyond their emitted size.
-/**
+/** Diagrams open fully visible and never exceed their emitted size.
  * @param {{width: number, height: number} | null | undefined} emitted
  * @param {number} box
- * @returns {number}
- */
+ * @returns {number} */
 export function fitScale(emitted, box) {
   const width = emitted?.width ?? 0;
   if (!(width > 0) || !(box > 0)) return 1;
   return Math.min(box / width, 1);
 }
 
-// Small content aligns with prose; large content cannot be dragged inside the stage.
-/**
+/** Small content aligns with prose; large content stays within the stage.
  * @param {number} translate
  * @param {number} box
- * @param {number} content
- * @returns {number}
- */
+ * @param {number} content @returns {number} */
 export function clampTranslate(translate, box, content) {
   if (!Number.isFinite(translate)) return 0;
   return Math.min(0, Math.max(Math.min(0, box - content), translate));
@@ -87,12 +82,10 @@ export function panBy(grab, by, box, content) {
   };
 }
 
-// Reader transforms never resize the stage or reflow surrounding prose.
-/**
+/** Reader transforms never resize the stage or reflow surrounding prose.
  * @param {HTMLElement} block
  * @param {SVGSVGElement} svg
- * @param {{width: number, height: number}} emitted
- */
+ * @param {{width: number, height: number}} emitted */
 export function attach(block, svg, emitted) {
   detach(block);
   const doc = block.ownerDocument;
@@ -190,8 +183,8 @@ export function attach(block, svg, emitted) {
     if (stage.hasPointerCapture(event.pointerId)) stage.releasePointerCapture(event.pointerId);
   };
 
-  // A drag that ends over a diagram must not reach the pane's link handler.
-  const clicked = (/** @type {MouseEvent} */ event) => {
+  const clicked = (/** A finished drag must not reach the pane's link handler.
+   * @type {MouseEvent} */ event) => {
     const swallow = dragged;
     dragged = false;
     if (!swallow || controls.contains(/** @type {Node} */ (event.target))) return;

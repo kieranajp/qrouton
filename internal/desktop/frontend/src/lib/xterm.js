@@ -35,11 +35,9 @@ export function decode(encoded) {
   return buffer;
 }
 
-// A retained replay replaces remounted terminal contents; ordinary chunks append.
-/**
+/** A retained replay replaces remounted terminal contents; ordinary chunks append.
  * @param {Terminal} term
- * @param {string | {encoded: string, replay?: boolean}} payload
- */
+ * @param {string | {encoded: string, replay?: boolean}} payload */
 export function paint(term, payload) {
   const chunk = typeof payload === "string" ? { encoded: payload } : payload;
   // Keep the reset in xterm's write queue. Calling reset() synchronously could

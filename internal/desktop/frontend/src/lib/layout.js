@@ -7,17 +7,15 @@ export const widthKey = (slug) => WIDTH_PREFIX + slug;
 
 export const sidebarWidthKey = () => SIDEBAR_WIDTH_KEY;
 
-// Zero means untouched, leaving the starting width to CSS.
-/** @param {(key: string) => string | null} read */
+/** Zero leaves the starting width to CSS.
+ * @param {(key: string) => string | null} read */
 export const storedWidth = (read, slug) => Number(read(widthKey(slug))) || 0;
 
 export const storedSidebarWidth = (read) => Number(read(SIDEBAR_WIDTH_KEY)) || 0;
 
-// A missing selection opens the first tab; a stale selection selects nothing.
-/**
+/** A missing selection opens the first tab; a stale selection selects nothing.
  * @param {{id?: string}[]} tabs
- * @param {string} selected
- */
+ * @param {string} selected */
 export function selectedTab(tabs, selected) {
   if (!selected) return tabs.length ? 0 : -1;
   return tabs.findIndex((tab) => tab.id === selected);

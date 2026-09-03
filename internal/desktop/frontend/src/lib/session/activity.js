@@ -47,11 +47,9 @@ export function roleLabel(role) {
   return ROLES.has(role) ? role : "";
 }
 
-// Only orchestrators can present a waiting-for-user state.
-/**
+/** Only orchestrators can present a waiting-for-user state.
  * @param {string} state
- * @param {string} [role]
- */
+ * @param {string} [role] */
 export function stateLabel(state, role = "") {
   if (!STATES.has(state)) return "";
   if (state === "Waiting for you" && role !== "Orchestrator") return "Working";
@@ -173,11 +171,9 @@ export function capabilityNote(panel = {}) {
  * started_at?: string, finished_at?: string}} AgentRecord */
 /** @typedef {{record: AgentRecord, level: number, children: AgentNode[]}} AgentNode */
 
-// Parent-child relationships never cross provider runs.
-/**
+/** Parent-child relationships never cross provider runs.
  * @param {AgentRecord[]} records
- * @returns {{trees: AgentNode[], observed: AgentRecord[]}}
- */
+ * @returns {{trees: AgentNode[], observed: AgentRecord[]}} */
 export function projectAgents(records = []) {
   const nodes = records.map((record) => ({ record, level: 0, children: [] }));
   const key = (record) => `${record.provider ?? ""}\u0000${record.run_id ?? ""}\u0000${record.id ?? ""}`;
@@ -208,10 +204,8 @@ export function projectAgents(records = []) {
   return { trees, observed };
 }
 
-// Subagents remain collapsed beneath their lead until requested.
-/**
- * @param {AgentRecord[]} records
- */
+/** Subagents remain collapsed beneath their lead until requested.
+ * @param {AgentRecord[]} records */
 export function hierarchy(records = []) {
   const { trees, observed } = projectAgents(records);
   return {

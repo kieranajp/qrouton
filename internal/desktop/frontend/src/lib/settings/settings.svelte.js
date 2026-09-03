@@ -3,8 +3,8 @@ import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
 
-// Restart-required saves keep the panel open behind the banner.
-/** @param {() => void} onClose */
+/** Restart-required saves keep the panel open behind the banner.
+ * @param {() => void} onClose */
 export function settings(onClose) {
   const form = $state({
     orgs: /** @type {string[]} */ ([]),

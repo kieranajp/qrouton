@@ -59,12 +59,10 @@ export function loader(draft, fetchTicket, hooks = {}) {
   return { load, seed };
 }
 
-// Ticket results only fill empty fields when the requested URL remains current.
-/**
+/** Ticket results fill empty fields only while the requested URL remains current.
  * @param {Draft} draft
  * @param {Result} result
- * @returns {{name: string, branchDescription: string, description: string}}
- */
+ * @returns {{name: string, branchDescription: string, description: string}} */
 export function fill(draft, result) {
   const kept = {
     name: draft.name ?? "",

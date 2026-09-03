@@ -1,10 +1,8 @@
 import { flatten, sliceSections, walk } from "./sections.js";
 
-// Phase headings are the sole source of slide numbering.
-/**
+/** Phase headings are the sole source of slide numbering.
  * @param {string} name A slide's heading text.
- * @returns {{number: number, name: string} | null}
- */
+ * @returns {{number: number, name: string} | null} */
 function namesPhase(name) {
   const match = /^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$/.exec(name);
   return match ? { number: Number(match[1]), name: match[2] } : null;
@@ -76,11 +74,9 @@ function stateOf(met, total) {
 /** @typedef {{text: string, met: boolean, group: number}} Criterion */
 /** @typedef {{screen: number, name: string, number: number | null, from: number, to: number, criteria: Criterion[], met: number, total: number, state: "met" | "working" | "not-started" | null, verify: {from: number, to: number} | null}} Slide */
 
-// A document without second-level headings has no slides and renders plainly.
-/**
+/** A document without second-level headings has no slides and renders plainly.
  * @param {string} text
- * @returns {{title: string, preamble: {from: number, to: number}, slides: Slide[], phases: Slide[]}}
- */
+ * @returns {{title: string, preamble: {from: number, to: number}, slides: Slide[], phases: Slide[]}} */
 export function parsePlan(text) {
   const { title, preamble, sections } = sliceSections(text);
 

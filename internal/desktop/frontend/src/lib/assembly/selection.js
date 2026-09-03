@@ -24,11 +24,9 @@ const UPGRADE_OFFERS = ["reference", "editing"];
 /** @type {Role[]} */
 const NO_OFFERS = [];
 
-// Held rows retain their roles but stay out of the new-selection order.
-/**
+/** Held rows retain their roles but stay out of the new-selection order.
  * @param {{id: string, role: Role}[]} [held]
- * @returns {Selection}
- */
+ * @returns {Selection} */
 export function seed(held = []) {
   /** @type {Record<string, Role>} */
   const roles = {};
@@ -44,10 +42,8 @@ export const isLocked = (selection, id) => selection.locked.includes(id);
 
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
 
-// Held editing repositories cannot be dropped or demoted from the picker.
-/**
- * @returns {Role[]}
- */
+/** Held editing repositories cannot be dropped or demoted from the picker.
+ * @returns {Role[]} */
 export function roleOffers(selection, id) {
   if (!isLocked(selection, id)) return OFFERS;
   return selection.roles[id] === "reference" ? UPGRADE_OFFERS : NO_OFFERS;
@@ -68,10 +64,8 @@ function heldNote(selection, id) {
   return selection.roles[id] === "reference" ? READING : IN_SESSION;
 }
 
-// Demotion preserves selection rank; turning a repository off discards it.
-/**
- * @returns {Selection}
- */
+/** Demotion preserves selection rank; turning a repository off discards it.
+ * @returns {Selection} */
 export function setRole(selection, id, role) {
   if (isLocked(selection, id)) return takeUp(selection, id, role);
   const roles = { ...selection.roles };
@@ -84,22 +78,18 @@ export function setRole(selection, id, role) {
   return { ...selection, roles, order };
 }
 
-// A pending upgrade retains its on-disk role until confirmation.
-/**
- * @returns {Selection}
- */
+/** A pending upgrade retains its on-disk role until confirmation.
+ * @returns {Selection} */
 function takeUp(selection, id, role) {
   if (!roleOffers(selection, id).includes(role)) return selection;
   const upgrades = selection.upgrades.filter((seen) => seen !== id);
   return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
-// Reconciliation retains held repositories even when GitHub omits them.
-/**
+/** Reconciliation retains held repositories even when GitHub omits them.
  * @param {Selection} selection
  * @param {string[]} ids
- * @returns {Selection}
- */
+ * @returns {Selection} */
 export function reconcile(selection, ids) {
   const available = new Set(ids);
   /** @type {Record<string, Role>} */
@@ -132,13 +122,10 @@ export const ordered = (selection) =>
 /** upgrading is what Go takes up for editing, which it finds in the manifest. */
 export const upgrading = (selection) => [...selection.upgrades];
 
-// Pending upgrades lead the summary because their held rows may be filtered out.
-/**
+/** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
- * @param {string} branch
- * @returns {{id: string, role: Role, glyph: string, meta: string}[]}
- */
+ * @param {string} branch @returns {{id: string, role: Role, glyph: string, meta: string}[]} */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
   const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));

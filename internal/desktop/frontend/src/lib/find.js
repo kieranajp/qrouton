@@ -80,12 +80,10 @@ export function clearMatches(root) {
   for (const parent of parents) parent.normalize();
 }
 
-// A search unit preserves inline markup and never crosses block boundaries.
-/**
+/** A search unit preserves inline markup and never crosses block boundaries.
  * @param {HTMLElement} root
  * @param {string} query
- * @returns {HTMLElement[][]}
- */
+ * @returns {HTMLElement[][]} */
 export function markMatches(root, query) {
   clearMatches(root);
   if (!root || !query) return [];

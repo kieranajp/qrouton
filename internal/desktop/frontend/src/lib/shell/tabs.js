@@ -1,11 +1,7 @@
-// The selected tab remains visible even when it falls beyond capacity.
-/**
- * @template T
- * @param {T[]} tabs
- * @param {number} selected
- * @param {number} capacity
- * @returns {{shown: {tab: T, index: number}[], hidden: {tab: T, index: number}[]}}
- */
+/** The selected tab remains visible even when it falls beyond capacity.
+ * @template T @param {T[]} tabs
+ * @param {number} selected @param {number} capacity
+ * @returns {{shown: {tab: T, index: number}[], hidden: {tab: T, index: number}[]}} */
 export function split(tabs, selected, capacity) {
   const all = tabs.map((tab, index) => ({ tab, index }));
   if (all.length <= capacity) return { shown: all, hidden: [] };
@@ -28,18 +24,10 @@ export function dominantStatus(tabs) {
 /** @param {{badge?: string, label?: string}} tab */
 export const tabLabel = ({ badge, label }) => (badge ? `${badge} ${label}` : (label ?? ""));
 
-/**
- * dropIndex places a tab dropped onto another in the whole strip. The strip may
- * be drawing only some of the tabs, so the drop is read against the drawn row:
- * the dragged tab lands immediately after the drawn tab it comes to follow, or
- * at the front when it follows none. Taking the drop target's place in the
- * drawn row for a place in the whole strip would land the tab among the ones in
- * the overflow menu.
- * @param {{index: number}[]} shown drawn entries, each carrying its index in the whole strip
- * @param {number} from the dragged tab's index in the whole strip
- * @param {number} onto the index of the tab it was dropped on
- * @returns {number} the dragged tab's index in the whole strip after the move
- */
+/** Maps a drop through the drawn row so hidden tabs do not skew its whole-strip position.
+ * @param {{index: number}[]} shown drawn entries carrying whole-strip indices
+ * @param {number} from dragged whole-strip index
+ * @param {number} onto target whole-strip index @returns {number} resulting whole-strip index */
 export function dropIndex(shown, from, onto) {
   const drawn = shown.map((entry) => entry.index);
   const target = drawn.indexOf(onto);

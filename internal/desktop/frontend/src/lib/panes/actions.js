@@ -9,11 +9,9 @@ import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
 
-// Document links dock inside the workbench; external links open in a browser.
-/**
+/** Document links dock inside the workbench; external links open in a browser.
  * @param {HTMLElement} body
- * @param {string} source
- */
+ * @param {string} source */
 export function links(body, source) {
   let from = source;
   /** @param {MouseEvent} event */
@@ -35,11 +33,9 @@ export function links(body, source) {
   };
 }
 
-// Events are subscribed before the initial call so no completed diagram is missed.
-/**
+/** Events subscribe before the initial call so no completed diagram is missed.
  * @param {HTMLElement} body
- * @param {{id: string, text: string}} params
- */
+ * @param {{id: string, text: string}} params */
 export function diagrams(body, { id }) {
   const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) => applyDiagrams(body, [event.data]));
   // Rendered markup does not survive a content push, so the fences are asked
@@ -58,8 +54,8 @@ export function diagrams(body, { id }) {
   };
 }
 
-// The epoch is read per report because reloads can move beneath a mounted pane.
-/** @param {{span: () => {line: number, to: number}, epoch: () => number | undefined, marking?: () => boolean, onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown}} options */
+/** The epoch is read per report because reloads can move beneath a mounted pane.
+ * @param {{span: () => {line: number, to: number}, epoch: () => number | undefined, marking?: () => boolean, onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown}} options */
 export function viewport({ span, epoch, marking, onMeasure }) {
   /**
    * @param {HTMLElement} content

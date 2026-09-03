@@ -1,7 +1,6 @@
 <script>
-  // Below 24px the hatch stops resolving and averages to mid-grey, so the flat
-  // cut is automatic rather than remembered.
-  /** @type {{size?: number, face?: string, back?: string, [attribute: string]: any}} */
+  /** Below 24px the hatch averages to mid-grey, so the flat cut is automatic.
+   * @type {{size?: number, face?: string, back?: string, [attribute: string]: any}} */
   let { size = 40, face = "var(--accent-label)", back = "var(--ctp-surface-2)", ...rest } = $props();
 
   let off = $derived(Math.round(size * 0.18));

@@ -3,11 +3,9 @@ import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
 import { refusal } from "./steps.js";
 
-// Picker state is provisional until confirmation reaches Go.
-/**
+/** Picker state is provisional until confirmation reaches Go.
  * @param {() => string} slug
- * @param {() => void} done
- */
+ * @param {() => void} done */
 export function picking(slug, done) {
   let branch = $state("");
   let status = $state("");

@@ -24,12 +24,10 @@ const STATES = { started: "running", advanced: "running", completed: "done", fai
  * @property {number} [percent]
  */
 
-// Progress replaces the current step row, while each outcome starts a new row.
-/**
+/** Progress replaces the current step row, while each outcome starts a new row.
  * @param {Row[]} rows
  * @param {Event} event
- * @returns {Row[]}
- */
+ * @returns {Row[]} */
 export function record(rows, event) {
   const row = toRow(event);
   const last = rows[rows.length - 1];

@@ -3,12 +3,10 @@
 
 import { fieldError } from "../settings/errors.js";
 
-// Go owns dismissal of the first-run gate after a successful outcome.
-/**
+/** Go owns dismissal of the first-run gate after a successful outcome.
  * @param {{relaunching?: boolean} | undefined} result
  * @param {any} err
- * @returns {{fields: Record<string, string>, status: string}}
- */
+ * @returns {{fields: Record<string, string>, status: string}} */
 export function firstRunOutcome(result, err) {
   if (!err) return { fields: {}, status: "" };
   const found = fieldError(err);

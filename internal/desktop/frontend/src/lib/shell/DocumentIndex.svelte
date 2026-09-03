@@ -1,9 +1,8 @@
 <script>
   import { dismissible } from "../core/dismiss.js";
 
-  // An index of everything the session has written, counted. It replaces a
-  // readout of the newest file, which named one document and implied an author.
-  /** @type {{count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** Counts every session-written document without implying authorship.
+   * @type {{count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
   let { count = 0, open = false, unseen = false, onToggle, children, ...rest } = $props();
 
   const dismiss = () => open && onToggle?.();

@@ -41,11 +41,9 @@ export function naturalSize(viewBox) {
   return width > 0 && height > 0 ? { width, height } : null;
 }
 
-// Emitted dimensions are separate from the SVG's natural viewBox size.
-/**
+/** Emitted dimensions are separate from the SVG's natural viewBox size.
  * @param {{getAttribute: (name: string) => string | null} | null | undefined} svg
- * @returns {{width: number, height: number} | null}
- */
+ * @returns {{width: number, height: number} | null} */
 export function emittedSize(svg) {
   const width = attributeSize(svg?.getAttribute("width"));
   const height = attributeSize(svg?.getAttribute("height"));
@@ -65,11 +63,9 @@ function attributeSize(value) {
   return Number.parseFloat(value ?? "");
 }
 
-// Diagram blocks retain their element identity while their contents change.
-/**
+/** Diagram blocks retain their element identity while their contents change.
  * @param {HTMLElement} container
- * @param {Rendered[]} results
- */
+ * @param {Rendered[]} results */
 export function apply(container, results) {
   const blocks = [
     .../** @type {NodeListOf<HTMLElement>} */ (container.querySelectorAll("pre[data-line]")),
@@ -105,11 +101,9 @@ function fail(block, message) {
   if (!stated) block.append(note);
 }
 
-// SVG markup has passed the backend's safety check before reaching this renderer.
-/**
+/** SVG markup has passed the backend's safety check before reaching this renderer.
  * @param {HTMLElement} block
- * @param {string} svg
- */
+ * @param {string} svg */
 function draw(block, svg) {
   detach(block);
   const holder = block.ownerDocument.createElement("div");

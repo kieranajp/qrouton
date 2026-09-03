@@ -1,13 +1,10 @@
 import { criteriaSpans } from "./plan.js";
 import { dealt } from "./sections.js";
 
-// Criteria spanning beyond their phase never claim blocks from the next slide.
-/**
+/** Criteria spanning beyond their phase never claim blocks from the next slide.
  * @param {string} html
  * @param {{slides: import("./plan.js").Slide[]}} parsed
- * @param {(html: string) => {html: string, from: number, to: number}[]} deal
- * @returns {{preamble: string, slides: {opening: string, body: string, criteria: string}[]}}
- */
+ * @param {(html: string) => {html: string, from: number, to: number}[]} deal @returns {{preamble: string, slides: {opening: string, body: string, criteria: string}[]}} */
 export function partition(html, parsed, deal = dealt) {
   const preamble = [];
   const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
@@ -48,11 +45,9 @@ export function screenFor(slides, line) {
   return at < 0 ? 0 : at + 1;
 }
 
-// Non-phase slides use their names because they have no defined sequence position.
-/**
+/** Non-phase slides use their names because they have no defined sequence position.
  * @param {{slides: {name: string, number: number | null}[], phases: unknown[]}} parsed
- * @param {number} screen
- */
+ * @param {number} screen */
 export function counterFor(parsed, screen) {
   if (screen === 0) return "Overview";
   const slide = parsed.slides[screen - 1];
