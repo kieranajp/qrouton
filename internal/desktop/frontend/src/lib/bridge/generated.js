@@ -59,7 +59,7 @@ export const WINDOW_DIAGRAM_EVENT = "window:diagram:";
 export const WINDOW_EXIT_EVENT = "window:exit:";
 export const WINDOWS_EVENT = "window:open";
 
-/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
+/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, pickerKind: string, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
   mode: "",
   phase: "",
@@ -87,6 +87,7 @@ export const CHROME_DEFAULTS = {
   },
   root: "",
   picker: false,
+  pickerKind: "",
   welcoming: false,
   stickerLabels: {
     star: "",

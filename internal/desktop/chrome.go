@@ -201,7 +201,9 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	}
 	if shown != nil {
 		fields.Terminal, fields.Activity = shown.terminal, shown.agents.state()
-		fields.Picker = shown.pendingPicker() != nil
+		if pending := shown.pendingPicker(); pending != nil {
+			fields.Picker, fields.PickerKind = true, pending.Kind
+		}
 	}
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
@@ -234,6 +236,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		if state := reg.bySlug(row.Slug); state != nil {
 			fields.Sessions[i].Terminal = state.terminal
 			fields.Sessions[i].Activity = state.agents.state()
+			fields.Sessions[i].Picker = state.pendingPicker() != nil
 		}
 		if snapshot, ok := agentSnapshots[row.Slug]; ok {
 			fields.Sessions[i].Summary = agentSummary(snapshot)

@@ -19,12 +19,25 @@ type heldRepo struct {
 	Locked bool   `json:"locked"`
 }
 
+// requestedRow is one repository an agent asked for, classified against the
+// manifest. Upgrade means the session already reads it and the tick will take it
+// up for editing rather than acquire it.
+type requestedRow struct {
+	ID      string `json:"id"`
+	Role    string `json:"role"`
+	Upgrade bool   `json:"upgrade"`
+}
+
 // pickerFields is what the picker draws itself from: the branch anything added
 // joins, and the rows the session already holds. Branch is empty for a session
 // with no repositories yet, which is the escalation that acquires its first ones.
+// Requested and Reason are empty for a picker the user opened themselves, which
+// is how the overlay knows not to claim an agent asked for anything.
 type pickerFields struct {
-	Branch string     `json:"branch"`
-	Repos  []heldRepo `json:"repos"`
+	Branch    string         `json:"branch"`
+	Repos     []heldRepo     `json:"repos"`
+	Requested []requestedRow `json:"requested"`
+	Reason    string         `json:"reason"`
 }
 
 // pickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
@@ -63,13 +76,13 @@ func (p *Picker) Escalate(slug string) error {
 	if m.EffectiveMode() != session.ModeAssistant {
 		return nil
 	}
-	state.requestPicker(workbench.PickerRequest{SessionRoot: root})
+	state.requestPicker(workbench.PickerRequest{SessionRoot: root, Kind: workbench.PickerKindEscalate})
 	p.sessions.touch()
 	return nil
 }
 
 func (p *Picker) Load(slug string) (pickerFields, error) {
-	_, root, err := p.root(slug)
+	state, root, err := p.root(slug)
 	if err != nil {
 		return pickerFields{}, err
 	}
@@ -77,6 +90,7 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 	if err != nil {
 		return pickerFields{}, err
 	}
+	pending := state.pendingPicker()
 	held := make([]heldRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
 		held = append(held, heldRepo{
@@ -85,7 +99,52 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 			Locked: true,
 		})
 	}
-	return pickerFields{Branch: m.Branch(), Repos: held}, nil
+	return pickerFields{Branch: m.Branch(), Repos: held,
+		Requested: classifyRequests(m, pending), Reason: reasonOf(pending)}, nil
+}
+
+func reasonOf(req *workbench.PickerRequest) string {
+	if req == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.Reason)
+}
+
+// classifyRequests answers each requested repository against the manifest as it
+// stands now, not as it stood when the agent asked: a request can sit for half an
+// hour while the user adds the very repository it wanted. A row the session
+// already holds in the role asked for, or holds for editing at all, is dropped —
+// there is nothing left for the tick to do.
+func classifyRequests(m session.Manifest, req *workbench.PickerRequest) []requestedRow {
+	if req == nil {
+		return []requestedRow{}
+	}
+	held := make(map[string]session.RepoRole, len(m.Repos))
+	for _, r := range m.Repos {
+		held[strings.ToLower((github.Repo{Org: r.Org, Name: r.Name}).ID())] = r.Role.Effective()
+	}
+	rows := make([]requestedRow, 0, len(req.Requested))
+	for _, want := range req.Requested {
+		id := strings.TrimSpace(want.ID)
+		if id == "" {
+			continue
+		}
+		// Not Effective(): an empty role means editing for a row the session
+		// holds, but a request that names none is only asking to read.
+		role := session.RepoRoleReference
+		if session.RepoRole(want.Role) == session.RepoRoleEditing {
+			role = session.RepoRoleEditing
+		}
+		switch held[strings.ToLower(id)] {
+		case "":
+			rows = append(rows, requestedRow{ID: id, Role: string(role)})
+		case session.RepoRoleReference:
+			if role == session.RepoRoleEditing {
+				rows = append(rows, requestedRow{ID: id, Role: string(session.RepoRoleEditing), Upgrade: true})
+			}
+		}
+	}
+	return rows
 }
 
 func (p *Picker) Confirm(slug string, in pickerInput) error {
@@ -93,18 +152,18 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if err != nil {
 		return err
 	}
-	escalation := state.pendingPicker()
+	pending := state.pendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
 		return err
 	}
-	draft := p.draft(m, escalation, in)
+	draft := p.draft(m, pending, in)
 	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+	if err := assembler.Confirm(root, draft, answerTo(pending), nil); err != nil {
 		return err
 	}
 	state.clearPicker()
@@ -117,7 +176,7 @@ func (p *Picker) Cancel(slug string) error {
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
+	if err := assembly.Cancel(root, answerTo(state.pendingPicker())); err != nil {
 		return err
 	}
 	state.clearPicker()
@@ -125,19 +184,28 @@ func (p *Picker) Cancel(slug string) error {
 	return nil
 }
 
+// answerTo separates the two facts a pending request carries: something is
+// polling for the outcome stanza, and only an escalation also moves the mode.
+func answerTo(req *workbench.PickerRequest) assembly.Answer {
+	return assembly.Answer{
+		Escalating: req != nil && req.Kind == workbench.PickerKindEscalate,
+		Awaited:    req != nil,
+	}
+}
+
 // draft is the session's own description of itself plus the rows just picked: the
 // picker has no name, ticket or mode field, so those come from the manifest. An
 // escalation is the exception — it proposes a name for the work it is escalating
 // to, and the prefix a first branch is cut with.
-func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in pickerInput) assembly.Draft {
+func (p *Picker) draft(m session.Manifest, pending *workbench.PickerRequest, in pickerInput) assembly.Draft {
 	repos := p.repos.Select(in.Repos)
 	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
 	upgrades := heldRefs(m, in.Upgrades)
-	if escalation != nil {
-		if proposed := strings.TrimSpace(escalation.Name); proposed != "" {
+	if pending != nil {
+		if proposed := strings.TrimSpace(pending.Name); proposed != "" {
 			name = proposed
 		}
-		if proposed := strings.TrimSpace(escalation.Prefix); proposed != "" {
+		if proposed := strings.TrimSpace(pending.Prefix); proposed != "" {
 			prefix = proposed
 		}
 	}

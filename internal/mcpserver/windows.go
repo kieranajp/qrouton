@@ -400,6 +400,7 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	spawnedAt := time.Now()
 	if err := m.host.Picker(ctx, workbench.PickerRequest{
 		SessionRoot: m.root,
+		Kind:        workbench.PickerKindEscalate,
 		Name:        name,
 		Prefix:      strings.TrimSpace(input.BranchPrefix),
 		Deadline:    spawnedAt.Add(escalateTimeout),

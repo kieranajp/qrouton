@@ -124,16 +124,30 @@ type WindowHost interface {
 	Picker(ctx context.Context, req PickerRequest) error
 }
 
-// PickerRequest is an escalation waiting on a session. Name is what the agent
-// proposes to call the work and Prefix the prefix a branch is cut with, both of
-// which a session with repositories already has answers for. A caller's
+// PickerRequest is a picker waiting on a session. Kind says what it is asking
+// for, which is what decides whether confirming also changes the session's mode.
+// Name is what the agent proposes to call the work and Prefix the prefix a
+// branch is cut with, both of which a session with repositories already has
+// answers for. Requested and Reason belong to a repository request: the rows the
+// agent wants and the one line the user reads before answering. A caller's
 // deadline keeps a stale request from being drawn; zero is a picker the user
 // opened directly and remains live until they answer it.
 type PickerRequest struct {
-	SessionRoot string    `json:"session_root"`
-	Name        string    `json:"name,omitempty"`
-	Prefix      string    `json:"prefix,omitempty"`
-	Deadline    time.Time `json:"deadline,omitempty"`
+	SessionRoot string          `json:"session_root"`
+	Kind        string          `json:"kind,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Prefix      string          `json:"prefix,omitempty"`
+	Requested   []RequestedRepo `json:"requested,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	Deadline    time.Time       `json:"deadline,omitempty"`
+}
+
+// RequestedRepo is one repository an agent asked for, in the role it asked for
+// it. Whether that is an addition or a promotion is not the agent's to say: the
+// workbench classifies each one against the manifest as it stands.
+type RequestedRepo struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
 // Handle identifies a running desktop process across the exec boundary.

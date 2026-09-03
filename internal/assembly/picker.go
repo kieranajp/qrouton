@@ -6,12 +6,21 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
+// Answer is what the picker was, rather than what it picked. Escalating moves
+// the session to RPI; Awaited means a Go-side request is polling for the outcome
+// stanza. An escalation is both, a repository request only the second, and a
+// picker the user opened from the rail neither.
+type Answer struct {
+	Escalating bool
+	Awaited    bool
+}
+
 // Confirm adds the picked repositories to a live session: the composed
 // repositories and the work's details land in one atomic manifest write, after a
-// take-up that has already recorded itself. Escalating adds RPI mode and the
-// confirmed stanza to that same write, so a polling reader never sees repos added
-// while the mode still says assistant.
-func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.ProgressFunc) error {
+// take-up that has already recorded itself. The mode and the confirmed stanza
+// join that same write, so a polling reader never sees repos added while the
+// mode still says assistant.
+func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.ProgressFunc) error {
 	// Loaded here, not carried in: a picker can sit open for half an hour while
 	// the workbench keeps rewriting the manifest underneath it.
 	m, err := session.Load(dir)
@@ -32,8 +41,10 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
 		out = session.MergeRepos(out, composed.Repos)
 		out.Name, out.Description, out.TicketURL = d.Name, d.Description, d.Ticket
-		if escalate {
+		if ans.Escalating {
 			out.Mode = session.ModeRPI
+		}
+		if ans.Awaited {
 			out.Picker = &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now()}
 		}
 		updated = out
@@ -41,7 +52,7 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	}); err != nil {
 		return err
 	}
-	if !escalate {
+	if !ans.Escalating {
 		notice := repositoryNotice(m, updated)
 		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
 			a.Signal(dir)
@@ -78,10 +89,10 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 }
 
 // Cancel records the cancelled outcome — the stanza alone, mode and
-// repositories untouched. Only an escalation has a caller waiting on that
+// repositories untouched. Only an awaited picker has a caller waiting on that
 // stanza; the add-repos button's cancel is nobody's business.
-func Cancel(dir string, escalate bool) error {
-	if !escalate {
+func Cancel(dir string, ans Answer) error {
+	if !ans.Awaited {
 		return nil
 	}
 	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {

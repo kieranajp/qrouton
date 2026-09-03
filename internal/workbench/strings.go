@@ -29,6 +29,13 @@ const (
 	OpOpenLinearIssue    = "open-linear-issue"
 )
 
+// What a picker is asking for. Only an escalation moves the session to RPI; a
+// repository request leaves the mode alone.
+const (
+	PickerKindEscalate = "escalate"
+	PickerKindRepos    = "repos"
+)
+
 const (
 	socketNetwork = "unix"
 
