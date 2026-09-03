@@ -25,7 +25,6 @@ var embeddedPromptIDs = []string{
 	"agents/qrouton-implementation-lead",
 	"agents/qrouton-planning-lead",
 	"agents/qrouton-research-lead",
-	"agents/qrouton-researcher",
 	"agents/test-verifier",
 	"agents/thoughts-researcher",
 	"assistant",
