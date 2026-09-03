@@ -32,3 +32,21 @@ jobs:
       # The pre-handoff gate from AGENTS.md, so CI and a developer's last command
       # are the same thing.
       - run: make check
+
+  # The app ships from macOS and the Go suite behaves differently there, so a
+  # release used to be the first run that could fail. These are release.yml's
+  # steps up to the point it starts signing.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/desktop/frontend/package-lock.json
+      - run: make front
+      - run: go test ./...

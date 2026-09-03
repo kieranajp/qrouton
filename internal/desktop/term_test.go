@@ -58,9 +58,14 @@ func testTerm(t *testing.T, emit emitter, root string, argv, env []string) (*Ter
 	return newTerm(reg, emit), reg.add(root, argv, withTerminalEnv(env))
 }
 
+// waitCeiling is not a latency any test here asserts: a child answers in
+// milliseconds or never, and a shared runner spawning this many processes can
+// stall for whole seconds between the two.
+const waitCeiling = 30 * time.Second
+
 func waitFor(t *testing.T, what string, condition func() bool) {
 	t.Helper()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(waitCeiling)
 	for !condition() {
 		if time.Now().After(deadline) {
 			t.Fatalf("timed out waiting for %s", what)
@@ -108,9 +113,14 @@ func TestTheConversationRunsInTheSessionRoot(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the child's own directory", func() bool {
-		return strings.Contains(rec.output(), resolved(t, root))
-	})
+	want := resolved(t, root)
+	deadline := time.Now().Add(waitCeiling)
+	for !strings.Contains(rec.output(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the child wrote %q, wanted %q in it", rec.output(), want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // A page subscribes per terminal, so a stream announced under a bare name is a
