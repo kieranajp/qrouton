@@ -347,6 +347,7 @@ func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
 		{Org: "org", Name: "docs", Role: session.RepoRoleReference},
 		{Org: "org", Name: "svc", Role: session.RepoRoleEditing},
 	}}
+	listed := []github.Repo{{Org: "org", Name: "api"}}
 	cases := []struct {
 		name string
 		ask  []workbench.RequestedRepo
@@ -386,6 +387,16 @@ func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
 			},
 			want: []requestedRow{{ID: "org/api", Role: "editing"}},
 		},
+		{
+			name: "listed under a different casing",
+			ask:  []workbench.RequestedRepo{{ID: "ORG/Api", Role: "editing"}},
+			want: []requestedRow{{ID: "org/api", Role: "editing"}},
+		},
+		{
+			name: "nothing knows it",
+			ask:  []workbench.RequestedRepo{{ID: "org/kraken", Role: "editing"}},
+			want: []requestedRow{{ID: "org/kraken", Role: "editing"}},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -393,7 +404,7 @@ func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
 			if tc.ask != nil {
 				req = &workbench.PickerRequest{Requested: tc.ask}
 			}
-			got := classifyRequests(m, req)
+			got := classifyRequests(m, listed, req)
 			if len(got) != len(tc.want) {
 				t.Fatalf("classified %+v, want %+v", got, tc.want)
 			}

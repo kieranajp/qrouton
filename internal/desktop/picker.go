@@ -100,7 +100,7 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 		})
 	}
 	return pickerFields{Branch: m.Branch(), Repos: held,
-		Requested: classifyRequests(m, pending), Reason: reasonOf(pending)}, nil
+		Requested: classifyRequests(m, p.repos.Cached(), pending), Reason: reasonOf(pending)}, nil
 }
 
 func reasonOf(req *workbench.PickerRequest) string {
@@ -114,8 +114,9 @@ func reasonOf(req *workbench.PickerRequest) string {
 // stands now, not as it stood when the agent asked: a request can sit for half an
 // hour while the user adds the very repository it wanted. A row the session
 // already holds in the role asked for, or holds for editing at all, is dropped —
-// there is nothing left for the tick to do.
-func classifyRequests(m session.Manifest, req *workbench.PickerRequest) []requestedRow {
+// there is nothing left for the tick to do. An id nothing knows survives as it
+// was asked for, so the banner can still show the user what was missed.
+func classifyRequests(m session.Manifest, cached []github.Repo, req *workbench.PickerRequest) []requestedRow {
 	if req == nil {
 		return []requestedRow{}
 	}
@@ -127,6 +128,10 @@ func classifyRequests(m session.Manifest, req *workbench.PickerRequest) []reques
 	for _, r := range m.Repos {
 		id := (github.Repo{Org: r.Org, Name: r.Name}).ID()
 		held[strings.ToLower(id)] = holding{id: id, role: r.Role.Effective()}
+	}
+	listed := make(map[string]string, len(cached))
+	for _, repo := range cached {
+		listed[strings.ToLower(repo.ID())] = repo.ID()
 	}
 	rows := make([]requestedRow, 0, len(req.Requested))
 	// Once each: the overlay draws these keyed by id, so a repository named
@@ -144,10 +149,14 @@ func classifyRequests(m session.Manifest, req *workbench.PickerRequest) []reques
 		if session.RepoRole(want.Role) == session.RepoRoleEditing {
 			role = session.RepoRoleEditing
 		}
-		// A matched row travels on as the session spells it: everything downstream
-		// compares ids exactly, so the agent's casing would tick nothing.
+		// A matched row travels on as the session or the list spells it:
+		// everything downstream compares ids exactly, so the agent's casing
+		// would tick a row nothing resolves and drop it again at confirm.
 		switch on := held[strings.ToLower(id)]; on.role {
 		case "":
+			if canonical, ok := listed[strings.ToLower(id)]; ok {
+				id = canonical
+			}
 			rows = append(rows, requestedRow{ID: id, Role: string(role)})
 		case session.RepoRoleReference:
 			if role == session.RepoRoleEditing {
