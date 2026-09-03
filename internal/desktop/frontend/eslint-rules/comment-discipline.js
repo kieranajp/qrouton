@@ -154,12 +154,10 @@ const noProseBeforeJSDoc = {
   create(context) {
     const sourceCode = context.sourceCode ?? context.getSourceCode();
     return { Program() {
-      const comments = commentsFor(sourceCode);
-      for (let index = 0; index < comments.length - 1; index += 1) {
-        const comment = comments[index];
-        const next = comments[index + 1];
+      for (const comment of sourceCode.getAllComments()) {
         if (comment.type !== "Line" || isDirective(comment) || !ownsItsLine(sourceCode, comment)) continue;
-        if (next.type !== "Block" || next.loc.start.line !== comment.loc.end.line + 1) continue;
+        const next = sourceCode.getTokenAfter(comment, { includeComments: true });
+        if (!next || next.type !== "Block" || next.loc.start.line !== comment.loc.end.line + 1) continue;
         if (!sourceCode.getText(next).startsWith("/**")) continue;
         report(context, comment, "adjacent");
       }

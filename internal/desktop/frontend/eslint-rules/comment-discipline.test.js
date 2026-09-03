@@ -56,6 +56,7 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
     valid: [
       { code: "// Explains the surrounding module.\n\n/** @type {number} */\nconst value = 1;" },
       { code: "const prior = 1; // Explains the prior value.\n/** @type {number} */\nconst value = 1;" },
+      { code: "// Explains the surrounding module.\nconst prior = 1; /** @type {number} */\nconst value = 1;" },
       { code: "// @ts-ignore\n/** @type {number} */\nconst value = 1;" },
       { code: "// Explains the ordinary block.\n/* Ordinary block. */\nconst value = 1;" },
     ],
@@ -128,6 +129,11 @@ test("Svelte scripts reject prose immediately before JSDoc", () => {
     `<script>
   let prior = 1; // Explains the prior value.
   /** @type {number} */
+  let selected = 0;
+</script>`,
+    `<script>
+  // Explains the surrounding module.
+  let prior = 1; /** @type {number} */
   let selected = 0;
 </script>`,
     `<script>
