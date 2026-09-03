@@ -108,9 +108,14 @@ func TestTheConversationRunsInTheSessionRoot(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the child's own directory", func() bool {
-		return strings.Contains(rec.output(), resolved(t, root))
-	})
+	want := resolved(t, root)
+	deadline := time.Now().Add(5 * time.Second)
+	for !strings.Contains(rec.output(), want) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the child wrote %q, wanted %q in it", rec.output(), want)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
 }
 
 // A page subscribes per terminal, so a stream announced under a bare name is a
