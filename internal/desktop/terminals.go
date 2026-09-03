@@ -7,7 +7,6 @@ import (
 	"sync"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 type terminals struct {
@@ -28,28 +27,30 @@ func newTerminals(emit emitter, reg *registry) *terminals {
 // The page calls it on load, so a reload must not fork a second process.
 func (t *terminals) start(id string, cols, rows int) error {
 	var started *ptyProcess
-	var terminal *agentWindow
+	var terminal *terminalContent
 	err := t.registry.with(id, func(window *agentWindow) error {
 		// A document has no command, and a page that asks anyway must not take the
 		// workbench down with it.
-		if window.opts.Kind != workbench.KindTerminal {
+		content, ok := window.terminal()
+		if !ok {
 			return ErrNotATerminal
 		}
-		if window.process != nil {
-			terminal = window
+		terminal = content
+		if content.process != nil {
 			return nil
 		}
 		process, err := startPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, cols, rows)
 		if err != nil {
 			return err
 		}
-		window.process = process
-		started, terminal = process, window
+		content.process = process
+		started = process
 		return nil
 	})
 	if err != nil {
 		return err
 	}
+
 	// A session switch unmounts this xterm, not its PTY. Reset the fresh view to
 	// the retained byte stream before any later chunk can pass it. Resize under
 	// the same ordering lock: a shell repainting for SIGWINCH must follow replay.
@@ -106,7 +107,9 @@ func (t *terminals) resize(id string, cols, rows int) error {
 func (t *terminals) process(id string) (*ptyProcess, error) {
 	var process *ptyProcess
 	err := t.registry.with(id, func(window *agentWindow) error {
-		process = window.process
+		if terminal, ok := window.terminal(); ok {
+			process = terminal.process
+		}
 		return nil
 	})
 	return process, err
@@ -116,19 +119,24 @@ func (t *terminals) process(id string) (*ptyProcess, error) {
 // leaves it open so the error stays readable.
 func (t *terminals) exited(id string, code int) {
 	t.emit(windowExitEvent+id, code)
-	var exited *agentWindow
+	var owner *sessionState
+	var closeOnExit bool
 	if err := t.registry.with(id, func(window *agentWindow) error {
-		window.exit = &code
-		exited = window
+		terminal, ok := window.terminal()
+		if !ok {
+			return ErrNotATerminal
+		}
+		terminal.exit = &code
+		owner, closeOnExit = window.session, window.opts.CloseOnExit
 		return nil
 	}); err != nil {
 		return
 	}
-	if code == 0 && exited.opts.CloseOnExit {
+	if code == 0 && closeOnExit {
 		t.registry.discard(id)
 		return
 	}
-	t.registry.announce(exited.session)
+	t.registry.announce(owner)
 }
 
 func terminalEnv() []string { return withTerminalEnv(os.Environ()) }
