@@ -14,6 +14,15 @@ const (
 	workspaceWindowsFileName    = "workspace-windows.md"
 	workspaceWindowsPlaceholder = "{{workspace-windows}}"
 
+	artifactDisciplineFileName    = "artifact-discipline.md"
+	artifactDisciplinePlaceholder = "{{artifact-discipline}}"
+
+	evidenceDisciplineFileName    = "evidence-discipline.md"
+	evidenceDisciplinePlaceholder = "{{evidence-discipline}}"
+
+	returnContractFileName    = "return-contract.md"
+	returnContractPlaceholder = "{{return-contract}}"
+
 	codexNameFormat        = "name = %s\ndescription = %s\n"
 	codexSandboxFormat     = "sandbox_mode = %s\n"
 	codexInstructionsOpen  = "developer_instructions = \"\"\"\n"
@@ -30,8 +39,11 @@ const (
 // placeholder that pulls each in. A partial holds no placeholder of its own, so
 // one pass over this map expands them all.
 var partials = map[string]string{
-	subagentChoicePlaceholder:   subagentChoiceFileName,
-	workspaceWindowsPlaceholder: workspaceWindowsFileName,
+	subagentChoicePlaceholder:     subagentChoiceFileName,
+	workspaceWindowsPlaceholder:   workspaceWindowsFileName,
+	artifactDisciplinePlaceholder: artifactDisciplineFileName,
+	evidenceDisciplinePlaceholder: evidenceDisciplineFileName,
+	returnContractPlaceholder:     returnContractFileName,
 }
 
 var (

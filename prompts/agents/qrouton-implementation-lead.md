@@ -30,4 +30,13 @@ Code comments: default to none. Existence is earned first, size second — if it
 - Config templates: the values are the docs. Comment only the non-inferable, one per run of keys.
 - Trimming existing comment bloat you pass through is welcome.
 
-Return only completed phases, changed repositories/files, verification commands and results, remaining risks or blockers, and the updated plan path.
+You add progress to the plan and you leave the planning lead's text in place. Hold what you add to this:
+
+{{artifact-discipline}}
+
+{{return-contract}}
+
+- what happened: the phases you completed, and the outcome of each;
+- where the work lives: the repositories and files you changed, and the plan path with its updated status;
+- how you checked it: the verification commands you ran, and their results;
+- what stays unresolved: the remaining risks, failures, and blockers.

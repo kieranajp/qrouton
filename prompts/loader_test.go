@@ -356,11 +356,6 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 			t.Fatal(err)
 		}
 		content := string(prompt.Content)
-		// Any surviving brace pair is a partial that did not expand — including
-		// one a partial itself named, which a single expansion pass cannot reach.
-		if i := strings.Index(content, "{{"); i >= 0 {
-			t.Errorf("prompt %q ships an unexpanded partial: %.32q", id, content[i:])
-		}
 		if !strings.Contains(content, "## The workspace windows") {
 			t.Errorf("prompt %q does not describe the workspace windows", id)
 		}
@@ -393,6 +388,149 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 	}
 	if !strings.Contains(rendered[Assistant], "`escalate`") {
 		t.Error("the assistant prompt does not name the escalate tool")
+	}
+}
+
+// Any surviving brace pair is a partial that did not expand — including one a
+// partial itself named, which a single expansion pass cannot reach. Every
+// embedded prompt is checked, and every file a skill ships with it, because a
+// passage that stops expanding leaves the prompt set without a sound.
+func TestNoEmbeddedPromptShipsAnUnexpandedPartial(t *testing.T) {
+	loaded, err := NewEmbeddedLoader().List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range loaded {
+		files := append([]PromptFile{{Path: "its entry file", Content: prompt.Content}}, prompt.Files...)
+		for _, file := range files {
+			content := string(file.Content)
+			if i := strings.Index(content, "{{"); i >= 0 {
+				t.Errorf("prompt %q ships an unexpanded partial in %s: %.32q", prompt.ID, file.Path, content[i:])
+			}
+		}
+	}
+}
+
+// Where each partial is expected, named rather than derived, so a prompt that
+// quietly drops one fails here instead of losing the passage in silence.
+var (
+	artifactDisciplineHomes = []ID{
+		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+		ID(skillIDPrefix + "qrouton-questions"),
+		ID(skillIDPrefix + "qrouton-research"),
+		ID(skillIDPrefix + "qrouton-spec"),
+		ID(skillIDPrefix + "qrouton-plan"),
+	}
+
+	evidenceDisciplineHomes = []ID{
+		ID(agentIDPrefix + "code-reviewer"),
+		ID(agentIDPrefix + "codebase-researcher"),
+		ID(agentIDPrefix + "external-researcher"),
+		ID(agentIDPrefix + "pattern-finder"),
+		ID(agentIDPrefix + "thoughts-researcher"),
+		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(skillIDPrefix + "qrouton-research"),
+	}
+
+	returnContractHomes = []ID{
+		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-planning-lead"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+		ID(skillIDPrefix + "qrouton-plan"),
+		ID(skillIDPrefix + "qrouton-implement"),
+	}
+)
+
+// A partial is one text with several homes. Each home has to carry it word for
+// word: a prompt that grows its own paraphrase drifts from the others silently,
+// which is the thing the partials exist to prevent.
+func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
+	homes := map[string][]ID{
+		artifactDisciplineFileName: artifactDisciplineHomes,
+		evidenceDisciplineFileName: evidenceDisciplineHomes,
+		returnContractFileName:     returnContractHomes,
+	}
+	loader := NewEmbeddedLoader()
+	for name, ids := range homes {
+		partial, err := fs.ReadFile(embedded, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, id := range ids {
+			prompt, err := loader.Load(context.Background(), id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(prompt.Content), string(partial)) {
+				t.Errorf("prompt %q does not carry %s verbatim", id, name)
+			}
+		}
+	}
+}
+
+// One expansion pass reaches a placeholder a partial names only if the map
+// happens to hand out the outer partial first, and map order is random. So the
+// flatness is the invariant, asserted where it is cheap and deterministic
+// rather than left to the corpus-wide guard to catch on a lucky run.
+func TestPartialsHoldNoPlaceholderOfTheirOwn(t *testing.T) {
+	for placeholder, name := range partials {
+		content, err := fs.ReadFile(embedded, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i := strings.Index(string(content), "{{"); i >= 0 {
+			t.Errorf("%s (%s) names a partial of its own: %.32q", name, placeholder, string(content)[i:])
+		}
+	}
+}
+
+// The artifact lengths are calibration, not a limit, and a figure restated in a
+// second prompt is a figure that will disagree with the first one. Each figure
+// is checked, because moving one and leaving another behind is the likelier
+// mistake than restating all three.
+func TestTheArtifactLengthsAreStatedOnce(t *testing.T) {
+	for _, figure := range []string{"400 lines", "300 to 350", "200 to 250"} {
+		var carriers []string
+		err := fs.WalkDir(embedded, ".", func(path string, entry fs.DirEntry, walkErr error) error {
+			if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, promptFileExt) {
+				return walkErr
+			}
+			content, err := fs.ReadFile(embedded, path)
+			if err != nil {
+				return err
+			}
+			if strings.Contains(string(content), figure) {
+				carriers = append(carriers, path)
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(carriers, []string{artifactDisciplineFileName}) {
+			t.Errorf("%q is stated in %v, want only %s", figure, carriers, artifactDisciplineFileName)
+		}
+	}
+}
+
+// return-contract names four slots and defers their contents to the prompt it
+// lands in, so a home that loses its list ships a contract pointing at nothing.
+func TestEveryReturnContractHomeNamesItsFourSlots(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	for _, id := range returnContractHomes {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		content := string(prompt.Content)
+		for _, slot := range []string{"- what happened:", "- where the work lives:", "- how you checked it:", "- what stays unresolved:"} {
+			if !strings.Contains(content, slot) {
+				t.Errorf("prompt %q carries the return contract without %q", id, slot)
+			}
+		}
 	}
 }
 

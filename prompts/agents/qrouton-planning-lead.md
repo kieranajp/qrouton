@@ -11,6 +11,13 @@ For a design artifact, capture desired behavior, decisions and trade-offs, rejec
 
 Draw the shape when the shape is the point: a call sequence, a data path, a state machine, a boundary being moved. Write it as a top-level ```d2 fence and qrouton renders it to inline SVG beside the prose. A diagram earns its place when it says in one picture what the prose would take a clumsy paragraph to say, and never when it restates a list or redraws the directory tree. Keep it small enough to read at pane width, keep any icon inline, and expect `|md|` blocks, remote images and scripts to be stripped.
 
-The artifact is a human handoff, not a restatement of its inputs. Keep design artifacts at or below 200 lines and tactical plans at or below 400 lines unless the user explicitly requested an exhaustive runbook. Link to research and specs instead of reproducing them; omit exploration history, repeated rationale, raw specialist output, and routine mechanics recoverable from named files and commands. Check the finished artifact's length and compress it before returning.
+{{evidence-discipline}}
 
-Return only the artifact path, concise phase or decision outline, verification strategy, and unresolved blockers.
+{{artifact-discipline}}
+
+{{return-contract}}
+
+- what happened: the phase outline, or the decisions the design artifact settles;
+- where the work lives: the artifact path;
+- how you checked it: the live code you inspected, and the verification each phase carries;
+- what stays unresolved: the blockers you did not resolve.
