@@ -179,6 +179,10 @@ func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
 	return newWindowManager(dir, testEditor, host), host, dir
 }
 
+// A ceiling these tests never mean to reach: they end when the poll sees the
+// stanza, and a loaded runner stalls for longer than the wait they are timing.
+const escalateCeiling = 10 * time.Second
+
 // shortEscalatePoll shrinks escalate's poll interval and timeout for the
 // duration of a test, restoring them on cleanup.
 func shortEscalatePoll(t *testing.T, timeout time.Duration) {
@@ -938,7 +942,7 @@ func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 // window at all.
 func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	shortEscalatePoll(t, 200*time.Millisecond)
+	shortEscalatePoll(t, escalateCeiling)
 
 	// A cancelled stanza lets escalate return promptly once its poll notices it,
 	// so the test doesn't wait out the full timeout.
@@ -992,7 +996,7 @@ func TestEscalateRejectsBlankName(t *testing.T) {
 
 func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortEscalatePoll(t, time.Second)
+	shortEscalatePoll(t, escalateCeiling)
 
 	start := time.Now()
 	go func() {
@@ -1016,7 +1020,7 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 
 func TestEscalateBlocksUntilCancelled(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortEscalatePoll(t, time.Second)
+	shortEscalatePoll(t, escalateCeiling)
 
 	start := time.Now()
 	go func() {
