@@ -968,6 +968,11 @@ func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	if got := host.pickers[0]; got.Name != "webhook retry" || got.Prefix != "fix" {
 		t.Fatalf("queued request = %+v, want the name and prefix escalate was given", got)
 	}
+	// The kind is what makes confirming move the session's mode, so an escalation
+	// that travelled without it would add repositories and escalate nothing.
+	if got := host.pickers[0].Kind; got != workbench.PickerKindEscalate {
+		t.Fatalf("queued kind = %q, want an escalation", got)
+	}
 	// The deadline travels with the request, so the workbench never draws a picker
 	// whose answer nothing is waiting for.
 	if got := host.pickers[0].Deadline; !got.After(before) {

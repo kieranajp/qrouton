@@ -10,7 +10,7 @@ var (
 	ErrCommandRequired = errors.New("command is required")
 	ErrMessageRequired = errors.New("message is required")
 	ErrNameRequired    = errors.New("name is required")
-	ErrReposRequired   = errors.New("repos is required: name at least one repository as org/name")
+	ErrReposRequired   = errors.New("repos must name at least one repository, each as org/name")
 	ErrReasonRequired  = errors.New("reason is required: one line the user reads, saying why you need these")
 
 	ErrInvalidRequestedRole = errors.New("role must be editing or reference")

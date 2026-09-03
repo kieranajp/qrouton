@@ -68,9 +68,9 @@ export const joining = (branch) => (branch ? `Added repositories join ${branch}`
 export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
 /**
- * pickerOpen is whether the picker is drawn over the session on screen: an
- * escalation waiting on it, or the add-repos button pressed on that same
- * session. Pressing it on one session and switching to another closes it.
+ * pickerOpen is whether the picker is drawn over the session on screen: a
+ * request waiting on it, or the add-repos button pressed on that same session.
+ * Pressing it on one session and switching to another closes it.
  * @param {string} shown
  * @param {boolean} pending
  * @param {string} added the session add-repos was pressed on

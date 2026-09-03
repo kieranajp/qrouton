@@ -139,9 +139,8 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		return textResult(message), map[string]any{"windows": names}, nil
 	})
 
-	// list_repos is a list too, and offered in every mode: an assistant
-	// session cannot escalate to add repositories, but still benefits from
-	// seeing the ones it has.
+	// list_repos is a list too, and offered in every mode: what a session holds
+	// is not a question only an orchestrator has.
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolListRepos,
 		Description: descListRepos,
@@ -150,12 +149,12 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(reposMessage(rows)), map[string]any{"repos": rows}, nil
+		return textResult(reposMessage(rows)), map[string]any{keyRepos: rows}, nil
 	})
 
 	// request_repos returns the resulting set alongside its line, so it carries
-	// two keys where addTool carries one. Offered in both modes: an assistant
-	// that needs another repository should not have to escalate to read one.
+	// two keys where addTool carries one. Offered in both modes: escalating to
+	// read one more repository would change who is doing the work as well.
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        toolRequestRepos,
 		Description: descRequestRepos,
@@ -164,7 +163,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		if err != nil {
 			return nil, nil, err
 		}
-		return textResult(message), map[string]any{keyMessage: message, "repos": rows}, nil
+		return textResult(message), map[string]any{keyMessage: message, keyRepos: rows}, nil
 	})
 
 	return server
