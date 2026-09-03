@@ -212,3 +212,22 @@ test("preselect is a no-op for an empty request", () => {
   const selection = seed([{ id: "acme/api", role: "editing" }]);
   assert.deepEqual(preselect(selection, []), selection);
 });
+
+// An agent's request is ticked before the list has been refreshed, so the id it
+// named is the only spelling available. A refresh that turns it up under
+// GitHub's own casing has to keep the tick, not drop it as a row nothing lists.
+test("a picked row is respelled by the refreshed list that carries it", () => {
+  const selection = reconcile(preselect(seed(), [{ id: "acme/api", role: "editing" }]), [
+    "Acme/API",
+  ]);
+  assert.equal(roleOf(selection, "Acme/API"), "editing");
+  assert.equal(roleOf(selection, "acme/api"), "off");
+  assert.deepEqual(ordered(selection), [{ id: "Acme/API", role: "editing" }]);
+});
+
+test("a held row keeps the spelling the session holds it under", () => {
+  const held = seed([{ id: "acme/docs", role: "reference" }]);
+  const selection = reconcile(setRole(held, "acme/docs", "editing"), ["Acme/DOCS"]);
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+});

@@ -165,7 +165,11 @@ const (
 // user opened themselves records nothing — nothing is awaiting it.
 type PickerOutcome struct {
 	Status PickerStatus `json:"status"`
-	At     time.Time    `json:"at"`
+	// Kind is what the picker was asking for, so two callers polling at once each
+	// take only their own answer. Empty is an escalation, which is what a stanza
+	// written before this field existed can only have been.
+	Kind string    `json:"kind,omitempty"`
+	At   time.Time `json:"at"`
 }
 
 // EffectiveMode is the session's runner mode, defaulting to RPI for manifests

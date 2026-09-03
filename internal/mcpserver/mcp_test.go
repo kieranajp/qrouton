@@ -1636,7 +1636,8 @@ func answered(t *testing.T, dir string, status session.PickerStatus, at time.Tim
 			Repos: []session.ManifestRepo{
 				{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/retry", WorktreePath: "src/app"},
 			},
-			Picker: &session.PickerOutcome{Status: status, At: at},
+			Picker: &session.PickerOutcome{
+				Status: status, Kind: workbench.PickerKindRepos, At: at},
 		})
 	}()
 }
@@ -1709,7 +1710,9 @@ func TestRequestReposReturnsTheResultingSetWhicheverWayItGoes(t *testing.T) {
 			if len(rows) != 1 || rows[0].Name != "app" || rows[0].Role != "editing" {
 				t.Fatalf("resulting set = %#v", rows)
 			}
-			if want := fmt.Sprintf(tc.want, reposMessage(rows)); message != want {
+			want := fmt.Sprintf(tc.want, reposMessage(rows)) +
+				fmt.Sprintf(reposShortfallFormat, fmt.Sprintf(shortfallAbsentFormat, "lifesum/docs"))
+			if message != want {
 				t.Fatalf("message = %q, want %q", message, want)
 			}
 		})
@@ -1730,7 +1733,12 @@ func TestRequestReposReportsAPickerNobodyAnswered(t *testing.T) {
 	if len(rows) != 0 {
 		t.Fatalf("an unanswered picker reported %#v", rows)
 	}
-	if want := fmt.Sprintf(reposStillOpenFormat, reposMessage(rows)); message != want {
+	want := fmt.Sprintf(reposStillOpenFormat, reposMessage(rows)) +
+		fmt.Sprintf(reposShortfallFormat, strings.Join([]string{
+			fmt.Sprintf(shortfallAbsentFormat, "lifesum/app"),
+			fmt.Sprintf(shortfallAbsentFormat, "lifesum/docs"),
+		}, repoShortfallJoiner))
+	if message != want {
 		t.Fatalf("message = %q, want %q", message, want)
 	}
 }
@@ -1796,5 +1804,102 @@ func TestRequestReposReportsAWorkbenchThatCannotDrawThePicker(t *testing.T) {
 	host.pickerErr = errors.New("unreachable")
 	if _, _, err := m.requestRepos(context.Background(), requested()); err == nil {
 		t.Fatal("request_repos succeeded with no workbench to draw the picker")
+	}
+}
+
+// The set alone leaves the agent to notice what it did not get, and an agent
+// that misses it asks again for the same repository. Naming the shortfall is
+// what closes that loop: a name nothing matched and a row the user dropped are
+// one fact, and a promotion the user declined is the other.
+func TestRequestReposNamesWhatTheRequestDidNotGet(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		held []session.ManifestRepo
+		want []string
+	}{
+		{
+			name: "nothing by that name is in the session",
+			held: []session.ManifestRepo{{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing}},
+			want: []string{"lifesum/docs is not in the session"},
+		},
+		{
+			name: "a declined promotion is still held, in the lesser role",
+			held: []session.ManifestRepo{
+				{Name: "app", Org: "lifesum", Role: session.RepoRoleReference},
+				{Name: "docs", Org: "lifesum", Role: session.RepoRoleReference},
+			},
+			want: []string{"lifesum/app is held as reference, not editing"},
+		},
+		{
+			name: "a request answered in full says nothing",
+			held: []session.ManifestRepo{
+				{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing},
+				{Name: "docs", Org: "lifesum", Role: session.RepoRoleReference},
+			},
+			want: nil,
+		},
+		{
+			name: "casing is not a shortfall",
+			held: []session.ManifestRepo{
+				{Name: "App", Org: "Lifesum", Role: session.RepoRoleEditing},
+				{Name: "Docs", Org: "Lifesum", Role: session.RepoRoleReference},
+			},
+			want: nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			asked, _, err := repoRequest(requested())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := shortfall(asked, reposFrom(session.Manifest{Repos: tc.held}))
+			if len(got) == 0 && len(tc.want) == 0 {
+				return
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("shortfall = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Both pickers write one stanza, and a repository request replaces a waiting
+// escalation, so an escalate poller that took the first answer it saw would
+// report a mode change the user never confirmed.
+func TestPickerOutcomeTakesOnlyItsOwnKind(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		written string
+		polling string
+		want    bool
+	}{
+		{name: "an escalation answers its own poller", written: workbench.PickerKindEscalate,
+			polling: workbench.PickerKindEscalate, want: true},
+		{name: "a repos answer is not an escalation's", written: workbench.PickerKindRepos,
+			polling: workbench.PickerKindEscalate},
+		{name: "an escalation's answer is not a request's", written: workbench.PickerKindEscalate,
+			polling: workbench.PickerKindRepos},
+		{name: "a repos answer answers its own poller", written: workbench.PickerKindRepos,
+			polling: workbench.PickerKindRepos, want: true},
+		// Every stanza written before the field existed was an escalation's.
+		{name: "an unkinded stanza is an escalation's", written: "",
+			polling: workbench.PickerKindEscalate, want: true},
+		{name: "an unkinded stanza is not a request's", written: "",
+			polling: workbench.PickerKindRepos},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			spawnedAt := time.Now()
+			if err := session.WriteManifest(dir, session.Manifest{
+				Picker: &session.PickerOutcome{
+					Status: session.PickerConfirmed, Kind: tc.written, At: spawnedAt.Add(time.Second)},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, done := pickerOutcome(dir, spawnedAt, tc.polling); done != tc.want {
+				t.Fatalf("a %q stanza answered a %q poll = %v, want %v",
+					tc.written, tc.polling, done, tc.want)
+			}
+		})
 	}
 }

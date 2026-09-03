@@ -107,18 +107,26 @@ function takeUp(selection, id, role) {
 /**
  * reconcile drops the repositories a refreshed list no longer carries. Held rows
  * survive it, because the session holds them whatever GitHub now reports.
+ *
+ * A row can also be picked before the list carries it: an agent's request names
+ * repositories the cache had not seen, and it may spell one differently than
+ * GitHub does. Those match on the fold and carry the list's spelling onward,
+ * because everything downstream compares ids exactly. A held row keeps the
+ * manifest's spelling, which locked and upgrades are keyed by.
  * @param {Selection} selection
  * @param {string[]} ids
  * @returns {Selection}
  */
 export function reconcile(selection, ids) {
-  const available = new Set(ids);
+  const canonical = new Map(ids.map((id) => [id.toLowerCase(), id]));
+  const keep = (id) => canonical.has(id.toLowerCase()) || isLocked(selection, id);
+  const spell = (id) => (isLocked(selection, id) ? id : (canonical.get(id.toLowerCase()) ?? id));
   /** @type {Record<string, Role>} */
   const roles = {};
   for (const [id, role] of Object.entries(selection.roles)) {
-    if (available.has(id) || isLocked(selection, id)) roles[id] = role;
+    if (keep(id)) roles[spell(id)] = role;
   }
-  return { ...selection, roles, order: selection.order.filter((id) => available.has(id)) };
+  return { ...selection, roles, order: selection.order.filter(keep).map(spell) };
 }
 
 /** counts is the `2 editing · 1 reference` line, which describes the rows on screen. */

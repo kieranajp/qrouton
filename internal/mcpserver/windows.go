@@ -407,7 +407,7 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	}); err != nil {
 		return "", fmt.Errorf("escalate: %w", err)
 	}
-	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt)
+	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt, workbench.PickerKindEscalate)
 	switch {
 	case err != nil:
 		return "", err
@@ -441,7 +441,7 @@ func (m *windowManager) requestRepos(ctx context.Context, input requestReposInpu
 	}); err != nil {
 		return "", nil, fmt.Errorf("request repos: %w", err)
 	}
-	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt)
+	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt, workbench.PickerKindRepos)
 	if err != nil {
 		return "", nil, err
 	}
@@ -450,15 +450,51 @@ func (m *windowManager) requestRepos(ctx context.Context, input requestReposInpu
 		if err != nil {
 			return "", nil, err
 		}
-		return fmt.Sprintf(reposStillOpenFormat, reposMessage(rows)), rows, nil
+		return reposAnswer(reposStillOpenFormat, requested, rows), rows, nil
 	}
 	// From the manifest the poll read: the confirm wrote the repositories and the
 	// stanza together, so this is the set the user answered with.
 	rows := reposFrom(answer.manifest)
 	if answer.status == session.PickerConfirmed {
-		return fmt.Sprintf(reposConfirmedFormat, reposMessage(rows)), rows, nil
+		return reposAnswer(reposConfirmedFormat, requested, rows), rows, nil
 	}
-	return fmt.Sprintf(reposCancelledFormat, reposMessage(rows)), rows, nil
+	return reposAnswer(reposCancelledFormat, requested, rows), rows, nil
+}
+
+// reposAnswer is the resulting set, and then whatever the request asked for that
+// the set does not account for. The agent could diff the two itself, but naming
+// the shortfall is what stops it asking again for a repository the user dropped
+// or a name that matched nothing.
+func reposAnswer(format string, requested []workbench.RequestedRepo, rows []repoRow) string {
+	message := fmt.Sprintf(format, reposMessage(rows))
+	if short := shortfall(requested, rows); len(short) > 0 {
+		message += fmt.Sprintf(reposShortfallFormat, strings.Join(short, repoShortfallJoiner))
+	}
+	return message
+}
+
+// shortfall reads the request against the resulting set. Absent covers both a
+// name nothing matched and a row the user dropped, which are one fact from here:
+// the session does not hold it and asking again unchanged will not help. A
+// repository held in a lesser role than the one asked for is the other case,
+// because the request was answered but not granted.
+func shortfall(requested []workbench.RequestedRepo, rows []repoRow) []string {
+	roles := make(map[string]string, len(rows))
+	for _, row := range rows {
+		roles[strings.ToLower(row.Org+repoIDSeparator+row.Name)] = row.Role
+	}
+	short := make([]string, 0, len(requested))
+	for _, want := range requested {
+		id := strings.TrimSpace(want.ID)
+		role, held := roles[strings.ToLower(id)]
+		switch {
+		case !held:
+			short = append(short, fmt.Sprintf(shortfallAbsentFormat, id))
+		case want.Role == string(session.RepoRoleEditing) && role != string(session.RepoRoleEditing):
+			short = append(short, fmt.Sprintf(shortfallRoleFormat, id, role))
+		}
+	}
+	return short
 }
 
 // repoRequest validates what the agent asked for. An omitted role reads as
@@ -502,13 +538,13 @@ type pickerAnswer struct {
 // awaitPickerOutcome polls the manifest for a picker outcome newer than
 // spawnedAt, without holding m.mu — a blocking poll must not stall every other
 // MCP tool the agent might call while the picker is open.
-func awaitPickerOutcome(ctx context.Context, root string, spawnedAt time.Time) (pickerAnswer, error) {
+func awaitPickerOutcome(ctx context.Context, root string, spawnedAt time.Time, kind string) (pickerAnswer, error) {
 	ticker := time.NewTicker(pickerPollInterval)
 	defer ticker.Stop()
 	timeout := time.NewTimer(pickerTimeout)
 	defer timeout.Stop()
 	for {
-		if answer, done := pickerOutcome(root, spawnedAt); done {
+		if answer, done := pickerOutcome(root, spawnedAt, kind); done {
 			return answer, nil
 		}
 		select {
@@ -521,9 +557,18 @@ func awaitPickerOutcome(ctx context.Context, root string, spawnedAt time.Time) (
 	}
 }
 
-func pickerOutcome(root string, spawnedAt time.Time) (pickerAnswer, bool) {
+// pickerOutcome takes only the answer to the kind of picker this caller opened.
+// Two can be pending at once — a repository request replaces a waiting
+// escalation — and the one stanza they share would otherwise tell the escalate
+// poller that a mode change it never got had been confirmed.
+func pickerOutcome(root string, spawnedAt time.Time, kind string) (pickerAnswer, bool) {
 	m, err := session.Load(root)
 	if err != nil || m.Picker == nil || !m.Picker.At.After(spawnedAt) {
+		return pickerAnswer{}, false
+	}
+	// An escalation also answers to the empty kind, which is every stanza written
+	// before the field existed; a repository request only ever answers to its own.
+	if m.Picker.Kind != kind && !(kind == workbench.PickerKindEscalate && m.Picker.Kind == "") {
 		return pickerAnswer{}, false
 	}
 	return pickerAnswer{manifest: m, status: m.Picker.Status, answered: true}, true

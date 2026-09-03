@@ -207,9 +207,13 @@ func (p *Picker) Cancel(slug string) error {
 // answerTo separates the two facts a pending request carries: something is
 // polling for the outcome stanza, and only an escalation also moves the mode.
 func answerTo(req *workbench.PickerRequest) assembly.Answer {
+	if req == nil {
+		return assembly.Answer{}
+	}
 	return assembly.Answer{
-		Escalating: req != nil && req.Kind == workbench.PickerKindEscalate,
-		Awaited:    req != nil,
+		Escalating: req.Kind == workbench.PickerKindEscalate,
+		Awaited:    true,
+		Kind:       req.Kind,
 	}
 }
 

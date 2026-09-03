@@ -98,6 +98,14 @@ const (
 	reposConfirmedFormat = "The user answered the picker. %s"
 	reposCancelledFormat = "The user cancelled; nothing was added or taken up. %s"
 	reposStillOpenFormat = "The picker is still open; the user hasn't confirmed or cancelled yet. %s"
+
+	// The shortfall names what the request did not get, so an agent does not read
+	// its own request back out of the set and ask for the same thing again.
+	reposShortfallFormat  = "\nYou asked for more than this: %s. Don't ask again without saying something new — check the spelling first, and take a no for an answer."
+	shortfallAbsentFormat = "%s is not in the session"
+	shortfallRoleFormat   = "%s is held as %s, not editing"
+	repoShortfallJoiner   = "; "
+	repoIDSeparator       = "/"
 )
 
 const toastFormat = "🔔  %s"

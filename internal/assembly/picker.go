@@ -13,6 +13,9 @@ import (
 type Answer struct {
 	Escalating bool
 	Awaited    bool
+	// Kind travels into the stanza so the caller that reads it can tell whether
+	// the answer is the one it is waiting for.
+	Kind string
 }
 
 // Confirm adds the picked repositories to a live session: the composed
@@ -45,7 +48,8 @@ func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.Pro
 			out.Mode = session.ModeRPI
 		}
 		if ans.Awaited {
-			out.Picker = &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now()}
+			out.Picker = &session.PickerOutcome{
+				Status: session.PickerConfirmed, Kind: ans.Kind, At: time.Now()}
 		}
 		updated = out
 		return out, nil
@@ -99,7 +103,8 @@ func Cancel(dir string, ans Answer) error {
 		return nil
 	}
 	return session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
-		m.Picker = &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()}
+		m.Picker = &session.PickerOutcome{
+			Status: session.PickerCancelled, Kind: ans.Kind, At: time.Now()}
 		return m, nil
 	})
 }
