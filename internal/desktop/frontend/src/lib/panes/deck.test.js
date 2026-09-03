@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { counterFor, partition, screenFor } from "./deck.js";
+import { criteriaSpans } from "./plan.js";
 import { parsePlan } from "./plan.js";
 
 const lines = (...text) => text.join("\n");
@@ -38,10 +39,18 @@ const PLAN = lines(
 const plan = parsePlan(PLAN);
 
 /** A rendered block as the renderer deals it out: its markup and its source span. */
-const block = (from, to = from) => ({ html: `<p data-line="${from}">${from}</p>`, from, to });
+const block = (from, to = from) => ({
+  html: `<p data-line="${from}">${from}</p>`,
+  from,
+  to,
+});
 const dealing =
   (...blocks) =>
-  () => blocks;
+  () =>
+    blocks;
+/** partition as PlanPane calls it: the plan's slides, bucketed by their criteria. */
+const deckOf = (parsed, deal) =>
+  partition("", parsed.slides, { criteria: criteriaSpans, deal });
 const html = (...blocks) => blocks.map((one) => one.html).join("");
 
 const opening = block(9);
@@ -53,49 +62,73 @@ test("every block lands in the slide whose span holds it", () => {
   const before = [block(5), block(7)];
   const middle = [block(17), block(19), block(21), block(22)];
   const section = [block(24), block(26)];
-  const deck = partition(
-    "",
+  const deck = deckOf(
     plan,
     dealing(...before, opening, body, heading, checks, ...middle, ...section),
   );
 
   assert.equal(deck.preamble, html(...before));
-  assert.deepEqual(deck.slides, [
-    { opening: html(opening), body: html(body), criteria: html(heading, checks) },
-    { opening: html(middle[0]), body: html(middle[1]), criteria: html(middle[2], middle[3]) },
+  assert.deepEqual(deck.sections, [
+    {
+      opening: html(opening),
+      body: html(body),
+      criteria: html(heading, checks),
+    },
+    {
+      opening: html(middle[0]),
+      body: html(middle[1]),
+      criteria: html(middle[2], middle[3]),
+    },
     { opening: html(section[0]), body: html(section[1]), criteria: "" },
   ]);
 });
 
 test("a block the parser numbered nowhere is bucketed with the block before it", () => {
-  const inBody = { html: "<figure>drawn</figure>", from: body.from, to: body.to };
-  const inCriteria = { html: "<figure>ticked</figure>", from: checks.from, to: checks.to };
-  const deck = partition("", plan, dealing(opening, body, inBody, heading, checks, inCriteria));
+  const inBody = {
+    html: "<figure>drawn</figure>",
+    from: body.from,
+    to: body.to,
+  };
+  const inCriteria = {
+    html: "<figure>ticked</figure>",
+    from: checks.from,
+    to: checks.to,
+  };
+  const deck = deckOf(
+    plan,
+    dealing(opening, body, inBody, heading, checks, inCriteria),
+  );
 
-  assert.equal(deck.slides[0].body, html(body, inBody));
-  assert.equal(deck.slides[0].criteria, html(heading, checks, inCriteria));
+  assert.equal(deck.sections[0].body, html(body, inBody));
+  assert.equal(deck.sections[0].criteria, html(heading, checks, inCriteria));
 });
 
 test("a block ending past the criteria it opens in stays in the body", () => {
   const spilling = block(14, 16);
-  const deck = partition("", plan, dealing(opening, heading, spilling));
+  const deck = deckOf(plan, dealing(opening, heading, spilling));
 
-  assert.equal(deck.slides[0].criteria, html(heading));
-  assert.equal(deck.slides[0].body, html(spilling));
+  assert.equal(deck.sections[0].criteria, html(heading));
+  assert.equal(deck.sections[0].body, html(spilling));
 });
 
 test("the criteria of one phase claim nothing in the next", () => {
   const straddling = /** @type {any} */ ({
     slides: [
-      { from: 9, to: 16, number: 1, name: "Groundwork", verify: { from: 13, to: 19 } },
+      {
+        from: 9,
+        to: 16,
+        number: 1,
+        name: "Groundwork",
+        verify: { from: 13, to: 19 },
+      },
       { from: 17, to: 20, number: 2, name: "The middle", verify: null },
     ],
   });
   const after = block(19);
-  const deck = partition("", straddling, dealing(heading, checks, block(17), after));
+  const deck = deckOf(straddling, dealing(heading, checks, block(17), after));
 
-  assert.equal(deck.slides[0].criteria, html(heading, checks));
-  assert.equal(deck.slides[1].body, html(after));
+  assert.equal(deck.sections[0].criteria, html(heading, checks));
+  assert.equal(deck.sections[1].body, html(after));
 });
 
 test("a line in no slide reads as the overview", () => {
