@@ -9,6 +9,6 @@
     {"kind": "artifact_absent", "path": "thoughts/shared/research/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
-    {"kind": "response_excludes", "any": ["QRSPI", "qrspi-research", "agent depth", "document numbering"]}
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "agent depth", "document numbering"]}
   ]
 }

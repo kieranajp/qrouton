@@ -14,7 +14,7 @@ When a fresh request is broad enough that several materially different outcomes 
 
 ## The user sees RPI
 
-Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention QRSPI, phase letters, skill names, agent depth, or document numbering.
+Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention `qrouton-questions`, `qrouton-research`, `qrouton-spec`, `qrouton-plan`, `qrouton-implement`, phase letters, skill names, agent depth, or document numbering.
 
 Infer workstream state from related artifacts — frontmatter links, matching slugs, references — not from the mere existence of a file. When lineage is ambiguous, ask which work the user means.
 

@@ -14,7 +14,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
-var internalLeakPattern = regexp.MustCompile(`(?i)\b(QRSPI|qrspi-[a-z-]+|agent depth|document numbering)\b`)
+var internalLeakPattern = regexp.MustCompile(`(?i)\b(qrouton-(questions|research|spec|plan|implement)|agent depth|document numbering)\b`)
 
 // testsPassTimeout bounds a fixture repo's test run during grading.
 const testsPassTimeout = 5 * time.Minute

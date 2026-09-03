@@ -41,8 +41,8 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 			t.Fatalf("orchestrator prompt missing %q", want)
 		}
 	}
-	skillDir := filepath.Join(dir, ".claude", "skills", "qrspi-questions")
-	codexSkillDir := filepath.Join(dir, ".agents", "skills", "qrspi-questions")
+	skillDir := filepath.Join(dir, ".claude", "skills", "qrouton-questions")
+	codexSkillDir := filepath.Join(dir, ".agents", "skills", "qrouton-questions")
 	for _, p := range []string{skillDir, codexSkillDir} {
 		if info, err := os.Lstat(p); err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatalf("%s is not a symlink: %v", p, err)
@@ -61,7 +61,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	}
 	// A skill folder reaches the runner whole, references and all.
 	for _, root := range []string{".claude", ".agents"} {
-		reference := filepath.Join(dir, root, "skills", "qrspi-plan", "references", "plan-shape.md")
+		reference := filepath.Join(dir, root, "skills", "qrouton-plan", "references", "plan-shape.md")
 		rb, err := os.ReadFile(reference)
 		if err != nil {
 			t.Fatalf("plan skill reference not stamped: %v", err)
@@ -113,7 +113,7 @@ func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertLinkTargetContains(t, filepath.Join(rpi, "CLAUDE.md"), "ORCHESTRATOR.md")
-	if _, err := os.Stat(filepath.Join(rpi, ".qrouton", "qrspi", "ASSISTANT.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(rpi, ".qrouton", "prompts", "ASSISTANT.md")); err != nil {
 		t.Fatalf("assistant prompt not stamped for escalation: %v", err)
 	}
 
@@ -128,7 +128,7 @@ func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
 	for _, name := range []string{"CLAUDE.md", "AGENTS.md"} {
 		assertLinkTargetContains(t, filepath.Join(asst, name), "ASSISTANT.md")
 	}
-	if _, err := os.Stat(filepath.Join(asst, ".qrouton", "qrspi", "ORCHESTRATOR.md")); err != nil {
+	if _, err := os.Stat(filepath.Join(asst, ".qrouton", "prompts", "ORCHESTRATOR.md")); err != nil {
 		t.Fatalf("orchestrator prompt not stamped for escalation: %v", err)
 	}
 	if b, err := os.ReadFile(filepath.Join(asst, "CLAUDE.md")); err != nil || !strings.Contains(string(b), "qrouton assistant") {
@@ -181,7 +181,7 @@ func TestStampAssetsAppendsHandoffBriefToPrimaryDiscovery(t *testing.T) {
 		t.Fatal("handoff brief not appended to the stamped primary discovery file")
 	}
 	// The non-primary mode prompt stays pristine.
-	ab, err := os.ReadFile(filepath.Join(dir, ".qrouton", "qrspi", "ASSISTANT.md"))
+	ab, err := os.ReadFile(filepath.Join(dir, ".qrouton", "prompts", "ASSISTANT.md"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -16,7 +16,7 @@ function humanize(value) {
     .trim()
     .split(/[-_\s]+/)
     .filter(Boolean)
-    .map((word) => (word.toLowerCase() === "qrspi" ? "QRSPI" : word[0].toUpperCase() + word.slice(1)))
+    .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
 }
 

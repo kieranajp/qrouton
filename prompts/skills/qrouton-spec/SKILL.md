@@ -1,6 +1,6 @@
 ---
-name: qrspi-spec
-description: Internally capture design decisions during the Plan part of qrouton's RPI workflow. Use when research exists and meaningful product or technical choices must be aligned before drafting the tactical plan.
+name: qrouton-spec
+description: Internally capture design decisions during the Plan part of qrouton's workflow. Use when research exists and meaningful product or technical choices must be aligned before drafting the tactical plan.
 ---
 
 # Align the design

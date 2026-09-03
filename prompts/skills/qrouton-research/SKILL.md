@@ -1,6 +1,6 @@
 ---
-name: qrspi-research
-description: Internally execute the Research part of qrouton's RPI workflow through a delegated research lead and ticket-blind specialists. Use after research questions are sufficiently framed.
+name: qrouton-research
+description: Internally execute the Research part of qrouton's workflow through a delegated research lead and ticket-blind specialists. Use after research questions are sufficiently framed.
 ---
 
 # Run research

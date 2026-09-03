@@ -90,6 +90,18 @@ func TestGradeDetectsReferenceModification(t *testing.T) {
 	}
 }
 
+func TestGradeNoInternalLeakCatchesSkillNamesButNotTheBareProductName(t *testing.T) {
+	leaked := gradeNoInternalLeak(CaseResult{FinalResponse: "Delegating to qrouton-plan next."})
+	if leaked.Passed {
+		t.Fatal("response naming a skill passed no_internal_leak")
+	}
+
+	clean := gradeNoInternalLeak(CaseResult{FinalResponse: "This is a qrouton session."})
+	if !clean.Passed {
+		t.Fatalf("response naming only the product failed no_internal_leak: %s", clean.Evidence)
+	}
+}
+
 func TestGradeChecksEditingRepositoryRemainsUnchanged(t *testing.T) {
 	unchanged := gradeCheck(CheckSpec{Kind: "repo_unchanged", Repo: "app"}, CaseResult{
 		Diffs: map[string]string{"app": ""},

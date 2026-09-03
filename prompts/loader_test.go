@@ -31,13 +31,13 @@ var embeddedPromptIDs = []string{
 	"orchestrator",
 	"skills/qrouton-development",
 	"skills/qrouton-evals",
+	"skills/qrouton-implement",
+	"skills/qrouton-plan",
+	"skills/qrouton-questions",
+	"skills/qrouton-research",
 	"skills/qrouton-review",
 	"skills/qrouton-slides",
-	"skills/qrspi-implement",
-	"skills/qrspi-plan",
-	"skills/qrspi-questions",
-	"skills/qrspi-research",
-	"skills/qrspi-spec",
+	"skills/qrouton-spec",
 }
 
 func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
@@ -128,7 +128,7 @@ func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
 			}
 		}
 
-		reference := filepath.Join(dir, root, skillsDirName, "qrspi-plan", "references", "plan-shape.md")
+		reference := filepath.Join(dir, root, skillsDirName, "qrouton-plan", "references", "plan-shape.md")
 		content, err := os.ReadFile(reference)
 		if err != nil {
 			t.Fatalf("%s does not resolve through the skill folder link: %v", reference, err)
@@ -144,7 +144,7 @@ func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
 // replace it, since every session that predates the change starts in that shape.
 func TestStampReplacesPerFileSkillDirectory(t *testing.T) {
 	dir := t.TempDir()
-	const name = "qrspi-plan"
+	const name = "qrouton-plan"
 	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
 
 	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
@@ -192,7 +192,7 @@ func TestStampRestoresCanonicalAssetReplacedByALink(t *testing.T) {
 	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
 		t.Fatal(err)
 	}
-	canonical := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, "qrspi-plan", skillFileName)
+	canonical := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, "qrouton-plan", skillFileName)
 	if err := os.Remove(canonical); err != nil {
 		t.Fatal(err)
 	}
@@ -208,7 +208,7 @@ func TestStampRestoresCanonicalAssetReplacedByALink(t *testing.T) {
 		t.Fatalf("%s is still a link: %v", canonical, err)
 	}
 	content, err := os.ReadFile(canonical)
-	if err != nil || !strings.Contains(string(content), "name: qrspi-plan") {
+	if err != nil || !strings.Contains(string(content), "name: qrouton-plan") {
 		t.Fatalf("canonical skill was not restored: %v", err)
 	}
 }
@@ -217,7 +217,7 @@ func TestStampRestoresCanonicalAssetReplacedByALink(t *testing.T) {
 // the user owns, whatever its name.
 func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {
 	dir := t.TempDir()
-	mine := filepath.Join(dir, claudeSkillsDir, skillsDirName, "qrspi-plan")
+	mine := filepath.Join(dir, claudeSkillsDir, skillsDirName, "qrouton-plan")
 	if err := os.MkdirAll(mine, dirMode); err != nil {
 		t.Fatal(err)
 	}
@@ -241,7 +241,7 @@ func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {
 // still refuse, since only every file being ours makes the directory ours.
 func TestStampRefusesSkillDirectoryHoldingMixedContent(t *testing.T) {
 	dir := t.TempDir()
-	const name = "qrspi-plan"
+	const name = "qrouton-plan"
 	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
 
 	stale := filepath.Join(dir, claudeSkillsDir, skillsDirName, name)
@@ -487,7 +487,7 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 // The plan template lives in the plan skill's own reference file, so SKILL.md
 // stays short enough to skim.
 func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
-	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-plan"))
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrouton-plan"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +511,7 @@ func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
 // The research document's shape is one file, read by the workbench pane and
 // written by the lead, so the skill points at it rather than restating it.
 func TestResearchSkillDefersItsShapeToAReference(t *testing.T) {
-	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrouton-research"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestOnlyAFolderDirectlyUnderSkillsIsASkill(t *testing.T) {
 // and the readers that ask whether it has been answered yet, so read it the way
 // they do.
 func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
-	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrspi-research"))
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrouton-research"))
 	if err != nil {
 		t.Fatal(err)
 	}

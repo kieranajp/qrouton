@@ -1,6 +1,6 @@
 ---
-name: qrspi-plan
-description: Internally produce the tactical artifact for the Plan part of qrouton's RPI workflow. Use when the design and scope are sufficiently decided for an implementation lead to execute.
+name: qrouton-plan
+description: Internally produce the tactical artifact for the Plan part of qrouton's workflow. Use when the design and scope are sufficiently decided for an implementation lead to execute.
 ---
 
 # Produce the implementation plan

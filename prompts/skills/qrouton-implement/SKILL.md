@@ -1,6 +1,6 @@
 ---
-name: qrspi-implement
-description: Execute the Implement part of qrouton's RPI workflow through a delegated implementation lead that owns plan execution, specialist workers, verification, and progress artifacts. Use when an approved plan or sufficiently concrete request is ready to build.
+name: qrouton-implement
+description: Execute the Implement part of qrouton's workflow through a delegated implementation lead that owns plan execution, specialist workers, verification, and progress artifacts. Use when an approved plan or sufficiently concrete request is ready to build.
 ---
 
 # Delegate implementation
