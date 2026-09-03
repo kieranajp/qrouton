@@ -32,6 +32,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 			&cli.StringFlag{Name: linearIssueFlag, Usage: linearIssueFlagUsage},
+			&cli.StringFlag{Name: ticketFlag, Usage: ticketFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
 		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
@@ -52,16 +53,29 @@ func open(c *cli.Context) error {
 	if arg := c.Args().First(); arg != "" {
 		return fmt.Errorf("%w: %q", errNoSessionArguments, arg)
 	}
-	linearIssue, linearPrompt := "", ""
-	if c.IsSet(linearIssueFlag) {
-		canonical, err := ticket.CanonicalLinearURL(c.String(linearIssueFlag))
-		if err != nil {
-			return err
-		}
-		linearIssue = canonical
-		linearPrompt = os.Getenv(linearPromptEnvVar)
+	reference, prompt, err := offeredTicket(c)
+	if err != nil {
+		return err
 	}
-	return workbench.WithLaunchLock(func() error { return openLocked(c, linearIssue, linearPrompt) })
+	return workbench.WithLaunchLock(func() error { return openLocked(c, reference, prompt) })
+}
+
+// offeredTicket is the ticket this invocation is opening on, canonical and ready
+// to dedupe against. --linear-issue is the name Linear Desktop already holds in
+// users' coding-tools.json, and it alone carries a free-text prompt.
+func offeredTicket(c *cli.Context) (string, string, error) {
+	flag, prompt := ticketFlag, ""
+	switch {
+	case c.IsSet(linearIssueFlag):
+		flag, prompt = linearIssueFlag, os.Getenv(linearPromptEnvVar)
+	case !c.IsSet(ticketFlag):
+		return "", "", nil
+	}
+	canonical, err := ticket.Canonical(c.String(flag))
+	if err != nil {
+		return "", "", err
+	}
+	return canonical, prompt, nil
 }
 
 func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {

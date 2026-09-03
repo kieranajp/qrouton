@@ -362,6 +362,17 @@ test("the sticker control shares the row context menu", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Clean up…" })).toBeVisible();
 });
 
+test("the row context menu leads with Reload and calls it for that row", async ({ page }) => {
+  await page.getByRole("button", { name: /^Checkout migration ·/ }).click({ button: "right" });
+  const reload = page.getByRole("button", { name: "Reload" });
+  await expect(reload).toBeVisible();
+  await expect(page.locator(".menu button.item").first()).toHaveText("Reload");
+  await reload.click();
+  await expect
+    .poll(() => page.evaluate(() => window.sessionRailBridge.calls()))
+    .toContainEqual({ method: "reload", slug: "checkout" });
+});
+
 test("the badge carries the row's state", async ({ page }) => {
   const avatar = (name) => page.getByRole("button", { name }).locator(".avatar");
   const background = (locator) =>

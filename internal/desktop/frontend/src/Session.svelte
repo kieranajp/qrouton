@@ -132,6 +132,7 @@
         selected={view.selected}
         onSelect={(i) => view.select(view.tabs[i])}
         onClose={(i) => view.close(view.tabs[i])}
+        onReorder={view.reorder}
         onNew={view.newShell}
         newLabel="Shell" />
       {#each view.tabs as tab, i (tab.id)}

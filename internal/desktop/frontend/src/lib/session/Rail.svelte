@@ -9,7 +9,7 @@
   import RailItem from "./RailItem.svelte";
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
-  import { cleanup, cycleSticker, reveal, show, uncommitted } from "../sessions.js";
+  import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
   import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
@@ -32,6 +32,7 @@
 
   const ROW_MENU_WIDTH = 190;
   const ROW_MENU = [
+    { label: "Reload", act: reloadRow },
     { label: "Reveal in Finder", act: revealRow },
     "-",
     { label: "Clean up…", tone: "destructive", act: askCleanup },
@@ -40,9 +41,9 @@
   const stickerQueues = new Map();
   let pendingStickers = $state({});
   /** @type {{slug: string, sequence: number, text: string, failed: boolean} | null} */
-  let stickerNotice = $state(null);
-  let stickerSequence = 0;
-  let stickerTimer;
+  let rowNotice = $state(null);
+  let noticeSequence = 0;
+  let rowNoticeTimer;
   let mounted = true;
 
   // A rail row's number is its position, so it moves when showing a session
@@ -58,16 +59,16 @@
     return () => {
       mounted = false;
       window.removeEventListener("keydown", onKey);
-      clearTimeout(stickerTimer);
+      clearTimeout(rowNoticeTimer);
     };
   });
 
-  function showStickerNotice(slug, text, failed = false) {
+  function showRowNotice(slug, text, failed = false) {
     if (!mounted) return;
-    clearTimeout(stickerTimer);
-    stickerNotice = { slug, text, failed, sequence: ++stickerSequence };
-    stickerTimer = setTimeout(() => {
-      stickerNotice = null;
+    clearTimeout(rowNoticeTimer);
+    rowNotice = { slug, text, failed, sequence: ++noticeSequence };
+    rowNoticeTimer = setTimeout(() => {
+      rowNotice = null;
     }, 1500);
   }
 
@@ -80,8 +81,8 @@
     const queued = previous
       .catch(() => {})
       .then(() => cycleSticker(slug))
-      .then((committed) => showStickerNotice(slug, stickerFeedback(committed, stickerLabels)))
-      .catch(() => showStickerNotice(slug, "Sticker could not be changed", true))
+      .then((committed) => showRowNotice(slug, stickerFeedback(committed, stickerLabels)))
+      .catch(() => showRowNotice(slug, "Sticker could not be changed", true))
       .finally(() => {
         pendingStickers = {
           ...pendingStickers,
@@ -121,7 +122,18 @@
     onDismissed();
   }
 
-  // Nothing here changed, and the rail has no surface to report a refusal on.
+  // A supervisor this workbench does not own is refused rather than killed, and
+  // the row is where that refusal has to land.
+  async function reloadRow(row) {
+    onDismissed();
+    try {
+      await reload(row.slug);
+    } catch {
+      showRowNotice(row.slug, "Session could not be reloaded", true);
+    }
+  }
+
+  // Nothing here changed, so a Finder that will not open is left silent.
   async function revealRow(row) {
     onDismissed();
     try {
@@ -184,7 +196,7 @@
         stickerId={row.sticker}
         {stickerLabels}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
-        feedback={stickerNotice?.slug === row.slug ? stickerNotice : null}
+        feedback={rowNotice?.slug === row.slug ? rowNotice : null}
         onSelect={() => show(row.slug)}
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />

@@ -1214,6 +1214,150 @@ func TestShowRefusesASlugItCannotResolve(t *testing.T) {
 	}
 }
 
+// A supervisor that fails leaves its state registered, and a pane drawn against
+// a dead process swallows every keystroke. The row goes back to unloaded with
+// the session's tabs intact, and showing it again boots a replacement.
+func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/sh", "-c", "exit 3")
+	reg, windows, r := testSessions(t, root, boot)
+	sessionDir(t, root, "octopus")
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	dead := reg.current()
+	tab, err := windows.openStructural(dead, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Command: []string{"/bin/cat"}, Cwd: dead.root(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(dead.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
+
+	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	crashed := pushedChrome(t, r)
+	if crashed.Terminal != "" {
+		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
+	}
+	if got := rowTerminal(t, crashed, "octopus"); got != "" {
+		t.Fatalf("the row still names terminal %q after its supervisor died", got)
+	}
+	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 1 || tabs[0].ID != tab {
+		t.Fatalf("the crash took the session's tabs with it: %+v", tabs)
+	}
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	booted := reg.current()
+	if booted == dead || booted.terminal == dead.terminal {
+		t.Fatalf("showing the dead session came back with terminal %q", booted.terminal)
+	}
+	if !boot.resumed(t, booted.root()) {
+		t.Fatal("the replacement supervisor started a fresh conversation")
+	}
+	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
+		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
+	}
+	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
+		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
+	}
+}
+
+// Reload is the way out of a session that is wedged rather than dead, so it
+// tears down a live supervisor and comes back on the same conversation.
+func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, r := testSessions(t, root, boot)
+	sessionDir(t, root, "octopus")
+
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	before := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(before.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	pid := before.process.cmd.Process.Pid
+
+	if err := reg.Reload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	after := reg.current()
+	if after == before || after.terminal == before.terminal {
+		t.Fatalf("Reload came back with terminal %q, want a session of its own", after.terminal)
+	}
+	if state, ok := reg.byTerminal(before.terminal); ok {
+		t.Fatalf("the reloaded session %q is still registered", state.terminal)
+	}
+	waitFor(t, "the previous supervisor to die", func() bool { return syscall.Kill(pid, 0) != nil })
+	if !boot.resumed(t, after.root()) {
+		t.Fatal("the reloaded session started a fresh conversation")
+	}
+	if agents, _ := boot.counts(); agents != 2 {
+		t.Fatalf("Reload asked for %d supervisors in total, want the first and its replacement", agents)
+	}
+}
+
+// A reboot that cannot start leaves the window on the session before it. An
+// empty window is the assembly overlay, and at its first step there is no way out.
+func TestARebootThatCannotStartFallsBackToThePreviousSession(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/sh", "-c", "exit 3")
+	reg, _, r := testSessions(t, root, boot)
+	for _, slug := range []string{"kraken", "octopus"} {
+		sessionDir(t, root, slug)
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	previous := reg.bySlug("kraken")
+	dead := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(dead.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
+
+	reg.boot.agent = func(AgentRequest) (AgentCommand, error) { return AgentCommand{}, ErrNoSession }
+	if err := reg.Show("octopus"); err == nil {
+		t.Fatal("Show reported a reboot that never happened")
+	}
+	if state := reg.current(); state != previous {
+		t.Fatalf("the window fell back to %q, want the session shown before the one that failed", state.slug())
+	}
+}
+
+func TestReloadRefusesASlugItCannotResolve(t *testing.T) {
+	reg, _, _ := testSessions(t, "", newStubBoot("/bin/cat"))
+	err := reg.Reload("octopus")
+	if err == nil {
+		t.Fatal("Reload booted a session with no directory behind it")
+	}
+	if !strings.Contains(err.Error(), "octopus") {
+		t.Fatalf("refusal %q does not name the session asked for", err)
+	}
+}
+
+func rowTerminal(t *testing.T, fields status.Fields, slug string) string {
+	t.Helper()
+	for _, row := range fields.Sessions {
+		if row.Slug == slug {
+			return row.Terminal
+		}
+	}
+	t.Fatalf("no row for %q in %+v", slug, fields.Sessions)
+	return ""
+}
+
 func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")

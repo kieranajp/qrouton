@@ -6,6 +6,7 @@ import {
   closeWindow,
   openDocument,
   openShell,
+  reorderWindow,
   selectWindow,
   surfaces,
 } from "../docked.svelte.js";
@@ -79,6 +80,15 @@ export function shell() {
       return;
     }
     if (tab.kind === "terminal") request(tab.id);
+  }
+
+  // Go owns the order too, so a refused move leaves the strip as Go last drew it.
+  async function reorder(from, to) {
+    const tab = open.tabs[from];
+    if (!tab?.id) return;
+    try {
+      await reorderWindow(fields.slug, tab.id, to);
+    } catch {}
   }
 
   async function newShell() {
@@ -283,6 +293,7 @@ export function shell() {
       return selected;
     },
     select,
+    reorder,
     close: (tab) => tab && closeWindow(tab.id),
     newShell,
 

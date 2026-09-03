@@ -89,11 +89,15 @@ const (
 	openCodePromptFlag        = "--prompt"
 
 	claudeContinueFlag = "--continue"
+	claudeNameFlag     = "--name"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
 
 	claudeMCPConfigFlag = "--mcp-config"
 	claudeSettingsFlag  = "--settings"
+
+	claudeMaintainProjectWorkingDirEnvVar = "CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR"
+	claudeMaintainProjectWorkingDirValue  = "1"
 )
 
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP

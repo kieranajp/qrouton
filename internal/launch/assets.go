@@ -16,18 +16,41 @@ const (
 	modeAssistant = "assistant"
 )
 
+type launchManifest struct {
+	Mode string `json:"mode"`
+	Name string `json:"name"`
+	Slug string `json:"slug"`
+}
+
 func sessionMode(dir string) string {
-	content, err := os.ReadFile(sessionpaths.Manifest(dir))
-	if err != nil {
-		return modeRPI
-	}
-	var manifest struct {
-		Mode string `json:"mode"`
-	}
-	if json.Unmarshal(content, &manifest) == nil && manifest.Mode == modeAssistant {
+	manifest, ok := sessionManifest(dir)
+	if ok && manifest.Mode == modeAssistant {
 		return modeAssistant
 	}
 	return modeRPI
+}
+
+func sessionName(dir string) string {
+	manifest, ok := sessionManifest(dir)
+	if !ok {
+		return ""
+	}
+	if manifest.Name != "" {
+		return manifest.Name
+	}
+	return manifest.Slug
+}
+
+func sessionManifest(dir string) (launchManifest, bool) {
+	content, err := os.ReadFile(sessionpaths.Manifest(dir))
+	if err != nil {
+		return launchManifest{}, false
+	}
+	var manifest launchManifest
+	if json.Unmarshal(content, &manifest) != nil {
+		return manifest, false
+	}
+	return manifest, true
 }
 
 func primaryDiscovery(mode string) string {
