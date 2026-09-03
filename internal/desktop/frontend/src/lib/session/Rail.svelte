@@ -194,6 +194,7 @@
         idle={row.summary?.running ? "" : age(row.opened)}
         selected={row.slug === slug}
         unseen={row.unseen}
+        picker={row.picker}
         stickerId={row.sticker}
         {stickerLabels}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}

@@ -163,7 +163,7 @@
     {#key fields.slug}
       <PickerOverlay
         slug={fields.slug}
-        escalating={fields.picker}
+        escalating={fields.pickerKind === "escalate"}
         onClose={() => (view.added = "")} />
     {/key}
   {/if}

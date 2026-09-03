@@ -131,12 +131,15 @@ export function subagentTally(records = []) {
  * @param {{attention?: string, active?: number, coverage?: string, running?: boolean}} summary
  * @param {number} unseen
  * @param {string} [idleAge]
+ * @param {boolean} [picker]
  */
-export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
+export function summaryFacts(summary = {}, unseen = 0, idleAge = "", picker = false) {
   const facts = [];
   if (summary.running && summary.attention === "needs-you") {
     facts.push({ kind: "attention", label: "Needs you" });
   }
+
+  if (picker) facts.push({ kind: "picker", label: "Repos requested" });
 
   if (!summary.running) {
     facts.push({ kind: "agents", label: idleAge ? `Idle · ${idleAge}` : "Idle" });

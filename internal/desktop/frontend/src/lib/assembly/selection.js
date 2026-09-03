@@ -144,6 +144,22 @@ export const ordered = (selection) =>
 export const upgrading = (selection) => [...selection.upgrades];
 
 /**
+ * preselect ticks the rows an agent asked for. A row already held routes
+ * through setRole to takeUp, so an upgrade needs no branch of its own here.
+ * @param {Selection} selection
+ * @param {{id: string, role: Role}[]} [requested]
+ * @returns {Selection}
+ */
+export function preselect(selection, requested = []) {
+  let next = selection;
+  for (const row of requested) {
+    if (!row?.id) continue;
+    next = setRole(next, row.id, row.role);
+  }
+  return next;
+}
+
+/**
  * summary is the selected chips. An editing chip names the branch it joins, and
  * says nothing while there is no branch to name. A row being taken up leads: it
  * is the one answer whose row a search can scroll out of sight.

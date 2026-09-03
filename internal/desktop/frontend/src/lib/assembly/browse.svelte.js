@@ -6,6 +6,7 @@ import { apply, failedOwners, idle } from "./refresh.js";
 import {
   counts,
   ordered,
+  preselect,
   reconcile,
   roleOf,
   roleOffers,
@@ -125,8 +126,11 @@ export function browsing(branch, report = () => {}) {
     get upgrading() {
       return upgrading(selection);
     },
-    /** @param {{id: string, role: 'editing'|'reference'}[]} rows */
-    hold: (rows) => (selection = seed(rows)),
+    /**
+     * @param {{id: string, role: 'editing'|'reference'}[]} rows
+     * @param {{id: string, role: 'editing'|'reference'}[]} [requested]
+     */
+    hold: (rows, requested) => (selection = preselect(seed(rows), requested)),
     refetch,
     owner: (org) =>
       (owners = owners.includes(org) ? owners.filter((on) => on !== org) : [...owners, org]),

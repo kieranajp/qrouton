@@ -5,6 +5,7 @@ import {
   isLocked,
   isUpgrading,
   ordered,
+  preselect,
   reconcile,
   roleOf,
   roleOffers,
@@ -190,4 +191,24 @@ test("a row being taken up leads the chips, naming the branch it joins", () => {
   selection = setRole(selection, "acme/docs", "reference");
   assert.deepEqual(ordered(selection).map((row) => row.id), ["other/web"]);
   assert.equal(summary(selection, repos, "feat/extract-billing").length, 1);
+});
+
+// An agent's request ticks rows the same way a person's click would.
+test("preselect ticks an unheld row at the asked role", () => {
+  const selection = preselect(seed(), [{ id: "acme/api", role: "editing" }]);
+  assert.equal(roleOf(selection, "acme/api"), "editing");
+  assert.equal(picked(selection), "acme/api");
+});
+
+test("preselect marks a held reference row as upgrading", () => {
+  const selection = preselect(seed([{ id: "acme/docs", role: "reference" }]), [
+    { id: "acme/docs", role: "editing" },
+  ]);
+  assert.ok(isUpgrading(selection, "acme/docs"));
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+});
+
+test("preselect is a no-op for an empty request", () => {
+  const selection = seed([{ id: "acme/api", role: "editing" }]);
+  assert.deepEqual(preselect(selection, []), selection);
 });

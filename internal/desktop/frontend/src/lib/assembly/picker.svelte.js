@@ -15,6 +15,8 @@ export function picking(slug, done) {
   let branch = $state("");
   let status = $state("");
   let answering = $state(false);
+  let reason = $state("");
+  let requested = $state(/** @type {{id: string, role: 'editing'|'reference', upgrade: boolean}[]} */ ([]));
 
   /** @param {string} text */
   const report = (text) => (status = text);
@@ -24,7 +26,9 @@ export function picking(slug, done) {
   call(go.held(slug())).then((answer) => {
     if (!answer.ok) return report(refusal(answer.error));
     branch = answer.value?.branch ?? "";
-    repos.hold(answer.value?.repos ?? []);
+    reason = answer.value?.reason ?? "";
+    requested = answer.value?.requested ?? [];
+    repos.hold(answer.value?.repos ?? [], requested);
   });
 
   // answering stays set once Go has the answer: the manifest now holds what this
@@ -64,6 +68,12 @@ export function picking(slug, done) {
     },
     get answering() {
       return answering;
+    },
+    get reason() {
+      return reason;
+    },
+    get requested() {
+      return requested;
     },
     confirm,
     cancel,
