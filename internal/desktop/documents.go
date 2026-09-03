@@ -52,9 +52,7 @@ func (window *agentWindow) sourcePath() string {
 
 func beginDocument(window *agentWindow) {
 	if window.opts.Kind == workbench.KindDocument && window.opts.Format == workbench.FormatMarkdown {
-		window.viewport = &workbench.DocumentViewport{
-			Source: window.opts.Source, Intervals: []workbench.LineInterval{},
-		}
+		window.viewport = workbench.UnmeasuredViewport(window.opts.Source)
 	}
 	// The content arrived from a read taken before this stat. A size that no
 	// longer matches it means the file moved in between, so it is left unseen
@@ -153,9 +151,7 @@ func (d *documents) content(id string) (document, error) {
 		if window.viewport != nil {
 			window.viewportEpoch++
 			window.viewportSeq = 0
-			window.viewport = &workbench.DocumentViewport{
-				Source: window.opts.Source, Intervals: []workbench.LineInterval{},
-			}
+			window.viewport = workbench.UnmeasuredViewport(window.opts.Source)
 		}
 		doc = documentFor(window)
 		return nil
@@ -199,7 +195,7 @@ func (d *documents) report(id string, report ViewportReport) error {
 		}
 		available := report.Available && report.Selected
 		if !available {
-			intervals = []workbench.LineInterval{}
+			intervals = workbench.NoIntervals()
 		}
 		window.viewportSeq = report.Seq
 		window.viewport = &workbench.DocumentViewport{
@@ -222,7 +218,7 @@ func (d *documents) viewport(owner *sessionState, id string) (*workbench.Documen
 			return nil
 		}
 		measured := *window.viewport
-		measured.Intervals = append([]workbench.LineInterval{}, window.viewport.Intervals...)
+		measured.Intervals = append(workbench.NoIntervals(), window.viewport.Intervals...)
 		view = &measured
 		return nil
 	})
@@ -234,7 +230,7 @@ func (d *documents) viewport(owner *sessionState, id string) (*workbench.Documen
 
 func normalizedIntervals(intervals []workbench.LineInterval) ([]workbench.LineInterval, error) {
 	if len(intervals) == 0 {
-		return []workbench.LineInterval{}, nil
+		return workbench.NoIntervals(), nil
 	}
 	out := append([]workbench.LineInterval(nil), intervals...)
 	for _, interval := range out {

@@ -19,9 +19,6 @@ import (
 // escalatePollInterval and escalateTimeout govern awaitEscalation; they are
 // vars so tests can shrink them instead of waiting out the real ceiling.
 var (
-	// ponytail: escalateTimeout is the poll's ceiling — a picker left open
-	// longer than this reports back as still-open instead of blocking the
-	// agent's tool call forever.
 	escalateTimeout      = 30 * time.Minute
 	escalatePollInterval = 2 * time.Second
 	viewportWaitTimeout  = 750 * time.Millisecond
@@ -157,17 +154,17 @@ func (m *windowManager) openedViewport(ctx context.Context, id, source string, s
 		return nil, err
 	}
 	if viewport == nil {
-		return &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}, nil
+		return workbench.UnmeasuredViewport(source), nil
 	}
-	copy := *viewport
-	copy.Available = false
-	copy.Selected = false
-	copy.Intervals = []workbench.LineInterval{}
-	return &copy, nil
+	unread := *viewport
+	unread.Available = false
+	unread.Selected = false
+	unread.Intervals = workbench.NoIntervals()
+	return &unread, nil
 }
 
 func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*workbench.DocumentViewport, error) {
-	last := &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}
+	last := workbench.UnmeasuredViewport(source)
 	deadline := time.NewTimer(viewportWaitTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(viewportPollInterval)
@@ -178,10 +175,7 @@ func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*
 			return nil, err
 		}
 		if viewport != nil {
-			last = viewport
-			if last.Intervals == nil {
-				last.Intervals = []workbench.LineInterval{}
-			}
+			last = viewport.Measured()
 			if viewport.Selected && viewport.Available {
 				return viewport, nil
 			}
@@ -272,10 +266,7 @@ func (m *windowManager) read(ctx context.Context, input readWindowInput) (string
 	if len(text) > readWindowLimit {
 		text = truncatedPrefix + text[len(text)-readWindowLimit:]
 	}
-	if viewport != nil {
-		if viewport.Intervals == nil {
-			viewport.Intervals = []workbench.LineInterval{}
-		}
+	if viewport.Measured() != nil {
 		text += "\n\n" + viewportSummary(viewport)
 	}
 	return text, viewport, nil

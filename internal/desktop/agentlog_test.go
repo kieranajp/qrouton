@@ -96,8 +96,7 @@ func TestAnOversizeAgentLogIsRotatedRatherThanGrown(t *testing.T) {
 // ones it caused itself would rotate the crash that mattered off the disk.
 func TestAnExitTheWorkbenchAskedForRecordsNothing(t *testing.T) {
 	root := sessionRoot(t)
-	state := &sessionState{stopped: true, tail: &ring{limit: agentTailBytes}}
-	state.named.Store(&identity{slug: filepath.Base(root), root: root})
+	state := &sessionState{stopped: true, sessionRoot: root, tail: &ring{limit: agentTailBytes}}
 	state.tail.write([]byte("still talking"))
 
 	state.recordExit(-1)

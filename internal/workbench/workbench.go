@@ -87,6 +87,25 @@ type DocumentViewport struct {
 	Intervals []LineInterval `json:"intervals"`
 }
 
+// UnmeasuredViewport is a viewport that reports nothing but its source, which
+// is what a tab nobody is looking at answers with.
+func UnmeasuredViewport(source string) *DocumentViewport {
+	return &DocumentViewport{Source: source, Intervals: NoIntervals()}
+}
+
+// NoIntervals is the empty interval list. A nil slice marshals as JSON null,
+// which reaches a .length on the page and takes the window down with it, so no
+// viewport crossing the wire may carry one.
+func NoIntervals() []LineInterval { return []LineInterval{} }
+
+// Measured is v with its intervals guaranteed non-nil, and nil left as nil.
+func (v *DocumentViewport) Measured() *DocumentViewport {
+	if v != nil && v.Intervals == nil {
+		v.Intervals = NoIntervals()
+	}
+	return v
+}
+
 // Bounds reports the span as a closed line range, and false when it names no
 // line at all.
 func (s LineSpan) Bounds() (first, last int, ok bool) {

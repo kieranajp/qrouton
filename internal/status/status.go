@@ -372,8 +372,8 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 			worktree = filepath.Join(root, worktree)
 		}
 		worktree = filepath.Clean(worktree)
-		rel, err := filepath.Rel(src, worktree)
-		if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		rel, inside := sessionpaths.Within(src, worktree)
+		if !inside || rel == "." {
 			continue
 		}
 		dir := filepath.Join(worktree, sessionpaths.ThoughtsDirName)
