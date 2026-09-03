@@ -119,28 +119,39 @@ func classifyRequests(m session.Manifest, req *workbench.PickerRequest) []reques
 	if req == nil {
 		return []requestedRow{}
 	}
-	held := make(map[string]session.RepoRole, len(m.Repos))
+	type holding struct {
+		id   string
+		role session.RepoRole
+	}
+	held := make(map[string]holding, len(m.Repos))
 	for _, r := range m.Repos {
-		held[strings.ToLower((github.Repo{Org: r.Org, Name: r.Name}).ID())] = r.Role.Effective()
+		id := (github.Repo{Org: r.Org, Name: r.Name}).ID()
+		held[strings.ToLower(id)] = holding{id: id, role: r.Role.Effective()}
 	}
 	rows := make([]requestedRow, 0, len(req.Requested))
+	// Once each: the overlay draws these keyed by id, so a repository named
+	// twice in one request would collide there.
+	seen := make(map[string]bool, len(req.Requested))
 	for _, want := range req.Requested {
 		id := strings.TrimSpace(want.ID)
-		if id == "" {
+		if id == "" || seen[strings.ToLower(id)] {
 			continue
 		}
+		seen[strings.ToLower(id)] = true
 		// Not Effective(): an empty role means editing for a row the session
 		// holds, but a request that names none is only asking to read.
 		role := session.RepoRoleReference
 		if session.RepoRole(want.Role) == session.RepoRoleEditing {
 			role = session.RepoRoleEditing
 		}
-		switch held[strings.ToLower(id)] {
+		// A matched row travels on as the session spells it: everything downstream
+		// compares ids exactly, so the agent's casing would tick nothing.
+		switch on := held[strings.ToLower(id)]; on.role {
 		case "":
 			rows = append(rows, requestedRow{ID: id, Role: string(role)})
 		case session.RepoRoleReference:
 			if role == session.RepoRoleEditing {
-				rows = append(rows, requestedRow{ID: id, Role: string(session.RepoRoleEditing), Upgrade: true})
+				rows = append(rows, requestedRow{ID: on.id, Role: string(session.RepoRoleEditing), Upgrade: true})
 			}
 		}
 	}
@@ -245,7 +256,7 @@ func (p *Picker) root(slug string) (*sessionState, string, error) {
 	return state, root, nil
 }
 
-// queuePicker records an agent escalation on the session it names and raises
+// queuePicker records an agent's request on the session it names and raises
 // nothing. The overlay opens when the user next arrives there, so a request they
 // never arrive at expires unseen rather than taking the screen.
 func (s *Sessions) queuePicker(req workbench.PickerRequest) error {

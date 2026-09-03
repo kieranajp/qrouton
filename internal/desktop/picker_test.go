@@ -235,6 +235,45 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 	}
 }
 
+// The kind is the whole difference: an escalation's confirm moves the session to
+// RPI, and a repository request's leaves it where it was.
+func TestOnlyAnEscalationsConfirmMovesTheMode(t *testing.T) {
+	for _, tc := range []struct {
+		kind string
+		want session.SessionMode
+	}{
+		{kind: workbench.PickerKindEscalate, want: session.ModeRPI},
+		{kind: workbench.PickerKindRepos, want: session.ModeAssistant},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			reg, shown, _ := pickerWorkbench(t)
+			cfg := &config.Config{Root: filepath.Dir(shown)}
+			repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+			repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
+			p := newPicker(cfg, reg, repos, nil)
+			if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: shown,
+				Kind: tc.kind, Deadline: time.Now().Add(time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+
+			in := pickerInput{Repos: []repoPick{{ID: "org/svc", Role: "editing"}}}
+			if err := p.Confirm("shown", in); err != nil {
+				t.Fatal(err)
+			}
+			got, err := session.Load(shown)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.EffectiveMode() != tc.want {
+				t.Fatalf("mode after a %s confirm = %q, want %q", tc.kind, got.EffectiveMode(), tc.want)
+			}
+			if got.Picker == nil || got.Picker.Status != session.PickerConfirmed {
+				t.Fatalf("both kinds are awaited, so both write a stanza: %+v", got.Picker)
+			}
+		})
+	}
+}
+
 // Every answer is for a session this workbench is running, so a slug it does not
 // hold is refused rather than answered against a session that is not there.
 func TestConfirmAndCancelRefuseASessionThisWorkbenchIsNotRunning(t *testing.T) {
@@ -327,7 +366,7 @@ func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
 		{
 			name: "held reference wanted for editing",
 			ask:  []workbench.RequestedRepo{{ID: "ORG/Docs", Role: "editing"}},
-			want: []requestedRow{{ID: "ORG/Docs", Role: "editing", Upgrade: true}},
+			want: []requestedRow{{ID: "org/docs", Role: "editing", Upgrade: true}},
 		},
 		{
 			name: "held reference already read",
@@ -338,6 +377,14 @@ func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
 			name: "held for editing already",
 			ask:  []workbench.RequestedRepo{{ID: "org/svc", Role: "editing"}},
 			want: []requestedRow{},
+		},
+		{
+			name: "named twice",
+			ask: []workbench.RequestedRepo{
+				{ID: "org/api", Role: "editing"},
+				{ID: "ORG/API", Role: "reference"},
+			},
+			want: []requestedRow{{ID: "org/api", Role: "editing"}},
 		},
 	}
 	for _, tc := range cases {
