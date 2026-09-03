@@ -19,6 +19,7 @@ export default [
       "comment-discipline/max-comment-run": ["error", { max: policy.maxCommentRun }],
       "comment-discipline/no-narration": ["error", { phrases: policy.narrationPhrases }],
       "comment-discipline/no-path-pointer": ["error", { extensions: policy.pathExtensions }],
+      "comment-discipline/no-prose-before-jsdoc": "error",
     },
   },
   {
@@ -32,6 +33,7 @@ export default [
       "comment-discipline/max-comment-run": ["error", { max: policy.maxCommentRun }],
       "comment-discipline/no-narration": ["error", { phrases: policy.narrationPhrases }],
       "comment-discipline/no-path-pointer": ["error", { extensions: policy.pathExtensions }],
+      "comment-discipline/no-prose-before-jsdoc": "error",
     },
   },
 ];

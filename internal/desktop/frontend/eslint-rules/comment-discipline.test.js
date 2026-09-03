@@ -51,15 +51,31 @@ test("JavaScript rules cover runs, directives, narration, pointers, and URL span
       { code: "// The guard is at AuthStore.js:142.", options: [{ extensions: ["js"] }], errors: [{ messageId: "pointer" }] },
     ],
   });
+
+  ruleTester.run("no-prose-before-jsdoc", rules["no-prose-before-jsdoc"], {
+    valid: [
+      { code: "// Explains the surrounding module.\n\n/** @type {number} */\nconst value = 1;" },
+      { code: "const prior = 1; // Explains the prior value.\n/** @type {number} */\nconst value = 1;" },
+      { code: "// @ts-ignore\n/** @type {number} */\nconst value = 1;" },
+      { code: "// Explains the ordinary block.\n/* Ordinary block. */\nconst value = 1;" },
+    ],
+    invalid: [
+      {
+        code: "// The selected tab remains visible.\n/** @param {number} selected */\nfunction choose(selected) {}",
+        errors: [{ messageId: "adjacent", line: 1, column: 1 }],
+      },
+    ],
+  });
 });
 
 function verifySvelte(code, rule, options) {
   const linter = new Linter();
+  const setting = options === undefined ? "error" : ["error", options];
   return linter.verify(code, {
     files: ["**/*.svelte"],
     languageOptions: { parser: svelteParser, parserOptions: { ecmaVersion: "latest", sourceType: "module" } },
     plugins: { "comment-discipline": { rules } },
-    rules: { [`comment-discipline/${rule}`]: ["error", options] },
+    rules: { [`comment-discipline/${rule}`]: setting },
   }, { filename: "fixture.svelte" });
 }
 
@@ -89,4 +105,41 @@ test("Svelte template comments nested in block fragments are checked", () => {
     assert.equal(diagnostics.length, count, code);
     assert.ok(diagnostics.every((diagnostic) => diagnostic.ruleId === "comment-discipline/no-narration"), code);
   }
+});
+
+test("Svelte scripts reject prose immediately before JSDoc", () => {
+  const invalid = verifySvelte(`<script>
+  // The selected tab remains visible.
+  /** @type {number} */
+  let selected = 0;
+</script>`, "no-prose-before-jsdoc");
+  assert.equal(invalid.length, 1);
+  assert.equal(invalid[0].ruleId, "comment-discipline/no-prose-before-jsdoc");
+  assert.equal(invalid[0].line, 2);
+  assert.equal(invalid[0].column, 3);
+
+  const valid = [
+    `<script>
+  // Explains the surrounding module.
+
+  /** @type {number} */
+  let selected = 0;
+</script>`,
+    `<script>
+  let prior = 1; // Explains the prior value.
+  /** @type {number} */
+  let selected = 0;
+</script>`,
+    `<script>
+  // @ts-ignore
+  /** @type {number} */
+  let selected = 0;
+</script>`,
+    `<script>
+  // Explains the ordinary block.
+  /* Ordinary block. */
+  let selected = 0;
+</script>`,
+  ];
+  for (const code of valid) assert.deepEqual(verifySvelte(code, "no-prose-before-jsdoc"), [], code);
 });

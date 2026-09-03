@@ -144,11 +144,35 @@ const noPathPointer = {
   },
 };
 
+const noProseBeforeJSDoc = {
+  meta: {
+    type: "suggestion",
+    docs: { description: "Require adjacent prose to live inside the JSDoc it describes." },
+    schema: [],
+    messages: { adjacent: "Fold this prose into the JSDoc below, or delete it if the JSDoc is already clear. " + GUIDANCE },
+  },
+  create(context) {
+    const sourceCode = context.sourceCode ?? context.getSourceCode();
+    return { Program() {
+      const comments = commentsFor(sourceCode);
+      for (let index = 0; index < comments.length - 1; index += 1) {
+        const comment = comments[index];
+        const next = comments[index + 1];
+        if (comment.type !== "Line" || isDirective(comment) || !ownsItsLine(sourceCode, comment)) continue;
+        if (next.type !== "Block" || next.loc.start.line !== comment.loc.end.line + 1) continue;
+        if (!sourceCode.getText(next).startsWith("/**")) continue;
+        report(context, comment, "adjacent");
+      }
+    } };
+  },
+};
+
 export default {
   rules: {
     "max-comment-run": maxCommentRun,
     "no-narration": noNarration,
     "no-path-pointer": noPathPointer,
+    "no-prose-before-jsdoc": noProseBeforeJSDoc,
   },
 };
 
