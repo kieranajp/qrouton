@@ -8,16 +8,17 @@ package mcpserver
 const serverInstructions = "Drive the user's qrouton workbench: each tool here opens or reads a tab in the session's right pane, beside the conversation and without taking the keyboard. All paths and working directories must belong to this session."
 
 const (
-	toolOpenFile    = "open_file"
-	toolRunCommand  = "run_command"
-	toolReadWindow  = "read_window"
-	toolShowDiff    = "show_diff"
-	toolNotify      = "notify"
-	toolCloseWindow = "close_window"
-	toolListWindows = "list_windows"
-	toolEscalate    = "escalate"
-	toolSharePage   = "share_page"
-	toolListRepos   = "list_repos"
+	toolOpenFile     = "open_file"
+	toolRunCommand   = "run_command"
+	toolReadWindow   = "read_window"
+	toolShowDiff     = "show_diff"
+	toolNotify       = "notify"
+	toolCloseWindow  = "close_window"
+	toolListWindows  = "list_windows"
+	toolEscalate     = "escalate"
+	toolSharePage    = "share_page"
+	toolListRepos    = "list_repos"
+	toolRequestRepos = "request_repos"
 )
 
 const (
@@ -37,7 +38,9 @@ const (
 
 	descSharePage = "Render a session document as a self-contained page carrying qrouton's own styling — its palette, its fonts and the same prose renderer the workbench draws with — so it can be handed to somebody outside this session. Give path, relative to the session root (e.g. thoughts/shared/plans/thing.md). This writes the page and returns its path; it does not send it anywhere. Publish that file yourself, verbatim, with whatever tool you have for it, and give the user the link. The page fetches nothing at runtime, so it survives a strict content-security policy, and it carries no html, head or body tag of its own."
 
-	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
+	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant. To ask for another repository without handing the work off, use request_repos instead: this tool changes who is doing the work, that one only changes what the session holds."
 
 	descListRepos = "List the session's repositories: name, org, role, branch or pinned revision, and worktree path. Reads qrouton.json fresh on every call, so a repository added or promoted since this server started shows up on the next call. worktree is a path relative to the session root. Reference repositories are checked out read-only at a pinned revision; editing repositories track a session branch."
+
+	descRequestRepos = "Ask the user for repositories this session does not hold, or for one it only reads to be checked out for editing. Give repos (each repo as org/name, with role editing or reference, defaulting to reference) and reason, one line the user reads saying why you need them. This opens the repository picker pre-ticked with your request; the user may change a role, drop something you asked for, or add something you did not mention, so treat the request as a proposal. The call blocks until they confirm or cancel, which can be a long wait. The result is the session's whole resulting repository set, not a yes or no: diff it against what you asked for. Promotion is one way, reference to editing; a repository cannot be demoted or dropped here."
 )

@@ -10,9 +10,17 @@ var (
 	ErrCommandRequired = errors.New("command is required")
 	ErrMessageRequired = errors.New("message is required")
 	ErrNameRequired    = errors.New("name is required")
+	ErrReposRequired   = errors.New("repos is required: name at least one repository as org/name")
+	ErrReasonRequired  = errors.New("reason is required: one line the user reads, saying why you need these")
+
+	ErrInvalidRequestedRole = errors.New("role must be editing or reference")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
+
+func invalidRequestedRole(role string) error {
+	return fmt.Errorf("%w, not %q", ErrInvalidRequestedRole, role)
+}
 
 func noSuchWindow(name string) error {
 	return fmt.Errorf("no open window named %q", name)

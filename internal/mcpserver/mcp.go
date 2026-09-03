@@ -57,6 +57,16 @@ type escalateInput struct {
 	BranchPrefix string `json:"branch_prefix,omitempty" jsonschema:"one of feat, fix, chore, refactor, docs, test"`
 }
 
+type requestReposInput struct {
+	Repos  []requestedRepoInput `json:"repos" jsonschema:"the repositories you need, each named org/name"`
+	Reason string               `json:"reason" jsonschema:"one line the user reads, saying why you need these"`
+}
+
+type requestedRepoInput struct {
+	Repo string `json:"repo" jsonschema:"org/name of the repository"`
+	Role string `json:"role,omitempty" jsonschema:"editing or reference; defaults to reference"`
+}
+
 // textResult wraps a message as an MCP text block. Each tool pairs it with its
 // own structured payload, which is the second value AddTool handlers return.
 func textResult(message string) *mcp.CallToolResult {
@@ -141,6 +151,20 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return nil, nil, err
 		}
 		return textResult(reposMessage(rows)), map[string]any{"repos": rows}, nil
+	})
+
+	// request_repos returns the resulting set alongside its line, so it carries
+	// two keys where addTool carries one. Offered in both modes: an assistant
+	// that needs another repository should not have to escalate to read one.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolRequestRepos,
+		Description: descRequestRepos,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input requestReposInput) (*mcp.CallToolResult, any, error) {
+		message, rows, err := windows.requestRepos(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{keyMessage: message, "repos": rows}, nil
 	})
 
 	return server

@@ -16,14 +16,14 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// escalatePollInterval and escalateTimeout govern awaitEscalation; they are
-// vars so tests can shrink them instead of waiting out the real ceiling.
+// pickerPollInterval and pickerTimeout govern awaitPickerOutcome; they are vars
+// so tests can shrink them instead of waiting out the real ceiling.
 var (
-	// ponytail: escalateTimeout is the poll's ceiling — a picker left open
-	// longer than this reports back as still-open instead of blocking the
-	// agent's tool call forever.
-	escalateTimeout      = 30 * time.Minute
-	escalatePollInterval = 2 * time.Second
+	// ponytail: pickerTimeout is the poll's ceiling — a picker left open longer
+	// than this reports back as still-open instead of blocking the agent's tool
+	// call forever.
+	pickerTimeout        = 30 * time.Minute
+	pickerPollInterval   = 2 * time.Second
 	viewportWaitTimeout  = 750 * time.Millisecond
 	viewportPollInterval = 25 * time.Millisecond
 )
@@ -403,44 +403,130 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 		Kind:        workbench.PickerKindEscalate,
 		Name:        name,
 		Prefix:      strings.TrimSpace(input.BranchPrefix),
-		Deadline:    spawnedAt.Add(escalateTimeout),
+		Deadline:    spawnedAt.Add(pickerTimeout),
 	}); err != nil {
 		return "", fmt.Errorf("escalate: %w", err)
 	}
-	return awaitEscalation(ctx, m.root, spawnedAt)
+	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt)
+	switch {
+	case err != nil:
+		return "", err
+	case !answer.answered:
+		return escalationTimeoutMessage, nil
+	case answer.status == session.PickerConfirmed:
+		return escalationConfirmedMessage, nil
+	}
+	return escalationCancelledMessage, nil
 }
 
-// awaitEscalation polls the manifest for an escalation outcome newer than
+// requestRepos asks the user for repositories the session does not hold, or for
+// one it only reads to be taken up for editing. It queues the ordinary picker
+// pre-ticked with the request and blocks on the same stanza escalate waits for,
+// then hands back the whole resulting set: the user is free to change a role,
+// drop something asked for, or add something never mentioned, so the answer is
+// the set itself rather than a yes.
+func (m *windowManager) requestRepos(ctx context.Context, input requestReposInput) (string, []repoRow, error) {
+	requested, reason, err := repoRequest(input)
+	if err != nil {
+		return "", nil, err
+	}
+	spawnedAt := time.Now()
+	playSound(sessionpaths.NotifyScript(m.root))
+	if err := m.host.Picker(ctx, workbench.PickerRequest{
+		SessionRoot: m.root,
+		Kind:        workbench.PickerKindRepos,
+		Requested:   requested,
+		Reason:      reason,
+		Deadline:    spawnedAt.Add(pickerTimeout),
+	}); err != nil {
+		return "", nil, fmt.Errorf("request repos: %w", err)
+	}
+	answer, err := awaitPickerOutcome(ctx, m.root, spawnedAt)
+	if err != nil {
+		return "", nil, err
+	}
+	if !answer.answered {
+		rows, err := sessionRepos(m.root)
+		if err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf(reposStillOpenFormat, reposMessage(rows)), rows, nil
+	}
+	// From the manifest the poll read: the confirm wrote the repositories and the
+	// stanza together, so this is the set the user answered with.
+	rows := reposFrom(answer.manifest)
+	if answer.status == session.PickerConfirmed {
+		return fmt.Sprintf(reposConfirmedFormat, reposMessage(rows)), rows, nil
+	}
+	return fmt.Sprintf(reposCancelledFormat, reposMessage(rows)), rows, nil
+}
+
+// repoRequest validates what the agent asked for. An omitted role reads as
+// reference: asking to read is the smaller ask, and a promotion the user did not
+// intend costs them a checkout.
+func repoRequest(input requestReposInput) ([]workbench.RequestedRepo, string, error) {
+	reason := strings.TrimSpace(input.Reason)
+	if len(input.Repos) == 0 {
+		return nil, "", ErrReposRequired
+	}
+	if reason == "" {
+		return nil, "", ErrReasonRequired
+	}
+	requested := make([]workbench.RequestedRepo, 0, len(input.Repos))
+	for _, want := range input.Repos {
+		repo := strings.TrimSpace(want.Repo)
+		if repo == "" {
+			return nil, "", ErrReposRequired
+		}
+		role := strings.TrimSpace(want.Role)
+		switch session.RepoRole(role) {
+		case "":
+			role = string(session.RepoRoleReference)
+		case session.RepoRoleEditing, session.RepoRoleReference:
+		default:
+			return nil, "", invalidRequestedRole(role)
+		}
+		requested = append(requested, workbench.RequestedRepo{ID: repo, Role: role})
+	}
+	return requested, reason, nil
+}
+
+// pickerAnswer is what a poll came back with. answered false is the ceiling:
+// nobody confirmed or cancelled, and the manifest is not the user's answer.
+type pickerAnswer struct {
+	manifest session.Manifest
+	status   session.PickerStatus
+	answered bool
+}
+
+// awaitPickerOutcome polls the manifest for a picker outcome newer than
 // spawnedAt, without holding m.mu — a blocking poll must not stall every other
 // MCP tool the agent might call while the picker is open.
-func awaitEscalation(ctx context.Context, root string, spawnedAt time.Time) (string, error) {
-	ticker := time.NewTicker(escalatePollInterval)
+func awaitPickerOutcome(ctx context.Context, root string, spawnedAt time.Time) (pickerAnswer, error) {
+	ticker := time.NewTicker(pickerPollInterval)
 	defer ticker.Stop()
-	timeout := time.NewTimer(escalateTimeout)
+	timeout := time.NewTimer(pickerTimeout)
 	defer timeout.Stop()
 	for {
-		if message, done := escalationOutcome(root, spawnedAt); done {
-			return message, nil
+		if answer, done := pickerOutcome(root, spawnedAt); done {
+			return answer, nil
 		}
 		select {
 		case <-ctx.Done():
-			return "", ctx.Err()
+			return pickerAnswer{}, ctx.Err()
 		case <-timeout.C:
-			return escalationTimeoutMessage, nil
+			return pickerAnswer{}, nil
 		case <-ticker.C:
 		}
 	}
 }
 
-func escalationOutcome(root string, spawnedAt time.Time) (string, bool) {
+func pickerOutcome(root string, spawnedAt time.Time) (pickerAnswer, bool) {
 	m, err := session.Load(root)
 	if err != nil || m.Picker == nil || !m.Picker.At.After(spawnedAt) {
-		return "", false
+		return pickerAnswer{}, false
 	}
-	if m.Picker.Status == session.PickerConfirmed {
-		return escalationConfirmedMessage, true
-	}
-	return escalationCancelledMessage, true
+	return pickerAnswer{manifest: m, status: m.Picker.Status, answered: true}, true
 }
 
 // list names the windows still open, dropping any the user has closed. An

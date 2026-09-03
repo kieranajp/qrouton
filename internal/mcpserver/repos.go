@@ -24,6 +24,10 @@ func sessionRepos(root string) ([]repoRow, error) {
 	if err != nil {
 		return nil, err
 	}
+	return reposFrom(manifest), nil
+}
+
+func reposFrom(manifest session.Manifest) []repoRow {
 	rows := make([]repoRow, len(manifest.Repos))
 	for i, r := range manifest.Repos {
 		rows[i] = repoRow{
@@ -35,7 +39,7 @@ func sessionRepos(root string) ([]repoRow, error) {
 			Worktree: r.WorktreePath,
 		}
 	}
-	return rows, nil
+	return rows
 }
 
 func reposMessage(rows []repoRow) string {

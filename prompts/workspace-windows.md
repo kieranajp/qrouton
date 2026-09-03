@@ -12,3 +12,4 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.
 - `close_window` / `list_windows` — manage what's open.
 - `list_repos` — list the session's repositories: role, branch or pinned revision, and worktree path.
+- `request_repos` — ask the user for a repository the session does not hold, or for one it only reads to be taken up for editing. It opens the picker pre-ticked and blocks until they answer.

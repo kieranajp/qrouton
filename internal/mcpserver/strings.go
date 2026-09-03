@@ -91,6 +91,13 @@ const (
 	escalationCancelledMessage = "The picker was cancelled. Still Assistant — carry on."
 
 	escalationTimeoutMessage = "The picker is still open; the user hasn't confirmed or cancelled yet."
+
+	// All three hand back the whole resulting set: the user may have changed a
+	// role, dropped something asked for or added something never mentioned, so
+	// the set is the answer and the request is only what prompted it.
+	reposConfirmedFormat = "The user answered the picker. %s"
+	reposCancelledFormat = "The user cancelled; nothing was added or taken up. %s"
+	reposStillOpenFormat = "The picker is still open; the user hasn't confirmed or cancelled yet. %s"
 )
 
 const toastFormat = "🔔  %s"
