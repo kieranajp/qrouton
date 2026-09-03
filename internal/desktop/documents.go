@@ -180,8 +180,6 @@ func (d *documents) content(id string) (document, error) {
 	return doc, nil
 }
 
-// markdown is a window's text and whether it is Markdown, which is the only
-// format anything is drawn into rather than shown as written.
 func (d *documents) markdown(id string) (string, bool, error) {
 	var text string
 	var rendered bool

@@ -107,8 +107,6 @@ func handoffSection(dir string) []byte {
 	return append([]byte(handoffHeader), content...)
 }
 
-// assetDestination places one rendered asset and reports the discovery links
-// that should point at it.
 func assetDestination(dir, canonical, assetPath, primary string) (string, []assetLink) {
 	switch {
 	case assetPath == OrchestratorAsset || assetPath == AssistantAsset:

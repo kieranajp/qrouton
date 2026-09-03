@@ -146,8 +146,6 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 	return launch.FirstInstalled(cfg)
 }
 
-// launchRunner opens the workbench on the session. The workbench builds the
-// agent's command as it boots it, and that supervisor stamps the prompts.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	socket, err := workbench.NewSocketPath()
 	if err != nil {

@@ -42,8 +42,6 @@ func DocumentWindow(root, name string, editor EditorCommand, span workbench.Line
 	}, nil
 }
 
-// documentPane reports false when the file cannot be a pane after all, leaving
-// the caller to fall back to the editor.
 func documentPane(path, rel string, format workbench.DocumentFormat, span workbench.LineSpan) (workbench.WindowOptions, bool) {
 	info, err := os.Stat(path)
 	if err != nil || info.Size() > workbench.DocumentLimit {

@@ -299,14 +299,12 @@ func RunnerMCPWiring(id, bin string, args []string) (MCPWiring, error) {
 }
 
 func claudeMCP(bin string, args []string) (MCPWiring, error) {
-	// Strings and maps of them: marshalling cannot fail.
 	config, _ := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
 		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}}})
 	return MCPWiring{Args: []string{claudeMCPConfigFlag, string(config)}}, nil
 }
 
 func codexMCP(bin string, args []string) (MCPWiring, error) {
-	// A string and a slice of them: marshalling cannot fail.
 	command, _ := json.Marshal(bin)
 	encoded, _ := json.Marshal(args)
 	return MCPWiring{Args: []string{
@@ -375,8 +373,8 @@ func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, provider, prompt s
 	return spec.Prompt(argv, openingMessage(mode, provider, prompt))
 }
 
-// openingMessage is the runner's first turn. An external request is attributed
-// to the provider it came from, or to nothing when no provider claims it.
+// An external request is attributed to the provider it came from, and to
+// nothing when no provider claims it.
 func openingMessage(mode, provider, initialPrompt string) string {
 	message := openingMessageRPI
 	if mode == modeAssistant {

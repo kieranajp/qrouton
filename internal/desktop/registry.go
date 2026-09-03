@@ -140,8 +140,6 @@ func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOpti
 	return r.spawn(owner, opts, false)
 }
 
-// showOrOpen selects the window already showing source, or the one open leaves
-// behind — so a single click both opens and selects.
 func (r *registry) showOrOpen(owner *sessionState, source string, open func() (string, error)) (string, error) {
 	r.sourceMu.Lock()
 	defer r.sourceMu.Unlock()
@@ -330,7 +328,6 @@ func (r *registry) ordered(owner *sessionState) []*agentWindow {
 	return live
 }
 
-// stop tears down one session's windows, so retiring it leaves the rest alone.
 func (r *registry) stop(owner *sessionState) {
 	for _, id := range r.list() {
 		if window, ok := r.window(id); ok && window.session == owner {

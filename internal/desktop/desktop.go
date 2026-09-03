@@ -113,8 +113,6 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 	return func() error { return relaunch(assembly.pendingTicket) }
 }
 
-// validators are the settings panel's checks, which a workbench without a
-// Validator simply does not make.
 func validators(v Validator) (func([]string) error, func(map[string][]string) error) {
 	if v == nil {
 		return nil, nil
@@ -122,8 +120,6 @@ func validators(v Validator) (func([]string) error, func(map[string][]string) er
 	return v.ValidateEditor, v.ValidateLaunch
 }
 
-// relaunchWith is the successor first run opens, and nil in a workbench with no
-// way to open one.
 func relaunchWith(r Relauncher) func(func() (string, string)) error {
 	if r == nil {
 		return nil
@@ -337,8 +333,6 @@ func shellLabel(n int) string {
 	return fmt.Sprintf(shellWindowLabelNumbers, n)
 }
 
-// windowTitle names the session in the conversation's title bar; onboarding has
-// not chosen one yet.
 func windowTitle(root string) string {
 	if root == "" {
 		return mainWindowTitle

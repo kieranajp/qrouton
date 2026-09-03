@@ -52,7 +52,6 @@ func (s *sessionState) requestPicker(req workbench.PickerRequest) {
 	s.picker = &req
 }
 
-// pendingPicker is this session's escalation while it is still worth drawing.
 func (s *sessionState) pendingPicker() *workbench.PickerRequest {
 	if s == nil {
 		return nil
@@ -701,8 +700,7 @@ func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	return out
 }
 
-// slugFor is a session's key: the name of its directory. The landing path has no
-// directory yet.
+// slugFor is a session's key: the name of its directory.
 func slugFor(root string) string {
 	if root == "" {
 		return ""

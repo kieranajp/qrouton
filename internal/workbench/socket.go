@@ -95,7 +95,6 @@ func NewSocketPath() (string, error) {
 	return filepath.Join(dir, hex.EncodeToString(token)+socketSuffix), nil
 }
 
-// socketDir holds every workbench address and process log belonging to one user.
 func socketDir() string {
 	return filepath.Join(socketRoot, strconv.Itoa(os.Getuid()))
 }

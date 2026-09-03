@@ -52,10 +52,10 @@ type Fields struct {
 	StickerLabels StickerLabels `json:"stickerLabels"`
 }
 
-// EmptyFields is the value every producer starts from, and the one place a slice
-// field of it is initialised. No slice may be nil: a nil one marshals as JSON
-// null, and the page's defaults only fill keys the payload omits, so null reaches
-// a .length and takes the whole window down with it.
+// EmptyFields is the value every producer starts from. No slice reaching the
+// page may be nil: a nil one marshals as JSON null, and the page's defaults only
+// fill keys the payload omits, so null reaches a .length and takes the window
+// down with it.
 func EmptyFields() Fields {
 	return Fields{
 		Sessions:            []SessionRow{},
@@ -225,8 +225,7 @@ func modeLabel(m session.Manifest) string {
 	return modeAssistantLabel
 }
 
-// stages is which of the three has produced its document. It walks the
-// session's thoughts tree, so phase is derived from it rather than repeating it.
+// stages is which of the three has produced its document.
 func stages(root string, m session.Manifest) Stages {
 	if len(m.Repos) == 0 {
 		return Stages{}
@@ -320,8 +319,6 @@ func writtenSince(root string, since time.Time) int {
 	return count
 }
 
-// sessionRepos names a session's repositories in the order they were picked,
-// which is the order the manifest holds them in.
 func sessionRepos(m session.Manifest) []SessionRepo {
 	out := make([]SessionRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {

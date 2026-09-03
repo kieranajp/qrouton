@@ -64,8 +64,6 @@ vet: front
 fmt:
 	gofmt -w .
 
-# The pre-handoff gate from AGENTS.md. gofmt -l reports rather than exits, so
-# it is asserted empty here.
 # A component's props are a contract with the screen that draws it, and a
 # bundler will happily ship a page that passes the wrong ones.
 front-check: $(FRONTEND)/node_modules
@@ -75,6 +73,8 @@ comment-check: $(FRONTEND)/node_modules
 	go run ./cmd/commentdiscipline -policy comment-discipline.json -root .
 	cd $(FRONTEND) && npm run test:comments && npm run check:comments
 
+# The pre-handoff gate from AGENTS.md. gofmt -l reports rather than exits, so
+# it is asserted empty here.
 check: comment-check test race vet build front-check
 	@test -z "$$(gofmt -l .)" || { echo "gofmt:"; gofmt -l .; exit 1; }
 	git diff --check
