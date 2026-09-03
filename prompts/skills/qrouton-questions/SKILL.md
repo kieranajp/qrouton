@@ -14,6 +14,8 @@ Keep this conversational; the user experiences one Research step.
 5. Write the research document itself at `thoughts/shared/research/R<n>-<date>-<slug>.md`, with the questions as headings and nothing answered under them; the research lead fills the same file in. There is no separate questions artifact. Its shape and template live beside the research skill, at `../qrouton-research/references/research-shape.md` relative to this file: read that and write to it. At this stage the document holds the questions and the context a researcher needs to answer them, so combine overlapping questions and leave the rest out.
 6. Ask for review only when ambiguity remains or correction would substantially change the research. Otherwise continue into delegated research.
 
+Run `qrouton-research` next.
+
 The framing opens a durable artifact, so write it the way the research lead will finish it. At this stage it answers nothing and stays far shorter than the figures below:
 
 {{artifact-discipline}}

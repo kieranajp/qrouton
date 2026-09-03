@@ -26,3 +26,5 @@ Require this of the lead's return:
 - what stays unresolved: the remaining risks, failures, or decisions.
 
 Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
+
+`qrouton-implement` is the last skill in the workflow. Report the result and stop.

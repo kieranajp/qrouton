@@ -37,3 +37,5 @@ Require this of the lead's return:
 - what stays unresolved: the blockers the lead could not resolve.
 
 Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.
+
+Run `qrouton-implement` next when the user approves the plan.

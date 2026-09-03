@@ -15,6 +15,8 @@ The user experiences this as Planning, not a separate workflow phase.
 
 The spec records what and why. File-by-file execution belongs in the tactical plan.
 
+Run `qrouton-plan` next.
+
 Pass this to the lead, and hold the returned spec to it:
 
 {{artifact-discipline}}
