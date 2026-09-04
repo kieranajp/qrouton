@@ -3,6 +3,7 @@ package prompts
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -67,6 +68,7 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 	handoff := handoffSection(dir)
 
 	var links []assetLink
+	seenLinks := make(map[string]bool)
 	for _, prompt := range loaded {
 		rendered, err := Render(prompt)
 		if err != nil {
@@ -74,11 +76,20 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 		}
 		for _, asset := range rendered {
 			destination, assetLinks := assetDestination(dir, canonical, asset.Path, primary)
-			links = append(links, assetLinks...)
+			for _, link := range assetLinks {
+				if seenLinks[link.link] {
+					continue
+				}
+				seenLinks[link.link] = true
+				links = append(links, link)
+			}
 			if err := ensureAssetOurs(canonical, destination); err != nil {
 				return err
 			}
 			if err := os.MkdirAll(filepath.Dir(destination), dirMode); err != nil {
+				return err
+			}
+			if err := clearSymlink(destination); err != nil {
 				return err
 			}
 			content := mark(destination, asset.Content)
@@ -121,10 +132,11 @@ func assetDestination(dir, canonical, assetPath, primary string) (string, []asse
 
 	case strings.HasPrefix(assetPath, skillsPathPrefix):
 		destination := filepath.Join(canonical, filepath.FromSlash(assetPath))
-		skillRel := filepath.FromSlash(strings.TrimPrefix(assetPath, skillsPathPrefix))
+		skillName, _, _ := strings.Cut(strings.TrimPrefix(assetPath, skillsPathPrefix), "/")
+		skillDir := filepath.Join(canonical, skillsDirName, skillName)
 		return destination, []assetLink{
-			{link: filepath.Join(dir, claudeSkillsDir, skillsDirName, skillRel), target: destination},
-			{link: filepath.Join(dir, agentsSkillsDir, skillsDirName, skillRel), target: destination},
+			{link: filepath.Join(dir, claudeSkillsDir, skillsDirName, skillName), target: skillDir},
+			{link: filepath.Join(dir, agentsSkillsDir, skillsDirName, skillName), target: skillDir},
 		}
 
 	default:
@@ -171,18 +183,28 @@ func ownedByUs(path string) (bool, error) {
 	return strings.Contains(string(content), markerNeedle), nil
 }
 
+// clearSymlink drops a symlink standing where a canonical asset belongs, so the
+// write reaches the file rather than following the link out of the tree.
+func clearSymlink(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	return os.Remove(path)
+}
+
 func ensureAssetLink(link assetLink) error {
 	if err := os.MkdirAll(filepath.Dir(link.link), dirMode); err != nil {
 		return err
 	}
-	ours, err := ownedByUs(link.link)
+	ours, err := linkSiteOurs(link.link)
 	if err != nil {
 		return err
 	}
 	if !ours {
 		return fmt.Errorf("%w: %s", ErrUserOwnedAsset, link.link)
 	}
-	if err := os.Remove(link.link); err != nil && !os.IsNotExist(err) {
+	if err := os.RemoveAll(link.link); err != nil {
 		return err
 	}
 
@@ -191,6 +213,35 @@ func ensureAssetLink(link assetLink) error {
 		return err
 	}
 	return os.Symlink(relative, link.link)
+}
+
+// linkSiteOurs extends ownedByUs to the real directory a qrouton that linked
+// skills per file leaves at a skill's link site. Such a directory is ours only
+// when every file beneath it is a link we stamped, so a user's own skill of the
+// same name is still refused.
+func linkSiteOurs(path string) (bool, error) {
+	info, err := os.Lstat(path)
+	if err == nil && info.Mode()&os.ModeSymlink == 0 && info.IsDir() {
+		return stampedTree(path), nil
+	}
+	return ownedByUs(path)
+}
+
+func stampedTree(dir string) bool {
+	ours := true
+	err := filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		switch {
+		case err != nil:
+			return err
+		case entry.IsDir():
+			return nil
+		case entry.Type()&os.ModeSymlink != 0 && ownAssetLink(path):
+			return nil
+		}
+		ours = false
+		return fs.SkipAll
+	})
+	return err == nil && ours
 }
 
 // ownAssetLink reports whether an existing symlink is one qrouton stamped: our

@@ -41,14 +41,14 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 			t.Fatalf("orchestrator prompt missing %q", want)
 		}
 	}
-	skill := filepath.Join(dir, ".claude", "skills", "qrspi-questions", "SKILL.md")
-	codexSkill := filepath.Join(dir, ".agents", "skills", "qrspi-questions", "SKILL.md")
-	for _, p := range []string{skill, codexSkill} {
+	skillDir := filepath.Join(dir, ".claude", "skills", "qrspi-questions")
+	codexSkillDir := filepath.Join(dir, ".agents", "skills", "qrspi-questions")
+	for _, p := range []string{skillDir, codexSkillDir} {
 		if info, err := os.Lstat(p); err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatalf("%s is not a symlink: %v", p, err)
 		}
 	}
-	sb, err := os.ReadFile(skill)
+	sb, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
 		t.Fatal("skill not stamped:", err)
 	}
@@ -56,7 +56,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	if !strings.HasPrefix(string(sb), "---\n") {
 		t.Fatal("marker broke skill frontmatter (must lead with ---)")
 	}
-	if target, _ := os.Readlink(skill); filepath.IsAbs(target) {
+	if target, _ := os.Readlink(skillDir); filepath.IsAbs(target) {
 		t.Fatal("skill link must be relative for portable sessions")
 	}
 	// A skill folder reaches the runner whole, references and all.

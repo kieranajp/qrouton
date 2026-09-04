@@ -3,6 +3,7 @@ import MarkdownPane from "./MarkdownPane.svelte";
 import PlainPane from "./PlainPane.svelte";
 import PlanPane from "./PlanPane.svelte";
 import ResearchPane from "./ResearchPane.svelte";
+import SlidesPane from "./SlidesPane.svelte";
 
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
@@ -18,7 +19,10 @@ const KINDS = {
   RESEARCH: ResearchPane,
 };
 
-export const paneFor = (format, kind) => {
-  const pane = PANES[format] ?? PlainPane;
-  return pane === MarkdownPane ? (KINDS[kind] ?? pane) : pane;
+// A deck is a presentation form, not an artifact kind, so it is asked first and
+// answered from its own field: a spec can be deck-shaped and stay a spec.
+export const paneFor = (doc) => {
+  if (doc.deck) return SlidesPane;
+  const pane = PANES[doc.format] ?? PlainPane;
+  return pane === MarkdownPane ? (KINDS[doc.kind] ?? pane) : pane;
 };
