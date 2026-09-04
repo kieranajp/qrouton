@@ -7,8 +7,18 @@ import { opensSettings, position } from "./shortcuts.js";
 
 export { Terminal };
 
-// getPropertyValue does not resolve a var() chain, so read the ramp itself.
-const shade = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// getPropertyValue does not resolve a var() chain, so callers name the property
+// holding the literal value.
+const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+const terminalFont = () => `${token("--terminal-size")} ${token("--font-terminal")}`;
+
+// xterm measures its cell and builds the WebGL glyph atlas at open(), so a face
+// arriving afterwards stays cached as tofu until something rebuilds it. Bold is
+// a face of its own that the unprefixed shorthand would not fetch.
+export const fontsReady = () =>
+  Promise.all(["", "bold "].map((weight) => document.fonts.load(weight + terminalFont())))
+    .catch((e) => console.warn("fonts", e));
 
 // The agent reads a lone LF as submit, but an LF inside a bracketed paste as a
 // literal newline.
@@ -63,14 +73,14 @@ export function terminalAt(node) {
  */
 export function mount(host, { write, background = "--ctp-base" }) {
   const term = new Terminal({
-    fontFamily: 'Menlo, ui-monospace, "JetBrains Mono Variable", monospace',
-    fontSize: 13,
+    fontFamily: token("--font-terminal"),
+    fontSize: parseFloat(token("--terminal-size")),
     allowProposedApi: true,
     macOptionIsMeta: true,
     theme: {
-      background: shade(background),
-      foreground: shade("--ctp-text"),
-      cursor: shade("--ctp-rosewater"),
+      background: token(background),
+      foreground: token("--ctp-text"),
+      cursor: token("--ctp-rosewater"),
     },
   });
   const fit = new FitAddon();

@@ -52,6 +52,11 @@ for size in 16 32 128 256 512; do
 done
 iconutil -c icns "$iconset" -o "$contents/Resources/qrouton.icns"
 
+# The OFL obliges the bundled font's licence to travel with it.
+fonts="$root/internal/desktop/frontend/src/tokens/nerd-font"
+mkdir -p "$contents/Resources/licenses"
+cp "$fonts/OFL.txt" "$fonts/LICENSE-NerdFonts" "$fonts/README.md" "$contents/Resources/licenses/"
+
 cp "$root/build/macos/Info.plist" "$contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $version" "$contents/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $build_number" "$contents/Info.plist"

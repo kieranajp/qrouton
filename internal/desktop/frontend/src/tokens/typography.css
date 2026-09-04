@@ -5,7 +5,7 @@
   --font-display: "Space Grotesk Variable", system-ui, sans-serif;
   --font-instruction: "Instrument Sans Variable", system-ui, sans-serif;
   --font-machine: "JetBrains Mono Variable", ui-monospace, Menlo, monospace;
-  --font-terminal: Menlo, ui-monospace, "JetBrains Mono Variable", monospace;
+  --font-terminal: "JetBrainsMono Nerd Font Mono", Menlo, ui-monospace, monospace;
 
   /* display — headings only, always tight */
   --display-lg: 700 31px/1.05 var(--font-display);
@@ -28,8 +28,10 @@
   --machine-bold: 700 12px/1.4 var(--font-machine);
   --button: 700 11.5px/1 var(--font-machine);
 
-  /* terminal — inside xterm panes and code blocks */
-  --terminal: 13px/1.55 var(--font-terminal);
+  /* terminal — inside xterm panes and code blocks. xterm sizes its own cell, so
+     it reads the size rather than the shorthand. */
+  --terminal-size: 13px;
+  --terminal: var(--terminal-size)/1.55 var(--font-terminal);
   --terminal-sm: 12.5px/1.5 var(--font-terminal);
 
   /* literal — a URL, branch, path or binary name quoted inside prose */

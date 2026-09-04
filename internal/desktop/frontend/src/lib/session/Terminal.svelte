@@ -3,7 +3,7 @@
   import TerminalPane from "../shell/TerminalPane.svelte";
   import { createTerminalActivation } from "../terminal-focus.js";
   import { Call, Events } from "../wails.js";
-  import { encode, mount, paint, watchSize } from "../xterm.js";
+  import { encode, fontsReady, mount, paint, watchSize } from "../xterm.js";
 
   /** @type {{id: string, pty: import("./services.js").PTY, active?: boolean,
    *   focus?: number, focusPending?: boolean, onFocused?: (generation: number) => void}} */
@@ -13,6 +13,7 @@
   let term = $state();
   let teardown;
   let fit;
+  let live = true;
 
   const activation = createTerminalActivation({
     frame: requestAnimationFrame,
@@ -23,12 +24,18 @@
     handled: (generation) => onFocused?.(generation),
   });
 
-  $effect(() => activation.update(active, focus, focusPending));
+  // Activation acknowledges a focus request as delivered, so it must not run
+  // before there is a terminal to deliver one to.
+  $effect(() => {
+    if (term) activation.update(active, focus, focusPending);
+  });
 
   // An async onMount callback returns a Promise, not a cleanup Svelte would
   // call, so teardown is set here and onDestroy reads it instead.
   onMount(() => {
     (async () => {
+      await fontsReady();
+      if (!live) return;
       const write = (text) => Call.ByName(pty.write, id, encode(text));
       const started = mount(host, { write, background: "--ctp-crust" });
       const { refit, dispose } = started;
@@ -54,6 +61,7 @@
   });
 
   onDestroy(() => {
+    live = false;
     activation.destroy();
     teardown?.();
   });
