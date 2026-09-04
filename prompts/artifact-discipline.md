@@ -4,4 +4,10 @@ A durable artifact serves a reader who arrives later with the code and nothing e
 
 Calibrate the length against these figures: about 400 lines for a research artifact, 300 to 350 for a tactical plan, 200 to 250 for a design spec. The figures guide you. No check enforces them. Exceed one when the brief asks for an exhaustive inventory. Otherwise group repeated examples. Leave out mechanics a reader recovers from the named files and commands. Record lower-value follow-ups as open questions.
 
-Read the finished artifact before you return it. Compress the passages that read long. Judge the length by reading, because you cannot count your own output reliably.
+**Write for a reader with no spare attention.**
+
+They know the system, so leave out the background. Assume they lack the context you built, and the patience to rebuild it. Put the point first, in the artifact and again in each section. Write short sentences that carry one idea each. Choose plain words. Name who acts. A sentence fails when the reader must hold two facts at once to parse it.
+
+Make the artifact stand alone. Name another document only where the reader can safely skip it. Say each thing where it sits, rather than referring the reader forward or backward through your own text — no "as noted above", no numbered findings to track.
+
+Read the finished artifact before you return it. Compress the passages that read long. Judge it by reading, because you cannot count your own output reliably. Ask also whether a reader without your context follows it first time.
