@@ -26,6 +26,9 @@ type Reference struct {
 
 type Provider interface {
 	Name() string
+	// Label is the provider as a person writes it, which is how a prompt
+	// attributes the request it carries.
+	Label() string
 	Hosts() []string
 	Parse(*url.URL) (Reference, error)
 	Fetch(context.Context, *http.Client, Reference) (Ticket, error)
@@ -64,6 +67,16 @@ func Key(raw string) string {
 		return ""
 	}
 	return ref.Key
+}
+
+// ProviderLabel names the provider that owns raw, and is empty for anything no
+// provider claims.
+func ProviderLabel(raw string) string {
+	ref, err := parse(raw)
+	if err != nil {
+		return ""
+	}
+	return ref.provider.Label()
 }
 
 func Fetch(ctx context.Context, client *http.Client, rawURL string) (Ticket, error) {

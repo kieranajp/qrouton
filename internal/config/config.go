@@ -138,7 +138,6 @@ func effectiveStickerLabels(c *Config) StickerLabels {
 	return labels
 }
 
-// xdgDir resolves $XDG_<base>_HOME/qrouton, or its documented fallback.
 func xdgDir(envVar, fallback string) string {
 	base := os.Getenv(envVar)
 	if base == "" {

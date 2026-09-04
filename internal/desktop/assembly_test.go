@@ -124,23 +124,23 @@ func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 	root := t.TempDir()
 	a := newAssembly(&config.Config{Root: root}, nil, newSessions(), nil, nil, nil)
 	got, err := a.offer("lif-2841", "Fix the regression")
-	if err != nil || got != assemblyOutcomeQueued {
+	if err != nil || got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
 	}
 	if pending := a.Pending(); pending != "https://linear.app/issue/LIF-2841" {
 		t.Fatalf("pending = %q", pending)
 	}
-	if ticket, prompt := a.pendingLinear(); ticket != "https://linear.app/issue/LIF-2841" || prompt != "Fix the regression" {
+	if ticket, prompt := a.pendingTicket(); ticket != "https://linear.app/issue/LIF-2841" || prompt != "Fix the regression" {
 		t.Fatalf("pending Linear request = %q, %q", ticket, prompt)
 	}
 	seed := a.Begin()
 	if seed.Ticket != "https://linear.app/issue/LIF-2841" || !regexp.MustCompile(`^[0-9a-f]{4}$`).MatchString(seed.Entropy) || seed.Generation == 0 || a.Pending() != "" {
 		t.Fatalf("Begin = %+v, pending %q", seed, a.Pending())
 	}
-	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title", "ignored duplicate"); err != nil || got != assemblyOutcomeDraft {
+	if got, err := a.offer("https://linear.app/lifesum/issue/LIF-2841/title", "ignored duplicate"); err != nil || got != assembly.OutcomeDraft {
 		t.Fatalf("same issue against open draft = %q, %v", got, err)
 	}
-	if _, err := a.offer("LIF-2842", "another task"); !errors.Is(err, ErrAssemblyDraftConflict) {
+	if _, err := a.offer("LIF-2842", "another task"); !errors.Is(err, assembly.ErrDraftConflict) {
 		t.Fatalf("different issue against open draft = %v", err)
 	}
 }
@@ -151,11 +151,11 @@ func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
 	if manual.Ticket != "" {
 		t.Fatalf("manual Begin = %+v", manual)
 	}
-	if _, err := a.offer("LIF-2841", ""); !errors.Is(err, ErrAssemblyDraftConflict) {
+	if _, err := a.offer("LIF-2841", ""); !errors.Is(err, assembly.ErrDraftConflict) {
 		t.Fatalf("external issue took over a manual draft: %v", err)
 	}
 	a.End(manual.Generation)
-	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeQueued {
+	if got, err := a.offer("LIF-2841", ""); err != nil || got != assembly.OutcomeQueued {
 		t.Fatalf("offer after cancel = %q, %v", got, err)
 	}
 }
@@ -171,11 +171,11 @@ func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
 		t.Fatalf("replacement = %+v after %+v", replacement, first)
 	}
 	a.End(first.Generation)
-	if got, err := a.offer("LIF-2842", ""); !errors.Is(err, ErrAssemblyDraftConflict) || got != "" {
+	if got, err := a.offer("LIF-2842", ""); !errors.Is(err, assembly.ErrDraftConflict) || got != "" {
 		t.Fatalf("late End closed the replacement: %q, %v", got, err)
 	}
 	a.End(replacement.Generation)
-	if got, err := a.offer("LIF-2842", ""); err != nil || got != assemblyOutcomeQueued {
+	if got, err := a.offer("LIF-2842", ""); err != nil || got != assembly.OutcomeQueued {
 		t.Fatalf("current End did not release the draft: %q, %v", got, err)
 	}
 }
@@ -237,7 +237,7 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 	}
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 	for range 2 {
-		if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {
+		if got, err := a.offer("LIF-2841", ""); err != nil || got != assembly.OutcomeExisting {
 			t.Fatalf("matching offer = %q, %v", got, err)
 		}
 	}
@@ -277,7 +277,7 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 		case got.err == nil:
 			accepted++
 			queued = got.issue
-		case errors.Is(got.err, ErrAssemblyDraftConflict):
+		case errors.Is(got.err, assembly.ErrDraftConflict):
 			refused++
 		default:
 			t.Fatalf("simultaneous offer = %v", got.err)
@@ -311,7 +311,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 		offered := make(chan error, 1)
 		go func() {
 			outcome, err := a.offer("LIF-2842", "")
-			if err == nil && outcome != assemblyOutcomeQueued {
+			if err == nil && outcome != assembly.OutcomeQueued {
 				err = fmt.Errorf("offer during a boot = %q", outcome)
 			}
 			offered <- err
@@ -325,7 +325,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 		return boot.Agent(req)
 	}
 
-	if got, err := a.offer("LIF-2841", ""); err != nil || got != assemblyOutcomeExisting {
+	if got, err := a.offer("LIF-2841", ""); err != nil || got != assembly.OutcomeExisting {
 		t.Fatalf("matching offer = %q, %v", got, err)
 	}
 	if err := <-during; err != nil {
@@ -474,7 +474,7 @@ func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 	}
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 	if got, err := a.offer("https://github.com/acme/api/issues/42?utm=x", ""); err != nil ||
-		got != assemblyOutcomeExisting {
+		got != assembly.OutcomeExisting {
 		t.Fatalf("matching offer = %q, %v", got, err)
 	}
 	if current := reg.current(); current == nil || current.slug() != "shown" {
@@ -485,7 +485,7 @@ func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 func TestAssemblyOfferQueuesAnUnmatchedGitHubIssue(t *testing.T) {
 	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	if got, err := a.offer("https://github.com/Acme/API/issues/42", ""); err != nil ||
-		got != assemblyOutcomeQueued {
+		got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
 	}
 	if pending := a.Pending(); pending != "https://github.com/acme/api/issues/42" {

@@ -472,7 +472,8 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	window, _ := w.window(id)
-	pid := window.process.cmd.Process.Pid
+	terminal, _ := window.terminal()
+	pid := terminal.process.cmd.Process.Pid
 	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("two-line prompt\n"))); err != nil {
 		t.Fatal(err)
 	}
@@ -484,10 +485,10 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	if err := w.Start(id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
-	if window.process.cmd.Process.Pid != pid {
+	if terminal.process.cmd.Process.Pid != pid {
 		t.Fatal("remounting a terminal forked another shell")
 	}
-	size, err := pty.GetsizeFull(window.process.file)
+	size, err := pty.GetsizeFull(terminal.process.file)
 	if err != nil || size.Cols != 120 || size.Rows != 36 {
 		t.Fatalf("remounted PTY size = %+v, %v, want 120x36", size, err)
 	}
@@ -1108,16 +1109,17 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 	// A push is not a reload: the page's controller is still running, so a
 	// report it had already earned must not be fenced off behind a new epoch.
 	window, _ := w.window(id)
-	if window.viewportEpoch != epoch || window.viewportSeq != 3 {
-		t.Fatalf("after rescan epoch/seq = %d/%d, want %d/3", window.viewportEpoch, window.viewportSeq, epoch)
+	rendered, _ := window.document()
+	if rendered.viewportEpoch != epoch || rendered.viewportSeq != 3 {
+		t.Fatalf("after rescan epoch/seq = %d/%d, want %d/3", rendered.viewportEpoch, rendered.viewportSeq, epoch)
 	}
 
 	// Content is a reload, and there the fence is the point.
 	if _, err := w.Content(id); err != nil {
 		t.Fatal(err)
 	}
-	if window.viewportEpoch != epoch+1 || window.viewportSeq != 0 {
-		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", window.viewportEpoch, window.viewportSeq, epoch+1)
+	if rendered.viewportEpoch != epoch+1 || rendered.viewportSeq != 0 {
+		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", rendered.viewportEpoch, rendered.viewportSeq, epoch+1)
 	}
 }
 

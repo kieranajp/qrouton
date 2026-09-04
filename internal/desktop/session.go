@@ -7,30 +7,24 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// identity is what a session is called and where it lives. Onboarding chooses
-// both after the workbench has opened, so it is replaced rather than mutated.
-type identity struct {
-	slug string
-	root string
-}
-
 type sessionState struct {
-	// terminal addresses the conversation PTY. Onboarding execs the supervisor
-	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
-	terminal string
-	agents   *agentActivity
-	provider string
-	argv     []string
-	env      []string
-	named    atomic.Pointer[identity]
+	// terminal addresses the conversation PTY rather than the session, because
+	// the page attaches its stream before the supervisor is running.
+	terminal    string
+	agents      *agentActivity
+	provider    string
+	argv        []string
+	env         []string
+	sessionSlug string
+	sessionRoot string
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
@@ -58,7 +52,6 @@ func (s *sessionState) requestPicker(req workbench.PickerRequest) {
 	s.picker = &req
 }
 
-// pendingPicker is this session's escalation while it is still worth drawing.
 func (s *sessionState) pendingPicker() *workbench.PickerRequest {
 	if s == nil {
 		return nil
@@ -79,19 +72,20 @@ func (s *sessionState) clearPicker() {
 	s.picker = nil
 }
 
-// slug and root tolerate a nil session, which is the window showing none.
+// slug and root tolerate a nil session, which is the window showing none. Both
+// are fixed at construction, so neither takes the lock.
 func (s *sessionState) slug() string {
 	if s == nil {
 		return ""
 	}
-	return s.named.Load().slug
+	return s.sessionSlug
 }
 
 func (s *sessionState) root() string {
 	if s == nil {
 		return ""
 	}
-	return s.named.Load().root
+	return s.sessionRoot
 }
 
 // alive is whether the session still has a supervisor behind it. A session
@@ -265,30 +259,25 @@ func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
 	state := s.bySlug(slug)
+	if state.alive() {
+		s.reveal(state)
+		return nil
+	}
 	// A supervisor that died left its state registered, and a pane drawn against
 	// it reaches nothing.
 	var fallback *sessionState
 	var emptied bool
-	if state != nil && !state.alive() {
+	if state != nil {
 		fallback, emptied = s.recycle(state)
-		state = nil
 	}
-	if state == nil {
-		root := s.boot.root(slug)
-		if root == "" {
-			return unknownSession(slug)
+	root := s.boot.root(slug)
+	if root == "" {
+		if emptied {
+			s.reveal(fallback)
 		}
-		booted, err := s.start(root, "", true)
-		if err != nil {
-			if emptied {
-				s.reveal(fallback)
-			}
-			return err
-		}
-		state = booted
+		return unknownSession(slug)
 	}
-	s.reveal(state)
-	return nil
+	return s.replace(root, fallback, emptied)
 }
 
 // Reload restarts a session's supervisor and resumes the conversation, which is
@@ -306,6 +295,13 @@ func (s *Sessions) Reload(slug string) error {
 	if state := s.bySlug(slug); state != nil {
 		fallback, emptied = s.recycle(state)
 	}
+	return s.replace(root, fallback, emptied)
+}
+
+// replace boots a session and puts it on screen. A boot that fails after
+// recycling had emptied the window hands the window back rather than leaving it
+// on nothing.
+func (s *Sessions) replace(root string, fallback *sessionState, emptied bool) error {
 	booted, err := s.start(root, "", true)
 	if err != nil {
 		if emptied {
@@ -372,21 +368,10 @@ func (s *Sessions) RevealPath(slug, path string) error {
 	if root == "" {
 		return unknownSession(slug)
 	}
-	inside, err := within(root, path)
-	if err != nil || !inside {
+	if _, inside := sessionpaths.Within(root, path); !inside {
 		return ErrPathOutsideSession
 	}
 	return s.boot.reveal(path)
-}
-
-// within reports whether path resolves inside root, with both cleaned so a
-// climbing path cannot leave the session by spelling.
-func within(root, path string) (bool, error) {
-	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
-	if err != nil {
-		return false, err
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 // Uncommitted names the repositories a cleanup would take changes from. It is a
@@ -530,13 +515,14 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 		s.agents[slug] = tracker
 	}
 	state := &sessionState{
-		terminal: fmt.Sprintf(terminalIDFormat, s.seq),
-		agents:   tracker,
-		argv:     argv,
-		env:      env,
-		tail:     &ring{limit: agentTailBytes},
+		terminal:    fmt.Sprintf(terminalIDFormat, s.seq),
+		agents:      tracker,
+		argv:        argv,
+		env:         env,
+		sessionSlug: slug,
+		sessionRoot: root,
+		tail:        &ring{limit: agentTailBytes},
 	}
-	state.named.Store(&identity{slug: slugFor(root), root: root})
 	s.slugs[state.slug()] = state
 	s.terms[state.terminal] = state
 	return state
@@ -714,8 +700,7 @@ func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	return out
 }
 
-// slugFor is a session's key: the name of its directory. The landing path has no
-// directory yet.
+// slugFor is a session's key: the name of its directory.
 func slugFor(root string) string {
 	if root == "" {
 		return ""

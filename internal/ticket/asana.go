@@ -13,7 +13,8 @@ var asanaAPI = asanaAPIDefault
 
 type asana struct{}
 
-func (asana) Name() string { return asanaProvider }
+func (asana) Name() string  { return asanaProvider }
+func (asana) Label() string { return asanaLabel }
 
 func (asana) Hosts() []string { return []string{asanaHost} }
 

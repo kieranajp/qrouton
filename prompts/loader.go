@@ -97,8 +97,6 @@ func (l *FSLoader) read(path string) ([]byte, error) {
 	return content, nil
 }
 
-// skillFiles is everything in a skill's folder other than its entry file, in
-// lexical order.
 func (l *FSLoader) skillFiles(dir string) ([]PromptFile, error) {
 	entry := dir + "/" + skillFileName
 	var out []PromptFile

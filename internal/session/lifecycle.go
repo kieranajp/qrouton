@@ -43,7 +43,6 @@ func Status(root string, m Manifest) WorkflowStatus {
 	return status
 }
 
-// researched requires answered sections, or non-empty prose when there are no sections.
 func researched(path string) bool {
 	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
 		return false

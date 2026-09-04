@@ -4,7 +4,10 @@
 // with several authors is a path convention that drifts.
 package sessionpaths
 
-import "path/filepath"
+import (
+	"path/filepath"
+	"strings"
+)
 
 const (
 	// DirName is the session-private directory: everything qrouton generates
@@ -128,4 +131,15 @@ func AgentNotice(root string) string {
 // each one waiting for the agent to hand it to somebody.
 func SharePages(root string) string {
 	return filepath.Join(Dir(root), sharePagesDirName)
+}
+
+// Within reports whether path is base or sits underneath it, and where it sits
+// relative to base. It compares spelling only: pass symlink-resolved paths when
+// the answer has to survive a link out of the tree.
+func Within(base, path string) (string, bool) {
+	rel, err := filepath.Rel(filepath.Clean(base), filepath.Clean(path))
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
 }

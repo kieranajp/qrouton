@@ -1,38 +1,58 @@
-import { criteriaSpans } from "./plan.js";
 import { dealt } from "./sections.js";
 
-/** Criteria spanning beyond their phase never claim blocks from the next slide.
- * @param {string} html
- * @param {{slides: import("./plan.js").Slide[]}} parsed
- * @param {(html: string) => {html: string, from: number, to: number}[]} deal @returns {{preamble: string, slides: {opening: string, body: string, criteria: string}[]}} */
-export function partition(html, parsed, deal = dealt) {
+/** Criteria spanning beyond their section never claim the next one's blocks.
+ * @param {{from: number, to: number}[]} sections In document order.
+ * @param {{criteria?: (s: any) => any, deal?: (html: string) => any[]}} [how]
+ * @returns {{preamble: string, sections: {opening: string, body: string, criteria: string}[]}} */
+export function partition(html, sections, how = {}) {
+  const { criteria, deal = dealt } = how;
   const preamble = [];
-  const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
+  // A section's opening heading stays apart from its body: the pane states the
+  // name itself, and the heading's own line still has to be findable.
+  const parts = sections.map(() => ({ opening: [], body: [], criteria: [] }));
   for (const block of deal(html)) {
-    const index = parsed.slides.findIndex(
-      (slide) => block.from >= slide.from && block.from <= slide.to,
+    const at = sections.findIndex(
+      (section) => block.from >= section.from && block.from <= section.to,
     );
-    if (index < 0) {
+    if (at < 0) {
       preamble.push(block.html);
       continue;
     }
-    const verify = criteriaSpans(parsed.slides[index]);
+    const verify = criteria?.(sections[at]);
     const bucket =
-      block.from === parsed.slides[index].from
+      block.from === sections[at].from
         ? "opening"
         : verify && block.from >= verify.from && block.to <= verify.to
           ? "criteria"
           : "body";
-    slides[index][bucket].push(block.html);
+    parts[at][bucket].push(block.html);
   }
   return {
     preamble: preamble.join(""),
-    slides: slides.map((slide) => ({
-      opening: slide.opening.join(""),
-      body: slide.body.join(""),
-      criteria: slide.criteria.join(""),
+    sections: parts.map((part) => ({
+      opening: part.opening.join(""),
+      body: part.body.join(""),
+      criteria: part.criteria.join(""),
     })),
   };
+}
+
+/** The section a line falls in, and -1 for a line in none of them.
+ * @param {{from: number, to: number}[]} sections @param {number} line */
+export function holding(sections, line) {
+  if (!line || line < 1) return -1;
+  return sections.findIndex(
+    (section) => line >= section.from && line <= section.to,
+  );
+}
+
+/** The span a pane marks, cut at the end of the section it opens in: a span
+ * running past that says nothing about the section after it.
+ * @param {{line?: number, to?: number}} doc @param {{to: number}} opened */
+export function clampedSpan(doc, opened) {
+  const line = doc.line ?? 0;
+  const to = doc.to ?? 0;
+  return { line, to: to > line ? Math.min(to, opened.to) : to };
 }
 
 /**
@@ -40,8 +60,7 @@ export function partition(html, parsed, deal = dealt) {
  * @param {number} line
  */
 export function screenFor(slides, line) {
-  if (!line || line < 1) return 0;
-  const at = slides.findIndex((slide) => line >= slide.from && line <= slide.to);
+  const at = holding(slides, line);
   return at < 0 ? 0 : at + 1;
 }
 
@@ -51,5 +70,7 @@ export function screenFor(slides, line) {
 export function counterFor(parsed, screen) {
   if (screen === 0) return "Overview";
   const slide = parsed.slides[screen - 1];
-  return slide.number === null ? slide.name : `${slide.number} / ${parsed.phases.length}`;
+  return slide.number === null
+    ? slide.name
+    : `${slide.number} / ${parsed.phases.length}`;
 }

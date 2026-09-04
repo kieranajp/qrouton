@@ -166,8 +166,6 @@ func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
 	return refs
 }
 
-// root is the session the picker is about, which is only ever one this workbench
-// is running.
 func (p *Picker) root(slug string) (*sessionState, string, error) {
 	state := p.sessions.bySlug(slug)
 	root := state.root()

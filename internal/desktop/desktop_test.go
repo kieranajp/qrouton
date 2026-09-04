@@ -1671,9 +1671,9 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	running := shownSession(t, reg)
 	beforeAgents, beforeServes := boot.counts()
 
-	outcome, err := workbench.OpenLinearIssue(context.Background(), opts.Socket, "lif-2841", "Linear prompt")
-	if err != nil || outcome != assemblyOutcomeQueued {
-		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
+	outcome, err := workbench.OpenTicket(context.Background(), opts.Socket, "lif-2841", "Linear prompt")
+	if err != nil || outcome != assembly.OutcomeQueued {
+		t.Fatalf("OpenTicket = %q, %v", outcome, err)
 	}
 	if reg.current() != running {
 		t.Fatal("opening a draft switched the running session")
@@ -1686,7 +1686,7 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	if pending := opts.assembly.Pending(); pending != "https://linear.app/issue/LIF-2841" {
 		t.Fatalf("pending = %q", pending)
 	}
-	if _, prompt := opts.assembly.pendingLinear(); prompt != "Linear prompt" {
+	if _, prompt := opts.assembly.pendingTicket(); prompt != "Linear prompt" {
 		t.Fatalf("pending prompt = %q", prompt)
 	}
 	waitFor(t, "the conversation window to be focused", func() bool {
@@ -1696,42 +1696,42 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 	})
 
 	seed := opts.assembly.Begin()
-	if outcome, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2841", "duplicate"); err != nil || outcome != assemblyOutcomeDraft {
+	if outcome, err = workbench.OpenTicket(context.Background(), opts.Socket, "LIF-2841", "duplicate"); err != nil || outcome != assembly.OutcomeDraft {
 		t.Fatalf("same issue repeat = %q, %v", outcome, err)
 	}
-	if _, err = workbench.OpenLinearIssue(context.Background(), opts.Socket, "LIF-2842", ""); err == nil {
+	if _, err = workbench.OpenTicket(context.Background(), opts.Socket, "LIF-2842", ""); err == nil {
 		t.Fatal("different issue replaced the open draft")
 	}
 	opts.assembly.End(seed.Generation)
 }
 
-func TestAColdLinearIssueIsPendingBeforeTheWindowOpens(t *testing.T) {
+func TestAColdTicketIsPendingBeforeTheWindowOpens(t *testing.T) {
 	r := newFakeRenderer()
 	opts, boot := testOptions(t)
 	opts.SessionRoot = ""
-	opts.LinearIssue = "https://linear.app/issue/LIF-2841"
-	opts.LinearPrompt = "Cold prompt"
+	opts.Ticket = "https://linear.app/issue/LIF-2841"
+	opts.TicketPrompt = "Cold prompt"
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
 
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
-	if pending := opts.assembly.Pending(); pending != opts.LinearIssue {
-		t.Fatalf("pending after open = %q, want %q", pending, opts.LinearIssue)
+	if pending := opts.assembly.Pending(); pending != opts.Ticket {
+		t.Fatalf("pending after open = %q, want %q", pending, opts.Ticket)
 	}
-	if _, prompt := opts.assembly.pendingLinear(); prompt != opts.LinearPrompt {
-		t.Fatalf("pending prompt after open = %q, want %q", prompt, opts.LinearPrompt)
+	if _, prompt := opts.assembly.pendingTicket(); prompt != opts.TicketPrompt {
+		t.Fatalf("pending prompt after open = %q, want %q", prompt, opts.TicketPrompt)
 	}
 	if agents, serves := boot.counts(); agents != 0 || serves != 0 {
 		t.Fatalf("cold draft started %d agents and %d session listeners", agents, serves)
 	}
 }
 
-func TestAColdLinearIssueIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T) {
+func TestAColdTicketIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
 	opts.SessionRoot = ""
-	opts.LinearIssue = "https://linear.app/issue/LIF-2841"
+	opts.Ticket = "https://linear.app/issue/LIF-2841"
 	reg, term, windows := testWorkbench(t, r, r.Emit)
 	offered := make(chan struct{})
 	release := make(chan struct{})
@@ -1748,8 +1748,8 @@ func TestAColdLinearIssueIsInstalledBeforeTheProcessEndpointIsPublished(t *testi
 	if workbench.Published(opts.Socket) {
 		t.Fatal("the process endpoint was published before its cold Linear issue was installed")
 	}
-	if pending := opts.assembly.Pending(); pending != opts.LinearIssue {
-		t.Fatalf("pending during publication handoff = %q, want %q", pending, opts.LinearIssue)
+	if pending := opts.assembly.Pending(); pending != opts.Ticket {
+		t.Fatalf("pending during publication handoff = %q, want %q", pending, opts.Ticket)
 	}
 	close(release)
 	waitFor(t, "the seeded process endpoint to be published", func() bool {

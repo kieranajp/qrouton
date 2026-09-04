@@ -100,12 +100,12 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 	}
 }
 
-func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
+func TestAnExternalPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
 		argv := argvFor(t, runner, false, modeAssistant, "  Fix the login regression.  ")
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
-			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {
+			!strings.HasSuffix(message, requestSeparator+"Fix the login regression.") {
 			t.Fatalf("%s opening message = %q", runner.ID, message)
 		}
 	}
@@ -558,7 +558,7 @@ func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []
 	if !ok {
 		t.Fatalf("no spec for runner %q", r.ID)
 	}
-	return runnerArgv(spec, r, resume, mode, initialPrompt)
+	return runnerArgv(spec, r, resume, mode, "", initialPrompt)
 }
 
 // ByID answers the runner the caller named, whether that is the identifier, the

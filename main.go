@@ -78,12 +78,12 @@ func offeredTicket(c *cli.Context) (string, string, error) {
 	return canonical, prompt, nil
 }
 
-func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
+func openLocked(c *cli.Context, offered, prompt string) error {
 	discovery := discoverProcess()
-	if linearIssue != "" {
+	if offered != "" {
 		if discovery.Socket != "" {
-			_, err := workbench.OpenLinearIssue(
-				context.Background(), discovery.Socket, linearIssue, linearPrompt,
+			_, err := workbench.OpenTicket(
+				context.Background(), discovery.Socket, offered, prompt,
 			)
 			return err
 		}
@@ -100,7 +100,7 @@ func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
 		}
 		return detachProcess(launch.WorkbenchSpec{
 			Socket: socket, Runner: c.String(runnerFlag), Editor: editorFor(cfg),
-			LinearIssue: linearIssue, LinearPrompt: linearPrompt,
+			Ticket: offered, TicketPrompt: prompt,
 		}, os.Environ())
 	}
 	// There is one workbench, and it opens on a session: two of them would each
@@ -146,8 +146,6 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 	return launch.FirstInstalled(cfg)
 }
 
-// launchRunner opens the workbench on the session. The workbench builds the
-// agent's command as it boots it, and that supervisor stamps the prompts.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
@@ -207,8 +205,8 @@ func workbenchProcess(marshalled string) error {
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
 		Socket:       spec.Socket,
-		LinearIssue:  spec.LinearIssue,
-		LinearPrompt: spec.LinearPrompt,
+		Ticket:       spec.Ticket,
+		TicketPrompt: spec.TicketPrompt,
 		LinearCommand: []string{
 			bin,
 			"--" + linearIssueFlag,
@@ -296,7 +294,7 @@ func (p workbenchPorts) ValidateLaunch(overrides map[string][]string) error {
 // session. Detach returns only once the child answers, so the two overlap for
 // that wait — safe because the successor holds no session, and so claims no
 // supervisor the caller might still own.
-func (p workbenchPorts) Relaunch(linearIssue func() (string, string)) error {
+func (p workbenchPorts) Relaunch(pending func() (string, string)) error {
 	return workbench.WithLaunchLock(func() error {
 		socket, err := workbench.NewSocketPath()
 		if err != nil {
@@ -304,8 +302,8 @@ func (p workbenchPorts) Relaunch(linearIssue func() (string, string)) error {
 		}
 		next := p.spec
 		next.SessionRoot, next.Resume, next.Socket = "", false, socket
-		if linearIssue != nil {
-			next.LinearIssue, next.LinearPrompt = linearIssue()
+		if pending != nil {
+			next.Ticket, next.TicketPrompt = pending()
 		}
 		return launch.Detach(launch.WorkbenchArgv(p.bin, next), config.WithoutOverrides(p.env),
 			socket, workbenchLog(next))

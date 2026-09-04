@@ -143,7 +143,6 @@ func (a Adapter) mcpWiring(runner, workspace, mcpLog string) (launch.MCPWiring, 
 	return wiring, nil
 }
 
-// mockMCPArgs invokes the harness binary as the mock qrouton MCP server.
 func mockMCPArgs(mcpLog, workspace string) []string {
 	return []string{mockMCPSubcommand, mockMCPLogFlag, mcpLog, mockMCPRootFlag, workspace}
 }

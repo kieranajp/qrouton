@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -214,7 +215,7 @@ func TestServeControlReplacesAStaleSocket(t *testing.T) {
 	}
 }
 
-func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T) {
+func TestProcessSocketOpensCanonicalTicketsAndFocusesTheWindow(t *testing.T) {
 	windows, _ := testWindows(t)
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
@@ -224,13 +225,13 @@ func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T
 	var focused int
 	conflict := false
 	server, err := serveControl(socket, windows, nil, controlHooks{
-		linearIssue: func(ticket, prompt string) (string, error) {
+		openTicket: func(ticket, prompt string) (string, error) {
 			offered = ticket
 			offeredPrompt = prompt
 			if conflict {
-				return "", ErrAssemblyDraftConflict
+				return "", assembly.ErrDraftConflict
 			}
-			return assemblyOutcomeQueued, nil
+			return assembly.OutcomeQueued, nil
 		},
 		focus: func() { focused++ },
 	})
@@ -239,24 +240,24 @@ func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T
 	}
 	t.Cleanup(func() { _ = server.Close() })
 
-	outcome, err := workbench.OpenLinearIssue(context.Background(), socket,
+	outcome, err := workbench.OpenTicket(context.Background(), socket,
 		"https://linear.app/lifesum/issue/lif-2841/title", "Linear's task")
-	if err != nil || outcome != assemblyOutcomeQueued {
-		t.Fatalf("OpenLinearIssue = %q, %v", outcome, err)
+	if err != nil || outcome != assembly.OutcomeQueued {
+		t.Fatalf("OpenTicket = %q, %v", outcome, err)
 	}
 	if offered != "https://linear.app/issue/LIF-2841" || offeredPrompt != "Linear's task" || focused != 1 {
 		t.Fatalf("offered %q, prompt %q, and focused %d times", offered, offeredPrompt, focused)
 	}
 
 	conflict = true
-	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "LIF-2842", ""); err == nil {
+	if _, err := workbench.OpenTicket(context.Background(), socket, "LIF-2842", ""); err == nil {
 		t.Fatal("draft conflict succeeded")
 	}
 	if focused != 2 {
 		t.Fatalf("draft conflict focused %d times, want twice in all", focused)
 	}
 	before := offered
-	if _, err := workbench.OpenLinearIssue(context.Background(), socket, "not-an-issue", ""); err == nil {
+	if _, err := workbench.OpenTicket(context.Background(), socket, "not-an-issue", ""); err == nil {
 		t.Fatal("invalid Linear issue reached the process")
 	}
 	if offered != before || focused != 2 {
@@ -264,7 +265,7 @@ func TestProcessSocketOpensCanonicalLinearIssuesAndFocusesTheWindow(t *testing.T
 	}
 }
 
-func TestLinearIssueOpIsRefusedOnSessionSocketsAndWithoutItsPayload(t *testing.T) {
+func TestOpenTicketIsRefusedOnSessionSocketsAndWithoutItsPayload(t *testing.T) {
 	windows, _ := testWindows(t)
 	for _, tc := range []struct {
 		name  string
@@ -272,14 +273,14 @@ func TestLinearIssueOpIsRefusedOnSessionSocketsAndWithoutItsPayload(t *testing.T
 		req   workbench.Request
 	}{
 		{name: "session socket", owner: windows.shown(), req: workbench.Request{
-			Op:          workbench.OpOpenLinearIssue,
-			LinearIssue: &workbench.LinearIssueRequest{Ticket: "https://linear.app/issue/LIF-2841"},
+			Op:     workbench.OpOpenTicket,
+			Ticket: &workbench.TicketRequest{URL: "https://linear.app/issue/LIF-2841"},
 		}},
-		{name: "missing payload", req: workbench.Request{Op: workbench.OpOpenLinearIssue}},
+		{name: "missing payload", req: workbench.Request{Op: workbench.OpOpenTicket}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			control := &control{windows: windows, owner: tc.owner, hooks: controlHooks{
-				linearIssue: func(string, string) (string, error) { return assemblyOutcomeQueued, nil },
+				openTicket: func(string, string) (string, error) { return assembly.OutcomeQueued, nil },
 			}}
 			if res := control.dispatch(tc.req); res.Error == "" {
 				t.Fatalf("dispatch(%+v) = %+v, want a refusal", tc.req, res)

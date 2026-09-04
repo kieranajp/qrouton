@@ -3,9 +3,9 @@ package evalharness
 import (
 	"context"
 	"fmt"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -70,11 +70,7 @@ func resolveWorkspacePath(root, requested string) (string, error) {
 		path = filepath.Join(root, path)
 	}
 	path = filepath.Clean(path)
-	rel, err := filepath.Rel(root, path)
-	if err != nil {
-		return "", err
-	}
-	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+	if _, inside := sessionpaths.Within(root, path); !inside {
 		return "", fmt.Errorf("path %q is outside the evaluation workspace", requested)
 	}
 	return path, nil

@@ -155,7 +155,7 @@ func TestSuperviseConsumesTheExternalPromptOnTheFirstLaunchOnly(t *testing.T) {
 		t.Fatalf("expected two launches, got %d", len(argvs))
 	}
 	if first := strings.Join(argvs[0], " "); !strings.Contains(first, openingMessageAssistant) ||
-		!strings.Contains(first, linearRequestSeparator+"Fix the login regression.") ||
+		!strings.Contains(first, requestSeparator+"Fix the login regression.") ||
 		strings.Contains(first, claudeContinueFlag) {
 		t.Fatalf("first launch did not layer the external prompt into a fresh opening: %v", argvs[0])
 	}

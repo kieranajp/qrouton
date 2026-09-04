@@ -3,7 +3,6 @@ package desktop
 import (
 	"context"
 	"net/http"
-	"sync"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -47,11 +46,6 @@ type AssemblySeed struct {
 	Generation uint64 `json:"generation"`
 }
 
-type linearSeed struct {
-	ticket string
-	prompt string
-}
-
 type Assembly struct {
 	cfg       *config.Config
 	repos     *Repositories
@@ -59,13 +53,7 @@ type Assembly struct {
 	emit      emitter
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
-
-	mu         sync.Mutex
-	pending    linearSeed
-	draftOpen  bool
-	external   linearSeed
-	entropy    string
-	generation uint64
+	offers    assembly.Offers
 }
 
 func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit emitter,
@@ -110,77 +98,47 @@ func (a *Assembly) Fetch(url string) (ticketFields, error) {
 		BranchDescription: assembly.SuggestBranchDescription(loaded.Title)}, nil
 }
 
-func (a *Assembly) Pending() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.pending.ticket
-}
+func (a *Assembly) Pending() string { return a.offers.Pending().Ticket }
 
-// pendingLinear supplies the full external request to a replacement workbench.
+// pendingTicket supplies the full external request to a replacement workbench.
 // The prompt stays out of the frontend seed and is carried only to session
 // creation, where the runner consumes it once.
-func (a *Assembly) pendingLinear() (string, string) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.pending.ticket, a.pending.prompt
+func (a *Assembly) pendingTicket() (string, string) {
+	pending := a.offers.Pending()
+	return pending.Ticket, pending.Prompt
 }
 
-// Begin claims the pending external ticket and owns the draft until End.
 func (a *Assembly) Begin() AssemblySeed {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	a.generation++
-	if !a.draftOpen {
-		a.external = a.pending
-		a.pending = linearSeed{}
-		a.entropy = session.NewEntropy()
-	}
-	a.draftOpen = true
-	return AssemblySeed{Ticket: a.external.ticket, Entropy: a.entropy, Generation: a.generation}
+	claim := a.offers.Begin()
+	return AssemblySeed{Ticket: claim.Seed.Ticket, Entropy: claim.Entropy, Generation: claim.Generation}
 }
 
-// End releases only the overlay generation that still owns the draft.
-func (a *Assembly) End(generation uint64) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if generation != a.generation {
-		return
-	}
-	a.draftOpen = false
-	a.external = linearSeed{}
-	a.entropy = ""
-}
+func (a *Assembly) End(generation uint64) { a.offers.End(generation) }
 
+// offer routes an externally opened ticket: to the session that already holds
+// it, or into the overlay's queue for a session that does not exist yet.
 func (a *Assembly) offer(raw, prompt string) (string, error) {
 	canonical, err := ticket.Canonical(raw)
 	if err != nil {
 		return "", err
 	}
-	if outcome, err := a.held(canonical); outcome != "" || err != nil {
+	if outcome, err := a.offers.Held(canonical); outcome != "" || err != nil {
 		return outcome, err
 	}
 	if a.cfg == nil || a.sessions == nil {
 		return "", ErrNoConfig
 	}
-	cfg := a.cfg.Snapshot()
-	manifests, err := session.Scan(cfg.Root)
+	preferred, found, err := assembly.SessionFor(a.cfg.Snapshot(), canonical)
 	if err != nil {
 		return "", err
 	}
-	matching := make([]session.Manifest, 0, len(manifests))
-	for _, manifest := range manifests {
-		persisted, err := ticket.Canonical(manifest.TicketURL)
-		if err == nil && persisted == canonical {
-			matching = append(matching, manifest)
-		}
-	}
-	if preferred, ok := session.Preferred(cfg.Root, matching); ok {
+	if found {
 		if err := a.sessions.Show(preferred.Slug); err != nil {
 			return "", err
 		}
-		return assemblyOutcomeExisting, nil
+		return assembly.OutcomeExisting, nil
 	}
-	outcome, taken, err := a.takePending(linearSeed{ticket: canonical, prompt: prompt})
+	outcome, taken, err := a.offers.Take(assembly.Seed{Ticket: canonical, Prompt: prompt})
 	if err != nil {
 		return "", err
 	}
@@ -188,50 +146,6 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 		a.emit(assemblyRequestedEvent, canonical)
 	}
 	return outcome, nil
-}
-
-// held is the answer the draft state alone gives an offered ticket. An empty
-// outcome and no error means nothing holds the assembly.
-func (a *Assembly) held(canonical string) (string, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.heldLocked(canonical)
-}
-
-// takePending queues the seed, deciding again because the scan it followed ran
-// off the lock: an offer of another issue that landed meanwhile keeps its claim
-// and this one is refused. taken is false when the answer came from that claim
-// rather than this seed.
-func (a *Assembly) takePending(seed linearSeed) (string, bool, error) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if outcome, err := a.heldLocked(seed.ticket); outcome != "" || err != nil {
-		return outcome, false, err
-	}
-	a.pending = seed
-	return assemblyOutcomeQueued, true, nil
-}
-
-func (a *Assembly) heldLocked(canonical string) (string, error) {
-	if a.draftOpen {
-		if a.external.ticket == canonical {
-			return assemblyOutcomeDraft, nil
-		}
-		return "", ErrAssemblyDraftConflict
-	}
-	if a.pending.ticket != "" {
-		if a.pending.ticket == canonical {
-			return assemblyOutcomeQueued, nil
-		}
-		return "", ErrAssemblyDraftConflict
-	}
-	return "", nil
-}
-
-func (a *Assembly) initialPrompt() string {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	return a.external.prompt
 }
 
 func (a *Assembly) Create(in draftInput) error {
@@ -252,7 +166,7 @@ func (a *Assembly) Create(in draftInput) error {
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
-		InitialPrompt: a.initialPrompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
+		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
 		Repos: draft.Repos,
 	}, progress)
 	if err != nil {

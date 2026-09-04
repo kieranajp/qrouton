@@ -19,7 +19,8 @@ var linearIdentifierPattern = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9]*-[1-9][0-
 
 type linear struct{}
 
-func (linear) Name() string { return linearProvider }
+func (linear) Name() string  { return linearProvider }
+func (linear) Label() string { return linearLabel }
 
 func (linear) Hosts() []string { return []string{linearHost} }
 

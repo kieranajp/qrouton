@@ -160,7 +160,7 @@ func TestLinearIssueColdLaunchCarriesTheCanonicalTicketAndPrompt(t *testing.T) {
 	if err := open(rootContext(t, "--linear-issue", "lif-2841")); err != nil {
 		t.Fatal(err)
 	}
-	if got.LinearIssue != "https://linear.app/issue/LIF-2841" || got.LinearPrompt != "Fix the login regression" ||
+	if got.Ticket != "https://linear.app/issue/LIF-2841" || got.TicketPrompt != "Fix the login regression" ||
 		got.SessionRoot != "" || got.Socket == "" {
 		t.Fatalf("cold workbench spec = %+v", got)
 	}
@@ -226,8 +226,8 @@ func TestLinearIssueUsesThePublishedProcessEndpoint(t *testing.T) {
 		t.Fatal(err)
 	}
 	req := <-requests
-	if req.Op != workbench.OpOpenLinearIssue || req.LinearIssue == nil ||
-		req.LinearIssue.Ticket != "https://linear.app/issue/LIF-2841" || req.LinearIssue.Prompt != "Fix the warm path" {
+	if req.Op != workbench.OpOpenTicket || req.Ticket == nil ||
+		req.Ticket.URL != "https://linear.app/issue/LIF-2841" || req.Ticket.Prompt != "Fix the warm path" {
 		t.Fatalf("live request = %+v", req)
 	}
 }
@@ -380,7 +380,7 @@ func TestTicketFlagCarriesTheCanonicalReferenceAndNoPrompt(t *testing.T) {
 			if err := open(rootContext(t, "--ticket", tc.raw)); err != nil {
 				t.Fatal(err)
 			}
-			if got.LinearIssue != tc.want || got.LinearPrompt != "" || got.Socket == "" {
+			if got.Ticket != tc.want || got.TicketPrompt != "" || got.Socket == "" {
 				t.Fatalf("cold workbench spec = %+v, want ticket %q and no prompt", got, tc.want)
 			}
 		})
@@ -405,8 +405,8 @@ func TestLinearIssueOutranksTicketAndKeepsItsPrompt(t *testing.T) {
 		"--ticket", "https://github.com/acme/api/issues/42")); err != nil {
 		t.Fatal(err)
 	}
-	if got.LinearIssue != "https://linear.app/issue/LIF-2841" ||
-		got.LinearPrompt != "Fix the login regression" {
+	if got.Ticket != "https://linear.app/issue/LIF-2841" ||
+		got.TicketPrompt != "Fix the login regression" {
 		t.Fatalf("spec = %+v, want Linear Desktop's request to win", got)
 	}
 }

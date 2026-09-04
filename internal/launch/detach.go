@@ -29,8 +29,8 @@ type WorkbenchSpec struct {
 	Socket       string `json:"socket"`
 	Runner       string `json:"runner,omitempty"`
 	Resume       bool   `json:"resume,omitempty"`
-	LinearIssue  string `json:"linear_issue,omitempty"`
-	LinearPrompt string `json:"linear_prompt,omitempty"`
+	Ticket       string `json:"ticket,omitempty"`
+	TicketPrompt string `json:"ticket_prompt,omitempty"`
 	// Zero when no editor resolved, which the session runs without.
 	Editor EditorCommand `json:"editor"`
 }
