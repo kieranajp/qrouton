@@ -237,6 +237,41 @@ func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {
 	}
 }
 
+// A stale per-file skill directory holding our symlinks alongside one file the
+// user added is neither of the pure cases stampedTree distinguishes: it must
+// still refuse, since only every file being ours makes the directory ours.
+func TestStampRefusesSkillDirectoryHoldingMixedContent(t *testing.T) {
+	dir := t.TempDir()
+	const name = "qrspi-plan"
+	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
+
+	stale := filepath.Join(dir, claudeSkillsDir, skillsDirName, name)
+	if err := os.MkdirAll(stale, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(stale, skillFileName)
+	relative, err := filepath.Rel(filepath.Dir(link), filepath.Join(canonicalSkill, skillFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(relative, link); err != nil {
+		t.Fatal(err)
+	}
+	authored := filepath.Join(stale, "notes.md")
+	if err := os.WriteFile(authored, []byte("my own notes"), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	err = Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset)
+	if !errors.Is(err, ErrUserOwnedAsset) {
+		t.Fatalf("Stamp over a mixed skill directory = %v", err)
+	}
+	content, err := os.ReadFile(authored)
+	if err != nil || string(content) != "my own notes" {
+		t.Fatalf("the user's own file did not survive: %q %v", content, err)
+	}
+}
+
 func skillParts(t *testing.T, content string) (string, string, string) {
 	t.Helper()
 	if !strings.HasPrefix(content, frontmatterFence) {
