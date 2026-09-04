@@ -404,7 +404,7 @@ func (s *Sessions) Cleanup(slug string) error {
 	// Retiring first is what stops a supervisor running on an unlinked directory
 	// and what stops the window recorder writing the manifest back after removal.
 	if state := s.bySlug(slug); state != nil {
-		s.retire(state)
+		s.retireLocked(state)
 	} else if pid, alive := session.AgentAlive(root); alive {
 		return agentAlreadyRunning(filepath.Base(root), pid)
 	}
@@ -485,6 +485,12 @@ func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShow
 
 // retire ends one session without ending the app.
 func (s *Sessions) retire(state *sessionState) {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	s.retireLocked(state)
+}
+
+func (s *Sessions) retireLocked(state *sessionState) {
 	s.boot.teardown(state)
 	state.stop()
 	fallback, wasShown := s.forget(state)
@@ -492,7 +498,40 @@ func (s *Sessions) retire(state *sessionState) {
 		s.touch()
 		return
 	}
+	if fallback == nil {
+		if root := s.nextInactiveRoot(state.slug()); root != "" {
+			fallback, _ = s.start(root, "", true)
+		}
+	}
 	s.reveal(fallback)
+}
+
+func (s *Sessions) nextInactiveRoot(after string) string {
+	s.mu.Lock()
+	rail := append([]string(nil), s.rail...)
+	registered := make(map[string]bool, len(s.slugs))
+	for slug := range s.slugs {
+		registered[slug] = true
+	}
+	s.mu.Unlock()
+
+	start := 0
+	for i, slug := range rail {
+		if slug == after {
+			start = (i + 1) % len(rail)
+			break
+		}
+	}
+	for i := range rail {
+		slug := rail[(start+i)%len(rail)]
+		if slug == after || registered[slug] {
+			continue
+		}
+		if root := s.boot.root(slug); root != "" {
+			return root
+		}
+	}
+	return ""
 }
 
 func (s *Sessions) stopAll() {

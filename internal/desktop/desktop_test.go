@@ -380,7 +380,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 }
 
 // A supervisor exiting ends its own session and not the app: the window falls
-// back to the session shown before it, and to none once the last one has gone.
+// back to another active session, then starts the next inactive one.
 func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	r := newFakeRenderer()
 	opts, boot := testOptions(t)
@@ -415,11 +415,38 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	}
 
 	endConversation(t, term, first)
-	waitFor(t, "the window with no session", func() bool { return reg.current() == nil })
+	waitFor(t, "the next inactive session to start", func() bool {
+		current := reg.current()
+		return current != nil && current != second && current.slug() == second.slug()
+	})
+	if !boot.resumed(t, second.root()) {
+		t.Fatal("the inactive session was restarted without resuming its conversation")
+	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.quit {
 		t.Fatal("the last supervisor exiting took the workbench with it")
+	}
+}
+
+func TestACleanSupervisorExitLeavesNoSessionWhenItWasTheOnlyOne(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	state := shownSession(t, reg)
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+
+	endConversation(t, term, state)
+	waitFor(t, "the window with no session", func() bool { return reg.current() == nil })
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.quit {
+		t.Fatal("the only supervisor exiting took the workbench with it")
 	}
 }
 
@@ -1997,6 +2024,32 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	}
 	if strings.Join(before, " ") != strings.Join(after, " ") {
 		t.Fatalf("switching reordered the rail from %v to %v", before, after)
+	}
+}
+
+func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	for _, slug := range []string{"shown", "next", "later"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("shown", "next", "later"))
+	if err := reg.Show("shown"); err != nil {
+		t.Fatal(err)
+	}
+
+	reg.retire(reg.current())
+
+	current := reg.current()
+	if current == nil || current.slug() != "next" {
+		t.Fatalf("the window moved to %v, want the next inactive rail row", current)
+	}
+	if reg.bySlug("later") != nil {
+		t.Fatal("retirement skipped the next inactive rail row")
+	}
+	if !boot.resumed(t, filepath.Join(root, "next")) {
+		t.Fatal("the next inactive session did not resume its conversation")
 	}
 }
 
