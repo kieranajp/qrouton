@@ -58,6 +58,10 @@ type WindowOptions struct {
 	Content string         `json:"content,omitempty"`
 	Format  DocumentFormat `json:"format,omitempty"`
 	Span    LineSpan       `json:"span,omitzero"`
+	// Deck is a Markdown document whose frontmatter declares it slides. It rides
+	// beside Format rather than replacing it, since a deck is still whatever
+	// kind of artifact its path says it is.
+	Deck bool `json:"deck,omitempty"`
 	// Select changes the session's selected tab without requesting native focus.
 	Select      bool `json:"select,omitempty"`
 	Attention   bool `json:"attention,omitempty"`

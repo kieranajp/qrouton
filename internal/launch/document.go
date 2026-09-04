@@ -47,10 +47,11 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	if err != nil || info.Size() > workbench.DocumentLimit {
 		return workbench.WindowOptions{}, false
 	}
-	text, err := os.ReadFile(path)
+	read, err := os.ReadFile(path)
 	if err != nil {
 		return workbench.WindowOptions{}, false
 	}
+	text := string(read)
 	first, last, ok := span.Bounds()
 	if ok {
 		span = workbench.LineSpan{Line: first, Through: last}
@@ -64,13 +65,14 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	id := status.ArtifactID(rel)
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
-		Label:   documentLabel(string(text), rel, id),
+		Label:   documentLabel(text, rel, id),
 		Badge:   id,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
-		Content: string(text),
+		Content: text,
 		Format:  format,
 		Span:    span,
+		Deck:    markdown.Marp(text),
 	}, true
 }
 

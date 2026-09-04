@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -21,6 +22,7 @@ type document struct {
 	Source        string `json:"source"`
 	Path          string `json:"path,omitempty"`
 	Kind          string `json:"kind,omitempty"`
+	Deck          bool   `json:"deck,omitempty"`
 	Line          int    `json:"line"`
 	To            int    `json:"to"`
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
@@ -98,6 +100,7 @@ func documentFor(window *agentWindow) document {
 		Source:        window.opts.Source,
 		Path:          path,
 		Kind:          kind,
+		Deck:          window.opts.Deck,
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
@@ -153,6 +156,9 @@ func (d *documents) rescan() {
 		}
 		rendered.read.at, rendered.read.size = info.ModTime(), info.Size()
 		window.opts.Content = string(text)
+		// A document becomes a deck, or stops being one, by an edit to its
+		// frontmatter, so the flag is read again with the text it describes.
+		window.opts.Deck = markdown.Marp(window.opts.Content)
 		pushes = append(pushes, push{id: id, doc: documentFor(window)})
 	})
 	for _, sent := range pushes {
