@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"testing/fstest"
 
 	"github.com/kieranajp/qrouton/internal/markdown"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // embeddedPromptIDs is every prompt the binary carries, in the order List sorts
@@ -135,6 +137,74 @@ func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
 		if !strings.Contains(string(content), "### Verify") {
 			t.Fatalf("%s did not resolve to the plan shape reference:\n%s", reference, content)
 		}
+	}
+}
+
+// A session stamped before skills linked at the folder carries a real directory
+// of file links where the folder link now belongs. Stamping over it has to
+// replace it, since every session that predates the change starts in that shape.
+func TestStampReplacesPerFileSkillDirectory(t *testing.T) {
+	dir := t.TempDir()
+	const name = "qrspi-plan"
+	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
+
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		stale := filepath.Join(dir, root, skillsDirName, name)
+		if err := os.MkdirAll(filepath.Join(stale, "references"), dirMode); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range []string{skillFileName, filepath.Join("references", "plan-shape.md")} {
+			link := filepath.Join(stale, file)
+			relative, err := filepath.Rel(filepath.Dir(link), filepath.Join(canonicalSkill, file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(relative, link); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		skillLink := filepath.Join(dir, root, skillsDirName, name)
+		info, err := os.Lstat(skillLink)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is not a stamped folder link: %v", skillLink, err)
+		}
+		content, err := os.ReadFile(filepath.Join(skillLink, skillFileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "name: "+name) {
+			t.Fatalf("%s does not resolve to the skill:\n%s", skillLink, content)
+		}
+	}
+}
+
+// Replacing a stale directory must not become a licence to delete a directory
+// the user owns, whatever its name.
+func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {
+	dir := t.TempDir()
+	mine := filepath.Join(dir, claudeSkillsDir, skillsDirName, "qrspi-plan")
+	if err := os.MkdirAll(mine, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	authored := filepath.Join(mine, skillFileName)
+	if err := os.WriteFile(authored, []byte("my own skill"), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset)
+	if !errors.Is(err, ErrUserOwnedAsset) {
+		t.Fatalf("Stamp over a user-owned skill directory = %v", err)
+	}
+	content, err := os.ReadFile(authored)
+	if err != nil || string(content) != "my own skill" {
+		t.Fatalf("the user's own skill did not survive: %q %v", content, err)
 	}
 }
 
