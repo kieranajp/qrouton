@@ -77,6 +77,27 @@ test("the counter names the card the reader is standing on", async ({ page }) =>
   await expect(page.locator(".counter")).not.toHaveText("1 / 7");
 });
 
+test("a default slide reads as a card against the pane's own ground", async ({ page }) => {
+  await open(page);
+  const info = await page.evaluate(() => {
+    // Card 0 opens on the title layout; card 1 is the deck's default layout.
+    const deck = document.querySelector(".deck");
+    const frame = document.querySelectorAll(".frame")[1];
+    const section = frame.querySelector(".marpit section");
+    return {
+      paneGround: getComputedStyle(deck).backgroundColor,
+      slideBackground: getComputedStyle(section).backgroundColor,
+      outlineWidth: getComputedStyle(frame).outlineWidth,
+      outlineColor: getComputedStyle(frame).outlineColor,
+    };
+  });
+
+  expect(info.slideBackground).not.toBe(info.paneGround);
+  expect(info.outlineWidth).not.toBe("0px");
+  expect(info.outlineColor).not.toBe(info.slideBackground);
+  expect(info.outlineColor).not.toBe(info.paneGround);
+});
+
 test("relative media resolves over the deck's asset route", async ({ page }) => {
   await open(page);
   await page.evaluate(() =>

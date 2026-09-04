@@ -75,7 +75,10 @@
 </article>
 
 <style>
+  /* Recessed below a slide's own ground, so a card always sits on something
+     rather than blending into it. */
   .deck {
+    background: var(--surface-terminal);
     padding: 26px 34px;
   }
 
@@ -118,10 +121,9 @@
     width: 100%;
     aspect-ratio: 16 / 9;
     overflow: hidden;
-    /* An outline rather than a border: the slide is scaled to the frame's own
-       width, and a border would take two pixels of it away. */
-    outline: var(--border-width) solid var(--border-subtle);
-    outline-offset: calc(-1 * var(--border-width));
+    /* Outline, not inset, so the slide's own background can't paint over it;
+       border-default so it reads against every layout, alt included. */
+    outline: var(--border-width) solid var(--border-default);
   }
 
   .card:global(.marked) .frame {
