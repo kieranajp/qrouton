@@ -1,0 +1,6 @@
+/* @theme qrouton */
+
+:root {
+  background: var(--surface-app);
+  color: var(--text-primary);
+}

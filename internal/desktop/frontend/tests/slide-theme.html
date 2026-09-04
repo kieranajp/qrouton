@@ -1,0 +1,21 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Slide theme fixture</title>
+    <style>
+      /* Sentinels, one shade apart, so a slide resolving the wrong token cannot
+         match by coincidence. */
+      :root {
+        --surface-app: rgb(1, 2, 3);
+        --text-primary: rgb(4, 5, 6);
+      }
+
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <main id="deck-root"></main>
+    <script type="module" src="./slide-theme-fixture.js"></script>
+  </body>
+</html>
