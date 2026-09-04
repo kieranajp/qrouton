@@ -185,6 +185,35 @@ func TestStampReplacesPerFileSkillDirectory(t *testing.T) {
 	}
 }
 
+// A qrouton old enough to link skills per file removes SKILL.md through the
+// folder link, which unlinks the canonical file and leaves a symlink in its
+// place. Stamping again has to restore the file rather than write through it.
+func TestStampRestoresCanonicalAssetReplacedByALink(t *testing.T) {
+	dir := t.TempDir()
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	canonical := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, "qrspi-plan", skillFileName)
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "..", "..", "gone", skillFileName), canonical); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(canonical)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("%s is still a link: %v", canonical, err)
+	}
+	content, err := os.ReadFile(canonical)
+	if err != nil || !strings.Contains(string(content), "name: qrspi-plan") {
+		t.Fatalf("canonical skill was not restored: %v", err)
+	}
+}
+
 // Replacing a stale directory must not become a licence to delete a directory
 // the user owns, whatever its name.
 func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {

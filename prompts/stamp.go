@@ -89,6 +89,9 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 			if err := os.MkdirAll(filepath.Dir(destination), dirMode); err != nil {
 				return err
 			}
+			if err := clearSymlink(destination); err != nil {
+				return err
+			}
 			content := mark(destination, asset.Content)
 			if asset.Path == primary {
 				content = append(content, handoff...)
@@ -178,6 +181,16 @@ func ownedByUs(path string) (bool, error) {
 		return false, nil
 	}
 	return strings.Contains(string(content), markerNeedle), nil
+}
+
+// clearSymlink drops a symlink standing where a canonical asset belongs, so the
+// write reaches the file rather than following the link out of the tree.
+func clearSymlink(path string) error {
+	info, err := os.Lstat(path)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		return nil
+	}
+	return os.Remove(path)
 }
 
 func ensureAssetLink(link assetLink) error {
