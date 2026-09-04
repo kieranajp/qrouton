@@ -6,9 +6,13 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
+	"os"
+	"path"
+	"path/filepath"
 	"reflect"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/theme"
 )
 
@@ -49,12 +53,54 @@ func validateFrontend(assets fs.FS) error {
 	return nil
 }
 
-func assetHandler(assets fs.FS) http.Handler {
+// deckLookup answers a deck's asset token with the session root its window
+// belongs to and the directory the deck itself sits in.
+type deckLookup func(token string) (root, dir string, ok bool)
+
+func assetHandler(assets fs.FS, decks deckLookup) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))
 	mux.HandleFunc(theme.Path, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set(contentTypeHeader, theme.MediaType)
 		_, _ = io.WriteString(w, theme.CSS())
 	})
+	mux.HandleFunc(deckAssetPath, deckAsset(decks))
 	return mux
+}
+
+// deckAsset serves a deck's own pictures and video, and only those: the media
+// type comes from the extension table rather than from the file, so a path that
+// resolves inside the session but is not media is a 404 rather than a read.
+func deckAsset(decks deckLookup) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, rel, split := strings.Cut(strings.TrimPrefix(r.URL.Path, deckAssetPath), "/")
+		media, known := deckMediaTypes[strings.ToLower(path.Ext(rel))]
+		if !split || rel == "" || !known || decks == nil {
+			http.NotFound(w, r)
+			return
+		}
+		root, dir, ok := decks(token)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		name, err := launch.ResolveSessionFile(root, filepath.FromSlash(path.Join(dir, rel)))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		file, err := os.Open(name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set(contentTypeHeader, media)
+		http.ServeContent(w, r, "", info.ModTime(), file)
+	}
 }

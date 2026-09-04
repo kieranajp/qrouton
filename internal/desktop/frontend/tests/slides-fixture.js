@@ -60,6 +60,7 @@ const document_ = (text) => ({
   path: "/sessions/fixture/thoughts/shared/decks/fixture.md",
   kind: "NOTE",
   deck: true,
+  assetToken: "tok",
   line: number("line"),
   to: number("to"),
   viewportEpoch: 1,

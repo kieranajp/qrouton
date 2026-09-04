@@ -36,6 +36,10 @@ const (
 	rootPath          = "/"
 	contentTypeHeader = "Content-Type"
 
+	// deckAssetPath leads a deck's own media, addressed by the per-window token
+	// that follows it. Window ids are sequential and never appear in a URL.
+	deckAssetPath = "/deck/"
+
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
@@ -146,3 +150,17 @@ const (
 	agentStateFinished = status.AgentStateFinished
 	agentStateFailed   = status.AgentStateFailed
 )
+
+// deckMediaTypes is the whole of what a deck can reach through its asset route.
+var deckMediaTypes = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".avif": "image/avif",
+	".svg":  "image/svg+xml",
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+	".mov":  "video/quicktime",
+}

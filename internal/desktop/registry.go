@@ -1,7 +1,10 @@
 package desktop
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"path"
 	"slices"
 	"sort"
 	"sync"
@@ -19,6 +22,9 @@ type agentWindow struct {
 	seq     int
 	order   int
 	content windowContent
+	// asset names a document window in the deck asset route's URLs. Window ids
+	// are sequential, so one session could otherwise guess another's.
+	asset string
 }
 
 // windowContent is the half of a tab that differs by kind. Callers ask for the
@@ -228,6 +234,9 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
 	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq, content: contentFor(opts)}
+	if opts.Kind == workbench.KindDocument {
+		window.asset = assetToken()
+	}
 	beginDocument(window)
 	r.open[id] = window
 	if selects {
@@ -237,6 +246,34 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 
 	r.announce(owner)
 	return id, nil
+}
+
+// deckDirectory answers the asset route. A token belonging to a window that is
+// not a deck resolves to nothing, so the route stays a media server for open
+// decks rather than a reader for any window's neighbours.
+func (r *registry) deckDirectory(token string) (root, dir string, ok bool) {
+	if token == "" {
+		return "", "", false
+	}
+	r.each(func(_ string, window *agentWindow) {
+		if ok || window.asset != token || !window.opts.Deck || window.opts.Source == "" {
+			return
+		}
+		home := window.session.root()
+		if home == "" {
+			return
+		}
+		root, dir, ok = home, path.Dir(window.opts.Source), true
+	})
+	return root, dir, ok
+}
+
+func assetToken() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(raw[:])
 }
 
 func (r *registry) readWindow(id string, full bool) (string, error) {

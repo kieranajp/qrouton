@@ -8,10 +8,10 @@
   import { slides } from "./slides.svelte.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, assetToken?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller: _onScroller } = $props();
 
-  let cards = $derived(deckSlides(doc.text));
+  let cards = $derived(deckSlides(doc.text, doc.assetToken));
   let sheet = $derived(renderDeck(doc.text).css);
   let heading = $derived(doc.source ? doc.source.split("/").pop() : "");
 

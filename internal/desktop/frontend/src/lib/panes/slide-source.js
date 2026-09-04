@@ -46,3 +46,28 @@ function frontmatterEnd(lines) {
   }
   return lines.length;
 }
+
+const assetRoot = "/deck";
+const scheme = /^[a-z][a-z0-9+.-]*:/i;
+const attribute = /(<(?:img|video|source)\b[^>]*?\bsrc\s*=\s*)(["'])([^"']*)\2/gi;
+const inline = /(!\[[^\]]*\]\()\s*([^)\s]+)/g;
+
+/** Deck media addressed at the workbench's own asset route, which serves the
+ * deck's directory and only its media.
+ * @param {string} markdown
+ * @param {string | undefined} token */
+export function deckAssets(markdown, token) {
+  const source = markdown ?? "";
+  if (!token) return source;
+  const base = `${assetRoot}/${token}/`;
+  return source
+    .replace(attribute, (_, open, quote, url) => `${open}${quote}${routed(url, base)}${quote}`)
+    .replace(inline, (_, open, url) => `${open}${routed(url, base)}`);
+}
+
+// An author's own absolute URL is theirs to keep; anything session-relative is
+// meaningless to a webview until it names the route.
+function routed(url, base) {
+  if (url === "" || url.startsWith("/") || url.startsWith("#") || scheme.test(url)) return url;
+  return base + url.replace(/^\.\//, "");
+}

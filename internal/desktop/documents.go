@@ -23,6 +23,7 @@ type document struct {
 	Path          string `json:"path,omitempty"`
 	Kind          string `json:"kind,omitempty"`
 	Deck          bool   `json:"deck,omitempty"`
+	AssetToken    string `json:"assetToken,omitempty"`
 	Line          int    `json:"line"`
 	To            int    `json:"to"`
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
@@ -94,6 +95,11 @@ func documentFor(window *agentWindow) document {
 	if rendered, ok := window.document(); ok && rendered.viewport != nil {
 		viewportEpoch = rendered.viewportEpoch
 	}
+	// Only a deck addresses the asset route, so only a deck is told its token.
+	var asset string
+	if window.opts.Deck {
+		asset = window.asset
+	}
 	return document{
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),
@@ -101,6 +107,7 @@ func documentFor(window *agentWindow) document {
 		Path:          path,
 		Kind:          kind,
 		Deck:          window.opts.Deck,
+		AssetToken:    asset,
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,

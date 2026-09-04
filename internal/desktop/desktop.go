@@ -71,10 +71,18 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	r := newWailsRenderer(assets, opts.Icon)
+	// The asset route is built into the renderer, which is built before the
+	// windows it asks: it holds the variable rather than the registry.
+	var windows *Windows
+	r := newWailsRenderer(assets, opts.Icon, func(token string) (string, string, bool) {
+		if windows == nil {
+			return "", "", false
+		}
+		return windows.registry.deckDirectory(token)
+	})
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)
-	windows := newWindows(r.Emit, reg)
+	windows = newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)
 	// The same teardown the main window's OnClose runs, shared with Settings.Quit

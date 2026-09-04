@@ -1,6 +1,6 @@
 import { Marp } from "@marp-team/marp-core";
 import { render } from "./markdown.js";
-import { slideSpans } from "./slide-source.js";
+import { deckAssets, slideSpans } from "./slide-source.js";
 import theme from "./slide-theme.css?raw";
 
 // Marp Core turns inlineSVG on for itself, which buries every slide under an
@@ -22,12 +22,12 @@ export function renderDeck(markdown) {
   return marp.render(markdown ?? "");
 }
 
-/** Marp's sections paired with the source lines and notes belonging to each. A
- * deck whose sections and spans disagree draws the rest of its cards unmeasured.
- * @param {string} markdown
+/** Marp's sections paired with their source lines and notes; token keys the
+ * asset route. Sections past the spans draw unmeasured rather than not at all.
+ * @param {string} markdown @param {string} [token]
  * @returns {{html: string, notes: string, line: number, lineEnd: number}[]} */
-export function deckSlides(markdown) {
-  const rendered = renderDeck(markdown);
+export function deckSlides(markdown, token) {
+  const rendered = renderDeck(deckAssets(markdown, token));
   const spans = slideSpans(markdown);
   return sectionsOf(rendered.html).map((html, index) => ({
     html,

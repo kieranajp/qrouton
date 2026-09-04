@@ -76,3 +76,22 @@ test("the counter names the card the reader is standing on", async ({ page }) =>
   });
   await expect(page.locator(".counter")).not.toHaveText("1 / 7");
 });
+
+test("relative media resolves over the deck's asset route", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() =>
+    window.pushDeck('<img src="./shot.png">\n<video src="./clip.mp4"></video>\n\n![](../shared/plate.png)\n'),
+  );
+  await page.locator(".card video").waitFor({ state: "attached" });
+  const media = await page.evaluate(() =>
+    [...document.querySelectorAll(".card section img, .card section video")].map((el) =>
+      el.getAttribute("src"),
+    ),
+  );
+
+  expect(media).toEqual([
+    "/deck/tok/shot.png",
+    "/deck/tok/clip.mp4",
+    "/deck/tok/../shared/plate.png",
+  ]);
+});
