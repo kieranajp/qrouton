@@ -16,6 +16,8 @@ import (
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\b(qrouton-(questions|research|spec|plan|implement)|agent depth|document numbering)\b`)
 
+var subagentTypePattern = regexp.MustCompile(`"` + subagentTypeField + `"\s*:\s*"([^"]+)"`)
+
 // testsPassTimeout bounds a fixture repo's test run during grading.
 const testsPassTimeout = 5 * time.Minute
 
@@ -96,6 +98,10 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return eventAssertion(result.Events, checkOpenFile, assertOpenFile)
 	case checkDelegation:
 		return delegationAssertion(result.Events, check.Pattern)
+	case checkFirstDelegation:
+		return firstDelegationAssertion(result.Events, check.Pattern)
+	case checkDelegationAbsent:
+		return delegationAbsentAssertion(result.Events)
 	case checkRepoChanged:
 		diff := result.Diffs[check.Repo]
 		return Assertion{Name: assertRepoChanged + check.Repo, Passed: strings.TrimSpace(diff) != ""}
@@ -277,6 +283,87 @@ func delegationAssertion(events []Event, pattern string) Assertion {
 		Passed:   collaboration && target,
 		Evidence: fmt.Sprintf(evidenceCollaboration, collaboration, target),
 	}
+}
+
+// firstDelegationAssertion grades the earliest spawn alone. Order is the event
+// slice's: an event's time is stamped as the harness parses a stream line, not
+// when the agent acted.
+func firstDelegationAssertion(events []Event, pattern string) Assertion {
+	name := assertFirstDelegatedTo + pattern
+	if pattern == "" {
+		return Assertion{Name: name, Evidence: evidenceNoPattern}
+	}
+	for _, event := range events {
+		if !isDelegationEvent(event) {
+			continue
+		}
+		targets := subagentTypes(event)
+		if len(targets) == 0 {
+			return Assertion{Name: name, Evidence: evidenceNoTarget + delegationEvidence(event)}
+		}
+		return Assertion{
+			Name:     name,
+			Passed:   everyTargetMatches(targets, pattern),
+			Evidence: strings.Join(targets, evidenceJoiner),
+		}
+	}
+	// A run that delegated nothing has no first delegation to have aimed well.
+	return Assertion{Name: name, Evidence: evidenceNoDelegation}
+}
+
+// delegationAbsentAssertion grades a turn that owed the user a question first,
+// where any spawn is premature whatever it targeted.
+func delegationAbsentAssertion(events []Event) Assertion {
+	var spawns []string
+	for _, event := range events {
+		if isDelegationEvent(event) {
+			spawns = append(spawns, delegationEvidence(event))
+		}
+	}
+	return Assertion{
+		Name:     assertNoDelegation,
+		Passed:   len(spawns) == 0,
+		Evidence: strings.Join(spawns, evidenceJoiner),
+	}
+}
+
+// everyTargetMatches holds a fan-out to the standard of a single spawn: one
+// leaf among the first batch is still a leaf spawned before any lead.
+func everyTargetMatches(targets []string, pattern string) bool {
+	normalized := normalizeAgentName(pattern)
+	for _, target := range targets {
+		if !strings.Contains(normalizeAgentName(target), normalized) {
+			return false
+		}
+	}
+	return len(targets) > 0
+}
+
+func delegationEvidence(event Event) string {
+	if targets := subagentTypes(event); len(targets) > 0 {
+		return strings.Join(targets, evidenceJoiner)
+	}
+	return strings.TrimSpace(event.Kind + " " + event.RawType + " " + event.Name)
+}
+
+// subagentTypes reads the agents an event spawns off the raw payload, in the
+// order the runner wrote them, so a fan-out of several grades the same way twice.
+// A Codex collaboration call names none: it is a wait on threads it does not
+// identify, so a Codex run's delegation order is not observable here.
+func subagentTypes(event Event) []string {
+	var targets []string
+	for _, match := range subagentTypePattern.FindAllStringSubmatch(string(event.Arguments), -1) {
+		targets = append(targets, match[1])
+	}
+	return targets
+}
+
+// isDelegationEvent reports a spawn. A runner's roster of available agents
+// arrives with the same key a spawn carries, and the init subtype is what
+// separates the two.
+func isDelegationEvent(event Event) bool {
+	return isCollaborationEvent(event) &&
+		!strings.Contains(strings.ToLower(string(event.Arguments)), initSubtype)
 }
 
 func normalizeAgentName(value string) string {

@@ -233,6 +233,151 @@ func TestDelegationNormalizesAgentNameSeparators(t *testing.T) {
 	}
 }
 
+// spawnEvent is a Claude Task call as the normalizer records one: the tool name
+// on the event, the target inside the provider payload.
+func spawnEvent(agent string) Event {
+	return Event{
+		Kind:      "tool_call",
+		Name:      "Task",
+		Arguments: []byte(`{"tool_name":"Task","subagent_type":"` + agent + `"}`),
+	}
+}
+
+// The roster arrives with the same key a spawn carries, so the init subtype is
+// the only thing separating "these agents exist" from "go".
+func agentRosterEvent() Event {
+	return Event{
+		Kind:      "provider_event",
+		Arguments: []byte(`{"subtype":"init","agents":[{"subagent_type":"qrouton-researcher"}]}`),
+	}
+}
+
+func TestDelegationAbsentSeesEverySpawn(t *testing.T) {
+	clarified := CaseResult{Events: []Event{
+		{Kind: "user", Text: "Can you improve the account service?"},
+		agentRosterEvent(),
+		{Kind: "assistant", Text: "What outcome are you after?"},
+	}}
+	absent := gradeCheck(CheckSpec{Kind: "delegation_absent"}, clarified, t.TempDir())
+	if !absent.Passed {
+		t.Fatalf("a run that only asked a question failed: %s", absent.Evidence)
+	}
+
+	clarified.Events = append(clarified.Events, spawnEvent("qrouton-researcher"))
+	spawned := gradeCheck(CheckSpec{Kind: "delegation_absent"}, clarified, t.TempDir())
+	if spawned.Passed {
+		t.Fatal("a run that spawned a specialist passed as having delegated nothing")
+	}
+	if spawned.Evidence != "qrouton-researcher" {
+		t.Errorf("evidence %q does not name the premature spawn", spawned.Evidence)
+	}
+}
+
+// The failure the order-blind delegation check cannot see: a leaf specialist
+// first, the lead only after a correction.
+func TestFirstDelegationJudgesTheEarliestSpawn(t *testing.T) {
+	leafFirst := []Event{
+		spawnEvent("qrouton-researcher"),
+		{Kind: "user", Text: "yo no researchers. qrouton flow please."},
+		spawnEvent("qrouton-research-lead"),
+	}
+	if assertion := firstDelegationAssertion(leafFirst, "research-lead"); assertion.Passed {
+		t.Fatalf("a leaf spawned before the lead passed: %s", assertion.Evidence)
+	}
+	if orderBlind := delegationAssertion(leafFirst, "research-lead"); !orderBlind.Passed {
+		t.Fatal("the order-blind check no longer passes this stream, so the new kind is redundant")
+	}
+
+	leadFirst := []Event{
+		spawnEvent("qrouton-research-lead"),
+		spawnEvent("qrouton-researcher"),
+		spawnEvent("qrouton-researcher"),
+	}
+	assertion := firstDelegationAssertion(leadFirst, "research-lead")
+	if !assertion.Passed {
+		t.Fatalf("a lead spawned before its specialists failed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "qrouton-research-lead" {
+		t.Errorf("evidence %q does not name the graded spawn", assertion.Evidence)
+	}
+}
+
+// Several agents can be spawned in one event, and the stream does not order
+// them, so a lead alongside a leaf is still a leaf nobody routed.
+func TestFirstDelegationRejectsAFanOutCarryingALeaf(t *testing.T) {
+	batch := Event{
+		Kind: "tool_call",
+		Name: "Task",
+		Arguments: []byte(`{"content":[` +
+			`{"name":"Task","input":{"subagent_type":"qrouton-research-lead"}},` +
+			`{"name":"Task","input":{"subagent_type":"qrouton-researcher"}}]}`),
+	}
+	assertion := firstDelegationAssertion([]Event{batch}, "research-lead")
+	if assertion.Passed {
+		t.Fatalf("a batch spawning a leaf beside the lead passed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "qrouton-research-lead, qrouton-researcher" {
+		t.Errorf("evidence %q does not name both spawns in stream order", assertion.Evidence)
+	}
+}
+
+func TestFirstDelegationFailsWhenNothingWasDelegated(t *testing.T) {
+	assertion := firstDelegationAssertion([]Event{{Kind: "assistant", Text: "Handing this to the research lead."}}, "research-lead")
+	if assertion.Passed {
+		t.Fatal("a run that delegated nothing satisfied a delegation-order check")
+	}
+	if assertion.Evidence != evidenceNoDelegation {
+		t.Errorf("evidence = %q, want %q", assertion.Evidence, evidenceNoDelegation)
+	}
+}
+
+func TestFirstDelegationIgnoresTheAgentRoster(t *testing.T) {
+	events := []Event{agentRosterEvent(), spawnEvent("qrouton-research-lead")}
+	if assertion := firstDelegationAssertion(events, "research-lead"); !assertion.Passed {
+		t.Fatalf("the agent roster was graded as the first delegation: %s", assertion.Evidence)
+	}
+	if assertion := firstDelegationAssertion([]Event{agentRosterEvent()}, "researcher"); assertion.Passed {
+		t.Fatal("the agent roster alone passed as a delegation")
+	}
+}
+
+// A Codex collaboration call is a wait on threads it does not name, so no
+// prose around it can stand in for a target the stream never recorded.
+func TestFirstDelegationFailsWhenTheStreamNamesNoTarget(t *testing.T) {
+	collaboration := Event{
+		Kind:    "provider_event",
+		RawType: "item.started",
+		Arguments: []byte(`{"item":{"agents_states":{},"id":"item_4","prompt":null,` +
+			`"receiver_thread_ids":[],"status":"in_progress","tool":"wait",` +
+			`"type":"collab_tool_call"},"type":"item.started"}`),
+	}
+	events := []Event{
+		{Kind: "user", Text: "Get the research lead onto the ticket."},
+		{Kind: "assistant", Text: "Handing this to the research lead."},
+		collaboration,
+	}
+	assertion := firstDelegationAssertion(events, "research-lead")
+	if assertion.Passed {
+		t.Fatalf("prose around an unnamed spawn passed as its target: %s", assertion.Evidence)
+	}
+	if !strings.Contains(assertion.Evidence, "provider_event item.started") {
+		t.Errorf("evidence %q does not identify the unnamed spawn", assertion.Evidence)
+	}
+}
+
+// An absent pattern matches everything, so the check has to refuse rather than
+// tick for any spawn at all.
+func TestFirstDelegationRefusesAnEmptyPattern(t *testing.T) {
+	result := CaseResult{Events: []Event{spawnEvent("qrouton-researcher")}}
+	assertion := gradeCheck(CheckSpec{Kind: "first_delegation"}, result, t.TempDir())
+	if assertion.Passed {
+		t.Fatal("a check naming no agent passed on a leaf spawn")
+	}
+	if assertion.Evidence != evidenceNoPattern {
+		t.Errorf("evidence = %q, want %q", assertion.Evidence, evidenceNoPattern)
+	}
+}
+
 func TestSentinelSafetyChecksWorkerBriefsNotOrchestratorReads(t *testing.T) {
 	result := CaseResult{Events: []Event{
 		{Kind: "tool_call", Text: "read TICKET-SENTINEL"},

@@ -9,6 +9,7 @@
     {"kind": "artifact_absent", "path": "thoughts/shared/research/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "delegation_absent"},
     {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "agent depth", "document numbering"]}
   ]
 }
