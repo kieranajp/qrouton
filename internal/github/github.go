@@ -28,6 +28,18 @@ type Repo struct {
 	PushedAt      time.Time `json:"pushed_at"`
 }
 
+type apiRepo struct {
+	Repo
+	Owner struct {
+		Login string `json:"login"`
+	} `json:"owner"`
+}
+
+type repoEndpoint struct {
+	url         string
+	filterOwner bool
+}
+
 // OwnerRepos is one owner's cached repositories and the moment they were
 // fetched. Each owner carries its own timestamp so an owner qrouton failed to
 // reach never presents as freshly fetched.
@@ -259,10 +271,10 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 		return nil, fmt.Errorf("github: identifying %s: %w", owner, err)
 	}
 
-	var endpoint string
+	var endpoints []repoEndpoint
 	switch identity.Type {
 	case ownerTypeOrganization:
-		endpoint = githubAPIBase + orgsPath + url.PathEscape(owner) + reposPath + orgReposQuery
+		endpoints = []repoEndpoint{{url: githubAPIBase + orgsPath + url.PathEscape(owner) + reposPath + orgReposQuery}}
 	case ownerTypeUser:
 		if *authenticatedLogin == "" {
 			login, err := AuthenticatedLogin(ctx, client, token)
@@ -272,31 +284,45 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 			*authenticatedLogin = login
 		}
 		if strings.EqualFold(owner, *authenticatedLogin) {
-			endpoint = githubAPIBase + userReposQuery
+			endpoints = []repoEndpoint{{url: githubAPIBase + userReposQuery}}
 		} else {
-			endpoint = githubAPIBase + usersPath + url.PathEscape(owner) + reposPath + otherUserQuery
+			endpoints = []repoEndpoint{
+				{url: githubAPIBase + usersPath + url.PathEscape(owner) + reposPath + otherUserQuery},
+				{url: githubAPIBase + collaboratorReposQuery, filterOwner: true},
+			}
 		}
 	default:
 		return nil, unsupportedOwnerType(identity.Type, owner)
 	}
 
 	var repos []Repo
-	for page := 1; ; page++ {
-		separator := querySeparator
-		if !strings.Contains(endpoint, queryStart) {
-			separator = queryStart
-		}
-		var batch []Repo
-		requestURL := fmt.Sprintf(paginationQuery, endpoint, separator, pageSize, page)
-		if err := githubJSON(ctx, client, token, requestURL, &batch); err != nil {
-			return nil, fmt.Errorf("github: listing %s repos (page %d): %w", owner, page, err)
-		}
-		for i := range batch {
-			batch[i].Org = owner
-		}
-		repos = append(repos, batch...)
-		if len(batch) < pageSize {
-			break
+	seen := map[string]bool{}
+	for _, endpoint := range endpoints {
+		for page := 1; ; page++ {
+			separator := querySeparator
+			if !strings.Contains(endpoint.url, queryStart) {
+				separator = queryStart
+			}
+			var batch []apiRepo
+			requestURL := fmt.Sprintf(paginationQuery, endpoint.url, separator, pageSize, page)
+			if err := githubJSON(ctx, client, token, requestURL, &batch); err != nil {
+				return nil, fmt.Errorf("github: listing %s repos (page %d): %w", owner, page, err)
+			}
+			for _, fetched := range batch {
+				if endpoint.filterOwner && !strings.EqualFold(fetched.Owner.Login, owner) {
+					continue
+				}
+				repo := fetched.Repo
+				repo.Org = owner
+				key := strings.ToLower(repo.Name)
+				if !seen[key] {
+					repos = append(repos, repo)
+					seen[key] = true
+				}
+			}
+			if len(batch) < pageSize {
+				break
+			}
 		}
 	}
 	return repos, nil

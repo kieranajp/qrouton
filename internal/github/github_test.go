@@ -166,6 +166,43 @@ func TestFetchOwnerReposUsesAuthenticatedEndpointForPersonalOwner(t *testing.T) 
 	}
 }
 
+func TestFetchOwnerReposIncludesCollaboratorReposForAnotherPersonalOwner(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/users/edelarose": `{"login":"edelarose","type":"User"}`,
+		"/user":            `{"login":"kieranajp"}`,
+		"/users/edelarose/repos?type=owner&per_page=100&page=1": `[
+			{"name":"public-repo","ssh_url":"git@example/public","owner":{"login":"edelarose"}}
+		]`,
+		"/user/repos?affiliation=collaborator&visibility=all&per_page=100&page=1": `[
+			{"name":"bottle-tonight","ssh_url":"git@example/bottle","owner":{"login":"edelarose"}},
+			{"name":"public-repo","ssh_url":"git@example/public","owner":{"login":"edelarose"}},
+			{"name":"someone-elses","ssh_url":"git@example/other","owner":{"login":"other"}}
+		]`,
+	}, &paths)
+
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+	login := ""
+	repos, err := fetchOwnerRepos(context.Background(), client, "token", "edelarose", &login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := repoIDs(repos); !reflect.DeepEqual(got, []string{"edelarose/public-repo", "edelarose/bottle-tonight"}) {
+		t.Fatalf("repos = %#v, want the owner's public and collaborator repositories", got)
+	}
+	wantPaths := []string{
+		"/users/edelarose",
+		"/user",
+		"/users/edelarose/repos?type=owner&per_page=100&page=1",
+		"/user/repos?affiliation=collaborator&visibility=all&per_page=100&page=1",
+	}
+	if got := paths.snapshot(); !reflect.DeepEqual(got, wantPaths) {
+		t.Fatalf("requests = %#v, want %#v", got, wantPaths)
+	}
+}
+
 func TestFetchOwnerReposUsesOrganizationEndpoint(t *testing.T) {
 	var paths requestPaths
 	client := githubTestClient(t, map[string]string{
