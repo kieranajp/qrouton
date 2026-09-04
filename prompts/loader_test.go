@@ -31,6 +31,7 @@ var embeddedPromptIDs = []string{
 	"skills/qrouton-development",
 	"skills/qrouton-evals",
 	"skills/qrouton-review",
+	"skills/qrouton-slides",
 	"skills/qrspi-implement",
 	"skills/qrspi-plan",
 	"skills/qrspi-questions",
