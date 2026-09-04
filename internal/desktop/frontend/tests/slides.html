@@ -1,0 +1,60 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Slides pane fixture</title>
+    <style>
+      :root {
+        --surface-app: #24273a;
+        --surface-chrome: #1e2030;
+        --surface-terminal: #181926;
+        --surface-raised: #363a4f;
+        --text-primary: #cad3f5;
+        --text-secondary: #a5adcb;
+        --text-muted: #8087a2;
+        --text-faint: #6e738d;
+        --text-on-accent: #181926;
+        --accent-action: #8aadf4;
+        --accent-label: #eed49f;
+        --accent-literal: #7dc4e4;
+        --state-success: #a6da95;
+        --state-warning: #f5a97f;
+        --artifact-note: #f0c6c6;
+        --border-subtle: #363a4f;
+        --border-default: #5b6078;
+        --border-accent: #8aadf4;
+        --border-width: 1px;
+        --radius: 0;
+        --shadow-cube: 3px 3px 0 #363a4f;
+        --terminal: 13px/1.55 Menlo, monospace;
+        --ctp-base: #24273a;
+        --ctp-mantle: #1e2030;
+        --ctp-crust: #181926;
+        --ctp-surface-0: #363a4f;
+        --ctp-surface-1: #494d64;
+        --ctp-surface-2: #5b6078;
+        --ctp-overlay-0: #6e738d;
+        --ctp-overlay-1: #8087a2;
+        --ctp-subtext-0: #a5adcb;
+        --ctp-text: #cad3f5;
+        --ctp-blue: #8aadf4;
+        --ctp-lavender: #b7bdf8;
+        --ctp-sapphire: #7dc4e4;
+        --ctp-sky: #91d7e3;
+        --ctp-teal: #8bd5ca;
+        --ctp-green: #a6da95;
+        --ctp-yellow: #eed49f;
+        --ctp-peach: #f5a97f;
+        --ctp-red: #ed8796;
+        --ctp-mauve: #c6a0f6;
+      }
+
+      body { margin: 0; background: var(--surface-app); }
+      #fixture { display: flex; flex-direction: column; width: min(900px, 100vw); height: 100vh; }
+    </style>
+  </head>
+  <body>
+    <main id="fixture"></main>
+    <script type="module" src="./slides-fixture.js"></script>
+  </body>
+</html>
