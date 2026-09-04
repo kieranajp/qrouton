@@ -67,6 +67,7 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 	handoff := handoffSection(dir)
 
 	var links []assetLink
+	seenLinks := make(map[string]bool)
 	for _, prompt := range loaded {
 		rendered, err := Render(prompt)
 		if err != nil {
@@ -74,7 +75,13 @@ func Stamp(ctx context.Context, dir string, loader PromptLoader, primary string)
 		}
 		for _, asset := range rendered {
 			destination, assetLinks := assetDestination(dir, canonical, asset.Path, primary)
-			links = append(links, assetLinks...)
+			for _, link := range assetLinks {
+				if seenLinks[link.link] {
+					continue
+				}
+				seenLinks[link.link] = true
+				links = append(links, link)
+			}
 			if err := ensureAssetOurs(canonical, destination); err != nil {
 				return err
 			}
@@ -121,10 +128,11 @@ func assetDestination(dir, canonical, assetPath, primary string) (string, []asse
 
 	case strings.HasPrefix(assetPath, skillsPathPrefix):
 		destination := filepath.Join(canonical, filepath.FromSlash(assetPath))
-		skillRel := filepath.FromSlash(strings.TrimPrefix(assetPath, skillsPathPrefix))
+		skillName, _, _ := strings.Cut(strings.TrimPrefix(assetPath, skillsPathPrefix), "/")
+		skillDir := filepath.Join(canonical, skillsDirName, skillName)
 		return destination, []assetLink{
-			{link: filepath.Join(dir, claudeSkillsDir, skillsDirName, skillRel), target: destination},
-			{link: filepath.Join(dir, agentsSkillsDir, skillsDirName, skillRel), target: destination},
+			{link: filepath.Join(dir, claudeSkillsDir, skillsDirName, skillName), target: skillDir},
+			{link: filepath.Join(dir, agentsSkillsDir, skillsDirName, skillName), target: skillDir},
 		}
 
 	default:

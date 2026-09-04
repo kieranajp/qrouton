@@ -97,25 +97,42 @@ func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
 	}
 }
 
+// Codex will not follow a symlinked SKILL.md, only a symlinked skill folder, so
+// each skill links once at its folder rather than once per file inside it.
 func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
 	dir := t.TempDir()
 	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
 		t.Fatal(err)
 	}
+	var skills []string
+	for _, id := range embeddedPromptIDs {
+		if name, ok := strings.CutPrefix(id, skillIDPrefix); ok {
+			skills = append(skills, name)
+		}
+	}
 	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
-		for _, name := range []string{"qrouton-development", "qrouton-evals", "qrouton-review"} {
-			entry := filepath.Join(dir, root, skillsDirName, name, skillFileName)
-			info, err := os.Lstat(entry)
+		for _, name := range skills {
+			skillLink := filepath.Join(dir, root, skillsDirName, name)
+			info, err := os.Lstat(skillLink)
 			if err != nil || info.Mode()&os.ModeSymlink == 0 {
-				t.Fatalf("%s is not a stamped discovery link: %v", entry, err)
+				t.Fatalf("%s is not a stamped discovery link: %v", skillLink, err)
 			}
-			content, err := os.ReadFile(entry)
+			content, err := os.ReadFile(filepath.Join(skillLink, skillFileName))
 			if err != nil {
 				t.Fatal(err)
 			}
 			if !strings.Contains(string(content), "name: "+name) || !strings.Contains(string(content), MarkerText) {
-				t.Fatalf("%s does not resolve to marked skill content:\n%s", entry, content)
+				t.Fatalf("%s does not resolve to marked skill content:\n%s", skillLink, content)
 			}
+		}
+
+		reference := filepath.Join(dir, root, skillsDirName, "qrspi-plan", "references", "plan-shape.md")
+		content, err := os.ReadFile(reference)
+		if err != nil {
+			t.Fatalf("%s does not resolve through the skill folder link: %v", reference, err)
+		}
+		if !strings.Contains(string(content), "### Verify") {
+			t.Fatalf("%s did not resolve to the plan shape reference:\n%s", reference, content)
 		}
 	}
 }
@@ -304,11 +321,12 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
-		reference := filepath.Join(dir, root, skillsDirName, "folder", "references", "detail.md")
-		info, err := os.Lstat(reference)
+		skillLink := filepath.Join(dir, root, skillsDirName, "folder")
+		info, err := os.Lstat(skillLink)
 		if err != nil || info.Mode()&os.ModeSymlink == 0 {
-			t.Fatalf("%s is not a symlink: %v", reference, err)
+			t.Fatalf("%s is not a symlink: %v", skillLink, err)
 		}
+		reference := filepath.Join(skillLink, "references", "detail.md")
 		content, err := os.ReadFile(reference)
 		if err != nil {
 			t.Fatal(err)
