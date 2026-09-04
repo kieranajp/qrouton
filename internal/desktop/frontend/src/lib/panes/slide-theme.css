@@ -1,6 +1,283 @@
 /* @theme qrouton */
 
+@size 16:9 1280px 720px;
+
+/* A slide is drawn at 1280x720 and scaled to the pane, so its type is sized in
+   slide pixels. Every colour and face is the app's own. */
 :root {
+  --slide-gap: 26px;
+  --slide-rule: 1px solid var(--border-subtle);
+  --slide-accent-width: 5px;
+
   background: var(--surface-app);
+  color: var(--text-secondary);
+  font-family: var(--font-machine);
+  font-size: 26px;
+  font-weight: 400;
+  line-height: 1.6;
+  padding: 56px 72px;
+}
+
+section h1,
+section h2,
+section h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
   color: var(--text-primary);
+  margin: 0 0 0.4em;
+}
+
+section h1 {
+  font-size: 54px;
+}
+
+section h2 {
+  font-size: 40px;
+}
+
+section h3 {
+  font-size: 28px;
+}
+
+section p,
+section ul,
+section ol {
+  margin: 0 0 0.7em;
+}
+
+section li {
+  margin: 0.3em 0;
+}
+
+section li::marker {
+  color: var(--accent-action);
+}
+
+section strong {
+  font-weight: 700;
+  color: var(--accent-label);
+}
+
+section em {
+  color: var(--text-muted);
+}
+
+section a {
+  color: var(--accent-action);
+}
+
+section code {
+  font-family: var(--font-machine);
+  font-size: 0.88em;
+  color: var(--accent-literal);
+  background: var(--surface-raised);
+  padding: 0.08em 0.32em;
+}
+
+section pre {
+  font-size: 20px;
+  line-height: 1.5;
+  background: var(--surface-terminal);
+  border: var(--slide-rule);
+  padding: 20px 24px;
+  overflow: hidden;
+}
+
+section pre code {
+  background: none;
+  color: var(--text-secondary);
+  padding: 0;
+}
+
+section blockquote {
+  margin: 0 0 0.7em;
+  padding: 20px 32px;
+  background: var(--surface-chrome);
+  border-left: var(--slide-accent-width) solid var(--accent-label);
+  color: var(--text-primary);
+}
+
+section table {
+  border-collapse: collapse;
+  font-size: 22px;
+  width: 100%;
+}
+
+section th,
+section td {
+  border-bottom: var(--slide-rule);
+  padding: 0.4em 0.8em 0.4em 0;
+  text-align: left;
+}
+
+section th {
+  font-family: var(--font-instruction);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* Layouts. content is the default and needs no selector; the other three are
+   chosen with a _class directive. */
+
+section.title,
+section.statement {
+  background: var(--surface-terminal);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+section.title h1 {
+  font-size: 76px;
+}
+
+section.title h2 {
+  font-family: var(--font-machine);
+  font-weight: 400;
+  font-size: 30px;
+  letter-spacing: 0;
+  color: var(--accent-label);
+}
+
+section.statement h1 {
+  font-size: 62px;
+  color: var(--accent-label);
+}
+
+section.statement p {
+  font-size: 30px;
+  color: var(--text-muted);
+}
+
+section.alt {
+  background: var(--surface-chrome);
+}
+
+/* Components, which compose inside any layout. */
+
+section .cols {
+  display: flex;
+  gap: 44px;
+  align-items: stretch;
+  margin: 0 0 0.7em;
+}
+
+section .cols > * {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+section .cols.wide-left > :first-child,
+section .cols.wide-right > :last-child {
+  flex: 1.9 1 0;
+}
+
+section .shot {
+  margin: 0 0 0.7em;
+  text-align: center;
+}
+
+section .shot img,
+section .shot video {
+  max-width: 100%;
+  max-height: 400px;
+  border: var(--slide-rule);
+}
+
+section .shot figcaption {
+  margin-top: 12px;
+  font-family: var(--font-instruction);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+section .cards {
+  display: flex;
+  gap: var(--slide-gap);
+  margin: 0 0 0.7em;
+}
+
+section .cards > * {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 22px 24px;
+  background: var(--surface-raised);
+  border: var(--slide-rule);
+  font-size: 22px;
+}
+
+section .cards > .accent {
+  background: var(--accent-label);
+  border-color: var(--accent-label);
+  color: var(--text-on-accent);
+}
+
+section .cards > .accent strong {
+  color: var(--text-on-accent);
+}
+
+section .callout {
+  margin: 0 0 0.7em;
+  padding: 18px 26px;
+  font-size: 23px;
+  color: var(--text-secondary);
+  background: var(--surface-chrome);
+  border: var(--slide-rule);
+  border-left: var(--slide-accent-width) solid var(--border-default);
+}
+
+section .callout.note {
+  border-left-color: var(--accent-literal);
+}
+
+section .callout.good {
+  border-left-color: var(--state-success);
+}
+
+section .callout.warn {
+  border-left-color: var(--state-waiting);
+}
+
+section .note:not(.callout) {
+  font-size: 21px;
+  color: var(--text-muted);
+}
+
+/* Pagination and the header and footer directives write into. */
+
+section::after {
+  font-family: var(--font-machine);
+  font-size: 16px;
+  color: var(--text-faint);
+  padding: 34px 44px;
+}
+
+section > header,
+section > footer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  padding: 34px 72px;
+  font-family: var(--font-instruction);
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+section > header {
+  top: 0;
+}
+
+section > footer {
+  bottom: 0;
 }
