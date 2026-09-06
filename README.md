@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS</strong></a>
+  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS and Ubuntu</strong></a>
 </p>
 
 <p align="center">
@@ -103,6 +103,49 @@ identifier to seed it with. Linear Desktop can hand an issue straight to qrouton
 through **Work on issue**, and `qrouton --ticket <url>` does the same for any of
 the three from a terminal. Reopen a session weeks later and the repos, branches,
 mode and agent conversation come back.
+
+## Ubuntu installation
+
+The Debian package supports **Ubuntu 24.04 on amd64 (x86-64)**. Download the
+`.deb` and `checksums-linux-amd64.txt` from the same
+[GitHub release](https://github.com/kieranajp/qrouton/releases/latest). In their
+download directory, replace the example version below with the downloaded version:
+
+```sh
+sha256sum -c checksums-linux-amd64.txt
+package=./qrouton_1.2.3_amd64.deb
+sudo apt-get update
+sudo apt-get satisfy -y "$(dpkg-deb --field "$package" Depends)"
+sudo dpkg -i "$package"
+```
+
+`dpkg -i` needs the declared dependencies installed first. As a convenience,
+`sudo apt install ./qrouton_1.2.3_amd64.deb` resolves and installs them together
+with qrouton. Launch **qrouton** from the application menu or run `qrouton` in a
+terminal. To check the installed package version, run `dpkg-query -W qrouton`.
+
+Install a supported agent CLI separately: Claude Code, Codex CLI, or OpenCode.
+Application-menu launches inherit the desktop's `PATH`, so the CLI must be
+available there. GitHub authentication accepts `GITHUB_TOKEN`; the `gh` CLI is
+optional. Finder reveal and Linear Desktop integration are unsupported on
+Ubuntu. Native window decoration may appear alongside qrouton's own chrome.
+
+## Building the Ubuntu package
+
+Build natively on Ubuntu 24.04 amd64 with the Go version in `go.mod` and Node 22:
+
+```sh
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev dpkg-dev desktop-file-utils
+make deb VERSION=v1.2.3
+(cd dist && sha256sum -c checksums-linux-amd64.txt)
+```
+
+This builds the frontend and writes `dist/qrouton_1.2.3_amd64.deb` plus
+`dist/checksums-linux-amd64.txt`. A leading `v` is optional. With Docker running,
+`make deb-check VERSION=v1.2.3` also checks package contents and tests installation,
+reinstallation, and removal in a fresh Ubuntu container. It does not install
+qrouton on the build host; its display-free `--help` check does not verify the GUI.
 
 Building, testing, configuring and releasing this thing are documented in
 [`AGENTS.md`](./AGENTS.md), for the agent. Prompt sources live in

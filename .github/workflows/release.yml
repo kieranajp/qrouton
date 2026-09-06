@@ -8,6 +8,34 @@ permissions:
   contents: write
 
 jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    env:
+      RELEASE_VERSION: ${{ github.event.release.tag_name }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.release.tag_name }}
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: internal/desktop/frontend/package-lock.json
+      - run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev dpkg-dev desktop-file-utils
+      - name: Build and verify Ubuntu package
+        run: make deb-check VERSION="$RELEASE_VERSION"
+      - name: Upload Linux release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=${RELEASE_VERSION#v}
+          gh release upload "$RELEASE_VERSION" \
+            "dist/qrouton_${version}_amd64.deb" \
+            dist/checksums-linux-amd64.txt --clobber
+
   release:
     runs-on: macos-latest
     env:
