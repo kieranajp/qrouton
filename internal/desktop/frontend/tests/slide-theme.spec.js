@@ -49,6 +49,9 @@ test("each component carries its own border or ground", async ({ page }) => {
   expect((await style(page, ".cards > :not(.accent)")).background).toBe(SURFACE_RAISED);
   expect((await style(page, ".cards > .accent")).background).toBe(ACCENT_LABEL);
   expect((await style(page, ".cards > .accent")).color).toBe(TEXT_ON_ACCENT);
+  expect((await style(page, ".cards > .accent h3")).color).toBe(TEXT_ON_ACCENT);
+  expect((await style(page, ".cards > .accent strong")).color).toBe(TEXT_ON_ACCENT);
+  expect((await style(page, ".cards > .accent code")).color).toBe(TEXT_ON_ACCENT);
 
   expect((await style(page, ".callout:not(.note):not(.good):not(.warn)")).edge).toBe(BORDER_DEFAULT);
   expect((await style(page, ".callout.note")).edge).toBe(ACCENT_LITERAL);

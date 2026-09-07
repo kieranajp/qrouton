@@ -28,7 +28,7 @@ Body copy on the default layout.
 
 <figure class="shot"><img src="/nothing.png"><figcaption>caption</figcaption></figure>
 
-<div class="cards"><div>plain</div><div class="accent">accent</div></div>
+<div class="cards"><div>plain</div><div class="accent"><h3>accent</h3><p><strong>bold</strong> and <code>code</code></p></div></div>
 
 <div class="callout">plain</div>
 <div class="callout note">note</div>
