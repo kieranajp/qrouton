@@ -13,10 +13,11 @@ import (
 // gh is the GitHub work a refresh does, as fields so a test drives the rules
 // without a token or a network.
 type gh struct {
-	token func() (string, error)
-	all   func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg
-	one   func(ctx context.Context, token, owner string) ([]github.Repo, error)
-	cache func(orgs []string, repos []github.Repo) error
+	token    func() (string, error)
+	all      func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg
+	one      func(ctx context.Context, token, owner string) ([]github.Repo, error)
+	branches func(ctx context.Context, token, owner, name string) ([]string, error)
+	cache    func(orgs []string, repos []github.Repo) error
 }
 
 func liveGitHub() gh {
@@ -27,6 +28,11 @@ func liveGitHub() gh {
 		},
 		one: func(ctx context.Context, token, owner string) ([]github.Repo, error) {
 			return github.RefreshOwnerRepos(ctx, http.DefaultClient, token, owner)
+		},
+		branches: func(ctx context.Context, token, owner, name string) ([]string, error) {
+			ctx, cancel := context.WithTimeout(ctx, branchListTimeout)
+			defer cancel()
+			return github.ListBranches(ctx, http.DefaultClient, token, owner, name)
 		},
 		cache: github.WriteRepoCache,
 	}
@@ -41,9 +47,13 @@ type Repositories struct {
 	repos []github.Repo
 	// errs is the last attempt's outcome per owner, which is what makes one
 	// button serve refresh and retry both.
-	errs   map[string]error
-	gen    int
-	cancel context.CancelFunc
+	errs map[string]error
+	// branchLists is this workbench's memo of what a repository's branches are,
+	// held only in memory: the on-disk repository cache is owner-keyed and
+	// version-gated, so a branch list has no business in it.
+	branchLists map[string]branchList
+	gen         int
+	cancel      context.CancelFunc
 	// done reports a run's end, so a test can wait on one.
 	done func(generation int)
 }
@@ -83,6 +93,80 @@ func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 		out = append(out, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role), Base: base})
 	}
 	return out
+}
+
+// Branches names what a repository's work can be cut from, the default branch
+// first. A failure arrives inside the payload rather than as a Go error, and is
+// not memoised, so an unreachable GitHub leaves the menu the default branch to
+// offer and the next open tries again.
+func (r *Repositories) Branches(id string) branchList {
+	repo, ok := r.byID(id)
+	if !ok {
+		return branchList{}
+	}
+	if memo, ok := r.memoisedBranches(id); ok {
+		return memo
+	}
+	list, ok := r.fetchBranches(repo)
+	if ok {
+		r.memoiseBranches(id, list)
+	}
+	return list
+}
+
+func (r *Repositories) fetchBranches(repo github.Repo) (branchList, bool) {
+	fallback := branchList{Default: repo.DefaultBranch, Branches: defaultFirst(nil, repo.DefaultBranch)}
+	token, err := r.gh.token()
+	if err != nil {
+		fallback.Error = errorText(err)
+		return fallback, false
+	}
+	names, err := r.gh.branches(context.Background(), token, repo.Org, repo.Name)
+	if err != nil {
+		fallback.Error = errorText(err)
+		return fallback, false
+	}
+	return branchList{Default: repo.DefaultBranch, Branches: defaultFirst(names, repo.DefaultBranch)}, true
+}
+
+// defaultFirst heads the list with the default branch and keeps every other
+// name once, so the branch a session would take anyway is the first offered.
+func defaultFirst(names []string, defaultBranch string) []string {
+	out := make([]string, 0, len(names)+1)
+	if defaultBranch != "" {
+		out = append(out, defaultBranch)
+	}
+	for _, name := range names {
+		if name != defaultBranch {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+func (r *Repositories) byID(id string) (github.Repo, bool) {
+	for _, repo := range r.Cached() {
+		if repo.ID() == id {
+			return repo, true
+		}
+	}
+	return github.Repo{}, false
+}
+
+func (r *Repositories) memoisedBranches(id string) (branchList, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	list, ok := r.branchLists[id]
+	return list, ok
+}
+
+func (r *Repositories) memoiseBranches(id string, list branchList) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.branchLists == nil {
+		r.branchLists = map[string]branchList{}
+	}
+	r.branchLists[id] = list
 }
 
 // Refresh refetches the owners whose last attempt failed if any did, and every

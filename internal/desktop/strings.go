@@ -128,6 +128,10 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
+
+	// branchListTimeout bounds the listing behind a repository row's base menu,
+	// which opens on the default branch and fills in.
+	branchListTimeout = 5 * time.Second
 )
 
 const (
