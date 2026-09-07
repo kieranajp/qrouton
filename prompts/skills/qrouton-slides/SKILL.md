@@ -65,6 +65,9 @@ A plain HTML comment is a speaker note, rendered under its card:
 <!-- Why this slide is here, in a sentence or two. -->
 ```
 
+Present the deck from the pane's Present control and those notes open in a window of their own,
+which the presenter drags to a second display to keep them off a screen share.
+
 An underscore-prefixed comment is a directive to Marp and is not shown: `<!-- _class: title -->`,
 `<!-- _paginate: false -->`.
 

@@ -35,6 +35,7 @@ type fakeRenderer struct {
 	focused map[string]int
 	closed  []string
 	sent    []delivery
+	quits   atomic.Int32
 	quit    bool
 	block   chan struct{}
 	once    sync.Once
@@ -93,6 +94,7 @@ func (f *fakeRenderer) Run() error {
 // Quit tolerates being called twice: the workbench quits itself when its
 // conversation window closes, and the test stops it again on the way out.
 func (f *fakeRenderer) Quit() {
+	f.quits.Add(1)
 	f.once.Do(func() {
 		f.mu.Lock()
 		f.quit = true
@@ -398,6 +400,38 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	defer r.mu.Unlock()
 	if !r.quit {
 		t.Fatal("closing the conversation window left the application running")
+	}
+}
+
+// A second window is not a second thing to shut down: the conversation's own
+// teardown still ends the app, and ends it once.
+func TestQuittingWithTheNotesWindowOpenEndsTheApplicationOnce(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+	presenter := newPresenter(r, r.Emit)
+
+	done := startWorkbench(t, r, term, windows, opts)
+	conversation := <-r.opened
+	shownSession(t, reg)
+	if err := presenter.Open(); err != nil {
+		t.Fatal(err)
+	}
+	<-r.opened
+
+	conversation.OnClose()
+	conversation.OnClose()
+
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := r.quits.Load(); got != 1 {
+		t.Fatalf("the application was told to quit %d times, want once", got)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.quit {
+		t.Fatal("quitting with a notes window open left the application running")
 	}
 }
 

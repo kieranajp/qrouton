@@ -92,11 +92,15 @@ window.reports = [];
 window.diagramReply = [];
 window.pushDeck = (text) => emitWailsEvent("window:content:w1", document_(text));
 window.shows = [];
+window.opens = [];
+window.closes = [];
 window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Content")) return document_(DECK);
   if (name.endsWith(".RenderDiagrams")) return window.diagramReply;
   if (name.endsWith(".ReportViewport")) window.reports.push(args[1]);
   if (name.endsWith(".Show")) window.shows.push(args[0]);
+  if (name.endsWith(".Open")) window.opens.push(name);
+  if (name.endsWith(".Close")) window.closes.push(name);
   return undefined;
 };
 window.pushDiagramDeck = () => {
@@ -170,6 +174,14 @@ window.present = () => {
 };
 
 window.presenting = () => Boolean(document.querySelector(".present"));
+
+window.notes = () => named("Notes").click();
+
+window.notesPressed = () =>
+  document.querySelector(".present-hud [aria-pressed]").getAttribute("aria-pressed");
+
+// The presenter closing the second window from the OS rather than from the deck.
+window.closeNotesWindow = () => emitWailsEvent("presenter:closed", null);
 
 window.presentIndex = () => document.querySelector(".present-counter").textContent.trim();
 

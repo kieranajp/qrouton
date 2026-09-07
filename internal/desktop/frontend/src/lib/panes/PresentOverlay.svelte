@@ -27,6 +27,9 @@
     const off = Events.On(PRESENTER_CLOSED_EVENT, () => (notes = false));
     return () => {
       off?.();
+      // Leaving the presentation takes the notes window with it, whether the
+      // presenter pressed Escape or the deck stopped being drawn.
+      call(Call.ByName(PRESENTER_CLOSE));
       beneath?.focus?.();
     };
   });

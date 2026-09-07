@@ -104,6 +104,41 @@ test("leaving the deck tab leaves the presentation", async ({ page }) => {
   await expect(page.locator(".present")).toHaveCount(0);
 });
 
+test("the Notes control opens the second window and follows it closing", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.evaluate(() => window.notes());
+  await page.waitForFunction(() => window.opens.length === 1);
+  await expect(page.locator(".present-hud [aria-pressed]")).toHaveAttribute("aria-pressed", "true");
+
+  await page.evaluate(() => window.closeNotesWindow());
+  await expect(page.locator(".present-hud [aria-pressed]")).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".present")).toHaveCount(1);
+  expect(await page.evaluate(() => window.closes.length)).toBe(0);
+});
+
+test("leaving the presentation takes the notes window with it", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.evaluate(() => window.notes());
+  await page.waitForFunction(() => window.opens.length === 1);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".present")).toHaveCount(0);
+  await page.waitForFunction(() => window.closes.length === 1);
+});
+
+test("deactivating the deck closes the notes window too", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.evaluate(() => window.notes());
+  await page.waitForFunction(() => window.opens.length === 1);
+
+  await page.evaluate(() => window.deactivate());
+  await expect(page.locator(".present")).toHaveCount(0);
+  await page.waitForFunction(() => window.closes.length === 1);
+});
+
 test("find declines to open behind the presentation", async ({ page }) => {
   await open(page);
   await start(page);
