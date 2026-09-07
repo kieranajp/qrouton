@@ -248,7 +248,7 @@ func spawnEvent(agent string) Event {
 func agentRosterEvent() Event {
 	return Event{
 		Kind:      "provider_event",
-		Arguments: []byte(`{"subtype":"init","agents":[{"subagent_type":"qrouton-researcher"}]}`),
+		Arguments: []byte(`{"subtype":"init","agents":[{"subagent_type":"codebase-researcher"}]}`),
 	}
 }
 
@@ -263,12 +263,12 @@ func TestDelegationAbsentSeesEverySpawn(t *testing.T) {
 		t.Fatalf("a run that only asked a question failed: %s", absent.Evidence)
 	}
 
-	clarified.Events = append(clarified.Events, spawnEvent("qrouton-researcher"))
+	clarified.Events = append(clarified.Events, spawnEvent("codebase-researcher"))
 	spawned := gradeCheck(CheckSpec{Kind: "delegation_absent"}, clarified, t.TempDir())
 	if spawned.Passed {
 		t.Fatal("a run that spawned a specialist passed as having delegated nothing")
 	}
-	if spawned.Evidence != "qrouton-researcher" {
+	if spawned.Evidence != "codebase-researcher" {
 		t.Errorf("evidence %q does not name the premature spawn", spawned.Evidence)
 	}
 }
@@ -277,7 +277,7 @@ func TestDelegationAbsentSeesEverySpawn(t *testing.T) {
 // first, the lead only after a correction.
 func TestFirstDelegationJudgesTheEarliestSpawn(t *testing.T) {
 	leafFirst := []Event{
-		spawnEvent("qrouton-researcher"),
+		spawnEvent("codebase-researcher"),
 		{Kind: "user", Text: "yo no researchers. qrouton flow please."},
 		spawnEvent("qrouton-research-lead"),
 	}
@@ -290,8 +290,8 @@ func TestFirstDelegationJudgesTheEarliestSpawn(t *testing.T) {
 
 	leadFirst := []Event{
 		spawnEvent("qrouton-research-lead"),
-		spawnEvent("qrouton-researcher"),
-		spawnEvent("qrouton-researcher"),
+		spawnEvent("codebase-researcher"),
+		spawnEvent("codebase-researcher"),
 	}
 	assertion := firstDelegationAssertion(leadFirst, "research-lead")
 	if !assertion.Passed {
@@ -310,13 +310,13 @@ func TestFirstDelegationRejectsAFanOutCarryingALeaf(t *testing.T) {
 		Name: "Task",
 		Arguments: []byte(`{"content":[` +
 			`{"name":"Task","input":{"subagent_type":"qrouton-research-lead"}},` +
-			`{"name":"Task","input":{"subagent_type":"qrouton-researcher"}}]}`),
+			`{"name":"Task","input":{"subagent_type":"codebase-researcher"}}]}`),
 	}
 	assertion := firstDelegationAssertion([]Event{batch}, "research-lead")
 	if assertion.Passed {
 		t.Fatalf("a batch spawning a leaf beside the lead passed: %s", assertion.Evidence)
 	}
-	if assertion.Evidence != "qrouton-research-lead, qrouton-researcher" {
+	if assertion.Evidence != "qrouton-research-lead, codebase-researcher" {
 		t.Errorf("evidence %q does not name both spawns in stream order", assertion.Evidence)
 	}
 }
@@ -368,7 +368,7 @@ func TestFirstDelegationFailsWhenTheStreamNamesNoTarget(t *testing.T) {
 // An absent pattern matches everything, so the check has to refuse rather than
 // tick for any spawn at all.
 func TestFirstDelegationRefusesAnEmptyPattern(t *testing.T) {
-	result := CaseResult{Events: []Event{spawnEvent("qrouton-researcher")}}
+	result := CaseResult{Events: []Event{spawnEvent("codebase-researcher")}}
 	assertion := gradeCheck(CheckSpec{Kind: "first_delegation"}, result, t.TempDir())
 	if assertion.Passed {
 		t.Fatal("a check naming no agent passed on a leaf spawn")
@@ -499,7 +499,7 @@ func TestTurnDelegationSeparatesATruncatedRunFromAnAbsorbedTurn(t *testing.T) {
 }
 
 func TestTurnDelegationRefusesAnUnusableCheck(t *testing.T) {
-	result := CaseResult{Events: []Event{atTurn(2, spawnEvent("qrouton-researcher"))}}
+	result := CaseResult{Events: []Event{atTurn(2, spawnEvent("codebase-researcher"))}}
 
 	noTurn := gradeCheck(CheckSpec{Kind: checkTurnDelegation, Pattern: "lead"}, result, t.TempDir())
 	if noTurn.Passed || noTurn.Evidence != evidenceNoTurn {
