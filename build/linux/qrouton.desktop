@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=qrouton
+Comment=Multi-repo agent workspaces
+Exec=qrouton
+Icon=qrouton
+Terminal=false
+Categories=Development;

@@ -14,7 +14,7 @@ BOUND    := $(wildcard internal/desktop/*.go internal/status/*.go internal/deskt
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
-.PHONY: build eval front front-check comment-check test race vet fmt check app archive dist install uninstall clean
+.PHONY: build eval front front-check comment-check test race vet fmt check app archive dist deb deb-check install uninstall clean
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
@@ -48,6 +48,14 @@ archive:
 
 dist: app
 	$(MAKE) archive
+
+deb:
+	./build/linux/package.sh --check
+	$(MAKE) front
+	./build/linux/package.sh
+
+deb-check: deb
+	@version=$${VERSION#v}; ./build/linux/verify.sh "dist/qrouton_$${version}_amd64.deb"
 
 eval:
 	go build -o $(EVAL) ./cmd/$(EVAL)

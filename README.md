@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS</strong></a>
+  <a href="https://github.com/kieranajp/qrouton/releases/latest"><strong>Download qrouton for macOS and Ubuntu</strong></a>
 </p>
 
 <p align="center">
@@ -103,6 +103,16 @@ identifier to seed it with. Linear Desktop can hand an issue straight to qrouton
 through **Work on issue**, and `qrouton --ticket <url>` does the same for any of
 the three from a terminal. Reopen a session weeks later and the repos, branches,
 mode and agent conversation come back.
+
+## Ubuntu installation
+
+On Ubuntu 24.04 amd64, download the `.deb` from
+[Releases](https://github.com/kieranajp/qrouton/releases/latest), then install it
+with the command below. Replace `<version>` with the downloaded version:
+
+```sh
+sudo apt install ./qrouton_<version>_amd64.deb
+```
 
 Building, testing, configuring and releasing this thing are documented in
 [`AGENTS.md`](./AGENTS.md), for the agent. Prompt sources live in
