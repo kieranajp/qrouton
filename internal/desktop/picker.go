@@ -28,11 +28,10 @@ type requestedRow struct {
 	Upgrade bool   `json:"upgrade"`
 }
 
-// pickerFields is what the picker draws itself from: the branch anything added
-// joins, and the rows the session already holds. Branch is empty for a session
-// with no repositories yet, which is the escalation that acquires its first ones.
-// Requested and Reason are empty for a picker the user opened themselves, which
-// is how the overlay knows not to claim an agent asked for anything.
+// pickerFields is what the picker draws itself from. Branch is empty for a
+// session with no repositories yet; Requested and Reason are empty for a picker
+// the user opened themselves, which is how the overlay knows not to claim an
+// agent asked for anything.
 type pickerFields struct {
 	Branch    string         `json:"branch"`
 	Repos     []heldRepo     `json:"repos"`
@@ -111,11 +110,9 @@ func reasonOf(req *workbench.PickerRequest) string {
 }
 
 // classifyRequests answers each requested repository against the manifest as it
-// stands now, not as it stood when the agent asked: a request can sit for half an
-// hour while the user adds the very repository it wanted. A row the session
-// already holds in the role asked for, or holds for editing at all, is dropped —
-// there is nothing left for the tick to do. An id nothing knows survives as it
-// was asked for, so the banner can still show the user what was missed.
+// stands now, not as it stood when the agent asked. A row already held in the
+// role asked for, or held for editing at all, is dropped; an id nothing knows
+// survives as asked, so the banner can still show the miss.
 func classifyRequests(m session.Manifest, cached []github.Repo, req *workbench.PickerRequest) []requestedRow {
 	if req == nil {
 		return []requestedRow{}
@@ -258,8 +255,6 @@ func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
 	return refs
 }
 
-// root is the session the picker is about, which is only ever one this workbench
-// is running.
 func (p *Picker) root(slug string) (*sessionState, string, error) {
 	state := p.sessions.bySlug(slug)
 	root := state.root()

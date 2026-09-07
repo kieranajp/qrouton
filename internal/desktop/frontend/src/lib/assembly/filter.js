@@ -7,15 +7,9 @@
 /** repoID is the key a repository is known by: the `org/name` Go matches on too. */
 export const repoID = (repo) => repo.org + "/" + repo.name;
 
-/**
- * filter produces the rows step 2 draws and the count above them together, so
- * `6 of 412 shown` cannot disagree with the list under it. The total is the whole
- * cache; only the shown answers to the cap. Pinned ids sort first — they are the
- * session's own repositories, which a cap counted in activity order would
- * otherwise hide behind repos it has never touched.
+/** Pinned repositories sort before the cap so a session cannot hide its own rows.
  * @param {{repos?: Repo[], owners?: string[], query?: string, cap?: number, pinned?: string[]}} [options]
- * @returns {{rows: Row[], shown: number, total: number}}
- */
+ * @returns {{rows: Row[], shown: number, total: number}} */
 export function filter({ repos = [], owners = [], query = "", cap = 0, pinned = [] } = {}) {
   const included = new Set(owners);
   const first = new Set(pinned);

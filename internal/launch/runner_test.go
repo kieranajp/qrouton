@@ -100,12 +100,12 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 	}
 }
 
-func TestLinearPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
+func TestAnExternalPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
 		argv := argvFor(t, runner, false, modeAssistant, "  Fix the login regression.  ")
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
-			!strings.HasSuffix(message, linearRequestSeparator+"Fix the login regression.") {
+			!strings.HasSuffix(message, requestSeparator+"Fix the login regression.") {
 			t.Fatalf("%s opening message = %q", runner.ID, message)
 		}
 	}
@@ -171,6 +171,47 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("Claude launch missing sound hook %q: %v", want, argv)
 		}
+	}
+}
+
+func TestRunnerLaunchNamesClaudeAfterTheQroutonSession(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		manifest string
+		want     string
+	}{
+		{name: "display name", manifest: `{"name":"Checkout slowdown","slug":"checkout-slowdown"}`, want: "Checkout slowdown"},
+		{name: "legacy slug", manifest: `{"slug":"checkout-slowdown"}`, want: "checkout-slowdown"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(sessionpaths.Manifest(dir), []byte(tc.manifest), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, resume := range []bool{false, true} {
+				argv, _, err := runnerLaunch(Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}},
+					"/tmp/qrouton", dir, EditorCommand{}, testHandle(), 7, resume, "")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if i := slices.Index(argv, claudeNameFlag); i < 0 || i+1 == len(argv) || argv[i+1] != tc.want {
+					t.Fatalf("Claude launch name = %#v, want %q", argv, tc.want)
+				}
+			}
+		})
+	}
+}
+
+func TestRunnerLaunchKeepsClaudeInTheSessionRoot(t *testing.T) {
+	t.Setenv(claudeMaintainProjectWorkingDirEnvVar, "0")
+	r := Runner{ID: runnerIDClaude, Command: []string{runnerIDClaude}}
+	_, env, err := runnerLaunch(r, "/tmp/qrouton", "/tmp/session", EditorCommand{}, testHandle(), 7, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := claudeMaintainProjectWorkingDirEnvVar + "=" + claudeMaintainProjectWorkingDirValue
+	if !slices.Contains(env, want) {
+		t.Fatalf("Claude launch environment missing %q: %v", want, env)
 	}
 }
 
@@ -517,7 +558,7 @@ func argvFor(t *testing.T, r Runner, resume bool, mode, initialPrompt string) []
 	if !ok {
 		t.Fatalf("no spec for runner %q", r.ID)
 	}
-	return runnerArgv(spec, r, resume, mode, initialPrompt)
+	return runnerArgv(spec, r, resume, mode, "", initialPrompt)
 }
 
 // ByID answers the runner the caller named, whether that is the identifier, the

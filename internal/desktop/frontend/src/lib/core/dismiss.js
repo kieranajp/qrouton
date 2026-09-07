@@ -1,5 +1,4 @@
 /**
- * dismissible calls close on a press outside node, or on Escape.
  * @param {HTMLElement} node
  * @param {() => void} close
  */

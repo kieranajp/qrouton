@@ -41,14 +41,14 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 			t.Fatalf("orchestrator prompt missing %q", want)
 		}
 	}
-	skill := filepath.Join(dir, ".claude", "skills", "qrspi-questions", "SKILL.md")
-	codexSkill := filepath.Join(dir, ".agents", "skills", "qrspi-questions", "SKILL.md")
-	for _, p := range []string{skill, codexSkill} {
+	skillDir := filepath.Join(dir, ".claude", "skills", "qrspi-questions")
+	codexSkillDir := filepath.Join(dir, ".agents", "skills", "qrspi-questions")
+	for _, p := range []string{skillDir, codexSkillDir} {
 		if info, err := os.Lstat(p); err != nil || info.Mode()&os.ModeSymlink == 0 {
 			t.Fatalf("%s is not a symlink: %v", p, err)
 		}
 	}
-	sb, err := os.ReadFile(skill)
+	sb, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
 	if err != nil {
 		t.Fatal("skill not stamped:", err)
 	}
@@ -56,7 +56,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	if !strings.HasPrefix(string(sb), "---\n") {
 		t.Fatal("marker broke skill frontmatter (must lead with ---)")
 	}
-	if target, _ := os.Readlink(skill); filepath.IsAbs(target) {
+	if target, _ := os.Readlink(skillDir); filepath.IsAbs(target) {
 		t.Fatal("skill link must be relative for portable sessions")
 	}
 	// A skill folder reaches the runner whole, references and all.
@@ -107,8 +107,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 }
 
 func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
-	// Default (no manifest) points discovery at the RPI orchestrator, and the
-	// assistant prompt is still stamped for later escalation.
+	// With no manifest, discovery uses the orchestrator while retaining the assistant prompt.
 	rpi := t.TempDir()
 	if err := StampAssets(rpi); err != nil {
 		t.Fatal(err)
@@ -118,8 +117,7 @@ func TestStampAssetsLinksDiscoveryToSessionMode(t *testing.T) {
 		t.Fatalf("assistant prompt not stamped for escalation: %v", err)
 	}
 
-	// An assistant manifest flips CLAUDE.md/AGENTS.md to the assistant prompt
-	// while the orchestrator stays available under .qrouton.
+	// Assistant mode changes primary discovery while retaining the orchestrator prompt.
 	asst := t.TempDir()
 	if err := os.WriteFile(filepath.Join(asst, "qrouton.json"), []byte(`{"mode":"assistant"}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -159,8 +157,7 @@ func TestStampAssetsFollowsModeRewrittenAfterCreation(t *testing.T) {
 	assertLinkTargetContains(t, filepath.Join(dir, "CLAUDE.md"), "ORCHESTRATOR.md")
 }
 
-// The escalation handoff: a brief at .qrouton/handoff.md rides into the
-// stamped primary discovery file, so a fresh orchestrator starts holding it.
+// An escalation brief is appended to primary discovery for the fresh orchestrator.
 func TestStampAssetsAppendsHandoffBriefToPrimaryDiscovery(t *testing.T) {
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".qrouton"), 0o755); err != nil {
@@ -173,9 +170,9 @@ func TestStampAssetsAppendsHandoffBriefToPrimaryDiscovery(t *testing.T) {
 	if err := StampAssets(dir); err != nil {
 		t.Fatal(err)
 	}
-	// CLAUDE.md still resolves to the primary (no manifest → orchestrator)…
+	// Discovery still resolves to the primary orchestrator prompt.
 	assertLinkTargetContains(t, filepath.Join(dir, "CLAUDE.md"), "ORCHESTRATOR.md")
-	// …and the brief is genuinely inside what the runner discovers.
+	// The linked prompt contains the brief the runner discovers.
 	b, err := os.ReadFile(filepath.Join(dir, "CLAUDE.md"))
 	if err != nil {
 		t.Fatal(err)

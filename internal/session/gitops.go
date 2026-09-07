@@ -28,16 +28,8 @@ func gitOK(args ...string) bool { return exec.Command(gitBin, args...).Run() == 
 // and a bar that silently restarts three times reads as a stuck one.
 var progressPattern = regexp.MustCompile(`([A-Za-z][A-Za-z ]*):\s+(\d+)%`)
 
-// gitSlow runs a long git command (clone, fetch) with its stderr captured
-// rather than sprayed over the terminal. Parsed phase and percentage go to
-// onProgress; a nil onProgress runs the command silently.
-//
-// Two details are load-bearing. Git suppresses progress entirely when stderr
-// is not a terminal, which it no longer is, so verbosityFlag must ask for it
-// explicitly. And stdin stays attached: ssh prompts for a passphrase or an
-// unknown host key on the tty, and swallowing that would turn a prompt into a
-// hang. The captured tail rides along in any error so an auth or host-key
-// failure is still diagnosable.
+// gitSlow requests progress because captured stderr is not a terminal.
+// Stdin stays attached for SSH prompts, and the captured tail diagnoses failures.
 func gitSlow(onProgress func(phase string, percent int), args ...string) error {
 	cmd := exec.Command(gitBin, args...)
 	cmd.Stdin = os.Stdin
@@ -80,12 +72,8 @@ func scanProgress(r io.Reader, onProgress func(phase string, percent int)) strin
 			}
 			if onProgress != nil {
 				if phase, percent, ok := lastProgress(chunk); ok && (phase != lastPhase || percent != lastPercent) {
-					// Git reports hundreds of times a second on a large
-					// repository. Rate-limit here rather than in the renderer:
-					// every consumer would otherwise have to, and one of them
-					// reads these off a channel that would throttle the clone
-					// to the frame rate. Phase changes and completion always
-					// pass, so no bar sticks short of full.
+					// Rate limiting before fan-out prevents a slow consumer from throttling git.
+					// Phase changes and completion always pass so progress cannot stick short.
 					if percent == progressComplete || phase != lastPhase ||
 						time.Since(lastEmit) >= progressEmitInterval {
 						lastEmit = time.Now()

@@ -26,7 +26,7 @@ const (
 	OpAttention          = "attention"
 	OpRunnerGeneration   = "runner-generation"
 	OpDelegatedLifecycle = "delegated-lifecycle"
-	OpOpenLinearIssue    = "open-linear-issue"
+	OpOpenTicket         = "open-ticket"
 )
 
 // What a picker is asking for. Only an escalation moves the session to RPI; a
@@ -51,7 +51,7 @@ const (
 	socketTokenBytes   = 6
 	socketDirMode      = 0o700
 	descriptorMode     = 0o600
-	descriptorVersion  = 1
+	descriptorVersion  = 2
 
 	// callTimeout bounds a request whose caller set no deadline, so a wedged
 	// desktop process cannot hang an agent's tool call.

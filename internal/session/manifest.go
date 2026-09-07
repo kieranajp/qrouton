@@ -1,10 +1,6 @@
 package session
 
-// The on-disk contract: the manifest schema and the reads and writes that
-// maintain it. qrouton.json is what makes a directory a session and what every
-// other process — the launcher, the window chrome, the escalate tool — polls, so
-// the schema and the serialised write that maintains it live together, apart
-// from the assembly behaviour that produces them.
+// The manifest is the polled on-disk session contract shared by all processes.
 
 import (
 	"encoding/json"
@@ -158,11 +154,10 @@ const (
 	PickerCancelled PickerStatus = "cancelled"
 )
 
-// PickerOutcome records the most recent awaited picker. The picker writes it as
-// part of its single atomic manifest write, so the Repos a poller reads
-// alongside a fresh stanza are the set the user confirmed; the blocked MCP tool
-// polls At to notice an outcome newer than the picker it spawned. A picker the
-// user opened themselves records nothing — nothing is awaiting it.
+// PickerOutcome records the most recent awaited picker, written in the same
+// atomic manifest write as the repositories, so a poller reading a fresh stanza
+// reads the confirmed set beside it. A picker the user opened themselves records
+// nothing.
 type PickerOutcome struct {
 	Status PickerStatus `json:"status"`
 	// Kind is what the picker was asking for, so two callers polling at once each

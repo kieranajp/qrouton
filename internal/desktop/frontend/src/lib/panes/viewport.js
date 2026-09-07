@@ -51,24 +51,7 @@ export function nextViewportSequence(id) {
   return next;
 }
 
-/**
- * @param {{
- *   root: HTMLElement,
- *   content: HTMLElement,
- *   blocks?: HTMLElement[],
- *   target?: HTMLElement,
- *   span?: {line: number, to: number},
- *   selected?: boolean,
- *   report: (report: {seq: number, available: boolean, selected: boolean, intervals: {line: number, to: number}[]}) => unknown,
- *   requestFrame?: (callback: FrameRequestCallback) => number,
- *   cancelFrame?: (id: number) => void,
- *   resizeObserver?: typeof ResizeObserver,
- *   view?: Window,
- *   fonts?: FontFaceSet,
- *   nextSequence?: () => number,
- *   onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown,
- * }} options
- */
+/** @param {{root: HTMLElement, content: HTMLElement, blocks?: HTMLElement[], target?: HTMLElement, span?: {line: number, to: number}, selected?: boolean, report: (report: {seq: number, available: boolean, selected: boolean, intervals: {line: number, to: number}[]}) => unknown, requestFrame?: (callback: FrameRequestCallback) => number, cancelFrame?: (id: number) => void, resizeObserver?: typeof ResizeObserver, view?: Window, fonts?: FontFaceSet, nextSequence?: () => number, onMeasure?: (state: {intervals: {line: number, to: number}[]}) => unknown}} options */
 export function createViewportController(options) {
   const {
     root,

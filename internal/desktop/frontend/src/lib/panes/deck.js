@@ -1,67 +1,76 @@
-import { criteriaSpans } from "./plan.js";
 import { dealt } from "./sections.js";
 
-/**
- * The deck is one rendered document dealt out by the source lines its blocks
- * already carry: the opening heading, the body, and the criteria the phase
- * states, each into the slide whose span holds it. A criteria span reaching
- * past its own phase claims nothing in the next one, which is bucketed by the
- * line its blocks start on.
- * @param {string} html
- * @param {{slides: import("./plan.js").Slide[]}} parsed
- * @param {(html: string) => {html: string, from: number, to: number}[]} deal
- * @returns {{preamble: string, slides: {opening: string, body: string, criteria: string}[]}}
- */
-export function partition(html, parsed, deal = dealt) {
+/** Criteria spanning beyond their section never claim the next one's blocks.
+ * @param {{from: number, to: number}[]} sections In document order.
+ * @param {{criteria?: (s: any) => any, deal?: (html: string) => any[]}} [how]
+ * @returns {{preamble: string, sections: {opening: string, body: string, criteria: string}[]}} */
+export function partition(html, sections, how = {}) {
+  const { criteria, deal = dealt } = how;
   const preamble = [];
-  const slides = parsed.slides.map(() => ({ opening: [], body: [], criteria: [] }));
+  // A section's opening heading stays apart from its body: the pane states the
+  // name itself, and the heading's own line still has to be findable.
+  const parts = sections.map(() => ({ opening: [], body: [], criteria: [] }));
   for (const block of deal(html)) {
-    const index = parsed.slides.findIndex(
-      (slide) => block.from >= slide.from && block.from <= slide.to,
+    const at = sections.findIndex(
+      (section) => block.from >= section.from && block.from <= section.to,
     );
-    if (index < 0) {
+    if (at < 0) {
       preamble.push(block.html);
       continue;
     }
-    const verify = criteriaSpans(parsed.slides[index]);
+    const verify = criteria?.(sections[at]);
     const bucket =
-      block.from === parsed.slides[index].from
+      block.from === sections[at].from
         ? "opening"
         : verify && block.from >= verify.from && block.to <= verify.to
           ? "criteria"
           : "body";
-    slides[index][bucket].push(block.html);
+    parts[at][bucket].push(block.html);
   }
   return {
     preamble: preamble.join(""),
-    slides: slides.map((slide) => ({
-      opening: slide.opening.join(""),
-      body: slide.body.join(""),
-      criteria: slide.criteria.join(""),
+    sections: parts.map((part) => ({
+      opening: part.opening.join(""),
+      body: part.body.join(""),
+      criteria: part.criteria.join(""),
     })),
   };
 }
 
+/** The section a line falls in, and -1 for a line in none of them.
+ * @param {{from: number, to: number}[]} sections @param {number} line */
+export function holding(sections, line) {
+  if (!line || line < 1) return -1;
+  return sections.findIndex(
+    (section) => line >= section.from && line <= section.to,
+  );
+}
+
+/** The span a pane marks, cut at the end of the section it opens in: a span
+ * running past that says nothing about the section after it.
+ * @param {{line?: number, to?: number}} doc @param {{to: number}} opened */
+export function clampedSpan(doc, opened) {
+  const line = doc.line ?? 0;
+  const to = doc.to ?? 0;
+  return { line, to: to > line ? Math.min(to, opened.to) : to };
+}
+
 /**
- * Screen 0 is the overview; slide at index n is screen n + 1.
  * @param {{from: number, to: number}[]} slides
  * @param {number} line
  */
 export function screenFor(slides, line) {
-  if (!line || line < 1) return 0;
-  const at = slides.findIndex((slide) => line >= slide.from && line <= slide.to);
+  const at = holding(slides, line);
   return at < 0 ? 0 : at + 1;
 }
 
-/**
- * A phase slide counts in phases, because that is what its heading numbers.
- * Anything else answers with its own name, which is the only honest label a
- * section has: it has no position in a sequence the document defines.
+/** Non-phase slides use their names because they have no defined sequence position.
  * @param {{slides: {name: string, number: number | null}[], phases: unknown[]}} parsed
- * @param {number} screen
- */
+ * @param {number} screen */
 export function counterFor(parsed, screen) {
   if (screen === 0) return "Overview";
   const slide = parsed.slides[screen - 1];
-  return slide.number === null ? slide.name : `${slide.number} / ${parsed.phases.length}`;
+  return slide.number === null
+    ? slide.name
+    : `${slide.number} / ${parsed.phases.length}`;
 }

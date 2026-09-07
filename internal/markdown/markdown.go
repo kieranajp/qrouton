@@ -1,8 +1,4 @@
-// Package markdown answers what qrouton asks of a document's text: what it
-// calls itself, and which of its sections have been written. A tab label and a
-// shared page's title are the same question, so they are the same answer.
-// Nothing here renders anything — the workbench's page and the share bundle
-// each do their own.
+// Package markdown reads titles, bodies, and section state without rendering.
 package markdown
 
 import "strings"
@@ -20,11 +16,14 @@ const (
 	quote      = ">"
 )
 
-// Title is the level-one heading a document opens with, after any frontmatter,
-// and false for a document that opens with anything else — prose, a lower
-// heading, a code fence. Deliberately the opening heading rather than the first
-// one anywhere: a `# ` further down belongs to a later section or to the inside
-// of a fenced block, and neither names the document.
+// marpKey declares a document a deck, and only when set to marpEnabled.
+const (
+	marpKey      = "marp"
+	marpEnabled  = "true"
+	keySeparator = ":"
+)
+
+// Title accepts only the first visible element after frontmatter as the document title.
 func Title(text string) (string, bool) {
 	for _, line := range body(text) {
 		trimmed := strings.TrimSpace(line)
@@ -45,10 +44,35 @@ func Body(text string) string {
 	return strings.Join(body(text), "\n")
 }
 
+// Marp reports whether a document declares itself a deck. Only the leading
+// frontmatter block counts, so a marp: line in the body is prose.
+func Marp(text string) bool {
+	for _, line := range frontmatter(text) {
+		key, value, ok := strings.Cut(line, keySeparator)
+		if !ok || strings.TrimSpace(key) != marpKey {
+			continue
+		}
+		return strings.EqualFold(strings.TrimSpace(value), marpEnabled)
+	}
+	return false
+}
+
 // body is text's lines with any frontmatter block dropped, which is parsed but
-// never shown. A block that never closes leaves no body at all rather than
-// treating its own contents as one.
+// never shown.
 func body(text string) []string {
+	_, rest := split(text)
+	return rest
+}
+
+func frontmatter(text string) []string {
+	front, _ := split(text)
+	return front
+}
+
+// split separates the frontmatter block from what a reader would see. A block
+// that never closes is neither: its contents are not the document, and a block
+// with no end declares nothing either.
+func split(text string) (front, rest []string) {
 	lines := strings.Split(text, "\n")
 	for at, line := range lines {
 		trimmed := strings.TrimSpace(line)
@@ -56,16 +80,16 @@ func body(text string) []string {
 			continue
 		}
 		if trimmed != fence {
-			return lines[at:]
+			return nil, lines[at:]
 		}
 		for closing := at + 1; closing < len(lines); closing++ {
 			if strings.TrimSpace(lines[closing]) == fence {
-				return lines[closing+1:]
+				return lines[at+1 : closing], lines[closing+1:]
 			}
 		}
-		return nil
+		return nil, nil
 	}
-	return nil
+	return nil, nil
 }
 
 // SectionState is how far a section has been taken. A research document is

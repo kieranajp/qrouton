@@ -15,7 +15,7 @@
     onFindAdapter,
   } = $props();
 
-  /** @type {{text: string, format: string, source: string, path?: string, kind?: string, line: number, to: number, viewportEpoch?: number} | undefined} */
+  /** @type {{text: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number} | undefined} */
   let doc = $state();
 
   // The window follows its file, so the pane is told about a write it did not
@@ -39,6 +39,6 @@
 </script>
 
 {#if doc}
-  {@const Pane = paneFor(doc.format, doc.kind)}
+  {@const Pane = paneFor(doc)}
   <Pane {doc} {id} {active} {scrollRoot} {agentWorking} {onScroller} {onFindAdapter} />
 {/if}

@@ -1,17 +1,10 @@
 // Scheduling for calls that cross the bridge, kept pure: node --test is the
 // whole frontend harness.
 
-/**
- * debounced asks once the caller stops scheduling, and lands only the newest
- * answer: the bridge finishes calls in whatever order it likes, so a slow reply
- * to a value the form has moved off must not overwrite a newer one.
- * ask must settle rather than reject, which is what wails.js's call gives it.
+/** Bridge calls may settle out of order; only the newest answer lands.
  * @template V, A
- * @param {number} ms
- * @param {(value: V) => Promise<A>} ask
- * @param {(answer: A) => void} land
- * @param {{set?: (run: () => void, ms: number) => any, clear?: (timer: any) => void}} [timers]
- */
+ * @param {number} ms @param {(value: V) => Promise<A>} ask resolves errors as values
+ * @param {(answer: A) => void} land @param {{set?: (run: () => void, ms: number) => any, clear?: (timer: any) => void}} [timers] */
 export function debounced(ms, ask, land, { set = setTimeout, clear = clearTimeout } = {}) {
   let timer;
   let asked = 0;

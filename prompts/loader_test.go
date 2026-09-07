@@ -2,6 +2,7 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"testing/fstest"
 
 	"github.com/kieranajp/qrouton/internal/markdown"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // embeddedPromptIDs is every prompt the binary carries, in the order List sorts
@@ -28,11 +30,266 @@ var embeddedPromptIDs = []string{
 	"agents/thoughts-researcher",
 	"assistant",
 	"orchestrator",
+	"skills/qrouton-development",
+	"skills/qrouton-evals",
+	"skills/qrouton-review",
+	"skills/qrouton-slides",
 	"skills/qrspi-implement",
 	"skills/qrspi-plan",
 	"skills/qrspi-questions",
 	"skills/qrspi-research",
 	"skills/qrspi-spec",
+}
+
+func TestQroutonSkillsAreNarrowSoloEntrypoints(t *testing.T) {
+	cases := []struct {
+		name              string
+		descriptionClaims []string
+		bodyClaims        []string
+	}{
+		{
+			name:              "qrouton-development",
+			descriptionClaims: []string{"Implement or debug qrouton's", "Do not use for operating qrouton on an unrelated project"},
+			bodyClaims:        []string{"nearest `AGENTS.md`", "src/lib/bridge/generated.js", "`prompts/`", "npm run test:unit", "npm run test:browser", "GOCACHE=/tmp/qrouton-go-cache make check", "do not infer that a release path runs"},
+		},
+		{
+			name:              "qrouton-evals",
+			descriptionClaims: []string{"eval/", "internal/evalharness/", "cmd/qrouton-eval/", "Do not use for ordinary application or unit-test work"},
+			bodyClaims:        []string{"`eval/README.md`", "`prompts.Stamp`", "`session.Manifest`", "--no-judge", "QROUTON_EVAL_SMOKE=1", "opt-in and do not run in CI"},
+		},
+		{
+			name:              "qrouton-review",
+			descriptionClaims: []string{"pre-merge diff review", "Do not use to implement"},
+			bodyClaims:        []string{"review read-only", "generated-source ownership", "launch/eval parity", "GOCACHE=/tmp/qrouton-go-cache make check", "UI, platform, authenticated eval"},
+		},
+	}
+
+	loader := NewEmbeddedLoader()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prompt, err := loader.Load(context.Background(), ID(skillIDPrefix+tc.name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(prompt.Files) != 0 {
+				t.Fatalf("solo skill ships supporting files: %#v", prompt.Files)
+			}
+			name, description, body := skillParts(t, string(prompt.Content))
+			if name != tc.name {
+				t.Fatalf("skill name = %q", name)
+			}
+			if strings.TrimSpace(description) == "" {
+				t.Fatal("skill description is empty")
+			}
+			for _, claim := range tc.descriptionClaims {
+				if !strings.Contains(description, claim) {
+					t.Errorf("description is missing discovery boundary %q", claim)
+				}
+			}
+			for _, claim := range tc.bodyClaims {
+				if !strings.Contains(body, claim) {
+					t.Errorf("body is missing verified routing claim %q", claim)
+				}
+			}
+			for _, unsupported := range []string{"CI runs authenticated evals", "release runs make check", "comment checks decide comment quality"} {
+				if strings.Contains(strings.ToLower(body), strings.ToLower(unsupported)) {
+					t.Errorf("body makes unsupported claim %q", unsupported)
+				}
+			}
+		})
+	}
+}
+
+// Codex will not follow a symlinked SKILL.md, only a symlinked skill folder, so
+// each skill links once at its folder rather than once per file inside it.
+func TestQroutonSkillsStampIntoBothDiscoveryTrees(t *testing.T) {
+	dir := t.TempDir()
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	var skills []string
+	for _, id := range embeddedPromptIDs {
+		if name, ok := strings.CutPrefix(id, skillIDPrefix); ok {
+			skills = append(skills, name)
+		}
+	}
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		for _, name := range skills {
+			skillLink := filepath.Join(dir, root, skillsDirName, name)
+			info, err := os.Lstat(skillLink)
+			if err != nil || info.Mode()&os.ModeSymlink == 0 {
+				t.Fatalf("%s is not a stamped discovery link: %v", skillLink, err)
+			}
+			content, err := os.ReadFile(filepath.Join(skillLink, skillFileName))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(content), "name: "+name) || !strings.Contains(string(content), MarkerText) {
+				t.Fatalf("%s does not resolve to marked skill content:\n%s", skillLink, content)
+			}
+		}
+
+		reference := filepath.Join(dir, root, skillsDirName, "qrspi-plan", "references", "plan-shape.md")
+		content, err := os.ReadFile(reference)
+		if err != nil {
+			t.Fatalf("%s does not resolve through the skill folder link: %v", reference, err)
+		}
+		if !strings.Contains(string(content), "### Verify") {
+			t.Fatalf("%s did not resolve to the plan shape reference:\n%s", reference, content)
+		}
+	}
+}
+
+// A session stamped before skills linked at the folder carries a real directory
+// of file links where the folder link now belongs. Stamping over it has to
+// replace it, since every session that predates the change starts in that shape.
+func TestStampReplacesPerFileSkillDirectory(t *testing.T) {
+	dir := t.TempDir()
+	const name = "qrspi-plan"
+	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
+
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		stale := filepath.Join(dir, root, skillsDirName, name)
+		if err := os.MkdirAll(filepath.Join(stale, "references"), dirMode); err != nil {
+			t.Fatal(err)
+		}
+		for _, file := range []string{skillFileName, filepath.Join("references", "plan-shape.md")} {
+			link := filepath.Join(stale, file)
+			relative, err := filepath.Rel(filepath.Dir(link), filepath.Join(canonicalSkill, file))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(relative, link); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
+		skillLink := filepath.Join(dir, root, skillsDirName, name)
+		info, err := os.Lstat(skillLink)
+		if err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is not a stamped folder link: %v", skillLink, err)
+		}
+		content, err := os.ReadFile(filepath.Join(skillLink, skillFileName))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(content), "name: "+name) {
+			t.Fatalf("%s does not resolve to the skill:\n%s", skillLink, content)
+		}
+	}
+}
+
+// A qrouton old enough to link skills per file removes SKILL.md through the
+// folder link, which unlinks the canonical file and leaves a symlink in its
+// place. Stamping again has to restore the file rather than write through it.
+func TestStampRestoresCanonicalAssetReplacedByALink(t *testing.T) {
+	dir := t.TempDir()
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	canonical := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, "qrspi-plan", skillFileName)
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "..", "..", "gone", skillFileName), canonical); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(canonical)
+	if err != nil || info.Mode()&os.ModeSymlink != 0 {
+		t.Fatalf("%s is still a link: %v", canonical, err)
+	}
+	content, err := os.ReadFile(canonical)
+	if err != nil || !strings.Contains(string(content), "name: qrspi-plan") {
+		t.Fatalf("canonical skill was not restored: %v", err)
+	}
+}
+
+// Replacing a stale directory must not become a licence to delete a directory
+// the user owns, whatever its name.
+func TestStampRefusesSkillDirectoryHoldingUserContent(t *testing.T) {
+	dir := t.TempDir()
+	mine := filepath.Join(dir, claudeSkillsDir, skillsDirName, "qrspi-plan")
+	if err := os.MkdirAll(mine, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	authored := filepath.Join(mine, skillFileName)
+	if err := os.WriteFile(authored, []byte("my own skill"), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	err := Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset)
+	if !errors.Is(err, ErrUserOwnedAsset) {
+		t.Fatalf("Stamp over a user-owned skill directory = %v", err)
+	}
+	content, err := os.ReadFile(authored)
+	if err != nil || string(content) != "my own skill" {
+		t.Fatalf("the user's own skill did not survive: %q %v", content, err)
+	}
+}
+
+// A stale per-file skill directory holding our symlinks alongside one file the
+// user added is neither of the pure cases stampedTree distinguishes: it must
+// still refuse, since only every file being ours makes the directory ours.
+func TestStampRefusesSkillDirectoryHoldingMixedContent(t *testing.T) {
+	dir := t.TempDir()
+	const name = "qrspi-plan"
+	canonicalSkill := filepath.Join(sessionpaths.CanonicalPrompts(dir), skillsDirName, name)
+
+	stale := filepath.Join(dir, claudeSkillsDir, skillsDirName, name)
+	if err := os.MkdirAll(stale, dirMode); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(stale, skillFileName)
+	relative, err := filepath.Rel(filepath.Dir(link), filepath.Join(canonicalSkill, skillFileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(relative, link); err != nil {
+		t.Fatal(err)
+	}
+	authored := filepath.Join(stale, "notes.md")
+	if err := os.WriteFile(authored, []byte("my own notes"), fileMode); err != nil {
+		t.Fatal(err)
+	}
+
+	err = Stamp(context.Background(), dir, NewEmbeddedLoader(), OrchestratorAsset)
+	if !errors.Is(err, ErrUserOwnedAsset) {
+		t.Fatalf("Stamp over a mixed skill directory = %v", err)
+	}
+	content, err := os.ReadFile(authored)
+	if err != nil || string(content) != "my own notes" {
+		t.Fatalf("the user's own file did not survive: %q %v", content, err)
+	}
+}
+
+func skillParts(t *testing.T, content string) (string, string, string) {
+	t.Helper()
+	if !strings.HasPrefix(content, frontmatterFence) {
+		t.Fatal("skill has no frontmatter")
+	}
+	end := strings.Index(content[len(frontmatterFence):], frontmatterClose)
+	if end < 0 {
+		t.Fatal("skill frontmatter is unterminated")
+	}
+	end += len(frontmatterFence)
+	fields := map[string]string{}
+	for _, line := range strings.Split(content[len(frontmatterFence):end], "\n") {
+		key, value, ok := strings.Cut(line, ":")
+		if ok {
+			fields[strings.TrimSpace(key)] = strings.TrimSpace(value)
+		}
+	}
+	return fields["name"], fields["description"], content[end+len(frontmatterClose):]
 }
 
 func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
@@ -199,11 +456,12 @@ func TestASkillFolderShipsItsReferencesAndASoloSkillStaysSolo(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, root := range []string{claudeSkillsDir, agentsSkillsDir} {
-		reference := filepath.Join(dir, root, skillsDirName, "folder", "references", "detail.md")
-		info, err := os.Lstat(reference)
+		skillLink := filepath.Join(dir, root, skillsDirName, "folder")
+		info, err := os.Lstat(skillLink)
 		if err != nil || info.Mode()&os.ModeSymlink == 0 {
-			t.Fatalf("%s is not a symlink: %v", reference, err)
+			t.Fatalf("%s is not a symlink: %v", skillLink, err)
 		}
+		reference := filepath.Join(skillLink, "references", "detail.md")
 		content, err := os.ReadFile(reference)
 		if err != nil {
 			t.Fatal(err)

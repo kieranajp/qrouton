@@ -1,7 +1,11 @@
 package desktop
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
+	"path"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -10,15 +14,40 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
+// agentWindow is one tab: what it was opened with, whose session it belongs to,
+// where it sits in the strip, and the content behind it.
 type agentWindow struct {
 	opts    workbench.WindowOptions
 	session *sessionState
 	seq     int
-	buffer  *ring
+	order   int
+	content windowContent
+	// asset names a document window in the deck asset route's URLs. Window ids
+	// are sequential, so one session could otherwise guess another's.
+	asset string
+}
+
+// windowContent is the half of a tab that differs by kind. Callers ask for the
+// kind they can work with, so document state cannot be reached through a
+// terminal or the other way round.
+type windowContent interface {
+	// tabStatus is the mark the tab strip draws, and empty where a kind has none.
+	tabStatus() string
+}
+
+type terminalContent struct {
+	buffer *ring
 	// stream orders a terminal's retained bytes and emitted chunks. A remounted
 	// page can therefore reset to one replay without racing live output around it.
-	stream        sync.Mutex
-	process       *ptyProcess
+	stream  sync.Mutex
+	process *ptyProcess
+	// exit is nil while the process is still running.
+	exit *int
+}
+
+// documentContent holds a rendered tab's measurements. viewport is nil for a
+// format the page cannot map back to source lines.
+type documentContent struct {
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64
@@ -28,8 +57,29 @@ type agentWindow struct {
 		at   time.Time
 		size int64
 	}
-	// exit is nil while the process is still running.
-	exit *int
+}
+
+func (t *terminalContent) tabStatus() string {
+	switch {
+	case t.exit == nil:
+		return tabStatusRunning
+	case *t.exit == 0:
+		return tabStatusSucceeded
+	default:
+		return tabStatusFailed
+	}
+}
+
+func (*documentContent) tabStatus() string { return "" }
+
+func (window *agentWindow) terminal() (*terminalContent, bool) {
+	content, ok := window.content.(*terminalContent)
+	return content, ok
+}
+
+func (window *agentWindow) document() (*documentContent, bool) {
+	content, ok := window.content.(*documentContent)
+	return content, ok
 }
 
 // registry holds the open tabs and which one each session has selected. Every
@@ -96,8 +146,6 @@ func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOpti
 	return r.spawn(owner, opts, false)
 }
 
-// showOrOpen selects the window already showing source, or the one open leaves
-// behind — so a single click both opens and selects.
 func (r *registry) showOrOpen(owner *sessionState, source string, open func() (string, error)) (string, error) {
 	r.sourceMu.Lock()
 	defer r.sourceMu.Unlock()
@@ -132,6 +180,38 @@ func (r *registry) selectWindow(owner *sessionState, id string) error {
 	return nil
 }
 
+func (r *registry) reorder(slug, id string, to int) error {
+	owner := r.sessions.bySlug(slug)
+	if owner == nil {
+		return unknownSession(slug)
+	}
+	r.mu.Lock()
+	window, ok := r.open[id]
+	if !ok || window.session != owner {
+		r.mu.Unlock()
+		return noSuchWindow(id)
+	}
+	live := r.ordered(owner)
+	from := slices.Index(live, window)
+	to = min(max(to, 0), len(live)-1)
+	if to == from {
+		r.mu.Unlock()
+		return nil
+	}
+	// The session's own order values, handed back out positionally rather than
+	// renumbered, so a tab opened later still sorts to the right of them all.
+	orders := make([]int, len(live))
+	for i, tab := range live {
+		orders[i] = tab.order
+	}
+	for i, tab := range slices.Insert(slices.Delete(live, from, from+1), to, window) {
+		tab.order = orders[i]
+	}
+	r.mu.Unlock()
+	r.announce(owner)
+	return nil
+}
+
 func (r *registry) showing(owner *sessionState, source string) (string, bool) {
 	if source == "" {
 		return "", false
@@ -153,9 +233,9 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	r.mu.Lock()
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
-	window := &agentWindow{opts: opts, session: owner, seq: r.seq}
-	if opts.Kind == workbench.KindTerminal {
-		window.buffer = &ring{limit: windowScrollback}
+	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq, content: contentFor(opts)}
+	if opts.Kind == workbench.KindDocument {
+		window.asset = assetToken()
 	}
 	beginDocument(window)
 	r.open[id] = window
@@ -168,15 +248,43 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	return id, nil
 }
 
+// deckDirectory answers the asset route. A token belonging to a window that is
+// not a deck resolves to nothing, so the route stays a media server for open
+// decks rather than a reader for any window's neighbours.
+func (r *registry) deckDirectory(token string) (root, dir string, ok bool) {
+	if token == "" {
+		return "", "", false
+	}
+	r.each(func(_ string, window *agentWindow) {
+		if ok || window.asset != token || !window.opts.Deck || window.opts.Source == "" {
+			return
+		}
+		home := window.session.root()
+		if home == "" {
+			return
+		}
+		root, dir, ok = home, path.Dir(window.opts.Source), true
+	})
+	return root, dir, ok
+}
+
+func assetToken() string {
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(raw[:])
+}
+
 func (r *registry) readWindow(id string, full bool) (string, error) {
 	var text string
 	var buffer *ring
 	if err := r.with(id, func(window *agentWindow) error {
-		if window.opts.Kind == workbench.KindDocument {
-			text = window.opts.Content
+		if terminal, ok := window.terminal(); ok {
+			buffer = terminal.buffer
 			return nil
 		}
-		buffer = window.buffer
+		text = window.opts.Content
 		return nil
 	}); err != nil {
 		return "", err
@@ -216,9 +324,11 @@ func (r *registry) discard(id string) {
 	delete(r.open, id)
 	var process *ptyProcess
 	if ok {
-		process = window.process
+		if terminal, live := window.terminal(); live {
+			process = terminal.process
+		}
 		if r.selected[window.session] == id {
-			if fallback := r.oldest(window.session); fallback != "" {
+			if fallback := r.leftmost(window.session); fallback != "" {
 				r.selected[window.session] = fallback
 			} else {
 				delete(r.selected, window.session)
@@ -235,19 +345,26 @@ func (r *registry) discard(id string) {
 	r.announce(window.session)
 }
 
-func (r *registry) oldest(owner *sessionState) string {
-	oldestID := ""
-	oldestSeq := 0
-	for id, window := range r.open {
-		if window.session == owner && (oldestID == "" || window.seq < oldestSeq) {
-			oldestID = id
-			oldestSeq = window.seq
-		}
+func (r *registry) leftmost(owner *sessionState) string {
+	live := r.ordered(owner)
+	if len(live) == 0 {
+		return ""
 	}
-	return oldestID
+	return fmt.Sprintf(windowIDFormat, live[0].seq)
 }
 
-// stop tears down one session's windows, so retiring it leaves the rest alone.
+// ordered lists one session's windows left to right. Callers hold mu.
+func (r *registry) ordered(owner *sessionState) []*agentWindow {
+	live := make([]*agentWindow, 0, len(r.open))
+	for _, window := range r.open {
+		if window.session == owner {
+			live = append(live, window)
+		}
+	}
+	sort.Slice(live, func(i, j int) bool { return live[i].order < live[j].order })
+	return live
+}
+
 func (r *registry) stop(owner *sessionState) {
 	for _, id := range r.list() {
 		if window, ok := r.window(id); ok && window.session == owner {
@@ -280,8 +397,7 @@ type drawnWindow struct {
 	Artifact string `json:"artifact,omitempty"`
 }
 
-// surfaces names one session's open tabs, oldest first so the shell stays
-// leftmost.
+// surfaces names one session's open tabs in tab order.
 type surfaces struct {
 	Session  string        `json:"session"`
 	Selected string        `json:"selected"`
@@ -295,13 +411,7 @@ func (r *registry) surfacesBySlug(slug string) surfaces {
 func (r *registry) surfaces(owner *sessionState) surfaces {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	live := make([]*agentWindow, 0, len(r.open))
-	for _, window := range r.open {
-		if window.session == owner {
-			live = append(live, window)
-		}
-	}
-	sort.Slice(live, func(i, j int) bool { return live[i].seq < live[j].seq })
+	live := r.ordered(owner)
 	out := surfaces{Session: owner.slug(), Selected: r.selected[owner], Tabs: []drawnWindow{}}
 	for _, window := range live {
 		drawn := drawnWindow{
@@ -317,16 +427,11 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 }
 
 func tabStatus(window *agentWindow) string {
-	switch {
-	case window.opts.Attention:
+	if window.opts.Attention {
 		return tabStatusWaiting
-	case window.opts.Kind != workbench.KindTerminal:
-		return ""
-	case window.exit == nil:
-		return tabStatusRunning
-	case *window.exit == 0:
-		return tabStatusSucceeded
-	default:
-		return tabStatusFailed
 	}
+	if window.content == nil {
+		return ""
+	}
+	return window.content.tabStatus()
 }

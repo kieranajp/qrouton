@@ -10,6 +10,8 @@ const open = async (page, query = "") => {
   await page.waitForSelector(".tab");
 };
 
+const titles = (page) => page.evaluate(() => window.labels().map((tab) => tab.text));
+
 test("a badged tab leads with its id in a filled block of its own hue", async ({ page }) => {
   await open(page);
 
@@ -56,4 +58,22 @@ test("the overflow menu keeps a hidden run's colour", async ({ page }) => {
 
   await page.getByRole("button", { name: /more tabs/ }).click();
   await expect.poll(() => page.evaluate(() => window.menuDots())).toContain(SUCCESS_GREEN);
+});
+
+test("a tab dragged onto another takes the place it was dropped on", async ({ page }) => {
+  await open(page);
+
+  await page.locator(".tab").first().dragTo(page.locator(".tab").nth(2));
+
+  await expect
+    .poll(() => titles(page))
+    .toEqual(["Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
+});
+
+test("the middle mouse button closes a tab", async ({ page }) => {
+  await open(page);
+
+  await page.locator(".tab").nth(1).click({ button: "middle" });
+
+  await expect.poll(() => titles(page)).toEqual(["Shell", "Pane selection", "◆ Findings"]);
 });

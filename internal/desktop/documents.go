@@ -8,6 +8,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -21,6 +22,8 @@ type document struct {
 	Source        string `json:"source"`
 	Path          string `json:"path,omitempty"`
 	Kind          string `json:"kind,omitempty"`
+	Deck          bool   `json:"deck,omitempty"`
+	AssetToken    string `json:"assetToken,omitempty"`
 	Line          int    `json:"line"`
 	To            int    `json:"to"`
 	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
@@ -50,17 +53,32 @@ func (window *agentWindow) sourcePath() string {
 	return filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
 }
 
-func beginDocument(window *agentWindow) {
-	if window.opts.Kind == workbench.KindDocument && window.opts.Format == workbench.FormatMarkdown {
-		window.viewport = &workbench.DocumentViewport{
-			Source: window.opts.Source, Intervals: []workbench.LineInterval{},
+// contentFor is the half of a tab its kind decides. An unknown kind gets none,
+// so it draws as a tab and answers no terminal or document call.
+func contentFor(opts workbench.WindowOptions) windowContent {
+	switch opts.Kind {
+	case workbench.KindTerminal:
+		return &terminalContent{buffer: &ring{limit: windowScrollback}}
+	case workbench.KindDocument:
+		content := &documentContent{}
+		if opts.Format == workbench.FormatMarkdown {
+			content.viewport = workbench.UnmeasuredViewport(opts.Source)
 		}
+		return content
+	}
+	return nil
+}
+
+func beginDocument(window *agentWindow) {
+	rendered, ok := window.document()
+	if !ok {
+		return
 	}
 	// The content arrived from a read taken before this stat. A size that no
 	// longer matches it means the file moved in between, so it is left unseen
 	// for the first rescan to pick up rather than recorded as already read.
 	if info, err := os.Stat(window.sourcePath()); err == nil && info.Size() == int64(len(window.opts.Content)) {
-		window.read.at, window.read.size = info.ModTime(), info.Size()
+		rendered.read.at, rendered.read.size = info.ModTime(), info.Size()
 	}
 }
 
@@ -74,8 +92,13 @@ func documentFor(window *agentWindow) document {
 		kind = status.DocumentKind(window.opts.Source)
 	}
 	var viewportEpoch uint64
-	if window.viewport != nil {
-		viewportEpoch = window.viewportEpoch
+	if rendered, ok := window.document(); ok && rendered.viewport != nil {
+		viewportEpoch = rendered.viewportEpoch
+	}
+	// Only a deck addresses the asset route, so only a deck is told its token.
+	var asset string
+	if window.opts.Deck {
+		asset = window.asset
 	}
 	return document{
 		Text:          window.opts.Content,
@@ -83,6 +106,8 @@ func documentFor(window *agentWindow) document {
 		Source:        window.opts.Source,
 		Path:          path,
 		Kind:          kind,
+		Deck:          window.opts.Deck,
+		AssetToken:    asset,
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
@@ -115,7 +140,8 @@ func (d *documents) rescan() {
 	}
 	var pushes []push
 	d.registry.each(func(id string, window *agentWindow) {
-		if window.opts.Kind != workbench.KindDocument {
+		rendered, ok := window.document()
+		if !ok {
 			return
 		}
 		path := window.sourcePath()
@@ -128,15 +154,18 @@ func (d *documents) rescan() {
 		if err != nil || info.IsDir() || info.Size() > workbench.DocumentLimit {
 			return
 		}
-		if info.Size() == window.read.size && info.ModTime().Equal(window.read.at) {
+		if info.Size() == rendered.read.size && info.ModTime().Equal(rendered.read.at) {
 			return
 		}
 		text, err := os.ReadFile(path)
 		if err != nil {
 			return
 		}
-		window.read.at, window.read.size = info.ModTime(), info.Size()
+		rendered.read.at, rendered.read.size = info.ModTime(), info.Size()
 		window.opts.Content = string(text)
+		// A document becomes a deck, or stops being one, by an edit to its
+		// frontmatter, so the flag is read again with the text it describes.
+		window.opts.Deck = markdown.Marp(window.opts.Content)
 		pushes = append(pushes, push{id: id, doc: documentFor(window)})
 	})
 	for _, sent := range pushes {
@@ -150,12 +179,10 @@ func (d *documents) rescan() {
 func (d *documents) content(id string) (document, error) {
 	var doc document
 	err := d.registry.with(id, func(window *agentWindow) error {
-		if window.viewport != nil {
-			window.viewportEpoch++
-			window.viewportSeq = 0
-			window.viewport = &workbench.DocumentViewport{
-				Source: window.opts.Source, Intervals: []workbench.LineInterval{},
-			}
+		if rendered, ok := window.document(); ok && rendered.viewport != nil {
+			rendered.viewportEpoch++
+			rendered.viewportSeq = 0
+			rendered.viewport = workbench.UnmeasuredViewport(window.opts.Source)
 		}
 		doc = documentFor(window)
 		return nil
@@ -166,13 +193,12 @@ func (d *documents) content(id string) (document, error) {
 	return doc, nil
 }
 
-// markdown is a window's text and whether it is Markdown, which is the only
-// format anything is drawn into rather than shown as written.
 func (d *documents) markdown(id string) (string, bool, error) {
 	var text string
 	var rendered bool
 	err := d.registry.with(id, func(window *agentWindow) error {
-		rendered = window.opts.Kind == workbench.KindDocument && window.opts.Format == workbench.FormatMarkdown
+		_, isDocument := window.document()
+		rendered = isDocument && window.opts.Format == workbench.FormatMarkdown
 		text = window.opts.Content
 		return nil
 	})
@@ -184,13 +210,14 @@ func (d *documents) markdown(id string) (string, bool, error) {
 
 func (d *documents) report(id string, report ViewportReport) error {
 	return d.registry.with(id, func(window *agentWindow) error {
-		if window.viewport == nil {
+		rendered, ok := window.document()
+		if !ok || rendered.viewport == nil {
 			return ErrNoViewport
 		}
-		if report.Epoch != window.viewportEpoch {
+		if report.Epoch != rendered.viewportEpoch {
 			return nil
 		}
-		if report.Seq <= window.viewportSeq {
+		if report.Seq <= rendered.viewportSeq {
 			return nil
 		}
 		intervals, err := normalizedIntervals(report.Intervals)
@@ -199,10 +226,10 @@ func (d *documents) report(id string, report ViewportReport) error {
 		}
 		available := report.Available && report.Selected
 		if !available {
-			intervals = []workbench.LineInterval{}
+			intervals = workbench.NoIntervals()
 		}
-		window.viewportSeq = report.Seq
-		window.viewport = &workbench.DocumentViewport{
+		rendered.viewportSeq = report.Seq
+		rendered.viewport = &workbench.DocumentViewport{
 			Source:    window.opts.Source,
 			Available: available,
 			Selected:  report.Selected,
@@ -218,11 +245,12 @@ func (d *documents) viewport(owner *sessionState, id string) (*workbench.Documen
 		if window.session != owner {
 			return noSuchWindow(id)
 		}
-		if window.viewport == nil {
+		rendered, ok := window.document()
+		if !ok || rendered.viewport == nil {
 			return nil
 		}
-		measured := *window.viewport
-		measured.Intervals = append([]workbench.LineInterval{}, window.viewport.Intervals...)
+		measured := *rendered.viewport
+		measured.Intervals = append(workbench.NoIntervals(), rendered.viewport.Intervals...)
 		view = &measured
 		return nil
 	})
@@ -234,7 +262,7 @@ func (d *documents) viewport(owner *sessionState, id string) (*workbench.Documen
 
 func normalizedIntervals(intervals []workbench.LineInterval) ([]workbench.LineInterval, error) {
 	if len(intervals) == 0 {
-		return []workbench.LineInterval{}, nil
+		return workbench.NoIntervals(), nil
 	}
 	out := append([]workbench.LineInterval(nil), intervals...)
 	for _, interval := range out {

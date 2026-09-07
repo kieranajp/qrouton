@@ -62,7 +62,7 @@ func TestAPendingPickerReachesTheChromeOfTheSessionItNames(t *testing.T) {
 	}
 }
 
-// The workbench never learns that awaitEscalation gave up, so an expired request
+// The workbench never learns that a caller's poll gave up, so an expired request
 // is ignored rather than drawn for an answer nobody is polling for.
 func TestAnExpiredPickerIsIgnoredOnArrival(t *testing.T) {
 	reg, _, background := pickerWorkbench(t)

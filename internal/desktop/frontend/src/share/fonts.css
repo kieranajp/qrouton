@@ -1,5 +1,4 @@
-/* Latin weight axes only, rather than the whole families tokens/fonts.css
-   loads: every byte here is base64-inlined into the file a colleague opens.
+/* Latin weight axes only: every byte is inlined into the shared file.
    Italic comes along because emphasis is ordinary in prose and a synthesised
    oblique mono looks like a rendering fault. */
 @import "@fontsource-variable/jetbrains-mono/wght.css";

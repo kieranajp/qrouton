@@ -11,9 +11,10 @@ const (
 
 	// userReposQuery lists the authenticated user's own repositories, including
 	// private ones — the /users/<login>/repos endpoint exposes only public.
-	userReposQuery = "/user/repos?affiliation=owner&visibility=all"
-	orgReposQuery  = "?type=all"
-	otherUserQuery = "?type=owner"
+	userReposQuery         = "/user/repos?affiliation=owner&visibility=all"
+	collaboratorReposQuery = "/user/repos?affiliation=collaborator&visibility=all"
+	orgReposQuery          = "?type=all"
+	otherUserQuery         = "?type=owner"
 
 	// pageSize is GitHub's maximum; a short page means the last one.
 	pageSize        = 100

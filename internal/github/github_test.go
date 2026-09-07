@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/kieranajp/qrouton/internal/config"
 	"io"
 	"net/http"
@@ -162,6 +163,43 @@ func TestFetchOwnerReposUsesAuthenticatedEndpointForPersonalOwner(t *testing.T) 
 	gotPaths := paths.snapshot()
 	if !reflect.DeepEqual(gotPaths, wantPaths) {
 		t.Fatalf("requests = %#v, want %#v", gotPaths, wantPaths)
+	}
+}
+
+func TestFetchOwnerReposIncludesCollaboratorReposForAnotherPersonalOwner(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/users/edelarose": `{"login":"edelarose","type":"User"}`,
+		"/user":            `{"login":"kieranajp"}`,
+		"/users/edelarose/repos?type=owner&per_page=100&page=1": `[
+			{"name":"public-repo","ssh_url":"git@example/public","owner":{"login":"edelarose"}}
+		]`,
+		"/user/repos?affiliation=collaborator&visibility=all&per_page=100&page=1": `[
+			{"name":"bottle-tonight","ssh_url":"git@example/bottle","owner":{"login":"edelarose"}},
+			{"name":"public-repo","ssh_url":"git@example/public","owner":{"login":"edelarose"}},
+			{"name":"someone-elses","ssh_url":"git@example/other","owner":{"login":"other"}}
+		]`,
+	}, &paths)
+
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+	login := ""
+	repos, err := fetchOwnerRepos(context.Background(), client, "token", "edelarose", &login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := repoIDs(repos); !reflect.DeepEqual(got, []string{"edelarose/public-repo", "edelarose/bottle-tonight"}) {
+		t.Fatalf("repos = %#v, want the owner's public and collaborator repositories", got)
+	}
+	wantPaths := []string{
+		"/users/edelarose",
+		"/user",
+		"/users/edelarose/repos?type=owner&per_page=100&page=1",
+		"/user/repos?affiliation=collaborator&visibility=all&per_page=100&page=1",
+	}
+	if got := paths.snapshot(); !reflect.DeepEqual(got, wantPaths) {
+		t.Fatalf("requests = %#v, want %#v", got, wantPaths)
 	}
 }
 
@@ -407,5 +445,19 @@ func TestWriteRepoCacheStampsEveryListedOwner(t *testing.T) {
 	}
 	if len(owners["globex"].Repos) != 0 {
 		t.Fatalf("globex repos = %#v, want an owner with nothing to be empty", owners["globex"].Repos)
+	}
+}
+
+// An empty PATH is how a gh that cannot answer is reproduced deterministically.
+func TestTokenFallsBackToTheEnvironmentWhenGhCannotAnswer(t *testing.T) {
+	t.Setenv("PATH", "")
+	t.Setenv("GITHUB_TOKEN", "env-token")
+	got, err := Token()
+	if err != nil || got != "env-token" {
+		t.Fatalf("Token() = %q, %v; want %q", got, err, "env-token")
+	}
+	t.Setenv("GITHUB_TOKEN", "")
+	if got, err := Token(); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("Token() = %q, %v; want %v", got, err, ErrNoToken)
 	}
 }

@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <title>Slide theme fixture</title>
+    <style>
+      /* Sentinels, every one distinct, so a slide resolving the wrong token
+         cannot match by coincidence. */
+      :root {
+        --surface-app: rgb(1, 0, 0);
+        --surface-chrome: rgb(2, 0, 0);
+        --surface-terminal: rgb(3, 0, 0);
+        --surface-raised: rgb(4, 0, 0);
+        --text-primary: rgb(5, 0, 0);
+        --text-secondary: rgb(6, 0, 0);
+        --text-muted: rgb(7, 0, 0);
+        --text-faint: rgb(8, 0, 0);
+        --text-on-accent: rgb(9, 0, 0);
+        --accent-action: rgb(10, 0, 0);
+        --accent-label: rgb(11, 0, 0);
+        --accent-literal: rgb(12, 0, 0);
+        --state-success: rgb(13, 0, 0);
+        --state-waiting: rgb(14, 0, 0);
+        --border-subtle: rgb(15, 0, 0);
+        --border-default: rgb(16, 0, 0);
+        --font-display: "Space Grotesk Fixture", sans-serif;
+        --font-instruction: "Instrument Sans Fixture", sans-serif;
+        --font-machine: "JetBrains Mono Fixture", monospace;
+      }
+
+      body { margin: 0; }
+    </style>
+  </head>
+  <body>
+    <main id="deck-root"></main>
+    <script type="module" src="./slide-theme-fixture.js"></script>
+  </body>
+</html>

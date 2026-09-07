@@ -19,9 +19,6 @@ import (
 // pickerPollInterval and pickerTimeout govern awaitPickerOutcome; they are vars
 // so tests can shrink them instead of waiting out the real ceiling.
 var (
-	// ponytail: pickerTimeout is the poll's ceiling — a picker left open longer
-	// than this reports back as still-open instead of blocking the agent's tool
-	// call forever.
 	pickerTimeout        = 30 * time.Minute
 	pickerPollInterval   = 2 * time.Second
 	viewportWaitTimeout  = 750 * time.Millisecond
@@ -157,17 +154,17 @@ func (m *windowManager) openedViewport(ctx context.Context, id, source string, s
 		return nil, err
 	}
 	if viewport == nil {
-		return &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}, nil
+		return workbench.UnmeasuredViewport(source), nil
 	}
-	copy := *viewport
-	copy.Available = false
-	copy.Selected = false
-	copy.Intervals = []workbench.LineInterval{}
-	return &copy, nil
+	unread := *viewport
+	unread.Available = false
+	unread.Selected = false
+	unread.Intervals = workbench.NoIntervals()
+	return &unread, nil
 }
 
 func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*workbench.DocumentViewport, error) {
-	last := &workbench.DocumentViewport{Source: source, Intervals: []workbench.LineInterval{}}
+	last := workbench.UnmeasuredViewport(source)
 	deadline := time.NewTimer(viewportWaitTimeout)
 	defer deadline.Stop()
 	ticker := time.NewTicker(viewportPollInterval)
@@ -178,10 +175,7 @@ func (m *windowManager) awaitViewport(ctx context.Context, id, source string) (*
 			return nil, err
 		}
 		if viewport != nil {
-			last = viewport
-			if last.Intervals == nil {
-				last.Intervals = []workbench.LineInterval{}
-			}
+			last = viewport.Measured()
 			if viewport.Selected && viewport.Available {
 				return viewport, nil
 			}
@@ -272,10 +266,7 @@ func (m *windowManager) read(ctx context.Context, input readWindowInput) (string
 	if len(text) > readWindowLimit {
 		text = truncatedPrefix + text[len(text)-readWindowLimit:]
 	}
-	if viewport != nil {
-		if viewport.Intervals == nil {
-			viewport.Intervals = []workbench.LineInterval{}
-		}
+	if viewport.Measured() != nil {
 		text += "\n\n" + viewportSummary(viewport)
 	}
 	return text, viewport, nil
@@ -309,11 +300,7 @@ func (m *windowManager) closeWindow(ctx context.Context, input windowNameInput) 
 	return fmt.Sprintf(closedFormat, name), nil
 }
 
-// liveWindow resolves a registered name to a window that is still open, pruning
-// the entry and saying so if it is not. Nothing in the registry learns that the
-// user closed a window by hand, or that a command finished and took its window
-// with it; without this the agent's next read reaches a dead id and surfaces a
-// transport failure instead of a reason.
+// liveWindow prunes registry entries for windows closed outside the manager.
 func (m *windowManager) liveWindow(ctx context.Context, name string) (string, error) {
 	m.mu.Lock()
 	entry := m.windows[name]
@@ -381,17 +368,8 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	return fmt.Sprintf(notifiedFormat, message), nil
 }
 
-// escalate opens the picker pre-filled with name, keeping keyboard focus on it —
-// the deliberate exception to the conversation keeping focus, since no agent is
-// waiting for the keyboard back once the picker is up. It then blocks until the
-// manifest records an escalation outcome newer than the spawn.
-//
-// On confirm, the agent supervisor kills and relaunches this MCP server's parent
-// process, so usually the handoff is the caller disappearing and this call never
-// returns. It is a race, not a guarantee: if the relaunch is slow or never
-// happens, the poll observes the confirmed outcome and the caller reads the
-// message below. The escalation holds either way — the fresh context is owed by
-// a marker on disk, not by this process dying.
+// escalate gives focus to a pre-filled picker and waits for a newer outcome.
+// Confirmation survives the race between polling and the supervisor replacing this process.
 func (m *windowManager) escalate(ctx context.Context, input escalateInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
@@ -419,12 +397,10 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	return escalationCancelledMessage, nil
 }
 
-// requestRepos asks the user for repositories the session does not hold, or for
-// one it only reads to be taken up for editing. It queues the ordinary picker
-// pre-ticked with the request and blocks on the same stanza escalate waits for,
-// then hands back the whole resulting set: the user is free to change a role,
-// drop something asked for, or add something never mentioned, so the answer is
-// the set itself rather than a yes.
+// requestRepos queues the ordinary picker pre-ticked with the request and blocks
+// on the outcome stanza written for it. The answer is the whole resulting set
+// rather than a yes: the user may change a role, drop a row the agent asked for,
+// or add one it never mentioned.
 func (m *windowManager) requestRepos(ctx context.Context, input requestReposInput) (string, []repoRow, error) {
 	requested, reason, err := repoRequest(input)
 	if err != nil {
@@ -474,10 +450,8 @@ func reposAnswer(format string, requested []workbench.RequestedRepo, rows []repo
 }
 
 // shortfall reads the request against the resulting set. Absent covers both a
-// name nothing matched and a row the user dropped, which are one fact from here:
-// the session does not hold it and asking again unchanged will not help. A
-// repository held in a lesser role than the one asked for is the other case,
-// because the request was answered but not granted.
+// name nothing matched and a row the user dropped: from here they are one fact,
+// and asking again unchanged will not help.
 func shortfall(requested []workbench.RequestedRepo, rows []repoRow) []string {
 	roles := make(map[string]string, len(rows))
 	for _, row := range rows {

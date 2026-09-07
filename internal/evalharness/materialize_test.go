@@ -29,11 +29,13 @@ func TestMaterializeAssetsCreatesRunnerDiscoveryLayout(t *testing.T) {
 		t.Fatal("asset hash is empty")
 	}
 
+	// A skill links at its folder, not at the files inside it: Codex follows a
+	// symlinked skill directory and will not follow a symlinked SKILL.md.
 	for _, path := range []string{
 		filepath.Join(root, "CLAUDE.md"),
 		filepath.Join(root, "AGENTS.md"),
-		filepath.Join(root, ".claude", "skills", "research", "SKILL.md"),
-		filepath.Join(root, ".agents", "skills", "research", "SKILL.md"),
+		filepath.Join(root, ".claude", "skills", "research"),
+		filepath.Join(root, ".agents", "skills", "research"),
 	} {
 		info, err := os.Lstat(path)
 		if err != nil {

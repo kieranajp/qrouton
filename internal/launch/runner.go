@@ -189,7 +189,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 	if !ok {
 		return nil, nil, fmt.Errorf("%w: %q", ErrUnsupportedRunner, r.ID)
 	}
-	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), prompt), injectContext{
+	return spec.Inject(runnerArgv(spec, r, resume, sessionMode(dir), sessionTicket(dir), prompt), injectContext{
 		qroutonBin: qroutonBin,
 		dir:        dir,
 		handle:     handle,
@@ -205,6 +205,9 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	if name := sessionName(c.dir); name != "" {
+		argv = append(argv, claudeNameFlag, name)
+	}
 	argv = append(argv, mcp.Args...)
 	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
@@ -219,7 +222,9 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		claudeSubagentStopHook:  commandHook(hookCommand),
 		claudeNotificationHook:  commandHook(soundCommand, hookCommand),
 	}})
-	return append(argv, claudeSettingsFlag, string(settings)), os.Environ(), nil
+	env := workbench.WithEnv(os.Environ(), claudeMaintainProjectWorkingDirEnvVar,
+		claudeMaintainProjectWorkingDirValue)
+	return append(argv, claudeSettingsFlag, string(settings)), env, nil
 }
 
 func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
@@ -294,14 +299,12 @@ func RunnerMCPWiring(id, bin string, args []string) (MCPWiring, error) {
 }
 
 func claudeMCP(bin string, args []string) (MCPWiring, error) {
-	// Strings and maps of them: marshalling cannot fail.
 	config, _ := json.Marshal(map[string]any{claudeMCPServersKey: map[string]any{serverName: map[string]any{
 		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}}})
 	return MCPWiring{Args: []string{claudeMCPConfigFlag, string(config)}}, nil
 }
 
 func codexMCP(bin string, args []string) (MCPWiring, error) {
-	// A string and a slice of them: marshalling cannot fail.
 	command, _ := json.Marshal(bin)
 	encoded, _ := json.Marshal(args)
 	return MCPWiring{Args: []string{
@@ -358,7 +361,7 @@ func ShellQuote(s string) string {
 	return shellQuoteChar + strings.ReplaceAll(s, shellQuoteChar, shellQuoteEscape) + shellQuoteChar
 }
 
-func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, prompt string) []string {
+func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, provider, prompt string) []string {
 	argv := slices.Clone(r.Command)
 	if resume {
 		argv = spec.Resume(argv)
@@ -367,16 +370,22 @@ func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, prompt string) []s
 		}
 		return argv
 	}
-	return spec.Prompt(argv, openingMessage(mode, prompt))
+	return spec.Prompt(argv, openingMessage(mode, provider, prompt))
 }
 
-func openingMessage(mode, initialPrompt string) string {
+// An external request is attributed to the provider it came from, and to
+// nothing when no provider claims it.
+func openingMessage(mode, provider, initialPrompt string) string {
 	message := openingMessageRPI
 	if mode == modeAssistant {
 		message = openingMessageAssistant
 	}
-	if prompt := strings.TrimSpace(initialPrompt); prompt != "" {
-		message += linearRequestSeparator + prompt
+	prompt := strings.TrimSpace(initialPrompt)
+	if prompt == "" {
+		return message
 	}
-	return message
+	if provider == "" {
+		return message + requestSeparator + prompt
+	}
+	return message + fmt.Sprintf(providerRequestSeparator, provider) + prompt
 }

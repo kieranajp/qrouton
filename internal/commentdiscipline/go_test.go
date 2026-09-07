@@ -1,0 +1,200 @@
+package commentdiscipline
+
+import (
+	"os"
+	"path/filepath"
+	"reflect"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func TestCheckGoSourceCommentRuns(t *testing.T) {
+	cases := map[string]struct {
+		source string
+		max    int
+		want   bool
+	}{
+		"single comment":                 {source: "// one\npackage fixture\n", max: 1},
+		"adjacent comments":              {source: "// one\n// two\npackage fixture\n", max: 1, want: true},
+		"blank line splits":              {source: "// one\n\n// two\npackage fixture\n", max: 1},
+		"code splits":                    {source: "package fixture\n// one\nvar x = 1\n// two\n", max: 1},
+		"trailing does not join":         {source: "package fixture\n// one\nvar x = 1 // two\n", max: 1},
+		"physical block height":          {source: "package fixture\n/* one\n two */\n", max: 1, want: true},
+		"block joins line comment":       {source: "package fixture\n/* one */\n// two\n", max: 1, want: true},
+		"doc comment is prose":           {source: "package fixture\n// Fixture is a value.\n// It carries one.\ntype Fixture int\n", max: 1, want: true},
+		"go directive splits":            {source: "// one\n//go:build linux\n// two\npackage fixture\n", max: 1},
+		"build tag splits":               {source: "// one\n// +build linux\n// two\npackage fixture\n", max: 1},
+		"line directive splits":          {source: "// one\n//line fixture.go:100\n// two\npackage fixture\n", max: 1},
+		"lint directive splits":          {source: "package fixture\n// one\n//nolint:gocyclo\n// two\nvar x = 1\n", max: 1},
+		"line prose does not split":      {source: "package fixture\n// one\n// line two\n// three\nvar x = 1\n", max: 1, want: true},
+		"incomplete line does not split": {source: "package fixture\n// one\n//line fixture.go\n// three\nvar x = 1\n", max: 1, want: true},
+		"indented line does not split":   {source: "package fixture\n// one\n //line fixture.go:100\n// three\nvar x = 1\n", max: 1, want: true},
+		"spaced go prose does not split": {source: "package fixture\n// one\n// go: somewhere\n// three\nvar x = 1\n", max: 1, want: true},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			policy := testPolicy()
+			policy.MaxCommentRun = tc.max
+			diagnostics, err := CheckGoSource("fixture.go", []byte(tc.source), policy)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := hasRule(diagnostics, "comment-discipline/max-comment-run")
+			if got != tc.want {
+				t.Fatalf("max run finding = %v, want %v; diagnostics: %+v", got, tc.want, diagnostics)
+			}
+		})
+	}
+}
+
+func TestCheckGoSourceUsesPhysicalLocationsAfterLineDirective(t *testing.T) {
+	source := "package fixture\n//line generated.go:100\n// turns out src/runtime.go is required\n// second line\nvar value = 1\n"
+	policy := testPolicy()
+	policy.MaxCommentRun = 1
+	diagnostics, err := CheckGoSource("fixture.go", []byte(source), policy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Diagnostic{
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/max-comment-run"},
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-narration"},
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-path-pointer"},
+	}
+	if len(diagnostics) != len(want) {
+		t.Fatalf("CheckGoSource() = %+v", diagnostics)
+	}
+	for index := range want {
+		got := diagnostics[index]
+		if got.Path != want[index].Path || got.Line != want[index].Line || got.Column != want[index].Column || got.Rule != want[index].Rule {
+			t.Errorf("diagnostic %d = %+v, want location/rule %+v", index, got, want[index])
+		}
+	}
+}
+
+func TestCheckGoSourceRulesAndLocations(t *testing.T) {
+	source := `package fixture
+
+// TURNS OUT this calls src/runtime.go after https://example.com/docs/guide.go.
+var a = 1
+
+// See https://example.com/docs/guide.go.
+var b = 2
+
+// Imported from github.com/acme/package.
+var c = 3
+
+// See Runtime.go:42.
+var d = 4
+`
+	diagnostics, err := CheckGoSource("fixture.go", []byte(source), testPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Diagnostic{
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-narration"},
+		{Path: "fixture.go", Line: 3, Column: 1, Rule: "comment-discipline/no-path-pointer"},
+		{Path: "fixture.go", Line: 12, Column: 1, Rule: "comment-discipline/no-path-pointer"},
+	}
+	if len(diagnostics) != len(want) {
+		t.Fatalf("CheckGoSource() = %+v", diagnostics)
+	}
+	for index := range want {
+		got := diagnostics[index]
+		if got.Path != want[index].Path || got.Line != want[index].Line || got.Column != want[index].Column || got.Rule != want[index].Rule {
+			t.Errorf("diagnostic %d = %+v, want location/rule %+v", index, got, want[index])
+		}
+		if !strings.Contains(got.Message, "AGENTS.md") {
+			t.Errorf("diagnostic %d does not point to AGENTS.md: %q", index, got.Message)
+		}
+	}
+}
+
+func TestCheckGoSourceExemptsGeneratedFilesAndDirectives(t *testing.T) {
+	cases := map[string]string{
+		"generated file": "// Code generated by fixture. DO NOT EDIT.\n\npackage fixture\n\n// one\n// two\n",
+		"go directive":   "package fixture\n//go:generate turns out src/tool.go\n",
+		"line directive": "//line turns out src/tool.go:4\npackage fixture\n",
+	}
+	for name, source := range cases {
+		t.Run(name, func(t *testing.T) {
+			diagnostics, err := CheckGoSource("fixture.go", []byte(source), testPolicy())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(diagnostics) != 0 {
+				t.Fatalf("CheckGoSource() = %+v", diagnostics)
+			}
+		})
+	}
+}
+
+func TestCheckGoSourceRejectsMalformedGo(t *testing.T) {
+	if _, err := CheckGoSource("fixture.go", []byte("package"), testPolicy()); err == nil {
+		t.Fatal("CheckGoSource() succeeded")
+	}
+}
+
+func TestCheckGoTreeCoversNestedModulesAndSkipsSymlinks(t *testing.T) {
+	root := t.TempDir()
+	writeGo(t, root, "plain.go", "package root\n")
+	writeGo(t, root, "eval/fixture/go.mod", "module fixture\n")
+	writeGo(t, root, "eval/fixture/nested.go", "package fixture\n// one\n// two\n// three\n// four\n// five\n")
+	writeGo(t, root, "eval/results/local.go", "package results\n// one\n// two\n// three\n// four\n// five\n")
+	outside := filepath.Join(t.TempDir(), "outside.go")
+	if err := os.WriteFile(outside, []byte("package outside\n// one\n// two\n// three\n// four\n// five\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked.go")); err != nil && runtime.GOOS != "windows" {
+		t.Fatal(err)
+	}
+	diagnostics, err := CheckGoTree(root, testPolicy())
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := make([]string, len(diagnostics))
+	for index, diagnostic := range diagnostics {
+		paths[index] = diagnostic.Path
+	}
+	if !reflect.DeepEqual(paths, []string{"eval/fixture/nested.go"}) {
+		t.Fatalf("diagnostic paths = %v", paths)
+	}
+}
+
+func TestCheckGoTreeReturnsParseError(t *testing.T) {
+	root := t.TempDir()
+	writeGo(t, root, "broken.go", "package")
+	_, err := CheckGoTree(root, testPolicy())
+	if err == nil || !strings.Contains(err.Error(), "broken.go") {
+		t.Fatalf("CheckGoTree() error = %v", err)
+	}
+}
+
+func testPolicy() Policy {
+	return Policy{
+		SchemaVersion:    1,
+		MaxCommentRun:    4,
+		NarrationPhrases: []string{"turns out", "we used to"},
+		PathExtensions:   []string{"go", "js", "svelte", "css", "md"},
+	}
+}
+
+func hasRule(diagnostics []Diagnostic, rule string) bool {
+	for _, diagnostic := range diagnostics {
+		if diagnostic.Rule == rule {
+			return true
+		}
+	}
+	return false
+}
+
+func writeGo(t *testing.T, root, relative, contents string) {
+	t.Helper()
+	path := filepath.Join(root, relative)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(contents), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}

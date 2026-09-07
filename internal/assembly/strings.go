@@ -24,3 +24,9 @@ var (
 	branchTitleSeparators = []string{":", " — ", " - "}
 	branchArticles        = map[string]bool{"a": true, "an": true, "the": true}
 )
+
+const (
+	OutcomeDraft    = "draft"
+	OutcomeExisting = "existing-session"
+	OutcomeQueued   = "queued"
+)

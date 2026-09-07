@@ -149,8 +149,6 @@ type service struct {
 	methods []string
 }
 
-// services are the exported types with exported methods, which is what Wails
-// binds and what the page may call.
 func services(files []*ast.File) []service {
 	declared := map[string]bool{}
 	methods := map[string][]string{}

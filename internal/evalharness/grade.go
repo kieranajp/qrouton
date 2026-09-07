@@ -361,8 +361,6 @@ func (r manifestRepo) dir(workspace string) string {
 	return filepath.Join(workspace, filepath.FromSlash(r.WorktreePath))
 }
 
-// repoDir locates a repository named by a scenario check, which addresses
-// fixture repositories by name rather than by worktree path.
 func repoDir(workspace, name string) string {
 	return filepath.Join(workspace, srcDirName, name)
 }

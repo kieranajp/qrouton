@@ -32,6 +32,7 @@ func main() {
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 			&cli.StringFlag{Name: linearIssueFlag, Usage: linearIssueFlagUsage},
+			&cli.StringFlag{Name: ticketFlag, Usage: ticketFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
 		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
@@ -52,24 +53,37 @@ func open(c *cli.Context) error {
 	if arg := c.Args().First(); arg != "" {
 		return fmt.Errorf("%w: %q", errNoSessionArguments, arg)
 	}
-	linearIssue, linearPrompt := "", ""
-	if c.IsSet(linearIssueFlag) {
-		canonical, err := ticket.CanonicalLinearURL(c.String(linearIssueFlag))
-		if err != nil {
-			return err
-		}
-		linearIssue = canonical
-		linearPrompt = os.Getenv(linearPromptEnvVar)
+	reference, prompt, err := offeredTicket(c)
+	if err != nil {
+		return err
 	}
-	return workbench.WithLaunchLock(func() error { return openLocked(c, linearIssue, linearPrompt) })
+	return workbench.WithLaunchLock(func() error { return openLocked(c, reference, prompt) })
 }
 
-func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
+// offeredTicket is the ticket this invocation is opening on, canonical and ready
+// to dedupe against. --linear-issue is the name Linear Desktop already holds in
+// users' coding-tools.json, and it alone carries a free-text prompt.
+func offeredTicket(c *cli.Context) (string, string, error) {
+	flag, prompt := ticketFlag, ""
+	switch {
+	case c.IsSet(linearIssueFlag):
+		flag, prompt = linearIssueFlag, os.Getenv(linearPromptEnvVar)
+	case !c.IsSet(ticketFlag):
+		return "", "", nil
+	}
+	canonical, err := ticket.Canonical(c.String(flag))
+	if err != nil {
+		return "", "", err
+	}
+	return canonical, prompt, nil
+}
+
+func openLocked(c *cli.Context, offered, prompt string) error {
 	discovery := discoverProcess()
-	if linearIssue != "" {
+	if offered != "" {
 		if discovery.Socket != "" {
-			_, err := workbench.OpenLinearIssue(
-				context.Background(), discovery.Socket, linearIssue, linearPrompt,
+			_, err := workbench.OpenTicket(
+				context.Background(), discovery.Socket, offered, prompt,
 			)
 			return err
 		}
@@ -86,7 +100,7 @@ func openLocked(c *cli.Context, linearIssue, linearPrompt string) error {
 		}
 		return detachProcess(launch.WorkbenchSpec{
 			Socket: socket, Runner: c.String(runnerFlag), Editor: editorFor(cfg),
-			LinearIssue: linearIssue, LinearPrompt: linearPrompt,
+			Ticket: offered, TicketPrompt: prompt,
 		}, os.Environ())
 	}
 	// There is one workbench, and it opens on a session: two of them would each
@@ -132,8 +146,6 @@ func pickRunner(cfg *config.Config, id string) (launch.Runner, error) {
 	return launch.FirstInstalled(cfg)
 }
 
-// launchRunner opens the workbench on the session. The workbench builds the
-// agent's command as it boots it, and that supervisor stamps the prompts.
 func launchRunner(cfg *config.Config, dir string, r launch.Runner, resume bool) error {
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
@@ -193,8 +205,8 @@ func workbenchProcess(marshalled string) error {
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
 		Socket:       spec.Socket,
-		LinearIssue:  spec.LinearIssue,
-		LinearPrompt: spec.LinearPrompt,
+		Ticket:       spec.Ticket,
+		TicketPrompt: spec.TicketPrompt,
 		LinearCommand: []string{
 			bin,
 			"--" + linearIssueFlag,
@@ -282,7 +294,7 @@ func (p workbenchPorts) ValidateLaunch(overrides map[string][]string) error {
 // session. Detach returns only once the child answers, so the two overlap for
 // that wait — safe because the successor holds no session, and so claims no
 // supervisor the caller might still own.
-func (p workbenchPorts) Relaunch(linearIssue func() (string, string)) error {
+func (p workbenchPorts) Relaunch(pending func() (string, string)) error {
 	return workbench.WithLaunchLock(func() error {
 		socket, err := workbench.NewSocketPath()
 		if err != nil {
@@ -290,8 +302,8 @@ func (p workbenchPorts) Relaunch(linearIssue func() (string, string)) error {
 		}
 		next := p.spec
 		next.SessionRoot, next.Resume, next.Socket = "", false, socket
-		if linearIssue != nil {
-			next.LinearIssue, next.LinearPrompt = linearIssue()
+		if pending != nil {
+			next.Ticket, next.TicketPrompt = pending()
 		}
 		return launch.Detach(launch.WorkbenchArgv(p.bin, next), config.WithoutOverrides(p.env),
 			socket, workbenchLog(next))

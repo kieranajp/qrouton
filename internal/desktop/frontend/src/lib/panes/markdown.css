@@ -8,12 +8,8 @@
   position: relative;
 }
 
-/* Source line numbers, so a passage in a long document can be referred to by
-   number. Every number resolves its column against .markdown and its row
-   against wherever the block already sits, which keeps one gutter for blocks at
-   every depth — a nested list item, a fenced block — without any of them
-   knowing how far they are indented. A block spanning several source lines is
-   named by the one it opens on: the prose is reflowed and no longer has rows. */
+/* Numbers share the root gutter while retaining each nested block's row.
+   Reflowed blocks use their opening source line. */
 .markdown [data-line]::before {
   content: attr(data-line);
   position: absolute;

@@ -10,9 +10,6 @@ export const menuHeight = (items = []) =>
   items.reduce((total, item) => total + (item === "-" ? RULE : ITEM), PADDING);
 
 /**
- * place is where a menu opened at point goes: hanging down and to the right of
- * the pointer, flipped up rather than off the bottom of the viewport, and pulled
- * back inside rather than off the right.
  * @param {{x: number, y: number}} point
  * @param {{width: number, height: number}} size
  * @param {{width: number, height: number}} viewport

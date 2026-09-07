@@ -7,33 +7,30 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// identity is what a session is called and where it lives. Onboarding chooses
-// both after the workbench has opened, so it is replaced rather than mutated.
-type identity struct {
-	slug string
-	root string
-}
-
 type sessionState struct {
-	// terminal addresses the conversation PTY. Onboarding execs the supervisor
-	// inside that PTY, so a slug-keyed stream would go deaf across the handover.
-	terminal string
-	agents   *agentActivity
-	provider string
-	argv     []string
-	env      []string
-	named    atomic.Pointer[identity]
+	// terminal addresses the conversation PTY rather than the session, because
+	// the page attaches its stream before the supervisor is running.
+	terminal    string
+	agents      *agentActivity
+	provider    string
+	argv        []string
+	env         []string
+	sessionSlug string
+	sessionRoot string
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
+	// tail is the last of the conversation, kept back for the log a supervisor's
+	// exit writes. The pane itself keeps no scrollback.
+	tail *ring
 
 	mu      sync.Mutex
 	stopped bool
@@ -55,7 +52,6 @@ func (s *sessionState) requestPicker(req workbench.PickerRequest) {
 	s.picker = &req
 }
 
-// pendingPicker is this session's picker request while it is still worth drawing.
 func (s *sessionState) pendingPicker() *workbench.PickerRequest {
 	if s == nil {
 		return nil
@@ -76,19 +72,32 @@ func (s *sessionState) clearPicker() {
 	s.picker = nil
 }
 
-// slug and root tolerate a nil session, which is the window showing none.
+// slug and root tolerate a nil session, which is the window showing none. Both
+// are fixed at construction, so neither takes the lock.
 func (s *sessionState) slug() string {
 	if s == nil {
 		return ""
 	}
-	return s.named.Load().slug
+	return s.sessionSlug
 }
 
 func (s *sessionState) root() string {
 	if s == nil {
 		return ""
 	}
-	return s.named.Load().root
+	return s.sessionRoot
+}
+
+// alive is whether the session still has a supervisor behind it. A session
+// between add and the page's first start has no PTY yet and counts as alive:
+// the page needs its terminal id to make that call.
+func (s *sessionState) alive() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.stopped && (s.process == nil || !s.process.done())
 }
 
 // start launches the supervisor under a PTY sized to the terminal displaying it.
@@ -109,9 +118,13 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	go process.pump(
 		func(b []byte) {
 			s.agents.output()
+			if s.tail != nil {
+				s.tail.write(b)
+			}
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
 		func(code int) {
+			s.recordExit(code)
 			emit(ptyExitEvent+s.terminal, code)
 			if exited != nil {
 				exited(s, code)
@@ -119,6 +132,23 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 		},
 	)
 	return nil
+}
+
+// recordExit logs a death the workbench did not cause. A supervisor it stopped
+// itself has nothing to explain, and a line plus a tail for every reload and
+// every quit would rotate the one crash that mattered off the disk.
+func (s *sessionState) recordExit(code int) {
+	s.mu.Lock()
+	stopped, tail := s.stopped, s.tail
+	s.mu.Unlock()
+	if stopped {
+		return
+	}
+	var last string
+	if code != 0 && tail != nil {
+		last = tail.text(false)
+	}
+	recordAgentExit(s.root(), s.provider, code, last)
 }
 
 func (s *sessionState) write(data []byte) error {
@@ -229,18 +259,57 @@ func (s *Sessions) Show(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
 	state := s.bySlug(slug)
-	if state == nil {
-		root := s.boot.root(slug)
-		if root == "" {
-			return unknownSession(slug)
-		}
-		booted, err := s.start(root, "", true)
-		if err != nil {
-			return err
-		}
-		state = booted
+	if state.alive() {
+		s.reveal(state)
+		return nil
 	}
-	s.reveal(state)
+	// A supervisor that died left its state registered, and a pane drawn against
+	// it reaches nothing.
+	var fallback *sessionState
+	var emptied bool
+	if state != nil {
+		fallback, emptied = s.recycle(state)
+	}
+	root := s.boot.root(slug)
+	if root == "" {
+		if emptied {
+			s.reveal(fallback)
+		}
+		return unknownSession(slug)
+	}
+	return s.replace(root, fallback, emptied)
+}
+
+// Reload restarts a session's supervisor and resumes the conversation, which is
+// the way out of one that is wedged rather than dead. A supervisor left behind
+// by a previous workbench is refused rather than killed.
+func (s *Sessions) Reload(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	var fallback *sessionState
+	var emptied bool
+	if state := s.bySlug(slug); state != nil {
+		fallback, emptied = s.recycle(state)
+	}
+	return s.replace(root, fallback, emptied)
+}
+
+// replace boots a session and puts it on screen. A boot that fails after
+// recycling had emptied the window hands the window back rather than leaving it
+// on nothing.
+func (s *Sessions) replace(root string, fallback *sessionState, emptied bool) error {
+	booted, err := s.start(root, "", true)
+	if err != nil {
+		if emptied {
+			s.reveal(fallback)
+		}
+		return err
+	}
+	s.reveal(booted)
 	return nil
 }
 
@@ -299,21 +368,10 @@ func (s *Sessions) RevealPath(slug, path string) error {
 	if root == "" {
 		return unknownSession(slug)
 	}
-	inside, err := within(root, path)
-	if err != nil || !inside {
+	if _, inside := sessionpaths.Within(root, path); !inside {
 		return ErrPathOutsideSession
 	}
 	return s.boot.reveal(path)
-}
-
-// within reports whether path resolves inside root, with both cleaned so a
-// climbing path cannot leave the session by spelling.
-func within(root, path string) (bool, error) {
-	rel, err := filepath.Rel(filepath.Clean(root), filepath.Clean(path))
-	if err != nil {
-		return false, err
-	}
-	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)), nil
 }
 
 // Uncommitted names the repositories a cleanup would take changes from. It is a
@@ -346,7 +404,7 @@ func (s *Sessions) Cleanup(slug string) error {
 	// Retiring first is what stops a supervisor running on an unlinked directory
 	// and what stops the window recorder writing the manifest back after removal.
 	if state := s.bySlug(slug); state != nil {
-		s.retire(state)
+		s.retireLocked(state)
 	} else if pid, alive := session.AgentAlive(root); alive {
 		return agentAlreadyRunning(filepath.Base(root), pid)
 	}
@@ -415,8 +473,24 @@ func (s *Sessions) adopt(root, runnerID string) error {
 	return nil
 }
 
+// recycle drops a session without putting anything in its place, so the window
+// never falls back to the session before this one on its way to a replacement.
+// The caller reveals under the same showMu: the replacement it booted, or the
+// fallback returned here when that boot failed.
+func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShown bool) {
+	s.boot.teardown(state)
+	state.stop()
+	return s.forget(state)
+}
+
 // retire ends one session without ending the app.
 func (s *Sessions) retire(state *sessionState) {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	s.retireLocked(state)
+}
+
+func (s *Sessions) retireLocked(state *sessionState) {
 	s.boot.teardown(state)
 	state.stop()
 	fallback, wasShown := s.forget(state)
@@ -424,7 +498,40 @@ func (s *Sessions) retire(state *sessionState) {
 		s.touch()
 		return
 	}
+	if fallback == nil {
+		if root := s.nextInactiveRoot(state.slug()); root != "" {
+			fallback, _ = s.start(root, "", true)
+		}
+	}
 	s.reveal(fallback)
+}
+
+func (s *Sessions) nextInactiveRoot(after string) string {
+	s.mu.Lock()
+	rail := append([]string(nil), s.rail...)
+	registered := make(map[string]bool, len(s.slugs))
+	for slug := range s.slugs {
+		registered[slug] = true
+	}
+	s.mu.Unlock()
+
+	start := 0
+	for i, slug := range rail {
+		if slug == after {
+			start = (i + 1) % len(rail)
+			break
+		}
+	}
+	for i := range rail {
+		slug := rail[(start+i)%len(rail)]
+		if slug == after || registered[slug] {
+			continue
+		}
+		if root := s.boot.root(slug); root != "" {
+			return root
+		}
+	}
+	return ""
 }
 
 func (s *Sessions) stopAll() {
@@ -447,12 +554,14 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 		s.agents[slug] = tracker
 	}
 	state := &sessionState{
-		terminal: fmt.Sprintf(terminalIDFormat, s.seq),
-		agents:   tracker,
-		argv:     argv,
-		env:      env,
+		terminal:    fmt.Sprintf(terminalIDFormat, s.seq),
+		agents:      tracker,
+		argv:        argv,
+		env:         env,
+		sessionSlug: slug,
+		sessionRoot: root,
+		tail:        &ring{limit: agentTailBytes},
 	}
-	state.named.Store(&identity{slug: slugFor(root), root: root})
 	s.slugs[state.slug()] = state
 	s.terms[state.terminal] = state
 	return state
@@ -630,8 +739,7 @@ func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	return out
 }
 
-// slugFor is a session's key: the name of its directory. The landing path has no
-// directory yet.
+// slugFor is a session's key: the name of its directory.
 func slugFor(root string) string {
 	if root == "" {
 		return ""

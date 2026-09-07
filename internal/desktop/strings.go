@@ -36,6 +36,10 @@ const (
 	rootPath          = "/"
 	contentTypeHeader = "Content-Type"
 
+	// deckAssetPath leads a deck's own media, addressed by the per-window token
+	// that follows it. Window ids are sequential and never appear in a URL.
+	deckAssetPath = "/deck/"
+
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
@@ -58,10 +62,6 @@ const (
 	assemblyProgressEvent  = "assembly:progress"
 	assemblyRequestedEvent = "assembly:requested"
 	orgsChangedEvent       = "orgs:changed"
-
-	assemblyOutcomeDraft    = "draft"
-	assemblyOutcomeExisting = "existing-session"
-	assemblyOutcomeQueued   = "queued"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -89,6 +89,18 @@ const (
 
 	// windowScreenLines is what a read without full returns.
 	windowScreenLines = 50
+
+	// agentTailBytes is how much of a conversation is kept back for the log its
+	// supervisor's exit writes; agentLogLimit is when that log is rotated.
+	agentTailBytes = 8 * 1024
+	agentLogLimit  = 256 * 1024
+)
+
+const (
+	agentLogPreviousSuffix = ".1"
+
+	agentExitLogFormat  = "%s agent exited: provider=%s status=%d\n"
+	agentExitTailFormat = "--- last output ---\n%s\n--- end output ---\n"
 )
 
 const documentPoll = time.Second
@@ -138,3 +150,17 @@ const (
 	agentStateFinished = status.AgentStateFinished
 	agentStateFailed   = status.AgentStateFailed
 )
+
+// deckMediaTypes is the whole of what a deck can reach through its asset route.
+var deckMediaTypes = map[string]string{
+	".png":  "image/png",
+	".jpg":  "image/jpeg",
+	".jpeg": "image/jpeg",
+	".gif":  "image/gif",
+	".webp": "image/webp",
+	".avif": "image/avif",
+	".svg":  "image/svg+xml",
+	".mp4":  "video/mp4",
+	".webm": "video/webm",
+	".mov":  "video/quicktime",
+}

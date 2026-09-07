@@ -104,3 +104,29 @@ func TestBodyIsWhatIsLeftAfterFrontmatter(t *testing.T) {
 		})
 	}
 }
+
+func TestMarpIsDeclaredInFrontmatter(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"no frontmatter", "# Deck\n\nmarp: true\n", false},
+		{"declared", "---\nmarp: true\ntheme: qrouton\n---\n\n# Deck\n", true},
+		{"declared after other keys", "---\ntitle: x\nmarp: true\n---\n", true},
+		{"declared uppercase", "---\nmarp: True\n---\n", true},
+		{"padded", "---\n  marp :  true  \n---\n", true},
+		{"declined", "---\nmarp: false\n---\n", false},
+		{"another value", "---\nmarp: maybe\n---\n", false},
+		{"absent", "---\ntheme: qrouton\n---\n", false},
+		{"in the body, not the frontmatter", "---\na: 1\n---\n\nmarp: true\n", false},
+		{"unclosed frontmatter", "---\nmarp: true\n", false},
+		{"empty", "", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Marp(tc.text); got != tc.want {
+				t.Fatalf("Marp(%q) = %v; want %v", tc.text, got, tc.want)
+			}
+		})
+	}
+}

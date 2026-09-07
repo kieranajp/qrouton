@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "maxCommentRun": 4,
+  "narrationPhrases": [
+    "was a giveaway",
+    "the giveaway",
+    "we used to",
+    "it used to",
+    "used to be",
+    "turns out",
+    "i tried",
+    "we tried",
+    "first attempt",
+    "originally",
+    "the problem was",
+    "the bug was",
+    "the issue was",
+    "this was actually",
+    "in hindsight"
+  ],
+  "pathExtensions": ["go", "js", "jsx", "ts", "tsx", "svelte", "css", "md"]
+}

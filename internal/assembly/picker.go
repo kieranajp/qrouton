@@ -6,10 +6,9 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-// Answer is what the picker was, rather than what it picked. Escalating moves
-// the session to RPI; Awaited means a Go-side request is polling for the outcome
-// stanza. An escalation is both, a repository request only the second, and a
-// picker the user opened from the rail neither.
+// Answer is what the picker was, not what it picked: Escalating moves the
+// session to RPI, Awaited means a Go-side caller is polling for the outcome
+// stanza.
 type Answer struct {
 	Escalating bool
 	Awaited    bool
@@ -18,11 +17,7 @@ type Answer struct {
 	Kind string
 }
 
-// Confirm adds the picked repositories to a live session: the composed
-// repositories and the work's details land in one atomic manifest write, after a
-// take-up that has already recorded itself. The mode and the confirmed stanza
-// join that same write, so a polling reader never sees repos added while the
-// mode still says assistant.
+// Confirm records repositories, work details, mode, and the picker outcome atomically.
 func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.ProgressFunc) error {
 	// Loaded here, not carried in: a picker can sit open for half an hour while
 	// the workbench keeps rewriting the manifest underneath it.
@@ -56,9 +51,8 @@ func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.Pro
 	}); err != nil {
 		return err
 	}
-	// Only for a picker nothing was waiting on. The signal relaunches the runner,
-	// which would tear down the very tool call blocked on this answer, and an
-	// awaited caller has the resulting set in its return value anyway.
+	// The signal relaunches the runner, which would tear down the very tool call
+	// blocked on this answer; an awaited caller gets the resulting set returned.
 	if !ans.Awaited {
 		notice := repositoryNotice(m, updated)
 		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
@@ -74,11 +68,7 @@ func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.Pro
 	return nil
 }
 
-// takeUp re-checks out the repositories the session already reads and records
-// them, ahead of any clone and in a write of its own. Both halves matter: a
-// refusal leaves the session holding no checkout the manifest never learned
-// about, and a clone that then fails cannot leave the file calling a checkout
-// pinned that is sitting on the session branch.
+// takeUp records upgraded checkouts before cloning additions can fail.
 func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.ProgressFunc) error {
 	if len(d.Upgrades) == 0 {
 		return nil
@@ -95,9 +85,7 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 	})
 }
 
-// Cancel records the cancelled outcome — the stanza alone, mode and
-// repositories untouched. Only an awaited picker has a caller waiting on that
-// stanza; the add-repos button's cancel is nobody's business.
+// Cancel records a cancelled outcome only for an awaited picker; the add-repos button's cancel is nobody's business.
 func Cancel(dir string, ans Answer) error {
 	if !ans.Awaited {
 		return nil

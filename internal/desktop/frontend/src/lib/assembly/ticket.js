@@ -23,9 +23,7 @@ export const claimSeed = (current, external, claimed = "") => {
 /**
  * @param {Draft} draft
  * @param {(url: string) => Promise<Result>} fetchTicket
- * @param {{fetching?: (active: boolean) => void,
- *   loaded?: (fields: {name: string, branchDescription: string, description: string}) => void,
- *   failed?: (error: unknown) => void}} hooks
+ * @param {{fetching?: (active: boolean) => void, loaded?: (fields: {name: string, branchDescription: string, description: string}) => void, failed?: (error: unknown) => void}} hooks
  */
 export function loader(draft, fetchTicket, hooks = {}) {
   let fetching = false;
@@ -61,14 +59,10 @@ export function loader(draft, fetchTicket, hooks = {}) {
   return { load, seed };
 }
 
-/**
- * fill applies a fetched ticket to the three fields it may touch. A result for a
- * URL the field has since moved off is dropped, and a fill only ever lands in an
- * empty field.
+/** Ticket results fill empty fields only while the requested URL remains current.
  * @param {Draft} draft
  * @param {Result} result
- * @returns {{name: string, branchDescription: string, description: string}}
- */
+ * @returns {{name: string, branchDescription: string, description: string}} */
 export function fill(draft, result) {
   const kept = {
     name: draft.name ?? "",

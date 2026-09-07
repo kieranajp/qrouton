@@ -46,13 +46,8 @@ func FormatFor(name string) (DocumentFormat, bool) {
 	return format, ok
 }
 
-// WindowOptions describes a window the agent opens. Command belongs to a
-// terminal window and Content to a document one. CloseOnExit closes a terminal
-// window whose process exits zero; a non-zero exit keeps it open regardless.
-// Attention marks a window that needs the user's eye without taking focus.
-// Source names the session file the window shows, relative to the session root,
-// so a second request for that file selects this window instead of opening
-// another. Badge leads the tab in the artifact's own colour, ahead of Label.
+// WindowOptions describes an agent-opened terminal or document.
+// Source deduplicates document windows; Badge precedes Label in the tab.
 type WindowOptions struct {
 	Kind    WindowKind     `json:"kind"`
 	Label   string         `json:"label"`
@@ -63,6 +58,10 @@ type WindowOptions struct {
 	Content string         `json:"content,omitempty"`
 	Format  DocumentFormat `json:"format,omitempty"`
 	Span    LineSpan       `json:"span,omitzero"`
+	// Deck is a Markdown document whose frontmatter declares it slides. It rides
+	// beside Format rather than replacing it, since a deck is still whatever
+	// kind of artifact its path says it is.
+	Deck bool `json:"deck,omitempty"`
 	// Select changes the session's selected tab without requesting native focus.
 	Select      bool `json:"select,omitempty"`
 	Attention   bool `json:"attention,omitempty"`
@@ -90,6 +89,25 @@ type DocumentViewport struct {
 	Available bool           `json:"available"`
 	Selected  bool           `json:"selected"`
 	Intervals []LineInterval `json:"intervals"`
+}
+
+// UnmeasuredViewport is a viewport that reports nothing but its source, which
+// is what a tab nobody is looking at answers with.
+func UnmeasuredViewport(source string) *DocumentViewport {
+	return &DocumentViewport{Source: source, Intervals: NoIntervals()}
+}
+
+// NoIntervals is the empty interval list. A nil slice marshals as JSON null,
+// which reaches a .length on the page and takes the window down with it, so no
+// viewport crossing the wire may carry one.
+func NoIntervals() []LineInterval { return []LineInterval{} }
+
+// Measured is v with its intervals guaranteed non-nil, and nil left as nil.
+func (v *DocumentViewport) Measured() *DocumentViewport {
+	if v != nil && v.Intervals == nil {
+		v.Intervals = NoIntervals()
+	}
+	return v
 }
 
 // Bounds reports the span as a closed line range, and false when it names no
@@ -124,14 +142,9 @@ type WindowHost interface {
 	Picker(ctx context.Context, req PickerRequest) error
 }
 
-// PickerRequest is a picker waiting on a session. Kind says what it is asking
-// for, which is what decides whether confirming also changes the session's mode.
-// Name is what the agent proposes to call the work and Prefix the prefix a
-// branch is cut with, both of which a session with repositories already has
-// answers for. Requested and Reason belong to a repository request: the rows the
-// agent wants and the one line the user reads before answering. A caller's
-// deadline keeps a stale request from being drawn; zero is a picker the user
-// opened directly and remains live until they answer it.
+// PickerRequest expires agent requests at Deadline; direct user requests have no
+// deadline. Kind decides whether confirming also changes the session's mode, and
+// Requested and Reason belong to a repository request.
 type PickerRequest struct {
 	SessionRoot string          `json:"session_root"`
 	Kind        string          `json:"kind,omitempty"`
@@ -143,8 +156,7 @@ type PickerRequest struct {
 }
 
 // RequestedRepo is one repository an agent asked for, in the role it asked for
-// it. Whether that is an addition or a promotion is not the agent's to say: the
-// workbench classifies each one against the manifest as it stands.
+// it. Whether that is an addition or a promotion is the workbench's to classify.
 type RequestedRepo struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`

@@ -77,7 +77,7 @@ func TestTheConversationURLIsServedWithoutARedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := assetHandler(assets)
+	handler := assetHandler(assets, nil)
 	request := httptest.NewRequest(http.MethodGet, frontendRoot, nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -107,7 +107,7 @@ func TestTheHandlerServesThePaletteBesideTheEmbeddedTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	assetHandler(assets).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, theme.Path, nil))
+	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, theme.Path, nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("%s answered %d", theme.Path, recorder.Code)
 	}
@@ -127,7 +127,7 @@ func TestTheConversationPageLinksThePalette(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	assetHandler(assets).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, frontendRoot, nil))
+	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, frontendRoot, nil))
 	if !strings.Contains(recorder.Body.String(), theme.Path) {
 		t.Fatalf("%s does not link %s", frontendRoot, theme.Path)
 	}

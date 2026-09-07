@@ -7,12 +7,7 @@ export const MENU_WIDTH = 168;
 const paste = { label: "Paste", act: "paste" };
 const selectAll = { label: "Select All", act: "selectAll" };
 
-/**
- * itemsFor is the menu a right click opens. A click with nothing to offer gets
- * no items and opens no menu: inert chrome in a native window has none either,
- * and a menu that only ever says "Copy" is how a page admits it is a page.
- * @param {{kind?: string, selection?: string, writable?: boolean, linkKind?: "document"|"external"|"none"}} at
- */
+/** @param {{kind?: string, selection?: string, writable?: boolean, linkKind?: "document"|"external"|"none"}} at */
 export function itemsFor({ kind, selection = "", writable = true, linkKind } = {}) {
   const copy = { label: "Copy", act: "copy", disabled: !selection };
   switch (kind) {

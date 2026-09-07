@@ -2,15 +2,14 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import ArtifactTag from "../core/ArtifactTag.svelte";
-  import CubeMark from "../core/CubeMark.svelte";
   import { untrack } from "svelte";
-  import { artifactTone } from "../artifacts.js";
+  import ArtifactPane from "./ArtifactPane.svelte";
   import { diagrams, links, viewport } from "./actions.js";
-  import CopyPath from "./CopyPath.svelte";
+  import { clampedSpan, holding, partition } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
+  import { reader, scrolls } from "./reader.svelte.js";
   import { parseResearch } from "./research.js";
-  import { dealt } from "./sections.js";
   import "./markdown.css";
 
   /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
@@ -18,41 +17,32 @@
 
   let rendered = $derived(render(doc.text));
   let research = $derived(parseResearch(doc.text));
-  let parts = $derived(partition(rendered.body, research));
+  let sections = $derived(sectionsOf(research));
+  let parts = $derived(partition(rendered.body, sections));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
-  let tone = $derived(artifactTone(doc.kind));
-  let mode = $state("research");
+  let structured = $derived(Boolean(research.summary) || research.items.length > 0);
+
+  // Closed is the resting state: the accordion is an index, and an index the
+  // reader has to fold up again is no index at all.
+  let open = $state(untrack(() => opening(research, doc.line ?? 0)));
+
+  const view = reader({
+    structured: "research",
+    doc: () => doc,
+    reload: () => (open = opening(research, doc.line ?? 0)),
+  });
 
   /** @type {HTMLElement | undefined} */
   let sheet = $state();
   /** @type {HTMLElement | undefined} */
   let reading = $state();
 
-  // The pane scrolls inside itself so its bar stops at the footer, which makes
-  // the sheet the scroll root rather than the port around it. Research with no
-  // sections is plain markdown, and scrolls where every other pane does.
-  $effect(() => {
-    const scroller = mode === "document" ? reading : sheet;
-    const structured = Boolean(research.summary) || research.items.length > 0;
-    onScroller?.(structured ? (scroller ?? null) : null);
-    return () => onScroller?.(null);
-  });
-
-  // Closed is the resting state: the accordion is an index, and an index the
-  // reader has to fold up again is no index at all.
-  let open = $state(untrack(() => holding(research, doc.line ?? 0)));
-  let epoch = untrack(() => doc.viewportEpoch);
-
-  // A push carries the span along with the text, so only a reload — which is
-  // what moves the epoch — counts as a fresh request to open an item.
-  $effect(() => {
-    const at = doc.viewportEpoch;
-    const asked = research;
-    untrack(() => {
-      if (at === epoch) return;
-      epoch = at;
-      open = holding(asked, doc.line ?? 0);
-    });
+  scrolls({
+    reading: () => view.reading,
+    structured: () => sheet,
+    document: () => reading,
+    when: () => structured,
+    onScroller: () => onScroller,
   });
 
   /** Every section in document order, which is the order their indexes run in. */
@@ -61,35 +51,9 @@
   }
 
   /** The item a line falls in, if any: the one the pane opens on. */
-  function holding(parsed, line) {
-    const found = parsed.items.find((item) => line >= item.from && line <= item.to);
-    return new Set(line > 0 && found ? [found.index] : []);
-  }
-
-  // The document is rendered whole and dealt out to the sections it was written
-  // as. Each section's opening heading is kept apart from its body: the pane
-  // states the name itself, and the heading's own line still has to be findable.
-  function partition(html, parsed) {
-    const sections = sectionsOf(parsed);
-    const preamble = [];
-    const bodies = sections.map(() => ({ opening: [], body: [] }));
-    for (const block of dealt(html)) {
-      const at = sections.findIndex(
-        (section) => block.from >= section.from && block.from <= section.to,
-      );
-      if (at < 0) {
-        preamble.push(block.html);
-        continue;
-      }
-      bodies[at][block.from === sections[at].from ? "opening" : "body"].push(block.html);
-    }
-    return {
-      preamble: preamble.join(""),
-      sections: bodies.map((section) => ({
-        opening: section.opening.join(""),
-        body: section.body.join(""),
-      })),
-    };
+  function opening(parsed, line) {
+    const at = holding(parsed.items, line);
+    return new Set(at < 0 ? [] : [parsed.items[at].index]);
   }
 
   /** @param {MouseEvent} event */
@@ -105,111 +69,82 @@
     open = on ? new Set(research.items.map((item) => item.index)) : new Set();
   }
 
-  // A span running past the end of the item it opens in says nothing about the
-  // one after it, so the pane neither marks that part nor scrolls to it.
-  function requested() {
-    const line = doc.line ?? 0;
-    const to = doc.to ?? 0;
-    const opened =
-      sectionsOf(research).find((section) => line >= section.from && line <= section.to) ??
-      research.preamble;
-    return { line, to: to > line ? Math.min(to, opened.to) : to };
-  }
-
   const port = viewport({
-    span: requested,
+    span: () => clampedSpan(doc, sections[holding(sections, doc.line ?? 0)] ?? research.preamble),
     epoch: () => doc.viewportEpoch,
   });
 </script>
 
-{#if !research.summary && research.items.length === 0}
+{#if !structured}
   <MarkdownPane {doc} {id} {active} {scrollRoot} />
 {:else}
-  <article class="document research">
-    <div class="head">
-      <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+  <ArtifactPane
+    {doc}
+    structured="research"
+    label="Research"
+    mode={view.mode}
+    onMode={(next) => (view.mode = next)}>
+    {#snippet tag()}
       <ArtifactTag kind={doc.kind ?? "RESEARCH"} long />
-      {#if doc.source}
-        <CapsLabel tone="dim">{doc.source}</CapsLabel>
-      {/if}
-      <CopyPath path={doc.path} />
-    </div>
-    {#if mode === "document"}
-      <div class="reading" bind:this={reading}>
-        <!-- The renderer lifts the opening heading out of the body, so the
-             document view states the research's name itself. -->
-        <h1 class="display-lg">{research.title || heading}</h1>
-        <MarkdownPane {doc} {id} {active} {scrollRoot} bare />
-      </div>
-    {:else}
-      <div
-        class="sheet"
-        bind:this={sheet}
-        data-document-source={doc.source}
-        use:links={doc.source}
-        use:diagrams={{ id, text: doc.text }}
-        use:port={{ id, active, scrollRoot, key: [...open].sort().join(",") }}>
-        <h1 class="display-lg">{research.title || heading}</h1>
-        <div class="markdown lead">{@html parts.preamble}</div>
-        {#if research.summary}
-          <section class="pinned">
-            <CapsLabel>{research.summary.name}</CapsLabel>
-            <div class="markdown lifted">{@html parts.sections[research.summary.index].opening}</div>
-            <div class="markdown">{@html parts.sections[research.summary.index].body}</div>
-          </section>
-        {/if}
-        <div class="items">
-          {#each research.items as item (item.index)}
-            <details class="item" data-item={item.name} open={open.has(item.index)}>
-              <!-- The pane owns what is open, not the element: its own toggle
-                   lands a task later, and a redraw in between undoes it.
-                   Enter and Space on a summary arrive here as clicks. -->
-              <summary onclick={(event) => turn(event, item.index)}>{item.name}</summary>
-              <div class="markdown lifted">{@html parts.sections[item.index].opening}</div>
-              <div class="markdown">{@html parts.sections[item.index].body}</div>
-            </details>
-          {/each}
+    {/snippet}
+    {#snippet body()}
+      {#if view.reading}
+        <div class="reading" bind:this={reading}>
+          <!-- The renderer lifts the opening heading out of the body, so the
+               document view states the research's name itself. -->
+          <h1 class="display-lg">{research.title || heading}</h1>
+          <MarkdownPane {doc} {id} {active} {scrollRoot} bare />
         </div>
-      </div>
-    {/if}
-    <footer class="footer">
-      <div class="controls">
-        {#if mode === "research"}
-          <div class="steps">
-            <Button variant="ghost" size="sm" onclick={() => showAll(true)}>Expand all</Button>
-            <Button variant="ghost" size="sm" onclick={() => showAll(false)}>Collapse all</Button>
+      {:else}
+        <div
+          class="sheet"
+          bind:this={sheet}
+          data-document-source={doc.source}
+          use:links={doc.source}
+          use:diagrams={{ id, text: doc.text }}
+          use:port={{ id, active, scrollRoot, key: [...open].sort().join(",") }}>
+          <h1 class="display-lg">{research.title || heading}</h1>
+          <div class="markdown lead">{@html parts.preamble}</div>
+          {#if research.summary}
+            <section class="pinned">
+              <CapsLabel>{research.summary.name}</CapsLabel>
+              <div class="markdown lifted">{@html parts.sections[research.summary.index].opening}</div>
+              <div class="markdown">{@html parts.sections[research.summary.index].body}</div>
+            </section>
+          {/if}
+          <div class="items">
+            {#each research.items as item (item.index)}
+              <details class="item" data-item={item.name} open={open.has(item.index)}>
+                <!-- The pane owns what is open, not the element: its own toggle
+                     lands a task later, and a redraw in between undoes it.
+                     Enter and Space on a summary arrive here as clicks. -->
+                <summary onclick={(event) => turn(event, item.index)}>{item.name}</summary>
+                <div class="markdown lifted">{@html parts.sections[item.index].opening}</div>
+                <div class="markdown">{@html parts.sections[item.index].body}</div>
+              </details>
+            {/each}
           </div>
-        {/if}
-        <div class="modes">
-          <Button
-            variant={mode === "research" ? "outline" : "ghost"}
-            size="sm"
-            aria-pressed={mode === "research"}
-            onclick={() => (mode = "research")}>Research</Button>
-          <Button
-            variant={mode === "document" ? "outline" : "ghost"}
-            size="sm"
-            aria-pressed={mode === "document"}
-            onclick={() => (mode = "document")}>Document</Button>
         </div>
-        <span class="counter">
-          {research.items.length}
-          {research.items.length === 1 ? "section" : "sections"}
-        </span>
-      </div>
-    </footer>
-  </article>
+      {/if}
+    {/snippet}
+    {#snippet controls()}
+      {#if !view.reading}
+        <div class="steps">
+          <Button variant="ghost" size="sm" onclick={() => showAll(true)}>Expand all</Button>
+          <Button variant="ghost" size="sm" onclick={() => showAll(false)}>Collapse all</Button>
+        </div>
+      {/if}
+    {/snippet}
+    {#snippet counter()}
+      <span class="counter">
+        {research.items.length}
+        {research.items.length === 1 ? "section" : "sections"}
+      </span>
+    {/snippet}
+  </ArtifactPane>
 {/if}
 
 <style>
-  .document {
-    --pane-pad: 34px;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-  }
-
   /* The footer spans the pane, so the padding belongs to what it frames. The
      scroller ends where the footer begins, so its bar stops there too rather
      than running the pane's full height with the footer floating over it. */
@@ -219,22 +154,6 @@
     min-height: 0;
     overflow-y: auto;
     padding: 0 var(--pane-pad) 26px;
-  }
-
-  /* Aligned with the body's text column rather than the pane edge, so the
-     mark, the chip and the path sit over the sheet's own left margin. */
-  .head {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 26px var(--pane-pad) 20px calc(var(--pane-pad) + var(--gutter));
-  }
-
-  .head :global(.caps) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .display-lg {
@@ -324,38 +243,10 @@
     display: none;
   }
 
-  /* Held on the pane's floor however tall the sheet is. */
-  .footer {
-    flex: none;
-    margin-top: auto;
-    background: var(--surface-chrome);
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
-
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-height: var(--h-footer);
-    padding: 0 var(--pane-pad);
-  }
-
-  .steps,
-  .modes {
+  .steps {
     display: flex;
     flex: none;
     gap: 6px;
-  }
-
-  .counter {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: right;
-    font: var(--machine-sm);
-    color: var(--text-muted);
   }
 
   /* The pane names the section already. Hidden but still measurable: the
@@ -381,7 +272,7 @@
       font: var(--machine-md);
     }
 
-    .controls {
+    :global(.document > .footer .controls) {
       flex-wrap: wrap;
       row-gap: 10px;
       padding-top: 8px;

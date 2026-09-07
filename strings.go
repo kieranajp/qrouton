@@ -13,6 +13,8 @@ const (
 	runnerFlagUsage      = "coding agent to launch (claude, codex, or opencode)"
 	linearIssueFlag      = "linear-issue"
 	linearIssueFlagUsage = "open a Linear issue in the New session flow"
+	ticketFlag           = "ticket"
+	ticketFlagUsage      = "open a Linear, Asana or GitHub ticket in the New session flow"
 	linearPromptEnvVar   = "LINEAR_PROMPT"
 	pathEnvVar           = "PATH"
 
@@ -52,5 +54,5 @@ var bundledUserBinDirs = [][]string{
 var (
 	errWorkbenchRunning   = errors.New(`a qrouton workbench is already open — use "+ New session" in it`)
 	errNoSessionArguments = errors.New("qrouton takes no arguments; assemble a session in the window")
-	errLegacyWorkbench    = errors.New("the running qrouton workbench cannot open Linear issues; quit and restart it, then try again")
+	errLegacyWorkbench    = errors.New("the running qrouton workbench cannot open tickets; quit and restart it, then try again")
 )

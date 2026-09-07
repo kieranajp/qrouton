@@ -24,6 +24,9 @@ const workbenchPages = {
 };
 
 export default defineConfig({
+  // Marp Core inlines a twemoji build that reads Node's `global` outright, not
+  // behind a typeof guard, so the deck renderer throws on load without this.
+  define: { global: "globalThis" },
   plugins: [svelte(), workbenchPages],
   build: {
     // The tree Go embeds; emptying it keeps a deleted page out of the binary.

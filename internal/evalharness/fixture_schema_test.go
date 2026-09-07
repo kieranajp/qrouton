@@ -1,10 +1,6 @@
 package evalharness
 
-// The harness deliberately keeps its own narrow view of qrouton.json so the
-// eval binary does not depend on the session package. This test closes the gap
-// that arrangement leaves open: every fixture manifest must decode as a real
-// session.Manifest, with the roles and worktree paths the graders expect. The
-// session import is test-only.
+// Fixture manifests must satisfy both the eval harness view and the session schema.
 
 import (
 	"bytes"

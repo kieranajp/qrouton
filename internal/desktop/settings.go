@@ -167,16 +167,10 @@ func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, e
 	return labels, nil
 }
 
-// Quit runs the same teardown closing the conversation window runs, not a bare
-// renderer Quit: every open session's supervisor and PTY end cleanly before
-// the process does.
+// Quit tears down every session supervisor and PTY before exiting.
 func (s *Settings) Quit() { s.quit() }
 
-// saveConfig writes cfg with mutate applied, and answers the mirror of that
-// write onto the live pointer. Root is written but never applied: the rail's
-// scanner and boot path closed over the boot value, so a session created
-// against a live-mutated root would not appear in a rail still scanning the old
-// one.
+// saveConfig persists Root but keeps the live boot value used by the rail scanner.
 func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
 	publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
@@ -200,11 +194,7 @@ func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() 
 	})
 }
 
-// validateOwnersAndRoot is the two answers both the settings panel and the
-// first-run gate collect, checked in the order that matters: validateRoot
-// creates the directory it is given, so an empty owner list refused behind it
-// would leave that directory behind. Keeping the pair here is what stops a
-// later edit to either caller from reordering them.
+// validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.
 func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root, expanded string, err error) {
 	orgs = dedupOrgs(owners)
 	if len(orgs) == 0 {

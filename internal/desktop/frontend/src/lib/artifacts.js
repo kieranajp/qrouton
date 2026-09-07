@@ -24,9 +24,6 @@ export const artifactInk = (kind) =>
   entry(kind) === NEUTRAL ? "var(--text-secondary)" : "var(--text-on-accent)";
 
 /**
- * artifactLabel is the text in the block. The short form is the document's own
- * identity where it has one — it sorts, and it matches the filename — falling
- * back to the kind for a file that answers to no number.
  * @param {string | undefined} kind
  * @param {{id?: string, long?: boolean}} [options]
  */

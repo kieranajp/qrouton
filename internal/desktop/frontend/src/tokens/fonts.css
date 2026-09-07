@@ -3,3 +3,20 @@
 @import "@fontsource-variable/space-grotesk";
 @import "@fontsource-variable/instrument-sans";
 @import "@fontsource-variable/jetbrains-mono";
+
+/* Patched, so every icon carries the same advance as the Latin it sits beside
+   and lands in one terminal cell. A symbols-only face cannot: its glyphs are an
+   em wide against a cell that is 0.6 of one. */
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  src: url("./nerd-font/JetBrainsMonoNerdFontMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: block;
+}
+
+@font-face {
+  font-family: "JetBrainsMono Nerd Font Mono";
+  src: url("./nerd-font/JetBrainsMonoNerdFontMono-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: block;
+}

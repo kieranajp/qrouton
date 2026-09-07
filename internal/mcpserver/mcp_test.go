@@ -179,6 +179,10 @@ func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
 	return newWindowManager(dir, testEditor, host), host, dir
 }
 
+// A ceiling these tests never mean to reach: they end when the poll sees the
+// stanza, and a loaded runner stalls for longer than the wait they are timing.
+const pickerCeiling = 10 * time.Second
+
 // shortPickerPoll shrinks the picker poll's interval and timeout for the
 // duration of a test, restoring them on cleanup.
 func shortPickerPoll(t *testing.T, timeout time.Duration) {
@@ -938,7 +942,7 @@ func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 // window at all.
 func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	shortPickerPoll(t, 200*time.Millisecond)
+	shortPickerPoll(t, pickerCeiling)
 
 	// A cancelled stanza lets escalate return promptly once its poll notices it,
 	// so the test doesn't wait out the full timeout.
@@ -997,7 +1001,7 @@ func TestEscalateRejectsBlankName(t *testing.T) {
 
 func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortPickerPoll(t, time.Second)
+	shortPickerPoll(t, pickerCeiling)
 
 	start := time.Now()
 	go func() {
@@ -1021,7 +1025,7 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 
 func TestEscalateBlocksUntilCancelled(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortPickerPoll(t, time.Second)
+	shortPickerPoll(t, pickerCeiling)
 
 	start := time.Now()
 	go func() {
@@ -1061,7 +1065,7 @@ func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
 // user never agreed to.
 func TestEscalateTreatsAStatuslessStanzaAsNotConfirmed(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortPickerPoll(t, time.Second)
+	shortPickerPoll(t, pickerCeiling)
 
 	go func() {
 		time.Sleep(40 * time.Millisecond)
@@ -1648,7 +1652,7 @@ func answered(t *testing.T, dir string, status session.PickerStatus, at time.Tim
 // the signal, since the picker itself is invisible from another session.
 func TestRequestReposQueuesThePickerWithTheRequestIntact(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	shortPickerPoll(t, 200*time.Millisecond)
+	shortPickerPoll(t, pickerCeiling)
 	answered(t, dir, session.PickerCancelled, time.Now().Add(20*time.Millisecond))
 	var played string
 	original := playSound
@@ -1700,7 +1704,7 @@ func TestRequestReposReturnsTheResultingSetWhicheverWayItGoes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			m, _, dir := newTestManager(t)
-			shortPickerPoll(t, time.Second)
+			shortPickerPoll(t, pickerCeiling)
 			answered(t, dir, tc.status, time.Now().Add(20*time.Millisecond))
 
 			message, rows, err := m.requestRepos(context.Background(), requested())

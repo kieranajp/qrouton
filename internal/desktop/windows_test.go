@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -471,7 +472,8 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 	window, _ := w.window(id)
-	pid := window.process.cmd.Process.Pid
+	terminal, _ := window.terminal()
+	pid := terminal.process.cmd.Process.Pid
 	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("two-line prompt\n"))); err != nil {
 		t.Fatal(err)
 	}
@@ -483,10 +485,10 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	if err := w.Start(id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
-	if window.process.cmd.Process.Pid != pid {
+	if terminal.process.cmd.Process.Pid != pid {
 		t.Fatal("remounting a terminal forked another shell")
 	}
-	size, err := pty.GetsizeFull(window.process.file)
+	size, err := pty.GetsizeFull(terminal.process.file)
 	if err != nil || size.Cols != 120 || size.Rows != 36 {
 		t.Fatalf("remounted PTY size = %+v, %v, want 120x36", size, err)
 	}
@@ -690,6 +692,154 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 	}
 	if err := w.Select("missing", alphaID); err == nil {
 		t.Fatal("an unknown session selected a tab")
+	}
+}
+
+// tabIDs is a session's tabs in strip order.
+func tabIDs(w *Windows, slug string) []string {
+	tabs := w.Surfaces(slug).Tabs
+	ids := make([]string, len(tabs))
+	for i, tab := range tabs {
+		ids[i] = tab.ID
+	}
+	return ids
+}
+
+func openDocuments(t *testing.T, w *Windows, owner *sessionState, n int) []string {
+	t.Helper()
+	ids := make([]string, n)
+	for i := range n {
+		id, err := w.openStructural(owner, workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "document",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids[i] = id
+	}
+	return ids
+}
+
+func TestReorderingATabMovesItRightwardsOrLeftwardsInTheWholeOrder(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	ids := openDocuments(t, w, owner, 4)
+
+	if err := w.Reorder(owner.slug(), ids[0], 2); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{ids[1], ids[2], ids[0], ids[3]}; !slices.Equal(got, want) {
+		t.Fatalf("order after moving rightwards = %v, want %v", got, want)
+	}
+
+	if err := w.Reorder(owner.slug(), ids[3], 0); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{ids[3], ids[1], ids[2], ids[0]}; !slices.Equal(got, want) {
+		t.Fatalf("order after moving leftwards = %v, want %v", got, want)
+	}
+}
+
+func TestATabOpenedAfterAReorderStillLandsAtTheRightHandEnd(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	ids := openDocuments(t, w, owner, 3)
+
+	if err := w.Reorder(owner.slug(), ids[2], 0); err != nil {
+		t.Fatal(err)
+	}
+	next := openDocuments(t, w, owner, 1)[0]
+
+	if got, want := tabIDs(w, owner.slug()), []string{ids[2], ids[0], ids[1], next}; !slices.Equal(got, want) {
+		t.Fatalf("order after opening a tab post-reorder = %v, want %v", got, want)
+	}
+}
+
+func TestReorderClampsAnOutOfRangeIndexRatherThanErroringOrPanicking(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	ids := openDocuments(t, w, owner, 3)
+
+	if err := w.Reorder(owner.slug(), ids[0], 100); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{ids[1], ids[2], ids[0]}; !slices.Equal(got, want) {
+		t.Fatalf("order after clamping a high index = %v, want %v", got, want)
+	}
+
+	if err := w.Reorder(owner.slug(), ids[0], -5); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{ids[0], ids[1], ids[2]}; !slices.Equal(got, want) {
+		t.Fatalf("order after clamping a negative index = %v, want %v", got, want)
+	}
+}
+
+func TestReorderRefusesAnUnknownSessionOrAWindowFromAnotherOne(t *testing.T) {
+	r := newFakeRenderer()
+	reg := newSessions()
+	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
+	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
+	reg.reveal(alpha)
+	w := newWindows(r.Emit, reg)
+	t.Cleanup(w.stopAll)
+
+	alphaID := openDocuments(t, w, alpha, 1)[0]
+	openDocuments(t, w, beta, 1)
+
+	if err := w.Reorder("missing", alphaID, 0); err == nil {
+		t.Fatal("an unknown session reordered a tab")
+	}
+	if err := w.Reorder("beta", alphaID, 0); err == nil {
+		t.Fatal("beta reordered alpha's tab")
+	}
+}
+
+func TestReorderEmitsSurfacesUnlessTheMoveIsANoOp(t *testing.T) {
+	reg := testRegistry(t, t.TempDir())
+	owner := reg.current()
+	emissions := 0
+	w := newWindows(func(event string, _ any) {
+		if event == windowsEvent {
+			emissions++
+		}
+	}, reg)
+	t.Cleanup(w.stopAll)
+	ids := openDocuments(t, w, owner, 2)
+	emissions = 0
+
+	if err := w.Reorder(owner.slug(), ids[0], 1); err != nil {
+		t.Fatal(err)
+	}
+	if emissions != 1 {
+		t.Fatalf("reorder emitted %d times, want one", emissions)
+	}
+
+	if err := w.Reorder(owner.slug(), ids[0], 1); err != nil {
+		t.Fatal(err)
+	}
+	if emissions != 1 {
+		t.Fatal("a no-op reorder emitted surfaces")
+	}
+}
+
+func TestClosingTheSelectedTabAfterAReorderFallsBackToTheLeftmostRemainingTab(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	ids := openDocuments(t, w, owner, 3)
+
+	// Move the newest tab to the front, so leftmost and oldest-opened disagree.
+	if err := w.Reorder(owner.slug(), ids[2], 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Select(owner.slug(), ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(ids[1]); err != nil {
+		t.Fatal(err)
+	}
+	if got := w.Surfaces(owner.slug()).Selected; got != ids[2] {
+		t.Fatalf("selected = %q, want leftmost remaining %q", got, ids[2])
 	}
 }
 
@@ -959,16 +1109,17 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 	// A push is not a reload: the page's controller is still running, so a
 	// report it had already earned must not be fenced off behind a new epoch.
 	window, _ := w.window(id)
-	if window.viewportEpoch != epoch || window.viewportSeq != 3 {
-		t.Fatalf("after rescan epoch/seq = %d/%d, want %d/3", window.viewportEpoch, window.viewportSeq, epoch)
+	rendered, _ := window.document()
+	if rendered.viewportEpoch != epoch || rendered.viewportSeq != 3 {
+		t.Fatalf("after rescan epoch/seq = %d/%d, want %d/3", rendered.viewportEpoch, rendered.viewportSeq, epoch)
 	}
 
 	// Content is a reload, and there the fence is the point.
 	if _, err := w.Content(id); err != nil {
 		t.Fatal(err)
 	}
-	if window.viewportEpoch != epoch+1 || window.viewportSeq != 0 {
-		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", window.viewportEpoch, window.viewportSeq, epoch+1)
+	if rendered.viewportEpoch != epoch+1 || rendered.viewportSeq != 0 {
+		t.Fatalf("after Content epoch/seq = %d/%d, want %d/0", rendered.viewportEpoch, rendered.viewportSeq, epoch+1)
 	}
 }
 
