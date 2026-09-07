@@ -153,4 +153,35 @@ window.narrow = () => {
 
 window.scroller = () => document.querySelector(".body");
 
+const named = (label) =>
+  [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === label);
+
+// Focused before the press, the way a real one lands, so the layer has
+// something to hand the keyboard back to.
+window.present = () => {
+  const control = named("Present");
+  control.focus();
+  control.click();
+};
+
+window.presenting = () => Boolean(document.querySelector(".present"));
+
+window.presentIndex = () => document.querySelector(".present-counter").textContent.trim();
+
+window.slideBox = () => {
+  const slide = document.querySelector(".present-slide");
+  const rect = slide.getBoundingClientRect();
+  return {
+    width: rect.width,
+    height: rect.height,
+    declared: slide.offsetWidth,
+    room: { width: window.innerWidth, height: window.innerHeight },
+  };
+};
+
+window.presentHeading = () =>
+  document.querySelector(".present-slide section h1, .present-slide section h2")?.textContent ?? "";
+
+window.focusedLabel = () => document.activeElement?.textContent?.trim() ?? "";
+
 mount(SlidesFixture, { target: document.querySelector("#fixture") });
