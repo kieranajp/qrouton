@@ -100,6 +100,8 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 		return delegationAssertion(result.Events, check.Pattern)
 	case checkFirstDelegation:
 		return firstDelegationAssertion(result.Events, check.Pattern)
+	case checkTurnDelegation:
+		return turnDelegationAssertion(result.Events, check.Turn, check.Pattern)
 	case checkDelegationAbsent:
 		return delegationAbsentAssertion(result.Events)
 	case checkRepoChanged:
@@ -309,6 +311,59 @@ func firstDelegationAssertion(events []Event, pattern string) Assertion {
 	}
 	// A run that delegated nothing has no first delegation to have aimed well.
 	return Assertion{Name: name, Evidence: evidenceNoDelegation}
+}
+
+// turnDelegationAssertion grades one turn's earliest spawn. The routing table
+// governs a cold start; every later turn decides for itself, and a turn that
+// absorbs read-heavy work spawns nothing at all, so there is no delegation
+// event for a whole-run check to find.
+func turnDelegationAssertion(events []Event, turn int, pattern string) Assertion {
+	name := fmt.Sprintf(assertTurnDelegatedTo, turn, pattern)
+	if turn <= 0 {
+		return Assertion{Name: name, Evidence: evidenceNoTurn}
+	}
+	if pattern == "" {
+		return Assertion{Name: name, Evidence: evidenceNoTurnPattern}
+	}
+
+	var reached bool
+	var ownToolCalls int
+	for _, event := range events {
+		if event.Turn != turn {
+			continue
+		}
+		reached = true
+		if !isDelegationEvent(event) {
+			ownToolCalls += ownToolCallCount(event)
+			continue
+		}
+		targets := subagentTypes(event)
+		if len(targets) == 0 {
+			return Assertion{Name: name, Evidence: evidenceNoTarget + delegationEvidence(event)}
+		}
+		return Assertion{
+			Name:     name,
+			Passed:   everyTargetMatches(targets, pattern),
+			Evidence: strings.Join(targets, evidenceJoiner),
+		}
+	}
+	if !reached {
+		return Assertion{Name: name, Evidence: fmt.Sprintf(evidenceTurnAbsent, turn)}
+	}
+	return Assertion{Name: name, Evidence: fmt.Sprintf(evidenceTurnAbsorbed, turn, ownToolCalls)}
+}
+
+// ownToolCallCount counts the tool calls one event carries. Claude nests them
+// inside an assistant message, several to an event when they run in parallel,
+// so the normalized kind alone misses nearly all of them.
+func ownToolCallCount(event Event) int {
+	if count := strings.Count(string(event.Arguments), toolUseMarker); count > 0 {
+		return count
+	}
+	if event.Kind == kindToolCall {
+		return 1
+	}
+	return 0
 }
 
 // delegationAbsentAssertion grades a turn that owed the user a question first,

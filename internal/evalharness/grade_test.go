@@ -423,3 +423,155 @@ func gitHead(t *testing.T, dir string) string {
 	}
 	return strings.TrimSpace(string(output))
 }
+
+// atTurn stamps a spawn with the turn it belongs to, the way the harness stamps
+// every event it records.
+func atTurn(turn int, event Event) Event {
+	event.Turn = turn
+	return event
+}
+
+// mainThreadToolCall is a tool call as Claude records one: nested inside an
+// assistant message, so nothing about the normalized kind says "tool".
+func mainThreadToolCall(turn int, tool string) Event {
+	return Event{
+		Kind:      "assistant",
+		Turn:      turn,
+		Arguments: []byte(`{"message":{"content":[{"name":"` + tool + `","type":"tool_use"}]},"type":"assistant"}`),
+	}
+}
+
+// The failure no whole-run delegation check can see: turn one routes correctly,
+// then turn two reads the codebase itself and hands nothing off.
+func TestTurnDelegationFailsWhenALaterTurnAbsorbsTheWork(t *testing.T) {
+	absorbed := []Event{
+		{Kind: "user", Turn: 1, Text: "Where does the retry work stand?"},
+		atTurn(1, spawnEvent("qrouton-research-lead")),
+		{Kind: "user", Turn: 2, Text: "Work out how the deadline propagates."},
+		mainThreadToolCall(2, "Grep"),
+		mainThreadToolCall(2, "Read"),
+		mainThreadToolCall(2, "Read"),
+		{Kind: "assistant", Turn: 2, Text: "The deadline is read in three places."},
+	}
+
+	assertion := turnDelegationAssertion(absorbed, 2, "lead")
+	if assertion.Passed {
+		t.Fatalf("a turn that delegated nothing passed: %s", assertion.Evidence)
+	}
+	if want := fmt.Sprintf(evidenceTurnAbsorbed, 2, 3); assertion.Evidence != want {
+		t.Errorf("evidence = %q, want %q", assertion.Evidence, want)
+	}
+
+	if orderBlind := delegationAssertion(absorbed, "lead"); !orderBlind.Passed {
+		t.Error("the whole-run check no longer passes this stream, so the new kind is redundant")
+	}
+	if earliest := firstDelegationAssertion(absorbed, "lead"); !earliest.Passed {
+		t.Error("the first-spawn check no longer passes this stream, so the new kind is redundant")
+	}
+}
+
+func TestTurnDelegationFailsWhenTheTurnSpawnsASpecialistDirectly(t *testing.T) {
+	events := []Event{
+		atTurn(1, spawnEvent("qrouton-research-lead")),
+		atTurn(2, spawnEvent("codebase-researcher")),
+		atTurn(2, spawnEvent("qrouton-research-lead")),
+	}
+	assertion := turnDelegationAssertion(events, 2, "lead")
+	if assertion.Passed {
+		t.Fatalf("a leaf spawned before the turn's lead passed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "codebase-researcher" {
+		t.Errorf("evidence %q does not name the graded spawn", assertion.Evidence)
+	}
+}
+
+// A turn the run never got to is a truncated case, not an absorbed one, and the
+// two failures need different evidence to be told apart.
+func TestTurnDelegationSeparatesATruncatedRunFromAnAbsorbedTurn(t *testing.T) {
+	events := []Event{atTurn(1, spawnEvent("qrouton-research-lead"))}
+	assertion := turnDelegationAssertion(events, 2, "lead")
+	if assertion.Passed {
+		t.Fatal("a turn that never ran satisfied a delegation check")
+	}
+	if want := fmt.Sprintf(evidenceTurnAbsent, 2); assertion.Evidence != want {
+		t.Errorf("evidence = %q, want %q", assertion.Evidence, want)
+	}
+}
+
+func TestTurnDelegationRefusesAnUnusableCheck(t *testing.T) {
+	result := CaseResult{Events: []Event{atTurn(2, spawnEvent("qrouton-researcher"))}}
+
+	noTurn := gradeCheck(CheckSpec{Kind: checkTurnDelegation, Pattern: "lead"}, result, t.TempDir())
+	if noTurn.Passed || noTurn.Evidence != evidenceNoTurn {
+		t.Errorf("a check naming no turn: %#v", noTurn)
+	}
+
+	noPattern := gradeCheck(CheckSpec{Kind: checkTurnDelegation, Turn: 2}, result, t.TempDir())
+	if noPattern.Passed || noPattern.Evidence != evidenceNoTurnPattern {
+		t.Errorf("a check naming no agent: %#v", noPattern)
+	}
+}
+
+// Scoping cuts both ways: an earlier turn that absorbed its work must not fail
+// a later turn that routed properly.
+func TestTurnDelegationGradesOnlyItsOwnTurn(t *testing.T) {
+	events := []Event{
+		mainThreadToolCall(1, "Read"),
+		mainThreadToolCall(1, "Grep"),
+		atTurn(2, spawnEvent("qrouton-planning-lead")),
+		atTurn(2, spawnEvent("pattern-finder")),
+	}
+	assertion := turnDelegationAssertion(events, 2, "planning-lead")
+	if !assertion.Passed {
+		t.Fatalf("a turn routed through its lead failed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "qrouton-planning-lead" {
+		t.Errorf("evidence %q does not name the graded spawn", assertion.Evidence)
+	}
+	if first := turnDelegationAssertion(events, 1, "planning-lead"); first.Passed {
+		t.Error("turn one's absorbed reading passed on turn two's spawn")
+	}
+}
+
+// Parallel tool calls arrive as one event carrying several blocks, and evidence
+// that counted events would understate the reading by most of it.
+func TestTurnDelegationCountsEveryToolCallInABatchedEvent(t *testing.T) {
+	batched := Event{
+		Kind: "assistant",
+		Turn: 2,
+		Arguments: []byte(`{"message":{"content":[` +
+			`{"name":"Grep","type":"tool_use"},` +
+			`{"name":"Grep","type":"tool_use"},` +
+			`{"name":"Read","type":"tool_use"}]}}`),
+	}
+	assertion := turnDelegationAssertion([]Event{batched}, 2, "lead")
+	if want := fmt.Sprintf(evidenceTurnAbsorbed, 2, 3); assertion.Evidence != want {
+		t.Errorf("evidence = %q, want %q", assertion.Evidence, want)
+	}
+}
+
+// The shape a recorded Claude run actually carries: a spawn is an assistant
+// message with no tool name of its own, and the target sits in the tool input.
+func TestTurnDelegationPassesOnARecordedClaudeSpawn(t *testing.T) {
+	spawn := Event{
+		Kind:    "assistant",
+		RawType: "assistant",
+		Turn:    2,
+		Arguments: []byte(`{"message":{"content":[{"id":"toolu_01MY5q6c7VBXbrok5B5ZiX6P",` +
+			`"input":{"description":"Inventory the deadline reads","subagent_type":"qrouton-research-lead"},` +
+			`"name":"Agent","type":"tool_use"}],"role":"assistant","type":"message"},` +
+			`"session_id":"17cbb42d-1a58-43c2-b86a-fe87374693a3","type":"assistant"}`),
+	}
+	events := []Event{
+		{Kind: "user", Turn: 1, Text: "Where does the retry deadline work stand?"},
+		{Kind: "user", Turn: 2, Text: "Now build the inventory."},
+		spawn,
+	}
+	assertion := turnDelegationAssertion(events, 2, "lead")
+	if !assertion.Passed {
+		t.Fatalf("a recorded spawn of the research lead failed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "qrouton-research-lead" {
+		t.Errorf("evidence %q does not name the graded spawn", assertion.Evidence)
+	}
+}
