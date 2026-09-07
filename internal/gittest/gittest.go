@@ -62,10 +62,8 @@ func WithMessage(message string) Option {
 	return func(o *options) { o.message = message }
 }
 
-// WithBranch adds a second branch to the origin, cut from main's own commit and
-// carrying one commit of its own — the fixture a test needs to tell which
-// branch a worktree was actually cut from. Leaves main checked out, matching
-// an Origin call without this option.
+// WithBranch adds a second branch carrying a commit of its own, so a test can
+// tell which branch a worktree was cut from. Leaves main checked out.
 func WithBranch(name string, lines ...string) Option {
 	return func(o *options) { o.branch = name; o.branchLines = lines }
 }

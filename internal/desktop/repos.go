@@ -129,8 +129,7 @@ func (r *Repositories) fetchBranches(repo github.Repo) (branchList, bool) {
 	return branchList{Default: repo.DefaultBranch, Branches: defaultFirst(names, repo.DefaultBranch)}, true
 }
 
-// defaultFirst heads the list with the default branch and keeps every other
-// name once, so the branch a session would take anyway is the first offered.
+// defaultFirst leads with the branch a session would take anyway.
 func defaultFirst(names []string, defaultBranch string) []string {
 	out := make([]string, 0, len(names)+1)
 	if defaultBranch != "" {

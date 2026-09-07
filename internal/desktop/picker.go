@@ -16,8 +16,7 @@ import (
 type heldRepo struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
-	// Base is the branch this repository was cut from, absent for the default
-	// one. A locked row says what it was cut from without offering to change it.
+	// Base is the branch this repository was cut from, absent for the default one.
 	Base   string `json:"base,omitempty"`
 	Locked bool   `json:"locked"`
 }

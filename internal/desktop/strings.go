@@ -129,8 +129,8 @@ const (
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
 
-	// branchListTimeout bounds the listing behind a repository row's base menu,
-	// which opens on the default branch and fills in.
+	// branchListTimeout bounds the branch listing GitHub is asked for, which the
+	// base menu opens without waiting for.
 	branchListTimeout = 5 * time.Second
 )
 

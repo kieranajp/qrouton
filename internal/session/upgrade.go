@@ -103,7 +103,7 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, progress ProgressFunc) error {
 	repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
 	rep := reporter{fn: progress, repo: &repo, role: RepoRoleEditing}
-	// The mirror is already there; this is the fetch that brings the default
+	// The mirror is already there; this is the fetch that brings the base
 	// branch's tip within reach of the new session branch.
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
 		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)

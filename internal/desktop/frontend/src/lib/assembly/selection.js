@@ -101,8 +101,7 @@ export function setRole(selection, id, role) {
 }
 
 /** A base outlives a role change, an off included: choosing one is deliberate
- * enough that an accidental toggle should not discard it. Only reconcile drops
- * one, when the repository leaves the list.
+ * enough that an accidental toggle should not discard it.
  * @returns {Selection} */
 export function setBase(selection, id, branch) {
   const bases = { ...selection.bases };

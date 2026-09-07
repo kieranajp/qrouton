@@ -39,6 +39,8 @@ test("the base menu shows the default branch before Repositories.Branches answer
   await page.getByRole("button", { name: "Choose repositories →" }).click();
 
   const base = page.locator(".rows button.base");
+  await expect(base).toHaveCount(0);
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
   await expect(base).toHaveText("main ▾");
   await base.click();
 
@@ -60,6 +62,7 @@ test("a failed branches answer still offers the default branch, disabled with a 
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
   await page.getByRole("button", { name: "Choose repositories →" }).click();
 
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
   await page.locator(".rows button.base").click();
   await page.evaluate(() =>
     window.assembly.resolveBranches({ branches: ["main"], default: "main", error: "listing failed" }),
@@ -100,4 +103,48 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
         ),
     ),
   )).toBe(true);
+});
+
+// The button opens the menu and closes it again, which is the reflex a caret on
+// a control asks for.
+test("the base button closes the menu it opened", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
+
+  const base = page.locator(".rows button.base");
+  await base.click();
+  await expect(page.locator(".anchor .menu")).toHaveCount(1);
+
+  await base.click();
+  await expect(page.locator(".anchor .menu")).toHaveCount(0);
+});
+
+// Two hundred branches must not run off the bottom of the screen, and the menu
+// must not move under the pointer when they arrive.
+test("a long branch list scrolls inside a menu that does not move when it lands", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
+  await page.locator(".rows button.base").click();
+
+  const menu = page.locator(".anchor .menu");
+  const before = await menu.boundingBox();
+  await page.evaluate(() =>
+    window.assembly.resolveBranches({
+      branches: ["main", ...Array.from({ length: 60 }, (_, i) => `topic/${i}`)],
+      default: "main",
+    }),
+  );
+  await expect(menu.getByRole("button")).toHaveCount(61);
+
+  const after = await menu.boundingBox();
+  expect(after.y).toBe(before.y);
+  const room = await page.evaluate(() => window.innerHeight);
+  expect(after.y + after.height).toBeLessThanOrEqual(room);
+  expect(await menu.evaluate((node) => node.scrollHeight > node.clientHeight)).toBe(true);
 });
