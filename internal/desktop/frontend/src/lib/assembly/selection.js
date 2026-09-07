@@ -9,11 +9,13 @@ import { repoID } from "./filter.js";
  * @typedef {object} Selection
  * @property {string[]} order the ids in the order they were picked, which is the ranking
  * @property {Record<string, Role>} roles for a held row, the role the session holds it in
+ * @property {Record<string, string>} bases for a row cut from something other than the default branch, that branch
  * @property {string[]} locked the ids the session already holds
  * @property {string[]} upgrades the held ids to take up for editing
  */
 
 const IN_SESSION = "in session";
+const CUT_FROM = "from ";
 const READING = "in session, read-only";
 const TAKING_UP = "in session, taking it up to edit";
 
@@ -24,14 +26,20 @@ const UPGRADE_OFFERS = ["reference", "editing"];
 /** @type {Role[]} */
 const NO_OFFERS = [];
 
-/** Held rows retain their roles but stay out of the new-selection order.
- * @param {{id: string, role: Role}[]} [held]
+/** Held rows retain their roles and the branch they were cut from, but stay out
+ * of the new-selection order.
+ * @param {{id: string, role: Role, base?: string}[]} [held]
  * @returns {Selection} */
 export function seed(held = []) {
   /** @type {Record<string, Role>} */
   const roles = {};
-  for (const row of held) roles[row.id] = row.role;
-  return { order: [], roles, locked: held.map((row) => row.id), upgrades: [] };
+  /** @type {Record<string, string>} */
+  const bases = {};
+  for (const row of held) {
+    roles[row.id] = row.role;
+    if (row.base) bases[row.id] = row.base;
+  }
+  return { order: [], roles, bases, locked: held.map((row) => row.id), upgrades: [] };
 }
 
 /** @returns {Role} */
@@ -41,6 +49,9 @@ export const roleOf = (selection, id) =>
 export const isLocked = (selection, id) => selection.locked.includes(id);
 
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
+
+/** baseOf is the branch a row's work is cut from, empty for the default one. */
+export const baseOf = (selection, id) => selection.bases?.[id] ?? "";
 
 /** Held editing repositories cannot be dropped or demoted from the picker.
  * @returns {Role[]} */
@@ -53,9 +64,20 @@ export function roleOffers(selection, id) {
  * @param {Selection} selection
  * @param {string} id
  * @param {string} pushed
+ * @param {string} [defaultBranch]
  */
-export function rowMeta(selection, id, pushed) {
-  return [pushed, heldNote(selection, id)].filter(Boolean).join(" · ");
+export function rowMeta(selection, id, pushed, defaultBranch = "") {
+  return [pushed, heldNote(selection, id), baseNote(selection, id, defaultBranch)]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+// A held row is where the base is named: the picker offers no base control for
+// what the session already holds.
+function baseNote(selection, id, defaultBranch) {
+  if (!isLocked(selection, id)) return "";
+  const base = baseOf(selection, id);
+  return base && base !== defaultBranch ? CUT_FROM + base : "";
 }
 
 function heldNote(selection, id) {
@@ -78,6 +100,17 @@ export function setRole(selection, id, role) {
   return { ...selection, roles, order };
 }
 
+/** A base outlives a role change, an off included: choosing one is deliberate
+ * enough that an accidental toggle should not discard it. Only reconcile drops
+ * one, when the repository leaves the list.
+ * @returns {Selection} */
+export function setBase(selection, id, branch) {
+  const bases = { ...selection.bases };
+  if (branch) bases[id] = branch;
+  else delete bases[id];
+  return { ...selection, bases };
+}
+
 /** A pending upgrade retains its on-disk role until confirmation.
  * @returns {Selection} */
 function takeUp(selection, id, role) {
@@ -92,12 +125,18 @@ function takeUp(selection, id, role) {
  * @returns {Selection} */
 export function reconcile(selection, ids) {
   const available = new Set(ids);
+  const kept = (id) => available.has(id) || isLocked(selection, id);
   /** @type {Record<string, Role>} */
   const roles = {};
   for (const [id, role] of Object.entries(selection.roles)) {
-    if (available.has(id) || isLocked(selection, id)) roles[id] = role;
+    if (kept(id)) roles[id] = role;
   }
-  return { ...selection, roles, order: selection.order.filter((id) => available.has(id)) };
+  /** @type {Record<string, string>} */
+  const bases = {};
+  for (const [id, base] of Object.entries(selection.bases ?? {})) {
+    if (kept(id)) bases[id] = base;
+  }
+  return { ...selection, roles, bases, order: selection.order.filter((id) => available.has(id)) };
 }
 
 /** counts is the `2 editing · 1 reference` line, which describes the rows on screen. */
@@ -114,10 +153,10 @@ export function counts(selection) {
 
 /**
  * ordered is what Go composes, in rank order.
- * @returns {{id: string, role: Role}[]}
+ * @returns {{id: string, role: Role, base: string}[]}
  */
 export const ordered = (selection) =>
-  selection.order.map((id) => ({ id, role: selection.roles[id] }));
+  selection.order.map((id) => ({ id, role: selection.roles[id], base: baseOf(selection, id) }));
 
 /** upgrading is what Go takes up for editing, which it finds in the manifest. */
 export const upgrading = (selection) => [...selection.upgrades];
@@ -133,7 +172,10 @@ export function summary(selection, repos, branch) {
     id,
     role,
     glyph: GLYPHS[role],
-    meta: role === "editing" ? editingMeta(branch) : referenceMeta(pinned.get(id)),
+    meta:
+      role === "editing"
+        ? editingMeta(branch)
+        : referenceMeta(baseOf(selection, id) || pinned.get(id)),
   }));
 }
 

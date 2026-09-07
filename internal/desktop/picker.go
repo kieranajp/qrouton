@@ -14,8 +14,11 @@ import (
 // it in. A held row is not composed again — that would clone a repo the agent is
 // working in a second time — but a reference one can be named in Upgrades.
 type heldRepo struct {
-	ID     string `json:"id"`
-	Role   string `json:"role"`
+	ID   string `json:"id"`
+	Role string `json:"role"`
+	// Base is the branch this repository was cut from, absent for the default
+	// one. A locked row says what it was cut from without offering to change it.
+	Base   string `json:"base,omitempty"`
 	Locked bool   `json:"locked"`
 }
 
@@ -82,6 +85,7 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 		held = append(held, heldRepo{
 			ID:     (github.Repo{Org: r.Org, Name: r.Name}).ID(),
 			Role:   string(r.Role.Effective()),
+			Base:   r.BaseBranch,
 			Locked: true,
 		})
 	}

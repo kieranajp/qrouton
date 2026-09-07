@@ -14,6 +14,7 @@ import {
   PICKER_CONFIRM,
   PICKER_ESCALATE,
   PICKER_LOAD,
+  REPOSITORIES_BRANCHES,
   REPOSITORIES_CACHED,
   REPOSITORIES_REFRESH,
 } from "../bridge/generated.js";
@@ -28,7 +29,7 @@ import { Call } from "../wails.js";
  * @property {string} prefix
  * @property {string} mode
  * @property {string} runner
- * @property {{id: string, role: string}[]} repos in the order they were picked
+ * @property {{id: string, role: string, base: string}[]} repos in the order they were picked
  */
 
 /** prefixes is the branch-prefix vocabulary, which Go owns the only copy of. */
@@ -68,6 +69,12 @@ export const fetchTicket = async (url) => ({
 
 export const cached = () => Call.ByName(REPOSITORIES_CACHED);
 
+/** branches is a repository's base vocabulary. A listing that failed answers
+ * with the default branch alone and a populated error.
+ * @param {string} id
+ * @returns {Promise<{branches: string[], default: string, error?: string}>} */
+export const branches = (id) => Call.ByName(REPOSITORIES_BRANCHES, id);
+
 /** refresh answers with the generation its events will carry. */
 export const refresh = () => Call.ByName(REPOSITORIES_REFRESH);
 
@@ -75,7 +82,7 @@ export const orgs = () => Call.ByName(ORGS_LIST);
 
 /**
  * @param {string} slug
- * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean}[]}>}
+ * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean, base?: string}[]}>}
  */
 export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
 
@@ -84,7 +91,7 @@ export const escalate = (slug) => Call.ByName(PICKER_ESCALATE, slug);
 
 /**
  * @param {string} slug
- * @param {{repos: {id: string, role: string}[], upgrades: string[]}} answer
+ * @param {{repos: {id: string, role: string, base: string}[], upgrades: string[]}} answer
  */
 export const addRepos = (slug, answer) => Call.ByName(PICKER_CONFIRM, slug, answer);
 

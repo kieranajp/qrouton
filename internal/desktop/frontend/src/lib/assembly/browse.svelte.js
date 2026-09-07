@@ -1,16 +1,20 @@
 import { call, Events } from "../wails.js";
+import { entry, requested, settled, unasked, wanted } from "./branches.js";
 import * as go from "./calls.js";
 import { filter, repoID } from "./filter.js";
 import { pushed } from "./pushed.js";
 import { apply, failedOwners, idle } from "./refresh.js";
 import {
+  baseOf,
   counts,
+  isLocked,
   ordered,
   reconcile,
   roleOf,
   roleOffers,
   rowMeta,
   seed,
+  setBase,
   setRole,
   summary,
   upgrading,
@@ -30,6 +34,7 @@ export function browsing(branch, report = () => {}) {
   let owners = $state(/** @type {string[]} */ ([]));
   let refresh = $state(idle());
   let selection = $state(seed());
+  let lists = $state(unasked());
 
   call(go.orgs()).then((answer) => {
     if (!answer.ok) return report(refusal(answer.error));
@@ -49,9 +54,14 @@ export function browsing(branch, report = () => {}) {
   let rows = $derived(
     listed.rows.map((row) => ({
       id: row.id,
-      meta: rowMeta(selection, row.id, pushed(row.pushed_at)),
+      meta: rowMeta(selection, row.id, pushed(row.pushed_at), row.default_branch),
       role: roleOf(selection, row.id),
       offers: roleOffers(selection, row.id),
+      // A held row is not re-based: the picker adds repositories, it does not
+      // move the ones the agent is already working in.
+      rebasable: !isLocked(selection, row.id),
+      base: baseOf(selection, row.id) || row.default_branch || "",
+      branches: entry(lists, row.id),
     })),
   );
 
@@ -70,6 +80,15 @@ export function browsing(branch, report = () => {}) {
       refetch();
     }),
   );
+
+  // Asked for on menu open only, so drawing two hundred rows costs no GitHub
+  // calls at all.
+  async function loadBranches(id) {
+    if (!wanted(lists, id)) return;
+    lists = requested(lists, id);
+    const answer = await call(go.branches(id));
+    lists = settled(lists, id, answer.ok ? answer.value : { error: refusal(answer.error) });
+  }
 
   // The events say when a run is live; a run already finished by the time its
   // generation came back must not be reported as one.
@@ -120,11 +139,13 @@ export function browsing(branch, report = () => {}) {
     get upgrading() {
       return upgrading(selection);
     },
-    /** @param {{id: string, role: 'editing'|'reference'}[]} rows */
+    /** @param {{id: string, role: 'editing'|'reference', base?: string}[]} rows */
     hold: (rows) => (selection = seed(rows)),
     refetch,
     owner: (org) =>
       (owners = owners.includes(org) ? owners.filter((on) => on !== org) : [...owners, org]),
     role: (id, role) => (selection = setRole(selection, id, role)),
+    base: (id, branch) => (selection = setBase(selection, id, branch)),
+    loadBranches,
   };
 }

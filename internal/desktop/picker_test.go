@@ -125,7 +125,8 @@ func TestOpPickerRefusesAnEmptyRootAsAnAnswer(t *testing.T) {
 func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	reg, shown, _ := pickerWorkbench(t)
 	m := session.Manifest{Slug: "shown", Name: "Webhook retry", Repos: []session.ManifestRepo{
-		{Name: "svc", Org: "org", Role: session.RepoRoleEditing, Branch: "fix/webhook-retry"},
+		{Name: "svc", Org: "org", Role: session.RepoRoleEditing, Branch: "fix/webhook-retry",
+			DefaultBranch: "main", BaseBranch: "release/24.4"},
 		{Name: "docs", Org: "org", Role: session.RepoRoleReference},
 	}}
 	if err := session.WriteManifest(shown, m); err != nil {
@@ -151,6 +152,12 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	}
 	if fields.Repos[0].ID != "org/svc" || fields.Repos[0].Role != "editing" {
 		t.Fatalf("held repo = %+v", fields.Repos[0])
+	}
+	if fields.Repos[0].Base != "release/24.4" {
+		t.Fatalf("held row does not say what it was cut from: %+v", fields.Repos[0])
+	}
+	if fields.Repos[1].Base != "" {
+		t.Fatalf("a row cut from the default branch names a base: %+v", fields.Repos[1])
 	}
 	if _, err := p.Load("kraken"); err == nil {
 		t.Fatal("a picker loaded for a session this workbench is not running")

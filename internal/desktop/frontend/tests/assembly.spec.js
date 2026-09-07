@@ -31,3 +31,73 @@ test("saved orgs reach the repositories step without it being rebuilt", async ({
     window.assembly.calls().filter(({ name }) => name.endsWith("Repositories.Refresh")).length,
   )).toBe(1);
 });
+
+test("the base menu shows the default branch before Repositories.Branches answers, then the full list", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+
+  const base = page.locator(".rows button.base");
+  await expect(base).toHaveText("main ▾");
+  await base.click();
+
+  const menu = page.locator(".anchor .menu");
+  await expect(menu.getByRole("button")).toHaveText(["main", "Listing branches…"]);
+  await expect.poll(() => page.evaluate(() =>
+    window.assembly.calls().some(({ name, args }) => name.endsWith("Repositories.Branches") && args[0] === "acme/api"),
+  )).toBe(true);
+
+  await page.evaluate(() =>
+    window.assembly.resolveBranches({ branches: ["main", "develop", "feature-x"], default: "main" }),
+  );
+  await expect(menu.getByRole("button")).toHaveText(["main", "develop", "feature-x"]);
+});
+
+test("a failed branches answer still offers the default branch, disabled with a failure line", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+
+  await page.locator(".rows button.base").click();
+  await page.evaluate(() =>
+    window.assembly.resolveBranches({ branches: ["main"], default: "main", error: "listing failed" }),
+  );
+
+  const menu = page.locator(".anchor .menu");
+  await expect(menu.getByRole("button")).toHaveText(["main", "Couldn't list branches"]);
+  await expect(menu.getByRole("button", { name: "Couldn't list branches" })).toBeDisabled();
+
+  await menu.getByRole("button", { name: "main", exact: true }).click();
+  await expect(page.locator(".anchor")).toHaveCount(0);
+  await expect(page.locator(".rows button.base")).toHaveText("main ▾");
+});
+
+test("a chosen non-default base branch reaches the create payload", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories →" }).click();
+
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
+  await page.locator(".rows button.base").click();
+  await page.evaluate(() =>
+    window.assembly.resolveBranches({ branches: ["main", "develop"], default: "main" }),
+  );
+  await page.locator(".anchor .menu").getByRole("button", { name: "develop", exact: true }).click();
+  await expect(page.locator(".rows button.base")).toHaveText("develop ▾");
+
+  await page.getByRole("button", { name: "Choose an agent →" }).click();
+  await page.getByRole("button", { name: "Create session →" }).click();
+
+  await expect.poll(() => page.evaluate(() =>
+    window.assembly.calls().some(
+      ({ name, args }) =>
+        (name.endsWith("Assembly.Create") || name.endsWith("Assembly.Check")) &&
+        args[0]?.repos?.some(
+          (repo) => repo.id === "acme/api" && repo.role === "editing" && repo.base === "develop",
+        ),
+    ),
+  )).toBe(true);
+});
