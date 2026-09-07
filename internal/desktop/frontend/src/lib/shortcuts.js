@@ -1,5 +1,4 @@
-// Switching sessions by keyboard. Pure so node --test can reach it, which is the
-// whole frontend harness.
+// Switching sessions by keyboard.
 
 // NUMBERED is how many rail rows get a shortcut. Past that the rows are
 // click-only: there is no second modifier worth teaching and no digit left.
