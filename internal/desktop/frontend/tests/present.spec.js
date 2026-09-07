@@ -139,6 +139,43 @@ test("deactivating the deck closes the notes window too", async ({ page }) => {
   await page.waitForFunction(() => window.closes.length === 1);
 });
 
+test("closing the deck tab takes the presentation with it", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.evaluate(() => window.notes());
+  await page.waitForFunction(() => window.opens.length === 1);
+
+  await page.evaluate(() => window.closeTab());
+  await expect(page.locator(".present")).toHaveCount(0);
+  await page.waitForFunction(() => window.closes.length === 1);
+});
+
+test("no app shortcut fires from under the presentation", async ({ page }) => {
+  await open(page);
+  await page.keyboard.press("Control+Comma");
+  expect(await page.evaluate(() => window.appKeys.length)).toBeGreaterThan(0);
+
+  await start(page);
+  await page.evaluate(() => (window.appKeys.length = 0));
+  await page.keyboard.press("Control+Comma");
+  await page.keyboard.press("Meta+1");
+  await page.keyboard.press("ArrowRight");
+
+  expect(await page.evaluate(() => window.appKeys)).toEqual([]);
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+});
+
+test("a deck edited down to fewer slides carries the presentation back", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.keyboard.press("End");
+  await expect(page.locator(".present-counter")).toHaveText("7 / 7");
+
+  await page.evaluate(() => window.shorten());
+  await expect(page.locator(".present-counter")).toHaveText("2 / 2");
+  expect(await page.evaluate(() => window.presentHeading())).toBe("Last");
+});
+
 test("find declines to open behind the presentation", async ({ page }) => {
   await open(page);
   await start(page);

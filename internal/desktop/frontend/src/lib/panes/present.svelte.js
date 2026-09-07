@@ -10,6 +10,10 @@ function presenting() {
   let index = $state(0);
   let source = () => /** @type {{html: string, title: string, notes: string}[]} */ ([]);
 
+  // Read through the clamp rather than stored clamped: a deck edited down to
+  // fewer slides while it is on screen moves the index without a key press.
+  const at = () => clamp(index, source().length);
+
   return {
     get active() {
       return owner !== "";
@@ -18,13 +22,14 @@ function presenting() {
       return source();
     },
     get current() {
-      return index;
+      return at();
     },
     get total() {
       return source().length;
     },
     /** @param {string} by @param {() => {html: string, title: string, notes: string}[]} cards @param {number} [from] */
     open(by, cards, from = 0) {
+      if (cards().length === 0) return;
       owner = by;
       source = cards;
       index = clamp(from, cards().length);
@@ -43,7 +48,7 @@ function presenting() {
     },
     /** @param {number} by */
     step(by) {
-      index = clamp(index + by, source().length);
+      index = clamp(at() + by, source().length);
     },
     /** @param {number} to */
     go(to) {

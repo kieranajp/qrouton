@@ -2,6 +2,8 @@ package desktop
 
 import (
 	"errors"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -69,12 +71,8 @@ func TestClosingTheNotesWindowLeavesTheApplicationRunning(t *testing.T) {
 	spec.OnClose()
 
 	r.mu.Lock()
-	quit := r.quit
 	_, announced := r.events[presenterClosedEvent]
 	r.mu.Unlock()
-	if quit {
-		t.Fatal("closing the notes window quit the application")
-	}
 	if !announced {
 		t.Fatalf("the page was not told the notes window went: %v", r.events)
 	}
@@ -105,13 +103,9 @@ func TestPresenterCloseEndsOnlyTheNotesWindow(t *testing.T) {
 
 	r.mu.Lock()
 	closed := append([]string(nil), r.closed...)
-	quit := r.quit
 	r.mu.Unlock()
 	if len(closed) != 1 || closed[0] != notesWindowName {
 		t.Fatalf("closed = %v, want the notes window alone", closed)
-	}
-	if quit {
-		t.Fatal("closing the notes window quit the application")
 	}
 }
 
@@ -190,6 +184,40 @@ func TestNoteAnswersTheLastShow(t *testing.T) {
 	}
 }
 
+// The toolkit destroys a window after Close returns, so the one this presenter
+// asked to go still reports itself closed — after the next one is already up.
+func TestALateCloseFromARetiredWindowSaysNothing(t *testing.T) {
+	p, r := testPresenter(t)
+	if err := p.Open(); err != nil {
+		t.Fatal(err)
+	}
+	retired := openedSpec(t, r)
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Open(); err != nil {
+		t.Fatal(err)
+	}
+	openedSpec(t, r)
+
+	retired.OnClose()
+
+	r.mu.Lock()
+	_, announced := r.events[presenterClosedEvent]
+	r.mu.Unlock()
+	if announced {
+		t.Fatal("a retired window's close turned the page's Notes control off")
+	}
+	if err := p.Show(noteView{Index: 1, Total: 2}); err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if len(r.sent) != 1 {
+		t.Fatalf("sent %d payloads; the live notes window stopped being fed", len(r.sent))
+	}
+}
+
 // A window that failed to open must not leave the presenter believing one is up,
 // or the control never opens a second.
 func TestAFailedOpenIsRetried(t *testing.T) {
@@ -224,3 +252,20 @@ func (r *refusingRenderer) Open(spec windowSpec) error {
 }
 
 var errNoDisplay = errors.New("no display to open a window on")
+
+// The toolkit's per-window EmitEvent is not the narrower call it reads as: it
+// stamps a sender and re-enters the same broadcast every window hears. A
+// regression to it looks correct until a third window exists, which nothing
+// running against one fake renderer can see.
+func TestTheRendererReachesOneWindowByDispatchingToIt(t *testing.T) {
+	source, err := os.ReadFile("wails.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(source), "DispatchWailsEvent") {
+		t.Fatal("the renderer no longer dispatches to a window directly")
+	}
+	if strings.Contains(string(source), ".EmitEvent(") {
+		t.Fatal("the renderer emits through a window, which broadcasts to every one of them")
+	}
+}

@@ -72,11 +72,13 @@
   }
 
   function key(event) {
+    // The presentation is exclusive, so no window listener acts on a key while
+    // it is up — a panel opening beneath an opaque layer holds the keyboard
+    // with nothing on screen to say so.
+    event.stopPropagation();
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "Escape") {
       event.preventDefault();
-      // Stopped here, so the generic dismisser does not also act on it.
-      event.stopPropagation();
       present.leave();
       return;
     }

@@ -17,9 +17,10 @@ type Presenter struct {
 	renderer notesRenderer
 	emit     emitter
 
-	mu   sync.Mutex
-	open bool
-	note noteView
+	mu    sync.Mutex
+	open  bool
+	epoch uint64
+	note  noteView
 }
 
 func newPresenter(r notesRenderer, emit emitter) *Presenter {
@@ -36,6 +37,8 @@ func (p *Presenter) Open() error {
 		return nil
 	}
 	p.open = true
+	p.epoch++
+	at := p.epoch
 	p.mu.Unlock()
 
 	spec := windowSpec{
@@ -47,7 +50,7 @@ func (p *Presenter) Open() error {
 		// The keyboard stays with the presenting window, or the press that opened
 		// this one would be the last arrow the deck heard.
 		Focus:   false,
-		OnClose: p.closed,
+		OnClose: func() { p.closed(at) },
 	}
 	if err := p.renderer.Open(spec); err != nil {
 		p.mu.Lock()
@@ -62,6 +65,7 @@ func (p *Presenter) Close() error {
 	p.mu.Lock()
 	closing := p.open
 	p.open = false
+	p.epoch++
 	p.mu.Unlock()
 	if closing {
 		p.renderer.Close(notesWindowName)
@@ -91,11 +95,15 @@ func (p *Presenter) Note() noteView {
 }
 
 // closed is the window going without being asked, which the presenting page's
-// own control has to hear about.
-func (p *Presenter) closed() {
+// own control has to hear about. The toolkit tears a window down after Close
+// returns, so a window closing at its own pace names the epoch it was opened
+// in and a stale one says nothing.
+func (p *Presenter) closed(at uint64) {
 	p.mu.Lock()
-	announce := p.open
-	p.open = false
+	announce := p.open && p.epoch == at
+	if announce {
+		p.open = false
+	}
 	p.mu.Unlock()
 	if announce && p.emit != nil {
 		p.emit(presenterClosedEvent, nil)

@@ -50,6 +50,10 @@ export const DECK = [
   "", // 42
 ].join("\n");
 
+export const SHORT_DECK = ["---", "marp: true", "---", "", "## Only", "", "---", "", "## Last", ""].join(
+  "\n",
+);
+
 export const DIAGRAM_DECK = [
   "---", // 1
   "marp: true", // 2
@@ -103,6 +107,8 @@ window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Close")) window.closes.push(name);
   return undefined;
 };
+window.shorten = () => window.pushDeck(SHORT_DECK);
+
 window.pushDiagramDeck = () => {
   window.diagramReply = [{ line: DIAGRAM_LINE }];
   window.pushDeck(DIAGRAM_DECK);
@@ -173,17 +179,14 @@ window.present = () => {
   control.click();
 };
 
-window.presenting = () => Boolean(document.querySelector(".present"));
-
 window.notes = () => named("Notes").click();
-
-window.notesPressed = () =>
-  document.querySelector(".present-hud [aria-pressed]").getAttribute("aria-pressed");
 
 // The presenter closing the second window from the OS rather than from the deck.
 window.closeNotesWindow = () => emitWailsEvent("presenter:closed", null);
 
-window.presentIndex = () => document.querySelector(".present-counter").textContent.trim();
+// Every app-level shortcut in this page is a window listener like this one.
+window.appKeys = [];
+window.addEventListener("keydown", (event) => window.appKeys.push(event.key));
 
 window.slideBox = () => {
   const slide = document.querySelector(".present-slide");

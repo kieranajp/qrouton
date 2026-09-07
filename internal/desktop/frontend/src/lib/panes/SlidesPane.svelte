@@ -1,4 +1,5 @@
 <script>
+  import { onDestroy } from "svelte";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
@@ -42,6 +43,10 @@
   $effect(() => {
     if (!active) present.close(id);
   });
+
+  // A closed tab is destroyed with the rest of the strip, so its pane never
+  // sees itself deactivate.
+  onDestroy(() => present.close(id));
 </script>
 
 <svelte:head>

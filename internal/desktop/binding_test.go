@@ -133,9 +133,6 @@ func TestTheConversationPageLinksThePalette(t *testing.T) {
 	}
 }
 
-// The formats the pane registry keys on are the port's values, spelled again in
-// JavaScript. Nothing checks that at build time, and a format no pane claims
-// draws as plain text rather than erroring.
 func TestTheHandlerServesTheNotesPageAtItsOwnRoot(t *testing.T) {
 	assets, err := frontend()
 	if err != nil {
@@ -151,6 +148,9 @@ func TestTheHandlerServesTheNotesPageAtItsOwnRoot(t *testing.T) {
 	}
 }
 
+// The formats the pane registry keys on are the port's values, spelled again in
+// JavaScript. Nothing checks that at build time, and a format no pane claims
+// draws as plain text rather than erroring.
 func TestThePaneRegistryDrawsEveryDocumentFormat(t *testing.T) {
 	source, err := os.ReadFile(frontendSource + "lib/panes/index.js")
 	if err != nil {
