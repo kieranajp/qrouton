@@ -311,3 +311,18 @@ func TestHeldRefsKeepOnlyTheReferenceRowsNamedOnce(t *testing.T) {
 		t.Fatalf("resolved refs = %+v", got)
 	}
 }
+
+// The escalation picker speaks the same per-row shape as the first assembly, so
+// a repository added later can be cut from a branch of its own too.
+func TestAPickerRowCarriesItsChosenBaseIntoTheDraft(t *testing.T) {
+	cfg := &config.Config{}
+	repos := &Repositories{cfg: cfg, errs: map[string]error{},
+		repos: []github.Repo{{Org: "org", Name: "svc", DefaultBranch: "main"}}}
+	p := newPicker(cfg, nil, repos, nil)
+
+	got := p.draft(session.Manifest{Slug: "shown", Name: "Webhook retry"}, nil,
+		pickerInput{Repos: []repoPick{{ID: "org/svc", Role: "editing", Base: "release/24.4"}}})
+	if len(got.Repos) != 1 || got.Repos[0].Base != "release/24.4" {
+		t.Fatalf("draft repos = %+v", got.Repos)
+	}
+}

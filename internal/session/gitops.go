@@ -128,6 +128,16 @@ func ensureMirror(root, org, repo, url string, onProgress func(phase string, per
 	return gitSlow(onProgress, dirFlag, mp, fetchCmd, pruneFlag, verbosityFlag(onProgress), remoteName)
 }
 
+// baseRef addresses the branch a session's work is cut from, as the mirror sees
+// it: the chosen base when there is one, the repository's default branch
+// otherwise.
+func baseRef(base, defaultBranch string) string {
+	if base != "" {
+		return remoteRefPrefix + base
+	}
+	return remoteRefPrefix + defaultBranch
+}
+
 func addWorktree(mirror, path, branch, startRef string) error {
 	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err

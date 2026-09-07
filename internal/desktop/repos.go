@@ -63,7 +63,8 @@ func (r *Repositories) Cached() []github.Repo {
 
 // Select resolves picked rows against the list the step was drawn from, in the
 // order they were picked. A repository a refresh has dropped simply is not there
-// any more.
+// any more. A base naming the repository's own default branch is cleared here,
+// so a session nobody chose a branch for records none.
 func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 	byID := make(map[string]github.Repo)
 	for _, repo := range r.Cached() {
@@ -75,7 +76,11 @@ func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 		if !ok {
 			continue
 		}
-		out = append(out, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role)})
+		base := pick.Base
+		if base == repo.DefaultBranch {
+			base = ""
+		}
+		out = append(out, session.RepoSelection{Repo: repo, Role: session.RepoRole(pick.Role), Base: base})
 	}
 	return out
 }

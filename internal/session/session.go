@@ -159,6 +159,9 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	if role != RepoRoleEditing && role != RepoRoleReference {
 		return ManifestRepo{}, invalidRole(role, r.Org, r.Name)
 	}
+	if sel.Base == "" && r.DefaultBranch == "" {
+		return ManifestRepo{}, refuseRepo(ErrNoBaseBranch, r.Org, r.Name)
+	}
 	url := sshURL(r.Org, r)
 	rep := reporter{fn: progress, repo: &r, role: role}
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
@@ -166,16 +169,16 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	}); err != nil {
 		return ManifestRepo{}, err
 	}
-	mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role,
-		DefaultBranch: r.DefaultBranch, WorktreePath: worktreePath, SSHURL: url}
+	mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role, DefaultBranch: r.DefaultBranch,
+		BaseBranch: sel.Base, WorktreePath: worktreePath, SSHURL: url}
+	from := baseRef(sel.Base, r.DefaultBranch)
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 	err := rep.step(ProgressWorktree, func(func(string, int)) error {
 		if role != RepoRoleReference {
 			mr.Branch = branch
-			return addWorktree(mirror, filepath.Join(dir, worktreePath), branch,
-				remoteRefPrefix+r.DefaultBranch)
+			return addWorktree(mirror, filepath.Join(dir, worktreePath), branch, from)
 		}
-		revision, err := resolveRevision(mirror, remoteRefPrefix+r.DefaultBranch)
+		revision, err := resolveRevision(mirror, from)
 		if err != nil {
 			return err
 		}

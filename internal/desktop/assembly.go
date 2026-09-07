@@ -26,10 +26,12 @@ type draftInput struct {
 }
 
 // repoPick is one row's answer, in the order it was picked: first picked means
-// worked in most.
+// worked in most. Base names the branch to cut from; absent takes the
+// repository's default.
 type repoPick struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
+	Base string `json:"base,omitempty"`
 }
 
 // ticketFields is a fetched ticket on the wire. The domain type knows nothing
