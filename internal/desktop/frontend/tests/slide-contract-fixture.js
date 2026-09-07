@@ -18,5 +18,11 @@ window.deck = (markdown) => {
       tag: element.tagName.toLowerCase(),
       src: element.getAttribute("src"),
     })),
+    fences: [...parsed.querySelectorAll("pre")].map((element) => ({
+      language: element.querySelector("code")?.className ?? "",
+      line: element.dataset.line ?? null,
+      lineEnd: element.dataset.lineEnd ?? null,
+      source: element.textContent,
+    })),
   };
 };

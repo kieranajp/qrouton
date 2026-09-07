@@ -35,14 +35,16 @@ export function links(body, source) {
 
 /** Events subscribe before the initial call so no completed diagram is missed.
  * @param {HTMLElement} body
- * @param {{id: string, text: string}} params */
-export function diagrams(body, { id }) {
-  const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) => applyDiagrams(body, [event.data]));
+ * @param {{id: string, text: string, fit?: boolean}} params */
+export function diagrams(body, { id, fit }) {
+  const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) =>
+    applyDiagrams(body, [event.data], { fit }),
+  );
   // Rendered markup does not survive a content push, so the fences are asked
   // for again whenever the text behind them changes.
   const draw = () =>
     Call.ByName(WINDOWS_RENDER_DIAGRAMS, id)
-      .then((found) => applyDiagrams(body, found ?? []))
+      .then((found) => applyDiagrams(body, found ?? [], { fit }))
       .catch(() => {});
   draw();
   return {

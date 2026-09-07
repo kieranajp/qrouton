@@ -164,6 +164,25 @@ in the default edge.
 A small muted aside with no box. Use it for the line that qualifies a slide without belonging in its
 body.
 
+## Diagrams
+
+A top-level d2 fence draws on the slide:
+
+````markdown
+## How a window opens
+
+```d2
+direction: right
+agent -> workbench: opens
+workbench -> pane: draws
+```
+````
+
+The source shows on the slide until the drawing lands, and the reason shows there if it fails. The
+diagram is fitted, so it never pans or zooms the way one in a reading pane does, and a diagram too
+tall for the slide shrinks until it fits rather than spilling over the edge. `|md|` blocks, remote
+images and scripts are stripped.
+
 ## Things that will not work
 
 | You write | What happens |

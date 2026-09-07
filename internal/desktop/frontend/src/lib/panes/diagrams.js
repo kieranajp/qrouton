@@ -64,14 +64,15 @@ function attributeSize(value) {
 }
 
 /** Diagram blocks retain their element identity while their contents change.
+ * A fitted diagram holds no view of its own: it cannot be panned or zoomed.
  * @param {HTMLElement} container
- * @param {Rendered[]} results */
-export function apply(container, results) {
+ * @param {Rendered[]} results @param {{fit?: boolean}} [options] */
+export function apply(container, results, options = {}) {
   const blocks = [
     .../** @type {NodeListOf<HTMLElement>} */ (container.querySelectorAll("pre[data-line]")),
   ];
   for (const { block, result } of place(blocks, results)) {
-    if (result.svg) draw(block, result.svg);
+    if (result.svg) draw(block, result.svg, options.fit ?? false);
     else if (result.error) fail(block, result.error);
     else wait(block);
   }
@@ -103,14 +104,16 @@ function fail(block, message) {
 
 /** SVG markup has passed the backend's safety check before reaching this renderer.
  * @param {HTMLElement} block
- * @param {string} svg */
-function draw(block, svg) {
+ * @param {string} svg
+ * @param {boolean} fit */
+function draw(block, svg, fit) {
   detach(block);
   const holder = block.ownerDocument.createElement("div");
   holder.innerHTML = svg;
   const drawn = /** @type {SVGSVGElement | null} */ (holder.firstElementChild);
-  const emitted = emittedSize(drawn);
-  if (drawn && emitted) {
+  const emitted = fit ? null : emittedSize(drawn);
+  if (fit) unscale(drawn);
+  else if (drawn && emitted) {
     drawn.style.width = `${emitted.width}px`;
     drawn.style.height = `${emitted.height}px`;
   }
@@ -118,6 +121,17 @@ function draw(block, svg) {
   block.classList.add(DRAWN);
   block.replaceChildren(...holder.childNodes);
   if (drawn && emitted) attach(block, drawn, emitted);
+}
+
+/** The renderer emits at prose scale, which reads as a stamp on a slide. Its
+ * natural size becomes its intrinsic one, so the box it sits in shrinks it on
+ * either axis without stretching it.
+ * @param {SVGSVGElement | null} drawn */
+function unscale(drawn) {
+  const natural = naturalSize(drawn?.getAttribute("viewBox"));
+  if (!drawn || !natural) return;
+  drawn.setAttribute("width", String(natural.width));
+  drawn.setAttribute("height", String(natural.height));
 }
 
 /**
