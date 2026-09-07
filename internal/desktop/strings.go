@@ -16,12 +16,20 @@ const (
 	mainWindowWidth  = 1100
 	mainWindowHeight = 760
 
+	notesWindowName   = "presenter-notes"
+	notesWindowTitle  = "Speaker notes"
+	notesWindowWidth  = 520
+	notesWindowHeight = 720
+
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"
+
+	// A directory too, for the redirect frontendRoot dodges.
+	notesRoot = "/notes/"
 
 	assetRoot = "assets"
 
@@ -57,6 +65,8 @@ const (
 	windowDiagramEvent = "window:diagram:"
 	windowContentEvent = "window:content:"
 	windowsEvent       = "window:open"
+
+	presenterClosedEvent = "presenter:closed"
 
 	reposRefreshEvent      = "repos:refresh"
 	assemblyProgressEvent  = "assembly:progress"

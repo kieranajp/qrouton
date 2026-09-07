@@ -1,6 +1,8 @@
 <script>
   import { onMount } from "svelte";
+  import { PRESENTER_CLOSE, PRESENTER_CLOSED_EVENT, PRESENTER_OPEN } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
+  import { call, Call, Events } from "../wails.js";
   import { present } from "./present.svelte.js";
   import { SLIDE_HEIGHT, SLIDE_WIDTH } from "./slides.js";
 
@@ -10,13 +12,18 @@
   let layer = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let stage = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let scale = $state(1);
+  let notes = $state(false);
   let card = $derived(present.cards[present.current]);
 
   // The layer takes the keyboard on mount and hands it back on the way out.
   onMount(() => {
     const beneath = /** @type {HTMLElement | null} */ (document.activeElement);
     layer?.focus();
-    return () => beneath?.focus?.();
+    const off = Events.On(PRESENTER_CLOSED_EVENT, () => (notes = false));
+    return () => {
+      off?.();
+      beneath?.focus?.();
+    };
   });
 
   // Both dimensions enter the sum: a slide fitted to width alone runs off the
@@ -32,6 +39,16 @@
     observer.observe(stage);
     return () => observer.disconnect();
   });
+
+  // The keyboard belongs to this window, so the control hands it straight back
+  // rather than leaving it on a button the arrows would not reach past.
+  async function toggleNotes() {
+    const wanted = !notes;
+    notes = wanted;
+    layer?.focus();
+    const answer = await call(Call.ByName(wanted ? PRESENTER_OPEN : PRESENTER_CLOSE));
+    if (!answer.ok) notes = !wanted;
+  }
 
   function key(event) {
     if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -62,6 +79,7 @@
   </div>
   <div class="present-hud">
     <span class="present-counter">{present.current + 1} / {present.total}</span>
+    <Button variant="ghost" size="sm" aria-pressed={notes} onclick={toggleNotes}>Notes</Button>
     <Button variant="ghost" size="sm" onclick={() => present.leave()}>Exit</Button>
   </div>
 </div>

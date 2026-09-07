@@ -8,8 +8,12 @@ type renderer interface {
 	// name of a session onboarding chose after it opened.
 	Retitle(name, title string)
 	Focus(name string)
-	// Emit delivers a payload to the pages of every open window.
+	// Close ends one window without taking the application with it.
+	Close(name string)
+	// Emit delivers a payload to the pages of every open window; Send delivers
+	// one to a single named window's page.
 	Emit(event string, payload any)
+	Send(name, event string, payload any)
 	// Run blocks on the event loop until the application quits.
 	Run() error
 	Quit()

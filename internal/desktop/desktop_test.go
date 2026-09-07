@@ -33,6 +33,8 @@ type fakeRenderer struct {
 	titles  map[string]string
 	events  map[string]any
 	focused map[string]int
+	closed  []string
+	sent    []delivery
 	quit    bool
 	block   chan struct{}
 	once    sync.Once
@@ -65,10 +67,22 @@ func (f *fakeRenderer) Focus(name string) {
 	f.focused[name]++
 }
 
+func (f *fakeRenderer) Close(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closed = append(f.closed, name)
+}
+
 func (f *fakeRenderer) Emit(event string, payload any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events[event] = payload
+}
+
+func (f *fakeRenderer) Send(name, event string, payload any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, delivery{window: name, event: event, payload: payload})
 }
 
 func (f *fakeRenderer) Run() error {
@@ -85,6 +99,14 @@ func (f *fakeRenderer) Quit() {
 		f.mu.Unlock()
 		close(f.block)
 	})
+}
+
+// delivery is one payload the toolkit was asked to put in front of one window's
+// page, rather than every page.
+type delivery struct {
+	window  string
+	event   string
+	payload any
 }
 
 // stubBoot stands in for what a session needs to come up, counting the
