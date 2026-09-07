@@ -19,6 +19,7 @@ type Presenter struct {
 
 	mu   sync.Mutex
 	open bool
+	note noteView
 }
 
 func newPresenter(r notesRenderer, emit emitter) *Presenter {
@@ -66,6 +67,27 @@ func (p *Presenter) Close() error {
 		p.renderer.Close(notesWindowName)
 	}
 	return nil
+}
+
+// Show retains the note and puts it in front of the notes window alone. With no
+// window up it only retains, so the presenting page can call it on every step.
+func (p *Presenter) Show(note noteView) error {
+	p.mu.Lock()
+	p.note = note
+	showing := p.open
+	p.mu.Unlock()
+	if showing {
+		p.renderer.Send(notesWindowName, presenterNotesEvent, note)
+	}
+	return nil
+}
+
+// Note answers the notes page's pull on mount, which closes the race with a
+// step dispatched before that page had subscribed.
+func (p *Presenter) Note() noteView {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.note
 }
 
 // closed is the window going without being asked, which the presenting page's

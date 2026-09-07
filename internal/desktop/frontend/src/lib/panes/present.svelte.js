@@ -8,7 +8,7 @@ const clamp = (at, total) => Math.max(0, Math.min(at, total - 1));
 function presenting() {
   let owner = $state("");
   let index = $state(0);
-  let source = () => /** @type {{html: string, notes: string}[]} */ ([]);
+  let source = () => /** @type {{html: string, title: string, notes: string}[]} */ ([]);
 
   return {
     get active() {
@@ -23,7 +23,7 @@ function presenting() {
     get total() {
       return source().length;
     },
-    /** @param {string} by @param {() => {html: string, notes: string}[]} cards @param {number} [from] */
+    /** @param {string} by @param {() => {html: string, title: string, notes: string}[]} cards @param {number} [from] */
     open(by, cards, from = 0) {
       owner = by;
       source = cards;

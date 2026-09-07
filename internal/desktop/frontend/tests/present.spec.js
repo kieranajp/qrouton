@@ -56,6 +56,26 @@ test("the arrows step the deck and stop at both ends", async ({ page }) => {
   await expect(page.locator(".present-counter")).toHaveText("1 / 7");
 });
 
+test("the workbench is told which note to show, once per step", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.shows.length > 0);
+  const [opening] = await page.evaluate(() => window.shows);
+
+  expect(opening.index).toBe(0);
+  expect(opening.total).toBe(7);
+  expect(opening.title).toBe("The fixture deck");
+  expect(opening.html).toContain("The note under the opener");
+
+  await page.evaluate(() => (window.shows.length = 0));
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+  const stepped = await page.evaluate(() => window.shows);
+
+  expect(stepped).toHaveLength(1);
+  expect(stepped[0]).toMatchObject({ index: 1, total: 7, title: "Second", html: "" });
+});
+
 test("a presenter remote's page keys step the deck too", async ({ page }) => {
   await open(page);
   await start(page);
@@ -102,7 +122,7 @@ for (const room of [
     await page.setViewportSize(room);
     await open(page);
     await start(page);
-    await page.waitForFunction((wide) => window.slideBox().width <= wide, room.width);
+    await page.waitForFunction(() => window.slideBox().scale !== 1);
     const box = await page.evaluate(() => window.slideBox());
 
     expect(box.declared).toBe(1280);

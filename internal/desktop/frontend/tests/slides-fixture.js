@@ -91,10 +91,12 @@ const document_ = (text) => ({
 window.reports = [];
 window.diagramReply = [];
 window.pushDeck = (text) => emitWailsEvent("window:content:w1", document_(text));
-window.wailsCall = async (name, id, payload) => {
+window.shows = [];
+window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Content")) return document_(DECK);
   if (name.endsWith(".RenderDiagrams")) return window.diagramReply;
-  if (name.endsWith(".ReportViewport")) window.reports.push(payload);
+  if (name.endsWith(".ReportViewport")) window.reports.push(args[1]);
+  if (name.endsWith(".Show")) window.shows.push(args[0]);
   return undefined;
 };
 window.pushDiagramDeck = () => {
@@ -147,6 +149,9 @@ window.cards = () =>
 
 window.counter = () => document.querySelector(".counter").textContent.trim();
 
+window.slideScale = () =>
+  Number(document.querySelector(".stack").style.getPropertyValue("--slide-scale"));
+
 window.narrow = () => {
   document.querySelector("#fixture").style.width = "480px";
 };
@@ -175,6 +180,7 @@ window.slideBox = () => {
     width: rect.width,
     height: rect.height,
     declared: slide.offsetWidth,
+    scale: Number(slide.style.getPropertyValue("--present-scale")),
     room: { width: window.innerWidth, height: window.innerHeight },
   };
 };

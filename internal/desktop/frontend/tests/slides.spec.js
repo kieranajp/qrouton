@@ -40,11 +40,11 @@ test("a note renders below its card and never resizes it", async ({ page }) => {
 test("a narrower pane rescales the slide rather than reflowing it", async ({ page }) => {
   await open(page);
   const wide = await page.evaluate(() => window.cards());
+  const wideScale = await page.evaluate(() => window.slideScale());
   await page.evaluate(() => window.narrow());
-  await page.waitForFunction(
-    (before) => window.cards()[0].frame.width < before,
-    wide[0].frame.width,
-  );
+  // The factor, not the frame: the frame narrows in the same layout the width
+  // was set in, while the factor waits on the observer that measures it.
+  await page.waitForFunction((before) => window.slideScale() < before, wideScale);
   const narrow = await page.evaluate(() => window.cards());
 
   expect(narrow[0].frame.width / narrow[0].frame.height).toBeCloseTo(16 / 9, 2);

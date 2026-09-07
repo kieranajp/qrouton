@@ -66,6 +66,7 @@ const (
 	windowContentEvent = "window:content:"
 	windowsEvent       = "window:open"
 
+	presenterNotesEvent  = "presenter:notes"
 	presenterClosedEvent = "presenter:closed"
 
 	reposRefreshEvent      = "repos:refresh"

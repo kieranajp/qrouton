@@ -1,6 +1,11 @@
 <script>
   import { onMount } from "svelte";
-  import { PRESENTER_CLOSE, PRESENTER_CLOSED_EVENT, PRESENTER_OPEN } from "../bridge/generated.js";
+  import {
+    PRESENTER_CLOSE,
+    PRESENTER_CLOSED_EVENT,
+    PRESENTER_OPEN,
+    PRESENTER_SHOW,
+  } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import { call, Call, Events } from "../wails.js";
   import { present } from "./present.svelte.js";
@@ -38,6 +43,19 @@
     });
     observer.observe(stage);
     return () => observer.disconnect();
+  });
+
+  // Unconditional: the workbench retains the note whether or not the second
+  // window is up, and a deck edited underneath the presentation moves both.
+  $effect(() => {
+    call(
+      Call.ByName(PRESENTER_SHOW, {
+        index: present.current,
+        total: present.total,
+        title: card?.title ?? "",
+        html: card?.notes ?? "",
+      }),
+    );
   });
 
   // The keyboard belongs to this window, so the control hands it straight back
