@@ -5,9 +5,6 @@
   import Menu from "../shell/Menu.svelte";
 
   const BASE_MENU_WIDTH = 232;
-  // A repository can have hundreds of branches, so the menu scrolls at this
-  // height and is placed against it, not against the list it happens to hold
-  // when it opens.
   const BASE_MENU_MAX_HEIGHT = 300;
   const BASE_HEADING = "Branch from";
   const LISTING = "Listing branches…";

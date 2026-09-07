@@ -81,8 +81,7 @@ export function browsing(branch, report = () => {}) {
     }),
   );
 
-  // Asked for on menu open only, so drawing two hundred rows costs no GitHub
-  // calls at all.
+  // Asked for on menu open, so drawing two hundred rows costs no GitHub calls.
   async function loadBranches(id) {
     if (!wanted(lists, id)) return;
     lists = requested(lists, id);

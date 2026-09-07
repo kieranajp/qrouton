@@ -105,8 +105,6 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
   )).toBe(true);
 });
 
-// The button opens the menu and closes it again, which is the reflex a caret on
-// a control asks for.
 test("the base button closes the menu it opened", async ({ page }) => {
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
@@ -122,8 +120,6 @@ test("the base button closes the menu it opened", async ({ page }) => {
   await expect(page.locator(".anchor .menu")).toHaveCount(0);
 });
 
-// Two hundred branches must not run off the bottom of the screen, and the menu
-// must not move under the pointer when they arrive.
 test("a long branch list scrolls inside a menu that does not move when it lands", async ({ page }) => {
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));

@@ -69,8 +69,7 @@ export const fetchTicket = async (url) => ({
 
 export const cached = () => Call.ByName(REPOSITORIES_CACHED);
 
-/** branches is a repository's base vocabulary. A listing that failed answers
- * with the default branch alone and a populated error.
+/** branches is a repository's base vocabulary.
  * @param {string} id
  * @returns {Promise<{branches: string[], default: string, error?: string}>} */
 export const branches = (id) => Call.ByName(REPOSITORIES_BRANCHES, id);

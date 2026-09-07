@@ -1,5 +1,4 @@
-// Which repositories a session takes and in what order, kept pure: node --test
-// is the whole frontend harness.
+// Which repositories a session takes, and in what order.
 
 import { GLYPHS, READ_ONLY } from "../roles.js";
 import { repoID } from "./filter.js";
@@ -72,8 +71,6 @@ export function rowMeta(selection, id, pushed, defaultBranch = "") {
     .join(" · ");
 }
 
-// A held row is where the base is named: the picker offers no base control for
-// what the session already holds.
 function baseNote(selection, id, defaultBranch) {
   if (!isLocked(selection, id)) return "";
   const base = baseOf(selection, id);
@@ -87,6 +84,7 @@ function heldNote(selection, id) {
 }
 
 /** Demotion preserves selection rank; turning a repository off discards it.
+ * The base a row is cut from survives both.
  * @returns {Selection} */
 export function setRole(selection, id, role) {
   if (isLocked(selection, id)) return takeUp(selection, id, role);
@@ -100,9 +98,7 @@ export function setRole(selection, id, role) {
   return { ...selection, roles, order };
 }
 
-/** A base outlives a role change, an off included: choosing one is deliberate
- * enough that an accidental toggle should not discard it.
- * @returns {Selection} */
+/** @returns {Selection} */
 export function setBase(selection, id, branch) {
   const bases = { ...selection.bases };
   if (branch) bases[id] = branch;

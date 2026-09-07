@@ -194,8 +194,6 @@ test("a row being taken up leads the chips, naming the branch it joins", () => {
   assert.equal(summary(selection, repos, "feat/extract-billing").length, 1);
 });
 
-// Choosing a base is deliberate, so no role change discards it, an off-then-on
-// cycle included.
 test("a base survives a demote to reference and an off-then-on cycle, and ordered() carries it", () => {
   let selection = setRole(seed(), "acme/api", "editing");
   selection = setBase(selection, "acme/api", "feat/cut");

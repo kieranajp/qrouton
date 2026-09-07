@@ -50,8 +50,6 @@ test("settled folds a successful answer into a ready entry", () => {
   });
 });
 
-// Go answers a failure alongside the fallback branches it already chose, so
-// the menu still has something to offer.
 test("settled folds a failed answer into a failed entry, keeping Go's fallback branches", () => {
   const lists = requested(unasked(), "acme/api");
   const result = settled(lists, "acme/api", {

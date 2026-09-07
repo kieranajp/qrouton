@@ -1,5 +1,4 @@
-// What a repository's branches are, per repository, kept pure: node --test is
-// the whole frontend harness.
+// Branch lists for the base menu, keyed by repository.
 
 /** @typedef {'idle'|'loading'|'ready'|'failed'} State */
 /**
