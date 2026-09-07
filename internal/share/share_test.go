@@ -3,9 +3,11 @@ package share
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -84,6 +86,74 @@ func TestPageCarriesTheDocumentAndItsSource(t *testing.T) {
 	}
 	if strings.Contains(string(page), markdown) {
 		t.Error("page carries the document unencoded, so its markup can close the script tag")
+	}
+}
+
+var diagramTag = regexp.MustCompile(`id="qrouton-diagrams">([^<]*)<`)
+
+func drawingsOf(t *testing.T, page []byte) []rendered {
+	t.Helper()
+	found := diagramTag.FindSubmatch(page)
+	if found == nil {
+		return nil
+	}
+	decoded, err := base64.StdEncoding.DecodeString(string(found[1]))
+	if err != nil {
+		t.Fatalf("decode diagrams: %v", err)
+	}
+	var drawings []rendered
+	if err := json.Unmarshal(decoded, &drawings); err != nil {
+		t.Fatalf("unmarshal diagrams: %v", err)
+	}
+	return drawings
+}
+
+// A shared page runs no renderer, so a d2 fence is laid out before the page is
+// written or it is never drawn at all.
+func TestPageCarriesItsDiagramsAlreadyDrawn(t *testing.T) {
+	page, err := Page("notes.md", []byte("# Notes\n\n```d2\na -> b\n```\n"))
+	if err != nil {
+		t.Fatalf("Page: %v", err)
+	}
+	drawings := drawingsOf(t, page)
+	if len(drawings) != 1 {
+		t.Fatalf("drawings = %d, want 1", len(drawings))
+	}
+	if drawings[0].Line != 3 {
+		t.Errorf("line = %d, want 3", drawings[0].Line)
+	}
+	if !strings.HasPrefix(drawings[0].SVG, "<svg") {
+		t.Errorf("svg = %.40q, want an SVG", drawings[0].SVG)
+	}
+	if drawings[0].Error != "" {
+		t.Errorf("error = %q, want none", drawings[0].Error)
+	}
+}
+
+func TestPageStatesWhyAFenceDidNotDraw(t *testing.T) {
+	page, err := Page("notes.md", []byte("# Notes\n\n```d2\nc: {\n```\n"))
+	if err != nil {
+		t.Fatalf("Page: %v", err)
+	}
+	drawings := drawingsOf(t, page)
+	if len(drawings) != 1 {
+		t.Fatalf("drawings = %d, want 1", len(drawings))
+	}
+	if drawings[0].Error == "" {
+		t.Error("a broken fence carries no reason")
+	}
+	if drawings[0].SVG != "" {
+		t.Error("a broken fence carries an SVG")
+	}
+}
+
+func TestPageWithNothingToDrawCarriesNoDiagrams(t *testing.T) {
+	page, err := Page("notes.md", []byte("# Notes\n\n```go\nx := 1\n```\n"))
+	if err != nil {
+		t.Fatalf("Page: %v", err)
+	}
+	if drawings := drawingsOf(t, page); drawings != nil {
+		t.Errorf("drawings = %v, want none", drawings)
 	}
 }
 
