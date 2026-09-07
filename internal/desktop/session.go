@@ -36,7 +36,7 @@ type sessionState struct {
 	stopped bool
 	process *ptyProcess
 	shell   string
-	// picker is the escalation waiting for the user to arrive at this session.
+	// picker is the request waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
 	// shells counts the shells the session has had rather than the ones still
@@ -44,8 +44,9 @@ type sessionState struct {
 	shells int
 }
 
-// requestPicker queues an escalation on this session. A later request replaces
-// an earlier one: both pollers then read the one stanza the confirm writes.
+// requestPicker queues a picker on this session. A later request of another kind
+// replaces an earlier one, whose caller then polls on to its own ceiling: only
+// the stanza matching the kind it opened answers it.
 func (s *sessionState) requestPicker(req workbench.PickerRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

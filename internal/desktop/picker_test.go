@@ -62,7 +62,7 @@ func TestAPendingPickerReachesTheChromeOfTheSessionItNames(t *testing.T) {
 	}
 }
 
-// The workbench never learns that awaitEscalation gave up, so an expired request
+// The workbench never learns that a caller's poll gave up, so an expired request
 // is ignored rather than drawn for an answer nobody is polling for.
 func TestAnExpiredPickerIsIgnoredOnArrival(t *testing.T) {
 	reg, _, background := pickerWorkbench(t)
@@ -203,14 +203,14 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reg.current().pendingPicker() != nil {
-		t.Fatal("cancelling left the escalation waiting to be drawn again")
+		t.Fatal("cancelling left the request waiting to be drawn again")
 	}
 	got, err := session.Load(shown)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationCancelled {
-		t.Fatalf("cancelling an escalation wrote %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerCancelled {
+		t.Fatalf("cancelling an awaited picker wrote %+v", got.Picker)
 	}
 
 	if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: shown, Deadline: time.Now().Add(time.Minute)}); err != nil {
@@ -221,17 +221,56 @@ func TestConfirmAndCancelClearThePendingPicker(t *testing.T) {
 		t.Fatal(err)
 	}
 	if reg.current().pendingPicker() != nil {
-		t.Fatal("confirming left the escalation waiting to be drawn again")
+		t.Fatal("confirming left the request waiting to be drawn again")
 	}
 	got, err = session.Load(shown)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed {
-		t.Fatalf("confirming an escalation wrote %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerConfirmed {
+		t.Fatalf("confirming an awaited picker wrote %+v", got.Picker)
 	}
 	if len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
 		t.Fatalf("confirm did not add the repository: %+v", got.Repos)
+	}
+}
+
+// The kind is the whole difference: an escalation's confirm moves the session to
+// RPI, and a repository request's leaves it where it was.
+func TestOnlyAnEscalationsConfirmMovesTheMode(t *testing.T) {
+	for _, tc := range []struct {
+		kind string
+		want session.SessionMode
+	}{
+		{kind: workbench.PickerKindEscalate, want: session.ModeRPI},
+		{kind: workbench.PickerKindRepos, want: session.ModeAssistant},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			reg, shown, _ := pickerWorkbench(t)
+			cfg := &config.Config{Root: filepath.Dir(shown)}
+			repo := github.Repo{Org: "org", Name: "svc", SSHURL: gittest.Origin(t, "svc"), DefaultBranch: "main"}
+			repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
+			p := newPicker(cfg, reg, repos, nil)
+			if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: shown,
+				Kind: tc.kind, Deadline: time.Now().Add(time.Minute)}); err != nil {
+				t.Fatal(err)
+			}
+
+			in := pickerInput{Repos: []repoPick{{ID: "org/svc", Role: "editing"}}}
+			if err := p.Confirm("shown", in); err != nil {
+				t.Fatal(err)
+			}
+			got, err := session.Load(shown)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.EffectiveMode() != tc.want {
+				t.Fatalf("mode after a %s confirm = %q, want %q", tc.kind, got.EffectiveMode(), tc.want)
+			}
+			if got.Picker == nil || got.Picker.Status != session.PickerConfirmed {
+				t.Fatalf("both kinds are awaited, so both write a stanza: %+v", got.Picker)
+			}
+		})
 	}
 }
 
@@ -252,14 +291,130 @@ func TestConfirmAndCancelRefuseASessionThisWorkbenchIsNotRunning(t *testing.T) {
 
 func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 	t.Helper()
+	return chromeUnder(t, reg, "")
+}
+
+func chromeUnder(t *testing.T, reg *Sessions, root string) status.Fields {
+	t.Helper()
 	var fields status.Fields
-	pushChrome(reg, "", nil, map[string][]status.RepoStat{}, map[string]int{},
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{},
 		func(event string, payload any) {
 			if event == chromeEvent {
 				fields = payload.(status.Fields)
 			}
 		})
 	return fields
+}
+
+// The rail is the only sign of a picker waiting on a session that is not on
+// screen, and the kind is what the overlay labels its primary button from.
+func TestARailRowCarriesAPickerWaitingOffScreen(t *testing.T) {
+	reg, shown, background := pickerWorkbench(t)
+	root := filepath.Dir(shown)
+	if err := reg.queuePicker(workbench.PickerRequest{SessionRoot: background,
+		Kind: workbench.PickerKindRepos, Deadline: time.Now().Add(time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+
+	fields := chromeUnder(t, reg, root)
+	if fields.PickerKind != "" {
+		t.Fatalf("the session on screen reports kind %q", fields.PickerKind)
+	}
+	badged := map[string]bool{}
+	for _, row := range fields.Sessions {
+		badged[row.Slug] = row.Picker
+	}
+	if len(badged) != 2 {
+		t.Fatalf("the rail lists %+v, want both sessions", fields.Sessions)
+	}
+	if !badged["background"] {
+		t.Fatal("the waiting session's rail row carries no badge")
+	}
+	if badged["shown"] {
+		t.Fatal("a session with no picker was badged")
+	}
+
+	reg.reveal(reg.bySlug("background"))
+	if got := chromeUnder(t, reg, root).PickerKind; got != workbench.PickerKindRepos {
+		t.Fatalf("arriving at the session reported kind %q", got)
+	}
+}
+
+// The agent names repositories and a role; whether that is an addition or a
+// promotion is answered against the manifest as it stands at open time.
+func TestClassifyRequestsAgainstWhatTheSessionHolds(t *testing.T) {
+	m := session.Manifest{Repos: []session.ManifestRepo{
+		{Org: "org", Name: "docs", Role: session.RepoRoleReference},
+		{Org: "org", Name: "svc", Role: session.RepoRoleEditing},
+	}}
+	listed := []github.Repo{{Org: "org", Name: "api"}}
+	cases := []struct {
+		name string
+		ask  []workbench.RequestedRepo
+		want []requestedRow
+	}{
+		{name: "no request at all", want: []requestedRow{}},
+		{
+			name: "unheld",
+			ask:  []workbench.RequestedRepo{{ID: "org/api", Role: "editing"}},
+			want: []requestedRow{{ID: "org/api", Role: "editing"}},
+		},
+		{
+			name: "unheld with no role asked reads it",
+			ask:  []workbench.RequestedRepo{{ID: "org/api"}},
+			want: []requestedRow{{ID: "org/api", Role: "reference"}},
+		},
+		{
+			name: "held reference wanted for editing",
+			ask:  []workbench.RequestedRepo{{ID: "ORG/Docs", Role: "editing"}},
+			want: []requestedRow{{ID: "org/docs", Role: "editing", Upgrade: true}},
+		},
+		{
+			name: "held reference already read",
+			ask:  []workbench.RequestedRepo{{ID: "org/docs", Role: "reference"}},
+			want: []requestedRow{},
+		},
+		{
+			name: "held for editing already",
+			ask:  []workbench.RequestedRepo{{ID: "org/svc", Role: "editing"}},
+			want: []requestedRow{},
+		},
+		{
+			name: "named twice",
+			ask: []workbench.RequestedRepo{
+				{ID: "org/api", Role: "editing"},
+				{ID: "ORG/API", Role: "reference"},
+			},
+			want: []requestedRow{{ID: "org/api", Role: "editing"}},
+		},
+		{
+			name: "listed under a different casing",
+			ask:  []workbench.RequestedRepo{{ID: "ORG/Api", Role: "editing"}},
+			want: []requestedRow{{ID: "org/api", Role: "editing"}},
+		},
+		{
+			name: "nothing knows it",
+			ask:  []workbench.RequestedRepo{{ID: "org/kraken", Role: "editing"}},
+			want: []requestedRow{{ID: "org/kraken", Role: "editing"}},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var req *workbench.PickerRequest
+			if tc.ask != nil {
+				req = &workbench.PickerRequest{Requested: tc.ask}
+			}
+			got := classifyRequests(m, listed, req)
+			if len(got) != len(tc.want) {
+				t.Fatalf("classified %+v, want %+v", got, tc.want)
+			}
+			for i, row := range got {
+				if row != tc.want[i] {
+					t.Fatalf("row %d = %+v, want %+v", i, row, tc.want[i])
+				}
+			}
+		})
+	}
 }
 
 // Upgrades name rows against the manifest, not the cached repository list: the

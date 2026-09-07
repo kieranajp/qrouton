@@ -19,12 +19,24 @@ type heldRepo struct {
 	Locked bool   `json:"locked"`
 }
 
-// pickerFields is what the picker draws itself from: the branch anything added
-// joins, and the rows the session already holds. Branch is empty for a session
-// with no repositories yet, which is the escalation that acquires its first ones.
+// requestedRow is one repository an agent asked for, classified against the
+// manifest. Upgrade means the session already reads it and the tick will take it
+// up for editing rather than acquire it.
+type requestedRow struct {
+	ID      string `json:"id"`
+	Role    string `json:"role"`
+	Upgrade bool   `json:"upgrade"`
+}
+
+// pickerFields is what the picker draws itself from. Branch is empty for a
+// session with no repositories yet; Requested and Reason are empty for a picker
+// the user opened themselves, which is how the overlay knows not to claim an
+// agent asked for anything.
 type pickerFields struct {
-	Branch string     `json:"branch"`
-	Repos  []heldRepo `json:"repos"`
+	Branch    string         `json:"branch"`
+	Repos     []heldRepo     `json:"repos"`
+	Requested []requestedRow `json:"requested"`
+	Reason    string         `json:"reason"`
 }
 
 // pickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
@@ -63,13 +75,13 @@ func (p *Picker) Escalate(slug string) error {
 	if m.EffectiveMode() != session.ModeAssistant {
 		return nil
 	}
-	state.requestPicker(workbench.PickerRequest{SessionRoot: root})
+	state.requestPicker(workbench.PickerRequest{SessionRoot: root, Kind: workbench.PickerKindEscalate})
 	p.sessions.touch()
 	return nil
 }
 
 func (p *Picker) Load(slug string) (pickerFields, error) {
-	_, root, err := p.root(slug)
+	state, root, err := p.root(slug)
 	if err != nil {
 		return pickerFields{}, err
 	}
@@ -77,6 +89,7 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 	if err != nil {
 		return pickerFields{}, err
 	}
+	pending := state.pendingPicker()
 	held := make([]heldRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
 		held = append(held, heldRepo{
@@ -85,7 +98,70 @@ func (p *Picker) Load(slug string) (pickerFields, error) {
 			Locked: true,
 		})
 	}
-	return pickerFields{Branch: m.Branch(), Repos: held}, nil
+	return pickerFields{Branch: m.Branch(), Repos: held,
+		Requested: classifyRequests(m, p.repos.Cached(), pending), Reason: reasonOf(pending)}, nil
+}
+
+func reasonOf(req *workbench.PickerRequest) string {
+	if req == nil {
+		return ""
+	}
+	return strings.TrimSpace(req.Reason)
+}
+
+// classifyRequests answers each requested repository against the manifest as it
+// stands now, not as it stood when the agent asked. A row already held in the
+// role asked for, or held for editing at all, is dropped; an id nothing knows
+// survives as asked, so the banner can still show the miss.
+func classifyRequests(m session.Manifest, cached []github.Repo, req *workbench.PickerRequest) []requestedRow {
+	if req == nil {
+		return []requestedRow{}
+	}
+	type holding struct {
+		id   string
+		role session.RepoRole
+	}
+	held := make(map[string]holding, len(m.Repos))
+	for _, r := range m.Repos {
+		id := (github.Repo{Org: r.Org, Name: r.Name}).ID()
+		held[strings.ToLower(id)] = holding{id: id, role: r.Role.Effective()}
+	}
+	listed := make(map[string]string, len(cached))
+	for _, repo := range cached {
+		listed[strings.ToLower(repo.ID())] = repo.ID()
+	}
+	rows := make([]requestedRow, 0, len(req.Requested))
+	// Once each: the overlay draws these keyed by id, so a repository named
+	// twice in one request would collide there.
+	seen := make(map[string]bool, len(req.Requested))
+	for _, want := range req.Requested {
+		id := strings.TrimSpace(want.ID)
+		if id == "" || seen[strings.ToLower(id)] {
+			continue
+		}
+		seen[strings.ToLower(id)] = true
+		// Not Effective(): an empty role means editing for a row the session
+		// holds, but a request that names none is only asking to read.
+		role := session.RepoRoleReference
+		if session.RepoRole(want.Role) == session.RepoRoleEditing {
+			role = session.RepoRoleEditing
+		}
+		// A matched row travels on as the session or the list spells it:
+		// everything downstream compares ids exactly, so the agent's casing
+		// would tick a row nothing resolves and drop it again at confirm.
+		switch on := held[strings.ToLower(id)]; on.role {
+		case "":
+			if canonical, ok := listed[strings.ToLower(id)]; ok {
+				id = canonical
+			}
+			rows = append(rows, requestedRow{ID: id, Role: string(role)})
+		case session.RepoRoleReference:
+			if role == session.RepoRoleEditing {
+				rows = append(rows, requestedRow{ID: on.id, Role: string(session.RepoRoleEditing), Upgrade: true})
+			}
+		}
+	}
+	return rows
 }
 
 func (p *Picker) Confirm(slug string, in pickerInput) error {
@@ -93,18 +169,18 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if err != nil {
 		return err
 	}
-	escalation := state.pendingPicker()
+	pending := state.pendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
 		return err
 	}
-	draft := p.draft(m, escalation, in)
+	draft := p.draft(m, pending, in)
 	if problems := assembly.CheckAdditions(m, draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
 	assembler := p.assembler
 	assembler.Cfg = p.cfg.Snapshot()
-	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
+	if err := assembler.Confirm(root, draft, answerTo(pending), nil); err != nil {
 		return err
 	}
 	state.clearPicker()
@@ -117,7 +193,7 @@ func (p *Picker) Cancel(slug string) error {
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
+	if err := assembly.Cancel(root, answerTo(state.pendingPicker())); err != nil {
 		return err
 	}
 	state.clearPicker()
@@ -125,19 +201,32 @@ func (p *Picker) Cancel(slug string) error {
 	return nil
 }
 
+// answerTo separates the two facts a pending request carries: something is
+// polling for the outcome stanza, and only an escalation also moves the mode.
+func answerTo(req *workbench.PickerRequest) assembly.Answer {
+	if req == nil {
+		return assembly.Answer{}
+	}
+	return assembly.Answer{
+		Escalating: req.Kind == workbench.PickerKindEscalate,
+		Awaited:    true,
+		Kind:       req.Kind,
+	}
+}
+
 // draft is the session's own description of itself plus the rows just picked: the
 // picker has no name, ticket or mode field, so those come from the manifest. An
 // escalation is the exception — it proposes a name for the work it is escalating
 // to, and the prefix a first branch is cut with.
-func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in pickerInput) assembly.Draft {
+func (p *Picker) draft(m session.Manifest, pending *workbench.PickerRequest, in pickerInput) assembly.Draft {
 	repos := p.repos.Select(in.Repos)
 	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
 	upgrades := heldRefs(m, in.Upgrades)
-	if escalation != nil {
-		if proposed := strings.TrimSpace(escalation.Name); proposed != "" {
+	if pending != nil {
+		if proposed := strings.TrimSpace(pending.Name); proposed != "" {
 			name = proposed
 		}
-		if proposed := strings.TrimSpace(escalation.Prefix); proposed != "" {
+		if proposed := strings.TrimSpace(pending.Prefix); proposed != "" {
 			prefix = proposed
 		}
 	}
@@ -175,7 +264,7 @@ func (p *Picker) root(slug string) (*sessionState, string, error) {
 	return state, root, nil
 }
 
-// queuePicker records an agent escalation on the session it names and raises
+// queuePicker records an agent's request on the session it names and raises
 // nothing. The overlay opens when the user next arrives there, so a request they
 // never arrive at expires unseen rather than taking the screen.
 func (s *Sessions) queuePicker(req workbench.PickerRequest) error {

@@ -77,6 +77,12 @@ const (
 	openWindowsSuffix = "."
 	windowNameJoiner  = ", "
 
+	noRepos           = "This session has no repositories yet."
+	reposHeaderFormat = "Session repositories (%d):\n%s"
+	repoLineFormat    = "- %s/%s (%s) at %s"
+	repoLineRefFormat = "- %s/%s (%s @ %s) at %s"
+	repoLineJoiner    = "\n"
+
 	// escalationConfirmedMessage is the confirm-path return. In practice the
 	// agent supervisor replaces this process before the poll observes a
 	// confirmed outcome, so this string exists for completeness and for tests.
@@ -85,6 +91,21 @@ const (
 	escalationCancelledMessage = "The picker was cancelled. Still Assistant — carry on."
 
 	escalationTimeoutMessage = "The picker is still open; the user hasn't confirmed or cancelled yet."
+
+	// All three hand back the whole resulting set: the user may have changed a
+	// role, dropped something asked for or added something never mentioned, so
+	// the set is the answer and the request is only what prompted it.
+	reposConfirmedFormat = "The user answered the picker. %s"
+	reposCancelledFormat = "The user cancelled; nothing was added or taken up. %s"
+	reposStillOpenFormat = "The picker is still open; the user hasn't confirmed or cancelled yet. %s"
+
+	// The shortfall names what the request did not get, so an agent does not read
+	// its own request back out of the set and ask for the same thing again.
+	reposShortfallFormat  = "\nYou asked for more than this: %s. Don't ask again without saying something new — check the spelling first, and take a no for an answer."
+	shortfallAbsentFormat = "%s is not in the session"
+	shortfallRoleFormat   = "%s is held as %s, not editing"
+	repoShortfallJoiner   = "; "
+	repoIDSeparator       = "/"
 )
 
 const toastFormat = "🔔  %s"
@@ -101,4 +122,5 @@ const (
 const (
 	keyMessage = "message"
 	keyOutput  = "output"
+	keyRepos   = "repos"
 )

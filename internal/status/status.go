@@ -42,9 +42,11 @@ type Fields struct {
 	// Root is where the session lives on disk, so the window can hand its path
 	// over and open it. Empty for a window holding no session.
 	Root string `json:"root"`
-	// Picker means the shown session has an escalation waiting on it. It is
-	// workbench-side knowledge, so a file read never sets it.
-	Picker bool `json:"picker"`
+	// Picker means the shown session has a picker waiting on it, and PickerKind
+	// what that picker is asking for. Both are workbench-side knowledge, so a
+	// file read never sets them.
+	Picker     bool   `json:"picker"`
+	PickerKind string `json:"pickerKind"`
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
@@ -67,8 +69,8 @@ func EmptyFields() Fields {
 }
 
 // SessionRow is one session under the sessions root. A Terminal means this
-// workbench holds a conversation for it; Activity and Unseen are all a row claims
-// about a session that is not on screen.
+// workbench holds a conversation for it; Activity, Picker and Unseen are all a
+// row claims about a session that is not on screen.
 type SessionRow struct {
 	Name     string        `json:"name"`
 	Slug     string        `json:"slug"`
@@ -78,6 +80,7 @@ type SessionRow struct {
 	Terminal string        `json:"terminal"`
 	Activity string        `json:"activity"`
 	Summary  AgentSummary  `json:"summary"`
+	Picker   bool          `json:"picker"`
 	Unseen   int           `json:"unseen"`
 	Opened   time.Time     `json:"opened"`
 	Sticker  string        `json:"sticker"`

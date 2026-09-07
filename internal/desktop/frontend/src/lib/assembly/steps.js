@@ -54,7 +54,7 @@ export const joining = (branch) => (branch ? `Added repositories join ${branch}`
  * @param {string} slug */
 export const assemblyOpen = (requested, settled, slug) => !!settled && (!!requested || !slug);
 
-/** An add-repositories picker closes when its originating session is no longer shown.
+/** A picker closes when the session it was opened over is no longer shown.
  * @param {string} shown
  * @param {boolean} pending
  * @param {string} added the session add-repos was pressed on */

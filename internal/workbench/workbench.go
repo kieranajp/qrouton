@@ -142,12 +142,24 @@ type WindowHost interface {
 	Picker(ctx context.Context, req PickerRequest) error
 }
 
-// PickerRequest expires agent requests at Deadline; direct user requests have no deadline.
+// PickerRequest expires agent requests at Deadline; direct user requests have no
+// deadline. Kind decides whether confirming also changes the session's mode, and
+// Requested and Reason belong to a repository request.
 type PickerRequest struct {
-	SessionRoot string    `json:"session_root"`
-	Name        string    `json:"name,omitempty"`
-	Prefix      string    `json:"prefix,omitempty"`
-	Deadline    time.Time `json:"deadline,omitempty"`
+	SessionRoot string          `json:"session_root"`
+	Kind        string          `json:"kind,omitempty"`
+	Name        string          `json:"name,omitempty"`
+	Prefix      string          `json:"prefix,omitempty"`
+	Requested   []RequestedRepo `json:"requested,omitempty"`
+	Reason      string          `json:"reason,omitempty"`
+	Deadline    time.Time       `json:"deadline,omitempty"`
+}
+
+// RequestedRepo is one repository an agent asked for, in the role it asked for
+// it. Whether that is an addition or a promotion is the workbench's to classify.
+type RequestedRepo struct {
+	ID   string `json:"id"`
+	Role string `json:"role"`
 }
 
 // Handle identifies a running desktop process across the exec boundary.

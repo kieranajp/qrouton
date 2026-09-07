@@ -181,15 +181,15 @@ func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
 
 // A ceiling these tests never mean to reach: they end when the poll sees the
 // stanza, and a loaded runner stalls for longer than the wait they are timing.
-const escalateCeiling = 10 * time.Second
+const pickerCeiling = 10 * time.Second
 
-// shortEscalatePoll shrinks escalate's poll interval and timeout for the
+// shortPickerPoll shrinks the picker poll's interval and timeout for the
 // duration of a test, restoring them on cleanup.
-func shortEscalatePoll(t *testing.T, timeout time.Duration) {
+func shortPickerPoll(t *testing.T, timeout time.Duration) {
 	t.Helper()
-	originalTimeout, originalInterval := escalateTimeout, escalatePollInterval
-	escalateTimeout, escalatePollInterval = timeout, 5*time.Millisecond
-	t.Cleanup(func() { escalateTimeout, escalatePollInterval = originalTimeout, originalInterval })
+	originalTimeout, originalInterval := pickerTimeout, pickerPollInterval
+	pickerTimeout, pickerPollInterval = timeout, 5*time.Millisecond
+	t.Cleanup(func() { pickerTimeout, pickerPollInterval = originalTimeout, originalInterval })
 }
 
 func shortViewportPoll(t *testing.T, timeout time.Duration) {
@@ -942,14 +942,14 @@ func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 // window at all.
 func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	shortEscalatePoll(t, escalateCeiling)
+	shortPickerPoll(t, pickerCeiling)
 
 	// A cancelled stanza lets escalate return promptly once its poll notices it,
 	// so the test doesn't wait out the full timeout.
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()},
 		})
 	}()
 
@@ -971,6 +971,11 @@ func TestEscalateQueuesThePickerOnItsOwnSessionAndOpensNoWindow(t *testing.T) {
 	// name and prefix the agent proposed to cut one.
 	if got := host.pickers[0]; got.Name != "webhook retry" || got.Prefix != "fix" {
 		t.Fatalf("queued request = %+v, want the name and prefix escalate was given", got)
+	}
+	// The kind is what makes confirming move the session's mode, so an escalation
+	// that travelled without it would add repositories and escalate nothing.
+	if got := host.pickers[0].Kind; got != workbench.PickerKindEscalate {
+		t.Fatalf("queued kind = %q, want an escalation", got)
 	}
 	// The deadline travels with the request, so the workbench never draws a picker
 	// whose answer nothing is waiting for.
@@ -996,13 +1001,13 @@ func TestEscalateRejectsBlankName(t *testing.T) {
 
 func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortEscalatePoll(t, escalateCeiling)
+	shortPickerPoll(t, pickerCeiling)
 
 	start := time.Now()
 	go func() {
 		time.Sleep(40 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now()},
 		})
 	}()
 
@@ -1020,13 +1025,13 @@ func TestEscalateBlocksUntilConfirmed(t *testing.T) {
 
 func TestEscalateBlocksUntilCancelled(t *testing.T) {
 	m, _, dir := newTestManager(t)
-	shortEscalatePoll(t, escalateCeiling)
+	shortPickerPoll(t, pickerCeiling)
 
 	start := time.Now()
 	go func() {
 		time.Sleep(40 * time.Millisecond)
 		_ = session.WriteManifest(dir, session.Manifest{
-			Escalation: &session.EscalationOutcome{Status: session.EscalationCancelled, At: time.Now()},
+			Picker: &session.PickerOutcome{Status: session.PickerCancelled, At: time.Now()},
 		})
 	}()
 
@@ -1044,7 +1049,7 @@ func TestEscalateBlocksUntilCancelled(t *testing.T) {
 
 func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
 	m, _, _ := newTestManager(t)
-	shortEscalatePoll(t, 20*time.Millisecond)
+	shortPickerPoll(t, 20*time.Millisecond)
 
 	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
 	if err != nil {
@@ -1052,6 +1057,32 @@ func TestEscalateTimesOutWhenPickerStaysOpen(t *testing.T) {
 	}
 	if message != escalationTimeoutMessage {
 		t.Fatalf("message = %q, want the timeout message", message)
+	}
+}
+
+// Only "confirmed" is a confirm. A stanza carrying no status at all is a bug
+// somewhere upstream, and reading it as approval would escalate a session the
+// user never agreed to.
+func TestEscalateTreatsAStatuslessStanzaAsNotConfirmed(t *testing.T) {
+	m, _, dir := newTestManager(t)
+	shortPickerPoll(t, pickerCeiling)
+
+	go func() {
+		time.Sleep(40 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Picker: &session.PickerOutcome{At: time.Now()},
+		})
+	}()
+
+	message, err := m.escalate(context.Background(), escalateInput{Name: "webhook retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if message == escalationConfirmedMessage {
+		t.Fatal("a stanza with no status read as a confirmed escalation")
+	}
+	if message != escalationCancelledMessage {
+		t.Fatalf("message = %q, want the cancelled message", message)
 	}
 }
 
@@ -1206,6 +1237,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
 		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+		toolListRepos, toolRequestRepos,
 	}
 	for _, tc := range []struct {
 		mode session.SessionMode
@@ -1464,5 +1496,414 @@ func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
 func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
 	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
 		t.Error("shared a document from outside the session")
+	}
+}
+
+func TestReposMessageFormatsRoleAndReference(t *testing.T) {
+	if got := reposMessage(nil); got != noRepos {
+		t.Fatalf("reposMessage(nil) = %q, want %q", got, noRepos)
+	}
+	rows := []repoRow{
+		{Org: "lifesum", Name: "app", Role: "editing", Branch: "feat/thing", Worktree: "src/app"},
+		{Org: "lifesum", Name: "other", Role: "reference", Revision: "deadbeef", Worktree: "src/other"},
+	}
+	got := reposMessage(rows)
+	want := "Session repositories (2):\n" +
+		"- lifesum/app (editing @ feat/thing) at src/app\n" +
+		"- lifesum/other (reference @ deadbeef) at src/other"
+	if got != want {
+		t.Fatalf("reposMessage = %q, want %q", got, want)
+	}
+}
+
+func TestSessionReposDefaultsEmptyRoleToEditing(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{{Name: "app", Org: "lifesum", WorktreePath: "src/app"}},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].Role != "editing" {
+		t.Fatalf("sessionRepos = %#v, want role editing", rows)
+	}
+}
+
+// sessionRepos re-reads qrouton.json on every call rather than caching it at
+// server construction, so a repo added mid-session appears without a restart.
+func TestListReposRereadsTheManifestEachCall(t *testing.T) {
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{
+			{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/thing", WorktreePath: "src/app"},
+		},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	_ = newMCPServer(dir, testEditor, &fakeHost{}, session.ModeRPI)
+
+	first, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first) != 1 {
+		t.Fatalf("first call repos = %#v, want 1", first)
+	}
+
+	manifest.Repos = append(manifest.Repos, session.ManifestRepo{
+		Name: "other", Org: "lifesum", Role: session.RepoRoleReference,
+		Revision: "deadbeef", WorktreePath: "src/other",
+	})
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := sessionRepos(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(second) != 2 {
+		t.Fatalf("second call repos = %#v, want 2 (rewritten manifest not seen)", second)
+	}
+}
+
+func TestListReposReturnsStructuredRepos(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	manifest := session.Manifest{
+		Repos: []session.ManifestRepo{
+			{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/thing", WorktreePath: "src/app"},
+			{Name: "other", Org: "lifesum", Role: session.RepoRoleReference, Revision: "deadbeef", WorktreePath: "src/other"},
+		},
+	}
+	if err := session.WriteManifest(dir, manifest); err != nil {
+		t.Fatal(err)
+	}
+	server := newMCPServer(dir, testEditor, &fakeHost{}, session.ModeRPI)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolListRepos})
+	if err != nil || result.IsError {
+		t.Fatalf("list_repos = %+v, %v", result, err)
+	}
+	output := structuredOutput(t, result.StructuredContent)
+	repos, ok := output["repos"].([]any)
+	if !ok || len(repos) != 2 {
+		t.Fatalf("structured repos = %#v", output["repos"])
+	}
+	first, ok := repos[0].(map[string]any)
+	if !ok || first["name"] != "app" || first["org"] != "lifesum" || first["role"] != "editing" ||
+		first["branch"] != "feat/thing" || first["worktree"] != "src/app" {
+		t.Fatalf("first repo = %#v", first)
+	}
+	second, ok := repos[1].(map[string]any)
+	if !ok || second["role"] != "reference" || second["revision"] != "deadbeef" {
+		t.Fatalf("second repo = %#v", second)
+	}
+}
+
+// requested is the two-row request the tests below make: one repository the
+// session does not hold and one it reads and wants to edit.
+func requested() requestReposInput {
+	return requestReposInput{
+		Repos: []requestedRepoInput{
+			{Repo: "lifesum/app", Role: "editing"},
+			{Repo: "lifesum/docs"},
+		},
+		Reason: "the retry lives in app and the contract in docs",
+	}
+}
+
+// answered writes a manifest carrying both a stanza and the repositories the
+// confirm landed with it, which is the set the poll reads back.
+func answered(t *testing.T, dir string, status session.PickerStatus, at time.Time) {
+	t.Helper()
+	go func() {
+		time.Sleep(20 * time.Millisecond)
+		_ = session.WriteManifest(dir, session.Manifest{
+			Repos: []session.ManifestRepo{
+				{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing, Branch: "feat/retry", WorktreePath: "src/app"},
+			},
+			Picker: &session.PickerOutcome{
+				Status: status, Kind: workbench.PickerKindRepos, At: at},
+		})
+	}()
+}
+
+// The request reaches the workbench whole: the kind decides the picker's label
+// and that confirming leaves the mode alone, and the rows and reason are what
+// the overlay pre-ticks and explains itself with. The sound is the other half of
+// the signal, since the picker itself is invisible from another session.
+func TestRequestReposQueuesThePickerWithTheRequestIntact(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	shortPickerPoll(t, pickerCeiling)
+	answered(t, dir, session.PickerCancelled, time.Now().Add(20*time.Millisecond))
+	var played string
+	original := playSound
+	playSound = func(script string) { played = script }
+	t.Cleanup(func() { playSound = original })
+
+	before := time.Now()
+	if _, _, err := m.requestRepos(context.Background(), requested()); err != nil {
+		t.Fatal(err)
+	}
+	if len(host.pickers) != 1 || host.pickers[0].SessionRoot != dir {
+		t.Fatalf("request_repos queued %+v, want one request for its own session", host.pickers)
+	}
+	got := host.pickers[0]
+	if got.Kind != workbench.PickerKindRepos {
+		t.Fatalf("queued kind = %q, want a repos request", got.Kind)
+	}
+	if got.Reason != "the retry lives in app and the contract in docs" {
+		t.Fatalf("queued reason = %q", got.Reason)
+	}
+	want := []workbench.RequestedRepo{
+		{ID: "lifesum/app", Role: "editing"},
+		{ID: "lifesum/docs", Role: "reference"},
+	}
+	if !slices.Equal(got.Requested, want) {
+		t.Fatalf("queued rows = %+v, want %+v", got.Requested, want)
+	}
+	if !got.Deadline.After(before) {
+		t.Fatalf("queued deadline = %s, want one ahead of the request", got.Deadline)
+	}
+	if len(host.opens) != 0 {
+		t.Fatalf("request_repos opened %+v; the workbench draws the picker itself", host.opens)
+	}
+	if want := sessionpaths.NotifyScript(dir); played != want {
+		t.Fatalf("played %q, want %q", played, want)
+	}
+}
+
+// Approve, approve-with-nothing and cancel all hand back the same thing: the set
+// the session ended up with, for the agent to diff against what it asked for.
+func TestRequestReposReturnsTheResultingSetWhicheverWayItGoes(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		status session.PickerStatus
+		want   string
+	}{
+		{name: "confirmed", status: session.PickerConfirmed, want: reposConfirmedFormat},
+		{name: "cancelled", status: session.PickerCancelled, want: reposCancelledFormat},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, _, dir := newTestManager(t)
+			shortPickerPoll(t, pickerCeiling)
+			answered(t, dir, tc.status, time.Now().Add(20*time.Millisecond))
+
+			message, rows, err := m.requestRepos(context.Background(), requested())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(rows) != 1 || rows[0].Name != "app" || rows[0].Role != "editing" {
+				t.Fatalf("resulting set = %#v", rows)
+			}
+			want := fmt.Sprintf(tc.want, reposMessage(rows)) +
+				fmt.Sprintf(reposShortfallFormat, fmt.Sprintf(shortfallAbsentFormat, "lifesum/docs"))
+			if message != want {
+				t.Fatalf("message = %q, want %q", message, want)
+			}
+		})
+	}
+}
+
+func TestRequestReposReportsAPickerNobodyAnswered(t *testing.T) {
+	m, _, dir := newTestManager(t)
+	shortPickerPoll(t, 20*time.Millisecond)
+	if err := session.WriteManifest(dir, session.Manifest{}); err != nil {
+		t.Fatal(err)
+	}
+
+	message, rows, err := m.requestRepos(context.Background(), requested())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Fatalf("an unanswered picker reported %#v", rows)
+	}
+	want := fmt.Sprintf(reposStillOpenFormat, reposMessage(rows)) +
+		fmt.Sprintf(reposShortfallFormat, strings.Join([]string{
+			fmt.Sprintf(shortfallAbsentFormat, "lifesum/app"),
+			fmt.Sprintf(shortfallAbsentFormat, "lifesum/docs"),
+		}, repoShortfallJoiner))
+	if message != want {
+		t.Fatalf("message = %q, want %q", message, want)
+	}
+}
+
+// A stanza already on disk answers whichever picker wrote it, not this one.
+func TestRequestReposIgnoresAStanzaOlderThanItself(t *testing.T) {
+	m, _, dir := newTestManager(t)
+	shortPickerPoll(t, 40*time.Millisecond)
+	if err := session.WriteManifest(dir, session.Manifest{
+		Picker: &session.PickerOutcome{Status: session.PickerConfirmed, At: time.Now().Add(-time.Hour)},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	message, _, err := m.requestRepos(context.Background(), requested())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(message, "The picker is still open") {
+		t.Fatalf("message = %q, want the still-open message", message)
+	}
+}
+
+// A refusal the agent can correct is refused before the user is interrupted.
+func TestRequestReposRefusesABadRequestWithoutOpeningThePicker(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		input requestReposInput
+		want  error
+	}{
+		{name: "no repositories", input: requestReposInput{Reason: "why"}, want: ErrReposRequired},
+		{
+			name:  "a blank repository name",
+			input: requestReposInput{Repos: []requestedRepoInput{{Repo: "  "}}, Reason: "why"},
+			want:  ErrReposRequired,
+		},
+		{
+			name:  "no reason",
+			input: requestReposInput{Repos: []requestedRepoInput{{Repo: "lifesum/app"}}, Reason: "  "},
+			want:  ErrReasonRequired,
+		},
+		{
+			name:  "a role that is neither",
+			input: requestReposInput{Repos: []requestedRepoInput{{Repo: "lifesum/app", Role: "owner"}}, Reason: "why"},
+			want:  ErrInvalidRequestedRole,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m, host, _ := newTestManager(t)
+			_, _, err := m.requestRepos(context.Background(), tc.input)
+			if !errors.Is(err, tc.want) {
+				t.Fatalf("error = %v, want %v", err, tc.want)
+			}
+			if len(host.pickers) != 0 {
+				t.Fatalf("a refused request still queued %+v", host.pickers)
+			}
+		})
+	}
+}
+
+func TestRequestReposReportsAWorkbenchThatCannotDrawThePicker(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	host.pickerErr = errors.New("unreachable")
+	if _, _, err := m.requestRepos(context.Background(), requested()); err == nil {
+		t.Fatal("request_repos succeeded with no workbench to draw the picker")
+	}
+}
+
+// The set alone leaves the agent to notice what it did not get, and an agent
+// that misses it asks again for the same repository. Naming the shortfall is
+// what closes that loop: a name nothing matched and a row the user dropped are
+// one fact, and a promotion the user declined is the other.
+func TestRequestReposNamesWhatTheRequestDidNotGet(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		held []session.ManifestRepo
+		want []string
+	}{
+		{
+			name: "nothing by that name is in the session",
+			held: []session.ManifestRepo{{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing}},
+			want: []string{"lifesum/docs is not in the session"},
+		},
+		{
+			name: "a declined promotion is still held, in the lesser role",
+			held: []session.ManifestRepo{
+				{Name: "app", Org: "lifesum", Role: session.RepoRoleReference},
+				{Name: "docs", Org: "lifesum", Role: session.RepoRoleReference},
+			},
+			want: []string{"lifesum/app is held as reference, not editing"},
+		},
+		{
+			name: "a request answered in full says nothing",
+			held: []session.ManifestRepo{
+				{Name: "app", Org: "lifesum", Role: session.RepoRoleEditing},
+				{Name: "docs", Org: "lifesum", Role: session.RepoRoleReference},
+			},
+			want: nil,
+		},
+		{
+			name: "casing is not a shortfall",
+			held: []session.ManifestRepo{
+				{Name: "App", Org: "Lifesum", Role: session.RepoRoleEditing},
+				{Name: "Docs", Org: "Lifesum", Role: session.RepoRoleReference},
+			},
+			want: nil,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			asked, _, err := repoRequest(requested())
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := shortfall(asked, reposFrom(session.Manifest{Repos: tc.held}))
+			if len(got) == 0 && len(tc.want) == 0 {
+				return
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Fatalf("shortfall = %#v, want %#v", got, tc.want)
+			}
+		})
+	}
+}
+
+// Both pickers write one stanza, and a repository request replaces a waiting
+// escalation, so an escalate poller that took the first answer it saw would
+// report a mode change the user never confirmed.
+func TestPickerOutcomeTakesOnlyItsOwnKind(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		written string
+		polling string
+		want    bool
+	}{
+		{name: "an escalation answers its own poller", written: workbench.PickerKindEscalate,
+			polling: workbench.PickerKindEscalate, want: true},
+		{name: "a repos answer is not an escalation's", written: workbench.PickerKindRepos,
+			polling: workbench.PickerKindEscalate},
+		{name: "an escalation's answer is not a request's", written: workbench.PickerKindEscalate,
+			polling: workbench.PickerKindRepos},
+		{name: "a repos answer answers its own poller", written: workbench.PickerKindRepos,
+			polling: workbench.PickerKindRepos, want: true},
+		// Every stanza written before the field existed was an escalation's.
+		{name: "an unkinded stanza is an escalation's", written: "",
+			polling: workbench.PickerKindEscalate, want: true},
+		{name: "an unkinded stanza is not a request's", written: "",
+			polling: workbench.PickerKindRepos},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			spawnedAt := time.Now()
+			if err := session.WriteManifest(dir, session.Manifest{
+				Picker: &session.PickerOutcome{
+					Status: session.PickerConfirmed, Kind: tc.written, At: spawnedAt.Add(time.Second)},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if _, done := pickerOutcome(dir, spawnedAt, tc.polling); done != tc.want {
+				t.Fatalf("a %q stanza answered a %q poll = %v, want %v",
+					tc.written, tc.polling, done, tc.want)
+			}
+		})
 	}
 }

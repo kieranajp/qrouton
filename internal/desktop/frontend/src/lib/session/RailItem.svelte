@@ -3,7 +3,7 @@
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: {attention?: string, active?: number, coverage?: string, running?: boolean}, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: {attention?: string, active?: number, coverage?: string, running?: boolean}, unseen?: number, idle?: string, picker?: boolean, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     initials,
     shortcut = "",
@@ -12,6 +12,7 @@
     summary = {},
     unseen = 0,
     idle = "",
+    picker = false,
     selected = false,
     stickerId = "",
     stickerLabels = {},
@@ -23,7 +24,7 @@
   } = $props();
 
   let repository = $derived(repositoryLine(repos));
-  let facts = $derived(summaryFacts(summary, unseen, idle));
+  let facts = $derived(summaryFacts(summary, unseen, idle, picker));
   let label = $derived(rowLabel(name, repos, facts));
   let running = $derived(Boolean(summary.running));
   let stickerItem = $derived(sticker(stickerId));
@@ -87,7 +88,13 @@
           <span class="fact {fact.kind}">
             {#if fact.kind !== "agents" || fact.active}
               <span class="glyph" class:running={fact.active} aria-hidden="true"
-                >{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
+                >{fact.kind === "attention"
+                  ? "!"
+                  : fact.kind === "unseen"
+                    ? "◆"
+                    : fact.kind === "picker"
+                      ? "▤"
+                      : "●"}</span>
             {/if}
             {fact.label}
           </span>
@@ -264,6 +271,10 @@
   }
 
   .fact.attention {
+    color: var(--state-waiting);
+  }
+
+  .fact.picker {
     color: var(--state-waiting);
   }
 

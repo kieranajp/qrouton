@@ -86,18 +86,20 @@ function takeUp(selection, id, role) {
   return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
-/** Reconciliation retains held repositories even when GitHub omits them.
- * @param {Selection} selection
- * @param {string[]} ids
- * @returns {Selection} */
+/** Held rows survive a list that omits them and keep the manifest's spelling. A
+ * request names repositories the cache had not seen and may spell one differently
+ * than GitHub does, so a picked row takes the list's spelling.
+ * @param {Selection} selection @param {string[]} ids @returns {Selection} */
 export function reconcile(selection, ids) {
-  const available = new Set(ids);
+  const canonical = new Map(ids.map((id) => [id.toLowerCase(), id]));
+  const keep = (id) => canonical.has(id.toLowerCase()) || isLocked(selection, id);
+  const spell = (id) => (isLocked(selection, id) ? id : (canonical.get(id.toLowerCase()) ?? id));
   /** @type {Record<string, Role>} */
   const roles = {};
   for (const [id, role] of Object.entries(selection.roles)) {
-    if (available.has(id) || isLocked(selection, id)) roles[id] = role;
+    if (keep(id)) roles[spell(id)] = role;
   }
-  return { ...selection, roles, order: selection.order.filter((id) => available.has(id)) };
+  return { ...selection, roles, order: selection.order.filter(keep).map(spell) };
 }
 
 /** counts is the `2 editing · 1 reference` line, which describes the rows on screen. */
@@ -121,6 +123,19 @@ export const ordered = (selection) =>
 
 /** upgrading is what Go takes up for editing, which it finds in the manifest. */
 export const upgrading = (selection) => [...selection.upgrades];
+
+/** A row already held routes through setRole to takeUp, so an upgrade needs no branch here.
+ * @param {Selection} selection
+ * @param {{id: string, role: Role}[]} [requested]
+ * @returns {Selection} */
+export function preselect(selection, requested = []) {
+  let next = selection;
+  for (const row of requested) {
+    if (!row?.id) continue;
+    next = setRole(next, row.id, row.role);
+  }
+  return next;
+}
 
 /** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection

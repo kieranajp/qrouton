@@ -49,6 +49,16 @@ test("a running session with unreadable coverage claims nothing about it", () =>
   assert.deepEqual(summaryFacts({ attention: "mystery", coverage: "mystery", running: true }), []);
 });
 
+test("a picker pending on the session yields its own fact", () => {
+  assert.deepEqual(summaryFacts({ running: false }, 0, "", true), [
+    { kind: "picker", label: "Repos requested" },
+    { kind: "agents", label: "Idle" },
+  ]);
+  assert.deepEqual(summaryFacts({ running: false }, 0, "", false), [
+    { kind: "agents", label: "Idle" },
+  ]);
+});
+
 test("a name qrouton cannot read is a line it does not draw", () => {
   assert.equal(roleLabel("Coordinator"), "");
   assert.equal(stateLabel("Maybe"), "");

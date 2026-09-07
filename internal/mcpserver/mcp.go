@@ -57,6 +57,16 @@ type escalateInput struct {
 	BranchPrefix string `json:"branch_prefix,omitempty" jsonschema:"one of feat, fix, chore, refactor, docs, test"`
 }
 
+type requestReposInput struct {
+	Repos  []requestedRepoInput `json:"repos" jsonschema:"the repositories you need, each named org/name"`
+	Reason string               `json:"reason" jsonschema:"one line the user reads, saying why you need these"`
+}
+
+type requestedRepoInput struct {
+	Repo string `json:"repo" jsonschema:"org/name of the repository"`
+	Role string `json:"role,omitempty" jsonschema:"editing or reference; defaults to reference"`
+}
+
 // textResult wraps a message as an MCP text block. Each tool pairs it with its
 // own structured payload, which is the second value AddTool handlers return.
 func textResult(message string) *mcp.CallToolResult {
@@ -127,6 +137,33 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			message = openWindowsPrefix + strings.Join(names, windowNameJoiner) + openWindowsSuffix
 		}
 		return textResult(message), map[string]any{"windows": names}, nil
+	})
+
+	// list_repos is a list too, and offered in every mode: what a session holds
+	// is not a question only an orchestrator has.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolListRepos,
+		Description: descListRepos,
+	}, func(_ context.Context, _ *mcp.CallToolRequest, _ struct{}) (*mcp.CallToolResult, any, error) {
+		rows, err := sessionRepos(root)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(reposMessage(rows)), map[string]any{keyRepos: rows}, nil
+	})
+
+	// request_repos returns the resulting set alongside its line, so it carries
+	// two keys where addTool carries one. Offered in both modes: escalating to
+	// read one more repository would change who is doing the work as well.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        toolRequestRepos,
+		Description: descRequestRepos,
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, input requestReposInput) (*mcp.CallToolResult, any, error) {
+		message, rows, err := windows.requestRepos(ctx, input)
+		if err != nil {
+			return nil, nil, err
+		}
+		return textResult(message), map[string]any{keyMessage: message, keyRepos: rows}, nil
 	})
 
 	return server

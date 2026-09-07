@@ -44,7 +44,7 @@ func scratch(t *testing.T) (Assembler, string) {
 func TestConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	a, dir := scratch(t)
 	draft := Draft{Name: "Webhook retry backoff", Prefix: "fix", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -57,8 +57,8 @@ func TestConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 	if len(got.Repos) != 1 || got.Repos[0].Branch != "fix/webhook-retry-backoff" {
 		t.Fatalf("escalated repos = %+v", got.Repos)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationConfirmed || got.Escalation.At.IsZero() {
-		t.Fatalf("confirmed stanza = %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerConfirmed || got.Picker.At.IsZero() {
+		t.Fatalf("confirmed stanza = %+v", got.Picker)
 	}
 }
 
@@ -68,7 +68,7 @@ func TestConfirmWritesReposModeAndStanzaTogether(t *testing.T) {
 func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 	a, dir := scratch(t)
 	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -78,8 +78,8 @@ func TestAddingReposLeavesTheModeAndConversationAlone(t *testing.T) {
 	if got.EffectiveMode() != session.ModeAssistant {
 		t.Fatalf("mode = %q, want assistant", got.Mode)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("adding repositories recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("adding repositories recorded an escalation: %+v", got.Picker)
 	}
 	if len(got.Repos) != 1 {
 		t.Fatalf("repos = %+v", got.Repos)
@@ -109,7 +109,7 @@ func TestAddingReposPreservesManifestChangesMadeDuringAssembly(t *testing.T) {
 		}
 	}
 	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, false, progress); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, progress); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -139,7 +139,7 @@ func TestConfirmPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft := Draft{Name: "Webhook retry backoff", Prefix: "fix", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -175,7 +175,7 @@ func TestAddedReposJoinTheSessionBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	draft := Draft{Name: "Webhook retry", Prefix: "feat", Repos: editing(testRepo(t, "contracts"))}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -213,7 +213,7 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	}
 
 	draft := Draft{Name: "Webhook retry backoff", Prefix: "fix", Repos: editing(repo)}
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -244,7 +244,7 @@ func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
 	a.Signal = func(root string) { signalled = append(signalled, root) }
 
 	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(signalled) != 1 || signalled[0] != dir {
@@ -262,7 +262,7 @@ func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
 	if err := os.Remove(sessionpaths.AgentNotice(dir)); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(signalled) != 2 || signalled[1] != dir {
@@ -291,31 +291,81 @@ func TestRepositoryNoticeNamesReferenceAdditionsAndPromotions(t *testing.T) {
 	}
 }
 
-func TestCancelWritesTheCancelledStanzaOnlyOnAnEscalation(t *testing.T) {
-	dir := t.TempDir()
-	if err := session.WriteManifest(dir, session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}); err != nil {
+// A repository request is awaited without escalating: the tool blocked on it
+// reads its answer from the stanza, and the session stays in the mode it was in.
+// It is also the one confirm that must not signal — the supervisor would
+// relaunch the runner, killing the tool call waiting for this answer.
+func TestConfirmingAnAwaitedPickerRecordsItWithoutMovingTheMode(t *testing.T) {
+	a, dir := scratch(t)
+	signalled := 0
+	a.Signal = func(string) { signalled++ }
+	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
+	if err := a.Confirm(dir, draft, Answer{Awaited: true}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := Cancel(dir, false); err != nil {
+	if signalled != 0 {
+		t.Fatalf("an awaited confirm signalled the supervisor %d times", signalled)
+	}
+	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); err == nil {
+		t.Fatal("an awaited confirm queued a notice; its caller already has the set")
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.EffectiveMode() != session.ModeAssistant {
+		t.Fatalf("mode = %q, want assistant", got.Mode)
+	}
+	if got.Picker == nil || got.Picker.Status != session.PickerConfirmed || got.Picker.At.IsZero() {
+		t.Fatalf("confirmed stanza = %+v", got.Picker)
+	}
+	if len(got.Repos) != 1 {
+		t.Fatalf("repos after an awaited confirm = %+v", got.Repos)
+	}
+}
+
+// The add-repos button has nobody polling for an answer, so it leaves no stanza
+// for the next request's poll to read as its own.
+func TestConfirmingAPickerNobodyAwaitsWritesNoStanza(t *testing.T) {
+	a, dir := scratch(t)
+	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a plain add-repos cancel wrote a stanza: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("an unawaited confirm wrote %+v", got.Picker)
+	}
+}
+
+func TestCancelWritesTheCancelledStanzaOnlyWhenSomethingAwaitsIt(t *testing.T) {
+	dir := t.TempDir()
+	if err := session.WriteManifest(dir, session.Manifest{Slug: "scratch", Mode: session.ModeAssistant}); err != nil {
+		t.Fatal(err)
+	}
+	if err := Cancel(dir, Answer{}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Picker != nil {
+		t.Fatalf("a plain add-repos cancel wrote a stanza: %+v", got.Picker)
 	}
 
-	if err := Cancel(dir, true); err != nil {
+	if err := Cancel(dir, Answer{Awaited: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err = session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Escalation == nil || got.Escalation.Status != session.EscalationCancelled || got.Escalation.At.IsZero() {
-		t.Fatalf("cancelled stanza = %+v", got.Escalation)
+	if got.Picker == nil || got.Picker.Status != session.PickerCancelled || got.Picker.At.IsZero() {
+		t.Fatalf("cancelled stanza = %+v", got.Picker)
 	}
 	if got.EffectiveMode() != session.ModeAssistant || len(got.Repos) != 0 {
 		t.Fatalf("cancel touched the session beyond the stanza: %+v", got)
@@ -332,7 +382,7 @@ func TestCancelPreservesManifestChangesMadeAfterPickerOpened(t *testing.T) {
 	if err := setRunner(dir, "codex"); err != nil {
 		t.Fatal(err)
 	}
-	if err := Cancel(dir, true); err != nil {
+	if err := Cancel(dir, Answer{Escalating: true, Awaited: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -376,7 +426,7 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	}
 	draft := Draft{Name: "Read only", Prefix: "chore",
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -406,7 +456,7 @@ func TestConfirmUpgradesAndAddsInOneWrite(t *testing.T) {
 	}
 	draft := Draft{Name: "Both", Prefix: "fix", Repos: editing(testRepo(t, "svc")),
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -440,7 +490,7 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 
 	draft := Draft{Name: "Refused", Prefix: "feat", Repos: editing(testRepo(t, "svc")),
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
-	if err := a.Confirm(dir, draft, true, nil); err == nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err == nil {
 		t.Fatal("a take-up of a checkout carrying commits was confirmed")
 	}
 	got, err := session.Load(dir)
@@ -453,8 +503,8 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleReference || r.Branch != "" || r.Revision == "" {
 		t.Fatalf("a refused take-up rewrote the entry: %+v", r)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a refused take-up recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("a refused take-up recorded an escalation: %+v", got.Picker)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "src", "svc")); !os.IsNotExist(err) {
 		t.Fatalf("the addition was cloned before the take-up was refused (%v)", err)
@@ -465,7 +515,7 @@ func TestConfirmClonesNothingWhenAnUpgradeIsRefused(t *testing.T) {
 
 	// Nothing is orphaned, so the same confirm succeeds once the refusal is gone.
 	draft.Upgrades = nil
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err != nil {
 		t.Fatal("retrying after a refused take-up failed:", err)
 	}
 }
@@ -483,7 +533,7 @@ func TestConfirmUpgradesAWholeBatchOntoOneBranch(t *testing.T) {
 	}
 	draft := Draft{Name: "Batch", Prefix: "chore",
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}, {Org: "org", Name: "specs"}}}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, draft, Answer{}, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, err := session.Load(dir)
@@ -515,7 +565,7 @@ func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 		DefaultBranch: "main"}
 	draft := Draft{Name: "Half", Prefix: "feat", Repos: editing(unclonable),
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
-	if err := a.Confirm(dir, draft, true, nil); err == nil {
+	if err := a.Confirm(dir, draft, Answer{Escalating: true, Awaited: true}, nil); err == nil {
 		t.Fatal("a session was confirmed with a repository that cannot be cloned")
 	}
 
@@ -526,8 +576,8 @@ func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "feat/half" || r.Revision != "" {
 		t.Fatalf("the manifest describes a checkout that is not on disk: %+v", r)
 	}
-	if got.Escalation != nil {
-		t.Fatalf("a failed addition recorded an escalation: %+v", got.Escalation)
+	if got.Picker != nil {
+		t.Fatalf("a failed addition recorded an escalation: %+v", got.Picker)
 	}
 	branch, err := exec.Command("git", "-C", filepath.Join(dir, "src", "docs"), "branch", "--show-current").Output()
 	if err != nil {

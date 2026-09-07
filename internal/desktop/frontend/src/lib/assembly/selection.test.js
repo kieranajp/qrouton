@@ -5,6 +5,7 @@ import {
   isLocked,
   isUpgrading,
   ordered,
+  preselect,
   reconcile,
   roleOf,
   roleOffers,
@@ -190,4 +191,43 @@ test("a row being taken up leads the chips, naming the branch it joins", () => {
   selection = setRole(selection, "acme/docs", "reference");
   assert.deepEqual(ordered(selection).map((row) => row.id), ["other/web"]);
   assert.equal(summary(selection, repos, "feat/extract-billing").length, 1);
+});
+
+// An agent's request ticks rows the same way a person's click would.
+test("preselect ticks an unheld row at the asked role", () => {
+  const selection = preselect(seed(), [{ id: "acme/api", role: "editing" }]);
+  assert.equal(roleOf(selection, "acme/api"), "editing");
+  assert.equal(picked(selection), "acme/api");
+});
+
+test("preselect marks a held reference row as upgrading", () => {
+  const selection = preselect(seed([{ id: "acme/docs", role: "reference" }]), [
+    { id: "acme/docs", role: "editing" },
+  ]);
+  assert.ok(isUpgrading(selection, "acme/docs"));
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
+});
+
+test("preselect is a no-op for an empty request", () => {
+  const selection = seed([{ id: "acme/api", role: "editing" }]);
+  assert.deepEqual(preselect(selection, []), selection);
+});
+
+// An agent's request is ticked before the list has been refreshed, so the id it
+// named is the only spelling available. A refresh that turns it up under
+// GitHub's own casing has to keep the tick, not drop it as a row nothing lists.
+test("a picked row is respelled by the refreshed list that carries it", () => {
+  const selection = reconcile(preselect(seed(), [{ id: "acme/api", role: "editing" }]), [
+    "Acme/API",
+  ]);
+  assert.equal(roleOf(selection, "Acme/API"), "editing");
+  assert.equal(roleOf(selection, "acme/api"), "off");
+  assert.deepEqual(ordered(selection), [{ id: "Acme/API", role: "editing" }]);
+});
+
+test("a held row keeps the spelling the session holds it under", () => {
+  const held = seed([{ id: "acme/docs", role: "reference" }]);
+  const selection = reconcile(setRole(held, "acme/docs", "editing"), ["Acme/DOCS"]);
+  assert.deepEqual(upgrading(selection), ["acme/docs"]);
+  assert.equal(roleOf(selection, "acme/docs"), "editing");
 });
