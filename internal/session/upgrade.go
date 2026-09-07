@@ -52,7 +52,7 @@ func ApplyUpgrades(m Manifest, refs []RepoRef, branch string) (Manifest, error) 
 	for _, ref := range refs {
 		i := indexOfRepo(m.Repos, ref.Org, ref.Name)
 		if i < 0 {
-			return m, refuseUpgrade(ErrNotHeld, ref.Org, ref.Name)
+			return m, refuseRepo(ErrNotHeld, ref.Org, ref.Name)
 		}
 		m.Repos[i].Role, m.Repos[i].Branch, m.Repos[i].Revision = RepoRoleEditing, branch, ""
 	}
@@ -65,14 +65,14 @@ func ApplyUpgrades(m Manifest, refs []RepoRef, branch string) (Manifest, error) 
 func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRepo, bool, error) {
 	i := indexOfRepo(m.Repos, ref.Org, ref.Name)
 	if i < 0 {
-		return ManifestRepo{}, false, refuseUpgrade(ErrNotHeld, ref.Org, ref.Name)
+		return ManifestRepo{}, false, refuseRepo(ErrNotHeld, ref.Org, ref.Name)
 	}
 	r := m.Repos[i]
 	if r.Role.Effective() != RepoRoleReference {
-		return r, false, refuseUpgrade(ErrNotReference, r.Org, r.Name)
+		return r, false, refuseRepo(ErrNotReference, r.Org, r.Name)
 	}
 	if r.SSHURL == "" {
-		return r, false, refuseUpgrade(ErrNoCloneURL, r.Org, r.Name)
+		return r, false, refuseRepo(ErrNoCloneURL, r.Org, r.Name)
 	}
 	wt := filepath.Join(dir, r.WorktreePath)
 	if _, err := os.Stat(wt); err != nil {
@@ -88,14 +88,14 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 	// Commits in a detached checkout exist nowhere else, and a branch cut from the
 	// default branch's tip would leave them unreachable.
 	if r.Revision == "" {
-		return r, false, refuseUpgrade(ErrNoPinnedRevision, r.Org, r.Name)
+		return r, false, refuseRepo(ErrNoPinnedRevision, r.Org, r.Name)
 	}
 	head, err := resolveRevision(wt, headRef)
 	if err != nil {
 		return r, false, err
 	}
 	if head != r.Revision {
-		return r, false, refuseUpgrade(ErrReferenceMoved, r.Org, r.Name)
+		return r, false, refuseRepo(ErrReferenceMoved, r.Org, r.Name)
 	}
 	return r, true, nil
 }
@@ -103,7 +103,7 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, progress ProgressFunc) error {
 	repo := github.Repo{Name: r.Name, Org: r.Org, DefaultBranch: r.DefaultBranch, SSHURL: r.SSHURL}
 	rep := reporter{fn: progress, repo: &repo, role: RepoRoleEditing}
-	// The mirror is already there; this is the fetch that brings the default
+	// The mirror is already there; this is the fetch that brings the base
 	// branch's tip within reach of the new session branch.
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
 		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)
@@ -121,7 +121,7 @@ func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, 
 // which keeps whatever the directory holds that git does not track — an .env, a
 // node_modules — and refuses rather than clobbering uncommitted work.
 func branchWorktree(mirror, wt string, r ManifestRepo, branch string) error {
-	startRef := remoteRefPrefix + r.DefaultBranch
+	startRef := baseRef(r.BaseBranch, r.DefaultBranch)
 	if _, err := os.Stat(wt); err != nil {
 		return addWorktree(mirror, wt, branch, startRef)
 	}
@@ -137,7 +137,7 @@ func branchWorktree(mirror, wt string, r ManifestRepo, branch string) error {
 	// The refusal a user can actually cause, said in a sentence: git's own names
 	// every file it would overwrite, and the footer holds one line.
 	if dirty, dirtyErr := worktreeDirty(wt); dirtyErr == nil && dirty {
-		return refuseUpgrade(ErrCheckoutHasWork, r.Org, r.Name)
+		return refuseRepo(ErrCheckoutHasWork, r.Org, r.Name)
 	}
 	return err
 }

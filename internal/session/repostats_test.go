@@ -145,6 +145,47 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	}
 }
 
+// worktreeWithDivergedBase is a gittest.Worktree fixture with a second
+// remote-tracking ref one commit behind HEAD, so counting from it names a
+// different range than counting from origin/main.
+func worktreeWithDivergedBase(t *testing.T, path, base string) string {
+	t.Helper()
+	gittest.Worktree(t, path)
+	gittest.WriteFile(t, path, "on-base.txt", "base-only")
+	gittest.Run(t, path, "add", ".")
+	gittest.Run(t, path, "commit", "-m", "on base branch")
+	gittest.Run(t, path, "update-ref", "refs/remotes/origin/"+base, "HEAD")
+	gittest.WriteFile(t, path, "session.txt", "session work")
+	gittest.Run(t, path, "add", ".")
+	gittest.Run(t, path, "commit", "-m", "session work")
+	return path
+}
+
+// Commits are measured from the recorded base branch when one is set, and
+// from the default branch when it is not — the two name different ranges here.
+func TestRepoStatsMeasuresFromTheRecordedBaseBranch(t *testing.T) {
+	requireGit(t)
+	root := sessionsRoot(t)
+	path := worktreeWithDivergedBase(t, filepath.Join(root, "sess", "src", "svc"), "develop")
+	repo := ManifestRepo{Name: "svc", Org: "org", Role: RepoRoleEditing, Branch: "feat/svc",
+		DefaultBranch: "main", BaseBranch: "develop", WorktreePath: filepath.Join("src", "svc")}
+	m := Manifest{Slug: "sess", Repos: []ManifestRepo{repo}}
+
+	stats := RepoStats(t.Context(), root, m)
+	if len(stats) != 1 || !stats[0].Measured || stats[0].Commits != 1 {
+		t.Fatalf("stats with a base branch = %#v, want 1 commit measured from develop", stats)
+	}
+	if got := stats[0].Path; got != path {
+		t.Fatalf("stat path = %q, want %q", got, path)
+	}
+
+	m.Repos[0].BaseBranch = ""
+	stats = RepoStats(t.Context(), root, m)
+	if len(stats) != 1 || !stats[0].Measured || stats[0].Commits != 2 {
+		t.Fatalf("stats without a base branch = %#v, want 2 commits measured from main", stats)
+	}
+}
+
 // An older manifest's blank default branch must never reach git as "origin/".
 func TestRepoStatsLeavesAnEmptyDefaultBranchUnmeasured(t *testing.T) {
 	requireGit(t)

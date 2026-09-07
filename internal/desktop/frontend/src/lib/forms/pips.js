@@ -1,4 +1,4 @@
-// Pip progress, kept pure: node --test is the whole frontend harness.
+// Pip progress.
 
 /**
  * @param {number} total

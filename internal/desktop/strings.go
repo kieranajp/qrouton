@@ -128,6 +128,10 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
+
+	// branchListTimeout bounds the branch listing GitHub is asked for, which the
+	// base menu opens without waiting for.
+	branchListTimeout = 5 * time.Second
 )
 
 const (

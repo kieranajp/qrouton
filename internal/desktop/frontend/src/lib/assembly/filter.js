@@ -1,5 +1,4 @@
-// Narrowing the repository list, kept pure: node --test is the whole frontend
-// harness.
+// Narrowing the repository list.
 
 /** @typedef {{org: string, name: string, default_branch?: string, pushed_at?: string}} Repo */
 /** @typedef {Repo & {id: string}} Row */

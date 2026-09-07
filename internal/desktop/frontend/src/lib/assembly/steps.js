@@ -1,6 +1,5 @@
-// The chrome around the three steps, kept pure: node --test is the whole
-// frontend harness. What each step is called, what stops it, and what a
-// keypress in the dialog means.
+// The chrome around the three steps. What each step is called, what stops
+// it, and what a keypress in the dialog means.
 
 /** @typedef {{field: string, message: string}} Problem */
 

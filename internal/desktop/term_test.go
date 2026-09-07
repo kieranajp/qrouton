@@ -63,6 +63,11 @@ func testTerm(t *testing.T, emit emitter, root string, argv, env []string) (*Ter
 // stall for whole seconds between the two.
 const waitCeiling = 30 * time.Second
 
+// macOS discards a PTY's unread output when the last slave descriptor closes,
+// and the pump that reads it starts a goroutine behind the child. So a child
+// here holds the terminal open until the test has what it came for, rather
+// than printing and exiting into that race.
+
 func waitFor(t *testing.T, what string, condition func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(waitCeiling)
@@ -80,19 +85,22 @@ func waitFor(t *testing.T, what string, condition func() bool) {
 func TestTermPumpsChildOutputToThePage(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
-		[]string{"/bin/sh", "-c", "test -t 0 && printf 'on a tty\\n'"}, os.Environ())
+		[]string{"/bin/sh", "-c", "test -t 0 && printf 'on a tty\\n'; read done"}, os.Environ())
 
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the child's output", func() bool { return strings.Contains(rec.output(), "on a tty") })
+	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+		t.Fatal(err)
+	}
 	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitEvent + state.terminal) })
 }
 
 func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
-		[]string{"/bin/sh", "-c", "printf '%s %s <%s>\\n' \"$TERM\" \"$COLORTERM\" \"$NO_COLOR\""},
+		[]string{"/bin/sh", "-c", "printf '%s %s <%s>\\n' \"$TERM\" \"$COLORTERM\" \"$NO_COLOR\"; exec cat"},
 		[]string{"TERM=dumb", "NO_COLOR=1"})
 
 	if err := term.Start(state.terminal, 80, 24); err != nil {
@@ -109,7 +117,7 @@ func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
 func TestTheConversationRunsInTheSessionRoot(t *testing.T) {
 	rec := &recorder{}
 	root := t.TempDir()
-	term, state := testTerm(t, rec.emit, root, []string{"/bin/pwd"}, os.Environ())
+	term, state := testTerm(t, rec.emit, root, []string{"/bin/sh", "-c", "pwd; exec cat"}, os.Environ())
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}

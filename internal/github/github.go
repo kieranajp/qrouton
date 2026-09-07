@@ -253,6 +253,29 @@ func RefreshOwnerRepos(ctx context.Context, client *http.Client, token, owner st
 	return fetchOwnerRepos(ctx, client, token, owner, &login)
 }
 
+// ListBranches names every branch a repository has, in the order GitHub answers
+// with. It is the vocabulary the repo picker offers a session's work to be cut
+// from, so it fetches whole rather than guessing at a useful subset.
+func ListBranches(ctx context.Context, client *http.Client, token, owner, name string) ([]string, error) {
+	endpoint := githubAPIBase + fmt.Sprintf(branchesPath, url.PathEscape(owner), url.PathEscape(name))
+	var names []string
+	for page := 1; ; page++ {
+		var batch []struct {
+			Name string `json:"name"`
+		}
+		requestURL := fmt.Sprintf(paginationQuery, endpoint, queryStart, pageSize, page)
+		if err := githubJSON(ctx, client, token, requestURL, &batch); err != nil {
+			return nil, fmt.Errorf("github: listing %s/%s branches (page %d): %w", owner, name, page, err)
+		}
+		for _, branch := range batch {
+			names = append(names, branch.Name)
+		}
+		if len(batch) < pageSize {
+			return names, nil
+		}
+	}
+}
+
 func SortReposByActivity(repos []Repo) {
 	sort.SliceStable(repos, func(i, j int) bool {
 		if !repos[i].PushedAt.Equal(repos[j].PushedAt) {

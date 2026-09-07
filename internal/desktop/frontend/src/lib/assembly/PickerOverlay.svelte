@@ -34,5 +34,7 @@
     refreshing={repos.refreshing}
     onOwner={repos.owner}
     onRefresh={repos.refetch}
-    onRole={repos.role} />
+    onRole={repos.role}
+    onBase={repos.base}
+    onBaseOpen={repos.loadBranches} />
 </Dialog>

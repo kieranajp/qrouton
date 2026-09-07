@@ -1,5 +1,4 @@
-// Scheduling for calls that cross the bridge, kept pure: node --test is the
-// whole frontend harness.
+// Scheduling for calls that cross the bridge.
 
 /** Bridge calls may settle out of order; only the newest answer lands.
  * @template V, A

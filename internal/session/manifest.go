@@ -88,10 +88,13 @@ func (m SessionMode) effective() SessionMode {
 	return ModeRPI
 }
 
-// RepoSelection pairs repository metadata with its role in a session.
+// RepoSelection pairs repository metadata with its role in a session. Base
+// names the branch the session's work is cut from; empty means the
+// repository's default branch.
 type RepoSelection struct {
 	Repo github.Repo
 	Role RepoRole
+	Base string
 }
 
 type ProgressStep string
@@ -189,9 +192,13 @@ type ManifestRepo struct {
 	Role          RepoRole `json:"role,omitempty"`
 	Branch        string   `json:"branch,omitempty"`
 	DefaultBranch string   `json:"defaultBranch,omitempty"`
-	Revision      string   `json:"revision,omitempty"`
-	WorktreePath  string   `json:"worktreePath"`
-	SSHURL        string   `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
+	// BaseBranch is the branch this repository was cut from when it is not the
+	// default one. Absent reads as the default branch, which is what every
+	// manifest written before the picker offered a choice says.
+	BaseBranch   string `json:"baseBranch,omitempty"`
+	Revision     string `json:"revision,omitempty"`
+	WorktreePath string `json:"worktreePath"`
+	SSHURL       string `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
 // Scan: a session is any direct child of root containing a qrouton.json.

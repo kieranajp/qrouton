@@ -125,7 +125,8 @@ func TestOpPickerRefusesAnEmptyRootAsAnAnswer(t *testing.T) {
 func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	reg, shown, _ := pickerWorkbench(t)
 	m := session.Manifest{Slug: "shown", Name: "Webhook retry", Repos: []session.ManifestRepo{
-		{Name: "svc", Org: "org", Role: session.RepoRoleEditing, Branch: "fix/webhook-retry"},
+		{Name: "svc", Org: "org", Role: session.RepoRoleEditing, Branch: "fix/webhook-retry",
+			DefaultBranch: "main", BaseBranch: "release/24.4"},
 		{Name: "docs", Org: "org", Role: session.RepoRoleReference},
 	}}
 	if err := session.WriteManifest(shown, m); err != nil {
@@ -151,6 +152,12 @@ func TestPickerLoadReportsTheSessionsBranchAndLocksWhatItHolds(t *testing.T) {
 	}
 	if fields.Repos[0].ID != "org/svc" || fields.Repos[0].Role != "editing" {
 		t.Fatalf("held repo = %+v", fields.Repos[0])
+	}
+	if fields.Repos[0].Base != "release/24.4" {
+		t.Fatalf("held row does not say what it was cut from: %+v", fields.Repos[0])
+	}
+	if fields.Repos[1].Base != "" {
+		t.Fatalf("a row cut from the default branch names a base: %+v", fields.Repos[1])
 	}
 	if _, err := p.Load("kraken"); err == nil {
 		t.Fatal("a picker loaded for a session this workbench is not running")
@@ -309,5 +316,20 @@ func TestHeldRefsKeepOnlyTheReferenceRowsNamedOnce(t *testing.T) {
 	got := heldRefs(m, []string{"org/svc", "org/docs", "org/docs", "org/kraken"})
 	if len(got) != 1 || got[0] != (session.RepoRef{Org: "org", Name: "docs"}) {
 		t.Fatalf("resolved refs = %+v", got)
+	}
+}
+
+// The escalation picker speaks the same per-row shape as the first assembly, so
+// a repository added later can be cut from a branch of its own too.
+func TestAPickerRowCarriesItsChosenBaseIntoTheDraft(t *testing.T) {
+	cfg := &config.Config{}
+	repos := &Repositories{cfg: cfg, errs: map[string]error{},
+		repos: []github.Repo{{Org: "org", Name: "svc", DefaultBranch: "main"}}}
+	p := newPicker(cfg, nil, repos, nil)
+
+	got := p.draft(session.Manifest{Slug: "shown", Name: "Webhook retry"}, nil,
+		pickerInput{Repos: []repoPick{{ID: "org/svc", Role: "editing", Base: "release/24.4"}}})
+	if len(got.Repos) != 1 || got.Repos[0].Base != "release/24.4" {
+		t.Fatalf("draft repos = %+v", got.Repos)
 	}
 }

@@ -1,5 +1,4 @@
-// What a right click offers, by what it landed on. Pure so node --test can
-// reach it, which is the whole frontend harness.
+// What a right click offers, by what it landed on.
 
 // Narrower than the rail's menu: these labels are one or two words.
 export const MENU_WIDTH = 168;
