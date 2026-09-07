@@ -220,8 +220,20 @@ section .cards > .accent {
   color: var(--text-on-accent);
 }
 
-section .cards > .accent strong {
+section .cards > .accent :is(h1, h2, h3, strong, a, code) {
   color: var(--text-on-accent);
+}
+
+section .cards > .accent li::marker {
+  color: var(--text-on-accent);
+}
+
+section .cards > .accent :is(em, .note) {
+  color: color-mix(in srgb, var(--text-on-accent) 68%, var(--accent-label));
+}
+
+section .cards > .accent code {
+  background: color-mix(in srgb, var(--text-on-accent) 10%, transparent);
 }
 
 section .callout {

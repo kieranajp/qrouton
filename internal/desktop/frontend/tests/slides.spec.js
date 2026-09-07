@@ -116,3 +116,49 @@ test("relative media resolves over the deck's asset route", async ({ page }) => 
     "/deck/tok/../shared/plate.png",
   ]);
 });
+
+test("a d2 fence waits on the slide, then draws fitted inside it", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.pushDiagramDeck());
+  await page.locator(".card pre[data-line]").waitFor();
+
+  const waiting = await page.evaluate(() => window.diagram());
+  expect(waiting.line).toBe("7");
+  expect(waiting.lineEnd).toBe("9");
+  expect(waiting.pending).toBe(true);
+  expect(waiting.code).toBe(true);
+
+  const drawn = await page.evaluate(() => (window.drawDiagram(), window.diagram()));
+  expect(drawn.drawn).toBe(true);
+  expect(drawn.pending).toBe(false);
+  expect(drawn.code).toBe(false);
+  expect(drawn.width).toBeGreaterThan(0);
+  expect(drawn.width).toBeLessThanOrEqual(drawn.slideWidth);
+  expect(drawn.height).toBeLessThanOrEqual(drawn.slideHeight);
+});
+
+test("a diagram on a slide has no view of its own to pan or zoom", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.pushDiagramDeck());
+  await page.locator(".card pre[data-line]").waitFor();
+  const drawn = await page.evaluate(() => (window.drawDiagram(), window.diagram()));
+
+  expect(drawn.staged).toBe(false);
+  expect(drawn.zoomable).toBe(false);
+  expect(drawn.controls).toBe(0);
+  expect(drawn.styleWidth).toBe("");
+  expect(drawn.viewBox).toContain(drawn.attrWidth);
+});
+
+test("a fence that failed states its reason on the slide", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.pushDiagramDeck());
+  await page.locator(".card pre[data-line]").waitFor();
+  const failed = await page.evaluate(
+    () => (window.failDiagram("5:1: <b> is not a shape"), window.diagram()),
+  );
+
+  expect(failed.failed).toBe(true);
+  expect(failed.pending).toBe(false);
+  expect(failed.error).toBe("5:1: <b> is not a shape");
+});

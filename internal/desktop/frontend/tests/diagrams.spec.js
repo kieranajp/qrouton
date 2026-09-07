@@ -418,3 +418,18 @@ test("a pane that goes away takes its diagrams' views with it", async ({ page })
   await page.evaluate(() => window.settled());
   expect(await page.evaluate(() => window.probe().staged)).toBe(false);
 });
+
+test("a fitted diagram is drawn without a view of its own", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  const drawn = await page.evaluate(() => (window.drawFitted(), window.probe()));
+
+  expect(drawn.drawn).toBe(true);
+  expect(drawn.staged).toBe(false);
+  expect(drawn.zoomable).toBe(false);
+  expect(drawn.controls).toBe(0);
+  expect(drawn.styleWidth).toBe("");
+  expect(drawn.styleHeight).toBe("");
+  // Drawn at the size d2 laid it out at, not the scale prose reads it at.
+  expect(drawn.attrWidth).toBe("1642");
+  expect(drawn.attrHeight).toBe("108");
+});

@@ -10,6 +10,20 @@ import theme from "./slide-theme.css?raw";
 const marp = new Marp({ inlineSVG: false, script: false });
 marp.themeSet.default = marp.themeSet.add(theme);
 
+// A d2 fence carries the document lines it spans, which is how the backend
+// names the diagram it lays out for it. Marp's own fence markup carries none.
+marp.use((md) => {
+  const fence = md.renderer.rules.fence;
+  md.renderer.rules.fence = (tokens, index, options, env, self) => {
+    const token = tokens[index];
+    const language = (token.info ?? "").trim().split(/\s+/)[0];
+    if (language !== "d2" || !token.map) return fence(tokens, index, options, env, self);
+    const [from, to] = token.map;
+    const source = md.utils.escapeHtml(token.content);
+    return `<pre data-line="${from + 1}" data-line-end="${to}"><code class="language-d2">${source}</code></pre>\n`;
+  };
+});
+
 /** The pixel box Marp lays a 16:9 slide out in, which the card scales down to
  * pane width. */
 export const SLIDE_WIDTH = 1280;

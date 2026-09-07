@@ -50,6 +50,28 @@ export const DECK = [
   "", // 42
 ].join("\n");
 
+export const DIAGRAM_DECK = [
+  "---", // 1
+  "marp: true", // 2
+  "---", // 3
+  "", // 4
+  "## Drawn", // 5
+  "", // 6
+  "```d2", // 7
+  "a -> b", // 8
+  "```", // 9
+  "", // 10
+].join("\n");
+const DIAGRAM_LINE = 7;
+
+// Shaped like d2's own output: a scaled size on the root beside a viewBox left
+// at natural size.
+const DIAGRAM_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet"' +
+  ' viewBox="0 0 1642 108" width="1067" height="70">' +
+  '<rect width="1642" height="108" fill="#24273a"></rect>' +
+  '<text x="40" y="60" fill="#cad3f5">a</text></svg>';
+
 const params = new URLSearchParams(location.search);
 const number = (name) => Number(params.get(name) ?? 0);
 
@@ -67,11 +89,47 @@ const document_ = (text) => ({
 });
 
 window.reports = [];
+window.diagramReply = [];
 window.pushDeck = (text) => emitWailsEvent("window:content:w1", document_(text));
 window.wailsCall = async (name, id, payload) => {
   if (name.endsWith(".Content")) return document_(DECK);
+  if (name.endsWith(".RenderDiagrams")) return window.diagramReply;
   if (name.endsWith(".ReportViewport")) window.reports.push(payload);
   return undefined;
+};
+window.pushDiagramDeck = () => {
+  window.diagramReply = [{ line: DIAGRAM_LINE }];
+  window.pushDeck(DIAGRAM_DECK);
+};
+window.drawDiagram = () =>
+  emitWailsEvent("window:diagram:w1", { line: DIAGRAM_LINE, svg: DIAGRAM_SVG });
+window.failDiagram = (error) => emitWailsEvent("window:diagram:w1", { line: DIAGRAM_LINE, error });
+
+window.diagram = () => {
+  const block = document.querySelector(".card pre[data-line]");
+  if (!block) return null;
+  const drawn = block.querySelector("svg");
+  const box = drawn?.getBoundingClientRect();
+  const slide = block.closest("section").getBoundingClientRect();
+  return {
+    line: block.dataset.line,
+    lineEnd: block.dataset.lineEnd,
+    pending: block.classList.contains("diagram-pending"),
+    drawn: block.classList.contains("diagram"),
+    failed: block.classList.contains("diagram-failed"),
+    zoomable: block.classList.contains("zoomable"),
+    staged: Boolean(block.querySelector(".diagram-stage")),
+    controls: block.querySelectorAll(".diagram-controls").length,
+    error: block.querySelector(".diagram-error")?.textContent ?? "",
+    code: Boolean(block.querySelector("code")),
+    styleWidth: drawn?.style.width ?? "",
+    attrWidth: drawn?.getAttribute("width") ?? "",
+    viewBox: drawn?.getAttribute("viewBox") ?? "",
+    width: box?.width ?? 0,
+    height: box?.height ?? 0,
+    slideWidth: slide.width,
+    slideHeight: slide.height,
+  };
 };
 
 const box = (element) => {

@@ -1,18 +1,22 @@
 // Package share renders a session document as one self-contained page: the
-// workbench's own prose renderer, its palette and its fonts, in a file that
-// fetches nothing. Handing that page to anybody is the agent's job — qrouton
-// draws the surface and stays out of the conversation.
+// workbench's own prose renderer, its palette, its fonts and its diagrams laid
+// out ahead of time, in a file that fetches nothing. Handing that page to
+// anybody is the agent's job — qrouton draws the surface and stays out of the
+// conversation.
 package share
 
 import (
 	"bytes"
+	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"html"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/diagram"
 	md "github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/theme"
@@ -38,6 +42,9 @@ func Page(source string, markdown []byte) ([]byte, error) {
 	fmt.Fprintf(&page, styleFormat, theme.CSS())
 	fmt.Fprintf(&page, styleFormat, style)
 	fmt.Fprintf(&page, payloadFormat, payload(source, markdown))
+	if drawn := diagrams(markdown); drawn != "" {
+		fmt.Fprintf(&page, diagramsFormat, drawn)
+	}
 	fmt.Fprintf(&page, scriptFormat, script)
 	return page.Bytes(), nil
 }
@@ -77,6 +84,40 @@ func payload(source string, markdown []byte) string {
 	document.WriteString("\n")
 	document.Write(markdown)
 	return base64.StdEncoding.EncodeToString(document.Bytes())
+}
+
+// rendered is one d2 fence as the page receives it, carrying the document line
+// it was found on so the page can place it. Exactly one of SVG and Error is set.
+type rendered struct {
+	Line  int    `json:"line"`
+	SVG   string `json:"svg,omitempty"`
+	Error string `json:"error,omitempty"`
+}
+
+// diagrams lays the document's d2 fences out at publish time: a shared page
+// runs no renderer, so every diagram has to travel with it. A fence that fails
+// carries the reason instead, which the page states where the drawing would be.
+func diagrams(markdown []byte) string {
+	found := diagram.Scan(string(markdown))
+	if len(found) == 0 {
+		return ""
+	}
+	renderer := diagram.New(diagram.DefaultTimeout)
+	defer renderer.Close()
+	drawings := make([]rendered, 0, len(found))
+	for _, fence := range found {
+		out := renderer.Render(context.Background(), fence)
+		if out.Err != nil {
+			drawings = append(drawings, rendered{Line: out.Line, Error: out.Err.Error()})
+			continue
+		}
+		drawings = append(drawings, rendered{Line: out.Line, SVG: out.SVG})
+	}
+	encoded, err := json.Marshal(drawings)
+	if err != nil {
+		return ""
+	}
+	return base64.StdEncoding.EncodeToString(encoded)
 }
 
 // slug keeps the whole relative path in the filename, so two documents sharing

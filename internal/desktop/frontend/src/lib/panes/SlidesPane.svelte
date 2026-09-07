@@ -2,7 +2,7 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
-  import { links, viewport } from "./actions.js";
+  import { diagrams, links, viewport } from "./actions.js";
   import CopyPath from "./CopyPath.svelte";
   import { deckSlides, renderDeck, SLIDE_WIDTH } from "./slides.js";
   import { slides } from "./slides.svelte.js";
@@ -57,6 +57,7 @@
     bind:this={stack}
     style="--slide-scale: {scale}"
     use:links={doc.source}
+    use:diagrams={{ id, text: doc.text, fit: true }}
     use:port={{ id, active, scrollRoot }}>
     {#each cards as card, index (index)}
       <div
@@ -144,5 +145,33 @@
     margin-top: 12px;
     font: var(--machine-sm);
     color: var(--text-muted);
+  }
+
+  /* A d2 fence keeps the slide's own frame: the source shows until the SVG
+     lands, and the drawing then fits the room the slide has left. */
+  .frame :global(pre.diagram) {
+    background: none;
+    border: none;
+    line-height: 0;
+    padding: 0;
+    text-align: center;
+  }
+
+  .frame :global(pre.diagram svg) {
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    max-height: 400px;
+  }
+
+  .frame :global(pre.diagram-pending) {
+    opacity: 0.55;
+  }
+
+  .frame :global(.diagram-error) {
+    display: block;
+    font-size: 20px;
+    color: var(--state-failed);
+    white-space: pre-wrap;
   }
 </style>
