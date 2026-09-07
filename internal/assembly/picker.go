@@ -6,9 +6,10 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-// Answer is what the picker was, not what it picked: Escalating moves the
-// session to RPI, Awaited means a Go-side caller is polling for the outcome
-// stanza.
+// Answer is what the picker was, not what it picked. Escalating moves the session
+// to RPI; Awaited means a Go-side caller is polling for the outcome stanza. An
+// escalation is both, a repository request only the second, and a picker the user
+// opened from the rail neither.
 type Answer struct {
 	Escalating bool
 	Awaited    bool
@@ -85,7 +86,8 @@ func (a Assembler) takeUp(dir string, d Draft, branch string, progress session.P
 	})
 }
 
-// Cancel records a cancelled outcome only for an awaited picker; the add-repos button's cancel is nobody's business.
+// Cancel records a cancelled outcome for an awaited picker, mode and repositories
+// untouched. The add-repos button's cancel is nobody's business.
 func Cancel(dir string, ans Answer) error {
 	if !ans.Awaited {
 		return nil

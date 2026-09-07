@@ -53,7 +53,7 @@ func (c *Chrome) publishFields(fields status.Fields) {
 }
 
 // watchChrome pushes what the window can observe about the session on screen
-// until the context is cancelled. Escalation rewrites the manifest, so
+// until the context is cancelled. A confirmed picker rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
 func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter) {
 	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,

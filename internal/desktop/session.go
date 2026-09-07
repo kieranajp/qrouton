@@ -44,8 +44,9 @@ type sessionState struct {
 	shells int
 }
 
-// requestPicker queues a picker on this session. A later request replaces an
-// earlier one: both pollers then read the one stanza the confirm writes.
+// requestPicker queues a picker on this session. A later request of another kind
+// replaces an earlier one, whose caller then polls on to its own ceiling: only
+// the stanza matching the kind it opened answers it.
 func (s *sessionState) requestPicker(req workbench.PickerRequest) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

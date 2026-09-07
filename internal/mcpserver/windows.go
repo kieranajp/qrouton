@@ -397,10 +397,10 @@ func (m *windowManager) escalate(ctx context.Context, input escalateInput) (stri
 	return escalationCancelledMessage, nil
 }
 
-// requestRepos queues the ordinary picker pre-ticked with the request and blocks
-// on the outcome stanza written for it. The answer is the whole resulting set
-// rather than a yes: the user may change a role, drop a row the agent asked for,
-// or add one it never mentioned.
+// requestRepos asks for repositories the session does not hold, or for one it
+// only reads to be taken up for editing. It queues the ordinary picker pre-ticked
+// with the request and blocks on the stanza tagged with its own kind; the answer
+// is the whole resulting set rather than a yes.
 func (m *windowManager) requestRepos(ctx context.Context, input requestReposInput) (string, []repoRow, error) {
 	requested, reason, err := repoRequest(input)
 	if err != nil {
@@ -450,8 +450,9 @@ func reposAnswer(format string, requested []workbench.RequestedRepo, rows []repo
 }
 
 // shortfall reads the request against the resulting set. Absent covers both a
-// name nothing matched and a row the user dropped: from here they are one fact,
-// and asking again unchanged will not help.
+// name nothing matched and a row the user dropped, which are one fact from here;
+// a repository held in a lesser role than the one asked for is the other, because
+// the request was answered but not granted.
 func shortfall(requested []workbench.RequestedRepo, rows []repoRow) []string {
 	roles := make(map[string]string, len(rows))
 	for _, row := range rows {

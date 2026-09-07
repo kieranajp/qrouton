@@ -86,10 +86,10 @@ function takeUp(selection, id, role) {
   return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
 }
 
-/** Held rows survive a list that omits them and keep the manifest's spelling; a picked row the list spells differently takes the list's, because everything downstream compares ids exactly.
- * @param {Selection} selection
- * @param {string[]} ids
- * @returns {Selection} */
+/** Held rows survive a list that omits them and keep the manifest's spelling. A
+ * request names repositories the cache had not seen and may spell one differently
+ * than GitHub does, so a picked row takes the list's spelling.
+ * @param {Selection} selection @param {string[]} ids @returns {Selection} */
 export function reconcile(selection, ids) {
   const canonical = new Map(ids.map((id) => [id.toLowerCase(), id]));
   const keep = (id) => canonical.has(id.toLowerCase()) || isLocked(selection, id);
