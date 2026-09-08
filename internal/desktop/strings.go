@@ -182,3 +182,5 @@ const (
 	contentTypeNoSniff       = "nosniff"
 	currentImageFormat       = "Current image: %d of %d"
 )
+
+const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"

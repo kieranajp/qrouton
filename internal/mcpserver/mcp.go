@@ -11,6 +11,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type focusImageInput struct {
+	Name  string `json:"name" jsonschema:"Name of an open image gallery"`
+	Index int    `json:"index" jsonschema:"One-based position in the gallery numbered manifest"`
+}
+
 type openFileInput struct {
 	Path       string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
 	Line       int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
@@ -105,6 +110,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	windows := newWindowManager(root, editor, host)
 
 	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, toolFocusImage, descFocusImage, keyMessage, messageOnly(windows.focusImage))
 	addTool(server, toolOpenImages, descOpenImages, keyMessage, messageOnly(windows.openImages))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {

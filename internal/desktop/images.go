@@ -59,3 +59,34 @@ func (r *registry) imageAsset(token string, index int) (imageAssetRef, bool) {
 	})
 	return ref, found
 }
+
+func (r *registry) focusImage(owner *sessionState, id string, index int) (workbench.ImageSelection, error) {
+	r.imageFocusMu.Lock()
+	defer r.imageFocusMu.Unlock()
+	var selected workbench.ImageSelection
+	var doc document
+	err := r.with(id, func(window *agentWindow) error {
+		if owner == nil || window.session != owner {
+			return noSuchWindow(id)
+		}
+		rendered, ok := window.document()
+		if !ok || window.opts.Format != workbench.FormatImages {
+			return ErrNotImageGallery
+		}
+		if index < 1 || index > len(rendered.images) {
+			return fmt.Errorf(imageIndexErrorFormat, ErrImageIndex, index, len(rendered.images))
+		}
+		rendered.currentImage = index
+		rendered.imageRevision++
+		r.selected[owner] = id
+		selected = workbench.ImageSelection{CurrentIndex: index, Count: len(rendered.images), Revision: rendered.imageRevision}
+		doc = documentFor(window)
+		return nil
+	})
+	if err != nil {
+		return workbench.ImageSelection{}, err
+	}
+	r.announce(owner)
+	r.emit(windowContentEvent+id, doc)
+	return selected, nil
+}

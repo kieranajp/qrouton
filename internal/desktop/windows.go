@@ -114,3 +114,11 @@ func (w *Windows) stopAll() {
 	w.stopFollow()
 	w.diagrams.stop()
 }
+
+func (w *Windows) FocusImage(slug, id string, index int) (workbench.ImageSelection, error) {
+	owner := w.sessions.bySlug(slug)
+	if owner == nil {
+		return workbench.ImageSelection{}, unknownSession(slug)
+	}
+	return w.focusImage(owner, id, index)
+}

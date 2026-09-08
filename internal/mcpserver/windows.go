@@ -508,3 +508,19 @@ var playSound = func(script string) {
 	}
 	go func() { _ = cmd.Wait() }()
 }
+
+func (m *windowManager) focusImage(ctx context.Context, input focusImageInput) (string, error) {
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		return "", ErrNameRequired
+	}
+	id, err := m.liveWindow(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	selected, err := m.host.FocusImage(ctx, id, input.Index)
+	if err != nil {
+		return "", fmt.Errorf(focusImageErrorFormat, name, err)
+	}
+	return fmt.Sprintf(focusedImageFormat, selected.CurrentIndex, selected.Count, name), nil
+}

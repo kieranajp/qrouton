@@ -45,3 +45,52 @@ test("loading and failed image states retain the remaining entries", async ({ pa
   await expect(page.locator(".image-strip li")).toHaveCount(7);
   await expect.poll(() => page.locator(".image-strip img").count()).toBe(6);
 });
+
+test("agent and thumbnail selection share state without agent keyboard focus", async ({ page }) => {
+  await page.goto("/tests/images.html");
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+  await page.evaluate(() => {
+    const input = document.createElement("input");
+    input.id = "conversation";
+    document.body.prepend(input);
+    input.focus();
+    window.pushImages({ currentIndex: 7, revision: 2 });
+  });
+  await expect(page.locator(".position")).toHaveText("Image 7 of 7");
+  await expect(page.locator("#conversation")).toBeFocused();
+  const buttons = page.locator(".image-strip button");
+  await expect(buttons.nth(6)).toHaveAttribute("aria-pressed", "true");
+  await buttons.nth(2).click();
+  await expect(page.locator(".position")).toHaveText("Image 3 of 7");
+  await buttons.nth(1).focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator(".position")).toHaveText("Image 2 of 7");
+  expect(await page.evaluate(() => window.bridgeCalls.filter((call) => call.name.endsWith(".FocusImage")).map((call) => call.args))).toEqual([["fixture", "images-1", 3], ["fixture", "images-1", 2]]);
+  await page.evaluate(() => { window.failSelection = true; });
+  await buttons.nth(0).click();
+  await expect(page.getByRole("alert")).toContainText("Could not select image");
+  await expect(page.locator(".position")).toHaveText("Image 2 of 7");
+});
+
+test("newer complete events win over initial responses and reversed revisions", async ({ page }) => {
+  await page.goto("/tests/images.html?delay=1");
+  await page.evaluate(() => window.pushImages({ currentIndex: 7, revision: 4 }));
+  await expect(page.locator(".position")).toHaveText("Image 7 of 7");
+  await page.evaluate(() => {
+    window.pushImages({ currentIndex: 2, revision: 3 });
+    window.releaseInitial();
+  });
+  await expect(page.locator(".position")).toHaveText("Image 7 of 7");
+  await expect(primary(page)).toHaveAttribute("src", /sample.avif/);
+});
+
+test("late initial response after replacement cannot restore the old gallery", async ({ page }) => {
+  await page.goto("/tests/images.html?delay=1");
+  await page.evaluate(() => window.pushImages({ currentIndex: 3, revision: 8 }));
+  await expect(page.locator(".position")).toHaveText("Image 3 of 7");
+  await page.evaluate(() => window.replaceGallery());
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+  await page.evaluate(() => { window.releaseInitial(); window.pushOldImages(); });
+  await expect(primary(page)).toHaveAttribute("src", /replacement=0/);
+  await expect(page.locator(".primary .path")).toHaveText("thoughts/assets/sample.avif");
+});

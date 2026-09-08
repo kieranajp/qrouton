@@ -124,9 +124,14 @@ func (s LineSpan) Bounds() (first, last int, ok bool) {
 	return s.Line, s.Through, true
 }
 
-// WindowHost opens and inspects the tabs a session shows the user. Agent opens
-// leave keyboard focus with the conversation.
+type ImageSelection struct {
+	CurrentIndex int    `json:"currentIndex"`
+	Count        int    `json:"count"`
+	Revision     uint64 `json:"revision"`
+}
+
 type WindowHost interface {
+	FocusImage(ctx context.Context, id string, index int) (ImageSelection, error)
 	Open(ctx context.Context, opts WindowOptions) (id string, err error)
 	Close(ctx context.Context, id string) error
 	// Read returns a terminal window's output with escape sequences stripped, or

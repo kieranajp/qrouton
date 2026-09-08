@@ -8,6 +8,9 @@ import (
 )
 
 var (
+	ErrNotImageGallery    = errors.New("window is not an image gallery")
+	ErrImageIndex         = errors.New("image index is out of range")
+	ErrNoImageFocus       = errors.New("image focus request carries no selection")
 	ErrNoAgentCommand     = errors.New("workbench has no agent command to run")
 	ErrNoControlSocket    = errors.New("workbench has no control socket address")
 	ErrNoConfig           = errors.New("workbench has no configuration to assemble sessions against")

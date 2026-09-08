@@ -148,7 +148,7 @@
             focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else}
-          <DockedDocument id={tab.id} active={i === view.selected} />
+          <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
         {/if}
       {/each}
     </div>

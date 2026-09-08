@@ -190,6 +190,15 @@ func TestControlSocketRoundTripsAndValidatesImageGalleries(t *testing.T) {
 	if err != nil || !strings.HasSuffix(text, "Current image: 1 of 2") {
 		t.Fatalf("read = %q, %v", text, err)
 	}
+	selection, err := host.FocusImage(context.Background(), id, 2)
+	if err != nil || selection.CurrentIndex != 2 || selection.Count != 2 || selection.Revision != 2 {
+		t.Fatalf("focus = %+v, %v", selection, err)
+	}
+	text, err = host.Read(context.Background(), id, false)
+	if err != nil || !strings.HasSuffix(text, "Current image: 2 of 2") {
+		t.Fatalf("focused read = %q, %v", text, err)
+	}
+
 	if viewport, err := host.Viewport(context.Background(), id); err != nil || viewport != nil {
 		t.Fatalf("viewport = %+v, %v", viewport, err)
 	}

@@ -92,7 +92,8 @@ type registry struct {
 	emit     emitter
 	sessions *Sessions
 	// sourceMu serialises the check and open for windows with a Source.
-	sourceMu sync.Mutex
+	sourceMu     sync.Mutex
+	imageFocusMu sync.Mutex
 
 	mu       sync.Mutex
 	seq      int

@@ -7,8 +7,8 @@
   import { present } from "./panes/present.svelte.js";
   import TerminalPane from "./shell/TerminalPane.svelte";
 
-  /** @type {{id: string, active?: boolean}} */
-  let { id, active = false } = $props();
+  /** @type {{id: string, slug?: string, active?: boolean}} */
+  let { id, slug = "", active = false } = $props();
 
   const session = chrome();
 
@@ -157,6 +157,7 @@
     <div bind:this={content}>
       <DocumentPane
         {id}
+        {slug}
         {active}
         {scrollRoot}
         agentWorking={session.fields.activity === "working"}

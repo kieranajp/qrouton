@@ -1,12 +1,13 @@
 <script>
-  import { onMount, tick } from "svelte";
+  import { tick } from "svelte";
   import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT } from "./bridge/generated.js";
   import { paneFor } from "./panes/index.js";
   import { Call, Events } from "./wails.js";
 
-  /** @type {{id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void, onScroller?: (element: HTMLElement | null) => void, onFindAdapter?: (adapter: import("./find.js").FindAdapter | null) => void}} */
+  /** @type {{id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void, onScroller?: (element: HTMLElement | null) => void, onFindAdapter?: (adapter: import("./find.js").FindAdapter | null) => void}} */
   let {
     id,
+    slug = "",
     active = false,
     scrollRoot,
     agentWorking = false,
@@ -18,27 +19,38 @@
   /** @type {{text: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, images?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
 
-  // The window follows its file, so the pane is told about a write it did not
-  // make. A push that beats the load keeps its text, but the load's viewport
-  // epoch still stands: it is the one the workbench is fencing reports against.
-  let live = false;
-  onMount(() => {
-    const off = Events.On(WINDOW_CONTENT_EVENT + id, (event) => {
-      if (!event?.data) return;
+  $effect(() => {
+    const windowID = id;
+    let disposed = false;
+    let live = false;
+    doc = undefined;
+    const accept = (incoming) => {
+      if (disposed || !incoming) return;
+      if (incoming.format === "images" && doc?.format === "images" &&
+          (incoming.revision ?? 0) <= (doc.revision ?? 0)) return;
+      doc = incoming;
+    };
+    const off = Events.On(WINDOW_CONTENT_EVENT + windowID, (event) => {
+      if (!event?.data || disposed) return;
       live = true;
-      doc = event.data;
+      accept(event.data);
     });
     (async () => {
-      const content = await Call.ByName(WINDOWS_CONTENT, id);
-      doc = live && doc ? { ...content, text: doc.text } : content;
+      const content = await Call.ByName(WINDOWS_CONTENT, windowID);
+      if (disposed) return;
+      if (content?.format === "images") accept(content);
+      else doc = live && doc ? { ...content, text: doc.text } : content;
       await tick();
-      onReady?.();
+      if (!disposed) onReady?.();
     })();
-    return off;
+    return () => {
+      disposed = true;
+      off();
+    };
   });
 </script>
 
 {#if doc}
   {@const Pane = paneFor(doc)}
-  <Pane {doc} {id} {active} {scrollRoot} {agentWorking} {onScroller} {onFindAdapter} />
+  <Pane {...{slug}} {doc} {id} {active} {scrollRoot} {agentWorking} {onScroller} {onFindAdapter} />
 {/if}

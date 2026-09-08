@@ -32,7 +32,12 @@ type readCall struct {
 // fakeHost stands in for the desktop process: it records what the window
 // manager asked of it, and lets a test script the answers, failures included.
 type fakeHost struct {
-	mu sync.Mutex
+	focuses []struct {
+		id    string
+		index int
+	}
+	focusErr error
+	mu       sync.Mutex
 
 	opens  []workbench.WindowOptions
 	ids    []string
@@ -56,8 +61,10 @@ type fakeHost struct {
 	listErr     error
 	openErr     error
 
-	openEntered chan struct{}
-	openGate    chan struct{}
+	focusEntered chan struct{}
+	focusGate    chan struct{}
+	openEntered  chan struct{}
+	openGate     chan struct{}
 }
 
 // blockOpen holds the next Open until release is called, without holding the
@@ -254,6 +261,19 @@ func TestOpenImagesMCPResponseHasMessageAndNoViewport(t *testing.T) {
 	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolOpenImages, Arguments: openImagesInput{Paths: []string{"one.png"}}})
 	if err != nil || result.IsError {
 		t.Fatalf("result = %+v, %v", result, err)
+	}
+	for _, args := range []map[string]any{
+		{"name": "images", "index": 0}, {"name": "images", "index": -1}, {"name": "images", "index": 2},
+		{"name": "images", "index": 1.5}, {"name": "images", "index": 1e50}, {"index": 1}, {"name": "images"}, {"name": " ", "index": 1},
+	} {
+		failed, callErr := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolFocusImage, Arguments: args})
+		if callErr == nil && !failed.IsError {
+			t.Fatalf("accepted focus arguments %+v", args)
+		}
+	}
+	focused, callErr := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolFocusImage, Arguments: map[string]any{"name": "images", "index": 1}})
+	if callErr != nil || focused.IsError {
+		t.Fatalf("focus = %+v, %v", focused, callErr)
 	}
 	output := structuredOutput(t, result.StructuredContent)
 	if _, ok := output[keyMessage].(string); !ok {
@@ -1289,7 +1309,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 // the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
-		toolOpenFile, toolOpenImages, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolOpenFile, toolOpenImages, toolFocusImage, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
 	}
 	for _, tc := range []struct {
@@ -1549,5 +1569,114 @@ func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
 func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
 	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
 		t.Error("shared a document from outside the session")
+	}
+}
+
+func (h *fakeHost) FocusImage(_ context.Context, id string, index int) (workbench.ImageSelection, error) {
+	h.mu.Lock()
+	entered, gate := h.focusEntered, h.focusGate
+	h.focusEntered, h.focusGate = nil, nil
+	h.mu.Unlock()
+	if gate != nil {
+		close(entered)
+		<-gate
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.focuses = append(h.focuses, struct {
+		id    string
+		index int
+	}{id, index})
+	if h.focusErr != nil {
+		return workbench.ImageSelection{}, h.focusErr
+	}
+	for i, candidate := range h.ids {
+		if candidate != id || !h.live[id] {
+			continue
+		}
+		opts := h.opens[i]
+		if opts.Format != workbench.FormatImages || index < 1 || index > len(opts.Images) {
+			return workbench.ImageSelection{}, fmt.Errorf("invalid image selection")
+		}
+		return workbench.ImageSelection{CurrentIndex: index, Count: len(opts.Images), Revision: uint64(len(h.focuses) + 1)}, nil
+	}
+	return workbench.ImageSelection{}, fmt.Errorf("missing gallery")
+}
+
+func TestFocusImageAddressesOneLiveIDWithoutOpeningOrRetargeting(t *testing.T) {
+	ctx := context.Background()
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	id, err := manager.open(ctx, "gallery", workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "z.png"}, {Source: "a.png"}, {Source: "z.png"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{1, 3} {
+		message, err := manager.focusImage(ctx, focusImageInput{Name: " gallery ", Index: index})
+		if err != nil || !strings.Contains(message, fmt.Sprintf("image %d of 3", index)) {
+			t.Fatalf("focus = %q, %v", message, err)
+		}
+	}
+	for _, index := range []int{0, -1, 4} {
+		if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: index}); err == nil {
+			t.Fatal("accepted invalid index")
+		}
+	}
+	host.focusErr = errors.New("closed during focus")
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 2}); err == nil {
+		t.Fatal("ignored failed host focus")
+	}
+	if len(host.opens) != 1 || len(host.closes) != 0 {
+		t.Fatal("focus reopened a tab")
+	}
+	for _, call := range host.focuses {
+		if call.id != id {
+			t.Fatal("focus changed target")
+		}
+	}
+}
+
+func TestFocusImageDoesNotFollowAReplacement(t *testing.T) {
+	ctx := context.Background()
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	options := workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "a.png"}}}
+	old, err := manager.open(ctx, "gallery", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, gate := make(chan struct{}), make(chan struct{})
+	host.focusEntered, host.focusGate = entered, gate
+	finished := make(chan error, 1)
+	go func() { _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 1}); finished <- err }()
+	<-entered
+	successor, err := manager.open(ctx, "gallery", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(gate)
+	if err := <-finished; err == nil {
+		t.Fatal("focus followed replacement")
+	}
+	if len(host.focuses) != 1 || host.focuses[0].id != old || successor == old {
+		t.Fatal("focus retargeted")
+	}
+	if got, err := manager.liveWindow(ctx, "gallery"); err != nil || got != successor {
+		t.Fatal("failed focus lost successor")
+	}
+}
+
+func TestFocusImageRejectsAWrongKindNamedWindow(t *testing.T) {
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	ctx := context.Background()
+	if _, err := manager.open(ctx, "notes", workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatMarkdown}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "notes", Index: 1}); err == nil {
+		t.Fatal("focused a non-gallery")
+	}
+	if len(host.opens) != 1 || len(host.closes) != 0 {
+		t.Fatal("wrong-kind focus reopened a tab")
 	}
 }
