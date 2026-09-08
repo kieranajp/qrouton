@@ -189,13 +189,21 @@ window.appKeys = [];
 window.addEventListener("keydown", (event) => window.appKeys.push(event.key));
 
 window.slideBox = () => {
-  const slide = document.querySelector(".present-slide");
-  const rect = slide.getBoundingClientRect();
+  const card = document.querySelector(".present-card");
+  const rect = card.getBoundingClientRect();
+  const stage = document.querySelector(".present-stage").getBoundingClientRect();
   return {
     width: rect.width,
     height: rect.height,
-    declared: slide.offsetWidth,
-    scale: Number(slide.style.getPropertyValue("--present-scale")),
+    declared: document.querySelector(".present-slide").offsetWidth,
+    scale: Number(card.style.getPropertyValue("--present-scale")),
+    inset: {
+      left: rect.left,
+      top: rect.top,
+      right: window.innerWidth - rect.right,
+      bottom: window.innerHeight - rect.bottom,
+    },
+    stage: { width: stage.width, height: stage.height },
     room: { width: window.innerWidth, height: window.innerHeight },
   };
 };

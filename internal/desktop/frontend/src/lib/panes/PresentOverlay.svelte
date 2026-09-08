@@ -19,6 +19,8 @@
   let scale = $state(1);
   let notes = $state(false);
   let card = $derived(present.cards[present.current]);
+  let first = $derived(present.current === 0);
+  let last = $derived(present.current >= present.total - 1);
 
   // The layer takes the keyboard on mount and hands it back on the way out.
   onMount(() => {
@@ -34,8 +36,8 @@
     };
   });
 
-  // Both dimensions enter the sum: a slide fitted to width alone runs off the
-  // bottom of a tall window.
+  // Both dimensions of the inset box enter the sum: a slide fitted to width
+  // alone runs off the bottom of a tall window.
   $effect(() => {
     if (!stage) return;
     const observer = new ResizeObserver(([entry]) => {
@@ -60,6 +62,19 @@
       }),
     );
   });
+
+  // The keyboard goes straight back to the layer: an arrow that disables at the
+  // end of the deck would otherwise take the arrow keys down with it.
+  function move(by) {
+    present.step(by);
+    layer?.focus();
+  }
+
+  // The stage passes clicks through, so a click that reaches the layer itself
+  // landed on the scrim rather than on the slide or the controls.
+  function press(event) {
+    if (event.target === event.currentTarget) present.leave();
+  }
 
   // The keyboard belongs to this window, so the control hands it straight back
   // rather than leaving it on a button the arrows would not reach past.
@@ -94,45 +109,85 @@
   }
 </script>
 
-<div class="present" role="presentation" tabindex="-1" bind:this={layer} onkeydown={key}>
+<div
+  class="present"
+  role="presentation"
+  tabindex="-1"
+  bind:this={layer}
+  onkeydown={key}
+  onclick={press}>
   <div class="present-stage" bind:this={stage}>
-    <div class="present-slide" style="--present-scale: {scale}">
-      <div class="marpit">{@html card?.html ?? ""}</div>
+    <div class="present-card" style="--present-scale: {scale}">
+      <div class="present-slide">
+        <div class="marpit">{@html card?.html ?? ""}</div>
+      </div>
     </div>
   </div>
   <div class="present-hud">
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label="Previous slide"
+      disabled={first}
+      onclick={() => move(-1)}>←</Button>
     <span class="present-counter">{present.current + 1} / {present.total}</span>
+    <Button
+      variant="ghost"
+      size="sm"
+      aria-label="Next slide"
+      disabled={last}
+      onclick={() => move(1)}>→</Button>
     <Button variant="ghost" size="sm" aria-pressed={notes} onclick={toggleNotes}>Notes</Button>
     <Button variant="ghost" size="sm" onclick={() => present.leave()}>Exit</Button>
   </div>
 </div>
 
 <style>
-  /* Above the app's own ceiling of 5, so the frontend's title bar is covered too. */
+  /* Above the app's own ceiling of 5, so the frontend's title bar is covered
+     too. The padding is the lightbox's inset, and the bottom of it is the strip
+     the controls sit in. */
   .present {
     position: fixed;
     inset: 0;
     z-index: 10;
-    background: var(--surface-terminal);
+    display: flex;
+    padding: var(--space-12);
+    background: var(--scrim);
     outline: none;
   }
 
+  /* Nothing here catches a click: the room around a letterboxed slide is scrim,
+     and the presenter expects the scrim to let them out. */
   .present-stage {
-    position: absolute;
-    inset: 0;
+    flex: 1;
+    min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
+    pointer-events: none;
   }
 
-  /* Marp's pixel box, centred and scaled about its own middle, so the letterbox
-     splits evenly whichever dimension is the tight one. */
-  .present-slide {
+  /* The border and the shadow belong to the card, at screen scale, rather than
+     to the slide inside the transform, where both would thin out. */
+  .present-card {
     flex: none;
+    box-sizing: border-box;
+    width: calc(1280px * var(--present-scale, 1));
+    height: calc(720px * var(--present-scale, 1));
+    overflow: hidden;
+    background: var(--surface-app);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-menu);
+    pointer-events: auto;
+  }
+
+  /* Marp's pixel box, scaled from its own corner to fill the card exactly. */
+  .present-slide {
     width: 1280px;
     height: 720px;
     transform: scale(var(--present-scale, 1));
+    transform-origin: top left;
   }
 
   .present-hud {

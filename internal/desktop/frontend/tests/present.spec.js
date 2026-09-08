@@ -10,7 +10,7 @@ const start = async (page) => {
   await page.locator(".present").waitFor();
 };
 
-test("Present opens the deck over the whole window on the counter's slide", async ({ page }) => {
+test("Present opens the deck as a card over a scrim, on the counter's slide", async ({ page }) => {
   await open(page);
   await start(page);
 
@@ -20,6 +20,10 @@ test("Present opens the deck over the whole window on the counter's slide", asyn
   const room = page.viewportSize();
   expect(layer.width).toBe(room.width);
   expect(layer.height).toBe(room.height);
+
+  // The scrim reaches the window's edges; the slide does not.
+  const box = await page.evaluate(() => window.slideBox());
+  for (const side of Object.values(box.inset)) expect(side).toBeGreaterThan(8);
 });
 
 test("present mode opens on the slide the reader is standing on", async ({ page }) => {
@@ -94,6 +98,75 @@ test("Escape leaves present mode and hands the keyboard back", async ({ page }) 
 
   expect(await page.evaluate(() => window.focusedLabel())).toBe("Present");
   await expect(page.locator(".counter")).toHaveText("1 / 7");
+});
+
+test("a press on the scrim leaves the presentation, as Escape does", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.mouse.click(6, 6);
+
+  await expect(page.locator(".present")).toHaveCount(0);
+  await expect(page.locator(".counter")).toHaveText("1 / 7");
+});
+
+test("the room around a letterboxed slide is scrim too", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
+  const box = await page.evaluate(() => window.slideBox());
+  const edge = (box.room.width - box.stage.width) / 2;
+  expect(box.inset.left).toBeGreaterThan(edge + 4);
+
+  await page.mouse.click((edge + box.inset.left) / 2, box.room.height / 2);
+  await expect(page.locator(".present")).toHaveCount(0);
+});
+
+test("a press on the slide keeps the presentation up", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.locator(".present-slide").click({ position: { x: 40, y: 40 } });
+
+  await expect(page.locator(".present")).toHaveCount(1);
+});
+
+test("the arrow controls step the deck and disable at both ends", async ({ page }) => {
+  await open(page);
+  await start(page);
+  const back = page.locator('.present-hud [aria-label="Previous slide"]');
+  const on = page.locator('.present-hud [aria-label="Next slide"]');
+
+  await expect(back).toBeDisabled();
+  await expect(on).toBeEnabled();
+
+  await on.click();
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+  expect(await page.evaluate(() => window.presentHeading())).toBe("Second");
+  await expect(back).toBeEnabled();
+
+  await back.click();
+  await expect(page.locator(".present-counter")).toHaveText("1 / 7");
+  await expect(back).toBeDisabled();
+
+  await page.keyboard.press("End");
+  await expect(page.locator(".present-counter")).toHaveText("7 / 7");
+  await expect(on).toBeDisabled();
+  await expect(back).toBeEnabled();
+});
+
+test("a step from the arrow controls pushes the note and keeps the keyboard", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.shows.length > 0);
+  await page.evaluate(() => (window.shows.length = 0));
+
+  await page.locator('.present-hud [aria-label="Next slide"]').click();
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+  expect(await page.evaluate(() => window.shows)).toEqual([
+    { index: 1, total: 7, title: "Second", html: "" },
+  ]);
+
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".present-counter")).toHaveText("3 / 7");
 });
 
 test("leaving the deck tab leaves the presentation", async ({ page }) => {
@@ -199,10 +272,13 @@ for (const room of [
 
     expect(box.declared).toBe(1280);
     expect(box.width / box.height).toBeCloseTo(16 / 9, 2);
-    expect(box.width).toBeLessThanOrEqual(room.width + 1);
-    expect(box.height).toBeLessThanOrEqual(room.height + 1);
-    // Fitted, not merely contained: one dimension is against the wall.
-    const filled = Math.max(box.width / room.width, box.height / room.height);
+    expect(box.stage.width).toBeLessThan(room.width);
+    expect(box.stage.height).toBeLessThan(room.height);
+    expect(box.width).toBeLessThanOrEqual(box.stage.width + 1);
+    expect(box.height).toBeLessThanOrEqual(box.stage.height + 1);
+    // Fitted to the inset box, not merely contained: one dimension is against
+    // the wall.
+    const filled = Math.max(box.width / box.stage.width, box.height / box.stage.height);
     expect(filled).toBeGreaterThan(0.99);
   });
 }
