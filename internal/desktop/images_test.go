@@ -198,3 +198,142 @@ func TestConcurrentImageFocusFollowsDesktopCommitOrder(t *testing.T) {
 		t.Fatal(fmt.Sprintf("final state %+v disagrees with commits %+v", doc, latest))
 	}
 }
+
+func TestImageTokensOnlyReachLiveAdmittedEntries(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	other := w.sessions.add(t.TempDir(), nil, nil)
+	first := openTestGallery(t, w, owner)
+	second := openTestGallery(t, w, other)
+	deck, err := w.openWindow(owner, workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Deck: true, Source: "deck.md"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	deckWindow, _ := w.window(deck)
+	page, _ := w.Content(first)
+	otherPage, _ := w.Content(second)
+	handler := assetHandler(fstest.MapFS{}, w.deckDirectory, w.imageAsset)
+	status := func(url string) int {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, url, nil))
+		return response.Code
+	}
+	prefix := strings.TrimSuffix(page.Images[0].URL, "1")
+	for _, url := range []string{prefix + "4", prefix + "-1", prefix + "+1", prefix + "01", prefix + "1/neighbor.png", prefix + "../1", prefix + "%2e%2e/1", prefix + "1%2f..%2f2", prefix + "1.png", "/images/" + deckWindow.asset + "/1"} {
+		if got := status(url); got != http.StatusNotFound {
+			t.Errorf("%s = %d", url, got)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(owner.root(), "neighbor.png"), []byte("neighbor"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := status(prefix + "neighbor.png"); got != 404 {
+		t.Fatal("unlisted neighbor available")
+	}
+	if err := w.Close(first); err != nil {
+		t.Fatal(err)
+	}
+	if status(page.Images[0].URL) != 404 || status(otherPage.Images[0].URL) != 200 {
+		t.Fatal("closing one gallery changed another token")
+	}
+	if _, err := w.FocusImage(owner.slug(), first, 1); err == nil {
+		t.Fatal("focused closed gallery")
+	}
+	w.sessions.boot.teardown = w.stop
+	w.sessions.retire(other)
+	if status(otherPage.Images[0].URL) != 404 {
+		t.Fatal("retired gallery token is live")
+	}
+	if _, err := w.focusImage(other, second, 1); err == nil {
+		t.Fatal("focused retired gallery")
+	}
+}
+
+func TestImageAssetRevalidatesChangedFilesAndRefreshesUnchangedMetadata(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	root := owner.root()
+	home := t.TempDir()
+	if err := os.Symlink(home, filepath.Join(root, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	name := filepath.Join(home, "capture.png")
+	if err := os.WriteFile(name, []byte("before"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	options := workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "thoughts/capture.png"}, {Source: "thoughts/capture.png"}}}
+	old, err := w.openWindow(owner, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := w.Content(old)
+	info, err := os.Stat(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := assetHandler(fstest.MapFS{}, nil, w.imageAsset)
+	read := func(url string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, url, nil))
+		return response
+	}
+	if got := read(before.Images[0].URL); got.Body.String() != "before" {
+		t.Fatal("initial bytes missing")
+	}
+	if _, err := w.FocusImage(owner.slug(), old, 2); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(name, []byte("after!"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(name, info.ModTime(), info.ModTime()); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Close(old); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := w.openWindow(owner, options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, _ := w.Content(fresh)
+	if old == fresh || before.Images[0].URL == after.Images[0].URL || after.CurrentIndex != 1 || after.Revision != 1 {
+		t.Fatal("reopen retained old lifetime")
+	}
+	response := read(after.Images[0].URL)
+	if response.Code != 200 || response.Body.String() != "after!" || response.Header().Get(cacheControlHeader) != cacheControlNoStore || response.Header().Get(contentTypeOptionsHeader) != contentTypeNoSniff {
+		t.Fatalf("fresh bytes = %+v %q", response, response.Body.String())
+	}
+	if read(before.Images[0].URL).Code != 404 {
+		t.Fatal("old URL still available")
+	}
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	if read(after.Images[0].URL).Code != 404 {
+		t.Fatal("deleted file still available")
+	}
+	if err := os.Mkdir(name, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if read(after.Images[0].URL).Code != 404 {
+		t.Fatal("directory still available")
+	}
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	external := filepath.Join(t.TempDir(), "outside.png")
+	if err := os.WriteFile(external, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(external, name); err != nil {
+		t.Fatal(err)
+	}
+	if read(after.Images[0].URL).Code != 404 {
+		t.Fatal("external symlink acquired authority")
+	}
+	w.stopAll()
+	if read(after.Images[0].URL).Code != 404 {
+		t.Fatal("shutdown token still available")
+	}
+}

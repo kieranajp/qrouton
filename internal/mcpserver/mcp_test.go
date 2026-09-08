@@ -1680,3 +1680,82 @@ func TestFocusImageRejectsAWrongKindNamedWindow(t *testing.T) {
 		t.Fatal("wrong-kind focus reopened a tab")
 	}
 }
+
+func TestNamedImageReplacementPreservesOrderAndIndependentNames(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.png", "z.png"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("image"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	host := &fakeHost{}
+	manager := newWindowManager(root, testEditor, host)
+	ctx := context.Background()
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"z.png", "a.png", "z.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "other", Paths: []string{"z.png", "a.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"a.png", "z.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(host.opens[2].Images, []workbench.ImageRef{{Source: "a.png"}, {Source: "z.png"}}) || !reflect.DeepEqual(host.closes, []string{"window-1"}) {
+		t.Fatal("replacement lost order or affected other gallery")
+	}
+	if names := manager.list(ctx); !reflect.DeepEqual(names, []string{"gallery", "other"}) {
+		t.Fatalf("names = %v", names)
+	}
+	host.openErr = errors.New("socket failed")
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"a.png"}}); err == nil {
+		t.Fatal("host failure accepted")
+	}
+	if names := manager.list(ctx); !reflect.DeepEqual(names, []string{"other"}) {
+		t.Fatalf("host failure left invalid claim: %v", names)
+	}
+	if _, err := manager.closeWindow(ctx, windowNameInput{Name: "other"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(manager.list(ctx)) != 0 {
+		t.Fatal("close left named gallery")
+	}
+}
+
+func TestCompetingImageOpensRetainTheLaterClaim(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host := &fakeHost{}
+	manager := newWindowManager(root, testEditor, host)
+	ctx := context.Background()
+	entered, release := host.blockOpen()
+	defer release()
+	finished := make(chan error, 1)
+	go func() {
+		_, err := manager.openImages(ctx, openImagesInput{Paths: []string{"one.png"}})
+		finished <- err
+	}()
+	<-entered
+	if _, err := manager.openImages(ctx, openImagesInput{Paths: []string{"one.png", "one.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	winner, err := manager.liveWindow(ctx, "images")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if err := <-finished; err != nil {
+		t.Fatal(err)
+	}
+	live, err := manager.liveWindow(ctx, "images")
+	if err != nil || live != winner {
+		t.Fatal("earlier claim replaced later gallery")
+	}
+	if len(host.closes) != 1 || host.closes[0] == winner {
+		t.Fatal("competing open closed winner")
+	}
+}

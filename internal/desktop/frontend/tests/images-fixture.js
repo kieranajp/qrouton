@@ -15,6 +15,8 @@ let doc = { text: "", source: "", format: "images", images: entries, currentInde
 let windowID = "images-1";
 let component;
 let initialRelease;
+let focusRelease;
+window.deferSelection = false;
 window.failSelection = false;
 window.delayInitial = new URLSearchParams(location.search).has("delay");
 window.bridgeCalls = [];
@@ -28,6 +30,7 @@ window.wailsCall = async (name, ...args) => {
   }
   if (name.endsWith(".Windows.FocusImage")) {
     const [slug, id, index] = args;
+    if (window.deferSelection) await new Promise((resolve) => { focusRelease = resolve; });
     if (window.failSelection || slug !== "fixture" || id !== windowID || index < 1 || index > doc.images.length) throw new Error("Selection refused");
     window.pushImages({ currentIndex: index, revision: doc.revision + 1 });
     return { currentIndex: index, count: doc.images.length, revision: doc.revision };
@@ -51,3 +54,5 @@ window.replaceGallery = async (changes = {}) => {
 };
 
 window.pushOldImages = () => emitWailsEvent("window:content:images-1", { ...doc, revision: 100, currentIndex: 3 });
+
+window.releaseFocus = () => focusRelease?.();

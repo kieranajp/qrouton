@@ -62,16 +62,19 @@
         <strong>{basename(entry.source)}</strong>
         <span class="path">{entry.source}</span>
       </figcaption>
+      {#key entry.url}
+      {@const shown = entry}
       <div class="primary-frame">
-        {#if loads[entry.url] === "error"}
-          <p class="load-error">Could not load image<br />{entry.source}</p>
+        {#if loads[shown.url] === "error"}
+          <p class="load-error">Could not load image<br />{shown.source}</p>
         {:else}
-          {#if !loads[entry.url]}<span class="loading">Loading image…</span>{/if}
-          <img src={entry.url} alt={entry.source}
-            onload={() => (loads[entry.url] = "loaded")}
-            onerror={() => (loads[entry.url] = "error")} />
+          {#if !loads[shown.url]}<span class="loading">Loading image…</span>{/if}
+          <img src={shown.url} alt={shown.source}
+            onload={() => (loads[shown.url] = "loaded")}
+            onerror={() => (loads[shown.url] = "error")} />
         {/if}
       </div>
+      {/key}
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
@@ -101,24 +104,124 @@
 </article>
 
 <style>
-  .images-pane { padding: 16px; min-width: 0; font: var(--machine-sm); }
-  .primary { margin: 0 0 18px; min-width: 0; }
-  figcaption { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-  .position, .number { color: var(--accent-action); font-weight: 700; }
-  strong, .path { overflow-wrap: anywhere; }
-  .path { display: block; color: var(--text-muted); font: var(--machine-xs); }
-  .primary-frame, .thumbnail-frame { display: flex; justify-content: center; align-items: center; position: relative; background: var(--surface-raised); border-radius: 4px; }
-  .primary-frame { min-height: 180px; padding: 12px; }
-  img { display: block; width: auto; height: auto; max-width: 100%; object-fit: contain; }
-  .primary-frame img { max-height: min(55vh, 560px); }
-  .image-strip { display: flex; gap: 10px; overflow-x: auto; margin: 0; padding: 4px 2px 12px; list-style: none; }
-  li { flex: 0 0 150px; min-width: 0; }
-  button { width: 100%; height: 100%; text-align: left; cursor: pointer; background: transparent; color: inherit; font: inherit; box-sizing: border-box; padding: 8px; border: 2px solid var(--border-subtle); border-radius: 6px; }
-  button.current { border-color: var(--accent-action); }
-  button:focus-visible { outline: 2px solid var(--accent-action); outline-offset: 2px; }
-  .selection-error { color: var(--text-secondary); }
-  .thumbnail-frame { height: 90px; margin: 6px 0; }
-  .thumbnail-frame img { max-height: 90px; }
-  .loading { position: absolute; color: var(--text-muted); }
-  .load-error { color: var(--text-secondary); overflow-wrap: anywhere; text-align: center; }
+  .images-pane {
+    padding: 16px;
+    min-width: 0;
+    font: var(--machine-sm);
+  }
+
+  .primary {
+    margin: 0 0 18px;
+    min-width: 0;
+  }
+
+  figcaption {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 12px;
+  }
+
+  .position, .number {
+    color: var(--accent-action);
+    font-weight: 700;
+  }
+
+  strong, .path {
+    overflow-wrap: anywhere;
+  }
+
+  .path {
+    display: block;
+    color: var(--text-muted);
+    font: var(--machine-xs);
+  }
+
+  .primary-frame, .thumbnail-frame {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    background: var(--surface-raised);
+    border-radius: 4px;
+  }
+
+  .primary-frame {
+    min-height: 180px;
+    padding: 12px;
+  }
+
+  img {
+    display: block;
+    width: auto;
+    height: auto;
+    max-width: 100%;
+    object-fit: contain;
+  }
+
+  .primary-frame img {
+    max-height: min(55vh, 560px);
+  }
+
+  .image-strip {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    margin: 0;
+    padding: 4px 2px 12px;
+    list-style: none;
+  }
+
+  li {
+    flex: 0 0 150px;
+    min-width: 0;
+  }
+
+  button {
+    width: 100%;
+    height: 100%;
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    box-sizing: border-box;
+    padding: 8px;
+    border: 2px solid var(--border-subtle);
+    border-radius: 6px;
+  }
+
+  button.current {
+    border-color: var(--accent-action);
+  }
+
+  button:focus-visible {
+    outline: 2px solid var(--accent-action);
+    outline-offset: 2px;
+  }
+
+  .selection-error {
+    color: var(--text-secondary);
+  }
+
+  .thumbnail-frame {
+    height: 90px;
+    margin: 6px 0;
+  }
+
+  .thumbnail-frame img {
+    max-height: 90px;
+  }
+
+  .loading {
+    position: absolute;
+    color: var(--text-muted);
+  }
+
+  .load-error {
+    color: var(--text-secondary);
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+
 </style>

@@ -94,3 +94,36 @@ test("late initial response after replacement cannot restore the old gallery", a
   await expect(primary(page)).toHaveAttribute("src", /replacement=0/);
   await expect(page.locator(".primary .path")).toHaveText("thoughts/assets/sample.avif");
 });
+
+test("corrupt and missing images can be current while other entries remain selectable", async ({ page }) => {
+  await page.route("**/sample.webp", (route) => route.fulfill({ contentType: "image/webp", body: "corrupt image bytes" }));
+  await page.route("**/small.png?entry=1", (route) => route.fulfill({ status: 404, body: "missing" }));
+  await page.goto("/tests/images.html");
+  await expect(page.locator(".primary .load-error")).toContainText("Could not load image");
+  await page.locator(".image-strip button").nth(5).click();
+  await expect(page.locator(".position")).toHaveText("Image 6 of 7");
+  await expect(page.locator(".primary .load-error")).toContainText("sample.webp");
+  await page.locator(".image-strip button").nth(1).click();
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+  await page.evaluate(() => { window.failSelection = true; });
+  await page.locator(".image-strip button").nth(0).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await page.evaluate(() => window.replaceGallery());
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".primary .load-error")).toHaveCount(0);
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+});
+
+test("a pending human request cannot affect a replacement gallery", async ({ page }) => {
+  await page.goto("/tests/images.html");
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+  await page.evaluate(() => { window.deferSelection = true; });
+  await page.locator(".image-strip button").nth(2).click();
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+  await page.evaluate(() => window.replaceGallery());
+  await expect(primary(page)).toHaveAttribute("src", /replacement=0/);
+  await page.evaluate(() => window.releaseFocus());
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator(".position")).toHaveText("Image 1 of 7");
+});

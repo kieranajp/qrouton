@@ -86,7 +86,7 @@ func imageAsset(images imageLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rawIndex, split := strings.Cut(strings.TrimPrefix(r.URL.Path, imageAssetPath), "/")
 		index, err := strconv.Atoi(rawIndex)
-		if !split || token == "" || index < 1 || err != nil || images == nil || strings.Contains(rawIndex, "/") {
+		if !split || token == "" || index < 1 || err != nil || images == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
 			http.NotFound(w, r)
 			return
 		}
