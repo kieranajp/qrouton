@@ -36,15 +36,16 @@ export function renderDeck(markdown) {
   return marp.render(markdown ?? "");
 }
 
-/** Marp's sections paired with their source lines and notes; token keys the
- * asset route. Sections past the spans draw unmeasured rather than not at all.
+/** Marp's sections paired with their source lines, title and notes; token keys
+ * the asset route. Sections past the spans draw unmeasured rather than not at all.
  * @param {string} markdown @param {string} [token]
- * @returns {{html: string, notes: string, line: number, lineEnd: number}[]} */
+ * @returns {{html: string, title: string, notes: string, line: number, lineEnd: number}[]} */
 export function deckSlides(markdown, token) {
   const rendered = renderDeck(deckAssets(markdown, token));
   const spans = slideSpans(markdown);
-  return sectionsOf(rendered.html).map((html, index) => ({
-    html,
+  return sectionsOf(rendered.html).map((section, index) => ({
+    html: section.html,
+    title: section.title,
     notes: notesOf(rendered.comments[index] ?? []),
     line: spans[index]?.line ?? 0,
     lineEnd: spans[index]?.lineEnd ?? 0,
@@ -53,7 +54,10 @@ export function deckSlides(markdown, token) {
 
 function sectionsOf(html) {
   const container = parse(html).querySelector("div.marpit");
-  return [...(container?.children ?? [])].map((section) => section.outerHTML);
+  return [...(container?.children ?? [])].map((section) => ({
+    html: section.outerHTML,
+    title: section.querySelector("h1, h2, h3")?.textContent?.trim() ?? "",
+  }));
 }
 
 // The app's own pipeline stamps every block with its line in the note, which

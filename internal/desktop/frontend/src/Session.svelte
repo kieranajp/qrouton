@@ -17,6 +17,8 @@
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
+  import PresentOverlay from "./lib/panes/PresentOverlay.svelte";
+  import { present } from "./lib/panes/present.svelte.js";
   import { conversationPTY, tabPTY } from "./lib/session/services.js";
   import { shell } from "./lib/session/shell.svelte.js";
   import { MAX_SIDEBAR, MIN_HUMAN, MIN_SIDEBAR } from "./lib/layout.js";
@@ -172,6 +174,10 @@
   <!-- Stacked rather than branched: unmounting the assembly overlay ends its draft. -->
   {#if view.settingsOpen}
     <SettingsOverlay onClose={() => (view.settingsOpen = false)} />
+  {/if}
+
+  {#if present.active}
+    <PresentOverlay />
   {/if}
 </div>
 

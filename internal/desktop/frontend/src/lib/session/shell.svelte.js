@@ -22,6 +22,7 @@ import {
   widthKey,
   writeStored,
 } from "../layout.js";
+import { present } from "../panes/present.svelte.js";
 import { relative } from "../relative.js";
 import { revealPath } from "../sessions.js";
 import { opensSettings } from "../shortcuts.js";
@@ -192,7 +193,9 @@ export function shell() {
   let added = $state("");
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
-  let covered = $derived(fields.welcoming || assembling || picker || settingsOpen);
+  let covered = $derived(
+    fields.welcoming || assembling || picker || settingsOpen || present.active,
+  );
 
   async function escalate() {
     if (escalating || fields.mode !== "ASSISTANT") return;

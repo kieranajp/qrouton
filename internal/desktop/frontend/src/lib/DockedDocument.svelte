@@ -4,6 +4,7 @@
   import DocumentPane from "./DocumentPane.svelte";
   import FindBar from "./FindBar.svelte";
   import { clearMatches, createDOMFindAdapter, findShortcut } from "./find.js";
+  import { present } from "./panes/present.svelte.js";
   import TerminalPane from "./shell/TerminalPane.svelte";
 
   /** @type {{id: string, active?: boolean}} */
@@ -87,6 +88,9 @@
   }
 
   async function openFind() {
+    // The find listener is registered in the capture phase at mount, so a
+    // presentation cannot pre-empt it — it declines instead.
+    if (present.active) return;
     if (!finding) {
       finding = true;
       await tick();

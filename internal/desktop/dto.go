@@ -68,6 +68,16 @@ func newProgressEvent(slug string, p session.Progress) progressEvent {
 	return event
 }
 
+// noteView is one slide's speaker notes on the wire. The body is the HTML the
+// presenting page already holds, sanitised by its own Markdown pipeline before
+// it was ever attached to a card.
+type noteView struct {
+	Index int    `json:"index"`
+	Total int    `json:"total"`
+	Title string `json:"title"`
+	HTML  string `json:"html"`
+}
+
 func errorText(err error) string {
 	if err == nil {
 		return ""

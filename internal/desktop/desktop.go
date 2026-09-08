@@ -104,6 +104,7 @@ func Run(opts Options) error {
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
+	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,

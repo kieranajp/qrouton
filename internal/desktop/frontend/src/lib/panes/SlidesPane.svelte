@@ -1,9 +1,12 @@
 <script>
+  import { onDestroy } from "svelte";
+  import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
   import { diagrams, links, viewport } from "./actions.js";
   import CopyPath from "./CopyPath.svelte";
+  import { present } from "./present.svelte.js";
   import { deckSlides, renderDeck, SLIDE_WIDTH } from "./slides.js";
   import { slides } from "./slides.svelte.js";
   import "./markdown.css";
@@ -36,6 +39,14 @@
     observer.observe(stack);
     return () => observer.disconnect();
   });
+
+  $effect(() => {
+    if (!active) present.close(id);
+  });
+
+  // A closed tab is destroyed with the rest of the strip, so its pane never
+  // sees itself deactivate.
+  onDestroy(() => present.close(id));
 </script>
 
 <svelte:head>
@@ -50,6 +61,10 @@
       <CapsLabel tone="dim">{doc.source}</CapsLabel>
     {/if}
     <CopyPath path={doc.path} />
+    <Button
+      variant="ghost"
+      size="sm"
+      onclick={() => present.open(id, () => cards, deck.current)}>Present</Button>
     <span class="counter">{Math.min(deck.current + 1, cards.length)} / {cards.length}</span>
   </div>
   <div

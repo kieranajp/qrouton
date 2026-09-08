@@ -50,6 +50,10 @@ export const DECK = [
   "", // 42
 ].join("\n");
 
+export const SHORT_DECK = ["---", "marp: true", "---", "", "## Only", "", "---", "", "## Last", ""].join(
+  "\n",
+);
+
 export const DIAGRAM_DECK = [
   "---", // 1
   "marp: true", // 2
@@ -91,12 +95,20 @@ const document_ = (text) => ({
 window.reports = [];
 window.diagramReply = [];
 window.pushDeck = (text) => emitWailsEvent("window:content:w1", document_(text));
-window.wailsCall = async (name, id, payload) => {
+window.shows = [];
+window.opens = [];
+window.closes = [];
+window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Content")) return document_(DECK);
   if (name.endsWith(".RenderDiagrams")) return window.diagramReply;
-  if (name.endsWith(".ReportViewport")) window.reports.push(payload);
+  if (name.endsWith(".ReportViewport")) window.reports.push(args[1]);
+  if (name.endsWith(".Show")) window.shows.push(args[0]);
+  if (name.endsWith(".Open")) window.opens.push(name);
+  if (name.endsWith(".Close")) window.closes.push(name);
   return undefined;
 };
+window.shorten = () => window.pushDeck(SHORT_DECK);
+
 window.pushDiagramDeck = () => {
   window.diagramReply = [{ line: DIAGRAM_LINE }];
   window.pushDeck(DIAGRAM_DECK);
@@ -147,10 +159,67 @@ window.cards = () =>
 
 window.counter = () => document.querySelector(".counter").textContent.trim();
 
+window.slideScale = () =>
+  Number(document.querySelector(".stack").style.getPropertyValue("--slide-scale"));
+
 window.narrow = () => {
   document.querySelector("#fixture").style.width = "480px";
 };
 
 window.scroller = () => document.querySelector(".body");
+
+const named = (label) =>
+  [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === label);
+
+// Focused before the press, the way a real one lands, so the layer has
+// something to hand the keyboard back to.
+window.present = () => {
+  const control = named("Present");
+  control.focus();
+  control.click();
+};
+
+window.notes = () => named("Notes").click();
+
+// The presenter closing the second window from the OS rather than from the deck.
+window.closeNotesWindow = () => emitWailsEvent("presenter:closed", null);
+
+// Every app-level shortcut in this page is a window listener like this one.
+window.appKeys = [];
+window.addEventListener("keydown", (event) => window.appKeys.push(event.key));
+
+window.slideBox = () => {
+  const layer = document.querySelector(".present");
+  const card = document.querySelector(".present-card");
+  const slide = document.querySelector(".present-slide").getBoundingClientRect();
+  const rect = card.getBoundingClientRect();
+  const stage = document.querySelector(".present-stage").getBoundingClientRect();
+  return {
+    width: rect.width,
+    height: rect.height,
+    declared: document.querySelector(".present-slide").offsetWidth,
+    scale: Number(card.style.getPropertyValue("--present-scale")),
+    inset: {
+      left: rect.left,
+      top: rect.top,
+      right: window.innerWidth - rect.right,
+      bottom: window.innerHeight - rect.bottom,
+    },
+    // The card's padding box, which is what its overflow clips the slide to.
+    // Whole pixels: getComputedStyle reports the border box instead.
+    shows: { width: card.clientWidth, height: card.clientHeight },
+    slide: { width: slide.width, height: slide.height },
+    pad: parseFloat(getComputedStyle(layer).paddingTop),
+    stage: { width: stage.width, height: stage.height },
+    room: { width: window.innerWidth, height: window.innerHeight },
+  };
+};
+
+window.layerHasFocus = () => document.activeElement?.classList.contains("present") === true;
+
+window.presentHeading = () =>
+  document.querySelector(".present-slide section h1, .present-slide section h2")?.textContent ?? "";
+
+window.focusedLabel = () => document.activeElement?.textContent?.trim() ?? "";
 
 mount(SlidesFixture, { target: document.querySelector("#fixture") });
