@@ -29,6 +29,8 @@ var (
 	ErrNoDirectoryPicker    = errors.New("workbench has no directory picker to choose a sessions root with")
 	ErrNoViewport           = errors.New("window has no source-mapped viewport")
 	ErrInvalidViewport      = errors.New("invalid document viewport report")
+	ErrInvalidImageGallery  = errors.New("invalid image gallery options")
+	ErrImageAssetToken      = errors.New("could not create image gallery asset token")
 	ErrNoTicket             = errors.New("open ticket request carries no ticket URL")
 	ErrProcessIngressOnly   = errors.New("open ticket is available only on the published process socket")
 	ErrNoRunnerGeneration   = errors.New("runner generation request carries no generation")

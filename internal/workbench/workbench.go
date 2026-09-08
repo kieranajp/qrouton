@@ -27,6 +27,7 @@ type DocumentFormat string
 
 const (
 	FormatDiff     DocumentFormat = "diff"
+	FormatImages   DocumentFormat = "images"
 	FormatMarkdown DocumentFormat = "markdown"
 )
 
@@ -57,6 +58,7 @@ type WindowOptions struct {
 	Command []string       `json:"command,omitempty"`
 	Content string         `json:"content,omitempty"`
 	Format  DocumentFormat `json:"format,omitempty"`
+	Images  []ImageRef     `json:"images,omitempty"`
 	Span    LineSpan       `json:"span,omitzero"`
 	// Deck is a Markdown document whose frontmatter declares it slides. It rides
 	// beside Format rather than replacing it, since a deck is still whatever

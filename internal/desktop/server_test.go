@@ -161,6 +161,44 @@ index 6dad4ad..84db3de 100644
 	}
 }
 
+func TestControlSocketRoundTripsAndValidatesImageGalleries(t *testing.T) {
+	windows, _ := testWindows(t)
+	root := windows.shown().root()
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	host := (workbench.Handle{Socket: socket, SessionRoot: root}).WindowHost()
+	id, err := host.Open(context.Background(), workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages,
+		Images: []workbench.ImageRef{{Source: "one.png"}, {Source: "one.png"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := windows.Content(id)
+	if err != nil || len(page.Images) != 2 || page.CurrentIndex != 1 || page.Revision != 1 {
+		t.Fatalf("page = %+v, %v", page, err)
+	}
+	text, err := host.Read(context.Background(), id, false)
+	if err != nil || !strings.HasSuffix(text, "Current image: 1 of 2") {
+		t.Fatalf("read = %q, %v", text, err)
+	}
+	if viewport, err := host.Viewport(context.Background(), id); err != nil || viewport != nil {
+		t.Fatalf("viewport = %+v, %v", viewport, err)
+	}
+	if _, err := host.Open(context.Background(), workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages,
+		Images: []workbench.ImageRef{{Source: "../outside.png"}}}); err == nil {
+		t.Fatal("socket bypassed image admission")
+	}
+}
+
 // A refusal is the desktop process's answer, not a transport failure, so the
 // caller must read the reason rather than a dial error.
 func TestTheControlSocketAnswersBadRequestsWithTheirReason(t *testing.T) {

@@ -179,6 +179,91 @@ func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
 	return newWindowManager(dir, testEditor, host), host, dir
 }
 
+func TestOpenImagesPreservesOrderNamesAndSelection(t *testing.T) {
+	m, host, root := newTestManager(t)
+	for _, name := range []string{"z.PNG", "a.webp"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("image"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	message, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"z.PNG", "a.webp", "z.PNG"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(message, "images") || !strings.Contains(message, "1") {
+		t.Fatalf("message = %q", message)
+	}
+	got := host.opens[0]
+	if got.Format != workbench.FormatImages || got.Source != "" || got.Select || len(got.Images) != 3 || got.Images[2].Source != "z.PNG" {
+		t.Fatalf("options = %+v", got)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"a.webp"}, Name: " Compare ", Foreground: boolPtr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if !host.opens[1].Select {
+		t.Fatal("foreground gallery was not selected")
+	}
+	if names := m.list(context.Background()); !slices.Equal(names, []string{"Compare", "images"}) {
+		t.Fatalf("names = %v", names)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"a.webp"}, Name: editorWindowName}); !errors.Is(err, ErrReservedWindowName) {
+		t.Fatalf("reserved = %v", err)
+	}
+}
+
+func TestOpenImagesValidatesBeforeReplacingAndReadHasNoViewport(t *testing.T) {
+	m, host, root := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"one.png"}, Name: "gallery"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"missing.png"}, Name: "gallery"}); err == nil {
+		t.Fatal("accepted missing image")
+	}
+	if len(host.closes) != 0 {
+		t.Fatalf("invalid replacement closed %v", host.closes)
+	}
+	host.text = strings.Repeat("1. one.png\n", readWindowLimit+1) + "Current image: 1 of 1"
+	text, viewport, err := m.read(context.Background(), readWindowInput{Name: "gallery"})
+	if err != nil || viewport != nil || !strings.HasSuffix(text, "Current image: 1 of 1") {
+		t.Fatalf("read = %q, %+v, %v", text, viewport, err)
+	}
+}
+
+func TestOpenImagesMCPResponseHasMessageAndNoViewport(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	server := newMCPServer(root, testEditor, &fakeHost{}, session.ModeRPI)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolOpenImages, Arguments: openImagesInput{Paths: []string{"one.png"}}})
+	if err != nil || result.IsError {
+		t.Fatalf("result = %+v, %v", result, err)
+	}
+	output := structuredOutput(t, result.StructuredContent)
+	if _, ok := output[keyMessage].(string); !ok {
+		t.Fatalf("output = %#v", output)
+	}
+	if _, ok := output["viewport"]; ok {
+		t.Fatalf("image response has viewport: %#v", output)
+	}
+}
+
 // A ceiling these tests never mean to reach: they end when the poll sees the
 // stanza, and a loaded runner stalls for longer than the wait they are timing.
 const escalateCeiling = 10 * time.Second
@@ -1204,7 +1289,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 // the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
-		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolOpenFile, toolOpenImages, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
 	}
 	for _, tc := range []struct {
@@ -1266,7 +1351,7 @@ func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
 
 func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
 	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
-	want := map[string]bool{toolOpenFile: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
+	want := map[string]bool{toolOpenFile: true, toolOpenImages: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
 	for name, tool := range tools {
 		schema := structuredOutput(t, tool.InputSchema)
 		properties, _ := schema["properties"].(map[string]any)

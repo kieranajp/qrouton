@@ -9,6 +9,7 @@ const serverInstructions = "Drive the user's qrouton workbench: each tool here o
 
 const (
 	toolOpenFile    = "open_file"
+	toolOpenImages  = "open_images"
 	toolRunCommand  = "run_command"
 	toolReadWindow  = "read_window"
 	toolShowDiff    = "show_diff"
@@ -20,7 +21,8 @@ const (
 )
 
 const (
-	descOpenFile = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
+	descOpenFile   = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
+	descOpenImages = "Show an ordered list of local raster images in a named gallery pane. Paths must name readable PNG, JPEG, GIF, WebP, or AVIF files inside the session. Caller order and duplicates are preserved. Reusing a name replaces that window. The first image is current. The pane begins in the background unless foreground is true."
 
 	descRunCommand = "Run a shell command in a tab instead of your own shell. Ideal for long-running or noisy processes (dev servers, test watchers, builds, log tails) the user should see live: it is interactive, so Ctrl-C there reaches the process. The keyboard stays with the conversation, reusing a name replaces that tab, and a command that succeeds closes it while one that fails leaves it open with its error. Its tab reports whether the command is running, succeeded or failed. Read its output later with read_window. Tabs begin in the background; foreground selects one without taking the keyboard."
 

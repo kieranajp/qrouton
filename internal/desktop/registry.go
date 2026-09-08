@@ -51,6 +51,9 @@ type documentContent struct {
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64
+	images        []workbench.ImageRef
+	currentImage  int
+	imageRevision uint64
 	// read is the file as the window last saw it, so a rescan can tell a
 	// rewritten document from an untouched one.
 	read struct {
@@ -128,6 +131,11 @@ func (r *registry) each(fn func(id string, window *agentWindow)) {
 }
 
 func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	var err error
+	opts, err = admittedWindowOptions(owner, opts)
+	if err != nil {
+		return "", err
+	}
 	if opts.Source != "" {
 		r.sourceMu.Lock()
 		defer r.sourceMu.Unlock()
@@ -143,6 +151,11 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 // it has the id, or is the unasked-for first shell, which has nothing to steal
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	var err error
+	opts, err = admittedWindowOptions(owner, opts)
+	if err != nil {
+		return "", err
+	}
 	return r.spawn(owner, opts, false)
 }
 
@@ -230,13 +243,18 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
+	asset := ""
+	if opts.Kind == workbench.KindDocument {
+		asset = assetToken()
+		if opts.Format == workbench.FormatImages && asset == "" {
+			return "", ErrImageAssetToken
+		}
+	}
 	r.mu.Lock()
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
 	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq, content: contentFor(opts)}
-	if opts.Kind == workbench.KindDocument {
-		window.asset = assetToken()
-	}
+	window.asset = asset
 	beginDocument(window)
 	r.open[id] = window
 	if selects {
@@ -285,6 +303,9 @@ func (r *registry) readWindow(id string, full bool) (string, error) {
 			return nil
 		}
 		text = window.opts.Content
+		if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
+			text = imageManifest(rendered.images, rendered.currentImage)
+		}
 		return nil
 	}); err != nil {
 		return "", err

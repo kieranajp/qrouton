@@ -18,6 +18,12 @@ type openFileInput struct {
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
+type openImagesInput struct {
+	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to raster image files in the qrouton session"`
+	Name       string   `json:"name,omitempty" jsonschema:"Gallery window name; reusing it replaces that window. Defaults to images"`
+	Foreground *bool    `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
+}
+
 type runCommandInput struct {
 	Command    string `json:"command" jsonschema:"Shell command to run in a window the user can watch"`
 	Name       string `json:"name,omitempty" jsonschema:"Window name; reusing a name replaces that window. Defaults to \"command\""`
@@ -99,6 +105,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	windows := newWindowManager(root, editor, host)
 
 	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, toolOpenImages, descOpenImages, keyMessage, messageOnly(windows.openImages))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
 			return sharePage(root, input)

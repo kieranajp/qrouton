@@ -79,6 +79,11 @@ func Run(opts Options) error {
 			return "", "", false
 		}
 		return windows.registry.deckDirectory(token)
+	}, func(token string, index int) (imageAssetRef, bool) {
+		if windows == nil {
+			return imageAssetRef{}, false
+		}
+		return windows.registry.imageAsset(token, index)
 	})
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)

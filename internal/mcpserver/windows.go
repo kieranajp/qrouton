@@ -136,6 +136,27 @@ func resolveForeground(foreground *bool, defaultSelect bool) bool {
 	return defaultSelect
 }
 
+func (m *windowManager) openImages(ctx context.Context, input openImagesInput) (string, error) {
+	refs, err := launch.ImageReferences(m.root, input.Paths)
+	if err != nil {
+		return "", err
+	}
+	name := strings.TrimSpace(input.Name)
+	if name == "" {
+		name = defaultImagesWindowName
+	}
+	if name == editorWindowName {
+		return "", ErrReservedWindowName
+	}
+	if _, err := m.open(ctx, name, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Label: name, Format: workbench.FormatImages,
+		Images: refs, Select: resolveForeground(input.Foreground, false),
+	}); err != nil {
+		return "", fmt.Errorf("open image gallery: %w", err)
+	}
+	return fmt.Sprintf(openedImagesFormat, len(refs), name, len(refs)), nil
+}
+
 func thoughtsSource(source string) bool {
 	clean := filepath.Clean(source)
 	if filepath.IsAbs(clean) {

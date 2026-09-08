@@ -6,6 +6,7 @@ const (
 	editorWindowName = "editor"
 
 	defaultCommandWindowName = "command"
+	defaultImagesWindowName  = "images"
 
 	// diffWindowName labels an all-repos diff; a single repo appends its basename.
 	diffWindowName      = "diff"
@@ -71,6 +72,7 @@ const (
 	sessionRootScope  = "the session root"
 
 	notifiedFormat = "Notified the user: %s"
+	openedImagesFormat = "Showing %d images in gallery %q. Current image: 1 of %d."
 
 	noWindowsOpen     = "No qrouton-managed windows are open."
 	openWindowsPrefix = "Open windows: "
