@@ -89,6 +89,7 @@
           class="card"
           data-line={card.line || undefined}
           data-line-end={card.lineEnd || undefined}>
+          <div class="slide-number">Slide {index + 1}</div>
           <div class="frame">
             <div class="marpit">{@html card.html}</div>
           </div>
@@ -174,6 +175,12 @@
     display: flex;
     flex-direction: column;
     gap: 34px;
+  }
+
+  .slide-number {
+    margin-bottom: 10px;
+    font: var(--machine-sm);
+    color: var(--text-muted);
   }
 
   /* The frame holds the aspect in flow while the slide inside keeps Marp's

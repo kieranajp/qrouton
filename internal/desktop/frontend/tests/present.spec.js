@@ -29,6 +29,15 @@ test("Present opens the deck as a card over a scrim, on the counter's slide", as
   for (const side of Object.values(box.inset)) expect(side).toBeGreaterThanOrEqual(box.pad);
 });
 
+test("preview numbers stay outside the presentation's slide content", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".card > .slide-number")).toHaveCount(7);
+  const preview = await page.locator(".card .marpit section").first().innerHTML();
+  await start(page);
+  await expect(page.locator(".present-slide .slide-number")).toHaveCount(0);
+  expect(await page.locator(".present-slide section").innerHTML()).toBe(preview);
+});
+
 test("present mode opens on the slide the reader is standing on", async ({ page }) => {
   await open(page);
   await page.evaluate(() => {

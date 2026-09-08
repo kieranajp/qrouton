@@ -15,6 +15,43 @@ test("a deck draws one card per slide, each holding 16:9 in flow", async ({ page
   }
 });
 
+test("every preview card has its own unscaled number above the frame", async ({ page }) => {
+  await open(page);
+  const labels = page.locator(".card > .slide-number");
+  await expect(labels).toHaveText(Array.from({ length: 7 }, (_, index) => `Slide ${index + 1}`));
+  await expect(page.locator(".marpit .slide-number, .slide-number[data-line]")).toHaveCount(0);
+
+  const geometry = () => page.locator(".card").evaluateAll((cards) => cards.map((card) => {
+    const label = card.querySelector(".slide-number").getBoundingClientRect();
+    const frame = card.querySelector(".frame").getBoundingClientRect();
+    const notes = card.querySelector(".notes")?.getBoundingClientRect();
+    return {
+      labelHeight: label.height,
+      labelWidth: label.width,
+      above: label.bottom <= frame.top,
+      notesBelow: !notes || notes.top >= frame.bottom,
+      aspect: frame.width / frame.height,
+    };
+  }));
+
+  const wide = await geometry();
+  await page.setViewportSize({ width: 400, height: 700 });
+  const narrow = await geometry();
+  for (let index = 0; index < narrow.length; index++) {
+    await expect(labels.nth(index)).toBeVisible();
+    expect(narrow[index].labelHeight).toBe(wide[index].labelHeight);
+    expect(narrow[index].labelWidth).toBeGreaterThan(0);
+    expect(narrow[index].above).toBe(true);
+    expect(narrow[index].notesBelow).toBe(true);
+    expect(narrow[index].aspect).toBeCloseTo(16 / 9, 2);
+  }
+
+  await page.evaluate(() => window.shorten());
+  await expect(labels).toHaveText(["Slide 1", "Slide 2"]);
+  await expect(page.locator(".pip")).toHaveCount(2);
+  await expect(page.locator(".pip").nth(1)).toHaveAttribute("aria-label", "Slide 2");
+});
+
 test("cards carry ascending source spans", async ({ page }) => {
   await open(page);
   const cards = await page.evaluate(() => window.cards());
