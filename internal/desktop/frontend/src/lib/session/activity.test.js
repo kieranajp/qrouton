@@ -54,7 +54,7 @@ test("a name qrouton cannot read is a line it does not draw", () => {
   assert.equal(stateLabel("Maybe"), "");
   assert.equal(providerLabel(""), "");
   assert.equal(typeLabel(""), "");
-  assert.equal(typeLabel("qrspi-planning-lead"), "QRSPI Planning Lead");
+  assert.equal(typeLabel("qrouton-planning-lead"), "Qrouton Planning Lead");
   assert.equal(activeAgent({ state: "Active" }), true);
   assert.equal(activeAgent({ state: "Finished" }), false);
   assert.equal(

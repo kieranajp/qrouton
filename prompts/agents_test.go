@@ -19,10 +19,7 @@ const (
 
 // Agents left to Codex's default sandbox. Naming them keeps a new agent from
 // inheriting the default by nobody's decision.
-var defaultSandboxAgents = map[string]bool{
-	"qrouton-implementation-lead": true,
-	"qrouton-planning-lead":       true,
-}
+var defaultSandboxAgents = map[string]bool{}
 
 // Depth stays bounded at three levels: a lead omits tools so it inherits Task
 // and can delegate, and every specialist declares a tools set without Task so

@@ -27,7 +27,7 @@ const (
 
 	// canonicalPromptsDirName holds the stamped prompt assets that the runner
 	// discovery files link to.
-	canonicalPromptsDirName = "qrspi"
+	canonicalPromptsDirName = "prompts"
 
 	manifestLockName   = "manifest.lock"
 	notifyScriptName   = "notify.sh"

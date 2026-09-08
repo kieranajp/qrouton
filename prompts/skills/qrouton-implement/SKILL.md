@@ -1,6 +1,6 @@
 ---
-name: qrspi-implement
-description: Execute the Implement part of qrouton's RPI workflow through a delegated implementation lead that owns plan execution, specialist workers, verification, and progress artifacts. Use when an approved plan or sufficiently concrete request is ready to build.
+name: qrouton-implement
+description: Execute the Implement part of qrouton's workflow through a delegated implementation lead that owns plan execution, specialist workers, verification, and progress artifacts. Use when an approved plan or sufficiently concrete request is ready to build.
 ---
 
 # Delegate implementation
@@ -16,12 +16,15 @@ The lead owns the implementation context. It should read the plan fully, resume 
 
 For each plan phase, the lead must implement the vertical increment, run that phase's verification, and update its checkboxes. If code contradicts a binding decision or the plan needs a materially different direction, it returns a blocker for the orchestrator and user instead of forcing the plan.
 
-Require the final return to contain only:
+Require this of the lead's return:
 
-- completed phases and outcome;
-- changed repositories/files;
-- verification commands and results;
-- remaining risks, failures, or decisions;
-- plan artifact path and its updated status.
+{{return-contract}}
+
+- what happened: the completed phases and the outcome of each;
+- where the work lives: the changed repositories and files, and the plan path with its updated status;
+- how you checked it: the verification commands and their results;
+- what stays unresolved: the remaining risks, failures, or decisions.
 
 Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
+
+`qrouton-implement` is the last skill in the workflow. Report the result and stop.

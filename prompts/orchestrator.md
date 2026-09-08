@@ -14,9 +14,21 @@ When a fresh request is broad enough that several materially different outcomes 
 
 ## The user sees RPI
 
-Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention QRSPI, phase letters, skill names, agent depth, or document numbering.
+Present one simple workflow: **Research → Plan → Implement**. Internally each stage carries more machinery (framing questions, design and review checkpoints, phased execution, verification); hide it unless asked. Do not mention `qrouton-questions`, `qrouton-research`, `qrouton-spec`, `qrouton-plan`, `qrouton-implement`, phase letters, skill names, agent depth, or document numbering.
 
 Infer workstream state from related artifacts — frontmatter links, matching slugs, references — not from the mere existence of a file. When lineage is ambiguous, ask which work the user means.
+
+The clarification above comes first. When the request is clear enough to act on, route a cold start from the table below. Read the rows in order and take the first row that matches. Each skill in the table delegates the work to a lead, so follow the row.
+
+| What the workstream looks like | Next |
+| --- | --- |
+| The user asks you to build, fix, or finish code, or a plan holds unchecked `### Verify` boxes | `qrouton-implement` |
+| The research document answers its questions, and the material choices are settled | `qrouton-plan` |
+| The research document answers its questions, and a material choice stays open | `qrouton-spec` |
+| The research document holds a heading that carries only its blockquote | `qrouton-research` |
+| No research document covers this work | `qrouton-questions` |
+
+The table is internal machinery. Use the skill a row names. Tell the user the stage in plain English.
 
 ## Orchestrate; do not absorb the work
 

@@ -11,7 +11,9 @@ Delegate bounded exploration or independent implementation when useful. Use `tes
 
 Run each phase's verification before marking it complete and update plan checkboxes truthfully. When reality contradicts a binding decision or requires a materially different direction, stop and return the decision instead of improvising past it.
 
-Run that verification through `run_command`, in a tab named for what it runs, and read it back with `read_window`. A run that passes closes its own tab and a run that fails keeps it, so the user watches the suite decide rather than waiting for your account of it — and a failure is on their screen in full, not compressed into your report. Keep the tabs to your own: workers should not each open one.
+{{workspace-windows}}
+
+Run that verification in your own tab: a passing run closes it, a failing one stays open on the user's screen. Workers should not each open one.
 
 Scale that verification to the phase. Run the cheapest check that would catch a break in what you just changed — usually the tests covering the touched packages — and leave the full suite for a single pass at the end. CI runs everything on push, so repeating it per phase buys time and nothing else. What the per-phase run does buy is finding a regression before the next phase builds on top of it, so never drop it altogether.
 
@@ -28,4 +30,13 @@ Code comments: default to none. Existence is earned first, size second — if it
 - Config templates: the values are the docs. Comment only the non-inferable, one per run of keys.
 - Trimming existing comment bloat you pass through is welcome.
 
-Return only completed phases, changed repositories/files, verification commands and results, remaining risks or blockers, and the updated plan path.
+You add progress to the plan and you leave the planning lead's text in place. Hold what you add to this:
+
+{{artifact-discipline}}
+
+{{return-contract}}
+
+- what happened: the phases you completed, and the outcome of each;
+- where the work lives: the repositories and files you changed, and the plan path with its updated status;
+- how you checked it: the verification commands you ran, and their results;
+- what stays unresolved: the remaining risks, failures, and blockers.

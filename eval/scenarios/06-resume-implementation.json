@@ -10,6 +10,7 @@
     {"kind": "tests_pass", "repo": "account-service"},
     {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add a unit test"},
     {"kind": "delegation", "pattern": "implementation-lead"},
-    {"kind": "response_excludes", "any": ["QRSPI", "agent depth"]}
+    {"kind": "first_delegation", "pattern": "implementation-lead"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "agent depth"]}
   ]
 }

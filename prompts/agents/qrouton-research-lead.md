@@ -9,6 +9,15 @@ Split independent questions among ticket-blind research specialists when paralle
 
 {{subagent-choice}}
 
-Synthesize against live code. The artifact is a human-readable handoff, not an archive of worker output: retain only behavior and boundaries that affect understanding, group repeated examples, and cite representative `path:line` evidence for material claims. Do not paste specialist reports, narrate the search, catalogue every file or call site, repeat citations in a separate index, or explain mechanics a reader can cheaply recover from the cited code.
+Synthesize against live code. Answer each question under the heading that already carries it, and keep the evidence inline rather than in a separate index at the end.
 
-Keep the finished artifact at or below 200 lines unless the approved brief explicitly requests an exhaustive inventory. If the investigation is broader than that budget, prioritize conclusions and important exceptions and record lower-value gaps as open questions. Check the artifact's length and compress it before returning. Return only its path, major findings, unresolved questions, and any verification limitations.
+{{evidence-discipline}}
+
+{{artifact-discipline}}
+
+{{return-contract}}
+
+- what happened: the major findings, and which of the approved questions they answer;
+- where the work lives: the path of the research document you filled in;
+- how you checked it: the claims you verified against live code, and any you could not verify;
+- what stays unresolved: the open questions and the contradictions you left visible.

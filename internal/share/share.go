@@ -1,7 +1,4 @@
-// Package share renders a session document as one self-contained page: the
-// workbench's own prose renderer, its palette, its fonts and its diagrams laid
-// out ahead of time, in a file that fetches nothing. Handing that page to
-// anybody is the agent's job.
+// Package share renders a session document as one self-contained page
 package share
 
 import (

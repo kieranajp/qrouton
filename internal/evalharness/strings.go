@@ -65,6 +65,9 @@ const (
 	checkSentinelSafe     = "sentinel_safe"
 	checkOpenFile         = "open_file"
 	checkDelegation       = "delegation"
+	checkFirstDelegation  = "first_delegation"
+	checkTurnDelegation   = "turn_delegation"
+	checkDelegationAbsent = "delegation_absent"
 	checkRepoChanged      = "repo_changed"
 	checkRepoUnchanged    = "repo_unchanged"
 	checkTestsPass        = "tests_pass"
@@ -85,6 +88,9 @@ const (
 	assertSentinelSafe     = "ticket sentinel absent from research briefs and artifacts"
 	assertOpenFile         = "completed document presented with open_file"
 	assertDelegatedTo      = "delegated to "
+	assertFirstDelegatedTo = "first delegation to "
+	assertTurnDelegatedTo  = "turn %d delegated to %s"
+	assertNoDelegation     = "nothing delegated"
 	assertRepoChanged      = "repository changed: "
 	assertRepoUnchanged    = "repository unchanged: "
 	assertTestsPass        = "tests pass: "
@@ -96,6 +102,13 @@ const (
 	evidenceNothingAnswered  = "no question answered outside the summary"
 	evidenceNoTestManifest   = "no supported test manifest"
 	evidenceCollaboration    = "collaboration=%t target=%t"
+	evidenceNoDelegation     = "the run delegated nothing"
+	evidenceNoPattern        = "first_delegation needs the agent it expects"
+	evidenceNoTurn           = "turn_delegation needs the turn it grades"
+	evidenceNoTurnPattern    = "turn_delegation needs the agent it expects"
+	evidenceNoTarget         = "the first spawn names no target: "
+	evidenceTurnAbsent       = "the run never reached turn %d"
+	evidenceTurnAbsorbed     = "turn %d delegated nothing across %d tool calls of its own"
 	evidenceTimeoutFormat    = "test run exceeded %s: %s"
 )
 
@@ -116,12 +129,14 @@ const (
 	researchPathSegment = "/research/"
 
 	// Event markers the delegation and brief graders match on.
-	subagentTypeKey  = `"subagent_type"`
-	taskNameKey      = `"task_name"`
-	spawnAgentMarker = "spawn_agent"
-	collabToolCall   = `"type":"collab_tool_call"`
-	initSubtype      = `"subtype":"init"`
-	delegationKind   = "delegation"
+	subagentTypeField = "subagent_type"
+	subagentTypeKey   = `"` + subagentTypeField + `"`
+	taskNameKey       = `"task_name"`
+	spawnAgentMarker  = "spawn_agent"
+	collabToolCall    = `"type":"collab_tool_call"`
+	toolUseMarker     = `"type":"tool_use"`
+	initSubtype       = `"subtype":"init"`
+	delegationKind    = "delegation"
 
 	evidenceJoiner = ", "
 
