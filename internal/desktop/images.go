@@ -48,7 +48,7 @@ func (r *registry) imageAsset(token string, index int) (imageAssetRef, bool) {
 	var ref imageAssetRef
 	var found bool
 	r.each(func(_ string, window *agentWindow) {
-		if found || window.asset != token || window.opts.Format != workbench.FormatImages {
+		if r.imagesClosed || r.imageOwnersClosed[window.session] || found || window.asset != token || window.opts.Format != workbench.FormatImages {
 			return
 		}
 		doc, ok := window.document()
@@ -66,7 +66,7 @@ func (r *registry) focusImage(owner *sessionState, id string, index int) (workbe
 	var selected workbench.ImageSelection
 	var doc document
 	err := r.with(id, func(window *agentWindow) error {
-		if owner == nil || window.session != owner {
+		if r.imagesClosed || r.imageOwnersClosed[owner] || owner == nil || window.session != owner {
 			return noSuchWindow(id)
 		}
 		rendered, ok := window.document()

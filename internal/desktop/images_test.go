@@ -2,7 +2,9 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -335,5 +337,34 @@ func TestImageAssetRevalidatesChangedFilesAndRefreshesUnchangedMetadata(t *testi
 	w.stopAll()
 	if read(after.Images[0].URL).Code != 404 {
 		t.Fatal("shutdown token still available")
+	}
+}
+
+func TestAcceptedImageOpenCannotOutliveSessionRetirement(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	openTestGallery(t, w, owner)
+	accepted, client := net.Pipe()
+	defer client.Close()
+	control := &control{windows: w, owner: owner}
+	go control.handle(accepted)
+	w.sessions.boot.teardown = w.stop
+	w.sessions.retire(owner)
+	options := workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "image.png"}}}
+	if err := json.NewEncoder(client).Encode(workbench.Request{Op: workbench.OpOpen, Options: &options}); err != nil {
+		t.Fatal(err)
+	}
+	var response workbench.Response
+	if err := json.NewDecoder(client).Decode(&response); err != nil {
+		t.Fatal(err)
+	}
+	if response.Error == "" || response.ID != "" || len(w.list()) != 0 {
+		t.Fatalf("retired open = %+v, tabs %v", response, w.list())
+	}
+	other := w.sessions.add(t.TempDir(), nil, nil)
+	openTestGallery(t, w, other)
+	w.stopAll()
+	if _, err := w.openWindow(other, options); err == nil {
+		t.Fatal("gallery opened after shutdown")
 	}
 }

@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	ErrImageGalleryClosed = errors.New("image galleries are unavailable for this session")
 	ErrNotImageGallery    = errors.New("window is not an image gallery")
 	ErrImageIndex         = errors.New("image index is out of range")
 	ErrNoImageFocus       = errors.New("image focus request carries no selection")
