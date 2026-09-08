@@ -37,12 +37,12 @@ type runCommandInput struct {
 }
 
 type readWindowInput struct {
-	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
+	Name string `json:"name" jsonschema:"Name of a window previously opened through the window tools"`
 	Full bool   `json:"full,omitempty" jsonschema:"Include the full scrollback instead of just the last screenful"`
 }
 
 type windowNameInput struct {
-	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
+	Name string `json:"name" jsonschema:"Name of a window previously opened through the window tools"`
 }
 
 type showDiffInput struct {

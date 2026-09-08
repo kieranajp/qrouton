@@ -376,6 +376,14 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 			"never takes the keyboard",
 			"automatically selects `thoughts/` artifacts",
 			"waiting marker",
+			"`open_images`",
+			"`focus_image(name, index)`",
+			"`thoughts/assets/` on demand",
+			"including duplicates",
+			"defaults to the background even under `thoughts/`",
+			"reset the current image to 1",
+			"Human thumbnail selection updates the same state",
+			"Continue to use `open_file` for Markdown decks",
 		} {
 			if !strings.Contains(content, guidance) {
 				t.Errorf("prompt %q is missing window attention guidance %q", id, guidance)
