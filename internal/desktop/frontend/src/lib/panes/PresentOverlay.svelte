@@ -70,10 +70,20 @@
     layer?.focus();
   }
 
-  // The stage passes clicks through, so a click that reaches the layer itself
-  // landed on the scrim rather than on the slide or the controls.
-  function press(event) {
-    if (event.target === event.currentTarget) present.leave();
+  // The stage passes presses through, so one that reaches the layer itself
+  // landed on the scrim rather than on the slide or the controls. Both ends of
+  // the gesture have to land there: a click is dispatched at the common
+  // ancestor, so a selection dragged off the slide would otherwise leave.
+  let from = false;
+
+  function down(event) {
+    from = event.target === event.currentTarget;
+  }
+
+  function up(event) {
+    const scrim = from && event.target === event.currentTarget;
+    from = false;
+    if (scrim) present.leave();
   }
 
   // The keyboard belongs to this window, so the control hands it straight back
@@ -88,8 +98,8 @@
 
   function key(event) {
     // The presentation is exclusive, so no window listener acts on a key while
-    // it is up — a panel opening beneath an opaque layer holds the keyboard
-    // with nothing on screen to say so.
+    // it is up — a panel opening behind the scrim holds the keyboard with
+    // nothing legible on screen to say so.
     event.stopPropagation();
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     if (event.key === "Escape") {
@@ -115,7 +125,8 @@
   tabindex="-1"
   bind:this={layer}
   onkeydown={key}
-  onclick={press}>
+  onpointerdown={down}
+  onpointerup={up}>
   <div class="present-stage" bind:this={stage}>
     <div class="present-card" style="--present-scale: {scale}">
       <div class="present-slide">
@@ -144,8 +155,7 @@
 
 <style>
   /* Above the app's own ceiling of 5, so the frontend's title bar is covered
-     too. The padding is the lightbox's inset, and the bottom of it is the strip
-     the controls sit in. */
+     too. The padding is the lightbox's inset. */
   .present {
     position: fixed;
     inset: 0;
@@ -156,28 +166,28 @@
     outline: none;
   }
 
-  /* Nothing here catches a click: the room around a letterboxed slide is scrim,
-     and the presenter expects the scrim to let them out. */
+  /* Nothing here catches a press: the room around a letterboxed slide is scrim,
+     and the presenter expects the scrim to let them out. The card's outline and
+     shadow fall outside its box, into the inset, so nothing here clips. */
   .present-stage {
     flex: 1;
     min-width: 0;
     display: flex;
     align-items: center;
     justify-content: center;
-    overflow: hidden;
     pointer-events: none;
   }
 
-  /* The border and the shadow belong to the card, at screen scale, rather than
-     to the slide inside the transform, where both would thin out. */
+  /* The edge and the shadow belong to the card, at screen scale, rather than to
+     the slide inside the transform, where both would thin out. Outline, not
+     border, so the box stays the size the slide was scaled to. */
   .present-card {
     flex: none;
-    box-sizing: border-box;
     width: calc(1280px * var(--present-scale, 1));
     height: calc(720px * var(--present-scale, 1));
     overflow: hidden;
     background: var(--surface-app);
-    border: 1px solid var(--border-subtle);
+    outline: var(--border-width) solid var(--border-subtle);
     box-shadow: var(--shadow-menu);
     pointer-events: auto;
   }

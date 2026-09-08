@@ -189,7 +189,9 @@ window.appKeys = [];
 window.addEventListener("keydown", (event) => window.appKeys.push(event.key));
 
 window.slideBox = () => {
+  const layer = document.querySelector(".present");
   const card = document.querySelector(".present-card");
+  const slide = document.querySelector(".present-slide").getBoundingClientRect();
   const rect = card.getBoundingClientRect();
   const stage = document.querySelector(".present-stage").getBoundingClientRect();
   return {
@@ -203,10 +205,17 @@ window.slideBox = () => {
       right: window.innerWidth - rect.right,
       bottom: window.innerHeight - rect.bottom,
     },
+    // The card's padding box, which is what its overflow clips the slide to.
+    // Whole pixels: getComputedStyle reports the border box instead.
+    shows: { width: card.clientWidth, height: card.clientHeight },
+    slide: { width: slide.width, height: slide.height },
+    pad: parseFloat(getComputedStyle(layer).paddingTop),
     stage: { width: stage.width, height: stage.height },
     room: { width: window.innerWidth, height: window.innerHeight },
   };
 };
+
+window.layerHasFocus = () => document.activeElement?.classList.contains("present") === true;
 
 window.presentHeading = () =>
   document.querySelector(".present-slide section h1, .present-slide section h2")?.textContent ?? "";

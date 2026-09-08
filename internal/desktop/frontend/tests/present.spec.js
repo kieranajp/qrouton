@@ -21,9 +21,12 @@ test("Present opens the deck as a card over a scrim, on the counter's slide", as
   expect(layer.width).toBe(room.width);
   expect(layer.height).toBe(room.height);
 
-  // The scrim reaches the window's edges; the slide does not.
+  // The scrim reaches the window's edges; the slide stands off them by the
+  // layer's own inset, at least.
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
   const box = await page.evaluate(() => window.slideBox());
-  for (const side of Object.values(box.inset)) expect(side).toBeGreaterThan(8);
+  expect(box.pad).toBeGreaterThan(0);
+  for (const side of Object.values(box.inset)) expect(side).toBeGreaterThanOrEqual(box.pad);
 });
 
 test("present mode opens on the slide the reader is standing on", async ({ page }) => {
@@ -109,17 +112,29 @@ test("a press on the scrim leaves the presentation, as Escape does", async ({ pa
   await expect(page.locator(".counter")).toHaveText("1 / 7");
 });
 
-test("the room around a letterboxed slide is scrim too", async ({ page }) => {
-  await open(page);
-  await start(page);
-  await page.waitForFunction(() => window.slideBox().scale !== 1);
-  const box = await page.evaluate(() => window.slideBox());
-  const edge = (box.room.width - box.stage.width) / 2;
-  expect(box.inset.left).toBeGreaterThan(edge + 4);
+// A wide window letterboxes above and below the slide; a tall one to its
+// sides. Both gaps are inside the stage, and both are scrim.
+for (const room of [
+  { width: 1400, height: 600 },
+  { width: 800, height: 1000 },
+]) {
+  test(`the room around a letterboxed slide is scrim in a ${room.width}x${room.height} window`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(room);
+    await open(page);
+    await start(page);
+    await page.waitForFunction(() => window.slideBox().scale !== 1);
+    const box = await page.evaluate(() => window.slideBox());
+    const wide = box.inset.left > box.pad + 4;
+    expect(wide || box.inset.top > box.pad + 4).toBe(true);
 
-  await page.mouse.click((edge + box.inset.left) / 2, box.room.height / 2);
-  await expect(page.locator(".present")).toHaveCount(0);
-});
+    const x = wide ? (box.pad + box.inset.left) / 2 : box.room.width / 2;
+    const y = wide ? box.room.height / 2 : (box.pad + box.inset.top) / 2;
+    await page.mouse.click(x, y);
+    await expect(page.locator(".present")).toHaveCount(0);
+  });
+}
 
 test("a press on the slide keeps the presentation up", async ({ page }) => {
   await open(page);
@@ -127,6 +142,54 @@ test("a press on the slide keeps the presentation up", async ({ page }) => {
   await page.locator(".present-slide").click({ position: { x: 40, y: 40 } });
 
   await expect(page.locator(".present")).toHaveCount(1);
+});
+
+// The middle of the card, once the stage has been measured — before that the
+// card is still at its unscaled size and the point would land on the scrim.
+const middle = async (page) => {
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
+  const box = await page.evaluate(() => window.slideBox());
+  return { box, x: box.inset.left + box.width / 2, y: box.inset.top + box.height / 2 };
+};
+
+test("a selection dragged off the slide onto the scrim stays in the presentation", async ({
+  page,
+}) => {
+  await open(page);
+  await start(page);
+  const { box, x, y } = await middle(page);
+
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(6, box.room.height / 2);
+  await page.mouse.up();
+
+  await expect(page.locator(".present")).toHaveCount(1);
+});
+
+test("a press begun on the scrim and released on the slide stays too", async ({ page }) => {
+  await open(page);
+  await start(page);
+  const { box, x, y } = await middle(page);
+
+  await page.mouse.move(6, box.room.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(x, y);
+  await page.mouse.up();
+
+  await expect(page.locator(".present")).toHaveCount(1);
+});
+
+test("the card shows the whole slide it holds", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
+  const box = await page.evaluate(() => window.slideBox());
+
+  // Rounding to whole pixels can account for one; an edge drawn inside the box
+  // would cost the slide two.
+  expect(Math.abs(box.shows.width - box.slide.width)).toBeLessThan(1.2);
+  expect(Math.abs(box.shows.height - box.slide.height)).toBeLessThan(1.2);
 });
 
 test("the arrow controls step the deck and disable at both ends", async ({ page }) => {
@@ -143,9 +206,14 @@ test("the arrow controls step the deck and disable at both ends", async ({ page 
   expect(await page.evaluate(() => window.presentHeading())).toBe("Second");
   await expect(back).toBeEnabled();
 
+  // The press that disables the arrow must not strand the keyboard on it.
   await back.click();
   await expect(page.locator(".present-counter")).toHaveText("1 / 7");
   await expect(back).toBeDisabled();
+  expect(await page.evaluate(() => window.layerHasFocus())).toBe(true);
+  await page.keyboard.press("ArrowRight");
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+  await page.keyboard.press("ArrowLeft");
 
   await page.keyboard.press("End");
   await expect(page.locator(".present-counter")).toHaveText("7 / 7");
@@ -165,6 +233,7 @@ test("a step from the arrow controls pushes the note and keeps the keyboard", as
     { index: 1, total: 7, title: "Second", html: "" },
   ]);
 
+  expect(await page.evaluate(() => window.layerHasFocus())).toBe(true);
   await page.keyboard.press("ArrowRight");
   await expect(page.locator(".present-counter")).toHaveText("3 / 7");
 });
