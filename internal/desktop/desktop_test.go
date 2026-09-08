@@ -33,6 +33,9 @@ type fakeRenderer struct {
 	titles  map[string]string
 	events  map[string]any
 	focused map[string]int
+	closed  []string
+	sent    []delivery
+	quits   atomic.Int32
 	quit    bool
 	block   chan struct{}
 	once    sync.Once
@@ -65,10 +68,22 @@ func (f *fakeRenderer) Focus(name string) {
 	f.focused[name]++
 }
 
+func (f *fakeRenderer) Close(name string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.closed = append(f.closed, name)
+}
+
 func (f *fakeRenderer) Emit(event string, payload any) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events[event] = payload
+}
+
+func (f *fakeRenderer) Send(name, event string, payload any) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sent = append(f.sent, delivery{window: name, event: event, payload: payload})
 }
 
 func (f *fakeRenderer) Run() error {
@@ -79,12 +94,21 @@ func (f *fakeRenderer) Run() error {
 // Quit tolerates being called twice: the workbench quits itself when its
 // conversation window closes, and the test stops it again on the way out.
 func (f *fakeRenderer) Quit() {
+	f.quits.Add(1)
 	f.once.Do(func() {
 		f.mu.Lock()
 		f.quit = true
 		f.mu.Unlock()
 		close(f.block)
 	})
+}
+
+// delivery is one payload the toolkit was asked to put in front of one window's
+// page, rather than every page.
+type delivery struct {
+	window  string
+	event   string
+	payload any
 }
 
 // stubBoot stands in for what a session needs to come up, counting the
@@ -376,6 +400,38 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 	defer r.mu.Unlock()
 	if !r.quit {
 		t.Fatal("closing the conversation window left the application running")
+	}
+}
+
+// A second window is not a second thing to shut down: the conversation's own
+// teardown still ends the app, and ends it once.
+func TestQuittingWithTheNotesWindowOpenEndsTheApplicationOnce(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+	presenter := newPresenter(r, r.Emit)
+
+	done := startWorkbench(t, r, term, windows, opts)
+	conversation := <-r.opened
+	shownSession(t, reg)
+	if err := presenter.Open(); err != nil {
+		t.Fatal(err)
+	}
+	<-r.opened
+
+	conversation.OnClose()
+	conversation.OnClose()
+
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if got := r.quits.Load(); got != 1 {
+		t.Fatalf("the application was told to quit %d times, want once", got)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if !r.quit {
+		t.Fatal("quitting with a notes window open left the application running")
 	}
 }
 
