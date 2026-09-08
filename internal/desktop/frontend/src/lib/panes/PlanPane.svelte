@@ -4,6 +4,7 @@
   import Chip from "../core/Chip.svelte";
   import { untrack } from "svelte";
   import ArtifactPane from "./ArtifactPane.svelte";
+  import ReaderPips from "./ReaderPips.svelte";
   import { diagrams, links, viewport } from "./actions.js";
   import { clampedSpan, counterFor, holding, partition, screenFor } from "./deck.js";
   import { deck } from "./deck.svelte.js";
@@ -75,6 +76,14 @@
   // the reader has scrolled into rather than the one they selected.
   let scrolled = $state(0);
   let viewing = $derived(view.reading ? scrolled : at.current);
+  let pips = $derived([
+    { label: "Overview", summary: true },
+    ...plan.slides.map((slide) => ({
+      label: slide.number === null ? slide.name : `Phase ${slide.number}`,
+      summary: slide.number === null,
+      color: slide.state ? DOT[slide.state] : undefined,
+    })),
+  ]);
 
   /** @param {{intervals: {line: number, to: number}[]}} state */
   function spy(state) {
@@ -132,6 +141,7 @@
 {:else}
   <ArtifactPane
     {doc}
+    pips
     structured="plan"
     label="Plan"
     mode={view.mode}
@@ -235,29 +245,7 @@
       {/if}
     {/snippet}
     {#snippet controls()}
-      <div class="pips">
-        <button
-          type="button"
-          class="pip summary"
-          class:viewing={viewing === 0}
-          aria-label="Overview"
-          aria-current={viewing === 0}
-          onclick={() => reach(0)}>
-          <span class="mark"></span>
-        </button>
-        {#each plan.slides as slide, index}
-          <button
-            type="button"
-            class="pip"
-            class:summary={slide.number === null}
-            class:viewing={viewing === index + 1}
-            aria-label={slide.number === null ? slide.name : `Phase ${slide.number}`}
-            aria-current={viewing === index + 1}
-            onclick={() => reach(index + 1)}>
-            <span class="mark" style:background={slide.state ? DOT[slide.state] : null}></span>
-          </button>
-        {/each}
-      </div>
+      <ReaderPips entries={pips} current={viewing} onSelect={reach} />
     {/snippet}
     {#snippet counter()}
       <!-- A truncated section name is unidentifiable, so the whole of it
@@ -360,52 +348,6 @@
   .follow input:checked {
     border: none;
     background: var(--accent-action);
-  }
-
-  /* The strip is a position indicator: a second row of pips would misstate the
-     shape of the document, so it neither wraps nor gives up width. */
-  .pips {
-    display: flex;
-    flex: none;
-    flex-wrap: nowrap;
-    gap: 6px;
-  }
-
-  .pip {
-    padding: 6px 3px;
-    border: 0;
-    border-bottom: 2px solid transparent;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .pip.viewing {
-    border-bottom-color: var(--accent-action);
-  }
-
-  .pip .mark {
-    display: block;
-    width: 14px;
-    height: 5px;
-  }
-
-  .pip.summary .mark {
-    box-shadow: inset 0 0 0 1px var(--text-faint);
-  }
-
-  .pip.summary {
-    margin-right: 4px;
-  }
-
-  :global(.document > .footer .modes) {
-    margin-left: 0;
-  }
-
-  /* Whatever width the fixed controls leave, on one line. A section's name is
-     the only label here long enough to want more, and it may not have it. */
-  .steps {
-    display: flex;
-    gap: 6px;
   }
 
   .screen > :global(.caps),
@@ -571,17 +513,5 @@
       font: var(--machine-xs);
     }
 
-    /* Squeezed into the same row the pips wrap one per line, so they take a
-       row of their own and the controls sit under them. */
-    :global(.document > .footer .controls) {
-      flex-wrap: wrap;
-      row-gap: 10px;
-      padding-top: 8px;
-      padding-bottom: 8px;
-    }
-
-    .pips {
-      flex: 1 0 100%;
-    }
   }
 </style>

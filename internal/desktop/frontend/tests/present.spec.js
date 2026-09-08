@@ -33,9 +33,9 @@ test("present mode opens on the slide the reader is standing on", async ({ page 
   await open(page);
   await page.evaluate(() => {
     const cards = document.querySelectorAll(".card");
-    window.scroller().scrollTop = cards[3].offsetTop;
+    cards[3].scrollIntoView({ block: "start" });
   });
-  await expect(page.locator(".counter")).toHaveText("4 / 7");
+  await expect(page.locator(".counter")).toHaveText("Slide 4 of 7");
   await start(page);
 
   await expect(page.locator(".present-counter")).toHaveText("4 / 7");
@@ -100,7 +100,7 @@ test("Escape leaves present mode and hands the keyboard back", async ({ page }) 
   await expect(page.locator(".present")).toHaveCount(0);
 
   expect(await page.evaluate(() => window.focusedLabel())).toBe("Present");
-  await expect(page.locator(".counter")).toHaveText("1 / 7");
+  await expect(page.locator(".counter")).toHaveText("Slide 1 of 7");
 });
 
 test("a press on the scrim leaves the presentation, as Escape does", async ({ page }) => {
@@ -109,7 +109,7 @@ test("a press on the scrim leaves the presentation, as Escape does", async ({ pa
   await page.mouse.click(6, 6);
 
   await expect(page.locator(".present")).toHaveCount(0);
-  await expect(page.locator(".counter")).toHaveText("1 / 7");
+  await expect(page.locator(".counter")).toHaveText("Slide 1 of 7");
 });
 
 // A wide window letterboxes above and below the slide; a tall one to its
