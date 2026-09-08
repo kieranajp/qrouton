@@ -221,6 +221,21 @@ test("the arrow controls step the deck and disable at both ends", async ({ page 
   await expect(back).toBeEnabled();
 });
 
+test("space activates a focused arrow rather than stepping the deck", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.locator('.present-hud [aria-label="Next slide"]').click();
+  await page.locator('.present-hud [aria-label="Previous slide"]').focus();
+
+  await page.keyboard.press(" ");
+  await expect(page.locator(".present-counter")).toHaveText("1 / 7");
+
+  // Space still steps the deck when no control holds the keyboard.
+  expect(await page.evaluate(() => window.layerHasFocus())).toBe(true);
+  await page.keyboard.press(" ");
+  await expect(page.locator(".present-counter")).toHaveText("2 / 7");
+});
+
 test("a step from the arrow controls pushes the note and keeps the keyboard", async ({ page }) => {
   await open(page);
   await start(page);

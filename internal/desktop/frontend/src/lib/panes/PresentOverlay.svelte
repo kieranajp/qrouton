@@ -112,6 +112,9 @@
       present.go(event.key === "Home" ? 0 : present.total - 1);
       return;
     }
+    // Space belongs to a focused control, so it activates that button rather
+    // than stepping the deck past it.
+    if (event.key === " " && event.target !== event.currentTarget) return;
     const by = STEPS[event.key];
     if (!by) return;
     event.preventDefault();
