@@ -166,7 +166,32 @@ window.narrow = () => {
   document.querySelector("#fixture").style.width = "480px";
 };
 
-window.scroller = () => document.querySelector(".body");
+window.scroller = () => document.querySelector(".preview");
+
+window.footerShape = () => {
+  const footer = document.querySelector(".footer");
+  const rect = footer.getBoundingClientRect();
+  const pane = document.querySelector(".body");
+  const bounds = pane.getBoundingClientRect();
+  const scroller = window.scroller();
+  return {
+    height: rect.height,
+    gap: bounds.bottom - rect.bottom,
+    left: rect.left - bounds.left,
+    width: rect.width,
+    paneWidth: bounds.width,
+    scrollerBottom: scroller.getBoundingClientRect().bottom,
+    footerTop: rect.top,
+    outerScroll: pane.scrollTop,
+    outerOverflows: pane.scrollHeight > pane.clientHeight,
+    innerOverflows: scroller.scrollHeight > scroller.clientHeight,
+    pipRows: new Set([...footer.querySelectorAll(".pip")].map((pip) => pip.getBoundingClientRect().top)).size,
+    controlsFit: [...footer.querySelectorAll("button")].every((button) => {
+      const box = button.getBoundingClientRect();
+      return box.left >= rect.left && box.right <= rect.right;
+    }),
+  };
+};
 
 const named = (label) =>
   [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === label);
