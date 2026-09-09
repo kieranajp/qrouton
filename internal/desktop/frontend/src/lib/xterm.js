@@ -45,15 +45,57 @@ export function decode(encoded) {
   return buffer;
 }
 
-/** A retained replay replaces remounted terminal contents; ordinary chunks append.
- * @param {Terminal} term
+const output = new WeakMap();
+
+function outputQueue(term) {
+  const state = { jobs: [], replay: false, writing: false, disposed: false };
+  const single = (params, values) => params.length === 1 && values.includes(params[0]);
+  const csi = (id, values) => term.parser.registerCsiHandler(id,
+    (params) => state.replay && single(params, values));
+  const handlers = [
+    csi({ final: "c" }, [0]),
+    csi({ prefix: ">", final: "c" }, [0]),
+    csi({ final: "n" }, [5, 6]),
+    csi({ prefix: "?", final: "n" }, [6]),
+    term.parser.registerOscHandler(11, (data) => state.replay && data === "?"),
+  ];
+  const next = () => {
+    if (state.disposed || state.writing || !state.jobs.length) return;
+    const job = state.jobs.shift();
+    state.writing = true;
+    state.replay = job.replay;
+    const bytes = job.replay ? new Uint8Array(job.bytes.length + 2) : job.bytes;
+    if (job.replay) {
+      bytes.set([0x1b, 0x63]);
+      bytes.set(job.bytes, 2);
+    }
+    term.write(bytes, () => {
+      if (state.disposed) return;
+      state.replay = false;
+      state.writing = false;
+      next();
+    });
+  };
+  return {
+    push(bytes, replay) {
+      if (state.disposed) return;
+      state.jobs.push({ bytes, replay });
+      next();
+    },
+    dispose() {
+      state.disposed = true;
+      state.replay = false;
+      state.jobs.length = 0;
+      handlers.forEach((handler) => handler.dispose());
+    },
+  };
+}
+
+/** @param {Terminal} term
  * @param {string | {encoded: string, replay?: boolean}} payload */
 export function paint(term, payload) {
   const chunk = typeof payload === "string" ? { encoded: payload } : payload;
-  // Keep the reset in xterm's write queue. Calling reset() synchronously could
-  // overtake an ordinary chunk which the parser has accepted but not painted.
-  if (chunk.replay) term.write("\x1bc");
-  term.write(decode(chunk.encoded));
+  output.get(term)?.push(decode(chunk.encoded), !!chunk.replay);
 }
 
 const mounted = new WeakMap();
@@ -83,6 +125,8 @@ export function mount(host, { write, background = "--ctp-base" }) {
       cursor: token("--ctp-rosewater"),
     },
   });
+  const queue = outputQueue(term);
+  output.set(term, queue);
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
@@ -121,6 +165,7 @@ export function mount(host, { write, background = "--ctp-base" }) {
     report(cols, rows);
   };
   const dispose = () => {
+    queue.dispose();
     mounted.delete(host);
     term.dispose();
   };
