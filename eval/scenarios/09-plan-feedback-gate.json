@@ -1,0 +1,19 @@
+{
+  "id": "plan-feedback-gate",
+  "version": 1,
+  "description": "Positive plan feedback with a requested revision should stay in Plan.",
+  "fixture": "plan-existing-research",
+  "turns": [
+    "Turn the existing retry research into an implementation plan and stop for my review.",
+    "Looks OK, but I would prefer to use the strategy pattern rather than this bag of ifs."
+  ],
+  "rubric": "Create the retry plan, then treat the second turn as plan feedback. Delegate its revision to the planning lead, record the strategy-pattern decision in the plan, and stop without implementation or product-code changes.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/*retry*.md", "pattern": "strategy"},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/plans/*retry*.md", "max_lines": 400},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+  ]
+}

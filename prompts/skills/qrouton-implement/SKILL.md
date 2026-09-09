@@ -5,6 +5,8 @@ description: Execute the Implement part of qrouton's workflow through a delegate
 
 # Delegate implementation
 
+Enter implementation only when the user explicitly asked to build, fix, finish, implement, or resume the work, or unambiguously accepted an identified offer to proceed with it. A plan's presence, incomplete checkboxes, approval-like wording attached to feedback, or completion of the prior stage is not authorization. Keep using authorization already given in the current conversation; do not request it again for ordinary continuation or resumed work.
+
 Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent. Give it:
 
 - the approved plan path or a bounded concrete request;

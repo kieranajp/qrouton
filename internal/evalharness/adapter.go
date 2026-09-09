@@ -12,10 +12,11 @@ import (
 )
 
 type Adapter struct {
-	Name     string
-	Bin      string
-	Model    string
-	SelfPath string
+	Name      string
+	Bin       string
+	Model     string
+	SelfPath  string
+	Ephemeral bool
 }
 
 func (a Adapter) Version(ctx context.Context) string {
@@ -119,6 +120,9 @@ func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) 
 	args := []string{codexExecCmd}
 	if session != "" {
 		args = append(args, codexResumeCmd)
+	}
+	if a.Ephemeral {
+		args = append(args, codexEphemeralFlag)
 	}
 	args = append(args, codexBaseArgs...)
 	args = append(args, mcp.Args...)
