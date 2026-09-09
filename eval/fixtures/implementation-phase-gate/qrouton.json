@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "name": "Calculator implementation phases",
+  "slug": "calculator-implementation-phases",
+  "description": "Complete a multi-phase calculator plan",
+  "mode": "rpi",
+  "runner": "codex",
+  "createdAt": "2026-09-09T00:00:00Z",
+  "repos": [
+    {
+      "name": "account-service",
+      "org": "qrouton-eval",
+      "role": "editing",
+      "branch": "feat/calculator-implementation-phases",
+      "defaultBranch": "main",
+      "worktreePath": "src/account-service",
+      "sshUrl": "git@github.com:qrouton-eval/account-service.git"
+    },
+    {
+      "name": "shared-lib",
+      "org": "qrouton-eval",
+      "role": "reference",
+      "defaultBranch": "main",
+      "worktreePath": "src/shared-lib",
+      "sshUrl": "git@github.com:qrouton-eval/shared-lib.git"
+    }
+  ]
+}
