@@ -39,6 +39,9 @@ export function createTerminalPainter(term) {
     term.parser.registerCsiHandler({ prefix: "?", final: "n" }, (params) => replaying && first(params) === 6),
     term.parser.registerCsiHandler({ final: "t" }, (params) => replaying && reportsWindowState(params)),
     term.parser.registerDcsHandler({ intermediates: "$", final: "q" }, () => replaying),
+    // A lone "?" is the background query; any other payload sets the colour, and
+    // a multi-parameter form is left to xterm so its replies stay correct.
+    term.parser.registerOscHandler(11, (data) => replaying && data === "?"),
   ];
 
   const next = () => {

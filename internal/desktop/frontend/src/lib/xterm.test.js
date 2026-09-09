@@ -22,6 +22,9 @@ function terminalDouble() {
     parser: {
       registerCsiHandler: (id, callback) => register("csi", id, callback),
       registerDcsHandler: (id, callback) => register("dcs", id, callback),
+      // An OSC is identified by a number rather than a prefix/final pair, so it
+      // borrows the final slot to share one key.
+      registerOscHandler: (identifier, callback) => register("osc", { final: String(identifier) }, callback),
     },
     write(data, callback) {
       writes.push({ data, callback });
@@ -107,6 +110,9 @@ test("the replay guards consume only xterm response requests", () => {
     assert.equal(handler(term, "csi", id)(params), expected, JSON.stringify({ id, params }));
   }
   assert.equal(handler(term, "dcs", { intermediates: "$", final: "q" })("m", []), true);
+  assert.equal(handler(term, "osc", { final: "11" })("?"), true);
+  assert.equal(handler(term, "osc", { final: "11" })("#123456"), false);
+  assert.equal(handler(term, "osc", { final: "11" })("?;?"), false);
 
   term.complete();
   term.complete();
@@ -114,6 +120,7 @@ test("the replay guards consume only xterm response requests", () => {
     assert.equal(handler(term, "csi", id)(params), false, JSON.stringify({ id, params }));
   }
   assert.equal(handler(term, "dcs", { intermediates: "$", final: "q" })("m", []), false);
+  assert.equal(handler(term, "osc", { final: "11" })("?"), false);
   painter.dispose();
 });
 
@@ -129,5 +136,5 @@ test("disposing clears queued output and makes write callbacks inert", () => {
 
   assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc"]);
   assert.equal(term.handlers.size, 0);
-  assert.equal(term.disposed.length, 8);
+  assert.equal(term.disposed.length, 9);
 });
