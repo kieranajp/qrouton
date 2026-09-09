@@ -16,6 +16,7 @@ const (
 // Operations the control socket understands: one per WindowHost method, plus
 // the attention signal the runner's own hooks raise.
 const (
+	OpFocusImage         = "focus-image"
 	OpOpen               = "open"
 	OpClose              = "close"
 	OpRead               = "read"

@@ -10,10 +10,12 @@ import (
 	"path"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/theme"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 // The tree is generated; `make front` produces it.
@@ -56,8 +58,9 @@ func validateFrontend(assets fs.FS) error {
 // deckLookup answers a deck's asset token with the session root its window
 // belongs to and the directory the deck itself sits in.
 type deckLookup func(token string) (root, dir string, ok bool)
+type imageLookup func(token string, index int) (imageAssetRef, bool)
 
-func assetHandler(assets fs.FS, decks deckLookup) http.Handler {
+func assetHandler(assets fs.FS, decks deckLookup, imageLookups ...imageLookup) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))
 	mux.HandleFunc(theme.Path, func(w http.ResponseWriter, _ *http.Request) {
@@ -65,7 +68,55 @@ func assetHandler(assets fs.FS, decks deckLookup) http.Handler {
 		_, _ = io.WriteString(w, theme.CSS())
 	})
 	mux.HandleFunc(deckAssetPath, deckAsset(decks))
-	return mux
+	var images imageLookup
+	if len(imageLookups) > 0 {
+		images = imageLookups[0]
+	}
+	gallery := imageAsset(images)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, imageAssetPath) {
+			gallery(w, r)
+			return
+		}
+		mux.ServeHTTP(w, r)
+	})
+}
+
+func imageAsset(images imageLookup) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		token, rawIndex, split := strings.Cut(strings.TrimPrefix(r.URL.Path, imageAssetPath), "/")
+		index, err := strconv.Atoi(rawIndex)
+		if !split || token == "" || index < 1 || err != nil || images == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
+			http.NotFound(w, r)
+			return
+		}
+		ref, ok := images(token, index)
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		name, err := launch.ResolveSessionFile(ref.root, ref.source)
+		media, known := workbench.RasterMediaType(name)
+		if err != nil || !known {
+			http.NotFound(w, r)
+			return
+		}
+		file, err := os.Open(name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set(contentTypeHeader, media)
+		w.Header().Set(cacheControlHeader, cacheControlNoStore)
+		w.Header().Set(contentTypeOptionsHeader, contentTypeNoSniff)
+		http.ServeContent(w, r, "", info.ModTime(), file)
+	}
 }
 
 // deckAsset serves a deck's own pictures and video, and only those: the media
@@ -74,7 +125,10 @@ func assetHandler(assets fs.FS, decks deckLookup) http.Handler {
 func deckAsset(decks deckLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rel, split := strings.Cut(strings.TrimPrefix(r.URL.Path, deckAssetPath), "/")
-		media, known := deckMediaTypes[strings.ToLower(path.Ext(rel))]
+		media, known := workbench.RasterMediaType(rel)
+		if !known {
+			media, known = deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]
+		}
 		if !split || rel == "" || !known || decks == nil {
 			http.NotFound(w, r)
 			return

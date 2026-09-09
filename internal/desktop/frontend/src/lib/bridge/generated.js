@@ -42,6 +42,7 @@ export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.St
 export const TERM_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Term.Write";
 export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Close";
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
+export const WINDOWS_FOCUS_IMAGE = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusImage";
 export const WINDOWS_OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";
 export const WINDOWS_OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
 export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/desktop.Windows.RenderDiagrams";

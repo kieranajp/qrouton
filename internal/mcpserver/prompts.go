@@ -9,6 +9,8 @@ const serverInstructions = "Drive the user's qrouton workbench: each tool here o
 
 const (
 	toolOpenFile    = "open_file"
+	toolFocusImage  = "focus_image"
+	toolOpenImages  = "open_images"
 	toolRunCommand  = "run_command"
 	toolReadWindow  = "read_window"
 	toolShowDiff    = "show_diff"
@@ -20,17 +22,19 @@ const (
 )
 
 const (
-	descOpenFile = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
+	descOpenFile   = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use read_window on editor to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
+	descFocusImage = "Select a named image gallery and make its one-based numbered entry current without taking keyboard focus. Use read_window for the ordered manifest and current image. The index must be from 1 through the image count. Selection acknowledges desktop state, not completed decoding."
+	descOpenImages = "Open an ordered list of existing local PNG, JPEG, GIF, WebP, or AVIF files in a named gallery. Paths resolve inside the session or its thoughts home. For captures you produce, create thoughts/assets/ on demand and write or copy them there first; this tool creates no folders and copies no files. Caller order and duplicates are preserved. A blank name becomes images; editor is reserved. Reusing a name replaces that window with fresh URLs and current image 1; use distinct names for independent galleries. Reopen after regeneration because files are not watched. The pane begins in the background even under thoughts/ unless foreground is true, and keeps keyboard focus with the conversation. Use read_window for the numbered manifest and current index/count, and focus_image to select a 1-based entry. Success acknowledges opening desktop state, not completed browser decoding."
 
 	descRunCommand = "Run a shell command in a tab instead of your own shell. Ideal for long-running or noisy processes (dev servers, test watchers, builds, log tails) the user should see live: it is interactive, so Ctrl-C there reaches the process. The keyboard stays with the conversation, reusing a name replaces that tab, and a command that succeeds closes it while one that fails leaves it open with its error. Its tab reports whether the command is running, succeeded or failed. Read its output later with read_window. Tabs begin in the background; foreground selects one without taking the keyboard."
 
-	descReadWindow = "Capture the current output of a window opened with run_command or open_file. Markdown results also include the current measured viewport as one-based inclusive source-block intervals, merged in source order; unavailable differs from a measured empty interval list. Set full to include terminal scrollback."
+	descReadWindow = "Capture the current output of a named window. Image galleries return their numbered paths and current 1-based index/count, including human selections; full has no additional image meaning. Markdown results also include the current measured viewport as one-based inclusive source-block intervals, merged in source order; unavailable differs from a measured empty interval list. Set full to include terminal scrollback."
 
 	descShowDiff = "Show a repo's git diff for the user to review, rendered as a formatted pane that stays open until they close it. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every session repo. Use base to compare against a ref (e.g. the default branch) or staged for index changes. Tabs begin in the background; foreground selects one without taking the keyboard."
 
 	descNotify = "Get the user's attention with an on-screen message and a sound. The message becomes a tab marked as wanting the user, and stays until they dismiss it; it does not take the keyboard. It begins in the background, ordinarily relying on sound and its waiting marker; foreground selects it without taking the keyboard. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs."
 
-	descCloseWindow = "Close a window you opened — run_command, open_file, show_diff or notify — by name."
+	descCloseWindow = "Close a window you opened — run_command, open_file, open_images, show_diff or notify — by name."
 
 	descListWindows = "List the tabs qrouton is holding for you, by name."
 

@@ -8,6 +8,10 @@ import (
 )
 
 var (
+	ErrImageGalleryClosed = errors.New("image galleries are unavailable for this session")
+	ErrNotImageGallery    = errors.New("window is not an image gallery")
+	ErrImageIndex         = errors.New("image index is out of range")
+	ErrNoImageFocus       = errors.New("image focus request carries no selection")
 	ErrNoAgentCommand     = errors.New("workbench has no agent command to run")
 	ErrNoControlSocket    = errors.New("workbench has no control socket address")
 	ErrNoConfig           = errors.New("workbench has no configuration to assemble sessions against")
@@ -29,6 +33,8 @@ var (
 	ErrNoDirectoryPicker    = errors.New("workbench has no directory picker to choose a sessions root with")
 	ErrNoViewport           = errors.New("window has no source-mapped viewport")
 	ErrInvalidViewport      = errors.New("invalid document viewport report")
+	ErrInvalidImageGallery  = errors.New("invalid image gallery options")
+	ErrImageAssetToken      = errors.New("could not create image gallery asset token")
 	ErrNoTicket             = errors.New("open ticket request carries no ticket URL")
 	ErrProcessIngressOnly   = errors.New("open ticket is available only on the published process socket")
 	ErrNoRunnerGeneration   = errors.New("runner generation request carries no generation")

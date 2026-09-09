@@ -11,11 +11,22 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+type focusImageInput struct {
+	Name  string `json:"name" jsonschema:"Name of an open image gallery"`
+	Index int    `json:"index" jsonschema:"One-based position in the gallery numbered manifest"`
+}
+
 type openFileInput struct {
 	Path       string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
 	Line       int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
 	Through    int    `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
+}
+
+type openImagesInput struct {
+	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to raster image files in the qrouton session"`
+	Name       string   `json:"name,omitempty" jsonschema:"Gallery window name; reusing it replaces that window. Defaults to images"`
+	Foreground *bool    `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 type runCommandInput struct {
@@ -26,12 +37,12 @@ type runCommandInput struct {
 }
 
 type readWindowInput struct {
-	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
+	Name string `json:"name" jsonschema:"Name of a window previously opened through the window tools"`
 	Full bool   `json:"full,omitempty" jsonschema:"Include the full scrollback instead of just the last screenful"`
 }
 
 type windowNameInput struct {
-	Name string `json:"name" jsonschema:"Name of a window previously opened via run_command or open_file"`
+	Name string `json:"name" jsonschema:"Name of a window previously opened through the window tools"`
 }
 
 type showDiffInput struct {
@@ -99,6 +110,8 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	windows := newWindowManager(root, editor, host)
 
 	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, toolFocusImage, descFocusImage, keyMessage, messageOnly(windows.focusImage))
+	addTool(server, toolOpenImages, descOpenImages, keyMessage, messageOnly(windows.openImages))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
 			return sharePage(root, input)

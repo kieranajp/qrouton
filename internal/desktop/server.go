@@ -94,6 +94,13 @@ type handler struct {
 // becomes the response's Error; dispatch is the only place that conversion
 // happens.
 var handlers = map[string]handler{
+	workbench.OpFocusImage: {
+		guards: []guard{needsSession, needsImageFocus},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			selected, err := c.windows.focusImage(c.owner, req.ID, req.ImageFocus.Index)
+			return workbench.Response{ImageSelection: &selected}, err
+		},
+	},
 	workbench.OpOpen: {
 		guards: []guard{needsOptions, needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -252,4 +259,11 @@ func (c *control) Close() error {
 	err := c.listener.Close()
 	_ = os.Remove(c.socket)
 	return err
+}
+
+func needsImageFocus(_ *control, req workbench.Request) error {
+	if req.ImageFocus == nil {
+		return ErrNoImageFocus
+	}
+	return nil
 }

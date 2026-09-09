@@ -166,16 +166,21 @@ const (
 	agentStateFailed   = status.AgentStateFailed
 )
 
-// deckMediaTypes is the whole of what a deck can reach through its asset route.
-var deckMediaTypes = map[string]string{
-	".png":  "image/png",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".avif": "image/avif",
+var deckExtraMediaTypes = map[string]string{
 	".svg":  "image/svg+xml",
 	".mp4":  "video/mp4",
 	".webm": "video/webm",
 	".mov":  "video/quicktime",
 }
+
+const (
+	imageAssetPath           = "/images/"
+	imageAssetURLFormat      = "/images/%s/%d"
+	cacheControlHeader       = "Cache-Control"
+	cacheControlNoStore      = "no-store"
+	contentTypeOptionsHeader = "X-Content-Type-Options"
+	contentTypeNoSniff       = "nosniff"
+	currentImageFormat       = "Current image: %d of %d"
+)
+
+const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"

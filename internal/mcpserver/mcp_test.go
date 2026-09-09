@@ -32,7 +32,12 @@ type readCall struct {
 // fakeHost stands in for the desktop process: it records what the window
 // manager asked of it, and lets a test script the answers, failures included.
 type fakeHost struct {
-	mu sync.Mutex
+	focuses []struct {
+		id    string
+		index int
+	}
+	focusErr error
+	mu       sync.Mutex
 
 	opens  []workbench.WindowOptions
 	ids    []string
@@ -56,8 +61,10 @@ type fakeHost struct {
 	listErr     error
 	openErr     error
 
-	openEntered chan struct{}
-	openGate    chan struct{}
+	focusEntered chan struct{}
+	focusGate    chan struct{}
+	openEntered  chan struct{}
+	openGate     chan struct{}
 }
 
 // blockOpen holds the next Open until release is called, without holding the
@@ -177,6 +184,104 @@ func newTestManager(t *testing.T) (*windowManager, *fakeHost, string) {
 	dir := t.TempDir()
 	host := &fakeHost{}
 	return newWindowManager(dir, testEditor, host), host, dir
+}
+
+func TestOpenImagesPreservesOrderNamesAndSelection(t *testing.T) {
+	m, host, root := newTestManager(t)
+	for _, name := range []string{"z.PNG", "a.webp"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("image"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	message, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"z.PNG", "a.webp", "z.PNG"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(message, "images") || !strings.Contains(message, "1") {
+		t.Fatalf("message = %q", message)
+	}
+	got := host.opens[0]
+	if got.Format != workbench.FormatImages || got.Source != "" || got.Select || len(got.Images) != 3 || got.Images[2].Source != "z.PNG" {
+		t.Fatalf("options = %+v", got)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"a.webp"}, Name: " Compare ", Foreground: boolPtr(true)}); err != nil {
+		t.Fatal(err)
+	}
+	if !host.opens[1].Select {
+		t.Fatal("foreground gallery was not selected")
+	}
+	if names := m.list(context.Background()); !slices.Equal(names, []string{"Compare", "images"}) {
+		t.Fatalf("names = %v", names)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"a.webp"}, Name: editorWindowName}); !errors.Is(err, ErrReservedWindowName) {
+		t.Fatalf("reserved = %v", err)
+	}
+}
+
+func TestOpenImagesValidatesBeforeReplacingAndReadHasNoViewport(t *testing.T) {
+	m, host, root := newTestManager(t)
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"one.png"}, Name: "gallery"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.openImages(context.Background(), openImagesInput{Paths: []string{"missing.png"}, Name: "gallery"}); err == nil {
+		t.Fatal("accepted missing image")
+	}
+	if len(host.closes) != 0 {
+		t.Fatalf("invalid replacement closed %v", host.closes)
+	}
+	host.text = strings.Repeat("1. one.png\n", readWindowLimit+1) + "Current image: 1 of 1"
+	text, viewport, err := m.read(context.Background(), readWindowInput{Name: "gallery"})
+	if err != nil || viewport != nil || !strings.HasSuffix(text, "Current image: 1 of 1") {
+		t.Fatalf("read = %q, %+v, %v", text, viewport, err)
+	}
+}
+
+func TestOpenImagesMCPResponseHasMessageAndNoViewport(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	server := newMCPServer(root, testEditor, &fakeHost{}, session.ModeRPI)
+	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+	serverTransport, clientTransport := mcp.NewInMemoryTransports()
+	ss, err := server.Connect(ctx, serverTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ss.Close()
+	cs, err := client.Connect(ctx, clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolOpenImages, Arguments: openImagesInput{Paths: []string{"one.png"}}})
+	if err != nil || result.IsError {
+		t.Fatalf("result = %+v, %v", result, err)
+	}
+	for _, args := range []map[string]any{
+		{"name": "images", "index": 0}, {"name": "images", "index": -1}, {"name": "images", "index": 2},
+		{"name": "images", "index": 1.5}, {"name": "images", "index": 1e50}, {"index": 1}, {"name": "images"}, {"name": " ", "index": 1},
+	} {
+		failed, callErr := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolFocusImage, Arguments: args})
+		if callErr == nil && !failed.IsError {
+			t.Fatalf("accepted focus arguments %+v", args)
+		}
+	}
+	focused, callErr := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolFocusImage, Arguments: map[string]any{"name": "images", "index": 1}})
+	if callErr != nil || focused.IsError {
+		t.Fatalf("focus = %+v, %v", focused, callErr)
+	}
+	output := structuredOutput(t, result.StructuredContent)
+	if _, ok := output[keyMessage].(string); !ok {
+		t.Fatalf("output = %#v", output)
+	}
+	if _, ok := output["viewport"]; ok {
+		t.Fatalf("image response has viewport: %#v", output)
+	}
 }
 
 // A ceiling these tests never mean to reach: they end when the poll sees the
@@ -1204,7 +1309,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 // the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
-		toolOpenFile, toolRunCommand, toolReadWindow, toolShowDiff,
+		toolOpenFile, toolOpenImages, toolFocusImage, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
 	}
 	for _, tc := range []struct {
@@ -1266,7 +1371,7 @@ func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
 
 func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
 	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
-	want := map[string]bool{toolOpenFile: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
+	want := map[string]bool{toolOpenFile: true, toolOpenImages: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
 	for name, tool := range tools {
 		schema := structuredOutput(t, tool.InputSchema)
 		properties, _ := schema["properties"].(map[string]any)
@@ -1464,5 +1569,193 @@ func TestSharePageStagesAPageInsideTheSession(t *testing.T) {
 func TestSharePageRefusesAPathOutsideTheSession(t *testing.T) {
 	if _, err := sharePage(t.TempDir(), sharePageInput{Path: "../elsewhere.md"}); err == nil {
 		t.Error("shared a document from outside the session")
+	}
+}
+
+func (h *fakeHost) FocusImage(_ context.Context, id string, index int) (workbench.ImageSelection, error) {
+	h.mu.Lock()
+	entered, gate := h.focusEntered, h.focusGate
+	h.focusEntered, h.focusGate = nil, nil
+	h.mu.Unlock()
+	if gate != nil {
+		close(entered)
+		<-gate
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.focuses = append(h.focuses, struct {
+		id    string
+		index int
+	}{id, index})
+	if h.focusErr != nil {
+		return workbench.ImageSelection{}, h.focusErr
+	}
+	for i, candidate := range h.ids {
+		if candidate != id || !h.live[id] {
+			continue
+		}
+		opts := h.opens[i]
+		if opts.Format != workbench.FormatImages || index < 1 || index > len(opts.Images) {
+			return workbench.ImageSelection{}, fmt.Errorf("invalid image selection")
+		}
+		return workbench.ImageSelection{CurrentIndex: index, Count: len(opts.Images), Revision: uint64(len(h.focuses) + 1)}, nil
+	}
+	return workbench.ImageSelection{}, fmt.Errorf("missing gallery")
+}
+
+func TestFocusImageAddressesOneLiveIDWithoutOpeningOrRetargeting(t *testing.T) {
+	ctx := context.Background()
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	id, err := manager.open(ctx, "gallery", workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "z.png"}, {Source: "a.png"}, {Source: "z.png"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, index := range []int{1, 3} {
+		message, err := manager.focusImage(ctx, focusImageInput{Name: " gallery ", Index: index})
+		if err != nil || !strings.Contains(message, fmt.Sprintf("image %d of 3", index)) {
+			t.Fatalf("focus = %q, %v", message, err)
+		}
+	}
+	for _, index := range []int{0, -1, 4} {
+		if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: index}); err == nil {
+			t.Fatal("accepted invalid index")
+		}
+	}
+	host.focusErr = errors.New("closed during focus")
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 2}); err == nil {
+		t.Fatal("ignored failed host focus")
+	}
+	if len(host.opens) != 1 || len(host.closes) != 0 {
+		t.Fatal("focus reopened a tab")
+	}
+	for _, call := range host.focuses {
+		if call.id != id {
+			t.Fatal("focus changed target")
+		}
+	}
+}
+
+func TestFocusImageDoesNotFollowAReplacement(t *testing.T) {
+	ctx := context.Background()
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	options := workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatImages, Images: []workbench.ImageRef{{Source: "a.png"}}}
+	old, err := manager.open(ctx, "gallery", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	entered, gate := make(chan struct{}), make(chan struct{})
+	host.focusEntered, host.focusGate = entered, gate
+	finished := make(chan error, 1)
+	go func() { _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 1}); finished <- err }()
+	<-entered
+	successor, err := manager.open(ctx, "gallery", options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	close(gate)
+	if err := <-finished; err == nil {
+		t.Fatal("focus followed replacement")
+	}
+	if len(host.focuses) != 1 || host.focuses[0].id != old || successor == old {
+		t.Fatal("focus retargeted")
+	}
+	if got, err := manager.liveWindow(ctx, "gallery"); err != nil || got != successor {
+		t.Fatal("failed focus lost successor")
+	}
+}
+
+func TestFocusImageRejectsAWrongKindNamedWindow(t *testing.T) {
+	host := &fakeHost{}
+	manager := newWindowManager(t.TempDir(), testEditor, host)
+	ctx := context.Background()
+	if _, err := manager.open(ctx, "notes", workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatMarkdown}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "notes", Index: 1}); err == nil {
+		t.Fatal("focused a non-gallery")
+	}
+	if len(host.opens) != 1 || len(host.closes) != 0 {
+		t.Fatal("wrong-kind focus reopened a tab")
+	}
+}
+
+func TestNamedImageReplacementPreservesOrderAndIndependentNames(t *testing.T) {
+	root := t.TempDir()
+	for _, name := range []string{"a.png", "z.png"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("image"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	host := &fakeHost{}
+	manager := newWindowManager(root, testEditor, host)
+	ctx := context.Background()
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"z.png", "a.png", "z.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.focusImage(ctx, focusImageInput{Name: "gallery", Index: 3}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "other", Paths: []string{"z.png", "a.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"a.png", "z.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(host.opens[2].Images, []workbench.ImageRef{{Source: "a.png"}, {Source: "z.png"}}) || !reflect.DeepEqual(host.closes, []string{"window-1"}) {
+		t.Fatal("replacement lost order or affected other gallery")
+	}
+	if names := manager.list(ctx); !reflect.DeepEqual(names, []string{"gallery", "other"}) {
+		t.Fatalf("names = %v", names)
+	}
+	host.openErr = errors.New("socket failed")
+	if _, err := manager.openImages(ctx, openImagesInput{Name: "gallery", Paths: []string{"a.png"}}); err == nil {
+		t.Fatal("host failure accepted")
+	}
+	if names := manager.list(ctx); !reflect.DeepEqual(names, []string{"other"}) {
+		t.Fatalf("host failure left invalid claim: %v", names)
+	}
+	if _, err := manager.closeWindow(ctx, windowNameInput{Name: "other"}); err != nil {
+		t.Fatal(err)
+	}
+	if len(manager.list(ctx)) != 0 {
+		t.Fatal("close left named gallery")
+	}
+}
+
+func TestCompetingImageOpensRetainTheLaterClaim(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "one.png"), []byte("image"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	host := &fakeHost{}
+	manager := newWindowManager(root, testEditor, host)
+	ctx := context.Background()
+	entered, release := host.blockOpen()
+	defer release()
+	finished := make(chan error, 1)
+	go func() {
+		_, err := manager.openImages(ctx, openImagesInput{Paths: []string{"one.png"}})
+		finished <- err
+	}()
+	<-entered
+	if _, err := manager.openImages(ctx, openImagesInput{Paths: []string{"one.png", "one.png"}}); err != nil {
+		t.Fatal(err)
+	}
+	winner, err := manager.liveWindow(ctx, "images")
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+	if err := <-finished; err != nil {
+		t.Fatal(err)
+	}
+	live, err := manager.liveWindow(ctx, "images")
+	if err != nil || live != winner {
+		t.Fatal("earlier claim replaced later gallery")
+	}
+	if len(host.closes) != 1 || host.closes[0] == winner {
+		t.Fatal("competing open closed winner")
 	}
 }
