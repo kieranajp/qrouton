@@ -45,7 +45,7 @@
       term.onBinary((data) => Call.ByName(pty.write, id, btoa(data)));
       const offData = Events.On(pty.data + id, (event) => paint(term, event.data));
       const offExit = Events.On(pty.exit + id, (event) => {
-        term.write("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n");
+        paint(term, encode("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n"));
       });
       const stopWatch = watchSize(host, fit);
 
