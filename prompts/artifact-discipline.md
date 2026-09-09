@@ -11,3 +11,14 @@ They know the system, so leave out the background. Assume they lack the context 
 Make the artifact stand alone. Name another document only where the reader can safely skip it. Say each thing where it sits, rather than referring the reader forward or backward through your own text — no "as noted above", no numbered findings to track.
 
 Read the finished artifact before you return it. Compress the passages that read long. Judge it by reading, because you cannot count your own output reliably. Ask also whether a reader without your context follows it first time.
+
+**Look for these when re-reading.** This prose has house tics that add nothing to a functional document.
+
+- The kicker: a clause after a dash that only restates the sentence it hangs off.
+- The reversal: "not X, it's Y", "X isn't about Y, it's about Z".
+- The triple: three parallel items where two carry the meaning.
+- The concept as actor: "the boundary surfaces this", "this buys us a seam". Name the person, the file, or the function.
+- The flagged aside: "worth noting", "importantly", "notably". Say the thing or cut it.
+- The vocabulary: leverage, robust, seamless, crucial, ensure, delve, and surface as a verb.
+
+Judge each line by what it tells the reader and rewrite for simplicity rather than fanciness.

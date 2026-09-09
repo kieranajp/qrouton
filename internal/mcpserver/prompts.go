@@ -26,7 +26,7 @@ const (
 
 	descReadWindow = "Capture the current output of a window opened with run_command or open_file. Markdown results also include the current measured viewport as one-based inclusive source-block intervals, merged in source order; unavailable differs from a measured empty interval list. Set full to include terminal scrollback."
 
-	descShowDiff = "Show a repo's git diff for the user to review, rendered as a formatted pane that stays open until they close it. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every session repo. Use base to compare against a ref (e.g. the default branch) or staged for index changes. Tabs begin in the background; foreground selects one without taking the keyboard."
+	descShowDiff = "Show a repo's git diff for the user to review, rendered as a formatted pane that stays open until they close it. The pane holds the diff as it was at this call and never refreshes itself, so call again after further edits. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every session repo. Use base to compare against a ref (e.g. the default branch) or staged for index changes. Tabs begin in the background; foreground selects one without taking the keyboard."
 
 	descNotify = "Get the user's attention with an on-screen message and a sound. The message becomes a tab marked as wanting the user, and stays until they dismiss it; it does not take the keyboard. It begins in the background, ordinarily relying on sound and its waiting marker; foreground selects it without taking the keyboard. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs."
 
