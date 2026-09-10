@@ -87,6 +87,40 @@ test("a retained shell replay replaces phantom cells with its prompt", async ({ 
   await expect.poll(() => page.evaluate(() => window.shell.terminalText())).not.toContain("orphaned a");
 });
 
+test("retained terminal queries do not reply while live queries and typing do", async ({ page }) => {
+  const query = "\x1bP$qm\x1b\\";
+  const response = "\x1bP1$r0m\x1b\\";
+  await open(page, "window-1");
+  await expect.poll(() => page.evaluate(() => window.shell.started())).toContainEqual([
+    "Windows",
+    "window-1",
+  ]);
+  await page.evaluate(() => window.shell.focusTerminal());
+
+  await page.evaluate(
+    ([query]) => window.shell.terminalData("window-1", query, true),
+    [query],
+  );
+  await page.keyboard.type("x");
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toContain("x");
+  expect(await page.evaluate(() => window.shell.writes("window-1"))).not.toContain(response);
+
+  await page.evaluate(
+    ([query]) => {
+      window.shell.terminalData("window-1", query);
+      window.shell.terminalData("window-1", query, true);
+      window.shell.terminalData("window-1", query);
+      window.shell.terminalData("window-1", query, true);
+    },
+    [query],
+  );
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toEqual([
+    "x",
+    response,
+    response,
+  ]);
+});
+
 test("an unselected session opens on its leftmost tab", async ({ page }) => {
   await open(page);
   await expect(selected(page)).toHaveText("Shell");

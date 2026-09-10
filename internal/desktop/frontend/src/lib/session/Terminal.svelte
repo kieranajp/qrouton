@@ -3,7 +3,7 @@
   import TerminalPane from "../shell/TerminalPane.svelte";
   import { createTerminalActivation } from "../terminal-focus.js";
   import { Call, Events } from "../wails.js";
-  import { encode, fontsReady, mount, paint, watchSize } from "../xterm.js";
+  import { createTerminalPainter, encode, fontsReady, mount, watchSize } from "../xterm.js";
 
   /** @type {{id: string, pty: import("./services.js").PTY, active?: boolean,
    *   focus?: number, focusPending?: boolean, onFocused?: (generation: number) => void}} */
@@ -40,12 +40,13 @@
       const started = mount(host, { write, background: "--ctp-crust" });
       const { refit, dispose } = started;
       term = started.term;
+      const painter = createTerminalPainter(term);
       fit = () => refit((cols, rows) => Call.ByName(pty.resize, id, cols, rows));
 
       term.onBinary((data) => Call.ByName(pty.write, id, btoa(data)));
-      const offData = Events.On(pty.data + id, (event) => paint(term, event.data));
+      const offData = Events.On(pty.data + id, (event) => painter.paint(event.data));
       const offExit = Events.On(pty.exit + id, (event) => {
-        term.write("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n");
+        painter.paint(encode("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n"));
       });
       const stopWatch = watchSize(host, fit);
 
@@ -53,6 +54,7 @@
         offData();
         offExit();
         stopWatch();
+        painter.dispose();
         dispose();
       };
 
