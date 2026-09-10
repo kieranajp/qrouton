@@ -83,7 +83,7 @@
       style="--slide-scale: {scale}"
       use:links={doc.source}
       use:diagrams={{ id, text: doc.text, fit: true }}
-      use:port={{ id, active, scrollRoot }}>
+      use:port={{ id, active, scrollRoot, request: doc.viewportEpoch }}>
       {#each cards as card, index (index)}
         <div
           class="card"

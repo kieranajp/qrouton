@@ -32,6 +32,11 @@ window.activate = () => {
   surface.style.display = "block";
   window.controller.setSelected(true);
 };
+window.deactivate = () => window.controller.setSelected(false);
+window.scrollAway = () => {
+  root.scrollTop = document.querySelector("#nested").offsetTop + 10;
+};
+window.scrollTop_ = () => root.scrollTop;
 window.moveTargetWithReflow = () => {
   before.style.height = `${before.offsetHeight + 180}px`;
   root.style.height = `${root.offsetHeight - 10}px`;

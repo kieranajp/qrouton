@@ -8,6 +8,17 @@ import { emitWailsEvent } from "./wails-runtime.js";
 
 const calls = [];
 let refuseSelect = false;
+let currentTabs = [];
+const DOCUMENT = {
+  text: ["# Reader", "", ...Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}.`)].join("\n\n"),
+  format: "markdown",
+  source: "thoughts/shared/research/R1-reader.md",
+  path: "/sessions/octopus/thoughts/shared/research/R1-reader.md",
+  kind: "NOTE",
+  line: 0,
+  to: 0,
+  viewportEpoch: 1,
+};
 
 window.wailsCall = (name, ...args) => {
   calls.push({ name, args });
@@ -15,6 +26,8 @@ window.wailsCall = (name, ...args) => {
     return Promise.reject(new Error("no such window"));
   }
   if (name.endsWith("Windows.Surfaces")) return { session: "octopus", selected: "", tabs: [] };
+  if (name.endsWith("Windows.Content")) return DOCUMENT;
+  if (name.endsWith("Windows.RenderDiagrams")) return [];
   if (name.endsWith("Windows.OpenShell")) return "window-9";
   if (name.endsWith("Picker.Load")) return { branch: "fix/octopus-4b2a", repos: [] };
   if (name.endsWith("Orgs.List") || name.endsWith("Repositories.Cached")) return [];
@@ -38,8 +51,12 @@ window.overlapOwner = () => {
 
 window.shell = {
   chrome: (fields) => emitWailsEvent("chrome:update", { slug: "octopus", ...fields }),
-  windows: (selected, tabs) =>
-    emitWailsEvent("window:open", { session: "octopus", selected, tabs }),
+  windows: (selected, tabs) => {
+    currentTabs = tabs;
+    emitWailsEvent("window:open", { session: "octopus", selected, tabs });
+  },
+  acknowledge: (selected) =>
+    emitWailsEvent("window:open", { session: "octopus", selected, tabs: currentTabs }),
   terminalData: (id, text, replay = false) =>
     emitWailsEvent("window:data:" + id, { encoded: encode(text), replay }),
   terminalText: () => {
@@ -60,4 +77,16 @@ window.shell = {
     calls
       .filter(({ name }) => name.endsWith(".Start"))
       .map(({ name, args }) => [name.split(".").at(-2), args[0]]),
+  contentCalls: () => calls.filter(({ name }) => name.endsWith("Windows.Content")).length,
+  documentState: () => {
+    const body = document.querySelector('.human [data-document-source="thoughts/shared/research/R1-reader.md"]')?.closest(".body");
+    return body && {
+      visible: getComputedStyle(body.closest(".pane")).display !== "none",
+      scrollTop: body.scrollTop,
+    };
+  },
+  scrollDocument: (top) => {
+    const body = document.querySelector('.human [data-document-source="thoughts/shared/research/R1-reader.md"]')?.closest(".body");
+    body.scrollTop = top;
+  },
 };

@@ -164,7 +164,7 @@
           data-document-source={doc.source}
           use:links={doc.source}
           use:diagrams={{ id, text: doc.text }}
-          use:port={{ id, active, scrollRoot, key: at.current }}>
+          use:port={{ id, active, scrollRoot, key: at.current, request: doc.viewportEpoch }}>
           <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
             <CapsLabel
               >Plan · {plan.phases.length}

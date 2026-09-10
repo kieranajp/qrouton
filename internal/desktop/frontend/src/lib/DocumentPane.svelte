@@ -1,5 +1,5 @@
 <script>
-  import { tick } from "svelte";
+  import { onDestroy, tick } from "svelte";
   import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT } from "./bridge/generated.js";
   import { paneFor } from "./panes/index.js";
   import { Call, Events } from "./wails.js";
@@ -18,9 +18,14 @@
 
   /** @type {{text: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, images?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
+  let windowID = "";
+  let dispose = () => {};
 
   $effect(() => {
-    const windowID = id;
+    const nextID = id;
+    if (nextID === windowID) return;
+    dispose();
+    windowID = nextID;
     let disposed = false;
     let live = false;
     doc = undefined;
@@ -36,18 +41,20 @@
       accept(event.data);
     });
     (async () => {
-      const content = await Call.ByName(WINDOWS_CONTENT, windowID);
+      const content = await Call.ByName(WINDOWS_CONTENT, nextID);
       if (disposed) return;
       if (content?.format === "images") accept(content);
       else doc = live && doc ? { ...content, text: doc.text } : content;
       await tick();
       if (!disposed) onReady?.();
     })();
-    return () => {
+    dispose = () => {
       disposed = true;
       off();
     };
   });
+
+  onDestroy(() => dispose());
 </script>
 
 {#if doc}
