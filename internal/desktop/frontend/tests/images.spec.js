@@ -15,6 +15,43 @@ test("ordered gallery decodes the raster formats and preserves duplicates and ca
   expect(await page.evaluate(() => window.errors)).toEqual([]);
 });
 
+test("clicking the selected image opens a fitted lightbox and Escape closes it", async ({ page }) => {
+  await page.goto("/tests/images.html");
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+  const preview = await primary(page).boundingBox();
+
+  await primary(page).click();
+
+  const lightbox = page.getByRole("dialog", { name: /Expanded image/ });
+  await expect(lightbox).toBeFocused();
+  const enlarged = await lightbox.locator("img").boundingBox();
+  expect(enlarged.width).toBeGreaterThan(preview.width);
+  const room = page.viewportSize();
+  expect(await lightbox.boundingBox()).toEqual({ x: 0, y: 0, width: room.width, height: room.height });
+
+  await page.keyboard.press("Escape");
+  await expect(lightbox).toHaveCount(0);
+  await expect(page.locator(".primary-frame")).toBeFocused();
+});
+
+test("the lightbox stays open over the image and closes from the scrim or control", async ({ page }) => {
+  await page.goto("/tests/images.html");
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+  const trigger = page.locator(".primary-frame");
+
+  await trigger.click();
+  await page.locator(".lightbox .card img").click({ position: { x: 10, y: 10 } });
+  await expect(page.locator(".lightbox")).toHaveCount(1);
+  await page.mouse.click(6, 6);
+  await expect(page.locator(".lightbox")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator(".lightbox")).toHaveCount(0);
+  await expect(trigger).toBeFocused();
+});
+
 for (const width of [320, 1100]) {
   test(`primary image fits without upscaling at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 720 });
