@@ -209,6 +209,16 @@ test("a pushed document redraws the body without moving the reader", async ({ pa
   await expect.poll(() => shown(page)).toEqual(["2"]);
 });
 
+test("a new viewport epoch fulfills its source target", async ({ page }) => {
+  await open(page, "?line=19");
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+
+  await page.evaluate(() => window.pushRequest(41));
+
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  await expect.poll(() => marked(page)).toEqual([41]);
+});
+
 test("a push that ticks the last box moves the meter, not the screen", async ({ page }) => {
   await open(page, "?line=19");
   await page.keyboard.press("ArrowRight");
@@ -218,6 +228,36 @@ test("a push that ticks the last box moves the meter, not the screen", async ({ 
   await expect(page.locator('[data-count="3"]')).toHaveText("1 of 1 met");
   await expect.poll(() => shown(page)).toEqual(["3"]);
   expect(await marked(page)).toEqual([]);
+});
+
+test("a checkbox push keeps a pinned long screen at its scroll position", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 420 });
+  await open(page, "?tall=true");
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  await page.evaluate(() => window.scrollTo_(360));
+  await expect.poll(() => page.evaluate(() => window.scrollTop_())).toBe(360);
+
+  await page.evaluate(() => window.pushStableTall());
+
+  await expect(page.locator('[data-screen="2"] input[type="checkbox"]').nth(1)).toBeChecked();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(360);
+});
+
+test("a checkbox push keeps an unchanged followed screen at its scroll position", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 420 });
+  await open(page, "?tall=true");
+  await page.evaluate(() => window.emitChrome({ activity: "working" }));
+  await follow(page).check();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  await page.evaluate(() => window.scrollTo_(360));
+  await expect.poll(() => page.evaluate(() => window.scrollTop_())).toBe(360);
+
+  await page.evaluate(() => window.pushStableTall());
+
+  await expect(page.locator('[data-screen="2"] input[type="checkbox"]').nth(1)).toBeChecked();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(360);
 });
 
 const bar = (page) => page.evaluate(() => window.bar());

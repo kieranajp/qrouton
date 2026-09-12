@@ -115,7 +115,7 @@ export function createViewportController(options) {
     const geometry = targetGeometry();
     const shouldReveal =
       geometry.available &&
-      (work === "activate" ||
+      ((work === "activate" && !achievedTarget) ||
         (work === "layout" && (!achievedTarget || (targetVisible && !geometry.visible))));
     if (shouldReveal) target.scrollIntoView({ block: "center" });
     measure();
@@ -155,8 +155,6 @@ export function createViewportController(options) {
     const active = Boolean(next);
     if (active === selected) return;
     selected = active;
-    achievedTarget = false;
-    targetVisible = false;
     if (active) {
       queue("activate");
     } else {

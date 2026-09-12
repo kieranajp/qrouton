@@ -102,7 +102,7 @@
           data-document-source={doc.source}
           use:links={doc.source}
           use:diagrams={{ id, text: doc.text }}
-          use:port={{ id, active, scrollRoot, key: [...open].sort().join(",") }}>
+          use:port={{ id, active, scrollRoot, key: [...open].sort().join(","), request: doc.viewportEpoch }}>
           <h1 class="display-lg">{research.title || heading}</h1>
           <div class="markdown lead">{@html parts.preamble}</div>
           {#if research.summary}

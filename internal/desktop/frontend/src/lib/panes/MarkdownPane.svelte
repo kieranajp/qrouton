@@ -27,7 +27,7 @@
     data-document-source={doc.source}
     use:links={doc.source}
     use:diagrams={{ id, text: doc.text }}
-    use:port={{ id, active, scrollRoot }}>
+    use:port={{ id, active, scrollRoot, request: doc.viewportEpoch }}>
     {@html rendered.body}
   </div>
 {/snippet}

@@ -61,44 +61,54 @@ export function diagrams(body, { id, fit }) {
 export function viewport({ span, epoch, marking, onMeasure }) {
   /**
    * @param {HTMLElement} content
-   * @param {{id: string, active?: boolean, scrollRoot?: HTMLElement, key?: unknown}} initial
+   * @param {{id: string, active?: boolean, scrollRoot?: HTMLElement, key?: unknown, request?: unknown}} initial
    */
   return (content, initial) => {
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (content.querySelectorAll("[data-line]")),
-    ];
-    const asked = span();
-    const { marked, at } = marks(
-      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      asked,
-    );
-    if (marking?.() ?? true) for (const index of marked) blocks[index].classList.add("marked");
-    const target = blocks[at];
     let controller;
     let root;
     let windowID;
     let key;
+    let request;
+    const create = (params) => {
+      const blocks = [
+        .../** @type {NodeListOf<HTMLElement>} */ (content.querySelectorAll("[data-line]")),
+      ];
+      const asked = span();
+      const { marked, at } = marks(
+        blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
+        asked,
+      );
+      for (const block of blocks) block.classList.remove("marked");
+      if (marking?.() ?? true) for (const index of marked) blocks[index].classList.add("marked");
+      return createViewportController({
+        root: params.scrollRoot,
+        content,
+        target: blocks[at],
+        span: asked,
+        selected: params.active,
+        nextSequence: () => nextViewportSequence(params.id),
+        onMeasure,
+        report: (report) =>
+          Call.ByName(WINDOWS_REPORT_VIEWPORT, params.id, {
+            epoch: epoch(),
+            ...report,
+          }).catch(() => {}),
+      });
+    };
     const apply = (params) => {
       if (!params.scrollRoot) return;
-      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
+      if (
+        !controller ||
+        root !== params.scrollRoot ||
+        windowID !== params.id ||
+        request !== params.request
+      ) {
         controller?.destroy();
         root = params.scrollRoot;
         windowID = params.id;
         key = params.key;
-        controller = createViewportController({
-          root,
-          content,
-          target,
-          span: asked,
-          selected: params.active,
-          nextSequence: () => nextViewportSequence(windowID),
-          onMeasure,
-          report: (report) =>
-            Call.ByName(WINDOWS_REPORT_VIEWPORT, windowID, {
-              epoch: epoch(),
-              ...report,
-            }).catch(() => {}),
-        });
+        request = params.request;
+        controller = create(params);
         return;
       }
       controller.setSelected(params.active);
