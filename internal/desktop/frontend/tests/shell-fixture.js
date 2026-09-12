@@ -3,7 +3,7 @@ import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import Session from "../src/Session.svelte";
-import { encode, terminalAt } from "../src/lib/xterm.js";
+import { decode, encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
 const calls = [];
@@ -51,6 +51,11 @@ window.shell = {
     }
     return lines.join("\n");
   },
+  focusTerminal: () => terminalAt(document.querySelector(".human .host"))?.focus(),
+  writes: (id) =>
+    calls
+      .filter(({ name, args }) => name.endsWith("Windows.Write") && args[0] === id)
+      .map(({ args }) => new TextDecoder().decode(decode(args[1]))),
   refuseSelect: (refuse) => (refuseSelect = refuse),
   selects: () =>
     calls.filter(({ name }) => name.endsWith("Windows.Select")).map(({ args }) => args),
