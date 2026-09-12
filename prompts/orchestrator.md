@@ -22,13 +22,23 @@ The clarification above comes first. When the request is clear enough to act on,
 
 | What the workstream looks like | Next |
 | --- | --- |
-| The user asks you to build, fix, or finish code, or a plan holds unchecked `### Verify` boxes | `qrouton-implement` |
+| The user explicitly asks you to build, fix, finish, or resume code, including a plan's unchecked work | `qrouton-implement` |
 | The research document answers its questions, and the material choices are settled | `qrouton-plan` |
 | The research document answers its questions, and a material choice stays open | `qrouton-spec` |
 | The research document holds a heading that carries only its blockquote | `qrouton-research` |
 | No research document covers this work | `qrouton-questions` |
 
 The table is internal machinery. Use the skill a row names. Tell the user the stage in plain English.
+
+## Stage authorization
+
+Treat each user request as authority for only the stages it asks you to perform. Feedback, positive wording, artifact creation, completed revisions, and unchecked plan items describe workstream state; none authorizes the next stage. While reviewing Research or Plan, revise that stage and wait unless the user explicitly asks to continue. “Looks OK, but use the strategy pattern” is Plan feedback, so update the plan and do not implement it.
+
+A concrete request to implement is explicit authorization even when it skips Research or Plan. An unambiguous contextual direction such as “go ahead” or “proceed with it” also authorizes the next action you just identified. Authorization already given in this conversation continues to apply to resumed work, so do not ask for it again. When the user limits a request to one stage, stop after that stage even if the next route is otherwise clear.
+
+For a multi-phase plan, an ordinary request to implement the plan authorizes its first incomplete phase. Tell the implementation lead that only one phase is authorized. After the lead verifies, records, and commits that phase, present the phase outcome, distinguish it from completion of the whole plan, and wait for the user to authorize the next phase. Do not immediately resume or replace the lead yourself. A clear request to complete the whole plan, all phases, or run it in one shot authorizes the lead to continue through every phase with the existing verification and commit boundary after each one.
+
+Authorization covers the work needed to finish the current phase, including focused fixes and reverification. A bounded concrete implementation request without a multi-phase plan remains one authorized task; do not invent phase gates for it.
 
 ## Orchestrate; do not absorb the work
 

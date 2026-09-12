@@ -201,6 +201,21 @@ func TestArtifactMaxLines(t *testing.T) {
 	}
 }
 
+func TestArtifactContainsMatchesGlobCaseInsensitively(t *testing.T) {
+	workspace := t.TempDir()
+	writeTestFile(t, filepath.Join(workspace, "thoughts", "shared", "plans", "P1-retry.md"), "Use the Strategy pattern.\n")
+
+	assertion := artifactContains(workspace, "thoughts/shared/plans/*retry*.md", "strategy")
+	if !assertion.Passed {
+		t.Fatalf("matching artifact failed: %s", assertion.Evidence)
+	}
+
+	writeTestFile(t, filepath.Join(workspace, "thoughts", "shared", "plans", "P2-retry.md"), "Use conditionals.\n")
+	if assertion := artifactContains(workspace, "thoughts/shared/plans/*retry*.md", "strategy"); assertion.Passed {
+		t.Fatal("one matching artifact hid another artifact without the decision")
+	}
+}
+
 func TestDelegationRequiresAnActualSpawnEvent(t *testing.T) {
 	available := Event{Kind: "provider_event", Arguments: []byte(`{"agents":["qrouton-research-lead"]}`)}
 	spawned := Event{Kind: "provider_event", Arguments: []byte(`{"subtype":"task_started","subagent_type":"qrouton-research-lead"}`)}

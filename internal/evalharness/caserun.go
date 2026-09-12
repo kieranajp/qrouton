@@ -63,6 +63,7 @@ func runCase(
 
 	caseCtx, cancel := context.WithTimeout(parent, config.Timeout)
 	defer cancel()
+	adapter.Ephemeral = len(scenario.Turns) == 1
 	mcpLog := filepath.Join(caseDir, "mcp.jsonl")
 	for turnIndex, prompt := range scenario.Turns {
 		turn := turnIndex + 1

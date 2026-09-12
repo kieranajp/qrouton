@@ -220,7 +220,6 @@ var (
 
 	codexBaseArgs = []string{
 		"--json",
-		"--ephemeral",
 		"--ignore-user-config",
 		"--enable", "multi_agent",
 		"--skip-git-repo-check",
@@ -229,11 +228,12 @@ var (
 )
 
 const (
-	claudeResumeFlag = "--resume"
-	codexExecCmd     = "exec"
-	codexResumeCmd   = "resume"
-	modelFlag        = "--model"
-	versionFlag      = "--version"
+	claudeResumeFlag   = "--resume"
+	codexExecCmd       = "exec"
+	codexResumeCmd     = "resume"
+	codexEphemeralFlag = "--ephemeral"
+	modelFlag          = "--model"
+	versionFlag        = "--version"
 
 	// Event kinds the harness synthesises itself, rather than reading from a
 	// provider stream.

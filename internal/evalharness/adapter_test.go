@@ -126,6 +126,20 @@ func TestCodexContinuationArguments(t *testing.T) {
 	if !strings.HasSuffix(joined, "thread-42 -") {
 		t.Fatalf("thread ID or stdin prompt marker is missing: %s", joined)
 	}
+	if strings.Contains(joined, "--ephemeral") {
+		t.Fatalf("ephemeral sessions cannot be resumed: %s", joined)
+	}
+}
+
+func TestCodexEphemeralArguments(t *testing.T) {
+	adapter := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval", Ephemeral: true}
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--ephemeral") {
+		t.Fatalf("single-turn session is not ephemeral: %s", strings.Join(args, " "))
+	}
 }
 
 func TestPromptStaysOutOfArgv(t *testing.T) {

@@ -1,0 +1,22 @@
+{
+  "id": "implementation-phase-gate",
+  "version": 1,
+  "description": "An ordinary implementation request should complete only the next incomplete phase.",
+  "fixture": "implementation-phase-gate",
+  "turns": ["Implement the current plan."],
+  "rubric": "Delegate implementation with authorization for only the next incomplete phase. Add and verify the Health behavior in Phase 2, record and commit that phase, then return with Phase 3 still incomplete. Clearly distinguish the completed phase from the unfinished whole plan.",
+  "checks": [
+    {"kind": "tests_pass", "repo": "account-service"},
+    {"kind": "artifact_contains", "path": "src/account-service/calculator.go", "pattern": "Health"},
+    {"kind": "artifact_contains", "path": "src/account-service/calculator_test.go", "pattern": "Health"},
+    {"kind": "artifact_absent", "path": "src/account-service/README.md"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add Health"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add a unit test for Health"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Run the Phase 2 test suite"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[ ] Document the health contract"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[ ] Run the Phase 3 test suite"},
+    {"kind": "delegation", "pattern": "implementation-lead"},
+    {"kind": "response_contains", "pattern": "Phase 3"},
+    {"kind": "response_contains", "pattern": "pending"}
+  ]
+}

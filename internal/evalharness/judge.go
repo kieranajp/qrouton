@@ -70,6 +70,7 @@ func JudgePairs(
 
 func PairwiseJudge(ctx context.Context, adapter Adapter, scenario Scenario, a, b CaseResult) PairwiseJudgment {
 	judgment := PairwiseJudgment{Judge: adapter.Name, ARunner: a.Runner, BRunner: b.Runner}
+	adapter.Ephemeral = true
 	prompt, err := pairwisePrompt(scenario, a, b)
 	if err != nil {
 		judgment.Error = err.Error()
