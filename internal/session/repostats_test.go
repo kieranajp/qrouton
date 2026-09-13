@@ -131,7 +131,7 @@ func TestRepoStatsIgnoresCommitsTheBaseBranchGainedAfterwards(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := ensureMirror(root, "org", "svc", origin, nil); err != nil {
+	if err := ensureMirror(root, "org", "svc", origin, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 	// Without the fetch the base never moves and the rest proves nothing.

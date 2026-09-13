@@ -118,14 +118,24 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 }
 
 func artifactContains(workspace, path, pattern string) Assertion {
-	content, err := os.ReadFile(filepath.Join(workspace, filepath.FromSlash(path)))
+	name := assertArtifactContains + path
+	matches, err := filepath.Glob(filepath.Join(workspace, filepath.FromSlash(path)))
 	if err != nil {
-		return Assertion{Name: assertArtifactContains + path, Evidence: err.Error()}
+		return Assertion{Name: name, Evidence: err.Error()}
 	}
-	return Assertion{
-		Name:   assertArtifactContains + path,
-		Passed: strings.Contains(string(content), pattern),
+	if len(matches) == 0 {
+		return Assertion{Name: name, Evidence: evidenceNoArtifacts}
 	}
+	for _, match := range matches {
+		content, readErr := os.ReadFile(match)
+		if readErr != nil {
+			return Assertion{Name: name, Evidence: readErr.Error()}
+		}
+		if !strings.Contains(strings.ToLower(string(content)), strings.ToLower(pattern)) {
+			return Assertion{Name: name, Evidence: filepath.ToSlash(match)}
+		}
+	}
+	return Assertion{Name: name, Passed: true}
 }
 
 func artifactMaxLines(workspace, pattern string, limit int) Assertion {

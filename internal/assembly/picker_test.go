@@ -537,3 +537,40 @@ func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 		t.Fatalf("the checkout is on %q", strings.TrimSpace(string(branch)))
 	}
 }
+
+func TestFailedAdditionCanRetryWithoutReplacingCompletedWorktrees(t *testing.T) {
+	a, dir := scratch(t)
+	first := testRepo(t, "first")
+	second := testRepo(t, "second")
+	broken := second
+	broken.SSHURL = filepath.Join(t.TempDir(), "missing")
+	draft := Draft{Name: "Batch", Prefix: "feat", Repos: editing(first, broken)}
+	if err := a.Confirm(dir, draft, true, nil); err == nil {
+		t.Fatal("confirmed an unclonable repository")
+	}
+	got, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 1 || got.Repos[0].Name != first.Name || got.Escalation != nil || got.Mode != session.ModeAssistant {
+		t.Fatalf("failed batch manifest = %+v", got)
+	}
+	work := filepath.Join(dir, got.Repos[0].WorktreePath, "local.txt")
+	if err := os.WriteFile(work, []byte("keep my work"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	draft.Repos = editing(first, second)
+	if err := a.Confirm(dir, draft, true, nil); err != nil {
+		t.Fatal("retry failed:", err)
+	}
+	got, err = session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Repos) != 2 || got.Mode != session.ModeRPI || got.Escalation == nil {
+		t.Fatalf("retried batch manifest = %+v", got)
+	}
+	if body, err := os.ReadFile(work); err != nil || string(body) != "keep my work" {
+		t.Fatalf("completed checkout lost work: %q, %v", body, err)
+	}
+}

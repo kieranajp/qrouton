@@ -165,7 +165,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	url := sshURL(r.Org, r)
 	rep := reporter{fn: progress, repo: &r, role: role}
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
-		return ensureMirror(cfg.Root, r.Org, r.Name, url, advance)
+		return ensureMirror(cfg.Root, r.Org, r.Name, url, r.DefaultBranch, advance)
 	}); err != nil {
 		return ManifestRepo{}, err
 	}

@@ -2,6 +2,7 @@
   import { onDestroy, tick } from "svelte";
   import { WINDOWS_FOCUS_IMAGE } from "../bridge/generated.js";
   import { Call } from "../wails.js";
+  import ImageLightbox from "./ImageLightbox.svelte";
 
   /** @type {{doc: {images?: {source: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
@@ -11,12 +12,29 @@
   let entry = $derived(images[current - 1]);
   /** @type {Record<string, 'loaded' | 'error'>} */
   let loads = $state({});
+  /** @type {Record<string, number>} */
+  let aspects = $state({});
   let selectionError = $state("");
+  let expanded = $state(false);
+  /** @type {HTMLButtonElement} */
+  let primary = $state();
   /** @type {HTMLOListElement} */
   let strip = $state();
   let alive = true;
   let request = 0;
   onDestroy(() => { alive = false; });
+
+  function loaded(url, event) {
+    loads[url] = "loaded";
+    const image = /** @type {HTMLImageElement} */ (event.currentTarget);
+    aspects[url] = image.naturalWidth / image.naturalHeight;
+  }
+
+  async function closeLightbox() {
+    expanded = false;
+    await tick();
+    if (active) primary?.focus();
+  }
 
   async function select(index) {
     const attempt = ++request;
@@ -51,6 +69,10 @@
     return () => { cancelled = true; };
   });
 
+  $effect(() => {
+    if (!active) expanded = false;
+  });
+
   const basename = (source) => source.split("/").pop();
 </script>
 
@@ -64,16 +86,22 @@
       </figcaption>
       {#key entry.url}
       {@const shown = entry}
-      <div class="primary-frame">
+      <button
+        type="button"
+        class="primary-frame"
+        bind:this={primary}
+        disabled={loads[shown.url] !== "loaded"}
+        aria-label={`Expand image: ${shown.source}`}
+        onclick={() => (expanded = true)}>
         {#if loads[shown.url] === "error"}
           <p class="load-error">Could not load image<br />{shown.source}</p>
         {:else}
           {#if !loads[shown.url]}<span class="loading">Loading image…</span>{/if}
           <img src={shown.url} alt={shown.source}
-            onload={() => (loads[shown.url] = "loaded")}
+            onload={(event) => loaded(shown.url, event)}
             onerror={() => (loads[shown.url] = "error")} />
         {/if}
-      </div>
+      </button>
       {/key}
     </figure>
   {/if}
@@ -91,7 +119,7 @@
           {:else}
             {#if !loads[image.url]}<span class="loading">Loading…</span>{/if}
             <img src={image.url} alt={image.source}
-              onload={() => (loads[image.url] = "loaded")}
+              onload={(event) => loaded(image.url, event)}
               onerror={() => (loads[image.url] = "error")} />
           {/if}
         </div>
@@ -102,6 +130,10 @@
     {/each}
   </ol>
 </article>
+
+{#if expanded && active && entry}
+  <ImageLightbox image={entry} aspect={aspects[entry.url] ?? 1} onClose={closeLightbox} />
+{/if}
 
 <style>
   .images-pane {
@@ -147,8 +179,22 @@
   }
 
   .primary-frame {
+    width: 100%;
     min-height: 180px;
     padding: 12px;
+    border: 0;
+    color: inherit;
+    font: inherit;
+    cursor: zoom-in;
+  }
+
+  .primary-frame:disabled {
+    cursor: default;
+  }
+
+  .primary-frame:focus-visible {
+    outline: 2px solid var(--accent-action);
+    outline-offset: -2px;
   }
 
   img {
@@ -177,7 +223,7 @@
     min-width: 0;
   }
 
-  button {
+  .image-strip button {
     width: 100%;
     height: 100%;
     text-align: left;
@@ -191,11 +237,11 @@
     border-radius: 6px;
   }
 
-  button.current {
+  .image-strip button.current {
     border-color: var(--accent-action);
   }
 
-  button:focus-visible {
+  .image-strip button:focus-visible {
     outline: 2px solid var(--accent-action);
     outline-offset: 2px;
   }

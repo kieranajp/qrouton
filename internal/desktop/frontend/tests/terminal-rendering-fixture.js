@@ -1,5 +1,5 @@
 import "../src/tokens/index.css";
-import { encode, fontsReady, mount, paint } from "../src/lib/xterm.js";
+import { createTerminalPainter, encode, fontsReady, mount } from "../src/lib/xterm.js";
 
 if (new URLSearchParams(location.search).has("fallback")) {
   const original = HTMLCanvasElement.prototype.getContext;
@@ -17,16 +17,29 @@ window.fixture = {
     document.body.append(host);
     const replies = [];
     const mounted = mount(host, { write: (data) => replies.push(data) });
-    const entry = { ...mounted, host, replies, completed: 0 };
+    const painter = createTerminalPainter(mounted.term);
+    const entry = {
+      ...mounted,
+      host,
+      replies,
+      completed: 0,
+      painter,
+      // A terminal outlives its painter nowhere, so the fixture tears both down
+      // together the way the session surface does.
+      dispose() {
+        painter.dispose();
+        mounted.dispose();
+      },
+    };
     mounted.term.parser.registerOscHandler(777, () => { entry.completed++; return true; });
     terminals.push(entry);
     return terminals.length - 1;
   },
   send(id, text, replay = false, structured = true) {
-    paint(terminals[id].term, structured ? { encoded: encode(text), replay } : encode(text));
+    terminals[id].painter.paint(structured ? { encoded: encode(text), replay } : encode(text));
   },
   bytes(id, bytes) {
-    paint(terminals[id].term, btoa(String.fromCharCode(...bytes)));
+    terminals[id].painter.paint(btoa(String.fromCharCode(...bytes)));
   },
   done(id) { this.send(id, "\x1b]777;done\x07"); },
   hold(id) {

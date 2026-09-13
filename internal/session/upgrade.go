@@ -106,7 +106,7 @@ func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, 
 	// The mirror is already there; this is the fetch that brings the base
 	// branch's tip within reach of the new session branch.
 	if err := rep.step(ProgressMirror, func(advance func(string, int)) error {
-		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, advance)
+		return ensureMirror(cfg.Root, r.Org, r.Name, r.SSHURL, r.DefaultBranch, advance)
 	}); err != nil {
 		return err
 	}

@@ -344,6 +344,36 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 	}
 }
 
+func TestImplementationPromptsCarryPhaseAuthorizationBoundary(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	checks := map[ID][]string{
+		Orchestrator: {
+			"ordinary request to implement the plan authorizes its first incomplete phase",
+			"Do not immediately resume or replace the lead yourself",
+			"complete the whole plan, all phases, or run it in one shot",
+		},
+		ID(skillIDPrefix + "qrouton-implement"): {
+			"whether the user authorized the first incomplete phase or the whole plan",
+			"The orchestrator presents its outcome and waits for explicit authorization",
+		},
+		ID(agentIDPrefix + "qrouton-implementation-lead"): {
+			"Unless it says the user authorized the whole plan, complete only the first incomplete phase",
+			"Do not ask the user for authorization yourself",
+		},
+	}
+	for id, phrases := range checks {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, phrase := range phrases {
+			if !strings.Contains(string(prompt.Content), phrase) {
+				t.Errorf("prompt %q is missing phase boundary %q", id, phrase)
+			}
+		}
+	}
+}
+
 // Both modes drive the same workbench, so the description of it is one text.
 // What differs is escalation: only the assistant has the tool, and only its
 // prompt may say so.

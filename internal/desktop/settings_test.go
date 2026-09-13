@@ -63,6 +63,24 @@ func TestSettingsLoadRoundTripsEditorAndLaunch(t *testing.T) {
 	}
 }
 
+func TestSettingsPreserveEditorArgumentsWhenSaving(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	want := []string{"/Applications/Visual Studio Code.app/bin/code", "--wait", "{}", "a'b", `a"b`, `a\b`, "", "#profile", "line\nbreak"}
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}, Editor: want}
+	s := testSettings(t, cfg, nil, nil, nil)
+	loaded := s.Load()
+	_, err := s.Save(SettingsInput{
+		Orgs: loaded.Orgs, Root: loaded.Root, Editor: loaded.Editor,
+		Launch: loaded.Launch, Linear: loaded.Linear, StickerLabels: loaded.StickerLabels,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.Snapshot().Editor; !reflect.DeepEqual(got, want) {
+		t.Fatalf("editor arguments changed: %q, want %q", got, want)
+	}
+}
+
 func TestSettingsLoadAnswersEffectiveStickerLabels(t *testing.T) {
 	defaults := testSettings(t, &config.Config{}, nil, nil, nil).Load()
 	if defaults.StickerLabels != config.DefaultStickerLabels {

@@ -94,13 +94,17 @@ const document_ = (text) => ({
 
 window.reports = [];
 window.diagramReply = [];
+let diagramRequest = 0;
 window.pushDeck = (text) => emitWailsEvent("window:content:w1", document_(text));
 window.shows = [];
 window.opens = [];
 window.closes = [];
 window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".Content")) return document_(DECK);
-  if (name.endsWith(".RenderDiagrams")) return window.diagramReply;
+  if (name.endsWith(".RenderDiagrams")) {
+    diagramRequest = args[1];
+    return window.diagramReply.map((result) => ({ ...result, request: diagramRequest }));
+  }
   if (name.endsWith(".ReportViewport")) window.reports.push(args[1]);
   if (name.endsWith(".Show")) window.shows.push(args[0]);
   if (name.endsWith(".Open")) window.opens.push(name);
@@ -114,8 +118,8 @@ window.pushDiagramDeck = () => {
   window.pushDeck(DIAGRAM_DECK);
 };
 window.drawDiagram = () =>
-  emitWailsEvent("window:diagram:w1", { line: DIAGRAM_LINE, svg: DIAGRAM_SVG });
-window.failDiagram = (error) => emitWailsEvent("window:diagram:w1", { line: DIAGRAM_LINE, error });
+  emitWailsEvent("window:diagram:w1", { request: diagramRequest, line: DIAGRAM_LINE, svg: DIAGRAM_SVG });
+window.failDiagram = (error) => emitWailsEvent("window:diagram:w1", { request: diagramRequest, line: DIAGRAM_LINE, error });
 
 window.diagram = () => {
   const block = document.querySelector(".card pre[data-line]");

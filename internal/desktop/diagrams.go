@@ -11,9 +11,10 @@ import (
 // its opening marker sits on, and either the SVG, the reason there is none, or
 // neither while it is still being laid out.
 type renderedDiagram struct {
-	Line  int    `json:"line"`
-	SVG   string `json:"svg,omitempty"`
-	Error string `json:"error,omitempty"`
+	Request uint64 `json:"request"`
+	Line    int    `json:"line"`
+	SVG     string `json:"svg,omitempty"`
+	Error   string `json:"error,omitempty"`
 }
 
 // diagramWorker lays a document's d2 fences out off the goroutine that asked
@@ -41,25 +42,25 @@ func newDiagramWorker(emit emitter) *diagramWorker {
 
 // render lays the misses out off this goroutine: opening a document costs a
 // scan, never a layout.
-func (d *diagramWorker) render(id, text string) []renderedDiagram {
+func (d *diagramWorker) render(id, text string, request uint64) []renderedDiagram {
 	found := []renderedDiagram{}
 	var misses []diagram.Fence
 	for _, fence := range diagram.Scan(text) {
 		if svg, hit := d.renderer.Cached(fence.Source); hit {
-			found = append(found, renderedDiagram{Line: fence.Line, SVG: svg})
+			found = append(found, renderedDiagram{Request: request, Line: fence.Line, SVG: svg})
 			continue
 		}
-		found = append(found, renderedDiagram{Line: fence.Line})
+		found = append(found, renderedDiagram{Request: request, Line: fence.Line})
 		misses = append(misses, fence)
 	}
-	d.layOut(id, misses)
+	d.layOut(id, misses, request)
 	return found
 }
 
 // layOut renders one document's misses in document order, emitting each as it
 // finishes. It declines once the renderer is stopping, so a quit cannot race a
 // send at a worker that is shutting down.
-func (d *diagramWorker) layOut(id string, fences []diagram.Fence) {
+func (d *diagramWorker) layOut(id string, fences []diagram.Fence, request uint64) {
 	if len(fences) == 0 {
 		return
 	}
@@ -77,16 +78,16 @@ func (d *diagramWorker) layOut(id string, fences []diagram.Fence) {
 			if d.ctx.Err() != nil {
 				return
 			}
-			d.emit(windowDiagramEvent+id, drawnDiagram(out))
+			d.emit(windowDiagramEvent+id, drawnDiagram(out, request))
 		}
 	}()
 }
 
-func drawnDiagram(out diagram.Result) renderedDiagram {
+func drawnDiagram(out diagram.Result, request uint64) renderedDiagram {
 	if out.Err != nil {
-		return renderedDiagram{Line: out.Line, Error: out.Err.Error()}
+		return renderedDiagram{Request: request, Line: out.Line, Error: out.Err.Error()}
 	}
-	return renderedDiagram{Line: out.Line, SVG: out.SVG}
+	return renderedDiagram{Request: request, Line: out.Line, SVG: out.SVG}
 }
 
 // stop cancels what is in flight before closing the worker: the cancellation

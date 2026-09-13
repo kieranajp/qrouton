@@ -36,6 +36,6 @@ Require this of the lead's return:
 - how you checked it: the verification each phase carries;
 - what stays unresolved: the blockers the lead could not resolve.
 
-Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement.
+Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement. Plan feedback authorizes revisions to the plan, not implementation. Positive wording such as “looks good” does not change that when the same request asks for a revision. After revising the plan, wait for an explicit implementation request.
 
-Run `qrouton-implement` next when the user approves the plan.
+Run `qrouton-implement` next when the user explicitly asks to implement the plan or unambiguously accepts your offer to proceed with it.

@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const TABS = [
   { id: "window-1", label: "Shell", kind: "terminal" },
   { id: "window-2", label: "Agent", kind: "terminal" },
+  { id: "window-3", label: "Research", kind: "document" },
 ];
 
 const selected = (page) => page.locator(".tab.selected .label");
@@ -87,6 +88,40 @@ test("a retained shell replay replaces phantom cells with its prompt", async ({ 
   await expect.poll(() => page.evaluate(() => window.shell.terminalText())).not.toContain("orphaned a");
 });
 
+test("retained terminal queries do not reply while live queries and typing do", async ({ page }) => {
+  const query = "\x1bP$qm\x1b\\";
+  const response = "\x1bP1$r0m\x1b\\";
+  await open(page, "window-1");
+  await expect.poll(() => page.evaluate(() => window.shell.started())).toContainEqual([
+    "Windows",
+    "window-1",
+  ]);
+  await page.evaluate(() => window.shell.focusTerminal());
+
+  await page.evaluate(
+    ([query]) => window.shell.terminalData("window-1", query, true),
+    [query],
+  );
+  await page.keyboard.type("x");
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toContain("x");
+  expect(await page.evaluate(() => window.shell.writes("window-1"))).not.toContain(response);
+
+  await page.evaluate(
+    ([query]) => {
+      window.shell.terminalData("window-1", query);
+      window.shell.terminalData("window-1", query, true);
+      window.shell.terminalData("window-1", query);
+      window.shell.terminalData("window-1", query, true);
+    },
+    [query],
+  );
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toEqual([
+    "x",
+    response,
+    response,
+  ]);
+});
+
 test("an unselected session opens on its leftmost tab", async ({ page }) => {
   await open(page);
   await expect(selected(page)).toHaveText("Shell");
@@ -126,6 +161,37 @@ test("a selection naming no open tab selects none of them", async ({ page }) => 
     /** @type {const} */ ([TABS]),
   );
   await expect(selected(page)).toHaveCount(0);
+});
+
+test("a selected document stays mounted and keeps its scroll through tab selection", async ({ page }) => {
+  await open(page, "window-3");
+  await expect.poll(() => page.evaluate(() => window.shell.documentState()?.visible)).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.shell.contentCalls())).toBe(1);
+  await page.evaluate(() => window.shell.scrollDocument(240));
+  await expect.poll(() => page.evaluate(() => window.shell.documentState()?.scrollTop)).toBe(240);
+
+  await page.getByRole("button", { name: "Research" }).click();
+  await expect.poll(() => page.evaluate(() => window.shell.selects().at(-1))).toEqual([
+    "octopus",
+    "window-3",
+  ]);
+  await page.evaluate(() => window.shell.acknowledge("window-3"));
+  await expect.poll(() => page.evaluate(() => window.shell.documentState())).toEqual({
+    visible: true,
+    scrollTop: 240,
+  });
+
+  await page.locator('.tab[title="Shell"] .select').click();
+  await page.evaluate(() => window.shell.acknowledge("window-1"));
+  await expect.poll(() => page.evaluate(() => window.shell.documentState()?.visible)).toBe(false);
+  await page.getByRole("button", { name: "Research" }).click();
+  await page.evaluate(() => window.shell.acknowledge("window-3"));
+
+  await expect.poll(() => page.evaluate(() => window.shell.documentState())).toEqual({
+    visible: true,
+    scrollTop: 240,
+  });
+  expect(await page.evaluate(() => window.shell.contentCalls())).toBe(1);
 });
 
 // The menu dropped behind the agent pane's header, which carries a stacking

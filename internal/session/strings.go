@@ -56,6 +56,7 @@ const (
 
 	configCmd      = "config"
 	showRefCmd     = "show-ref"
+	updateRefCmd   = "update-ref"
 	checkoutCmd    = "checkout"
 	symbolicRefCmd = "symbolic-ref"
 

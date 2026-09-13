@@ -23,7 +23,7 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 	gittest.Run(t, origin, "branch", "doomed")
 
 	root := filepath.Join(tmp, "root")
-	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 	mp := mirrorPath(root, "org", "repo")
@@ -33,7 +33,7 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 
 	// origin deletes a branch; our prune-fetch must drop its remote ref but keep the session branch
 	gittest.Run(t, origin, "branch", "-D", "doomed")
-	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -42,6 +42,32 @@ func TestFetchAfterSessionBranchDoesNotPrune(t *testing.T) {
 	}
 	if gitOK("-C", mp, "show-ref", "--verify", "--quiet", "refs/remotes/origin/doomed") {
 		t.Fatal("deleted origin branch not pruned — --prune not working")
+	}
+}
+
+func TestFetchAdvancesTheBareClonesLocalDefaultBranch(t *testing.T) {
+	tmp := t.TempDir()
+	origin := filepath.Join(tmp, "origin")
+	gittest.Run(t, "", "init", "-b", "main", origin)
+	os.WriteFile(filepath.Join(origin, "f"), []byte("one"), 0o644)
+	gittest.Run(t, origin, "add", ".")
+	gittest.Run(t, origin, "commit", "-m", "one")
+
+	root := filepath.Join(tmp, "root")
+	if err := ensureMirror(root, "org", "repo", origin, "main", nil); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(origin, "f"), []byte("two"), 0o644)
+	gittest.Run(t, origin, "commit", "-am", "two")
+
+	if err := ensureMirror(root, "org", "repo", origin, "main", nil); err != nil {
+		t.Fatal(err)
+	}
+	mp := mirrorPath(root, "org", "repo")
+	local := gitOutput(t, mp, "rev-parse", "refs/heads/main")
+	remote := gitOutput(t, mp, "rev-parse", "refs/remotes/origin/main")
+	if local != remote {
+		t.Fatalf("local default branch = %s, want fetched tip %s", local, remote)
 	}
 }
 
@@ -55,7 +81,7 @@ func TestWorktreeRematerialisesOnExistingBranch(t *testing.T) {
 	gittest.Run(t, origin, "commit", "-m", "init")
 
 	root := filepath.Join(tmp, "root")
-	if err := ensureMirror(root, "org", "repo", origin, nil); err != nil {
+	if err := ensureMirror(root, "org", "repo", origin, "main", nil); err != nil {
 		t.Fatal(err)
 	}
 	mp := mirrorPath(root, "org", "repo")

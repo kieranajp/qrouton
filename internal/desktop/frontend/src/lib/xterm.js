@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { latestPerFrame } from "./frame.js";
 import { opensSettings, position } from "./shortcuts.js";
+export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
 export { Terminal };
 
@@ -23,80 +24,6 @@ export const fontsReady = () =>
 // The agent reads a lone LF as submit, but an LF inside a bracketed paste as a
 // literal newline.
 const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
-
-const encoder = new TextEncoder();
-const CHUNK = 0x8000;
-
-// String.fromCharCode(...bytes) spreads the array as call arguments, which
-// throws past ~128KB; chunking keeps every paste size working.
-export const encode = (text) => {
-  const bytes = encoder.encode(text);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-};
-
-export function decode(encoded) {
-  const raw = atob(encoded);
-  const buffer = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
-  return buffer;
-}
-
-const output = new WeakMap();
-
-function outputQueue(term) {
-  const state = { jobs: [], replay: false, writing: false, disposed: false };
-  const single = (params, values) => params.length === 1 && values.includes(params[0]);
-  const csi = (id, values) => term.parser.registerCsiHandler(id,
-    (params) => state.replay && single(params, values));
-  const handlers = [
-    csi({ final: "c" }, [0]),
-    csi({ prefix: ">", final: "c" }, [0]),
-    csi({ final: "n" }, [5, 6]),
-    csi({ prefix: "?", final: "n" }, [6]),
-    term.parser.registerOscHandler(11, (data) => state.replay && data === "?"),
-  ];
-  const next = () => {
-    if (state.disposed || state.writing || !state.jobs.length) return;
-    const job = state.jobs.shift();
-    state.writing = true;
-    state.replay = job.replay;
-    const bytes = job.replay ? new Uint8Array(job.bytes.length + 2) : job.bytes;
-    if (job.replay) {
-      bytes.set([0x1b, 0x63]);
-      bytes.set(job.bytes, 2);
-    }
-    term.write(bytes, () => {
-      if (state.disposed) return;
-      state.replay = false;
-      state.writing = false;
-      next();
-    });
-  };
-  return {
-    push(bytes, replay) {
-      if (state.disposed) return;
-      state.jobs.push({ bytes, replay });
-      next();
-    },
-    dispose() {
-      state.disposed = true;
-      state.replay = false;
-      state.jobs.length = 0;
-      handlers.forEach((handler) => handler.dispose());
-    },
-  };
-}
-
-/** @param {Terminal} term
- * @param {string | {encoded: string, replay?: boolean}} payload */
-export function paint(term, payload) {
-  const chunk = typeof payload === "string" ? { encoded: payload } : payload;
-  output.get(term)?.push(decode(chunk.encoded), !!chunk.replay);
-}
 
 const mounted = new WeakMap();
 
@@ -125,8 +52,6 @@ export function mount(host, { write, background = "--ctp-base" }) {
       cursor: token("--ctp-rosewater"),
     },
   });
-  const queue = outputQueue(term);
-  output.set(term, queue);
   const fit = new FitAddon();
   term.loadAddon(fit);
   term.open(host);
@@ -165,7 +90,6 @@ export function mount(host, { write, background = "--ctp-base" }) {
     report(cols, rows);
   };
   const dispose = () => {
-    queue.dispose();
     mounted.delete(host);
     term.dispose();
   };

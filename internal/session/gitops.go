@@ -108,10 +108,10 @@ func mirrorPath(root, org, repo string) string {
 	return filepath.Join(root, mirrorsDirName, org, repo+gitDirSuffix)
 }
 
-// ensureMirror clones a bare mirror on first use, otherwise fetches. The fetch refspec maps origin's
-// heads to refs/remotes/origin/* only, so --prune can never touch session branches under refs/heads/*.
-// A literal --mirror clone's +refs/*:refs/* refspec would prune them.
-func ensureMirror(root, org, repo, url string, onProgress func(phase string, percent int)) error {
+// ensureMirror clones a bare mirror on first use, otherwise fetches. Remote heads stay under
+// refs/remotes so pruning cannot touch session branches; the clone-seeded local default branch
+// is advanced separately after each fetch.
+func ensureMirror(root, org, repo, url, defaultBranch string, onProgress func(phase string, percent int)) error {
 	mp := mirrorPath(root, org, repo)
 	if _, err := os.Stat(mp); os.IsNotExist(err) {
 		if err := gitSlow(onProgress, cloneCmd, bareFlag, verbosityFlag(onProgress), url, mp); err != nil {
@@ -125,7 +125,13 @@ func ensureMirror(root, org, repo, url string, onProgress func(phase string, per
 	if err := git(dirFlag, mp, configCmd, fetchRefspecKey, fetchRefspec); err != nil {
 		return err
 	}
-	return gitSlow(onProgress, dirFlag, mp, fetchCmd, pruneFlag, verbosityFlag(onProgress), remoteName)
+	if err := gitSlow(onProgress, dirFlag, mp, fetchCmd, pruneFlag, verbosityFlag(onProgress), remoteName); err != nil {
+		return err
+	}
+	if defaultBranch == "" {
+		return nil
+	}
+	return git(dirFlag, mp, updateRefCmd, localBranchRef+defaultBranch, remoteRefPrefix+defaultBranch)
 }
 
 // baseRef addresses the branch a session's work is cut from, as the mirror sees it.

@@ -138,6 +138,12 @@ export const PLAN = [
   "",
 ].join("\n");
 
+export const TALL = PLAN.replace(
+  "Middle body copy a span can point at.",
+  Array.from({ length: 48 }, (_, i) => `Middle body paragraph ${i + 1}.`).join("\n\n"),
+).replace("- [ ] one check not", "- [ ] one check not\n- [ ] another check not");
+export const TALL_UPDATED = TALL.replace("- [ ] one check not", "- [x] one check not");
+
 // Every criterion ticked, so a pushed document can move the meter.
 export const FINISHED = PLAN.replace("- [ ] one check not", "- [x] one check not").replace(
   "- [ ] nothing ticked yet",
@@ -295,6 +301,8 @@ window.wailsCall = async (name, id, payload) => {
       ? PLAIN
       : params.get("done")
         ? DONE
+        : params.get("tall")
+          ? TALL
         : params.get("long")
           ? LONG
           : params.get("leading")
@@ -316,6 +324,8 @@ window.wailsCall = async (name, id, payload) => {
 // The push the workbench sends when the file changes under an open tab.
 window.pushContent = (fields) => emitWailsEvent("window:content:w1", { ...document_(PLAN, 1), ...fields });
 window.pushFinished = () => window.pushContent({ text: FINISHED });
+window.pushStableTall = () => window.pushContent({ text: TALL_UPDATED });
+window.pushRequest = (line) => window.pushContent({ line, to: line, viewportEpoch: 2 });
 // Phase 2's last box ticked and phase 3's still open, so the meter moves on
 // without the plan being finished.
 window.pushSecondMet = () =>
@@ -386,6 +396,7 @@ window.scrollers = () => {
 window.scrollTo_ = (top) => {
   (document.querySelector(".reading, .deck") ?? document.querySelector(".body")).scrollTop = top;
 };
+window.scrollTop_ = () => document.querySelector(".reading, .deck")?.scrollTop ?? 0;
 window.pips = () =>
   [...document.querySelectorAll(".pip")].map((pip) => ({
     label: pip.getAttribute("aria-label"),
