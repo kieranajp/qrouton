@@ -76,7 +76,7 @@ func (w *Windows) Content(id string) (document, error) { return w.documents.cont
 // the ones already rendered; the rest arrive on windowDiagramEvent as they land.
 // A window with nothing to draw answers with an empty list rather than an error:
 // every Markdown pane calls this, diagrams or not.
-func (w *Windows) RenderDiagrams(id string) ([]renderedDiagram, error) {
+func (w *Windows) RenderDiagrams(id string, request uint64) ([]renderedDiagram, error) {
 	text, markdown, err := w.documents.markdown(id)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (w *Windows) RenderDiagrams(id string) ([]renderedDiagram, error) {
 	if !markdown {
 		return []renderedDiagram{}, nil
 	}
-	return w.diagrams.render(id, text), nil
+	return w.diagrams.render(id, text, request), nil
 }
 
 func (w *Windows) ReportViewport(id string, report ViewportReport) error {

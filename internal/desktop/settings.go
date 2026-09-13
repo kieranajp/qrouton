@@ -75,13 +75,24 @@ func (s *Settings) Load() SettingsView {
 	return SettingsView{
 		Orgs:          cfg.Orgs,
 		Root:          cfg.Root,
-		Editor:        strings.Join(cfg.Editor, " "),
+		Editor:        editorCommand(cfg.Editor),
 		Launch:        launch,
 		Linear:        linear,
 		LinearPath:    lineartools.ConfigPath,
 		LinearError:   errorText(linearErr),
 		StickerLabels: cfg.EffectiveStickerLabels(),
 	}
+}
+
+func editorCommand(argv []string) string {
+	words := slices.Clone(argv)
+	for i, word := range words {
+		parsed, err := shlex.Split(word)
+		if err != nil || len(parsed) != 1 || parsed[0] != word {
+			words[i] = "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+		}
+	}
+	return strings.Join(words, " ")
 }
 
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {

@@ -8,6 +8,7 @@ import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
+import { createDiagramStream } from "./diagram-stream.js";
 
 /** Document links dock inside the workbench; external links open in a browser.
  * @param {HTMLElement} body
@@ -37,19 +38,21 @@ export function links(body, source) {
  * @param {HTMLElement} body
  * @param {{id: string, text: string, fit?: boolean}} params */
 export function diagrams(body, { id, fit }) {
+  const stream = createDiagramStream(
+    (request) => Call.ByName(WINDOWS_RENDER_DIAGRAMS, id, request),
+    (found) => applyDiagrams(body, found, { fit }),
+  );
   const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) =>
-    applyDiagrams(body, [event.data], { fit }),
+    stream.receive([event.data]),
   );
   // Rendered markup does not survive a content push, so the fences are asked
   // for again whenever the text behind them changes.
-  const draw = () =>
-    Call.ByName(WINDOWS_RENDER_DIAGRAMS, id)
-      .then((found) => applyDiagrams(body, found ?? [], { fit }))
-      .catch(() => {});
+  const draw = stream.draw;
   draw();
   return {
     update: draw,
     destroy: () => {
+      stream.destroy();
       off();
       teardownDiagrams(body);
     },

@@ -1,5 +1,9 @@
 package evalharness
 
+import "time"
+
+const runnerWaitDelay = 250 * time.Millisecond
+
 const (
 	gitBin     = "git"
 	srcDirName = "src"

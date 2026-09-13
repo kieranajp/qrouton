@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/launch"
 )
 
@@ -41,6 +43,9 @@ func (a Adapter) RunTurn(
 	}
 
 	cmd := exec.CommandContext(ctx, a.Bin, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = runnerWaitDelay
 	cmd.Dir = workspace
 	// The prompt travels over stdin, not argv: judge prompts embed candidate
 	// artifacts and diffs, and a single exec argument caps out at ~128KiB on
@@ -125,6 +130,7 @@ func (a Adapter) codexArgs(workspace, mcpLog, session string) ([]string, error) 
 		args = append(args, codexEphemeralFlag)
 	}
 	args = append(args, codexBaseArgs...)
+	args = append(args, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	args = append(args, mcp.Args...)
 	if a.Model != "" {
 		args = append(args, modelFlag, a.Model)

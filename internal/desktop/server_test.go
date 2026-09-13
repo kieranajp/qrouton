@@ -24,6 +24,42 @@ type adoption struct {
 	boot bool
 }
 
+func TestSessionControlCannotReachAnotherSessionsWindows(t *testing.T) {
+	windows, _ := testWindows(t)
+	owner := windows.shown()
+	other := &sessionState{sessionSlug: "other", sessionRoot: t.TempDir()}
+	opts := workbench.WindowOptions{Kind: workbench.KindDocument, Content: "private", Format: workbench.FormatMarkdown}
+	foreign, err := windows.openWindow(other, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owned, err := windows.openWindow(owner, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &control{windows: windows, owner: owner}
+	for _, op := range []string{workbench.OpRead, workbench.OpClose} {
+		if res := c.dispatch(workbench.Request{Op: op, ID: foreign}); res.Error == "" {
+			t.Fatalf("%s reached a foreign window: %+v", op, res)
+		}
+	}
+	if res := c.dispatch(workbench.Request{Op: workbench.OpExists, ID: foreign}); res.Error != "" || res.Exists {
+		t.Fatalf("Exists exposed a foreign window: %+v", res)
+	}
+	if res := c.dispatch(workbench.Request{Op: workbench.OpList}); res.Error != "" || len(res.IDs) != 1 || res.IDs[0] != owned {
+		t.Fatalf("List did not stay within the session: %+v", res)
+	}
+	if !windows.exists(foreign) {
+		t.Fatal("foreign window was closed")
+	}
+	c.owner = nil
+	for _, op := range []string{workbench.OpRead, workbench.OpClose, workbench.OpExists, workbench.OpList} {
+		if res := c.dispatch(workbench.Request{Op: op, ID: owned}); res.Error != ErrNoSession.Error() {
+			t.Fatalf("process endpoint admitted %s: %+v", op, res)
+		}
+	}
+}
+
 // The control socket is the one place the port's wire format is agreed, and the
 // two halves are compiled separately — so this drives the real server through
 // the real client rather than either side's idea of the other.
@@ -145,7 +181,7 @@ index 6dad4ad..84db3de 100644
 		Name: "Webhook retry", Prefix: "fix", Deadline: deadline}); err != nil {
 		t.Fatal(err)
 	}
-	if got := <-queued; got.SessionRoot != "/sessions/octopus" || got.Name != "Webhook retry" ||
+	if got := <-queued; got.SessionRoot != windows.shown().root() || got.Name != "Webhook retry" ||
 		got.Prefix != "fix" || !got.Deadline.Equal(deadline) {
 		t.Fatalf("queued %+v, want the request the caller sent", got)
 	}

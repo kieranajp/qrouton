@@ -24,8 +24,8 @@ test("clicking the selected image opens a fitted lightbox and Escape closes it",
 
   const lightbox = page.getByRole("dialog", { name: /Expanded image/ });
   await expect(lightbox).toBeFocused();
-  const enlarged = await lightbox.locator("img").boundingBox();
-  expect(enlarged.width).toBeGreaterThan(preview.width);
+  await expect.poll(async () => (await lightbox.locator("img").boundingBox())?.width ?? 0)
+    .toBeGreaterThan(preview.width);
   const room = page.viewportSize();
   expect(await lightbox.boundingBox()).toEqual({ x: 0, y: 0, width: room.width, height: room.height });
 
