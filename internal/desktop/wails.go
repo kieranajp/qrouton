@@ -13,13 +13,13 @@ type wailsRenderer struct {
 	running atomic.Bool
 }
 
-func newWailsRenderer(assets fs.FS, icon []byte, decks deckLookup) *wailsRenderer {
+func newWailsRenderer(assets fs.FS, icon []byte, decks deckLookup, images ...imageLookup) *wailsRenderer {
 	r := &wailsRenderer{}
 	r.app = application.New(application.Options{
 		Name:        applicationName,
 		Description: applicationDescription,
 		Icon:        icon,
-		Assets:      application.AssetOptions{Handler: assetHandler(assets, decks)},
+		Assets:      application.AssetOptions{Handler: assetHandler(assets, decks, images...)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 	r.app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
@@ -76,8 +76,27 @@ func (r *wailsRenderer) Focus(name string) {
 	})
 }
 
+func (r *wailsRenderer) Close(name string) {
+	r.onMain(func() {
+		if window, ok := r.app.Window.Get(name); ok {
+			window.Close()
+		}
+	})
+}
+
 func (r *wailsRenderer) Emit(event string, payload any) {
 	r.app.Event.Emit(event, payload)
+}
+
+// Send reaches one window. EmitEvent is not the narrower call despite its
+// receiver: it stamps a sender and re-enters the same broadcast the application
+// emitter uses.
+func (r *wailsRenderer) Send(name, event string, payload any) {
+	r.onMain(func() {
+		if window, ok := r.app.Window.Get(name); ok {
+			window.DispatchWailsEvent(&application.CustomEvent{Name: event, Data: payload})
+		}
+	})
 }
 
 func (r *wailsRenderer) Run() error { return r.app.Run() }

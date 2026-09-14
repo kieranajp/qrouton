@@ -172,8 +172,8 @@ type RepoStat struct {
 }
 
 // RepoStats measures each repository against the branch it was cut from. A
-// reference repository is pinned, so it has nothing to be ahead of, and a
-// blank default branch is left unmeasured rather than built into a bad ref.
+// reference repository is pinned, so it has nothing to be ahead of, and one
+// naming no branch at all is left unmeasured rather than built into a bad ref.
 func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	dir := filepath.Join(root, m.Slug)
 	stats := make([]RepoStat, 0, len(m.Repos))
@@ -182,8 +182,8 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 			Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective(),
 			Path: filepath.Join(dir, repo.WorktreePath),
 		}
-		if stat.Role == RepoRoleEditing && repo.DefaultBranch != "" {
-			measure(ctx, stat.Path, remoteRefPrefix+repo.DefaultBranch,
+		if stat.Role == RepoRoleEditing && (repo.BaseBranch != "" || repo.DefaultBranch != "") {
+			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch),
 				remoteRefPrefix+repo.Branch, &stat)
 		}
 		stats = append(stats, stat)

@@ -1,14 +1,20 @@
 import "./share.css";
 import { artifactTone } from "../lib/artifacts.js";
+import { apply as applyDiagrams } from "../lib/panes/diagrams.js";
 import { render } from "../lib/panes/markdown.js";
 
-// The document arrives base64-encoded so no markdown can close the script tag
-// that carries it.
-function payload() {
-  const node = document.getElementById("qrouton-document");
-  if (!node) return { kind: "NOTE", source: "", markdown: "" };
+// Both payloads arrive base64-encoded so nothing in them can close the script
+// tag carrying it.
+function decode(id) {
+  const node = document.getElementById(id);
+  if (!node) return "";
   const bytes = Uint8Array.from(atob(node.textContent.trim()), (c) => c.charCodeAt(0));
-  const text = new TextDecoder().decode(bytes);
+  return new TextDecoder().decode(bytes);
+}
+
+function payload() {
+  const text = decode("qrouton-document");
+  if (!text) return { kind: "NOTE", source: "", markdown: "" };
   const kindEnd = text.indexOf("\n");
   const sourceEnd = text.indexOf("\n", kindEnd + 1);
   return {
@@ -66,3 +72,8 @@ prose.innerHTML = body;
 article.append(prose);
 
 document.body.append(article);
+
+// The diagrams were laid out before the page was written, so every fence is
+// already settled: none of them can be left waiting.
+const drawings = decode("qrouton-diagrams");
+if (drawings) applyDiagrams(prose, JSON.parse(drawings));

@@ -8,6 +8,7 @@ import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
+import { createDiagramStream } from "./diagram-stream.js";
 
 /** Document links dock inside the workbench; external links open in a browser.
  * @param {HTMLElement} body
@@ -35,19 +36,23 @@ export function links(body, source) {
 
 /** Events subscribe before the initial call so no completed diagram is missed.
  * @param {HTMLElement} body
- * @param {{id: string, text: string}} params */
-export function diagrams(body, { id }) {
-  const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) => applyDiagrams(body, [event.data]));
+ * @param {{id: string, text: string, fit?: boolean}} params */
+export function diagrams(body, { id, fit }) {
+  const stream = createDiagramStream(
+    (request) => Call.ByName(WINDOWS_RENDER_DIAGRAMS, id, request),
+    (found) => applyDiagrams(body, found, { fit }),
+  );
+  const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) =>
+    stream.receive([event.data]),
+  );
   // Rendered markup does not survive a content push, so the fences are asked
   // for again whenever the text behind them changes.
-  const draw = () =>
-    Call.ByName(WINDOWS_RENDER_DIAGRAMS, id)
-      .then((found) => applyDiagrams(body, found ?? []))
-      .catch(() => {});
+  const draw = stream.draw;
   draw();
   return {
     update: draw,
     destroy: () => {
+      stream.destroy();
       off();
       teardownDiagrams(body);
     },
@@ -59,44 +64,54 @@ export function diagrams(body, { id }) {
 export function viewport({ span, epoch, marking, onMeasure }) {
   /**
    * @param {HTMLElement} content
-   * @param {{id: string, active?: boolean, scrollRoot?: HTMLElement, key?: unknown}} initial
+   * @param {{id: string, active?: boolean, scrollRoot?: HTMLElement, key?: unknown, request?: unknown}} initial
    */
   return (content, initial) => {
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (content.querySelectorAll("[data-line]")),
-    ];
-    const asked = span();
-    const { marked, at } = marks(
-      blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
-      asked,
-    );
-    if (marking?.() ?? true) for (const index of marked) blocks[index].classList.add("marked");
-    const target = blocks[at];
     let controller;
     let root;
     let windowID;
     let key;
+    let request;
+    const create = (params) => {
+      const blocks = [
+        .../** @type {NodeListOf<HTMLElement>} */ (content.querySelectorAll("[data-line]")),
+      ];
+      const asked = span();
+      const { marked, at } = marks(
+        blocks.map((el) => ({ line: Number(el.dataset.line), end: Number(el.dataset.lineEnd) })),
+        asked,
+      );
+      for (const block of blocks) block.classList.remove("marked");
+      if (marking?.() ?? true) for (const index of marked) blocks[index].classList.add("marked");
+      return createViewportController({
+        root: params.scrollRoot,
+        content,
+        target: blocks[at],
+        span: asked,
+        selected: params.active,
+        nextSequence: () => nextViewportSequence(params.id),
+        onMeasure,
+        report: (report) =>
+          Call.ByName(WINDOWS_REPORT_VIEWPORT, params.id, {
+            epoch: epoch(),
+            ...report,
+          }).catch(() => {}),
+      });
+    };
     const apply = (params) => {
       if (!params.scrollRoot) return;
-      if (!controller || root !== params.scrollRoot || windowID !== params.id) {
+      if (
+        !controller ||
+        root !== params.scrollRoot ||
+        windowID !== params.id ||
+        request !== params.request
+      ) {
         controller?.destroy();
         root = params.scrollRoot;
         windowID = params.id;
         key = params.key;
-        controller = createViewportController({
-          root,
-          content,
-          target,
-          span: asked,
-          selected: params.active,
-          nextSequence: () => nextViewportSequence(windowID),
-          onMeasure,
-          report: (report) =>
-            Call.ByName(WINDOWS_REPORT_VIEWPORT, windowID, {
-              epoch: epoch(),
-              ...report,
-            }).catch(() => {}),
-        });
+        request = params.request;
+        controller = create(params);
         return;
       }
       controller.setSelected(params.active);

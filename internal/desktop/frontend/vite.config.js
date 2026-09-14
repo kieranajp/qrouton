@@ -38,6 +38,7 @@ export default defineConfig({
       external: [/^\/wails\//],
       input: {
         index: page("index.html"),
+        notes: page("notes/index.html"),
       },
     },
   },

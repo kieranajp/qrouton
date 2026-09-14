@@ -1,6 +1,7 @@
 package assembly
 
 import (
+	"errors"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
@@ -34,7 +35,13 @@ func (a Assembler) Confirm(dir string, d Draft, ans Answer, progress session.Pro
 	// may be kept off the manifest for them.
 	composed, err := session.ComposeRepos(a.Cfg, m, d.Repos, branch, progress)
 	if err != nil {
-		return err
+		if len(composed.Repos) == len(m.Repos) {
+			return err
+		}
+		// Completed checkouts must be discoverable so a retry keeps their work.
+		return errors.Join(err, session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {
+			return session.MergeRepos(out, composed.Repos), nil
+		}))
 	}
 	var updated session.Manifest
 	if err := session.UpdateManifest(dir, func(out session.Manifest) (session.Manifest, error) {

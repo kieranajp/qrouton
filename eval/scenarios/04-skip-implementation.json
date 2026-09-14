@@ -10,6 +10,7 @@
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "repo_changed", "repo": "account-service"},
     {"kind": "tests_pass", "repo": "account-service"},
-    {"kind": "delegation", "pattern": "implementation-lead"}
+    {"kind": "delegation", "pattern": "implementation-lead"},
+    {"kind": "first_delegation", "pattern": "implementation-lead"}
   ]
 }

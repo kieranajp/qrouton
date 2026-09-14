@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"github.com/kieranajp/qrouton/internal/config"
 	"io"
 	"net/http"
@@ -78,6 +79,55 @@ func TestRefreshOwnerReposCanBeRetriedIndependently(t *testing.T) {
 	if len(repos) != 1 || repos[0].ID() != "owner/recovered" {
 		t.Fatalf("retry repos = %#v", repos)
 	}
+}
+
+func TestListBranchesPaginatesPastAFullPageAndStopsAtAShortOne(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{
+		"/repos/acme/api/branches?per_page=100&page=1": branchPage(pageSize, "p1-"),
+		"/repos/acme/api/branches?per_page=100&page=2": branchPage(3, "p2-"),
+	}, &paths)
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	names, err := ListBranches(context.Background(), client, "token", "acme", "api")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(names) != pageSize+3 {
+		t.Fatalf("branches = %d, want %d", len(names), pageSize+3)
+	}
+	wantPaths := []string{
+		"/repos/acme/api/branches?per_page=100&page=1",
+		"/repos/acme/api/branches?per_page=100&page=2",
+	}
+	if got := paths.snapshot(); !reflect.DeepEqual(got, wantPaths) {
+		t.Fatalf("requests = %#v, want %#v (page 3 must never be asked for)", got, wantPaths)
+	}
+}
+
+func TestListBranchesReportsAFailedLookup(t *testing.T) {
+	var paths requestPaths
+	client := githubTestClient(t, map[string]string{}, &paths) // /repos/acme/api/branches 404s
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	if _, err := ListBranches(context.Background(), client, "token", "acme", "api"); err == nil {
+		t.Fatal("ListBranches invented a result from a failed lookup")
+	}
+}
+
+func branchPage(n int, prefix string) string {
+	names := make([]struct {
+		Name string `json:"name"`
+	}, n)
+	for i := range names {
+		names[i].Name = fmt.Sprintf("%s%d", prefix, i)
+	}
+	b, _ := json.Marshal(names)
+	return string(b)
 }
 
 type roundTripFunc func(*http.Request) (*http.Response, error)

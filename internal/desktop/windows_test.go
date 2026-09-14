@@ -910,11 +910,11 @@ func waitForDiagram(t *testing.T, emitted <-chan emittedDiagram) emittedDiagram 
 func TestRenderDiagramsQueuesAMissAndAnswersACacheHitInPlace(t *testing.T) {
 	w, id, emitted := diagramDocument(t, "# Notes\n\n```d2\na -> b\n```\n")
 
-	found, err := w.RenderDiagrams(id)
+	found, err := w.RenderDiagrams(id, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(found) != 1 || found[0].Line != 3 || found[0].SVG != "" {
+	if len(found) != 1 || found[0].Request != 42 || found[0].Line != 3 || found[0].SVG != "" {
 		t.Fatalf("found = %+v, want the fence on line 3 with nothing rendered yet", found)
 	}
 
@@ -922,15 +922,15 @@ func TestRenderDiagramsQueuesAMissAndAnswersACacheHitInPlace(t *testing.T) {
 	if out.event != windowDiagramEvent+id {
 		t.Errorf("event = %q, want %q", out.event, windowDiagramEvent+id)
 	}
-	if out.drawn.Line != 3 || out.drawn.Error != "" || !strings.HasPrefix(out.drawn.SVG, "<svg") {
+	if out.drawn.Request != 42 || out.drawn.Line != 3 || out.drawn.Error != "" || !strings.HasPrefix(out.drawn.SVG, "<svg") {
 		t.Fatalf("emitted %+v, want the drawn diagram for line 3", out.drawn)
 	}
 
-	again, err := w.RenderDiagrams(id)
+	again, err := w.RenderDiagrams(id, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(again) != 1 || again[0].SVG != out.drawn.SVG {
+	if len(again) != 1 || again[0].Request != 42 || again[0].SVG != out.drawn.SVG {
 		t.Fatalf("again = %d fences, the first without the cached SVG", len(again))
 	}
 	select {
@@ -943,7 +943,7 @@ func TestRenderDiagramsQueuesAMissAndAnswersACacheHitInPlace(t *testing.T) {
 func TestARefusedDiagramEmitsItsReasonRatherThanNothing(t *testing.T) {
 	w, id, emitted := diagramDocument(t, "```d2\nc: {\n```\n")
 
-	found, err := w.RenderDiagrams(id)
+	found, err := w.RenderDiagrams(id, 42)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -972,13 +972,13 @@ func TestRenderDiagramsHasNothingToSayAboutOtherWindows(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			found, err := w.RenderDiagrams(id)
+			found, err := w.RenderDiagrams(id, 42)
 			if err != nil || len(found) != 0 {
 				t.Fatalf("RenderDiagrams = %+v, %v; want nothing and no error", found, err)
 			}
 		})
 	}
-	if _, err := w.RenderDiagrams("window-404"); err == nil {
+	if _, err := w.RenderDiagrams("window-404", 42); err == nil {
 		t.Fatal("an unknown window rendered diagrams")
 	}
 }
@@ -1161,7 +1161,7 @@ func TestRescanCannotRaceTheReadsOfTheTextItRewrites(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			if _, err := w.RenderDiagrams(id); err != nil {
+			if _, err := w.RenderDiagrams(id, 42); err != nil {
 				t.Error(err)
 				return
 			}

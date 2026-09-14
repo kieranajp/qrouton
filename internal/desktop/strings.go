@@ -16,12 +16,20 @@ const (
 	mainWindowWidth  = 1100
 	mainWindowHeight = 760
 
+	notesWindowName   = "presenter-notes"
+	notesWindowTitle  = "Speaker notes"
+	notesWindowWidth  = 520
+	notesWindowHeight = 720
+
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"
+
+	// A directory too, for the redirect frontendRoot dodges.
+	notesRoot = "/notes/"
 
 	assetRoot = "assets"
 
@@ -57,6 +65,9 @@ const (
 	windowDiagramEvent = "window:diagram:"
 	windowContentEvent = "window:content:"
 	windowsEvent       = "window:open"
+
+	presenterNotesEvent  = "presenter:notes"
+	presenterClosedEvent = "presenter:closed"
 
 	reposRefreshEvent      = "repos:refresh"
 	assemblyProgressEvent  = "assembly:progress"
@@ -128,6 +139,10 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	ticketFetchTimeout = 15 * time.Second
+
+	// branchListTimeout bounds the branch listing GitHub is asked for, which the
+	// base menu opens without waiting for.
+	branchListTimeout = 5 * time.Second
 )
 
 const (
@@ -151,16 +166,21 @@ const (
 	agentStateFailed   = status.AgentStateFailed
 )
 
-// deckMediaTypes is the whole of what a deck can reach through its asset route.
-var deckMediaTypes = map[string]string{
-	".png":  "image/png",
-	".jpg":  "image/jpeg",
-	".jpeg": "image/jpeg",
-	".gif":  "image/gif",
-	".webp": "image/webp",
-	".avif": "image/avif",
+var deckExtraMediaTypes = map[string]string{
 	".svg":  "image/svg+xml",
 	".mp4":  "video/mp4",
 	".webm": "video/webm",
 	".mov":  "video/quicktime",
 }
+
+const (
+	imageAssetPath           = "/images/"
+	imageAssetURLFormat      = "/images/%s/%d"
+	cacheControlHeader       = "Cache-Control"
+	cacheControlNoStore      = "no-store"
+	contentTypeOptionsHeader = "X-Content-Type-Options"
+	contentTypeNoSniff       = "nosniff"
+	currentImageFormat       = "Current image: %d of %d"
+)
+
+const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"

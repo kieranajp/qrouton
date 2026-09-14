@@ -75,7 +75,10 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
-	if !strings.Contains(argv[2], "Research, Plan, or Implement") || strings.Contains(argv[2], "QRSPI") {
+	if !strings.Contains(argv[2], "Research, Plan, or Implement") ||
+		strings.Contains(argv[2], "qrouton-questions") || strings.Contains(argv[2], "qrouton-research") ||
+		strings.Contains(argv[2], "qrouton-spec") || strings.Contains(argv[2], "qrouton-plan") ||
+		strings.Contains(argv[2], "qrouton-implement") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
 	if argv := argvFor(t, byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||

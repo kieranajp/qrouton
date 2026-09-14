@@ -7,7 +7,9 @@
   import TextField from "../forms/TextField.svelte";
   import RepoRow from "../session/RepoRow.svelte";
 
-  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: {id: string, meta: string, role: 'off'|'editing'|'reference', offers: ('off'|'editing'|'reference')[]}[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void}} */
+  /** @typedef {{id: string, meta: string, role: 'off'|'editing'|'reference', offers: ('off'|'editing'|'reference')[], rebasable: boolean, base: string, branches: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}}} Row */
+
+  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: Row[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void, onBase?: (id: string, branch: string) => void, onBaseOpen?: (id: string) => void}} */
   let {
     query = $bindable(""),
     orgs = [],
@@ -22,6 +24,8 @@
     onOwner,
     onRefresh,
     onRole,
+    onBase,
+    onBaseOpen,
   } = $props();
 
   let segments = $derived(
@@ -59,7 +63,12 @@
         meta={row.meta}
         role={row.role}
         offers={row.offers}
-        onRoleChange={(role) => onRole?.(row.id, role)} />
+        rebasable={row.rebasable}
+        base={row.base}
+        branches={row.branches}
+        onRoleChange={(role) => onRole?.(row.id, role)}
+        onBaseChange={(branch) => onBase?.(row.id, branch)}
+        onBaseOpen={() => onBaseOpen?.(row.id)} />
     {/each}
   </div>
 </div>

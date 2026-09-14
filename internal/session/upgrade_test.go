@@ -101,6 +101,47 @@ func TestUpgradeReposMovesAReferenceCheckoutOntoTheSessionBranch(t *testing.T) {
 	}
 }
 
+// A reference repo cut from a non-default base carries that base into the
+// manifest; taking it up must cut the session branch from the same base, not
+// the repository's default branch.
+func TestUpgradeReposCutsFromTheRecordedBaseBranch(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, _, branchTip := makeOriginWithBranch(t, "docs", "release")
+	cfg := &config.Config{Root: root}
+	dir, err := Create(cfg, CreateRequest{
+		Name: "Based take-up", Prefix: "feat", Mode: ModeAssistant,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "docs", Org: "org", SSHURL: origin, DefaultBranch: "main"},
+			Role: RepoRoleReference, Base: "release"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The default branch moves on after the pin; the take-up must still follow
+	// the recorded base, not main's advanced tip.
+	gittest.WriteFile(t, origin, "version", "advanced")
+	gittest.Run(t, origin, "add", ".")
+	gittest.Run(t, origin, "commit", "-m", "advance main")
+
+	if err := UpgradeRepos(cfg, m, refs("docs"), "feat/based", nil); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
+	if got := gitOutput(t, wt, "rev-parse", "HEAD"); got != branchTip {
+		t.Fatalf("session branch cut at %s, want the release tip %s", got, branchTip)
+	}
+	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/based" {
+		t.Fatalf("checkout is on %q", got)
+	}
+}
+
 // The mirror is shared and expensive. A take-up fetches it and nothing more.
 func TestUpgradeReposReusesTheExistingMirror(t *testing.T) {
 	cfg, dir, _ := referenceSession(t, "shared")

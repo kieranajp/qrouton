@@ -17,16 +17,24 @@ import (
 // session file it came from, if it came from one, and the source lines the page
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
-	Text          string `json:"text"`
-	Format        string `json:"format"`
-	Source        string `json:"source"`
-	Path          string `json:"path,omitempty"`
-	Kind          string `json:"kind,omitempty"`
-	Deck          bool   `json:"deck,omitempty"`
-	AssetToken    string `json:"assetToken,omitempty"`
-	Line          int    `json:"line"`
-	To            int    `json:"to"`
-	ViewportEpoch uint64 `json:"viewportEpoch,omitempty"`
+	Text          string          `json:"text"`
+	Format        string          `json:"format"`
+	Source        string          `json:"source"`
+	Path          string          `json:"path,omitempty"`
+	Kind          string          `json:"kind,omitempty"`
+	Deck          bool            `json:"deck,omitempty"`
+	AssetToken    string          `json:"assetToken,omitempty"`
+	Line          int             `json:"line"`
+	To            int             `json:"to"`
+	ViewportEpoch uint64          `json:"viewportEpoch,omitempty"`
+	Images        []documentImage `json:"images,omitempty"`
+	CurrentIndex  int             `json:"currentIndex,omitempty"`
+	Revision      uint64          `json:"revision,omitempty"`
+}
+
+type documentImage struct {
+	Source string `json:"source"`
+	URL    string `json:"url"`
 }
 
 type ViewportReport struct {
@@ -61,6 +69,10 @@ func contentFor(opts workbench.WindowOptions) windowContent {
 		return &terminalContent{buffer: &ring{limit: windowScrollback}}
 	case workbench.KindDocument:
 		content := &documentContent{}
+		if opts.Format == workbench.FormatImages {
+			content.images = append([]workbench.ImageRef(nil), opts.Images...)
+			content.currentImage, content.imageRevision = 1, 1
+		}
 		if opts.Format == workbench.FormatMarkdown {
 			content.viewport = workbench.UnmeasuredViewport(opts.Source)
 		}
@@ -100,7 +112,7 @@ func documentFor(window *agentWindow) document {
 	if window.opts.Deck {
 		asset = window.asset
 	}
-	return document{
+	doc := document{
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),
 		Source:        window.opts.Source,
@@ -112,6 +124,14 @@ func documentFor(window *agentWindow) document {
 		To:            last,
 		ViewportEpoch: viewportEpoch,
 	}
+	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
+		doc.Images = make([]documentImage, len(rendered.images))
+		for i, ref := range rendered.images {
+			doc.Images[i] = documentImage{Source: ref.Source, URL: fmt.Sprintf(imageAssetURLFormat, window.asset, i+1)}
+		}
+		doc.CurrentIndex, doc.Revision = rendered.currentImage, rendered.imageRevision
+	}
+	return doc
 }
 
 // follow keeps open documents current. A stat a second buys what a file

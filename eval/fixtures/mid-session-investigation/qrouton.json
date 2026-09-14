@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 2,
+  "name": "Retry deadline audit",
+  "slug": "retry-deadline-audit",
+  "description": "Retry deadline audit",
+  "mode": "rpi",
+  "runner": "claude",
+  "createdAt": "2026-08-28T00:00:00Z",
+  "repos": [
+    {
+      "name": "account-service",
+      "org": "qrouton-eval",
+      "role": "editing",
+      "branch": "chore/retry-deadline-audit",
+      "defaultBranch": "main",
+      "worktreePath": "src/account-service",
+      "sshUrl": "git@github.com:qrouton-eval/account-service.git"
+    },
+    {
+      "name": "shared-lib",
+      "org": "qrouton-eval",
+      "role": "reference",
+      "defaultBranch": "main",
+      "worktreePath": "src/shared-lib",
+      "sshUrl": "git@github.com:qrouton-eval/shared-lib.git"
+    }
+  ]
+}

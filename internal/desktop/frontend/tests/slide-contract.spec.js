@@ -70,6 +70,41 @@ test("a deck naming an unknown theme still renders against ours", async ({ page 
   expect(rendered.css).toContain("var(--surface-app)");
 });
 
+const diagramDeck = `---
+marp: true
+---
+
+## First
+
+\`\`\`d2
+a -> b
+\`\`\`
+
+---
+
+## Second
+
+\`\`\`go
+x := 1
+\`\`\`
+`;
+
+test("a d2 fence carries the document lines it spans", async ({ page }) => {
+  const rendered = await render(page, diagramDeck);
+
+  expect(rendered.fences).toEqual([
+    { language: "language-d2", line: "7", lineEnd: "9", source: "a -> b\n" },
+    { language: "language-go", line: null, lineEnd: null, source: "x := 1\n" },
+  ]);
+});
+
+test("a d2 fence's source is escaped, not run", async ({ page }) => {
+  const rendered = await render(page, "```d2\nx: \"<script>boom()</script>\"\n```\n");
+
+  expect(rendered.html).not.toContain("<script>");
+  expect(rendered.fences[0].source).toContain("<script>boom()</script>");
+});
+
 test("inline style and event handlers do not survive the allowlist", async ({ page }) => {
   const rendered = await render(page, `<div class="cols" style="flex: 2" onclick="boom()">x</div>\n`);
 

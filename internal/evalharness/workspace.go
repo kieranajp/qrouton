@@ -89,10 +89,10 @@ func collectArtifacts(workspace string) ([]Artifact, error) {
 // exactly the one whose diffs the report and judges must still see.
 func collectDiffs(workspace string, baselines map[string]string) map[string]string {
 	diffs := make(map[string]string, len(baselines))
-	for repo := range baselines {
+	for repo, baseline := range baselines {
 		repoDir := repoDir(workspace, repo)
 		ctx := context.Background()
-		diff, err := commandOutput(ctx, repoDir, gitBin, gitDiffCmd, gitNoExtDiffFlag, gitHeadRef)
+		diff, err := commandOutput(ctx, repoDir, gitBin, gitDiffCmd, gitNoExtDiffFlag, baseline)
 		if err != nil {
 			// Fail loud: an error string trips repo_unchanged instead of
 			// letting a broken diff pass as "no changes".

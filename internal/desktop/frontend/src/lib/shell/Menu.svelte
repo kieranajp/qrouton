@@ -2,13 +2,26 @@
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import StatusDot from "../core/StatusDot.svelte";
 
-  /** @type {{label?: string, items?: any[], width?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
-  let { label, items = [], width = 212, align = "left", offsetY = 32, onSelect, ...rest } = $props();
+  /** maxHeight caps a menu whose items are not a fixed vocabulary, which then
+   * scrolls rather than running off the screen.
+   * @type {{label?: string, items?: any[], width?: number, maxHeight?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
+  let {
+    label,
+    items = [],
+    width = 212,
+    maxHeight = 0,
+    align = "left",
+    offsetY = 32,
+    onSelect,
+    ...rest
+  } = $props();
 </script>
 
 <div
   class="menu"
+  class:capped={maxHeight > 0}
   style:width="{width}px"
+  style:max-height={maxHeight > 0 ? `${maxHeight}px` : null}
   style:top="{offsetY}px"
   style:left={align === "left" ? "0" : "auto"}
   style:right={align === "right" ? "0" : "auto"}
@@ -66,6 +79,10 @@
     flex-direction: column;
     padding: 5px 0;
     z-index: 5;
+  }
+
+  .capped {
+    overflow: hidden auto;
   }
 
   .heading {

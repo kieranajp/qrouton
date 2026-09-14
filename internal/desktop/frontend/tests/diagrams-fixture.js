@@ -71,6 +71,7 @@ window.emitted = EMITTED;
 window.narrow = NARROW;
 window.pending = () => apply(root, Object.values(LINES).map((line) => ({ line })));
 window.draw = () => apply(root, [{ line: LINES.drawn, svg }]);
+window.drawFitted = () => apply(root, [{ line: LINES.drawn, svg }], { fit: true });
 window.drawSizeless = () => apply(root, [{ line: LINES.drawn, svg: sizeless }]);
 window.drawNarrow = () => apply(root, [{ line: LINES.narrow, svg: narrow }]);
 window.fail = (line = LINES.drawn, error = TIMEOUT) => apply(root, [{ line, error }]);
@@ -169,6 +170,8 @@ window.probe = (line = LINES.drawn) => {
     position: block && getComputedStyle(block).position,
     styleWidth: drawn?.style.width ?? "",
     styleHeight: drawn?.style.height ?? "",
+    attrWidth: drawn?.getAttribute("width") ?? "",
+    attrHeight: drawn?.getAttribute("height") ?? "",
     transform: drawn && getComputedStyle(drawn).transform,
     boxWidth: block?.clientWidth ?? 0,
     boxHeight: block?.clientHeight ?? 0,

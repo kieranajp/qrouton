@@ -492,3 +492,29 @@ func TestAssemblyOfferQueuesAnUnmatchedGitHubIssue(t *testing.T) {
 		t.Fatalf("pending = %q, want the canonical GitHub issue URL", pending)
 	}
 }
+
+// A base names the branch a repository's work is cut from. One naming the
+// repository's own default branch is no choice at all, so it is cleared and the
+// manifest records nothing.
+func TestABaseReachesTheSelectionUnlessItNamesTheDefaultBranch(t *testing.T) {
+	repos := &Repositories{cfg: &config.Config{}, errs: map[string]error{},
+		repos: []github.Repo{
+			{Org: "acme", Name: "api", DefaultBranch: "main"},
+			{Org: "acme", Name: "web", DefaultBranch: "main"},
+		}}
+	a := &Assembly{cfg: &config.Config{}, repos: repos}
+
+	got := a.draft(draftInput{Name: "Cleanup", Prefix: "feat", Repos: []repoPick{
+		{ID: "acme/api", Role: "editing", Base: "release/24.4"},
+		{ID: "acme/web", Role: "reference", Base: "main"},
+	}})
+	if len(got.Repos) != 2 {
+		t.Fatalf("draft repos = %+v", got.Repos)
+	}
+	if got.Repos[0].Base != "release/24.4" {
+		t.Fatalf("chosen base = %q", got.Repos[0].Base)
+	}
+	if got.Repos[1].Base != "" {
+		t.Fatalf("a base naming the default branch survived as %q", got.Repos[1].Base)
+	}
+}

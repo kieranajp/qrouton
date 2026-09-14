@@ -65,12 +65,20 @@ A plain HTML comment is a speaker note, rendered under its card:
 <!-- Why this slide is here, in a sentence or two. -->
 ```
 
+Present the deck from the pane's Present control and those notes open in a window of their own,
+which the presenter drags to a second display to keep them off a screen share.
+
 An underscore-prefixed comment is a directive to Marp and is not shown: `<!-- _class: title -->`,
 `<!-- _paginate: false -->`.
 
 Images and video are relative to the deck: `<img src="./shot.png">`, `<video src="./clip.mp4">`,
 `![alt](./shot.png)`. The workbench serves them from the deck's own directory, so keep them beside
 it and inside the session. Only pictures and video resolve; anything else is a 404.
+
+A top-level ```d2 fence is drawn as a diagram on the slide, fitted to the room the slide has left.
+Draw a shape when the shape is the argument — a call sequence, a boundary, a state machine — and
+keep it to a handful of nodes: a diagram the width of a slide is legible, and one twenty nodes deep
+shrinks until nothing on it can be read.
 
 ## Before you hand it over
 

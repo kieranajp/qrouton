@@ -22,6 +22,14 @@ func makeOrigin(t *testing.T, name string) (string, string) {
 	return origin, gittest.Head(t, origin)
 }
 
+// makeOriginWithBranch is makeOrigin plus a second branch, so a test can tell
+// which one a repository was actually cut from.
+func makeOriginWithBranch(t *testing.T, name, branch string) (origin, mainTip, branchTip string) {
+	t.Helper()
+	origin = gittest.Origin(t, name, gittest.WithFile("version", "one"), gittest.WithBranch(branch, "two"))
+	return origin, gittest.Head(t, origin), gitOutput(t, origin, "rev-parse", branch)
+}
+
 func TestCreatePersistsSessionMode(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "sessions")
 	if err := os.MkdirAll(root, 0o755); err != nil {
@@ -92,6 +100,83 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	}
 	if got := gittest.Head(t, filepath.Join(dir, "src", "reference")); got != pinned {
 		t.Fatalf("reference checkout at %s, want pinned %s", got, pinned)
+	}
+}
+
+func TestCreateEditingRepoCutFromANonDefaultBase(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, mainTip, branchTip := makeOriginWithBranch(t, "svc", "develop")
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Based", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: origin, DefaultBranch: "main"},
+			Role: RepoRoleEditing, Base: "develop"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Repos[0].BaseBranch; got != "develop" {
+		t.Fatalf("manifest BaseBranch = %q, want develop", got)
+	}
+	wt := filepath.Join(dir, "src", "svc")
+	if got := gittest.Head(t, wt); got != branchTip {
+		t.Fatalf("editing worktree HEAD = %s, want the develop tip %s (main tip was %s)", got, branchTip, mainTip)
+	}
+}
+
+func TestCreateReferenceRepoPinnedToANonDefaultBase(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	origin, mainTip, branchTip := makeOriginWithBranch(t, "docs", "release")
+	dir, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "Based ref", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "docs", Org: "org", SSHURL: origin, DefaultBranch: "main"},
+			Role: RepoRoleReference, Base: "release"}},
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := m.Repos[0].BaseBranch; got != "release" {
+		t.Fatalf("manifest BaseBranch = %q, want release", got)
+	}
+	if got := m.Repos[0].Revision; got != branchTip {
+		t.Fatalf("pinned revision = %s, want the release tip %s (main tip was %s)", got, branchTip, mainTip)
+	}
+	wt := filepath.Join(dir, "src", "docs")
+	if gitOK("-C", wt, "symbolic-ref", "-q", "HEAD") {
+		t.Fatal("reference checkout is not detached")
+	}
+	if got := gittest.Head(t, wt); got != branchTip {
+		t.Fatalf("reference checkout HEAD = %s, want %s", got, branchTip)
+	}
+}
+
+// Nothing names a branch to cut from: no base was chosen, and GitHub reported
+// no default branch either.
+func TestCreateRefusesARepoWithNoBaseAndNoDefaultBranch(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "sessions")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Create(&config.Config{Root: root}, CreateRequest{
+		Name: "No base", Prefix: "feat", Mode: ModeRPI,
+		Repos: []RepoSelection{{Repo: github.Repo{Name: "svc", Org: "org", SSHURL: "irrelevant", DefaultBranch: ""},
+			Role: RepoRoleEditing}},
+	}, nil)
+	if !errors.Is(err, ErrNoBaseBranch) {
+		t.Fatalf("create with no base and no default branch = %v, want ErrNoBaseBranch", err)
 	}
 }
 

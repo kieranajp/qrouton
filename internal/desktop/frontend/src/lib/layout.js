@@ -1,4 +1,4 @@
-// Per-session layout, kept pure: node --test is the whole frontend harness.
+// Per-session layout.
 
 const WIDTH_PREFIX = "qrouton.human-pane:";
 const SIDEBAR_WIDTH_KEY = "qrouton.sidebar";

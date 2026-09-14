@@ -1,5 +1,4 @@
-// Assembly progress as rows on screen, kept pure: node --test is the whole
-// frontend harness.
+// Assembly progress as rows on screen.
 
 /** @typedef {'pending'|'running'|'done'|'failed'} State */
 const STATES = { started: "running", advanced: "running", completed: "done", failed: "failed" };

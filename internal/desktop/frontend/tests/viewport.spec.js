@@ -84,6 +84,21 @@ test("selection arriving after content mount triggers the measured reveal", asyn
   });
 });
 
+test("reactivation keeps the position chosen after a source target was revealed", async ({ page }) => {
+  await page.goto("/tests/viewport.html");
+  await expect.poll(() => page.evaluate(() => window.reveals)).toBe(1);
+  await page.evaluate(() => window.scrollAway());
+  const scrolled = await page.evaluate(() => window.scrollTop_());
+  expect(scrolled).toBeGreaterThan(0);
+
+  await page.evaluate(() => window.deactivate());
+  await page.evaluate(() => window.activate());
+
+  await expect.poll(() => latest(page)).toMatchObject({ available: true, selected: true });
+  expect(await page.evaluate(() => window.reveals)).toBe(1);
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(scrolled);
+});
+
 test("a line inside a multiline block reports the block's full source interval", async ({ page }) => {
   await page.goto("/tests/viewport.html");
   await expect.poll(() => latest(page)).toMatchObject({

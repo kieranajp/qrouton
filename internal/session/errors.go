@@ -23,11 +23,16 @@ var ErrCheckoutHasWork = errors.New("uncommitted work in the checkout would be o
 
 var ErrReferenceMoved = errors.New("reference checkout has moved off its pinned revision")
 
+// ErrNoBaseBranch means there is nothing to cut a branch from: no base was
+// chosen and GitHub reported no default branch, which is what a repository
+// without commits looks like.
+var ErrNoBaseBranch = errors.New("repository has no branch to work from")
+
 func invalidRole(role RepoRole, org, name string) error {
 	return fmt.Errorf("%w %q for %s/%s", ErrInvalidRole, role, org, name)
 }
 
-func refuseUpgrade(err error, org, name string) error {
+func refuseRepo(err error, org, name string) error {
 	return fmt.Errorf("%s/%s: %w", org, name, err)
 }
 

@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,48 @@ import (
 	"testing"
 	"time"
 )
+
+func TestManifestRepoJSONFieldOrderIncludesBaseBranch(t *testing.T) {
+	repo := ManifestRepo{
+		Name: "svc", Org: "org", Role: RepoRoleEditing, Branch: "feat/svc",
+		DefaultBranch: "main", BaseBranch: "develop", Revision: "deadbeef",
+		WorktreePath: "src/svc", SSHURL: "git@github.com:org/svc.git",
+	}
+	got, err := json.Marshal(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"name":"svc","org":"org","role":"editing","branch":"feat/svc","defaultBranch":"main",` +
+		`"baseBranch":"develop","revision":"deadbeef","worktreePath":"src/svc","sshUrl":"git@github.com:org/svc.git"}`
+	if string(got) != want {
+		t.Fatalf("ManifestRepo JSON = %s, want %s", got, want)
+	}
+}
+
+// A repository cut from its default branch carries no base at all, which is
+// what keeps an untouched session's manifest identical to what it was.
+func TestManifestRepoWithNoBaseOmitsTheKeyEntirely(t *testing.T) {
+	repo := ManifestRepo{Name: "svc", Org: "org", Role: RepoRoleEditing, Branch: "feat/svc",
+		DefaultBranch: "main", WorktreePath: "src/svc"}
+	got, err := json.Marshal(repo)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), "baseBranch") {
+		t.Fatalf("manifest repo with no base carries a baseBranch key: %s", got)
+	}
+}
+
+func TestManifestRepoWithoutBaseBranchDecodesEmpty(t *testing.T) {
+	doc := `{"name":"svc","org":"org","role":"editing","branch":"feat/svc","defaultBranch":"main","worktreePath":"src/svc"}`
+	var repo ManifestRepo
+	if err := json.Unmarshal([]byte(doc), &repo); err != nil {
+		t.Fatal(err)
+	}
+	if repo.BaseBranch != "" {
+		t.Fatalf("BaseBranch = %q, want empty for a pre-change document", repo.BaseBranch)
+	}
+}
 
 // Several processes write the manifest at once, and a poller reads it between
 // them: none of those writers may let Load observe a torn file, and none may

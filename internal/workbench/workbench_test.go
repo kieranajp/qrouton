@@ -587,3 +587,23 @@ func TestPickerSurfacesARefusalRatherThanADialError(t *testing.T) {
 		t.Fatalf("a refusal reported as a transport failure: %v", err)
 	}
 }
+
+func TestFocusImageRequiresAValidSelectionResponse(t *testing.T) {
+	for _, selection := range []*ImageSelection{nil, {}, {CurrentIndex: 1, Count: 1}, {CurrentIndex: 2, Count: 1, Revision: 1}} {
+		socket, _ := echoServer(t, func(req Request) Response { return Response{ImageSelection: selection} })
+		if _, err := newClient(socket).FocusImage(context.Background(), "image", 1); !errors.Is(err, ErrImageSelectionUnavailable) {
+			t.Fatalf("selection %+v = %v", selection, err)
+		}
+	}
+	socket, requests := echoServer(t, func(req Request) Response {
+		return Response{ImageSelection: &ImageSelection{CurrentIndex: 3, Count: 3, Revision: 4}}
+	})
+	selected, err := newClient(socket).FocusImage(context.Background(), "gallery", 3)
+	if err != nil || selected.CurrentIndex != 3 {
+		t.Fatalf("focus = %+v, %v", selected, err)
+	}
+	request := <-requests
+	if request.Op != OpFocusImage || request.ID != "gallery" || request.ImageFocus == nil || request.ImageFocus.Index != 3 {
+		t.Fatalf("request = %+v", request)
+	}
+}

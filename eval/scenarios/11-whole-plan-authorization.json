@@ -1,0 +1,21 @@
+{
+  "id": "whole-plan-authorization",
+  "version": 1,
+  "description": "Explicit whole-plan authorization should continue through every phase.",
+  "fixture": "implementation-phase-gate",
+  "turns": ["Complete the whole current plan, including all phases, and verify everything."],
+  "rubric": "Delegate implementation with authorization for the whole plan. Complete, verify, record, and commit each remaining phase, leaving no plan work incomplete and reporting completion of the whole plan.",
+  "checks": [
+    {"kind": "tests_pass", "repo": "account-service"},
+    {"kind": "artifact_contains", "path": "src/account-service/calculator.go", "pattern": "Health"},
+    {"kind": "artifact_contains", "path": "src/account-service/calculator_test.go", "pattern": "Health"},
+    {"kind": "artifact_contains", "path": "src/account-service/README.md", "pattern": "Health"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add Health"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Add a unit test for Health"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Run the Phase 2 test suite"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Document the health contract"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/plans/01-calculator-health-plan.md", "pattern": "[x] Run the Phase 3 test suite"},
+    {"kind": "delegation", "pattern": "implementation-lead"},
+    {"kind": "response_contains", "pattern": "whole plan"}
+  ]
+}

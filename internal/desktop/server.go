@@ -94,6 +94,13 @@ type handler struct {
 // becomes the response's Error; dispatch is the only place that conversion
 // happens.
 var handlers = map[string]handler{
+	workbench.OpFocusImage: {
+		guards: []guard{needsSession, needsImageFocus},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			selected, err := c.windows.focusImage(c.owner, req.ID, req.ImageFocus.Index)
+			return workbench.Response{ImageSelection: &selected}, err
+		},
+	},
 	workbench.OpOpen: {
 		guards: []guard{needsOptions, needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -102,11 +109,13 @@ var handlers = map[string]handler{
 		},
 	},
 	workbench.OpClose: {
+		guards: []guard{needsSession, needsOwnedWindow},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			return workbench.Response{ID: req.ID}, c.windows.Close(req.ID)
 		},
 	},
 	workbench.OpRead: {
+		guards: []guard{needsSession, needsOwnedWindow},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			text, err := c.windows.readWindow(req.ID, req.Full)
 			return workbench.Response{ID: req.ID, Text: text}, err
@@ -120,22 +129,32 @@ var handlers = map[string]handler{
 		},
 	},
 	workbench.OpExists: {
+		guards: []guard{needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
-			return workbench.Response{ID: req.ID, Exists: c.windows.exists(req.ID)}, nil
+			return workbench.Response{ID: req.ID, Exists: needsOwnedWindow(c, req) == nil}, nil
 		},
 	},
 	workbench.OpList: {
+		guards: []guard{needsSession},
 		run: func(c *control, _ workbench.Request) (workbench.Response, error) {
-			return workbench.Response{IDs: c.windows.list()}, nil
+			ids := []string{}
+			for _, id := range c.windows.list() {
+				if needsOwnedWindow(c, workbench.Request{ID: id}) == nil {
+					ids = append(ids, id)
+				}
+			}
+			return workbench.Response{IDs: ids}, nil
 		},
 	},
 	workbench.OpPicker: {
-		guards: []guard{needsPickerRequest},
+		guards: []guard{needsPickerRequest, needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			if c.hooks.picker == nil {
 				return workbench.Response{}, nil
 			}
-			return workbench.Response{}, c.hooks.picker(*req.Picker)
+			picker := *req.Picker
+			picker.SessionRoot = c.owner.root()
+			return workbench.Response{}, c.hooks.picker(picker)
 		},
 	},
 	workbench.OpAttention: {
@@ -185,6 +204,15 @@ func needsSession(c *control, _ workbench.Request) error {
 		return ErrNoSession
 	}
 	return nil
+}
+
+func needsOwnedWindow(c *control, req workbench.Request) error {
+	return c.windows.with(req.ID, func(window *agentWindow) error {
+		if window.session != c.owner {
+			return noSuchWindow(req.ID)
+		}
+		return nil
+	})
 }
 
 // needsProcessIngress admits only the published process endpoint: a session's
@@ -252,4 +280,11 @@ func (c *control) Close() error {
 	err := c.listener.Close()
 	_ = os.Remove(c.socket)
 	return err
+}
+
+func needsImageFocus(_ *control, req workbench.Request) error {
+	if req.ImageFocus == nil {
+		return ErrNoImageFocus
+	}
+	return nil
 }

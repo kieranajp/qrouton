@@ -79,6 +79,11 @@ func Run(opts Options) error {
 			return "", "", false
 		}
 		return windows.registry.deckDirectory(token)
+	}, func(token string, index int) (imageAssetRef, bool) {
+		if windows == nil {
+			return imageAssetRef{}, false
+		}
+		return windows.registry.imageAsset(token, index)
 	})
 	reg := newSessions()
 	term := newTerm(reg, r.Emit)
@@ -104,6 +109,7 @@ func Run(opts Options) error {
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
+	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,

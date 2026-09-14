@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  baseOf,
   counts,
   isLocked,
   isUpgrading,
@@ -11,6 +12,7 @@ import {
   roleOffers,
   rowMeta,
   seed,
+  setBase,
   setRole,
   summary,
   upgrading,
@@ -222,7 +224,7 @@ test("a picked row is respelled by the refreshed list that carries it", () => {
   ]);
   assert.equal(roleOf(selection, "Acme/API"), "editing");
   assert.equal(roleOf(selection, "acme/api"), "off");
-  assert.deepEqual(ordered(selection), [{ id: "Acme/API", role: "editing" }]);
+  assert.deepEqual(ordered(selection), [{ id: "Acme/API", role: "editing", base: "" }]);
 });
 
 test("a held row keeps the spelling the session holds it under", () => {
@@ -230,4 +232,65 @@ test("a held row keeps the spelling the session holds it under", () => {
   const selection = reconcile(setRole(held, "acme/docs", "editing"), ["Acme/DOCS"]);
   assert.deepEqual(upgrading(selection), ["acme/docs"]);
   assert.equal(roleOf(selection, "acme/docs"), "editing");
+});
+
+test("a base survives a demote to reference and an off-then-on cycle, and ordered() carries it", () => {
+  let selection = setRole(seed(), "acme/api", "editing");
+  selection = setBase(selection, "acme/api", "feat/cut");
+  selection = setRole(selection, "acme/api", "reference");
+  assert.equal(baseOf(selection, "acme/api"), "feat/cut");
+
+  selection = setRole(selection, "acme/api", "off");
+  assert.equal(baseOf(selection, "acme/api"), "feat/cut");
+  selection = setRole(selection, "acme/api", "editing");
+  assert.equal(baseOf(selection, "acme/api"), "feat/cut");
+  assert.deepEqual(ordered(selection), [{ id: "acme/api", role: "editing", base: "feat/cut" }]);
+});
+
+test("clearing a base with an empty branch removes it", () => {
+  let selection = setBase(seed(), "acme/api", "feat/cut");
+  assert.equal(baseOf(selection, "acme/api"), "feat/cut");
+  selection = setBase(selection, "acme/api", "");
+  assert.equal(baseOf(selection, "acme/api"), "");
+});
+
+test("reconcile prunes a vanished id's base but keeps a locked row's", () => {
+  let selection = seed([{ id: "acme/docs", role: "reference", base: "feat/locked" }]);
+  selection = setRole(selection, "acme/api", "editing");
+  selection = setBase(selection, "acme/api", "feat/gone");
+  selection = reconcile(selection, ["other/web"]);
+  assert.equal(baseOf(selection, "acme/api"), "");
+  assert.equal(baseOf(selection, "acme/docs"), "feat/locked");
+});
+
+test("a locked row's rowMeta names the branch it was cut from", () => {
+  const held = seed([{ id: "acme/api", role: "editing", base: "feat/cut" }]);
+  assert.equal(rowMeta(held, "acme/api", "", "main"), "in session · from feat/cut");
+  assert.equal(
+    rowMeta(held, "acme/api", "pushed 2h ago", "main"),
+    "pushed 2h ago · in session · from feat/cut",
+  );
+});
+
+test("rowMeta names no base when it matches the default branch or the row is not locked", () => {
+  const held = seed([{ id: "acme/api", role: "editing", base: "main" }]);
+  assert.equal(rowMeta(held, "acme/api", "", "main"), "in session");
+
+  const selection = setBase(seed(), "acme/api", "feat/cut");
+  assert.equal(rowMeta(selection, "acme/api", "", "main"), "");
+});
+
+test("seed reads a held row's recorded base", () => {
+  const selection = seed([{ id: "acme/api", role: "editing", base: "feat/cut" }]);
+  assert.equal(baseOf(selection, "acme/api"), "feat/cut");
+  assert.equal(baseOf(seed([{ id: "acme/docs", role: "reference" }]), "acme/docs"), "");
+});
+
+test("summary names the chosen branch on a reference chip instead of the default branch", () => {
+  const repos = [{ org: "acme", name: "docs", default_branch: "main" }];
+  let selection = setRole(seed(), "acme/docs", "reference");
+  selection = setBase(selection, "acme/docs", "feat/cut");
+  assert.deepEqual(summary(selection, repos, "feat/extract-billing"), [
+    { id: "acme/docs", role: "reference", glyph: "◐", meta: "→ feat/cut, read-only" },
+  ]);
 });

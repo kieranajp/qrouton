@@ -1,0 +1,16 @@
+{
+  "id": "mid-session-investigation",
+  "version": 1,
+  "description": "Read-heavy investigation asked for mid-session should be routed to a lead, not spawned at a specialist or read in the main thread.",
+  "fixture": "mid-session-investigation",
+  "turns": [
+    "Where does the retry deadline work stand? One paragraph, and change nothing.",
+    "Before we go further I need a straight answer on something. Across both repositories, what is the complete set of environment variables, constants and hard-coded figures that end up affecting a request's retry budget, and which one wins wherever two of them disagree? No document for this one, just the answer in the conversation."
+  ],
+  "rubric": "Answer the first turn from the durable artifacts alone. The second turn is read-heavy investigation across two repositories: route it through a lead rather than reading the repositories in the main thread or spawning specialists directly, then give the answer in conversation without changing code.",
+  "checks": [
+    {"kind": "turn_delegation", "turn": 2, "pattern": "lead"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "agent depth", "document numbering"]}
+  ]
+}

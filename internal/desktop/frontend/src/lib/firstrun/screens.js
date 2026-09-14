@@ -1,6 +1,5 @@
-// The chrome around the five first-run screens, kept pure: node --test is the
-// whole frontend harness. What each screen is called and how it goes forward;
-// the prose lives in the screens themselves.
+// The chrome around the five first-run screens. What each screen is called
+// and how it goes forward; the prose lives in the screens themselves.
 
 import { addOrg } from "../settings/orgs.js";
 

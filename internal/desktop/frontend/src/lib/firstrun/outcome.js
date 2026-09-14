@@ -1,5 +1,4 @@
-// What a first-run Save response means for the screen, kept pure: node --test is
-// the whole frontend harness.
+// What a first-run Save response means for the screen.
 
 import { fieldError } from "../settings/errors.js";
 

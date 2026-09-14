@@ -30,6 +30,15 @@ func newRefreshEvent(generation int, msg github.RefreshMsg) refreshEvent {
 	}
 }
 
+// branchList is a repository's branches for the base menu, Default first.
+// Error is a listing that failed, in which case Branches holds the default
+// branch alone and the menu offers that.
+type branchList struct {
+	Branches []string `json:"branches"`
+	Default  string   `json:"default"`
+	Error    string   `json:"error,omitempty"`
+}
+
 // progressEvent is one step of one session's assembly, named by the slug it
 // belongs to so a page ignores another session's.
 type progressEvent struct {
@@ -57,6 +66,16 @@ func newProgressEvent(slug string, p session.Progress) progressEvent {
 		event.Repo = p.Repo.ID()
 	}
 	return event
+}
+
+// noteView is one slide's speaker notes on the wire. The body is the HTML the
+// presenting page already holds, sanitised by its own Markdown pipeline before
+// it was ever attached to a card.
+type noteView struct {
+	Index int    `json:"index"`
+	Total int    `json:"total"`
+	Title string `json:"title"`
+	HTML  string `json:"html"`
 }
 
 func errorText(err error) string {

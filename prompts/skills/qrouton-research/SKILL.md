@@ -1,0 +1,30 @@
+---
+name: qrouton-research
+description: Internally execute the Research part of qrouton's workflow through a delegated research lead and ticket-blind specialists. Use after research questions are sufficiently framed.
+---
+
+# Run research
+
+Delegate the investigation; keep its exploratory output out of the orchestrator context.
+
+1. Read the approved research document: it carries the questions as headings with nothing answered under them. Do not include `qrouton.json`, a ticket, or solution framing in the delegated brief.
+2. Spawn a `qrouton-research-lead` when available, otherwise a general subagent. Give it only that document's path/content, safe context pointers, the editing/reference repo rules, and the instruction to fill it in where it stands.
+3. Instruct the lead to split independent questions among ticket-blind research specialists, wait for them, verify important claims against live code, and synthesize one artifact. It may delegate recursively; it must not ask the orchestrator to carry worker details or paste worker reports into the artifact.
+4. Research describes what is; it does not recommend a solution.
+5. Fill in `thoughts/shared/research/R<n>-<date>-<slug>.md` in place, answering each question under the heading that already carries it, with inline evidence instead of a duplicate Code References catalogue. No second artifact is written. The shape is in `references/research-shape.md` beside this file: the heading convention the workbench builds its accordion from, and how a framed question becomes an answered one. Read it and pass it, or its absolute path, to the lead — the lead starts in a fresh context and cannot resolve a path relative to this file.
+6. Accept a compact return containing the outcome, artifact path, major findings, and unresolved questions. Present the useful conclusions naturally, then offer to Plan.
+
+Before spawning, inspect the exact brief for ticket or intended-solution leakage.
+Sparse, contradictory, or unexpectedly minimal code is still a valid research finding. Complete the delegated investigation and artifacts so the evidence gap is durable; do not replace Research with an informal direct inspection or an implementation proposal.
+
+Continue only when the user asks for it. Run `qrouton-spec` next when a material choice stays open. Run `qrouton-plan` next when the choices are settled.
+
+Pass this to the lead and its specialists:
+
+{{evidence-discipline}}
+
+A citation on every sentence is not the goal; a citation on every material claim is.
+
+Pass this to the lead, and hold the returned artifact to it:
+
+{{artifact-discipline}}

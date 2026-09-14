@@ -1,5 +1,4 @@
-// What a Save refusal means for the panel's fields, kept pure: node --test is
-// the whole frontend harness.
+// What a Save refusal means for the panel's fields.
 
 const msgLoadFailed = "Settings could not be read:";
 

@@ -1,5 +1,4 @@
-// The repository refresh as the page sees it, kept pure: node --test is the whole
-// frontend harness.
+// The repository refresh as the page sees it.
 
 /** @typedef {'fetching'|'updated'|'failed'} OwnerStatus */
 const STATES = { started: "fetching", succeeded: "updated", failed: "failed" };

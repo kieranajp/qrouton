@@ -1,5 +1,4 @@
-// How long ago something happened, kept pure: node --test is the whole
-// frontend harness.
+// How long ago something happened.
 
 const MINUTE = 60000;
 const HOUR = 60 * MINUTE;

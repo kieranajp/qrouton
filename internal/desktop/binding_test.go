@@ -133,6 +133,21 @@ func TestTheConversationPageLinksThePalette(t *testing.T) {
 	}
 }
 
+func TestTheHandlerServesTheNotesPageAtItsOwnRoot(t *testing.T) {
+	assets, err := frontend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	recorder := httptest.NewRecorder()
+	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, notesRoot, nil))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("%s answered %d", notesRoot, recorder.Code)
+	}
+	if !strings.Contains(recorder.Body.String(), theme.Path) {
+		t.Fatalf("%s does not link %s", notesRoot, theme.Path)
+	}
+}
+
 // The formats the pane registry keys on are the port's values, spelled again in
 // JavaScript. Nothing checks that at build time, and a format no pane claims
 // draws as plain text rather than erroring.

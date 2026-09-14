@@ -13,7 +13,8 @@
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
     {"kind": "repo_unchanged", "repo": "account-service"},
     {"kind": "delegation", "pattern": "planning-lead"},
+    {"kind": "first_delegation", "pattern": "planning-lead"},
     {"kind": "open_file"},
-    {"kind": "response_excludes", "any": ["QRSPI", "qrspi-plan", "document numbering"]}
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
   ]
 }

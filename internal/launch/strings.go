@@ -160,8 +160,12 @@ const (
 )
 
 const (
-	editorWindowLabel   = "Editor"
-	documentLabelFormat = "◆ %s"
+	editorWindowLabel       = "Editor"
+	documentLabelFormat     = "◆ %s"
+	imagePathsRequiredError = "image paths are required"
+	imagePathRequiredError  = "image path is required"
+	unsupportedImageError   = "unsupported image format"
+	imageEntryErrorFormat   = "image %d %q: %w"
 )
 
 var (

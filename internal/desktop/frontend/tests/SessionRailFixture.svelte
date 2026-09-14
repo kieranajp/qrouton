@@ -51,7 +51,7 @@
         provider: "claude",
         parent_id: "root",
         parent_known: true,
-        type: "qrspi-planning-lead",
+        type: "qrouton-planning-lead",
         role: "Lead",
         state: "Active",
       },

@@ -16,6 +16,10 @@ const (
 	orgReposQuery          = "?type=all"
 	otherUserQuery         = "?type=owner"
 
+	// branchesPath lists one repository's branches. It carries no query of its
+	// own, so pagination opens one.
+	branchesPath = "/repos/%s/%s/branches"
+
 	// pageSize is GitHub's maximum; a short page means the last one.
 	pageSize        = 100
 	paginationQuery = "%s%sper_page=%d&page=%d"

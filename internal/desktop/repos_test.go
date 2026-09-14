@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -14,19 +15,37 @@ import (
 // fakeGitHub records which owners a refresh asked for and answers each with one
 // repository, so the rules are exercised without a token or a network.
 type fakeGitHub struct {
-	mu     sync.Mutex
-	all    []string
-	one    []string
-	cached [][]github.Repo
-	fails  map[string]error
-	token  error
+	mu             sync.Mutex
+	all            []string
+	one            []string
+	cached         [][]github.Repo
+	fails          map[string]error
+	token          error
+	tokenCalls     int
+	branchesAnswer []string
+	branchesErr    error
+	branchCalls    []string
 }
 
 func newFakeGitHub() *fakeGitHub { return &fakeGitHub{fails: map[string]error{}} }
 
 func (f *fakeGitHub) calls() gh {
 	return gh{
-		token: func() (string, error) { return "t", f.token },
+		token: func() (string, error) {
+			f.mu.Lock()
+			f.tokenCalls++
+			f.mu.Unlock()
+			return "t", f.token
+		},
+		branches: func(_ context.Context, _, owner, name string) ([]string, error) {
+			f.mu.Lock()
+			f.branchCalls = append(f.branchCalls, owner+"/"+name)
+			f.mu.Unlock()
+			if f.branchesErr != nil {
+				return nil, f.branchesErr
+			}
+			return append([]string(nil), f.branchesAnswer...), nil
+		},
 		all: func(_ context.Context, _ string, orgs []string, _ []github.Repo) <-chan github.RefreshMsg {
 			f.mu.Lock()
 			f.all = append(f.all, orgs...)
@@ -68,6 +87,18 @@ func (f *fakeGitHub) asked() ([]string, []string, int) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]string(nil), f.all...), append([]string(nil), f.one...), len(f.cached)
+}
+
+func (f *fakeGitHub) branchFetches() []string {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]string(nil), f.branchCalls...)
+}
+
+func (f *fakeGitHub) tokenFetches() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.tokenCalls
 }
 
 // testRepositories is a repository list that never reads the user's own cache.
@@ -273,5 +304,78 @@ func TestARetryDropsReposOfAnOwnerThatLeftTheConfiguration(t *testing.T) {
 		if repo.Org == "gone" {
 			t.Fatalf("the list kept %s, whose owner is no longer configured", repo.ID())
 		}
+	}
+}
+
+func TestBranchesPutsTheDefaultFirstAndDropsItFromTheRest(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.branchesAnswer = []string{"feature-a", "main"}
+	repos, _, _ := testRepositories(t, nil, fake)
+	repos.mu.Lock()
+	repos.repos = []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}
+	repos.mu.Unlock()
+
+	got := repos.Branches("acme/api")
+	if got.Default != "main" || got.Error != "" {
+		t.Fatalf("Branches = %+v", got)
+	}
+	if want := []string{"main", "feature-a"}; !reflect.DeepEqual(got.Branches, want) {
+		t.Fatalf("branches = %v, want %v", got.Branches, want)
+	}
+}
+
+func TestBranchesMemoisesASuccessfulFetch(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.branchesAnswer = []string{"main"}
+	repos, _, _ := testRepositories(t, nil, fake)
+	repos.mu.Lock()
+	repos.repos = []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}
+	repos.mu.Unlock()
+
+	first := repos.Branches("acme/api")
+	second := repos.Branches("acme/api")
+	if !reflect.DeepEqual(first, second) {
+		t.Fatalf("Branches = %+v, then %+v", first, second)
+	}
+	if got := fake.branchFetches(); len(got) != 1 {
+		t.Fatalf("branches fetched %v, want exactly one fetch", got)
+	}
+}
+
+func TestBranchesFailureIsNotMemoisedAndRetries(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.branchesErr = errors.New("unavailable")
+	repos, _, _ := testRepositories(t, nil, fake)
+	repos.mu.Lock()
+	repos.repos = []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}
+	repos.mu.Unlock()
+
+	got := repos.Branches("acme/api")
+	if got.Default != "main" || got.Error == "" {
+		t.Fatalf("Branches = %+v, want the default branch alone and a non-empty error", got)
+	}
+	if want := []string{"main"}; !reflect.DeepEqual(got.Branches, want) {
+		t.Fatalf("branches = %v, want %v", got.Branches, want)
+	}
+
+	repos.Branches("acme/api")
+	if got := fake.branchFetches(); len(got) != 2 {
+		t.Fatalf("branches fetched %v, want a retry on the next call", got)
+	}
+}
+
+func TestBranchesOfAnUnknownIDIsNotFetched(t *testing.T) {
+	fake := newFakeGitHub()
+	repos, _, _ := testRepositories(t, nil, fake)
+
+	got := repos.Branches("acme/api")
+	if !reflect.DeepEqual(got, branchList{}) {
+		t.Fatalf("Branches = %+v, want a zero value for an unknown id", got)
+	}
+	if got := fake.branchFetches(); len(got) != 0 {
+		t.Fatalf("branches fetched %v, want none for an unknown id", got)
+	}
+	if got := fake.tokenFetches(); got != 0 {
+		t.Fatalf("token fetched %d times, want none for an unknown id", got)
 	}
 }

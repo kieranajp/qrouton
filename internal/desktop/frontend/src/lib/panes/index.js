@@ -1,3 +1,4 @@
+import ImagesPane from "./ImagesPane.svelte";
 import DiffPane from "./DiffPane.svelte";
 import MarkdownPane from "./MarkdownPane.svelte";
 import PlainPane from "./PlainPane.svelte";
@@ -8,6 +9,7 @@ import SlidesPane from "./SlidesPane.svelte";
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
 const PANES = {
+  images: ImagesPane,
   diff: DiffPane,
   markdown: MarkdownPane,
 };

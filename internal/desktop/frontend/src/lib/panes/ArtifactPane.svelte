@@ -4,11 +4,12 @@
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
   import CopyPath from "./CopyPath.svelte";
+  import ReaderFooter from "./ReaderFooter.svelte";
 
   /** @type {{doc: {source: string, path?: string, kind?: string}, structured: string,
    * label: string, mode: string, onMode: (mode: string) => void, tag: any, body: any,
-   * controls?: any, bar?: any, counter?: any}} */
-  let { doc, structured, label, mode, onMode, tag, body, controls, bar, counter } = $props();
+   * controls?: any, bar?: any, counter?: any, pips?: boolean}} */
+  let { doc, structured, label, mode, onMode, tag, body, controls, bar, counter, pips = false } = $props();
 </script>
 
 <article class="document">
@@ -21,11 +22,8 @@
     <CopyPath path={doc.path} />
   </div>
   {@render body()}
-  <footer class="footer">
-    {@render bar?.()}
-    <div class="controls">
-      {@render controls?.()}
-      <div class="modes">
+  <ReaderFooter {bar} navigation={controls} {counter} {pips}>
+    {#snippet actions()}
         <Button
           variant={mode === structured ? "outline" : "ghost"}
           size="sm"
@@ -36,10 +34,8 @@
           size="sm"
           aria-pressed={mode === "document"}
           onclick={() => onMode("document")}>Document</Button>
-      </div>
-      {@render counter?.()}
-    </div>
-  </footer>
+    {/snippet}
+  </ReaderFooter>
 </article>
 
 <style>
@@ -67,39 +63,4 @@
     white-space: nowrap;
   }
 
-  /* Held on the pane's floor whatever the body is tall enough to fill, so the
-     controls stay under the same finger from one screen to the next. */
-  .footer {
-    flex: none;
-    margin-top: auto;
-    background: var(--surface-chrome);
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
-
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    min-height: var(--h-footer);
-    padding: 0 var(--pane-pad);
-  }
-
-  .modes {
-    display: flex;
-    gap: 6px;
-    margin-left: auto;
-  }
-
-  /* The counter is last in the markup but claims the slack, so the mode
-     buttons sit against it rather than drifting with the body's width. */
-  :global(.document > .footer .counter) {
-    flex: 1 1 0;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    text-align: right;
-    font: var(--machine-sm);
-    color: var(--text-muted);
-  }
 </style>

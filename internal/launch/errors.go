@@ -40,4 +40,7 @@ var (
 	ErrNotDirectory          = errors.New("not a directory")
 	ErrOutsideSession        = errors.New("path is outside the qrouton session")
 	ErrOutsideSessionMissing = errors.New("path does not exist in the qrouton session")
+	ErrImagePathsRequired    = errors.New(imagePathsRequiredError)
+	ErrImagePathRequired     = errors.New(imagePathRequiredError)
+	ErrUnsupportedImage      = errors.New(unsupportedImageError)
 )

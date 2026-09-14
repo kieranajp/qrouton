@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { latestPerFrame } from "./frame.js";
 import { opensSettings, position } from "./shortcuts.js";
+export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
 export { Terminal };
 
@@ -23,38 +24,6 @@ export const fontsReady = () =>
 // The agent reads a lone LF as submit, but an LF inside a bracketed paste as a
 // literal newline.
 const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
-
-const encoder = new TextEncoder();
-const CHUNK = 0x8000;
-
-// String.fromCharCode(...bytes) spreads the array as call arguments, which
-// throws past ~128KB; chunking keeps every paste size working.
-export const encode = (text) => {
-  const bytes = encoder.encode(text);
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-};
-
-export function decode(encoded) {
-  const raw = atob(encoded);
-  const buffer = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) buffer[i] = raw.charCodeAt(i);
-  return buffer;
-}
-
-/** A retained replay replaces remounted terminal contents; ordinary chunks append.
- * @param {Terminal} term
- * @param {string | {encoded: string, replay?: boolean}} payload */
-export function paint(term, payload) {
-  const chunk = typeof payload === "string" ? { encoded: payload } : payload;
-  // Keep the reset in xterm's write queue. Calling reset() synchronously could
-  // overtake an ordinary chunk which the parser has accepted but not painted.
-  if (chunk.replay) term.write("\x1bc");
-  term.write(decode(chunk.encoded));
-}
 
 const mounted = new WeakMap();
 

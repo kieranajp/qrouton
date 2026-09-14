@@ -1,4 +1,4 @@
-// The panel's org list, kept pure: node --test is the whole frontend harness.
+// The panel's org list.
 
 /**
  * @param {string[]} list

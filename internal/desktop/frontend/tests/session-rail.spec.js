@@ -385,7 +385,7 @@ test("the badge carries the row's state", async ({ page }) => {
 test("activity shows an orchestrator, its leads, and subagents behind a count", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
   await expect(activity.getByLabel("Orchestrator · Claude · Waiting for you")).toBeVisible();
-  const lead = activity.getByLabel("Lead · QRSPI Planning Lead · Active");
+  const lead = activity.getByLabel("Lead · Qrouton Planning Lead · Active");
   await expect(lead).toBeVisible();
 
   // A subagent is a detail, not a row, until it is asked for.
@@ -414,7 +414,7 @@ test("waiting is the orchestrator's alone", async ({ page }) => {
     activity.getByLabel(label).locator(".dot").evaluate((el) => getComputedStyle(el).backgroundColor);
 
   expect(await dot("Orchestrator · Claude · Waiting for you")).toBe(waiting);
-  expect(await dot("Lead · QRSPI Planning Lead · Active")).toBe(running);
+  expect(await dot("Lead · Qrouton Planning Lead · Active")).toBe(running);
 });
 
 test("the rail prints no name it cannot read", async ({ page }) => {

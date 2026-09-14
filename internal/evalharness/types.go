@@ -24,6 +24,7 @@ type CheckSpec struct {
 	Pattern  string   `json:"pattern,omitempty"`
 	Any      []string `json:"any,omitempty"`
 	MaxLines int      `json:"max_lines,omitempty"`
+	Turn     int      `json:"turn,omitempty"`
 }
 
 type Config struct {

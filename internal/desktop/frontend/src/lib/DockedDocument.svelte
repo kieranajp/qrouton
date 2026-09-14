@@ -4,10 +4,11 @@
   import DocumentPane from "./DocumentPane.svelte";
   import FindBar from "./FindBar.svelte";
   import { clearMatches, createDOMFindAdapter, findShortcut } from "./find.js";
+  import { present } from "./panes/present.svelte.js";
   import TerminalPane from "./shell/TerminalPane.svelte";
 
-  /** @type {{id: string, active?: boolean}} */
-  let { id, active = false } = $props();
+  /** @type {{id: string, slug?: string, active?: boolean}} */
+  let { id, slug = "", active = false } = $props();
 
   const session = chrome();
 
@@ -87,6 +88,9 @@
   }
 
   async function openFind() {
+    // The find listener is registered in the capture phase at mount, so a
+    // presentation cannot pre-empt it — it declines instead.
+    if (present.active) return;
     if (!finding) {
       finding = true;
       await tick();
@@ -153,6 +157,7 @@
     <div bind:this={content}>
       <DocumentPane
         {id}
+        {slug}
         {active}
         {scrollRoot}
         agentWorking={session.fields.activity === "working"}

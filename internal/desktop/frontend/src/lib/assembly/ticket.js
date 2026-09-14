@@ -1,5 +1,4 @@
-// Applying a fetched ticket to the form, kept pure: node --test is the whole
-// frontend harness.
+// Applying a fetched ticket to the form.
 
 /** @typedef {{name?: string, branchDescription?: string, description?: string, ticket?: string}} Draft */
 /** @typedef {{url?: string, title?: string, body?: string, branchDescription?: string}} Result */

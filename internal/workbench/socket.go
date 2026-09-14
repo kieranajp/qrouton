@@ -32,7 +32,12 @@ type processDescriptor struct {
 }
 
 // Request is one call on the control socket.
+type ImageFocusRequest struct {
+	Index int `json:"index"`
+}
+
 type Request struct {
+	ImageFocus       *ImageFocusRequest         `json:"image_focus,omitempty"`
 	Op               string                     `json:"op"`
 	ID               string                     `json:"id,omitempty"`
 	Full             bool                       `json:"full,omitempty"`
@@ -48,13 +53,14 @@ type Request struct {
 
 // Response is the desktop process's single-line answer.
 type Response struct {
-	ID       string            `json:"id,omitempty"`
-	Text     string            `json:"text,omitempty"`
-	Exists   bool              `json:"exists,omitempty"`
-	IDs      []string          `json:"ids,omitempty"`
-	Viewport *DocumentViewport `json:"viewport,omitempty"`
-	Outcome  string            `json:"outcome,omitempty"`
-	Error    string            `json:"error,omitempty"`
+	ImageSelection *ImageSelection   `json:"image_selection,omitempty"`
+	ID             string            `json:"id,omitempty"`
+	Text           string            `json:"text,omitempty"`
+	Exists         bool              `json:"exists,omitempty"`
+	IDs            []string          `json:"ids,omitempty"`
+	Viewport       *DocumentViewport `json:"viewport,omitempty"`
+	Outcome        string            `json:"outcome,omitempty"`
+	Error          string            `json:"error,omitempty"`
 }
 
 // TicketRequest is the canonical ticket URL and the user-level request the
@@ -376,4 +382,16 @@ func (c *client) call(ctx context.Context, req Request) (Response, error) {
 		return Response{}, errors.New(res.Error)
 	}
 	return res, nil
+}
+
+func (c *client) FocusImage(ctx context.Context, id string, index int) (ImageSelection, error) {
+	res, err := c.call(ctx, Request{Op: OpFocusImage, ID: id, ImageFocus: &ImageFocusRequest{Index: index}})
+	if err != nil {
+		return ImageSelection{}, err
+	}
+	selection := res.ImageSelection
+	if selection == nil || selection.CurrentIndex < 1 || selection.CurrentIndex > selection.Count || selection.Revision == 0 {
+		return ImageSelection{}, ErrImageSelectionUnavailable
+	}
+	return *selection, nil
 }

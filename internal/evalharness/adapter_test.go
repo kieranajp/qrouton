@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/launch"
 )
 
@@ -126,6 +127,34 @@ func TestCodexContinuationArguments(t *testing.T) {
 	if !strings.HasSuffix(joined, "thread-42 -") {
 		t.Fatalf("thread ID or stdin prompt marker is missing: %s", joined)
 	}
+	if strings.Contains(joined, "--ephemeral") {
+		t.Fatalf("ephemeral sessions cannot be resumed: %s", joined)
+	}
+}
+
+func TestCodexEvalAllowsLeadDelegation(t *testing.T) {
+	adapter := Adapter{Name: "codex", SelfPath: "/tmp/qrouton-eval"}
+	for _, session := range []string{"", "thread-42"} {
+		args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", session)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := codex.ConfigFlag + " " + codex.MaxDepthSetting(codex.RequiredMaxDepth)
+		if !strings.Contains(strings.Join(args, " "), want) {
+			t.Fatalf("eval cannot delegate through a lead: %v", args)
+		}
+	}
+}
+
+func TestCodexEphemeralArguments(t *testing.T) {
+	adapter := Adapter{Name: "codex", Bin: "codex", SelfPath: "/tmp/qrouton-eval", Ephemeral: true}
+	args, err := adapter.args("/tmp/workspace", "/tmp/mcp.log", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(args, " "), "--ephemeral") {
+		t.Fatalf("single-turn session is not ephemeral: %s", strings.Join(args, " "))
+	}
 }
 
 func TestPromptStaysOutOfArgv(t *testing.T) {
@@ -208,7 +237,11 @@ func TestAdapterHonorsContextTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	adapter := Adapter{Name: "claude", Bin: script, SelfPath: script}
+	started := time.Now()
 	_, _, _, err := adapter.RunTurn(ctx, dir, filepath.Join(dir, "mcp.log"), "prompt", "", 1)
+	if elapsed := time.Since(started); elapsed > time.Second {
+		t.Fatalf("timeout waited for the runner's child: %s", elapsed)
+	}
 	if err == nil {
 		t.Fatal("expected timeout error")
 	}

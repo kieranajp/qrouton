@@ -45,9 +45,11 @@ func output(t *testing.T, dir string, args ...string) string {
 }
 
 type options struct {
-	files   map[string][]string
-	message string
-	fileURL bool
+	files       map[string][]string
+	message     string
+	fileURL     bool
+	branch      string
+	branchLines []string
 }
 
 type Option func(*options)
@@ -58,6 +60,12 @@ func WithFile(name string, lines ...string) Option {
 
 func WithMessage(message string) Option {
 	return func(o *options) { o.message = message }
+}
+
+// WithBranch adds a second branch carrying a commit of its own, so a test can
+// tell which branch a worktree was cut from. Leaves main checked out.
+func WithBranch(name string, lines ...string) Option {
+	return func(o *options) { o.branch = name; o.branchLines = lines }
 }
 
 // AsFileURL answers a file:// URL rather than a path, so cloning it is a real
@@ -85,6 +93,13 @@ func Origin(t *testing.T, name string, opts ...Option) string {
 		}
 		Run(t, dir, "add", ".")
 		Run(t, dir, "commit", "-m", o.message)
+	}
+	if o.branch != "" {
+		Run(t, dir, "checkout", "-b", o.branch)
+		WriteFile(t, dir, "on-"+o.branch, o.branchLines...)
+		Run(t, dir, "add", ".")
+		Run(t, dir, "commit", "-m", "branch "+o.branch)
+		Run(t, dir, "checkout", "main")
 	}
 	if o.fileURL {
 		return "file://" + dir
