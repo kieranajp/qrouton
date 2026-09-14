@@ -26,6 +26,50 @@ func TestHandleRoundTripsAcrossExecBoundary(t *testing.T) {
 	}
 }
 
+func TestBugReportSocketRoundTrip(t *testing.T) {
+	socket, requests := echoServer(t, func(req Request) Response {
+		return Response{BugReport: &BugReport{ID: req.ID, Status: BugReportPending, Message: "Review"}}
+	})
+	host := newClient(socket).(BugReportHost)
+	req := BugReportRequest{ID: "one", Title: "title", Body: "\n body ", Deadline: time.Now().Add(time.Minute).Round(time.Second)}
+	if _, err := host.QueueBugReport(context.Background(), req); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.BugReportStatus(context.Background(), req.ID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := host.CancelBugReport(context.Background(), req.ID); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{OpQueueBugReport, OpBugReportStatus, OpCancelBugReport} {
+		got := <-requests
+		if got.Op != op || got.ID != req.ID {
+			t.Fatalf("request: %+v", got)
+		}
+		if op == OpQueueBugReport && (got.BugReport == nil || got.BugReport.Title != req.Title || got.BugReport.Body != req.Body || !got.BugReport.Deadline.Equal(req.Deadline)) {
+			t.Fatalf("payload: %+v", got)
+		}
+	}
+}
+
+func TestBugReportSocketRejectsMalformedOutcomes(t *testing.T) {
+	for _, report := range []*BugReport{nil, {}, {ID: "other", Status: BugReportPending, Message: "Review"}, {ID: "one", Status: "approved", Message: "No"}, {ID: "one", Status: BugReportCreated, Message: "Created"}} {
+		socket, _ := echoServer(t, func(Request) Response { return Response{BugReport: report} })
+		host := newClient(socket).(BugReportHost)
+		for _, call := range []func() (BugReport, error){
+			func() (BugReport, error) { return host.BugReportStatus(context.Background(), "one") },
+			func() (BugReport, error) { return host.CancelBugReport(context.Background(), "one") },
+			func() (BugReport, error) {
+				return host.QueueBugReport(context.Background(), BugReportRequest{ID: "one"})
+			},
+		} {
+			if _, err := call(); !errors.Is(err, ErrBugReportUnavailable) {
+				t.Fatalf("%+v: %v", report, err)
+			}
+		}
+	}
+}
+
 func TestParseHandleRejectsGarbageAndMissingIdentity(t *testing.T) {
 	if _, err := ParseHandle("not json"); err == nil {
 		t.Fatal("accepted malformed handle")

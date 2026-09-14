@@ -3,6 +3,21 @@ package workbench
 import "time"
 
 const (
+	OpQueueBugReport       = "queue-bug-report"
+	OpBugReportStatus      = "bug-report-status"
+	OpCancelBugReport      = "cancel-bug-report"
+	BugReportPending       = "pending"
+	BugReportPosting       = "posting"
+	BugReportCreated       = "created"
+	BugReportCancelled     = "cancelled"
+	BugReportExpired       = "expired"
+	BugReportFailed        = "failed"
+	BugReportUnknown       = "unknown"
+	BugReportReviewTimeout = 30 * time.Minute
+	BugReportCallTimeout   = 2 * time.Second
+)
+
+const (
 	envKeyValueSep = "="
 
 	handleParseError = "parse session handle"

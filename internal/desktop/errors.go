@@ -8,6 +8,9 @@ import (
 )
 
 var (
+	ErrBugReportInvalid   = errors.New("bug report needs an id, title, body, and deadline; an id cannot change content")
+	ErrBugReportBusy      = errors.New("this session already has a bug report awaiting review or creation")
+	ErrBugReportStale     = errors.New("bug report is no longer available for this session")
 	ErrImageGalleryClosed = errors.New("image galleries are unavailable for this session")
 	ErrNotImageGallery    = errors.New("window is not an image gallery")
 	ErrImageIndex         = errors.New("image index is out of range")

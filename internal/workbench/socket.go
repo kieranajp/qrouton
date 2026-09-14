@@ -37,6 +37,7 @@ type ImageFocusRequest struct {
 }
 
 type Request struct {
+	BugReport        *BugReportRequest          `json:"bug_report,omitempty"`
 	ImageFocus       *ImageFocusRequest         `json:"image_focus,omitempty"`
 	Op               string                     `json:"op"`
 	ID               string                     `json:"id,omitempty"`
@@ -53,6 +54,7 @@ type Request struct {
 
 // Response is the desktop process's single-line answer.
 type Response struct {
+	BugReport      *BugReport        `json:"bug_report,omitempty"`
 	ImageSelection *ImageSelection   `json:"image_selection,omitempty"`
 	ID             string            `json:"id,omitempty"`
 	Text           string            `json:"text,omitempty"`
@@ -358,6 +360,8 @@ func (c *client) call(ctx context.Context, req Request) (Response, error) {
 		return Response{}, fmt.Errorf("%w: %w", ErrWorkbenchUnreachable, err)
 	}
 	defer conn.Close()
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	defer stop()
 	if deadline, ok := ctx.Deadline(); ok {
 		_ = conn.SetDeadline(deadline)
 	} else {
@@ -379,7 +383,12 @@ func (c *client) call(ctx context.Context, req Request) (Response, error) {
 		return Response{}, err
 	}
 	if res.Error != "" {
-		return Response{}, errors.New(res.Error)
+		switch req.Op {
+		case OpQueueBugReport, OpBugReportStatus, OpCancelBugReport:
+			return Response{}, fmt.Errorf("%w: %s", ErrWorkbenchRefused, res.Error)
+		default:
+			return Response{}, errors.New(res.Error)
+		}
 	}
 	return res, nil
 }

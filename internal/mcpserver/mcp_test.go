@@ -1310,7 +1310,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
 		toolOpenFile, toolOpenImages, toolFocusImage, toolRunCommand, toolReadWindow, toolShowDiff,
-		toolNotify, toolCloseWindow, toolListWindows, toolSharePage,
+		toolNotify, toolCloseWindow, toolListWindows, toolSharePage, toolReportBug,
 	}
 	for _, tc := range []struct {
 		mode session.SessionMode

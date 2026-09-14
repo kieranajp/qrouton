@@ -5,9 +5,11 @@ package mcpserver
 // left for the server to say is the one rule neither of them can: the session
 // bounds every path this server will accept.
 
-const serverInstructions = "Drive the user's qrouton workbench: each tool here opens or reads a tab in the session's right pane, beside the conversation and without taking the keyboard. All paths and working directories must belong to this session."
+const serverInstructions = "Drive the user's qrouton workbench: window tools open or read tabs beside the conversation without taking the keyboard. All paths and working directories must belong to this session. report_bug proposes qrouton defects for the user's explicit desktop confirmation before GitHub issue creation."
 
 const (
+	toolReportBug   = "report_bug"
+	descReportBug   = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
 	toolOpenFile    = "open_file"
 	toolFocusImage  = "focus_image"
 	toolOpenImages  = "open_images"

@@ -108,6 +108,18 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		Instructions: serverInstructions,
 	})
 	windows := newWindowManager(root, editor, host)
+	mcp.AddTool(server, &mcp.Tool{Name: toolReportBug, Description: descReportBug},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input reportBugInput) (*mcp.CallToolResult, reportBugOutput, error) {
+			out, err := windows.reportBug(ctx, input)
+			if err != nil {
+				return nil, out, err
+			}
+			message := out.Message
+			if out.URL != "" {
+				message += " " + out.URL
+			}
+			return textResult(message), out, nil
+		})
 
 	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
 	addTool(server, toolFocusImage, descFocusImage, keyMessage, messageOnly(windows.focusImage))

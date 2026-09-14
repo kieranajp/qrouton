@@ -1,5 +1,6 @@
 <script>
   import Button from "./lib/core/Button.svelte";
+  import ReportReview from "./lib/bugs/ReportReview.svelte";
   import CapsLabel from "./lib/core/CapsLabel.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
@@ -105,6 +106,11 @@
           </DocumentIndex>
         {/snippet}
       </PaneHeader>
+      {#if fields.bugReportID}
+        <div class="report-action">
+          <Button variant="secondary" size="sm" onclick={view.reviewBugReport}>{fields.bugReportLabel}</Button>
+        </div>
+      {/if}
       {#each view.conversations as row (row.terminal)}
         <Terminal
           id={row.terminal}
@@ -155,6 +161,12 @@
   </div>
 
   <ContextMenu />
+
+  {#if view.reviewing}
+    {#key fields.slug + ":" + fields.bugReportID}
+      <ReportReview slug={fields.slug} requestID={fields.bugReportID} status={fields.bugReportStatus} label={fields.bugReportLabel} onClose={view.dismissBugReport} />
+    {/key}
+  {/if}
 
   {#if fields.welcoming}
     <FirstRunOverlay />
@@ -288,6 +300,15 @@
     font: var(--machine-sm);
     font-size: 11px;
     color: var(--text-primary);
+  }
+
+  .report-action {
+    flex: none;
+    display: flex;
+    justify-content: flex-end;
+    padding: 6px 8px;
+    background: var(--surface-chrome);
+    border-bottom: 1px solid var(--border-subtle);
   }
 
   /* A zero-size point for the menu to resolve its own position against. */

@@ -15,6 +15,7 @@ import (
 // controlHooks is what the socket may change about the running session that is
 // not a window.
 type controlHooks struct {
+	bugReports *BugReports
 	picker     func(req workbench.PickerRequest) error
 	attention  func(activity string, generation uint64)
 	generation func(req workbench.RunnerGenerationRequest)
@@ -94,6 +95,30 @@ type handler struct {
 // becomes the response's Error; dispatch is the only place that conversion
 // happens.
 var handlers = map[string]handler{
+	workbench.OpQueueBugReport: {
+		guards: []guard{needsSession, needsBugReports},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			if req.BugReport == nil || req.ID != req.BugReport.ID {
+				return workbench.Response{}, ErrBugReportInvalid
+			}
+			out, err := c.hooks.bugReports.queue(c.owner, *req.BugReport)
+			return workbench.Response{BugReport: &out}, err
+		},
+	},
+	workbench.OpBugReportStatus: {
+		guards: []guard{needsSession, needsBugReports},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			out, err := c.hooks.bugReports.status(c.owner, req.ID)
+			return workbench.Response{BugReport: &out}, err
+		},
+	},
+	workbench.OpCancelBugReport: {
+		guards: []guard{needsSession, needsBugReports},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			out, err := c.hooks.bugReports.cancel(c.owner, req.ID)
+			return workbench.Response{BugReport: &out}, err
+		},
+	},
 	workbench.OpFocusImage: {
 		guards: []guard{needsSession, needsImageFocus},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -202,6 +227,13 @@ var handlers = map[string]handler{
 func needsSession(c *control, _ workbench.Request) error {
 	if c.owner == nil {
 		return ErrNoSession
+	}
+	return nil
+}
+
+func needsBugReports(c *control, _ workbench.Request) error {
+	if c.hooks.bugReports == nil {
+		return ErrBugReportInvalid
 	}
 	return nil
 }

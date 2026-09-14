@@ -21,10 +21,13 @@ import (
 // git measurements. Agents carries only the manifest provider until the
 // workbench overlays live data.
 type Fields struct {
-	Mode     string `json:"mode"`
-	Phase    string `json:"phase"`
-	Identity string `json:"identity"`
-	Branch   string `json:"branch"`
+	BugReportID     string `json:"bugReportID"`
+	BugReportStatus string `json:"bugReportStatus"`
+	BugReportLabel  string `json:"bugReportLabel"`
+	Mode            string `json:"mode"`
+	Phase           string `json:"phase"`
+	Identity        string `json:"identity"`
+	Branch          string `json:"branch"`
 	// Slug and Terminal name the session on screen and the conversation the page
 	// attaches to; the page has no other way to address either.
 	Slug                string                `json:"slug"`
