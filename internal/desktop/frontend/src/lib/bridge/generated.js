@@ -10,6 +10,9 @@ export const ASSEMBLY_PENDING = "github.com/kieranajp/qrouton/internal/desktop.A
 export const ASSEMBLY_PREFIXES = "github.com/kieranajp/qrouton/internal/desktop.Assembly.Prefixes";
 export const ASSEMBLY_PREVIEW = "github.com/kieranajp/qrouton/internal/desktop.Assembly.Preview";
 export const ASSEMBLY_RUNNERS = "github.com/kieranajp/qrouton/internal/desktop.Assembly.Runners";
+export const BUG_REPORTS_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Cancel";
+export const BUG_REPORTS_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Confirm";
+export const BUG_REPORTS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Load";
 export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Chrome.Snapshot";
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
@@ -69,8 +72,11 @@ export const WINDOW_DIAGRAM_EVENT = "window:diagram:";
 export const WINDOW_EXIT_EVENT = "window:exit:";
 export const WINDOWS_EVENT = "window:open";
 
-/** @type {{mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
+  bugReportID: "",
+  bugReportStatus: "",
+  bugReportLabel: "",
   mode: "",
   phase: "",
   identity: "",

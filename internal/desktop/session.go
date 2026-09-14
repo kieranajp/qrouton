@@ -32,10 +32,12 @@ type sessionState struct {
 	// exit writes. The pane itself keeps no scrollback.
 	tail *ring
 
-	mu      sync.Mutex
-	stopped bool
-	process *ptyProcess
-	shell   string
+	mu              sync.Mutex
+	stopped         bool
+	bugReports      map[string]*bugReportRecord
+	latestBugReport string
+	process         *ptyProcess
+	shell           string
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
@@ -189,6 +191,7 @@ func (s *sessionState) serve(control io.Closer) bool {
 func (s *sessionState) stop() {
 	s.mu.Lock()
 	s.stopped = true
+	s.pruneBugReports(time.Now())
 	process, control := s.process, s.control
 	s.process, s.control = nil, nil
 	s.mu.Unlock()

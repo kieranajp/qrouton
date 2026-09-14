@@ -7,9 +7,11 @@ import (
 
 // Input errors, returned to the agent so it can correct its own call.
 var (
-	ErrCommandRequired = errors.New("command is required")
-	ErrMessageRequired = errors.New("message is required")
-	ErrNameRequired    = errors.New("name is required")
+	ErrBugReportInput       = errors.New("report_bug requires a nonblank title and body")
+	ErrBugReportUnsupported = errors.New("this workbench does not support bug report review")
+	ErrCommandRequired      = errors.New("command is required")
+	ErrMessageRequired      = errors.New("message is required")
+	ErrNameRequired         = errors.New("name is required")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )

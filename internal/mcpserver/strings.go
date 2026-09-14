@@ -1,5 +1,15 @@
 package mcpserver
 
+import "time"
+
+const (
+	bugReportIDBytes         = 16
+	bugReportPollFailures    = 3
+	bugReportPollInterval    = 250 * time.Millisecond
+	bugReportFinishAllowance = 35 * time.Second
+	bugReportNotification    = "A qrouton bug report is ready. Open this session and choose Review bug report in the Agent header. Only Create issue sends it to GitHub."
+)
+
 const (
 	// editorWindowName is the reserved registry key for the single editor
 	// window; others are keyed by the caller-supplied name.

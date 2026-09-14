@@ -7,6 +7,18 @@ import (
 )
 
 const (
+	bugReportReviewLabel      = "Review bug report"
+	bugReportCreateLabel      = "Create issue"
+	bugReportCancelLabel      = "Cancel"
+	bugReportCloseLabel       = "Close"
+	bugReportPendingMessage   = "Review the bug report in qrouton before creating an issue."
+	bugReportPostingMessage   = "Creating the confirmed GitHub issue…"
+	bugReportCancelledMessage = "Bug report cancelled. No issue was sent."
+	bugReportExpiredMessage   = "Bug report review expired. No issue was sent."
+	bugReportCreatedFormat    = "Created GitHub issue #%d."
+	bugReportRetention        = 30 * time.Minute
+	bugReportPostTimeout      = 30 * time.Second
+
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"
 

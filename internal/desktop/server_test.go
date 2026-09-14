@@ -24,6 +24,43 @@ type adoption struct {
 	boot bool
 }
 
+func TestBugReportControlCannotApproveOrChangeSession(t *testing.T) {
+	b, first, _ := bugReportSetup(t)
+	second := b.sessions.add(t.TempDir(), nil, nil)
+	c := &control{owner: first, hooks: controlHooks{bugReports: b}}
+	req := workbench.BugReportRequest{ID: "one", Title: "title", Body: "body", Deadline: b.now().Add(time.Minute)}
+	if got := c.dispatch(workbench.Request{Op: workbench.OpQueueBugReport, ID: req.ID, Root: second.root(), BugReport: &req}); got.Error != "" || got.BugReport.Status != workbench.BugReportPending {
+		t.Fatal(got)
+	}
+	if _, err := b.Load(second.slug(), req.ID); err == nil {
+		t.Fatal("forged root changed owner")
+	}
+	if _, err := b.Confirm(second.slug(), req.ID); err == nil {
+		t.Fatal("foreign session confirmed")
+	}
+	for _, owner := range []*sessionState{nil, second} {
+		c.owner = owner
+		for _, op := range []string{workbench.OpBugReportStatus, workbench.OpCancelBugReport} {
+			if got := c.dispatch(workbench.Request{Op: op, ID: req.ID, Root: first.root()}); got.Error == "" {
+				t.Fatal(got)
+			}
+		}
+	}
+	c.owner = nil
+	if got := c.dispatch(workbench.Request{Op: workbench.OpQueueBugReport, ID: req.ID, BugReport: &req}); got.Error == "" {
+		t.Fatal("process queue admitted")
+	}
+	c.owner = first
+	for _, op := range []string{"confirm-bug-report", "create-bug-report", "BugReports.Confirm"} {
+		if got := c.dispatch(workbench.Request{Op: op, ID: req.ID, BugReport: &req}); got.Error == "" {
+			t.Fatal("approval operation admitted")
+		}
+	}
+	if r, err := b.status(first, req.ID); err != nil || r.Status != workbench.BugReportPending {
+		t.Fatalf("report=%+v err=%v", r, err)
+	}
+}
+
 func TestSessionControlCannotReachAnotherSessionsWindows(t *testing.T) {
 	windows, _ := testWindows(t)
 	owner := windows.shown()

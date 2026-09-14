@@ -182,6 +182,11 @@ func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
 // pushChrome emits even with the session-level fields empty: the page cannot
 // attach to a conversation whose terminal id it has not been told.
 func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[string][]status.RepoStat, unseen map[string]int, emit emitter) {
+	for _, state := range reg.all() {
+		state.mu.Lock()
+		state.pruneBugReports(reg.now())
+		state.mu.Unlock()
+	}
 	shown := reg.current()
 	shownRoot := shown.root()
 	fields := status.Read(shownRoot)
@@ -200,6 +205,12 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 		}
 	}
 	if shown != nil {
+		shown.mu.Lock()
+		shown.pruneBugReports(reg.now())
+		if report := shown.bugReports[shown.latestBugReport]; report != nil {
+			fields.BugReportID, fields.BugReportStatus, fields.BugReportLabel = report.outcome.ID, report.outcome.Status, bugReportReviewLabel
+		}
+		shown.mu.Unlock()
 		fields.Activity = shown.agents.state()
 		fields.Picker = shown.pendingPicker() != nil
 		if shown.alive() {

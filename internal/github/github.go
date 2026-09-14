@@ -225,7 +225,11 @@ func cacheKey(owner string) string { return strings.ToLower(owner) }
 
 // Token resolves credentials: gh auth token, then the environment.
 func Token() (string, error) {
-	if out, err := exec.Command(ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
+	return TokenContext(context.Background())
+}
+
+func TokenContext(ctx context.Context) (string, error) {
+	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
 		if t := strings.TrimSpace(string(out)); t != "" {
 			return t, nil
 		}

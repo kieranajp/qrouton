@@ -13,6 +13,7 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `notify` — get the user's attention when you finish, need a decision, or are blocked. Use it sparingly.
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.
 - `close_window` / `list_windows` — manage what's open.
+- `report_bug` — propose a qrouton defect with a title and evidence. The user reviews it in the app and chooses Create issue before anything is sent to GitHub. Return the issue link on success; never bypass cancelled review, and inspect GitHub before retrying an uncertain result.
 
 For images you produce, create `thoughts/assets/` on demand and write or copy captures there before calling `open_images`. Copy external simulator captures into that folder; the tool reads existing session files and does not create the folder or copy files. Existing supported images elsewhere in the admitted session remain usable.
 

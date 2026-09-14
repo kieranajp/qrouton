@@ -187,6 +187,12 @@ export function shell() {
   let requested = $state(false);
   let escalating = $state(false);
   let settingsOpen = $state(false);
+  let reviewed = $state("");
+  let reviewKey = $derived(fields.slug + ":" + fields.bugReportID);
+  let reviewing = $derived(Boolean(fields.bugReportID) && reviewed === reviewKey);
+  $effect(() => {
+    if (reviewed && reviewed !== reviewKey) reviewed = "";
+  });
   // An escalation is the shown session's own pending request, so switching
   // session takes its picker with it. Add-repos is this page's, and belongs to
   // the session it was pressed on for the same reason.
@@ -194,7 +200,7 @@ export function shell() {
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
   let covered = $derived(
-    fields.welcoming || assembling || picker || settingsOpen || present.active,
+    fields.welcoming || assembling || picker || settingsOpen || present.active || reviewing,
   );
 
   async function escalate() {
@@ -249,6 +255,9 @@ export function shell() {
   });
 
   return {
+    get reviewing() { return reviewing; },
+    reviewBugReport: () => { reviewed = reviewKey; },
+    dismissBugReport: () => { reviewed = ""; },
     get fields() {
       return fields;
     },

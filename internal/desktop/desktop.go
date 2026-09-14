@@ -49,8 +49,9 @@ type Options struct {
 	Validator  Validator
 	Relauncher Relauncher
 
-	assembly *Assembly
-	chrome   *Chrome
+	assembly   *Assembly
+	chrome     *Chrome
+	bugReports *BugReports
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -86,6 +87,8 @@ func Run(opts Options) error {
 		return windows.registry.imageAsset(token, index)
 	})
 	reg := newSessions()
+	opts.bugReports = newBugReports(reg)
+	r.register(application.NewService(opts.bugReports))
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
 	repos := newRepositories(opts.Config, r.Emit)
@@ -148,6 +151,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	defer cancel()
 
 	reg := term.sessions
+	if opts.bugReports == nil {
+		opts.bugReports = newBugReports(reg)
+	}
 	launcher := opts.Launcher
 	shell := &shellWindow{windows: windows, launcher: launcher}
 
@@ -156,6 +162,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			return serveControl(socket, windows, state, controlHooks{
+				bugReports: opts.bugReports,
 				attention: func(value string, generation uint64) {
 					if state.agents.attention(generation, value) {
 						reg.touch()
