@@ -60,6 +60,7 @@ test("assistant mode replaces RPI marks with a cube escalation action", async ({
       mode: "ASSISTANT",
       terminal: "term-1",
       picker: true,
+      pickerKind: "escalate",
       repos: [],
     }),
   );

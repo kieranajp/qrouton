@@ -11,7 +11,7 @@ Spawn one `qrouton-implementation-lead` when available, otherwise a capable gene
 
 - the approved plan path or a bounded concrete request;
 - whether the user authorized the first incomplete phase or the whole plan;
-- active and reference repository roles;
+- editing and reference repository roles;
 - user decisions not already captured in the artifact;
 - the requirement to update durable progress and return a compact result.
 

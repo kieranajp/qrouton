@@ -53,7 +53,7 @@ func (c *Chrome) publishFields(fields status.Fields) {
 }
 
 // watchChrome pushes what the window can observe about the session on screen
-// until the context is cancelled. Escalation rewrites the manifest, so
+// until the context is cancelled. A confirmed picker rewrites the manifest, so
 // re-reading it on a poll is what keeps the window agreeing with the session.
 func watchChrome(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter) {
 	watch(ctx, reg, root, cfg, emit, chromeInterval, repoStatInterval,
@@ -201,7 +201,9 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	}
 	if shown != nil {
 		fields.Activity = shown.agents.state()
-		fields.Picker = shown.pendingPicker() != nil
+		if pending := shown.pendingPicker(); pending != nil {
+			fields.Picker, fields.PickerKind = true, pending.Kind
+		}
 		if shown.alive() {
 			fields.Terminal = shown.terminal
 		}
@@ -240,6 +242,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 				fields.Sessions[i].Terminal = state.terminal
 			}
 			fields.Sessions[i].Activity = state.agents.state()
+			fields.Sessions[i].Picker = state.pendingPicker() != nil
 		}
 		if snapshot, ok := agentSnapshots[row.Slug]; ok {
 			fields.Sessions[i].Summary = agentSummary(snapshot)
