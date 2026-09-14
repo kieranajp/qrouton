@@ -5,9 +5,12 @@ const open = async (page) => {
   await page.locator(".card").first().waitFor();
 };
 
+// The card is at its unscaled size until the stage has been measured, covering
+// the scrim a test means to click.
 const start = async (page) => {
   await page.evaluate(() => window.present());
   await page.locator(".present").waitFor();
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
 };
 
 test("Present opens the deck as a card over a scrim, on the counter's slide", async ({ page }) => {
@@ -23,7 +26,6 @@ test("Present opens the deck as a card over a scrim, on the counter's slide", as
 
   // The scrim reaches the window's edges; the slide stands off them by the
   // layer's own inset, at least.
-  await page.waitForFunction(() => window.slideBox().scale !== 1);
   const box = await page.evaluate(() => window.slideBox());
   expect(box.pad).toBeGreaterThan(0);
   for (const side of Object.values(box.inset)) expect(side).toBeGreaterThanOrEqual(box.pad);
@@ -133,7 +135,6 @@ for (const room of [
     await page.setViewportSize(room);
     await open(page);
     await start(page);
-    await page.waitForFunction(() => window.slideBox().scale !== 1);
     const box = await page.evaluate(() => window.slideBox());
     const wide = box.inset.left > box.pad + 4;
     expect(wide || box.inset.top > box.pad + 4).toBe(true);
@@ -153,10 +154,7 @@ test("a press on the slide keeps the presentation up", async ({ page }) => {
   await expect(page.locator(".present")).toHaveCount(1);
 });
 
-// The middle of the card, once the stage has been measured — before that the
-// card is still at its unscaled size and the point would land on the scrim.
 const middle = async (page) => {
-  await page.waitForFunction(() => window.slideBox().scale !== 1);
   const box = await page.evaluate(() => window.slideBox());
   return { box, x: box.inset.left + box.width / 2, y: box.inset.top + box.height / 2 };
 };
@@ -192,7 +190,6 @@ test("a press begun on the scrim and released on the slide stays too", async ({ 
 test("the card shows the whole slide it holds", async ({ page }) => {
   await open(page);
   await start(page);
-  await page.waitForFunction(() => window.slideBox().scale !== 1);
   const box = await page.evaluate(() => window.slideBox());
 
   // Rounding to whole pixels can account for one; an edge drawn inside the box
@@ -360,7 +357,6 @@ for (const room of [
     await page.setViewportSize(room);
     await open(page);
     await start(page);
-    await page.waitForFunction(() => window.slideBox().scale !== 1);
     const box = await page.evaluate(() => window.slideBox());
 
     expect(box.declared).toBe(1280);
