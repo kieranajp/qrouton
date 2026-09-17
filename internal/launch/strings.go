@@ -61,6 +61,10 @@ const (
 	openCommand    = "open"
 	openRevealFlag = "-R"
 
+	shellCommandFlag = "-c"
+	// sh -c takes the script's own name before its arguments; $1 is the path.
+	shellArgv0 = "sh"
+
 	findCommand   = "find"
 	findRoot      = "."
 	findDepthFlag = "-maxdepth"

@@ -212,6 +212,7 @@ type booting struct {
 	uncommitted func(sessionRoot string) ([]string, error)
 	cleanup     func(sessionRoot string) error
 	reveal      func(sessionRoot string) error
+	copyImage   func(path string) error
 }
 
 type Sessions struct {
@@ -375,6 +376,23 @@ func (s *Sessions) RevealPath(slug, path string) error {
 		return ErrPathOutsideSession
 	}
 	return s.boot.reveal(path)
+}
+
+// CopyImage puts one of a gallery's images on the clipboard. The path is the
+// page's, so it is refused unless it resolves inside the session it names and
+// carries an extension a gallery would have shown.
+func (s *Sessions) CopyImage(slug, path string) error {
+	root := s.boot.root(slug)
+	if root == "" {
+		return unknownSession(slug)
+	}
+	if _, inside := sessionpaths.Within(root, path); !inside {
+		return ErrPathOutsideSession
+	}
+	if _, ok := workbench.RasterMediaType(path); !ok {
+		return ErrNotAnImage
+	}
+	return s.boot.copyImage(path)
 }
 
 // Uncommitted names the repositories a cleanup would take changes from. It is a

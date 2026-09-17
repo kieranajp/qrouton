@@ -200,6 +200,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		uncommitted: func(root string) ([]string, error) { return session.Uncommitted(opts.Root, root) },
 		cleanup:     func(root string) error { return session.Remove(opts.Root, root) },
 		reveal:      func(root string) error { return reveal(launcher.Reveal(root)) },
+		copyImage:   func(path string) error { return copyImage(launcher.CopyImage(path)) },
 	}
 	chromeEmit := r.Emit
 	if opts.chrome != nil {
@@ -343,6 +344,16 @@ func openDocument(windows *Windows, owner *sessionState, launcher Launcher, name
 func reveal(argv []string) error {
 	if len(argv) == 0 {
 		return ErrNoRevealCommand
+	}
+	return exec.Command(argv[0], argv[1:]...).Run()
+}
+
+// copyImage puts a picture on the clipboard. The conversion runs while the
+// command does, so waiting on it is what says the clipboard now holds the
+// image.
+func copyImage(argv []string) error {
+	if len(argv) == 0 {
+		return ErrNoCopyImageCommand
 	}
 	return exec.Command(argv[0], argv[1:]...).Run()
 }

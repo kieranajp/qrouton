@@ -34,6 +34,7 @@ type document struct {
 
 type documentImage struct {
 	Source string `json:"source"`
+	Path   string `json:"path,omitempty"`
 	URL    string `json:"url"`
 }
 
@@ -125,9 +126,19 @@ func documentFor(window *agentWindow) document {
 		ViewportEpoch: viewportEpoch,
 	}
 	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
+		var root string
+		if window.session != nil {
+			root = window.session.root()
+		}
 		doc.Images = make([]documentImage, len(rendered.images))
 		for i, ref := range rendered.images {
-			doc.Images[i] = documentImage{Source: ref.Source, URL: fmt.Sprintf(imageAssetURLFormat, window.asset, i+1)}
+			// A gallery with no session behind it can still be drawn; only the
+			// items that name a file on disk go missing from its menu.
+			var path string
+			if root != "" {
+				path = filepath.Join(root, filepath.FromSlash(ref.Source))
+			}
+			doc.Images[i] = documentImage{Source: ref.Source, Path: path, URL: fmt.Sprintf(imageAssetURLFormat, window.asset, i+1)}
 		}
 		doc.CurrentIndex, doc.Revision = rendered.currentImage, rendered.imageRevision
 	}

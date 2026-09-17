@@ -3,8 +3,9 @@
   import { WINDOWS_FOCUS_IMAGE } from "../bridge/generated.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
+  import ImageMenu from "./ImageMenu.svelte";
 
-  /** @type {{doc: {images?: {source: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {images?: {source: string, path?: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
 
   let images = $derived(doc.images ?? []);
@@ -16,13 +17,35 @@
   let aspects = $state({});
   let selectionError = $state("");
   let expanded = $state(false);
+  /** @type {{image: {source: string, path?: string}, x: number, y: number} | null} */
+  let menu = $state(null);
+  let notice = $state("");
+  let noticeTimer;
   /** @type {HTMLButtonElement} */
   let primary = $state();
   /** @type {HTMLOListElement} */
   let strip = $state();
   let alive = true;
   let request = 0;
-  onDestroy(() => { alive = false; });
+  onDestroy(() => { alive = false; clearTimeout(noticeTimer); });
+
+  function openMenu(event, image) {
+    // The webview draws one of its own otherwise, and the workbench's own
+    // text menu stands down on the same signal.
+    event.preventDefault();
+    menu = { image, x: event.clientX, y: event.clientY };
+  }
+
+  function show(text) {
+    notice = text;
+    clearTimeout(noticeTimer);
+    noticeTimer = setTimeout(() => (notice = ""), 1600);
+  }
+
+  function step(by) {
+    const next = current + by;
+    if (next >= 1 && next <= images.length) select(next);
+  }
 
   function loaded(url, event) {
     loads[url] = "loaded";
@@ -70,7 +93,10 @@
   });
 
   $effect(() => {
-    if (!active) expanded = false;
+    if (!active) {
+      expanded = false;
+      menu = null;
+    }
   });
 
   const basename = (source) => source.split("/").pop();
@@ -92,6 +118,7 @@
         bind:this={primary}
         disabled={loads[shown.url] !== "loaded"}
         aria-label={`Expand image: ${shown.source}`}
+        oncontextmenu={(event) => openMenu(event, shown)}
         onclick={() => (expanded = true)}>
         {#if loads[shown.url] === "error"}
           <p class="load-error">Could not load image<br />{shown.source}</p>
@@ -106,11 +133,13 @@
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
+  {#if notice}<p class="notice" role="status">{notice}</p>{/if}
   <ol bind:this={strip} class="image-strip" aria-label="Images in supplied order">
     {#each images as image, index (image.url)}
       <li>
         <button type="button" class:current={index + 1 === current}
           aria-pressed={index + 1 === current} aria-label={`Image ${index + 1}: ${image.source}`}
+          oncontextmenu={(event) => openMenu(event, image)}
           onclick={() => select(index + 1)}>
         <span class="number">{index + 1}</span>
         <div class="thumbnail-frame">
@@ -132,7 +161,18 @@
 </article>
 
 {#if expanded && active && entry}
-  <ImageLightbox image={entry} aspect={aspects[entry.url] ?? 1} onClose={closeLightbox} />
+  <ImageLightbox
+    image={entry}
+    aspect={aspects[entry.url] ?? 1}
+    index={current}
+    total={images.length}
+    {slug}
+    onStep={step}
+    onClose={closeLightbox} />
+{/if}
+
+{#if menu}
+  <ImageMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={show} />
 {/if}
 
 <style>
@@ -248,6 +288,10 @@
 
   .selection-error {
     color: var(--text-secondary);
+  }
+
+  .notice {
+    color: var(--text-muted);
   }
 
   .thumbnail-frame {

@@ -119,6 +119,7 @@ type stubBoot struct {
 	argv     []string
 	shell    func(sessionRoot string) []string
 	reveal   func(sessionRoot string) []string
+	copyPic  func(path string) []string
 	document func(sessionRoot, name string) (workbench.WindowOptions, error)
 
 	mu      sync.Mutex
@@ -160,6 +161,13 @@ func (b *stubBoot) Reveal(sessionRoot string) []string {
 		return nil
 	}
 	return b.reveal(sessionRoot)
+}
+
+func (b *stubBoot) CopyImage(path string) []string {
+	if b.copyPic == nil {
+		return nil
+	}
+	return b.copyPic(path)
 }
 
 func (b *stubBoot) Document(sessionRoot, name string) (workbench.WindowOptions, error) {
@@ -2531,4 +2539,40 @@ func lastChrome(t *testing.T, r *fakeRenderer) status.Fields {
 		t.Fatalf("no chrome pushed: %v", r.events)
 	}
 	return fields
+}
+
+// The page names the file, so the guards are what keep a gallery's menu from
+// handing an arbitrary path to the image converter.
+func TestCopyImageTakesOnlyAnImageInsideTheSession(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	var copied []string
+	reg.boot.copyImage = func(path string) error {
+		copied = append(copied, path)
+		return nil
+	}
+	kraken := sessionDir(t, root, "kraken")
+	shot := filepath.Join(kraken, "thoughts", "assets", "shot.png")
+
+	if err := reg.CopyImage("kraken", shot); err != nil {
+		t.Fatal(err)
+	}
+	if len(copied) != 1 || copied[0] != shot {
+		t.Fatalf("copied %v, want %q", copied, shot)
+	}
+
+	for name, call := range map[string]func() error{
+		"a slug with no session": func() error { return reg.CopyImage("ghost", shot) },
+		"a path outside it":      func() error { return reg.CopyImage("kraken", filepath.Join(root, "elsewhere.png")) },
+		"a file that is not an image": func() error {
+			return reg.CopyImage("kraken", filepath.Join(kraken, "notes.md"))
+		},
+	} {
+		if err := call(); err == nil {
+			t.Fatalf("%s was copied anyway", name)
+		}
+	}
+	if len(copied) != 1 {
+		t.Fatalf("a refused request still reached the clipboard: %v", copied)
+	}
 }
