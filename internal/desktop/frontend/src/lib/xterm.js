@@ -56,10 +56,16 @@ export function mount(host, { write, background = "--ctp-base" }) {
   term.loadAddon(fit);
   term.open(host);
   mounted.set(host, term);
-  try {
-    term.loadAddon(new WebglAddon());
-  } catch (e) {
-    console.warn("webgl", e);
+  // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
+  // the layer, so on Linux a keystroke stays unpainted until the next event
+  // arrives and nothing repaints an idle terminal. The DOM renderer gives up
+  // GPU throughput but paints when it is told to.
+  if (!navigator.userAgent.includes("Linux")) {
+    try {
+      term.loadAddon(new WebglAddon());
+    } catch (e) {
+      console.warn("webgl", e);
+    }
   }
   fit.fit();
 
