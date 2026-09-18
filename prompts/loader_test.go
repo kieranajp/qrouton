@@ -301,7 +301,7 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(assets) != 2 || assets[0].Path != ".claude/agents/qrouton-research-lead.md" || assets[1].Path != ".codex/agents/qrouton-research-lead.toml" {
+	if len(assets) != 3 || assets[0].Path != ".claude/agents/qrouton-research-lead.md" || assets[1].Path != ".codex/agents/qrouton-research-lead.toml" || assets[2].Path != ".agents/agents/qrouton-research-lead/agent.md" {
 		t.Fatalf("rendered assets = %#v", assets)
 	}
 	if !strings.Contains(string(assets[1].Content), `sandbox_mode = "workspace-write"`) || !strings.Contains(string(assets[1].Content), "Lead a bounded") {

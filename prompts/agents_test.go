@@ -17,6 +17,10 @@ const (
 	sandboxModeKey = "sandbox_mode"
 )
 
+// agentTargets are the runners that read a roster off disk: claude, codex and
+// agy each get one file per agent prompt.
+var agentTargets = []string{claudeAgentsDir, codexAgentsDir, agyAgentsDir}
+
 // Agents left to Codex's default sandbox. Naming them keeps a new agent from
 // inheriting the default by nobody's decision.
 var defaultSandboxAgents = map[string]bool{}
@@ -56,6 +60,11 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			if len(assets) != len(agentTargets) {
+				t.Errorf("agent renders %d files, want one per runner that reads a roster", len(assets))
+			}
+			assertAgyAgent(t, assets, name, string(prompt.Content))
+
 			codex := codexAsset(t, assets, name)
 			switch want := wantSandbox(t, name); want {
 			case "":
@@ -91,9 +100,45 @@ func wantSandbox(t *testing.T, name string) string {
 	}
 }
 
-func codexAsset(t *testing.T, assets []Rendered, name string) string {
+// assertAgyAgent checks the third rendering carries the identity agy resolves an
+// agent by, and the source body under the heading that introduces it.
+func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	t.Helper()
-	want := codexAgentsDir + name + tomlExtension
+	agy := renderedAsset(t, assets, agyAgentsDir+name+"/"+agyAgentFileName)
+	for _, key := range []string{frontmatterNameKey, frontmatterDescriptionKey} {
+		rendered, declared := frontmatterEntry(agy, key)
+		if !declared {
+			t.Errorf("agy rendering declares no %s", key)
+			continue
+		}
+		unquoted, err := strconv.Unquote(rendered)
+		if err != nil {
+			t.Errorf("agy %s is not a quoted scalar: %s", key, rendered)
+			continue
+		}
+		if want, _ := frontmatterEntry(source, key); unquoted != want {
+			t.Errorf("agy %s = %q, want %q", key, unquoted, want)
+		}
+	}
+	if subagent, _ := frontmatterEntry(agy, agySubagentKey); subagent != "true" {
+		t.Errorf("agy rendering is not declared a subagent: %s = %q", agySubagentKey, subagent)
+	}
+
+	_, body, split := strings.Cut(agy, frontmatterClose)
+	if !split {
+		t.Fatalf("agy rendering has no terminated frontmatter:\n%s", agy)
+	}
+	heading := fmt.Sprintf(agyPromptHeadingFormat, name)
+	if !strings.HasPrefix(body, heading) {
+		t.Errorf("agy body does not open on its own H1:\n%s", body)
+	}
+	if _, want, _ := strings.Cut(source, frontmatterClose); !strings.Contains(body, strings.TrimSpace(want)) {
+		t.Error("agy body drops the source prompt")
+	}
+}
+
+func renderedAsset(t *testing.T, assets []Rendered, want string) string {
+	t.Helper()
 	for _, asset := range assets {
 		if asset.Path == want {
 			return string(asset.Content)
@@ -101,6 +146,11 @@ func codexAsset(t *testing.T, assets []Rendered, name string) string {
 	}
 	t.Fatalf("no %s among %#v", want, assets)
 	return ""
+}
+
+func codexAsset(t *testing.T, assets []Rendered, name string) string {
+	t.Helper()
+	return renderedAsset(t, assets, codexAgentsDir+name+tomlExtension)
 }
 
 func frontmatterEntry(text, key string) (string, bool) {
