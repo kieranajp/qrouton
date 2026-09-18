@@ -27,10 +27,9 @@ const (
 	returnContractFileName    = "return-contract.md"
 	returnContractPlaceholder = "{{return-contract}}"
 
-	agyNameFormat          = "name: %s\ndescription: %s\n"
-	agySubagentKey         = "subagent"
-	agySubagentLine        = agySubagentKey + ": true\n"
-	agyPromptHeadingFormat = "\n# %s\n\n"
+	agyNameFormat   = "name: %s\ndescription: %s\n"
+	agySubagentKey  = "subagent"
+	agySubagentLine = agySubagentKey + ": true\n"
 
 	codexNameFormat        = "name = %s\ndescription = %s\n"
 	codexSandboxFormat     = "sandbox_mode = %s\n"

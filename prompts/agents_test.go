@@ -138,12 +138,11 @@ func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	if !split {
 		t.Fatalf("agy rendering has no terminated frontmatter:\n%s", agy)
 	}
-	heading := fmt.Sprintf(agyPromptHeadingFormat, name)
-	if !strings.HasPrefix(body, heading) {
-		t.Errorf("agy body does not open on its own H1:\n%s", body)
+	if strings.Contains(body, "\n# ") || strings.HasPrefix(strings.TrimLeft(body, "\n"), "# ") {
+		t.Errorf("an H1 splits the prompt out of the section agy reads as the system prompt:\n%s", body)
 	}
-	if _, want, _ := strings.Cut(source, frontmatterClose); !strings.Contains(body, strings.TrimSpace(want)) {
-		t.Error("agy body drops the source prompt")
+	if _, want, _ := strings.Cut(source, frontmatterClose); strings.TrimSpace(body) != strings.TrimSpace(want) {
+		t.Errorf("agy body is not the source prompt:\n%s", body)
 	}
 }
 

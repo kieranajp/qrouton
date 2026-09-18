@@ -90,14 +90,16 @@ func renderCodexAgent(agent agentPrompt) []byte {
 }
 
 // renderAgyAgent rebuilds the document rather than copying the claude source,
-// whose frontmatter carries keys agy does not read.
+// whose frontmatter carries keys agy does not read. The body gets no heading:
+// agy splits a body on H1s and reads whatever precedes the first one as the
+// system prompt.
 func renderAgyAgent(agent agentPrompt) []byte {
 	var out strings.Builder
 	out.WriteString(frontmatterFence)
 	fmt.Fprintf(&out, agyNameFormat, strconv.Quote(agent.name), strconv.Quote(agent.description))
 	out.WriteString(agySubagentLine)
 	out.WriteString(frontmatterFence)
-	fmt.Fprintf(&out, agyPromptHeadingFormat, agent.name)
+	out.WriteString("\n")
 	out.WriteString(agent.body)
 	out.WriteString("\n")
 	return []byte(out.String())
