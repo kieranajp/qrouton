@@ -287,6 +287,14 @@ func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T)
 	if caps := tracker.snapshot().Capabilities; caps.Attention || !caps.Children || caps.Parents || caps.Outcomes {
 		t.Fatalf("Codex capabilities = %+v", caps)
 	}
+	tracker.begin(agentProviderOpenCode, 3)
+	if caps := tracker.snapshot().Capabilities; caps.Attention || caps.Children || caps.Parents || caps.Outcomes {
+		t.Fatalf("OpenCode capabilities = %+v", caps)
+	}
+	tracker.begin(agentProviderAgy, 4)
+	if caps := tracker.snapshot().Capabilities; caps.Attention || caps.Children || caps.Parents || caps.Outcomes {
+		t.Fatalf("Agy capabilities = %+v", caps)
+	}
 	for agentType, role := range map[string]string{
 		"qrouton-implementation-lead": agentRoleLead,
 		"explorer":                    agentRoleSpecialist,
