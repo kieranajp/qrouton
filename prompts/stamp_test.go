@@ -54,6 +54,7 @@ func TestStampReplacesItsOwnAgentFiles(t *testing.T) {
 	for _, agent := range []string{
 		filepath.Join(dir, claudeAgentsDir, "code-reviewer.md"),
 		filepath.Join(dir, codexAgentsDir, "code-reviewer.toml"),
+		filepath.Join(dir, agyAgentsDir, "code-reviewer", agyAgentFileName),
 	} {
 		content, err := os.ReadFile(agent)
 		if err != nil {

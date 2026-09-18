@@ -89,10 +89,8 @@ func renderCodexAgent(agent agentPrompt) []byte {
 	return []byte(out.String())
 }
 
-// renderAgyAgent writes the frontmatter keys agy's own agent files carry, then
-// the source body under the single H1 that introduces a system prompt. The
-// claude source is not reused verbatim because its frontmatter holds keys agy
-// does not read.
+// renderAgyAgent rebuilds the document rather than copying the claude source,
+// whose frontmatter carries keys agy does not read.
 func renderAgyAgent(agent agentPrompt) []byte {
 	var out strings.Builder
 	out.WriteString(frontmatterFence)

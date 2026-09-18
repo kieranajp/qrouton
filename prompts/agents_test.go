@@ -2,8 +2,10 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -17,9 +19,15 @@ const (
 	sandboxModeKey = "sandbox_mode"
 )
 
-// agentTargets are the runners that read a roster off disk: claude, codex and
-// agy each get one file per agent prompt.
-var agentTargets = []string{claudeAgentsDir, codexAgentsDir, agyAgentsDir}
+// agentAssetPaths are the files one agent prompt renders to, one per runner
+// that resolves a roster off disk. agy's is a directory holding agent.md.
+func agentAssetPaths(name string) []string {
+	return []string{
+		claudeAgentsDir + name + promptFileExt,
+		codexAgentsDir + name + tomlExtension,
+		agyAgentsDir + name + "/" + agyAgentFileName,
+	}
+}
 
 // Agents left to Codex's default sandbox. Naming them keeps a new agent from
 // inheriting the default by nobody's decision.
@@ -60,8 +68,12 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if len(assets) != len(agentTargets) {
-				t.Errorf("agent renders %d files, want one per runner that reads a roster", len(assets))
+			paths := make([]string, len(assets))
+			for i, asset := range assets {
+				paths[i] = asset.Path
+			}
+			if want := agentAssetPaths(name); !slices.Equal(paths, want) {
+				t.Errorf("rendered %v, want %v", paths, want)
 			}
 			assertAgyAgent(t, assets, name, string(prompt.Content))
 
@@ -100,8 +112,6 @@ func wantSandbox(t *testing.T, name string) string {
 	}
 }
 
-// assertAgyAgent checks the third rendering carries the identity agy resolves an
-// agent by, and the source body under the heading that introduces it.
 func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	t.Helper()
 	agy := renderedAsset(t, assets, agyAgentsDir+name+"/"+agyAgentFileName)
@@ -167,4 +177,26 @@ func frontmatterEntry(text, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Render is the only guard on a malformed agent source, and a source that
+// cannot be parsed must stop a launch rather than stamp a half-built roster.
+func TestRenderRejectsMalformedAgentPrompts(t *testing.T) {
+	for name, probe := range map[string]struct {
+		source string
+		want   error
+	}{
+		"no frontmatter":    {"Body with no frontmatter.\n", ErrNoFrontmatter},
+		"unterminated":      {"---\nname: probe\ndescription: Probes.\n", ErrUnterminatedFrontmatter},
+		"no name":           {"---\ndescription: Probes.\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"no description":    {"---\nname: probe\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"empty description": {"---\nname: probe\ndescription:\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Render(Prompt{ID: ID(agentIDPrefix + "probe"), Content: []byte(probe.source)})
+			if !errors.Is(err, probe.want) {
+				t.Fatalf("Render = %v, want %v", err, probe.want)
+			}
+		})
+	}
 }
