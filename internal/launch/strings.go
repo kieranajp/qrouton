@@ -46,7 +46,12 @@ const (
 	specParseError         = "parse workbench spec"
 )
 
-const scriptMode = 0o755
+const (
+	scriptMode = 0o755
+	// configMode is the generated runner configuration qrouton writes into a
+	// session.
+	configMode = 0o644
+)
 
 const (
 	shellEnvVar    = "SHELL"
@@ -81,21 +86,31 @@ const (
 	// word, and codex owns the spelling.
 	runnerIDCodex    = codex.Binary
 	runnerIDOpenCode = "opencode"
+	runnerIDAgy      = "agy"
 
 	runnerLabelClaude   = "Claude Code"
 	runnerLabelCodex    = "Codex CLI"
 	runnerLabelOpenCode = "OpenCode"
+	runnerLabelAgy      = "Antigravity CLI"
 
 	claudeSkipPermissionsFlag = "--dangerously-skip-permissions"
 	codexBypassSandboxFlag    = "--dangerously-bypass-approvals-and-sandbox"
 	codexBypassHookTrustFlag  = "--dangerously-bypass-hook-trust"
 	openCodeAutoFlag          = "--auto"
 	openCodePromptFlag        = "--prompt"
+	agySkipPermissionsFlag    = "--dangerously-skip-permissions"
 
 	claudeContinueFlag = "--continue"
 	claudeNameFlag     = "--name"
 	codexResumeCmd     = "resume"
 	codexResumeLast    = "--last"
+	agyContinueFlag    = "--continue"
+
+	// agy's own --prompt is an alias for --print: one turn, then exit.
+	agyPromptInteractiveFlag = "--prompt-interactive"
+	// agyGeminiDirFlag relocates agy's whole configuration root. It is absent
+	// from --help, and it is the only route to a session-scoped MCP server.
+	agyGeminiDirFlag = "--gemini_dir"
 
 	claudeMCPConfigFlag = "--mcp-config"
 	claudeSettingsFlag  = "--settings"
@@ -133,6 +148,12 @@ const (
 	openCodeEnabledKey    = "enabled"
 	openCodePermissionKey = "permission"
 	openCodeAllowValue    = "allow"
+
+	// agy takes MCP servers from <gemini root>/config/mcp_config.json and
+	// nowhere else: not on argv, not from the environment.
+	geminiDirName    = ".gemini"
+	agyConfigDirName = "config"
+	agyMCPConfigName = "mcp_config.json"
 )
 
 // Opening messages: the first prompt a fresh session sends its runner. RPI

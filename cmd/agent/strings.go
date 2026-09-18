@@ -8,7 +8,7 @@ const (
 	sessionRootUsage = "qrouton session root"
 
 	runnerFlag  = "runner"
-	runnerUsage = "runner identifier to launch (claude, codex, opencode)"
+	runnerUsage = "runner identifier to launch (claude, codex, opencode, agy)"
 
 	workbenchJSONFlag  = "workbench-json"
 	workbenchJSONUsage = "workbench handle stamped by the launcher"

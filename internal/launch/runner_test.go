@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,6 +120,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"claude":   {"--continue"},
 		"codex":    {"resume", "--last"},
 		"opencode": {"--continue"},
+		"agy":      {"--continue"},
 	}
 	for _, runner := range builtinRunners {
 		argv := argvFor(t, runner, true, modeRPI, "")
@@ -146,16 +148,39 @@ func TestRunnerResumeArgvCarriesARepositoryNoticeWithoutAFreshOpening(t *testing
 }
 
 func TestResumedRunnerStillReceivesMCPConfiguration(t *testing.T) {
+	session := sessionWithOwnHome(t)
 	for _, runner := range builtinRunners {
-		argv, env, err := runnerLaunch(runner, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, true, "")
+		argv, env, err := runnerLaunch(runner, "/bin/qrouton", session, EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, true, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		joined := strings.Join(argv, " ") + " " + strings.Join(env, " ")
+		joined := strings.Join(argv, " ") + " " + strings.Join(env, " ") + " " + writtenConfig(t, session, runner.ID)
 		if !strings.Contains(joined, "qrouton") {
 			t.Errorf("%s resumed without qrouton MCP config", runner.ID)
 		}
 	}
+}
+
+// sessionWithOwnHome is a session root whose launch reaches a throwaway home,
+// so a runner that materialises configuration cannot touch the developer's.
+func sessionWithOwnHome(t *testing.T) string {
+	t.Helper()
+	t.Setenv("HOME", t.TempDir())
+	return t.TempDir()
+}
+
+// writtenConfig is what a runner configured through a file was left to read,
+// and the empty string for the runners configured any other way.
+func writtenConfig(t *testing.T, session, id string) string {
+	t.Helper()
+	if id != runnerIDAgy {
+		return ""
+	}
+	raw, err := os.ReadFile(filepath.Join(sessionpaths.AgyHome(session), agyMCPConfigPath()))
+	if err != nil {
+		t.Fatalf("agy launched without its MCP config on disk: %v", err)
+	}
+	return string(raw)
 }
 
 func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
@@ -319,29 +344,24 @@ func shellWords(t *testing.T, command string) []string {
 }
 
 func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
+	session := sessionWithOwnHome(t)
 	t.Setenv("OPENCODE_CONFIG_CONTENT", `{"model":"test"}`)
-	for _, id := range []string{"claude", "codex", "opencode"} {
+	for _, id := range []string{"claude", "codex", "opencode", "agy"} {
 		var r Runner
 		for _, candidate := range builtinRunners {
 			if candidate.ID == id {
 				r = candidate
 			}
 		}
-		argv, env, err := runnerLaunch(r, "/bin/qrouton", "/work/session", EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, false, "")
+		argv, env, err := runnerLaunch(r, "/bin/qrouton", session, EditorCommand{Argv: []string{"vi"}}, testHandle(), 1, false, "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		joined := strings.Join(argv, " ")
-		if id != "opencode" && !strings.Contains(joined, "qrouton") {
-			t.Fatalf("%s missing MCP config: %v", id, argv)
-		}
-		if id != "opencode" && !strings.Contains(joined, "editor-json") {
-			t.Fatalf("%s missing explicit editor config: %v", id, argv)
-		}
-		if id != "opencode" && (!strings.Contains(joined, "workbench-json") || !strings.Contains(joined, testSocket)) {
-			t.Fatalf("%s missing explicit session handle: %v", id, argv)
-		}
-		if id == "opencode" {
+		// Each runner is handed the same server a different way: on argv, in the
+		// environment, or in a file it is pointed at.
+		configured := strings.Join(argv, " ")
+		switch id {
+		case "opencode":
 			var raw string
 			for _, item := range env {
 				if strings.HasPrefix(item, "OPENCODE_CONFIG_CONTENT=") {
@@ -355,8 +375,206 @@ func TestRunnerLaunchInjectsMCPAndOpenCodePermissions(t *testing.T) {
 			if cfg["model"] != "test" || cfg["permission"] != "allow" {
 				t.Fatalf("OpenCode content not merged: %s", raw)
 			}
+			continue
+		case "agy":
+			if i := slices.Index(argv, agyGeminiDirFlag); i < 0 || i+1 == len(argv) || argv[i+1] != sessionpaths.AgyHome(session) {
+				t.Fatalf("agy not pointed at the session's configuration root: %v", argv)
+			}
+			configured = writtenConfig(t, session, id)
+		}
+		if !strings.Contains(configured, "qrouton") {
+			t.Fatalf("%s missing MCP config: %s", id, configured)
+		}
+		if !strings.Contains(configured, "editor-json") {
+			t.Fatalf("%s missing explicit editor config: %s", id, configured)
+		}
+		if !strings.Contains(configured, "workbench-json") || !strings.Contains(configured, testSocket) {
+			t.Fatalf("%s missing explicit session handle: %s", id, configured)
 		}
 	}
+}
+
+// --gemini_dir moves agy's whole configuration root, so a bare directory would
+// take the user's model, their history and their trusted workspaces with it.
+// Everything qrouton does not generate has to lead back to their own tree.
+func TestAgyShimLeadsBackToTheUsersOwnConfiguration(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	gemini := filepath.Join(home, ".gemini")
+	writeTree(t, map[string]string{
+		filepath.Join(gemini, "antigravity-cli", "settings.json"): `{"model":"Gemini 3.8 Flash (Medium)"}`,
+		filepath.Join(gemini, "config", "config.json"):            `{"account":"kieran"}`,
+		filepath.Join(gemini, "config", "mcp_config.json"):        `{"mcpServers":{}}`,
+		filepath.Join(gemini, "GEMINI.md"):                        "# global rules\n",
+	})
+	before := readTree(t, gemini)
+
+	session := t.TempDir()
+	if _, _, err := runnerLaunch(agyRunner(t), "/bin/qrouton", session, EditorCommand{}, testHandle(), 1, false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	shim := sessionpaths.AgyHome(session)
+	for _, entry := range []struct{ link, read, want string }{
+		{"antigravity-cli", filepath.Join("antigravity-cli", "settings.json"), `{"model":"Gemini 3.8 Flash (Medium)"}`},
+		{filepath.Join("config", "config.json"), filepath.Join("config", "config.json"), `{"account":"kieran"}`},
+		{"GEMINI.md", "GEMINI.md", "# global rules\n"},
+	} {
+		got, err := os.ReadFile(filepath.Join(shim, entry.read))
+		if err != nil {
+			t.Fatalf("the shim stranded %s: %v", entry.read, err)
+		}
+		if string(got) != entry.want {
+			t.Fatalf("%s reads %q through the shim, want %q", entry.read, got, entry.want)
+		}
+		// A copy would read the same and still strand every write agy makes,
+		// which is how a session would lose its conversations and its trust.
+		if !isLink(t, filepath.Join(shim, entry.link)) {
+			t.Fatalf("%s is a copy of the user's tree, not a way back into it", entry.link)
+		}
+	}
+	if diff := readTree(t, gemini); !reflect.DeepEqual(diff, before) {
+		t.Fatalf("launching agy edited the user's own tree:\nbefore %v\nafter  %v", before, diff)
+	}
+}
+
+// Every launch runs the shim again, including a resume. A second one that
+// relinked, or replaced what agy had written, would take the session with it.
+func TestAgyShimIsUnchangedByASecondLaunch(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	gemini := filepath.Join(home, ".gemini")
+	writeTree(t, map[string]string{
+		filepath.Join(gemini, "antigravity-cli", "settings.json"): `{"model":"mine"}`,
+		filepath.Join(gemini, "config", "config.json"):            `{"account":"kieran"}`,
+	})
+	session := t.TempDir()
+	if _, _, err := runnerLaunch(agyRunner(t), "/bin/qrouton", session, EditorCommand{}, testHandle(), 1, false, ""); err != nil {
+		t.Fatal(err)
+	}
+	// A directory agy made for itself, at a name the user's tree also carries.
+	shim := sessionpaths.AgyHome(session)
+	if err := os.RemoveAll(filepath.Join(shim, "antigravity-cli")); err != nil {
+		t.Fatal(err)
+	}
+	writeTree(t, map[string]string{filepath.Join(shim, "antigravity-cli", "conversations.db"): "agy's own"})
+	before := readTree(t, shim)
+
+	if _, _, err := runnerLaunch(agyRunner(t), "/bin/qrouton", session, EditorCommand{}, testHandle(), 2, true, ""); err != nil {
+		t.Fatalf("relaunch: %v", err)
+	}
+
+	if after := readTree(t, shim); !reflect.DeepEqual(after, before) {
+		t.Fatalf("relaunching rewrote the shim:\nbefore %v\nafter  %v", before, after)
+	}
+	if isLink(t, filepath.Join(shim, "antigravity-cli")) {
+		t.Fatal("relaunching replaced what agy had written with a link to the user's tree")
+	}
+	if !isLink(t, filepath.Join(shim, "config", "config.json")) {
+		t.Fatal("relaunching dropped a link the first launch made")
+	}
+}
+
+func isLink(t *testing.T, path string) bool {
+	t.Helper()
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return info.Mode()&os.ModeSymlink != 0
+}
+
+// The session's own file may already declare servers — from a previous launch,
+// or added by hand. Replacing it would take them out from under the agent.
+func TestAgyShimKeepsServersItDidNotWrite(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	session := t.TempDir()
+	config := filepath.Join(sessionpaths.AgyHome(session), agyMCPConfigPath())
+	writeTree(t, map[string]string{config: `{"mcpServers":{"linear":{"type":"stdio","command":"linear-mcp"}}}`})
+
+	if _, _, err := runnerLaunch(agyRunner(t), "/bin/qrouton", session, EditorCommand{}, testHandle(), 1, false, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	var content struct {
+		Servers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	raw, err := os.ReadFile(config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &content); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{serverName, "linear"} {
+		if _, ok := content.Servers[name]; !ok {
+			t.Fatalf("%q is missing from the merged config: %s", name, raw)
+		}
+	}
+}
+
+// agy parses the file as HuJSON, so one a user wrote may carry comments that
+// encoding/json refuses. Writing over it would drop their servers in silence.
+func TestAgyShimRefusesAConfigItCannotRead(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	session := t.TempDir()
+	config := filepath.Join(sessionpaths.AgyHome(session), agyMCPConfigPath())
+	writeTree(t, map[string]string{config: "// mine\n{\"mcpServers\":{}}"})
+
+	_, _, err := runnerLaunch(agyRunner(t), "/bin/qrouton", session, EditorCommand{}, testHandle(), 1, false, "")
+	if err == nil {
+		t.Fatal("a config qrouton could not parse was overwritten rather than reported")
+	}
+	if !strings.Contains(err.Error(), config) {
+		t.Fatalf("error does not name the file to go and fix: %v", err)
+	}
+}
+
+func agyRunner(t *testing.T) Runner {
+	t.Helper()
+	spec, ok := specFor(runnerIDAgy)
+	if !ok {
+		t.Fatal("no spec for agy")
+	}
+	return Runner{ID: spec.ID, Label: spec.Label, Command: spec.Command}
+}
+
+func writeTree(t *testing.T, files map[string]string) {
+	t.Helper()
+	for path, content := range files {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+// readTree is every file under root and what it holds, for comparing a tree
+// against itself after something that had no business touching it ran.
+func readTree(t *testing.T, root string) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() {
+			return err
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		out[rel] = string(content)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 const testSocket = "/tmp/qrouton/501/deadbeef.sock"
@@ -440,7 +658,8 @@ func TestEveryRunnerPointsAtAQroutonMCPServer(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: %v", spec.ID, err)
 		}
-		configured := strings.Join(append(append([]string(nil), wiring.Args...), wiring.Env...), " ")
+		parts := append(append([]string(nil), wiring.Args...), wiring.Env...)
+		configured := strings.Join(append(parts, wiring.File.Content), " ")
 		for _, want := range []string{serverName, "/opt/qrouton", "--session-root"} {
 			if !strings.Contains(configured, want) {
 				t.Errorf("%s wiring %q does not carry %q", spec.ID, configured, want)
@@ -538,13 +757,14 @@ func TestCodexKeepsADeeperDepthFromALaunchOverride(t *testing.T) {
 // their own defaults and must not be handed a -c they do not understand.
 func TestOnlyCodexGetsTheDepthSetting(t *testing.T) {
 	setting := codex.MaxDepthSetting(codex.RequiredMaxDepth)
-	for _, id := range []string{runnerIDClaude, runnerIDOpenCode} {
+	session := sessionWithOwnHome(t)
+	for _, id := range []string{runnerIDClaude, runnerIDOpenCode, runnerIDAgy} {
 		spec, ok := specFor(id)
 		if !ok {
 			t.Fatalf("no spec for %q", id)
 		}
 		r := Runner{ID: spec.ID, Label: spec.Label, Command: spec.Command}
-		argv, _, err := runnerLaunch(r, "/bin/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 1, false, "")
+		argv, _, err := runnerLaunch(r, "/bin/qrouton", session, EditorCommand{}, testHandle(), 1, false, "")
 		if err != nil {
 			t.Fatal(err)
 		}
