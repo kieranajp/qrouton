@@ -9,6 +9,7 @@
     claude: "Subagents, skills and the window tools. What guided mode is tuned against.",
     codex: "Works in both modes. Needs depth ≥ 2 to nest subagents when guided.",
     opencode: "Open-ended sessions. No subagents, so guided mode runs flat.",
+    agy: "Subagents and skills, but qrouton can't watch them: no activity tree, no chime.",
   };
 
   /** @type {{runners?: {id: string, label: string}[], runner?: string, mode?: string}} */

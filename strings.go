@@ -10,7 +10,7 @@ const (
 		"empty one when there are none. Sessions are assembled in the window."
 
 	runnerFlag           = "runner"
-	runnerFlagUsage      = "coding agent to launch (claude, codex, or opencode)"
+	runnerFlagUsage      = "coding agent to launch (claude, codex, opencode or agy)"
 	linearIssueFlag      = "linear-issue"
 	linearIssueFlagUsage = "open a Linear issue in the New session flow"
 	ticketFlag           = "ticket"

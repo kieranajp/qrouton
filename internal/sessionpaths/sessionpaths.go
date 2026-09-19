@@ -29,6 +29,9 @@ const (
 	// discovery files link to.
 	canonicalPromptsDirName = "prompts"
 
+	// agyHomeDirName holds the configuration root an agy session is pointed at.
+	agyHomeDirName = "agy"
+
 	manifestLockName   = "manifest.lock"
 	notifyScriptName   = "notify.sh"
 	workbenchLogName   = "workbench.log"
@@ -68,6 +71,12 @@ func Thoughts(root string) string {
 // the session root are symlinks into it.
 func CanonicalPrompts(root string) string {
 	return filepath.Join(Dir(root), canonicalPromptsDirName)
+}
+
+// AgyHome is the .gemini root an agy session runs against: a shim holding the
+// session's own MCP server, with everything else linked to the user's tree.
+func AgyHome(root string) string {
+	return filepath.Join(Dir(root), agyHomeDirName)
 }
 
 // NotifyScript plays the attention sound, for both the notify MCP tool and the

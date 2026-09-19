@@ -39,7 +39,10 @@ for (const dpr of [1, 2]) {
             webgl: !!renderer._gl, canvasWidth: renderer._canvas?.width, fontSize: term.options.fontSize,
             widths: [0, 1].map((row) => Array.from({ length: 32 }, (_, col) => term.buffer.active.getLine(row).getCell(col).getWidth())) };
         });
-        expect(geometry.webgl).toBe(!fallback);
+        // mount() skips the WebGL addon on Linux, so there the renderer is the
+        // DOM one whether or not the fixture withheld the context.
+        const eligible = await page.evaluate(() => !navigator.userAgent.includes("Linux"));
+        expect(geometry.webgl).toBe(!fallback && eligible);
         expect(geometry.fontSize).toBe(13);
         expect(geometry.widths.flat()).toEqual(Array(64).fill(1));
         expect(await page.evaluate(() => fixture.lines(0).slice(0, 2))).toEqual([blocks, blocks]);

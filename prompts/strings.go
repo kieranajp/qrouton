@@ -3,6 +3,10 @@ package prompts
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
+	// agy discovers an agent as a directory holding agent.md, so its name is a
+	// path segment rather than a file stem.
+	agyAgentsDir     = ".agents/agents/"
+	agyAgentFileName = "agent.md"
 
 	frontmatterKeySep         = ":"
 	frontmatterNameKey        = "name"
@@ -22,6 +26,10 @@ const (
 
 	returnContractFileName    = "return-contract.md"
 	returnContractPlaceholder = "{{return-contract}}"
+
+	agyNameFormat   = "name: %s\ndescription: %s\n"
+	agySubagentKey  = "subagent"
+	agySubagentLine = agySubagentKey + ": true\n"
 
 	codexNameFormat        = "name = %s\ndescription = %s\n"
 	codexSandboxFormat     = "sandbox_mode = %s\n"

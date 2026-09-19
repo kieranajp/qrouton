@@ -359,6 +359,8 @@ func capabilitiesFor(provider string) agentCapabilities {
 		return agentCapabilities{Children: true}
 	case agentProviderOpenCode:
 		return agentCapabilities{}
+	case agentProviderAgy:
+		return agentCapabilities{Attention: false, Children: false}
 	default:
 		return agentCapabilities{}
 	}

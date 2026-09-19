@@ -2,7 +2,9 @@ package launch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,6 +77,14 @@ var runnerSpecs = []runnerSpec{
 		Prompt:  promptBehindFlag(openCodePromptFlag),
 		MCP:     openCodeMCP,
 		Inject:  injectOpenCode,
+	},
+	{
+		ID: runnerIDAgy, Label: runnerLabelAgy,
+		Command: []string{runnerIDAgy, agySkipPermissionsFlag},
+		Resume:  resumeWith(agyContinueFlag),
+		Prompt:  promptBehindFlag(agyPromptInteractiveFlag),
+		MCP:     agyMCP,
+		Inject:  injectAgy,
 	},
 }
 
@@ -280,11 +290,95 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, config), nil
 }
 
+// injectAgy moves agy's whole configuration root into the session, because a
+// session-scoped MCP server can be declared nowhere else. Only the server
+// document is generated; the rest of the root links back to the user's own, so
+// their model, their history and their trusted workspaces still apply.
+func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
+	home := sessionpaths.AgyHome(c.dir)
+	config := filepath.Join(home, agyMCPConfigPath())
+	if err := os.MkdirAll(filepath.Dir(config), dirMode); err != nil {
+		return nil, nil, err
+	}
+	if err := linkGeminiRoot(home); err != nil {
+		return nil, nil, err
+	}
+	content, err := agyMCPConfig(config, c.qroutonBin, c.mcpArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := os.WriteFile(config, []byte(content), configMode); err != nil {
+		return nil, nil, err
+	}
+	return append(argv, agyGeminiDirFlag, home), os.Environ(), nil
+}
+
+// linkGeminiRoot links the user's .gemini tree into the session's, entry by
+// entry, so the one file qrouton generates is the only thing that differs.
+func linkGeminiRoot(home string) error {
+	userHome, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	root := filepath.Join(userHome, geminiDirName)
+	// The config directory is shadowed rather than linked: qrouton owns a file
+	// inside it, and a link would put that file in the user's tree.
+	if err := linkEntries(root, home, agyConfigDirName); err != nil {
+		return err
+	}
+	return linkEntries(filepath.Join(root, agyConfigDirName),
+		filepath.Join(home, agyConfigDirName), agyMCPConfigName)
+}
+
+// linkEntries symlinks every entry of source into destination, skipping the
+// names qrouton generates. A missing source is a machine agy has not run on.
+// Whatever is already in destination for real is left alone: replacing it with
+// a link would discard what agy put there.
+func linkEntries(source, destination string, generated ...string) error {
+	entries, err := os.ReadDir(source)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil
+		}
+		return err
+	}
+	for _, entry := range entries {
+		if slices.Contains(generated, entry.Name()) {
+			continue
+		}
+		link, target := filepath.Join(destination, entry.Name()), filepath.Join(source, entry.Name())
+		if info, err := os.Lstat(link); err == nil {
+			if info.Mode()&os.ModeSymlink == 0 {
+				continue
+			}
+			if current, err := os.Readlink(link); err == nil && current == target {
+				continue
+			}
+			if err := os.Remove(link); err != nil {
+				return err
+			}
+		}
+		if err := os.Symlink(target, link); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // MCPWiring is how one runner is told about a qrouton MCP server: arguments for
-// its command line, and environment entries for the runner configured that way.
+// its command line, environment entries for the runner configured that way, and
+// a document for the runner that reads one off disk.
 type MCPWiring struct {
 	Args []string
 	Env  []string
+	File MCPFile
+}
+
+// MCPFile is a configuration document a runner reads from its own configuration
+// root. Path is relative to that root, which the launch path moves per session.
+type MCPFile struct {
+	Path    string
+	Content string
 }
 
 // RunnerMCPWiring points runner id at bin, invoked with args, as its qrouton MCP
@@ -339,6 +433,49 @@ func openCodeConfig(bin string, args []string, extra map[string]any) (string, er
 	for key, value := range extra {
 		content[key] = value
 	}
+	b, err := json.Marshal(content)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+// agyMCPConfigPath is the only place agy looks for MCP servers, relative to the
+// configuration root --gemini_dir moves.
+func agyMCPConfigPath() string { return filepath.Join(agyConfigDirName, agyMCPConfigName) }
+
+func agyMCP(bin string, args []string) (MCPWiring, error) {
+	content, err := agyMCPConfig("", bin, args)
+	if err != nil {
+		return MCPWiring{}, err
+	}
+	return MCPWiring{File: MCPFile{Path: agyMCPConfigPath(), Content: content}}, nil
+}
+
+// agyMCPConfig merges the qrouton server into the document at existing, so
+// servers a previous launch wrote or the user added by hand survive. agy reads
+// the file as HuJSON, so a hand-edited one can carry comments encoding/json
+// refuses; failing beats writing a document their servers are missing from.
+func agyMCPConfig(existing, bin string, args []string) (string, error) {
+	content := map[string]any{}
+	if existing != "" {
+		raw, err := os.ReadFile(existing)
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return "", err
+		}
+		if trimmed := strings.TrimSpace(string(raw)); trimmed != "" {
+			if err := json.Unmarshal([]byte(trimmed), &content); err != nil {
+				return "", fmt.Errorf("%s: %w", existing, err)
+			}
+		}
+	}
+	servers, _ := content[claudeMCPServersKey].(map[string]any)
+	if servers == nil {
+		servers = map[string]any{}
+	}
+	servers[serverName] = map[string]any{
+		claudeTypeKey: claudeStdioType, claudeCommandKey: bin, claudeArgsKey: args}
+	content[claudeMCPServersKey] = servers
 	b, err := json.Marshal(content)
 	if err != nil {
 		return "", err

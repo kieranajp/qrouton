@@ -2,8 +2,10 @@ package prompts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -16,6 +18,16 @@ const (
 	toolsKey       = "tools"
 	sandboxModeKey = "sandbox_mode"
 )
+
+// agentAssetPaths are the files one agent prompt renders to, one per runner
+// that resolves a roster off disk. agy's is a directory holding agent.md.
+func agentAssetPaths(name string) []string {
+	return []string{
+		claudeAgentsDir + name + promptFileExt,
+		codexAgentsDir + name + tomlExtension,
+		agyAgentsDir + name + "/" + agyAgentFileName,
+	}
+}
 
 // Agents left to Codex's default sandbox. Naming them keeps a new agent from
 // inheriting the default by nobody's decision.
@@ -56,6 +68,15 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			paths := make([]string, len(assets))
+			for i, asset := range assets {
+				paths[i] = asset.Path
+			}
+			if want := agentAssetPaths(name); !slices.Equal(paths, want) {
+				t.Errorf("rendered %v, want %v", paths, want)
+			}
+			assertAgyAgent(t, assets, name, string(prompt.Content))
+
 			codex := codexAsset(t, assets, name)
 			switch want := wantSandbox(t, name); want {
 			case "":
@@ -91,9 +112,42 @@ func wantSandbox(t *testing.T, name string) string {
 	}
 }
 
-func codexAsset(t *testing.T, assets []Rendered, name string) string {
+func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	t.Helper()
-	want := codexAgentsDir + name + tomlExtension
+	agy := renderedAsset(t, assets, agyAgentsDir+name+"/"+agyAgentFileName)
+	for _, key := range []string{frontmatterNameKey, frontmatterDescriptionKey} {
+		rendered, declared := frontmatterEntry(agy, key)
+		if !declared {
+			t.Errorf("agy rendering declares no %s", key)
+			continue
+		}
+		unquoted, err := strconv.Unquote(rendered)
+		if err != nil {
+			t.Errorf("agy %s is not a quoted scalar: %s", key, rendered)
+			continue
+		}
+		if want, _ := frontmatterEntry(source, key); unquoted != want {
+			t.Errorf("agy %s = %q, want %q", key, unquoted, want)
+		}
+	}
+	if subagent, _ := frontmatterEntry(agy, agySubagentKey); subagent != "true" {
+		t.Errorf("agy rendering is not declared a subagent: %s = %q", agySubagentKey, subagent)
+	}
+
+	_, body, split := strings.Cut(agy, frontmatterClose)
+	if !split {
+		t.Fatalf("agy rendering has no terminated frontmatter:\n%s", agy)
+	}
+	if strings.Contains(body, "\n# ") || strings.HasPrefix(strings.TrimLeft(body, "\n"), "# ") {
+		t.Errorf("an H1 splits the prompt out of the section agy reads as the system prompt:\n%s", body)
+	}
+	if _, want, _ := strings.Cut(source, frontmatterClose); strings.TrimSpace(body) != strings.TrimSpace(want) {
+		t.Errorf("agy body is not the source prompt:\n%s", body)
+	}
+}
+
+func renderedAsset(t *testing.T, assets []Rendered, want string) string {
+	t.Helper()
 	for _, asset := range assets {
 		if asset.Path == want {
 			return string(asset.Content)
@@ -101,6 +155,11 @@ func codexAsset(t *testing.T, assets []Rendered, name string) string {
 	}
 	t.Fatalf("no %s among %#v", want, assets)
 	return ""
+}
+
+func codexAsset(t *testing.T, assets []Rendered, name string) string {
+	t.Helper()
+	return renderedAsset(t, assets, codexAgentsDir+name+tomlExtension)
 }
 
 func frontmatterEntry(text, key string) (string, bool) {
@@ -117,4 +176,26 @@ func frontmatterEntry(text, key string) (string, bool) {
 		}
 	}
 	return "", false
+}
+
+// Render is the only guard on a malformed agent source, and a source that
+// cannot be parsed must stop a launch rather than stamp a half-built roster.
+func TestRenderRejectsMalformedAgentPrompts(t *testing.T) {
+	for name, probe := range map[string]struct {
+		source string
+		want   error
+	}{
+		"no frontmatter":    {"Body with no frontmatter.\n", ErrNoFrontmatter},
+		"unterminated":      {"---\nname: probe\ndescription: Probes.\n", ErrUnterminatedFrontmatter},
+		"no name":           {"---\ndescription: Probes.\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"no description":    {"---\nname: probe\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"empty description": {"---\nname: probe\ndescription:\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := Render(Prompt{ID: ID(agentIDPrefix + "probe"), Content: []byte(probe.source)})
+			if !errors.Is(err, probe.want) {
+				t.Fatalf("Render = %v, want %v", err, probe.want)
+			}
+		})
+	}
 }

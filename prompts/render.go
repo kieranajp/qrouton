@@ -12,6 +12,14 @@ type Rendered struct {
 	Content []byte
 }
 
+// agentPrompt is an agent source split into the parts a runner that rebuilds
+// the document, rather than reading the source verbatim, needs.
+type agentPrompt struct {
+	name        string
+	description string
+	body        string
+}
+
 func Render(prompt Prompt) ([]Rendered, error) {
 	id := string(prompt.ID)
 	switch {
@@ -27,27 +35,28 @@ func Render(prompt Prompt) ([]Rendered, error) {
 		return out, nil
 	case strings.HasPrefix(id, agentIDPrefix):
 		name := path.Base(id)
-		codex, err := renderCodexAgent(prompt.Content)
+		agent, err := parseAgentPrompt(prompt.Content)
 		if err != nil {
 			return nil, fmt.Errorf("render %s: %w", prompt.ID, err)
 		}
 		return []Rendered{
 			{Path: claudeAgentsDir + name + promptFileExt, Content: prompt.Content},
-			{Path: codexAgentsDir + name + tomlExtension, Content: codex},
+			{Path: codexAgentsDir + name + tomlExtension, Content: renderCodexAgent(agent)},
+			{Path: agyAgentsDir + name + "/" + agyAgentFileName, Content: renderAgyAgent(agent)},
 		}, nil
 	default:
 		return nil, fmt.Errorf("%w: %q", ErrUnsupportedPrompt, prompt.ID)
 	}
 }
 
-func renderCodexAgent(content []byte) ([]byte, error) {
+func parseAgentPrompt(content []byte) (agentPrompt, error) {
 	text := string(content)
 	if !strings.HasPrefix(text, frontmatterFence) {
-		return nil, ErrNoFrontmatter
+		return agentPrompt{}, ErrNoFrontmatter
 	}
 	end := strings.Index(text[len(frontmatterFence):], frontmatterClose)
 	if end < 0 {
-		return nil, ErrUnterminatedFrontmatter
+		return agentPrompt{}, ErrUnterminatedFrontmatter
 	}
 	end += len(frontmatterFence)
 	metadata := make(map[string]string)
@@ -57,20 +66,43 @@ func renderCodexAgent(content []byte) ([]byte, error) {
 			metadata[strings.TrimSpace(key)] = strings.TrimSpace(value)
 		}
 	}
-	name, description := metadata[frontmatterNameKey], metadata[frontmatterDescriptionKey]
-	if name == "" || description == "" {
-		return nil, ErrIncompleteAgentPrompt
+	agent := agentPrompt{
+		name:        metadata[frontmatterNameKey],
+		description: metadata[frontmatterDescriptionKey],
+		body:        strings.TrimSpace(text[end+len(frontmatterClose):]),
 	}
-	body := strings.TrimSpace(text[end+len(frontmatterClose):])
+	if agent.name == "" || agent.description == "" {
+		return agentPrompt{}, ErrIncompleteAgentPrompt
+	}
+	return agent, nil
+}
+
+func renderCodexAgent(agent agentPrompt) []byte {
 	var out strings.Builder
-	fmt.Fprintf(&out, codexNameFormat, strconv.Quote(name), strconv.Quote(description))
-	if sandbox := codexSandbox(name); sandbox != "" {
+	fmt.Fprintf(&out, codexNameFormat, strconv.Quote(agent.name), strconv.Quote(agent.description))
+	if sandbox := codexSandbox(agent.name); sandbox != "" {
 		fmt.Fprintf(&out, codexSandboxFormat, strconv.Quote(sandbox))
 	}
 	out.WriteString(codexInstructionsOpen)
-	out.WriteString(strings.ReplaceAll(body, tomlTripleQuote, tomlEscapedTripleQuote))
+	out.WriteString(strings.ReplaceAll(agent.body, tomlTripleQuote, tomlEscapedTripleQuote))
 	out.WriteString(codexInstructionsClose)
-	return []byte(out.String()), nil
+	return []byte(out.String())
+}
+
+// renderAgyAgent rebuilds the document rather than copying the claude source,
+// whose frontmatter carries keys agy does not read. The body gets no heading:
+// agy splits a body on H1s and reads whatever precedes the first one as the
+// system prompt.
+func renderAgyAgent(agent agentPrompt) []byte {
+	var out strings.Builder
+	out.WriteString(frontmatterFence)
+	fmt.Fprintf(&out, agyNameFormat, strconv.Quote(agent.name), strconv.Quote(agent.description))
+	out.WriteString(agySubagentLine)
+	out.WriteString(frontmatterFence)
+	out.WriteString("\n")
+	out.WriteString(agent.body)
+	out.WriteString("\n")
+	return []byte(out.String())
 }
 
 func codexSandbox(name string) string {
