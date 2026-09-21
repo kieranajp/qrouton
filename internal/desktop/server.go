@@ -95,6 +95,24 @@ type handler struct {
 // becomes the response's Error; dispatch is the only place that conversion
 // happens.
 var handlers = map[string]handler{
+	workbench.OpVaultStatus: {guards: []guard{needsSession, needsVault}, run: func(c *control, _ workbench.Request) (workbench.Response, error) {
+		out, err := c.windows.vaults.status(c.owner)
+		return workbench.Response{VaultStatus: &out}, err
+	}},
+	workbench.OpReadVault: {guards: []guard{needsSession, needsVault}, run: func(c *control, req workbench.Request) (workbench.Response, error) {
+		if req.VaultRead == nil {
+			return workbench.Response{}, ErrVaultRequest
+		}
+		out, err := c.windows.vaults.read(c.owner, *req.VaultRead)
+		return workbench.Response{VaultRead: &out}, err
+	}},
+	workbench.OpSearchVault: {guards: []guard{needsSession, needsVault}, run: func(c *control, req workbench.Request) (workbench.Response, error) {
+		if req.VaultSearch == nil {
+			return workbench.Response{}, ErrVaultRequest
+		}
+		out, err := c.windows.vaults.search(c.owner, *req.VaultSearch)
+		return workbench.Response{VaultSearch: &out}, err
+	}},
 	workbench.OpQueueBugReport: {
 		guards: []guard{needsSession, needsBugReports},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -317,6 +335,13 @@ func (c *control) Close() error {
 func needsImageFocus(_ *control, req workbench.Request) error {
 	if req.ImageFocus == nil {
 		return ErrNoImageFocus
+	}
+	return nil
+}
+
+func needsVault(c *control, _ workbench.Request) error {
+	if c.windows == nil || c.windows.vaults == nil {
+		return ErrVaultRequest
 	}
 	return nil
 }

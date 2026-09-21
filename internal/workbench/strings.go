@@ -66,3 +66,9 @@ const (
 	// desktop process cannot hang an agent's tool call.
 	callTimeout = 30 * time.Second
 )
+
+const (
+	OpVaultStatus = "vault-status"
+	OpReadVault   = "read-vault"
+	OpSearchVault = "search-vault"
+)

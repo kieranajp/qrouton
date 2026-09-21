@@ -131,14 +131,23 @@ type Progress struct {
 
 type ProgressFunc func(Progress)
 
+type VaultSelection struct {
+	ReadProfiles        []string `json:"readProfiles,omitempty"`
+	Repositories        []string `json:"repositories,omitempty"`
+	Destination         string   `json:"destination,omitempty"`
+	PublicationDisabled bool     `json:"publicationDisabled,omitempty"`
+}
+
 type Manifest struct {
-	SchemaVersion int         `json:"schemaVersion"`
-	Name          string      `json:"name"`
-	Slug          string      `json:"slug"`
-	Description   string      `json:"description"`
-	TicketURL     string      `json:"ticketUrl,omitempty"`
-	Mode          SessionMode `json:"mode,omitempty"`
-	Sticker       Sticker     `json:"sticker,omitempty"`
+	Workstream    string          `json:"workstream,omitempty"`
+	Vault         *VaultSelection `json:"vault,omitempty"`
+	SchemaVersion int             `json:"schemaVersion"`
+	Name          string          `json:"name"`
+	Slug          string          `json:"slug"`
+	Description   string          `json:"description"`
+	TicketURL     string          `json:"ticketUrl,omitempty"`
+	Mode          SessionMode     `json:"mode,omitempty"`
+	Sticker       Sticker         `json:"sticker,omitempty"`
 	// Runner is the coding agent this session was assembled with, so every later
 	// boot starts the one that was chosen rather than the workbench's default.
 	Runner     string             `json:"runner,omitempty"`

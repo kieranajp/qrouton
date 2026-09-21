@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -17,19 +18,20 @@ import (
 // session file it came from, if it came from one, and the source lines the page
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
-	Text          string          `json:"text"`
-	Format        string          `json:"format"`
-	Source        string          `json:"source"`
-	Path          string          `json:"path,omitempty"`
-	Kind          string          `json:"kind,omitempty"`
-	Deck          bool            `json:"deck,omitempty"`
-	AssetToken    string          `json:"assetToken,omitempty"`
-	Line          int             `json:"line"`
-	To            int             `json:"to"`
-	ViewportEpoch uint64          `json:"viewportEpoch,omitempty"`
-	Images        []documentImage `json:"images,omitempty"`
-	CurrentIndex  int             `json:"currentIndex,omitempty"`
-	Revision      uint64          `json:"revision,omitempty"`
+	Vault         *vault.Reference `json:"vault,omitempty"`
+	Text          string           `json:"text"`
+	Format        string           `json:"format"`
+	Source        string           `json:"source"`
+	Path          string           `json:"path,omitempty"`
+	Kind          string           `json:"kind,omitempty"`
+	Deck          bool             `json:"deck,omitempty"`
+	AssetToken    string           `json:"assetToken,omitempty"`
+	Line          int              `json:"line"`
+	To            int              `json:"to"`
+	ViewportEpoch uint64           `json:"viewportEpoch,omitempty"`
+	Images        []documentImage  `json:"images,omitempty"`
+	CurrentIndex  int              `json:"currentIndex,omitempty"`
+	Revision      uint64           `json:"revision,omitempty"`
 }
 
 type documentImage struct {
@@ -56,7 +58,7 @@ func newDocuments(emit emitter, reg *registry) *documents {
 }
 
 func (window *agentWindow) sourcePath() string {
-	if window.opts.Source == "" || window.session == nil {
+	if window.opts.Vault != nil || window.opts.Source == "" || window.session == nil {
 		return ""
 	}
 	return filepath.Join(window.session.root(), filepath.FromSlash(window.opts.Source))
@@ -114,6 +116,7 @@ func documentFor(window *agentWindow) document {
 		asset = window.asset
 	}
 	doc := document{
+		Vault:         window.opts.Vault,
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),
 		Source:        window.opts.Source,
@@ -170,11 +173,17 @@ func (d *documents) rescan() {
 		doc document
 	}
 	var pushes []push
+	var vaultIDs []string
 	d.registry.each(func(id string, window *agentWindow) {
 		rendered, ok := window.document()
 		if !ok {
 			return
 		}
+		if window.opts.Vault != nil {
+			vaultIDs = append(vaultIDs, id)
+			return
+		}
+
 		path := window.sourcePath()
 		if path == "" {
 			return
@@ -199,6 +208,10 @@ func (d *documents) rescan() {
 		window.opts.Deck = markdown.Marp(window.opts.Content)
 		pushes = append(pushes, push{id: id, doc: documentFor(window)})
 	})
+	for _, id := range vaultIDs {
+		_, _ = d.registry.refreshVault(id)
+	}
+
 	for _, sent := range pushes {
 		d.emit(windowContentEvent+sent.id, sent.doc)
 	}
@@ -208,6 +221,9 @@ func (d *documents) rescan() {
 // restarts the page's sequence counter, so the epoch moves and the viewport
 // starts again from nothing measured.
 func (d *documents) content(id string) (document, error) {
+	if _, err := d.registry.refreshVault(id); err != nil {
+		return document{}, err
+	}
 	var doc document
 	err := d.registry.with(id, func(window *agentWindow) error {
 		if rendered, ok := window.document(); ok && rendered.viewport != nil {
@@ -225,6 +241,9 @@ func (d *documents) content(id string) (document, error) {
 }
 
 func (d *documents) markdown(id string) (string, bool, error) {
+	if _, err := d.registry.refreshVault(id); err != nil {
+		return "", false, err
+	}
 	var text string
 	var rendered bool
 	err := d.registry.with(id, func(window *agentWindow) error {
@@ -319,4 +338,28 @@ func normalizedIntervals(intervals []workbench.LineInterval) ([]workbench.LineIn
 		merged = append(merged, interval)
 	}
 	return merged, nil
+}
+
+func (d *documents) invalidateVaults() {
+	d.registry.vaultPublishMu.Lock()
+	type cleared struct {
+		id  string
+		doc document
+	}
+	var updates []cleared
+	d.registry.mu.Lock()
+	d.registry.vaultEpoch++
+	for id, window := range d.registry.open {
+		if window.opts.Vault == nil {
+			continue
+		}
+		window.opts.Content = ""
+		updates = append(updates, cleared{id, documentFor(window)})
+	}
+	d.registry.mu.Unlock()
+	for _, update := range updates {
+		d.emit(windowContentEvent+update.id, update.doc)
+	}
+	d.registry.vaultPublishMu.Unlock()
+	d.rescan()
 }

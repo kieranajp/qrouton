@@ -21,7 +21,7 @@ export function links(body, source) {
     if (!anchor) return;
     const href = anchor.getAttribute("href");
     event.preventDefault();
-    if (linkKind(href) === "document") {
+    if (linkKind(href) === "document" && !from.startsWith("vault://")) {
       openDocument(documentPath(href ?? "", from)).catch(() => {});
     } else if (linkKind(href) === "external") {
       openURL(href ?? "");

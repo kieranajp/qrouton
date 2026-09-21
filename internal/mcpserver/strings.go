@@ -119,3 +119,10 @@ const (
 	focusedImageFormat    = "Selected image %d of %d in gallery %q (the conversation keeps keyboard focus)."
 	focusImageErrorFormat = "focus image in %q: %w"
 )
+
+const (
+	toolReadVault   = "read_vault"
+	toolSearchVault = "search_vault"
+	descReadVault   = "Read a canonical vault artifact explicitly by ID, with profile to disambiguate its origin. A profile and relative path can read an unsupported schema. Access follows this session's scope."
+	descSearchVault = "Search the session's admitted vaults. Retrieval is unavailable until indexing and calibration are configured; empty results in this state are not evidence of no prior work."
+)

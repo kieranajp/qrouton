@@ -15,3 +15,5 @@ var (
 	ErrWorkbenchUnreachable     = errors.New("workbench control socket unreachable")
 	ErrInvalidProcessDescriptor = errors.New("invalid active-workbench descriptor")
 )
+
+var ErrVaultResponse = errors.New("workbench returned no vault response")

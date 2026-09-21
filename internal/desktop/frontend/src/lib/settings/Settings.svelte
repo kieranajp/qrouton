@@ -3,12 +3,15 @@
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
+ import VaultSettings from "./VaultSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{vaultProfiles?: import("./calls.js").VaultProfile[], vaultMappings?: Record<string,string>, orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
-    orgs = [],
+    vaultProfiles = $bindable([]),
+ vaultMappings = $bindable({}),
+ orgs = [],
     orgInput = $bindable(""),
     root = $bindable(""),
     editor = $bindable(""),
@@ -103,6 +106,8 @@
   help={fields.linear ?? (linearPath ? `${LINEAR_HELP} Save writes` : LINEAR_HELP)}
   helpLiteral={fields.linear ? "" : linearPath}
   helpTone={fields.linear ? "failed" : "muted"} />
+
+<VaultSettings bind:profiles={vaultProfiles} bind:mappings={vaultMappings} error={fields.vault} />
 
 {#if restartRequired}
   <div class="banner">

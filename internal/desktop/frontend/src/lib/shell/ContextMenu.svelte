@@ -50,7 +50,7 @@
       const source = link.closest("[data-document-source]")?.getAttribute("data-document-source");
       const kind = linkKind(href);
       // A relative link with no known source pane is reported unfollowable.
-      return { kind: "link", href, source, linkKind: kind === "document" && !source ? "none" : kind };
+      return { kind: "link", href, source, linkKind: kind === "document" && (!source || source.startsWith("vault://")) ? "none" : kind };
     }
     return { kind: "text", selection: String(window.getSelection() ?? "") };
   }

@@ -89,8 +89,11 @@ func (window *agentWindow) document() (*documentContent, bool) {
 // field of a window that changes after it opens is guarded by mu, so a reader
 // reaches one through with or each and never through the map.
 type registry struct {
-	emit     emitter
-	sessions *Sessions
+	vaultPublishMu sync.Mutex
+	vaultEpoch     uint64
+	vaults         *vaults
+	emit           emitter
+	sessions       *Sessions
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu     sync.Mutex
 	imageFocusMu sync.Mutex
@@ -136,6 +139,10 @@ func (r *registry) each(fn func(id string, window *agentWindow)) {
 
 func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	var err error
+	opts, err = r.admitVault(owner, opts)
+	if err != nil {
+		return "", err
+	}
 	opts, err = admittedWindowOptions(owner, opts)
 	if err != nil {
 		return "", err
@@ -156,6 +163,10 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	var err error
+	opts, err = r.admitVault(owner, opts)
+	if err != nil {
+		return "", err
+	}
 	opts, err = admittedWindowOptions(owner, opts)
 	if err != nil {
 		return "", err
@@ -303,6 +314,9 @@ func assetToken() string {
 }
 
 func (r *registry) readWindow(id string, full bool) (string, error) {
+	if _, err := r.refreshVault(id); err != nil {
+		return "", err
+	}
 	var text string
 	var buffer *ring
 	if err := r.with(id, func(window *agentWindow) error {

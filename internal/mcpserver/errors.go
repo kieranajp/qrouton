@@ -25,3 +25,5 @@ func noSuchWindow(name string) error {
 func windowGone(name string) error {
 	return fmt.Errorf("window %q is no longer open (the user closed it, or its command finished); open it again if you still need it", name)
 }
+
+var ErrVaultFileChoice = errors.New("choose either a session path or a vault reference")

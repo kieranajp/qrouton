@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"path/filepath"
 	"strings"
 	"time"
@@ -50,16 +51,17 @@ func FormatFor(name string) (DocumentFormat, bool) {
 // WindowOptions describes an agent-opened terminal or document.
 // Source deduplicates document windows; Badge precedes Label in the tab.
 type WindowOptions struct {
-	Kind    WindowKind     `json:"kind"`
-	Label   string         `json:"label"`
-	Badge   string         `json:"badge,omitempty"`
-	Source  string         `json:"source,omitempty"`
-	Cwd     string         `json:"cwd,omitempty"`
-	Command []string       `json:"command,omitempty"`
-	Content string         `json:"content,omitempty"`
-	Format  DocumentFormat `json:"format,omitempty"`
-	Images  []ImageRef     `json:"images,omitempty"`
-	Span    LineSpan       `json:"span,omitzero"`
+	Vault   *vault.Reference `json:"vault,omitempty"`
+	Kind    WindowKind       `json:"kind"`
+	Label   string           `json:"label"`
+	Badge   string           `json:"badge,omitempty"`
+	Source  string           `json:"source,omitempty"`
+	Cwd     string           `json:"cwd,omitempty"`
+	Command []string         `json:"command,omitempty"`
+	Content string           `json:"content,omitempty"`
+	Format  DocumentFormat   `json:"format,omitempty"`
+	Images  []ImageRef       `json:"images,omitempty"`
+	Span    LineSpan         `json:"span,omitzero"`
 	// Deck is a Markdown document whose frontmatter declares it slides. It rides
 	// beside Format rather than replacing it, since a deck is still whatever
 	// kind of artifact its path says it is.

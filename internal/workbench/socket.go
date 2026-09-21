@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 // Discovery is the one process endpoint external launchers may use. Legacy is
@@ -37,6 +38,8 @@ type ImageFocusRequest struct {
 }
 
 type Request struct {
+	VaultRead        *vault.Reference           `json:"vault_read,omitempty"`
+	VaultSearch      *VaultSearchRequest        `json:"vault_search,omitempty"`
 	BugReport        *BugReportRequest          `json:"bug_report,omitempty"`
 	ImageFocus       *ImageFocusRequest         `json:"image_focus,omitempty"`
 	Op               string                     `json:"op"`
@@ -54,15 +57,18 @@ type Request struct {
 
 // Response is the desktop process's single-line answer.
 type Response struct {
-	BugReport      *BugReport        `json:"bug_report,omitempty"`
-	ImageSelection *ImageSelection   `json:"image_selection,omitempty"`
-	ID             string            `json:"id,omitempty"`
-	Text           string            `json:"text,omitempty"`
-	Exists         bool              `json:"exists,omitempty"`
-	IDs            []string          `json:"ids,omitempty"`
-	Viewport       *DocumentViewport `json:"viewport,omitempty"`
-	Outcome        string            `json:"outcome,omitempty"`
-	Error          string            `json:"error,omitempty"`
+	VaultStatus    *vault.Status      `json:"vault_status,omitempty"`
+	VaultRead      *vault.ReadResult  `json:"vault_read,omitempty"`
+	VaultSearch    *VaultSearchResult `json:"vault_search,omitempty"`
+	BugReport      *BugReport         `json:"bug_report,omitempty"`
+	ImageSelection *ImageSelection    `json:"image_selection,omitempty"`
+	ID             string             `json:"id,omitempty"`
+	Text           string             `json:"text,omitempty"`
+	Exists         bool               `json:"exists,omitempty"`
+	IDs            []string           `json:"ids,omitempty"`
+	Viewport       *DocumentViewport  `json:"viewport,omitempty"`
+	Outcome        string             `json:"outcome,omitempty"`
+	Error          string             `json:"error,omitempty"`
 }
 
 // TicketRequest is the canonical ticket URL and the user-level request the

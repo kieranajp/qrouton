@@ -7,6 +7,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -17,10 +18,11 @@ type focusImageInput struct {
 }
 
 type openFileInput struct {
-	Path       string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
-	Line       int    `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
-	Through    int    `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
-	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
+	Vault      *vault.Reference `json:"vault,omitempty" jsonschema:"Canonical artifact reference in an admitted vault; use instead of path"`
+	Path       string           `json:"path,omitempty" jsonschema:"Path to an existing file in the qrouton session; use instead of vault"`
+	Line       int              `json:"line,omitempty" jsonschema:"One-based line number to draw the user's eye to; defaults to 1"`
+	Through    int              `json:"through,omitempty" jsonschema:"Last line of the range to mark, when line opens one; defaults to line alone"`
+	Foreground *bool            `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
 type openImagesInput struct {
@@ -108,6 +110,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		Instructions: serverInstructions,
 	})
 	windows := newWindowManager(root, editor, host)
+	registerVault(server, host)
 	mcp.AddTool(server, &mcp.Tool{Name: toolReportBug, Description: descReportBug},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input reportBugInput) (*mcp.CallToolResult, reportBugOutput, error) {
 			out, err := windows.reportBug(ctx, input)

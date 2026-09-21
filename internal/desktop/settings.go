@@ -11,27 +11,32 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 // SettingsView carries the editable config and Linear document on the wire.
 type SettingsView struct {
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	LinearPath    string               `json:"linearPath"`
-	LinearError   string               `json:"linearError,omitempty"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
+	VaultProfiles []config.VaultProfile `json:"vaultProfiles"`
+	VaultMappings map[string]string     `json:"vaultMappings"`
+	Orgs          []string              `json:"orgs"`
+	Root          string                `json:"root"`
+	Editor        string                `json:"editor"`
+	Launch        string                `json:"launch"`
+	Linear        string                `json:"linear"`
+	LinearPath    string                `json:"linearPath"`
+	LinearError   string                `json:"linearError,omitempty"`
+	StickerLabels config.StickerLabels  `json:"stickerLabels"`
 }
 
 type SettingsInput struct {
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
+	VaultProfiles []config.VaultProfile `json:"vaultProfiles"`
+	VaultMappings map[string]string     `json:"vaultMappings"`
+	Orgs          []string              `json:"orgs"`
+	Root          string                `json:"root"`
+	Editor        string                `json:"editor"`
+	Launch        string                `json:"launch"`
+	Linear        string                `json:"linear"`
+	StickerLabels config.StickerLabels  `json:"stickerLabels"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -41,6 +46,8 @@ type SaveResult struct {
 }
 
 type Settings struct {
+	vaults         *vaults
+	vaultChanged   func()
 	cfg            *config.Config
 	emit           emitter
 	validateEditor func([]string) error
@@ -73,6 +80,7 @@ func (s *Settings) Load() SettingsView {
 	}
 	linear, linearErr := s.linear.Load()
 	return SettingsView{
+		VaultProfiles: cfg.VaultProfiles, VaultMappings: cfg.VaultMappings,
 		Orgs:          cfg.Orgs,
 		Root:          cfg.Root,
 		Editor:        editorCommand(cfg.Editor),
@@ -96,6 +104,9 @@ func editorCommand(argv []string) string {
 }
 
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
+	if err := vault.ValidateProfiles(vaultProfiles(&config.Config{VaultProfiles: in.VaultProfiles}), in.VaultMappings); err != nil {
+		return SaveResult{}, fmt.Errorf(vaultSettingsErrorFormat, err)
+	}
 	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
 		return SaveResult{}, err
@@ -135,6 +146,8 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	err = saveConfig(s.cfg, func(next *config.Config) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
+		next.VaultProfiles = in.VaultProfiles
+		next.VaultMappings = in.VaultMappings
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf("linear: %w", err)
@@ -153,6 +166,9 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	})
 	if err != nil {
 		return SaveResult{}, err
+	}
+	if s.vaultChanged != nil {
+		s.vaultChanged()
 	}
 	return result, nil
 }

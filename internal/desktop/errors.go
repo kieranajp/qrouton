@@ -73,3 +73,8 @@ func agentAlreadyRunning(slug string, pid int) error {
 func unknownOperation(op string) error {
 	return fmt.Errorf("unknown workbench operation %q", op)
 }
+
+var (
+	ErrVaultRequest       = errors.New("invalid vault request")
+	ErrVaultDocumentLarge = errors.New("vault document exceeds pane size limit")
+)

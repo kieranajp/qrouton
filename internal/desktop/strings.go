@@ -197,3 +197,9 @@ const (
 )
 
 const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"
+
+const (
+	vaultSettingsErrorFormat = "vault: %w"
+	vaultSourcePrefix        = "vault://"
+	vaultLabelSeparator      = " · "
+)

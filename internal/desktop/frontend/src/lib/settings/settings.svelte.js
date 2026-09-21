@@ -7,7 +7,9 @@ import { addOrg, removeOrg } from "./orgs.js";
  * @param {() => void} onClose */
 export function settings(onClose) {
   const form = $state({
-    orgs: /** @type {string[]} */ ([]),
+    vaultProfiles: /** @type {import("./calls.js").VaultProfile[]} */ ([]),
+ vaultMappings: /** @type {Record<string,string>} */ ({}),
+ orgs: /** @type {string[]} */ ([]),
     root: "",
     editor: "",
     launch: "",
@@ -32,7 +34,9 @@ export function settings(onClose) {
       return;
     }
     const loaded = answer.value;
-    form.orgs = loaded?.orgs ?? [];
+    form.vaultProfiles=loaded?.vaultProfiles ?? [];
+ form.vaultMappings=loaded?.vaultMappings ?? {};
+ form.orgs = loaded?.orgs ?? [];
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
@@ -62,7 +66,9 @@ export function settings(onClose) {
     let result, err;
     try {
       result = await go.save({
-        orgs: form.orgs,
+        vaultProfiles: form.vaultProfiles.map((profile)=>({...profile})),
+ vaultMappings: {...form.vaultMappings},
+ orgs: form.orgs,
         root: form.root,
         editor: form.editor,
         launch: form.launch,

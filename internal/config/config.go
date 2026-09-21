@@ -28,7 +28,16 @@ type Config struct {
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 
+	VaultProfiles []VaultProfile    `json:"vaultProfiles,omitempty"`
+	VaultMappings map[string]string `json:"vaultMappings,omitempty"`
+
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
+}
+
+type VaultProfile struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Root string `json:"root"`
 }
 
 type StickerLabels struct {
@@ -90,6 +99,8 @@ func (c *Config) Replace(next *Config) {
 	c.Editor = replacement.Editor
 	c.Welcomed = replacement.Welcomed
 	c.StickerLabels = replacement.StickerLabels
+	c.VaultProfiles = replacement.VaultProfiles
+	c.VaultMappings = replacement.VaultMappings
 }
 
 func clone(c *Config) *Config {
@@ -100,6 +111,13 @@ func clone(c *Config) *Config {
 		Root:     c.Root,
 		Editor:   append([]string(nil), c.Editor...),
 		Welcomed: c.Welcomed,
+	}
+	out.VaultProfiles = append([]VaultProfile(nil), c.VaultProfiles...)
+	if c.VaultMappings != nil {
+		out.VaultMappings = make(map[string]string, len(c.VaultMappings))
+		for org, profile := range c.VaultMappings {
+			out.VaultMappings[org] = profile
+		}
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))

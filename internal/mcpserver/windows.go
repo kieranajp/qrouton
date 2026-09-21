@@ -99,7 +99,16 @@ func (m *windowManager) release(name string, claim uint64) {
 
 func (m *windowManager) openFile(ctx context.Context, input openFileInput) (string, *workbench.DocumentViewport, error) {
 	span := workbench.LineSpan{Line: input.Line, Through: input.Through}
-	opts, err := launch.DocumentWindow(m.root, input.Path, m.editor, span)
+	var opts workbench.WindowOptions
+	var err error
+	if input.Vault != nil {
+		if input.Path != "" {
+			return "", nil, ErrVaultFileChoice
+		}
+		opts = workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Vault: input.Vault, Span: span, Source: input.Vault.ID}
+	} else {
+		opts, err = launch.DocumentWindow(m.root, input.Path, m.editor, span)
+	}
 	if err != nil {
 		return "", nil, err
 	}

@@ -52,6 +52,7 @@ type Options struct {
 	assembly   *Assembly
 	chrome     *Chrome
 	bugReports *BugReports
+	vaults     *vaults
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -91,6 +92,8 @@ func Run(opts Options) error {
 	r.register(application.NewService(opts.bugReports))
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
+	opts.vaults = newVaults(opts.Config, reg)
+	windows.registry.setVaults(opts.vaults)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)
 	// The same teardown the main window's OnClose runs, shared with Settings.Quit
@@ -114,10 +117,13 @@ func Run(opts Options) error {
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch := validators(opts.Validator)
-	r.register(application.NewService(newSettings(
+	settingsService := newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,
 		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch,
-	)))
+	)
+	settingsService.vaults = opts.vaults
+	settingsService.vaultChanged = windows.documents.invalidateVaults
+	r.register(application.NewService(settingsService))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
 	return run(r, term, windows, opts, quit)
@@ -151,6 +157,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	defer cancel()
 
 	reg := term.sessions
+	if opts.vaults == nil {
+		opts.vaults = newVaults(opts.Config, reg)
+	}
+	windows.registry.setVaults(opts.vaults)
+	defer opts.vaults.close()
 	if opts.bugReports == nil {
 		opts.bugReports = newBugReports(reg)
 	}

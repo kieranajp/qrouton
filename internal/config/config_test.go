@@ -260,3 +260,31 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 		t.Fatalf("replacement shares nested values: %+v", got)
 	}
 }
+
+func TestVaultSettingsSnapshotAndRoundTrip(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	original := &Config{VaultProfiles: []VaultProfile{{ID: "shared", Name: "Shared", Root: "/vault"}}, VaultMappings: map[string]string{"team": "shared"}}
+	snapshot := original.Snapshot()
+	snapshot.VaultProfiles[0].Root = "/other"
+	snapshot.VaultMappings["team"] = "other"
+	if original.VaultProfiles[0].Root != "/vault" || original.VaultMappings["team"] != "shared" {
+		t.Fatal("snapshot aliases original")
+	}
+	original.Replace(snapshot)
+	snapshot.VaultProfiles[0].Root = "/third"
+	snapshot.VaultMappings["team"] = "third"
+	if original.VaultProfiles[0].Root != "/other" || original.VaultMappings["team"] != "other" {
+		t.Fatal("replace aliases snapshot")
+	}
+	if err := Save(original); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.VaultProfiles, original.VaultProfiles) || !reflect.DeepEqual(loaded.VaultMappings, original.VaultMappings) {
+		t.Fatalf("%+v", loaded)
+	}
+}

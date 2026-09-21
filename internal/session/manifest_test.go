@@ -237,3 +237,25 @@ func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 		t.Fatalf("concurrent result = %+v", got)
 	}
 }
+
+func TestVaultSelectionsSurviveLockedManifestUpdate(t *testing.T) {
+	dir := t.TempDir()
+	m := Manifest{Slug: "test", Workstream: "vault", Vault: &VaultSelection{ReadProfiles: []string{"shared"}, Repositories: []string{"github.com/team/repo"}, Destination: "shared", PublicationDisabled: true}}
+	if err := WriteManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) { m.Name = "Renamed"; return m, nil }); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Workstream != "vault" || got.Vault == nil || !got.Vault.PublicationDisabled || got.Vault.ReadProfiles[0] != "shared" || got.Vault.Repositories[0] != "github.com/team/repo" {
+		t.Fatalf("%+v", got)
+	}
+	old, err := decode([]byte(`{"slug":"old","repos":[]}`))
+	if err != nil || old.Vault != nil || old.Workstream != "" {
+		t.Fatalf("%+v %v", old, err)
+	}
+}

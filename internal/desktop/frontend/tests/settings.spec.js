@@ -39,7 +39,9 @@ test("sticker meanings load and save together without asking for a restart", asy
 
   await expect.poll(() => page.evaluate(() => window.settingsFixture.saves())).toEqual([
     {
-      orgs: ["acme"],
+      vaultProfiles: [],
+ vaultMappings: {},
+ orgs: ["acme"],
       root: "/sessions",
       editor: "",
       launch: "",
@@ -68,4 +70,43 @@ test("a blank sticker meaning names the field and stays open", async ({ page }) 
     ),
   ).toContainText("cannot be empty");
   await expect(page.locator(".dialog")).toBeVisible();
+});
+
+
+test("vault setup is optional and saves profiles with organisation mappings", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await expect(page.getByText("Select a read profile for this repository-free session.")).toHaveCount(0);
+  await page.getByRole("button", { name: "Add vault", exact: true }).click();
+  await page.getByRole("textbox", { name: "Vault name 1", exact: true }).fill("Shared");
+  await page.getByRole("textbox", { name: "Vault folder 1", exact: true }).fill("/vault/shared");
+  await page.getByRole("textbox", { name: "Vault organisation", exact: true }).fill("acme");
+  await page.getByRole("combobox", { name: "Destination vault", exact: true }).selectOption({ label: "Shared" });
+  await page.getByRole("button", { name: "Map organisation", exact: true }).click();
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const saves = await page.evaluate(() => window.settingsFixture.saves());
+  expect(saves[0].vaultProfiles[0]).toMatchObject({ name: "Shared", root: "/vault/shared" });
+  expect(saves[0].vaultMappings.acme).toBe(saves[0].vaultProfiles[0].id);
+});
+
+test("vault validation stays visible without saving a relative root", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await page.getByRole("button", { name: "Add vault", exact: true }).click();
+  await page.getByRole("textbox", { name: "Vault name 1", exact: true }).fill("Shared");
+  await page.getByRole("textbox", { name: "Vault folder 1", exact: true }).fill("relative/vault");
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(status(page)).toHaveText("invalid vault configuration");
+  await expect(page.locator(".dialog")).toBeVisible();
+});
+
+test("a repository-free session requires explicit read selection", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults");
+  await expect(page.getByText("Select a read profile for this repository-free session.")).toBeVisible();
+  await expect(page.getByRole("checkbox", { name: "Read Shared", exact: true })).not.toBeChecked();
+  await page.getByRole("checkbox", { name: "Read Shared", exact: true }).check();
+  await page.getByRole("textbox", { name: "Vault workstream", exact: true }).fill("storage");
+  await page.getByRole("button", { name: "Save session scope", exact: true }).click();
+  await expect(page.getByText("Session vault scope saved.")).toBeVisible();
+  await expect(page.getByText(/Shared: 1 readable documents/)).toBeVisible();
+  const scopes = await page.evaluate(() => window.settingsFixture.scopes());
+  expect(scopes).toEqual([{ session: "example", workstream: "storage", selection: { readProfiles: ["shared"], repositories: [], destination: "", publicationDisabled: false } }]);
 });

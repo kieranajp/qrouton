@@ -25,7 +25,9 @@
   onPrimary={panel.save}
   onEscape={panel.cancel}>
   <Settings
-    orgs={panel.form.orgs}
+    bind:vaultProfiles={panel.form.vaultProfiles}
+ bind:vaultMappings={panel.form.vaultMappings}
+ orgs={panel.form.orgs}
     bind:orgInput={panel.orgInput}
     bind:root={panel.form.root}
     bind:editor={panel.form.editor}
