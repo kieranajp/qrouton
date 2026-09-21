@@ -1,4 +1,4 @@
-import { SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE, SETTINGS_VAULT_SESSION, SETTINGS_SAVE_VAULT_SESSION, SETTINGS_VAULT_SETUP, SETTINGS_DOWNLOAD_VAULT_MODEL, SETTINGS_CANCEL_VAULT_DOWNLOAD, SETTINGS_RETRY_VAULT_INDEX } from "../bridge/generated.js";
+import { SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE, SETTINGS_VAULT_SESSION, SETTINGS_SAVE_VAULT_SESSION, SETTINGS_VAULT_SETUP, SETTINGS_DOWNLOAD_VAULT_MODEL, SETTINGS_CANCEL_VAULT_DOWNLOAD, SETTINGS_RETRY_VAULT_INDEX, SETTINGS_SELECT_VAULT_IMPORT_SOURCES, SETTINGS_CLEAR_VAULT_IMPORT_SOURCES, SETTINGS_PREVIEW_VAULT_IMPORT, SETTINGS_CONFIRM_VAULT_IMPORT, SETTINGS_VAULT_IMPORT_STATUS, SETTINGS_RETRY_VAULT_IMPORTS, SETTINGS_REVALIDATE_VAULT_IMPORT_DESTINATION } from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
 /**
@@ -51,3 +51,12 @@ export const downloadVaultModel = () => Call.ByName(SETTINGS_DOWNLOAD_VAULT_MODE
 export const cancelVaultDownload = () => Call.ByName(SETTINGS_CANCEL_VAULT_DOWNLOAD);
 /** @param {string} profile */
 export const retryVaultIndex = (profile) => Call.ByName(SETTINGS_RETRY_VAULT_INDEX, profile);
+
+export const selectVaultImportSources = (kind) => Call.ByName(SETTINGS_SELECT_VAULT_IMPORT_SOURCES, kind);
+export const previewVaultImport = (input) => Call.ByName(SETTINGS_PREVIEW_VAULT_IMPORT, input);
+export const confirmVaultImport = (preview, selected) => Call.ByName(SETTINGS_CONFIRM_VAULT_IMPORT, preview, selected);
+export const vaultImportStatus = () => Call.ByName(SETTINGS_VAULT_IMPORT_STATUS);
+export const retryVaultImports = (profile) => Call.ByName(SETTINGS_RETRY_VAULT_IMPORTS, profile);
+export const revalidateVaultImportDestination = (id) => Call.ByName(SETTINGS_REVALIDATE_VAULT_IMPORT_DESTINATION, id);
+
+export const clearVaultImportSources = () => Call.ByName(SETTINGS_CLEAR_VAULT_IMPORT_SOURCES);

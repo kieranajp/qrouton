@@ -135,7 +135,7 @@ test("linkKind separates a document from a URL from everything else", () => {
   assert.equal(linkKind("../research/R7-2026-08-07-editor-surfaces.md"), "document");
   assert.equal(linkKind("plans/P007.markdown#phase-2"), "document");
   assert.equal(linkKind("https://example.com"), "external");
-  assert.equal(linkKind("#a-heading"), "none");
+  assert.equal(linkKind("#a-heading"), "document");
   assert.equal(linkKind("src/main.go"), "none");
   assert.equal(linkKind("file:///etc/passwd"), "none");
   assert.equal(linkKind("javascript:alert(1)"), "none");
@@ -148,4 +148,13 @@ test("a document link resolves against the document holding it", () => {
   assert.equal(documentPath("./P006.md", from), "thoughts/shared/plans/P006.md");
   assert.equal(documentPath("P006.md#phase-1", from), "thoughts/shared/plans/P006.md");
   assert.equal(documentPath("/AGENTS.md", from), "AGENTS.md");
+});
+
+
+test("heading anchors count stripped title and preserve Unicode", () => {
+  const rendered = render("# Heading\n\n## Heading\n\n## Héllo 世界\n\n## Heading\n");
+  assert.equal(rendered.titleAnchor, "doc-heading");
+  assert.match(rendered.body, /id="doc-heading-1"/);
+  assert.match(rendered.body, /id="doc-héllo-世界"/);
+  assert.match(rendered.body, /id="doc-heading-2"/);
 });

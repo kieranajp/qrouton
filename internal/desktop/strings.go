@@ -212,3 +212,10 @@ const (
 	vaultDownloadCancelled = "cancelled"
 	vaultDownloadFailed    = "failed"
 )
+
+const (
+	importMarkdown      = "markdown"
+	importManifest      = "manifest"
+	importMarkdownLabel = "Markdown artifacts"
+	importManifestLabel = "Session manifests"
+)

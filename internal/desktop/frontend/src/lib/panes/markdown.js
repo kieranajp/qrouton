@@ -91,12 +91,29 @@ function number(node) {
   };
 }
 
+export function headingSlug(value) {
+  return value.toLowerCase().trim().replace(/[^\p{L}\p{N}\p{M}_\-\s]/gu, "").replace(/\s+/gu, "-");
+}
+function anchors() {
+  return (tree) => {
+    const used = new Set();
+    walk(tree, (node) => {
+      if (node.type !== "heading") return;
+      const base = headingSlug(text(node));
+      let slug = base, suffix = 0;
+      while (used.has(slug)) slug = `${base}-${++suffix}`;
+      used.add(slug);
+      node.data = { ...node.data, hProperties: { ...node.data?.hProperties, id: slug } };
+    });
+  };
+}
 function title() {
   return (tree, file) => {
     const at = tree.children.findIndex((node) => node.type !== "yaml" && node.type !== "toml");
     const first = tree.children[at];
     if (at < 0 || first.type !== "heading" || first.depth !== 1) return;
     file.data.title = text(first);
+    file.data.titleAnchor = "doc-" + first.data?.hProperties?.id;
     tree.children.splice(at, 1);
   };
 }
@@ -114,6 +131,7 @@ const pipeline = unified().use([
   remarkGfm,
   fences,
   remarkSugarHigh,
+  anchors,
   title,
   remarkRehype,
   restore,
@@ -124,11 +142,11 @@ const pipeline = unified().use([
 
 /**
  * @param {string} markdown
- * @returns {{title: string, body: string}}
+ * @returns {{title: string, body: string, titleAnchor: string}}
  */
 export function render(markdown) {
   const file = pipeline.processSync(markdown);
-  return { title: typeof file.data.title === "string" ? file.data.title : "", body: String(file) };
+  return { title: typeof file.data.title === "string" ? file.data.title : "", titleAnchor: typeof file.data.titleAnchor === "string" ? file.data.titleAnchor : "", body: String(file) };
 }
 
 /** A span between blocks marks nothing and scrolls to the following block.
@@ -153,7 +171,8 @@ export function marks(blocks, span) {
  * @returns {"document" | "external" | "none"}
  */
 export function linkKind(href) {
-  if (!href || href.startsWith("#")) return "none";
+  if (!href) return "none";
+  if (href.startsWith("#")) return "document";
   if (/^[a-z][a-z0-9+.-]*:/i.test(href)) return /^https?:/i.test(href) ? "external" : "none";
   return /\.(md|markdown)($|[?#])/i.test(href) ? "document" : "none";
 }

@@ -40,6 +40,7 @@ type IndexStatus struct {
 	Total       int          `json:"total"`
 }
 type profileWorker struct {
+	beforeRefresh func(context.Context) error
 	profile       Profile
 	canonicalRoot string
 	stateDir      string
@@ -223,12 +224,15 @@ func (w *profileWorker) checkIdentity(result ReadResult) error {
 	return nil
 }
 func acquireWriter(ctx context.Context, root *os.Root) (*os.File, error) {
-	if info, err := root.Lstat(workerLockFilename); err == nil && !info.Mode().IsRegular() {
+	return acquireNamedWriter(ctx, root, workerLockFilename)
+}
+func acquireNamedWriter(ctx context.Context, root *os.Root, name string) (*os.File, error) {
+	if info, err := root.Lstat(name); err == nil && !info.Mode().IsRegular() {
 		return nil, ErrIndexState
 	} else if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
-	file, err := root.OpenFile(workerLockFilename, os.O_CREATE|os.O_RDWR|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0600)
+	file, err := root.OpenFile(name, os.O_CREATE|os.O_RDWR|syscall.O_NONBLOCK|syscall.O_NOFOLLOW, 0600)
 	if err != nil {
 		return nil, err
 	}
@@ -426,6 +430,14 @@ func inventorySources(inv inventory) map[string]string {
 	return sources
 }
 func (w *profileWorker) refresh(ctx context.Context) error {
+	if w.beforeRefresh != nil {
+		if err := w.beforeRefresh(ctx); err != nil {
+			return err
+		}
+	}
+	if w.options.Provider == nil {
+		return ErrProviderUnavailable
+	}
 	inv, err := w.inventory()
 	if err != nil {
 		return err

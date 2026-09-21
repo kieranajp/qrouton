@@ -7,7 +7,7 @@
   import { render } from "./markdown.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, bare = false, onMeasure, onScroller: _onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
@@ -24,10 +24,12 @@
 {#snippet prose()}
   <div
     class="markdown"
+    data-pane-document={bare ? id : undefined}
     data-document-source={doc.source}
-    use:links={doc.source}
+    use:links={{ id, source: doc.source, fragment: doc.fragment, request: doc.viewportEpoch }}
     use:diagrams={{ id, text: doc.text }}
     use:port={{ id, active, scrollRoot, request: doc.viewportEpoch }}>
+    {#if bare && rendered.titleAnchor}<span id={rendered.titleAnchor}></span>{/if}
     {@html rendered.body}
   </div>
 {/snippet}
@@ -35,7 +37,7 @@
 {#if bare}
   {@render prose()}
 {:else}
-  <article class="document">
+  <article class="document" data-pane-document={id}>
     {#if doc.source}
       <div class="source">
         <CapsLabel tone="dim">{doc.source}</CapsLabel>
@@ -43,7 +45,7 @@
       </div>
     {/if}
     {#if heading}
-      <div class="title">
+      <div class="title" id={rendered.titleAnchor}>
         <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
         <span>{heading}</span>
       </div>

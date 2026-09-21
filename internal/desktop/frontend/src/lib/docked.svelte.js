@@ -2,6 +2,7 @@ import {
   WINDOWS_CLOSE,
   WINDOWS_EVENT,
   WINDOWS_OPEN_DOCUMENT,
+  WINDOWS_OPEN_DOCUMENT_LINK,
   WINDOWS_OPEN_SHELL,
   WINDOWS_REORDER,
   WINDOWS_SELECT,
@@ -54,3 +55,5 @@ export const reorderWindow = (slug, id, to) => Call.ByName(WINDOWS_REORDER, slug
 
 /** openDocument opens a session document, or selects the tab already on it. */
 export const openDocument = (path) => Call.ByName(WINDOWS_OPEN_DOCUMENT, path);
+
+export const openDocumentLink = (source, href) => Call.ByName(WINDOWS_OPEN_DOCUMENT_LINK, {source, href});

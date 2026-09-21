@@ -90,7 +90,7 @@ test("a link is opened or copied rather than selected", async ({ page }) => {
 // A relative href resolves to an absolute wails.localhost URL by the time the
 // DOM reports it; the menu must read the authored attribute instead, or a
 // document link goes to the OS browser rather than the pane beside it.
-test("a relative document link opens in the pane, resolved against its document", async ({
+test("a relative document link carries its admitted pane and authored target", async ({
   page,
 }) => {
   await page.evaluate(() => {
@@ -103,7 +103,7 @@ test("a relative document link opens in the pane, resolved against its document"
   await expect
     .poll(() => page.evaluate(() => window.calls))
     .toEqual([
-      ["github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument", "notes/child.md"],
+      ["github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocumentLink", { source: "document-pane", href: "child.md" }],
     ]);
   expect(await page.evaluate(() => window.openedURL)).toBeUndefined();
 });

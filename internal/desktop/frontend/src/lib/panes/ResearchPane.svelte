@@ -12,7 +12,7 @@
   import { parseResearch } from "./research.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
@@ -31,6 +31,8 @@
     doc: () => doc,
     reload: () => (open = opening(research, doc.line ?? 0)),
   });
+
+  $effect(() => { const epoch = doc.viewportEpoch; if (doc.fragment) view.mode = "document"; });
 
   /** @type {HTMLElement | undefined} */
   let sheet = $state();
@@ -100,7 +102,7 @@
           class="sheet"
           bind:this={sheet}
           data-document-source={doc.source}
-          use:links={doc.source}
+          use:links={{ id, source: doc.source, fragment: doc.fragment, request: doc.viewportEpoch }}
           use:diagrams={{ id, text: doc.text }}
           use:port={{ id, active, scrollRoot, key: [...open].sort().join(","), request: doc.viewportEpoch }}>
           <h1 class="display-lg">{research.title || heading}</h1>

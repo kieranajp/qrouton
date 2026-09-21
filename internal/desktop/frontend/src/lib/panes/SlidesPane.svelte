@@ -13,7 +13,7 @@
   import { slides } from "./slides.svelte.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, assetToken?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, assetToken?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
   let cards = $derived(deckSlides(doc.text, doc.assetToken));
@@ -81,7 +81,7 @@
       class="stack"
       bind:this={stack}
       style="--slide-scale: {scale}"
-      use:links={doc.source}
+      use:links={{ id, source: doc.source, fragment: doc.fragment, request: doc.viewportEpoch }}
       use:diagrams={{ id, text: doc.text, fit: true }}
       use:port={{ id, active, scrollRoot, request: doc.viewportEpoch }}>
       {#each cards as card, index (index)}

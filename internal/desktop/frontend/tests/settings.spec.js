@@ -153,3 +153,51 @@ test("setup reports its first failed status request", async ({ page }) => {
   await page.goto("/tests/settings.html?vaults&fail=VaultSetup");
   await expect(page.getByRole("status").filter({ hasText: "permission denied" })).toBeVisible();
 });
+
+
+test("import requires preview and keeps unresolved documents unconfirmable", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults");
+  await page.getByRole("button", {name:"Choose Markdown files"}).click();
+  await expect(page.getByRole("button", {name:"Import selected valid documents"})).toHaveCount(0);
+  await page.getByRole("button", {name:"Preview import",exact:true}).click();
+  await expect(page.getByRole("checkbox", {name:"Import R2.md"})).toBeDisabled();
+  await page.getByRole("checkbox", {name:"Import R1.md"}).check();
+  await page.getByRole("button", {name:"Import selected valid documents"}).click();
+  await expect(page.getByText("Selected documents queued for import.")).toBeVisible();
+  await page.getByRole("button", {name:"Revalidate destination for batch/R1"}).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.importCalls().some((call) => call.action === "revalidate"))).toBe(true);
+  await page.getByRole("button", {name:"Clear import selection"}).click();
+  await expect(page.getByRole("checkbox", {name:"Import R1.md"})).toHaveCount(0);
+});
+
+test("repair preserves deliberate fields while newly associated manifest supplies metadata", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults");
+  await page.getByRole("button", {name:"Choose Markdown files"}).click();
+  await page.getByRole("button", {name:"Preview import",exact:true}).click();
+  await page.getByText("Edit metadata and content for R2.md",{exact:true}).click();
+  await page.getByRole("textbox", {name:"Author for R2.md",exact:true}).fill("Reviewed author");
+  await page.getByRole("button", {name:"Choose session manifests"}).click();
+  await page.getByRole("combobox", {name:"Manifest for R2.md"}).selectOption("manifest");
+  await page.getByRole("button", {name:"Rebuild import preview"}).click();
+  await expect(page.getByRole("checkbox", {name:"Import R2.md"})).toBeEnabled();
+  await expect(page.getByRole("textbox", {name:"Author for R2.md",exact:true})).toHaveValue("Reviewed author");
+  await expect(page.getByRole("textbox", {name:"Workstream for R2.md",exact:true})).toHaveValue("manifest workstream");
+  await page.getByRole("button", {name:"Rebuild import preview"}).click();
+  await expect(page.getByRole("checkbox", {name:"Import R2.md"})).toBeEnabled();
+  expect(await page.evaluate(() => window.settingsFixture.importCalls().filter((call) => call.action === "preview").some((call) => call.input.overrides.source1?.body))).toBe(false);
+});
+
+test("stale import preview reports error before queueing", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults&stale-import");
+  await page.getByRole("button", {name:"Choose Markdown files"}).click();
+  await page.getByRole("button", {name:"Preview import",exact:true}).click();
+  await page.getByRole("checkbox", {name:"Import R1.md"}).check();
+  await page.getByRole("button", {name:"Import selected valid documents"}).click();
+  await expect(page.getByRole("status").filter({hasText:"source changed since preview"})).toBeVisible();
+});
+
+test("pending import remains visible without configured profiles", async ({ page }) => {
+  await page.goto("/tests/settings.html?pending-import");
+  await expect(page.getByText("batch/R1 → removed: unavailable")).toBeVisible();
+  await expect(page.getByRole("button", {name:"Choose Markdown files"})).toBeDisabled();
+});

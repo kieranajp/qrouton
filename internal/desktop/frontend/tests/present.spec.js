@@ -115,6 +115,7 @@ test("Escape leaves present mode and hands the keyboard back", async ({ page }) 
 test("a press on the scrim leaves the presentation, as Escape does", async ({ page }) => {
   await open(page);
   await start(page);
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
   await page.mouse.click(6, 6);
 
   await expect(page.locator(".present")).toHaveCount(0);

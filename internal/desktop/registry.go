@@ -48,6 +48,7 @@ type terminalContent struct {
 // documentContent holds a rendered tab's measurements. viewport is nil for a
 // format the page cannot map back to source lines.
 type documentContent struct {
+	fragment      string
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64

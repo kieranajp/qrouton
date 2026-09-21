@@ -1,21 +1,28 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"path"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 type vaults struct {
+	ctx                  context.Context
+	cancel               context.CancelFunc
+	importDirectory      func() (string, error)
+	importSelections     importSelections
 	providerCloser       io.Closer
 	indexOptions         func() vault.IndexOptions
 	downloader           modelDownloader
@@ -31,7 +38,8 @@ type vaults struct {
 }
 
 func newVaults(cfg *config.Config, sessions *Sessions) *vaults {
-	return &vaults{cfg: cfg, sessions: sessions}
+	ctx, cancel := context.WithCancel(context.Background())
+	return &vaults{cfg: cfg, sessions: sessions, ctx: ctx, cancel: cancel}
 }
 func vaultProfiles(cfg *config.Config) []vault.Profile {
 	profiles := make([]vault.Profile, 0, len(cfg.VaultProfiles))
@@ -76,6 +84,11 @@ func (v *vaults) manager() (*vault.Service, error) {
 	if err != nil {
 		return nil, err
 	}
+	if v.importDirectory != nil {
+		if directory, dirErr := v.importDirectory(); dirErr == nil {
+			_ = service.ConfigureImports(directory)
+		}
+	}
 	v.service, v.key = service, string(encoded)
 	return service, nil
 }
@@ -86,10 +99,12 @@ func (v *vaults) close() {
 		return
 	}
 	v.closed = true
+	v.cancel()
 	v.stopDownload()
 	if v.service != nil {
 		_ = v.service.Close()
 	}
+	v.importSelections.close()
 	if v.providerCloser != nil {
 		_ = v.providerCloser.Close()
 	}
@@ -201,7 +216,7 @@ func (s *Settings) SaveVaultSession(in VaultSessionInput) (VaultSessionView, err
 		return VaultSessionView{}, ErrNoSession
 	}
 	cfg := s.cfg.Snapshot()
-	err := session.UpdateManifest(owner.root(), func(m session.Manifest) (session.Manifest, error) {
+	apply := func(m session.Manifest) (session.Manifest, error) {
 		next := m
 		next.Workstream = strings.TrimSpace(in.Workstream)
 		next.Vault = &in.Selection
@@ -218,7 +233,29 @@ func (s *Settings) SaveVaultSession(in VaultSessionInput) (VaultSessionView, err
 			}
 		}
 		return next, nil
-	})
+	}
+	current, loadErr := session.Load(owner.root())
+	if loadErr != nil {
+		return VaultSessionView{}, loadErr
+	}
+	if _, validateErr := apply(current); validateErr != nil {
+		return VaultSessionView{}, validateErr
+	}
+	var publicationService *vault.Service
+	if s.vaults.importDirectory != nil {
+		var err error
+		publicationService, err = s.vaults.manager()
+		if err != nil {
+			return VaultSessionView{}, err
+		}
+	}
+	persist := func() error { return session.UpdateManifest(owner.root(), apply) }
+	var err error
+	if publicationService != nil {
+		err = publicationService.UpdatePublicationPolicy(s.vaults.ctx, vault.SourceSessionKey(filepath.Join(owner.root(), sessionpaths.ManifestName)), in.Selection.PublicationDisabled, persist)
+	} else {
+		err = persist()
+	}
 	if err != nil {
 		return VaultSessionView{}, fmt.Errorf(vaultSettingsErrorFormat, err)
 	}

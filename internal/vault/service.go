@@ -24,17 +24,22 @@ type Status struct {
 	Profiles []ProfileStatus `json:"profiles"`
 }
 type Service struct {
-	workers   map[string]*profileWorker
-	closeOnce sync.Once
-	profiles  []Profile
-	mappings  map[string]string
+	importMu     sync.RWMutex
+	importRoot   string
+	importState  string
+	importClosed bool
+	publishers   map[string]*profileWorker
+	workers      map[string]*profileWorker
+	closeOnce    sync.Once
+	profiles     []Profile
+	mappings     map[string]string
 }
 
 func NewService(profiles []Profile, mappings map[string]string) (*Service, error) {
 	if err := ValidateProfiles(profiles, mappings); err != nil {
 		return nil, err
 	}
-	s := &Service{profiles: append([]Profile(nil), profiles...), mappings: map[string]string{}}
+	s := &Service{publishers: map[string]*profileWorker{}, profiles: append([]Profile(nil), profiles...), mappings: map[string]string{}}
 	for org, id := range mappings {
 		s.mappings[org] = id
 	}
@@ -67,7 +72,7 @@ func (s *Service) Status(scope Scope) Status {
 			continue
 		}
 		inv, err := scan(profile)
-		if worker := s.workers[profile.ID]; worker != nil {
+		if worker := s.identityOwner(profile.ID); worker != nil {
 			inv = worker.applyIdentityConflicts(inv)
 		}
 		ps := ProfileStatus{Profile: profile.ID, State: StateInitializing, Invalid: inv.invalid, Unsupported: inv.unsupported, Conflicts: len(inv.conflicts)}
@@ -163,7 +168,7 @@ func (s *Service) Resolve(scope Scope, ref Reference) (ReadResult, error) {
 	if found == nil {
 		return ReadResult{}, ErrNotFound
 	}
-	if worker := s.workers[origin.ID]; worker != nil {
+	if worker := s.identityOwner(origin.ID); worker != nil {
 		if err := worker.checkIdentity(*found); err != nil {
 			return ReadResult{}, err
 		}
@@ -181,7 +186,7 @@ func NewIndexedService(profiles []Profile, mappings map[string]string, options I
 		ledger, ledgerErr := loadLedger(directory)
 		canonical := canonicalProfileRoot(profile.Root)
 		ctx, cancel := context.WithCancel(context.Background())
-		worker := &profileWorker{profile: profile, canonicalRoot: canonical, stateDir: directory, options: options, validate: func() error { return ValidateProfiles(s.profiles, s.mappings) }, ledger: ledger, ledgerErr: ledgerErr, allowed: map[string]string{}, lineage: map[string]LineageState{}, status: IndexStatus{State: StateInitializing}, retry: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
+		worker := &profileWorker{beforeRefresh: func(ctx context.Context) error { return s.processImports(ctx, profile) }, profile: profile, canonicalRoot: canonical, stateDir: directory, options: options, validate: func() error { return ValidateProfiles(s.profiles, s.mappings) }, ledger: ledger, ledgerErr: ledgerErr, allowed: map[string]string{}, lineage: map[string]LineageState{}, status: IndexStatus{State: StateInitializing}, retry: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
 		s.workers[profile.ID] = worker
 		if options.Failure != "" || !filepath.IsAbs(options.StateDir) || options.Provider == nil || !componentPattern.MatchString(options.InstallationID) {
 			worker.status.State = StateUnavailable
@@ -193,6 +198,9 @@ func NewIndexedService(profiles []Profile, mappings map[string]string, options I
 			continue
 		}
 		go worker.run(ctx)
+	}
+	if filepath.IsAbs(options.StateDir) {
+		_ = s.ConfigureImports(options.StateDir)
 	}
 	return s, nil
 }
@@ -206,12 +214,32 @@ func (s *Service) Retry(profile string) error {
 }
 func (s *Service) Close() error {
 	s.closeOnce.Do(func() {
+		s.importMu.Lock()
+		s.importClosed = true
+		publishers := make([]*profileWorker, 0, len(s.publishers))
+		for _, worker := range s.publishers {
+			publishers = append(publishers, worker)
+			worker.cancel()
+		}
+		s.importMu.Unlock()
 		for _, worker := range s.workers {
 			worker.cancel()
 		}
 		for _, worker := range s.workers {
 			<-worker.done
 		}
+		for _, worker := range publishers {
+			<-worker.done
+		}
 	})
 	return nil
+}
+
+func (s *Service) identityOwner(profile string) *profileWorker {
+	s.importMu.RLock()
+	defer s.importMu.RUnlock()
+	if worker := s.publishers[profile]; worker != nil {
+		return worker
+	}
+	return s.workers[profile]
 }

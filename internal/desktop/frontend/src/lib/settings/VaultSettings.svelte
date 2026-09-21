@@ -1,4 +1,5 @@
 <script>
+  import VaultImport from "./VaultImport.svelte";
   import VaultStatus from "./VaultStatus.svelte";
   import Button from "../core/Button.svelte";
   import TextField from "../forms/TextField.svelte";
@@ -119,6 +120,7 @@
     </fieldset>
   {/if}
   <VaultStatus {profiles} />
+  <VaultImport {profiles} />
   {#if message}<p role="status">{message}</p>{/if}
 </fieldset>
 

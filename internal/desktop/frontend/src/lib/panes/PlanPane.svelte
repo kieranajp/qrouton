@@ -21,7 +21,7 @@
   };
   const WORD = { met: "Met", working: "Working", "not-started": "Not started" };
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, agentWorking = false, onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
@@ -38,6 +38,8 @@
   // it is working on this plan, and the bar must not say that it does. A deck
   // of nothing but sections has no meter, so it has nothing to report.
   let live = $derived((agentWorking || allMet) && Boolean(metered));
+
+  $effect(() => { const epoch = doc.viewportEpoch; if (doc.fragment) view.mode = "document"; });
 
   /** @type {HTMLElement | undefined} */
   let sheet = $state();
@@ -162,7 +164,7 @@
           class="deck"
           bind:this={sheet}
           data-document-source={doc.source}
-          use:links={doc.source}
+          use:links={{ id, source: doc.source, fragment: doc.fragment, request: doc.viewportEpoch }}
           use:diagrams={{ id, text: doc.text }}
           use:port={{ id, active, scrollRoot, key: at.current, request: doc.viewportEpoch }}>
           <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>

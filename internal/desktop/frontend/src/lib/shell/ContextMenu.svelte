@@ -4,9 +4,9 @@
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
-  import { openDocument } from "../docked.svelte.js";
+  import { openDocumentLink } from "../docked.svelte.js";
   import { clipboardText, copyText, openURL } from "../wails.js";
-  import { documentPath, linkKind } from "../panes/markdown.js";
+  import { linkKind } from "../panes/markdown.js";
   import { terminalAt } from "../xterm.js";
 
   /** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */
@@ -48,9 +48,10 @@
     if (link) {
       const href = link.getAttribute("href");
       const source = link.closest("[data-document-source]")?.getAttribute("data-document-source");
+      const pane = link.closest("[data-document-pane]")?.getAttribute("data-document-pane");
       const kind = linkKind(href);
       // A relative link with no known source pane is reported unfollowable.
-      return { kind: "link", href, source, linkKind: kind === "document" && (!source || source.startsWith("vault://")) ? "none" : kind };
+      return { kind: "link", href, source, pane, linkKind: kind === "document" && !pane ? "none" : kind };
     }
     return { kind: "text", selection: String(window.getSelection() ?? "") };
   }
@@ -108,7 +109,7 @@
         else at.field.select();
         break;
       case "open":
-        if (at.linkKind === "document") openDocument(documentPath(at.href, at.source)).catch(() => {});
+        if (at.linkKind === "document") openDocumentLink(at.pane, at.href).catch(() => {});
         else openURL(at.href);
         break;
       case "copyLink":

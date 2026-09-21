@@ -1,0 +1,7 @@
+[
+  {"key":"complete","name":"R1-2026-09-21-finding.md","body":"---\nauthor: Engineer\nstate: active\nextra: retain this\n---\n# Finding\n\nEvidence.\n","accepted":true},
+  {"key":"missing-author","name":"R2-2026-09-21-finding.md","body":"---\nstate: active\n---\n# Missing attribution\n","accepted":false},
+  {"key":"missing-state","name":"P1-2026-09-21-plan.md","body":"---\nauthor: Engineer\nstatus: looks good\n---\n# Plan\n","accepted":false},
+  {"key":"attachment","name":"N1-2026-09-21-note.md","body":"---\nauthor: Engineer\nstate: active\n---\n# Note\n\n![attachment](private.png)\n","accepted":false},
+  {"key":"note","name":"N2-2026-09-21-note.md","body":"---\nauthor: Engineer\nstate: active\n---\n# Note without attachments\n","accepted":true}
+]

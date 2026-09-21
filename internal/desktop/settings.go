@@ -46,15 +46,16 @@ type SaveResult struct {
 }
 
 type Settings struct {
-	vaults         *vaults
-	vaultChanged   func()
-	cfg            *config.Config
-	emit           emitter
-	validateEditor func([]string) error
-	validateLaunch func(map[string][]string) error
-	quit           func()
-	wakeChrome     func()
-	linear         lineartools.Tools
+	chooseImportFiles func(string) ([]string, error)
+	vaults            *vaults
+	vaultChanged      func()
+	cfg               *config.Config
+	emit              emitter
+	validateEditor    func([]string) error
+	validateLaunch    func(map[string][]string) error
+	quit              func()
+	wakeChrome        func()
+	linear            lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,

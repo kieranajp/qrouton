@@ -124,3 +124,13 @@ func (r *wailsRenderer) onMain(work func()) {
 	}
 	work()
 }
+
+func (r *wailsRenderer) chooseImportFiles(kind string) ([]string, error) {
+	dialog := r.app.Dialog.OpenFile().CanChooseFiles(true).CanChooseDirectories(false)
+	if kind == importManifest {
+		dialog.AddFilter(importManifestLabel, "*.json")
+	} else {
+		dialog.AddFilter(importMarkdownLabel, "*.md;*.markdown")
+	}
+	return dialog.PromptForMultipleSelection()
+}

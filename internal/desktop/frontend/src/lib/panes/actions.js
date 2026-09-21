@@ -3,34 +3,51 @@ import {
   WINDOWS_RENDER_DIAGRAMS,
   WINDOWS_REPORT_VIEWPORT,
 } from "../bridge/generated.js";
-import { openDocument } from "../docked.svelte.js";
+import { openDocumentLink } from "../docked.svelte.js";
 import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
-import { documentPath, linkKind, marks } from "./markdown.js";
+import { headingSlug, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
 import { createDiagramStream } from "./diagram-stream.js";
 
-/** Document links dock inside the workbench; external links open in a browser.
- * @param {HTMLElement} body
- * @param {string} source */
-export function links(body, source) {
-  let from = source;
-  /** @param {MouseEvent} event */
+/** @param {HTMLElement} body
+ * @param {{id: string, source: string, fragment?: string, request?: number}} params */
+export function links(body, params) {
+  let current = params;
+  let frame;
+  const follow = () => {
+    cancelAnimationFrame(frame);
+    if (!current.fragment) return;
+    frame = requestAnimationFrame(() => {
+      const fragment = current.fragment;
+      const slugs = new Set();
+      for (const heading of body.querySelectorAll(".marpit h1, .marpit h2, .marpit h3, .marpit h4, .marpit h5, .marpit h6")) {
+        const base = headingSlug(heading.textContent ?? "");
+        let slug = base, suffix = 0;
+        while (slugs.has(slug)) slug = `${base}-${++suffix}`;
+        slugs.add(slug); heading.id = "doc-" + slug;
+      }
+      const candidates = [fragment, "doc-" + fragment, "doc-" + headingSlug(fragment)];
+      const pane = body.closest("[data-pane-document]") ?? body;
+      const targets = [...pane.querySelectorAll("[id]")];
+      const target = candidates.map((id) => targets.find((el) => el.id === id)).find(Boolean);
+      target?.scrollIntoView({ block: "start" });
+    });
+  };
   const click = (event) => {
-    const anchor = /** @type {HTMLElement} */ (event.target)?.closest("a");
+    const anchor = event.target?.closest("a");
     if (!anchor) return;
     const href = anchor.getAttribute("href");
     event.preventDefault();
-    if (linkKind(href) === "document" && !from.startsWith("vault://")) {
-      openDocument(documentPath(href ?? "", from)).catch(() => {});
-    } else if (linkKind(href) === "external") {
-      openURL(href ?? "");
-    }
+    if (linkKind(href) === "document") openDocumentLink(current.id, href).catch(() => {});
+    else if (linkKind(href) === "external") openURL(href);
   };
+  body.dataset.documentPane = current.id;
   body.addEventListener("click", click);
+  follow();
   return {
-    update: (next) => (from = next),
-    destroy: () => body.removeEventListener("click", click),
+    update: (next) => { current = next; body.dataset.documentPane = next.id; follow(); },
+    destroy: () => { cancelAnimationFrame(frame); body.removeEventListener("click", click); },
   };
 }
 

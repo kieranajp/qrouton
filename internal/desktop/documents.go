@@ -18,6 +18,7 @@ import (
 // session file it came from, if it came from one, and the source lines the page
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
+	Fragment      string           `json:"fragment,omitempty"`
 	Vault         *vault.Reference `json:"vault,omitempty"`
 	Text          string           `json:"text"`
 	Format        string           `json:"format"`
@@ -107,8 +108,10 @@ func documentFor(window *agentWindow) document {
 		kind = status.DocumentKind(window.opts.Source)
 	}
 	var viewportEpoch uint64
+	var fragment string
 	if rendered, ok := window.document(); ok && rendered.viewport != nil {
 		viewportEpoch = rendered.viewportEpoch
+		fragment = rendered.fragment
 	}
 	// Only a deck addresses the asset route, so only a deck is told its token.
 	var asset string
@@ -116,6 +119,7 @@ func documentFor(window *agentWindow) document {
 		asset = window.asset
 	}
 	doc := document{
+		Fragment:      fragment,
 		Vault:         window.opts.Vault,
 		Text:          window.opts.Content,
 		Format:        string(window.opts.Format),

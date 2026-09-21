@@ -11,12 +11,13 @@ import (
 // terminal processes and the diagram worker, each owning what only it touches.
 type Windows struct {
 	*registry
-	documents   *documents
-	terminals   *terminals
-	diagrams    *diagramWorker
-	newShell    func() (string, error)
-	newDocument func(name string) (string, error)
-	stopFollow  context.CancelFunc
+	documents      *documents
+	terminals      *terminals
+	diagrams       *diagramWorker
+	newShell       func() (string, error)
+	newDocument    func(name string) (string, error)
+	newDocumentFor func(*sessionState, string) (string, error)
+	stopFollow     context.CancelFunc
 }
 
 func newWindows(emit emitter, sessions *Sessions) *Windows {

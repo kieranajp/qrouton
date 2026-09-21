@@ -39,3 +39,28 @@ const (
 	indexSchemaVersion     = 1
 	maxIndexBytes          = 256 << 20
 )
+
+const (
+	maxImportRecordBytes     = 128 << 20
+	importDirectoryName      = "imports"
+	importUnsupportedField   = "unsupported field retained in the import archive"
+	importRequiredField      = "required metadata is missing"
+	queuePrefix              = "queue-"
+	policyPrefix             = "policy-"
+	conflictPrefix           = "conflict-"
+	evidencePrefix           = "evidence-"
+	publicationLockFilename  = ".qrouton-publication.lock"
+	ImportPending            = "pending"
+	ImportWritten            = "written"
+	ImportPaused             = "paused"
+	ImportConflict           = "conflict"
+	ImportUnavailable        = "unavailable"
+	ImportDestinationChanged = "destination_changed"
+)
+
+const (
+	importIdentityRequired  = "use an explicit session/local-id identity"
+	importNamespaceRequired = "session namespace must match the artifact identity"
+	importDateRequired      = "use the recorded date in YYYY-MM-DD format"
+	ImportRepairRequired    = "repair_required"
+)

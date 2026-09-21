@@ -98,6 +98,7 @@ func Run(opts Options) error {
 	opts.vaults.indexOptions = func() vault.IndexOptions { return productionVaultOptions(provider) }
 	opts.vaults.providerCloser = provider
 	opts.vaults.installed = ollamaInstalled
+	opts.vaults.importDirectory = func() (string, error) { state, err := config.VaultState(); return state.Directory, err }
 	go func() { _, _ = opts.vaults.manager() }()
 	windows.registry.setVaults(opts.vaults)
 	repos := newRepositories(opts.Config, r.Emit)
@@ -128,6 +129,7 @@ func Run(opts Options) error {
 		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch,
 	)
 	settingsService.vaults = opts.vaults
+	settingsService.chooseImportFiles = r.chooseImportFiles
 	settingsService.vaultChanged = windows.documents.invalidateVaults
 	r.register(application.NewService(settingsService))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
@@ -237,6 +239,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	})
 
 	windows.newShell = func() (string, error) { return shell.another(reg.current()) }
+	windows.newDocumentFor = func(owner *sessionState, name string) (string, error) {
+		return openDocument(windows, owner, launcher, name)
+	}
 	windows.newDocument = func(name string) (string, error) {
 		return openDocument(windows, reg.current(), launcher, name)
 	}

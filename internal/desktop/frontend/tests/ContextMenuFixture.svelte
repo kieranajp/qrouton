@@ -26,7 +26,7 @@
   <input id="field" aria-label="Field" bind:value={field} />
   <p id="prose">Some prose to select.</p>
   <a id="link" href="https://example.com/doc">A document</a>
-  <div data-document-source="notes/find.md">
+  <div data-document-source="notes/find.md" data-document-pane="document-pane">
     <a id="doc-link" href="child.md">A relative document</a>
   </div>
   <a id="orphan-link" href="child.md">A relative document with no pane</a>

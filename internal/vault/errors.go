@@ -3,6 +3,17 @@ package vault
 import "errors"
 
 var (
+	ErrImportState         = errors.New("durable import state unavailable")
+	ErrImportSource        = errors.New("invalid import source selection")
+	ErrImportStale         = errors.New("import sources changed; regenerate preview")
+	ErrImportRepair        = errors.New("import requires repair")
+	ErrImportLink          = errors.New("unresolved local link; repair the body or link mapping")
+	ErrImportRepository    = errors.New("repository alias or historical pin requires repair")
+	ErrImportWrite         = errors.New("canonical import write unavailable")
+	ErrCrossVaultImport    = errors.New("cross-vault promotion is not supported")
+	ErrPublicationDisabled = errors.New("source session publication is disabled")
+	ErrDestinationChanged  = errors.New("destination root changed; explicit revalidation required")
+
 	ErrIdentityState = errors.New("vault identity state unavailable")
 	ErrIndexState    = errors.New("vault index unavailable")
 	ErrIndexCorrupt  = errors.New("vault index generation invalid")
@@ -25,3 +36,5 @@ var (
 	ErrAmbiguous           = errors.New("vault origin required")
 	ErrUnavailable         = errors.New("vault unavailable")
 )
+
+var ErrImportPending = errors.New("import dependencies are not ready")
