@@ -203,3 +203,12 @@ const (
 	vaultSourcePrefix        = "vault://"
 	vaultLabelSeparator      = " · "
 )
+
+const (
+	ollamaCommand          = "ollama"
+	ollamaApplication      = "/Applications/Ollama.app"
+	vaultDownloadRunning   = "downloading"
+	vaultDownloadComplete  = "complete"
+	vaultDownloadCancelled = "cancelled"
+	vaultDownloadFailed    = "failed"
+)

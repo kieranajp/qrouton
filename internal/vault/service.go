@@ -1,14 +1,20 @@
 package vault
 
-import "slices"
+import (
+	"context"
+	"path/filepath"
+	"slices"
+	"sync"
+)
 
 type ProfileStatus struct {
-	Profile     string `json:"profile"`
-	State       string `json:"state"`
-	Documents   int    `json:"documents"`
-	Invalid     int    `json:"invalid"`
-	Unsupported int    `json:"unsupported"`
-	Conflicts   int    `json:"conflicts"`
+	Index       *IndexStatus `json:"index,omitempty"`
+	Profile     string       `json:"profile"`
+	State       string       `json:"state"`
+	Documents   int          `json:"documents"`
+	Invalid     int          `json:"invalid"`
+	Unsupported int          `json:"unsupported"`
+	Conflicts   int          `json:"conflicts"`
 }
 type Status struct {
 	Enabled  bool            `json:"enabled"`
@@ -18,8 +24,10 @@ type Status struct {
 	Profiles []ProfileStatus `json:"profiles"`
 }
 type Service struct {
-	profiles []Profile
-	mappings map[string]string
+	workers   map[string]*profileWorker
+	closeOnce sync.Once
+	profiles  []Profile
+	mappings  map[string]string
 }
 
 func NewService(profiles []Profile, mappings map[string]string) (*Service, error) {
@@ -42,6 +50,9 @@ func (s *Service) Status(scope Scope) Status {
 		return status
 	}
 	status.State = StateInitializing
+	if len(s.workers) > 0 {
+		status.State = StateReady
+	}
 	resolved, err := ResolveReadProfiles(s.profiles, s.mappings, scope)
 	status.Scope = resolved
 	if err != nil {
@@ -56,6 +67,9 @@ func (s *Service) Status(scope Scope) Status {
 			continue
 		}
 		inv, err := scan(profile)
+		if worker := s.workers[profile.ID]; worker != nil {
+			inv = worker.applyIdentityConflicts(inv)
+		}
 		ps := ProfileStatus{Profile: profile.ID, State: StateInitializing, Invalid: inv.invalid, Unsupported: inv.unsupported, Conflicts: len(inv.conflicts)}
 		for _, entry := range inv.entries {
 			if !inv.conflicts[entry.Document.ID] && entry.Supported {
@@ -69,6 +83,28 @@ func (s *Service) Status(scope Scope) Status {
 			ps.State = StateIncomplete
 			if status.State != StateUnavailable {
 				status.State = StateIncomplete
+			}
+		}
+		if worker := s.workers[profile.ID]; worker != nil {
+			index := worker.snapshot(inv)
+			ps.Index = &index
+			switch index.State {
+			case StateUnavailable:
+				ps.State = StateUnavailable
+				status.State = StateUnavailable
+			case StateReady:
+				if ps.State == StateInitializing {
+					ps.State = StateReady
+				}
+			case StateIncomplete:
+				ps.State = StateIncomplete
+				if status.State != StateUnavailable {
+					status.State = StateIncomplete
+				}
+			default:
+				if ps.State == StateInitializing && status.State == StateReady {
+					status.State = StateInitializing
+				}
 			}
 		}
 		status.Profiles = append(status.Profiles, ps)
@@ -127,6 +163,55 @@ func (s *Service) Resolve(scope Scope, ref Reference) (ReadResult, error) {
 	if found == nil {
 		return ReadResult{}, ErrNotFound
 	}
+	if worker := s.workers[origin.ID]; worker != nil {
+		if err := worker.checkIdentity(*found); err != nil {
+			return ReadResult{}, err
+		}
+	}
 	return resolveFile(origin, *found)
 }
-func (s *Service) Close() error { return nil }
+func NewIndexedService(profiles []Profile, mappings map[string]string, options IndexOptions) (*Service, error) {
+	s, err := NewService(profiles, mappings)
+	if err != nil {
+		return nil, err
+	}
+	s.workers = map[string]*profileWorker{}
+	for _, profile := range s.profiles {
+		directory := profileStatePath(options.StateDir, profile)
+		ledger, ledgerErr := loadLedger(directory)
+		canonical := canonicalProfileRoot(profile.Root)
+		ctx, cancel := context.WithCancel(context.Background())
+		worker := &profileWorker{profile: profile, canonicalRoot: canonical, stateDir: directory, options: options, validate: func() error { return ValidateProfiles(s.profiles, s.mappings) }, ledger: ledger, ledgerErr: ledgerErr, allowed: map[string]string{}, lineage: map[string]LineageState{}, status: IndexStatus{State: StateInitializing}, retry: make(chan struct{}, 1), cancel: cancel, done: make(chan struct{})}
+		s.workers[profile.ID] = worker
+		if options.Failure != "" || !filepath.IsAbs(options.StateDir) || options.Provider == nil || !componentPattern.MatchString(options.InstallationID) {
+			worker.status.State = StateUnavailable
+			worker.status.Error = ErrIndexState.Error()
+			if options.Failure != "" {
+				worker.status.Error = options.Failure
+			}
+			close(worker.done)
+			continue
+		}
+		go worker.run(ctx)
+	}
+	return s, nil
+}
+func (s *Service) Retry(profile string) error {
+	worker := s.workers[profile]
+	if worker == nil {
+		return ErrScope
+	}
+	worker.signal()
+	return nil
+}
+func (s *Service) Close() error {
+	s.closeOnce.Do(func() {
+		for _, worker := range s.workers {
+			worker.cancel()
+		}
+		for _, worker := range s.workers {
+			<-worker.done
+		}
+	})
+	return nil
+}

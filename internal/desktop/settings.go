@@ -167,6 +167,9 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
+	if s.vaults != nil {
+		_, _ = s.vaults.manager()
+	}
 	if s.vaultChanged != nil {
 		s.vaultChanged()
 	}

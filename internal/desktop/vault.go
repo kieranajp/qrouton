@@ -3,6 +3,7 @@ package desktop
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"path"
 	"slices"
 	"strings"
@@ -15,12 +16,18 @@ import (
 )
 
 type vaults struct {
-	cfg      *config.Config
-	sessions *Sessions
-	mu       sync.Mutex
-	key      string
-	service  *vault.Service
-	closed   bool
+	providerCloser       io.Closer
+	indexOptions         func() vault.IndexOptions
+	downloader           modelDownloader
+	installed            func() bool
+	download             vaultDownload
+	cfg                  *config.Config
+	sessions             *Sessions
+	mu                   sync.Mutex
+	key                  string
+	service              *vault.Service
+	initializationFailed bool
+	closed               bool
 }
 
 func newVaults(cfg *config.Config, sessions *Sessions) *vaults {
@@ -50,12 +57,24 @@ func (v *vaults) manager() (*vault.Service, error) {
 	if v.service != nil && v.key == string(encoded) {
 		return v.service, nil
 	}
-	service, err := vault.NewService(vaultProfiles(cfg), cfg.VaultMappings)
+	if v.service != nil {
+		v.stopDownload()
+		_ = v.service.Close()
+		v.service = nil
+	}
+	var service *vault.Service
+	var err error
+	v.initializationFailed = false
+	if v.indexOptions != nil && len(cfg.VaultProfiles) > 0 {
+		options := v.indexOptions()
+		v.initializationFailed = options.Failure != ""
+		v.downloader, _ = options.Provider.(modelDownloader)
+		service, err = vault.NewIndexedService(vaultProfiles(cfg), cfg.VaultMappings, options)
+	} else {
+		service, err = vault.NewService(vaultProfiles(cfg), cfg.VaultMappings)
+	}
 	if err != nil {
 		return nil, err
-	}
-	if v.service != nil {
-		_ = v.service.Close()
 	}
 	v.service, v.key = service, string(encoded)
 	return service, nil
@@ -63,9 +82,16 @@ func (v *vaults) manager() (*vault.Service, error) {
 func (v *vaults) close() {
 	v.mu.Lock()
 	defer v.mu.Unlock()
+	if v.closed {
+		return
+	}
 	v.closed = true
+	v.stopDownload()
 	if v.service != nil {
 		_ = v.service.Close()
+	}
+	if v.providerCloser != nil {
+		_ = v.providerCloser.Close()
 	}
 }
 func manifestScope(m session.Manifest) (vault.Scope, error) {

@@ -1,4 +1,5 @@
 <script>
+  import VaultStatus from "./VaultStatus.svelte";
   import Button from "../core/Button.svelte";
   import TextField from "../forms/TextField.svelte";
   import * as go from "./calls.js";
@@ -117,6 +118,7 @@
       <p>Search is unavailable until indexing and relevance calibration are ready. Direct reads require no model.</p>
     </fieldset>
   {/if}
+  <VaultStatus {profiles} />
   {#if message}<p role="status">{message}</p>{/if}
 </fieldset>
 

@@ -110,3 +110,46 @@ test("a repository-free session requires explicit read selection", async ({ page
   const scopes = await page.evaluate(() => window.settingsFixture.scopes());
   expect(scopes).toEqual([{ session: "example", workstream: "storage", selection: { readProfiles: ["shared"], repositories: [], destination: "", publicationDisabled: false } }]);
 });
+
+
+test("model download is explicit, reports progress, and cancels", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults");
+  await expect(page.getByRole("region", { name: "Vault indexing" })).toBeVisible();
+  expect(await page.evaluate(() => window.settingsFixture.actions())).toEqual([]);
+  await expect(page.getByText("4 readable; 1 invalid; 2 unsupported; 3 conflicts.")).toHaveCount(2);
+  await page.getByRole("button", { name: "Download required model" }).click();
+  await expect(page.getByRole("progressbar", { name: "Model download" })).toHaveAttribute("value", "4");
+  await page.getByRole("button", { name: "Cancel download" }).click();
+  await expect(page.getByText("Model download cancelled.")).toBeVisible();
+  expect(await page.evaluate(() => window.settingsFixture.actions())).toEqual(["download", "cancel"]);
+  await expect(page.getByText(/Exclude each vault’s/)).toBeVisible();
+});
+
+test("setup polling preserves unsaved session scope", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults");
+  await page.getByRole("checkbox", { name: "Read Shared", exact: true }).check();
+  await page.getByRole("textbox", { name: "Vault workstream" }).fill("unsaved work");
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.setupReads())).toBeGreaterThan(1);
+  await expect(page.getByRole("checkbox", { name: "Read Shared", exact: true })).toBeChecked();
+  await expect(page.getByRole("textbox", { name: "Vault workstream" })).toHaveValue("unsaved work");
+  await page.getByRole("button", { name: "Retry indexing Private", exact: true }).click();
+  expect(await page.evaluate(() => window.settingsFixture.actions())).toEqual(["retry:private"]);
+});
+
+for (const item of [
+  { query: "dependency=service_unavailable&not-installed", text: "Ollama was not found." },
+  { query: "dependency=service_unavailable", text: "Ollama is stopped or unreachable." },
+  { query: "dependency=incompatible", text: "The embedding model is incompatible." },
+]) {
+  test(`setup explains ${item.query}`, async ({ page }) => {
+    await page.goto(`/tests/settings.html?vaults&${item.query}`);
+    await expect(page.getByText(item.text, { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Download required model" })).toHaveCount(0);
+  });
+}
+
+
+test("setup reports its first failed status request", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults&fail=VaultSetup");
+  await expect(page.getByRole("status").filter({ hasText: "permission denied" })).toBeVisible();
+});

@@ -1,0 +1,295 @@
+{
+  "generator": "huggingface tokenizers 0.23.2; no_truncation(); no_padding(); encode(add_special_tokens=True)",
+  "cases": [
+    {
+      "text": "Hello, WORLD!",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        ",",
+        "world",
+        "!",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "Héllo café naïve Ångström",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "cafe",
+        "naive",
+        "ang",
+        "##strom",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "你好世界 東京",
+      "tokens": [
+        "[CLS]",
+        "[UNK]",
+        "[UNK]",
+        "世",
+        "[UNK]",
+        "東",
+        "京",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "[CLS] hello [MASK][SEP]",
+      "tokens": [
+        "[CLS]",
+        "[CLS]",
+        "hello",
+        "[MASK]",
+        "[SEP]",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tokens": [
+        "[CLS]",
+        "aaa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##aa",
+        "##a",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "tokens": [
+        "[CLS]",
+        "[UNK]",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\u0000world�​!",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##world",
+        "!",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "ab",
+      "tokens": [
+        "[CLS]",
+        "ab",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "tabs\tnew\nline\rtest",
+      "tokens": [
+        "[CLS]",
+        "tab",
+        "##s",
+        "new",
+        "line",
+        "test",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "emoji 😀 snow ☃",
+      "tokens": [
+        "[CLS]",
+        "em",
+        "##oj",
+        "##i",
+        "[UNK]",
+        "snow",
+        "[UNK]",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "Straße İ ΣΟΣ",
+      "tokens": [
+        "[CLS]",
+        "st",
+        "##raße",
+        "i",
+        "σ",
+        "##ο",
+        "##σ",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "x y z",
+      "tokens": [
+        "[CLS]",
+        "x",
+        "y",
+        "z",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\u000bhello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##hell",
+        "##o",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\fhello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##hell",
+        "##o",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hellohello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##hell",
+        "##o",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\thello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\rhello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello\nhello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello hello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello hello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello hello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "hello",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello​hello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##hell",
+        "##o",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hellohello",
+      "tokens": [
+        "[CLS]",
+        "hello",
+        "##hell",
+        "##o",
+        "[SEP]"
+      ]
+    },
+    {
+      "text": "hello͸hello",
+      "tokens": [
+        "[CLS]",
+        "[UNK]",
+        "[SEP]"
+      ]
+    }
+  ]
+}

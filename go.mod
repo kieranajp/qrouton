@@ -6,11 +6,13 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.4
 	github.com/creack/pty v1.1.24
 	github.com/d2lang/d2 v0.8.2
+	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/wailsapp/wails/v3 v3.0.0-beta.13
 	golang.org/x/sys v0.47.0
+	golang.org/x/text v0.40.0
 )
 
 require (
@@ -50,6 +52,5 @@ require (
 	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/net v0.57.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
-	golang.org/x/text v0.40.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 )

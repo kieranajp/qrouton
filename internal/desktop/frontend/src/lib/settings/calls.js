@@ -1,4 +1,4 @@
-import { SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE, SETTINGS_VAULT_SESSION, SETTINGS_SAVE_VAULT_SESSION } from "../bridge/generated.js";
+import { SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE, SETTINGS_VAULT_SESSION, SETTINGS_SAVE_VAULT_SESSION, SETTINGS_VAULT_SETUP, SETTINGS_DOWNLOAD_VAULT_MODEL, SETTINGS_CANCEL_VAULT_DOWNLOAD, SETTINGS_RETRY_VAULT_INDEX } from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
 /**
@@ -42,3 +42,12 @@ export const vaultSession = () => Call.ByName(SETTINGS_VAULT_SESSION);
 /** @param {{session: string, workstream: string, selection: VaultSelection}} input
  * @returns {Promise<VaultSession>} */
 export const saveVaultSession = (input) => Call.ByName(SETTINGS_SAVE_VAULT_SESSION, input);
+
+/** @typedef {{state: string, dependency?: string, error?: string, indexed: number, pending: number, excluded: number, unresolved: number, competing: number, chunks: number, completed: number, total: number}} VaultIndex */
+/** @typedef {{model: string, installed: boolean, status: {enabled: boolean, profiles: {profile: string, documents: number, invalid: number, unsupported: number, conflicts: number, index?: VaultIndex}[]}, download: {state: string, error?: string, progress: {status: string, total: number, completed: number}}}} VaultSetup */
+/** @returns {Promise<VaultSetup>} */
+export const vaultSetup = () => Call.ByName(SETTINGS_VAULT_SETUP);
+export const downloadVaultModel = () => Call.ByName(SETTINGS_DOWNLOAD_VAULT_MODEL);
+export const cancelVaultDownload = () => Call.ByName(SETTINGS_CANCEL_VAULT_DOWNLOAD);
+/** @param {string} profile */
+export const retryVaultIndex = (profile) => Call.ByName(SETTINGS_RETRY_VAULT_INDEX, profile);

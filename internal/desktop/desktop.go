@@ -14,6 +14,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -93,6 +94,11 @@ func Run(opts Options) error {
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
 	opts.vaults = newVaults(opts.Config, reg)
+	provider := vault.NewOllama()
+	opts.vaults.indexOptions = func() vault.IndexOptions { return productionVaultOptions(provider) }
+	opts.vaults.providerCloser = provider
+	opts.vaults.installed = ollamaInstalled
+	go func() { _, _ = opts.vaults.manager() }()
 	windows.registry.setVaults(opts.vaults)
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)

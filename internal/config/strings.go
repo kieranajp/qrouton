@@ -34,3 +34,11 @@ const (
 	// launch never has to stop and ask. Mirrors go under <root>/.mirrors.
 	defaultRoot = "~/work"
 )
+
+const (
+	stateHomeEnvVar       = "XDG_STATE_HOME"
+	stateHomeFallback     = ".local/state"
+	vaultStateDirectory   = "vault"
+	vaultInstallationFile = "installation-id"
+	vaultInstallationLock = "installation.lock"
+)
