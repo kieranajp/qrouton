@@ -158,3 +158,16 @@ test("heading anchors count stripped title and preserve Unicode", () => {
   assert.match(rendered.body, /id="doc-héllo-世界"/);
   assert.match(rendered.body, /id="doc-heading-2"/);
 });
+
+
+test("unknown repository citations retain evidence without a link", () => {
+ const result=render("[code](repo://github.com/team/repo/src/main.go?revision=unknown#L12)");
+ assert.match(result.body,/github.com\/team\/repo\/src\/main.go#L12; revision unknown/);
+ assert.doesNotMatch(result.body,/<a|href=/);
+});
+
+test("reference citations retain unknown revision evidence", () => {
+ const result=render("[code][source]\n\n[source]: repo://github.com/team/repo/main.go?revision=unknown#L12");
+ assert.match(result.body,/github.com\/team\/repo\/main.go#L12; revision unknown/);
+ assert.doesNotMatch(result.body,/<a|href=/);
+});

@@ -1,3 +1,4 @@
+import { unknownRevision } from "./legacy.js";
 import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import rehypeStringify from "rehype-stringify";
 import remarkFrontmatter from "remark-frontmatter";
@@ -22,6 +23,20 @@ const SCHEMA = {
   },
   clobberPrefix: "doc-",
 };
+
+function citations() {
+  return (tree) => {
+    const definitions = new Map();
+    walk(tree, node => { if (node.type === "definition") definitions.set(node.identifier, node.url); });
+    walk(tree, (node) => {
+      const url = node.type === "linkReference" ? definitions.get(node.identifier) : node.type === "link" ? node.url : "";
+      if (!/^repo:/i.test(url ?? "")) return;
+      const citation = url.replace(/^repo:\/\//i, "").replace("?revision=unknown", "");
+      node.type = "text"; node.value = `${text(node)} (${citation}; ${unknownRevision})`;
+      delete node.children; delete node.url;
+    });
+  };
+}
 
 // remark-sugar-high swaps every fenced block for markup it builds itself, which
 // arrives without the position the parser gave the fence. The swap keeps
@@ -129,6 +144,7 @@ const pipeline = unified().use([
   remarkParse,
   remarkFrontmatter,
   remarkGfm,
+  citations,
   fences,
   remarkSugarHigh,
   anchors,

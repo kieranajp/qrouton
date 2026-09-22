@@ -1,4 +1,5 @@
 <script>
+  import { unknownHistory } from "./legacy.js";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
@@ -7,7 +8,7 @@
   import { render } from "./markdown.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {staleness?: string, text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, fragment?: string, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, bare?: boolean, onMeasure?: (state: any) => unknown, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, bare = false, onMeasure, onScroller: _onScroller } = $props();
 
   let rendered = $derived(render(doc.text));
@@ -22,6 +23,7 @@
 </script>
 
 {#snippet prose()}
+  {#if doc.staleness === "unknown"}<p role="note">{unknownHistory}</p>{/if}
   <div
     class="markdown"
     data-pane-document={bare ? id : undefined}

@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 
 const status = (page) => page.locator(".dialog .status");
@@ -157,6 +158,7 @@ test("setup reports its first failed status request", async ({ page }) => {
 
 test("import requires preview and keeps unresolved documents unconfirmable", async ({ page }) => {
   await page.goto("/tests/settings.html?vaults");
+  await page.getByText("Individual file import", {exact:true}).click();
   await page.getByRole("button", {name:"Choose Markdown files"}).click();
   await expect(page.getByRole("button", {name:"Import selected valid documents"})).toHaveCount(0);
   await page.getByRole("button", {name:"Preview import",exact:true}).click();
@@ -172,6 +174,7 @@ test("import requires preview and keeps unresolved documents unconfirmable", asy
 
 test("repair preserves deliberate fields while newly associated manifest supplies metadata", async ({ page }) => {
   await page.goto("/tests/settings.html?vaults");
+  await page.getByText("Individual file import", {exact:true}).click();
   await page.getByRole("button", {name:"Choose Markdown files"}).click();
   await page.getByRole("button", {name:"Preview import",exact:true}).click();
   await page.getByText("Edit metadata and content for R2.md",{exact:true}).click();
@@ -189,6 +192,7 @@ test("repair preserves deliberate fields while newly associated manifest supplie
 
 test("stale import preview reports error before queueing", async ({ page }) => {
   await page.goto("/tests/settings.html?vaults&stale-import");
+  await page.getByText("Individual file import", {exact:true}).click();
   await page.getByRole("button", {name:"Choose Markdown files"}).click();
   await page.getByRole("button", {name:"Preview import",exact:true}).click();
   await page.getByRole("checkbox", {name:"Import R1.md"}).check();
@@ -199,5 +203,74 @@ test("stale import preview reports error before queueing", async ({ page }) => {
 test("pending import remains visible without configured profiles", async ({ page }) => {
   await page.goto("/tests/settings.html?pending-import");
   await expect(page.getByText("batch/R1 → removed: unavailable")).toBeVisible();
+  await page.getByText("Individual file import", {exact:true}).click();
   await expect(page.getByRole("button", {name:"Choose Markdown files"})).toBeDisabled();
+});
+
+
+test("corpus summary selects ready closure and opens only one lazy editor", async ({page}) => {
+ await page.goto("/tests/settings.html?vaults");
+ await page.getByRole("button",{name:"Choose corpus folder"}).click();
+ await page.getByRole("combobox",{name:"State for missing legacy metadata"}).selectOption("active");
+ await page.getByRole("button",{name:"Preview corpus",exact:true}).click();
+ await expect(page.getByText("300 documents · 297 ready · 2 need repair · 1 excluded")).toBeVisible();
+ expect(await page.evaluate(()=>window.settingsFixture.importCalls().filter(c=>c.action==="detail").length)).toBe(0);
+ await expect(page.getByRole("button",{name:"Import 297 ready documents"})).toBeEnabled();
+ const region=page.getByRole("region",{name:"Corpus import"});
+ await region.getByRole("checkbox",{name:/Finding 1 personal/,exact:false}).uncheck();
+ await expect(page.getByRole("button",{name:"Import 295 ready documents"})).toBeEnabled();
+ await region.getByRole("checkbox",{name:/Finding 0 personal/,exact:false}).check();
+ await expect(page.getByRole("button",{name:"Import 297 ready documents"})).toBeEnabled();
+ await page.getByRole("combobox",{name:"Show",exact:true}).selectOption("repair");
+ await expect(region.getByRole("button",{name:/Review R/})).toHaveCount(2);
+ await page.getByRole("button",{name:"Review R297.md",exact:true}).click();
+ await page.getByRole("button",{name:"Review R298.md",exact:true}).click();
+ await expect(page.getByRole("article",{name:"Artifact exception editor"})).toHaveCount(1);
+ await page.getByRole("button",{name:"Close detail"}).click();
+ await page.getByRole("combobox",{name:"Show",exact:true}).selectOption("excluded");
+ await expect(region.getByRole("button",{name:/Review R/})).toHaveCount(1);
+ await expect(region.getByRole("checkbox",{name:/Finding 299/})).toBeDisabled();
+ await page.getByRole("combobox",{name:"Show",exact:true}).selectOption("all");
+ if(process.env.QROUTON_THEME_CSS)await page.addStyleTag({content:readFileSync(process.env.QROUTON_THEME_CSS,"utf8")});
+ await region.scrollIntoViewIfNeeded();
+ await page.screenshot({path:process.env.QROUTON_BULK_SCREENSHOT??"/tmp/qrouton-vault-bulk.png",fullPage:true});
+});
+
+test("corpus stale source clears confirmation selection", async ({page})=>{
+ await page.goto("/tests/settings.html?vaults&stale-import");
+ await page.getByRole("button",{name:"Choose corpus folder"}).click();
+ await page.getByRole("combobox",{name:"State for missing legacy metadata"}).selectOption("active");
+ await page.getByRole("button",{name:"Preview corpus",exact:true}).click();
+ await page.getByRole("button",{name:"Import 297 ready documents"}).click();
+ await expect(page.getByRole("status").filter({hasText:"source changed since preview"})).toBeVisible();
+ await expect(page.getByRole("button",{name:"Import 0 ready documents"})).toBeDisabled();
+});
+
+
+test("edits during a corpus preview require another refresh", async ({ page }) => {
+  await page.goto("/tests/settings.html?vaults&delay-corpus&delay-confirm");
+  await page.getByRole("button", { name: "Choose corpus folder" }).click();
+  await page.getByRole("combobox", { name: "State for missing legacy metadata" }).selectOption("active");
+  await page.getByRole("button", { name: "Preview corpus", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.importCalls().filter(call => call.action === "corpus-preview").length)).toBe(1);
+  await page.getByRole("textbox", { name: "Batch author", exact: true }).fill("Revised author");
+  await page.getByRole("region", { name: "Corpus import" }).getByRole("combobox", { name: "Destination vault", exact: true }).selectOption("private");
+  await page.evaluate(() => window.settingsFixture.releaseCorpusPreview());
+  await expect(page.getByRole("status").filter({ hasText: "Changes need a fresh preview" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Import 0 ready documents" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Select all ready" })).toBeDisabled();
+  await page.getByRole("button", { name: "Refresh corpus preview" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.importCalls().filter(call => call.action === "corpus-preview").length)).toBe(2);
+  const calls = await page.evaluate(() => window.settingsFixture.importCalls().filter(call => call.action === "corpus-preview"));
+  expect(calls[0].input.defaults.author).toBe("Local Author");
+  expect(calls[1].input.defaults.author).toBe("Revised author");
+  expect(calls[1].input.targetProfile).toBe("private");
+  await page.evaluate(() => window.settingsFixture.releaseCorpusPreview());
+  await expect(page.getByRole("button", { name: "Import 297 ready documents" })).toBeEnabled();
+  await expect(page.getByRole("status").filter({ hasText: "Changes need a fresh preview" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Import 297 ready documents" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.importCalls().some(call => call.action === "confirm"))).toBe(true);
+  await page.getByRole("textbox", { name: "Batch author", exact: true }).fill("Another author");
+  await page.evaluate(() => window.settingsFixture.releaseCorpusConfirm());
+  await expect(page.getByRole("status").filter({ hasText: "297 documents queued for import." })).toBeVisible();
 });

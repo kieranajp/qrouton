@@ -20,10 +20,12 @@ type importFile struct {
 	path, name, kind string
 }
 type importSelections struct {
-	mu       sync.Mutex
-	files    map[string]importFile
-	previews map[string]map[string]string
-	closed   bool
+	mu           sync.Mutex
+	files        map[string]importFile
+	previews     map[string]map[string]string
+	corpus       map[string][]string
+	associations map[string]string
+	closed       bool
 }
 type VaultImportFile struct {
 	Token   string `json:"token"`
@@ -51,7 +53,12 @@ func (i *importSelections) close() {
 	i.previews = nil
 }
 func readImportFile(f importFile) ([]byte, error) {
-	file, err := f.root.OpenFile(f.name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
+	root, name, release, err := importParent(f.root, f.name)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	file, err := root.OpenFile(name, os.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_NONBLOCK, 0)
 	if err != nil {
 		return nil, vault.ErrImportSource
 	}
@@ -271,5 +278,7 @@ func (s *Settings) ClearVaultImportSources() error {
 	}
 	selections.files = nil
 	selections.previews = nil
+	selections.corpus = nil
+	selections.associations = nil
 	return nil
 }

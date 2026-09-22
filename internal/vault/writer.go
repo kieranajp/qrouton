@@ -102,6 +102,33 @@ func (s *Service) writeCanonical(ctx context.Context, profile Profile, job queue
 	if err != nil || document.ID != job.ArtifactID {
 		return ErrInvalidDocument
 	}
+	if document.LegacyImport != nil {
+		record, err := loadImportRecord(store, job.Preview)
+		if err != nil {
+			return ErrImportRepair
+		}
+		proven := false
+		for _, source := range record.Sources {
+			if source.Key != job.Source {
+				continue
+			}
+			if contentHash(string(source.Content)) == document.LegacyImport.SourceHash {
+				proven = true
+			}
+			if original, err := Parse(source.Content); err == nil && original.LegacyImport != nil && original.LegacyImport.SourceHash == document.LegacyImport.SourceHash {
+				proven = true
+			}
+		}
+		reviewed := false
+		for _, entry := range record.Preview.Entries {
+			if entry.Key == job.Source && entry.Canonical == string(job.Canonical) && entry.Destination == job.Profile && entry.Disposition != "excluded" {
+				reviewed = true
+			}
+		}
+		if !proven || !reviewed {
+			return ErrImportRepair
+		}
+	}
 	root, err := os.OpenRoot(profile.Root)
 	if err != nil {
 		return ErrImportWrite

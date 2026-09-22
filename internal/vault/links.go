@@ -14,46 +14,82 @@ var referenceDefinition = regexp.MustCompile(`^( {0,3}\[[^\]\n]+\]:[ \t]*)(<[^>\
 var citationSuffix = regexp.MustCompile(`^(.*):([0-9]+)(?:-([0-9]+))?$`)
 var linkScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
-func importLinkTarget(target string, source ImportSource, current ImportEntry, entries []ImportEntry, sources []ImportSource) (ImportEntry, bool) {
+type importLinkIndex struct {
+	aliases map[string]map[string]ImportEntry
+}
+
+func newImportLinkIndex(entries []ImportEntry, sources []ImportSource) *importLinkIndex {
+	index := &importLinkIndex{aliases: map[string]map[string]ImportEntry{}}
+	byKey := map[string]ImportSource{}
+	for _, source := range sources {
+		byKey[source.Key] = source
+	}
+	for _, entry := range entries {
+		if !validID(entry.Document.ID) {
+			continue
+		}
+		source := byKey[entry.Key]
+		add := func(alias string) {
+			if alias == "" {
+				return
+			}
+			key := entry.Destination + "\x00" + alias
+			if index.aliases[key] == nil {
+				index.aliases[key] = map[string]ImportEntry{}
+			}
+			index.aliases[key][entry.Key] = entry
+		}
+		add(entry.Document.ID)
+		add(entry.Name)
+		add(strings.TrimSuffix(entry.Name, filepath.Ext(entry.Name)))
+		add(entry.Document.Title)
+		if entry.Path != "" {
+			add("path:" + path.Clean(entry.Path))
+		}
+		if source.Origin != "" {
+			add("origin:" + canonicalProfileRoot(source.Origin))
+		}
+		if source.RelativePath != "" {
+			add("corpus:" + path.Clean(source.RelativePath))
+		}
+		if d, err := Parse(source.Content); err == nil {
+			add(d.ID)
+		} else if fields, _, err := legacyFields(source.Content); err == nil {
+			if id := fields["id"]; id != nil && id.Tag == "!!str" {
+				value := id.Value
+				if !strings.Contains(value, "/") {
+					namespace := entry.Document.Session
+					if session := fields["session"]; session != nil && session.Tag == "!!str" {
+						namespace = session.Value
+					}
+					value = namespace + "/" + value
+				}
+				add(value)
+			}
+		}
+	}
+	return index
+}
+func (index *importLinkIndex) resolve(target string, source ImportSource, current ImportEntry) (ImportEntry, bool) {
 	target = strings.SplitN(target, "#", 2)[0]
 	if decoded, err := url.PathUnescape(target); err == nil {
 		target = decoded
 	}
-	byKey := map[string]ImportSource{}
-	for _, candidate := range sources {
-		byKey[candidate.Key] = candidate
+	aliases := []string{target, "path:" + path.Clean(path.Join(path.Dir(current.Path), target))}
+	if source.Origin != "" {
+		resolved := filepath.Clean(filepath.Join(filepath.Dir(source.Origin), filepath.FromSlash(target)))
+		if filepath.IsAbs(target) {
+			resolved = filepath.Clean(target)
+		}
+		aliases = append(aliases, "origin:"+canonicalProfileRoot(resolved))
 	}
-	resolved := filepath.Clean(filepath.Join(filepath.Dir(source.Origin), filepath.FromSlash(target)))
-	if filepath.IsAbs(target) {
-		resolved = filepath.Clean(target)
+	if source.RelativePath != "" {
+		aliases = append(aliases, "corpus:"+path.Clean(path.Join(path.Dir(source.RelativePath), target)))
 	}
 	candidates := map[string]ImportEntry{}
-	for _, entry := range entries {
-		if entry.Destination != current.Destination || !validID(entry.Document.ID) {
-			continue
-		}
-		original := byKey[entry.Key]
-		originalID := ""
-		if parsed, err := Parse(original.Content); err == nil {
-			originalID = parsed.ID
-		} else if fields, _, fieldErr := legacyFields(original.Content); fieldErr == nil {
-			if id := fields["id"]; id != nil && id.Tag == "!!str" {
-				originalID = id.Value
-			}
-			if !strings.Contains(originalID, "/") && originalID != "" {
-				namespace := ""
-				if session := fields["session"]; session != nil && session.Tag == "!!str" {
-					namespace = session.Value
-				} else if original.Session != nil {
-					namespace = original.Session.Slug
-				}
-				if namespace != "" {
-					originalID = namespace + "/" + originalID
-				}
-			}
-		}
-		if target == entry.Document.ID || target == originalID || (current.Path != "" && entry.Path != "" && path.Clean(path.Join(path.Dir(current.Path), target)) == entry.Path) || (original.Origin != "" && canonicalProfileRoot(resolved) == canonicalProfileRoot(original.Origin)) || target == strings.TrimSuffix(entry.Name, filepath.Ext(entry.Name)) || target == entry.Document.Title || target == entry.Name {
-			candidates[entry.Key] = entry
+	for _, alias := range aliases {
+		for key, entry := range index.aliases[current.Destination+"\x00"+alias] {
+			candidates[key] = entry
 		}
 	}
 	if len(candidates) != 1 {
@@ -64,7 +100,13 @@ func importLinkTarget(target string, source ImportSource, current ImportEntry, e
 	}
 	return ImportEntry{}, false
 }
+func importLinkTarget(target string, source ImportSource, current ImportEntry, entries []ImportEntry, sources []ImportSource) (ImportEntry, bool) {
+	return newImportLinkIndex(entries, sources).resolve(target, source, current)
+}
 func normalizeImportLinks(body string, source ImportSource, current ImportEntry, entries []ImportEntry, sources []ImportSource, mappings map[string]string) (string, []Repair, []string) {
+	return normalizeImportLinksIndexed(body, source, current, mappings, newImportLinkIndex(entries, sources))
+}
+func normalizeImportLinksIndexed(body string, source ImportSource, current ImportEntry, mappings map[string]string, index *importLinkIndex) (string, []Repair, []string) {
 	repairs := []Repair{}
 	dependencies := map[string]bool{}
 	rewrite := func(destination string) (string, bool) {
@@ -82,7 +124,7 @@ func normalizeImportLinks(body string, source ImportSource, current ImportEntry,
 			return destination, true
 		}
 		target, fragment, _ := strings.Cut(destination, "#")
-		if entry, ok := importLinkTarget(target, source, current, entries, sources); ok {
+		if entry, ok := index.resolve(target, source, current); ok {
 			fromPath, targetPath := current.Path, entry.Path
 			if fromPath == "" {
 				fromPath = current.Document.ID + ".md"
@@ -358,11 +400,17 @@ func normalizeCodeCitation(destination string, source ImportSource, document Doc
 	}
 	candidates := map[string]bool{}
 	for _, repo := range document.Repos {
-		if repo.Revision == nil {
+		if repo.Revision == nil && !unknownLegacyHistory(document) {
 			continue
 		}
 		prefix := "src/" + path.Base(repo.Path) + "/"
 		relative := ""
+		if source.RelativePath != "" && !filepath.IsAbs(raw) {
+			candidate := path.Clean(path.Join(path.Dir(source.RelativePath), raw))
+			if strings.HasPrefix(candidate, prefix) {
+				relative = strings.TrimPrefix(candidate, prefix)
+			}
+		}
 		if source.Session != nil && source.Session.Origin != "" {
 			absolute := raw
 			if !filepath.IsAbs(raw) {
@@ -379,7 +427,12 @@ func normalizeCodeCitation(destination string, source ImportSource, document Doc
 		if relative == "" || !filepath.IsLocal(relative) {
 			continue
 		}
-		target := "https://" + repo.Path + "/blob/" + *repo.Revision + "/" + escapeMarkdownPath(relative)
+		target := ""
+		if repo.Revision == nil {
+			target = "repo://" + repo.Path + "/" + escapeMarkdownPath(relative) + "?revision=unknown"
+		} else {
+			target = "https://" + repo.Path + "/blob/" + *repo.Revision + "/" + escapeMarkdownPath(relative)
+		}
 		if fragment != "" {
 			target += "#" + fragment
 		}

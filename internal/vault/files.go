@@ -18,6 +18,7 @@ type Reference struct {
 	Path    string `json:"path,omitempty"`
 }
 type ReadResult struct {
+	Staleness string    `json:"staleness,omitempty"`
 	Reference Reference `json:"reference"`
 	Document  Document  `json:"document"`
 	Content   string    `json:"content"`
@@ -98,7 +99,11 @@ func scan(profile Profile) (inventory, error) {
 			}
 			identities[d.ID] = b
 		}
-		inv.entries = append(inv.entries, ReadResult{Reference: Reference{Profile: profile.ID, ID: d.ID, Path: filepath.ToSlash(path)}, Document: d, Content: string(b), Supported: supported})
+		staleness := ""
+		if unknownLegacyHistory(d) {
+			staleness = "unknown"
+		}
+		inv.entries = append(inv.entries, ReadResult{Staleness: staleness, Reference: Reference{Profile: profile.ID, ID: d.ID, Path: filepath.ToSlash(path)}, Document: d, Content: string(b), Supported: supported})
 		return nil
 	})
 	if err != nil {

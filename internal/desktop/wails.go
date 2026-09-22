@@ -134,3 +134,7 @@ func (r *wailsRenderer) chooseImportFiles(kind string) ([]string, error) {
 	}
 	return dialog.PromptForMultipleSelection()
 }
+
+func (r *wailsRenderer) chooseImportCorpus() (string, error) {
+	return r.app.Dialog.OpenFile().CanChooseDirectories(true).CanChooseFiles(false).CanCreateDirectories(false).PromptForSingleSelection()
+}

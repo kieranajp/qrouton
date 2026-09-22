@@ -130,6 +130,8 @@ func Run(opts Options) error {
 	)
 	settingsService.vaults = opts.vaults
 	settingsService.chooseImportFiles = r.chooseImportFiles
+	settingsService.chooseImportCorpus = r.chooseImportCorpus
+	settingsService.importAuthor = localImportAuthor
 	settingsService.vaultChanged = windows.documents.invalidateVaults
 	r.register(application.NewService(settingsService))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)

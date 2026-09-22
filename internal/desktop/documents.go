@@ -18,6 +18,7 @@ import (
 // session file it came from, if it came from one, and the source lines the page
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
+	Staleness     string           `json:"staleness,omitempty"`
 	Fragment      string           `json:"fragment,omitempty"`
 	Vault         *vault.Reference `json:"vault,omitempty"`
 	Text          string           `json:"text"`
@@ -131,6 +132,16 @@ func documentFor(window *agentWindow) document {
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
+	}
+	if window.opts.Vault != nil {
+		if parsed, err := vault.Parse([]byte(window.opts.Content)); err == nil && parsed.LegacyImport != nil {
+			for _, repo := range parsed.Repos {
+				if repo.Revision == nil {
+					doc.Staleness = "unknown"
+					break
+				}
+			}
+		}
 	}
 	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
 		var root string

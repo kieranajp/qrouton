@@ -28,3 +28,17 @@ for (const source of ["vault-pane", "ordinary-pane"]) {
     await expect.poll(() => pane.evaluate((node) => node.scrollTop)).toBeLessThan(50);
   });
 }
+
+test("legacy badge resets across navigation and revocation and citations stay inert", async ({page})=>{
+ await page.goto("/tests/markdown.html?legacy");
+ await expect(page.getByRole("note")).toHaveCount(0);
+ await page.getByRole("button",{name:"Show legacy"}).click();
+ await expect(page.getByRole("note")).toContainText("historical revision unknown");
+ await expect(page.getByText("code (github.com/team/repo/main.go#L12; revision unknown)")).toBeVisible();
+ await expect(page.getByRole("link")).toHaveCount(0);
+ await page.getByRole("button",{name:"Show regular"}).click();
+ await expect(page.getByRole("note")).toHaveCount(0);
+ await page.getByRole("button",{name:"Show legacy"}).click();
+ await page.getByRole("button",{name:"Revoke",exact:true}).click();
+ await expect(page.getByRole("note")).toHaveCount(0);
+});

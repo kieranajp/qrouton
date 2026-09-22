@@ -21,21 +21,25 @@ type Edge struct {
 	Relation string `yaml:"relation" json:"relation"`
 	Target   string `yaml:"target" json:"target"`
 }
+type LegacyImport struct {
+	SourceHash string `yaml:"source_hash" json:"sourceHash"`
+}
 type Document struct {
-	SchemaVersion int          `yaml:"schema_version" json:"schemaVersion"`
-	ID            string       `yaml:"id" json:"id"`
-	Session       string       `yaml:"session" json:"session"`
-	Kind          string       `yaml:"kind" json:"kind"`
-	Title         string       `yaml:"title" json:"title"`
-	Date          string       `yaml:"date" json:"date"`
-	Author        string       `yaml:"author" json:"author"`
-	State         string       `yaml:"state" json:"state"`
-	StatusNote    string       `yaml:"status_note,omitempty" json:"statusNote,omitempty"`
-	Repos         []Repository `yaml:"repos" json:"repos"`
-	Workstream    string       `yaml:"workstream" json:"workstream"`
-	Ticket        string       `yaml:"ticket,omitempty" json:"ticket,omitempty"`
-	Lineage       []Edge       `yaml:"lineage,omitempty" json:"lineage,omitempty"`
-	Body          string       `yaml:"-" json:"-"`
+	LegacyImport  *LegacyImport `yaml:"legacy_import,omitempty" json:"legacyImport,omitempty"`
+	SchemaVersion int           `yaml:"schema_version" json:"schemaVersion"`
+	ID            string        `yaml:"id" json:"id"`
+	Session       string        `yaml:"session" json:"session"`
+	Kind          string        `yaml:"kind" json:"kind"`
+	Title         string        `yaml:"title" json:"title"`
+	Date          string        `yaml:"date" json:"date"`
+	Author        string        `yaml:"author" json:"author"`
+	State         string        `yaml:"state" json:"state"`
+	StatusNote    string        `yaml:"status_note,omitempty" json:"statusNote,omitempty"`
+	Repos         []Repository  `yaml:"repos" json:"repos"`
+	Workstream    string        `yaml:"workstream" json:"workstream"`
+	Ticket        string        `yaml:"ticket,omitempty" json:"ticket,omitempty"`
+	Lineage       []Edge        `yaml:"lineage,omitempty" json:"lineage,omitempty"`
+	Body          string        `yaml:"-" json:"-"`
 }
 
 var componentPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]*$`)
@@ -87,7 +91,7 @@ func Parse(data []byte) (Document, error) {
 		}
 		return d, ErrUnsupportedSchema
 	}
-	shape := map[string]string{"schema_version": "!!int", "id": "!!str", "session": "!!str", "kind": "!!str", "title": "!!str", "date": "date", "author": "!!str", "state": "!!str", "status_note": "!!str", "repos": "seq", "workstream": "!!str", "ticket": "!!str", "lineage": "seq"}
+	shape := map[string]string{"schema_version": "!!int", "id": "!!str", "session": "!!str", "kind": "!!str", "title": "!!str", "date": "date", "author": "!!str", "state": "!!str", "status_note": "!!str", "repos": "seq", "workstream": "!!str", "ticket": "!!str", "lineage": "seq", "legacy_import": "map"}
 	if err := checkShape(root, shape); err != nil {
 		return d, err
 	}
@@ -112,6 +116,11 @@ func Parse(data []byte) (Document, error) {
 			if len(edge.Content) != 4 {
 				return d, ErrInvalidDocument
 			}
+		}
+	}
+	if legacy := fields["legacy_import"]; legacy != nil {
+		if checkShape(legacy, map[string]string{"source_hash": "!!str"}) != nil || len(legacy.Content) != 2 {
+			return d, ErrInvalidDocument
 		}
 	}
 	body := d.Body
@@ -161,6 +170,8 @@ func checkShape(node *yaml.Node, shape map[string]string) error {
 		}
 		valid := value.Kind == yaml.ScalarNode && value.Tag == expected
 		switch expected {
+		case "map":
+			valid = value.Kind == yaml.MappingNode
 		case "seq":
 			valid = value.Kind == yaml.SequenceNode
 		case "date":
@@ -199,6 +210,9 @@ func Validate(d Document) error {
 	default:
 		return ErrInvalidDocument
 	}
+	if d.LegacyImport != nil && !legacyHashPattern.MatchString(d.LegacyImport.SourceHash) {
+		return ErrInvalidDocument
+	}
 	if d.Kind != "note" && len(d.Repos) == 0 {
 		return ErrInvalidDocument
 	}
@@ -207,7 +221,7 @@ func Validate(d Document) error {
 			return ErrInvalidDocument
 		}
 		if repo.Revision == nil {
-			if d.Kind != "note" {
+			if !allowsUnpinned(d) {
 				return ErrInvalidDocument
 			}
 		} else if !revisionPattern.MatchString(*repo.Revision) {
@@ -239,4 +253,21 @@ func Encode(d Document) ([]byte, error) {
 		return nil, err
 	}
 	return []byte("---\n" + string(b) + "---\n" + d.Body), nil
+}
+
+var legacyHashPattern = regexp.MustCompile(`^[a-f0-9]{64}$`)
+
+func allowsUnpinned(d Document) bool {
+	return d.Kind == "note" || (d.LegacyImport != nil && (d.Kind == "research" || d.Kind == "spec" || d.Kind == "plan"))
+}
+func unknownLegacyHistory(d Document) bool {
+	if d.LegacyImport == nil {
+		return false
+	}
+	for _, repo := range d.Repos {
+		if repo.Revision == nil {
+			return true
+		}
+	}
+	return false
 }

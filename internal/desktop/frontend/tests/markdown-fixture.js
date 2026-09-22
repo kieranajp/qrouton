@@ -47,3 +47,8 @@ if (new URLSearchParams(location.search).has("links")) {
   window.navigationCalls = () => [...calls];
   mount(ContextMenu, { target: document.body });
 }
+
+if (new URLSearchParams(location.search).has("legacy")) {
+ const [{mount},{default:LegacyPaneFixture}]=await Promise.all([import("svelte"),import("./LegacyPaneFixture.svelte")]);
+ root.innerHTML="";mount(LegacyPaneFixture,{target:root});
+}

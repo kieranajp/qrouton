@@ -198,7 +198,7 @@ func (s *Service) ConfirmImport(ctx context.Context, previewID string, selectedK
 	keys := map[string]bool{}
 	for _, key := range selectedKeys {
 		entry, exists := entries[key]
-		if !exists || len(entry.Repairs) > 0 || entry.Canonical == "" {
+		if !exists || entry.Disposition == "excluded" || len(entry.Repairs) > 0 || entry.Canonical == "" {
 			return ImportReport{}, ErrImportRepair
 		}
 		if selected[key] {
@@ -206,6 +206,16 @@ func (s *Service) ConfirmImport(ctx context.Context, previewID string, selectedK
 		}
 		selected[key] = true
 		keys[key] = true
+		for _, evidenceKey := range entry.EvidenceKeys {
+			evidence, ok := sources[evidenceKey]
+			if !ok || record.Hashes[evidenceKey] == "" {
+				return ImportReport{}, ErrImportStale
+			}
+			keys[evidenceKey] = true
+			if evidence.Session != nil {
+				keys[evidence.Session.Key] = true
+			}
+		}
 		if source := sources[key]; source.Session != nil {
 			keys[source.Session.Key] = true
 		}

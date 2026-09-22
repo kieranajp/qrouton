@@ -1,3 +1,4 @@
+import "../src/tokens/index.css";
 import { mount } from "svelte";
 import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 
@@ -10,14 +11,16 @@ const scopes = [];
 const actions = [];
 const importCalls = [];
 let importJobs = [];
+let releaseCorpusPreview;
+let releaseCorpusConfirm;
 let setupReads = 0;
 let download = { state: "", progress: { status: "", total: 0, completed: 0 } };
 const dependency = new URLSearchParams(location.search).get("dependency") ?? "model_missing";
 const vaults = new URLSearchParams(location.search).has("vaults");
 
-window.settingsFixture = { saves: () => [...saves], scopes: () => [...scopes], actions: () => [...actions], setupReads: () => setupReads, importCalls: () => [...importCalls] };
+window.settingsFixture = { releaseCorpusConfirm: () => { releaseCorpusConfirm?.(); releaseCorpusConfirm = undefined; }, releaseCorpusPreview: () => { releaseCorpusPreview?.(); releaseCorpusPreview = undefined; }, saves: () => [...saves], scopes: () => [...scopes], actions: () => [...actions], setupReads: () => setupReads, importCalls: () => [...importCalls] };
 
-window.wailsCall = async (name, input) => {
+window.wailsCall = async (name, input, key) => {
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith(".Load"))
     return {
@@ -39,6 +42,13 @@ window.wailsCall = async (name, input) => {
     if (new URLSearchParams(location.search).has("pending-import")) return {entries:[{id:"pending",artifactId:"batch/R1",profile:"removed",state:"unavailable",error:"vault profile outside session scope"}]};
     return {entries:importJobs};
   }
+  if (name.endsWith(".SelectVaultImportCorpus")) return {token:"corpus",name:"Legacy thoughts",documents:300,skipped:12,sessions:["personal","ambiguous"],author:"Local Author"};
+  if (name.endsWith(".PreviewVaultCorpus")) {
+    importCalls.push({action:"corpus-preview",input});
+    if (new URLSearchParams(location.search).has("delay-corpus")) await new Promise(resolve => { releaseCorpusPreview = resolve; });
+    return {id:"corpus-preview",targetProfile:input.targetProfile,total:300,ready:297,repairRequired:2,excluded:1,entries:Array.from({length:300},(_,i)=>({key:`corpus${i}`,id:`personal/R${i}`,name:`R${i}.md`,session:i===298?"ambiguous":"personal",kind:"research",title:`Finding ${i}`,destination:i===299?"private":input.targetProfile,disposition:i===299?"excluded":i>=297?"repair":"ready",dependencies:i===0?["corpus1"]:[],unknownRevisions:true,repairs:i>=297&&i<299?[{field:"repos",reason:"Repository scope needs review"}]:[],warnings:[],reason:i===299?"Different destination vault":""}))};
+  }
+  if (name.endsWith(".VaultCorpusEntry")) {importCalls.push({action:"detail",key});return {key,name:key+".md",document:{schemaVersion:1,id:"personal/R1",session:"personal",kind:"research",title:"Finding",author:"Local Author",date:"2026-09-22",workstream:"personal",state:"active",repos:[]},body:"Original evidence",canonical:"Canonical evidence",destination:"shared",path:"personal/R1.md",repairs:[],warnings:[],provenance:{author:{source:"batch",detail:"reviewed default"}}};}
   if (name.endsWith(".SelectVaultImportSources")) {
     importCalls.push({action:"pick",kind:input});
     return input === "manifest" ? [{token:"manifest",name:"qrouton.json",kind:"manifest",session:"batch"}] : [{token:"source1",name:"R1.md",kind:"markdown"},{token:"source2",name:"R2.md",kind:"markdown"}];
@@ -61,6 +71,7 @@ window.wailsCall = async (name, input) => {
   if (name.endsWith(".ConfirmVaultImport")) {
     importCalls.push({action:"confirm"});
     if (new URLSearchParams(location.search).has("stale-import")) throw new Error("source changed since preview");
+    if (new URLSearchParams(location.search).has("delay-confirm")) await new Promise(resolve => { releaseCorpusConfirm = resolve; });
     importJobs=[{id:"job",artifactId:"batch/R1",profile:"shared",state:"destination_changed"}];return {entries:importJobs};
   }
   if (name.endsWith(".RevalidateVaultImportDestination")) {importCalls.push({action:"revalidate",id:input});importJobs=importJobs.map((job)=>({...job,state:"pending"}));return;}
