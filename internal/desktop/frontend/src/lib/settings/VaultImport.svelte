@@ -196,6 +196,7 @@
  {/if}
  {#if preview}
   <p class="summary">{preview.total} documents · {preview.ready} ready · {preview.repairRequired} need repair · {preview.excluded} excluded</p>
+  <p>{preview.entries.reduce((total, entry) => total + (entry.assetCount ?? 0), 0)} referenced PNG attachments · {preview.entries.reduce((total, entry) => total + (entry.assetBytes ?? 0), 0).toLocaleString()} bytes across documents. Only selected documents’ attachments are copied.</p>
   <p>Fixed destination: {profiles.find(p=>p.id===preview.targetProfile)?.name??preview.targetProfile}. Historical revisions may be unknown for legacy imports.</p>
   <div class="buttons"><label>Session filter<select bind:value={sessionFilter}><option value="">All sessions</option>{#each [...new Set(preview.entries.map(entry=>entry.session))].sort() as session}<option value={session}>{session||"Unknown session"}</option>{/each}</select></label><label>Show<select bind:value={filter}><option value="all">All documents</option><option value="ready">Ready</option><option value="repair">Needs repair</option><option value="excluded">Excluded</option><option value="duplicates">Duplicate identities ({duplicateIDs.size})</option></select></label><Button variant="ghost" disabled={busy||dirty} onclick={selectReady}>Select all ready</Button><span>{selected.length} selected, including linked dependencies</span></div>
   {#if dirty}<p role="status">Changes need a fresh preview before confirmation.</p>{/if}
@@ -206,6 +207,7 @@
    <article aria-label="Artifact exception editor"><h4>{detail.name}</h4><p>{detail.destination} / {detail.path}</p>
     {#each detail.repairs??[] as repair}<p>{repair.field}: {repair.reason}</p>{/each}
     {#each detail.warnings??[] as warning}<p>{warning.field}: {warning.reason}</p>{/each}
+    {#if detail.assets?.length}<h4>Referenced PNG attachments</h4>{#each detail.assets as asset}<p>{asset.href} → {asset.path} · {asset.size.toLocaleString()} bytes · {asset.width}×{asset.height}</p>{/each}{/if}
     <div class="defaults">{#each ["title","author","date","session","id","workstream","kind","state"] as field}<TextField label={field} value={detail.document[field]??""} oninput={event=>{detail.document[field]=event.target.value;change();}}/>{/each}</div>
     {#each detail.document.repos??[] as repo}<div class="defaults"><TextField label="Repository" bind:value={repo.path} oninput={change}/><TextField label="Historical revision (blank means unknown)" value={repo.revision??""} oninput={event=>{repo.revision=event.target.value||null;change();}}/></div>{/each}
     <TextField multiline label="Reviewed Markdown body" bind:value={detail.body} oninput={change}/>

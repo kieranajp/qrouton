@@ -93,3 +93,7 @@ const (
 	corpusDependencyRepair     = "linked source requires repair or belongs to another vault"
 	corpusUnknownCitation      = "portable code citation has unknown historical revision"
 )
+
+const corpusLegacyReference = "Legacy reference (not a derivation):"
+const corpusPriorImport = "identity retained from an existing import of these source bytes"
+const corpusInertLink = "Legacy reference unavailable; retained as source-authored text"

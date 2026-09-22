@@ -274,3 +274,15 @@ test("edits during a corpus preview require another refresh", async ({ page }) =
   await page.evaluate(() => window.settingsFixture.releaseCorpusConfirm());
   await expect(page.getByRole("status").filter({ hasText: "297 documents queued for import." })).toBeVisible();
 });
+
+
+test("corpus attachment counts and lazy details describe portable PNG copies", async ({page}) => {
+  await page.goto("/tests/settings.html?vaults");
+  await page.getByRole("button", {name:"Choose corpus folder"}).click();
+  await page.getByRole("combobox", {name:"State for missing legacy metadata"}).selectOption("active");
+  await page.getByRole("button", {name:"Preview corpus",exact:true}).click();
+  await expect(page.getByText("2 referenced PNG attachments · 136 bytes across documents. Only selected documents’ attachments are copied.")).toBeVisible();
+  expect(await page.evaluate(() => window.settingsFixture.importCalls().some(call=>call.action==="detail"))).toBe(false);
+  await page.getByRole("button", {name:"Review R0.md",exact:true}).click();
+  await expect(page.getByText("../../assets/capture.png → personal/assets/hash.png · 68 bytes · 2×2")).toBeVisible();
+});

@@ -28,6 +28,7 @@ type CorpusDefaults struct {
 	WorkstreamFromSession bool   `json:"workstreamFromSession"`
 }
 type CorpusRequest struct {
+	Assets              []ImportAsset
 	Sources             []CorpusSource
 	TargetProfile       string
 	Defaults            CorpusDefaults
@@ -40,6 +41,8 @@ type CorpusRequest struct {
 	peerRepositories    map[string][]Repository
 }
 type CorpusEntrySummary struct {
+	AssetCount       int                      `json:"assetCount"`
+	AssetBytes       int                      `json:"assetBytes"`
 	Key              string                   `json:"key"`
 	Name             string                   `json:"name"`
 	ID               string                   `json:"id"`
@@ -95,7 +98,7 @@ func (s *Service) PreviewCorpus(ctx context.Context, request CorpusRequest) (Cor
 			sessionEvidence[parts[0]] = append(sessionEvidence[parts[0]], input.Source.Key)
 		}
 	}
-	prepared := ImportRequest{prepared: map[string]ImportEntry{}, targetProfile: request.TargetProfile, LinkMappings: request.LinkMappings, Namespaces: request.Namespaces}
+	prepared := ImportRequest{Assets: request.Assets, prepared: map[string]ImportEntry{}, targetProfile: request.TargetProfile, LinkMappings: request.LinkMappings, Namespaces: request.Namespaces}
 	seen := map[string]bool{}
 	for _, input := range request.Sources {
 		if input.Source.Key == "" || seen[input.Source.Key] {
@@ -155,7 +158,11 @@ func (s *Service) CorpusEntry(previewID, key string) (ImportEntry, error) {
 func corpusSummary(preview ImportPreview, target string) CorpusPreview {
 	out := CorpusPreview{ID: preview.ID, TargetProfile: target, Total: len(preview.Entries), Ready: preview.Accepted, RepairRequired: preview.RepairRequired, Excluded: preview.Excluded, Entries: []CorpusEntrySummary{}}
 	for _, entry := range preview.Entries {
-		out.Entries = append(out.Entries, CorpusEntrySummary{Key: entry.Key, Name: entry.Name, ID: entry.Document.ID, Session: entry.Document.Session, Kind: entry.Document.Kind, Title: entry.Document.Title, Destination: entry.Destination, Disposition: entry.Disposition, Reason: entry.Reason, Dependencies: entry.Dependencies, Repairs: entry.Repairs, Warnings: entry.Warnings, UnknownRevisions: unknownLegacyHistory(entry.Document), Provenance: entry.Provenance})
+		assetBytes := 0
+		for _, asset := range entry.Assets {
+			assetBytes += asset.Size
+		}
+		out.Entries = append(out.Entries, CorpusEntrySummary{AssetCount: len(entry.Assets), AssetBytes: assetBytes, Key: entry.Key, Name: entry.Name, ID: entry.Document.ID, Session: entry.Document.Session, Kind: entry.Document.Kind, Title: entry.Document.Title, Destination: entry.Destination, Disposition: entry.Disposition, Reason: entry.Reason, Dependencies: entry.Dependencies, Repairs: entry.Repairs, Warnings: entry.Warnings, UnknownRevisions: unknownLegacyHistory(entry.Document), Provenance: entry.Provenance})
 	}
 	return out
 }
@@ -200,7 +207,7 @@ func (s *Service) classifyCorpusDestination(entry *ImportEntry, target string) {
 	}
 }
 func inferCorpusEntry(source ImportSource, request CorpusRequest) ImportEntry {
-	entry := normalizeSource(source, ImportRequest{})
+	entry := normalizeSource(source, ImportRequest{legacyReferences: true})
 	fields, _, fieldErr := legacyFields(source.Content)
 	canonical, canonicalErr := Parse(source.Content)
 	if canonicalErr == nil {
@@ -250,6 +257,9 @@ func inferCorpusEntry(source ImportSource, request CorpusRequest) ImportEntry {
 		if _, ok := entry.Provenance["kind"]; !ok {
 			evidence("kind", "filename", source.Name)
 		}
+	}
+	if canonicalErr != nil && scalar("id") == "" {
+		d.ID = strings.TrimSuffix(source.Name, path.Ext(source.Name))
 	}
 	if !strings.Contains(d.ID, "/") && d.Session != "" && d.ID != "" {
 		d.ID = d.Session + "/" + d.ID

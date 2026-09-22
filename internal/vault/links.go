@@ -1,10 +1,12 @@
 package vault
 
 import (
+	"html"
 	"net/url"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"unicode"
@@ -15,7 +17,11 @@ var citationSuffix = regexp.MustCompile(`^(.*):([0-9]+)(?:-([0-9]+))?$`)
 var linkScheme = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9+.-]*:`)
 
 type importLinkIndex struct {
-	aliases map[string]map[string]ImportEntry
+	profiles    []string
+	unavailable map[string]bool
+	warnings    *[]Repair
+	rewrite     func(string) (string, bool)
+	aliases     map[string]map[string]ImportEntry
 }
 
 func newImportLinkIndex(entries []ImportEntry, sources []ImportSource) *importLinkIndex {
@@ -27,6 +33,9 @@ func newImportLinkIndex(entries []ImportEntry, sources []ImportSource) *importLi
 	for _, entry := range entries {
 		if !validID(entry.Document.ID) {
 			continue
+		}
+		if !slices.Contains(index.profiles, entry.Destination) {
+			index.profiles = append(index.profiles, entry.Destination)
 		}
 		source := byKey[entry.Key]
 		add := func(alias string) {
@@ -71,6 +80,10 @@ func newImportLinkIndex(entries []ImportEntry, sources []ImportSource) *importLi
 	return index
 }
 func (index *importLinkIndex) resolve(target string, source ImportSource, current ImportEntry) (ImportEntry, bool) {
+	entry, count := index.resolveCount(target, source, current)
+	return entry, count == 1
+}
+func (index *importLinkIndex) resolveCount(target string, source ImportSource, current ImportEntry) (ImportEntry, int) {
 	target = strings.SplitN(target, "#", 2)[0]
 	if decoded, err := url.PathUnescape(target); err == nil {
 		target = decoded
@@ -84,21 +97,39 @@ func (index *importLinkIndex) resolve(target string, source ImportSource, curren
 		aliases = append(aliases, "origin:"+canonicalProfileRoot(resolved))
 	}
 	if source.RelativePath != "" {
+		parts := strings.Split(source.RelativePath, "/")
+		if strings.HasPrefix(target, "thoughts/shared/") {
+			aliases = append(aliases, "corpus:"+parts[0]+"/"+strings.TrimPrefix(target, "thoughts/"))
+		}
+		if strings.HasPrefix(target, "shared/") {
+			aliases = append(aliases, "corpus:"+parts[0]+"/"+target)
+		}
+		aliases = append(aliases, "corpus:"+path.Clean(target))
 		aliases = append(aliases, "corpus:"+path.Clean(path.Join(path.Dir(source.RelativePath), target)))
 	}
 	candidates := map[string]ImportEntry{}
+	for _, alias := range aliases[1:] {
+		for key, entry := range index.aliases[current.Destination+"\x00"+alias] {
+			candidates[key] = entry
+		}
+	}
+	if len(candidates) == 1 {
+		for _, entry := range candidates {
+			return entry, 1
+		}
+	}
 	for _, alias := range aliases {
 		for key, entry := range index.aliases[current.Destination+"\x00"+alias] {
 			candidates[key] = entry
 		}
 	}
 	if len(candidates) != 1 {
-		return ImportEntry{}, false
+		return ImportEntry{}, len(candidates)
 	}
 	for _, entry := range candidates {
-		return entry, true
+		return entry, 1
 	}
-	return ImportEntry{}, false
+	return ImportEntry{}, len(candidates)
 }
 func importLinkTarget(target string, source ImportSource, current ImportEntry, entries []ImportEntry, sources []ImportSource) (ImportEntry, bool) {
 	return newImportLinkIndex(entries, sources).resolve(target, source, current)
@@ -110,6 +141,14 @@ func normalizeImportLinksIndexed(body string, source ImportSource, current Impor
 	repairs := []Repair{}
 	dependencies := map[string]bool{}
 	rewrite := func(destination string) (string, bool) {
+		if index.rewrite != nil {
+			if result, ok := index.rewrite(destination); ok {
+				return result, true
+			}
+		}
+		if result, ok := assetLink(current, destination); ok {
+			return result, true
+		}
 		original := destination
 		if mapped, ok := mappings[destination]; ok {
 			destination = mapped
@@ -124,7 +163,26 @@ func normalizeImportLinksIndexed(body string, source ImportSource, current Impor
 			return destination, true
 		}
 		target, fragment, _ := strings.Cut(destination, "#")
-		if entry, ok := index.resolve(target, source, current); ok {
+		sameProfile, sameProfileCount := index.resolveCount(target, source, current)
+		sameProfileFound := sameProfileCount == 1
+		if sameProfileCount > 1 {
+			repairs = append(repairs, Repair{"body", ErrImportLink.Error() + ": " + original})
+			return original, false
+		}
+		if index.unavailable != nil && (!sameProfileFound || index.unavailable[sameProfile.Key]) {
+
+			for _, profile := range index.profiles {
+				probe := current
+				probe.Destination = profile
+				if found, ok := index.resolve(target, source, probe); ok && (profile != current.Destination || index.unavailable[found.Key]) {
+					if index.warnings != nil {
+						*index.warnings = append(*index.warnings, Repair{"body", corpusInertLink + ": " + original})
+					}
+					return "\x00" + original, true
+				}
+			}
+		}
+		if entry, ok := sameProfile, sameProfileFound; ok {
 			fromPath, targetPath := current.Path, entry.Path
 			if fromPath == "" {
 				fromPath = current.Document.ID + ".md"
@@ -187,6 +245,10 @@ func normalizeImportLinksIndexed(body string, source ImportSource, current Impor
 				}
 				decoded := unescapeMarkdown(value)
 				rewritten, _ := rewrite(decoded)
+				if strings.HasPrefix(rewritten, "\x00") {
+					output.WriteString(inertText(strings.TrimSuffix(line, "\n")) + "\n")
+					continue
+				}
 				if rewritten == decoded {
 					rewritten = value
 				}
@@ -241,7 +303,9 @@ func normalizeImportLinksIndexed(body string, source ImportSource, current Impor
 						label = target
 					}
 					rewritten, ok := rewrite(target)
-					if ok {
+					if strings.HasPrefix(rewritten, "\x00") {
+						output.WriteString(inertText(label + " (" + target + ")"))
+					} else if ok {
 						output.WriteString("[" + strings.ReplaceAll(label, "]", "\\]") + "](" + rewritten + ")")
 					} else {
 						output.WriteString(line[at : at+end+4])
@@ -268,6 +332,11 @@ func normalizeImportLinksIndexed(body string, source ImportSource, current Impor
 						raw := inner[begin:finish]
 						decoded := unescapeMarkdown(raw)
 						rewritten, _ := rewrite(decoded)
+						if strings.HasPrefix(rewritten, "\x00") {
+							output.WriteString(inertText(line[at+1:close] + " (" + decoded + ")"))
+							at = end + 1
+							continue
+						}
 						if rewritten == decoded {
 							rewritten = raw
 						}
@@ -478,4 +547,9 @@ func (s *Service) ResolveLink(scope Scope, from Reference, target string) (ReadR
 	}
 	result, err := s.Resolve(scope, Reference{Profile: admitted.Reference.Profile, Path: relative})
 	return result, parsed.Fragment, err
+}
+
+func inertText(value string) string {
+	value = html.EscapeString(value)
+	return strings.NewReplacer("\\", "\\\\", "[", "\\[", "]", "\\]", "*", "\\*", "_", "\\_", "`", "&#96;", "<", "&lt;", ">", "&gt;", "\n", " ").Replace(value)
 }

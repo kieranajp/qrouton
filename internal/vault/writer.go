@@ -196,6 +196,9 @@ func (s *Service) writeCanonical(ctx context.Context, profile Profile, job queue
 	if err := s.validateImportDependencies(store, profile, job, inv, ledger, map[string]bool{}); err != nil {
 		return err
 	}
+	if err := writeImportAssets(ctx, root, store, job, document.Session); err != nil {
+		return err
+	}
 	if same {
 		return saveLedger(directory, ledger)
 	}

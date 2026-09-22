@@ -309,6 +309,10 @@ func (s *Settings) PreviewVaultCorpus(in VaultCorpusInput) (vault.CorpusPreview,
 		}
 		request.Sources = append(request.Sources, vault.CorpusSource{Source: source, RelativePath: filepath.ToSlash(file.name)})
 	}
+	assetFiles, err := admitCorpusAssets(&request, selections, keys, totalBytes)
+	if err != nil {
+		return vault.CorpusPreview{}, err
+	}
 	cfg := s.cfg.Snapshot()
 	request.ResolveRevision = func(repository, recorded string) (string, error) {
 		if cfg == nil || !vault.ValidRepository(repository) || !regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`).MatchString(recorded) {
@@ -333,6 +337,9 @@ func (s *Settings) PreviewVaultCorpus(in VaultCorpusInput) (vault.CorpusPreview,
 	}
 	result, err := service.PreviewCorpus(s.vaults.ctx, request)
 	if err == nil {
+		for token, file := range assetFiles {
+			selections.files[token] = file
+		}
 		selections.previews = map[string]map[string]string{result.ID: keys}
 	}
 	return result, err

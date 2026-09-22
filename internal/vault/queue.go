@@ -28,6 +28,7 @@ type importDependency struct {
 	Job        string `json:"job,omitempty"`
 }
 type queueEntry struct {
+	Assets       []ImportAssetInfo  `json:"assets,omitempty"`
 	Path         string             `json:"path"`
 	Dependencies []importDependency `json:"dependencies,omitempty"`
 	ImportJob
@@ -205,6 +206,9 @@ func (s *Service) ConfirmImport(ctx context.Context, previewID string, selectedK
 			return ImportReport{}, ErrImportSource
 		}
 		selected[key] = true
+		for _, asset := range entry.Assets {
+			keys[asset.Key] = true
+		}
 		keys[key] = true
 		for _, evidenceKey := range entry.EvidenceKeys {
 			evidence, ok := sources[evidenceKey]
@@ -231,6 +235,21 @@ func (s *Service) ConfirmImport(ctx context.Context, previewID string, selectedK
 	}
 	for _, key := range selectedKeys {
 		entry := entries[key]
+		for _, pin := range record.Dependencies[key] {
+			selectedTarget := false
+			for targetKey := range selected {
+				target := entries[targetKey]
+				if target.Destination == entry.Destination && target.Document.ID == pin.ArtifactID && target.Path == pin.Path && contentHash(target.Canonical) == pin.Hash {
+					selectedTarget = true
+				}
+			}
+			if !selectedTarget {
+				existing, err := s.Read(Scope{ReadProfiles: []string{entry.Destination}}, Reference{Profile: entry.Destination, ID: pin.ArtifactID, Path: pin.Path})
+				if err != nil || contentHash(existing.Content) != pin.Hash {
+					return ImportReport{}, ErrImportRepair
+				}
+			}
+		}
 		for _, dependency := range entry.Dependencies {
 			target := entries[dependency]
 			scope := Scope{ReadProfiles: []string{entry.Destination}}
@@ -305,7 +324,19 @@ func (s *Service) ConfirmImport(ctx context.Context, previewID string, selectedK
 			}
 			dependencies = append(dependencies, pin)
 		}
-		job := queueEntry{Path: entry.Path, Dependencies: dependencies, ImportJob: ImportJob{ID: id, ArtifactID: entry.Document.ID, Profile: entry.Destination, SessionKey: sessionKey, State: ImportPending}, Version: 1, Root: record.Roots[key], Canonical: canonical, Hash: hash, Preview: previewID, Source: key}
+		for _, pin := range record.Dependencies[key] {
+			found := false
+			for _, dependency := range dependencies {
+				if dependency.ArtifactID == pin.ArtifactID {
+					found = true
+				}
+			}
+			if !found {
+				pin.Job = ""
+				dependencies = append(dependencies, pin)
+			}
+		}
+		job := queueEntry{Assets: entry.Assets, Path: entry.Path, Dependencies: dependencies, ImportJob: ImportJob{ID: id, ArtifactID: entry.Document.ID, Profile: entry.Destination, SessionKey: sessionKey, State: ImportPending}, Version: 1, Root: record.Roots[key], Canonical: canonical, Hash: hash, Preview: previewID, Source: key}
 		err := s.withPublicationPolicy(ctx, sessionKey, func(store *os.Root, policy publicationPolicy) error {
 			if source.Session != nil && source.Session.PublicationDisabled {
 				policy.Disabled = true

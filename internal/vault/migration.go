@@ -40,6 +40,8 @@ type ImportOverride struct {
 	Destination string   `json:"destination,omitempty"`
 }
 type ImportRequest struct {
+	legacyReferences  bool
+	Assets            []ImportAsset `json:"-"`
 	prepared          map[string]ImportEntry
 	targetProfile     string
 	Sources           []ImportSource            `json:"sources"`
@@ -53,6 +55,7 @@ type Repair struct {
 	Reason string `json:"reason"`
 }
 type ImportEntry struct {
+	Assets       []ImportAssetInfo        `json:"assets,omitempty"`
 	EvidenceKeys []string                 `json:"evidenceKeys,omitempty"`
 	Disposition  string                   `json:"disposition,omitempty"`
 	Reason       string                   `json:"reason,omitempty"`
@@ -77,13 +80,15 @@ type ImportPreview struct {
 	Excluded       int           `json:"excluded"`
 }
 type importRecord struct {
-	Sessions       map[string]ImportSession `json:"sessions,omitempty"`
-	SourceSessions map[string]string        `json:"sourceSessions,omitempty"`
-	Version        int                      `json:"version"`
-	Preview        ImportPreview            `json:"preview"`
-	Sources        []ImportSource           `json:"sources"`
-	Hashes         map[string]string        `json:"hashes"`
-	Roots          map[string]string        `json:"roots"`
+	Dependencies   map[string][]importDependency `json:"dependencies,omitempty"`
+	Assets         map[string][]byte             `json:"assets,omitempty"`
+	Sessions       map[string]ImportSession      `json:"sessions,omitempty"`
+	SourceSessions map[string]string             `json:"sourceSessions,omitempty"`
+	Version        int                           `json:"version"`
+	Preview        ImportPreview                 `json:"preview"`
+	Sources        []ImportSource                `json:"sources"`
+	Hashes         map[string]string             `json:"hashes"`
+	Roots          map[string]string             `json:"roots"`
 }
 
 var legacyFilename = regexp.MustCompile(`^([RSPND][0-9]+)(?:-([0-9]{4}-[0-9]{2}-[0-9]{2})(?:-.*)?)?$`)
@@ -111,7 +116,7 @@ func (s *Service) PreviewImport(ctx context.Context, request ImportRequest) (Imp
 			return ImportPreview{}, ErrImportSource
 		}
 	}
-	record := importRecord{Version: 1, Sources: request.Sources, Hashes: map[string]string{}, Roots: map[string]string{}}
+	record := importRecord{Dependencies: map[string][]importDependency{}, Version: 1, Sources: request.Sources, Hashes: map[string]string{}, Roots: map[string]string{}}
 	record.Preview.ID, err = randomName("import-")
 	if err != nil {
 		return ImportPreview{}, err
@@ -192,8 +197,84 @@ func (s *Service) PreviewImport(ctx context.Context, request ImportRequest) (Imp
 			existingPaths[profile][entry.Reference.Path] = entry
 		}
 	}
+	priorCanonical := map[string]string{}
+	priorPins := map[string][]importDependency{}
+	priorSources := map[string]map[string][]ReadResult{}
+	if request.targetProfile != "" {
+		store, err := os.OpenRoot(directory)
+		if err != nil {
+			return ImportPreview{}, ErrImportState
+		}
+		files, err := os.ReadDir(directory)
+		if err != nil {
+			store.Close()
+			return ImportPreview{}, ErrImportState
+		}
+		archives := map[string]importRecord{}
+		for _, file := range files {
+			if file.IsDir() || !strings.HasPrefix(file.Name(), queuePrefix) || !strings.HasSuffix(file.Name(), ".json") {
+				continue
+			}
+			job, err := loadQueueEntry(store, file.Name())
+			if err != nil {
+				continue
+			}
+			prior, ok := archives[job.Preview]
+			if !ok {
+				prior, err = loadImportRecord(store, job.Preview)
+				if err != nil {
+					continue
+				}
+				archives[job.Preview] = prior
+			}
+			hash := prior.Hashes[job.Source]
+			identity := ""
+			for _, source := range prior.Sources {
+				if source.Key == job.Source {
+					identity = importSourceIdentity(source)
+				}
+			}
+			if hash == "" || identity == "" {
+				continue
+			}
+			hash += "\x00" + identity
+			d, err := Parse(job.Canonical)
+			if err != nil {
+				continue
+			}
+			if priorSources[job.Profile] == nil {
+				priorSources[job.Profile] = map[string][]ReadResult{}
+			}
+			priorPins[job.Profile+"\x00"+hash+"\x00"+d.ID] = job.Dependencies
+			known := false
+			for _, match := range priorSources[job.Profile][hash] {
+				if match.Document.ID == d.ID {
+					known = true
+				}
+			}
+			if !known {
+				priorSources[job.Profile][hash] = append(priorSources[job.Profile][hash], ReadResult{Document: d, Content: string(job.Canonical), Supported: true})
+			}
+		}
+		store.Close()
+	}
 	for i := range record.Preview.Entries {
 		entry := &record.Preview.Entries[i]
+		if entry.Provenance["id"].Source == "filename" && entry.Provenance["metadata"].Source != "user_override" && entry.Provenance["body"].Source != "user_override" {
+			matches := priorSources[entry.Destination][record.Hashes[entry.Key]+"\x00"+importSourceIdentity(sourcesByKey[entry.Key])]
+			if len(matches) == 1 && matches[0].Document.Session == entry.Document.Session {
+				entry.Document.ID = matches[0].Document.ID
+				entry.Document = matches[0].Document
+				priorCanonical[entry.Key] = matches[0].Content
+				record.Dependencies[entry.Key] = append([]importDependency(nil), priorPins[entry.Destination+"\x00"+record.Hashes[entry.Key]+"\x00"+importSourceIdentity(sourcesByKey[entry.Key])+"\x00"+entry.Document.ID]...)
+				for i := range record.Dependencies[entry.Key] {
+					record.Dependencies[entry.Key][i].Job = ""
+				}
+				entry.Provenance["id"] = FieldEvidence{"prior_import", corpusPriorImport}
+			} else if len(matches) > 1 {
+				entry.Repairs = append(entry.Repairs, Repair{"id", ErrConflict.Error()})
+			}
+		}
 		entry.Path = entry.Document.ID + ".md"
 		for _, existing := range existingIDs[entry.Destination][entry.Document.ID] {
 			if existing.Supported && !inventories[entry.Destination].conflicts[existing.Document.ID] {
@@ -202,11 +283,18 @@ func (s *Service) PreviewImport(ctx context.Context, request ImportRequest) (Imp
 			}
 		}
 	}
+	if err := prepareImportAssets(ctx, &record, request.Assets); err != nil {
+		return ImportPreview{}, err
+	}
+	rawBodies := map[string]string{}
+	for _, entry := range record.Preview.Entries {
+		rawBodies[entry.Key] = entry.Document.Body
+	}
 	linkIndex := newImportLinkIndex(record.Preview.Entries, request.Sources)
 	for index := range record.Preview.Entries {
 		entry := &record.Preview.Entries[index]
 		source := request.Sources[index]
-		if entry.Disposition == "excluded" {
+		if entry.Disposition == "excluded" || entry.Provenance["id"].Source == "prior_import" {
 			entry.Body = entry.Document.Body
 			continue
 		}
@@ -262,6 +350,9 @@ func (s *Service) PreviewImport(ctx context.Context, request ImportRequest) (Imp
 		}
 		entry.Repairs = append(entry.Repairs, metadataRepairs(entry.Document)...)
 		canonical, encodeErr := Encode(entry.Document)
+		if prior := priorCanonical[entry.Key]; prior != "" && encodeErr == nil {
+			canonical = []byte(prior)
+		}
 		source := sourcesByKey[entry.Key]
 		if original, err := Parse(source.Content); err == nil {
 			encoded, _ := Encode(original)
@@ -291,6 +382,67 @@ func (s *Service) PreviewImport(ctx context.Context, request ImportRequest) (Imp
 		}
 		if strings.Contains(entry.Body, "repo://github.com/") {
 			entry.Warnings = append(entry.Warnings, Repair{"body", corpusUnknownCitation})
+		}
+	}
+	if request.targetProfile != "" {
+		index := newImportLinkIndex(record.Preview.Entries, request.Sources)
+		index.unavailable = map[string]bool{}
+		for _, entry := range record.Preview.Entries {
+			index.unavailable[entry.Key] = entry.Disposition == "excluded" || len(entry.Repairs) > 0
+		}
+		for i := range record.Preview.Entries {
+			entry := &record.Preview.Entries[i]
+			if entry.Disposition == "excluded" || entry.Provenance["id"].Source == "prior_import" {
+				continue
+			}
+			kept := []Repair{}
+			for _, repair := range entry.Repairs {
+				if repair.Field != "body" {
+					kept = append(kept, repair)
+				}
+			}
+			entry.Repairs = kept
+			index.warnings = &entry.Warnings
+			body, issues, deps := normalizeImportLinksIndexed(rawBodies[entry.Key], sourcesByKey[entry.Key], *entry, request.LinkMappings, index)
+			entry.Document.Body = body
+			entry.Body = body
+			entry.Repairs = append(entry.Repairs, issues...)
+			entry.Dependencies = deps
+			for _, edge := range entry.Document.Lineage {
+				if target, ok := index.resolve(edge.Target, sourcesByKey[entry.Key], *entry); ok && target.Key != entry.Key {
+					entry.Dependencies = append(entry.Dependencies, target.Key)
+				}
+			}
+			if canonical, err := Encode(entry.Document); err == nil {
+				entry.Canonical = string(canonical)
+				if original, err := Parse(sourcesByKey[entry.Key].Content); err == nil {
+					if encoded, _ := Encode(original); bytes.Equal(encoded, canonical) {
+						entry.Canonical = string(sourcesByKey[entry.Key].Content)
+					}
+				}
+			}
+		}
+	}
+	for i := range record.Preview.Entries {
+		entry := &record.Preview.Entries[i]
+		for _, pin := range record.Dependencies[entry.Key] {
+			matched := false
+			for _, target := range record.Preview.Entries {
+				if target.Destination == entry.Destination && target.Document.ID == pin.ArtifactID {
+					matched = true
+					if target.Path != pin.Path || contentHash(target.Canonical) != pin.Hash {
+						entry.Repairs = append(entry.Repairs, Repair{"dependencies", ErrImportRepair.Error()})
+					} else {
+						entry.Dependencies = append(entry.Dependencies, target.Key)
+					}
+				}
+			}
+			if !matched {
+				existing, err := s.Read(Scope{ReadProfiles: []string{entry.Destination}}, Reference{Profile: entry.Destination, ID: pin.ArtifactID, Path: pin.Path})
+				if err != nil || contentHash(existing.Content) != pin.Hash {
+					entry.Repairs = append(entry.Repairs, Repair{"dependencies", ErrImportRepair.Error()})
+				}
+			}
 		}
 	}
 	finalizeImportPreview(&record.Preview, request.targetProfile != "")
@@ -422,10 +574,20 @@ func normalizeSource(source ImportSource, request ImportRequest) ImportEntry {
 				}
 			}
 		}
-		for _, key := range []string{"research", "spec", "plan", "derived_from", "supersedes"} {
+		referenceKeys := []string{"research", "spec", "plan", "derived_from", "supersedes"}
+		if request.legacyReferences {
+			referenceKeys = append(referenceKeys, "questions", "output", "related_research", "follows", "copy")
+		}
+		for _, key := range referenceKeys {
 			supported[key] = true
 			n := fields[key]
 			if n == nil {
+				continue
+			}
+			if request.legacyReferences && key != "derived_from" && key != "supersedes" {
+				raw, _ := yaml.Marshal(n)
+				d.Body += "\n\n" + corpusLegacyReference + " " + inertText(key+": "+strings.TrimSpace(string(raw))) + "\n"
+				entry.Warnings = append(entry.Warnings, Repair{key, corpusLegacyReference})
 				continue
 			}
 			relation := "derived_from"
@@ -670,4 +832,14 @@ func finalizeImportPreview(preview *ImportPreview, closure bool) {
 			preview.Accepted++
 		}
 	}
+}
+
+func importSourceIdentity(source ImportSource) string {
+	if source.RelativePath != "" {
+		return "relative:" + filepath.ToSlash(filepath.Clean(source.RelativePath))
+	}
+	if source.Origin != "" {
+		return "origin:" + canonicalProfileRoot(source.Origin)
+	}
+	return ""
 }

@@ -43,7 +43,7 @@ func TestCorpusLegacyUnknownRevisionRoundTrip(t *testing.T) {
 	if d.LegacyImport == nil || d.LegacyImport.SourceHash != contentHash(string(source.Source.Content)) || d.Repos[0].Revision != nil || d.Repos[0].Role != "reference" {
 		t.Fatal(d)
 	}
-	if d.ID != "session/R1" || d.Kind != "research" || d.Date != "2026-07-01" || d.Title != "Finding" || d.Workstream != "session" {
+	if d.ID != "session/R1-2026-07-01-finding" || d.Kind != "research" || d.Date != "2026-07-01" || d.Title != "Finding" || d.Workstream != "session" {
 		t.Fatal(d)
 	}
 	if entry.Provenance["author"].Source != "batch_default" || entry.Provenance["session"].Source != "folder" {
@@ -178,11 +178,11 @@ func TestCorpusManifestPinsAndExplicitDefaults(t *testing.T) {
 		t.Fatal(p, err, calls)
 	}
 }
-func TestCorpusRejectsConflictsAndPropagatesLinkRepairs(t *testing.T) {
+func TestCorpusFilenameIdentityAndInvalidSources(t *testing.T) {
 	s, request := corpusFixture(t)
 	request.Sources = []CorpusSource{corpusSource("one", "R1-2026-07-01-finding.md", "repo: qrouton", "# One\n"), corpusSource("questions", "R1-2026-07-01-finding-questions.md", "repo: qrouton", "# Questions\n"), corpusSource("two", "R2-2026-07-01-finding.md", "repo: qrouton", "# Two\n\n[one](R1-2026-07-01-finding.md)\n")}
 	p, err := s.PreviewCorpus(context.Background(), request)
-	if err != nil || p.RepairRequired != 3 || p.Ready != 0 {
+	if err != nil || p.RepairRequired != 0 || p.Ready != 3 {
 		t.Fatal(p, err)
 	}
 	request.Sources[1].Source.Key = "one"
@@ -225,7 +225,7 @@ func TestCorpusLargeLinkedBatchWithExistingInventory(t *testing.T) {
 	}
 	t.Logf("%d linked sources +40 destination documents: %s", count, time.Since(started))
 	entry, err := s.CorpusEntry(p.ID, "0")
-	if err != nil || !strings.Contains(entry.Body, "R1.md#finding") || len(entry.Dependencies) != 1 {
+	if err != nil || !strings.Contains(entry.Body, "R1-2026-07-01-finding.md#finding") || len(entry.Dependencies) != 1 {
 		t.Fatal(entry, err)
 	}
 }
