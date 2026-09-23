@@ -6,7 +6,6 @@ const (
 	OllamaModel = "all-minilm:22m-l6-v2-fp16"
 	OllamaURL   = "http://127.0.0.1:11434"
 
-	schemaVersion = 1
 	// preprocessing versions the chunking and window inputs the cache was built from.
 	preprocessing = 3
 
@@ -39,12 +38,12 @@ const (
 	AdmittedDense = "dense_top"
 
 	KindResearch = "research"
-
-	RelationDerivedFrom = "derived_from"
-	RelationSupersedes  = "supersedes"
 )
 
-var kinds = map[string]bool{KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
+var (
+	kinds    = map[string]bool{KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
+	dirKinds = map[string]string{"research": KindResearch, "specs": "spec", "plans": "plan"}
+)
 
 const (
 	frontmatterOpen  = "---\n"
