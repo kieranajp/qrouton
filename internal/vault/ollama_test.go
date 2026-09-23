@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestEmbedAllSplitsOverflowingWindowsUnderTheirBreadcrumb(t *testing.T) {
@@ -96,5 +100,69 @@ func TestOllamaClientSpeaksTheAPI(t *testing.T) {
 	o.Name = "absent"
 	if _, err := o.Model(ctx); !errors.Is(err, ErrModelMissing) {
 		t.Fatalf("missing model = %v", err)
+	}
+}
+
+func TestAStalledEmbedTimesOutAndALaterSearchRetries(t *testing.T) {
+	root := t.TempDir()
+	for i := range 80 {
+		writeFile(t, filepath.Join(root, fmt.Sprintf("note-%02d.md", i)), fmt.Sprintf("# Note %d\n\nParagraph about topic %d.\n", i, i))
+	}
+	var stall atomic.Bool
+	stall.Store(true)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case ollamaTags:
+			_, _ = w.Write([]byte(`{"models":[{"name":"` + OllamaModel + `","digest":"abc"}]}`))
+		case ollamaEmbed:
+			var body struct {
+				Input []string `json:"input"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			if stall.Load() {
+				<-r.Context().Done()
+				return
+			}
+			vectors := make([][]float32, len(body.Input))
+			for i := range vectors {
+				vectors[i] = []float32{1, float32(i)}
+			}
+			_ = json.NewEncoder(w).Encode(map[string]any{"embeddings": vectors})
+		}
+	}))
+	defer server.Close()
+	o := NewOllama()
+	if o.Client.Timeout == 0 {
+		t.Fatal("Ollama requests have no timeout")
+	}
+	o.URL = server.URL
+	o.Client.Timeout = 50 * time.Millisecond
+	s := newTestService(t, root, o)
+
+	search(t, s, Query{Text: "topic 7"})
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		s.mu.Lock()
+		building := s.building
+		s.mu.Unlock()
+		if !building {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("a stalled embed left the build running")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	stall.Store(false)
+	for {
+		res := search(t, s, Query{Text: "topic 7"})
+		if res.Status.Semantic == StatusReady {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("a later search never rebuilt the index: %+v", res.Status)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 }

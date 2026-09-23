@@ -27,7 +27,7 @@ type Ollama struct {
 }
 
 func NewOllama() *Ollama {
-	return &Ollama{URL: OllamaURL, Name: OllamaModel, Client: http.DefaultClient}
+	return &Ollama{URL: OllamaURL, Name: OllamaModel, Client: &http.Client{Timeout: requestTimeout}}
 }
 
 func (o *Ollama) Model(ctx context.Context) (Model, error) {
