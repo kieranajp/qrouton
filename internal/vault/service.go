@@ -245,11 +245,7 @@ func (s *Service) loadLocked(name string) bool {
 		delete(s.byName, name)
 		return false
 	}
-	doc, body, line, ok := parseDocument(name, string(b))
-	if !ok {
-		delete(s.byName, name)
-		return true
-	}
+	doc, body, line := parseDocument(name, string(b))
 	s.byName[name] = &entry{name: name, doc: doc, chunks: chunkDocument(doc.Title, body, line)}
 	return true
 }

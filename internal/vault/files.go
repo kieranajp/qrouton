@@ -35,7 +35,7 @@ func walk(dir string) (map[string]stamp, error) {
 			}
 			return nil
 		}
-		if entry.IsDir() || !markdownFile(name) {
+		if entry.IsDir() || !markdownFile(name) || syncArtefact(entry.Name()) {
 			return nil
 		}
 		if info, err := documentInfo(root, name); err == nil {
@@ -49,6 +49,12 @@ func walk(dir string) (map[string]stamp, error) {
 func markdownFile(name string) bool {
 	ext := strings.ToLower(path.Ext(name))
 	return ext == ".md" || ext == ".markdown"
+}
+
+// syncArtefact reports a copy a sync tool made beside a real file.
+func syncArtefact(base string) bool {
+	return strings.Contains(base, ".sync-conflict-") || strings.HasPrefix(base, "~syncthing~") ||
+		strings.Contains(base, " (conflicted copy") || strings.Contains(base, " (Conflict")
 }
 
 func documentInfo(root *os.Root, name string) (fs.FileInfo, error) {
