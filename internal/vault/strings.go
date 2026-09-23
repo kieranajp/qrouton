@@ -14,6 +14,7 @@ const (
 	embedBatch       = 64
 	walkInterval     = 2 * time.Second
 	probeTimeout     = 2 * time.Second
+	requestTimeout   = 2 * time.Minute
 	maxDocumentBytes = 1 << 20
 	readLimit        = 20000
 	snippetChars     = 320
