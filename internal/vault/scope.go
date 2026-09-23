@@ -7,8 +7,7 @@ import (
 	"strings"
 )
 
-// Validate refuses duplicate ids and roots that share, nest in, or reach each
-// other through symlinks.
+// Validate compares ids without case, since each names a cache file.
 func Validate(profiles []Profile) error {
 	resolved := make([]string, len(profiles))
 	for i, p := range profiles {
@@ -17,7 +16,7 @@ func Validate(profiles []Profile) error {
 		}
 		real := resolve(p.Root)
 		for j, other := range profiles[:i] {
-			if other.ID == p.ID {
+			if strings.EqualFold(other.ID, p.ID) {
 				return fmt.Errorf("%w: %q", ErrDuplicateProfile, p.ID)
 			}
 			if contains(resolved[j], real) || contains(real, resolved[j]) {

@@ -5,8 +5,6 @@ import (
 	"sync"
 )
 
-// Set holds one index per thoughts root. A session reaches only the one its
-// thoughts directory lives in.
 type Set struct {
 	embedder Embedder
 	cacheDir string

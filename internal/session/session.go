@@ -84,7 +84,7 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 		slug = Slugify(req.Name)
 	}
 	thoughts, notice := routeThoughts(cfg, req.Repos)
-	if thoughts.ID != config.DefaultThoughtsID {
+	if thoughts.ID != config.DefaultThoughtsID && slug != "" {
 		slug = freeSlug(cfg.Root, thoughts.Path, slug, req.Entropy)
 	}
 	dir := filepath.Join(cfg.Root, slug)

@@ -28,6 +28,7 @@ func TestValidateRefusesRootsThatCouldReachEachOther(t *testing.T) {
 		{"separate roots", []Profile{{"shared", shared}, {"private", private}}, nil},
 		{"a missing root", []Profile{{"shared", filepath.Join(base, "later")}}, nil},
 		{"duplicate id", []Profile{{"shared", shared}, {"shared", private}}, ErrDuplicateProfile},
+		{"duplicate id in another case", []Profile{{"shared", shared}, {"Shared", private}}, ErrDuplicateProfile},
 		{"same root", []Profile{{"shared", shared}, {"private", shared + "/"}}, ErrOverlappingRoots},
 		{"nested root", []Profile{{"shared", shared}, {"inner", filepath.Join(shared, "inner")}}, ErrOverlappingRoots},
 		{"enclosing root", []Profile{{"shared", shared}, {"all", base}}, ErrOverlappingRoots},

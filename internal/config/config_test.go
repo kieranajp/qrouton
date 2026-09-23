@@ -318,6 +318,8 @@ func TestLoadRefusesThoughtsRootsThatCouldMixMaterial(t *testing.T) {
 		"duplicate id":      `[{"id":"a","path":"/tmp/a","orgs":["acme"]},{"id":"a","path":"/tmp/b","orgs":["other"]}]`,
 		"reserved id":       `[{"id":"default","path":"/tmp/a","orgs":["acme"]}]`,
 		"no orgs":           `[{"id":"a","path":"/tmp/a"}]`,
+		"blank org":         `[{"id":"a","path":"/tmp/a","orgs":[" "]}]`,
+		"reserved id cased": `[{"id":"Default","path":"/tmp/a","orgs":["acme"]}]`,
 	} {
 		writeConfig(t, `{"root":"`+root+`","thoughts":{"roots":`+roots+`}}`)
 		if _, err := Load(); err == nil {

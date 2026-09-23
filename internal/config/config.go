@@ -36,8 +36,7 @@ type Config struct {
 	Thoughts Thoughts `json:"thoughts,omitzero"`
 }
 
-// Thoughts names where sessions write their documents. Default is private; each
-// extra root takes a session only when every one of its repos' orgs maps there.
+// Thoughts names where sessions write their documents. Default is private.
 type Thoughts struct {
 	Default string         `json:"default,omitempty"`
 	Roots   []ThoughtsRoot `json:"roots,omitempty"`
@@ -153,7 +152,7 @@ func (c *Config) RouteThoughts(orgs []string) ThoughtsRoot {
 	routed := -1
 	for _, org := range orgs {
 		i := slices.IndexFunc(roots, func(r ThoughtsRoot) bool {
-			return slices.ContainsFunc(r.Orgs, func(o string) bool { return strings.EqualFold(o, org) })
+			return slices.ContainsFunc(r.Orgs, func(o string) bool { return strings.EqualFold(strings.TrimSpace(o), strings.TrimSpace(org)) })
 		})
 		if i < 0 || routed >= 0 && i != routed {
 			return roots[0]
@@ -167,11 +166,14 @@ func validateThoughts(roots []ThoughtsRoot) error {
 	profiles := make([]vault.Profile, len(roots))
 	owners := map[string]string{}
 	for i, r := range roots {
-		if i > 0 && (r.ID == DefaultThoughtsID || len(r.Orgs) == 0) {
+		if i > 0 && (strings.EqualFold(r.ID, DefaultThoughtsID) || len(r.Orgs) == 0) {
 			return fmt.Errorf("%w: %q", ErrThoughtsRoot, r.ID)
 		}
 		for _, org := range r.Orgs {
 			key := strings.ToLower(strings.TrimSpace(org))
+			if key == "" {
+				return fmt.Errorf("%w: %q", ErrThoughtsRoot, r.ID)
+			}
 			if owner, ok := owners[key]; ok {
 				return fmt.Errorf("%w: %s on %q and %q", ErrThoughtsOrg, org, owner, r.ID)
 			}
