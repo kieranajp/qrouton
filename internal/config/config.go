@@ -32,6 +32,15 @@ type Config struct {
 	Quiet bool `json:"quiet,omitempty"`
 
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
+
+	Vault *VaultProfile `json:"vault,omitempty"`
+}
+
+// VaultProfile names the one Obsidian vault every session searches.
+type VaultProfile struct {
+	ID   string `json:"id"`
+	Name string `json:"name,omitempty"`
+	Root string `json:"root"`
 }
 
 type StickerLabels struct {
@@ -94,6 +103,7 @@ func (c *Config) Replace(next *Config) {
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
 	c.StickerLabels = replacement.StickerLabels
+	c.Vault = replacement.Vault
 }
 
 func clone(c *Config) *Config {
@@ -115,6 +125,10 @@ func clone(c *Config) *Config {
 	if c.StickerLabels != nil {
 		labels := *c.StickerLabels
 		out.StickerLabels = &labels
+	}
+	if c.Vault != nil {
+		profile := *c.Vault
+		out.Vault = &profile
 	}
 	return out
 }
@@ -186,6 +200,9 @@ func Load() (*Config, error) {
 		cfg.Root = defaultRoot
 	}
 	cfg.Root = expandHome(cfg.Root)
+	if cfg.Vault != nil {
+		cfg.Vault.Root = expandHome(cfg.Vault.Root)
+	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
 
