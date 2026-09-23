@@ -5,6 +5,7 @@ const ZOOMABLE = "zoomable";
 const CONTROLS = "diagram-controls";
 const LEVEL = "diagram-level";
 const STEPPING = "stepping";
+export const EXPAND = "diagram-expand";
 
 // Multiples of the size the renderer emitted, which is what the readout says.
 const CEILING = 8;
@@ -187,9 +188,14 @@ export function attach(block, svg, emitted) {
    * @type {MouseEvent} */ event) => {
     const swallow = dragged;
     dragged = false;
-    if (!swallow || controls.contains(/** @type {Node} */ (event.target))) return;
-    event.stopPropagation();
-    event.preventDefault();
+    const target = /** @type {Element} */ (event.target);
+    if (controls.contains(target)) return;
+    if (swallow) {
+      event.stopPropagation();
+      event.preventDefault();
+    } else if (!target.closest("a")) {
+      stage.dispatchEvent(new CustomEvent(EXPAND, { bubbles: true, detail: { svg, emitted } }));
+    }
   };
 
   const travel = (/** @type {WheelEvent} */ event) => {
@@ -255,14 +261,7 @@ export function attach(block, svg, emitted) {
   );
   stage.append(controls);
 
-  const doubled = (/** @type {MouseEvent} */ event) => {
-    if (controls.contains(/** @type {Node} */ (event.target))) return;
-    stepping();
-    fit();
-  };
-
   stage.addEventListener("wheel", wheel, { passive: false });
-  stage.addEventListener("dblclick", doubled);
   stage.addEventListener("pointerdown", down);
   stage.addEventListener("pointermove", drag);
   stage.addEventListener("pointerup", release);
@@ -278,7 +277,6 @@ export function attach(block, svg, emitted) {
       paint.cancel();
       view?.clearTimeout(timer);
       stage.removeEventListener("wheel", wheel);
-      stage.removeEventListener("dblclick", doubled);
       stage.removeEventListener("pointerdown", down);
       stage.removeEventListener("pointermove", drag);
       stage.removeEventListener("pointerup", release);
