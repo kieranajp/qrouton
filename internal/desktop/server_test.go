@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -512,6 +513,10 @@ func TestDispatchRefusesEachOperationWithItsOwnSentinel(t *testing.T) {
 				Lifecycle: &workbench.DelegatedLifecycleRequest{Kind: workbench.LifecycleStart}}, want: ErrNoSession},
 		{name: "delegated lifecycle without a payload", owner: owner,
 			req: workbench.Request{Op: workbench.OpDelegatedLifecycle}, want: ErrNoDelegatedLifecycle},
+		{name: "vault search on a session-less socket",
+			req: workbench.Request{Op: workbench.OpVaultSearch, VaultSearch: &vault.Query{Text: "x"}}, want: ErrNoSession},
+		{name: "vault read without a vault", owner: owner,
+			req: workbench.Request{Op: workbench.OpVaultRead, VaultRead: &vault.ReadRequest{Ref: "x"}}, want: ErrNoVault},
 		{name: "an operation nothing serves", owner: owner,
 			req: workbench.Request{Op: "teleport"}, want: unknownOperation("teleport")},
 	} {

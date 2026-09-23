@@ -1,0 +1,26 @@
+{
+  "queries": [
+    {"id": "e1", "kind": "exact", "text": "How slow is the ZXing decoder on low-end Android phones?",
+     "relevant": ["pantry-sync/research/R1-2026-01-10-barcode-decoder-latency.md"]},
+    {"id": "e2", "kind": "exact", "text": "What do Stripe chargeback webhooks contain?",
+     "relevant": ["billing/research/R1-2026-05-01-chargeback-webhooks.md"]},
+    {"id": "e3", "kind": "exact", "text": "Which Android versions support passkeys?",
+     "relevant": ["login-flow/research/R2-2026-02-05-passkey-support.md"]},
+    {"id": "e4", "kind": "exact", "text": "How does Room handle SQLite schema migrations?",
+     "relevant": ["offline-mode/research/R2-2026-04-03-sqlite-migrations.md"]},
+    {"id": "c1", "kind": "cross-vocab", "text": "Why do people get kicked out when two calls renew their credentials at once?",
+     "relevant": ["login-flow/research/R1-2026-02-02-token-refresh-races.md"]},
+    {"id": "c2", "kind": "cross-vocab", "text": "How can we ship a new build to a small slice of customers first?",
+     "relevant": ["release-train/research/R1-2026-03-01-staged-rollout.md"]},
+    {"id": "c3", "kind": "cross-vocab", "text": "What happens when two phones edit the same shopping list without signal?",
+     "relevant": ["offline-mode/research/R1-2026-04-01-list-merge-conflicts.md"]},
+    {"id": "c4", "kind": "cross-vocab", "text": "How do we read the use-by stamp printed on packaging?",
+     "relevant": ["pantry-sync/research/R2-2026-01-12-expiry-date-ocr.md"]},
+    {"id": "d1", "kind": "distractor", "text": "How do we decide a release is healthy enough to continue?",
+     "relevant": ["release-train/research/R2-2026-03-03-crash-free-sessions.md"]},
+    {"id": "d2", "kind": "distractor", "text": "How should refund amounts round in different currencies?",
+     "relevant": ["billing/research/R2-2026-05-03-price-localisation.md"]},
+    {"id": "a1", "kind": "absent", "text": "How does the app draw its home-screen widget on iOS?", "relevant": []},
+    {"id": "a2", "kind": "absent", "text": "Which shader cache does the game engine use?", "relevant": []}
+  ]
+}

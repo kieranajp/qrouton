@@ -14,6 +14,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -52,6 +53,7 @@ type Options struct {
 	assembly   *Assembly
 	chrome     *Chrome
 	bugReports *BugReports
+	vault      *vault.Service
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -88,6 +90,7 @@ func Run(opts Options) error {
 	})
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
+	opts.vault = openVault(opts.Config)
 	r.register(application.NewService(opts.bugReports))
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
@@ -163,6 +166,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
+				vault:      opts.vault,
 				attention: func(value string, generation uint64) {
 					if state.agents.attention(generation, value) {
 						reg.touch()
@@ -207,6 +211,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		chromeEmit = opts.chrome.publish
 	}
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
+	if opts.vault != nil {
+		go opts.vault.Warm(ctx)
+	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
@@ -381,4 +388,22 @@ func frontend() (fs.FS, error) {
 		return nil, err
 	}
 	return assets, nil
+}
+
+// openVault answers nil when no vault is configured or its profile is unusable;
+// the vault tools then say so and the session carries on without one.
+func openVault(cfg *config.Config) *vault.Service {
+	profile := cfg.Snapshot().Vault
+	if profile == nil {
+		return nil
+	}
+	cacheDir, err := vault.DefaultCacheDir()
+	if err != nil {
+		return nil
+	}
+	service, err := vault.New(vault.Profile{ID: profile.ID, Root: profile.Root}, vault.NewOllama(), cacheDir)
+	if err != nil {
+		return nil
+	}
+	return service
 }

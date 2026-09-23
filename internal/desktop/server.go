@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"net"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/ticket"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -16,6 +18,7 @@ import (
 // not a window.
 type controlHooks struct {
 	bugReports *BugReports
+	vault      *vault.Service
 	picker     func(req workbench.PickerRequest) error
 	attention  func(activity string, generation uint64)
 	generation func(req workbench.RunnerGenerationRequest)
@@ -208,6 +211,28 @@ var handlers = map[string]handler{
 			return workbench.Response{}, nil
 		},
 	},
+	workbench.OpVaultSearch: {
+		guards: []guard{needsSession, needsVault},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			if req.VaultSearch == nil {
+				return workbench.Response{}, ErrNoVaultRequest
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), vaultTimeout)
+			defer cancel()
+			res, err := c.hooks.vault.Search(ctx, *req.VaultSearch)
+			return workbench.Response{VaultResult: &res}, err
+		},
+	},
+	workbench.OpVaultRead: {
+		guards: []guard{needsSession, needsVault},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			if req.VaultRead == nil {
+				return workbench.Response{}, ErrNoVaultRequest
+			}
+			excerpt, err := c.hooks.vault.Read(*req.VaultRead)
+			return workbench.Response{VaultExcerpt: &excerpt}, err
+		},
+	},
 	workbench.OpOpenTicket: {
 		guards: []guard{needsProcessIngress, needsTicket},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -234,6 +259,13 @@ func needsSession(c *control, _ workbench.Request) error {
 func needsBugReports(c *control, _ workbench.Request) error {
 	if c.hooks.bugReports == nil {
 		return ErrBugReportInvalid
+	}
+	return nil
+}
+
+func needsVault(c *control, _ workbench.Request) error {
+	if c.hooks.vault == nil {
+		return ErrNoVault
 	}
 	return nil
 }

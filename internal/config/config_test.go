@@ -260,3 +260,28 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 		t.Fatalf("replacement shares nested values: %+v", got)
 	}
 }
+
+func TestLoadReadsTheVaultProfileAndExpandsItsRoot(t *testing.T) {
+	configHome, home := t.TempDir(), t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configHome)
+	t.Setenv("HOME", home)
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	dir := filepath.Join(configHome, "qrouton")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "config.json"),
+		[]byte(`{"vault":{"id":"personal","root":"~/Obsidian/Work"}}`), 0o644)
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := &VaultProfile{ID: "personal", Root: filepath.Join(home, "Obsidian/Work")}
+	if !reflect.DeepEqual(cfg.Vault, want) {
+		t.Fatalf("vault = %#v, want %#v", cfg.Vault, want)
+	}
+	snapshot := cfg.Snapshot()
+	cfg.Vault.Root = "changed"
+	if snapshot.Vault.Root != want.Root {
+		t.Fatal("snapshot shares the vault profile")
+	}
+}

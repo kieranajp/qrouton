@@ -44,3 +44,13 @@ const (
 
 	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
 )
+
+const (
+	toolSearchVault = "search_vault"
+	toolReadVault   = "read_vault"
+	toolOpenVault   = "open_vault"
+
+	descSearchVault = "Search the Obsidian vault of finished qrouton artifacts with BM25 and embeddings together. Returns ranked candidates, each with its ref, section and source lines, a snippet, and raw per-channel evidence: BM25 rank and score, dense rank and cosine, the fused rank, and which rule admitted it. The scores are rank evidence, not relevance judgements, and nothing is filtered by a threshold: read a hit with read_vault before relying on it. No hits, an unavailable channel, and a list of irrelevant neighbours all mean the same thing: carry on with fresh investigation. kinds restricts the artifact kinds searched; limit sets how many documents to take in fused order, and each channel's top three are added when fusion left them out."
+	descReadVault   = "Read a vault document by the ref or artifact id a search_vault hit gave. Give line, and optionally through, to read a range; a long document is cut at 20,000 characters unless you read a range of it."
+	descOpenVault   = "Show the user a vault document rendered in a pane, marking line through through. The keyboard stays with the conversation. The pane selects by default; foreground false keeps it in the background."
+)

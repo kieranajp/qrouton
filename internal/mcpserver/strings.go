@@ -119,3 +119,24 @@ const (
 	focusedImageFormat    = "Selected image %d of %d in gallery %q (the conversation keeps keyboard focus)."
 	focusImageErrorFormat = "focus image in %q: %w"
 )
+
+const (
+	vaultWindowName = "vault"
+
+	vaultReadyHeader    = "Lexical and semantic channels ready. "
+	vaultBM25OnlyFormat = "Lexical %s; semantic unavailable (%s), so these hits are BM25 only. "
+	vaultPartialFormat  = "Lexical ready; semantic partial, with %d windows still embedding, so dense ranks only what is embedded. "
+	vaultEvidenceNote   = "Scores are raw rank evidence, not relevance: read a hit before relying on it.\n"
+	vaultNoHits         = "No hits. Carry on with fresh investigation."
+	vaultUnknownKind    = "unknown kind"
+	vaultHitFormat      = "\n%d. %s [%s] %s\n   ref %s, %s, %s\n"
+	vaultBM25Format     = "bm25 #%d (%.4f)"
+	vaultDenseFormat    = "dense #%d (cosine %.4f)"
+	vaultEvidenceJoiner = ", "
+	vaultEvidenceFormat = "   %s; fused #%d, admitted by %s\n   %s\n"
+
+	vaultReadFormat       = "%s (%s, ref %s), lines %d-%d of %d:\n\n"
+	vaultTruncated        = "\n…(cut at 20,000 characters; read a line range for the rest)…"
+	vaultOpenedFormat     = "Showing %s (%s) rendered in a pane (the conversation keeps focus)."
+	vaultOpenedSpanFormat = "Showing %s (%s) rendered in a pane, marking %s (the conversation keeps focus)."
+)

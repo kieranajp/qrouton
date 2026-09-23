@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 // Discovery is the one process endpoint external launchers may use. Legacy is
@@ -50,6 +51,8 @@ type Request struct {
 	Ticket           *TicketRequest             `json:"ticket,omitempty"`
 	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
 	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
+	VaultSearch      *vault.Query               `json:"vault_search,omitempty"`
+	VaultRead        *vault.ReadRequest         `json:"vault_read,omitempty"`
 }
 
 // Response is the desktop process's single-line answer.
@@ -61,6 +64,8 @@ type Response struct {
 	Exists         bool              `json:"exists,omitempty"`
 	IDs            []string          `json:"ids,omitempty"`
 	Viewport       *DocumentViewport `json:"viewport,omitempty"`
+	VaultResult    *vault.Result     `json:"vault_result,omitempty"`
+	VaultExcerpt   *vault.Excerpt    `json:"vault_excerpt,omitempty"`
 	Outcome        string            `json:"outcome,omitempty"`
 	Error          string            `json:"error,omitempty"`
 }

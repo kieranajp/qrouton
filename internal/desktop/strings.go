@@ -128,6 +128,10 @@ const (
 
 const documentPoll = time.Second
 
+// vaultTimeout stays under the socket client's own deadline, so a slow embed
+// answers with an error rather than a dropped connection.
+const vaultTimeout = 25 * time.Second
+
 const (
 	// chromeInterval bounds how stale the window chrome can be after an
 	// escalation.
