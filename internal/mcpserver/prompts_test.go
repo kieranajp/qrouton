@@ -38,7 +38,7 @@ func promptCorpus(t *testing.T) map[string]string {
 // The prompts are markdown in a leaf that cannot import this package, so the
 // tool names they teach are checked against what the server advertises.
 func TestPromptsNameExactlyTheAdvertisedTools(t *testing.T) {
-	advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeAssistant))
+	advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &vaultHost{}, session.ModeAssistant, true))
 	corpus := promptCorpus(t)
 
 	taught := map[string]bool{}

@@ -43,6 +43,8 @@ const (
 	OpRunnerGeneration   = "runner-generation"
 	OpDelegatedLifecycle = "delegated-lifecycle"
 	OpOpenTicket         = "open-ticket"
+	OpVaultSearch        = "vault-search"
+	OpVaultRead          = "vault-read"
 )
 
 const (
@@ -61,8 +63,8 @@ const (
 	socketDirMode      = 0o700
 	descriptorMode     = 0o600
 	descriptorVersion  = 2
-
-	// callTimeout bounds a request whose caller set no deadline, so a wedged
-	// desktop process cannot hang an agent's tool call.
-	callTimeout = 30 * time.Second
 )
+
+// CallTimeout bounds a request whose caller set no deadline, so a wedged
+// desktop process cannot hang an agent's tool call.
+const CallTimeout = 30 * time.Second

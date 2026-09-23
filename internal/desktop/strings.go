@@ -5,6 +5,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 const (
@@ -146,6 +147,10 @@ const (
 )
 
 const documentPoll = time.Second
+
+// vaultTimeout stays under the socket client's deadline, so a slow embed
+// answers with an error rather than a dropped connection.
+const vaultTimeout = workbench.CallTimeout - 5*time.Second
 
 const (
 	// chromeInterval bounds how stale the window chrome can be after an

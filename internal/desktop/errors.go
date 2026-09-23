@@ -44,6 +44,8 @@ var (
 	ErrProcessIngressOnly   = errors.New("open ticket is available only on the published process socket")
 	ErrNoRunnerGeneration   = errors.New("runner generation request carries no generation")
 	ErrNoDelegatedLifecycle = errors.New("delegated lifecycle request carries no event")
+	ErrNoVault              = errors.New("no vault is configured; carry on without it")
+	ErrNoVaultRequest       = errors.New("vault request carries no query or reference")
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

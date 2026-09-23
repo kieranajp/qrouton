@@ -173,8 +173,8 @@ func (s *Service) Read(req ReadRequest) (Excerpt, error) {
 	if first <= last {
 		ex.Content = strings.Join(lines[first-1:last], "")
 	}
-	if !req.Full && len(ex.Content) > readLimit {
-		cut := readLimit
+	if !req.Full && len(ex.Content) > ReadLimit {
+		cut := ReadLimit
 		for cut > 0 && !utf8.RuneStart(ex.Content[cut]) {
 			cut--
 		}

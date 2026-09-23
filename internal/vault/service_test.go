@@ -297,13 +297,13 @@ func TestReadAnswersRangesByRefOrID(t *testing.T) {
 		t.Fatalf("range read = %q (%d-%d)", part.Content, part.Line, part.Through)
 	}
 
-	writeFile(t, filepath.Join(root, "long.md"), "# Long\n\n"+strings.Repeat("word ", readLimit))
+	writeFile(t, filepath.Join(root, "long.md"), "# Long\n\n"+strings.Repeat("word ", ReadLimit))
 	long, err := s.Read(ReadRequest{Ref: "test:long.md"})
-	if err != nil || !long.Truncated || len(long.Content) > readLimit {
+	if err != nil || !long.Truncated || len(long.Content) > ReadLimit {
 		t.Fatalf("long read truncated=%v len=%d err=%v", long.Truncated, len(long.Content), err)
 	}
 	full, err := s.Read(ReadRequest{Ref: "test:long.md", Full: true})
-	if err != nil || full.Truncated || len(full.Content) <= readLimit {
+	if err != nil || full.Truncated || len(full.Content) <= ReadLimit {
 		t.Fatalf("full read truncated=%v len=%d err=%v", full.Truncated, len(full.Content), err)
 	}
 }

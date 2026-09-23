@@ -15,7 +15,7 @@ const (
 	walkInterval     = 2 * time.Second
 	probeTimeout     = 2 * time.Second
 	maxDocumentBytes = 1 << 20
-	readLimit        = 20000
+	ReadLimit        = 20000
 	snippetChars     = 320
 
 	rrfK         = 60
