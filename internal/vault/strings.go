@@ -8,9 +8,9 @@ const (
 
 	schemaVersion = 1
 	// preprocessing versions the chunking and window inputs the cache was built from.
-	preprocessing = 2
+	preprocessing = 3
 
-	windowChars      = 500
+	windowChars      = 700
 	embedBatch       = 64
 	walkInterval     = 2 * time.Second
 	probeTimeout     = 2 * time.Second
