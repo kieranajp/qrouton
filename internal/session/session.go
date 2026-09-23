@@ -137,7 +137,7 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 				return err
 			}
 		}
-		return os.Symlink(thoughtsLink(cfg.Root, dir, home), filepath.Join(dir, sessionpaths.ThoughtsDirName))
+		return os.Symlink(ThoughtsLink(cfg.Root, dir, home), filepath.Join(dir, sessionpaths.ThoughtsDirName))
 	}); err != nil {
 		return "", err
 	}
@@ -190,9 +190,9 @@ func taken(path string) bool {
 	return err == nil
 }
 
-// thoughtsLink stays relative under the sessions root, so moving the whole root
+// ThoughtsLink stays relative under the sessions root, so moving the whole root
 // keeps every link working.
-func thoughtsLink(root, dir, home string) string {
+func ThoughtsLink(root, dir, home string) string {
 	if rel, err := filepath.Rel(root, home); err == nil && filepath.IsLocal(rel) {
 		if link, err := filepath.Rel(dir, home); err == nil {
 			return link
