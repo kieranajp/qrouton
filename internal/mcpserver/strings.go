@@ -121,7 +121,7 @@ const (
 )
 
 const (
-	vaultWindowName = "vault"
+	vaultWindowName = "thoughts"
 
 	vaultReadyHeader    = "Lexical and semantic channels ready. "
 	vaultBM25OnlyFormat = "Lexical %s; semantic unavailable (%s), so these hits are BM25 only. "

@@ -3,7 +3,9 @@ package vault
 import "errors"
 
 var (
-	ErrInvalidProfile   = errors.New("vault profile needs an id of letters, digits, dot, dash or underscore, and an absolute root")
+	ErrInvalidProfile   = errors.New("a thoughts root needs an id of letters, digits, dot, dash or underscore, and an absolute path")
+	ErrDuplicateProfile = errors.New("two thoughts roots share an id")
+	ErrOverlappingRoots = errors.New("thoughts roots must not share, nest in, or link into each other")
 	ErrQueryRequired    = errors.New("query is required")
 	ErrUnknownKind      = errors.New("unknown artifact kind; use research, spec, plan, note or dead_end")
 	ErrModelChanged     = errors.New("embedding model changed while embedding")

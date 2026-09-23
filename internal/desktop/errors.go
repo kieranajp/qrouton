@@ -44,7 +44,8 @@ var (
 	ErrProcessIngressOnly   = errors.New("open ticket is available only on the published process socket")
 	ErrNoRunnerGeneration   = errors.New("runner generation request carries no generation")
 	ErrNoDelegatedLifecycle = errors.New("delegated lifecycle request carries no event")
-	ErrNoVault              = errors.New("no vault is configured; carry on without it")
+	ErrNoVault              = errors.New("no thoughts index is available; carry on without it")
+	ErrNoThoughtsRoot       = errors.New("this session's thoughts are in no thoughts root")
 	ErrNoVaultRequest       = errors.New("vault request carries no query or reference")
 )
 

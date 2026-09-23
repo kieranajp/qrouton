@@ -192,7 +192,7 @@ func loadQueries(t *testing.T, path string) evalFile {
 }
 
 // evalRun is one query's rankings: each channel's full document order, RRF's
-// order, and the documents search_vault actually returned.
+// order, and the documents search_thoughts actually returned.
 type evalRun struct {
 	query                 evalQuery
 	lexical, dense, fused []string

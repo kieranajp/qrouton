@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -18,27 +17,20 @@ type searchVaultInput struct {
 }
 
 type readVaultInput struct {
-	Ref     string `json:"ref" jsonschema:"A search_vault hit's ref, or its artifact id"`
+	Ref     string `json:"ref" jsonschema:"A search_thoughts hit's ref, or its artifact id"`
 	Line    int    `json:"line,omitempty" jsonschema:"First line to read; omit for the whole document"`
 	Through int    `json:"through,omitempty" jsonschema:"Last line to read; defaults to the end of the document"`
 }
 
 type openVaultInput struct {
-	Ref        string `json:"ref" jsonschema:"A search_vault hit's ref, or its artifact id"`
+	Ref        string `json:"ref" jsonschema:"A search_thoughts hit's ref, or its artifact id"`
 	Line       int    `json:"line,omitempty" jsonschema:"One-based line to draw the user's eye to"`
 	Through    int    `json:"through,omitempty" jsonschema:"Last line of the marked range; defaults to line alone"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
-// vaultConfigured decides whether the vault tools are offered at all, so a
-// machine without a vault never sees them.
-func vaultConfigured() bool {
-	cfg, err := config.Load()
-	return err == nil && cfg.Vault != nil
-}
-
 func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.VaultHost) {
-	mcp.AddTool(server, &mcp.Tool{Name: toolSearchVault, Description: descSearchVault},
+	mcp.AddTool(server, &mcp.Tool{Name: toolSearchThoughts, Description: descSearchThoughts},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input searchVaultInput) (*mcp.CallToolResult, any, error) {
 			res, err := host.SearchVault(ctx, vault.Query{Text: input.Query, Kinds: input.Kinds, Limit: input.Limit})
 			if err != nil {
@@ -46,7 +38,7 @@ func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.Va
 			}
 			return textResult(formatHits(res)), res, nil
 		})
-	mcp.AddTool(server, &mcp.Tool{Name: toolReadVault, Description: descReadVault},
+	mcp.AddTool(server, &mcp.Tool{Name: toolReadThoughts, Description: descReadThoughts},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input readVaultInput) (*mcp.CallToolResult, any, error) {
 			ex, err := host.ReadVault(ctx, vault.ReadRequest{Ref: input.Ref, Line: input.Line, Through: input.Through})
 			if err != nil {
@@ -58,7 +50,7 @@ func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.Va
 			}
 			return textResult(text), ex, nil
 		})
-	addTool(server, toolOpenVault, descOpenVault, keyMessage, messageOnly(func(ctx context.Context, input openVaultInput) (string, error) {
+	addTool(server, toolOpenThoughts, descOpenThoughts, keyMessage, messageOnly(func(ctx context.Context, input openVaultInput) (string, error) {
 		ex, err := host.ReadVault(ctx, vault.ReadRequest{Ref: input.Ref, Full: true})
 		if err != nil {
 			return "", err
@@ -68,7 +60,7 @@ func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.Va
 			Kind: workbench.KindDocument, Label: ex.Title, Content: ex.Content,
 			Format: workbench.FormatMarkdown, Span: span, Select: resolveForeground(input.Foreground, true),
 		}); err != nil {
-			return "", fmt.Errorf("open vault document: %w", err)
+			return "", fmt.Errorf("open thoughts document: %w", err)
 		}
 		if first, last, ok := span.Bounds(); ok {
 			return fmt.Sprintf(vaultOpenedSpanFormat, ex.Title, ex.ID, lineRange(first, last)), nil

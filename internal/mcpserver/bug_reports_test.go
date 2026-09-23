@@ -63,7 +63,7 @@ func (h *reportHost) CancelBugReport(_ context.Context, id string) (workbench.Bu
 
 func connectBugReportClient(t *testing.T, host workbench.WindowHost, mode session.SessionMode) *mcp.ClientSession {
 	t.Helper()
-	server := newMCPServer(t.TempDir(), testEditor, host, mode, false)
+	server := newMCPServer(t.TempDir(), testEditor, host, mode)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	st, ct := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(context.Background(), st, nil)
@@ -82,7 +82,7 @@ func TestBugReportMCPContractInBothModes(t *testing.T) {
 	for _, mode := range []session.SessionMode{session.ModeRPI, session.ModeAssistant} {
 		t.Run(string(mode), func(t *testing.T) {
 			host := &reportHost{status: workbench.BugReportCreated, lostPoll: true}
-			tool := listedTools(t, newMCPServer(t.TempDir(), testEditor, host, mode, false))[toolReportBug]
+			tool := listedTools(t, newMCPServer(t.TempDir(), testEditor, host, mode))[toolReportBug]
 			schema := structuredOutput(t, tool.InputSchema)
 			properties := schema["properties"].(map[string]any)
 			if len(properties) != 2 || properties["title"] == nil || properties["body"] == nil || len(schema["required"].([]any)) != 2 {

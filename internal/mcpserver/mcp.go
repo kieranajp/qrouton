@@ -103,7 +103,7 @@ func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In
 	}
 }
 
-func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost, mode session.SessionMode, withVault bool) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost, mode session.SessionMode) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,
 	})
@@ -133,7 +133,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
 	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
 	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))
-	if vaultHost, ok := host.(workbench.VaultHost); ok && withVault {
+	if vaultHost, ok := host.(workbench.VaultHost); ok {
 		addVaultTools(server, windows, vaultHost)
 	}
 
@@ -172,7 +172,7 @@ func Run(root, editorJSON, workbenchJSON string) error {
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
-	return newMCPServer(root, editor, handle.WindowHost(), sessionMode(root), vaultConfigured()).
+	return newMCPServer(root, editor, handle.WindowHost(), sessionMode(root)).
 		Run(context.Background(), &mcp.StdioTransport{})
 }
 

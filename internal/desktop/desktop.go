@@ -60,7 +60,7 @@ type Options struct {
 	chrome     *Chrome
 	bugReports *BugReports
 	updates    *Updates
-	vault      *vault.Service
+	vault      *vault.Set
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -433,22 +433,4 @@ func frontend() (fs.FS, error) {
 		return nil, err
 	}
 	return assets, nil
-}
-
-// openVault answers nil when no vault is configured or its profile is unusable;
-// the vault tools then say so and the session carries on without one.
-func openVault(cfg *config.Config) *vault.Service {
-	profile := cfg.Snapshot().Vault
-	if profile == nil {
-		return nil
-	}
-	cacheDir, err := vault.DefaultCacheDir()
-	if err != nil {
-		return nil
-	}
-	service, err := vault.New(vault.Profile{ID: profile.ID, Root: profile.Root}, vault.NewOllama(), cacheDir)
-	if err != nil {
-		return nil
-	}
-	return service
 }
