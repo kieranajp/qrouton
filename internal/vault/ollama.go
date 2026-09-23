@@ -89,44 +89,60 @@ func (o *Ollama) call(ctx context.Context, method, route string, body, out any) 
 		if strings.Contains(failure.Error, ollamaOverflow) {
 			return fmt.Errorf("%w: %s", ErrContextOverflow, failure.Error)
 		}
-		return fmt.Errorf("ollama %s: %s %s", route, res.Status, failure.Error)
+		return fmt.Errorf("%w: %s %s %s", ErrRejected, route, res.Status, failure.Error)
 	}
 	return json.NewDecoder(res.Body).Decode(out)
 }
 
-// embedAll returns every vector for each input. A batch that overflows is
-// retried one input at a time, since a failed batch costs about as much as a
-// good one, and an input that still overflows is halved until its parts fit.
-func embedAll(ctx context.Context, e Embedder, inputs []string) ([][][]float32, error) {
+// embedAll returns every vector for each window. A batch Ollama rejects is
+// retried one window at a time, and a window it rejects alone gets nil, so one
+// bad window cannot sink its batch. Failing to reach Ollama fails the call.
+func embedAll(ctx context.Context, e Embedder, windows []window) ([][][]float32, error) {
+	inputs := make([]string, len(windows))
+	for i, w := range windows {
+		inputs[i] = w.input
+	}
 	vectors, err := e.Embed(ctx, inputs)
+	out := make([][][]float32, len(windows))
 	if err == nil {
-		out := make([][][]float32, len(vectors))
 		for i, v := range vectors {
 			out[i] = [][]float32{v}
 		}
 		return out, nil
 	}
-	if !errors.Is(err, ErrContextOverflow) {
+	if !rejected(err) {
 		return nil, err
 	}
-	if len(inputs) == 1 {
-		first, second := halves(inputs[0])
-		if first == "" || second == "" {
+	for i, w := range windows {
+		if out[i], err = embedWindow(ctx, e, w); err != nil && !rejected(err) {
 			return nil, err
 		}
-		parts, err := embedAll(ctx, e, []string{first, second})
-		if err != nil {
-			return nil, err
-		}
-		return [][][]float32{append(parts[0], parts[1]...)}, nil
-	}
-	out := make([][][]float32, len(inputs))
-	for i, input := range inputs {
-		one, err := embedAll(ctx, e, []string{input})
-		if err != nil {
-			return nil, err
-		}
-		out[i] = one[0]
 	}
 	return out, nil
+}
+
+func rejected(err error) bool {
+	return errors.Is(err, ErrRejected) || errors.Is(err, ErrContextOverflow)
+}
+
+// embedWindow halves a window that overflows the model, keeping its
+// breadcrumb on both halves, until each part fits.
+func embedWindow(ctx context.Context, e Embedder, w window) ([][]float32, error) {
+	vectors, err := e.Embed(ctx, []string{w.input})
+	if err == nil {
+		return vectors, nil
+	}
+	first, second := halves(w.text)
+	if !errors.Is(err, ErrContextOverflow) || first == "" || second == "" {
+		return nil, err
+	}
+	a, err := embedWindow(ctx, e, newWindow(w.crumb, first))
+	if err != nil {
+		return nil, err
+	}
+	b, err := embedWindow(ctx, e, newWindow(w.crumb, second))
+	if err != nil {
+		return nil, err
+	}
+	return append(a, b...), nil
 }

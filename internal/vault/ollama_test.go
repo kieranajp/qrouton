@@ -10,10 +10,10 @@ import (
 	"testing"
 )
 
-func TestEmbedAllSplitsOverflowingInputs(t *testing.T) {
+func TestEmbedAllSplitsOverflowingWindowsUnderTheirBreadcrumb(t *testing.T) {
 	e := &stubEmbedder{limit: 300}
 	long := strings.Repeat("line of text\n", 60)
-	got, err := embedAll(context.Background(), e, []string{"short", long, "also short"})
+	got, err := embedAll(context.Background(), e, []window{newWindow("A", "short"), newWindow("Doc > Long", long), newWindow("C", "also short")})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,10 +21,19 @@ func TestEmbedAllSplitsOverflowingInputs(t *testing.T) {
 		t.Fatalf("vector counts = %d %d %d", len(got[0]), len(got[1]), len(got[2]))
 	}
 	if len(got[1]) < 3 {
-		t.Fatalf("overflowing input produced %d vectors", len(got[1]))
+		t.Fatalf("overflowing window produced %d vectors", len(got[1]))
 	}
-	if _, err := embedAll(context.Background(), &stubEmbedder{down: true}, []string{"x"}); !errors.Is(err, errStubDown) {
-		t.Fatalf("other failures pass through: %v", err)
+	for _, input := range e.seen {
+		if strings.Contains(input, "line of text") && !strings.HasPrefix(input, "Doc > Long\n\n") {
+			t.Fatalf("a split half lost its breadcrumb: %q", input[:30])
+		}
+	}
+	if _, err := embedAll(context.Background(), &stubEmbedder{down: true}, []window{newWindow("A", "x"), newWindow("B", "y")}); !errors.Is(err, errStubDown) {
+		t.Fatalf("an unreachable Ollama must fail the call: %v", err)
+	}
+	got, err = embedAll(context.Background(), &stubEmbedder{poison: "bad"}, []window{newWindow("A", "good"), newWindow("B", "bad")})
+	if err != nil || got[0] == nil || got[1] != nil {
+		t.Fatalf("one bad window = %v, %v", got, err)
 	}
 }
 
@@ -38,8 +47,12 @@ func TestOverflowingWindowsStillReachDenseRanking(t *testing.T) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if vectors := s.vectors[s.entries[0].chunks[0].windows[0].hash]; len(vectors) < 2 {
-		t.Fatalf("window kept %d vectors", len(vectors))
+	most := 0
+	for _, w := range s.entries[0].chunks[0].windows {
+		most = max(most, len(s.vectors[w.hash]))
+	}
+	if most < 2 {
+		t.Fatal("no overflowing window was split")
 	}
 }
 

@@ -64,6 +64,7 @@ type Service struct {
 	header   *cacheHeader
 	loaded   cacheHeader
 	vectors  map[string][][]float32
+	failures map[string]int
 	building bool
 }
 
@@ -81,6 +82,7 @@ func New(profile Profile, embedder Embedder, cacheDir string) (*Service, error) 
 		stamps:   map[string]stamp{},
 		byName:   map[string]*entry{},
 		vectors:  map[string][][]float32{},
+		failures: map[string]int{},
 	}, nil
 }
 
@@ -270,20 +272,26 @@ func (s *Service) reindexLocked() {
 	s.lexicon = newBM25(texts)
 }
 
-func (s *Service) pendingLocked() []window {
-	var out []window
+// pendingLocked answers the windows still to embed, and how many it gave up on
+// after they failed alone maxFailures times.
+func (s *Service) pendingLocked() (out []window, skipped int) {
 	seen := map[string]bool{}
 	for _, e := range s.entries {
 		for _, c := range e.chunks {
 			for _, w := range c.windows {
-				if _, ok := s.vectors[w.hash]; !ok && !seen[w.hash] {
-					seen[w.hash] = true
+				if _, ok := s.vectors[w.hash]; ok || seen[w.hash] {
+					continue
+				}
+				seen[w.hash] = true
+				if s.failures[w.hash] >= maxFailures {
+					skipped++
+				} else {
 					out = append(out, w)
 				}
 			}
 		}
 	}
-	return out
+	return out, skipped
 }
 
 // model probes Ollama until it answers, then keeps the answer until an embed
@@ -325,26 +333,34 @@ func (s *Service) semantic(ctx context.Context) Status {
 		return Status{Lexical: StatusReady, Semantic: StatusUnavailable, Reason: err.Error()}
 	}
 	s.mu.Lock()
-	pending := s.pendingLocked()
+	pending, _ := s.pendingLocked()
 	switch {
 	case len(pending) == 0:
-		s.mu.Unlock()
-		return Status{Lexical: StatusReady, Semantic: StatusReady}
 	case s.building:
-		s.mu.Unlock()
-		return Status{Lexical: StatusReady, Semantic: StatusPartial, Pending: len(pending)}
 	case len(pending) > embedBatch:
 		s.building = true
-		s.mu.Unlock()
 		go s.build(context.Background())
-		return Status{Lexical: StatusReady, Semantic: StatusPartial, Pending: len(pending)}
+	default:
+		s.mu.Unlock()
+		err := s.embed(ctx, pending)
+		s.save()
+		s.mu.Lock()
+		if err != nil {
+			defer s.mu.Unlock()
+			return s.statusLocked(err.Error())
+		}
 	}
-	s.mu.Unlock()
-	if err := s.embed(ctx, pending); err != nil {
-		return Status{Lexical: StatusReady, Semantic: StatusPartial, Pending: len(pending), Reason: err.Error()}
+	defer s.mu.Unlock()
+	return s.statusLocked("")
+}
+
+func (s *Service) statusLocked(reason string) Status {
+	pending, skipped := s.pendingLocked()
+	status := Status{Lexical: StatusReady, Semantic: StatusReady, Pending: len(pending), Skipped: skipped, Reason: reason}
+	if len(pending) > 0 {
+		status.Semantic = StatusPartial
 	}
-	s.save()
-	return Status{Lexical: StatusReady, Semantic: StatusReady}
+	return status
 }
 
 func (s *Service) build(ctx context.Context) {
@@ -358,7 +374,7 @@ func (s *Service) build(ctx context.Context) {
 			s.save()
 		}
 		s.mu.Lock()
-		pending := s.pendingLocked()
+		pending, _ := s.pendingLocked()
 		s.mu.Unlock()
 		if len(pending) == 0 {
 			break
@@ -375,11 +391,7 @@ func (s *Service) embed(ctx context.Context, windows []window) error {
 	s.mu.Lock()
 	loaded := s.loaded
 	s.mu.Unlock()
-	inputs := make([]string, len(windows))
-	for i, w := range windows {
-		inputs[i] = w.input
-	}
-	vectors, err := embedAll(ctx, s.embedder, inputs)
+	vectors, err := embedAll(ctx, s.embedder, windows)
 	if err != nil {
 		return err
 	}
@@ -389,6 +401,10 @@ func (s *Service) embed(ctx context.Context, windows []window) error {
 		return ErrModelChanged
 	}
 	for i, w := range windows {
+		if vectors[i] == nil {
+			s.failures[w.hash]++
+			continue
+		}
 		s.vectors[w.hash] = vectors[i]
 	}
 	return nil
