@@ -12,6 +12,7 @@ const (
 	repositoryNoticeAddedReference  = "added %s as a read-only reference at %s"
 	repositoryNoticePromotedEditing = "promoted %s to editing at %s"
 	repositoryNoticeSeparator       = "; "
+	unroutedNoticeFormat            = "qrouton: this session writes to the shared %q thoughts root, and %s is not routed there. Tell the user; its thoughts stay in that root."
 )
 
 const (

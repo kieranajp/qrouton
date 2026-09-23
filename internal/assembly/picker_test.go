@@ -270,6 +270,41 @@ func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
 	}
 }
 
+func TestAddingAnUnroutedRepoToASharedRootSessionQueuesAWarning(t *testing.T) {
+	for _, tc := range []struct {
+		name, root string
+		warned     bool
+	}{
+		{"shared root", "work", true},
+		{"default root", config.DefaultThoughtsID, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, dir := scratch(t)
+			a.Cfg.Thoughts.Roots = []config.ThoughtsRoot{{ID: "work", Path: t.TempDir(), Orgs: []string{"acme"}}}
+			if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+				m.ThoughtsRoot = tc.root
+				return m, nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}, false, nil); err != nil {
+				t.Fatal(err)
+			}
+			notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
+			if err != nil {
+				t.Fatal(err)
+			}
+			warned := strings.Contains(string(notice), `shared "work" thoughts root, and org/svc is not routed there`)
+			if warned != tc.warned {
+				t.Fatalf("notice = %q, warned %v, want %v", notice, warned, tc.warned)
+			}
+			if m, _ := session.Load(dir); m.ThoughtsRoot != tc.root || len(m.Repos) != 1 {
+				t.Fatalf("manifest = %+v", m)
+			}
+		})
+	}
+}
+
 func TestRepositoryNoticeNamesReferenceAdditionsAndPromotions(t *testing.T) {
 	before := session.Manifest{Repos: []session.ManifestRepo{
 		{Org: "org", Name: "docs", Role: session.RepoRoleReference, WorktreePath: "src/docs"},
