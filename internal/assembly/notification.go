@@ -2,8 +2,10 @@ package assembly
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -28,6 +30,25 @@ func repositoryNotice(before, after session.Manifest) string {
 		return ""
 	}
 	return fmt.Sprintf(repositoryNoticeFormat, strings.Join(changes, repositoryNoticeSeparator))
+}
+
+// unroutedNotice warns a session writing to a shared root about added repos
+// whose orgs do not map there. The thoughts stay where they are.
+func unroutedNotice(cfg *config.Config, before, after session.Manifest) string {
+	if after.ThoughtsRoot == "" || after.ThoughtsRoot == config.DefaultThoughtsID {
+		return ""
+	}
+	var unrouted []string
+	for _, repo := range after.Repos {
+		if !slices.ContainsFunc(before.Repos, func(r session.ManifestRepo) bool { return repositoryKey(r) == repositoryKey(repo) }) &&
+			cfg.RouteThoughts([]string{repo.Org}).ID != after.ThoughtsRoot {
+			unrouted = append(unrouted, repositoryID(repo))
+		}
+	}
+	if len(unrouted) == 0 {
+		return ""
+	}
+	return fmt.Sprintf(unroutedNoticeFormat, after.ThoughtsRoot, strings.Join(unrouted, repositoryNoticeSeparator))
 }
 
 func repositoryKey(repo session.ManifestRepo) string {
