@@ -36,7 +36,7 @@ func TestLiveOllama(t *testing.T) {
 	if _, err := o.Embed(ctx, []string{"fits", oversized}); !errors.Is(err, ErrContextOverflow) {
 		t.Fatalf("oversized input with truncate false = %v, want overflow", err)
 	}
-	split, err := embedAll(ctx, o, []string{"fits", oversized})
+	split, err := embedAll(ctx, o, []window{newWindow("Doc", "fits"), newWindow("Doc > Section", oversized)})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,14 +58,15 @@ func TestLiveRetrievalEval(t *testing.T) {
 	start := time.Now()
 	s.Warm(context.Background())
 	s.mu.Lock()
+	pending, skipped := s.pendingLocked()
 	split := 0
 	for _, vectors := range s.vectors {
 		if len(vectors) > 1 {
 			split++
 		}
 	}
-	t.Logf("indexed %d documents, %d chunks, %d windows (%d split to fit the model) in %v; %d pending",
-		len(s.entries), len(s.chunkAt), len(s.vectors), split, time.Since(start), len(s.pendingLocked()))
+	t.Logf("indexed %d documents, %d chunks, %d windows (%d split to fit the model) in %v; %d pending, %d skipped",
+		len(s.entries), len(s.chunkAt), len(s.vectors), split, time.Since(start), len(pending), skipped)
 	s.mu.Unlock()
 	var runs []evalRun
 	for _, q := range file.Queries {

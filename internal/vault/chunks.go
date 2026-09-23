@@ -16,6 +16,7 @@ type chunk struct {
 }
 
 type window struct {
+	crumb      string
 	input      string
 	hash       string
 	text       string
@@ -112,9 +113,9 @@ func atxHeading(line string) (int, string, bool) {
 func newChunk(crumb, text string, start int) chunk {
 	c := chunk{breadcrumb: crumb, text: text, start: start, end: start + strings.Count(strings.TrimRight(text, "\n"), "\n")}
 	for _, p := range splitWindows(text, start, windowChars) {
-		input := crumb + "\n\n" + p.text
-		sum := sha256.Sum256([]byte(input))
-		c.windows = append(c.windows, window{input: input, hash: hex.EncodeToString(sum[:]), text: p.text, start: p.start, end: p.end})
+		w := newWindow(crumb, p.text)
+		w.start, w.end = p.start, p.end
+		c.windows = append(c.windows, w)
 	}
 	return c
 }
@@ -213,4 +214,10 @@ func halves(input string) (string, string) {
 		mid--
 	}
 	return input[:mid], input[mid:]
+}
+
+func newWindow(crumb, text string) window {
+	input := crumb + "\n\n" + text
+	sum := sha256.Sum256([]byte(input))
+	return window{crumb: crumb, input: input, hash: hex.EncodeToString(sum[:]), text: text}
 }

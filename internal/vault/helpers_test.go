@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"hash/fnv"
 	"io/fs"
 	"os"
@@ -28,6 +29,7 @@ var concepts = map[string]string{
 }
 
 var errStubDown = errors.New("stub embedder is down")
+var errPoisoned = fmt.Errorf("%w: stub embedder rejects this input", ErrRejected)
 
 type stubEmbedder struct {
 	mu     sync.Mutex
@@ -35,6 +37,8 @@ type stubEmbedder struct {
 	down   bool
 	digest string
 	gate   chan struct{}
+	poison string
+	seen   []string
 	calls  int
 	inputs int
 }
@@ -57,6 +61,8 @@ func (e *stubEmbedder) Embed(ctx context.Context, inputs []string) ([][]float32,
 	gate, down, limit := e.gate, e.down, e.limit
 	e.calls++
 	e.inputs += len(inputs)
+	e.seen = append(e.seen, inputs...)
+	poison := e.poison
 	e.mu.Unlock()
 	if gate != nil && len(inputs) > 1 {
 		select {
@@ -70,6 +76,9 @@ func (e *stubEmbedder) Embed(ctx context.Context, inputs []string) ([][]float32,
 	}
 	out := make([][]float32, len(inputs))
 	for i, input := range inputs {
+		if poison != "" && strings.Contains(input, poison) {
+			return nil, errPoisoned
+		}
 		if limit > 0 && len(input) > limit {
 			return nil, ErrContextOverflow
 		}

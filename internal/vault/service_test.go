@@ -328,3 +328,20 @@ func TestSearchRejectsUnknownKindsAndCapsTheLimit(t *testing.T) {
 		t.Fatalf("relative root = %v", err)
 	}
 }
+
+func TestAWindowThatKeepsFailingIsSkipped(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "good.md"), "# Good\n\nwombat\n")
+	writeFile(t, filepath.Join(root, "bad.md"), "# Bad\n\npoisoned wombat\n")
+	s := newTestService(t, root, &stubEmbedder{poison: "poisoned"})
+	var res Result
+	for range maxFailures {
+		res = search(t, s, Query{Text: "wombat"})
+	}
+	if res.Status.Semantic != StatusReady || res.Status.Skipped != 1 || res.Status.Pending != 0 {
+		t.Fatalf("status after repeated failures = %+v", res.Status)
+	}
+	if hit, ok := hitFor(res, "good.md"); !ok || hit.Dense == nil {
+		t.Fatalf("the good window lost its embedding: %+v", res.Hits)
+	}
+}

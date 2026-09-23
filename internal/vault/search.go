@@ -41,11 +41,12 @@ type Hit struct {
 }
 
 // Status reports each channel apart. Pending counts windows still waiting for
-// an embedding while Semantic is partial.
+// an embedding while Semantic is partial; Skipped counts windows given up on.
 type Status struct {
 	Lexical  string `json:"lexical"`
 	Semantic string `json:"semantic"`
 	Pending  int    `json:"pending,omitempty"`
+	Skipped  int    `json:"skipped,omitempty"`
 	Reason   string `json:"reason,omitempty"`
 }
 

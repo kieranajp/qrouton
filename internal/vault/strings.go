@@ -8,9 +8,9 @@ const (
 
 	schemaVersion = 1
 	// preprocessing versions the chunking and window inputs the cache was built from.
-	preprocessing = 1
+	preprocessing = 2
 
-	windowChars      = 1000
+	windowChars      = 500
 	embedBatch       = 64
 	walkInterval     = 2 * time.Second
 	probeTimeout     = 2 * time.Second
@@ -22,6 +22,7 @@ const (
 	defaultLimit = 5
 	maxLimit     = 20
 	saveEvery    = 8
+	maxFailures  = 3
 	channelTop   = 3
 	bm25K1       = 1.2
 	bm25B        = 0.75
