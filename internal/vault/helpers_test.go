@@ -148,7 +148,7 @@ func copyTree(t *testing.T, src string, excluded ...string) string {
 
 func newTestService(t *testing.T, root string, e Embedder) *Service {
 	t.Helper()
-	s, err := New(Profile{ID: "test", Name: "Test", Root: root}, e, t.TempDir())
+	s, err := New(Profile{ID: "test", Root: root}, e, t.TempDir())
 	if err != nil {
 		t.Fatal(err)
 	}

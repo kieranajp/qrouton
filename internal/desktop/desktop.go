@@ -401,7 +401,7 @@ func openVault(cfg *config.Config) *vault.Service {
 	if err != nil {
 		return nil
 	}
-	service, err := vault.New(vault.Profile{ID: profile.ID, Name: profile.Name, Root: profile.Root}, vault.NewOllama(), cacheDir)
+	service, err := vault.New(vault.Profile{ID: profile.ID, Root: profile.Root}, vault.NewOllama(), cacheDir)
 	if err != nil {
 		return nil
 	}

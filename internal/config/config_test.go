@@ -269,13 +269,13 @@ func TestLoadReadsTheVaultProfileAndExpandsItsRoot(t *testing.T) {
 	dir := filepath.Join(configHome, "qrouton")
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "config.json"),
-		[]byte(`{"vault":{"id":"personal","name":"Personal","root":"~/Obsidian/Work"}}`), 0o644)
+		[]byte(`{"vault":{"id":"personal","root":"~/Obsidian/Work"}}`), 0o644)
 
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &VaultProfile{ID: "personal", Name: "Personal", Root: filepath.Join(home, "Obsidian/Work")}
+	want := &VaultProfile{ID: "personal", Root: filepath.Join(home, "Obsidian/Work")}
 	if !reflect.DeepEqual(cfg.Vault, want) {
 		t.Fatalf("vault = %#v, want %#v", cfg.Vault, want)
 	}
