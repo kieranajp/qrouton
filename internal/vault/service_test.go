@@ -63,7 +63,7 @@ func TestSearchReportsRawChannelEvidence(t *testing.T) {
 		t.Fatalf("status = %+v", res.Status)
 	}
 	top := res.Hits[0]
-	if top.ID != "pantry-sync/R1-2026-01-10-barcode-decoder-latency" || top.Kind != KindResearch || top.Profile != "test" {
+	if top.ID != "pantry-sync/research/R1-2026-01-10-barcode-decoder-latency" || top.Kind != KindResearch || top.Profile != "test" {
 		t.Fatalf("top hit = %+v", top)
 	}
 	if top.BM25 == nil || top.BM25.Rank != 1 || top.Dense == nil || top.FusedRank != 1 || top.AdmittedBy != AdmittedRRF {
@@ -159,7 +159,7 @@ func TestSearchFallsBackToBM25AndRecovers(t *testing.T) {
 	if res.Status.Lexical != StatusReady || res.Status.Semantic != StatusUnavailable || res.Status.Reason == "" {
 		t.Fatalf("status = %+v", res.Status)
 	}
-	if len(res.Hits) == 0 || res.Hits[0].ID != "billing/R1-2026-05-01-chargeback-webhooks" {
+	if len(res.Hits) == 0 || res.Hits[0].ID != "billing/research/R1-2026-05-01-chargeback-webhooks" {
 		t.Fatalf("BM25-only hits = %+v", res.Hits)
 	}
 	for _, h := range res.Hits {
@@ -282,7 +282,7 @@ func TestMissingRootLeavesBothChannelsUnavailable(t *testing.T) {
 func TestReadAnswersRangesByRefOrID(t *testing.T) {
 	root := copyTree(t, corpusDir)
 	s := newTestService(t, root, &stubEmbedder{})
-	whole, err := s.Read(ReadRequest{Ref: "login-flow/R1-2026-02-02-token-refresh-races"})
+	whole, err := s.Read(ReadRequest{Ref: "login-flow/research/R1-2026-02-02-token-refresh-races"})
 	if err != nil {
 		t.Fatal(err)
 	}

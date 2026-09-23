@@ -1,11 +1,14 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 func TestSplitOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
@@ -213,7 +216,7 @@ func TestStickerLabelsLoadSaveAndReload(t *testing.T) {
 	t.Setenv("QROUTON_ROOT", t.TempDir())
 
 	custom := StickerLabels{Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken"}
-	if err := Save(&Config{Root: "unused", StickerLabels: &custom}); err != nil {
+	if err := Save(&Config{Root: "/unused", StickerLabels: &custom}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(Path())
@@ -261,27 +264,108 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	}
 }
 
-func TestLoadReadsTheVaultProfileAndExpandsItsRoot(t *testing.T) {
-	configHome, home := t.TempDir(), t.TempDir()
+func writeConfig(t *testing.T, body string) {
+	t.Helper()
+	configHome := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", configHome)
-	t.Setenv("HOME", home)
-	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("QROUTON_ROOT", "")
 	dir := filepath.Join(configHome, "qrouton")
-	os.MkdirAll(dir, 0o755)
-	os.WriteFile(filepath.Join(dir, "config.json"),
-		[]byte(`{"vault":{"id":"personal","root":"~/Obsidian/Work"}}`), 0o644)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 
+func TestLoadDerivesTheDefaultThoughtsRootAndExpandsExtraOnes(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfig(t, `{"root":"`+root+`","thoughts":{"roots":[{"id":"work","path":"~/Sync/work","orgs":["Acme"]}]}}`)
 	cfg, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := &VaultProfile{ID: "personal", Root: filepath.Join(home, "Obsidian/Work")}
-	if !reflect.DeepEqual(cfg.Vault, want) {
-		t.Fatalf("vault = %#v, want %#v", cfg.Vault, want)
+	want := []ThoughtsRoot{
+		{ID: DefaultThoughtsID, Path: filepath.Join(root, "thoughts")},
+		{ID: "work", Path: filepath.Join(home, "Sync/work"), Orgs: []string{"Acme"}},
 	}
+	if got := cfg.ThoughtsRoots(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("roots = %#v, want %#v", got, want)
+	}
+	cfg.Root = "/elsewhere"
+	if got := cfg.ThoughtsRoots()[0].Path; got != "/elsewhere/thoughts" {
+		t.Fatalf("default did not follow the root: %s", got)
+	}
+
 	snapshot := cfg.Snapshot()
-	cfg.Vault.Root = "changed"
-	if snapshot.Vault.Root != want.Root {
-		t.Fatal("snapshot shares the vault profile")
+	cfg.Thoughts.Roots[0].Orgs[0] = "changed"
+	if snapshot.Thoughts.Roots[0].Orgs[0] != "Acme" {
+		t.Fatal("snapshot shares the thoughts roots")
+	}
+	cfg.Replace(snapshot)
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := os.ReadFile(Path())
+	if err != nil || !strings.Contains(string(saved), `"orgs": [`) || strings.Contains(string(saved), `"default"`) {
+		t.Fatalf("saved config = %s, %v", saved, err)
+	}
+}
+
+func TestLoadRefusesThoughtsRootsThatCouldMixMaterial(t *testing.T) {
+	root := t.TempDir()
+	for name, roots := range map[string]string{
+		"org on two roots":  `[{"id":"a","path":"/tmp/a","orgs":["acme"]},{"id":"b","path":"/tmp/b","orgs":["ACME"]}]`,
+		"nested in default": `[{"id":"a","path":"` + root + `/thoughts/a","orgs":["acme"]}]`,
+		"duplicate id":      `[{"id":"a","path":"/tmp/a","orgs":["acme"]},{"id":"a","path":"/tmp/b","orgs":["other"]}]`,
+		"reserved id":       `[{"id":"default","path":"/tmp/a","orgs":["acme"]}]`,
+		"no orgs":           `[{"id":"a","path":"/tmp/a"}]`,
+		"blank org":         `[{"id":"a","path":"/tmp/a","orgs":[" "]}]`,
+		"reserved id cased": `[{"id":"Default","path":"/tmp/a","orgs":["acme"]}]`,
+	} {
+		writeConfig(t, `{"root":"`+root+`","thoughts":{"roots":`+roots+`}}`)
+		if _, err := Load(); err == nil {
+			t.Errorf("%s: loaded", name)
+		}
+	}
+}
+
+func TestRouteThoughtsNeedsEveryOrgOnOneRoot(t *testing.T) {
+	cfg := &Config{Root: "/s", Thoughts: Thoughts{Roots: []ThoughtsRoot{
+		{ID: "work", Path: "/w", Orgs: []string{"acme", "acme-labs"}},
+		{ID: "club", Path: "/c", Orgs: []string{"club"}},
+	}}}
+	for _, tc := range []struct {
+		orgs []string
+		want string
+	}{
+		{[]string{"acme", "ACME-labs"}, "work"},
+		{[]string{"acme", "someone"}, DefaultThoughtsID},
+		{[]string{"acme", "club"}, DefaultThoughtsID},
+		{[]string{"someone"}, DefaultThoughtsID},
+		{nil, DefaultThoughtsID},
+	} {
+		if got := cfg.RouteThoughts(tc.orgs).ID; got != tc.want {
+			t.Errorf("RouteThoughts(%v) = %s, want %s", tc.orgs, got, tc.want)
+		}
+	}
+}
+
+func TestSaveRefusesARootThatWouldSwallowAnExtraThoughtsRoot(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &Config{Root: "/old/sessions", Thoughts: Thoughts{Roots: []ThoughtsRoot{
+		{ID: "work", Path: "/new/sessions/thoughts/work", Orgs: []string{"acme"}},
+	}}}
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(Path())
+	cfg.Root = "/new/sessions"
+	if err := Save(cfg); !errors.Is(err, vault.ErrOverlappingRoots) {
+		t.Fatalf("save = %v", err)
+	}
+	if after, _ := os.ReadFile(Path()); string(after) != string(before) {
+		t.Fatalf("a refused save replaced the file: %s", after)
 	}
 }

@@ -33,9 +33,9 @@ func (h *vaultHost) ReadVault(_ context.Context, req vault.ReadRequest) (vault.E
 	return h.excerpt, nil
 }
 
-func connectVault(t *testing.T, host workbench.WindowHost, withVault bool) *mcp.ClientSession {
+func connectVault(t *testing.T, host workbench.WindowHost) *mcp.ClientSession {
 	t.Helper()
-	server := newMCPServer(t.TempDir(), testEditor, host, session.ModeRPI, withVault)
+	server := newMCPServer(t.TempDir(), testEditor, host, session.ModeRPI)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	st, ct := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(context.Background(), st, nil)
@@ -59,21 +59,20 @@ func callText(t *testing.T, cs *mcp.ClientSession, name string, args any) (strin
 	return res.Content[0].(*mcp.TextContent).Text, structuredOutput(t, res.StructuredContent)
 }
 
-func TestVaultToolsNeedAConfiguredVault(t *testing.T) {
-	vaultTools := []string{toolSearchVault, toolReadVault, toolOpenVault}
+func TestThoughtsToolsNeedOnlyAHostWithAnIndex(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	names := []string{"search_thoughts", "read_thoughts", "open_thoughts"}
 	for _, tc := range []struct {
-		name      string
-		host      workbench.WindowHost
-		withVault bool
-		want      bool
+		name string
+		host workbench.WindowHost
+		want bool
 	}{
-		{"configured", &vaultHost{}, true, true},
-		{"unconfigured", &vaultHost{}, false, false},
-		{"host without an index", &fakeHost{}, true, false},
+		{"index host", &vaultHost{}, true},
+		{"host without an index", &fakeHost{}, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, tc.host, session.ModeRPI, tc.withVault))
-			for _, name := range vaultTools {
+			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, tc.host, session.ModeRPI))
+			for _, name := range names {
 				if advertised[name] != tc.want {
 					t.Errorf("%s advertised = %v, want %v", name, advertised[name], tc.want)
 				}
@@ -91,8 +90,8 @@ func TestSearchVaultLabelsBM25OnlyResultsAndCarriesEvidence(t *testing.T) {
 			BM25: &vault.LexicalScore{Rank: 1, Score: 7.5}, FusedRank: 1, AdmittedBy: vault.AdmittedRRF,
 		}},
 	}}
-	cs := connectVault(t, host, true)
-	text, output := callText(t, cs, toolSearchVault, searchVaultInput{Query: "why", Kinds: []string{"research"}})
+	cs := connectVault(t, host)
+	text, output := callText(t, cs, toolSearchThoughts, searchVaultInput{Query: "why", Kinds: []string{"research"}})
 	for _, want := range []string{"BM25 only", "connection refused", "not relevance", "ref personal:s/research/R1-x.md", "lines 12-18", "bm25 #1 (7.5000)", "admitted by rrf", "the snippet"} {
 		if !strings.Contains(text, want) {
 			t.Errorf("search text lacks %q:\n%s", want, text)
@@ -106,7 +105,7 @@ func TestSearchVaultLabelsBM25OnlyResultsAndCarriesEvidence(t *testing.T) {
 	}
 
 	host.result = vault.Result{Status: vault.Status{Lexical: vault.StatusReady, Semantic: vault.StatusReady}, Hits: []vault.Hit{}}
-	if text, _ := callText(t, cs, toolSearchVault, searchVaultInput{Query: "absent"}); !strings.Contains(text, "fresh investigation") {
+	if text, _ := callText(t, cs, toolSearchThoughts, searchVaultInput{Query: "absent"}); !strings.Contains(text, "fresh investigation") {
 		t.Fatalf("empty search text = %q", text)
 	}
 }
@@ -116,8 +115,8 @@ func TestOpenVaultShowsTheWholeDocumentAtItsLines(t *testing.T) {
 		Document: vault.Document{ID: "s/R1-x", Title: "X"}, Ref: "personal:s/research/R1-x.md",
 		Line: 1, Through: 30, Lines: 30, Content: "# X\n",
 	}}
-	cs := connectVault(t, host, true)
-	text, _ := callText(t, cs, toolOpenVault, openVaultInput{Ref: "s/R1-x", Line: 12, Through: 18})
+	cs := connectVault(t, host)
+	text, _ := callText(t, cs, toolOpenThoughts, openVaultInput{Ref: "s/R1-x", Line: 12, Through: 18})
 	if !strings.Contains(text, "lines 12-18") {
 		t.Fatalf("open text = %q", text)
 	}
@@ -130,7 +129,7 @@ func TestOpenVaultShowsTheWholeDocumentAtItsLines(t *testing.T) {
 		t.Fatalf("opened = %+v", opened)
 	}
 
-	text, _ = callText(t, cs, toolReadVault, readVaultInput{Ref: "s/R1-x", Line: 12})
+	text, _ = callText(t, cs, toolReadThoughts, readVaultInput{Ref: "s/R1-x", Line: 12})
 	if !strings.HasPrefix(text, "X (s/R1-x, ref personal:s/research/R1-x.md), lines 1-30 of 30:") {
 		t.Fatalf("read text = %q", text)
 	}

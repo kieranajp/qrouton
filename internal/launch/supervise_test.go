@@ -229,6 +229,25 @@ func TestSuperviseDeliversARepositoryNoticeOnTheResumedConversationOnce(t *testi
 	}
 }
 
+func TestSuperviseRelaysANoticeQueuedBeforeTheFirstLaunch(t *testing.T) {
+	dir := superviseTestDir(t, session.ModeRPI)
+	const notice = "qrouton: the thoughts root is missing."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
+	var argvs [][]string
+	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
+		argvs = append(argvs, argv)
+		return false, nil
+	})
+	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, false); err != nil {
+		t.Fatal(err)
+	}
+	if first := strings.Join(argvs[0], " "); strings.Contains(first, claudeContinueFlag) || !strings.Contains(first, notice) {
+		t.Fatalf("fresh launch = %v, want the notice in its opening message", argvs[0])
+	}
+}
+
 // A pending handoff prevents resume when escalation completed before this launch.
 func TestSuperviseStartsFreshWhenEscalationPrecedesTheLaunch(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)

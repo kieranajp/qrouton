@@ -72,6 +72,8 @@ type CreateRequest struct {
 	// is carried in a private one-shot file rather than becoming durable
 	// manifest state, so the runner consumes it exactly once.
 	InitialPrompt string
+	// Entropy is the suffix Slug ends with, if any, which a collision re-rolls.
+	Entropy string
 }
 
 // Create is the role-aware assembly entry point. Progress reports the start and
@@ -80,6 +82,10 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	slug := Slugify(req.Slug)
 	if slug == "" {
 		slug = Slugify(req.Name)
+	}
+	thoughts, notice := routeThoughts(cfg, req.Repos)
+	if thoughts.ID != config.DefaultThoughtsID && slug != "" {
+		slug = freeSlug(cfg.Root, thoughts.Path, slug, req.Entropy)
 	}
 	dir := filepath.Join(cfg.Root, slug)
 	if err := os.Mkdir(dir, dirMode); err != nil {
@@ -104,6 +110,9 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	if err := os.WriteFile(filepath.Join(dir, assemblingMarker), nil, fileMode); err != nil {
 		return "", err
 	}
+	if err := QueueAgentNotice(dir, notice); err != nil {
+		return "", err
+	}
 	if strings.TrimSpace(req.InitialPrompt) != "" {
 		if err := os.MkdirAll(sessionpaths.Dir(dir), dirMode); err != nil {
 			return "", err
@@ -114,22 +123,21 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	}
 
 	m := Manifest{SchemaVersion: manifestSchemaVersion, Name: req.Name, Slug: slug, Description: req.Description,
-		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, CreatedAt: time.Now()}
+		TicketURL: req.Ticket, Mode: req.Mode.effective(), Runner: req.Runner, CreatedAt: time.Now(), ThoughtsRoot: thoughts.ID}
 	var err error
 	if m, err = ComposeRepos(cfg, m, req.Repos, req.Prefix+branchSeparator+slug, progress); err != nil {
 		return "", err
 	}
 
 	steps := reporter{fn: progress}
-	home := thoughtsHome(cfg.Root, slug)
+	home := filepath.Join(thoughts.Path, slug)
 	if err := steps.step(ProgressScaffold, func(func(string, int)) error {
 		for _, d := range scaffoldDirs {
 			if err := os.MkdirAll(filepath.Join(home, sessionpaths.SharedDirName, d), dirMode); err != nil {
 				return err
 			}
 		}
-		return os.Symlink(filepath.Join("..", sessionpaths.ThoughtsDirName, slug),
-			filepath.Join(dir, sessionpaths.ThoughtsDirName))
+		return os.Symlink(thoughtsLink(cfg.Root, dir, home), filepath.Join(dir, sessionpaths.ThoughtsDirName))
 	}); err != nil {
 		return "", err
 	}
@@ -147,10 +155,50 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 	return dir, nil
 }
 
-// thoughtsHome is where a session's documents actually live: under the root,
-// outside the session directory, so deleting the session keeps them.
-func thoughtsHome(root, slug string) string {
-	return filepath.Join(root, sessionpaths.ThoughtsDirName, slug)
+// routeThoughts falls back to the default root, with a notice for the agent,
+// when the root the repos map to is missing.
+func routeThoughts(cfg *config.Config, sels []RepoSelection) (config.ThoughtsRoot, string) {
+	orgs := make([]string, len(sels))
+	for i, sel := range sels {
+		orgs[i] = sel.Repo.Org
+	}
+	root := cfg.RouteThoughts(orgs)
+	if root.ID == config.DefaultThoughtsID {
+		return root, ""
+	}
+	if info, err := os.Stat(root.Path); err != nil || !info.IsDir() {
+		return cfg.ThoughtsRoots()[0], fmt.Sprintf(missingThoughtsRootNotice, root.ID, root.Path)
+	}
+	return root, ""
+}
+
+// freeSlug re-rolls the entropy suffix until neither the sessions root nor a
+// shared thoughts root holds the slug, so two sessions never merge there.
+func freeSlug(sessions, thoughts, slug, entropy string) string {
+	base := slug
+	if suffix := Slugify(entropy); suffix != "" {
+		base = strings.TrimSuffix(slug, slugSeparator+suffix)
+	}
+	for taken(filepath.Join(thoughts, slug)) || taken(filepath.Join(sessions, slug)) {
+		slug = SessionSlug(base, NewEntropy())
+	}
+	return slug
+}
+
+func taken(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
+}
+
+// thoughtsLink stays relative under the sessions root, so moving the whole root
+// keeps every link working.
+func thoughtsLink(root, dir, home string) string {
+	if rel, err := filepath.Rel(root, home); err == nil && filepath.IsLocal(rel) {
+		if link, err := filepath.Rel(dir, home); err == nil {
+			return link
+		}
+	}
+	return home
 }
 
 func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {

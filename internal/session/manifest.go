@@ -145,6 +145,9 @@ type Manifest struct {
 	CreatedAt  time.Time          `json:"createdAt"`
 	Repos      []ManifestRepo     `json:"repos"`
 	Escalation *EscalationOutcome `json:"escalation,omitempty"`
+	// ThoughtsRoot is the id of the root chosen at creation; the thoughts link
+	// wins when the two disagree.
+	ThoughtsRoot string `json:"thoughtsRoot,omitempty"`
 }
 
 // EscalationStatus is how a picker-driven escalation attempt ended.

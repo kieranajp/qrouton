@@ -18,7 +18,7 @@ import (
 // not a window.
 type controlHooks struct {
 	bugReports *BugReports
-	vault      *vault.Service
+	vault      *vault.Set
 	picker     func(req workbench.PickerRequest) error
 	attention  func(activity string, generation uint64)
 	generation func(req workbench.RunnerGenerationRequest)
@@ -217,9 +217,13 @@ var handlers = map[string]handler{
 			if req.VaultSearch == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
+			thoughts, err := sessionThoughts(c.hooks.vault, c.owner.root())
+			if err != nil {
+				return workbench.Response{}, err
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), vaultTimeout)
 			defer cancel()
-			res, err := c.hooks.vault.Search(ctx, *req.VaultSearch)
+			res, err := thoughts.Search(ctx, *req.VaultSearch)
 			return workbench.Response{VaultResult: &res}, err
 		},
 	},
@@ -229,7 +233,11 @@ var handlers = map[string]handler{
 			if req.VaultRead == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
-			excerpt, err := c.hooks.vault.Read(*req.VaultRead)
+			thoughts, err := sessionThoughts(c.hooks.vault, c.owner.root())
+			if err != nil {
+				return workbench.Response{}, err
+			}
+			excerpt, err := thoughts.Read(*req.VaultRead)
 			return workbench.Response{VaultExcerpt: &excerpt}, err
 		},
 	},
