@@ -245,7 +245,7 @@ func TestOpenImagesMCPResponseHasMessageAndNoViewport(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	server := newMCPServer(root, testEditor, &fakeHost{}, session.ModeRPI, false)
+	server := newMCPServer(root, testEditor, &fakeHost{}, session.ModeRPI)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)
@@ -1320,7 +1320,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 		{session.ModeRPI, window},
 	} {
 		t.Run(string(tc.mode), func(t *testing.T) {
-			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, tc.mode, false))
+			advertised := advertisedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, tc.mode))
 			for _, name := range tc.want {
 				if !advertised[name] {
 					t.Errorf("tool %q was not advertised", name)
@@ -1370,7 +1370,7 @@ func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
 }
 
 func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
-	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI, false))
+	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
 	want := map[string]bool{toolOpenFile: true, toolOpenImages: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
 	for name, tool := range tools {
 		schema := structuredOutput(t, tool.InputSchema)
@@ -1420,7 +1420,7 @@ func TestServerModeFollowsTheManifest(t *testing.T) {
 			if got := sessionMode(dir); got != tc.want {
 				t.Fatalf("sessionMode = %q, want %q", got, tc.want)
 			}
-			advertised := advertisedTools(t, newMCPServer(dir, testEditor, &fakeHost{}, sessionMode(dir), false))
+			advertised := advertisedTools(t, newMCPServer(dir, testEditor, &fakeHost{}, sessionMode(dir)))
 			if advertised[toolEscalate] != (tc.want == session.ModeAssistant) {
 				t.Fatalf("%s session advertises %s = %v", tc.want, toolEscalate, advertised[toolEscalate])
 			}
@@ -1438,7 +1438,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 		Source: "P007.md", Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 3, To: 3}},
 	}}}
-	server := newMCPServer(dir, testEditor, host, session.ModeAssistant, false)
+	server := newMCPServer(dir, testEditor, host, session.ModeAssistant)
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
 	serverTransport, clientTransport := mcp.NewInMemoryTransports()
 	ss, err := server.Connect(ctx, serverTransport, nil)

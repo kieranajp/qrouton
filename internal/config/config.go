@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 type Config struct {
@@ -30,13 +33,20 @@ type Config struct {
 
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 
-	Vault *VaultProfile `json:"vault,omitempty"`
+	Thoughts Thoughts `json:"thoughts,omitzero"`
 }
 
-// VaultProfile names the one Obsidian vault every session searches.
-type VaultProfile struct {
-	ID   string `json:"id"`
-	Root string `json:"root"`
+// Thoughts names where sessions write their documents. Default is private; each
+// extra root takes a session only when every one of its repos' orgs maps there.
+type Thoughts struct {
+	Default string         `json:"default,omitempty"`
+	Roots   []ThoughtsRoot `json:"roots,omitempty"`
+}
+
+type ThoughtsRoot struct {
+	ID   string   `json:"id"`
+	Path string   `json:"path"`
+	Orgs []string `json:"orgs,omitempty"`
 }
 
 type StickerLabels struct {
@@ -98,7 +108,7 @@ func (c *Config) Replace(next *Config) {
 	c.Editor = replacement.Editor
 	c.Welcomed = replacement.Welcomed
 	c.StickerLabels = replacement.StickerLabels
-	c.Vault = replacement.Vault
+	c.Thoughts = replacement.Thoughts
 }
 
 func clone(c *Config) *Config {
@@ -120,11 +130,56 @@ func clone(c *Config) *Config {
 		labels := *c.StickerLabels
 		out.StickerLabels = &labels
 	}
-	if c.Vault != nil {
-		profile := *c.Vault
-		out.Vault = &profile
+	out.Thoughts = Thoughts{Default: c.Thoughts.Default}
+	for _, r := range c.Thoughts.Roots {
+		out.Thoughts.Roots = append(out.Thoughts.Roots, ThoughtsRoot{ID: r.ID, Path: r.Path, Orgs: slices.Clone(r.Orgs)})
 	}
 	return out
+}
+
+// ThoughtsRoots lists the default root first, at <root>/thoughts unless set.
+func (c *Config) ThoughtsRoots() []ThoughtsRoot {
+	snapshot := c.Snapshot()
+	def := snapshot.Thoughts.Default
+	if strings.TrimSpace(def) == "" {
+		def = filepath.Join(snapshot.Root, sessionpaths.ThoughtsDirName)
+	}
+	return append([]ThoughtsRoot{{ID: DefaultThoughtsID, Path: def}}, snapshot.Thoughts.Roots...)
+}
+
+// RouteThoughts answers a mapped root only when every org maps to it.
+func (c *Config) RouteThoughts(orgs []string) ThoughtsRoot {
+	roots := c.ThoughtsRoots()
+	routed := -1
+	for _, org := range orgs {
+		i := slices.IndexFunc(roots, func(r ThoughtsRoot) bool {
+			return slices.ContainsFunc(r.Orgs, func(o string) bool { return strings.EqualFold(o, org) })
+		})
+		if i < 0 || routed >= 0 && i != routed {
+			return roots[0]
+		}
+		routed = i
+	}
+	return roots[max(routed, 0)]
+}
+
+func validateThoughts(roots []ThoughtsRoot) error {
+	profiles := make([]vault.Profile, len(roots))
+	owners := map[string]string{}
+	for i, r := range roots {
+		if i > 0 && (r.ID == DefaultThoughtsID || len(r.Orgs) == 0) {
+			return fmt.Errorf("%w: %q", ErrThoughtsRoot, r.ID)
+		}
+		for _, org := range r.Orgs {
+			key := strings.ToLower(strings.TrimSpace(org))
+			if owner, ok := owners[key]; ok {
+				return fmt.Errorf("%w: %s on %q and %q", ErrThoughtsOrg, org, owner, r.ID)
+			}
+			owners[key] = r.ID
+		}
+		profiles[i] = vault.Profile{ID: r.ID, Root: r.Path}
+	}
+	return vault.Validate(profiles)
 }
 
 func (c *Config) EffectiveStickerLabels() StickerLabels {
@@ -194,8 +249,12 @@ func Load() (*Config, error) {
 		cfg.Root = defaultRoot
 	}
 	cfg.Root = expandHome(cfg.Root)
-	if cfg.Vault != nil {
-		cfg.Vault.Root = expandHome(cfg.Vault.Root)
+	cfg.Thoughts.Default = expandHome(cfg.Thoughts.Default)
+	for i := range cfg.Thoughts.Roots {
+		cfg.Thoughts.Roots[i].Path = expandHome(cfg.Thoughts.Roots[i].Path)
+	}
+	if err := validateThoughts(cfg.ThoughtsRoots()); err != nil {
+		return nil, fmt.Errorf("%s: %w", Path(), err)
 	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }

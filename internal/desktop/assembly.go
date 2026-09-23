@@ -169,7 +169,7 @@ func (a *Assembly) Create(in draftInput) error {
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
 		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
-		Repos: draft.Repos,
+		Repos: draft.Repos, Entropy: draft.Entropy,
 	}, progress)
 	if err != nil {
 		return err
