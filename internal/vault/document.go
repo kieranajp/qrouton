@@ -50,7 +50,6 @@ func parseDocument(name, text string) (doc Document, body string, bodyLine int) 
 	return doc, body, bodyLine
 }
 
-// pathKind reads the kind from a shared/research, specs or plans directory.
 func pathKind(name string) string {
 	parts := strings.Split(path.Dir(name), "/")
 	for i := 1; i < len(parts); i++ {
