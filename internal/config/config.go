@@ -247,6 +247,14 @@ func Load() (*Config, error) {
 	if v := os.Getenv(orgsEnvVar); v != "" {
 		cfg.Orgs = splitOrgs(v)
 	}
+	resolvePaths(cfg)
+	if err := validateThoughts(cfg.ThoughtsRoots()); err != nil {
+		return nil, fmt.Errorf("%s: %w", Path(), err)
+	}
+	return cfg, os.MkdirAll(cfg.Root, dirMode)
+}
+
+func resolvePaths(cfg *Config) {
 	if strings.TrimSpace(cfg.Root) == "" {
 		cfg.Root = defaultRoot
 	}
@@ -255,17 +263,19 @@ func Load() (*Config, error) {
 	for i := range cfg.Thoughts.Roots {
 		cfg.Thoughts.Roots[i].Path = expandHome(cfg.Thoughts.Roots[i].Path)
 	}
-	if err := validateThoughts(cfg.ThoughtsRoots()); err != nil {
-		return nil, fmt.Errorf("%s: %w", Path(), err)
-	}
-	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
 
 func Save(cfg *Config) error {
+	snapshot := cfg.Snapshot()
+	resolved := clone(snapshot)
+	resolvePaths(resolved)
+	if err := validateThoughts(resolved.ThoughtsRoots()); err != nil {
+		return err
+	}
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(cfg.Snapshot(), "", "  ")
+	b, err := json.MarshalIndent(snapshot, "", "  ")
 	if err != nil {
 		return err
 	}

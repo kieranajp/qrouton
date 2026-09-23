@@ -1,11 +1,14 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 func TestSplitOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
@@ -213,7 +216,7 @@ func TestStickerLabelsLoadSaveAndReload(t *testing.T) {
 	t.Setenv("QROUTON_ROOT", t.TempDir())
 
 	custom := StickerLabels{Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken"}
-	if err := Save(&Config{Root: "unused", StickerLabels: &custom}); err != nil {
+	if err := Save(&Config{Root: "/unused", StickerLabels: &custom}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(Path())
@@ -346,5 +349,23 @@ func TestRouteThoughtsNeedsEveryOrgOnOneRoot(t *testing.T) {
 		if got := cfg.RouteThoughts(tc.orgs).ID; got != tc.want {
 			t.Errorf("RouteThoughts(%v) = %s, want %s", tc.orgs, got, tc.want)
 		}
+	}
+}
+
+func TestSaveRefusesARootThatWouldSwallowAnExtraThoughtsRoot(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &Config{Root: "/old/sessions", Thoughts: Thoughts{Roots: []ThoughtsRoot{
+		{ID: "work", Path: "/new/sessions/thoughts/work", Orgs: []string{"acme"}},
+	}}}
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(Path())
+	cfg.Root = "/new/sessions"
+	if err := Save(cfg); !errors.Is(err, vault.ErrOverlappingRoots) {
+		t.Fatalf("save = %v", err)
+	}
+	if after, _ := os.ReadFile(Path()); string(after) != string(before) {
+		t.Fatalf("a refused save replaced the file: %s", after)
 	}
 }
