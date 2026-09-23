@@ -162,6 +162,7 @@ const (
 const (
 	requestSeparator         = "\n\nRequest:\n"
 	providerRequestSeparator = "\n\n%s request:\n"
+	noticeSeparator          = "\n\n"
 
 	openingMessageRPI = "You have just been launched in a qrouton session. " +
 		"Read the session instructions and manifest, inspect relevant thoughts/shared artifacts, " +
