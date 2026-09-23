@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -25,7 +26,11 @@ const (
 
 var outcomes = []outcome{moved, unchanged, finished, conflict, skipped, refused, failed}
 
-const linkStaging = ".moving"
+const (
+	linkStaging = ".moving"
+	moveMarker  = ".thoughtsmove"
+	markerMode  = 0o644
+)
 
 type result struct {
 	Slug    string
@@ -91,14 +96,17 @@ func (mv mover) one(dir string, m session.Manifest) result {
 	home := filepath.Join(routed.Path, r.Slug)
 	from, to := resolve(filepath.Join(mv.cfg.ThoughtsRoots()[0].Path, r.Slug)), resolve(home)
 	r.Detail = from + " -> " + to
+	mark := marker(r.Slug, m)
 	switch {
 	case target == to && isDir(to):
 		r.Outcome, r.Detail = unchanged, to
-		return mv.apply(r, func() error { return record(dir, routed.ID) })
+		return mv.apply(r, func() error { return settle(dir, to, routed.ID) })
 	case target != from:
 		r.Detail = "links outside the default and routed roots: " + target
 	case exists(from) && exists(to):
 		r.Outcome, r.Detail = conflict, to+" already exists"
+	case !exists(from) && isDir(to) && !marked(to, mark):
+		r.Outcome, r.Detail = conflict, to+" already exists and this tool did not move it there"
 	case !exists(from) && isDir(to):
 		r.Outcome = finished
 		return mv.apply(r, func() error { return mv.relink(dir, home, routed.ID) })
@@ -111,6 +119,9 @@ func (mv mover) one(dir string, m session.Manifest) result {
 	default:
 		r.Outcome = moved
 		return mv.apply(r, func() error {
+			if err := os.WriteFile(filepath.Join(from, moveMarker), []byte(mark), markerMode); err != nil {
+				return err
+			}
 			if err := os.Rename(from, to); err != nil {
 				return err
 			}
@@ -142,7 +153,27 @@ func (mv mover) relink(dir, home, id string) error {
 	if err := os.Rename(staged, link); err != nil {
 		return err
 	}
-	return record(dir, id)
+	return settle(dir, home, id)
+}
+
+func settle(dir, home, id string) error {
+	if err := record(dir, id); err != nil {
+		return err
+	}
+	if err := os.Remove(filepath.Join(home, moveMarker)); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	return nil
+}
+
+// marker names the session a move is for, so a rerun adopts only its own destination.
+func marker(slug string, m session.Manifest) string {
+	return slug + " " + m.CreatedAt.UTC().Format(time.RFC3339Nano)
+}
+
+func marked(dir, want string) bool {
+	b, err := os.ReadFile(filepath.Join(dir, moveMarker))
+	return err == nil && string(b) == want
 }
 
 func record(dir, id string) error {

@@ -56,6 +56,20 @@ func (f *fixture) legacy(slug string, orgs ...string) string {
 	return dir
 }
 
+// interrupt leaves a session as a crash just after the rename would.
+func (f *fixture) interrupt(dir string) {
+	f.t.Helper()
+	m, err := session.Load(dir)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	slug := filepath.Base(dir)
+	mustWrite(f.t, filepath.Join(f.def, slug, moveMarker), marker(slug, m))
+	if err := os.Rename(filepath.Join(f.def, slug), filepath.Join(f.work, slug)); err != nil {
+		f.t.Fatal(err)
+	}
+}
+
 func (f *fixture) link(dir, target string) {
 	f.t.Helper()
 	link := filepath.Join(dir, "thoughts")
@@ -173,6 +187,9 @@ func TestMovesALegacySessionIntoItsRoutedRoot(t *testing.T) {
 	if exists(filepath.Join(dir, "thoughts"+linkStaging)) {
 		t.Fatal("staged link left behind")
 	}
+	if exists(filepath.Join(f.work, "routed", moveMarker)) {
+		t.Fatal("move marker left behind")
+	}
 }
 
 func TestDryRunChangesNothing(t *testing.T) {
@@ -180,9 +197,7 @@ func TestDryRunChangesNothing(t *testing.T) {
 	f.legacy("routed", "acme")
 	f.legacy("private", "kieranajp")
 	crashed := f.legacy("crashed", "acme")
-	if err := os.Rename(filepath.Join(f.def, "crashed"), filepath.Join(f.work, "crashed")); err != nil {
-		t.Fatal(err)
-	}
+	f.interrupt(crashed)
 	before := f.snapshot()
 	results := f.run(true)
 	expect(t, results, "routed", moved)
@@ -227,9 +242,7 @@ func TestALinkAlreadyInTheRoutedRootIsRecorded(t *testing.T) {
 func TestACrashBetweenRenameAndLinkSwapIsFinished(t *testing.T) {
 	f := newFixture(t)
 	dir := f.legacy("crashed", "acme")
-	if err := os.Rename(filepath.Join(f.def, "crashed"), filepath.Join(f.work, "crashed")); err != nil {
-		t.Fatal(err)
-	}
+	f.interrupt(dir)
 	if err := os.Symlink("stale", filepath.Join(dir, "thoughts"+linkStaging)); err != nil {
 		t.Fatal(err)
 	}
@@ -239,6 +252,9 @@ func TestACrashBetweenRenameAndLinkSwapIsFinished(t *testing.T) {
 	}
 	if got := thoughtsRoot(t, dir); got != "work" {
 		t.Fatalf("thoughtsRoot = %q", got)
+	}
+	if exists(filepath.Join(f.work, "crashed", moveMarker)) {
+		t.Fatal("move marker left behind")
 	}
 }
 
@@ -374,5 +390,29 @@ func TestThoughtsWithoutASessionAreNeverTouched(t *testing.T) {
 	}
 	if exists(filepath.Join(f.work, "orphan")) {
 		t.Fatal("orphan reached the work root")
+	}
+}
+
+func TestAnUnmarkedDestinationIsNeverAdopted(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("borrowed", "acme")
+	if err := os.RemoveAll(filepath.Join(f.def, "borrowed")); err != nil {
+		t.Fatal(err)
+	}
+	other := filepath.Join(f.work, "borrowed", "shared", "research")
+	mustMkdir(t, other)
+	mustWrite(t, filepath.Join(other, "R1.md"), "# another machine's session")
+	for _, mark := range []string{"", "borrowed 2020-01-01T00:00:00Z"} {
+		if mark != "" {
+			mustWrite(t, filepath.Join(f.work, "borrowed", moveMarker), mark)
+		}
+		before := f.snapshot()
+		expect(t, f.run(false), "borrowed", conflict)
+		if after := f.snapshot(); !reflect.DeepEqual(before, after) {
+			t.Fatalf("marker %q: a conflict changed the tree", mark)
+		}
+		if got := thoughtsRoot(t, dir); got != "" {
+			t.Fatalf("marker %q: thoughtsRoot = %q", mark, got)
+		}
 	}
 }
