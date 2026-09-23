@@ -3,12 +3,15 @@ import {
   WINDOWS_RENDER_DIAGRAMS,
   WINDOWS_REPORT_VIEWPORT,
 } from "../bridge/generated.js";
+import { mount, unmount } from "svelte";
 import { openDocument } from "../docked.svelte.js";
 import { Call, Events, openURL } from "../wails.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
 import { createDiagramStream } from "./diagram-stream.js";
+import { EXPAND } from "./diagram-view.js";
+import ImageLightbox from "./ImageLightbox.svelte";
 
 /** Document links dock inside the workbench; external links open in a browser.
  * @param {HTMLElement} body
@@ -49,9 +52,34 @@ export function diagrams(body, { id, fit }) {
   // for again whenever the text behind them changes.
   const draw = stream.draw;
   draw();
+  /** @type {(() => void) | null} */
+  let close = null;
+  const expand = (/** @type {CustomEvent} */ event) => {
+    const { svg, emitted } = event.detail;
+    const shown = svg.cloneNode(true);
+    shown.removeAttribute("style");
+    const markup = new XMLSerializer().serializeToString(shown);
+    const back = /** @type {HTMLElement | null} */ (document.activeElement);
+    const lightbox = mount(ImageLightbox, {
+      target: document.body,
+      props: {
+        image: { source: "Diagram", url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}` },
+        aspect: emitted.width / emitted.height,
+        onClose: () => close?.(),
+      },
+    });
+    close = () => {
+      close = null;
+      unmount(lightbox);
+      back?.focus();
+    };
+  };
+  body.addEventListener(EXPAND, expand);
   return {
     update: draw,
     destroy: () => {
+      close?.();
+      body.removeEventListener(EXPAND, expand);
       stream.destroy();
       off();
       teardownDiagrams(body);

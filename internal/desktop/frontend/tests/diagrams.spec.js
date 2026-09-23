@@ -136,7 +136,7 @@ test("a reply naming every fence does not put a settled failure back to waiting"
   expect(failed.notes).toBe(1);
 });
 
-test("ctrl and the wheel zoom about the pointer, and a double-click goes back", async ({ page }) => {
+test("ctrl and the wheel zoom about the pointer, and Fit goes back", async ({ page }) => {
   await page.goto("/tests/diagrams.html");
   await page.evaluate(() => window.draw());
 
@@ -162,7 +162,7 @@ test("ctrl and the wheel zoom about the pointer, and a double-click goes back", 
   expect(staged.boxWidth).toBeCloseTo(box.width, 0);
   expect(staged.boxHeight).toBeCloseTo(box.height, 0);
 
-  await page.mouse.dblclick(at.x, at.y);
+  await page.evaluate(() => window.press("Fit the whole diagram"));
   await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale, 3);
   const back = await page.evaluate(() => window.view());
   expect(back.tx).toBeCloseTo(0, 3);
@@ -337,6 +337,23 @@ test("a press on the overlay lands, drag or no drag", async ({ page }) => {
     zoomed * Math.SQRT2,
     3,
   );
+});
+
+test("a click asks for the diagram fullscreen, a drag or a control press does not", async ({ page }) => {
+  await page.goto("/tests/diagrams.html");
+  await page.evaluate(() => window.draw());
+  const box = await page.evaluate(() => window.stageBox());
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+
+  await page.mouse.click(at.x, at.y);
+  expect(await page.evaluate(() => window.expanded)).toEqual([await page.evaluate(() => window.emitted)]);
+
+  await page.click('pre[data-line="3"] button[aria-label="Zoom in"]');
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x - 40, at.y - 8, { steps: 4 });
+  await page.mouse.up();
+  expect(await page.evaluate(() => window.expanded.length)).toBe(1);
 });
 
 test("a diagram that drew and then failed leaves no stage behind", async ({ page }) => {

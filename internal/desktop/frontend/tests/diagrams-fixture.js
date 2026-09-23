@@ -1,5 +1,6 @@
 import "../src/tokens/typography.css";
 import "../src/lib/panes/markdown.css";
+import { EXPAND } from "../src/lib/panes/diagram-view.js";
 import { apply, teardown } from "../src/lib/panes/diagrams.js";
 import { render } from "../src/lib/panes/markdown.js";
 
@@ -65,6 +66,9 @@ const sizeless =
   '<svg xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet" viewBox="0 0 1642 108">' +
   inner +
   "</svg>";
+
+window.expanded = [];
+root.addEventListener(EXPAND, (event) => window.expanded.push(event.detail.emitted));
 
 window.lines = LINES;
 window.emitted = EMITTED;
