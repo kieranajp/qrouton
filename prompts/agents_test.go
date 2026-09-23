@@ -236,7 +236,8 @@ func TestResearchPromptsCarryVaultIsolation(t *testing.T) {
 		"`kinds: [\"research\"]`",
 		"Only research artifacts may reach the lead: specs, plans and notes carry intended solutions",
 		"Pass a reference, not content: the artifact ID, heading breadcrumb, line range, and the approved question it bears on",
-		"Add no summary of your own and no reason why the hit matters to the ticket",
+		"Add nothing else: no summary, no staleness note, no comment on its claims",
+		"read them with `read_vault` (the lead has it; do not hedge on its availability)",
 		"let the lead investigate fresh",
 	} {
 		if !strings.Contains(string(skill.Content), phrase) {
