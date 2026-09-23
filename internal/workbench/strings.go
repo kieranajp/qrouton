@@ -43,6 +43,8 @@ const (
 	OpRunnerGeneration   = "runner-generation"
 	OpDelegatedLifecycle = "delegated-lifecycle"
 	OpOpenTicket         = "open-ticket"
+	OpVaultSearch        = "vault-search"
+	OpVaultRead          = "vault-read"
 )
 
 const (
