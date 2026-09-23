@@ -195,6 +195,16 @@ func rrfOrder(lexical, dense []int) []int {
 			score[e] += 1 / float64(rrfK+rank+1)
 		}
 	}
+	lexRank := make(map[int]int, len(lexical))
+	for rank, e := range lexical {
+		lexRank[e] = rank + 1
+	}
+	lexOrder := func(e int) int {
+		if r, ok := lexRank[e]; ok {
+			return r
+		}
+		return len(lexical) + 1
+	}
 	order := make([]int, 0, len(score))
 	for e := range score {
 		order = append(order, e)
@@ -205,6 +215,9 @@ func rrfOrder(lexical, dense []int) []int {
 				return -1
 			}
 			return 1
+		}
+		if ra, rb := lexOrder(a), lexOrder(b); ra != rb {
+			return ra - rb
 		}
 		return a - b
 	})

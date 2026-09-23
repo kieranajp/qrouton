@@ -94,12 +94,12 @@ func TestKindsNarrowBothChannels(t *testing.T) {
 func TestFuseAdmitsEachChannelsTopThree(t *testing.T) {
 	got := fuse([]int{20, 21, 22}, []int{1, 2, 3, 4, 5, 6}, 2)
 	want := []admission{
-		{entry: 1, fused: 1, by: AdmittedRRF},
-		{entry: 20, fused: 2, by: AdmittedRRF},
-		{entry: 21, fused: 4, by: AdmittedBM25},
-		{entry: 22, fused: 6, by: AdmittedBM25},
-		{entry: 2, fused: 3, by: AdmittedDense},
-		{entry: 3, fused: 5, by: AdmittedDense},
+		{entry: 20, fused: 1, by: AdmittedRRF},
+		{entry: 1, fused: 2, by: AdmittedRRF},
+		{entry: 21, fused: 3, by: AdmittedBM25},
+		{entry: 22, fused: 5, by: AdmittedBM25},
+		{entry: 2, fused: 4, by: AdmittedDense},
+		{entry: 3, fused: 6, by: AdmittedDense},
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("fuse = %+v\nwant %+v", got, want)
