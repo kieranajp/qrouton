@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  or <code>brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton && brew install --cask qrouton</code>
+  or <code>brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton && brew trust --tap kieranajp/qrouton && brew install --cask qrouton</code>
 </p>
 
 A product change touches the app, a service, a shared library and a folder of
@@ -103,6 +103,20 @@ identifier to seed it with. Linear Desktop can hand an issue straight to qrouton
 through **Work on issue**, and `qrouton --ticket <url>` does the same for any of
 the three from a terminal. Reopen a session weeks later and the repos, branches,
 mode and agent conversation come back.
+
+## macOS installation
+
+Downloaded builds aren't notarised, so macOS blocks the first launch with
+"Apple could not verify qrouton is free of malware." To allow it: open qrouton
+once, dismiss the warning, go to **System Settings → Privacy & Security**,
+scroll to Security, click **Open Anyway** next to the qrouton message,
+authenticate, then open it again. Only needed once per install.
+
+Or, from a terminal:
+
+```sh
+xattr -dr com.apple.quarantine /Applications/qrouton.app
+```
 
 ## Ubuntu installation
 

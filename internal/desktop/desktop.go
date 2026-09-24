@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"net/http"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -20,6 +21,9 @@ import (
 
 type Options struct {
 	Icon []byte
+	// Version is the packaged release the binary was built as. Empty in a dev
+	// build, which turns the update check off.
+	Version string
 	// SessionRoot is empty when there is no session to open on, which is the
 	// window whose only content is the assembly overlay.
 	SessionRoot string
@@ -52,6 +56,7 @@ type Options struct {
 	assembly   *Assembly
 	chrome     *Chrome
 	bugReports *BugReports
+	updates    *Updates
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -108,6 +113,9 @@ func Run(opts Options) error {
 	chrome := newChrome(r.Emit)
 	opts.chrome = chrome
 	r.register(application.NewService(chrome))
+	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
+	opts.updates = updates
+	r.register(application.NewService(updates))
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
@@ -207,6 +215,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		chromeEmit = opts.chrome.publish
 	}
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
+	if opts.updates != nil {
+		go opts.updates.watch(ctx, updateInterval)
+	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.

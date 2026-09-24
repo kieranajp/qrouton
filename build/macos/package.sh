@@ -34,7 +34,7 @@ build_arch() {
 			MACOSX_DEPLOYMENT_TARGET="$deployment_target" \
 			CGO_CFLAGS="-mmacosx-version-min=$deployment_target -arch $clang_arch" \
 			CGO_LDFLAGS="-mmacosx-version-min=$deployment_target -arch $clang_arch" \
-			go build -tags production -trimpath -ldflags='-w -s' -o "$work/qrouton-$goarch" .
+			go build -tags production -trimpath -ldflags="-w -s -X main.version=$version" -o "$work/qrouton-$goarch" .
 	)
 }
 

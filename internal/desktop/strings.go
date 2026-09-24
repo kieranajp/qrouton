@@ -85,6 +85,7 @@ const (
 	assemblyProgressEvent  = "assembly:progress"
 	assemblyRequestedEvent = "assembly:requested"
 	orgsChangedEvent       = "orgs:changed"
+	updateEvent            = "update:status"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -155,6 +156,21 @@ const (
 	// branchListTimeout bounds the branch listing GitHub is asked for, which the
 	// base menu opens without waiting for.
 	branchListTimeout = 5 * time.Second
+
+	// updateInterval paces the release check; updateCheckTimeout bounds each one.
+	updateInterval     = 6 * time.Hour
+	updateCheckTimeout = 10 * time.Second
+)
+
+const (
+	updateEndpoint        = "https://api.github.com/repos/kieranajp/qrouton/releases/latest"
+	updateFallbackURL     = "https://github.com/kieranajp/qrouton/releases/latest"
+	updateBrewCommand     = "brew upgrade --cask qrouton"
+	updateUserAgentHeader = "User-Agent"
+	updateUserAgentPrefix = "qrouton/"
+	updateAcceptHeader    = "Accept"
+	updateAcceptValue     = "application/vnd.github+json"
+	updateResponseLimit   = 1 << 20
 )
 
 const (

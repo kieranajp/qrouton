@@ -14,6 +14,7 @@
   import Splitter from "./lib/shell/Splitter.svelte";
   import TabStrip from "./lib/shell/TabStrip.svelte";
   import DockedDocument from "./lib/DockedDocument.svelte";
+  import UpdateButton from "./lib/UpdateButton.svelte";
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
@@ -50,6 +51,7 @@
       </div>
     </div>
     <span class="tools">
+      <UpdateButton />
       <Button variant="ghost" size="sm" onclick={() => (view.settingsOpen = true)}>Settings</Button>
     </span>
   </div>

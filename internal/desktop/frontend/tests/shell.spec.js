@@ -194,6 +194,71 @@ test("a selected document stays mounted and keeps its scroll through tab selecti
   expect(await page.evaluate(() => window.shell.contentCalls())).toBe(1);
 });
 
+test("no update button appears when the workbench is current", async ({ page }) => {
+  await open(page, "window-1");
+  await expect(page.getByRole("button", { name: /Update to/ })).toHaveCount(0);
+});
+
+test("an update button reads the latest release and sits before Settings", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate(() =>
+    window.shell.updateStatus({ available: true, current: "1.0.0", latest: "1.4.0", command: "brew upgrade --cask qrouton" }),
+  );
+  const tools = page.locator(".tools button");
+  await expect(tools.nth(0)).toHaveText("Update to 1.4.0");
+  await expect(tools.nth(1)).toHaveText("Settings");
+});
+
+test("a click with a command shows it, and Copy puts it on the clipboard", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate(() =>
+    window.shell.updateStatus({ available: true, current: "1.0.0", latest: "1.4.0", command: "brew upgrade --cask qrouton" }),
+  );
+  await page.getByRole("button", { name: "Update to 1.4.0" }).click();
+  await expect(page.getByText("brew upgrade --cask qrouton")).toBeVisible();
+
+  await page.getByRole("button", { name: "Copy" }).click();
+  await expect.poll(() => page.evaluate(() => window.clipboardText)).toBe("brew upgrade --cask qrouton");
+});
+
+test("a command panel with a url also offers the release page link", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate(() =>
+    window.shell.updateStatus({
+      available: true,
+      current: "1.0.0",
+      latest: "1.4.0",
+      command: "brew upgrade --cask qrouton",
+      url: "https://github.com/kieranajp/qrouton/releases/latest",
+    }),
+  );
+  await page.getByRole("button", { name: "Update to 1.4.0" }).click();
+  await page.getByRole("link", { name: "Get it from the release page." }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe(
+    "https://github.com/kieranajp/qrouton/releases/latest",
+  );
+});
+
+test("a click with a url opens the release page", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate(() =>
+    window.shell.updateStatus({ available: true, current: "1.0.0", latest: "1.4.0", url: "https://github.com/kieranajp/qrouton/releases/latest" }),
+  );
+  await page.getByRole("button", { name: "Update to 1.4.0" }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe(
+    "https://github.com/kieranajp/qrouton/releases/latest",
+  );
+});
+
+test("an update status pushed after load shows the button without a reload", async ({ page }) => {
+  await open(page, "window-1");
+  await expect(page.getByRole("button", { name: /Update to/ })).toHaveCount(0);
+  await page.evaluate(() =>
+    window.shell.updateStatus({ available: true, current: "1.0.0", latest: "2.0.0", command: "brew upgrade --cask qrouton" }),
+  );
+  await expect(page.getByRole("button", { name: "Update to 2.0.0" })).toBeVisible();
+});
+
 // The menu dropped behind the agent pane's header, which carries a stacking
 // order of its own: the titlebar has to outrank the panes it sits above.
 test("the session name's menu paints over the pane chrome below it", async ({ page }) => {

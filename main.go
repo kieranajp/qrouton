@@ -23,12 +23,17 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
+// version is set by the package scripts via -X main.version=$version. A dev
+// build leaves it empty, which turns --version and the update check off.
+var version string
+
 func main() {
 	prepareEnvironment()
 	app := &cli.App{
 		Name:        appName,
 		Usage:       appUsage,
 		Description: appDescription,
+		Version:     version,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: runnerFlag, Usage: runnerFlagUsage},
 			&cli.StringFlag{Name: linearIssueFlag, Usage: linearIssueFlagUsage},
@@ -201,6 +206,7 @@ func workbenchProcess(marshalled string) error {
 	ports := workbenchPorts{cfg: cfg, bin: bin, spec: spec, env: os.Environ()}
 	return desktop.Run(desktop.Options{
 		Icon:         applicationIcon,
+		Version:      version,
 		SessionRoot:  spec.SessionRoot,
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
