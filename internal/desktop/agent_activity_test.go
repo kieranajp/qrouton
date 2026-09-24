@@ -622,3 +622,56 @@ func TestOpeningAnAttentionTabRingsTheSession(t *testing.T) {
 		t.Fatalf("rang %d times, want once for the attention tab alone", rung)
 	}
 }
+
+func TestTerminalRepliesAreNotTheUserTyping(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		data  string
+		reply bool
+	}{
+		{"focus in", "\x1b[I", true},
+		{"focus out", "\x1b[O", true},
+		{"cursor position", "\x1b[24;80R", true},
+		{"status report", "\x1b[0n", true},
+		{"primary attributes", "\x1b[?1;2c", true},
+		{"secondary attributes", "\x1b[>0;276;0c", true},
+		{"mode report", "\x1b[?2004;1$y", true},
+		{"window size", "\x1b[8;24;80t", true},
+		{"background colour", "\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\", true},
+		{"colour by bell", "\x1b]10;rgb:cdcd/d6d6/f4f4\x07", true},
+		{"xtversion", "\x1bP>|xterm.js(5.5.0)\x1b\\", true},
+		{"two replies at once", "\x1b[O\x1b[24;80R", true},
+		{"a letter", "y", false},
+		{"enter", "\r", false},
+		{"an arrow key", "\x1b[A", false},
+		{"escape", "\x1b", false},
+		{"a paste", "\x1b[200~ls\x1b[201~", false},
+		{"a reply then a keystroke", "\x1b[Oy", false},
+	} {
+		if got := terminalReplies.MatchString(tc.data); got != tc.reply {
+			t.Errorf("%s %q: reply = %v, want %v", tc.name, tc.data, got, tc.reply)
+		}
+	}
+}
+
+// Switching away from a window whose runner asked for focus reports writes to
+// the PTY, but it is not the user answering the chime.
+func TestAFocusReportLeavesTheChimeClaimed(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, _ := chimingSession(t, &config.Config{})
+
+	hook(status.ActivityTurnEnded, 1)
+	_ = state.write([]byte("\x1b[O"))
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 1 {
+		t.Fatalf("a focus report re-armed the chime: rang %d times", len(chimed.rung))
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("a focus report cleared the waiting marker: %q", got)
+	}
+	_ = state.write([]byte("y"))
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 2 {
+		t.Fatalf("a keystroke did not re-arm the chime: rang %d times", len(chimed.rung))
+	}
+}
