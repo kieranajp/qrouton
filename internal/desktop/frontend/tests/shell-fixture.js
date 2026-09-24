@@ -9,6 +9,7 @@ import { emitWailsEvent } from "./wails-runtime.js";
 const calls = [];
 let refuseSelect = false;
 let currentTabs = [];
+let updateStatus = { available: false, current: "", latest: "", command: "", url: "" };
 const DOCUMENT = {
   text: ["# Reader", "", ...Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1}.`)].join("\n\n"),
   format: "markdown",
@@ -31,6 +32,7 @@ window.wailsCall = (name, ...args) => {
   if (name.endsWith("Windows.OpenShell")) return "window-9";
   if (name.endsWith("Picker.Load")) return { branch: "fix/octopus-4b2a", repos: [] };
   if (name.endsWith("Orgs.List") || name.endsWith("Repositories.Cached")) return [];
+  if (name.endsWith("Updates.Status")) return updateStatus;
   return undefined;
 };
 
@@ -93,5 +95,9 @@ window.shell = {
   scrollDocument: (top) => {
     const body = document.querySelector('.human [data-document-source="thoughts/shared/research/R1-reader.md"]')?.closest(".body");
     body.scrollTop = top;
+  },
+  updateStatus: (status) => {
+    updateStatus = { available: false, current: "", latest: "", command: "", url: "", ...status };
+    emitWailsEvent("update:status", updateStatus);
   },
 };
