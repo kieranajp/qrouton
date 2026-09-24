@@ -79,8 +79,8 @@ func AgyHome(root string) string {
 	return filepath.Join(Dir(root), agyHomeDirName)
 }
 
-// NotifyScript plays the attention sound, for both the notify MCP tool and the
-// runner's notification hook.
+// NotifyScript plays the attention sound. Only the workbench rings it, so one
+// place decides whether a ring is wanted.
 func NotifyScript(root string) string {
 	return filepath.Join(Dir(root), notifyScriptName)
 }

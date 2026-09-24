@@ -50,6 +50,7 @@ test("sticker meanings load and save together without asking for a restart", asy
         question: "Needs an answer",
         exclamation: "Broken here",
       },
+      chime: true,
     },
   ]);
   await expect(page.getByText("Quit qrouton to use the new sessions root")).toHaveCount(0);
@@ -68,4 +69,17 @@ test("a blank sticker meaning names the field and stays open", async ({ page }) 
     ),
   ).toContainText("cannot be empty");
   await expect(page.locator(".dialog")).toBeVisible();
+});
+
+test("the chime loads ticked and saves unticked", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  const chime = page.getByRole("checkbox", { name: "Chime when an agent is waiting for you" });
+  await expect(chime).toBeChecked();
+
+  await chime.uncheck();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect
+    .poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.chime)))
+    .toEqual([false]);
 });

@@ -135,6 +135,7 @@ const (
 	claudeSubagentStartHook = "SubagentStart"
 	claudeSubagentStopHook  = "SubagentStop"
 	claudeNotificationHook  = "Notification"
+	claudeStopHook          = "Stop"
 
 	codexMCPCommandKey           = "mcp_servers.qrouton.command="
 	codexMCPArgsKey              = "mcp_servers.qrouton.args="

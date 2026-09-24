@@ -32,6 +32,7 @@
     bind:launch={panel.form.launch}
     bind:linear={panel.form.linear}
     bind:stickerLabels={panel.form.stickerLabels}
+    bind:chime={panel.form.chime}
     linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}

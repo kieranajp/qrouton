@@ -376,7 +376,6 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	if message == "" {
 		return "", ErrMessageRequired
 	}
-	playSound(sessionpaths.NotifyScript(m.root))
 	if _, err := m.open(ctx, notifyWindowName, workbench.WindowOptions{
 		Kind:      workbench.KindDocument,
 		Label:     notifyWindowLabel,
@@ -498,15 +497,6 @@ func shellOutput(ctx context.Context, dir, command string) string {
 	cmd.Dir = dir
 	out, _ := cmd.CombinedOutput()
 	return string(out)
-}
-
-// playSound rings the session's attention sound without waiting for it.
-var playSound = func(script string) {
-	cmd := exec.Command(script)
-	if err := cmd.Start(); err != nil {
-		return
-	}
-	go func() { _ = cmd.Wait() }()
 }
 
 func (m *windowManager) focusImage(ctx context.Context, input focusImageInput) (string, error) {

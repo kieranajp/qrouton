@@ -19,6 +19,7 @@ export function settings(onClose) {
       question: "",
       exclamation: "",
     },
+    chime: true,
   });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -44,6 +45,7 @@ export function settings(onClose) {
       question: loaded?.stickerLabels?.question ?? "",
       exclamation: loaded?.stickerLabels?.exclamation ?? "",
     };
+    form.chime = loaded?.chime ?? true;
     if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
   });
 
@@ -68,6 +70,7 @@ export function settings(onClose) {
         launch: form.launch,
         linear: form.linear,
         stickerLabels: { ...form.stickerLabels },
+        chime: form.chime,
       });
     } catch (thrown) {
       err = thrown;

@@ -28,6 +28,8 @@ const (
 		`"cwd":"/work/webhook","hook_event_name":"SubagentStop","agent_id":"agent_017c","agent_type":"Explore"}`
 	codexStartPayload = `{"session_id":"lead_012","transcript_path":"/work/.codex/rollout.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"SubagentStart","agent_id":"agent_017c","agent_type":"code-reviewer","model":"gpt-5.6-sol"}`
+	stopPayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
+		`"cwd":"/work/webhook","hook_event_name":"Stop","stop_hook_active":false}`
 	preToolUsePayload = `{"session_id":"4f3a1e19","transcript_path":"/home/t/.claude/projects/-work-webhook/4f3a1e19.jsonl",` +
 		`"cwd":"/work/webhook","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`
 )
@@ -41,6 +43,18 @@ func TestNotificationHookAsksTheWorkbenchForAttention(t *testing.T) {
 	req := await(t, requests)
 	if req.Op != workbench.OpAttention || req.Activity != status.ActivityWaiting || req.Generation != 7 {
 		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", req, workbench.OpAttention, status.ActivityWaiting)
+	}
+}
+
+func TestStopHookTellsTheWorkbenchTheTurnEnded(t *testing.T) {
+	root := t.TempDir()
+	socket, requests := controlSocket(t)
+	if err := runEvent(t, "claude", handleFor(socket, root), stopPayload); err != nil {
+		t.Fatal(err)
+	}
+	req := await(t, requests)
+	if req.Op != workbench.OpAttention || req.Activity != status.ActivityTurnEnded || req.Generation != 7 {
+		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", req, workbench.OpAttention, status.ActivityTurnEnded)
 	}
 }
 

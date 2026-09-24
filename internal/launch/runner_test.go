@@ -195,9 +195,9 @@ func TestRunnerLaunchInjectsClaudeAgentHooks(t *testing.T) {
 			t.Fatalf("Claude launch missing %q: %v", want, argv)
 		}
 	}
-	for _, want := range []string{"Notification", filepath.Join(".qrouton", "notify.sh")} {
+	for _, want := range []string{"Notification", "Stop"} {
 		if !strings.Contains(joined, want) {
-			t.Fatalf("Claude launch missing sound hook %q: %v", want, argv)
+			t.Fatalf("Claude launch missing hook %q: %v", want, argv)
 		}
 	}
 }
@@ -273,17 +273,11 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	if got := shellWords(t, callback); !reflect.DeepEqual(got, want) {
 		t.Fatalf("hook command splits to %q, want %q", got, want)
 	}
-	// Notification runs the sound and then the callback that turns the header
-	// peach; losing either leaves an agent blocked on the user saying nothing.
-	notification := settings.Hooks["Notification"][0].Hooks
-	if len(notification) != 2 {
-		t.Fatalf("Notification carries %d commands, want the sound and the callback", len(notification))
-	}
-	if got := shellWords(t, notification[0].Command); !reflect.DeepEqual(got, []string{sessionpaths.NotifyScript(dir)}) {
-		t.Fatalf("notification sound splits to %q", got)
-	}
-	if notification[1].Command != callback {
-		t.Fatalf("notification callback = %s", notification[1].Command)
+	// No hook rings the sound itself: the workbench decides whether one is wanted.
+	for _, hook := range []string{"Notification", "Stop"} {
+		if got := settings.Hooks[hook][0].Hooks; len(got) != 1 || got[0].Command != callback {
+			t.Fatalf("%s hooks = %+v, want only the callback", hook, got)
+		}
 	}
 }
 
