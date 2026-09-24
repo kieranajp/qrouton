@@ -221,6 +221,24 @@ test("a click with a command shows it, and Copy puts it on the clipboard", async
   await expect.poll(() => page.evaluate(() => window.clipboardText)).toBe("brew upgrade --cask qrouton");
 });
 
+test("a command panel with a url also offers the release page link", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate(() =>
+    window.shell.updateStatus({
+      available: true,
+      current: "1.0.0",
+      latest: "1.4.0",
+      command: "brew upgrade --cask qrouton",
+      url: "https://github.com/kieranajp/qrouton/releases/latest",
+    }),
+  );
+  await page.getByRole("button", { name: "Update to 1.4.0" }).click();
+  await page.getByRole("link", { name: "Get it from the release page." }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe(
+    "https://github.com/kieranajp/qrouton/releases/latest",
+  );
+});
+
 test("a click with a url opens the release page", async ({ page }) => {
   await open(page, "window-1");
   await page.evaluate(() =>

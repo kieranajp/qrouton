@@ -99,14 +99,15 @@ func TestUpdatesCheckFindsANewerRelease(t *testing.T) {
 	if !status.Available || status.Latest != "1.4.0" || status.Current != "1.0.0" {
 		t.Fatalf("status = %+v", status)
 	}
+	if status.URL != "https://example.com/releases/v1.4.0" {
+		t.Fatalf("status = %+v", status)
+	}
 	if runtime.GOOS == "darwin" {
-		if status.Command != updateBrewCommand || status.URL != "" {
+		if status.Command != updateBrewCommand {
 			t.Fatalf("darwin status = %+v", status)
 		}
-	} else {
-		if status.URL != "https://example.com/releases/v1.4.0" || status.Command != "" {
-			t.Fatalf("non-darwin status = %+v", status)
-		}
+	} else if status.Command != "" {
+		t.Fatalf("non-darwin status = %+v", status)
 	}
 	if rec.count() != 1 {
 		t.Fatalf("emitted %d times, want 1", rec.count())

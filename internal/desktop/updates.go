@@ -94,13 +94,12 @@ func (u *Updates) check(ctx context.Context) {
 		return
 	}
 	next := UpdateStatus{Available: true, Current: u.version, Latest: strings.TrimPrefix(release.TagName, "v")}
+	next.URL = release.URL
+	if next.URL == "" {
+		next.URL = updateFallbackURL
+	}
 	if runtime.GOOS == "darwin" {
 		next.Command = updateBrewCommand
-	} else {
-		next.URL = release.URL
-		if next.URL == "" {
-			next.URL = updateFallbackURL
-		}
 	}
 	u.setStatus(next)
 }

@@ -41,6 +41,16 @@
         </p>
         <code>{status.command}</code>
         <Button variant="ghost" size="sm" onclick={copy}>{copied ? "Copied" : "Copy"}</Button>
+        {#if status.url}
+          <p>
+            Downloaded it directly? <a
+              href={status.url}
+              onclick={(event) => {
+                event.preventDefault();
+                openURL(status.url);
+              }}>Get it from the release page.</a>
+          </p>
+        {/if}
       </div>
     {/if}
   </div>
@@ -78,5 +88,9 @@
     background: var(--surface-raised);
     padding: 6px 8px;
     word-break: break-all;
+  }
+
+  .panel a {
+    color: var(--accent-action);
   }
 </style>
