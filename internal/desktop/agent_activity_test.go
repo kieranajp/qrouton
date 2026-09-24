@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -513,5 +515,110 @@ func TestAReopenedSessionRejoinsTheRailIdle(t *testing.T) {
 	}
 	if got := second.agents.state(); got != status.ActivityIdle {
 		t.Fatalf("a reopened session rejoins the rail as %q, want idle", got)
+	}
+}
+
+type chimes struct{ rung []string }
+
+func recordChimes(t *testing.T) *chimes {
+	t.Helper()
+	c := &chimes{}
+	original := chime
+	chime = func(script string) { c.rung = append(c.rung, script) }
+	t.Cleanup(func() { chime = original })
+	return c
+}
+
+func chimingSession(t *testing.T, cfg *config.Config) (*sessionState, func(string, uint64), func()) {
+	t.Helper()
+	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
+	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
+	state.agents.begin(agentProviderClaude, 1)
+	ring := ringer(cfg, state)
+	return state, attend(state, func() {}, ring), ring
+}
+
+// An orchestrator ends a turn each time a background lead reports back, so only
+// the turn that leaves nothing delegated running is worth a chime.
+func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, _ := chimingSession(t, &config.Config{})
+	lead := workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "agent-1", Type: "qrouton-research-lead",
+	}
+	state.agents.lifecycle(lead)
+
+	hook(status.ActivityTurnEnded, 1)
+	if len(chimed.rung) != 0 || state.agents.state() == status.ActivityWaiting {
+		t.Fatalf("a turn ending with a lead still running chimed %v and reads %q", chimed.rung, state.agents.state())
+	}
+	lead.Kind = workbench.LifecycleStop
+	state.agents.lifecycle(lead)
+	hook(status.ActivityTurnEnded, 1)
+	if want := sessionpaths.NotifyScript(state.root()); len(chimed.rung) != 1 || chimed.rung[0] != want {
+		t.Fatalf("chimed %v, want %s once", chimed.rung, want)
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("a settled turn reads %q, want waiting", got)
+	}
+}
+
+// A turn ending, Claude's idle nag after it and a notify tab all mean the same
+// wait, so the session chimes once until the user types.
+func TestASessionChimesOnceUntilTheUserTypes(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, ring := chimingSession(t, &config.Config{})
+
+	hook(status.ActivityTurnEnded, 1)
+	hook(status.ActivityWaiting, 1)
+	ring()
+	if len(chimed.rung) != 1 {
+		t.Fatalf("one wait chimed %d times", len(chimed.rung))
+	}
+	state.agents.input()
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 2 {
+		t.Fatalf("a permission prompt after the user typed chimed %d times in all, want 2", len(chimed.rung))
+	}
+}
+
+func TestAQuietConfigNeverChimes(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, ring := chimingSession(t, &config.Config{Quiet: true})
+
+	hook(status.ActivityTurnEnded, 1)
+	ring()
+	if len(chimed.rung) != 0 {
+		t.Fatalf("a quiet config chimed %v", chimed.rung)
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("quiet also dropped the waiting marker: %q", got)
+	}
+}
+
+func TestOpeningAnAttentionTabRingsTheSession(t *testing.T) {
+	windows, _ := testWindows(t)
+	rung := 0
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{ring: func() { rung++ }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	handle := workbench.Handle{Socket: socket, SessionRoot: windows.shown().root()}
+	for _, attention := range []bool{false, true} {
+		if _, err := handle.WindowHost().Open(context.Background(), workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "🔔", Content: "done", Attention: attention,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if rung != 1 {
+		t.Fatalf("rang %d times, want once for the attention tab alone", rung)
 	}
 }

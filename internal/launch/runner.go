@@ -223,14 +223,12 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
-	// Chime only when the agent asks for attention, not on every turn, so the
-	// user can step away.
-	soundCommand := ShellQuote(sessionpaths.NotifyScript(c.dir))
 	// Strings and maps of them: marshalling cannot fail.
 	settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
 		claudeSubagentStartHook: commandHook(hookCommand),
 		claudeSubagentStopHook:  commandHook(hookCommand),
-		claudeNotificationHook:  commandHook(soundCommand, hookCommand),
+		claudeNotificationHook:  commandHook(hookCommand),
+		claudeStopHook:          commandHook(hookCommand),
 	}})
 	env := workbench.WithEnv(os.Environ(), claudeMaintainProjectWorkingDirEnvVar,
 		claudeMaintainProjectWorkingDirValue)

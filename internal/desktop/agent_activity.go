@@ -59,6 +59,7 @@ type agentActivity struct {
 	setupRuns  uint64
 	running    bool
 	waiting    bool
+	rung       bool
 	spoke      time.Time
 	records    map[agentRecordKey]*agentRecord
 	stopped    map[agentRecordKey]struct{}
@@ -87,6 +88,7 @@ func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.stopped = map[agentRecordKey]struct{}{}
 	a.running = true
 	a.waiting = false
+	a.rung = false
 	a.spoke = time.Time{}
 	runID := strconv.FormatUint(generation, 10)
 	key := agentRecordKey{provider: provider, runID: runID, id: agentRootID, root: true}
@@ -183,10 +185,36 @@ func (a *agentActivity) attention(generation uint64, state string) bool {
 	case status.ActivityWorking:
 		a.waiting = false
 		a.spoke = a.now()
+	case status.ActivityTurnEnded:
+		if a.delegatingLocked() {
+			return false
+		}
+		a.waiting = true
 	default:
 		return false
 	}
 	return true
+}
+
+// ring claims the one chime a session gets between two things the user types,
+// whichever of its runner's hooks or tools asks for it first.
+func (a *agentActivity) ring() bool {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.rung {
+		return false
+	}
+	a.rung = true
+	return true
+}
+
+func (a *agentActivity) delegatingLocked() bool {
+	for _, record := range a.records {
+		if !record.Root && record.Generation == a.generation && record.State == agentStateActive {
+			return true
+		}
+	}
+	return false
 }
 
 // output and input are the conversation PTY's own timing, which the workbench
@@ -201,6 +229,7 @@ func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.waiting = false
+	a.rung = false
 	a.spoke = a.now()
 }
 

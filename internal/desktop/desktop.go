@@ -14,6 +14,8 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -144,6 +146,37 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 	return r.Relaunch
 }
 
+var chime = func(script string) {
+	cmd := exec.Command(script)
+	if err := cmd.Start(); err != nil {
+		return
+	}
+	go func() { _ = cmd.Wait() }()
+}
+
+// ringer is the one place a session's chime is rung from, so the setting and
+// the once-until-you-type rule cannot be skipped by any caller.
+func ringer(cfg *config.Config, state *sessionState) func() {
+	return func() {
+		if (cfg != nil && cfg.Snapshot().Quiet) || !state.agents.ring() {
+			return
+		}
+		chime(sessionpaths.NotifyScript(state.root()))
+	}
+}
+
+func attend(state *sessionState, touch, ring func()) func(string, uint64) {
+	return func(value string, generation uint64) {
+		if !state.agents.attention(generation, value) {
+			return
+		}
+		touch()
+		if value == status.ActivityWaiting || value == status.ActivityTurnEnded {
+			ring()
+		}
+	}
+}
+
 // run is Run with the renderer already built, so the window lifecycle and the
 // control socket are exercised against a double instead of a display.
 func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
@@ -161,13 +194,11 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
+			ring := ringer(opts.Config, state)
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
-				attention: func(value string, generation uint64) {
-					if state.agents.attention(generation, value) {
-						reg.touch()
-					}
-				},
+				attention:  attend(state, reg.touch, ring),
+				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
 					if req.Provider != state.provider {
 						return

@@ -28,6 +28,9 @@ type Config struct {
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 
+	// Absent reads false, so the chime stays on until someone turns it off.
+	Quiet bool `json:"quiet,omitempty"`
+
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 }
 
@@ -89,6 +92,7 @@ func (c *Config) Replace(next *Config) {
 	c.Launch = replacement.Launch
 	c.Editor = replacement.Editor
 	c.Welcomed = replacement.Welcomed
+	c.Quiet = replacement.Quiet
 	c.StickerLabels = replacement.StickerLabels
 }
 
@@ -100,6 +104,7 @@ func clone(c *Config) *Config {
 		Root:     c.Root,
 		Editor:   append([]string(nil), c.Editor...),
 		Welcomed: c.Welcomed,
+		Quiet:    c.Quiet,
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))

@@ -13,6 +13,7 @@ import (
 
 var attention = map[string]string{
 	hookNotification:           status.ActivityWaiting,
+	hookStop:                   status.ActivityTurnEnded,
 	eventlog.HookSubagentStart: status.ActivityWorking,
 }
 
