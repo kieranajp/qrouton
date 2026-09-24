@@ -20,6 +20,9 @@ import (
 
 type Options struct {
 	Icon []byte
+	// Version is the packaged release the binary was built as. Empty in a dev
+	// build, which turns the update check off.
+	Version string
 	// SessionRoot is empty when there is no session to open on, which is the
 	// window whose only content is the assembly overlay.
 	SessionRoot string

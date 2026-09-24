@@ -16,7 +16,7 @@
 </p>
 
 <p align="center">
-  or <code>brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton && brew install --cask qrouton</code>
+  or <code>brew tap kieranajp/qrouton https://github.com/kieranajp/qrouton && brew trust --tap kieranajp/qrouton && brew install --cask qrouton</code>
 </p>
 
 A product change touches the app, a service, a shared library and a folder of

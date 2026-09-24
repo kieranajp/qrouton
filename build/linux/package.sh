@@ -31,7 +31,7 @@ mkdir -p "$staged/usr/bin" "$staged/usr/share/applications" \
 (
 	cd "$root"
 	CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
-		go build -tags production -trimpath -ldflags='-w -s' -o "$staged/usr/bin/qrouton" .
+		go build -tags production -trimpath -ldflags="-w -s -X main.version=$version" -o "$staged/usr/bin/qrouton" .
 )
 chmod 755 "$staged/usr/bin/qrouton"
 install -m 644 "$root/build/linux/qrouton.desktop" "$staged/usr/share/applications/qrouton.desktop"
