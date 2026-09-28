@@ -68,6 +68,8 @@ func (f *fakeRenderer) Focus(name string) {
 	f.focused[name]++
 }
 
+func (f *fakeRenderer) Focused(string) bool { return false }
+
 func (f *fakeRenderer) Close(name string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

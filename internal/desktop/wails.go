@@ -76,6 +76,15 @@ func (r *wailsRenderer) Focus(name string) {
 	})
 }
 
+// Focused must not go through onMain: IsFocused marshals to the main thread itself.
+func (r *wailsRenderer) Focused(name string) bool {
+	if !r.running.Load() {
+		return false
+	}
+	window, ok := r.app.Window.Get(name)
+	return ok && window.IsFocused()
+}
+
 func (r *wailsRenderer) Close(name string) {
 	r.onMain(func() {
 		if window, ok := r.app.Window.Get(name); ok {

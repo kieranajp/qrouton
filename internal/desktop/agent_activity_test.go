@@ -529,12 +529,12 @@ func recordChimes(t *testing.T) *chimes {
 	return c
 }
 
-func chimingSession(t *testing.T, cfg *config.Config) (*sessionState, func(string, uint64), func()) {
+func chimingSession(t *testing.T, cfg *config.Config, watched func(*sessionState) bool) (*sessionState, func(string, uint64), func()) {
 	t.Helper()
 	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
 	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
 	state.agents.begin(agentProviderClaude, 1)
-	ring := ringer(cfg, state)
+	ring := ringer(cfg, state, watched)
 	return state, attend(state, func() {}, ring), ring
 }
 
@@ -542,7 +542,7 @@ func chimingSession(t *testing.T, cfg *config.Config) (*sessionState, func(strin
 // the turn that leaves nothing delegated running is worth a chime.
 func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
 	chimed := recordChimes(t)
-	state, hook, _ := chimingSession(t, &config.Config{})
+	state, hook, _ := chimingSession(t, &config.Config{}, unwatched)
 	lead := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
 		ID: "agent-1", Type: "qrouton-research-lead",
@@ -568,7 +568,7 @@ func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
 // wait, so the session chimes once until the user types.
 func TestASessionChimesOnceUntilTheUserTypes(t *testing.T) {
 	chimed := recordChimes(t)
-	state, hook, ring := chimingSession(t, &config.Config{})
+	state, hook, ring := chimingSession(t, &config.Config{}, unwatched)
 
 	hook(status.ActivityTurnEnded, 1)
 	hook(status.ActivityWaiting, 1)
@@ -583,9 +583,31 @@ func TestASessionChimesOnceUntilTheUserTypes(t *testing.T) {
 	}
 }
 
+func unwatched(*sessionState) bool { return false }
+
+// The session in front of the user needs no chime to be noticed; the wait still
+// registers, so the rail and the next unwatched wait behave as before.
+func TestTheWatchedSessionDoesNotChime(t *testing.T) {
+	chimed := recordChimes(t)
+	watching := true
+	state, hook, _ := chimingSession(t, &config.Config{}, func(*sessionState) bool { return watching })
+
+	hook(status.ActivityTurnEnded, 1)
+	if len(chimed.rung) != 0 {
+		t.Fatalf("the watched session chimed %v", chimed.rung)
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("a watched wait reads %q, want waiting", got)
+	}
+	watching = false
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 1 {
+		t.Fatalf("a wait after looking away chimed %d times, want 1", len(chimed.rung))
+	}
+}
 func TestAQuietConfigNeverChimes(t *testing.T) {
 	chimed := recordChimes(t)
-	state, hook, ring := chimingSession(t, &config.Config{Quiet: true})
+	state, hook, ring := chimingSession(t, &config.Config{Quiet: true}, unwatched)
 
 	hook(status.ActivityTurnEnded, 1)
 	ring()
@@ -631,6 +653,10 @@ func TestTerminalRepliesAreNotTheUserTyping(t *testing.T) {
 	}{
 		{"focus in", "\x1b[I", true},
 		{"focus out", "\x1b[O", true},
+		{"mouse move", "\x1b[<35;10;5M", true},
+		{"scroll", "\x1b[<64;10;5M", true},
+		{"click release", "\x1b[<0;10;5m", true},
+		{"x10 click", "\x1b[M !!", true},
 		{"cursor position", "\x1b[24;80R", true},
 		{"status report", "\x1b[0n", true},
 		{"primary attributes", "\x1b[?1;2c", true},
@@ -658,7 +684,7 @@ func TestTerminalRepliesAreNotTheUserTyping(t *testing.T) {
 // the PTY, but it is not the user answering the chime.
 func TestAFocusReportLeavesTheChimeClaimed(t *testing.T) {
 	chimed := recordChimes(t)
-	state, hook, _ := chimingSession(t, &config.Config{})
+	state, hook, _ := chimingSession(t, &config.Config{}, unwatched)
 
 	hook(status.ActivityTurnEnded, 1)
 	_ = state.write([]byte("\x1b[O"))

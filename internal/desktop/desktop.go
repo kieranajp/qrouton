@@ -162,11 +162,12 @@ var chime = func(script string) {
 	go func() { _ = cmd.Wait() }()
 }
 
-// ringer is the one place a session's chime is rung from, so the setting and
-// the once-until-you-type rule cannot be skipped by any caller.
-func ringer(cfg *config.Config, state *sessionState) func() {
+// ringer is the one place a session's chime is rung from, so the setting, the
+// session in front of the user, and the once-until-you-type rule cannot be
+// skipped by any caller.
+func ringer(cfg *config.Config, state *sessionState, watched func(*sessionState) bool) func() {
 	return func() {
-		if (cfg != nil && cfg.Snapshot().Quiet) || !state.agents.ring() {
+		if (cfg != nil && cfg.Snapshot().Quiet) || watched(state) || !state.agents.ring() {
 			return
 		}
 		chime(sessionpaths.NotifyScript(state.root()))
@@ -202,7 +203,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
-			ring := ringer(opts.Config, state)
+			ring := ringer(opts.Config, state, func(s *sessionState) bool {
+				return reg.current() == s && r.Focused(mainWindowName)
+			})
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				attention:  attend(state, reg.touch, ring),
