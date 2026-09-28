@@ -26,6 +26,10 @@ const (
 	ActivityWorking = "working"
 	ActivityWaiting = "waiting"
 	ActivityIdle    = "idle"
+
+	// ActivityTurnEnded is the runner saying its own turn is over. It is never
+	// displayed: it becomes waiting, or nothing while delegated work runs.
+	ActivityTurnEnded = "turn-ended"
 )
 
 const (

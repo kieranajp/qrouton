@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -153,8 +154,14 @@ func (s *sessionState) recordExit(code int) {
 	recordAgentExit(s.root(), s.provider, code, last)
 }
 
+// terminalReplies matches writes xterm.js makes on its own: focus reports and
+// answers to the runner's status, attribute, window and colour queries.
+var terminalReplies = regexp.MustCompile(`^(?:\x1b\[[IO]|\x1b\[\??\d+;\d+R|\x1b\[\d*n|\x1b\[[?>][\d;]*c|\x1b\[\??[\d;]*\$y|\x1b\[[\d;]*t|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1bP[^\x1b]*\x1b\\)+$`)
+
 func (s *sessionState) write(data []byte) error {
-	s.agents.input()
+	if !terminalReplies.Match(data) {
+		s.agents.input()
+	}
 	s.mu.Lock()
 	process := s.process
 	s.mu.Unlock()

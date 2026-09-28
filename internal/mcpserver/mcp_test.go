@@ -349,9 +349,6 @@ func TestForegroundResolvesEveryOpeningTool(t *testing.T) {
 			})
 			t.Run("notify", func(t *testing.T) {
 				m, host, _ := newTestManager(t)
-				original := playSound
-				playSound = func(string) {}
-				t.Cleanup(func() { playSound = original })
 				if _, err := m.notify(context.Background(), notifyInput{Message: "done", Foreground: tc.foreground}); err != nil {
 					t.Fatal(err)
 				}
@@ -1010,12 +1007,8 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	}
 }
 
-func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
-	m, host, dir := newTestManager(t)
-	var played string
-	original := playSound
-	playSound = func(script string) { played = script }
-	t.Cleanup(func() { playSound = original })
+func TestNotifyOpensADurableAttentionTab(t *testing.T) {
+	m, host, _ := newTestManager(t)
 	ctx := context.Background()
 
 	if _, err := m.notify(ctx, notifyInput{Message: "build finished"}); err != nil {
@@ -1033,9 +1026,6 @@ func TestNotifyOpensADurableAttentionTabAndRingsTheSessionSound(t *testing.T) {
 	}
 	if opts.Format != "" {
 		t.Fatalf("the toast declared the %q format; only show_diff does", opts.Format)
-	}
-	if want := sessionpaths.NotifyScript(dir); played != want {
-		t.Fatalf("played %q, want %q", played, want)
 	}
 	if _, err := m.notify(ctx, notifyInput{Message: "  "}); !errors.Is(err, ErrMessageRequired) {
 		t.Fatalf("empty message error = %v, want ErrMessageRequired", err)

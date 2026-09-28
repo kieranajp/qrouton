@@ -6,7 +6,7 @@
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -16,6 +16,7 @@
     linear = $bindable(""),
     linearPath = "",
     stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
+    chime = $bindable(true),
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -55,6 +56,11 @@
   valueVoice="literal"
   help={fields.editor ?? "One {} placeholder for the file path"}
   helpTone={fields.editor ? "failed" : "muted"} />
+
+<label class="chime">
+  <input type="checkbox" bind:checked={chime} />
+  Chime when an agent is waiting for you
+</label>
 
 <fieldset class="sticker-labels">
   <legend>Session stickers</legend>
@@ -141,6 +147,35 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 14px 18px;
+  }
+
+  .chime {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font: var(--machine-md);
+    color: var(--text-primary);
+    cursor: pointer;
+  }
+
+  .chime input {
+    appearance: none;
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    border: var(--border-width) solid var(--border-default);
+    background: transparent;
+    cursor: pointer;
+  }
+
+  .chime input:checked {
+    border: none;
+    background: var(--accent-action);
+  }
+
+  .chime input:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
   }
 
   .banner {

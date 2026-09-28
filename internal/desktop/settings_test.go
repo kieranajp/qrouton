@@ -811,3 +811,34 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 		t.Fatalf("final disk/live editor and Linear = %#v / %#v / %q", disk.Editor, live.Editor, linear)
 	}
 }
+
+func TestSettingsChimeReadsOnForAnUntouchedConfigAndSavesAsQuiet(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	if !s.Load().Chime {
+		t.Fatal("a config that never mentioned the chime loads it as off")
+	}
+
+	input := SettingsInput{
+		Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+	}
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Snapshot().Quiet || !loaded.Quiet || s.Load().Chime {
+		t.Fatalf("unticking the chime left live quiet %v, on-disk quiet %v", cfg.Snapshot().Quiet, loaded.Quiet)
+	}
+
+	input.Chime = true
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Snapshot().Quiet || !s.Load().Chime {
+		t.Fatal("ticking the chime again left the config quiet")
+	}
+}

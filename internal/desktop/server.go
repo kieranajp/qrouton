@@ -18,6 +18,8 @@ type controlHooks struct {
 	bugReports *BugReports
 	picker     func(req workbench.PickerRequest) error
 	attention  func(activity string, generation uint64)
+	// ring asks for the session's chime, which it may already have had.
+	ring       func()
 	generation func(req workbench.RunnerGenerationRequest)
 	lifecycle  func(req workbench.DelegatedLifecycleRequest)
 	openTicket func(url, prompt string) (string, error)
@@ -130,6 +132,9 @@ var handlers = map[string]handler{
 		guards: []guard{needsOptions, needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
 			id, err := c.windows.openWindow(c.owner, *req.Options)
+			if err == nil && req.Options.Attention && c.hooks.ring != nil {
+				c.hooks.ring()
+			}
 			return workbench.Response{ID: id}, err
 		},
 	},

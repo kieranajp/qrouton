@@ -17,6 +17,7 @@ import { Call } from "../wails.js";
  * @property {string} launch
  * @property {string} linear
  * @property {StickerLabels} stickerLabels
+ * @property {boolean} chime
  * @property {string} [linearPath]
  * @property {string} [linearError]
  */

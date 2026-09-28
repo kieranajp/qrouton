@@ -14,6 +14,7 @@ const (
 	providerUsage      = "runner provider that emitted the event"
 
 	hookNotification = "Notification"
+	hookStop         = "Stop"
 
 	signalTimeout = 2 * time.Second
 )

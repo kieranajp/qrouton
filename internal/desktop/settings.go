@@ -23,6 +23,7 @@ type SettingsView struct {
 	LinearPath    string               `json:"linearPath"`
 	LinearError   string               `json:"linearError,omitempty"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
+	Chime         bool                 `json:"chime"`
 }
 
 type SettingsInput struct {
@@ -32,6 +33,7 @@ type SettingsInput struct {
 	Launch        string               `json:"launch"`
 	Linear        string               `json:"linear"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
+	Chime         bool                 `json:"chime"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -81,6 +83,7 @@ func (s *Settings) Load() SettingsView {
 		LinearPath:    lineartools.ConfigPath,
 		LinearError:   errorText(linearErr),
 		StickerLabels: cfg.EffectiveStickerLabels(),
+		Chime:         !cfg.Quiet,
 	}
 }
 
@@ -135,6 +138,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	err = saveConfig(s.cfg, func(next *config.Config) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
+		next.Quiet = !in.Chime
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf("linear: %w", err)

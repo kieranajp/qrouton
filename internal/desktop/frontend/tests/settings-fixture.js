@@ -24,6 +24,7 @@ window.wailsCall = async (name, input) => {
         question: "Needs follow-up",
         exclamation: "Has bugs",
       },
+      chime: true,
     };
   if (name.endsWith(".Save")) {
     saves.push(input);

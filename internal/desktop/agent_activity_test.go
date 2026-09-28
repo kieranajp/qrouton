@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -513,5 +515,163 @@ func TestAReopenedSessionRejoinsTheRailIdle(t *testing.T) {
 	}
 	if got := second.agents.state(); got != status.ActivityIdle {
 		t.Fatalf("a reopened session rejoins the rail as %q, want idle", got)
+	}
+}
+
+type chimes struct{ rung []string }
+
+func recordChimes(t *testing.T) *chimes {
+	t.Helper()
+	c := &chimes{}
+	original := chime
+	chime = func(script string) { c.rung = append(c.rung, script) }
+	t.Cleanup(func() { chime = original })
+	return c
+}
+
+func chimingSession(t *testing.T, cfg *config.Config) (*sessionState, func(string, uint64), func()) {
+	t.Helper()
+	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
+	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
+	state.agents.begin(agentProviderClaude, 1)
+	ring := ringer(cfg, state)
+	return state, attend(state, func() {}, ring), ring
+}
+
+// An orchestrator ends a turn each time a background lead reports back, so only
+// the turn that leaves nothing delegated running is worth a chime.
+func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, _ := chimingSession(t, &config.Config{})
+	lead := workbench.DelegatedLifecycleRequest{
+		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		ID: "agent-1", Type: "qrouton-research-lead",
+	}
+	state.agents.lifecycle(lead)
+
+	hook(status.ActivityTurnEnded, 1)
+	if len(chimed.rung) != 0 || state.agents.state() == status.ActivityWaiting {
+		t.Fatalf("a turn ending with a lead still running chimed %v and reads %q", chimed.rung, state.agents.state())
+	}
+	lead.Kind = workbench.LifecycleStop
+	state.agents.lifecycle(lead)
+	hook(status.ActivityTurnEnded, 1)
+	if want := sessionpaths.NotifyScript(state.root()); len(chimed.rung) != 1 || chimed.rung[0] != want {
+		t.Fatalf("chimed %v, want %s once", chimed.rung, want)
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("a settled turn reads %q, want waiting", got)
+	}
+}
+
+// A turn ending, Claude's idle nag after it and a notify tab all mean the same
+// wait, so the session chimes once until the user types.
+func TestASessionChimesOnceUntilTheUserTypes(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, ring := chimingSession(t, &config.Config{})
+
+	hook(status.ActivityTurnEnded, 1)
+	hook(status.ActivityWaiting, 1)
+	ring()
+	if len(chimed.rung) != 1 {
+		t.Fatalf("one wait chimed %d times", len(chimed.rung))
+	}
+	state.agents.input()
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 2 {
+		t.Fatalf("a permission prompt after the user typed chimed %d times in all, want 2", len(chimed.rung))
+	}
+}
+
+func TestAQuietConfigNeverChimes(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, ring := chimingSession(t, &config.Config{Quiet: true})
+
+	hook(status.ActivityTurnEnded, 1)
+	ring()
+	if len(chimed.rung) != 0 {
+		t.Fatalf("a quiet config chimed %v", chimed.rung)
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("quiet also dropped the waiting marker: %q", got)
+	}
+}
+
+func TestOpeningAnAttentionTabRingsTheSession(t *testing.T) {
+	windows, _ := testWindows(t)
+	rung := 0
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{ring: func() { rung++ }})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+
+	handle := workbench.Handle{Socket: socket, SessionRoot: windows.shown().root()}
+	for _, attention := range []bool{false, true} {
+		if _, err := handle.WindowHost().Open(context.Background(), workbench.WindowOptions{
+			Kind: workbench.KindDocument, Label: "🔔", Content: "done", Attention: attention,
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if rung != 1 {
+		t.Fatalf("rang %d times, want once for the attention tab alone", rung)
+	}
+}
+
+func TestTerminalRepliesAreNotTheUserTyping(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		data  string
+		reply bool
+	}{
+		{"focus in", "\x1b[I", true},
+		{"focus out", "\x1b[O", true},
+		{"cursor position", "\x1b[24;80R", true},
+		{"status report", "\x1b[0n", true},
+		{"primary attributes", "\x1b[?1;2c", true},
+		{"secondary attributes", "\x1b[>0;276;0c", true},
+		{"mode report", "\x1b[?2004;1$y", true},
+		{"window size", "\x1b[8;24;80t", true},
+		{"background colour", "\x1b]11;rgb:1e1e/1e1e/2e2e\x1b\\", true},
+		{"colour by bell", "\x1b]10;rgb:cdcd/d6d6/f4f4\x07", true},
+		{"xtversion", "\x1bP>|xterm.js(5.5.0)\x1b\\", true},
+		{"two replies at once", "\x1b[O\x1b[24;80R", true},
+		{"a letter", "y", false},
+		{"enter", "\r", false},
+		{"an arrow key", "\x1b[A", false},
+		{"escape", "\x1b", false},
+		{"a paste", "\x1b[200~ls\x1b[201~", false},
+		{"a reply then a keystroke", "\x1b[Oy", false},
+	} {
+		if got := terminalReplies.MatchString(tc.data); got != tc.reply {
+			t.Errorf("%s %q: reply = %v, want %v", tc.name, tc.data, got, tc.reply)
+		}
+	}
+}
+
+// Switching away from a window whose runner asked for focus reports writes to
+// the PTY, but it is not the user answering the chime.
+func TestAFocusReportLeavesTheChimeClaimed(t *testing.T) {
+	chimed := recordChimes(t)
+	state, hook, _ := chimingSession(t, &config.Config{})
+
+	hook(status.ActivityTurnEnded, 1)
+	_ = state.write([]byte("\x1b[O"))
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 1 {
+		t.Fatalf("a focus report re-armed the chime: rang %d times", len(chimed.rung))
+	}
+	if got := state.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("a focus report cleared the waiting marker: %q", got)
+	}
+	_ = state.write([]byte("y"))
+	hook(status.ActivityWaiting, 1)
+	if len(chimed.rung) != 2 {
+		t.Fatalf("a keystroke did not re-arm the chime: rang %d times", len(chimed.rung))
 	}
 }
