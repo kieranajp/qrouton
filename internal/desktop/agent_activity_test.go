@@ -653,6 +653,10 @@ func TestTerminalRepliesAreNotTheUserTyping(t *testing.T) {
 	}{
 		{"focus in", "\x1b[I", true},
 		{"focus out", "\x1b[O", true},
+		{"mouse move", "\x1b[<35;10;5M", true},
+		{"scroll", "\x1b[<64;10;5M", true},
+		{"click release", "\x1b[<0;10;5m", true},
+		{"x10 click", "\x1b[M !!", true},
 		{"cursor position", "\x1b[24;80R", true},
 		{"status report", "\x1b[0n", true},
 		{"primary attributes", "\x1b[?1;2c", true},
