@@ -8,6 +8,7 @@ type renderer interface {
 	// name of a session onboarding chose after it opened.
 	Retitle(name, title string)
 	Focus(name string)
+	Focused(name string) bool
 	// Close ends one window without taking the application with it.
 	Close(name string)
 	// Emit delivers a payload to the pages of every open window; Send delivers
