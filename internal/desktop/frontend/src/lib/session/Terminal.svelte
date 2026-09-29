@@ -37,7 +37,7 @@
       await fontsReady();
       if (!live) return;
       const write = (text) => Call.ByName(pty.write, id, encode(text));
-      const started = mount(host, { write, background: "--ctp-crust" });
+      const started = mount(host, { write, background: "--surface-terminal" });
       const { refit, dispose } = started;
       term = started.term;
       const painter = createTerminalPainter(term);

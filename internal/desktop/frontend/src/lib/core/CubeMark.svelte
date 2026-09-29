@@ -7,7 +7,7 @@
   let inner = $derived(size - off);
   let hatch = $derived(
     size >= 24
-      ? `repeating-linear-gradient(45deg, rgba(24,25,38,.45) 0 ${Math.max(1, inner * 0.025)}px,` +
+      ? `repeating-linear-gradient(45deg, color-mix(in srgb, var(--ctp-crust) 45%, transparent) 0 ${Math.max(1, inner * 0.025)}px,` +
         ` transparent ${Math.max(1, inner * 0.025)}px ${Math.max(3, inner * 0.07)}px)`
       : "none",
   );
