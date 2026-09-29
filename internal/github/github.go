@@ -18,7 +18,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
-var githubAPIBase = apiBaseDefault
+var githubAPIBase = APIBaseDefault
 
 type Repo struct {
 	Name          string    `json:"name"`

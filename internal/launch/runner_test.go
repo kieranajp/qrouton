@@ -289,7 +289,7 @@ func TestRunnerLaunchInjectsCodexAgentHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	hook := fmt.Sprintf(codexCommandHookFormat,
-		quotedConfigString(fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)))
+		quotedConfigString(fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)), codexHookTimeoutSeconds)
 	for _, want := range []string{
 		codexBypassHookTrustFlag,
 		codexSubagentStartHook + hook,

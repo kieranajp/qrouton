@@ -248,7 +248,7 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	}
 	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)
-	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(hookCommand))
+	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(hookCommand), codexHookTimeoutSeconds)
 	if !c.override {
 		argv = append(argv, codexBypassHookTrustFlag)
 	}

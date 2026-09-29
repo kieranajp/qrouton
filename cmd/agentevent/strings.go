@@ -1,8 +1,6 @@
 package agentevent
 
 import (
-	"time"
-
 	eventlog "github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/launch"
 )
@@ -21,5 +19,5 @@ const (
 	hookNotification = eventlog.HookNotification
 	hookStop         = eventlog.HookStop
 
-	signalTimeout = 2 * time.Second
+	signalTimeout = eventlog.SignalTimeout
 )

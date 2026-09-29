@@ -2,15 +2,16 @@ package github
 
 const (
 	IssueRepository        = "kieranajp/qrouton"
-	IssueListURL           = "https://github.com/" + IssueRepository + "/issues"
-	issueAPIURL            = "https://api.github.com/repos/" + IssueRepository + "/issues"
+	IssueListURL           = WebBase + "/" + IssueRepository + "/issues"
+	issueAPIURL            = APIBaseDefault + "/repos/" + IssueRepository + "/issues"
 	issueContentTypeHeader = "Content-Type"
 	issueJSONType          = "application/json"
 	issueResponseLimit     = 1 << 20
 	issueRejectedFormat    = "%w (HTTP %d): check GitHub access and the report, then propose it again"
 
-	// apiBaseDefault is overridable in tests via githubAPIBase.
-	apiBaseDefault = "https://api.github.com"
+	// APIBaseDefault is overridable in tests via githubAPIBase.
+	APIBaseDefault = "https://api.github.com"
+	WebBase        = "https://github.com"
 
 	usersPath = "/users/"
 	orgsPath  = "/orgs/"

@@ -152,11 +152,12 @@ const (
 	claudeNotificationHook  = agentevent.HookNotification
 	claudeStopHook          = agentevent.HookStop
 
-	codexMCPCommandKey           = "mcp_servers.qrouton.command="
-	codexMCPArgsKey              = "mcp_servers.qrouton.args="
+	codexMCPCommandKey           = "mcp_servers." + serverName + ".command="
+	codexMCPArgsKey              = "mcp_servers." + serverName + ".args="
 	codexSubagentStartHook       = "hooks." + agentevent.HookSubagentStart + "="
 	codexSubagentStopHook        = "hooks." + agentevent.HookSubagentStop + "="
-	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=3}]}]`
+	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=%d}]}]`
+	codexHookTimeoutSeconds      = int(agentevent.SignalTimeout/time.Second) + 1
 	codexAgentEventCommandFormat = `"$%s" %s`
 
 	openCodeMCPKey        = "mcp"

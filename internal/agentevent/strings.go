@@ -1,5 +1,11 @@
 package agentevent
 
+import "time"
+
+// SignalTimeout bounds the hook's push to the workbench, which must finish
+// inside the time a runner gives a hook before killing it.
+const SignalTimeout = 2 * time.Second
+
 const (
 	HookSubagentStart = "SubagentStart"
 	HookSubagentStop  = "SubagentStop"

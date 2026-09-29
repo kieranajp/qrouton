@@ -3,6 +3,7 @@ package desktop
 import (
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -180,8 +181,8 @@ const (
 )
 
 const (
-	updateEndpoint        = "https://api.github.com/repos/kieranajp/qrouton/releases/latest"
-	updateFallbackURL     = "https://github.com/kieranajp/qrouton/releases/latest"
+	updateEndpoint        = github.APIBaseDefault + "/repos/" + github.IssueRepository + "/releases/latest"
+	updateFallbackURL     = github.WebBase + "/" + github.IssueRepository + "/releases/latest"
 	updateBrewCommand     = "brew upgrade --cask qrouton"
 	updateUserAgentHeader = "User-Agent"
 	updateUserAgentPrefix = "qrouton/"
