@@ -142,6 +142,14 @@ export const DOCUMENT_FORMATS = Object.freeze({
   MARKDOWN: "markdown",
 });
 
+/** @typedef {"name"|"branchDescription"|"ticket"|"repos"} DraftField */
+export const DRAFT_FIELDS = Object.freeze({
+  NAME: "name",
+  BRANCH_DESCRIPTION: "branchDescription",
+  TICKET: "ticket",
+  REPOS: "repos",
+});
+
 /** @typedef {"ASSISTANT"|"RPI"} ModeLabel */
 export const MODE_LABELS = Object.freeze({
   ASSISTANT: "ASSISTANT",
@@ -174,6 +182,19 @@ export const REPO_ROLES = Object.freeze({
 export const SESSION_MODES = Object.freeze({
   RPI: "rpi",
   ASSISTANT: "assistant",
+});
+
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"} SettingsField */
+export const SETTINGS_FIELDS = Object.freeze({
+  ORGS: "orgs",
+  ROOT: "root",
+  EDITOR: "editor",
+  LAUNCH: "launch",
+  LINEAR: "linear",
+  STAR: "star",
+  BOOKMARK: "bookmark",
+  QUESTION: "question",
+  EXCLAMATION: "exclamation",
 });
 
 /** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */

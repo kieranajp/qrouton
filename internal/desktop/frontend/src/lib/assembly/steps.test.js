@@ -13,10 +13,11 @@ import {
   primary,
   refusal,
 } from "./steps.js";
+import { DRAFT_FIELDS } from "../bridge/generated.js";
 
-const NAME = { field: "name", message: "A name is needed." };
-const BRANCH = { field: "branchDescription", message: "That folder already exists." };
-const REPOS = { field: "repos", message: "At least one editing repo is needed." };
+const NAME = { field: DRAFT_FIELDS.NAME, message: "A name is needed." };
+const BRANCH = { field: DRAFT_FIELDS.BRANCH_DESCRIPTION, message: "That folder already exists." };
+const REPOS = { field: DRAFT_FIELDS.REPOS, message: "At least one editing repo is needed." };
 
 test("each step names itself and its own way forward", () => {
   assert.equal(labels.length, 3);
@@ -86,6 +87,10 @@ test("a refusal reads as the sentence, without the field Go named it by", () => 
   assert.equal(
     refusal(new Error("repos: At least one editing repo is needed.")),
     "At least one editing repo is needed.",
+  );
+  assert.equal(
+    refusal(new Error("branchDescription: That folder already exists.")),
+    "That folder already exists.",
   );
   const unprefixed = 'no session named "billing" under the sessions root';
   assert.equal(refusal(unprefixed), unprefixed);

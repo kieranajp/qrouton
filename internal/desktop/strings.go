@@ -88,6 +88,23 @@ const (
 	updateEvent            = "update:status"
 )
 
+// A Save refusal names the settings field it belongs under before the sentence.
+const (
+	settingsFieldOrgs        = "orgs"
+	settingsFieldRoot        = "root"
+	settingsFieldEditor      = "editor"
+	settingsFieldLaunch      = "launch"
+	settingsFieldLinear      = "linear"
+	settingsFieldStar        = "star"
+	settingsFieldBookmark    = "bookmark"
+	settingsFieldQuestion    = "question"
+	settingsFieldExclamation = "exclamation"
+
+	settingsRefusalFormat = "%s: %s"
+	settingsWrappedFormat = "%s: %w"
+	settingsEmpty         = "cannot be empty"
+)
+
 // A tab may only stand in for a window if it reports its process's state.
 const (
 	tabStatusRunning   = "running"

@@ -106,22 +106,22 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 
 	editor, err := shlex.Split(in.Editor)
 	if err != nil {
-		return SaveResult{}, fmt.Errorf("editor: %s", err)
+		return SaveResult{}, fmt.Errorf(settingsRefusalFormat, settingsFieldEditor, err)
 	}
 	if len(editor) > 0 && s.validateEditor != nil {
 		if err := s.validateEditor(editor); err != nil {
-			return SaveResult{}, fmt.Errorf("editor: %s", err)
+			return SaveResult{}, fmt.Errorf(settingsRefusalFormat, settingsFieldEditor, err)
 		}
 	}
 
 	var launch map[string][]string
 	if trimmed := strings.TrimSpace(in.Launch); trimmed != "" {
 		if err := json.Unmarshal([]byte(trimmed), &launch); err != nil {
-			return SaveResult{}, fmt.Errorf("launch: %s", err)
+			return SaveResult{}, fmt.Errorf(settingsRefusalFormat, settingsFieldLaunch, err)
 		}
 		if s.validateLaunch != nil {
 			if err := s.validateLaunch(launch); err != nil {
-				return SaveResult{}, fmt.Errorf("launch: %s", err)
+				return SaveResult{}, fmt.Errorf(settingsRefusalFormat, settingsFieldLaunch, err)
 			}
 		}
 	}
@@ -132,7 +132,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 
 	linear, err := lineartools.Validate(in.Linear)
 	if err != nil {
-		return SaveResult{}, fmt.Errorf("linear: %w", err)
+		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 	}
 	result := SaveResult{}
 	err = saveConfig(s.cfg, func(next *config.Config) {
@@ -141,7 +141,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		next.Quiet = !in.Chime
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
-			return fmt.Errorf("linear: %w", err)
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 		}
 		return nil
 	}, func(current, _ *config.Config) {
@@ -170,13 +170,13 @@ func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, e
 		name  string
 		value string
 	}{
-		{name: "star", value: labels.Star},
-		{name: "bookmark", value: labels.Bookmark},
-		{name: "question", value: labels.Question},
-		{name: "exclamation", value: labels.Exclamation},
+		{name: settingsFieldStar, value: labels.Star},
+		{name: settingsFieldBookmark, value: labels.Bookmark},
+		{name: settingsFieldQuestion, value: labels.Question},
+		{name: settingsFieldExclamation, value: labels.Exclamation},
 	} {
 		if field.value == "" {
-			return config.StickerLabels{}, fmt.Errorf("%s: cannot be empty", field.name)
+			return config.StickerLabels{}, fmt.Errorf(settingsRefusalFormat, field.name, settingsEmpty)
 		}
 	}
 	return labels, nil
@@ -213,7 +213,7 @@ func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() 
 func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root, expanded string, err error) {
 	orgs = dedupOrgs(owners)
 	if len(orgs) == 0 {
-		return nil, "", "", fmt.Errorf("orgs: %w", ErrNoOwners)
+		return nil, "", "", fmt.Errorf(settingsWrappedFormat, settingsFieldOrgs, ErrNoOwners)
 	}
 	root, expanded, err = validateRoot(rawRoot)
 	return orgs, root, expanded, err
@@ -225,11 +225,11 @@ func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root
 func validateRoot(raw string) (stored, expanded string, err error) {
 	stored = strings.TrimSpace(raw)
 	if stored == "" {
-		return "", "", fmt.Errorf("root: cannot be empty")
+		return "", "", fmt.Errorf(settingsRefusalFormat, settingsFieldRoot, settingsEmpty)
 	}
 	expanded = filepath.Clean(config.ExpandHome(stored))
 	if err := os.MkdirAll(expanded, 0o755); err != nil {
-		return "", "", fmt.Errorf("root: %s", err)
+		return "", "", fmt.Errorf(settingsRefusalFormat, settingsFieldRoot, err)
 	}
 	return stored, expanded, nil
 }
