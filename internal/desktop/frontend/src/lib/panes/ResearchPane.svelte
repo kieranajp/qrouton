@@ -1,4 +1,5 @@
 <script>
+  import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import ArtifactTag from "../core/ArtifactTag.svelte";
@@ -85,7 +86,7 @@
     mode={view.mode}
     onMode={(next) => (view.mode = next)}>
     {#snippet tag()}
-      <ArtifactTag kind={doc.kind ?? "RESEARCH"} long />
+      <ArtifactTag kind={doc.kind ?? ARTIFACT_KINDS.RESEARCH} long />
     {/snippet}
     {#snippet body()}
       {#if view.reading}

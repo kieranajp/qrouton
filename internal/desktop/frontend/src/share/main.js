@@ -1,5 +1,6 @@
 import "./share.css";
 import { artifactTone } from "../lib/artifacts.js";
+import { ARTIFACT_KINDS } from "../lib/bridge/generated.js";
 import { apply as applyDiagrams } from "../lib/panes/diagrams.js";
 import { render } from "../lib/panes/markdown.js";
 
@@ -14,7 +15,7 @@ function decode(id) {
 
 function payload() {
   const text = decode("qrouton-document");
-  if (!text) return { kind: "NOTE", source: "", markdown: "" };
+  if (!text) return { kind: ARTIFACT_KINDS.NOTE, source: "", markdown: "" };
   const kindEnd = text.indexOf("\n");
   const sourceEnd = text.indexOf("\n", kindEnd + 1);
   return {

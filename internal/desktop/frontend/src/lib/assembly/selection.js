@@ -1,9 +1,10 @@
 // Which repositories a session takes, and in what order.
 
+import { REPO_ROLES } from "../bridge/generated.js";
 import { GLYPHS, READ_ONLY } from "../roles.js";
 import { repoID } from "./filter.js";
 
-/** @typedef {'off'|'editing'|'reference'} Role */
+/** @typedef {"off" | import("../bridge/generated.js").RepoRole} Role */
 /**
  * @typedef {object} Selection
  * @property {string[]} order the ids in the order they were picked, which is the ranking
@@ -19,9 +20,9 @@ const READING = "in session, read-only";
 const TAKING_UP = "in session, taking it up to edit";
 
 /** @type {Role[]} */
-const OFFERS = ["off", "editing", "reference"];
+const OFFERS = ["off", REPO_ROLES.EDITING, REPO_ROLES.REFERENCE];
 /** @type {Role[]} */
-const UPGRADE_OFFERS = ["reference", "editing"];
+const UPGRADE_OFFERS = [REPO_ROLES.REFERENCE, REPO_ROLES.EDITING];
 /** @type {Role[]} */
 const NO_OFFERS = [];
 
@@ -43,7 +44,7 @@ export function seed(held = []) {
 
 /** @returns {Role} */
 export const roleOf = (selection, id) =>
-  isUpgrading(selection, id) ? "editing" : (selection.roles[id] ?? "off");
+  isUpgrading(selection, id) ? REPO_ROLES.EDITING : (selection.roles[id] ?? "off");
 
 export const isLocked = (selection, id) => selection.locked.includes(id);
 
@@ -56,7 +57,7 @@ export const baseOf = (selection, id) => selection.bases?.[id] ?? "";
  * @returns {Role[]} */
 export function roleOffers(selection, id) {
   if (!isLocked(selection, id)) return OFFERS;
-  return selection.roles[id] === "reference" ? UPGRADE_OFFERS : NO_OFFERS;
+  return selection.roles[id] === REPO_ROLES.REFERENCE ? UPGRADE_OFFERS : NO_OFFERS;
 }
 
 /**
@@ -80,7 +81,7 @@ function baseNote(selection, id, defaultBranch) {
 function heldNote(selection, id) {
   if (!isLocked(selection, id)) return "";
   if (isUpgrading(selection, id)) return TAKING_UP;
-  return selection.roles[id] === "reference" ? READING : IN_SESSION;
+  return selection.roles[id] === REPO_ROLES.REFERENCE ? READING : IN_SESSION;
 }
 
 /** Demotion preserves selection rank; turning a repository off discards it.
@@ -111,7 +112,7 @@ export function setBase(selection, id, branch) {
 function takeUp(selection, id, role) {
   if (!roleOffers(selection, id).includes(role)) return selection;
   const upgrades = selection.upgrades.filter((seen) => seen !== id);
-  return { ...selection, upgrades: role === "editing" ? [...upgrades, id] : upgrades };
+  return { ...selection, upgrades: role === REPO_ROLES.EDITING ? [...upgrades, id] : upgrades };
 }
 
 /** Reconciliation retains held repositories even when GitHub omits them.
@@ -140,8 +141,8 @@ export function counts(selection) {
   let reference = 0;
   for (const id of Object.keys(selection.roles)) {
     const role = roleOf(selection, id);
-    if (role === "editing") editing++;
-    else if (role === "reference") reference++;
+    if (role === REPO_ROLES.EDITING) editing++;
+    else if (role === REPO_ROLES.REFERENCE) reference++;
   }
   return { editing, reference };
 }
@@ -168,7 +169,7 @@ export function summary(selection, repos, branch) {
     role,
     glyph: GLYPHS[role],
     meta:
-      role === "editing"
+      role === REPO_ROLES.EDITING
         ? editingMeta(branch)
         : referenceMeta(baseOf(selection, id) || pinned.get(id)),
   }));

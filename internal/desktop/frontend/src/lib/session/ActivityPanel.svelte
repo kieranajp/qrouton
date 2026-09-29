@@ -1,4 +1,5 @@
 <script>
+  import { AGENT_ROLES, AGENT_STATES } from "../bridge/generated.js";
   import CapsLabel from "../core/CapsLabel.svelte";
   import {
     activeAgent,
@@ -31,8 +32,8 @@
 
   /** @param {any} record */
   function mark(record) {
-    if (finishedAgent(record)) return record.state === "Failed" ? "failed" : "done";
-    if (record.state === "Waiting for you" && record.role === "Orchestrator") return "waiting";
+    if (finishedAgent(record)) return record.state === AGENT_STATES.FAILED ? "failed" : "done";
+    if (record.state === AGENT_STATES.WAITING && record.role === AGENT_ROLES.ORCHESTRATOR) return "waiting";
     return "running";
   }
 </script>

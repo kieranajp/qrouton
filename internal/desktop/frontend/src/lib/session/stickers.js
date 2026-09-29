@@ -1,26 +1,28 @@
+import { STICKER_IDS } from "../bridge/generated.js";
+
 export const DEFAULT_STICKER_LABELS = Object.freeze({
-  star: "Important",
-  bookmark: "Read later",
-  question: "Needs follow-up",
-  exclamation: "Has bugs",
+  [STICKER_IDS.STAR]: "Important",
+  [STICKER_IDS.BOOKMARK]: "Read later",
+  [STICKER_IDS.QUESTION]: "Needs follow-up",
+  [STICKER_IDS.EXCLAMATION]: "Has bugs",
 });
 
 export const STICKERS = Object.freeze({
-  star: Object.freeze({ id: "star", colour: "Blue", shape: "star", css: "var(--sticker-blue)" }),
-  bookmark: Object.freeze({
-    id: "bookmark",
+  [STICKER_IDS.STAR]: Object.freeze({ id: STICKER_IDS.STAR, colour: "Blue", shape: "star", css: "var(--sticker-blue)" }),
+  [STICKER_IDS.BOOKMARK]: Object.freeze({
+    id: STICKER_IDS.BOOKMARK,
     colour: "Green",
     shape: "bookmark",
     css: "var(--sticker-green)",
   }),
-  question: Object.freeze({
-    id: "question",
+  [STICKER_IDS.QUESTION]: Object.freeze({
+    id: STICKER_IDS.QUESTION,
     colour: "Orange",
     shape: "question mark",
     css: "var(--sticker-orange)",
   }),
-  exclamation: Object.freeze({
-    id: "exclamation",
+  [STICKER_IDS.EXCLAMATION]: Object.freeze({
+    id: STICKER_IDS.EXCLAMATION,
     colour: "Red",
     shape: "exclamation mark",
     css: "var(--sticker-red)",

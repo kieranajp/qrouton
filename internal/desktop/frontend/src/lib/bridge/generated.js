@@ -75,6 +75,131 @@ export const WINDOW_DIAGRAM_EVENT = "window:diagram:";
 export const WINDOW_EXIT_EVENT = "window:exit:";
 export const WINDOWS_EVENT = "window:open";
 
+/** @typedef {"working"|"waiting"|"idle"|"turn-ended"} Activity */
+export const ACTIVITIES = Object.freeze({
+  WORKING: "working",
+  WAITING: "waiting",
+  IDLE: "idle",
+  TURN_ENDED: "turn-ended",
+});
+
+/** @typedef {"needs-you"|"none"|"unknown"} AgentAttention */
+export const AGENT_ATTENTION = Object.freeze({
+  NEEDS_YOU: "needs-you",
+  NONE: "none",
+  UNKNOWN: "unknown",
+});
+
+/** @typedef {"full"|"root"|"none"} AgentCoverage */
+export const AGENT_COVERAGE = Object.freeze({
+  FULL: "full",
+  ROOT: "root",
+  NONE: "none",
+});
+
+/** @typedef {"Orchestrator"|"Lead"|"Specialist"|"Role unavailable"} AgentRole */
+export const AGENT_ROLES = Object.freeze({
+  ORCHESTRATOR: "Orchestrator",
+  LEAD: "Lead",
+  SPECIALIST: "Specialist",
+  UNAVAILABLE: "Role unavailable",
+});
+
+/** @typedef {"Waiting for you"|"Working"|"Idle"|"Active"|"Finished"|"Failed"} AgentState */
+export const AGENT_STATES = Object.freeze({
+  WAITING: "Waiting for you",
+  WORKING: "Working",
+  IDLE: "Idle",
+  ACTIVE: "Active",
+  FINISHED: "Finished",
+  FAILED: "Failed",
+});
+
+/** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
+export const ARTIFACT_KINDS = Object.freeze({
+  PLAN: "PLAN",
+  SPEC: "SPEC",
+  RESEARCH: "RESEARCH",
+  NOTE: "NOTE",
+  EXPLAINER: "EXPLAINER",
+});
+
+/** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */
+export const BUG_REPORT_STATUSES = Object.freeze({
+  PENDING: "pending",
+  POSTING: "posting",
+  CREATED: "created",
+  CANCELLED: "cancelled",
+  EXPIRED: "expired",
+  FAILED: "failed",
+  UNKNOWN: "unknown",
+});
+
+/** @typedef {"diff"|"images"|"markdown"} DocumentFormat */
+export const DOCUMENT_FORMATS = Object.freeze({
+  DIFF: "diff",
+  IMAGES: "images",
+  MARKDOWN: "markdown",
+});
+
+/** @typedef {"ASSISTANT"|"RPI"} ModeLabel */
+export const MODE_LABELS = Object.freeze({
+  ASSISTANT: "ASSISTANT",
+  RPI: "RPI",
+});
+
+/** @typedef {"started"|"completed"|"failed"|"advanced"} ProgressStatus */
+export const PROGRESS_STATUSES = Object.freeze({
+  STARTED: "started",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  ADVANCED: "advanced",
+});
+
+/** @typedef {"started"|"succeeded"|"failed"|"complete"} RefreshState */
+export const REFRESH_STATES = Object.freeze({
+  STARTED: "started",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+  COMPLETE: "complete",
+});
+
+/** @typedef {"editing"|"reference"} RepoRole */
+export const REPO_ROLES = Object.freeze({
+  EDITING: "editing",
+  REFERENCE: "reference",
+});
+
+/** @typedef {"rpi"|"assistant"} SessionMode */
+export const SESSION_MODES = Object.freeze({
+  RPI: "rpi",
+  ASSISTANT: "assistant",
+});
+
+/** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */
+export const STICKER_IDS = Object.freeze({
+  STAR: "star",
+  BOOKMARK: "bookmark",
+  QUESTION: "question",
+  EXCLAMATION: "exclamation",
+});
+
+/** @typedef {"running"|"succeeded"|"failed"|"waiting"} TabStatus */
+export const TAB_STATUSES = Object.freeze({
+  RUNNING: "running",
+  SUCCEEDED: "succeeded",
+  FAILED: "failed",
+  WAITING: "waiting",
+});
+
+/** @typedef {"terminal"|"document"} WindowKind */
+export const WINDOW_KINDS = Object.freeze({
+  TERMINAL: "terminal",
+  DOCUMENT: "document",
+});
+
+export const AGENT_ROOT_ID = "root";
+
 /** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",

@@ -148,16 +148,24 @@ func TestTheHandlerServesTheNotesPageAtItsOwnRoot(t *testing.T) {
 	}
 }
 
-// The formats the pane registry keys on are the port's values, spelled again in
-// JavaScript. Nothing checks that at build time, and a format no pane claims
-// draws as plain text rather than erroring.
+// The pane registry keys on the generated formats, so a format no pane claims
+// is one the page draws as plain text rather than an error.
 func TestThePaneRegistryDrawsEveryDocumentFormat(t *testing.T) {
 	source, err := os.ReadFile(frontendSource + "lib/panes/index.js")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, format := range []workbench.DocumentFormat{workbench.FormatDiff, workbench.FormatMarkdown} {
-		if !strings.Contains(string(source), string(format)+":") {
+	generated, err := os.ReadFile(frontendSource + "lib/bridge/generated.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, format := range []workbench.DocumentFormat{workbench.FormatDiff, workbench.FormatImages, workbench.FormatMarkdown} {
+		key := regexp.MustCompile(`(?m)^  (\w+): "` + string(format) + `",$`).FindSubmatch(generated)
+		if key == nil {
+			t.Errorf("the generated formats do not name %q", format)
+			continue
+		}
+		if !strings.Contains(string(source), "[DOCUMENT_FORMATS."+string(key[1])+"]:") {
 			t.Errorf("the pane registry has no pane for the %q format", format)
 		}
 	}

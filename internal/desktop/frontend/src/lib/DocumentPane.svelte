@@ -1,6 +1,6 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT } from "./bridge/generated.js";
+  import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT, DOCUMENT_FORMATS } from "./bridge/generated.js";
   import { paneFor } from "./panes/index.js";
   import { Call, Events } from "./wails.js";
 
@@ -31,7 +31,7 @@
     doc = undefined;
     const accept = (incoming) => {
       if (disposed || !incoming) return;
-      if (incoming.format === "images" && doc?.format === "images" &&
+      if (incoming.format === DOCUMENT_FORMATS.IMAGES && doc?.format === DOCUMENT_FORMATS.IMAGES &&
           (incoming.revision ?? 0) <= (doc.revision ?? 0)) return;
       doc = incoming;
     };
@@ -43,7 +43,7 @@
     (async () => {
       const content = await Call.ByName(WINDOWS_CONTENT, nextID);
       if (disposed) return;
-      if (content?.format === "images") accept(content);
+      if (content?.format === DOCUMENT_FORMATS.IMAGES) accept(content);
       else doc = live && doc ? { ...content, text: doc.text } : content;
       await tick();
       if (!disposed) onReady?.();

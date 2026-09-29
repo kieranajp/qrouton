@@ -81,7 +81,7 @@ export const orgs = () => Call.ByName(ORGS_LIST);
 
 /**
  * @param {string} slug
- * @returns {Promise<{branch: string, repos: {id: string, role: 'editing'|'reference', locked: boolean, base?: string}[]}>}
+ * @returns {Promise<{branch: string, repos: {id: string, role: import("../bridge/generated.js").RepoRole, locked: boolean, base?: string}[]}>}
  */
 export const held = (slug) => Call.ByName(PICKER_LOAD, slug);
 

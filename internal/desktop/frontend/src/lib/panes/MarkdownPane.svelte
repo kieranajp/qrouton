@@ -1,4 +1,5 @@
 <script>
+  import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
   import { artifactTone } from "../artifacts.js";
@@ -44,7 +45,7 @@
     {/if}
     {#if heading}
       <div class="title">
-        <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? "NOTE"} />
+        <CubeMark size={18} face={tone} data-artifact-kind={doc.kind ?? ARTIFACT_KINDS.NOTE} />
         <span>{heading}</span>
       </div>
     {/if}

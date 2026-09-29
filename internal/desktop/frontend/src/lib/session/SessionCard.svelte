@@ -1,4 +1,5 @@
 <script>
+  import { MODE_LABELS, REPO_ROLES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import Chip from "../core/Chip.svelte";
   import { GLYPHS, READ_ONLY } from "../roles.js";
@@ -7,7 +8,7 @@
   let {
     initials,
     name,
-    mode = "RPI",
+    mode = MODE_LABELS.RPI,
     lastOpened,
     description,
     repos = [],
@@ -17,7 +18,7 @@
     ...rest
   } = $props();
 
-  let modeTone = $derived(mode === "RPI" ? "guided" : "assistant");
+  let modeTone = $derived(mode === MODE_LABELS.RPI ? "guided" : "assistant");
 </script>
 
 <div class="card" class:selected {...rest}>
@@ -38,7 +39,7 @@
           <Chip
             tone={repo.role}
             glyph={GLYPHS[repo.role]}
-            meta={repo.role === "editing" ? "editing" : READ_ONLY}>{repo.name}</Chip>
+            meta={repo.role === REPO_ROLES.EDITING ? REPO_ROLES.EDITING : READ_ONLY}>{repo.name}</Chip>
         {/each}
       </div>
     {/if}

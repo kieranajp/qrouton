@@ -1,3 +1,5 @@
+import { TAB_STATUSES } from "../bridge/generated.js";
+
 /** The selected tab remains visible even when it falls beyond capacity.
  * @template T @param {T[]} tabs
  * @param {number} selected @param {number} capacity
@@ -11,10 +13,16 @@ export function split(tabs, selected, capacity) {
   return { shown, hidden: all.filter((entry) => !drawn.has(entry.index)) };
 }
 
-/** @typedef {"waiting" | "failed" | "running" | "succeeded" | "idle"} TabStatus */
+/** @typedef {import("../bridge/generated.js").TabStatus | "idle"} TabStatus */
 
 /** @type {TabStatus[]} */
-const STATUS_PRIORITY = ["waiting", "failed", "running", "succeeded", "idle"];
+const STATUS_PRIORITY = [
+  TAB_STATUSES.WAITING,
+  TAB_STATUSES.FAILED,
+  TAB_STATUSES.RUNNING,
+  TAB_STATUSES.SUCCEEDED,
+  "idle",
+];
 
 /** @param {{status?: TabStatus}[]} tabs @returns {TabStatus | ""} */
 export function dominantStatus(tabs) {

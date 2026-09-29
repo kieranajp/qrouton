@@ -1,6 +1,7 @@
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
+import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, REPO_ROLES, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
 import {
   closeWindow,
@@ -80,7 +81,7 @@ export function shell() {
     } catch {
       return;
     }
-    if (tab.kind === "terminal") request(tab.id);
+    if (tab.kind === WINDOW_KINDS.TERMINAL) request(tab.id);
   }
 
   // Go owns the order too, so a refused move leaves the strip as Go last drew it.
@@ -94,7 +95,7 @@ export function shell() {
 
   async function newShell() {
     try {
-      await select({ id: await openShell(), kind: "terminal" });
+      await select({ id: await openShell(), kind: WINDOW_KINDS.TERMINAL });
     } catch {}
   }
 
@@ -142,7 +143,7 @@ export function shell() {
   // The branch was reference material sitting in the titlebar as a label. It is
   // now behind the session's name, where the things you do with it also live.
   let identityOpen = $state(false);
-  let editing = $derived(fields.repos.filter((repo) => repo.role === "editing" && repo.path));
+  let editing = $derived(fields.repos.filter((repo) => repo.role === REPO_ROLES.EDITING && repo.path));
   let identityMenu = $derived([
     ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, disabled: true }, "-"] : []),
     { label: "Copy branch name", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
@@ -204,7 +205,7 @@ export function shell() {
   );
 
   async function escalate() {
-    if (escalating || fields.mode !== "ASSISTANT") return;
+    if (escalating || fields.mode !== MODE_LABELS.ASSISTANT) return;
     escalating = true;
     try {
       await escalateSession(fields.slug);
@@ -214,7 +215,7 @@ export function shell() {
 
   $effect(() => {
     let live = true;
-    const off = Events.On("assembly:requested", () => (requested = true));
+    const off = Events.On(ASSEMBLY_REQUESTED_EVENT, () => (requested = true));
     pendingAssembly()
       .then((ticket) => {
         if (live && ticket) requested = true;

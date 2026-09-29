@@ -1,13 +1,15 @@
+import { ARTIFACT_KINDS } from "./bridge/generated.js";
+
 // One rule for every place a document names itself: a filled block of the kind's
 // hue, short where space is short and long in a document head. A kind no
 // taxonomy claims is the neutral sixth case, not an absence.
 
 const KINDS = {
-  PLAN: { tone: "var(--artifact-plan)", short: "PLAN", long: "PLAN" },
-  SPEC: { tone: "var(--artifact-spec)", short: "SPEC", long: "SPEC" },
-  RESEARCH: { tone: "var(--artifact-research)", short: "RSCH", long: "RESEARCH" },
-  NOTE: { tone: "var(--artifact-note)", short: "NOTE", long: "NOTE" },
-  EXPLAINER: { tone: "var(--artifact-explainer)", short: "EXPL", long: "EXPLAINER" },
+  [ARTIFACT_KINDS.PLAN]: { tone: "var(--artifact-plan)", short: "PLAN", long: "PLAN" },
+  [ARTIFACT_KINDS.SPEC]: { tone: "var(--artifact-spec)", short: "SPEC", long: "SPEC" },
+  [ARTIFACT_KINDS.RESEARCH]: { tone: "var(--artifact-research)", short: "RSCH", long: "RESEARCH" },
+  [ARTIFACT_KINDS.NOTE]: { tone: "var(--artifact-note)", short: "NOTE", long: "NOTE" },
+  [ARTIFACT_KINDS.EXPLAINER]: { tone: "var(--artifact-explainer)", short: "EXPL", long: "EXPLAINER" },
 };
 
 const NEUTRAL = { tone: "var(--surface-raised)", short: "DOC", long: "DOCUMENT" };
