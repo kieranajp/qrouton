@@ -164,11 +164,15 @@ func (a *Assembly) Create(in draftInput) error {
 	if problems := assembler.CheckSlug(draft); len(problems) > 0 {
 		return draftRefused(problems[0])
 	}
+	mode, err := session.ParseMode(in.Mode)
+	if err != nil {
+		return err
+	}
 	slug := draft.Slug()
 	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
-		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: draft.Mode, Runner: in.Runner,
+		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: mode, Runner: in.Runner,
 		Repos: draft.Repos,
 	}, progress)
 	if err != nil {

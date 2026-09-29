@@ -4,6 +4,7 @@ package session
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -86,6 +87,16 @@ func (m SessionMode) effective() SessionMode {
 		return ModeAssistant
 	}
 	return ModeRPI
+}
+
+// ParseMode is how a new session names its mode. Only a manifest from before the
+// field existed may leave it unset; a caller that means one says which.
+func ParseMode(s string) (SessionMode, error) {
+	switch mode := SessionMode(s); mode {
+	case ModeRPI, ModeAssistant:
+		return mode, nil
+	}
+	return "", fmt.Errorf("%w %q", ErrInvalidMode, s)
 }
 
 // RepoSelection pairs repository metadata with its role in a session. Base
