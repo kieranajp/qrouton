@@ -3,6 +3,7 @@ package launch
 import (
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
 )
 
@@ -20,23 +21,37 @@ const (
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
 
-	// Subcommands qrouton launches against itself.
-	mcpSubcommand        = "mcp"
-	agentEventSubcommand = "agent-event"
-	agentSubcommand      = "agent"
-	shellSubcommand      = "shell"
+	flagPrefix = "--"
 
-	sessionRootFlag   = "--session-root"
-	runnerFlag        = "--runner"
-	editorJSONFlag    = "--editor-json"
-	workbenchJSONFlag = "--workbench-json"
-	generationFlag    = "--generation"
-	providerFlag      = "--provider"
-	resumeFlag        = "--resume"
+	sessionRootFlag   = flagPrefix + SessionRootFlag
+	runnerFlag        = flagPrefix + RunnerFlag
+	editorJSONFlag    = flagPrefix + EditorJSONFlag
+	workbenchJSONFlag = flagPrefix + WorkbenchJSONFlag
+	generationFlag    = flagPrefix + GenerationFlag
+	providerFlag      = flagPrefix + ProviderFlag
+	resumeFlag        = flagPrefix + ResumeFlag
+	workbenchSpecFlag = flagPrefix + WorkbenchSpecFlag
+)
 
-	// workbenchSpecFlag is the hidden marker that makes qrouton run the event
+// The command line qrouton launches itself with. The commands that parse it
+// take their names from here.
+const (
+	MCPSubcommand        = "mcp"
+	AgentEventSubcommand = "agent-event"
+	AgentSubcommand      = "agent"
+	ShellSubcommand      = "shell"
+
+	SessionRootFlag   = "session-root"
+	RunnerFlag        = "runner"
+	EditorJSONFlag    = "editor-json"
+	WorkbenchJSONFlag = "workbench-json"
+	GenerationFlag    = "generation"
+	ProviderFlag      = "provider"
+	ResumeFlag        = "resume"
+
+	// WorkbenchSpecFlag is the hidden marker that makes qrouton run the event
 	// loop rather than assemble a session.
-	workbenchSpecFlag = "--workbench-spec"
+	WorkbenchSpecFlag = "workbench-spec"
 )
 
 const generationSignalTimeout = 2 * time.Second
@@ -132,15 +147,15 @@ const (
 	claudeHooksKey      = "hooks"
 	claudeCommandType   = "command"
 
-	claudeSubagentStartHook = "SubagentStart"
-	claudeSubagentStopHook  = "SubagentStop"
-	claudeNotificationHook  = "Notification"
-	claudeStopHook          = "Stop"
+	claudeSubagentStartHook = agentevent.HookSubagentStart
+	claudeSubagentStopHook  = agentevent.HookSubagentStop
+	claudeNotificationHook  = agentevent.HookNotification
+	claudeStopHook          = agentevent.HookStop
 
 	codexMCPCommandKey           = "mcp_servers.qrouton.command="
 	codexMCPArgsKey              = "mcp_servers.qrouton.args="
-	codexSubagentStartHook       = "hooks.SubagentStart="
-	codexSubagentStopHook        = "hooks.SubagentStop="
+	codexSubagentStartHook       = "hooks." + agentevent.HookSubagentStart + "="
+	codexSubagentStopHook        = "hooks." + agentevent.HookSubagentStop + "="
 	codexCommandHookFormat       = `[{hooks=[{type="command",command=%s,timeout=3}]}]`
 	codexAgentEventCommandFormat = `"$%s" %s`
 

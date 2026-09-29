@@ -204,7 +204,7 @@ func runnerLaunch(r Runner, qroutonBin, dir string, editor EditorCommand, handle
 		dir:        dir,
 		handle:     handle,
 		generation: generation,
-		mcpArgs: []string{mcpSubcommand, sessionRootFlag, dir,
+		mcpArgs: []string{MCPSubcommand, sessionRootFlag, dir,
 			editorJSONFlag, editor.Marshal(), workbenchJSONFlag, handle.Marshal()},
 		override: r.Override,
 	})
@@ -219,7 +219,7 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		argv = append(argv, claudeNameFlag, name)
 	}
 	argv = append(argv, mcp.Args...)
-	hookCommand := ShellQuote(c.qroutonBin) + " " + agentEventSubcommand +
+	hookCommand := ShellQuote(c.qroutonBin) + " " + AgentEventSubcommand +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
@@ -247,7 +247,7 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 	if codex.MaxDepth(argv) < codex.RequiredMaxDepth {
 		argv = append(argv, codex.ConfigFlag, codex.MaxDepthSetting(codex.RequiredMaxDepth))
 	}
-	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, agentEventSubcommand)
+	hookCommand := fmt.Sprintf(codexAgentEventCommandFormat, agentevent.QroutonBinEnvVar, AgentEventSubcommand)
 	hook := fmt.Sprintf(codexCommandHookFormat, quotedConfigString(hookCommand))
 	if !c.override {
 		argv = append(argv, codexBypassHookTrustFlag)

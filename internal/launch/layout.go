@@ -22,7 +22,7 @@ func writeSupport(dir string) error {
 }
 
 func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, editor EditorCommand, resume bool) []string {
-	argv := []string{qroutonBin, agentSubcommand, sessionRootFlag, dir, runnerFlag, r.ID,
+	argv := []string{qroutonBin, AgentSubcommand, sessionRootFlag, dir, runnerFlag, r.ID,
 		workbenchJSONFlag, handle.Marshal(), editorJSONFlag, editor.Marshal()}
 	if resume {
 		argv = append(argv, resumeFlag)
@@ -31,7 +31,7 @@ func superviseArgv(qroutonBin, dir string, r Runner, handle workbench.Handle, ed
 }
 
 func ShellArgv(qroutonBin, dir string) []string {
-	return []string{qroutonBin, shellSubcommand, sessionRootFlag, dir}
+	return []string{qroutonBin, ShellSubcommand, sessionRootFlag, dir}
 }
 
 // RevealArgv shows a directory in Finder. Revealing rather than opening leaves

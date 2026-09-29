@@ -1,20 +1,25 @@
 package agentevent
 
-import "time"
+import (
+	"time"
+
+	eventlog "github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/launch"
+)
 
 const (
-	eventCommandName  = "agent-event"
+	eventCommandName  = launch.AgentEventSubcommand
 	eventCommandUsage = "Record an agent lifecycle hook event from stdin and tell the workbench what it said"
 
-	workbenchJSONFlag  = "workbench-json"
+	workbenchJSONFlag  = launch.WorkbenchJSONFlag
 	workbenchJSONUsage = "workbench handle stamped by the launcher"
-	generationFlag     = "generation"
+	generationFlag     = launch.GenerationFlag
 	generationUsage    = "runner generation stamped by the supervisor"
-	providerFlag       = "provider"
+	providerFlag       = launch.ProviderFlag
 	providerUsage      = "runner provider that emitted the event"
 
-	hookNotification = "Notification"
-	hookStop         = "Stop"
+	hookNotification = eventlog.HookNotification
+	hookStop         = eventlog.HookStop
 
 	signalTimeout = 2 * time.Second
 )

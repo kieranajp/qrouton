@@ -1,15 +1,17 @@
 package mcp
 
+import "github.com/kieranajp/qrouton/internal/launch"
+
 const (
-	commandName  = "mcp"
+	commandName  = launch.MCPSubcommand
 	commandUsage = "Serve the qrouton MCP server (window and editor tools) over stdio"
 
-	sessionRootFlag  = "session-root"
+	sessionRootFlag  = launch.SessionRootFlag
 	sessionRootUsage = "qrouton session root"
 
-	editorJSONFlag  = "editor-json"
+	editorJSONFlag  = launch.EditorJSONFlag
 	editorJSONUsage = "resolved editor configuration"
 
-	workbenchJSONFlag  = "workbench-json"
+	workbenchJSONFlag  = launch.WorkbenchJSONFlag
 	workbenchJSONUsage = "workbench handle stamped by the launcher"
 )
