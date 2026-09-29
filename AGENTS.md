@@ -70,6 +70,6 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 GOCACHE=/tmp/qrouton-go-cache make check
 ```
 
-  One entry point rather than four bare `go` commands: the embedded asset tree is generated, so a build, a test, or a vet run before `make front` fails on an empty embed. `check` covers test, race, vet, build, `gofmt -l` and `git diff --check`.
+  One entry point rather than four bare `go` commands: the embedded asset tree is generated, so a build, a test, or a vet run before `make front` fails on an empty embed. `check` covers comment-check, test, race, vet, build, front-check (svelte-check, the unit tests and the browser tests), `gofmt -l` and `git diff --check`.
 
 Do not discard unrelated worktree changes or edit generated session assets directly; change prompt sources under `prompts/`, launch support scripts under `internal/launch/scripts/`, or the workbench's frontend under `internal/desktop/frontend/`.

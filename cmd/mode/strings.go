@@ -4,7 +4,7 @@ import "github.com/kieranajp/qrouton/internal/launch"
 
 const (
 	commandName      = "mode"
-	commandUsage     = "Set a session's mode and relaunch its agent (assistant keeps the conversation; used by the Alt-n binding)"
+	commandUsage     = "Set a session's mode and relaunch its agent (assistant keeps the conversation)"
 	commandArgsUsage = "<assistant|rpi>"
 
 	sessionRootFlag  = launch.SessionRootFlag

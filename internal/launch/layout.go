@@ -8,8 +8,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// notifyScript plays a short cross-platform attention sound; it backs both the
-// notify MCP tool and the runner's Notification hook.
+// notifyScript plays a short cross-platform attention sound when the workbench
+// rings a session's chime.
 //
 //go:embed scripts/notify.sh
 var notifyScript string
