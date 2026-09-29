@@ -1,6 +1,10 @@
 package agentevent
 
-import "time"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/codex"
+)
 
 // SignalTimeout bounds the hook's push to the workbench, which must finish
 // inside the time a runner gives a hook before killing it.
@@ -17,5 +21,5 @@ const (
 	GenerationEnvVar = "QROUTON_AGENT_EVENT_GENERATION"
 	ProviderEnvVar   = "QROUTON_AGENT_EVENT_PROVIDER"
 
-	providerCodex = "codex"
+	providerCodex = codex.Binary
 )

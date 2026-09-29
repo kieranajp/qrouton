@@ -40,6 +40,9 @@ type runnerSpec struct {
 	// Inject adds MCP and hook configuration, and answers the environment the
 	// runner is launched with.
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
+	// Hooks are the agent-event hooks Inject wires, which is everything the
+	// workbench can learn about the runner's agents.
+	Hooks []string
 }
 
 type injectContext struct {
@@ -61,6 +64,8 @@ var runnerSpecs = []runnerSpec{
 		Prompt:  promptAsArgument,
 		MCP:     claudeMCP,
 		Inject:  injectClaude,
+		Hooks: []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop,
+			agentevent.HookNotification, agentevent.HookStop},
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
@@ -69,6 +74,7 @@ var runnerSpecs = []runnerSpec{
 		Prompt:  promptAsArgument,
 		MCP:     codexMCP,
 		Inject:  injectCodex,
+		Hooks:   []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,
@@ -96,6 +102,20 @@ func builtins() []Runner {
 		out[i] = Runner{ID: spec.ID, Label: spec.Label, Command: slices.Clone(spec.Command)}
 	}
 	return out
+}
+
+// RunnerHooks are the agent-event hooks a runner is launched with; an unknown
+// runner has none.
+func RunnerHooks(id string) []string {
+	spec, _ := specFor(id)
+	return slices.Clone(spec.Hooks)
+}
+
+// RunnerLabel is what a runner is called on screen, and empty for one qrouton
+// does not launch.
+func RunnerLabel(id string) string {
+	spec, _ := specFor(id)
+	return spec.Label
 }
 
 func specFor(id string) (runnerSpec, bool) {

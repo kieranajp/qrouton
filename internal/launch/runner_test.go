@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -856,5 +857,27 @@ func TestFirstInstalledFollowsTheSpecTableOrder(t *testing.T) {
 	broken := &config.Config{Launch: map[string][]string{"aider": {"aider"}}}
 	if _, err := FirstInstalled(broken); !errors.Is(err, ErrUnsupportedOverride) {
 		t.Fatalf("a broken config = %v, want ErrUnsupportedOverride", err)
+	}
+}
+
+// The workbench reads a runner's capabilities off the hooks it declares, so the
+// declaration has to be what the launch actually wires, both ways.
+func TestEachRunnerWiresExactlyTheHooksItDeclares(t *testing.T) {
+	for _, spec := range runnerSpecs {
+		t.Run(spec.ID, func(t *testing.T) {
+			r := Runner{ID: spec.ID, Command: slices.Clone(spec.Command)}
+			argv, env, err := runnerLaunch(r, "/tmp/qrouton", t.TempDir(), EditorCommand{}, testHandle(), 7, false, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			launched := strings.Join(append(argv, env...), "\n")
+			for _, hook := range []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop,
+				agentevent.HookNotification, agentevent.HookStop} {
+				wired := regexp.MustCompile(`(^|[^A-Za-z])` + hook + `([^A-Za-z]|$)`).MatchString(launched)
+				if declared := slices.Contains(spec.Hooks, hook); wired != declared {
+					t.Errorf("hook %s: wired %t, declared %t", hook, wired, declared)
+				}
+			}
+		})
 	}
 }

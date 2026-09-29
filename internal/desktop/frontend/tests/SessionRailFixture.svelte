@@ -33,6 +33,7 @@
   ]);
   let agents = $state({
     provider: "claude",
+    provider_label: "Claude Code",
     attention_known: true,
     children_known: true,
     parents_known: false,
@@ -105,7 +106,7 @@
     }),
   );
 
-  function rootOnly(provider) {
+  function rootOnly(provider, label) {
     const childrenKnown = provider === "codex";
     sessions = sessions.map((session) =>
       session.slug === "checkout"
@@ -114,6 +115,7 @@
     );
     agents = {
       provider,
+      provider_label: label,
       attention_known: false,
       children_known: childrenKnown,
       parents_known: false,

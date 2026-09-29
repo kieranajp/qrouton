@@ -18,18 +18,12 @@ function humanize(value) {
     .join(" ");
 }
 
-/** @param {string} provider */
-export function providerLabel(provider) {
-  switch (provider?.toLowerCase()) {
-    case "claude":
-      return "Claude";
-    case "codex":
-      return "Codex";
-    case "opencode":
-      return "OpenCode";
-    default:
-      return provider ? humanize(provider) : "";
-  }
+/** Go names the session's own runner; any other provider is only humanized.
+ * @param {string} provider
+ * @param {{provider?: string, provider_label?: string}} [panel] */
+export function providerLabel(provider, panel = {}) {
+  if (provider && provider === panel.provider && panel.provider_label) return panel.provider_label;
+  return provider ? humanize(provider) : "";
 }
 
 // A name qrouton cannot read is a line it does not draw. Every label below
@@ -72,12 +66,12 @@ export function runningRoot(record) {
   );
 }
 
-/** @param {AgentRecord} record @param {string} fallbackProvider */
-export function recordLabel(record, fallbackProvider = "") {
+/** @param {AgentRecord} record @param {{provider?: string, provider_label?: string}} [panel] */
+export function recordLabel(record, panel = {}) {
   const role = roleLabel(record.role ?? "") || "Agent";
   const identity =
     record.role === AGENT_ROLES.ORCHESTRATOR
-      ? providerLabel(record.provider || fallbackProvider)
+      ? providerLabel(record.provider || panel.provider, panel)
       : typeLabel(record.type ?? "");
   return [role, identity, stateLabel(record.state ?? "", record.role ?? "")]
     .filter(Boolean)
@@ -157,11 +151,11 @@ export function rowLabel(name, repos, facts) {
     .join(" · ");
 }
 
-/** @param {{provider?: string, children_known?: boolean}} panel */
+/** @param {{provider?: string, provider_label?: string, children_known?: boolean}} panel */
 export function capabilityNote(panel = {}) {
   if (!panel.provider) return "Provider unknown · live activity unavailable";
   if (panel.children_known) return "";
-  return `${providerLabel(panel.provider)} provides root activity only.`;
+  return `${providerLabel(panel.provider, panel)} provides root activity only.`;
 }
 
 /** @typedef {{id?: string, run_id?: string, provider?: string, parent_id?: string,

@@ -384,7 +384,7 @@ test("the badge carries the row's state", async ({ page }) => {
 
 test("activity shows an orchestrator, its leads, and subagents behind a count", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
-  await expect(activity.getByLabel("Orchestrator · Claude · Waiting for you")).toBeVisible();
+  await expect(activity.getByLabel("Orchestrator · Claude Code · Waiting for you")).toBeVisible();
   const lead = activity.getByLabel("Lead · Qrouton Planning Lead · Active");
   await expect(lead).toBeVisible();
 
@@ -399,7 +399,7 @@ test("activity shows an orchestrator, its leads, and subagents behind a count", 
   const indent = (locator) =>
     locator.locator(".dot").evaluate((element) => element.getBoundingClientRect().left);
   expect(await indent(lead)).toBe(
-    (await indent(activity.getByLabel("Orchestrator · Claude · Waiting for you"))) + 15,
+    (await indent(activity.getByLabel("Orchestrator · Claude Code · Waiting for you"))) + 15,
   );
   expect(await activity.locator(".rank").evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe(
     "0px",
@@ -413,7 +413,7 @@ test("waiting is the orchestrator's alone", async ({ page }) => {
   const dot = (label) =>
     activity.getByLabel(label).locator(".dot").evaluate((el) => getComputedStyle(el).backgroundColor);
 
-  expect(await dot("Orchestrator · Claude · Waiting for you")).toBe(waiting);
+  expect(await dot("Orchestrator · Claude Code · Waiting for you")).toBe(waiting);
   expect(await dot("Lead · Qrouton Planning Lead · Active")).toBe(running);
 });
 
@@ -462,7 +462,7 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
 
 test("provider coverage and missing capabilities are textual", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
-  await page.evaluate(() => window.sessionRail.rootOnly("codex"));
+  await page.evaluate(() => window.sessionRail.rootOnly("codex", "Codex CLI"));
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 unseen/ });
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");
@@ -474,7 +474,7 @@ test("provider coverage and missing capabilities are textual", async ({ page }) 
   await expect(activity).not.toContainText("Attention unavailable.");
   await expect(activity).not.toContainText("Codex provides root activity only.");
 
-  await page.evaluate(() => window.sessionRail.rootOnly("opencode"));
+  await page.evaluate(() => window.sessionRail.rootOnly("opencode", "OpenCode"));
   await expect(activity).toContainText("OpenCode provides root activity only.");
 });
 

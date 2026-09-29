@@ -105,10 +105,21 @@ test("the disclosure line counts the subagents and how many are through", () => 
   assert.equal(subagentTally([{ state: "Working" }]), "1 subagent · 0 done");
 });
 
+test("the session's runner is called what Go calls it, and any other provider is humanized", () => {
+  const panel = { provider: "agy", provider_label: "Antigravity CLI" };
+  assert.equal(providerLabel("agy", panel), "Antigravity CLI");
+  assert.equal(providerLabel("some-runner", panel), "Some Runner");
+  assert.equal(providerLabel("agy"), "Agy");
+  assert.equal(
+    recordLabel({ role: "Orchestrator", provider: "agy", state: "Working" }, panel),
+    "Orchestrator · Antigravity CLI · Working",
+  );
+});
+
 test("provider capability copy reports coverage without mentioning attention", () => {
   assert.equal(capabilityNote({ provider: "codex", children_known: true }), "");
   assert.equal(
-    capabilityNote({ provider: "opencode", children_known: false }),
+    capabilityNote({ provider: "opencode", provider_label: "OpenCode", children_known: false }),
     "OpenCode provides root activity only.",
   );
   assert.equal(capabilityNote({}), "Provider unknown · live activity unavailable");

@@ -192,11 +192,6 @@ const (
 )
 
 const (
-	agentProviderClaude   = "claude"
-	agentProviderCodex    = "codex"
-	agentProviderOpenCode = "opencode"
-	agentProviderAgy      = "agy"
-
 	agentRootID         = "root"
 	agentSetupRunPrefix = "setup-"
 

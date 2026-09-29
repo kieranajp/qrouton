@@ -47,12 +47,12 @@
 
   {#each ranks.roots as root (key(root.record))}
     <div class="rank">
-      <div class="row" aria-label={recordLabel(root.record, agents.provider)}>
+      <div class="row" aria-label={recordLabel(root.record, agents)}>
         <span class="dot {mark(root.record)}" aria-hidden="true"></span>
         <span class="identity">
           <span class="who">{roleLabel(root.record.role) || "Agent"}</span>
-          {#if providerLabel(root.record.provider || agents.provider)}
-            <span class="what">{providerLabel(root.record.provider || agents.provider)}</span>
+          {#if providerLabel(root.record.provider || agents.provider, agents)}
+            <span class="what">{providerLabel(root.record.provider || agents.provider, agents)}</span>
           {/if}
         </span>
         {#if stateLabel(root.record.state, root.record.role)}
@@ -61,7 +61,7 @@
       </div>
 
       {#each root.leads as lead (key(lead.record))}
-        <div class="row lead" aria-label={recordLabel(lead.record, agents.provider)}>
+        <div class="row lead" aria-label={recordLabel(lead.record, agents)}>
           <span class="dot {mark(lead.record)}" aria-hidden="true"></span>
           <span class="identity">
             <span class="who">{typeLabel(lead.record.type) || roleLabel(lead.record.role) || "Agent"}</span>
@@ -82,7 +82,7 @@
           {#if opened[key(lead.record)]}
             <div class="subagents">
               {#each lead.subagents as sub (key(sub))}
-                <div class="row sub" aria-label={recordLabel(sub, agents.provider)}>
+                <div class="row sub" aria-label={recordLabel(sub, agents)}>
                   <span class="dot small {mark(sub)}" aria-hidden="true"></span>
                   <span class="name" class:spent={finishedAgent(sub)}
                     >{typeLabel(sub.type) || "Subagent"}</span>
@@ -100,7 +100,7 @@
     <div class="observed">
       <div class="group-label">Observed agents</div>
       {#each ranks.observed as record (key(record))}
-        <div class="row" aria-label={recordLabel(record, agents.provider)}>
+        <div class="row" aria-label={recordLabel(record, agents)}>
           {#if activeAgent(record)}<span class="dot {mark(record)}" aria-hidden="true"></span>{/if}
           <span class="identity">
             <span class="who">{typeLabel(record.type) || roleLabel(record.role) || "Agent"}</span>
