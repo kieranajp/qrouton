@@ -7,6 +7,8 @@ import (
 
 var ErrInvalidRole = errors.New("invalid repository role")
 
+var ErrInvalidMode = errors.New("invalid session mode")
+
 var ErrNoPinnedRevision = errors.New("reference repository has no pinned revision")
 
 // ErrNoCloneURL means a manifest cannot be resumed: Create always records a

@@ -401,6 +401,24 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	}
 }
 
+// The page names the mode it offers; a misspelt one must not quietly assemble
+// the guided workflow in its place.
+func TestCreateRefusesAModeTheSessionDoesNotHave(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	repos := &Repositories{cfg: cfg, errs: map[string]error{},
+		repos: []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}}
+	a := newAssembly(cfg, repos, nil, nil, nil, nil)
+	err := a.Create(draftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat", Mode: "assistent",
+		Repos: []repoPick{{ID: "acme/api", Role: "editing"}}})
+	if !errors.Is(err, session.ErrInvalidMode) {
+		t.Fatalf("Create with an unknown mode answered %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "cleanup-4f3a")); !os.IsNotExist(err) {
+		t.Fatalf("a refused mode still left a session directory: %v", err)
+	}
+}
+
 func TestCreateRefusesADraftItsOwnRulesReject(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := newAssembly(cfg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil, nil, nil, nil)

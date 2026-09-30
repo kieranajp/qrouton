@@ -124,6 +124,7 @@ type AgentRecord struct {
 
 type AgentPanel struct {
 	Provider       string        `json:"provider"`
+	ProviderLabel  string        `json:"provider_label"`
 	AttentionKnown bool          `json:"attention_known"`
 	ChildrenKnown  bool          `json:"children_known"`
 	ParentsKnown   bool          `json:"parents_known"`

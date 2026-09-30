@@ -1,5 +1,6 @@
 <script>
   import { onDestroy, onMount, tick } from "svelte";
+  import { ACTIVITIES } from "./bridge/generated.js";
   import { chrome } from "./chrome.svelte.js";
   import DocumentPane from "./DocumentPane.svelte";
   import FindBar from "./FindBar.svelte";
@@ -160,7 +161,7 @@
         {slug}
         {active}
         {scrollRoot}
-        agentWorking={session.fields.activity === "working"}
+        agentWorking={session.fields.activity === ACTIVITIES.WORKING}
         onReady={documentReady}
         onScroller={(element) => (owned = element)}
         onFindAdapter={registerFindAdapter} />

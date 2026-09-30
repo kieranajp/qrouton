@@ -1,4 +1,5 @@
 <script>
+  import { SESSION_MODES } from "../bridge/generated.js";
   import CapsLabel from "../core/CapsLabel.svelte";
   import OptionCard from "../forms/OptionCard.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
@@ -12,8 +13,8 @@
     agy: "Subagents and skills, but qrouton can't watch them: no activity tree, no chime.",
   };
 
-  /** @type {{runners?: {id: string, label: string}[], runner?: string, mode?: string}} */
-  let { runners = [], runner = $bindable(""), mode = $bindable("rpi") } = $props();
+  /** @type {{runners?: {id: string, label: string}[], runner?: string, mode?: import("../bridge/generated.js").SessionMode}} */
+  let { runners = [], runner = $bindable(""), mode = $bindable(SESSION_MODES.RPI) } = $props();
 </script>
 
 <StepHeading title="Who runs it, and how?">
@@ -42,14 +43,14 @@
       description="Researches the codebase, writes a plan you can read, then implements it phase by phase with test gates between them."
       accent="var(--state-guided)"
       wash="var(--wash-guided)"
-      selected={mode === "rpi"}
-      onclick={() => (mode = "rpi")} />
+      selected={mode === SESSION_MODES.RPI}
+      onclick={() => (mode = SESSION_MODES.RPI)} />
     <OptionCard
       layout="stack"
       title="Open-ended"
       description="Helps directly with no forced workflow. Ask it to switch to guided at any point in the conversation."
-      selected={mode === "assistant"}
-      onclick={() => (mode = "assistant")} />
+      selected={mode === SESSION_MODES.ASSISTANT}
+      onclick={() => (mode = SESSION_MODES.ASSISTANT)} />
   </div>
 </div>
 

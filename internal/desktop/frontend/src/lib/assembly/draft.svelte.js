@@ -1,4 +1,5 @@
 import { debounced } from "../async.js";
+import { ASSEMBLY_PROGRESS_EVENT, SESSION_MODES } from "../bridge/generated.js";
 import { call, Events } from "../wails.js";
 import { browsing } from "./browse.svelte.js";
 import * as go from "./calls.js";
@@ -24,7 +25,7 @@ export function assembling(done) {
     description: "",
     ticket: "",
     prefix: "",
-    mode: "rpi",
+    mode: SESSION_MODES.RPI,
     runner: "",
   });
 
@@ -79,7 +80,7 @@ export function assembling(done) {
   // Every page in the process hears this, and the slug the session will have is
   // the folder the previewed branch names.
   $effect(() =>
-    Events.On("assembly:progress", (event) => {
+    Events.On(ASSEMBLY_PROGRESS_EVENT, (event) => {
       const advance = event.data ?? {};
       if (advance.session !== folder(branch)) return;
       progress = record(progress, advance);

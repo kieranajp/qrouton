@@ -549,3 +549,16 @@ func TestComposeReposSkipsRepositoriesAlreadyInTheSession(t *testing.T) {
 		t.Fatalf("second owner's worktree = %q", got)
 	}
 }
+
+func TestParseModeTakesOnlyTheModesASessionHas(t *testing.T) {
+	for _, mode := range []SessionMode{ModeRPI, ModeAssistant} {
+		if got, err := ParseMode(string(mode)); err != nil || got != mode {
+			t.Errorf("ParseMode(%q) = %q, %v", mode, got, err)
+		}
+	}
+	for _, bad := range []string{"", "RPI", "assistent"} {
+		if _, err := ParseMode(bad); !errors.Is(err, ErrInvalidMode) {
+			t.Errorf("ParseMode(%q) answered %v, want ErrInvalidMode", bad, err)
+		}
+	}
+}

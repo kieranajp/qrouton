@@ -1,4 +1,5 @@
 <script>
+  import { REPO_ROLES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { GLYPHS, READ_ONLY } from "../roles.js";
@@ -19,7 +20,7 @@
         {repo.name}
       </div>
       <div class="repo-stat">
-        {#if repo.role === "reference"}
+        {#if repo.role === REPO_ROLES.REFERENCE}
           {READ_ONLY}
         {:else if repo.measured === false}
           unmeasured

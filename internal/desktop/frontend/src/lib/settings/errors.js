@@ -1,14 +1,18 @@
 // What a Save refusal means for the panel's fields.
 
+import { SETTINGS_FIELDS } from "../bridge/generated.js";
+
 const msgLoadFailed = "Settings could not be read:";
+
+const SCOPED = new RegExp(`^([a-z]+|${Object.values(SETTINGS_FIELDS).join("|")}): (.*)$`, "s");
 
 /** Unscoped failures return null instead of guessing a field.
  * @param {any} err
- * @returns {{field: string, message: string} | null} */
+ * @returns {{field: import("../bridge/generated.js").SettingsField, message: string} | null} */
 export function fieldError(err) {
   const text = String(err?.message ?? err ?? "");
-  const found = text.match(/^([a-z]+): (.*)$/s);
-  return found ? { field: found[1], message: found[2] } : null;
+  const found = text.match(SCOPED);
+  return found ? { field: /** @type {any} */ (found[1]), message: found[2] } : null;
 }
 
 /** @param {any} err */
@@ -20,7 +24,7 @@ export function loadFailure(err) {
 /** Failures omit restartRequired so an existing restart banner remains unchanged.
  * @param {{restartRequired?: boolean} | undefined} result
  * @param {any} err
- * @returns {{close: boolean, restartRequired?: boolean, fields: Record<string, string>, status: string}} */
+ * @returns {{close: boolean, restartRequired?: boolean, fields: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, status: string}} */
 export function saveOutcome(result, err) {
   if (err) {
     const found = fieldError(err);

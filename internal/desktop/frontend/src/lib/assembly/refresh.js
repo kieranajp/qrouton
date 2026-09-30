@@ -1,7 +1,13 @@
 // The repository refresh as the page sees it.
 
+import { REFRESH_STATES } from "../bridge/generated.js";
+
 /** @typedef {'fetching'|'updated'|'failed'} OwnerStatus */
-const STATES = { started: "fetching", succeeded: "updated", failed: "failed" };
+const STATES = {
+  [REFRESH_STATES.STARTED]: "fetching",
+  [REFRESH_STATES.SUCCEEDED]: "updated",
+  [REFRESH_STATES.FAILED]: "failed",
+};
 
 /**
  * @typedef {object} Refresh
@@ -34,7 +40,7 @@ export function apply(refresh, event) {
     generation,
     repos: Array.isArray(event.repos) ? event.repos : refresh.repos,
   };
-  if (event.state === "complete") return { ...next, active: false };
+  if (event.state === REFRESH_STATES.COMPLETE) return { ...next, active: false };
   const status = STATES[event.state];
   if (!status) return next;
   return {

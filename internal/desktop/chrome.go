@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -296,6 +297,7 @@ func agentPanel(snapshot agentActivitySnapshot) status.AgentPanel {
 	}
 	return status.AgentPanel{
 		Provider:       snapshot.Provider,
+		ProviderLabel:  launch.RunnerLabel(snapshot.Provider),
 		AttentionKnown: snapshot.Capabilities.Attention,
 		ChildrenKnown:  snapshot.Capabilities.Children,
 		ParentsKnown:   snapshot.Capabilities.Parents,

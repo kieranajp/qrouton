@@ -1,21 +1,23 @@
 package agent
 
+import "github.com/kieranajp/qrouton/internal/launch"
+
 const (
-	commandName  = "agent"
+	commandName  = launch.AgentSubcommand
 	commandUsage = "Supervise a session's agent runner, relaunching it on escalation or de-escalation (used by the workbench)"
 
-	sessionRootFlag  = "session-root"
+	sessionRootFlag  = launch.SessionRootFlag
 	sessionRootUsage = "qrouton session root"
 
-	runnerFlag  = "runner"
+	runnerFlag  = launch.RunnerFlag
 	runnerUsage = "runner identifier to launch (claude, codex, opencode, agy)"
 
-	workbenchJSONFlag  = "workbench-json"
+	workbenchJSONFlag  = launch.WorkbenchJSONFlag
 	workbenchJSONUsage = "workbench handle stamped by the launcher"
 
-	editorJSONFlag  = "editor-json"
+	editorJSONFlag  = launch.EditorJSONFlag
 	editorJSONUsage = "resolved editor configuration"
 
-	resumeFlag  = "resume"
+	resumeFlag  = launch.ResumeFlag
 	resumeUsage = "continue the runner's previous conversation on first launch"
 )

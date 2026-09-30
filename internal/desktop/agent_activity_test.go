@@ -13,6 +13,15 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
+// Runner ids as qrouton launches them: a misspelling reads as a runner it does
+// not launch, and the capability tests below stop passing.
+const (
+	agentProviderClaude   = "claude"
+	agentProviderCodex    = "codex"
+	agentProviderOpenCode = "opencode"
+	agentProviderAgy      = "agy"
+)
+
 type activityClock struct{ at time.Time }
 
 func (c *activityClock) now() time.Time { return c.at }

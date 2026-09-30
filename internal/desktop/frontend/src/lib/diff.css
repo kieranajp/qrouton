@@ -113,7 +113,7 @@
 
 .diff-notice {
   margin-top: 14px !important;
-  color: var(--state-warning, var(--text-secondary)) !important;
+  color: var(--state-waiting) !important;
 }
 
 .diff-items {

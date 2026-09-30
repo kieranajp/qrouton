@@ -1,7 +1,14 @@
 // Assembly progress as rows on screen.
 
+import { PROGRESS_STATUSES } from "../bridge/generated.js";
+
 /** @typedef {'pending'|'running'|'done'|'failed'} State */
-const STATES = { started: "running", advanced: "running", completed: "done", failed: "failed" };
+const STATES = {
+  [PROGRESS_STATUSES.STARTED]: "running",
+  [PROGRESS_STATUSES.ADVANCED]: "running",
+  [PROGRESS_STATUSES.COMPLETED]: "done",
+  [PROGRESS_STATUSES.FAILED]: "failed",
+};
 
 /**
  * @typedef {object} Event
@@ -30,7 +37,7 @@ const STATES = { started: "running", advanced: "running", completed: "done", fai
 export function record(rows, event) {
   const row = toRow(event);
   const last = rows[rows.length - 1];
-  if (row.status === "advanced" && last?.status === "advanced" && sameStep(last, row)) {
+  if (row.status === PROGRESS_STATUSES.ADVANCED && last?.status === PROGRESS_STATUSES.ADVANCED && sameStep(last, row)) {
     return [...rows.slice(0, -1), row];
   }
   return [...rows, row];
@@ -47,7 +54,7 @@ function toRow(event) {
     status: event.status,
     state: STATES[event.status] ?? "pending",
     label: repo ? `${repo} ${event.step}` : event.step,
-    detail: (event.status === "failed" ? event.error : event.phase) ?? "",
-    percent: event.status === "advanced" ? event.percent : undefined,
+    detail: (event.status === PROGRESS_STATUSES.FAILED ? event.error : event.phase) ?? "",
+    percent: event.status === PROGRESS_STATUSES.ADVANCED ? event.percent : undefined,
   };
 }

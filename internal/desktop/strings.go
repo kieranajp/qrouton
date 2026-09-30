@@ -3,6 +3,7 @@ package desktop
 import (
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -88,6 +89,23 @@ const (
 	updateEvent            = "update:status"
 )
 
+// A Save refusal names the settings field it belongs under before the sentence.
+const (
+	settingsFieldOrgs        = "orgs"
+	settingsFieldRoot        = "root"
+	settingsFieldEditor      = "editor"
+	settingsFieldLaunch      = "launch"
+	settingsFieldLinear      = "linear"
+	settingsFieldStar        = "star"
+	settingsFieldBookmark    = "bookmark"
+	settingsFieldQuestion    = "question"
+	settingsFieldExclamation = "exclamation"
+
+	settingsRefusalFormat = "%s: %s"
+	settingsWrappedFormat = "%s: %w"
+	settingsEmpty         = "cannot be empty"
+)
+
 // A tab may only stand in for a window if it reports its process's state.
 const (
 	tabStatusRunning   = "running"
@@ -163,8 +181,8 @@ const (
 )
 
 const (
-	updateEndpoint        = "https://api.github.com/repos/kieranajp/qrouton/releases/latest"
-	updateFallbackURL     = "https://github.com/kieranajp/qrouton/releases/latest"
+	updateEndpoint        = github.APIBaseDefault + "/repos/" + github.IssueRepository + "/releases/latest"
+	updateFallbackURL     = github.WebBase + "/" + github.IssueRepository + "/releases/latest"
 	updateBrewCommand     = "brew upgrade --cask qrouton"
 	updateUserAgentHeader = "User-Agent"
 	updateUserAgentPrefix = "qrouton/"
@@ -174,11 +192,6 @@ const (
 )
 
 const (
-	agentProviderClaude   = "claude"
-	agentProviderCodex    = "codex"
-	agentProviderOpenCode = "opencode"
-	agentProviderAgy      = "agy"
-
 	agentRootID         = "root"
 	agentSetupRunPrefix = "setup-"
 

@@ -1,4 +1,5 @@
 <script>
+  import { REPO_ROLES } from "../bridge/generated.js";
   import { dismissible } from "../core/dismiss.js";
   import RoleToggle from "../forms/RoleToggle.svelte";
   import { menuHeight, place } from "../menu.js";
@@ -10,12 +11,12 @@
   const LISTING = "Listing branches…";
   const UNLISTABLE = "Couldn't list branches";
 
-  /** @type {{name?: string, meta?: string, role?: 'off'|'editing'|'reference', offers?: ('off'|'editing'|'reference')[], base?: string, rebasable?: boolean, branches?: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}, onRoleChange?: (role: string) => void, onBaseChange?: (branch: string) => void, onBaseOpen?: () => void, [attribute: string]: any}} */
+  /** @type {{name?: string, meta?: string, role?: "off" | import("../bridge/generated.js").RepoRole, offers?: ("off" | import("../bridge/generated.js").RepoRole)[], base?: string, rebasable?: boolean, branches?: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}, onRoleChange?: (role: string) => void, onBaseChange?: (branch: string) => void, onBaseOpen?: () => void, [attribute: string]: any}} */
   let {
     name,
     meta,
     role = "off",
-    offers = ["off", "editing", "reference"],
+    offers = ["off", REPO_ROLES.EDITING, REPO_ROLES.REFERENCE],
     base = "",
     rebasable = false,
     branches = { state: "idle", branches: [], default: "" },

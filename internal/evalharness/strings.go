@@ -1,14 +1,19 @@
 package evalharness
 
-import "time"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
+)
 
 const runnerWaitDelay = 250 * time.Millisecond
 
 const (
 	gitBin     = "git"
-	srcDirName = "src"
+	srcDirName = sessionpaths.SrcDirName
 
-	manifestName = "qrouton.json"
+	manifestName = sessionpaths.ManifestName
 
 	// Git subcommands and arguments the harness runs against fixture repos.
 	gitInitCmd     = "init"
@@ -32,7 +37,7 @@ const (
 	gitUserEmailKey = "user.email"
 	gitUserNameKey  = "user.name"
 
-	roleReference = "reference"
+	roleReference = string(session.RepoRoleReference)
 
 	// Runner names, as scenarios and the --runner flag spell them.
 	runnerClaude = "claude"
@@ -144,8 +149,8 @@ const (
 
 	evidenceJoiner = ", "
 
-	thoughtsDirName = "thoughts"
-	sharedDirName   = "shared"
+	thoughtsDirName = sessionpaths.ThoughtsDirName
+	sharedDirName   = sessionpaths.SharedDirName
 
 	// diffFailedFormat records a failed diff as the diff itself, so a broken
 	// repository trips repo_unchanged instead of passing as "no changes".
@@ -254,5 +259,6 @@ const (
 	diffsDirName     = "diffs"
 	diffFileExt      = ".diff"
 
-	outcomeTie = "tie"
+	outcomeTie   = "tie"
+	outcomeError = "error"
 )

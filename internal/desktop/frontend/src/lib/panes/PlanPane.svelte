@@ -1,4 +1,5 @@
 <script>
+  import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
@@ -147,7 +148,7 @@
     mode={view.mode}
     onMode={(next) => (view.mode = next)}>
     {#snippet tag()}
-      <Chip>{doc.kind ?? "PLAN"}</Chip>
+      <Chip>{doc.kind ?? ARTIFACT_KINDS.PLAN}</Chip>
     {/snippet}
     {#snippet body()}
       {#if view.reading}

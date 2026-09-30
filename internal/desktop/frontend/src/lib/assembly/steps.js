@@ -1,7 +1,9 @@
 // The chrome around the three steps. What each step is called, what stops
 // it, and what a keypress in the dialog means.
 
-/** @typedef {{field: string, message: string}} Problem */
+import { DRAFT_FIELDS } from "../bridge/generated.js";
+
+/** @typedef {{field: import("../bridge/generated.js").DraftField, message: string}} Problem */
 
 const STEPS = [
   { label: "Describe the work", primary: "Choose repositories →" },
@@ -17,11 +19,8 @@ export const primary = (step = 0) => (STEPS[step] ?? STEPS[0]).primary;
 
 // The fields a step is in a position to fix. A missing repository must not stop
 // step 1, where there is nothing on screen to pick one with.
-const OWNED = [
-  ["name", "branchDescription", "ticket"],
-  ["repos"],
-  ["name", "branchDescription", "ticket", "repos"],
-];
+const DESCRIBED = [DRAFT_FIELDS.NAME, DRAFT_FIELDS.BRANCH_DESCRIPTION, DRAFT_FIELDS.TICKET];
+const OWNED = [DESCRIBED, [DRAFT_FIELDS.REPOS], [...DESCRIBED, DRAFT_FIELDS.REPOS]];
 
 /**
  * @param {Problem[]} [problems]
@@ -59,11 +58,13 @@ export const assemblyOpen = (requested, settled, slug) => !!settled && (!!reques
  * @param {string} added the session add-repos was pressed on */
 export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || added === shown);
 
+const NAMED = new RegExp(`^(?:[a-z]+|${Object.values(DRAFT_FIELDS).join("|")}): `);
+
 /**
  * refusal is how the footer says what Go refused, which names the field before
  * the sentence.
  */
-export const refusal = (err) => String(err?.message ?? err ?? "").replace(/^[a-z]+: /, "");
+export const refusal = (err) => String(err?.message ?? err ?? "").replace(NAMED, "");
 
 /**
  * @param {{key?: string, target?: any}} [event]

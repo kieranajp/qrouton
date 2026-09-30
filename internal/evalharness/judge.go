@@ -165,7 +165,7 @@ func pairwiseOutcome(judgments []PairwiseJudgment) (string, bool) {
 		}
 	}
 	if len(winners) == 0 {
-		return "error", false
+		return outcomeError, false
 	}
 	if len(winners) == 1 {
 		return winners[0], false
@@ -173,7 +173,7 @@ func pairwiseOutcome(judgments []PairwiseJudgment) (string, bool) {
 	if winners[0] == winners[1] {
 		return winners[0], true
 	}
-	return "tie", false
+	return outcomeTie, false
 }
 
 func stripJSONFence(value string) string {

@@ -1,3 +1,4 @@
+import { ARTIFACT_KINDS, DOCUMENT_FORMATS } from "../bridge/generated.js";
 import ImagesPane from "./ImagesPane.svelte";
 import DiffPane from "./DiffPane.svelte";
 import MarkdownPane from "./MarkdownPane.svelte";
@@ -9,16 +10,16 @@ import SlidesPane from "./SlidesPane.svelte";
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
 const PANES = {
-  images: ImagesPane,
-  diff: DiffPane,
-  markdown: MarkdownPane,
+  [DOCUMENT_FORMATS.IMAGES]: ImagesPane,
+  [DOCUMENT_FORMATS.DIFF]: DiffPane,
+  [DOCUMENT_FORMATS.MARKDOWN]: MarkdownPane,
 };
 
 // Some markdown is more than markdown. The kind is the workbench's own reading
 // of where the file lives, so it refines the format rather than replacing it.
 const KINDS = {
-  PLAN: PlanPane,
-  RESEARCH: ResearchPane,
+  [ARTIFACT_KINDS.PLAN]: PlanPane,
+  [ARTIFACT_KINDS.RESEARCH]: ResearchPane,
 };
 
 // A deck is a presentation form, not an artifact kind, so it is asked first and

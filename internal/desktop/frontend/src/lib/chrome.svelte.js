@@ -1,9 +1,9 @@
-import { CHROME_DEFAULTS, CHROME_EVENT, CHROME_SNAPSHOT } from "./bridge/generated.js";
+import { CHROME_DEFAULTS, CHROME_EVENT, CHROME_SNAPSHOT, ACTIVITIES } from "./bridge/generated.js";
 import { call, Call, Events } from "./wails.js";
 
 // Idle rather than the payload's zero value: a page that has heard nothing is
 // not a page reporting an agent at work.
-const NOTHING = { ...CHROME_DEFAULTS, activity: "idle" };
+const NOTHING = { ...CHROME_DEFAULTS, activity: ACTIVITIES.IDLE };
 
 // Spreading over the defaults is not enough: a slice Go leaves nil arrives as
 // an explicit null, which fills the key rather than leaving it absent, and the

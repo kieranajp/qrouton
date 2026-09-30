@@ -72,21 +72,21 @@ func renderMarkdown(report Report) string {
 
 	if len(report.Pairwise) > 0 {
 		builder.WriteString("\n## Pairwise judging\n\n")
-		wins := map[string]int{"claude": 0, "codex": 0, "tie": 0, "error": 0}
+		wins := map[string]int{runnerClaude: 0, runnerCodex: 0, outcomeTie: 0, outcomeError: 0}
 		for _, pair := range report.Pairwise {
 			wins[pair.Outcome]++
 		}
-		fmt.Fprintf(&builder, "Claude wins: %d · Codex wins: %d · Ties/mixed: %d · Errors: %d\n\n", wins["claude"], wins["codex"], wins["tie"], wins["error"])
+		fmt.Fprintf(&builder, "Claude wins: %d · Codex wins: %d · Ties/mixed: %d · Errors: %d\n\n", wins[runnerClaude], wins[runnerCodex], wins[outcomeTie], wins[outcomeError])
 		builder.WriteString("| Pair | Outcome | Agreement | Claude judge | Codex judge |\n")
 		builder.WriteString("| --- | --- | ---: | --- | --- |\n")
 		for _, pair := range report.Pairwise {
-			judgments := map[string]string{"claude": "—", "codex": "—"}
+			judgments := map[string]string{runnerClaude: "—", runnerCodex: "—"}
 			for _, judgment := range pair.Judgments {
 				judgments[judgment.Judge] = pairwiseJudgmentSummary(judgment)
 			}
 			fmt.Fprintf(&builder, "| `%s` | %s | %t | %s | %s |\n",
 				pair.ID, pair.Outcome, pair.Agreement,
-				escapeTable(judgments["claude"]), escapeTable(judgments["codex"]),
+				escapeTable(judgments[runnerClaude]), escapeTable(judgments[runnerCodex]),
 			)
 		}
 	}

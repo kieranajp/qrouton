@@ -1,5 +1,6 @@
 <script>
   import { onDestroy } from "svelte";
+  import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import CubeMark from "../core/CubeMark.svelte";
@@ -69,7 +70,7 @@
 
 <article class="deck">
   <div class="source">
-    <CubeMark size={18} face={artifactTone(doc.kind)} data-artifact-kind={doc.kind ?? "NOTE"} />
+    <CubeMark size={18} face={artifactTone(doc.kind)} data-artifact-kind={doc.kind ?? ARTIFACT_KINDS.NOTE} />
     <span class="title">{heading}</span>
     {#if doc.source}
       <CapsLabel tone="dim">{doc.source}</CapsLabel>

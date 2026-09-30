@@ -1,3 +1,4 @@
+import { ORGS_CHANGED_EVENT, REPOS_REFRESH_EVENT } from "../bridge/generated.js";
 import { call, Events } from "../wails.js";
 import { entry, requested, settled, unasked, wanted } from "./branches.js";
 import * as go from "./calls.js";
@@ -66,7 +67,7 @@ export function browsing(branch, report = () => {}) {
   );
 
   $effect(() =>
-    Events.On("repos:refresh", (event) => {
+    Events.On(REPOS_REFRESH_EVENT, (event) => {
       const updated = apply(refresh, event.data ?? {});
       refresh = updated;
       selection = reconcile(selection, updated.repos.map(repoID));
@@ -74,7 +75,7 @@ export function browsing(branch, report = () => {}) {
   );
 
   $effect(() =>
-    Events.On("orgs:changed", (event) => {
+    Events.On(ORGS_CHANGED_EVENT, (event) => {
       orgs = event.data ?? [];
       owners = [...orgs];
       refetch();
@@ -138,7 +139,7 @@ export function browsing(branch, report = () => {}) {
     get upgrading() {
       return upgrading(selection);
     },
-    /** @param {{id: string, role: 'editing'|'reference', base?: string}[]} rows */
+    /** @param {{id: string, role: import("../bridge/generated.js").RepoRole, base?: string}[]} rows */
     hold: (rows) => (selection = seed(rows)),
     refetch,
     owner: (org) =>

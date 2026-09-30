@@ -1,5 +1,6 @@
 <script>
   import { onMount, untrack } from "svelte";
+  import { BUG_REPORT_STATUSES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import { openURL } from "../wails.js";
   import { loadReport, confirmReport, cancelReport } from "./calls.js";
@@ -14,14 +15,14 @@
   let panel;
   let live = true;
   let epoch = 0;
-  let pending = $derived(preview?.report.status === "pending" && !submitting);
+  let pending = $derived(preview?.report.status === BUG_REPORT_STATUSES.PENDING && !submitting);
 
   onMount(() => {
     panel.focus();
     return () => {
       live = false;
       epoch++;
-      if (!closing && !submitting && (!preview || preview.report.status === "pending")) {
+      if (!closing && !submitting && (!preview || preview.report.status === BUG_REPORT_STATUSES.PENDING)) {
         cancelReport(owner, id).catch(() => {});
       }
     };
@@ -33,7 +34,7 @@
     loadReport(owner, id).then((value) => {
       if (live && sequence === epoch && value.report.id === id) {
         preview = value;
-        if (observed !== "pending") submitting = false;
+        if (observed !== BUG_REPORT_STATUSES.PENDING) submitting = false;
         error = "";
       }
     }).catch((reason) => {
@@ -50,7 +51,7 @@
       if (live && sequence === epoch && outcome.id === id) preview = { ...preview, report: outcome };
     } catch (reason) {
       if (live && sequence === epoch) {
-        preview = { ...preview, report: { ...preview.report, status: "unknown", message: preview.unknownMessage } };
+        preview = { ...preview, report: { ...preview.report, status: BUG_REPORT_STATUSES.UNKNOWN, message: preview.unknownMessage } };
       }
     }
   }
@@ -60,7 +61,7 @@
     closing = true;
     epoch++;
     try {
-      if (!submitting && (!preview || preview.report.status === "pending")) {
+      if (!submitting && (!preview || preview.report.status === BUG_REPORT_STATUSES.PENDING)) {
         await cancelReport(owner, id);
       }
     } catch (reason) {
@@ -105,7 +106,7 @@
     {#if error}<p role="alert">{error}</p>{/if}
     <div class="actions">
       <Button variant="secondary" disabled={closing} onclick={dismiss}>{preview ? (pending ? preview.cancelLabel : preview.closeLabel) : "×"}</Button>
-      {#if preview?.report.status === "pending"}
+      {#if preview?.report.status === BUG_REPORT_STATUSES.PENDING}
         <Button disabled={!pending || closing} onclick={confirm}>{preview.createLabel}</Button>
       {/if}
     </div>

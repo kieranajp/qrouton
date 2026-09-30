@@ -1,6 +1,6 @@
 // Command bridge writes the page's copy of the names the workbench binds: one
-// constant per bound method, one per event, and the defaults the chrome payload
-// is read through.
+// constant per bound method, one per event, the defaults the chrome payload is
+// read through, and every closed set of values the payloads carry.
 package main
 
 import (
@@ -12,6 +12,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -23,10 +24,14 @@ import (
 // Paths are the generator's own, relative to the package directory go generate
 // runs it in.
 const (
-	desktopPackage = ".."
-	statusPackage  = "../../status"
-	moduleFile     = "../../../go.mod"
-	generatedPage  = "../frontend/src/lib/bridge/generated.js"
+	desktopPackage   = ".."
+	statusPackage    = "../../status"
+	workbenchPackage = "../../workbench"
+	sessionPackage   = "../../session"
+	githubPackage    = "../../github"
+	assemblyPackage  = "../../assembly"
+	moduleFile       = "../../../go.mod"
+	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 )
 
 const (
@@ -35,6 +40,41 @@ const (
 	defaultsName = "CHROME_DEFAULTS"
 	eventSuffix  = "Event"
 )
+
+// valueSet selects a closed set of string constants from one package, by Go
+// type when it has one and by name otherwise; prefix and suffix are trimmed to
+// make each key.
+type valueSet struct {
+	name, typedef, dir, goType, prefix, suffix string
+}
+
+var valueSets = []valueSet{
+	{name: "ACTIVITIES", typedef: "Activity", dir: statusPackage, prefix: "Activity"},
+	{name: "AGENT_ATTENTION", typedef: "AgentAttention", dir: statusPackage, prefix: "AgentAttention"},
+	{name: "AGENT_COVERAGE", typedef: "AgentCoverage", dir: statusPackage, prefix: "AgentCoverage"},
+	{name: "AGENT_ROLES", typedef: "AgentRole", dir: statusPackage, prefix: "AgentRole"},
+	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
+	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind"},
+	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
+	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
+	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
+	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
+	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
+	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
+	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
+	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},
+	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
+	{name: "STICKER_IDS", typedef: "Sticker", dir: sessionPackage, goType: "Sticker", prefix: "Sticker"},
+	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
+	{name: "WINDOW_KINDS", typedef: "WindowKind", dir: workbenchPackage, goType: "WindowKind", prefix: "Kind"},
+}
+
+// valueNames are single values the page compares against.
+type valueName struct{ dir, goName string }
+
+var valueNames = []valueName{
+	{desktopPackage, "agentRootID"},
+}
 
 func main() {
 	body, err := render(desktopPackage, statusPackage, moduleFile)
@@ -85,6 +125,9 @@ func render(desktopDir, statusDir, modPath string) ([]byte, error) {
 		fmt.Fprintf(&js, "export const %s = %q;\n", screaming(event.name), event.value)
 	}
 	js.WriteString("\n")
+	if err := writeValues(&js, valueSets, valueNames); err != nil {
+		return nil, err
+	}
 	fmt.Fprintf(&js, "/** @type {%s} */\n", defaults.typing(0))
 	fmt.Fprintf(&js, "export const %s = %s;\n", defaultsName, defaults.value(0))
 	return js.Bytes(), nil
@@ -198,8 +241,7 @@ func receiver(expr ast.Expr) string {
 }
 
 type constant struct {
-	name  string
-	value string
+	name, value, goType string
 }
 
 func events(files []*ast.File) []constant {
@@ -231,6 +273,94 @@ func events(files []*ast.File) []constant {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
+	return out
+}
+
+func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
+	parsed := map[string][]constant{}
+	constants := func(dir string) ([]constant, error) {
+		if found, ok := parsed[dir]; ok {
+			return found, nil
+		}
+		files, err := parsePackage(dir)
+		if err != nil {
+			return nil, err
+		}
+		parsed[dir] = stringConstants(files)
+		return parsed[dir], nil
+	}
+	for _, set := range sets {
+		found, err := constants(set.dir)
+		if err != nil {
+			return err
+		}
+		var keys, values []string
+		for _, c := range found {
+			if set.goType != "" && c.goType != set.goType {
+				continue
+			}
+			key, ok := strings.CutPrefix(c.name, set.prefix)
+			if !ok || !strings.HasSuffix(key, set.suffix) || key == set.suffix {
+				continue
+			}
+			keys = append(keys, screaming(strings.TrimSuffix(key, set.suffix)))
+			values = append(values, strconv.Quote(c.value))
+		}
+		if len(keys) == 0 {
+			return fmt.Errorf("%s matches no constant in %s", set.name, set.dir)
+		}
+		fmt.Fprintf(js, "/** @typedef {%s} %s */\n", strings.Join(values, "|"), set.typedef)
+		fmt.Fprintf(js, "export const %s = Object.freeze({\n", set.name)
+		for i := range keys {
+			fmt.Fprintf(js, "  %s: %s,\n", keys[i], values[i])
+		}
+		js.WriteString("});\n\n")
+	}
+	for _, single := range names {
+		found, err := constants(single.dir)
+		if err != nil {
+			return err
+		}
+		i := slices.IndexFunc(found, func(c constant) bool { return c.name == single.goName })
+		if i < 0 {
+			return fmt.Errorf("no constant %s in %s", single.goName, single.dir)
+		}
+		fmt.Fprintf(js, "export const %s = %q;\n\n", screaming(single.goName), found[i].value)
+	}
+	return nil
+}
+
+// stringConstants are a package's string-literal constants in source order,
+// which is the order a set is drawn in.
+func stringConstants(files []*ast.File) []constant {
+	var out []constant
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			decl, ok := decl.(*ast.GenDecl)
+			if !ok || decl.Tok != token.CONST {
+				continue
+			}
+			for _, spec := range decl.Specs {
+				spec, ok := spec.(*ast.ValueSpec)
+				if !ok || len(spec.Names) != 1 || len(spec.Values) != 1 {
+					continue
+				}
+				text, ok := spec.Values[0].(*ast.BasicLit)
+				if !ok || text.Kind != token.STRING {
+					continue
+				}
+				value, err := strconv.Unquote(text.Value)
+				if err != nil {
+					continue
+				}
+				goType := ""
+				if ident, ok := spec.Type.(*ast.Ident); ok {
+					goType = ident.Name
+				}
+				out = append(out, constant{name: spec.Names[0].Name, value: value, goType: goType})
+			}
+		}
+	}
 	return out
 }
 

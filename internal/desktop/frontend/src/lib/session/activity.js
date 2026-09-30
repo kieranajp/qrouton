@@ -1,14 +1,12 @@
-const ROLES = new Set(["Orchestrator", "Lead", "Specialist"]);
-const STATES = new Set([
-  "Waiting for you",
-  "Working",
-  "Idle",
-  "Active",
-  "Finished",
-  "Failed",
-]);
+import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_ROLES, AGENT_ROOT_ID, AGENT_STATES } from "../bridge/generated.js";
 
-const WORKING = ["Waiting for you", "Working", "Idle", "Active"];
+/** @type {Set<string>} */
+const ROLES = new Set([AGENT_ROLES.ORCHESTRATOR, AGENT_ROLES.LEAD, AGENT_ROLES.SPECIALIST]);
+/** @type {Set<string>} */
+const STATES = new Set(Object.values(AGENT_STATES));
+
+/** @type {string[]} */
+const WORKING = [AGENT_STATES.WAITING, AGENT_STATES.WORKING, AGENT_STATES.IDLE, AGENT_STATES.ACTIVE];
 
 /** @param {string} value */
 function humanize(value) {
@@ -20,18 +18,12 @@ function humanize(value) {
     .join(" ");
 }
 
-/** @param {string} provider */
-export function providerLabel(provider) {
-  switch (provider?.toLowerCase()) {
-    case "claude":
-      return "Claude";
-    case "codex":
-      return "Codex";
-    case "opencode":
-      return "OpenCode";
-    default:
-      return provider ? humanize(provider) : "";
-  }
+/** Go names the session's own runner; any other provider is only humanized.
+ * @param {string} provider
+ * @param {{provider?: string, provider_label?: string}} [panel] */
+export function providerLabel(provider, panel = {}) {
+  if (provider && provider === panel.provider && panel.provider_label) return panel.provider_label;
+  return provider ? humanize(provider) : "";
 }
 
 // A name qrouton cannot read is a line it does not draw. Every label below
@@ -52,7 +44,7 @@ export function roleLabel(role) {
  * @param {string} [role] */
 export function stateLabel(state, role = "") {
   if (!STATES.has(state)) return "";
-  if (state === "Waiting for you" && role !== "Orchestrator") return "Working";
+  if (state === AGENT_STATES.WAITING && role !== AGENT_ROLES.ORCHESTRATOR) return AGENT_STATES.WORKING;
   return state;
 }
 
@@ -63,23 +55,23 @@ export function activeAgent(record) {
 
 /** @param {AgentRecord} record */
 export function finishedAgent(record) {
-  return record.state === "Finished" || record.state === "Failed";
+  return record.state === AGENT_STATES.FINISHED || record.state === AGENT_STATES.FAILED;
 }
 
 /** @param {AgentRecord} record */
 export function runningRoot(record) {
   return (
-    (record.role === "Orchestrator" || record.id === "root") &&
+    (record.role === AGENT_ROLES.ORCHESTRATOR || record.id === AGENT_ROOT_ID) &&
     activeAgent(record)
   );
 }
 
-/** @param {AgentRecord} record @param {string} fallbackProvider */
-export function recordLabel(record, fallbackProvider = "") {
+/** @param {AgentRecord} record @param {{provider?: string, provider_label?: string}} [panel] */
+export function recordLabel(record, panel = {}) {
   const role = roleLabel(record.role ?? "") || "Agent";
   const identity =
-    record.role === "Orchestrator"
-      ? providerLabel(record.provider || fallbackProvider)
+    record.role === AGENT_ROLES.ORCHESTRATOR
+      ? providerLabel(record.provider || panel.provider, panel)
       : typeLabel(record.type ?? "");
   return [role, identity, stateLabel(record.state ?? "", record.role ?? "")]
     .filter(Boolean)
@@ -125,15 +117,15 @@ export function subagentTally(records = []) {
  */
 export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   const facts = [];
-  if (summary.running && summary.attention === "needs-you") {
+  if (summary.running && summary.attention === AGENT_ATTENTION.NEEDS_YOU) {
     facts.push({ kind: "attention", label: "Needs you" });
   }
 
   if (!summary.running) {
     facts.push({ kind: "agents", label: idleAge ? `Idle · ${idleAge}` : "Idle" });
-  } else if (summary.coverage === "full") {
+  } else if (summary.coverage === AGENT_COVERAGE.FULL) {
     facts.push({ kind: "agents", label: `${Math.max(0, summary.active ?? 0)} active`, active: true });
-  } else if (summary.coverage === "root") {
+  } else if (summary.coverage === AGENT_COVERAGE.ROOT) {
     facts.push({ kind: "agents", label: "Root active", active: true });
   }
 
@@ -159,11 +151,11 @@ export function rowLabel(name, repos, facts) {
     .join(" · ");
 }
 
-/** @param {{provider?: string, children_known?: boolean}} panel */
+/** @param {{provider?: string, provider_label?: string, children_known?: boolean}} panel */
 export function capabilityNote(panel = {}) {
   if (!panel.provider) return "Provider unknown · live activity unavailable";
   if (panel.children_known) return "";
-  return `${providerLabel(panel.provider)} provides root activity only.`;
+  return `${providerLabel(panel.provider, panel)} provides root activity only.`;
 }
 
 /** @typedef {{id?: string, run_id?: string, provider?: string, parent_id?: string,
@@ -179,7 +171,7 @@ export function projectAgents(records = []) {
   const key = (record) => `${record.provider ?? ""}\u0000${record.run_id ?? ""}\u0000${record.id ?? ""}`;
   const indexed = new Map(nodes.map((node) => [key(node.record), node]));
   const trees = nodes.filter(
-    (node) => node.record.role === "Orchestrator" || node.record.id === "root",
+    (node) => node.record.role === AGENT_ROLES.ORCHESTRATOR || node.record.id === AGENT_ROOT_ID,
   );
   for (const root of trees) root.level = 1;
 

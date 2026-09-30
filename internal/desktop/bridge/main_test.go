@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,5 +52,42 @@ func TestBoundNamesAreSpelledTheWayTheModuleImportsThem(t *testing.T) {
 		if got := screaming(spelling.go_); got != spelling.js {
 			t.Errorf("screaming(%q) = %q, want %q", spelling.go_, got, spelling.js)
 		}
+	}
+}
+
+// A set whose constants were renamed or retyped would otherwise vanish from the
+// page, and every comparison against it would quietly stop matching.
+func TestAValueSetThatMatchesNothingStopsTheGenerator(t *testing.T) {
+	dir := t.TempDir()
+	source := "package session\n\ntype RepoRole string\n\nconst Editing RepoRole = \"editing\"\n"
+	if err := os.WriteFile(filepath.Join(dir, "manifest.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var js bytes.Buffer
+	sets := []valueSet{{name: "REPO_ROLES", typedef: "RepoRole", dir: dir, goType: "RepoRole", prefix: "RepoRole"}}
+	if err := writeValues(&js, sets, nil); err == nil || !strings.Contains(err.Error(), "REPO_ROLES") {
+		t.Fatalf("a set with no constants generated anyway: %v", err)
+	}
+	if err := writeValues(&js, nil, []valueName{{dir, "agentRootID"}}); err == nil {
+		t.Fatal("a missing single value generated anyway")
+	}
+}
+
+func TestAValueSetKeepsSourceOrderAndItsOwnType(t *testing.T) {
+	dir := t.TempDir()
+	source := "package session\n\ntype Sticker string\ntype Other string\n\nconst (\n" +
+		"\tStickerStar Sticker = \"star\"\n\tStickerOther Other = \"other\"\n\tStickerBookmark Sticker = \"bookmark\"\n)\n"
+	if err := os.WriteFile(filepath.Join(dir, "manifest.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var js bytes.Buffer
+	sets := []valueSet{{name: "STICKERS", typedef: "Sticker", dir: dir, goType: "Sticker", prefix: "Sticker"}}
+	if err := writeValues(&js, sets, nil); err != nil {
+		t.Fatal(err)
+	}
+	want := "/** @typedef {\"star\"|\"bookmark\"} Sticker */\nexport const STICKERS = Object.freeze({\n" +
+		"  STAR: \"star\",\n  BOOKMARK: \"bookmark\",\n});\n\n"
+	if js.String() != want {
+		t.Fatalf("generated\n%s\nwant\n%s", js.String(), want)
 	}
 }

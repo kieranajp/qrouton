@@ -1,5 +1,7 @@
 package ticket
 
+import gh "github.com/kieranajp/qrouton/internal/github"
+
 const (
 	// Provider names, used to prefix the errors a user reads.
 	linearProvider = "linear"
@@ -12,20 +14,21 @@ const (
 
 	linearAPIDefault = "https://api.linear.app/graphql"
 	asanaAPIDefault  = "https://app.asana.com/api/1.0"
-	githubAPIDefault = "https://api.github.com"
+	githubAPIDefault = gh.APIBaseDefault
 
 	linearHost = "linear.app"
 	asanaHost  = "app.asana.com"
 	githubHost = "github.com"
 
-	httpsScheme = "https"
+	httpsScheme     = "https"
+	schemeSeparator = "://"
 
 	linearIssueSegment       = "issue"
 	linearShortIDIndex       = 1
 	linearScopedIDIndex      = 2
 	linearShortMinSegments   = 2
 	linearScopedMinSegments  = 3
-	linearCanonicalPrefix    = "https://linear.app/issue/"
+	linearCanonicalPrefix    = httpsScheme + schemeSeparator + linearHost + pathSeparator + linearIssueSegment + pathSeparator
 	linearMaxReferenceBytes  = 2048
 	linearMaxIdentifierBytes = 128
 
@@ -39,7 +42,7 @@ const (
 	githubNumberIndex       = 3
 	githubIssueSegments     = 4
 	githubMaxReferenceBytes = 2048
-	githubCanonicalFormat   = "https://github.com/%s/%s/issues/%s"
+	githubCanonicalFormat   = httpsScheme + schemeSeparator + githubHost + "/%s/%s/" + githubIssuesSegment + "/%s"
 	githubIssuePathFormat   = "/repos/%s/%s/issues/%s"
 	githubKeyFormat         = "%s-%s"
 

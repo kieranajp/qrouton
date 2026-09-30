@@ -1,12 +1,15 @@
 package desktop
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -381,17 +384,10 @@ func agentStateFor(activity string) string {
 }
 
 func capabilitiesFor(provider string) agentCapabilities {
-	switch provider {
-	case agentProviderClaude:
-		return agentCapabilities{Attention: true, Children: true}
-	case agentProviderCodex:
-		return agentCapabilities{Children: true}
-	case agentProviderOpenCode:
-		return agentCapabilities{}
-	case agentProviderAgy:
-		return agentCapabilities{Attention: false, Children: false}
-	default:
-		return agentCapabilities{}
+	hooks := launch.RunnerHooks(provider)
+	return agentCapabilities{
+		Attention: slices.Contains(hooks, agentevent.HookNotification),
+		Children:  slices.Contains(hooks, agentevent.HookSubagentStart),
 	}
 }
 

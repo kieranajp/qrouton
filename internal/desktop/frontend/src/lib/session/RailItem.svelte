@@ -1,4 +1,5 @@
 <script>
+  import { STICKER_IDS } from "../bridge/generated.js";
   import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
@@ -109,7 +110,7 @@
     {#if stickerItem}
       <StickerIcon id={stickerItem.id} />
     {:else}
-      <StickerIcon id="star" outline />
+      <StickerIcon id={STICKER_IDS.STAR} outline />
     {/if}
   </button>
 

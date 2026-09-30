@@ -1,4 +1,5 @@
 <script>
+  import { MODE_LABELS, WINDOW_KINDS } from "./lib/bridge/generated.js";
   import Button from "./lib/core/Button.svelte";
   import ReportReview from "./lib/bugs/ReportReview.svelte";
   import CapsLabel from "./lib/core/CapsLabel.svelte";
@@ -82,7 +83,7 @@
     <div class="agent">
       <PaneHeader>
         {#snippet lead()}
-          {#if fields.mode === "ASSISTANT"}
+          {#if fields.mode === MODE_LABELS.ASSISTANT}
             <span class="assistant-mode">Assistant</span>
             <Button
               variant="cube"
@@ -147,7 +148,7 @@
         newLabel="Shell" />
       {#each view.tabs as tab, i (tab.id)}
         <!-- Only a terminal may be Started; a document tab has no process behind it. -->
-        {#if tab.kind === "terminal"}
+        {#if tab.kind === WINDOW_KINDS.TERMINAL}
           <Terminal
             id={tab.id}
             pty={tabPTY}

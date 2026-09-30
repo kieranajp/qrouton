@@ -2,15 +2,15 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
 import { opensSettings, position } from "./shortcuts.js";
 export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
 export { Terminal };
 
-// getPropertyValue does not resolve a var() chain, so callers name the property
-// holding the literal value.
-const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const token = (name) =>
+  resolveToken((property) => getComputedStyle(document.documentElement).getPropertyValue(property), name);
 
 const terminalFont = () => `${token("--terminal-size")} ${token("--font-terminal")}`;
 
@@ -40,7 +40,7 @@ export function terminalAt(node) {
  * @param {HTMLElement} host
  * @param {{write: (text: string) => void, background?: string}} options
  */
-export function mount(host, { write, background = "--ctp-base" }) {
+export function mount(host, { write, background = "--surface-app" }) {
   const term = new Terminal({
     fontFamily: token("--font-terminal"),
     fontSize: parseFloat(token("--terminal-size")),
@@ -48,8 +48,8 @@ export function mount(host, { write, background = "--ctp-base" }) {
     macOptionIsMeta: true,
     theme: {
       background: token(background),
-      foreground: token("--ctp-text"),
-      cursor: token("--ctp-rosewater"),
+      foreground: token("--text-primary"),
+      cursor: token("--caret"),
     },
   });
   const fit = new FitAddon();

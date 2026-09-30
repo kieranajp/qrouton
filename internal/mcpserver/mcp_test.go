@@ -1525,6 +1525,9 @@ func TestEscalatePrefixSchemaEnumeratesTheAssemblyPrefixes(t *testing.T) {
 	if want := "one of " + strings.Join(prefixes, ", "); description != want {
 		t.Fatalf("branch_prefix description = %q, want %q", description, want)
 	}
+	if want := "(one of " + strings.Join(prefixes, ", ") + ")"; !strings.Contains(descEscalate, want) {
+		t.Fatalf("escalate description does not list the prefixes as %q", want)
+	}
 }
 
 // share_page stages a file and reports where; qrouton never sends it anywhere,

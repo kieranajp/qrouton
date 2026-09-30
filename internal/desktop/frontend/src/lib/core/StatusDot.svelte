@@ -1,10 +1,11 @@
 <script>
+  import { TAB_STATUSES } from "../bridge/generated.js";
   const TONES = {
     selected: "var(--state-selected)",
-    succeeded: "var(--state-success)",
-    running: "var(--state-running)",
-    failed: "var(--state-failed)",
-    waiting: "var(--state-waiting)",
+    [TAB_STATUSES.SUCCEEDED]: "var(--state-success)",
+    [TAB_STATUSES.RUNNING]: "var(--state-running)",
+    [TAB_STATUSES.FAILED]: "var(--state-failed)",
+    [TAB_STATUSES.WAITING]: "var(--state-waiting)",
     guided: "var(--state-guided)",
     idle: "var(--ctp-surface-2)",
   };

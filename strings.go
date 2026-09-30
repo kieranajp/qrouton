@@ -1,6 +1,10 @@
 package main
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/kieranajp/qrouton/internal/launch"
+)
 
 const (
 	appName  = "qrouton"
@@ -20,9 +24,8 @@ const (
 
 	// workbenchSpecFlag is the marker the detached workbench process is started
 	// with. Hidden: it is qrouton talking to itself, and the spec behind it is
-	// not something a user composes. Its literal is duplicated in
-	// internal/launch, which builds the argv that carries it.
-	workbenchSpecFlag = "workbench-spec"
+	// not something a user composes.
+	workbenchSpecFlag = launch.WorkbenchSpecFlag
 
 	logPrefix = appName + ":"
 

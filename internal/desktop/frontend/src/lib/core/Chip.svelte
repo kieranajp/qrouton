@@ -1,8 +1,9 @@
 <script>
+  import { REPO_ROLES } from "../bridge/generated.js";
   const TONES = {
     neutral: "var(--text-secondary)",
-    editing: "var(--role-editing)",
-    reference: "var(--role-reference)",
+    [REPO_ROLES.EDITING]: "var(--role-editing)",
+    [REPO_ROLES.REFERENCE]: "var(--role-reference)",
     guided: "var(--state-guided)",
     assistant: "var(--state-running)",
     running: "var(--state-running)",

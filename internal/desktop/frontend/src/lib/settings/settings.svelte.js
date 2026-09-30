@@ -1,3 +1,4 @@
+import { SETTINGS_FIELDS } from "../bridge/generated.js";
 import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
@@ -22,7 +23,7 @@ export function settings(onClose) {
     chime: true,
   });
   let orgInput = $state("");
-  let fields = $state(/** @type {Record<string, string>} */ ({}));
+  let fields = $state(/** @type {Partial<Record<import("../bridge/generated.js").SettingsField, string>>} */ ({}));
   let status = $state("");
   let saving = $state(false);
   let restartRequired = $state(false);
@@ -46,7 +47,7 @@ export function settings(onClose) {
       exclamation: loaded?.stickerLabels?.exclamation ?? "",
     };
     form.chime = loaded?.chime ?? true;
-    if (loaded?.linearError) fields = { ...fields, linear: loaded.linearError };
+    if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
 
   function add() {
