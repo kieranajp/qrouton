@@ -133,6 +133,9 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
 	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
 	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))
+	if vaultHost, ok := host.(workbench.VaultHost); ok {
+		addVaultTools(server, windows, vaultHost)
+	}
 
 	// Escalation is the assistant's way out of its own mode. An RPI session is
 	// already where it leads, so the tool is not offered there at all.

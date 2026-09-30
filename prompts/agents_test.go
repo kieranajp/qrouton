@@ -199,3 +199,49 @@ func TestRenderRejectsMalformedAgentPrompts(t *testing.T) {
 		})
 	}
 }
+
+// Only the orchestrator searches the thoughts root during Research. Claude enforces the
+// lead's refusal from its frontmatter; Codex and agy read only the prose.
+func TestResearchPromptsCarryVaultIsolation(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	lead, err := loader.Load(context.Background(), ID(agentIDPrefix+"qrouton-research-lead"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if denied, _ := frontmatterEntry(string(lead.Content), "disallowedTools"); denied != "mcp__qrouton__search_thoughts" {
+		t.Errorf("research lead disallowedTools = %q", denied)
+	}
+	assets, err := Render(lead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := renderedAsset(t, assets, claudeAgentsDir+"qrouton-research-lead"+promptFileExt)
+	if denied, _ := frontmatterEntry(claude, "disallowedTools"); denied != "mcp__qrouton__search_thoughts" {
+		t.Errorf("the Claude rendering drops disallowedTools:\n%s", claude)
+	}
+	for _, asset := range assets {
+		body := string(asset.Content)
+		for _, phrase := range []string{"Do not call `search_thoughts`", "`read_thoughts`"} {
+			if !strings.Contains(body, phrase) {
+				t.Errorf("%s is missing %q", asset.Path, phrase)
+			}
+		}
+	}
+
+	skill, err := loader.Load(context.Background(), ID(skillIDPrefix+"qrouton-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{
+		"`kinds: [\"research\"]`",
+		"Only research artifacts may reach the lead: specs, plans and notes carry intended solutions",
+		"Pass a reference, not content: the artifact ID, heading breadcrumb, line range, and the approved question it bears on",
+		"Add nothing else: no summary, no staleness note, no comment on its claims",
+		"read them with `read_thoughts` (the lead has it; do not hedge on its availability)",
+		"let the lead investigate fresh",
+	} {
+		if !strings.Contains(string(skill.Content), phrase) {
+			t.Errorf("research skill is missing %q", phrase)
+		}
+	}
+}

@@ -17,6 +17,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -59,6 +60,7 @@ type Options struct {
 	chrome     *Chrome
 	bugReports *BugReports
 	updates    *Updates
+	vault      *vault.Set
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -95,6 +97,7 @@ func Run(opts Options) error {
 	})
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
+	opts.vault = openVault(opts.Config)
 	r.register(application.NewService(opts.bugReports))
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
@@ -208,6 +211,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			})
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
+				vault:      opts.vault,
 				attention:  attend(state, reg.touch, ring),
 				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
@@ -251,6 +255,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 	if opts.updates != nil {
 		go opts.updates.watch(ctx, updateInterval)
+	}
+	if opts.vault != nil {
+		go opts.vault.Warm(ctx)
 	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends

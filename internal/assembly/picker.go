@@ -2,6 +2,7 @@ package assembly
 
 import (
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/session"
@@ -44,13 +45,15 @@ func (a Assembler) Confirm(dir string, d Draft, escalate bool, progress session.
 	}); err != nil {
 		return err
 	}
+	unrouted := unroutedNotice(a.Cfg, m, updated)
 	if !escalate {
-		notice := repositoryNotice(m, updated)
+		notice := strings.TrimSpace(repositoryNotice(m, updated) + " " + unrouted)
 		if notice != "" && session.QueueAgentNotice(dir, notice) == nil && a.Signal != nil {
 			a.Signal(dir)
 		}
 		return nil
 	}
+	_ = session.QueueAgentNotice(dir, unrouted)
 	if a.Signal != nil {
 		// Best-effort: the supervisor replaces the assistant with a fresh
 		// orchestrator; with no supervisor, the mode takes effect next launch.

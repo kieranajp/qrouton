@@ -1,5 +1,11 @@
 package mcpserver
 
+import (
+	"fmt"
+
+	"github.com/kieranajp/qrouton/internal/vault"
+)
+
 // The mode prompt already describes the workbench and when a window is worth
 // opening, and each description below owns its own tool's mechanics. What is
 // left for the server to say is the one rule neither of them can: the session
@@ -44,3 +50,14 @@ const (
 
 	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
 )
+
+const (
+	toolSearchThoughts = "search_thoughts"
+	toolReadThoughts   = "read_thoughts"
+	toolOpenThoughts   = "open_thoughts"
+
+	descSearchThoughts = "Search this session's thoughts root, the qrouton artifacts its sessions wrote, with BM25 and embeddings together. Returns ranked candidates, each with its ref, section and source lines, a snippet, and raw per-channel evidence: BM25 rank and score, dense rank and cosine, the fused rank, and which rule admitted it. The scores are rank evidence, not relevance judgements, and nothing is filtered by a threshold: read a hit with " + toolReadThoughts + " before relying on it. No hits, an unavailable channel, and a list of irrelevant neighbours all mean the same thing: carry on with fresh investigation. kinds restricts the artifact kinds searched; limit sets how many documents to take in fused order, and each channel's top three are added when fusion left them out."
+	descOpenThoughts   = "Show the user a thoughts document rendered in a pane, marking line through through. The keyboard stays with the conversation. The pane selects by default; foreground false keeps it in the background."
+)
+
+var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)

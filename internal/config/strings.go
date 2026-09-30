@@ -33,4 +33,6 @@ const (
 	// defaultRoot is where sessions live when config.json names no root, so a
 	// launch never has to stop and ask. Mirrors go under <root>/.mirrors.
 	defaultRoot = "~/work"
+
+	DefaultThoughtsID = "default"
 )

@@ -65,6 +65,8 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		prompt := initialPrompt
 		if resume {
 			prompt = notice
+		} else if notice != "" {
+			prompt = strings.TrimSpace(initialPrompt + noticeSeparator + notice)
 		}
 		if err := announceRunnerGeneration(handle, r.ID, generation); err != nil {
 			return err

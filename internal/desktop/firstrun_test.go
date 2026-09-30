@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -128,6 +129,40 @@ func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {
 	}
 	if _, err := os.Stat(next); err != nil {
 		t.Fatal("the new sessions root was not created:", err)
+	}
+}
+
+func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", "")
+	stubs := &firstRunStubs{}
+	f := newFirstRun(&config.Config{Root: t.TempDir()}, newSessions(), stubs.relaunch, stubs.quit, nil)
+	next := filepath.Join(t.TempDir(), "elsewhere")
+	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next}); err != nil {
+		t.Fatal(err)
+	}
+	if raw, _ := os.ReadFile(config.Path()); strings.Contains(string(raw), "thoughts") {
+		t.Fatalf("first run pinned a thoughts root:\n%s", raw)
+	}
+
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir, err := session.Create(cfg, session.CreateRequest{Name: "Scratch"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	real, err := filepath.EvalSymlinks(filepath.Join(dir, "thoughts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, _ := filepath.EvalSymlinks(filepath.Join(next, "thoughts", "scratch"))
+	if real != want {
+		t.Fatalf("thoughts resolve to %s, want %s", real, want)
+	}
+	if _, err := sessionThoughts(openVault(cfg), dir); err != nil {
+		t.Fatal(err)
 	}
 }
 

@@ -10,6 +10,7 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `run_command` — run work the user would want to watch (test suites, builds, servers, watchers, logs) in a tab instead of your own shell, whenever the output is the point.
 - `read_window` — read back what a window has produced. For a gallery, read its numbered paths and current index/count before choosing an entry.
 - `show_diff` — display a repo's changes for review, or every repo's at once.
+- `open_thoughts` — when the thoughts tools are offered, show the user a thoughts document in a pane, marked at the lines a hit points to.
 - `notify` — get the user's attention when you finish, need a decision, or are blocked. Use it sparingly.
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.
 - `close_window` / `list_windows` — manage what's open.
