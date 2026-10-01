@@ -1,8 +1,10 @@
 <script>
   import Button from "../core/Button.svelte";
+  import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
+  import OllamaStatus from "../OllamaStatus.svelte";
   import ThoughtsSettings from "./ThoughtsSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
@@ -61,6 +63,11 @@
   error={fields.thoughts ?? ""}
   onAdd={onAddFolder}
   onRemove={onRemoveFolder} />
+
+<div class="semantic">
+  <CapsLabel>Semantic search</CapsLabel>
+  <OllamaStatus />
+</div>
 
 <TextField
   label="Editor"
@@ -140,6 +147,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+  }
+
+  .semantic {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .sticker-labels {

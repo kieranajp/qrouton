@@ -59,6 +59,7 @@ var valueSets = []valueSet{
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
 	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
+	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},

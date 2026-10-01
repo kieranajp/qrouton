@@ -1,6 +1,7 @@
 <script>
   import Dialog from "../assembly/Dialog.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import OllamaScreen from "./OllamaScreen.svelte";
   import OrgsScreen from "./OrgsScreen.svelte";
   import PanelsScreen from "./PanelsScreen.svelte";
   import RootScreen from "./RootScreen.svelte";
@@ -46,12 +47,14 @@
       onRemoveOrg={flow.remove} />
   {:else if flow.step === 4}
     <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} onChoose={flow.choose} />
-  {:else}
+  {:else if flow.step === 5}
     <ThoughtsScreen
       bind:thoughts={flow.thoughts}
       derived={flow.derivedThoughts}
       error={flow.fields.thoughts ?? ""}
       onChoose={flow.chooseThoughts} />
+  {:else}
+    <OllamaScreen />
   {/if}
 </Dialog>
 

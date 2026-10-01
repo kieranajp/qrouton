@@ -42,6 +42,10 @@ test("an answered question advances on the same key", async ({ page }) => {
   await expect(heading(page)).toHaveText("Where should thoughts go?");
 
   await advance(page);
+  await expect(heading(page)).toHaveText("Search by meaning as well?");
+  await expect(page.getByText("search will be keyword-only")).toBeVisible();
+
+  await advance(page);
   await expect.poll(() => page.evaluate(() => window.saves)).toEqual([
     { orgs: ["acme"], root: "/sessions", thoughts: "/sessions/thoughts" },
   ]);
@@ -75,6 +79,11 @@ test("the thoughts folder follows the root until the user types one", async ({ p
   await forward(page, "Next →");
   await expect(field(page)).toHaveValue("/vaults/mine");
 
+  await forward(page, "Next →");
+  await page.evaluate(() =>
+    window.emitOllama({ state: "pulling", model: "all-minilm", completed: 1, total: 4 }),
+  );
+  await expect(page.getByRole("button", { name: "Cancel" })).toBeVisible();
   await forward(page, "Find my repositories →");
   await expect.poll(() => page.evaluate(() => window.saves)).toEqual([
     { orgs: ["acme"], root: "/elsewhere", thoughts: "/vaults/mine" },
@@ -83,6 +92,7 @@ test("the thoughts folder follows the root until the user types one", async ({ p
 
 test("a refused root returns to the root screen", async ({ page }) => {
   await toRoot(page, "?refuse=root");
+  await forward(page, "Next →");
   await forward(page, "Next →");
   await forward(page, "Find my repositories →");
 

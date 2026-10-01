@@ -13,7 +13,8 @@ const SCREENS = [
   { caps: "Where you will spend your time", primary: "Set it up →", back: true },
   { caps: "Question 1 of 3", primary: "Next →", back: true, owners: true, field: "orgs" },
   { caps: "Question 2 of 3", primary: "Next →", back: true, field: "root" },
-  { caps: "Question 3 of 3", primary: "Find my repositories →", back: true, field: "thoughts" },
+  { caps: "Question 3 of 3", primary: "Next →", back: true, field: "thoughts" },
+  { caps: "Optional", primary: "Find my repositories →", back: true },
 ];
 
 export const title = "Welcome to qrouton";
