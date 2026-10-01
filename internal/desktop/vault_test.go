@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -26,6 +27,7 @@ func (offlineEmbedder) Embed(context.Context, []string) ([][]float32, error) {
 func thoughtsHost(t *testing.T, own, other, target string) workbench.VaultHost {
 	t.Helper()
 	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
+	roots := []config.ThoughtsRoot{{ID: "personal", Path: own}, {ID: "team", Path: other}}
 	if err := set.Configure([]vault.Profile{{ID: "personal", Root: own}, {ID: "team", Root: other}}); err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func thoughtsHost(t *testing.T, own, other, target string) workbench.VaultHost {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server, err := serveControl(socket, windows, &sessionState{sessionRoot: sessionDir}, controlHooks{vault: set})
+	server, err := serveControl(socket, windows, &sessionState{sessionRoot: sessionDir}, controlHooks{vault: set, thoughts: func() []config.ThoughtsRoot { return roots }})
 	if err != nil {
 		t.Fatal(err)
 	}

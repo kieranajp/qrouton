@@ -2,10 +2,10 @@ package desktop
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -74,13 +74,13 @@ type Settings struct {
 	validateLaunch func(map[string][]string) error
 	quit           func()
 	wakeChrome     func()
-	reconfigure    func(*config.Config)
+	reconfigure    func(*config.Config) error
 	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
-	reconfigure func(*config.Config)) *Settings {
+	reconfigure func(*config.Config) error) *Settings {
 	return &Settings{
 		reconfigure:    reconfigure,
 		cfg:            cfg,
@@ -212,10 +212,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 		}
 		return nil
-	}, func(current, live *config.Config) {
-		if !reflect.DeepEqual(current.Thoughts, live.Thoughts) && s.reconfigure != nil {
-			s.reconfigure(live)
-		}
+	}, s.reconfigure, func(current, live *config.Config) {
 		changed := !slices.Equal(current.Orgs, orgs)
 		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
 		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)
@@ -316,28 +313,56 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 // Quit tears down every session supervisor and PTY before exiting.
 func (s *Settings) Quit() { s.quit() }
 
-// saveConfig persists Root but keeps the live boot value used by the rail scanner.
+// saveConfig persists Root but keeps the live boot value used by the rail
+// scanner. A changed Root holds back the thoughts too, since the live default
+// still derives from the old one.
 func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
-	publish func(current, live *config.Config)) error {
+	reconfigure func(*config.Config) error, publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
 		next := snapshot.Snapshot()
 		mutate(next)
-		if persist != nil {
-			if err := persist(); err != nil {
-				return err
-			}
-		}
-		if err := config.Save(next); err != nil {
-			return err
-		}
 		live := next.Snapshot()
 		live.Root = snapshot.Root
-		cfg.Replace(live)
+		if filepath.Clean(config.ExpandHome(next.Root)) != filepath.Clean(snapshot.Root) {
+			live.Thoughts = snapshot.Thoughts
+		}
+		if err := config.CheckThoughts(live); err != nil {
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		}
+		if err := commitLive(cfg, snapshot, next, live, reconfigure, persist); err != nil {
+			return err
+		}
 		if publish != nil {
 			publish(snapshot, live)
 		}
 		return nil
 	})
+}
+
+// commitLive reindexes before it writes or publishes anything, so routing and
+// search never disagree. A failed write puts the old index back.
+func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error, persist func() error) error {
+	reindex := reconfigure != nil && !slices.Equal(thoughtsProfiles(current), thoughtsProfiles(live))
+	if reindex {
+		if err := reconfigure(live); err != nil {
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		}
+	}
+	var err error
+	if persist != nil {
+		err = persist()
+	}
+	if err == nil {
+		err = config.Save(next)
+	}
+	if err != nil {
+		if reindex {
+			err = errors.Join(err, reconfigure(current))
+		}
+		return err
+	}
+	cfg.Replace(live)
+	return nil
 }
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.

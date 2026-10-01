@@ -9,6 +9,7 @@ import (
 	"os"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -19,6 +20,7 @@ import (
 type controlHooks struct {
 	bugReports *BugReports
 	vault      *vault.Set
+	thoughts   func() []config.ThoughtsRoot
 	picker     func(req workbench.PickerRequest) error
 	attention  func(activity string, generation uint64)
 	// ring asks for the session's chime, which it may already have had.
@@ -222,7 +224,7 @@ var handlers = map[string]handler{
 			if req.VaultSearch == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
-			thoughts, err := sessionThoughts(c.hooks.vault, c.owner.root())
+			thoughts, err := sessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
 			if err != nil {
 				return workbench.Response{}, err
 			}
@@ -238,7 +240,7 @@ var handlers = map[string]handler{
 			if req.VaultRead == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
-			thoughts, err := sessionThoughts(c.hooks.vault, c.owner.root())
+			thoughts, err := sessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
 			if err != nil {
 				return workbench.Response{}, err
 			}
@@ -277,7 +279,7 @@ func needsBugReports(c *control, _ workbench.Request) error {
 }
 
 func needsVault(c *control, _ workbench.Request) error {
-	if c.hooks.vault == nil {
+	if c.hooks.vault == nil || c.hooks.thoughts == nil {
 		return ErrNoVault
 	}
 	return nil
