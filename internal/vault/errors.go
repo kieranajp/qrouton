@@ -17,4 +17,5 @@ var (
 	ErrContextOverflow  = errors.New("embedding input exceeds the model context")
 	ErrRejected         = errors.New("Ollama rejected the request")
 	ErrEmbeddingMissing = errors.New("Ollama returned the wrong number of embeddings")
+	ErrPullFailed       = errors.New("Ollama could not download the model")
 )

@@ -166,3 +166,35 @@ func TestAStalledEmbedTimesOutAndALaterSearchRetries(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestOllamaPullStreamsProgressAndReturnsTheStreamError(t *testing.T) {
+	var model string
+	fail := false
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		model = body["model"]
+		_, _ = w.Write([]byte(`{"status":"pulling manifest"}` + "\n" + `{"status":"pulling abc","total":100,"completed":40}` + "\n"))
+		if fail {
+			_, _ = w.Write([]byte(`{"error":"disk full"}` + "\n"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"status":"success"}` + "\n"))
+	}))
+	defer server.Close()
+	o := &Ollama{URL: server.URL, Name: OllamaModel, Client: &http.Client{Timeout: time.Millisecond}}
+
+	var seen []PullProgress
+	if err := o.Pull(context.Background(), func(p PullProgress) { seen = append(seen, p) }); err != nil {
+		t.Fatal(err)
+	}
+	if model != OllamaModel || len(seen) != 3 || seen[1].Completed != 40 || seen[1].Total != 100 {
+		t.Fatalf("pulled %q, saw %+v", model, seen)
+	}
+
+	fail = true
+	err := o.Pull(context.Background(), func(PullProgress) {})
+	if !errors.Is(err, ErrPullFailed) || !strings.Contains(err.Error(), "disk full") {
+		t.Fatalf("Pull = %v, want the stream error", err)
+	}
+}

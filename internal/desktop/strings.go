@@ -93,6 +93,19 @@ const (
 	orgsChangedEvent       = "orgs:changed"
 	uiScaleEvent           = "ui:scale"
 	updateEvent            = "update:status"
+	ollamaEvent            = "ollama:status"
+)
+
+const (
+	ollamaStateReady       = "ready"
+	ollamaStateMissing     = "missing"
+	ollamaStatePulling     = "pulling"
+	ollamaStateUnreachable = "unreachable"
+	ollamaStateFailed      = "failed"
+
+	ollamaBinary       = "ollama"
+	ollamaMacApp       = "/Applications/Ollama.app"
+	ollamaProbeTimeout = 2 * time.Second
 )
 
 // A Save refusal names the settings field it belongs under before the sentence.

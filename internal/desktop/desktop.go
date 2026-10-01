@@ -61,6 +61,7 @@ type Options struct {
 	bugReports *BugReports
 	updates    *Updates
 	vault      *vault.Set
+	ollama     *Ollama
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -121,6 +122,8 @@ func Run(opts Options) error {
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
+	opts.ollama = newOllama(vault.NewOllama(), vault.OllamaModel, r.Emit, ollamaInstalled)
+	r.register(application.NewService(opts.ollama))
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
@@ -261,6 +264,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	if opts.vault != nil {
 		go opts.vault.Warm(ctx)
+	}
+	if opts.ollama != nil {
+		opts.ollama.bind(ctx)
 	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
