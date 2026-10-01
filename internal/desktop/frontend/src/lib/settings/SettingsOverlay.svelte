@@ -35,6 +35,10 @@
     bind:chime={panel.form.chime}
     bind:uiScale={panel.form.uiScale}
     uiScaleSteps={panel.form.uiScaleSteps}
+    bind:thoughts={panel.form.thoughts}
+    loadedThoughts={panel.loadedThoughts}
+    onAddFolder={panel.addFolder}
+    onRemoveFolder={panel.removeFolder}
     linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}

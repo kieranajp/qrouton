@@ -2,7 +2,7 @@ import { FIRST_RUN_CHOOSE_ROOT, FIRST_RUN_LOGIN, FIRST_RUN_SAVE } from "../bridg
 import { Call } from "../wails.js";
 
 /**
- * @param {{orgs: string[], root: string}} input
+ * @param {{orgs: string[], root: string, thoughts: string}} input
  * @returns {Promise<{relaunching: boolean}>}
  */
 export const save = (input) => Call.ByName(FIRST_RUN_SAVE, input);

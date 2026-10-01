@@ -20,6 +20,7 @@ import { Call } from "../wails.js";
  * @property {boolean} chime
  * @property {number} uiScale
  * @property {number[]} [uiScaleSteps]
+ * @property {{default: string, derived?: string, roots: {id: string, path: string, orgs: string}[]}} thoughts
  * @property {string} [linearPath]
  * @property {string} [linearError]
  */

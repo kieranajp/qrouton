@@ -48,7 +48,7 @@ var (
 	ErrNoDelegatedLifecycle = errors.New("delegated lifecycle request carries no event")
 	ErrNoVault              = errors.New("no thoughts index is available; carry on without it")
 	ErrNoThoughtsRoot       = errors.New("this session's thoughts are in no thoughts root")
-	ErrNoVaultRequest       = errors.New("vault request carries no query or reference")
+	ErrNoVaultRequest       = errors.New("thoughts request carries no query or reference")
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

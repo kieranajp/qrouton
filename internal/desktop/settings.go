@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // SettingsView carries the editable config and Linear document on the wire.
@@ -26,6 +28,25 @@ type SettingsView struct {
 	Chime         bool                 `json:"chime"`
 	UIScale       int                  `json:"uiScale"`
 	UIScaleSteps  []int                `json:"uiScaleSteps"`
+	Thoughts      ThoughtsView         `json:"thoughts"`
+}
+
+type ThoughtsView struct {
+	Default string        `json:"default"`
+	Derived string        `json:"derived"`
+	Roots   []ThoughtsRow `json:"roots"`
+}
+
+type ThoughtsInput struct {
+	Default string        `json:"default"`
+	Roots   []ThoughtsRow `json:"roots"`
+}
+
+// ThoughtsRow carries a shared folder's orgs as the comma-separated text the panel edits.
+type ThoughtsRow struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	Orgs string `json:"orgs"`
 }
 
 type SettingsInput struct {
@@ -37,6 +58,7 @@ type SettingsInput struct {
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
 	Chime         bool                 `json:"chime"`
 	UIScale       int                  `json:"uiScale"`
+	Thoughts      ThoughtsInput        `json:"thoughts"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -52,12 +74,15 @@ type Settings struct {
 	validateLaunch func(map[string][]string) error
 	quit           func()
 	wakeChrome     func()
+	reconfigure    func(*config.Config)
 	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func()) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
+	reconfigure func(*config.Config)) *Settings {
 	return &Settings{
+		reconfigure:    reconfigure,
 		cfg:            cfg,
 		emit:           emit,
 		validateEditor: validateEditor,
@@ -89,7 +114,33 @@ func (s *Settings) Load() SettingsView {
 		Chime:         !cfg.Quiet,
 		UIScale:       cfg.EffectiveUIScale(),
 		UIScaleSteps:  config.UIScaleSteps(),
+		Thoughts:      thoughtsView(cfg),
 	}
+}
+
+func thoughtsView(cfg *config.Config) ThoughtsView {
+	view := ThoughtsView{
+		Default: cfg.Thoughts.Default,
+		Derived: filepath.Join(cfg.Root, sessionpaths.ThoughtsDirName),
+		Roots:   []ThoughtsRow{},
+	}
+	for _, r := range cfg.Thoughts.Roots {
+		view.Roots = append(view.Roots, ThoughtsRow{ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin)})
+	}
+	return view
+}
+
+// The live config routes new sessions from these paths, so ~ is expanded here.
+func thoughtsFromInput(in ThoughtsInput) config.Thoughts {
+	out := config.Thoughts{Default: config.ExpandHome(strings.TrimSpace(in.Default))}
+	for _, row := range in.Roots {
+		out.Roots = append(out.Roots, config.ThoughtsRoot{
+			ID:   strings.TrimSpace(row.ID),
+			Path: config.ExpandHome(strings.TrimSpace(row.Path)),
+			Orgs: dedupOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
+		})
+	}
+	return out
 }
 
 func editorCommand(argv []string) string {
@@ -143,18 +194,28 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 	}
+	thoughts := thoughtsFromInput(in.Thoughts)
+	candidate := s.cfg.Snapshot()
+	candidate.Root, candidate.Thoughts = root, thoughts
+	if err := config.CheckThoughts(candidate); err != nil {
+		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+	}
 	result := SaveResult{}
 	err = saveConfig(s.cfg, func(next *config.Config) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
 		next.Quiet = !in.Chime
 		next.UIScale = storedUIScale(uiScale)
+		next.Thoughts = thoughts
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 		}
 		return nil
-	}, func(current, _ *config.Config) {
+	}, func(current, live *config.Config) {
+		if !reflect.DeepEqual(current.Thoughts, live.Thoughts) && s.reconfigure != nil {
+			s.reconfigure(live)
+		}
 		changed := !slices.Equal(current.Orgs, orgs)
 		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
 		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)

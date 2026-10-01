@@ -4,10 +4,11 @@
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
+  import ThoughtsSettings from "./ThoughtsSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -20,6 +21,10 @@
     chime = $bindable(true),
     uiScale = $bindable(100),
     uiScaleSteps = [],
+    thoughts = $bindable({ default: "", roots: [] }),
+    loadedThoughts = { default: "", roots: [], derived: "" },
+    onAddFolder,
+    onRemoveFolder,
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -52,6 +57,13 @@
   bind:value={root}
   help={fields.root ?? "Takes effect for sessions started after a restart"}
   helpTone={fields.root ? "failed" : "muted"} />
+
+<ThoughtsSettings
+  bind:thoughts
+  loaded={loadedThoughts}
+  error={fields.thoughts ?? ""}
+  onAdd={onAddFolder}
+  onRemove={onRemoveFolder} />
 
 <TextField
   label="Editor"

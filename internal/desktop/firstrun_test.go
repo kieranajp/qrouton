@@ -53,7 +53,7 @@ func TestFirstRunSaveWithAnUnchangedRootPersistsBothAnswersAndDropsTheGate(t *te
 	cfg := &config.Config{Root: root}
 	reg := newSessions()
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil, nil)
 
 	result, err := f.Save(FirstRunInput{Orgs: []string{" acme ", "acme", "", "second-org"}, Root: root})
 	if err != nil {
@@ -91,7 +91,7 @@ func TestFirstRunSaveStoresTheRootWithoutSurroundingSpace(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{Root: root}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
 
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: "  " + root + "  "}); err != nil {
 		t.Fatal(err)
@@ -110,7 +110,7 @@ func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
 
 	next := filepath.Join(t.TempDir(), "elsewhere")
 	result, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next})
@@ -136,7 +136,7 @@ func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("QROUTON_ROOT", "")
 	stubs := &firstRunStubs{}
-	f := newFirstRun(&config.Config{Root: t.TempDir()}, newSessions(), stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(&config.Config{Root: t.TempDir()}, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
 	next := filepath.Join(t.TempDir(), "elsewhere")
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next}); err != nil {
 		t.Fatal(err)
@@ -178,7 +178,7 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 		close(relaunchEntered)
 		<-successorReady
 		return nil
-	}, func() {}, nil)
+	}, func() {}, nil, nil)
 	go func() {
 		_, err := f.Save(FirstRunInput{Orgs: []string{"first"}, Root: newRoot})
 		firstDone <- err
@@ -231,7 +231,7 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{fail: errors.New("workbench never answered")}
 	reg := newSessions()
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil, nil)
 
 	_, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: filepath.Join(t.TempDir(), "elsewhere")})
 	if err == nil {
@@ -266,7 +266,7 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	}
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
 
 	owned := []string{"acme"}
 	for _, in := range []FirstRunInput{
@@ -295,7 +295,7 @@ func TestFirstRunSaveRefusesAnEmptyOwnerListAndTouchesNothing(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil)
+	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
 
 	root := filepath.Join(t.TempDir(), "sessions")
 	for _, orgs := range [][]string{nil, {}, {"", "   "}} {
@@ -327,7 +327,7 @@ func TestFirstRunSaveRefusesAnEmptyOwnerListAndTouchesNothing(t *testing.T) {
 func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("GITHUB_TOKEN", "")
-	f := newFirstRun(&config.Config{}, newSessions(), nil, nil, nil)
+	f := newFirstRun(&config.Config{}, newSessions(), nil, nil, nil, nil)
 
 	if login := f.Login(); login != "" {
 		t.Fatalf("Login() = %q, want no account named", login)
@@ -337,7 +337,7 @@ func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 func TestFirstRunChooseRootAnswersThePickerAndNothingOnACancel(t *testing.T) {
 	chosen := "/sessions/elsewhere"
 	f := newFirstRun(&config.Config{}, newSessions(), nil, nil,
-		func() (string, error) { return chosen, nil })
+		func() (string, error) { return chosen, nil }, nil)
 	if got, err := f.ChooseRoot(); err != nil || got != chosen {
 		t.Fatalf("ChooseRoot() = %q, %v, want %q", got, err, chosen)
 	}
@@ -345,5 +345,57 @@ func TestFirstRunChooseRootAnswersThePickerAndNothingOnACancel(t *testing.T) {
 	chosen = ""
 	if got, err := f.ChooseRoot(); err != nil || got != "" {
 		t.Fatalf("a cancelled picker answered %q, %v, want the field left alone", got, err)
+	}
+}
+
+func TestFirstRunStoresTheThoughtsFolderOnlyWhenItDiffersFromTheDerivedOne(t *testing.T) {
+	home, root := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	for _, answer := range []string{"", "  ", filepath.Join(root, "thoughts"), filepath.Join(root, "thoughts") + "/"} {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		f := newFirstRun(&config.Config{Root: root}, newSessions(), nil, nil, nil, nil)
+		if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: answer}); err != nil {
+			t.Fatal(err)
+		}
+		if raw, _ := os.ReadFile(config.Path()); strings.Contains(string(raw), "thoughts") {
+			t.Fatalf("answer %q pinned a thoughts root:\n%s", answer, raw)
+		}
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: root}
+	var reconfigured []config.ThoughtsRoot
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, func(c *config.Config) { reconfigured = c.ThoughtsRoots() })
+	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: " ~/Vault "}); err != nil {
+		t.Fatal(err)
+	}
+	if saved := savedConfig(t); saved.Thoughts.Default != "~/Vault" {
+		t.Fatalf("saved default = %q, want ~ kept", saved.Thoughts.Default)
+	}
+	want := filepath.Join(home, "Vault")
+	if got := cfg.ThoughtsRoots()[0].Path; got != want {
+		t.Fatalf("live default = %q, want %q", got, want)
+	}
+	if len(reconfigured) == 0 || reconfigured[0].Path != want {
+		t.Fatalf("search was reconfigured with %v", reconfigured)
+	}
+}
+
+func TestFirstRunRefusesAThoughtsFolderHoldingTheRootAndWritesNothing(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	parent := t.TempDir()
+	root := filepath.Join(parent, "sessions")
+	cfg := &config.Config{Root: root}
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+
+	_, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: parent})
+	if !errors.Is(err, config.ErrThoughtsHoldsRoot) || !strings.HasPrefix(err.Error(), "thoughts: ") {
+		t.Fatalf("Save = %v, want a thoughts field refusal", err)
+	}
+	if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
+		t.Fatal("a refused save wrote config.json")
+	}
+	if cfg.Welcomed {
+		t.Fatal("a refused save marked the config welcomed")
 	}
 }

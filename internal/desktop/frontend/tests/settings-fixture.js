@@ -33,9 +33,18 @@ window.wailsCall = async (name, input) => {
       chime: true,
       uiScale: 130,
       uiScaleSteps: [80, 90, 100, 110, 120, 130, 140, 150],
+      thoughts: {
+        default: "",
+        derived: "/sessions/thoughts",
+        roots: [
+          { id: "work", path: "/sync/work", orgs: "acme" },
+          { id: "club", path: "/sync/club", orgs: "club, club-labs" },
+        ],
+      },
     };
   if (name.endsWith(".Save")) {
     saves.push(input);
+    if (invalid === "thoughts") throw new Error("thoughts: an org maps to two thoughts roots");
     if (invalid && !input?.stickerLabels?.[invalid]?.trim()) {
       throw new Error(`${invalid}: cannot be empty`);
     }

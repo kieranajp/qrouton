@@ -107,6 +107,10 @@ const (
 	settingsFieldQuestion    = "question"
 	settingsFieldExclamation = "exclamation"
 	settingsFieldUIScale     = "uiScale"
+	settingsFieldThoughts    = "thoughts"
+
+	thoughtsOrgJoin  = ", "
+	thoughtsOrgSplit = ","
 
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"

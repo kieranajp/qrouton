@@ -2,16 +2,20 @@ package desktop
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type FirstRunInput struct {
-	Orgs []string `json:"orgs"`
-	Root string   `json:"root"`
+	Orgs     []string `json:"orgs"`
+	Root     string   `json:"root"`
+	Thoughts string   `json:"thoughts"`
 }
 
 // FirstRunResult reports whether the workbench is being replaced. Nothing is
@@ -21,16 +25,17 @@ type FirstRunResult struct {
 }
 
 type FirstRun struct {
-	cfg      *config.Config
-	reg      *Sessions
-	relaunch func() error
-	quit     func()
-	choose   func() (string, error)
+	cfg         *config.Config
+	reg         *Sessions
+	relaunch    func() error
+	quit        func()
+	choose      func() (string, error)
+	reconfigure func(*config.Config)
 }
 
 func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
-	choose func() (string, error)) *FirstRun {
-	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose}
+	choose func() (string, error), reconfigure func(*config.Config)) *FirstRun {
+	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose, reconfigure: reconfigure}
 }
 
 // Login is the GitHub account the owners screen names. No account is an answer
@@ -68,18 +73,30 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	if err != nil {
 		return FirstRunResult{}, err
 	}
+	thoughts := strings.TrimSpace(in.Thoughts)
+	if filepath.Clean(config.ExpandHome(thoughts)) == filepath.Join(expanded, sessionpaths.ThoughtsDirName) {
+		thoughts = ""
+	}
 	changed := false
 	err = f.cfg.Transact(func(current *config.Config) error {
 		changed = expanded != filepath.Clean(current.Root)
 		next := current.Snapshot()
 		next.Orgs, next.Root, next.Welcomed = orgs, root, true
+		next.Thoughts.Default = thoughts
+		if err := config.CheckThoughts(next); err != nil {
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		}
 		if err := config.Save(next); err != nil {
 			return err
 		}
 		if !changed {
 			live := next.Snapshot()
 			live.Root = current.Root
+			live.Thoughts.Default = config.ExpandHome(thoughts)
 			f.cfg.Replace(live)
+			if live.Thoughts.Default != current.Thoughts.Default && f.reconfigure != nil {
+				f.reconfigure(live)
+			}
 			return nil
 		}
 		if f.relaunch == nil || f.quit == nil {
