@@ -99,6 +99,7 @@ func openLocked(c *cli.Context, offered, prompt string) error {
 		if err != nil {
 			return err
 		}
+		warnConfig(cfg)
 		socket, err := workbench.NewSocketPath()
 		if err != nil {
 			return err
@@ -117,6 +118,7 @@ func openLocked(c *cli.Context, offered, prompt string) error {
 	if err != nil {
 		return err
 	}
+	warnConfig(cfg)
 	sessions, err := session.Scan(cfg.Root)
 	if err != nil {
 		return err
@@ -203,6 +205,7 @@ func workbenchProcess(marshalled string) error {
 	if err != nil {
 		return err
 	}
+	warnConfig(cfg)
 	ports := workbenchPorts{cfg: cfg, bin: bin, spec: spec, env: os.Environ()}
 	return desktop.Run(desktop.Options{
 		Icon:         applicationIcon,
@@ -333,4 +336,10 @@ func subject(sessionRoot string) string {
 		return noSessionSubject
 	}
 	return filepath.Base(sessionRoot)
+}
+
+func warnConfig(cfg *config.Config) {
+	for _, w := range cfg.Warnings() {
+		fmt.Fprintln(os.Stderr, logPrefix, w)
+	}
 }

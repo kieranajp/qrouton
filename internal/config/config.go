@@ -37,7 +37,13 @@ type Config struct {
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 
 	Thoughts Thoughts `json:"thoughts,omitzero"`
+
+	warnings []string
 }
+
+// Warnings lists the non-fatal problems Load found. They describe that load, so
+// a Snapshot does not carry them.
+func (c *Config) Warnings() []string { return slices.Clone(c.warnings) }
 
 // Thoughts names where sessions write their documents. Default is private.
 type Thoughts struct {
@@ -167,14 +173,30 @@ func (c *Config) RouteThoughts(orgs []string) ThoughtsRoot {
 	return roots[max(routed, 0)]
 }
 
-// CheckThoughts runs the validation Load and Save run, without writing anything.
+// CheckThoughts runs the validation Save runs, without writing anything.
 func CheckThoughts(cfg *Config) error {
 	resolved := clone(cfg.Snapshot())
 	resolvePaths(resolved)
-	return validateThoughts(resolved.Root, resolved.ThoughtsRoots())
+	roots := resolved.ThoughtsRoots()
+	if err := validateThoughts(roots); err != nil {
+		return err
+	}
+	if r, held := holdingRoot(resolved.Root, roots); held {
+		return fmt.Errorf("%w: %q", ErrThoughtsHoldsRoot, r.ID)
+	}
+	return nil
 }
 
-func validateThoughts(sessionsRoot string, roots []ThoughtsRoot) error {
+func holdingRoot(sessionsRoot string, roots []ThoughtsRoot) (ThoughtsRoot, bool) {
+	for _, r := range roots {
+		if vault.Contains(r.Path, sessionsRoot) {
+			return r, true
+		}
+	}
+	return ThoughtsRoot{}, false
+}
+
+func validateThoughts(roots []ThoughtsRoot) error {
 	profiles := make([]vault.Profile, len(roots))
 	owners := map[string]string{}
 	for i, r := range roots {
@@ -193,15 +215,7 @@ func validateThoughts(sessionsRoot string, roots []ThoughtsRoot) error {
 		}
 		profiles[i] = vault.Profile{ID: r.ID, Root: r.Path}
 	}
-	if err := vault.Validate(profiles); err != nil {
-		return err
-	}
-	for _, r := range roots {
-		if vault.Contains(r.Path, sessionsRoot) {
-			return fmt.Errorf("%w: %q", ErrThoughtsHoldsRoot, r.ID)
-		}
-	}
-	return nil
+	return vault.Validate(profiles)
 }
 
 func (c *Config) EffectiveStickerLabels() StickerLabels {
@@ -268,8 +282,12 @@ func Load() (*Config, error) {
 		cfg.Orgs = splitOrgs(v)
 	}
 	resolvePaths(cfg)
-	if err := CheckThoughts(cfg); err != nil {
+	roots := cfg.ThoughtsRoots()
+	if err := validateThoughts(roots); err != nil {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
+	}
+	if r, held := holdingRoot(cfg.Root, roots); held {
+		cfg.warnings = append(cfg.warnings, fmt.Sprintf("thoughts folder %q (%s) holds the sessions root %q", r.ID, r.Path, cfg.Root))
 	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
 }
