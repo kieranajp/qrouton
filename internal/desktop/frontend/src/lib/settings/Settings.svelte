@@ -1,12 +1,15 @@
 <script>
   import Button from "../core/Button.svelte";
+  import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
+  import OllamaStatus from "../OllamaStatus.svelte";
+  import ThoughtsSettings from "./ThoughtsSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -17,6 +20,10 @@
     linearPath = "",
     stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
     chime = $bindable(true),
+    thoughts = $bindable({ default: "", roots: [] }),
+    loadedThoughts = { default: "", roots: [], derived: "" },
+    onAddFolder,
+    onRemoveFolder,
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -49,6 +56,18 @@
   bind:value={root}
   help={fields.root ?? "Takes effect for sessions started after a restart"}
   helpTone={fields.root ? "failed" : "muted"} />
+
+<ThoughtsSettings
+  bind:thoughts
+  loaded={loadedThoughts}
+  error={fields.thoughts ?? ""}
+  onAdd={onAddFolder}
+  onRemove={onRemoveFolder} />
+
+<div class="semantic">
+  <CapsLabel>Semantic search</CapsLabel>
+  <OllamaStatus />
+</div>
 
 <TextField
   label="Editor"
@@ -112,7 +131,7 @@
 
 {#if restartRequired}
   <div class="banner">
-    <span>Quit qrouton to use the new sessions root</span>
+    <span>Quit qrouton to use the new sessions root and thoughts folders</span>
     <Button variant="secondary" onclick={onQuit}>Quit qrouton</Button>
   </div>
 {/if}
@@ -128,6 +147,12 @@
     display: inline-flex;
     align-items: center;
     gap: 4px;
+  }
+
+  .semantic {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
   }
 
   .sticker-labels {

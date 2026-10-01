@@ -51,9 +51,16 @@ test("sticker meanings load and save together without asking for a restart", asy
         exclamation: "Broken here",
       },
       chime: true,
+      thoughts: {
+        default: "",
+        roots: [
+          { id: "work", path: "/sync/work", orgs: "acme" },
+          { id: "club", path: "/sync/club", orgs: "club, club-labs" },
+        ],
+      },
     },
   ]);
-  await expect(page.getByText("Quit qrouton to use the new sessions root")).toHaveCount(0);
+  await expect(page.getByText("Quit qrouton to use the new sessions root and thoughts folders")).toHaveCount(0);
 });
 
 test("a blank sticker meaning names the field and stays open", async ({ page }) => {
@@ -82,4 +89,65 @@ test("the chime loads ticked and saves unticked", async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.chime)))
     .toEqual([false]);
+});
+
+const shared = (page) => page.getByRole("group", { name: "Shared thoughts folders" });
+const warning = (page) => page.getByText("Sessions already using the old folder keep their documents");
+
+test("shared folders load, add and remove, and save as rows", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  const names = shared(page).getByRole("textbox", { name: "Shared folder name" });
+  await expect(names).toHaveCount(2);
+  await expect(page.getByRole("textbox", { name: "Default thoughts folder" })).toHaveAttribute(
+    "placeholder",
+    "/sessions/thoughts",
+  );
+
+  await shared(page).getByRole("button", { name: "Add shared folder" }).click();
+  await names.nth(2).fill("team");
+  await shared(page).getByRole("textbox", { name: "Shared folder path" }).nth(2).fill("/sync/team");
+  await shared(page).getByRole("textbox", { name: "Shared folder orgs" }).nth(2).fill("team-org");
+  await shared(page).getByRole("button", { name: "Remove club" }).click();
+  await expect(warning(page)).toBeVisible();
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect
+    .poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.thoughts)))
+    .toEqual([
+      {
+        default: "",
+        roots: [
+          { id: "work", path: "/sync/work", orgs: "acme" },
+          { id: "team", path: "/sync/team", orgs: "team-org" },
+        ],
+      },
+    ]);
+});
+
+test("a saved folder's name is read-only and a new one's is not", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  const names = shared(page).getByRole("textbox", { name: "Shared folder name" });
+  await expect(names.first()).toHaveAttribute("readonly", "");
+  await shared(page).getByRole("button", { name: "Add shared folder" }).click();
+  await expect(names.nth(2)).toBeEditable();
+});
+
+test("a changed path warns that nothing moves, and changed orgs do not", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await expect(shared(page).getByRole("textbox", { name: "Shared folder name" })).toHaveCount(2);
+  await shared(page).getByRole("textbox", { name: "Shared folder orgs" }).first().fill("acme, more");
+  await expect(warning(page)).toHaveCount(0);
+
+  await shared(page).getByRole("textbox", { name: "Shared folder path" }).first().fill("/sync/new");
+  await expect(warning(page)).toBeVisible();
+});
+
+test("a thoughts refusal shows under the section and keeps the panel open", async ({ page }) => {
+  await page.goto("/tests/settings.html?invalid=thoughts");
+  await expect(shared(page).getByRole("textbox", { name: "Shared folder name" })).toHaveCount(2);
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect(page.locator(".note.failed")).toHaveText("an org maps to two thoughts roots");
+  await expect(status(page)).toHaveText("an org maps to two thoughts roots");
+  await expect(page.locator(".dialog")).toBeVisible();
 });

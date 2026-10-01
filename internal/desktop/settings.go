@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 // SettingsView carries the editable config and Linear document on the wire.
@@ -24,6 +26,25 @@ type SettingsView struct {
 	LinearError   string               `json:"linearError,omitempty"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
 	Chime         bool                 `json:"chime"`
+	Thoughts      ThoughtsView         `json:"thoughts"`
+}
+
+type ThoughtsView struct {
+	Default string        `json:"default"`
+	Derived string        `json:"derived"`
+	Roots   []ThoughtsRow `json:"roots"`
+}
+
+type ThoughtsInput struct {
+	Default string        `json:"default"`
+	Roots   []ThoughtsRow `json:"roots"`
+}
+
+// ThoughtsRow carries a shared folder's orgs as the comma-separated text the panel edits.
+type ThoughtsRow struct {
+	ID   string `json:"id"`
+	Path string `json:"path"`
+	Orgs string `json:"orgs"`
 }
 
 type SettingsInput struct {
@@ -34,6 +55,7 @@ type SettingsInput struct {
 	Linear        string               `json:"linear"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
 	Chime         bool                 `json:"chime"`
+	Thoughts      ThoughtsInput        `json:"thoughts"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -49,12 +71,15 @@ type Settings struct {
 	validateLaunch func(map[string][]string) error
 	quit           func()
 	wakeChrome     func()
+	reconfigure    func(*config.Config) error
 	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func()) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
+	reconfigure func(*config.Config) error) *Settings {
 	return &Settings{
+		reconfigure:    reconfigure,
 		cfg:            cfg,
 		emit:           emit,
 		validateEditor: validateEditor,
@@ -84,7 +109,33 @@ func (s *Settings) Load() SettingsView {
 		LinearError:   errorText(linearErr),
 		StickerLabels: cfg.EffectiveStickerLabels(),
 		Chime:         !cfg.Quiet,
+		Thoughts:      thoughtsView(cfg),
 	}
+}
+
+func thoughtsView(cfg *config.Config) ThoughtsView {
+	view := ThoughtsView{
+		Default: cfg.Thoughts.Default,
+		Derived: filepath.Join(cfg.Root, sessionpaths.ThoughtsDirName),
+		Roots:   []ThoughtsRow{},
+	}
+	for _, r := range cfg.Thoughts.Roots {
+		view.Roots = append(view.Roots, ThoughtsRow{ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin)})
+	}
+	return view
+}
+
+// The live config routes new sessions from these paths, so ~ is expanded here.
+func thoughtsFromInput(in ThoughtsInput) config.Thoughts {
+	out := config.Thoughts{Default: config.ExpandHome(strings.TrimSpace(in.Default))}
+	for _, row := range in.Roots {
+		out.Roots = append(out.Roots, config.ThoughtsRoot{
+			ID:   strings.TrimSpace(row.ID),
+			Path: config.ExpandHome(strings.TrimSpace(row.Path)),
+			Orgs: dedupOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
+		})
+	}
+	return out
 }
 
 func editorCommand(argv []string) string {
@@ -134,17 +185,24 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 	}
+	thoughts := thoughtsFromInput(in.Thoughts)
+	candidate := s.cfg.Snapshot()
+	candidate.Root, candidate.Thoughts = root, thoughts
+	if err := config.CheckThoughts(candidate); err != nil {
+		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+	}
 	result := SaveResult{}
 	err = saveConfig(s.cfg, func(next *config.Config) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
 		next.Quiet = !in.Chime
+		next.Thoughts = thoughts
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 		}
 		return nil
-	}, func(current, _ *config.Config) {
+	}, s.reconfigure, func(current, live *config.Config) {
 		changed := !slices.Equal(current.Orgs, orgs)
 		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
 		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)
@@ -185,28 +243,56 @@ func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, e
 // Quit tears down every session supervisor and PTY before exiting.
 func (s *Settings) Quit() { s.quit() }
 
-// saveConfig persists Root but keeps the live boot value used by the rail scanner.
+// saveConfig persists Root but keeps the live boot value used by the rail
+// scanner. A changed Root holds back the thoughts too, since the live default
+// still derives from the old one.
 func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
-	publish func(current, live *config.Config)) error {
+	reconfigure func(*config.Config) error, publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
 		next := snapshot.Snapshot()
 		mutate(next)
-		if persist != nil {
-			if err := persist(); err != nil {
-				return err
-			}
-		}
-		if err := config.Save(next); err != nil {
-			return err
-		}
 		live := next.Snapshot()
 		live.Root = snapshot.Root
-		cfg.Replace(live)
+		if filepath.Clean(config.ExpandHome(next.Root)) != filepath.Clean(snapshot.Root) {
+			live.Thoughts = snapshot.Thoughts
+		}
+		if err := config.CheckThoughts(live); err != nil {
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		}
+		if err := commitLive(cfg, snapshot, next, live, reconfigure, persist); err != nil {
+			return err
+		}
 		if publish != nil {
 			publish(snapshot, live)
 		}
 		return nil
 	})
+}
+
+// commitLive reindexes before it writes or publishes anything, so routing and
+// search never disagree. A failed write puts the old index back.
+func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error, persist func() error) error {
+	reindex := reconfigure != nil && !slices.Equal(thoughtsProfiles(current), thoughtsProfiles(live))
+	if reindex {
+		if err := reconfigure(live); err != nil {
+			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		}
+	}
+	var err error
+	if persist != nil {
+		err = persist()
+	}
+	if err == nil {
+		err = config.Save(next)
+	}
+	if err != nil {
+		if reindex {
+			err = errors.Join(err, reconfigure(current))
+		}
+		return err
+	}
+	cfg.Replace(live)
+	return nil
 }
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.

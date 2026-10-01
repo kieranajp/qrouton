@@ -3,6 +3,7 @@ import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
+import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
 
 /** Restart-required saves keep the panel open behind the banner.
  * @param {() => void} onClose */
@@ -21,7 +22,9 @@ export function settings(onClose) {
       exclamation: "",
     },
     chime: true,
+    thoughts: fromView(undefined),
   });
+  let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
   let fields = $state(/** @type {Partial<Record<import("../bridge/generated.js").SettingsField, string>>} */ ({}));
   let status = $state("");
@@ -47,6 +50,8 @@ export function settings(onClose) {
       exclamation: loaded?.stickerLabels?.exclamation ?? "",
     };
     form.chime = loaded?.chime ?? true;
+    form.thoughts = fromView(loaded?.thoughts);
+    loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
     if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
 
@@ -57,6 +62,15 @@ export function settings(onClose) {
 
   function remove(org) {
     form.orgs = removeOrg(form.orgs, org);
+  }
+
+  function addFolder() {
+    form.thoughts = addRow(form.thoughts);
+  }
+
+  /** @param {number} index */
+  function removeFolder(index) {
+    form.thoughts = removeRow(form.thoughts, index);
   }
 
   async function save() {
@@ -72,6 +86,7 @@ export function settings(onClose) {
         linear: form.linear,
         stickerLabels: { ...form.stickerLabels },
         chime: form.chime,
+        thoughts: toInput(form.thoughts),
       });
     } catch (thrown) {
       err = thrown;
@@ -82,6 +97,10 @@ export function settings(onClose) {
     fields = outcome.fields;
     status = outcome.status;
     if (outcome.restartRequired !== undefined) restartRequired = outcome.restartRequired;
+    if (!err) {
+      form.thoughts = fromView(toInput(form.thoughts));
+      loadedThoughts = { ...fromView(toInput(form.thoughts)), derived: loadedThoughts.derived };
+    }
     if (outcome.close) onClose();
   }
 
@@ -114,8 +133,13 @@ export function settings(onClose) {
     get restartRequired() {
       return restartRequired;
     },
+    get loadedThoughts() {
+      return loadedThoughts;
+    },
     add,
     remove,
+    addFolder,
+    removeFolder,
     save,
     cancel,
     quitAndRelaunch,

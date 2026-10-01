@@ -88,6 +88,19 @@ const (
 	assemblyRequestedEvent = "assembly:requested"
 	orgsChangedEvent       = "orgs:changed"
 	updateEvent            = "update:status"
+	ollamaEvent            = "ollama:status"
+)
+
+const (
+	ollamaStateReady       = "ready"
+	ollamaStateMissing     = "missing"
+	ollamaStatePulling     = "pulling"
+	ollamaStateUnreachable = "unreachable"
+	ollamaStateFailed      = "failed"
+
+	ollamaBinary       = "ollama"
+	ollamaMacApp       = "/Applications/Ollama.app"
+	ollamaProbeTimeout = 2 * time.Second
 )
 
 // A Save refusal names the settings field it belongs under before the sentence.
@@ -101,6 +114,10 @@ const (
 	settingsFieldBookmark    = "bookmark"
 	settingsFieldQuestion    = "question"
 	settingsFieldExclamation = "exclamation"
+	settingsFieldThoughts    = "thoughts"
+
+	thoughtsOrgJoin  = ", "
+	thoughtsOrgSplit = ","
 
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"

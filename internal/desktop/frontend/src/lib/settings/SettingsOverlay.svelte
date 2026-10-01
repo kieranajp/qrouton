@@ -33,6 +33,10 @@
     bind:linear={panel.form.linear}
     bind:stickerLabels={panel.form.stickerLabels}
     bind:chime={panel.form.chime}
+    bind:thoughts={panel.form.thoughts}
+    loadedThoughts={panel.loadedThoughts}
+    onAddFolder={panel.addFolder}
+    onRemoveFolder={panel.removeFolder}
     linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}

@@ -80,3 +80,13 @@ func (s *Set) ForPath(real string) *Service {
 	}
 	return nil
 }
+
+// ForProfile answers the service indexing exactly this profile, or nil.
+func (s *Set) ForProfile(p Profile) *Service {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if service := s.services[p.ID]; service != nil && service.profile == p {
+		return service
+	}
+	return nil
+}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 )
@@ -46,6 +47,50 @@ func (o *Ollama) Model(ctx context.Context) (Model, error) {
 		}
 	}
 	return Model{}, fmt.Errorf("%w: %s", ErrModelMissing, o.Name)
+}
+
+// PullProgress is one line of Ollama's pull stream.
+type PullProgress struct {
+	Status    string `json:"status"`
+	Total     int64  `json:"total"`
+	Completed int64  `json:"completed"`
+	Error     string `json:"error"`
+}
+
+// Pull streams the model download. Its client has no total timeout, so only
+// ctx ends a slow pull.
+func (o *Ollama) Pull(ctx context.Context, onProgress func(PullProgress)) error {
+	body, err := json.Marshal(map[string]string{"model": o.Name})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, o.URL+ollamaPull, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", ollamaContentType)
+	res, err := (&http.Client{Transport: o.Client.Transport}).Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		var failure PullProgress
+		_ = json.NewDecoder(res.Body).Decode(&failure)
+		return fmt.Errorf("%w: %s %s %s", ErrRejected, ollamaPull, res.Status, failure.Error)
+	}
+	for decoder := json.NewDecoder(res.Body); ; {
+		var line PullProgress
+		if err := decoder.Decode(&line); errors.Is(err, io.EOF) {
+			return nil
+		} else if err != nil {
+			return err
+		}
+		if line.Error != "" {
+			return fmt.Errorf("%w: %s", ErrPullFailed, line.Error)
+		}
+		onProgress(line)
+	}
 }
 
 // Embed asks Ollama not to truncate, so an overflowing input fails loudly and

@@ -2,18 +2,18 @@
   import Button from "../core/Button.svelte";
   import TextField from "../forms/TextField.svelte";
 
-  /** @type {{root?: string, error?: string, onChoose?: () => void}} */
-  let { root = $bindable(""), error = "", onChoose } = $props();
+  /** @type {{thoughts?: string, derived?: string, error?: string, onChoose?: () => void}} */
+  let { thoughts = $bindable(""), derived = "", error = "", onChoose } = $props();
 </script>
 
-<h1>Where should sessions live?</h1>
+<h1>Where should thoughts go?</h1>
 
 <p>
-  One folder holds every session and the shared mirrors. Nothing is written outside it, and deleting
-  a session only removes its worktrees — the mirrors stay for next time.
+  Each session writes its research, specs and plans here as plain Markdown, so Obsidian or any
+  editor can open the folder. An existing Obsidian vault works too.
 </p>
 
-<TextField bind:value={root} valueVoice="literal">
+<TextField bind:value={thoughts} valueVoice="literal">
   {#snippet trailing()}
     <Button variant="secondary" onclick={onChoose}>Choose…</Button>
   {/snippet}
@@ -23,9 +23,10 @@
   <p class="help failed">{error}</p>
 {:else}
   <p class="help">
-    Default is <span class="path">~/work</span>. This folder will be created if it does not exist.
+    Default is <span class="path">{derived}</span>, inside the sessions folder.
   </p>
 {/if}
+<p class="help">Folders shared with a team, such as one Syncthing syncs, are set up in Settings.</p>
 
 <style>
   h1 {
