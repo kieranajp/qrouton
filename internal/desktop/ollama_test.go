@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -26,9 +27,15 @@ func (e *ollamaEvents) emit(name string, data any) {
 		return
 	}
 	e.mu.Lock()
+	if len(e.seen) > 0 && len(e.seen)%4096 == 0 {
+		e.seen = e.seen[len(e.seen)-1:]
+	}
 	e.seen = append(e.seen, data.(OllamaStatus))
 	e.mu.Unlock()
-	e.ch <- data.(OllamaStatus)
+	select {
+	case e.ch <- data.(OllamaStatus):
+	default:
+	}
 }
 
 func (e *ollamaEvents) until(t *testing.T, state string) OllamaStatus {
@@ -203,4 +210,52 @@ func TestOllamaCancelPullStopsTheRequestAndAnswersMissing(t *testing.T) {
 	if n := stub.pulls.Load(); n != 1 {
 		t.Fatalf("a second Pull during one made %d requests", n)
 	}
+}
+
+// fakePull streams progress until cancelled and answers with ctx.Err(), as a
+// loopback client does.
+type fakePull struct{ pulls atomic.Int32 }
+
+func (f *fakePull) Model(context.Context) (vault.Model, error) {
+	return vault.Model{}, vault.ErrModelMissing
+}
+
+func (f *fakePull) Pull(ctx context.Context, onProgress func(vault.PullProgress)) error {
+	f.pulls.Add(1)
+	for done := int64(0); ctx.Err() == nil; done = (done + 1) % 100 {
+		onProgress(vault.PullProgress{Status: "pulling abc", Completed: done, Total: 100})
+	}
+	return ctx.Err()
+}
+
+func TestOllamaCancelAlwaysEndsMissingAndTheLastEventMatches(t *testing.T) {
+	for i := 0; i < 2000; i++ {
+		events := newOllamaEvents()
+		o := newOllama(&fakePull{}, vault.OllamaModel, events.emit, nil)
+		o.Pull()
+		events.until(t, ollamaStatePulling)
+		o.CancelPull()
+		time.Sleep(time.Millisecond)
+		seen := events.all()
+		if got := o.snapshot(); got.State != ollamaStateMissing || seen[len(seen)-1] != got {
+			t.Fatalf("run %d: status %+v, last event %+v", i, got, seen[len(seen)-1])
+		}
+	}
+}
+
+func TestOllamaPullAfterACancelIsNotOverwrittenByTheOldOne(t *testing.T) {
+	client := &fakePull{}
+	events := newOllamaEvents()
+	o := newOllama(client, vault.OllamaModel, events.emit, nil)
+	o.Pull()
+	o.CancelPull()
+	o.Pull()
+	time.Sleep(10 * time.Millisecond)
+	if got := o.snapshot(); got.State != ollamaStatePulling {
+		t.Fatalf("the second pull reads %+v", got)
+	}
+	if n := client.pulls.Load(); n != 2 {
+		t.Fatalf("made %d pull requests, want 2", n)
+	}
+	o.CancelPull()
 }

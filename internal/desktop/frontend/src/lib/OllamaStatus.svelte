@@ -1,4 +1,5 @@
 <script>
+  import { onMount } from "svelte";
   import { OLLAMA_STATES } from "./bridge/generated.js";
   import Button from "./core/Button.svelte";
   import { ollama } from "./ollama.svelte.js";
@@ -7,6 +8,7 @@
   const DOWNLOAD_URL = "https://ollama.com/download";
 
   const view = ollama();
+  onMount(view.check);
   let status = $derived(view.status);
   let percent = $derived(status.total ? Math.round((status.completed / status.total) * 100) : 0);
 

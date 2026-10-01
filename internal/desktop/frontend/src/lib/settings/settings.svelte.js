@@ -97,6 +97,10 @@ export function settings(onClose) {
     fields = outcome.fields;
     status = outcome.status;
     if (outcome.restartRequired !== undefined) restartRequired = outcome.restartRequired;
+    if (!err) {
+      form.thoughts = fromView(toInput(form.thoughts));
+      loadedThoughts = { ...fromView(toInput(form.thoughts)), derived: loadedThoughts.derived };
+    }
     if (outcome.close) onClose();
   }
 
