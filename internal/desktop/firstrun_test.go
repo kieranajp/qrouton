@@ -161,7 +161,7 @@ func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.
 	if real != want {
 		t.Fatalf("thoughts resolve to %s, want %s", real, want)
 	}
-	if _, err := sessionThoughts(openVault(cfg), dir); err != nil {
+	if _, err := sessionThoughts(openVault(cfg), cfg.ThoughtsRoots(), dir); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -365,7 +365,7 @@ func TestFirstRunStoresTheThoughtsFolderOnlyWhenItDiffersFromTheDerivedOne(t *te
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: root}
 	var reconfigured []config.ThoughtsRoot
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, func(c *config.Config) { reconfigured = c.ThoughtsRoots() })
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, func(c *config.Config) error { reconfigured = c.ThoughtsRoots(); return nil })
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: " ~/Vault "}); err != nil {
 		t.Fatal(err)
 	}

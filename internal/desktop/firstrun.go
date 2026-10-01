@@ -30,11 +30,11 @@ type FirstRun struct {
 	relaunch    func() error
 	quit        func()
 	choose      func() (string, error)
-	reconfigure func(*config.Config)
+	reconfigure func(*config.Config) error
 }
 
 func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
-	choose func() (string, error), reconfigure func(*config.Config)) *FirstRun {
+	choose func() (string, error), reconfigure func(*config.Config) error) *FirstRun {
 	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose, reconfigure: reconfigure}
 }
 
@@ -86,18 +86,14 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 		if err := config.CheckThoughts(next); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
-		if err := config.Save(next); err != nil {
-			return err
-		}
 		if !changed {
 			live := next.Snapshot()
 			live.Root = current.Root
 			live.Thoughts.Default = config.ExpandHome(thoughts)
-			f.cfg.Replace(live)
-			if live.Thoughts.Default != current.Thoughts.Default && f.reconfigure != nil {
-				f.reconfigure(live)
-			}
-			return nil
+			return commitLive(f.cfg, current, next, live, f.reconfigure, nil)
+		}
+		if err := config.Save(next); err != nil {
+			return err
 		}
 		if f.relaunch == nil || f.quit == nil {
 			return ErrNoRelaunch

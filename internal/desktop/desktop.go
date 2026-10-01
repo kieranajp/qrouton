@@ -215,6 +215,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
+				thoughts:   opts.Config.ThoughtsRoots,
 				attention:  attend(state, reg.touch, ring),
 				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {

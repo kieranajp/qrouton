@@ -506,7 +506,7 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 			close(firstEntered)
 			<-releaseFirst
 			next.Orgs = []string{"first"}
-		}, nil, nil)
+		}, nil, nil, nil)
 		errs <- err
 	}()
 	<-firstEntered
@@ -514,7 +514,7 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 		close(secondStarted)
 		err := saveConfig(cfg, func(next *config.Config) {
 			next.Orgs = []string{"second"}
-		}, nil, nil)
+		}, nil, nil, nil)
 		errs <- err
 	}()
 	<-secondStarted
@@ -873,7 +873,7 @@ func TestSettingsSaveRefusesThoughtsFoldersThatCouldMixMaterialBeforeWritingEith
 			root := t.TempDir()
 			reconfigures := 0
 			s := testSettings(t, &config.Config{Root: root}, nil, nil, nil)
-			s.reconfigure = func(*config.Config) { reconfigures++ }
+			s.reconfigure = func(*config.Config) error { reconfigures++; return nil }
 			in := thoughtsInput(rows...)
 			in.Root = root
 			_, err := s.Save(in)
@@ -928,7 +928,7 @@ func TestSettingsSaveThatLeavesThoughtsAloneDoesNotReconfigureSearch(t *testing.
 	}}}
 	reconfigures := 0
 	s := testSettings(t, cfg, nil, nil, nil)
-	s.reconfigure = func(*config.Config) { reconfigures++ }
+	s.reconfigure = func(*config.Config) error { reconfigures++; return nil }
 	view := s.Load()
 	in := SettingsInput{Orgs: []string{"other"}, Root: root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
 		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots}}
@@ -937,5 +937,106 @@ func TestSettingsSaveThatLeavesThoughtsAloneDoesNotReconfigureSearch(t *testing.
 	}
 	if reconfigures != 0 {
 		t.Fatalf("an untouched thoughts section reconfigured search %d times", reconfigures)
+	}
+}
+
+func TestSettingsSaveThatChangesTheRootHoldsBackItsThoughtsFoldersUntilTheRelaunch(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", "")
+	t.Setenv("QROUTON_ORGS", "")
+	oldRoot, newRoot := t.TempDir(), t.TempDir()
+	shared := filepath.Join(oldRoot, "thoughts", "shared")
+	if err := os.MkdirAll(filepath.Join(shared, "s1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(oldRoot, "thoughts", "private.md"), []byte("# Private\n\nNot for work.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.Config{Root: oldRoot}
+	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
+	if err := set.Configure(thoughtsProfiles(cfg)); err != nil {
+		t.Fatal(err)
+	}
+	reconfigures := 0
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.reconfigure = func(c *config.Config) error { reconfigures++; return reconfigureVault(set)(c) }
+
+	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
+	in.Root = newRoot
+	res, err := s.Save(in)
+	if err != nil || !res.RestartRequired {
+		t.Fatalf("Save = %+v, %v", res, err)
+	}
+	if reconfigures != 0 {
+		t.Fatal("a save waiting on a relaunch reconfigured search")
+	}
+	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != config.DefaultThoughtsID {
+		t.Fatalf("acme sessions route to %s before the relaunch", got)
+	}
+
+	relaunched, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessionDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(shared, "s1"), filepath.Join(sessionDir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	thoughts, err := sessionThoughts(openVault(relaunched), relaunched.ThoughtsRoots(), sessionDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := thoughts.Read(vault.ReadRequest{Ref: "default:private.md"}); err == nil {
+		t.Fatal("a shared session read the default folder")
+	}
+}
+
+func TestSettingsSaveThatCannotReindexLeavesRoutingAndSearchAlone(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root, shared := t.TempDir(), t.TempDir()
+	cfg := &config.Config{Root: root}
+	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
+	if err := set.Configure(thoughtsProfiles(cfg)); err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.reconfigure = func(*config.Config) error { return errOffline }
+
+	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
+	in.Root = root
+	if _, err := s.Save(in); !errors.Is(err, errOffline) {
+		t.Fatalf("Save = %v, want the reindex failure", err)
+	}
+	for _, path := range []string{config.Path(), s.linear.File} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("a refused save wrote %s", path)
+		}
+	}
+	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != config.DefaultThoughtsID {
+		t.Fatalf("acme sessions route to %s after a refused save", got)
+	}
+	if set.ForProfile(vault.Profile{ID: "work", Root: shared}) != nil {
+		t.Fatal("a refused save indexed the folder")
+	}
+}
+
+func TestSessionThoughtsRefusesAFolderWithNoIndexInsideAWiderOne(t *testing.T) {
+	base := t.TempDir()
+	def, shared := filepath.Join(base, "thoughts"), filepath.Join(base, "thoughts", "shared")
+	if err := os.MkdirAll(filepath.Join(shared, "s1"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
+	if err := set.Configure([]vault.Profile{{ID: config.DefaultThoughtsID, Root: def}}); err != nil {
+		t.Fatal(err)
+	}
+	roots := []config.ThoughtsRoot{{ID: config.DefaultThoughtsID, Path: def}, {ID: "work", Path: shared, Orgs: []string{"acme"}}}
+	sessionDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(shared, "s1"), filepath.Join(sessionDir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sessionThoughts(set, roots, sessionDir); !errors.Is(err, ErrNoThoughtsRoot) {
+		t.Fatalf("sessionThoughts = %v, want %v", err, ErrNoThoughtsRoot)
 	}
 }
