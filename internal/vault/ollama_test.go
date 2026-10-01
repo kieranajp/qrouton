@@ -174,7 +174,10 @@ func TestOllamaPullStreamsProgressAndReturnsTheStreamError(t *testing.T) {
 		var body map[string]string
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		model = body["model"]
-		_, _ = w.Write([]byte(`{"status":"pulling manifest"}` + "\n" + `{"status":"pulling abc","total":100,"completed":40}` + "\n"))
+		_, _ = w.Write([]byte(`{"status":"pulling manifest"}` + "\n"))
+		w.(http.Flusher).Flush()
+		time.Sleep(30 * time.Millisecond)
+		_, _ = w.Write([]byte(`{"status":"pulling abc","total":100,"completed":40}` + "\n"))
 		if fail {
 			_, _ = w.Write([]byte(`{"error":"disk full"}` + "\n"))
 			return
@@ -182,7 +185,7 @@ func TestOllamaPullStreamsProgressAndReturnsTheStreamError(t *testing.T) {
 		_, _ = w.Write([]byte(`{"status":"success"}` + "\n"))
 	}))
 	defer server.Close()
-	o := &Ollama{URL: server.URL, Name: OllamaModel, Client: &http.Client{Timeout: time.Millisecond}}
+	o := &Ollama{URL: server.URL, Name: OllamaModel, Client: &http.Client{Timeout: 10 * time.Millisecond}}
 
 	var seen []PullProgress
 	if err := o.Pull(context.Background(), func(p PullProgress) { seen = append(seen, p) }); err != nil {

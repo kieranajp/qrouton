@@ -8,7 +8,8 @@ import { call, Call, Events } from "./wails.js";
 
 const UNKNOWN = { state: "", model: "" };
 
-/** ollama is the last known state of semantic search, shared by every view of it. */
+/** ollama is the last known state of semantic search, shared by every view of it.
+ * Each view checks again when it mounts, so an old answer does not linger. */
 export function ollama() {
   return (shared ??= observing());
 }
@@ -29,7 +30,6 @@ function observing() {
       if (answer.ok && answer.value && events === before) status = answer.value;
     });
   };
-  check();
   return {
     get status() {
       return status;
