@@ -61,7 +61,7 @@ test("sticker meanings load and save together without asking for a restart", asy
       },
     },
   ]);
-  await expect(page.getByText("Quit qrouton to use the new sessions root")).toHaveCount(0);
+  await expect(page.getByText("Quit qrouton to use the new sessions root and thoughts folders")).toHaveCount(0);
 });
 
 test("a blank sticker meaning names the field and stays open", async ({ page }) => {

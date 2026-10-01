@@ -143,7 +143,7 @@
 
 {#if restartRequired}
   <div class="banner">
-    <span>Quit qrouton to use the new sessions root</span>
+    <span>Quit qrouton to use the new sessions root and thoughts folders</span>
     <Button variant="secondary" onclick={onQuit}>Quit qrouton</Button>
   </div>
 {/if}
