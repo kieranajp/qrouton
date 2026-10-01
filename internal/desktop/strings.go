@@ -101,6 +101,10 @@ const (
 	settingsFieldBookmark    = "bookmark"
 	settingsFieldQuestion    = "question"
 	settingsFieldExclamation = "exclamation"
+	settingsFieldThoughts    = "thoughts"
+
+	thoughtsOrgJoin  = ", "
+	thoughtsOrgSplit = ","
 
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"

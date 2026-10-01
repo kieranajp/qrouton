@@ -15,13 +15,25 @@ func openVault(cfg *config.Config) *vault.Set {
 	if err != nil {
 		return nil
 	}
+	set := vault.NewSet(vault.NewOllama(), cacheDir)
+	_ = set.Configure(thoughtsProfiles(cfg))
+	return set
+}
+
+func thoughtsProfiles(cfg *config.Config) []vault.Profile {
 	var profiles []vault.Profile
 	for _, root := range cfg.ThoughtsRoots() {
 		profiles = append(profiles, vault.Profile{ID: root.ID, Root: root.Path})
 	}
-	set := vault.NewSet(vault.NewOllama(), cacheDir)
-	_ = set.Configure(profiles)
-	return set
+	return profiles
+}
+
+func reconfigureVault(set *vault.Set) func(*config.Config) {
+	return func(cfg *config.Config) {
+		if set != nil {
+			_ = set.Configure(thoughtsProfiles(cfg))
+		}
+	}
 }
 
 // sessionThoughts follows the session's thoughts link, so search reads the

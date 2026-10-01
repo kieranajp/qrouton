@@ -184,7 +184,7 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"thoughts"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
@@ -195,6 +195,7 @@ export const SETTINGS_FIELDS = Object.freeze({
   BOOKMARK: "bookmark",
   QUESTION: "question",
   EXCLAMATION: "exclamation",
+  THOUGHTS: "thoughts",
 });
 
 /** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */

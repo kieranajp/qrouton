@@ -167,7 +167,14 @@ func (c *Config) RouteThoughts(orgs []string) ThoughtsRoot {
 	return roots[max(routed, 0)]
 }
 
-func validateThoughts(roots []ThoughtsRoot) error {
+// CheckThoughts runs the validation Load and Save run, without writing anything.
+func CheckThoughts(cfg *Config) error {
+	resolved := clone(cfg.Snapshot())
+	resolvePaths(resolved)
+	return validateThoughts(resolved.Root, resolved.ThoughtsRoots())
+}
+
+func validateThoughts(sessionsRoot string, roots []ThoughtsRoot) error {
 	profiles := make([]vault.Profile, len(roots))
 	owners := map[string]string{}
 	for i, r := range roots {
@@ -186,7 +193,15 @@ func validateThoughts(roots []ThoughtsRoot) error {
 		}
 		profiles[i] = vault.Profile{ID: r.ID, Root: r.Path}
 	}
-	return vault.Validate(profiles)
+	if err := vault.Validate(profiles); err != nil {
+		return err
+	}
+	for _, r := range roots {
+		if vault.Contains(r.Path, sessionsRoot) {
+			return fmt.Errorf("%w: %q", ErrThoughtsHoldsRoot, r.ID)
+		}
+	}
+	return nil
 }
 
 func (c *Config) EffectiveStickerLabels() StickerLabels {
@@ -253,7 +268,7 @@ func Load() (*Config, error) {
 		cfg.Orgs = splitOrgs(v)
 	}
 	resolvePaths(cfg)
-	if err := validateThoughts(cfg.ThoughtsRoots()); err != nil {
+	if err := CheckThoughts(cfg); err != nil {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
 	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
@@ -272,9 +287,7 @@ func resolvePaths(cfg *Config) {
 
 func Save(cfg *Config) error {
 	snapshot := cfg.Snapshot()
-	resolved := clone(snapshot)
-	resolvePaths(resolved)
-	if err := validateThoughts(resolved.ThoughtsRoots()); err != nil {
+	if err := CheckThoughts(snapshot); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(Path()), dirMode); err != nil {

@@ -1,6 +1,5 @@
 <script>
   import Button from "../core/Button.svelte";
-  import CapsLabel from "../core/CapsLabel.svelte";
   import TextField from "../forms/TextField.svelte";
 
   /** @type {{root?: string, error?: string, onChoose?: () => void}} */
@@ -28,14 +27,6 @@
   </p>
 {/if}
 
-<div class="everything">
-  <CapsLabel>That is everything</CapsLabel>
-  <p>
-    Next you will pick repositories for your first session. Editors and agent commands have sensible
-    defaults — Settings has them when you want them.
-  </p>
-</div>
-
 <style>
   h1 {
     margin: 0;
@@ -61,17 +52,5 @@
 
   .path {
     color: var(--text-primary);
-  }
-
-  .everything {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px;
-    border: 1px solid var(--border-default);
-  }
-
-  .everything p {
-    font: var(--machine-sm);
   }
 </style>

@@ -13,6 +13,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string) error,
@@ -21,7 +22,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
-	}, []string{"LINEAR_PROMPT"}, quit, nil)
+	}, []string{"LINEAR_PROMPT"}, quit, nil, nil)
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
@@ -840,5 +841,101 @@ func TestSettingsChimeReadsOnForAnUntouchedConfigAndSavesAsQuiet(t *testing.T) {
 	}
 	if cfg.Snapshot().Quiet || !s.Load().Chime {
 		t.Fatal("ticking the chime again left the config quiet")
+	}
+}
+
+func thoughtsInput(rows ...ThoughtsRow) SettingsInput {
+	return SettingsInput{Orgs: []string{"acme"}, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Thoughts: ThoughtsInput{Roots: rows}}
+}
+
+func TestSettingsLoadAnswersTheThoughtsFoldersAndTheDerivedDefault(t *testing.T) {
+	cfg := &config.Config{Root: "/sessions", Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
+		{ID: "work", Path: "/sync/work", Orgs: []string{"acme", "acme-labs"}},
+	}}}
+	got := testSettings(t, cfg, nil, nil, nil).Load().Thoughts
+	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs"}}}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("thoughts = %+v, want %+v", got, want)
+	}
+}
+
+func TestSettingsSaveRefusesThoughtsFoldersThatCouldMixMaterialBeforeWritingEitherFile(t *testing.T) {
+	shared := t.TempDir()
+	for name, rows := range map[string][]ThoughtsRow{
+		"org on two folders":  {{ID: "a", Path: shared + "/a", Orgs: "acme"}, {ID: "b", Path: shared + "/b", Orgs: "other, ACME"}},
+		"overlapping folders": {{ID: "a", Path: shared, Orgs: "acme"}, {ID: "b", Path: shared + "/b", Orgs: "other"}},
+		"reserved id":         {{ID: "default", Path: shared, Orgs: "acme"}},
+		"bad id":              {{ID: "no spaces", Path: shared, Orgs: "acme"}},
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			root := t.TempDir()
+			reconfigures := 0
+			s := testSettings(t, &config.Config{Root: root}, nil, nil, nil)
+			s.reconfigure = func(*config.Config) { reconfigures++ }
+			in := thoughtsInput(rows...)
+			in.Root = root
+			_, err := s.Save(in)
+			if err == nil || !strings.HasPrefix(err.Error(), "thoughts: ") {
+				t.Fatalf("Save = %v, want a thoughts field refusal", err)
+			}
+			for _, path := range []string{config.Path(), s.linear.File} {
+				if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+					t.Fatalf("a refused save wrote %s", path)
+				}
+			}
+			if reconfigures != 0 {
+				t.Fatal("a refused save reconfigured search")
+			}
+		})
+	}
+}
+
+func TestSettingsSaveThatAddsAThoughtsFolderReachesSearchWithoutARestart(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root, shared := t.TempDir(), t.TempDir()
+	cfg := &config.Config{Root: root}
+	set := vault.NewSet(vault.NewOllama(), t.TempDir())
+	if err := set.Configure(thoughtsProfiles(cfg)); err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.reconfigure = reconfigureVault(set)
+	link := filepath.Join(shared, "new-session")
+	if set.ForPath(link) != nil {
+		t.Fatal("the folder was searchable before it was added")
+	}
+
+	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
+	in.Root = root
+	if _, err := s.Save(in); err != nil {
+		t.Fatal(err)
+	}
+	if set.ForPath(link) == nil {
+		t.Fatal("a session in the added folder has no thoughts root until a restart")
+	}
+	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != "work" {
+		t.Fatalf("new acme sessions route to %s", got)
+	}
+}
+
+func TestSettingsSaveThatLeavesThoughtsAloneDoesNotReconfigureSearch(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root, shared := t.TempDir(), t.TempDir()
+	cfg := &config.Config{Root: root, Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
+		{ID: "work", Path: shared, Orgs: []string{"acme"}},
+	}}}
+	reconfigures := 0
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.reconfigure = func(*config.Config) { reconfigures++ }
+	view := s.Load()
+	in := SettingsInput{Orgs: []string{"other"}, Root: root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots}}
+	if _, err := s.Save(in); err != nil {
+		t.Fatal(err)
+	}
+	if reconfigures != 0 {
+		t.Fatalf("an untouched thoughts section reconfigured search %d times", reconfigures)
 	}
 }

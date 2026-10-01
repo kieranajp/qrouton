@@ -369,3 +369,27 @@ func TestSaveRefusesARootThatWouldSwallowAnExtraThoughtsRoot(t *testing.T) {
 		t.Fatalf("a refused save replaced the file: %s", after)
 	}
 }
+
+func TestThoughtsRootsMayNotHoldTheSessionsRoot(t *testing.T) {
+	parent := t.TempDir()
+	root := filepath.Join(parent, "sessions")
+	for name, def := range map[string]string{"the root itself": root, "a parent of the root": parent} {
+		writeConfig(t, `{"root":"`+root+`","thoughts":{"default":"`+def+`"}}`)
+		if _, err := Load(); !errors.Is(err, ErrThoughtsHoldsRoot) {
+			t.Errorf("%s: load = %v", name, err)
+		}
+		cfg := &Config{Root: root, Thoughts: Thoughts{Default: def}}
+		if err := Save(cfg); !errors.Is(err, ErrThoughtsHoldsRoot) {
+			t.Errorf("%s: save = %v", name, err)
+		}
+	}
+	shared := &Config{Root: root, Thoughts: Thoughts{Default: t.TempDir(), Roots: []ThoughtsRoot{{ID: "work", Path: parent, Orgs: []string{"acme"}}}}}
+	if err := CheckThoughts(shared); !errors.Is(err, ErrThoughtsHoldsRoot) {
+		t.Errorf("a shared folder holding the root: %v", err)
+	}
+
+	writeConfig(t, `{"root":"`+root+`","thoughts":{"default":"`+filepath.Join(root, "thoughts")+`"}}`)
+	if _, err := Load(); err != nil {
+		t.Fatalf("<root>/thoughts refused: %v", err)
+	}
+}

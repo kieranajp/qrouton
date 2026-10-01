@@ -18,6 +18,7 @@ import { Call } from "../wails.js";
  * @property {string} linear
  * @property {StickerLabels} stickerLabels
  * @property {boolean} chime
+ * @property {{default: string, derived?: string, roots: {id: string, path: string, orgs: string}[]}} thoughts
  * @property {string} [linearPath]
  * @property {string} [linearError]
  */

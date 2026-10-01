@@ -5,6 +5,7 @@
   import PanelsScreen from "./PanelsScreen.svelte";
   import RootScreen from "./RootScreen.svelte";
   import SessionScreen from "./SessionScreen.svelte";
+  import ThoughtsScreen from "./ThoughtsScreen.svelte";
   import Welcome from "./Welcome.svelte";
   import { firstRun } from "./firstrun.svelte.js";
   import { back, blocking, caps, pip, primary, title, total } from "./screens.js";
@@ -43,8 +44,14 @@
       login={flow.login}
       onAddOrg={flow.add}
       onRemoveOrg={flow.remove} />
-  {:else}
+  {:else if flow.step === 4}
     <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} onChoose={flow.choose} />
+  {:else}
+    <ThoughtsScreen
+      bind:thoughts={flow.thoughts}
+      derived={flow.derivedThoughts}
+      error={flow.fields.thoughts ?? ""}
+      onChoose={flow.chooseThoughts} />
   {/if}
 </Dialog>
 
