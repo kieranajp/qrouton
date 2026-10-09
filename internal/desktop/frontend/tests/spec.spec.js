@@ -217,3 +217,35 @@ test("answering the last open question makes send the primary action", async ({ 
   await expect(page.locator(".crumb .count")).toHaveText("3 of 3 answered");
   await expect(sendButton(page)).toHaveClass(/primary/);
 });
+
+test("clicking the chosen option again clears the letter and keeps the note as the answer", async ({ page }) => {
+  await questions(page);
+  const q1 = card(page, "Q1");
+  const note = "Neither: use an absolute caller deadline instead.";
+  await q1.locator("textarea").fill(note);
+  await q1.getByRole("button", { name: /Overall/ }).click();
+  await expect(q1.getByRole("button", { name: /Overall/ })).toHaveAttribute("aria-pressed", "false");
+
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBeGreaterThan(0);
+  const last = () => page.evaluate(() => window.saves().at(-1)[2]);
+  await expect.poll(last).toContain(`Answer: ${note}\n`);
+  expect(await last()).not.toMatch(/Answer: B/);
+  await expect(q1.locator(".state")).toHaveText("Saved");
+});
+
+test("a letter key on the chosen option clears it, and a note beside a letter still saves", async ({ page }) => {
+  await questions(page);
+  const q1 = card(page, "Q1");
+  const overall = q1.getByRole("button", { name: /Overall/ });
+  await expect(overall).toHaveAttribute("aria-pressed", "true");
+
+  await page.keyboard.press("b");
+  await expect(overall).toHaveAttribute("aria-pressed", "false");
+  await expect.poll(() => page.evaluate(() => window.saves().at(-1)[2])).toContain("it caps the caller's wait)**\n- C. Both\n\nAnswer:\n");
+
+  await page.keyboard.press("b");
+  await expect(overall).toHaveAttribute("aria-pressed", "true");
+  await q1.locator("textarea").fill("Because of the SLA");
+  await page.getByRole("heading", { name: "Open questions" }).click();
+  await expect.poll(() => page.evaluate(() => window.saves().at(-1)[2])).toContain("Answer: B\n\nBecause of the SLA\n");
+});

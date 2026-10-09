@@ -364,6 +364,26 @@ test("a free-text answer splices without a letter", () => {
   assert.deepEqual([read.letter, read.note], ["", "Neither, honestly"]);
 });
 
+test("clearing the letter keeps the note as a free-text answer", () => {
+  const question = parseSpec(OPEN).open[0];
+  assert.equal(question.answer.letter, "B");
+  const note = "Neither: use an absolute caller deadline instead.";
+  const withBoth = spliceAnswer(OPEN, question, { letter: "B", note });
+  const cleared = spliceAnswer(withBoth, parseSpec(withBoth).open[0], { letter: "", note });
+  const read = parseSpec(cleared).open[0].answer;
+  assert.deepEqual([read.letter, read.note], ["", note]);
+  assert.match(cleared, new RegExp(`\\nAnswer: ${note}\\n`));
+  outside(OPEN, cleared, question);
+});
+
+test("clearing the letter of an empty note leaves the question unanswered", () => {
+  const question = parseSpec(OPEN).open[0];
+  const after = spliceAnswer(OPEN, question, { letter: "", note: "" });
+  const read = parseSpec(after).open[0];
+  assert.equal(read.answer.raw, "");
+  assert.equal(parseSpec(after).answered, parseSpec(OPEN).answered - 1);
+});
+
 test("a question with no answer line gains one after its options", () => {
   const text = doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "## Decisions", "");
   const question = parseSpec(text).open[0];

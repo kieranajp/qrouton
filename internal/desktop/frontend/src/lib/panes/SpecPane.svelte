@@ -200,7 +200,7 @@
 
   /** @param {number} index @param {string} letter */
   function pick(index, letter) {
-    commit(edit(index, { letter }));
+    commit(edit(index, { letter: drafts[index]?.letter === letter ? "" : letter }));
   }
 
   /** @param {number} index @param {string} note */
