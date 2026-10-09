@@ -28,6 +28,9 @@ func Validate(profiles []Profile) error {
 	return nil
 }
 
+// Contains answers whether child is parent or lies inside it, following links.
+func Contains(parent, child string) bool { return contains(resolve(parent), resolve(child)) }
+
 // resolve follows symlinks as far as the path exists, so a root not created
 // yet still compares against the others.
 func resolve(path string) string {

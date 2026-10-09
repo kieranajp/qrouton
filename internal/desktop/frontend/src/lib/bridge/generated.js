@@ -17,6 +17,9 @@ export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Ch
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
 export const FIRST_RUN_SAVE = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Save";
+export const OLLAMA_CANCEL_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.CancelPull";
+export const OLLAMA_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Check";
+export const OLLAMA_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Pull";
 export const ORGS_LIST = "github.com/kieranajp/qrouton/internal/desktop.Orgs.List";
 export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Picker.Cancel";
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
@@ -63,6 +66,7 @@ export const WINDOWS_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Wind
 export const ASSEMBLY_PROGRESS_EVENT = "assembly:progress";
 export const ASSEMBLY_REQUESTED_EVENT = "assembly:requested";
 export const CHROME_EVENT = "chrome:update";
+export const OLLAMA_EVENT = "ollama:status";
 export const ORGS_CHANGED_EVENT = "orgs:changed";
 export const PRESENTER_CLOSED_EVENT = "presenter:closed";
 export const PRESENTER_NOTES_EVENT = "presenter:notes";
@@ -158,6 +162,15 @@ export const MODE_LABELS = Object.freeze({
   RPI: "RPI",
 });
 
+/** @typedef {"ready"|"missing"|"pulling"|"unreachable"|"failed"} OllamaState */
+export const OLLAMA_STATES = Object.freeze({
+  READY: "ready",
+  MISSING: "missing",
+  PULLING: "pulling",
+  UNREACHABLE: "unreachable",
+  FAILED: "failed",
+});
+
 /** @typedef {"started"|"completed"|"failed"|"advanced"} ProgressStatus */
 export const PROGRESS_STATUSES = Object.freeze({
   STARTED: "started",
@@ -186,7 +199,7 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
@@ -198,6 +211,7 @@ export const SETTINGS_FIELDS = Object.freeze({
   QUESTION: "question",
   EXCLAMATION: "exclamation",
   UI_SCALE: "uiScale",
+  THOUGHTS: "thoughts",
 });
 
 /** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */

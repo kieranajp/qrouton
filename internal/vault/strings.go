@@ -58,6 +58,7 @@ const (
 
 	ollamaTags        = "/api/tags"
 	ollamaEmbed       = "/api/embed"
+	ollamaPull        = "/api/pull"
 	ollamaContentType = "application/json"
 	ollamaOverflow    = "exceeds the context length"
 )

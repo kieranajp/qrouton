@@ -61,6 +61,7 @@ type Options struct {
 	bugReports *BugReports
 	updates    *Updates
 	vault      *vault.Set
+	ollama     *Ollama
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -121,6 +122,8 @@ func Run(opts Options) error {
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
+	opts.ollama = newOllama(vault.NewOllama(), vault.OllamaModel, r.Emit, ollamaInstalled)
+	r.register(application.NewService(opts.ollama))
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
@@ -129,10 +132,10 @@ func Run(opts Options) error {
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,
-		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch,
+		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault),
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory)))
+	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
 	return run(r, term, windows, opts, quit)
 }
 
@@ -215,6 +218,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
+				thoughts:   opts.Config.ThoughtsRoots,
 				attention:  attend(state, reg.current, reg.touch, ring),
 				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
@@ -261,6 +265,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	if opts.vault != nil {
 		go opts.vault.Warm(ctx)
+	}
+	if opts.ollama != nil {
+		opts.ollama.bind(ctx)
 	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends

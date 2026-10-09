@@ -4,7 +4,13 @@ import { addOrg, removeOrg } from "../settings/orgs.js";
 import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { firstRunOutcome } from "./outcome.js";
-import { last } from "./screens.js";
+import { last, stepFor } from "./screens.js";
+
+/** @param {string} root */
+const derivedThoughts = (root) => {
+  const trimmed = root.trim().replace(/\/+$/, "");
+  return trimmed ? `${trimmed}/thoughts` : "";
+};
 
 // First-run answers remain provisional until the final screen succeeds.
 export function firstRun() {
@@ -15,6 +21,8 @@ export function firstRun() {
   let status = $state("");
   let busy = $state(false);
   let login = $state("");
+  // Null follows the root; anything the user typed or chose stops it following.
+  let thoughts = $state(/** @type {string | null} */ (null));
 
   // The prefill is Settings' own Load: the same config, so asking twice would be
   // two owners of one fact.
@@ -25,6 +33,7 @@ export function firstRun() {
     }
     form.orgs = answer.value?.orgs ?? [];
     form.root = answer.value?.root ?? "";
+    if (answer.value?.thoughts?.default) thoughts = answer.value.thoughts.default;
   });
 
   // Resolved off the render: shelling out to gh costs more than the screen does,
@@ -43,14 +52,17 @@ export function firstRun() {
   // A cancelled picker answers "" with no error, which leaves the field as the
   // user had it; anything thrown is a real failure and would otherwise look like
   // a button that does nothing.
-  async function choose() {
+  async function pick(apply) {
     try {
       const chosen = await go.chooseRoot();
-      if (chosen) form.root = chosen;
+      if (chosen) apply(chosen);
     } catch (err) {
       status = String(err?.message ?? err ?? "");
     }
   }
+
+  const choose = () => pick((chosen) => (form.root = chosen));
+  const chooseThoughts = () => pick((chosen) => (thoughts = chosen));
 
   function back() {
     if (step > 0) step--;
@@ -72,7 +84,11 @@ export function firstRun() {
     busy = true;
     let result, err;
     try {
-      result = await go.save({ orgs: form.orgs, root: form.root });
+      result = await go.save({
+        orgs: form.orgs,
+        root: form.root,
+        thoughts: thoughts ?? derivedThoughts(form.root),
+      });
     } catch (thrown) {
       err = thrown;
     }
@@ -80,6 +96,8 @@ export function firstRun() {
     const outcome = firstRunOutcome(result, err);
     fields = outcome.fields;
     status = outcome.status;
+    const refused = stepFor(Object.keys(outcome.fields)[0]);
+    if (refused >= 0) step = refused;
     // Only a refusal hands the button back; a success is waiting for Go.
     if (err) busy = false;
   }
@@ -107,9 +125,19 @@ export function firstRun() {
     get login() {
       return login;
     },
+    get thoughts() {
+      return thoughts ?? derivedThoughts(form.root);
+    },
+    set thoughts(value) {
+      thoughts = value;
+    },
+    get derivedThoughts() {
+      return derivedThoughts(form.root);
+    },
     add,
     remove,
     choose,
+    chooseThoughts,
     back,
     next,
   };
