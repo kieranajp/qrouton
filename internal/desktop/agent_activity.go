@@ -39,7 +39,7 @@ type agentRecord struct {
 type agentActivitySnapshot struct {
 	Provider     string
 	Running      bool
-	Attention    bool
+	Unread       bool
 	Active       int
 	Capabilities agentCapabilities
 	Records      []agentRecord
@@ -62,6 +62,7 @@ type agentActivity struct {
 	setupRuns  uint64
 	running    bool
 	waiting    bool
+	unread     bool
 	rung       bool
 	spoke      time.Time
 	records    map[agentRecordKey]*agentRecord
@@ -91,6 +92,7 @@ func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.stopped = map[agentRecordKey]struct{}{}
 	a.running = true
 	a.waiting = false
+	a.unread = false
 	a.rung = false
 	a.spoke = time.Time{}
 	runID := strconv.FormatUint(generation, 10)
@@ -185,6 +187,7 @@ func (a *agentActivity) attention(generation uint64, state string) bool {
 	switch state {
 	case status.ActivityWaiting:
 		a.waiting = true
+		a.unread = true
 	case status.ActivityWorking:
 		a.waiting = false
 		a.spoke = a.now()
@@ -193,6 +196,7 @@ func (a *agentActivity) attention(generation uint64, state string) bool {
 			return false
 		}
 		a.waiting = true
+		a.unread = true
 	default:
 		return false
 	}
@@ -232,8 +236,15 @@ func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.waiting = false
+	a.unread = false
 	a.rung = false
 	a.spoke = a.now()
+}
+
+func (a *agentActivity) seen() {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.unread = false
 }
 
 // state is what the rail says about this session: waiting comes from the
@@ -331,7 +342,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		return records[i].ID < records[j].ID
 	})
 	return agentActivitySnapshot{
-		Provider: a.provider, Running: a.running, Attention: a.running && a.waiting,
+		Provider: a.provider, Running: a.running, Unread: a.running && a.unread,
 		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
 	}
 }

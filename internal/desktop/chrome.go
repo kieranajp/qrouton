@@ -277,8 +277,8 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 		summary.Coverage = status.AgentCoverageRoot
 	}
 	if snapshot.Capabilities.Attention {
-		if snapshot.Attention {
-			summary.Attention = status.AgentAttentionNeedsYou
+		if snapshot.Unread {
+			summary.Attention = status.AgentAttentionUnread
 		}
 	} else {
 		summary.Attention = status.AgentAttentionUnknown

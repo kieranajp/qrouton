@@ -13,7 +13,7 @@
       { name: "acme/web", role: "editing" },
       { name: "acme/a-very-long-editing-repository-name", role: "editing" },
     ],
-    summary: { attention: "needs-you", active: 2, coverage: "full", running: true },
+    summary: { attention: "unread", active: 2, coverage: "full", running: true },
     unseen: 3,
     opened: new Date(Date.now() - 120000).toISOString(),
     sticker: "",

@@ -177,10 +177,13 @@ func ringer(cfg *config.Config, state *sessionState, watched func(*sessionState)
 	}
 }
 
-func attend(state *sessionState, touch, ring func()) func(string, uint64) {
+func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(string, uint64) {
 	return func(value string, generation uint64) {
 		if !state.agents.attention(generation, value) {
 			return
+		}
+		if shown() == state {
+			state.agents.seen()
 		}
 		touch()
 		if value == status.ActivityWaiting || value == status.ActivityTurnEnded {
@@ -212,7 +215,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
-				attention:  attend(state, reg.touch, ring),
+				attention:  attend(state, reg.current, reg.touch, ring),
 				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
 					if req.Provider != state.provider {
