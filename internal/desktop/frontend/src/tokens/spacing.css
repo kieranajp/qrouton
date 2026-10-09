@@ -1,34 +1,34 @@
 /* Loose 4px grid. Window padding is deliberately generous;
    density lives inside the panes, not around them. */
 :root {
-  --space-1: 4px;
-  --space-2: 6px;
-  --space-3: 8px;
-  --space-4: 10px;
-  --space-5: 12px;
-  --space-6: 14px;
-  --space-7: 16px;
-  --space-8: 18px;
-  --space-9: 22px;
-  --space-10: 26px;
-  --space-11: 34px;
-  --space-12: 44px;
+  --space-1: calc(4px * var(--ui-scale));
+  --space-2: calc(6px * var(--ui-scale));
+  --space-3: calc(8px * var(--ui-scale));
+  --space-4: calc(10px * var(--ui-scale));
+  --space-5: calc(12px * var(--ui-scale));
+  --space-6: calc(14px * var(--ui-scale));
+  --space-7: calc(16px * var(--ui-scale));
+  --space-8: calc(18px * var(--ui-scale));
+  --space-9: calc(22px * var(--ui-scale));
+  --space-10: calc(26px * var(--ui-scale));
+  --space-11: calc(34px * var(--ui-scale));
+  --space-12: calc(44px * var(--ui-scale));
 
   /* Line-number gutter. A length, not `ch`: the display headings share it and
      would resolve `ch` against their own face, landing right of the prose. */
-  --gutter: 36px;
+  --gutter: calc(36px * var(--ui-scale));
 
   /* fixed chrome heights */
-  --h-titlebar: 44px;
-  --h-pane-header: 46px;
-  --h-footer: 36px;
-  --h-form-footer: 52px;
+  --h-titlebar: calc(44px * var(--ui-scale));
+  --h-pane-header: calc(46px * var(--ui-scale));
+  --h-footer: calc(36px * var(--ui-scale));
+  --h-form-footer: calc(52px * var(--ui-scale));
 
   /* The strip macOS paints its traffic lights into, over the session's own
-     titlebar. Clears the zoom button with room to spare. */
+     titlebar. Unscaled: macOS draws the lights at a fixed size. */
   --w-traffic-lights: 78px;
 
   /* starting widths; both panes can move from these with their dividers */
-  --w-rail: 200px;
-  --w-human-pane: 640px;
+  --w-rail: calc(200px * var(--ui-scale));
+  --w-human-pane: calc(640px * var(--ui-scale));
 }

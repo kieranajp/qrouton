@@ -4,21 +4,21 @@ import { svelte } from "@sveltejs/vite-plugin-svelte";
 
 const page = (path) => resolve(import.meta.dirname, path);
 
-// The palette is served by the workbench, so Vite cannot resolve it and drops
-// the link silently if the source HTML carries one. Injected here it stays a
-// blocking stylesheet in <head>, and crossorigin goes with it — the webview
-// serves these pages from a scheme of its own.
+// The palette and the scale are served by the workbench, so Vite cannot resolve
+// them and drops their links silently if the source HTML carries them. Injected
+// here they stay blocking stylesheets in <head>, and crossorigin goes with it —
+// the webview serves these pages from a scheme of its own.
 const workbenchPages = {
   name: "qrouton-workbench-pages",
   transformIndexHtml: {
     order: "post",
     handler: (html) => ({
       html: html.replaceAll(" crossorigin", ""),
-      tags: [{
+      tags: ["/tokens/colors.css", "/tokens/scale.css"].map((href) => ({
         tag: "link",
-        attrs: { rel: "stylesheet", href: "/tokens/colors.css" },
+        attrs: { rel: "stylesheet", href },
         injectTo: "head-prepend",
-      }],
+      })),
     }),
   },
 };

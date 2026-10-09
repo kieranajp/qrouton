@@ -62,6 +62,10 @@ const (
 	// that follows it. Window ids are sequential and never appear in a URL.
 	deckAssetPath = "/deck/"
 
+	// Served live so a new window paints at the stored scale on its first frame.
+	uiScalePath      = "/tokens/scale.css"
+	uiScaleCSSFormat = ":root { --ui-scale: %s; }\n"
+
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
@@ -87,6 +91,7 @@ const (
 	assemblyProgressEvent  = "assembly:progress"
 	assemblyRequestedEvent = "assembly:requested"
 	orgsChangedEvent       = "orgs:changed"
+	uiScaleEvent           = "ui:scale"
 	updateEvent            = "update:status"
 )
 
@@ -101,10 +106,12 @@ const (
 	settingsFieldBookmark    = "bookmark"
 	settingsFieldQuestion    = "question"
 	settingsFieldExclamation = "exclamation"
+	settingsFieldUIScale     = "uiScale"
 
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"
 	settingsEmpty         = "cannot be empty"
+	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 )
 
 // A tab may only stand in for a window if it reports its process's state.

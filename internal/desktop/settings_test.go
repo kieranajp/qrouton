@@ -842,3 +842,83 @@ func TestSettingsChimeReadsOnForAnUntouchedConfigAndSavesAsQuiet(t *testing.T) {
 		t.Fatal("ticking the chime again left the config quiet")
 	}
 }
+
+func TestSettingsLoadAnswersTheEffectiveUIScaleAndItsSteps(t *testing.T) {
+	for _, tc := range []struct{ stored, want int }{{0, 100}, {130, 130}, {85, 100}} {
+		view := testSettings(t, &config.Config{UIScale: tc.stored}, nil, nil, nil).Load()
+		if view.UIScale != tc.want {
+			t.Fatalf("stored %d loads as %d, want %d", tc.stored, view.UIScale, tc.want)
+		}
+		if !reflect.DeepEqual(view.UIScaleSteps, config.UIScaleSteps()) {
+			t.Fatalf("steps = %v", view.UIScaleSteps)
+		}
+	}
+}
+
+func TestSettingsSaveRefusesAnOffGridUIScaleAndWritesNothing(t *testing.T) {
+	for _, scale := range []int{70, 105, 160} {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+		s := testSettings(t, cfg, nil, nil, nil)
+		_, err := s.Save(SettingsInput{
+			Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: scale,
+		})
+		if !errors.Is(err, ErrUIScale) || !strings.HasPrefix(err.Error(), settingsFieldUIScale+": ") {
+			t.Fatalf("scale %d: error = %v", scale, err)
+		}
+		if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
+			t.Fatalf("scale %d: Save wrote config.json despite refusing it", scale)
+		}
+	}
+}
+
+func TestSettingsSaveAnnouncesTheUIScaleOnlyWhenItChanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	var announced []int
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.emit = func(event string, payload any) {
+		if event == uiScaleEvent {
+			announced = append(announced, payload.(int))
+		}
+	}
+	input := SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels}
+	for _, scale := range []int{100, 150, 150, 0} {
+		input.UIScale = scale
+		if _, err := s.Save(input); err != nil {
+			t.Fatalf("Save(%d): %v", scale, err)
+		}
+	}
+	if want := []int{150, 100}; !reflect.DeepEqual(announced, want) {
+		t.Fatalf("announced = %v, want %v", announced, want)
+	}
+}
+
+func TestSettingsSaveStoresTheUIScaleAndDropsItAtTheDefault(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	input := SettingsInput{
+		Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: 150,
+	}
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"uiScale": 150`) || cfg.EffectiveUIScale() != 150 {
+		t.Fatalf("150 left live %d and wrote %s", cfg.EffectiveUIScale(), b)
+	}
+	input.UIScale = 100
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	if b, err = os.ReadFile(config.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "uiScale") || cfg.EffectiveUIScale() != 100 {
+		t.Fatalf("100 left live %d and wrote %s", cfg.EffectiveUIScale(), b)
+	}
+}

@@ -35,4 +35,9 @@ const (
 	defaultRoot = "~/work"
 
 	DefaultThoughtsID = "default"
+
+	UIScaleMin     = 80
+	UIScaleMax     = 150
+	UIScaleStep    = 10
+	UIScaleDefault = 100
 )

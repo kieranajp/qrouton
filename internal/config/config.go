@@ -37,6 +37,9 @@ type Config struct {
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 
 	Thoughts Thoughts `json:"thoughts,omitzero"`
+
+	// A whole percent. Absent reads as 100.
+	UIScale int `json:"uiScale,omitempty"`
 }
 
 // Thoughts names where sessions write their documents. Default is private.
@@ -112,6 +115,7 @@ func (c *Config) Replace(next *Config) {
 	c.Quiet = replacement.Quiet
 	c.StickerLabels = replacement.StickerLabels
 	c.Thoughts = replacement.Thoughts
+	c.UIScale = replacement.UIScale
 }
 
 func clone(c *Config) *Config {
@@ -123,6 +127,7 @@ func clone(c *Config) *Config {
 		Editor:   append([]string(nil), c.Editor...),
 		Welcomed: c.Welcomed,
 		Quiet:    c.Quiet,
+		UIScale:  c.UIScale,
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))
@@ -211,6 +216,27 @@ func effectiveStickerLabels(c *Config) StickerLabels {
 		labels.Exclamation = c.StickerLabels.Exclamation
 	}
 	return labels
+}
+
+// UIScaleSteps lists every percent the UI scale may take, smallest first.
+func UIScaleSteps() []int {
+	var steps []int
+	for p := UIScaleMin; p <= UIScaleMax; p += UIScaleStep {
+		steps = append(steps, p)
+	}
+	return steps
+}
+
+func ValidUIScale(percent int) bool {
+	return percent >= UIScaleMin && percent <= UIScaleMax && (percent-UIScaleMin)%UIScaleStep == 0
+}
+
+// EffectiveUIScale answers 100 for an unset or hand-edited off-grid value.
+func (c *Config) EffectiveUIScale() int {
+	if percent := c.Snapshot().UIScale; ValidUIScale(percent) {
+		return percent
+	}
+	return UIScaleDefault
 }
 
 func xdgDir(envVar, fallback string) string {

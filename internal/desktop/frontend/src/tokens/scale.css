@@ -1,0 +1,4 @@
+/* Must stay unitless: a unit makes every calc() that multiplies it invalid. */
+:where(:root) {
+  --ui-scale: 1;
+}

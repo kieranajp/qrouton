@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -367,5 +368,56 @@ func TestSaveRefusesARootThatWouldSwallowAnExtraThoughtsRoot(t *testing.T) {
 	}
 	if after, _ := os.ReadFile(Path()); string(after) != string(before) {
 		t.Fatalf("a refused save replaced the file: %s", after)
+	}
+}
+
+func TestEffectiveUIScaleAnswersEachStepAndDefaultsTheRest(t *testing.T) {
+	want := []int{80, 90, 100, 110, 120, 130, 140, 150}
+	if got := UIScaleSteps(); !slices.Equal(got, want) {
+		t.Fatalf("steps = %v, want %v", got, want)
+	}
+	for _, step := range want {
+		if got := (&Config{UIScale: step}).EffectiveUIScale(); got != step {
+			t.Fatalf("EffectiveUIScale(%d) = %d", step, got)
+		}
+	}
+	for _, off := range []int{0, -10, 70, 85, 105, 160, 1000} {
+		if got := (&Config{UIScale: off}).EffectiveUIScale(); got != 100 {
+			t.Fatalf("EffectiveUIScale(%d) = %d, want 100", off, got)
+		}
+	}
+}
+
+func TestSnapshotAndReplaceKeepTheUIScale(t *testing.T) {
+	cfg := &Config{UIScale: 130}
+	if got := cfg.Snapshot().UIScale; got != 130 {
+		t.Fatalf("snapshot dropped the scale: %d", got)
+	}
+	live := &Config{}
+	live.Replace(cfg)
+	if got := live.Snapshot().UIScale; got != 130 {
+		t.Fatalf("replace dropped the scale: %d", got)
+	}
+}
+
+func TestSaveOmitsAnUnsetUIScale(t *testing.T) {
+	writeConfig(t, `{}`)
+	for _, tc := range []struct {
+		scale int
+		want  bool
+	}{{0, false}, {150, true}} {
+		if err := Save(&Config{Root: t.TempDir(), UIScale: tc.scale}); err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(Path())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := strings.Contains(string(b), `"uiScale": 150`); got != tc.want {
+			t.Fatalf("scale %d wrote %s", tc.scale, b)
+		}
+		if !tc.want && strings.Contains(string(b), "uiScale") {
+			t.Fatalf("an unset scale was written: %s", b)
+		}
 	}
 }

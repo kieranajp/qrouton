@@ -18,6 +18,8 @@ import { Call } from "../wails.js";
  * @property {string} linear
  * @property {StickerLabels} stickerLabels
  * @property {boolean} chime
+ * @property {number} uiScale
+ * @property {number[]} [uiScaleSteps]
  * @property {string} [linearPath]
  * @property {string} [linearError]
  */

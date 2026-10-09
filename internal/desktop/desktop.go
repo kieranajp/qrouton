@@ -84,7 +84,7 @@ func Run(opts Options) error {
 	// The asset route is built into the renderer, which is built before the
 	// windows it asks: it holds the variable rather than the registry.
 	var windows *Windows
-	r := newWailsRenderer(assets, opts.Icon, func(token string) (string, string, bool) {
+	r := newWailsRenderer(assets, opts.Icon, opts.Config.EffectiveUIScale, func(token string) (string, string, bool) {
 		if windows == nil {
 			return "", "", false
 		}

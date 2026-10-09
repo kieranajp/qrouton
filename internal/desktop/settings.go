@@ -24,6 +24,8 @@ type SettingsView struct {
 	LinearError   string               `json:"linearError,omitempty"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
 	Chime         bool                 `json:"chime"`
+	UIScale       int                  `json:"uiScale"`
+	UIScaleSteps  []int                `json:"uiScaleSteps"`
 }
 
 type SettingsInput struct {
@@ -34,6 +36,7 @@ type SettingsInput struct {
 	Linear        string               `json:"linear"`
 	StickerLabels config.StickerLabels `json:"stickerLabels"`
 	Chime         bool                 `json:"chime"`
+	UIScale       int                  `json:"uiScale"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -84,6 +87,8 @@ func (s *Settings) Load() SettingsView {
 		LinearError:   errorText(linearErr),
 		StickerLabels: cfg.EffectiveStickerLabels(),
 		Chime:         !cfg.Quiet,
+		UIScale:       cfg.EffectiveUIScale(),
+		UIScaleSteps:  config.UIScaleSteps(),
 	}
 }
 
@@ -129,6 +134,10 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	if err != nil {
 		return SaveResult{}, err
 	}
+	uiScale, err := validateUIScale(in.UIScale)
+	if err != nil {
+		return SaveResult{}, err
+	}
 
 	linear, err := lineartools.Validate(in.Linear)
 	if err != nil {
@@ -139,6 +148,10 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
 		next.Quiet = !in.Chime
+		next.UIScale = uiScale
+		if uiScale == config.UIScaleDefault {
+			next.UIScale = 0
+		}
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
@@ -153,6 +166,9 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		}
 		if labelsChanged && s.wakeChrome != nil {
 			s.wakeChrome()
+		}
+		if current.EffectiveUIScale() != uiScale {
+			s.emit(uiScaleEvent, uiScale)
 		}
 	})
 	if err != nil {
@@ -180,6 +196,17 @@ func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, e
 		}
 	}
 	return labels, nil
+}
+
+// validateUIScale reads an unset scale as the default.
+func validateUIScale(percent int) (int, error) {
+	if percent == 0 {
+		return config.UIScaleDefault, nil
+	}
+	if !config.ValidUIScale(percent) {
+		return 0, fmt.Errorf(settingsWrappedFormat, settingsFieldUIScale, ErrUIScale)
+	}
+	return percent, nil
 }
 
 // Quit tears down every session supervisor and PTY before exiting.

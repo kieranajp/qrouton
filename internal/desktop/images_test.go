@@ -39,7 +39,7 @@ func TestImageGalleryRegistryContentReadAndAssetRoute(t *testing.T) {
 	if err != nil || text != "1. first.PNG\n2. second.webp\n3. first.PNG\nCurrent image: 1 of 3" {
 		t.Fatalf("read = %q, %v", text, err)
 	}
-	handler := assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, w.imageAsset)
+	handler := assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, nil, w.imageAsset)
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, page.Images[1].URL, nil))
 	if response.Code != http.StatusOK || response.Header().Get("Content-Type") != "image/webp" || response.Header().Get(cacheControlHeader) != cacheControlNoStore || response.Header().Get(contentTypeOptionsHeader) != contentTypeNoSniff {
@@ -214,7 +214,7 @@ func TestImageTokensOnlyReachLiveAdmittedEntries(t *testing.T) {
 	deckWindow, _ := w.window(deck)
 	page, _ := w.Content(first)
 	otherPage, _ := w.Content(second)
-	handler := assetHandler(fstest.MapFS{}, w.deckDirectory, w.imageAsset)
+	handler := assetHandler(fstest.MapFS{}, nil, w.deckDirectory, w.imageAsset)
 	status := func(url string) int {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, url, nil))
@@ -273,7 +273,7 @@ func TestImageAssetRevalidatesChangedFilesAndRefreshesUnchangedMetadata(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := assetHandler(fstest.MapFS{}, nil, w.imageAsset)
+	handler := assetHandler(fstest.MapFS{}, nil, nil, w.imageAsset)
 	read := func(url string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, url, nil))

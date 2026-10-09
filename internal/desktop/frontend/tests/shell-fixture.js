@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";

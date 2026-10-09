@@ -33,6 +33,8 @@
     bind:linear={panel.form.linear}
     bind:stickerLabels={panel.form.stickerLabels}
     bind:chime={panel.form.chime}
+    bind:uiScale={panel.form.uiScale}
+    uiScaleSteps={panel.form.uiScaleSteps}
     linearPath={panel.form.linearPath}
     fields={panel.fields}
     restartRequired={panel.restartRequired}

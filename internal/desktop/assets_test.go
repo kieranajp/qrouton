@@ -46,7 +46,7 @@ func deckHandler(root string) http.Handler {
 		}
 		return root, "thoughts/decks", true
 	}
-	return assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, lookup)
+	return assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, lookup)
 }
 
 func TestTheDeckRouteServesItsOwnMediaAndNothingElse(t *testing.T) {
@@ -105,7 +105,7 @@ func TestADeckAddressesItsOwnWindowAndNoOther(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	// A handler whose lookup answers nothing is every window that is not an open
 	// deck: another session's tab, a terminal, a plain markdown document.
-	assetHandler(fstest.MapFS{}, func(string) (string, string, bool) { return "", "", false }).
+	assetHandler(fstest.MapFS{}, nil, func(string) (string, string, bool) { return "", "", false }).
 		ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/deck/goodtoken/shot.png", nil))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("a window that is no deck served its neighbours: %d", recorder.Code)
@@ -114,5 +114,26 @@ func TestADeckAddressesItsOwnWindowAndNoOther(t *testing.T) {
 	deckHandler(root).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/deck/goodtoken/shot.png", nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("the deck's own picture answered %d", recorder.Code)
+	}
+}
+
+func TestTheScaleRouteAnswersTheStoredScaleUncached(t *testing.T) {
+	for _, tc := range []struct {
+		lookup func() int
+		want   string
+	}{
+		{nil, "--ui-scale: 1;"},
+		{func() int { return 150 }, "--ui-scale: 1.5;"},
+		{func() int { return 80 }, "--ui-scale: 0.8;"},
+	} {
+		recorder := httptest.NewRecorder()
+		assetHandler(fstest.MapFS{}, tc.lookup, nil).
+			ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, uiScalePath, nil))
+		if recorder.Code != http.StatusOK || !strings.Contains(recorder.Body.String(), tc.want) {
+			t.Fatalf("answered %d %q, want %q", recorder.Code, recorder.Body.String(), tc.want)
+		}
+		if got := recorder.Header().Get(cacheControlHeader); got != cacheControlNoStore {
+			t.Fatalf("Cache-Control = %q", got)
+		}
 	}
 }

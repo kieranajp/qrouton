@@ -1,12 +1,13 @@
 <script>
   import Button from "../core/Button.svelte";
+  import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -17,6 +18,8 @@
     linearPath = "",
     stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
     chime = $bindable(true),
+    uiScale = $bindable(100),
+    uiScaleSteps = [],
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -60,6 +63,16 @@
 <label class="chime">
   <input type="checkbox" bind:checked={chime} />
   Chime when an agent is waiting for you
+</label>
+
+<label class="scale">
+  <CapsLabel>UI scale</CapsLabel>
+  <select bind:value={uiScale}>
+    {#each uiScaleSteps.includes(uiScale) ? uiScaleSteps : [...uiScaleSteps, uiScale] as step (step)}
+      <option value={step}>{step}%</option>
+    {/each}
+  </select>
+  {#if fields.uiScale}<span class="help">{fields.uiScale}</span>{/if}
 </label>
 
 <fieldset class="sticker-labels">
@@ -176,6 +189,32 @@
   .chime input:focus-visible {
     outline: none;
     box-shadow: var(--shadow-focus);
+  }
+
+  .scale {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .scale select {
+    border: 1px solid var(--border-default);
+    background: var(--surface-chrome);
+    padding: var(--space-3) var(--space-5);
+    font: var(--machine-md);
+    color: var(--text-primary);
+  }
+
+  .scale select:focus-visible {
+    outline: none;
+    border-color: var(--accent-action);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .scale .help {
+    font: var(--machine-sm);
+    color: var(--state-failed);
   }
 
   .banner {

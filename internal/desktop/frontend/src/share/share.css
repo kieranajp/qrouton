@@ -1,5 +1,6 @@
 /* Shared pages omit window-level height and overflow rules so they remain scrollable.
    The backend emits the colour variables before this stylesheet. */
+@import "../tokens/scale.css";
 @import "./fonts.css";
 @import "../tokens/typography.css";
 @import "../tokens/spacing.css";

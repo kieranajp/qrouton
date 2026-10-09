@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -60,12 +61,21 @@ func validateFrontend(assets fs.FS) error {
 type deckLookup func(token string) (root, dir string, ok bool)
 type imageLookup func(token string, index int) (imageAssetRef, bool)
 
-func assetHandler(assets fs.FS, decks deckLookup, imageLookups ...imageLookup) http.Handler {
+func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, imageLookups ...imageLookup) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))
 	mux.HandleFunc(theme.Path, func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set(contentTypeHeader, theme.MediaType)
 		_, _ = io.WriteString(w, theme.CSS())
+	})
+	mux.HandleFunc(uiScalePath, func(w http.ResponseWriter, _ *http.Request) {
+		percent := config.UIScaleDefault
+		if uiScale != nil {
+			percent = uiScale()
+		}
+		w.Header().Set(contentTypeHeader, theme.MediaType)
+		w.Header().Set(cacheControlHeader, cacheControlNoStore)
+		_, _ = fmt.Fprintf(w, uiScaleCSSFormat, strconv.FormatFloat(float64(percent)/100, 'f', -1, 64))
 	})
 	mux.HandleFunc(deckAssetPath, deckAsset(decks))
 	var images imageLookup
