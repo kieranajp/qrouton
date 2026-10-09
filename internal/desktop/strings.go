@@ -112,7 +112,17 @@ const (
 	settingsWrappedFormat = "%s: %w"
 	settingsEmpty         = "cannot be empty"
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
+	unknownUIScaleAction  = "unknown UI scale action"
 )
+
+// What a scale shortcut asks the workbench to do.
+const (
+	uiScaleActionIn    = "in"
+	uiScaleActionOut   = "out"
+	uiScaleActionReset = "reset"
+)
+
+const viewMenuLabel = "View"
 
 // A tab may only stand in for a window if it reports its process's state.
 const (

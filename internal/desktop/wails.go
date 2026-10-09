@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"io/fs"
+	"runtime"
 	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -22,10 +23,30 @@ func newWailsRenderer(assets fs.FS, icon []byte, uiScale func() int, decks deckL
 		Assets:      application.AssetOptions{Handler: assetHandler(assets, uiScale, decks, images...)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
+	if runtime.GOOS == "darwin" {
+		r.app.Menu.Set(applicationMenu())
+	}
 	r.app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
 		r.running.Store(true)
 	})
 	return r
+}
+
+// applicationMenu is the macOS default without its zoom items, which magnify
+// the webview on top of the UI scale.
+func applicationMenu() *application.Menu {
+	menu := application.NewMenu()
+	menu.AddRole(application.AppMenu)
+	menu.AddRole(application.FileMenu)
+	menu.AddRole(application.EditMenu)
+	view := menu.AddSubmenu(viewMenuLabel)
+	view.AddRole(application.Reload)
+	view.AddRole(application.ForceReload)
+	view.AddSeparator()
+	view.AddRole(application.ToggleFullscreen)
+	menu.AddRole(application.WindowMenu)
+	menu.AddRole(application.HelpMenu)
+	return menu
 }
 
 func (r *wailsRenderer) register(service application.Service) {

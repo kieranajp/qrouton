@@ -38,6 +38,7 @@ export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Se
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
+export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
 export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
@@ -213,6 +214,13 @@ export const TAB_STATUSES = Object.freeze({
   SUCCEEDED: "succeeded",
   FAILED: "failed",
   WAITING: "waiting",
+});
+
+/** @typedef {"in"|"out"|"reset"} UIScaleAction */
+export const UI_SCALE_ACTIONS = Object.freeze({
+  IN: "in",
+  OUT: "out",
+  RESET: "reset",
 });
 
 /** @typedef {"terminal"|"document"} WindowKind */

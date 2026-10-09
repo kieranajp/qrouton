@@ -148,10 +148,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
 		next.Quiet = !in.Chime
-		next.UIScale = uiScale
-		if uiScale == config.UIScaleDefault {
-			next.UIScale = 0
-		}
+		next.UIScale = storedUIScale(uiScale)
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
@@ -209,6 +206,44 @@ func validateUIScale(percent int) (int, error) {
 	return percent, nil
 }
 
+func storedUIScale(percent int) int {
+	if percent == config.UIScaleDefault {
+		return 0
+	}
+	return percent
+}
+
+// AdjustUIScale steps the scale in or out within its bounds, or resets it,
+// saving and announcing only a change.
+func (s *Settings) AdjustUIScale(action string) (int, error) {
+	var scale int
+	err := s.cfg.Transact(func(snapshot *config.Config) error {
+		current := snapshot.EffectiveUIScale()
+		switch action {
+		case uiScaleActionIn:
+			scale = min(current+config.UIScaleStep, config.UIScaleMax)
+		case uiScaleActionOut:
+			scale = max(current-config.UIScaleStep, config.UIScaleMin)
+		case uiScaleActionReset:
+			scale = config.UIScaleDefault
+		default:
+			return fmt.Errorf("%w: %q", ErrUIScaleAction, action)
+		}
+		if scale == current {
+			return nil
+		}
+		return commitConfig(s.cfg, snapshot, func(next *config.Config) {
+			next.UIScale = storedUIScale(scale)
+		}, nil, func(_, _ *config.Config) {
+			s.emit(uiScaleEvent, scale)
+		})
+	})
+	if err != nil {
+		return 0, err
+	}
+	return scale, nil
+}
+
 // Quit tears down every session supervisor and PTY before exiting.
 func (s *Settings) Quit() { s.quit() }
 
@@ -216,24 +251,29 @@ func (s *Settings) Quit() { s.quit() }
 func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
 	publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
-		next := snapshot.Snapshot()
-		mutate(next)
-		if persist != nil {
-			if err := persist(); err != nil {
-				return err
-			}
-		}
-		if err := config.Save(next); err != nil {
+		return commitConfig(cfg, snapshot, mutate, persist, publish)
+	})
+}
+
+func commitConfig(cfg, snapshot *config.Config, mutate func(*config.Config), persist func() error,
+	publish func(current, live *config.Config)) error {
+	next := snapshot.Snapshot()
+	mutate(next)
+	if persist != nil {
+		if err := persist(); err != nil {
 			return err
 		}
-		live := next.Snapshot()
-		live.Root = snapshot.Root
-		cfg.Replace(live)
-		if publish != nil {
-			publish(snapshot, live)
-		}
-		return nil
-	})
+	}
+	if err := config.Save(next); err != nil {
+		return err
+	}
+	live := next.Snapshot()
+	live.Root = snapshot.Root
+	cfg.Replace(live)
+	if publish != nil {
+		publish(snapshot, live)
+	}
+	return nil
 }
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.

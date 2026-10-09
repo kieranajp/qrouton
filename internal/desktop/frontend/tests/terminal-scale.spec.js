@@ -17,3 +17,19 @@ test("a scale change regrows an open terminal and tells the PTY its new size", a
     .poll(async () => columns(await page.evaluate(() => window.terminalScale.calls()), "pty.Resize").at(-1))
     .toBeLessThan(started);
 });
+
+test("the scale shortcut reaches the workbench from a focused terminal and types nothing", async ({ page }) => {
+  await page.goto("/tests/terminal-scale.html");
+  await expect.poll(() => page.evaluate(() => window.terminalScale.fontSize())).toBe(13);
+  await page.locator(".xterm-helper-textarea").focus();
+
+  await page.keyboard.press("ControlOrMeta+Equal");
+  await page.keyboard.press("ControlOrMeta+Minus");
+  await page.keyboard.press("ControlOrMeta+Digit0");
+
+  const calls = () => page.evaluate(() => window.terminalScale.calls());
+  await expect
+    .poll(async () => (await calls()).filter(([name]) => name.endsWith(".AdjustUIScale")).map(([, action]) => action))
+    .toEqual(["in", "out", "reset"]);
+  expect((await calls()).filter(([name]) => name === "pty.Write")).toEqual([]);
+});

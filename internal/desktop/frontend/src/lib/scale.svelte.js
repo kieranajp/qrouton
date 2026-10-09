@@ -1,6 +1,10 @@
 import { UI_SCALE_EVENT } from "./bridge/generated.js";
 import { isNarrow } from "./scale.js";
-import { Events } from "./wails.js";
+import { adjustUIScale } from "./settings/calls.js";
+import { scaleAction } from "./shortcuts.js";
+import { call, Events } from "./wails.js";
+
+const linux = navigator.userAgent.includes("Linux");
 
 /** @type {Set<(percent: number) => void>} */
 const listeners = new Set();
@@ -15,6 +19,14 @@ export function onScale(listener) {
   return () => listeners.delete(listener);
 }
 
+/** The workbench saves the step and announces it back; the page applies only the announcement. */
+function onKey(event) {
+  const action = scaleAction(event, linux);
+  if (!action) return;
+  event.preventDefault();
+  call(adjustUIScale(action));
+}
+
 function markNarrow() {
   document.documentElement.toggleAttribute("data-narrow", isNarrow(window.innerWidth, percent));
 }
@@ -25,10 +37,12 @@ export function startScale() {
   if (Number.isFinite(painted)) percent = Math.round(painted * 100);
   markNarrow();
   window.addEventListener("resize", markNarrow);
+  window.addEventListener("keydown", onKey);
   const stop = Events.On(UI_SCALE_EVENT, (event) => applyScale(event.data));
   return () => {
     stop();
     window.removeEventListener("resize", markNarrow);
+    window.removeEventListener("keydown", onKey);
   };
 }
 

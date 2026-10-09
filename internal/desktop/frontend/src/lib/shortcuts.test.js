@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NUMBERED, opensSettings, position, rowAt, shortcut } from "./shortcuts.js";
+import { NUMBERED, opensSettings, position, rowAt, scaleAction, shortcut } from "./shortcuts.js";
 
 const cmd = (key, extra = {}) => ({ key, metaKey: true, ...extra });
 
@@ -62,4 +62,31 @@ test("a comma the settings panel has no claim on", () => {
   assert.equal(opensSettings(cmd(",", { altKey: true })), false);
   assert.equal(opensSettings(cmd(".")), false);
   assert.equal(opensSettings(undefined), false);
+});
+
+test("Command with =, +, - and 0 steps and resets the scale on macOS", () => {
+  assert.equal(scaleAction(cmd("="), false), "in");
+  assert.equal(scaleAction(cmd("+", { shiftKey: true }), false), "in");
+  assert.equal(scaleAction(cmd("-"), false), "out");
+  assert.equal(scaleAction(cmd("0"), false), "reset");
+});
+
+test("Control steps and resets the scale on Linux", () => {
+  assert.equal(scaleAction({ key: "=", ctrlKey: true }, true), "in");
+  assert.equal(scaleAction({ key: "+", ctrlKey: true, shiftKey: true }, true), "in");
+  assert.equal(scaleAction({ key: "-", ctrlKey: true }, true), "out");
+  assert.equal(scaleAction({ key: "0", ctrlKey: true }, true), "reset");
+});
+
+// Control-minus is readline's undo on macOS, so only Command scales there.
+test("the other platform's modifier, Option, both modifiers and other keys leave the scale alone", () => {
+  assert.equal(scaleAction({ key: "-", ctrlKey: true }, false), "");
+  assert.equal(scaleAction(cmd("="), true), "");
+  assert.equal(scaleAction(cmd("=", { altKey: true }), false), "");
+  assert.equal(scaleAction({ key: "=", ctrlKey: true, altKey: true }, true), "");
+  assert.equal(scaleAction(cmd("=", { ctrlKey: true }), false), "");
+  assert.equal(scaleAction({ key: "=", ctrlKey: true, metaKey: true }, true), "");
+  assert.equal(scaleAction(cmd("1"), false), "");
+  assert.equal(scaleAction({ key: "=" }, false), "");
+  assert.equal(scaleAction(undefined, false), "");
 });

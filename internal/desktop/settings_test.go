@@ -922,3 +922,70 @@ func TestSettingsSaveStoresTheUIScaleAndDropsItAtTheDefault(t *testing.T) {
 		t.Fatalf("100 left live %d and wrote %s", cfg.EffectiveUIScale(), b)
 	}
 }
+
+func TestAdjustUIScaleStepsClampsAndResets(t *testing.T) {
+	cases := []struct {
+		name          string
+		stored        int
+		action        string
+		want, written int
+		announced     bool
+	}{
+		{"in from 100", 0, uiScaleActionIn, 110, 110, true},
+		{"out from 100", 0, uiScaleActionOut, 90, 90, true},
+		{"in at the top", 150, uiScaleActionIn, 150, -1, false},
+		{"out at the bottom", 80, uiScaleActionOut, 80, -1, false},
+		{"out from the top", 150, uiScaleActionOut, 140, 140, true},
+		{"in from the bottom", 80, uiScaleActionIn, 90, 90, true},
+		{"reset from 150", 150, uiScaleActionReset, 100, 0, true},
+		{"reset at 100", 0, uiScaleActionReset, 100, -1, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: []string{"vim"}, UIScale: tc.stored}
+			s := testSettings(t, cfg, nil, nil, nil)
+			var announced []int
+			s.emit = func(event string, payload any) {
+				if event == uiScaleEvent {
+					announced = append(announced, payload.(int))
+				}
+			}
+			got, err := s.AdjustUIScale(tc.action)
+			if err != nil || got != tc.want {
+				t.Fatalf("AdjustUIScale = %d, %v; want %d", got, err, tc.want)
+			}
+			if tc.announced != (len(announced) == 1 && announced[0] == tc.want) {
+				t.Fatalf("announced %v", announced)
+			}
+			b, err := os.ReadFile(config.Path())
+			if tc.written < 0 {
+				if !os.IsNotExist(err) {
+					t.Fatalf("a scale at its bound wrote config.json (%v)", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var onDisk config.Config
+			if err := json.Unmarshal(b, &onDisk); err != nil {
+				t.Fatal(err)
+			}
+			if onDisk.UIScale != tc.written || !reflect.DeepEqual(onDisk.Editor, []string{"vim"}) || cfg.EffectiveUIScale() != tc.want {
+				t.Fatalf("wrote %s, live scale %d", b, cfg.EffectiveUIScale())
+			}
+		})
+	}
+}
+
+func TestAdjustUIScaleRefusesAnUnknownAction(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := testSettings(t, &config.Config{Root: t.TempDir()}, nil, nil, nil)
+	if _, err := s.AdjustUIScale("sideways"); !errors.Is(err, ErrUIScaleAction) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
+		t.Fatal("an unknown action wrote config.json")
+	}
+}
