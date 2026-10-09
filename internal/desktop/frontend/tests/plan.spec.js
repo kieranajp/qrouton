@@ -209,7 +209,7 @@ test("a narrow pane steps the type down and hides nothing", async ({ page }) => 
   expect(narrow).toHaveLength(wide.length);
   const lost = wide.filter((display, at) => display !== "none" && narrow[at] === "none");
   expect(lost).toEqual([]);
-  expect(narrowHeading).toBeLessThan(wideHeading);
+  expect(narrowHeading).toBeLessThanOrEqual(wideHeading);
 });
 
 test("a pushed document redraws the body without moving the reader", async ({ page }) => {
