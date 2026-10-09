@@ -273,3 +273,18 @@ test("the session name's menu paints over the pane chrome below it", async ({ pa
   // The menu overhangs the header, and the band they share belongs to the menu.
   expect(await page.evaluate(() => window.overlapOwner())).toBe("menu");
 });
+
+for (const scale of [1, 1.3, 1.5]) {
+  test(`an untouched layout at ${scale * 100}% keeps the conversation one rail wide inside 1100px`, async ({ page }) => {
+    await page.setViewportSize({ width: 1100, height: 760 });
+    await open(page, "window-1");
+    await page.evaluate((scale) => document.documentElement.style.setProperty("--ui-scale", String(scale)), scale);
+
+    const box = (selector) => page.evaluate((selector) => document.querySelector(selector).getBoundingClientRect().toJSON(), selector);
+    const minimum = 200 * scale;
+    await expect.poll(async () => (await box(".agent")).width).toBeGreaterThanOrEqual(minimum);
+    expect((await box(".human")).right).toBeLessThanOrEqual(1100);
+    if (scale === 1) await expect(page.locator(".human")).toHaveCSS("width", "640px");
+    else expect((await box(".human")).width).toBeLessThan(640 * scale);
+  });
+}

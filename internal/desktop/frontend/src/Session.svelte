@@ -80,7 +80,7 @@
       onReset={view.resetSidebar}
       label="Resize the sidebar" />
 
-    <div class="agent">
+    <div class="agent" class:kept={!view.human}>
       <PaneHeader>
         {#snippet lead()}
           {#if fields.mode === MODE_LABELS.ASSISTANT}
@@ -136,6 +136,7 @@
 
     <div
       class="human"
+      class:dragged={view.human}
       style:width={view.human ? view.human + "px" : null}
       bind:clientWidth={view.measured}>
       <TabStrip
@@ -299,6 +300,11 @@
     border-right: 1px solid var(--border-subtle);
   }
 
+  /* An undragged right pane gives way before the conversation drops below one rail width. */
+  .agent.kept {
+    min-width: var(--w-rail);
+  }
+
   .assistant-mode {
     font: var(--machine-sm);
     font-size: calc(11px * var(--ui-scale));
@@ -317,9 +323,14 @@
   /* A zero-size point for the menu to resolve its own position against. */
   .human {
     width: var(--w-human-pane);
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--surface-terminal);
+  }
+
+  .human.dragged {
+    flex: none;
   }
 </style>
