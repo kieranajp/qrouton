@@ -4,6 +4,8 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
+import { terminalSize } from "./scale.js";
+import { uiScale } from "./scale.svelte.js";
 import { opensSettings, position } from "./shortcuts.js";
 export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
@@ -11,6 +13,9 @@ export { Terminal };
 
 const token = (name) =>
   resolveToken((property) => getComputedStyle(document.documentElement).getPropertyValue(property), name);
+
+/** @param {number} percent */
+export const terminalFontSize = (percent) => terminalSize(parseFloat(token("--terminal-size")), percent);
 
 const terminalFont = () => `${token("--terminal-size")} ${token("--font-terminal")}`;
 
@@ -43,7 +48,7 @@ export function terminalAt(node) {
 export function mount(host, { write, background = "--surface-app" }) {
   const term = new Terminal({
     fontFamily: token("--font-terminal"),
-    fontSize: parseFloat(token("--terminal-size")),
+    fontSize: terminalFontSize(uiScale()),
     allowProposedApi: true,
     macOptionIsMeta: true,
     theme: {

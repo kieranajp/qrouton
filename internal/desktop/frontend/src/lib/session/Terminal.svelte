@@ -1,9 +1,11 @@
 <script>
   import { onDestroy, onMount } from "svelte";
   import TerminalPane from "../shell/TerminalPane.svelte";
+  import { latestPerFrame } from "../frame.js";
+  import { onScale } from "../scale.svelte.js";
   import { createTerminalActivation } from "../terminal-focus.js";
   import { Call, Events } from "../wails.js";
-  import { createTerminalPainter, encode, fontsReady, mount, watchSize } from "../xterm.js";
+  import { createTerminalPainter, encode, fontsReady, mount, terminalFontSize, watchSize } from "../xterm.js";
 
   /** @type {{id: string, pty: import("./services.js").PTY, active?: boolean,
    *   focus?: number, focusPending?: boolean, onFocused?: (generation: number) => void}} */
@@ -49,8 +51,16 @@
         painter.paint(encode("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n"));
       });
       const stopWatch = watchSize(host, fit);
+      // xterm re-measures its cell after the option changes, so a fit in the same frame reads the old cell.
+      const refitScaled = latestPerFrame(() => fit());
+      const offScale = onScale((percent) => {
+        term.options.fontSize = terminalFontSize(percent);
+        refitScaled.schedule();
+      });
 
       teardown = () => {
+        offScale();
+        refitScaled.cancel();
         offData();
         offExit();
         stopWatch();
