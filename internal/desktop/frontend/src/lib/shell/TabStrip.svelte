@@ -4,6 +4,7 @@
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
+  import { uiScale } from "../scale.svelte.js";
   import { dominantStatus, dropIndex, split, tabLabel } from "./tabs.js";
 
   /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
@@ -20,6 +21,7 @@
 
   // Below this a tab is a coloured rectangle; the rest go to the menu.
   const MIN_TAB = 104;
+  let minTab = $derived((MIN_TAB * uiScale()) / 100);
 
   let width = $state(0);
   let reserved = $state(0);
@@ -29,9 +31,9 @@
   let room = $derived(Math.max(0, width - reserved));
   // Decided before the chip is measured in: taking a tab off to make room for
   // the chip would otherwise remove the overflow that summoned it.
-  let overflowing = $derived(width > 0 && tabs.length > Math.floor(room / MIN_TAB));
+  let overflowing = $derived(width > 0 && tabs.length > Math.floor(room / minTab));
   let capacity = $derived(
-    overflowing ? Math.max(1, Math.floor((room - chip) / MIN_TAB)) : tabs.length,
+    overflowing ? Math.max(1, Math.floor((room - chip) / minTab)) : tabs.length,
   );
   let drawn = $derived(split(tabs, selected, capacity));
   let hiddenStatus = $derived(dominantStatus(drawn.hidden.map(({ tab }) => tab)));

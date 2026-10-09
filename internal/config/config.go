@@ -261,16 +261,9 @@ func CachePath() string {
 // owners, so nothing may block a launch here, and an empty owner list is simply
 // an empty repository list. QROUTON_ROOT / QROUTON_ORGS override at runtime.
 func Load() (*Config, error) {
-	cfg := &Config{mu: &sync.RWMutex{}, writeMu: &sync.Mutex{}}
-	b, err := os.ReadFile(Path())
-	switch {
-	case os.IsNotExist(err):
-	case err != nil:
+	cfg, err := ReadFile()
+	if err != nil {
 		return nil, err
-	default:
-		if err := json.Unmarshal(b, cfg); err != nil {
-			return nil, fmt.Errorf("%s: %w", Path(), err)
-		}
 	}
 	if v := os.Getenv(rootEnvVar); v != "" {
 		cfg.Root = v
@@ -283,6 +276,23 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("%s: %w", Path(), err)
 	}
 	return cfg, os.MkdirAll(cfg.Root, dirMode)
+}
+
+// ReadFile answers config.json as written, without the runtime overrides or
+// path expansion Load applies, so a save from it keeps the user's own text.
+func ReadFile() (*Config, error) {
+	cfg := &Config{mu: &sync.RWMutex{}, writeMu: &sync.Mutex{}}
+	b, err := os.ReadFile(Path())
+	switch {
+	case os.IsNotExist(err):
+	case err != nil:
+		return nil, err
+	default:
+		if err := json.Unmarshal(b, cfg); err != nil {
+			return nil, fmt.Errorf("%s: %w", Path(), err)
+		}
+	}
+	return cfg, nil
 }
 
 func resolvePaths(cfg *Config) {

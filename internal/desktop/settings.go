@@ -232,11 +232,19 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 		if scale == current {
 			return nil
 		}
-		return commitConfig(s.cfg, snapshot, func(next *config.Config) {
-			next.UIScale = storedUIScale(scale)
-		}, nil, func(_, _ *config.Config) {
-			s.emit(uiScaleEvent, scale)
-		})
+		onDisk, err := config.ReadFile()
+		if err != nil {
+			return err
+		}
+		onDisk.UIScale = storedUIScale(scale)
+		if err := config.Save(onDisk); err != nil {
+			return err
+		}
+		live := snapshot.Snapshot()
+		live.UIScale = onDisk.UIScale
+		s.cfg.Replace(live)
+		s.emit(uiScaleEvent, scale)
+		return nil
 	})
 	if err != nil {
 		return 0, err
@@ -251,29 +259,24 @@ func (s *Settings) Quit() { s.quit() }
 func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
 	publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
-		return commitConfig(cfg, snapshot, mutate, persist, publish)
-	})
-}
-
-func commitConfig(cfg, snapshot *config.Config, mutate func(*config.Config), persist func() error,
-	publish func(current, live *config.Config)) error {
-	next := snapshot.Snapshot()
-	mutate(next)
-	if persist != nil {
-		if err := persist(); err != nil {
+		next := snapshot.Snapshot()
+		mutate(next)
+		if persist != nil {
+			if err := persist(); err != nil {
+				return err
+			}
+		}
+		if err := config.Save(next); err != nil {
 			return err
 		}
-	}
-	if err := config.Save(next); err != nil {
-		return err
-	}
-	live := next.Snapshot()
-	live.Root = snapshot.Root
-	cfg.Replace(live)
-	if publish != nil {
-		publish(snapshot, live)
-	}
-	return nil
+		live := next.Snapshot()
+		live.Root = snapshot.Root
+		cfg.Replace(live)
+		if publish != nil {
+			publish(snapshot, live)
+		}
+		return nil
+	})
 }
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.

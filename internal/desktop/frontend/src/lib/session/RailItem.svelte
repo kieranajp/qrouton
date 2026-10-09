@@ -1,5 +1,6 @@
 <script>
   import { STICKER_IDS } from "../bridge/generated.js";
+  import { uiScale } from "../scale.svelte.js";
   import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
@@ -40,7 +41,7 @@
       node.classList.remove("above");
       const rowBox = row.getBoundingClientRect();
       const scrollBox = scrollport.getBoundingClientRect();
-      const gap = 5;
+      const gap = (5 * uiScale()) / 100;
       const height = node.getBoundingClientRect().height;
       const below = scrollBox.bottom - rowBox.bottom;
       const above = rowBox.top - scrollBox.top;

@@ -945,6 +945,11 @@ func TestAdjustUIScaleStepsClampsAndResets(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: []string{"vim"}, UIScale: tc.stored}
 			s := testSettings(t, cfg, nil, nil, nil)
+			if tc.written >= 0 {
+				if err := config.Save(cfg); err != nil {
+					t.Fatal(err)
+				}
+			}
 			var announced []int
 			s.emit = func(event string, payload any) {
 				if event == uiScaleEvent {
@@ -987,5 +992,40 @@ func TestAdjustUIScaleRefusesAnUnknownAction(t *testing.T) {
 	}
 	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
 		t.Fatal("an unknown action wrote config.json")
+	}
+}
+
+func TestAdjustUIScaleWritesTheFileAsWrittenNotTheRuntimeOverrides(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), []byte(`{"orgs": ["acme"], "root": "~/work-from-file"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("QROUTON_ORGS", "override")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+
+	if _, err := s.AdjustUIScale(uiScaleActionIn); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onDisk config.Config
+	if err := json.Unmarshal(b, &onDisk); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk.Root != "~/work-from-file" || !reflect.DeepEqual(onDisk.Orgs, []string{"acme"}) || onDisk.UIScale != 110 {
+		t.Fatalf("wrote %s", b)
+	}
+	if live := cfg.Snapshot(); live.UIScale != 110 || !reflect.DeepEqual(live.Orgs, []string{"override"}) {
+		t.Fatalf("live config = %+v", live)
 	}
 }

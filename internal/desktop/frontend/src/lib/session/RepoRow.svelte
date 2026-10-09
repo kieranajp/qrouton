@@ -51,7 +51,7 @@
     }
     const box = event.currentTarget.getBoundingClientRect();
     menu = place(
-      { x: box.left, y: box.bottom + 4 },
+      { x: box.left, y: box.bottom + (4 * uiScale()) / 100 },
       { width: BASE_MENU_WIDTH, height: Math.min(menuHeight(items), BASE_MENU_MAX_HEIGHT) },
       { width: window.innerWidth, height: window.innerHeight },
       uiScale() / 100,
