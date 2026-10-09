@@ -1,0 +1,17 @@
+{
+  "id": "spec-zero-questions",
+  "version": 1,
+  "description": "Large work whose research settles every choice should produce a spec with no open questions.",
+  "fixture": "spec-settled-large",
+  "turns": ["The audit log research is done. Take it to the next stage and stop for my review."],
+  "rubric": "Write a spec rather than a plan. It records the settled choices under Decisions and keeps an Open questions heading with nothing open under it: no Q heading and no answer block outside Decisions. Present it through open_file and stop without changing product code.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/specs/*.md", "pattern": "## Open questions"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/specs/*.md", "pattern": "## Decisions"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+  ]
+}

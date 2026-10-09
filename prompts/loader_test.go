@@ -684,6 +684,30 @@ func TestPlanSkillDefersItsTemplateToAReference(t *testing.T) {
 	}
 }
 
+func TestSpecSkillDefersItsShapeToAReference(t *testing.T) {
+	prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrouton-spec"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(prompt.Content), "Answer:") {
+		t.Error("SKILL.md still holds the spec template")
+	}
+	if !strings.Contains(string(prompt.Content), "references/spec-shape.md") {
+		t.Error("SKILL.md does not point at its reference")
+	}
+	var reference string
+	for _, file := range prompt.Files {
+		if file.Path == "references/spec-shape.md" {
+			reference = string(file.Content)
+		}
+	}
+	for _, want := range []string{"## Open questions", "### Q1", "Answer:", "Chosen:", "Rejected:"} {
+		if !strings.Contains(reference, want) {
+			t.Errorf("the spec shape lacks %q", want)
+		}
+	}
+}
+
 // The research document's shape is one file, read by the workbench pane and
 // written by the lead, so the skill points at it rather than restating it.
 func TestResearchSkillDefersItsShapeToAReference(t *testing.T) {

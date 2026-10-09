@@ -6,6 +6,7 @@ import PlainPane from "./PlainPane.svelte";
 import PlanPane from "./PlanPane.svelte";
 import ResearchPane from "./ResearchPane.svelte";
 import SlidesPane from "./SlidesPane.svelte";
+import SpecPane from "./SpecPane.svelte";
 
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
@@ -20,6 +21,7 @@ const PANES = {
 const KINDS = {
   [ARTIFACT_KINDS.PLAN]: PlanPane,
   [ARTIFACT_KINDS.RESEARCH]: ResearchPane,
+  [ARTIFACT_KINDS.SPEC]: SpecPane,
 };
 
 // A deck is a presentation form, not an artifact kind, so it is asked first and
