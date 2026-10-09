@@ -83,9 +83,9 @@ export const ACTIVITIES = Object.freeze({
   TURN_ENDED: "turn-ended",
 });
 
-/** @typedef {"needs-you"|"none"|"unknown"} AgentAttention */
+/** @typedef {"unread"|"none"|"unknown"} AgentAttention */
 export const AGENT_ATTENTION = Object.freeze({
-  NEEDS_YOU: "needs-you",
+  UNREAD: "unread",
   NONE: "none",
   UNKNOWN: "unknown",
 });

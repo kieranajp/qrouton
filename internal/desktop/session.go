@@ -659,6 +659,9 @@ func (s *Sessions) reveal(state *sessionState) {
 		}
 	}
 	s.mu.Unlock()
+	if state != nil {
+		state.agents.seen()
+	}
 	if s.boot.shown != nil {
 		s.boot.shown(state)
 	}

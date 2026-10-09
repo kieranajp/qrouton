@@ -40,7 +40,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 		rows[row.Slug] = row
 	}
 	backgroundSummary := rows["background"].Summary
-	if backgroundSummary.Attention != status.AgentAttentionNeedsYou || backgroundSummary.Active != 2 ||
+	if backgroundSummary.Attention != status.AgentAttentionUnread || backgroundSummary.Active != 2 ||
 		backgroundSummary.Coverage != status.AgentCoverageFull || !backgroundSummary.Running || rows["background"].Unseen != 3 {
 		t.Fatalf("background row = %+v", rows["background"])
 	}

@@ -117,8 +117,8 @@ export function subagentTally(records = []) {
  */
 export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   const facts = [];
-  if (summary.running && summary.attention === AGENT_ATTENTION.NEEDS_YOU) {
-    facts.push({ kind: "attention", label: "Needs you" });
+  if (summary.running && summary.attention === AGENT_ATTENTION.UNREAD) {
+    facts.push({ kind: "attention", label: "Unread" });
   }
 
   if (!summary.running) {

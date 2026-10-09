@@ -162,7 +162,7 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 		t.Fatal("new generation was rejected")
 	}
 	view := tracker.snapshot()
-	if !view.Running || view.Attention || tracker.snapshot().Active != 1 {
+	if !view.Running || view.Unread || tracker.snapshot().Active != 1 {
 		t.Fatalf("new generation snapshot = %+v, active %d", view, tracker.snapshot().Active)
 	}
 	for _, id := range []string{agentRootID, "agent-1"} {
@@ -200,7 +200,7 @@ func TestRootExitFinalizesChildrenAndRetentionPrunesAtTheExactBoundary(t *testin
 		t.Fatal("root exit was ignored")
 	}
 	view := tracker.snapshot()
-	if view.Running || view.Attention || tracker.snapshot().Active != 0 {
+	if view.Running || view.Unread || tracker.snapshot().Active != 0 {
 		t.Fatalf("exit snapshot = %+v, active %d", view, tracker.snapshot().Active)
 	}
 	if root := recordForRun(t, view, agentRootID, 1); root.State != agentStateFailed {
@@ -544,7 +544,7 @@ func chimingSession(t *testing.T, cfg *config.Config, watched func(*sessionState
 	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
 	state.agents.begin(agentProviderClaude, 1)
 	ring := ringer(cfg, state, watched)
-	return state, attend(state, func() {}, ring), ring
+	return state, attend(state, reg.current, func() {}, ring), ring
 }
 
 // An orchestrator ends a turn each time a background lead reports back, so only
@@ -625,6 +625,38 @@ func TestAQuietConfigNeverChimes(t *testing.T) {
 	}
 	if got := state.agents.state(); got != status.ActivityWaiting {
 		t.Fatalf("quiet also dropped the waiting marker: %q", got)
+	}
+}
+
+func TestASessionIsUnreadUntilShownAndNeverWhileShown(t *testing.T) {
+	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
+	background := reg.add(sessionDir(t, t.TempDir(), "background"), []string{"/bin/cat"}, os.Environ())
+	onscreen := reg.add(sessionDir(t, t.TempDir(), "onscreen"), []string{"/bin/cat"}, os.Environ())
+	background.agents.begin(agentProviderClaude, 1)
+	onscreen.agents.begin(agentProviderClaude, 1)
+	reg.reveal(onscreen)
+	hookFor := func(state *sessionState) func(string, uint64) {
+		return attend(state, reg.current, func() {}, func() {})
+	}
+
+	hookFor(background)(status.ActivityTurnEnded, 1)
+	hookFor(onscreen)(status.ActivityTurnEnded, 1)
+	if !background.agents.snapshot().Unread {
+		t.Fatal("a background turn ending left the session read")
+	}
+	if onscreen.agents.snapshot().Unread {
+		t.Fatal("the session on screen was marked unread")
+	}
+	if got := onscreen.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("the session on screen reads %q, want waiting", got)
+	}
+
+	reg.reveal(background)
+	if background.agents.snapshot().Unread {
+		t.Fatal("showing the session left it unread")
+	}
+	if got := background.agents.state(); got != status.ActivityWaiting {
+		t.Fatalf("showing the session changed its activity to %q", got)
 	}
 }
 

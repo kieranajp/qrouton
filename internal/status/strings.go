@@ -33,9 +33,9 @@ const (
 )
 
 const (
-	AgentAttentionNeedsYou = "needs-you"
-	AgentAttentionNone     = "none"
-	AgentAttentionUnknown  = "unknown"
+	AgentAttentionUnread  = "unread"
+	AgentAttentionNone    = "none"
+	AgentAttentionUnknown = "unknown"
 
 	AgentCoverageFull = "full"
 	AgentCoverageRoot = "root"

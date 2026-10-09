@@ -19,13 +19,13 @@ test.beforeEach(async ({ page }) => {
 
 test("rows name one repository, count the rest, and state their facts at once", async ({ page }) => {
   const selected = page.getByRole("button", {
-    name: "Checkout migration · acme/web +1 · Needs you · 2 active · 3 unseen",
+    name: "Checkout migration · acme/web +1 · Unread · 2 active · 3 unseen",
   });
   await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toContainText("acme/web");
   await expect(selected).toContainText("+1");
   await expect(selected).not.toContainText("a-very-long-editing-repository-name");
-  await expect(selected).toContainText("Needs you");
+  await expect(selected).toContainText("Unread");
   await expect(selected).toContainText("2 active");
   await expect(selected).toContainText("3 unseen");
 
