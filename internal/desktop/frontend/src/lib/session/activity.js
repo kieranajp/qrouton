@@ -129,7 +129,7 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
     facts.push({ kind: "agents", label: "Root active", active: true });
   }
 
-  if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} unseen` });
+  if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });
   return facts;
 }
 

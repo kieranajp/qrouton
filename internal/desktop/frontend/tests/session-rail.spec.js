@@ -19,7 +19,7 @@ test.beforeEach(async ({ page }) => {
 
 test("rows name one repository, count the rest, and state their facts at once", async ({ page }) => {
   const selected = page.getByRole("button", {
-    name: "Checkout migration · acme/web +1 · Unread · 2 active · 3 unseen",
+    name: "Checkout migration · acme/web +1 · Unread · 2 active · 3 new docs",
   });
   await expect(selected).toHaveAttribute("aria-current", "page");
   await expect(selected).toContainText("acme/web");
@@ -27,7 +27,7 @@ test("rows name one repository, count the rest, and state their facts at once", 
   await expect(selected).not.toContainText("a-very-long-editing-repository-name");
   await expect(selected).toContainText("Unread");
   await expect(selected).toContainText("2 active");
-  await expect(selected).toContainText("3 unseen");
+  await expect(selected).toContainText("3 new docs");
 
   await expect(page.getByRole("button", { name: /Session 2 · No editing repositories/ })).toContainText(
     "No editing repositories",
@@ -463,7 +463,7 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
 test("provider coverage and missing capabilities are textual", async ({ page }) => {
   const activity = page.getByRole("region", { name: "Activity" });
   await page.evaluate(() => window.sessionRail.rootOnly("codex", "Codex CLI"));
-  const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 unseen/ });
+  const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");
   expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
