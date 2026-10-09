@@ -17,8 +17,8 @@
 <span
   aria-hidden="true"
   class="dot"
-  style:width="{size}px"
-  style:height="{size}px"
+  style:width="calc({size}px * var(--ui-scale))"
+  style:height="calc({size}px * var(--ui-scale))"
   style:background={TONES[state]}
   {...rest}
 ></span>

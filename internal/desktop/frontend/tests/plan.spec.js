@@ -184,6 +184,19 @@ test("a long section name truncates rather than growing the footer", async ({ pa
   expect(shape.counterClipped).toBe(true);
 });
 
+test("a larger scale reaches the narrow layout at a wider window", async ({ page }) => {
+  await open(page);
+  await page.setViewportSize({ width: 600, height: 520 });
+  const narrow = () => page.evaluate(() => document.documentElement.hasAttribute("data-narrow"));
+  await expect.poll(narrow).toBe(false);
+
+  await page.evaluate(() => window.announceScale(150));
+  await expect.poll(narrow).toBe(true);
+
+  await page.setViewportSize({ width: 640, height: 520 });
+  await expect.poll(narrow).toBe(false);
+});
+
 test("a narrow pane steps the type down and hides nothing", async ({ page }) => {
   await open(page);
   const wide = await page.evaluate(() => window.displays());

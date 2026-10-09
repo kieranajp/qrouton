@@ -20,7 +20,7 @@
   .button {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     border: 0;
     border-radius: 0;
     cursor: pointer;
@@ -29,21 +29,21 @@
   }
 
   .sm {
-    padding: 6px 11px;
-    font-size: 11px;
+    padding: calc(6px * var(--ui-scale)) calc(11px * var(--ui-scale));
+    font-size: calc(11px * var(--ui-scale));
   }
 
   /* Three pixels short of its column, so the offset shadow has somewhere to fall. */
   .wide {
-    width: calc(100% - 3px);
+    width: calc(100% - calc(3px * var(--ui-scale)));
     flex: none;
-    padding: 7px 11px;
-    gap: 9px;
+    padding: calc(7px * var(--ui-scale)) calc(11px * var(--ui-scale));
+    gap: calc(9px * var(--ui-scale));
     justify-content: flex-start;
   }
 
   .md {
-    padding: 9px 18px;
+    padding: calc(9px * var(--ui-scale)) calc(18px * var(--ui-scale));
   }
 
   .primary {
@@ -117,7 +117,7 @@
      it sinks flush. A cube that never moves is a lie. */
   .cube:active:not(:disabled) {
     box-shadow: none;
-    transform: translate(3px, 3px);
+    transform: translate(calc(3px * var(--ui-scale)), calc(3px * var(--ui-scale)));
   }
 
   .button:disabled {

@@ -134,13 +134,13 @@
   .orgs {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .org {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--ui-scale));
   }
 
   .sticker-labels {
@@ -150,7 +150,7 @@
   }
 
   .sticker-labels legend {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--ui-scale));
     padding: 0;
     font: var(--display-sm);
     color: var(--text-primary);
@@ -159,13 +159,13 @@
   .sticker-fields {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px 18px;
+    gap: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
   }
 
   .chime {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     font: var(--machine-md);
     color: var(--text-primary);
     cursor: pointer;
@@ -173,8 +173,8 @@
 
   .chime input {
     appearance: none;
-    width: 13px;
-    height: 13px;
+    width: calc(13px * var(--ui-scale));
+    height: calc(13px * var(--ui-scale));
     margin: 0;
     border: var(--border-width) solid var(--border-default);
     background: transparent;
@@ -221,8 +221,8 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 10px 12px;
+    gap: calc(14px * var(--ui-scale));
+    padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
     background: var(--surface-chrome);
     border: 1px solid var(--border-subtle);
     font: var(--machine-sm);

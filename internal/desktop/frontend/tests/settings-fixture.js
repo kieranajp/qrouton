@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
 import { UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";

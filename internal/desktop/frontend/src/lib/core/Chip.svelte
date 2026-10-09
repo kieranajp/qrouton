@@ -25,22 +25,22 @@
 <style>
   .chip {
     display: inline-flex;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--tone);
     background: var(--surface-chrome);
     border: 1px solid var(--border-subtle);
-    padding: 2px 7px;
+    padding: 2px calc(7px * var(--ui-scale));
   }
 
   .selected {
     font: var(--machine-bold);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-on-accent);
     background: var(--tone);
     border: none;
-    padding: 3px 9px;
+    padding: calc(3px * var(--ui-scale)) calc(9px * var(--ui-scale));
   }
 
   .meta {

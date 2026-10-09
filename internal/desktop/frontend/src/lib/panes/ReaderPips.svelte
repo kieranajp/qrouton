@@ -23,11 +23,11 @@
     display: flex;
     flex: none;
     flex-wrap: nowrap;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
   }
 
   .pip {
-    padding: 6px 3px;
+    padding: calc(6px * var(--ui-scale)) calc(3px * var(--ui-scale));
     border: 0;
     border-bottom: 2px solid transparent;
     background: transparent;
@@ -40,8 +40,8 @@
 
   .mark {
     display: block;
-    width: 14px;
-    height: 5px;
+    width: calc(14px * var(--ui-scale));
+    height: calc(5px * var(--ui-scale));
   }
 
   .summary .mark {
@@ -49,12 +49,10 @@
   }
 
   .summary {
-    margin-right: 4px;
+    margin-right: calc(4px * var(--ui-scale));
   }
 
-  @media (max-width: 420px) {
-    .pips {
-      flex: 1 0 100%;
-    }
+  :global(html[data-narrow]) .pips {
+    flex: 1 0 100%;
   }
 </style>

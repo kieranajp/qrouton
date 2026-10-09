@@ -46,12 +46,12 @@
   }
 
   .panel {
-    width: 420px;
-    max-width: calc(100% - 40px);
+    width: calc(420px * var(--ui-scale));
+    max-width: calc(100% - calc(40px * var(--ui-scale)));
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px;
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(18px * var(--ui-scale));
     background: var(--surface-chrome);
     border: 1px solid var(--border-default);
     box-shadow: var(--shadow-menu);
@@ -70,12 +70,12 @@
   .actions {
     display: flex;
     justify-content: flex-end;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .spinner {
-    width: 12px;
-    height: 12px;
+    width: calc(12px * var(--ui-scale));
+    height: calc(12px * var(--ui-scale));
     border: 2px solid rgb(255 255 255 / 0.35);
     border-top-color: currentColor;
     border-radius: 50%;

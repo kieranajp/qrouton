@@ -63,13 +63,13 @@
 
   .panel {
     position: absolute;
-    top: 34px;
+    top: calc(34px * var(--ui-scale));
     right: 0;
-    width: 260px;
+    width: calc(260px * var(--ui-scale));
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 12px;
+    gap: calc(10px * var(--ui-scale));
+    padding: calc(12px * var(--ui-scale));
     background: var(--surface-chrome);
     border: 1px solid var(--accent-action);
     box-shadow: var(--shadow-menu);
@@ -86,7 +86,7 @@
     font: var(--machine-sm);
     color: var(--text-primary);
     background: var(--surface-raised);
-    padding: 6px 8px;
+    padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
     word-break: break-all;
   }
 

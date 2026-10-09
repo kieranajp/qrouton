@@ -41,7 +41,7 @@
 
 <style>
   .document {
-    --pane-pad: 34px;
+    --pane-pad: calc(34px * var(--ui-scale));
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -53,8 +53,8 @@
   .head {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 26px var(--pane-pad) 20px calc(var(--pane-pad) + var(--gutter));
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(26px * var(--ui-scale)) var(--pane-pad) calc(20px * var(--ui-scale)) calc(var(--pane-pad) + var(--gutter));
   }
 
   .head :global(.caps) {

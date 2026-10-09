@@ -63,9 +63,9 @@
 <style>
   .card {
     display: flex;
-    gap: 18px;
+    gap: calc(18px * var(--ui-scale));
     align-items: flex-start;
-    padding: 16px;
+    padding: calc(16px * var(--ui-scale));
     border: 1px solid var(--border-default);
     background: transparent;
   }
@@ -77,13 +77,13 @@
   }
 
   .initials {
-    width: 44px;
-    height: 44px;
+    width: calc(44px * var(--ui-scale));
+    height: calc(44px * var(--ui-scale));
     flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    font: 700 17px var(--font-machine);
+    font: 700 calc(17px * var(--ui-scale)) var(--font-machine);
     background: var(--surface-raised);
     border: 1px solid var(--border-default);
     color: var(--text-secondary);
@@ -100,13 +100,13 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
   }
 
   .heading {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
   }
 
   .name {
@@ -117,13 +117,13 @@
 
   .opened {
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-muted);
   }
 
   .description {
     font: var(--machine-sm);
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--text-secondary);
   }
 
@@ -134,15 +134,15 @@
   .repos {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     margin-top: 2px;
   }
 
   .progress {
     display: flex;
     align-items: center;
-    gap: 9px;
-    margin-top: 5px;
+    gap: calc(9px * var(--ui-scale));
+    margin-top: calc(5px * var(--ui-scale));
   }
 
   .progress-label {
@@ -154,10 +154,10 @@
 
   .stage {
     font: var(--machine-bold);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-muted);
     border: 1px solid var(--border-default);
-    padding: 1px 6px;
+    padding: 1px calc(6px * var(--ui-scale));
   }
 
   .stage.active {
@@ -170,14 +170,14 @@
     color: var(--text-on-accent);
     background: var(--state-success);
     border: none;
-    padding: 2px 7px;
+    padding: 2px calc(7px * var(--ui-scale));
   }
 
   .actions {
     flex: none;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     align-items: stretch;
   }
 </style>

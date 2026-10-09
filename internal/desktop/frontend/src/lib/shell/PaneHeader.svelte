@@ -15,8 +15,8 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 0 16px;
+    gap: calc(14px * var(--ui-scale));
+    padding: 0 calc(16px * var(--ui-scale));
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-chrome);
     position: relative;
@@ -27,7 +27,7 @@
   .actions {
     flex: none;
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     align-items: center;
   }
 

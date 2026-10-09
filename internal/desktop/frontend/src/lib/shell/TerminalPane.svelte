@@ -18,7 +18,7 @@
     flex: 1;
     min-height: 0;
     background: var(--surface-terminal);
-    padding: 12px 14px;
+    padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
     /* flex-basis sizes the content box, so without this the padding overflows. */
     box-sizing: border-box;
     font: var(--terminal);

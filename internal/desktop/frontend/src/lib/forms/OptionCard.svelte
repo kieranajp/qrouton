@@ -44,18 +44,18 @@
     display: flex;
     border: 1px solid var(--border-default);
     background: transparent;
-    padding: 14px 16px;
+    padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
     cursor: pointer;
   }
 
   .row {
     align-items: center;
-    gap: 16px;
+    gap: calc(16px * var(--ui-scale));
   }
 
   .stack {
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .selected {
@@ -70,12 +70,12 @@
   .heading {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: calc(9px * var(--ui-scale));
   }
 
   .marker {
-    width: 12px;
-    height: 12px;
+    width: calc(12px * var(--ui-scale));
+    height: calc(12px * var(--ui-scale));
     flex: none;
     box-sizing: border-box;
     background: transparent;
@@ -107,12 +107,12 @@
   }
 
   .row .description {
-    margin-top: 4px;
+    margin-top: calc(4px * var(--ui-scale));
   }
 
   .meta {
     font: var(--literal);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
   }
 </style>

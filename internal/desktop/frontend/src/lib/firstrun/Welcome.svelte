@@ -50,13 +50,13 @@
   .lede {
     display: flex;
     align-items: flex-start;
-    gap: 26px;
+    gap: calc(26px * var(--ui-scale));
   }
 
   .words {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 
   h1 {
@@ -80,19 +80,19 @@
 
   .columns {
     display: flex;
-    gap: 34px;
+    gap: calc(34px * var(--ui-scale));
   }
 
   .column {
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
   }
 
   .swatch {
-    width: 26px;
-    height: 26px;
+    width: calc(26px * var(--ui-scale));
+    height: calc(26px * var(--ui-scale));
   }
 
   .title {

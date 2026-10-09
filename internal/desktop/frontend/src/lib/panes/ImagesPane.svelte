@@ -177,21 +177,21 @@
 
 <style>
   .images-pane {
-    padding: 16px;
+    padding: calc(16px * var(--ui-scale));
     min-width: 0;
     font: var(--machine-sm);
   }
 
   .primary {
-    margin: 0 0 18px;
+    margin: 0 0 calc(18px * var(--ui-scale));
     min-width: 0;
   }
 
   figcaption {
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    margin-bottom: 12px;
+    gap: calc(4px * var(--ui-scale));
+    margin-bottom: calc(12px * var(--ui-scale));
   }
 
   .position, .number {
@@ -215,13 +215,13 @@
     align-items: center;
     position: relative;
     background: var(--surface-raised);
-    border-radius: 4px;
+    border-radius: calc(4px * var(--ui-scale));
   }
 
   .primary-frame {
     width: 100%;
-    min-height: 180px;
-    padding: 12px;
+    min-height: calc(180px * var(--ui-scale));
+    padding: calc(12px * var(--ui-scale));
     border: 0;
     color: inherit;
     font: inherit;
@@ -246,20 +246,20 @@
   }
 
   .primary-frame img {
-    max-height: min(55vh, 560px);
+    max-height: min(55vh, calc(560px * var(--ui-scale)));
   }
 
   .image-strip {
     display: flex;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
     overflow-x: auto;
     margin: 0;
-    padding: 4px 2px 12px;
+    padding: calc(4px * var(--ui-scale)) 2px calc(12px * var(--ui-scale));
     list-style: none;
   }
 
   li {
-    flex: 0 0 150px;
+    flex: 0 0 calc(150px * var(--ui-scale));
     min-width: 0;
   }
 
@@ -272,9 +272,9 @@
     color: inherit;
     font: inherit;
     box-sizing: border-box;
-    padding: 8px;
+    padding: calc(8px * var(--ui-scale));
     border: 2px solid var(--border-subtle);
-    border-radius: 6px;
+    border-radius: calc(6px * var(--ui-scale));
   }
 
   .image-strip button.current {
@@ -295,12 +295,12 @@
   }
 
   .thumbnail-frame {
-    height: 90px;
-    margin: 6px 0;
+    height: calc(90px * var(--ui-scale));
+    margin: calc(6px * var(--ui-scale)) 0;
   }
 
   .thumbnail-frame img {
-    max-height: 90px;
+    max-height: calc(90px * var(--ui-scale));
   }
 
   .loading {

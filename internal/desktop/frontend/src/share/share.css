@@ -16,8 +16,8 @@ body {
 }
 
 .document {
-  padding: 26px 34px;
-  max-width: 960px;
+  padding: calc(26px * var(--ui-scale)) calc(34px * var(--ui-scale));
+  max-width: calc(960px * var(--ui-scale));
 }
 
 .caps {
@@ -36,8 +36,8 @@ body {
 .title {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin: 10px 0 18px;
+  gap: calc(12px * var(--ui-scale));
+  margin: calc(10px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
   font: var(--display-sm);
   letter-spacing: var(--display-tracking);
   color: var(--text-primary);

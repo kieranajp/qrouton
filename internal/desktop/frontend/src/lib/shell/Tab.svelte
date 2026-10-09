@@ -87,14 +87,14 @@
   .tab {
     display: flex;
     align-items: stretch;
-    gap: 9px;
-    padding: 0 14px;
+    gap: calc(9px * var(--ui-scale));
+    padding: 0 calc(14px * var(--ui-scale));
     border-right: 1px solid var(--border-subtle);
     border-bottom: 2px solid transparent;
     background: transparent;
     flex: 1 1 auto;
     min-width: 0;
-    max-width: 210px;
+    max-width: calc(210px * var(--ui-scale));
     overflow: hidden;
   }
 
@@ -126,14 +126,14 @@
   }
 
   .select {
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     min-width: 0;
     flex: 1 1 auto;
   }
 
   .label {
     font: var(--machine-sm);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
@@ -145,7 +145,7 @@
   }
 
   .close {
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
   }
 </style>

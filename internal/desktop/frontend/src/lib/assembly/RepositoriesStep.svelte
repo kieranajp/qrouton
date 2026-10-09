@@ -93,7 +93,7 @@
 
   .controls {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .search {
@@ -111,8 +111,8 @@
   .tally {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px 12px;
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -120,26 +120,26 @@
   .roles {
     margin-left: auto;
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-muted);
   }
 
   /* One height whatever the search left behind: the count above says how much
      of the list this is. */
   .rows {
-    height: 224px;
+    height: calc(224px * var(--ui-scale));
     overflow: hidden auto;
   }
 
   .selected {
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: calc(9px * var(--ui-scale));
   }
 
   .chips {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 </style>

@@ -16,7 +16,7 @@
       {#if chosen.includes(option)}
         <Chip
           selected
-          style="background: var(--accent-action); cursor: pointer; padding: 5px 11px"
+          style="background: var(--accent-action); cursor: pointer; padding: calc(5px * var(--ui-scale)) calc(11px * var(--ui-scale))"
           onclick={() => onSelect?.(option)}>{option}</Chip>
       {:else}
         <span class="option" onclick={() => onSelect?.(option)} role="presentation">{option}</span>
@@ -32,27 +32,27 @@
   .choices {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
   }
 
   .options {
     display: flex;
     flex-wrap: wrap;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
   }
 
   .option {
     font: var(--machine-sm);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     color: var(--text-secondary);
     border: 1px solid var(--border-default);
-    padding: 4px 10px;
+    padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
     cursor: pointer;
   }
 
   .help {
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-muted);
   }
 

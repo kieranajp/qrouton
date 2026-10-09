@@ -154,11 +154,11 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 var(--pane-pad) 26px;
+    padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
   }
 
   .display-lg {
-    margin: 4px 0 18px;
+    margin: calc(4px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
     padding-left: var(--gutter);
     text-align: center;
     font: var(--display-lg);
@@ -169,7 +169,7 @@
 
   .lead :global(p) {
     font: var(--machine-lg);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale));
     line-height: 1.7;
     color: var(--text-secondary);
     max-width: 68ch;
@@ -180,7 +180,7 @@
   }
 
   .pinned {
-    margin: 26px 0 8px;
+    margin: calc(26px * var(--ui-scale)) 0 calc(8px * var(--ui-scale));
   }
 
   .pinned > :global(.caps) {
@@ -199,7 +199,7 @@
      mark takes it and the label starts where the prose does. */
   .item > summary {
     position: relative;
-    padding: 12px 0 12px var(--gutter);
+    padding: calc(12px * var(--ui-scale)) 0 calc(12px * var(--ui-scale)) var(--gutter);
     list-style: none;
     cursor: pointer;
     font: var(--machine-md);
@@ -235,7 +235,7 @@
   }
 
   .item > .markdown:last-child {
-    padding-bottom: 14px;
+    padding-bottom: calc(14px * var(--ui-scale));
   }
 
   /* A closed item is folded away outright rather than left to the browser's
@@ -247,7 +247,7 @@
   .steps {
     display: flex;
     flex: none;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
   }
 
   /* The pane names the section already. Hidden but still measurable: the
@@ -264,20 +264,18 @@
   }
 
   /* Narrow steps the type down. Nothing goes away. */
-  @media (max-width: 420px) {
-    .display-lg {
-      font: var(--display-md);
-    }
+  :global(html[data-narrow]) .display-lg {
+    font: var(--display-md);
+  }
 
-    .lead :global(p) {
-      font: var(--machine-md);
-    }
+  :global(html[data-narrow]) .lead :global(p) {
+    font: var(--machine-md);
+  }
 
-    :global(.document > .footer .controls) {
-      flex-wrap: wrap;
-      row-gap: 10px;
-      padding-top: 8px;
-      padding-bottom: 8px;
-    }
+  :global(html[data-narrow]) :global(.document > .footer .controls) {
+    flex-wrap: wrap;
+    row-gap: calc(10px * var(--ui-scale));
+    padding-top: calc(8px * var(--ui-scale));
+    padding-bottom: calc(8px * var(--ui-scale));
   }
 </style>

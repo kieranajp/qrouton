@@ -23,7 +23,7 @@
   .controls {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     min-height: var(--h-footer);
     padding: 0 var(--pane-pad);
   }
@@ -31,7 +31,7 @@
   .modes {
     display: flex;
     flex: none;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
     margin-left: auto;
   }
 
@@ -53,15 +53,13 @@
   .footer :global(.steps) {
     display: flex;
     flex: none;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
   }
 
-  @media (max-width: 420px) {
-    .with-pips .controls {
-      flex-wrap: wrap;
-      row-gap: 10px;
-      padding-top: 8px;
-      padding-bottom: 8px;
-    }
+  :global(html[data-narrow]) .with-pips .controls {
+    flex-wrap: wrap;
+    row-gap: calc(10px * var(--ui-scale));
+    padding-top: calc(8px * var(--ui-scale));
+    padding-bottom: calc(8px * var(--ui-scale));
   }
 </style>

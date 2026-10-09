@@ -81,9 +81,9 @@
   }
 
   .dialog {
-    width: 1100px;
+    width: calc(1100px * var(--ui-scale));
     max-width: 100%;
-    min-height: 470px;
+    min-height: calc(470px * var(--ui-scale));
     max-height: 100%;
     display: flex;
     flex-direction: column;
@@ -95,7 +95,7 @@
 
   .steps {
     flex: none;
-    padding: 22px 34px 0;
+    padding: calc(22px * var(--ui-scale)) calc(34px * var(--ui-scale)) 0;
   }
 
   .body {
@@ -103,8 +103,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    padding: 22px 34px 30px;
+    gap: calc(18px * var(--ui-scale));
+    padding: calc(22px * var(--ui-scale)) calc(34px * var(--ui-scale)) calc(30px * var(--ui-scale));
     overflow: hidden auto;
   }
 
@@ -114,7 +114,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 34px;
+    padding: 0 calc(34px * var(--ui-scale));
     background: var(--surface-chrome);
     border-top: 1px solid var(--border-subtle);
   }
@@ -125,12 +125,12 @@
     margin-left: auto;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
   }
 
   .status {
     font: var(--machine-sm);
-    font-size: 11.5px;
+    font-size: calc(11.5px * var(--ui-scale));
     color: var(--text-muted);
   }
 </style>

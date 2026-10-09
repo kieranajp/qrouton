@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import ChromeFixture from "./ChromeFixture.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";

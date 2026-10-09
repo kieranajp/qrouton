@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { renderDeck } from "../src/lib/panes/slides.js";
 
 const DECK = `# Content

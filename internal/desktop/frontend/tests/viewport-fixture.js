@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { apply } from "../src/lib/panes/diagrams.js";
 import { createViewportController } from "../src/lib/panes/viewport.js";
 

@@ -282,27 +282,27 @@
 
   .deck,
   .reading {
-    padding-bottom: 26px;
+    padding-bottom: calc(26px * var(--ui-scale));
   }
 
   .reading .display-lg {
-    margin-top: 4px;
+    margin-top: calc(4px * var(--ui-scale));
   }
 
   /* The opening screen is the one everybody sees first, so it is given room:
      label, title, lead, then the list with air around it. */
   .hero {
-    padding-top: 18px;
+    padding-top: calc(18px * var(--ui-scale));
   }
 
   .hero .display-lg {
-    margin: 14px 0 20px;
+    margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
     max-width: 26ch;
   }
 
   .hero .lead :global(p) {
     font: var(--machine-lg);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale));
     line-height: 1.7;
     color: var(--text-secondary);
     max-width: 68ch;
@@ -313,14 +313,14 @@
   }
 
   .hero .rows {
-    margin-top: 34px;
+    margin-top: calc(34px * var(--ui-scale));
   }
 
   .bar {
     display: flex;
     align-items: center;
-    gap: 10px;
-    padding: 8px var(--pane-pad);
+    gap: calc(10px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) var(--pane-pad);
     border-bottom: var(--border-width) solid var(--border-subtle);
     font: var(--machine-sm);
     color: var(--text-secondary);
@@ -329,7 +329,7 @@
   .follow {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     margin-left: auto;
     cursor: pointer;
   }
@@ -338,8 +338,8 @@
      operates rather than the colour of a check the document has met. */
   .follow input {
     appearance: none;
-    width: 13px;
-    height: 13px;
+    width: calc(13px * var(--ui-scale));
+    height: calc(13px * var(--ui-scale));
     margin: 0;
     border: var(--border-width) solid var(--border-default);
     background: transparent;
@@ -359,13 +359,13 @@
   .crumb {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 
   .state {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-muted);
   }
@@ -373,13 +373,13 @@
   .dot {
     display: inline-block;
     flex: none;
-    width: 9px;
-    height: 9px;
+    width: calc(9px * var(--ui-scale));
+    height: calc(9px * var(--ui-scale));
   }
 
   .display-lg,
   .display-md {
-    margin: 12px 0 18px;
+    margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
     padding-left: var(--gutter);
     letter-spacing: var(--display-tracking);
     color: var(--text-primary);
@@ -404,7 +404,7 @@
 
   .rows {
     list-style: none;
-    margin: 26px 0 0;
+    margin: calc(26px * var(--ui-scale)) 0 0;
     padding: 0;
     border: var(--border-width) solid var(--border-subtle);
     box-shadow: var(--shadow-offset) var(--border-subtle);
@@ -417,9 +417,9 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     width: 100%;
-    padding: 11px 14px;
+    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border: 0;
     background: transparent;
     font: var(--machine-md);
@@ -455,14 +455,14 @@
   .rule {
     border: 0;
     border-top: var(--border-width) solid var(--border-subtle);
-    margin: 26px 0 18px;
+    margin: calc(26px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
   }
 
   .criteria-head {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
     padding-left: var(--gutter);
   }
 
@@ -484,35 +484,32 @@
   }
 
   /* Narrow steps the type down. Nothing goes away. */
-  @media (max-width: 420px) {
-    .hero {
-      padding-top: 6px;
-    }
+  :global(html[data-narrow]) .hero {
+    padding-top: calc(6px * var(--ui-scale));
+  }
 
-    /* The list is what the screen is for; the hero gives way to it. */
-    .hero .display-lg {
-      margin: 8px 0 12px;
-    }
+  /* The list is what the screen is for; the hero gives way to it. */
+  :global(html[data-narrow]) .hero .display-lg {
+    margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
+  }
 
-    .hero .rows {
-      margin-top: 18px;
-    }
+  :global(html[data-narrow]) .hero .rows {
+    margin-top: calc(18px * var(--ui-scale));
+  }
 
-    .hero .lead :global(p) {
-      font: var(--machine-md);
-    }
+  :global(html[data-narrow]) .hero .lead :global(p) {
+    font: var(--machine-md);
+  }
 
-    .display-lg {
-      font: var(--display-md);
-    }
+  :global(html[data-narrow]) .display-lg {
+    font: var(--display-md);
+  }
 
-    .display-md {
-      font: var(--display-sm);
-    }
+  :global(html[data-narrow]) .display-md {
+    font: var(--display-sm);
+  }
 
-    .criteria .markdown :global(li) {
-      font: var(--machine-xs);
-    }
-
+  :global(html[data-narrow]) .criteria .markdown :global(li) {
+    font: var(--machine-xs);
   }
 </style>

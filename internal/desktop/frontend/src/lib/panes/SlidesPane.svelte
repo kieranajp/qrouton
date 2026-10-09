@@ -136,7 +136,7 @@
   /* Recessed below a slide's own ground, so a card always sits on something
      rather than blending into it. */
   .deck {
-    --pane-pad: 34px;
+    --pane-pad: calc(34px * var(--ui-scale));
     display: flex;
     flex-direction: column;
     flex: 1;
@@ -147,8 +147,8 @@
   .source {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 26px var(--pane-pad) 18px;
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(26px * var(--ui-scale)) var(--pane-pad) calc(18px * var(--ui-scale));
   }
 
   .title {
@@ -168,18 +168,18 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 var(--pane-pad) 26px;
+    padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
     outline: none;
   }
 
   .stack {
     display: flex;
     flex-direction: column;
-    gap: 34px;
+    gap: calc(34px * var(--ui-scale));
   }
 
   .slide-number {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-muted);
   }
@@ -211,7 +211,7 @@
   }
 
   .notes {
-    margin-top: 12px;
+    margin-top: calc(12px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-muted);
   }
@@ -230,7 +230,7 @@
     width: auto;
     height: auto;
     max-width: 100%;
-    max-height: 400px;
+    max-height: calc(400px * var(--ui-scale));
   }
 
   .frame :global(pre.diagram-pending) {
@@ -239,7 +239,7 @@
 
   .frame :global(.diagram-error) {
     display: block;
-    font-size: 20px;
+    font-size: calc(20px * var(--ui-scale));
     color: var(--state-failed);
     white-space: pre-wrap;
   }

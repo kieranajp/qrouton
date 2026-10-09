@@ -19,11 +19,11 @@
   .stepper {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 
   .rule {
-    width: 26px;
+    width: calc(26px * var(--ui-scale));
     height: 1px;
     background: var(--border-default);
   }
@@ -31,19 +31,19 @@
   .step {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .marker {
-    width: 20px;
-    height: 20px;
+    width: calc(20px * var(--ui-scale));
+    height: calc(20px * var(--ui-scale));
     flex: none;
     box-sizing: border-box;
     display: flex;
     align-items: center;
     justify-content: center;
     font: var(--button);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     background: transparent;
     border: 1px solid var(--border-default);
     color: var(--text-muted);

@@ -118,7 +118,7 @@
     align-items: stretch;
     border-bottom: 1px solid var(--border-subtle);
     background: var(--surface-chrome);
-    padding-right: 8px;
+    padding-right: calc(8px * var(--ui-scale));
     position: relative;
     z-index: 4;
   }
@@ -127,7 +127,7 @@
     display: flex;
     align-items: center;
     flex: none;
-    padding-left: 4px;
+    padding-left: calc(4px * var(--ui-scale));
   }
 
   /* Three pixels off the right edge, so the cube's shadow has somewhere to fall. */
@@ -135,6 +135,6 @@
     margin-left: auto;
     align-self: center;
     flex: none;
-    padding-right: 3px;
+    padding-right: calc(3px * var(--ui-scale));
   }
 </style>

@@ -76,8 +76,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 10px 12px;
+    gap: calc(8px * var(--ui-scale));
+    padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
     background: var(--surface-chrome);
     border: 1px solid var(--accent-action);
     box-shadow: var(--shadow-focus);

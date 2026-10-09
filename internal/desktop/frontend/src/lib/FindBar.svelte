@@ -60,8 +60,8 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 7px;
-    padding: 7px 9px;
+    gap: calc(7px * var(--ui-scale));
+    padding: calc(7px * var(--ui-scale)) calc(9px * var(--ui-scale));
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -73,11 +73,11 @@
 
   input {
     flex: 1;
-    min-width: 72px;
+    min-width: calc(72px * var(--ui-scale));
     border: 1px solid var(--border-default);
     outline: none;
     background: var(--surface-terminal);
-    padding: 6px 8px;
+    padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
     font: var(--machine-md);
     color: var(--text-primary);
     caret-color: var(--caret);
@@ -93,18 +93,18 @@
   }
 
   .tally {
-    width: 66px;
+    width: calc(66px * var(--ui-scale));
     flex: none;
     font: var(--machine-sm);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-muted);
     text-align: right;
     white-space: nowrap;
   }
 
   button {
-    width: 25px;
-    height: 25px;
+    width: calc(25px * var(--ui-scale));
+    height: calc(25px * var(--ui-scale));
     flex: none;
     border: 1px solid transparent;
     background: transparent;

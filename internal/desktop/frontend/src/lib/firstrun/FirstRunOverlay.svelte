@@ -50,8 +50,8 @@
 
 <style>
   .title {
-    margin: -4px 0 4px;
-    padding-bottom: 14px;
+    margin: calc(-4px * var(--ui-scale)) 0 calc(4px * var(--ui-scale));
+    padding-bottom: calc(14px * var(--ui-scale));
     border-bottom: 1px solid var(--border-subtle);
     font: var(--machine-sm);
     color: var(--text-faint);

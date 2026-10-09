@@ -115,14 +115,14 @@
 
 <style>
   .scrim { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: var(--scrim); }
-  .panel { box-sizing: border-box; width: 680px; max-width: calc(100% - 32px); max-height: calc(100% - 32px); display: flex; flex-direction: column; gap: 12px; padding: 18px; background: var(--surface-chrome); color: var(--text-primary); border: 1px solid var(--border-default); box-shadow: var(--shadow-menu); font: var(--machine-sm); }
+  .panel { box-sizing: border-box; width: calc(680px * var(--ui-scale)); max-width: calc(100% - calc(32px * var(--ui-scale))); max-height: calc(100% - calc(32px * var(--ui-scale))); display: flex; flex-direction: column; gap: calc(12px * var(--ui-scale)); padding: calc(18px * var(--ui-scale)); background: var(--surface-chrome); color: var(--text-primary); border: 1px solid var(--border-default); box-shadow: var(--shadow-menu); font: var(--machine-sm); }
   h2, h3, p { margin: 0; }
   h2 { font: var(--display-xs); }
   h3 { font: var(--machine-sm); font-weight: bold; overflow-wrap: anywhere; }
   .destination { flex: none; overflow-wrap: anywhere; }
-  .payload { min-height: 0; overflow: auto; border: 1px solid var(--border-subtle); padding: 12px; }
+  .payload { min-height: 0; overflow: auto; border: 1px solid var(--border-subtle); padding: calc(12px * var(--ui-scale)); }
   pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
   p, a { overflow-wrap: anywhere; flex: none; }
   a { color: var(--accent-action); }
-  .actions { display: flex; justify-content: flex-end; gap: 8px; flex: none; }
+  .actions { display: flex; justify-content: flex-end; gap: calc(8px * var(--ui-scale)); flex: none; }
 </style>

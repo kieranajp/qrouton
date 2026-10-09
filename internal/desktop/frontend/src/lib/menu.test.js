@@ -63,3 +63,10 @@ test("the anchor never lands at a negative coordinate", () => {
     }
   }
 });
+
+test("a scaled menu flips at the size it is drawn, not its base size", () => {
+  const size = { width: 190, height: 100 };
+  const point = { x: VIEWPORT.width - 250, y: 120 };
+  assert.equal(place(point, size, VIEWPORT).left, point.x);
+  assert.equal(place(point, size, VIEWPORT, 1.5).left, VIEWPORT.width - 285 - 8);
+});

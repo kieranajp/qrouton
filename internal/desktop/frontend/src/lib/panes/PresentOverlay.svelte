@@ -205,11 +205,11 @@
 
   .present-hud {
     position: absolute;
-    right: 18px;
-    bottom: 14px;
+    right: calc(18px * var(--ui-scale));
+    bottom: calc(14px * var(--ui-scale));
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
     opacity: 0.5;
   }
 

@@ -4,6 +4,7 @@
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import { openDocument } from "../docked.svelte.js";
   import { clipboardText, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind } from "../panes/markdown.js";
@@ -18,6 +19,7 @@
           open,
           { width: MENU_WIDTH, height: menuHeight(open.items) },
           { width: window.innerWidth, height: window.innerHeight },
+          uiScale() / 100,
         )
       : null,
   );

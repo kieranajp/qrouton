@@ -20,9 +20,9 @@
 <div
   class="menu"
   class:capped={maxHeight > 0}
-  style:width="{width}px"
-  style:max-height={maxHeight > 0 ? `${maxHeight}px` : null}
-  style:top="{offsetY}px"
+  style:width="calc({width}px * var(--ui-scale))"
+  style:max-height={maxHeight > 0 ? `calc(${maxHeight}px * var(--ui-scale))` : null}
+  style:top="calc({offsetY}px * var(--ui-scale))"
   style:left={align === "left" ? "0" : "auto"}
   style:right={align === "right" ? "0" : "auto"}
   {...rest}>
@@ -52,7 +52,7 @@
           {#if item.items?.length}<span class="submenu-caret">&#8250;</span>{/if}
         </button>
         {#if item.items?.length}
-          <div class="submenu" style:width="{item.width ?? width}px">
+          <div class="submenu" style:width="calc({item.width ?? width}px * var(--ui-scale))">
             {#each item.items as child, childIndex (childIndex)}
               <button class="item" onclick={() => onSelect?.(child, childIndex)}>
                 {#if child.tag}
@@ -77,7 +77,7 @@
     box-shadow: var(--shadow-menu);
     display: flex;
     flex-direction: column;
-    padding: 5px 0;
+    padding: calc(5px * var(--ui-scale)) 0;
     z-index: 5;
   }
 
@@ -86,7 +86,7 @@
   }
 
   .heading {
-    padding: 7px 12px 8px;
+    padding: calc(7px * var(--ui-scale)) calc(12px * var(--ui-scale)) calc(8px * var(--ui-scale));
     font: var(--instruction-sm);
     letter-spacing: var(--instruction-tracking-sm);
     text-transform: uppercase;
@@ -96,14 +96,14 @@
   .rule {
     height: 1px;
     background: var(--border-subtle);
-    margin: 5px 0;
+    margin: calc(5px * var(--ui-scale)) 0;
   }
 
   .item {
-    padding: 8px 12px;
+    padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
     cursor: pointer;
     background: transparent;
     border: 0;
@@ -139,9 +139,9 @@
 
   .submenu {
     position: absolute;
-    top: -6px;
+    top: calc(-6px * var(--ui-scale));
     left: calc(100% - 1px);
-    padding: 5px 0;
+    padding: calc(5px * var(--ui-scale)) 0;
     background: var(--surface-chrome);
     border: 1px solid var(--accent-action);
     box-shadow: var(--shadow-menu);
@@ -159,7 +159,7 @@
 
   .submenu-caret {
     color: var(--text-muted);
-    font-size: 16px;
+    font-size: calc(16px * var(--ui-scale));
     line-height: 0;
     flex: none;
   }
@@ -173,7 +173,7 @@
 
   .meta {
     font: var(--machine-xs);
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale));
     color: var(--text-faint);
     flex: none;
   }

@@ -1,5 +1,9 @@
+import "../src/tokens/scale.css";
 import { mount, unmount } from "svelte";
 import DiffPane from "../src/lib/panes/DiffPane.svelte";
+import { startScale } from "../src/lib/scale.svelte.js";
+
+startScale();
 
 const root = document.querySelector("#diff-root");
 

@@ -55,7 +55,7 @@
 
 <style>
   .document {
-    padding: 26px 34px;
+    padding: calc(26px * var(--ui-scale)) calc(34px * var(--ui-scale));
   }
 
   /* The heading and the path start where the prose does, right of the gutter. */
@@ -67,7 +67,7 @@
   .source {
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: calc(9px * var(--ui-scale));
   }
 
   .source :global(.caps) {
@@ -80,8 +80,8 @@
   .title {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin: 10px 0 18px;
+    gap: calc(12px * var(--ui-scale));
+    margin: calc(10px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
     font: var(--display-sm);
     letter-spacing: var(--display-tracking);
     color: var(--text-primary);
