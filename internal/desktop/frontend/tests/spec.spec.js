@@ -14,6 +14,44 @@ test("the overview counts the answered questions and lists the decisions", async
   await expect(page.locator(".rows .row")).toHaveText([/Decisions\s*Keep `?Retry`? as a wrapper\s*Cancellation is cooperative/]);
 });
 
+test("the overview lists the open questions before the decisions", async ({ page }) => {
+  await open(page);
+  const labels = page.locator('[data-screen="overview"] .caps[data-list]');
+  await expect(labels).toHaveText(["Open questions", "Decisions"]);
+  const asks = page.locator("[data-open-list] .row");
+  await expect(asks).toHaveCount(3);
+  await expect(asks.nth(0)).toContainText("Q1");
+  await expect(asks.nth(0)).toContainText("Answered");
+  await expect(asks.nth(1)).toContainText("Q2");
+  await expect(asks.nth(1).locator(".ask-state")).toHaveText("Open");
+  const order = await page.evaluate(() => {
+    const list = document.querySelector("[data-open-list]");
+    const rows = document.querySelector(".rows");
+    return Boolean(list.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+  expect(order).toBe(true);
+});
+
+test("clicking an open question on the overview lands on its card", async ({ page }) => {
+  await open(page);
+  await page.locator('[data-ask="Q3"]').click();
+  await expect.poll(() => shown(page)).toEqual(["questions"]);
+  await expect.poll(() => page.evaluate(() => window.focusedCard())).toBe("Q3");
+  await expect(page.locator('[data-question="Q3"]')).toBeInViewport();
+});
+
+test("answering a question updates its row on the overview", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Next open question" }).click();
+  await page.locator('[data-question="Q2"]').getByRole("button", { name: /The context's error/ }).click();
+  await expect(page.locator('[data-question="Q2"] .state')).toHaveText("Saved");
+  await page.keyboard.press("ArrowLeft");
+  await expect.poll(() => shown(page)).toEqual(["overview"]);
+  await expect(page.locator('[data-ask="Q2"] .ask-state')).toHaveText("Answered B");
+  await expect(page.locator('[data-ask="Q2"]')).toHaveClass(/settled/);
+  await expect(page.locator("[data-tally]")).toContainText("2 of 3 answered");
+});
+
 test("the questions pip holds every open question as a card", async ({ page }) => {
   await open(page);
   await page.getByRole("button", { name: "Next open question" }).click();
@@ -64,6 +102,7 @@ test("a spec with nothing open says so and has no questions pip", async ({ page 
     "Decisions",
   ]);
   await expect(page.locator('[data-screen="overview"]')).not.toContainText("None.");
+  await expect(page.locator("[data-open-list]")).toHaveCount(0);
 });
 
 test("topic groups page the decisions by heading", async ({ page }) => {

@@ -90,6 +90,16 @@
     return hidden;
   }
 
+  /** @param {number} index */
+  function rowState(index) {
+    const saved = saves.get(draftKey(spec.open[index]))?.state;
+    if (saved === "failed" || saved === "reloaded") return "Not saved";
+    if (saved === "unsaved" || saved === "saving") return "Saving…";
+    const draft = drafts[index];
+    if (draft.letter) return `Answered ${draft.letter}`;
+    return draft.note.trim() ? "Own answer" : "Open";
+  }
+
   /** @param {import("./spec.js").Question} question */
   function draftOf(question) {
     return { letter: question.answer?.letter ?? "", note: question.answer?.note ?? "" };
@@ -345,8 +355,30 @@
                 {/if}
               {/if}
             </div>
+            {#if spec.open.length > 0}
+              <CapsLabel data-list>Open questions</CapsLabel>
+              <ol class="asks" data-open-list>
+                {#each spec.open as question, index (draftKey(question))}
+                  <li>
+                    <button
+                      type="button"
+                      class="row"
+                      class:settled={drafts[index].letter || drafts[index].note.trim()}
+                      data-ask={question.id}
+                      onclick={() => showQuestions(index)}>
+                      <span class="index">{question.id}</span>
+                      <span class="name">{question.heading}</span>
+                      <span class="ask-state" data-state={saves.get(draftKey(question))?.state}>{rowState(index)}</span>
+                    </button>
+                  </li>
+                {/each}
+              </ol>
+            {/if}
             {#if spec.decisions.length > 0}
-              <ol class="rows">
+              {#if spec.open.length > 0}
+                <CapsLabel data-list>Decisions</CapsLabel>
+              {/if}
+              <ol class="rows" class:titled={spec.open.length > 0}>
                 {#each spec.decisions as decision, index}
                   <li>
                     <button
@@ -354,6 +386,7 @@
                       class="row"
                       onclick={() => at.show(slides.findIndex((slide) => slide.from === decision.from) + 1)}>
                       <span class="index">{decision.id || index + 1}</span>
+                      {#if decision.kind === "question"}<span class="decided">decided</span>{/if}
                       <span class="text">
                         <span class="name">{decision.label}{decision.kind === "group" && decision.count > 0 ? ` · ${decision.count} ${decision.count === 1 ? "decision" : "decisions"}` : ""}</span>
                         {#each decision.leads as lead}
@@ -545,7 +578,8 @@
     padding-left: var(--gutter);
   }
 
-  .rows {
+  .rows,
+  .asks {
     list-style: none;
     margin: calc(26px * var(--ui-scale)) 0 0;
     padding: 0;
@@ -553,7 +587,18 @@
     box-shadow: var(--shadow-offset) var(--border-subtle);
   }
 
-  .rows li + li .row {
+  .hero > :global(.caps[data-list]) {
+    display: block;
+    margin-top: calc(26px * var(--ui-scale));
+  }
+
+  .rows.titled,
+  .asks {
+    margin-top: calc(8px * var(--ui-scale));
+  }
+
+  .rows li + li .row,
+  .asks li + li .row {
     border-top: var(--border-width) solid var(--border-subtle);
   }
 
@@ -589,6 +634,32 @@
     min-width: 0;
   }
 
+  .row .decided,
+  .row .ask-state {
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .row .ask-state {
+    flex: none;
+    font: var(--machine-bold);
+    color: var(--state-waiting);
+  }
+
+  .row.settled .ask-state {
+    font: var(--machine-sm);
+    color: var(--state-success);
+  }
+
+  .row.settled .name {
+    color: var(--text-muted);
+  }
+
+  .row .ask-state[data-state="failed"],
+  .row .ask-state[data-state="reloaded"] {
+    color: var(--state-failed);
+  }
+
   .row .name,
   .row .lead-line {
     overflow: hidden;
@@ -598,6 +669,11 @@
 
   .row .name {
     color: var(--text-primary);
+  }
+
+  .asks .row > .name {
+    flex: 1;
+    min-width: 0;
   }
 
   .row .lead-line {
