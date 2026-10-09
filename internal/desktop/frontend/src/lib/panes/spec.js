@@ -24,7 +24,7 @@ function lastFilled(lines, from, to) {
 /** @typedef {{letter: string, text: string, recommended: boolean, reason: string}} Option */
 /** @typedef {{from: number, to: number, raw: string, letter: string, note: string}} Answer */
 /** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
-/** @typedef {{kind: "question" | "decision" | "section", id: string, label: string, from: number, to: number}} Decision */
+/** @typedef {{kind: "question" | "group" | "decision", id: string, label: string, from: number, to: number, count: number, leads: string[]}} Decision */
 
 /** A letter is picked only when it is all the Answer line holds; anything else is free text.
  * @param {string} first @param {string} rest @param {Option[]} options */
@@ -92,34 +92,38 @@ function readQuestions(lines, section) {
 /** @param {{from: number, to: number, nodes: any[]}} section */
 function readDecisions(section) {
   /** @type {Decision[]} */
-  const decisions = [];
+  const pages = [];
+  /** @type {Decision | null} */
+  let page = null;
   for (const node of section.nodes) {
     if (isHeading(node, 3)) {
       const name = flatten(node).trim();
       const named = QUESTION.exec(name);
-      decisions.push({
-        kind: named ? "question" : "section",
+      page = {
+        kind: named ? "question" : "group",
         id: named ? named[1] : "",
         label: named ? named[2] : name,
         from: line(node),
         to: 0,
-      });
+        count: 0,
+        leads: [],
+      };
+      pages.push(page);
       continue;
     }
     const lead = node.type === "paragraph" ? node.children?.[0] : null;
     if (lead?.type !== "strong") continue;
-    decisions.push({
-      kind: "decision",
-      id: "",
-      label: flatten(lead).trim().replace(/[.:]$/, ""),
-      from: line(node),
-      to: 0,
-    });
+    if (!page) {
+      page = { kind: "decision", id: "", label: "Decisions", from: line(node), to: 0, count: 0, leads: [] };
+      pages.push(page);
+    }
+    if (page.kind !== "question") page.leads.push(flatten(lead).trim().replace(/[.:]$/, ""));
   }
-  decisions.forEach((decision, at) => {
-    decision.to = decisions[at + 1] ? decisions[at + 1].from - 1 : section.to;
+  pages.forEach((decision, at) => {
+    decision.count = decision.kind === "question" ? 1 : decision.leads.length;
+    decision.to = pages[at + 1] ? pages[at + 1].from - 1 : section.to;
   });
-  return decisions;
+  return pages;
 }
 
 /** @param {{nodes: any[]}} section */
@@ -151,6 +155,7 @@ export function parseSpec(text) {
     open,
     answered,
     decisions,
+    decisionCount: decisions.reduce((total, decision) => total + decision.count, 0),
     openSection: openSection && { from: openSection.from, to: openSection.to },
     decisionsSection: decisionsSection && { from: decisionsSection.from, to: decisionsSection.to },
     sections: sections

@@ -76,6 +76,46 @@ export const ZERO = [
   "",
 ].join("\n");
 
+export const CLEF = [
+  "---",
+  "kind: spec",
+  "---",
+  "",
+  "# Clef bands",
+  "",
+  "## Open questions",
+  "",
+  "### Q1 — How does the ring fill?",
+  "",
+  "- A. From bands",
+  "- B. From grams",
+  "",
+  "Answer:",
+  "",
+  "## Decisions",
+  "",
+  "### Product",
+  "",
+  "**Grams go entirely.** Each nutrient gets one band.",
+  "",
+  "**The bars go.** Nothing reads them.",
+  "",
+  "**A failed estimate shows no dots.** Nothing is drawn.",
+  "",
+  "### The Clef call",
+  "",
+  "**nutrition-intelligence owns the call.** Through its api task.",
+  "",
+  "**lsx makes one call per entry.** It posts the text.",
+  "",
+  "### Storage",
+  "",
+  "**Facets carry bands.** A nutrients object.",
+  "",
+  "**Old grams are dropped.** Nothing converts them.",
+  "",
+].join("\n");
+
 export const FREEFORM = [
   "# An older spec",
   "",
@@ -90,7 +130,7 @@ export const FREEFORM = [
 ].join("\n");
 
 const params = new URLSearchParams(location.search);
-const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : OPEN;
+const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : params.get("clef") ? CLEF : OPEN;
 
 // Any stable digest will do: the pane only compares what it was given.
 const hashOf = (text) => {

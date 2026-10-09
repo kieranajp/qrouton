@@ -121,15 +121,16 @@ test("an answer block spans its own lines only", () => {
   assert.deepEqual([four.answer.from, four.answer.to], [41, 43]);
 });
 
-test("decisions come from bold leads and resolved questions", () => {
+test("bold decisions before the first heading share one Decisions page, and each resolved question has its own", () => {
   const spec = parseSpec(OPEN);
   assert.deepEqual(
-    spec.decisions.map((d) => [d.kind, d.id, d.label]),
+    spec.decisions.map((d) => [d.kind, d.id, d.label, d.count]),
     [
-      ["decision", "", "Retries stay bounded"],
-      ["question", "Q0", "Which package owns it?"],
+      ["decision", "", "Decisions", 1],
+      ["question", "Q0", "Which package owns it?", 1],
     ],
   );
+  assert.equal(spec.decisionCount, 2);
   assert.deepEqual(spec.sections.map((s) => s.name), ["End state", "Risks"]);
 });
 
@@ -138,7 +139,7 @@ test("a spec with no open questions is still a spec", () => {
   assert.equal(spec.isSpec, true);
   assert.deepEqual(spec.open, []);
   assert.equal(spec.answered, 0);
-  assert.deepEqual(spec.decisions.map((d) => d.label), ["The service writes entries", "Append before put"]);
+  assert.deepEqual(spec.decisions.map((d) => [d.label, d.count]), [["Decisions", 2]]);
 });
 
 test("a freeform spec is not one", () => {
@@ -187,10 +188,61 @@ test("resolved Q blocks under Decisions stay structured without Open questions",
   assert.deepEqual(spec.decisions.map((d) => d.kind), ["question"]);
 });
 
-test("a decision runs up to the next one", () => {
-  const [first, second] = parseSpec(ZERO).decisions;
-  assert.deepEqual([first.from, first.to], [9, 10]);
-  assert.deepEqual([second.from, second.to], [11, 12]);
+test("a page runs up to the next heading", () => {
+  const [first, second] = parseSpec(OPEN).decisions;
+  assert.deepEqual([first.from, first.to], [47, 49]);
+  assert.deepEqual([second.from, second.to], [50, 54]);
+});
+
+const GROUPED = doc(
+  "# Bands",
+  "",
+  "## Decisions",
+  "",
+  "### Product",
+  "",
+  "**Grams go.** Four bands.",
+  "",
+  "**The bars go.** Nothing reads them.",
+  "",
+  "### Storage",
+  "",
+  "**Facets carry bands.** On the wire.",
+  "",
+  "### Q1 \u2014 Per attempt or overall?",
+  "",
+  "**Chosen:** overall.",
+  "",
+  "## Open questions",
+  "",
+  "None.",
+  "",
+);
+
+test("each heading under Decisions is one page holding its bold decisions", () => {
+  const spec = parseSpec(GROUPED);
+  assert.deepEqual(
+    spec.decisions.map((d) => [d.kind, d.id, d.label, d.count, d.leads]),
+    [
+      ["group", "", "Product", 2, ["Grams go", "The bars go"]],
+      ["group", "", "Storage", 1, ["Facets carry bands"]],
+      ["question", "Q1", "Per attempt or overall?", 1, []],
+    ],
+  );
+  const [product, storage, question] = spec.decisions;
+  assert.deepEqual([product.from, product.to], [5, 10]);
+  assert.deepEqual([storage.from, storage.to], [11, 14]);
+  assert.deepEqual([question.from, question.to], [15, 18]);
+});
+
+test("the decision count excludes group headings", () => {
+  assert.equal(parseSpec(GROUPED).decisionCount, 4);
+});
+
+test("bold decisions with no heading under Decisions are one page", () => {
+  const spec = parseSpec(ZERO);
+  assert.equal(spec.decisions.length, 1);
+  assert.deepEqual([spec.decisions[0].from, spec.decisions[0].to], [9, 12]);
 });
 
 test("the spec this pane was built from reads as fully resolved", () => {
@@ -199,7 +251,8 @@ test("the spec this pane was built from reads as fully resolved", () => {
   assert.deepEqual(spec.open, []);
   const questions = spec.decisions.filter((d) => d.kind === "question");
   assert.deepEqual(questions.map((q) => q.id), ["Q1", "Q2", "Q3", "Q4", "Q5"]);
-  assert.equal(spec.decisions.filter((d) => d.kind === "decision").length, 13);
+  assert.equal(spec.decisions.filter((d) => d.kind === "decision").length, 1);
+  assert.equal(spec.decisionCount, 18);
 });
 
 const INTEGRAL = doc(

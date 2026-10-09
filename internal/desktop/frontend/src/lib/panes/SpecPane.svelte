@@ -328,7 +328,7 @@
           use:diagrams={{ id, text: source.text }}
           use:port={{ id, active, scrollRoot, key: at.current, request: epoch }}>
           <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
-            <CapsLabel>Spec · {spec.decisions.length} {spec.decisions.length === 1 ? "decision" : "decisions"}</CapsLabel>
+            <CapsLabel>Spec · {spec.decisionCount} {spec.decisionCount === 1 ? "decision" : "decisions"}</CapsLabel>
             <h1 class="display-lg">{spec.title || heading}</h1>
             <div class="markdown lead">{@html parts.preamble}</div>
             <div class="tally" data-tally>
@@ -354,7 +354,12 @@
                       class="row"
                       onclick={() => at.show(slides.findIndex((slide) => slide.from === decision.from) + 1)}>
                       <span class="index">{decision.id || index + 1}</span>
-                      <span class="name">{decision.label}</span>
+                      <span class="text">
+                        <span class="name">{decision.label}{decision.kind === "group" ? ` · ${decision.count} ${decision.count === 1 ? "decision" : "decisions"}` : ""}</span>
+                        {#each decision.leads as lead}
+                          <span class="lead-line">{lead}</span>
+                        {/each}
+                      </span>
                     </button>
                   </li>
                 {/each}
@@ -402,7 +407,7 @@
               {:else}
                 {#if slide.kind !== "section"}
                   <div class="crumb">
-                    <CapsLabel>{slide.kind === "question" ? "Resolved question" : "Decision"}</CapsLabel>
+                    <CapsLabel>{slide.kind === "question" ? "Resolved question" : "Decisions"}</CapsLabel>
                   </div>
                 {/if}
                 <h1 class="display-md">{slide.name}</h1>
@@ -576,13 +581,28 @@
     color: var(--accent-action);
   }
 
-  .row .name {
+  .row .text {
+    display: flex;
     flex: 1;
+    flex-direction: column;
+    gap: calc(4px * var(--ui-scale));
     min-width: 0;
+  }
+
+  .row .name,
+  .row .lead-line {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .row .name {
     color: var(--text-primary);
+  }
+
+  .row .lead-line {
+    font: var(--machine-sm);
+    color: var(--text-muted);
   }
 
   /* The pane names the section already; the heading stays measurable for the viewport. */

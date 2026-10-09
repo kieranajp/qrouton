@@ -11,7 +11,7 @@ test("the overview counts the answered questions and lists the decisions", async
   await open(page);
   await expect.poll(() => shown(page)).toEqual(["overview"]);
   await expect(page.locator("[data-tally]")).toContainText("1 of 3 answered");
-  await expect(page.locator(".rows .row")).toHaveText([/Keep `?Retry`? as a wrapper/, /Cancellation is cooperative/]);
+  await expect(page.locator(".rows .row")).toHaveText([/Decisions\s*Keep `?Retry`? as a wrapper\s*Cancellation is cooperative/]);
 });
 
 test("the questions pip holds every open question as a card", async ({ page }) => {
@@ -28,13 +28,12 @@ test("the questions pip holds every open question as a card", async ({ page }) =
   await expect.poll(() => page.evaluate(() => window.focusedCard())).toBe("Q2");
 });
 
-test("every decision gets a pip of its own, after the questions", async ({ page }) => {
+test("bold decisions share one pip, after the questions", async ({ page }) => {
   await open(page);
   expect(await page.evaluate(() => window.pips())).toEqual([
     "Overview",
     "Open questions",
-    "Keep Retry as a wrapper",
-    "Cancellation is cooperative",
+    "Decisions",
     "End state",
     "Risks",
   ]);
@@ -54,7 +53,7 @@ test("arrow keys move between pips, and up and down between cards", async ({ pag
   await expect.poll(() => page.evaluate(() => window.focusedCard())).toBe("Q2");
 
   await page.keyboard.press("ArrowRight");
-  await expect.poll(() => shown(page)).toEqual(["Keep Retry as a wrapper"]);
+  await expect.poll(() => shown(page)).toEqual(["Decisions"]);
 });
 
 test("a spec with nothing open says so and has no questions pip", async ({ page }) => {
@@ -62,10 +61,33 @@ test("a spec with nothing open says so and has no questions pip", async ({ page 
   await expect(page.locator("[data-tally]")).toHaveText("No open questions");
   expect(await page.evaluate(() => window.pips())).toEqual([
     "Overview",
-    "The service writes entries",
-    "Append before put",
+    "Decisions",
   ]);
   await expect(page.locator('[data-screen="overview"]')).not.toContainText("None.");
+});
+
+test("topic groups page the decisions by heading", async ({ page }) => {
+  await open(page, "?clef=1");
+  expect(await page.evaluate(() => window.pips())).toEqual([
+    "Overview",
+    "Open questions",
+    "Product",
+    "The Clef call",
+    "Storage",
+  ]);
+  await expect(page.locator('[data-screen="overview"] .caps').first()).toHaveText("Spec · 7 decisions");
+  await expect(page.locator(".rows .row")).toHaveText([
+    /Product · 3 decisions\s*Grams go entirely\s*The bars go\s*A failed estimate shows no dots/,
+    /The Clef call · 2 decisions/,
+    /Storage · 2 decisions/,
+  ]);
+
+  await page.locator(".rows .row").nth(1).click();
+  await expect.poll(() => shown(page)).toEqual(["The Clef call"]);
+  const group = page.locator('[data-screen="The Clef call"]');
+  await expect(group).toContainText("nutrition-intelligence owns the call.");
+  await expect(group).toContainText("lsx makes one call per entry.");
+  await expect(group.locator(".markdown strong")).toHaveCount(2);
 });
 
 test("a spec in no known shape renders as plain markdown", async ({ page }) => {
