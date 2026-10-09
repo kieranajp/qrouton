@@ -129,8 +129,26 @@ export const FREEFORM = [
   "",
 ].join("\n");
 
+export const BULLETS = [
+  "---",
+  "kind: spec",
+  "---",
+  "",
+  "# Retry budget",
+  "",
+  "## Open questions",
+  "",
+  "None.",
+  "",
+  "## Decisions",
+  "",
+  "- Retries stop after three attempts",
+  "- Backoff is capped at ten seconds",
+  "",
+].join("\n");
+
 const params = new URLSearchParams(location.search);
-const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : params.get("clef") ? CLEF : OPEN;
+const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : params.get("clef") ? CLEF : params.get("bullets") ? BULLETS : OPEN;
 
 // Any stable digest will do: the pane only compares what it was given.
 const hashOf = (text) => {

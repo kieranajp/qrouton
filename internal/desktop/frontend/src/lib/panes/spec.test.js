@@ -245,6 +245,51 @@ test("bold decisions with no heading under Decisions are one page", () => {
   assert.deepEqual([spec.decisions[0].from, spec.decisions[0].to], [9, 12]);
 });
 
+test("a Decisions section of bullets is one page holding them", () => {
+  const text = doc("# Spec", "", "## Open questions", "", "None.", "", "## Decisions", "", "- use X", "- use Y", "");
+  const spec = parseSpec(text);
+  assert.deepEqual(spec.decisions.map((d) => [d.kind, d.label, d.count, d.leads]), [["decision", "Decisions", 0, []]]);
+  assert.deepEqual([spec.decisions[0].from, spec.decisions[0].to], [9, 11]);
+  assert.equal(spec.decisionCount, 0);
+});
+
+test("content before the first heading stays on the leading page beside bold decisions", () => {
+  const text = doc(
+    "# Spec",
+    "",
+    "## Open questions",
+    "",
+    "None.",
+    "",
+    "## Decisions",
+    "",
+    "Intro prose.",
+    "",
+    "- a bullet",
+    "",
+    "**Keep it.** Why.",
+    "",
+    "### Storage",
+    "",
+    "**Facets.** Wire.",
+    "",
+  );
+  const spec = parseSpec(text);
+  assert.deepEqual(
+    spec.decisions.map((d) => [d.kind, d.label, d.count, d.from, d.to]),
+    [
+      ["decision", "Decisions", 1, 9, 14],
+      ["group", "Storage", 1, 15, 18],
+    ],
+  );
+});
+
+test("a group with no bold decisions has a count of 0", () => {
+  const spec = parseSpec(doc("# Spec", "", "## Decisions", "", "### Notes", "", "- just a bullet", "", "## Open questions", "", "None.", ""));
+  assert.deepEqual(spec.decisions.map((d) => [d.kind, d.label, d.count]), [["group", "Notes", 0]]);
+  assert.equal(spec.decisionCount, 0);
+});
+
 test("the spec this pane was built from reads as fully resolved", () => {
   const spec = parseSpec(INTEGRAL);
   assert.equal(spec.isSpec, true);

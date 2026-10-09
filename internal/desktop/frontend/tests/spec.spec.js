@@ -90,6 +90,16 @@ test("topic groups page the decisions by heading", async ({ page }) => {
   await expect(group.locator(".markdown strong")).toHaveCount(2);
 });
 
+test("a Decisions section of plain bullets is one page that shows them", async ({ page }) => {
+  await open(page, "?bullets=1");
+  expect(await page.evaluate(() => window.pips())).toEqual(["Overview", "Decisions"]);
+  await page.locator(".rows .row").click();
+  await expect.poll(() => shown(page)).toEqual(["Decisions"]);
+  const decisions = page.locator('[data-screen="Decisions"]');
+  await expect(decisions).toContainText("Retries stop after three attempts");
+  await expect(decisions).toContainText("Backoff is capped at ten seconds");
+});
+
 test("a spec in no known shape renders as plain markdown", async ({ page }) => {
   await open(page, "?freeform=1");
   await expect(page.locator(".pip")).toHaveCount(0);

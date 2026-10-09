@@ -355,7 +355,7 @@
                       onclick={() => at.show(slides.findIndex((slide) => slide.from === decision.from) + 1)}>
                       <span class="index">{decision.id || index + 1}</span>
                       <span class="text">
-                        <span class="name">{decision.label}{decision.kind === "group" ? ` · ${decision.count} ${decision.count === 1 ? "decision" : "decisions"}` : ""}</span>
+                        <span class="name">{decision.label}{decision.kind === "group" && decision.count > 0 ? ` · ${decision.count} ${decision.count === 1 ? "decision" : "decisions"}` : ""}</span>
                         {#each decision.leads as lead}
                           <span class="lead-line">{lead}</span>
                         {/each}

@@ -111,13 +111,12 @@ function readDecisions(section) {
       pages.push(page);
       continue;
     }
-    const lead = node.type === "paragraph" ? node.children?.[0] : null;
-    if (lead?.type !== "strong") continue;
     if (!page) {
       page = { kind: "decision", id: "", label: "Decisions", from: line(node), to: 0, count: 0, leads: [] };
       pages.push(page);
     }
-    if (page.kind !== "question") page.leads.push(flatten(lead).trim().replace(/[.:]$/, ""));
+    const lead = node.type === "paragraph" ? node.children?.[0] : null;
+    if (lead?.type === "strong" && page.kind !== "question") page.leads.push(flatten(lead).trim().replace(/[.:]$/, ""));
   }
   pages.forEach((decision, at) => {
     decision.count = decision.kind === "question" ? 1 : decision.leads.length;
