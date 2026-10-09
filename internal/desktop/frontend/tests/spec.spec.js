@@ -165,3 +165,55 @@ test("a letter key picks that option on the focused card", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(1);
   expect(await page.evaluate(() => window.saves()[0][2])).toContain("callers can test for it)**\n\nAnswer: B\n");
 });
+
+const sendButton = (page) => page.locator("[data-send]");
+const why = (page) => page.locator(".send .why");
+
+test("send waits until something is answered and saved", async ({ page }) => {
+  await open(page, "?zero=1");
+  await expect(sendButton(page)).toHaveCount(0);
+
+  await page.evaluate(() => window.pushContent(window.OPEN.replace("Answer: B", "Answer:")));
+  await expect(sendButton(page)).toBeDisabled();
+  await expect(why(page)).toHaveText("Answer at least one question first.");
+  await expect(page.locator(".send-button")).toHaveAttribute("title", "Answer at least one question first.");
+
+  await page.keyboard.press("ArrowRight");
+  const field = card(page, "Q1").locator("textarea");
+  await field.fill("an unsaved note");
+  await expect(sendButton(page)).toBeDisabled();
+  await expect(why(page)).toContainText("Save your typed answer first");
+
+  await page.evaluate(() => window.holdSaves());
+  await field.press("ControlOrMeta+Enter");
+  await expect(why(page)).toHaveText("Wait for the save to finish.");
+  await page.evaluate(() => window.releaseSaves());
+  await expect(sendButton(page)).toBeEnabled();
+});
+
+test("send is held back while a save has failed", async ({ page }) => {
+  await questions(page);
+  await page.evaluate(() => window.staleOnce(window.OPEN + "\nMoved.\n"));
+  const field = card(page, "Q2").locator("textarea");
+  await field.fill("kept");
+  await field.press("ControlOrMeta+Enter");
+  await expect(why(page)).toHaveText("An answer did not save. Save it again first.");
+  await expect(sendButton(page)).toBeDisabled();
+});
+
+test("one click on send makes one bridge call with the window id", async ({ page }) => {
+  await questions(page);
+  await expect(sendButton(page)).toBeEnabled();
+  await sendButton(page).click();
+  await expect(why(page)).toHaveText("Typed into the conversation.");
+  expect(await page.evaluate(() => window.sends())).toEqual([["w1"]]);
+});
+
+test("answering the last open question makes send the primary action", async ({ page }) => {
+  await questions(page);
+  await expect(sendButton(page)).toHaveClass(/outline/);
+  await card(page, "Q2").locator(".option").first().click();
+  await card(page, "Q3").locator(".option").first().click();
+  await expect(page.locator(".crumb .count")).toHaveText("3 of 3 answered");
+  await expect(sendButton(page)).toHaveClass(/primary/);
+});

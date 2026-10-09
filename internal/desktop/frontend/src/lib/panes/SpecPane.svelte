@@ -15,7 +15,7 @@
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
-  import { freshContent, saveSpec } from "./spec-calls.js";
+  import { freshContent, saveSpec, sendSpecAnswers } from "./spec-calls.js";
   import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
   import "./markdown.css";
 
@@ -193,6 +193,7 @@
     const question = spec.open[index];
     if (!question) return "";
     const key = draftKey(question);
+    sent = null;
     pending.set(key, { id: question.id, heading: question.heading, ...drafts[index], ...change });
     return key;
   }
@@ -244,6 +245,26 @@
       return;
     }
     saves.set(key, { state: "failed", message: `Could not save: ${saved.error?.message ?? saved.error}` });
+  }
+
+  let blocked = $derived.by(() => {
+    const states = [...saves.values()].map((save) => save.state);
+    if (states.includes("saving")) return "Wait for the save to finish.";
+    if (states.includes("failed") || states.includes("reloaded"))
+      return "An answer did not save. Save it again first.";
+    if (laid.detached.length > 0) return "Copy or discard the detached answers first.";
+    if (pending.size > 0) return "Save your typed answer first: click outside the field or press ⌘↵.";
+    if (answered === 0) return "Answer at least one question first.";
+    return "";
+  });
+  let sent = $state(/** @type {{ok: boolean, message: string} | null} */ (null));
+
+  async function send() {
+    if (blocked) return;
+    const typed = await sendSpecAnswers(id);
+    sent = typed.ok
+      ? { ok: true, message: "Typed into the conversation." }
+      : { ok: false, message: `Could not type into the conversation: ${typed.error?.message ?? typed.error}` };
   }
 
   /** @param {{id: string, heading: string}} draft */
@@ -390,6 +411,21 @@
               {/if}
             </section>
           {/each}
+        </div>
+      {/if}
+    {/snippet}
+    {#snippet bar()}
+      {#if spec.open.length > 0}
+        <div class="send">
+          <span class="send-button" title={blocked || null}>
+            <Button
+              variant={answered === spec.open.length && !blocked ? "primary" : "outline"}
+              size="sm"
+              disabled={Boolean(blocked)}
+              data-send
+              onclick={send}>Type 'answers are in' into the conversation</Button>
+          </span>
+          <span class="why" class:failed={sent && !sent.ok} role="status">{blocked || sent?.message || ""}</span>
         </div>
       {/if}
     {/snippet}
@@ -560,6 +596,25 @@
     white-space: nowrap;
   }
 
+  .send {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 8px var(--pane-pad);
+    border-bottom: var(--border-width) solid var(--border-subtle);
+  }
+
+  .why {
+    min-width: 0;
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .why.failed {
+    color: var(--state-failed);
+  }
+
   .detached {
     display: flex;
     flex-direction: column;
@@ -596,7 +651,26 @@
   }
 
   @media (max-width: 420px) {
-    .detached {
+    .send {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    padding: 8px var(--pane-pad);
+    border-bottom: var(--border-width) solid var(--border-subtle);
+  }
+
+  .why {
+    min-width: 0;
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .why.failed {
+    color: var(--state-failed);
+  }
+
+  .detached {
       padding-left: 0;
     }
 

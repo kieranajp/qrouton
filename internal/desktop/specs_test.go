@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -142,5 +143,44 @@ func TestSaveSpecKeepsTheFileMode(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("mode = %o after a save, want 600", info.Mode().Perm())
+	}
+}
+
+func TestSendSpecAnswersTypesTheFixedLineIntoTheConversation(t *testing.T) {
+	rec := &recorder{}
+	reg, term, w := testWorkbench(t, newFakeRenderer(), rec.emit)
+	root := t.TempDir()
+	state := reg.add(root, []string{"/bin/cat"}, withTerminalEnv(os.Environ()))
+	reg.reveal(state)
+	spec, err := w.openWindow(state, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Label: "S1", Source: specSource, Content: "# Spec\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SendSpecAnswers(spec); !errors.Is(err, ErrTerminalNotStarted) {
+		t.Fatalf("SendSpecAnswers before the conversation started returned %v, want ErrTerminalNotStarted", err)
+	}
+
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SendSpecAnswers(spec); err != nil {
+		t.Fatal(err)
+	}
+	line := fmt.Sprintf(specAnswersInFormat, specSource)
+	if got := string(specAnswersLine(specSource)); got != line+"\r" {
+		t.Fatalf("line = %q, want the fixed sentence and a carriage return", got)
+	}
+	waitFor(t, "the typed line", func() bool { return strings.Contains(rec.output(), line) })
+
+	plan, err := w.openWindow(state, workbench.WindowOptions{
+		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Label: "P1", Source: "thoughts/shared/plans/P1.md", Content: "# Plan\n",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.SendSpecAnswers(plan); !errors.Is(err, ErrNotASpec) {
+		t.Fatalf("SendSpecAnswers on a plan returned %v, want ErrNotASpec", err)
 	}
 }

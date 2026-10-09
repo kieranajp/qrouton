@@ -50,3 +50,25 @@ func (w *Windows) SaveSpec(id, hash, text string) (string, error) {
 	})
 	return saved, err
 }
+
+func specAnswersLine(source string) []byte {
+	return []byte(fmt.Sprintf(specAnswersInFormat, source) + conversationSubmit)
+}
+
+// SendSpecAnswers types one fixed line into the spec's conversation, as if the
+// user had. Only the window id comes from the page.
+func (w *Windows) SendSpecAnswers(id string) error {
+	var owner *sessionState
+	var source string
+	err := w.with(id, func(window *agentWindow) error {
+		if _, _, err := specWindow(window); err != nil {
+			return err
+		}
+		owner, source = window.session, window.opts.Source
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	return owner.write(specAnswersLine(source))
+}

@@ -21,6 +21,9 @@ const (
 	bugReportRetention        = 30 * time.Minute
 	bugReportPostTimeout      = 30 * time.Second
 
+	specAnswersInFormat = "I've answered the design questions in %s. Please fold them into Decisions."
+	conversationSubmit  = "\r"
+
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"
 

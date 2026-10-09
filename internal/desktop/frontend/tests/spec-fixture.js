@@ -122,6 +122,7 @@ window.wailsCall = async (name, ...args) => {
   if (name.endsWith(".RenderDiagrams")) return [];
   if (name.endsWith(".SaveSpec")) {
     const [, hash, text] = args;
+    if (hold) await hold;
     if (stale !== null) {
       window.file = stale;
       stale = null;
@@ -135,6 +136,15 @@ window.wailsCall = async (name, ...args) => {
 
 // The next save finds the file already rewritten to this text.
 window.staleOnce = (text) => (stale = text);
+window.sends = () => window.calls.filter((call) => call.name.endsWith(".SendSpecAnswers")).map((call) => call.args);
+// Saves hang until released, so a test can look at the pane mid-save.
+let hold = null;
+window.holdSaves = () => {
+  hold = new Promise((resolve) => (window.releaseSaves = () => {
+    hold = null;
+    resolve();
+  }));
+};
 window.saves = () => window.calls.filter((call) => call.name.endsWith(".SaveSpec")).map((call) => call.args);
 window.OPEN = OPEN;
 
