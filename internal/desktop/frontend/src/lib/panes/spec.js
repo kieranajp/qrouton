@@ -1,0 +1,150 @@
+import { flatten, sliceSections } from "./sections.js";
+
+const OPEN = "open questions";
+const DECISIONS = "decisions";
+const QUESTION = /^(Q\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
+const OPTION = /^\s*[-*+]\s+([A-Z])\.\s+(.*)$/;
+const RECOMMENDED = /\s*\*\*\(\s*recommended\b:?\s*(.*?)\s*\)\*\*\s*/i;
+const ANSWER = /^Answer(?:\s*\([^)]*\))?:[ \t]?(.*)$/;
+// "B", "B.", "B, a note" and "B" alone on its line name an option; "A good idea" does not.
+const LETTER = /^([A-Z])(?=$|[.,:;)—–-]|[ \t]*\n|\s+[—–-])/;
+
+/** @param {any} node */
+const line = (node) => node.position?.start?.line ?? 0;
+
+/** @param {any} node @param {number} depth */
+const isHeading = (node, depth) => node.type === "heading" && node.depth === depth;
+
+/** @param {string[]} lines @param {number} from @param {number} to 1-based, inclusive. */
+function lastFilled(lines, from, to) {
+  let at = to;
+  while (at > from && !lines[at - 1]?.trim()) at--;
+  return at;
+}
+
+/** @typedef {{letter: string, text: string, recommended: boolean, reason: string}} Option */
+/** @typedef {{from: number, to: number, raw: string, letter: string, note: string}} Answer */
+/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
+/** @typedef {{kind: "question" | "decision" | "section", id: string, label: string, from: number, to: number}} Decision */
+
+/** @param {string} raw @param {Option[]} options */
+export function readAnswer(raw, options) {
+  const match = LETTER.exec(raw);
+  if (!match || !options.some((option) => option.letter === match[1])) {
+    return { letter: "", note: raw };
+  }
+  return { letter: match[1], note: raw.slice(1).replace(/^[\s.,:;)—–-]+/, "").trim() };
+}
+
+/** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named */
+function readQuestion(lines, heading, to, named) {
+  const from = line(heading);
+  /** @type {Option[]} */
+  const options = [];
+  let firstOption = 0;
+  let answerAt = 0;
+  for (let at = from + 1; at <= to; at++) {
+    const source = lines[at - 1];
+    const option = OPTION.exec(source);
+    if (option && !answerAt) {
+      firstOption ||= at;
+      const reason = RECOMMENDED.exec(option[2]);
+      options.push({
+        letter: option[1],
+        text: (reason ? option[2].replace(RECOMMENDED, " ") : option[2]).trim(),
+        recommended: Boolean(reason),
+        reason: reason ? reason[1] : "",
+      });
+      continue;
+    }
+    if (!answerAt && ANSWER.test(source)) answerAt = at;
+  }
+
+  const contextEnd = (firstOption || answerAt || to + 1) - 1;
+  const context = lines.slice(from, contextEnd).join("\n").trim();
+
+  let answer = null;
+  if (answerAt) {
+    const end = lastFilled(lines, answerAt, to);
+    const first = ANSWER.exec(lines[answerAt - 1])?.[1] ?? "";
+    const raw = [first, ...lines.slice(answerAt, end)].join("\n").trim();
+    answer = { from: answerAt, to: end, raw, ...readAnswer(raw, options) };
+  }
+
+  return { id: named[1], heading: named[2], from, to, context, options, answer };
+}
+
+/** @param {string[]} lines @param {{from: number, to: number, nodes: any[]}} section */
+function readQuestions(lines, section) {
+  const heads = section.nodes.filter((node) => isHeading(node, 3));
+  /** @type {Question[]} */
+  const questions = [];
+  heads.forEach((heading, at) => {
+    const named = QUESTION.exec(flatten(heading).trim());
+    if (!named) return;
+    const to = heads[at + 1] ? line(heads[at + 1]) - 1 : section.to;
+    questions.push(readQuestion(lines, heading, to, named));
+  });
+  return questions;
+}
+
+/** @param {{from: number, to: number, nodes: any[]}} section */
+function readDecisions(section) {
+  /** @type {Decision[]} */
+  const decisions = [];
+  for (const node of section.nodes) {
+    if (isHeading(node, 3)) {
+      const name = flatten(node).trim();
+      const named = QUESTION.exec(name);
+      decisions.push({
+        kind: named ? "question" : "section",
+        id: named ? named[1] : "",
+        label: named ? named[2] : name,
+        from: line(node),
+        to: 0,
+      });
+      continue;
+    }
+    const lead = node.type === "paragraph" ? node.children?.[0] : null;
+    if (lead?.type !== "strong") continue;
+    decisions.push({
+      kind: "decision",
+      id: "",
+      label: flatten(lead).trim().replace(/[.:]$/, ""),
+      from: line(node),
+      to: 0,
+    });
+  }
+  decisions.forEach((decision, at) => {
+    decision.to = decisions[at + 1] ? decisions[at + 1].from - 1 : section.to;
+  });
+  return decisions;
+}
+
+/** A spec is answerable once it has an open-questions section or a resolved question.
+ * @param {string} text */
+export function parseSpec(text) {
+  const { title, preamble, sections } = sliceSections(text);
+  const lines = text.split("\n");
+  const named = (name) => sections.find((section) => section.name.toLowerCase() === name);
+  const openSection = named(OPEN) ?? null;
+  const decisionsSection = named(DECISIONS) ?? null;
+
+  const open = openSection ? readQuestions(lines, openSection) : [];
+  const decisions = decisionsSection ? readDecisions(decisionsSection) : [];
+  const answered = open.filter((question) => question.answer?.raw).length;
+
+  return {
+    title,
+    preamble,
+    isSpec: Boolean(openSection) || decisions.some((decision) => decision.kind === "question"),
+    open,
+    answered,
+    decisions,
+    openSection: openSection && { from: openSection.from, to: openSection.to },
+    decisionsSection: decisionsSection && { from: decisionsSection.from, to: decisionsSection.to },
+    sections: sections
+      .filter((section) => section !== openSection && section !== decisionsSection)
+      .map(({ name, from, to }) => ({ name, from, to })),
+  };
+}
