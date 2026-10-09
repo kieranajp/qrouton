@@ -164,7 +164,7 @@
   .semantic {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
   }
 
   .sticker-labels {

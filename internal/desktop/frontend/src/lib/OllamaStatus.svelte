@@ -60,7 +60,7 @@
   .ollama {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
   }
 
   p {
@@ -80,7 +80,7 @@
   .actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 
   code,
@@ -90,7 +90,7 @@
   }
 
   .bar {
-    height: 4px;
+    height: calc(4px * var(--ui-scale));
     background: var(--border-subtle);
   }
 

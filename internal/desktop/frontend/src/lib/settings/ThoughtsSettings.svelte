@@ -76,14 +76,14 @@
   .shared {
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     margin: 0;
     border: 0;
     padding: 0;
   }
 
   .shared legend {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--ui-scale));
     padding: 0;
     font: var(--display-sm);
     color: var(--text-primary);
@@ -104,6 +104,6 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 2fr) minmax(0, 1.5fr) auto;
     align-items: start;
-    gap: 14px 18px;
+    gap: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
   }
 </style>
