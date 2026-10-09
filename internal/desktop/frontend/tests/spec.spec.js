@@ -311,3 +311,29 @@ test("a picked option and a note save as the letter on its own line with the not
     "- B. No\n\nAnswer: B\nonly when the caller asks\n\n## Decisions",
   );
 });
+
+test("a d2 fence draws in a question's context, a decision page and another section", async ({ page }) => {
+  await open(page, "?d2=1");
+  const fence = (screen) => page.locator(`[data-screen="${screen}"] pre.diagram`);
+
+  await page.getByRole("button", { name: "Next open question" }).click();
+  await expect(fence("questions")).toHaveCount(1);
+  await expect(page.locator('[data-screen="questions"] pre:not(.diagram) code')).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Next screen" }).click();
+  await expect.poll(() => shown(page)).toEqual(["Decisions"]);
+  await expect(fence("Decisions")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Next screen" }).click();
+  await page.getByRole("button", { name: "Next screen" }).click();
+  await expect.poll(() => shown(page)).toEqual(["Risks"]);
+  await expect(fence("Risks")).toHaveCount(1);
+});
+
+test("a saved answer leaves the question's diagram drawn", async ({ page }) => {
+  await open(page, "?d2=1");
+  await page.getByRole("button", { name: "Next open question" }).click();
+  await page.locator('[data-question="Q2"] .option').first().click();
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(1);
+  await expect(page.locator('[data-question="Q1"] pre.diagram')).toHaveCount(1);
+});

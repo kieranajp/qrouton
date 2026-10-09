@@ -147,8 +147,15 @@ export const BULLETS = [
   "",
 ].join("\n");
 
+export const DIAGRAMS = OPEN.replace(
+  "Every caller depends on this.\n",
+  "Every caller depends on this.\n\n```d2\ncaller -> retry: attempts\n```\n",
+)
+  .replace("Nobody breaks.\n", "Nobody breaks.\n\n```d2\nretry -> call\n```\n")
+  .replace("None.\n", "None.\n\n```d2\nrisk -> mitigation\n```\n");
+
 const params = new URLSearchParams(location.search);
-const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : params.get("clef") ? CLEF : params.get("bullets") ? BULLETS : OPEN;
+const initial = params.get("d2") ? DIAGRAMS : params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : params.get("clef") ? CLEF : params.get("bullets") ? BULLETS : OPEN;
 
 // Any stable digest will do: the pane only compares what it was given.
 const hashOf = (text) => {
@@ -177,7 +184,14 @@ window.calls = [];
 window.wailsCall = async (name, ...args) => {
   window.calls.push({ name, args });
   if (name.endsWith(".Content")) return document_();
-  if (name.endsWith(".RenderDiagrams")) return [];
+  if (name.endsWith(".RenderDiagrams")) {
+    const [, request] = args;
+    return window.file.split("\n").flatMap((text, at) =>
+      text === "```d2"
+        ? [{ request, line: at + 1, svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 20" width="40" height="20"><rect width="40" height="20"></rect></svg>' }]
+        : [],
+    );
+  }
   if (name.endsWith(".SaveSpec")) {
     const [, hash, text] = args;
     if (hold) await hold;

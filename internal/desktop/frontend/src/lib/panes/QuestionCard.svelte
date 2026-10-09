@@ -9,9 +9,16 @@
 
   // Line numbers here would count from the card, not the file.
   const unnumbered = (text) => render(text).body.replace(/ data-line(?:-end)?="\d+"/g, "");
+  // A fence keeps its line in the file so the diagram renderer can find it.
+  const anchored = (text, first) =>
+    render(text).body.replace(/<(\w+)([^>]*)>/g, (tag, name, attrs) =>
+      attrs.includes("data-line")
+        ? `<${name}${attrs.replace(/ data-line(-end)?="(\d+)"/g, (_, end, at) =>
+            name === "pre" ? ` data-line${end ?? ""}="${Number(at) + first - 1}"` : "")}>`
+        : tag);
   const inline = (text) => unnumbered(text).replace(/^<p>|<\/p>\s*$/g, "");
 
-  let context = $derived(question.context ? unnumbered(question.context) : "");
+  let context = $derived(question.context ? anchored(question.context, question.contextFrom) : "");
   let answered = $derived(Boolean(draft.letter || draft.note.trim()));
 </script>
 

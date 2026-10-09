@@ -613,3 +613,8 @@ test("a missing answer line goes after the block's last line, not inside its pro
   assert.equal(after, doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Some trailing context.", "", "Answer: B", "", "## Decisions", ""));
   assert.equal(parseSpec(after).open[0].answer.note, "");
 });
+
+test("a question's context knows the file line it starts on", () => {
+  const spec = parseSpec(doc("## Open questions", "", "### Q1 — Pick", "", "Shape:", "", "- A. One", "", "Answer:", ""));
+  assert.equal(spec.open[0].contextFrom, 5);
+});

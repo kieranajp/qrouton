@@ -23,7 +23,7 @@ function lastFilled(lines, from, to) {
 
 /** @typedef {{letter: string, text: string, recommended: boolean, reason: string}} Option */
 /** @typedef {{from: number, to: number, raw: string, letter: string, note: string}} Answer */
-/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
+/** @typedef {{id: string, heading: string, from: number, to: number, context: string, contextFrom: number, options: Option[], answer: Answer | null}} Question */
 /** @typedef {{kind: "question" | "group" | "decision", id: string, label: string, from: number, to: number, count: number, leads: string[]}} Decision */
 
 /** A letter is picked only when it is all the Answer line holds; anything else is free text.
@@ -61,7 +61,9 @@ function readQuestion(lines, heading, to, named) {
   }
 
   const contextEnd = (firstOption || answerAt || to + 1) - 1;
-  const context = lines.slice(from, contextEnd).join("\n").trim();
+  const raw = lines.slice(from, contextEnd).join("\n");
+  const context = raw.trim();
+  const contextFrom = from + 1 + (raw.slice(0, raw.length - raw.trimStart().length).match(/\n/g)?.length ?? 0);
 
   let answer = null;
   if (answerAt) {
@@ -72,7 +74,7 @@ function readQuestion(lines, heading, to, named) {
     answer = { from: answerAt, to: end, raw, ...readAnswer(first, rest, options) };
   }
 
-  return { id: named[1], heading: named[2], from, to, context, options, answer };
+  return { id: named[1], heading: named[2], from, to, context, contextFrom, options, answer };
 }
 
 /** @param {string[]} lines @param {{from: number, to: number, nodes: any[]}} section */
