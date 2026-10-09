@@ -27,7 +27,7 @@ research: <relative path to the research document>
 
 ### Q1 — <the question>
 
-<the context the user needs to answer it: what depends on it, what the evidence says>
+<the context the user needs to answer it: what depends on it, what the evidence says; a small d2 diagram if the options differ in shape>
 
 - A. <option>
 - B. <option> **(recommended: <why this one>)**
@@ -80,6 +80,26 @@ When the user answers in chat, write their answer into that question's
 `Answer:` block in these forms: the letter alone on the line with any note
 beneath it, or their words as given with no letter. If they say "B, but only if
 X", record `Answer: B, but only if X`, not `Answer: B`.
+
+## Diagrams
+
+A top-level d2 fence draws as a diagram in the pane. Use one where a picture explains a concept faster
+than prose: data flow between services, a request path, a state lifecycle, or how options differ in
+shape.
+
+Diagrams are optional. Leave them out when the choice is a value, a name or a wording, or when the
+picture would only repeat a list.
+
+A question's context may hold one. Where options differ in structure, a small diagram per option
+beats paragraphs. Keep each diagram small and label it with real names from the code.
+
+````markdown
+```d2
+direction: right
+caller -> Retry: attempts
+Retry -> client.Do: one try each
+```
+````
 
 ## Folding answers
 
