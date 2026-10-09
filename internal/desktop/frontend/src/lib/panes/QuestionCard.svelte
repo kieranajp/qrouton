@@ -77,8 +77,8 @@
   .card {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    padding: 18px 20px 20px;
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(18px * var(--ui-scale)) calc(20px * var(--ui-scale)) calc(20px * var(--ui-scale));
     border: var(--border-width) solid var(--border-subtle);
     box-shadow: var(--shadow-offset) var(--border-subtle);
     outline: none;
@@ -93,7 +93,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 
   .state {
@@ -140,16 +140,16 @@
   .options {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .option {
     display: flex;
     align-items: flex-start;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     width: 100%;
-    min-height: 48px;
-    padding: 12px 14px;
+    min-height: calc(48px * var(--ui-scale));
+    padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border: var(--border-width) solid var(--border-default);
     background: transparent;
     font: var(--machine-md);
@@ -176,7 +176,7 @@
     flex: none;
     min-width: 2ch;
     font: var(--machine-bold);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale));
     color: var(--accent-action);
   }
 
@@ -187,7 +187,7 @@
   .text {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
     min-width: 0;
     overflow-wrap: anywhere;
   }
@@ -196,13 +196,13 @@
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-secondary);
   }
 
   .badge {
-    padding: 2px 6px;
+    padding: 2px calc(6px * var(--ui-scale));
     background: var(--accent-label);
     color: var(--text-on-accent);
     font: var(--instruction);
@@ -213,14 +213,14 @@
   .note {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: calc(6px * var(--ui-scale));
   }
 
   textarea {
     width: 100%;
     box-sizing: border-box;
-    min-height: 52px;
-    padding: 8px 10px;
+    min-height: calc(52px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
     border: var(--border-width) solid var(--border-default);
     background: var(--surface-terminal);
     color: var(--text-primary);

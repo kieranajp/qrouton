@@ -460,25 +460,25 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 0 var(--pane-pad) 26px;
+    padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
   }
 
   .reading .display-lg {
-    margin-top: 4px;
+    margin-top: calc(4px * var(--ui-scale));
   }
 
   .hero {
-    padding-top: 18px;
+    padding-top: calc(18px * var(--ui-scale));
   }
 
   .hero .display-lg {
-    margin: 14px 0 20px;
+    margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
     max-width: 26ch;
   }
 
   .hero .lead :global(p) {
     font: var(--machine-lg);
-    font-size: 15px;
+    font-size: calc(15px * var(--ui-scale));
     line-height: 1.7;
     color: var(--text-secondary);
     max-width: 68ch;
@@ -488,14 +488,14 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 14px;
-    margin-top: 26px;
+    gap: calc(14px * var(--ui-scale));
+    margin-top: calc(26px * var(--ui-scale));
     padding-left: var(--gutter);
   }
 
   .tally .says {
     font: var(--machine-bold);
-    font-size: 14px;
+    font-size: calc(14px * var(--ui-scale));
     color: var(--text-primary);
   }
 
@@ -507,8 +507,8 @@
   .crumb {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding-top: 18px;
+    gap: calc(12px * var(--ui-scale));
+    padding-top: calc(18px * var(--ui-scale));
   }
 
   .count {
@@ -518,7 +518,7 @@
 
   .display-lg,
   .display-md {
-    margin: 12px 0 18px;
+    margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
     padding-left: var(--gutter);
     letter-spacing: var(--display-tracking);
     color: var(--text-primary);
@@ -536,13 +536,13 @@
   .cards {
     display: flex;
     flex-direction: column;
-    gap: 22px;
+    gap: calc(22px * var(--ui-scale));
     padding-left: var(--gutter);
   }
 
   .rows {
     list-style: none;
-    margin: 26px 0 0;
+    margin: calc(26px * var(--ui-scale)) 0 0;
     padding: 0;
     border: var(--border-width) solid var(--border-subtle);
     box-shadow: var(--shadow-offset) var(--border-subtle);
@@ -555,9 +555,9 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     width: 100%;
-    padding: 11px 14px;
+    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border: 0;
     background: transparent;
     font: var(--machine-md);
@@ -600,8 +600,8 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 12px;
-    padding: 8px var(--pane-pad);
+    gap: calc(12px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) var(--pane-pad);
     border-bottom: var(--border-width) solid var(--border-subtle);
   }
 
@@ -618,8 +618,8 @@
   .detached {
     display: flex;
     flex-direction: column;
-    gap: 12px;
-    margin-top: 26px;
+    gap: calc(12px * var(--ui-scale));
+    margin-top: calc(26px * var(--ui-scale));
     padding-left: var(--gutter);
   }
 
@@ -635,8 +635,8 @@
   .orphan {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px 14px;
+    gap: calc(8px * var(--ui-scale));
+    padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
     border: var(--border-width) dashed var(--state-waiting);
   }
 
@@ -647,48 +647,27 @@
 
   .actions {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
-  @media (max-width: 420px) {
-    .send {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 12px;
-    padding: 8px var(--pane-pad);
-    border-bottom: var(--border-width) solid var(--border-subtle);
+  :global(html[data-narrow]) .detached {
+    padding-left: 0;
   }
 
-  .why {
-    min-width: 0;
-    font: var(--machine-sm);
-    color: var(--text-muted);
+  :global(html[data-narrow]) .hero {
+    padding-top: calc(6px * var(--ui-scale));
   }
 
-  .why.failed {
-    color: var(--state-failed);
+  :global(html[data-narrow]) .display-lg {
+    font: var(--display-md);
   }
 
-  .detached {
-      padding-left: 0;
-    }
+  :global(html[data-narrow]) .display-md {
+    font: var(--display-sm);
+  }
 
-    .hero {
-      padding-top: 6px;
-    }
-
-    .display-lg {
-      font: var(--display-md);
-    }
-
-    .display-md {
-      font: var(--display-sm);
-    }
-
-    .cards,
-    .tally {
-      padding-left: 0;
-    }
+  :global(html[data-narrow]) .cards,
+  :global(html[data-narrow]) .tally {
+    padding-left: 0;
   }
 </style>
