@@ -6,8 +6,7 @@ const QUESTION = /^(Q\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const OPTION = /^\s*[-*+]\s+([A-Z])\.\s+(.*)$/;
 const RECOMMENDED = /\s*\*\*\(\s*recommended\b:?\s*(.*?)\s*\)\*\*\s*/i;
 const ANSWER = /^Answer(?:\s*\([^)]*\))?:[ \t]?(.*)$/;
-// "B", "B.", "B, a note" and "B" alone on its line name an option; "A good idea" does not.
-const LETTER = /^([A-Z])(?=$|[.,:;)—–]|[ \t]*\n|[ \t]+[—–-][ \t])/;
+const LONE_LETTER = /^[A-Z]$/;
 
 /** @param {any} node */
 const line = (node) => node.position?.start?.line ?? 0;
@@ -27,13 +26,14 @@ function lastFilled(lines, from, to) {
 /** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
 /** @typedef {{kind: "question" | "decision" | "section", id: string, label: string, from: number, to: number}} Decision */
 
-/** @param {string} raw @param {Option[]} options */
-export function readAnswer(raw, options) {
-  const match = LETTER.exec(raw);
-  if (!match || !options.some((option) => option.letter === match[1])) {
-    return { letter: "", note: raw };
+/** A letter is picked only when it is all the Answer line holds; anything else is free text.
+ * @param {string} first @param {string} rest @param {Option[]} options */
+export function readAnswer(first, rest, options) {
+  const letter = first.trim();
+  if (LONE_LETTER.test(letter) && options.some((option) => option.letter === letter)) {
+    return { letter, note: rest.trim() };
   }
-  return { letter: match[1], note: raw.slice(1).replace(/^[.,:;)]?[ \t]*(?:[—–-][ \t]+)?/, "").trim() };
+  return { letter: "", note: [first, rest].join("\n").trim() };
 }
 
 /** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named */
@@ -67,8 +67,9 @@ function readQuestion(lines, heading, to, named) {
   if (answerAt) {
     const end = lastFilled(lines, answerAt, to);
     const first = ANSWER.exec(lines[answerAt - 1])?.[1] ?? "";
-    const raw = [first, ...lines.slice(answerAt, end)].join("\n").trim();
-    answer = { from: answerAt, to: end, raw, ...readAnswer(raw, options) };
+    const rest = lines.slice(answerAt, end).join("\n");
+    const raw = [first, rest].join("\n").trim();
+    answer = { from: answerAt, to: end, raw, ...readAnswer(first, rest, options) };
   }
 
   return { id: named[1], heading: named[2], from, to, context, options, answer };
@@ -167,8 +168,8 @@ function answerLines({ letter, note }) {
   const text = note.replace(/\r\n?/g, "\n").trim();
   if (!text) return [letter ? `Answer: ${letter}` : "Answer:"];
   const body = text.split("\n");
-  if (letter) return [`Answer: ${letter}`, "", ...body];
-  return body.length === 1 ? [`Answer: ${body[0]}`] : ["Answer:", "", ...body];
+  if (letter) return [`Answer: ${letter}`, ...body];
+  return LONE_LETTER.test(body[0].trim()) ? ["Answer:", ...body] : [`Answer: ${body[0]}`, ...body.slice(1)];
 }
 
 /** Rewrites one question's answer block and leaves every other line as it was.

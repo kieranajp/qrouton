@@ -247,5 +247,35 @@ test("a letter key on the chosen option clears it, and a note beside a letter st
   await expect(overall).toHaveAttribute("aria-pressed", "true");
   await q1.locator("textarea").fill("Because of the SLA");
   await page.getByRole("heading", { name: "Open questions" }).click();
-  await expect.poll(() => page.evaluate(() => window.saves().at(-1)[2])).toContain("Answer: B\n\nBecause of the SLA\n");
+  await expect.poll(() => page.evaluate(() => window.saves().at(-1)[2])).toContain("Answer: B\nBecause of the SLA\n");
+});
+
+test("a note that opens with a letter is saved as free text and no option is highlighted after a reload", async ({ page }) => {
+  await questions(page);
+  const q1 = card(page, "Q1");
+  const note = "B, but only if X";
+  await q1.getByRole("button", { name: /Overall/ }).click();
+  await expect(q1.getByRole("button", { name: /Overall/ })).toHaveAttribute("aria-pressed", "false");
+  await q1.locator("textarea").fill(note);
+  await page.getByRole("heading", { name: "Open questions" }).click();
+
+  const last = () => page.evaluate(() => window.saves().at(-1)[2]);
+  await expect.poll(last).toContain(`\nAnswer: ${note}\n`);
+  expect(await last()).not.toMatch(/^Answer: [A-Z]$/m);
+
+  await page.evaluate((text) => window.pushContent(text), await last());
+  await expect(q1.locator("[aria-pressed=true]")).toHaveCount(0);
+  await expect(q1.locator("textarea")).toHaveValue(note);
+});
+
+test("a picked option and a note save as the letter on its own line with the note below", async ({ page }) => {
+  await questions(page);
+  const q3 = card(page, "Q3");
+  await q3.getByRole("button", { name: /No/ }).click();
+  await q3.locator("textarea").fill("only when the caller asks");
+  await page.getByRole("heading", { name: "Open questions" }).click();
+
+  await expect.poll(() => page.evaluate(() => window.saves().at(-1)[2])).toContain(
+    "- B. No\n\nAnswer: B\nonly when the caller asks\n\n## Decisions",
+  );
 });

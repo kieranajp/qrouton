@@ -106,10 +106,10 @@ test("a recommended option keeps its reason and loses the marker", () => {
   });
 });
 
-test("a bare letter, a letter with a note, free text and nothing are told apart", () => {
+test("a bare letter, prose that opens with one, free text and nothing are told apart", () => {
   const [one, two, three, four] = parseSpec(OPEN).open;
   assert.deepEqual([one.answer.letter, one.answer.note], ["B", ""]);
-  assert.deepEqual([two.answer.letter, two.answer.note], ["A", "because the callers have one"]);
+  assert.deepEqual([two.answer.letter, two.answer.note], ["", "A, because the callers have one"]);
   assert.equal(three.answer.raw, "");
   assert.deepEqual([four.answer.letter, four.answer.note], ["", "Neither: log it and carry on."]);
 });
@@ -446,11 +446,67 @@ test("drafts go back on the question with the same id and heading", () => {
   assert.deepEqual(detached.map((draft) => draft.note), ["renamed", "removed"]);
 });
 
-test("a hyphen glued to a letter is free text, and a note keeps its own list marker", () => {
-  const options = [{ letter: "A", text: "", recommended: false, reason: "" }];
-  assert.deepEqual(readAnswer("A-ish approach", options), { letter: "", note: "A-ish approach" });
-  assert.deepEqual(readAnswer("A - with a caveat", options), { letter: "A", note: "with a caveat" });
-  assert.deepEqual(readAnswer("A\n\n- caveat one", options), { letter: "A", note: "- caveat one" });
+const answered = (...lines) => {
+  const text = doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", ...lines, "", "## Decisions", "");
+  return { text, question: parseSpec(text).open[0] };
+};
+const reads = (question) => [question.answer.letter, question.answer.note];
+
+test("a letter alone on the Answer line is a pick, and the lines below are its note", () => {
+  assert.deepEqual(reads(answered("Answer: B").question), ["B", ""]);
+  assert.deepEqual(reads(answered("Answer: B  ").question), ["B", ""]);
+  assert.deepEqual(reads(answered("Answer: B", "but only if the deadline is per caller").question), [
+    "B",
+    "but only if the deadline is per caller",
+  ]);
+  assert.deepEqual(reads(answered("Answer: B", "", "- one", "- two").question), ["B", "- one\n- two"]);
+});
+
+test("anything else on the Answer line is free text with no letter", () => {
+  for (const first of ["B, but caveat", "B, because the callers have one", "B (I think so)", "B. Overall", "B - overall", "yes", "Z", "b"]) {
+    const { question } = answered(`Answer: ${first}`);
+    assert.deepEqual(reads(question), ["", first]);
+    assert.equal(question.answer.raw, first);
+  }
+  assert.deepEqual(reads(answered("Answer: B, but", "only per caller").question), ["", "B, but\nonly per caller"]);
+  assert.deepEqual(reads(answered("Answer:", "B").question), ["", "B"]);
+  assert.deepEqual(reads(answered("Answer:", "", "Neither, log it.").question), ["", "Neither, log it."]);
+});
+
+test("a letter with no such option is free text", () => {
+  assert.deepEqual(reads(answered("Answer: C").question), ["", "C"]);
+});
+
+test("every form written by spliceAnswer reads back as it was given", () => {
+  const forms = [
+    { letter: "B", note: "" },
+    { letter: "B", note: "only if the deadline is per caller" },
+    { letter: "B", note: "line one\nline two" },
+    { letter: "", note: "" },
+    { letter: "", note: "Neither, log it." },
+    { letter: "", note: "B, but only if X" },
+    { letter: "", note: "B, because X\nand more" },
+    { letter: "", note: "B\nnot a pick" },
+    { letter: "", note: "B" },
+    { letter: "", note: "A\n\n- caveat" },
+  ];
+  for (const form of forms) {
+    for (const start of ["Answer:", "Answer: A", "Answer: A, old\nmore"]) {
+      const { text, question } = answered(start);
+      const after = spliceAnswer(text, question, form);
+      const read = parseSpec(after).open[0].answer;
+      assert.deepEqual([read.letter, read.note], [form.letter, form.note], JSON.stringify(form));
+      const again = spliceAnswer(after, parseSpec(after).open[0], { letter: read.letter, note: read.note });
+      assert.equal(again, after);
+    }
+  }
+});
+
+test("splicing writes a letter on its own line and the note beneath it", () => {
+  const { text, question } = answered("Answer:");
+  assert.match(spliceAnswer(text, question, { letter: "B", note: "per caller" }), /\nAnswer: B\nper caller\n/);
+  assert.match(spliceAnswer(text, question, { letter: "", note: "B, but per caller" }), /\nAnswer: B, but per caller\n/);
+  assert.match(spliceAnswer(text, question, { letter: "", note: "B\nper caller" }), /\nAnswer:\nB\nper caller\n/);
 });
 
 test("a missing answer line goes after the block's last line, not inside its prose", () => {

@@ -61,10 +61,25 @@ Each open question has:
 - exactly one option marked `**(recommended: <reason>)**` at its end;
 - an empty `Answer:` line, last in the block.
 
-The user answers on the line after `Answer:`, or after it on the same line.
-An answer may be a bare letter, a letter followed by a note, or free text that
-names no letter. Any non-empty answer counts. When the user answers in chat,
-write their answer into that question's `Answer:` block, as they gave it.
+An option letter counts as picked only when the `Answer:` line holds that one
+letter and nothing else. Never infer a letter from prose.
+
+```markdown
+Answer: B
+but only if the deadline is per caller
+```
+
+That is a pick of B with a note, which runs on the following lines up to the
+next heading. Anything else on the `Answer:` line is free text with no letter:
+`Answer: B, but only if X`, `Answer: B (I think so)`, `Answer: yes`. Free text
+may continue onto later lines, and it counts as answered with no option
+selected. A note with no letter goes on the `Answer:` line itself, or, when its
+first line is a single letter, on the lines after an empty `Answer:`.
+
+When the user answers in chat, write their answer into that question's
+`Answer:` block in these forms: the letter alone on the line with any note
+beneath it, or their words as given with no letter. If they say "B, but only if
+X", record `Answer: B, but only if X`, not `Answer: B`.
 
 ## Folding answers
 
@@ -77,13 +92,14 @@ move each answered question into `## Decisions`:
 
 <the note or free-text answer, if any>
 
-Chosen: <the option taken, and why>
+Chosen: <the option taken, and why. Carry the note or free text verbatim>
 Rejected: A. <option>: <why it lost>
 Rejected: C. <option>: <why it lost>
 ```
 
-Keep the id and the heading text. Remove the options and the `Answer:` line,
-and leave unanswered questions where they are. When the last one moves, put
-`None.` under `## Open questions`.
+Never reduce a free-text answer to a letter: "B, but only if X" is decided as
+that, caveat included. Keep the id and the heading text. Remove the options and
+the `Answer:` line, and leave unanswered questions where they are. When the
+last one moves, put `None.` under `## Open questions`.
 
 Answering questions does not start Plan. The user still asks for it.
