@@ -7,7 +7,7 @@ const OPTION = /^\s*[-*+]\s+([A-Z])\.\s+(.*)$/;
 const RECOMMENDED = /\s*\*\*\(\s*recommended\b:?\s*(.*?)\s*\)\*\*\s*/i;
 const ANSWER = /^Answer(?:\s*\([^)]*\))?:[ \t]?(.*)$/;
 // "B", "B.", "B, a note" and "B" alone on its line name an option; "A good idea" does not.
-const LETTER = /^([A-Z])(?=$|[.,:;)—–-]|[ \t]*\n|\s+[—–-])/;
+const LETTER = /^([A-Z])(?=$|[.,:;)—–]|[ \t]*\n|[ \t]+[—–-][ \t])/;
 
 /** @param {any} node */
 const line = (node) => node.position?.start?.line ?? 0;
@@ -24,7 +24,7 @@ function lastFilled(lines, from, to) {
 
 /** @typedef {{letter: string, text: string, recommended: boolean, reason: string}} Option */
 /** @typedef {{from: number, to: number, raw: string, letter: string, note: string}} Answer */
-/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], optionsEnd: number, answer: Answer | null}} Question */
+/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
 /** @typedef {{kind: "question" | "decision" | "section", id: string, label: string, from: number, to: number}} Decision */
 
 /** @param {string} raw @param {Option[]} options */
@@ -33,7 +33,7 @@ export function readAnswer(raw, options) {
   if (!match || !options.some((option) => option.letter === match[1])) {
     return { letter: "", note: raw };
   }
-  return { letter: match[1], note: raw.slice(1).replace(/^[\s.,:;)—–-]+/, "").trim() };
+  return { letter: match[1], note: raw.slice(1).replace(/^[.,:;)]?[ \t]*(?:[—–-][ \t]+)?/, "").trim() };
 }
 
 /** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named */
@@ -42,14 +42,12 @@ function readQuestion(lines, heading, to, named) {
   /** @type {Option[]} */
   const options = [];
   let firstOption = 0;
-  let optionsEnd = 0;
   let answerAt = 0;
   for (let at = from + 1; at <= to; at++) {
     const source = lines[at - 1];
     const option = OPTION.exec(source);
     if (option && !answerAt) {
       firstOption ||= at;
-      optionsEnd = at;
       const reason = RECOMMENDED.exec(option[2]);
       options.push({
         letter: option[1],
@@ -73,7 +71,7 @@ function readQuestion(lines, heading, to, named) {
     answer = { from: answerAt, to: end, raw, ...readAnswer(raw, options) };
   }
 
-  return { id: named[1], heading: named[2], from, to, context, options, optionsEnd, answer };
+  return { id: named[1], heading: named[2], from, to, context, options, answer };
 }
 
 /** @param {string[]} lines @param {{from: number, to: number, nodes: any[]}} section */
@@ -173,7 +171,7 @@ export function spliceAnswer(text, question, answer) {
     lines.splice(question.answer.from - 1, question.answer.to - question.answer.from + 1, ...next);
     return lines.join("\n");
   }
-  const after = question.optionsEnd || lastFilled(lines, question.from, question.to);
+  const after = lastFilled(lines, question.from, question.to);
   const blankAfter = lines[after] !== undefined && !lines[after].trim();
   lines.splice(after, 0, "", ...next, ...(blankAfter ? [] : [""]));
   return lines.join("\n");

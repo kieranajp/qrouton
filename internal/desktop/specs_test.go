@@ -107,6 +107,9 @@ func TestSaveSpecRefusesAStaleHashAndLeavesTheFileAlone(t *testing.T) {
 	if got, _ := os.ReadFile(f.path); string(got) != edited {
 		t.Fatalf("file = %q, want the edit left byte for byte", got)
 	}
+	if page, _ := f.w.Content(f.id); page.Text != edited || page.Hash != contentHash(edited) {
+		t.Fatalf("Content after a refusal = %q, want the text on disk", page.Text)
+	}
 }
 
 func TestSaveSpecRefusesAnythingButASpecFile(t *testing.T) {

@@ -31,17 +31,22 @@ func (w *Windows) SaveSpec(id, hash, text string) (string, error) {
 		if err != nil {
 			return err
 		}
-		if contentHash(string(current)) != hash {
-			return fmt.Errorf("%w: %s", ErrDocumentChanged, window.opts.Source)
-		}
 		info, err := os.Stat(path)
 		if err != nil {
 			return err
 		}
+		// The page re-fetches after a refusal, so it must get the disk's text, not the poll's.
+		if contentHash(string(current)) != hash {
+			window.opts.Content = string(current)
+			if info.Size() == int64(len(current)) {
+				rendered.read.at, rendered.read.size = info.ModTime(), info.Size()
+			}
+			return fmt.Errorf("%w: %s", ErrDocumentChanged, window.opts.Source)
+		}
 		if err := atomicfile.Replace(path, []byte(text), info.Mode().Perm()); err != nil {
 			return err
 		}
-		if info, err = os.Stat(path); err == nil {
+		if info, err = os.Stat(path); err == nil && info.Size() == int64(len(text)) {
 			rendered.read.at, rendered.read.size = info.ModTime(), info.Size()
 		}
 		window.opts.Content = text

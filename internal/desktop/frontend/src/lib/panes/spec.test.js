@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
+import { draftKey, parseSpec, readAnswer, reapply, spliceAnswer } from "./spec.js";
 
 const doc = (...lines) => lines.join("\n");
 
@@ -332,9 +332,9 @@ const INTEGRAL = doc(
 const outside = (before, after, question) => {
   const a = before.split("\n");
   const b = after.split("\n");
-  const head = a.slice(0, question.answer ? question.answer.from - 1 : question.optionsEnd);
+  const head = a.slice(0, question.answer.from - 1);
   assert.deepEqual(b.slice(0, head.length), head);
-  const tail = a.slice(question.answer ? question.answer.to : question.optionsEnd);
+  const tail = a.slice(question.answer.to);
   assert.deepEqual(b.slice(b.length - tail.length), tail);
 };
 
@@ -382,4 +382,18 @@ test("drafts go back on the question with the same id and heading", () => {
   assert.equal(questions[1].draft.note, "kept");
   assert.equal(questions[2].draft, null);
   assert.deepEqual(detached.map((draft) => draft.note), ["renamed", "removed"]);
+});
+
+test("a hyphen glued to a letter is free text, and a note keeps its own list marker", () => {
+  const options = [{ letter: "A", text: "", recommended: false, reason: "" }];
+  assert.deepEqual(readAnswer("A-ish approach", options), { letter: "", note: "A-ish approach" });
+  assert.deepEqual(readAnswer("A - with a caveat", options), { letter: "A", note: "with a caveat" });
+  assert.deepEqual(readAnswer("A\n\n- caveat one", options), { letter: "A", note: "- caveat one" });
+});
+
+test("a missing answer line goes after the block's last line, not inside its prose", () => {
+  const text = doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Some trailing context.", "", "## Decisions", "");
+  const after = spliceAnswer(text, parseSpec(text).open[0], { letter: "B", note: "" });
+  assert.equal(after, doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Some trailing context.", "", "Answer: B", "", "## Decisions", ""));
+  assert.equal(parseSpec(after).open[0].answer.note, "");
 });
