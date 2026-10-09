@@ -1,12 +1,13 @@
 <script>
   import Button from "../core/Button.svelte";
+  import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -17,6 +18,8 @@
     linearPath = "",
     stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
     chime = $bindable(true),
+    uiScale = $bindable(100),
+    uiScaleSteps = [],
     fields = {},
     restartRequired = false,
     onAddOrg,
@@ -60,6 +63,16 @@
 <label class="chime">
   <input type="checkbox" bind:checked={chime} />
   Chime when an agent is waiting for you
+</label>
+
+<label class="scale">
+  <CapsLabel>UI scale</CapsLabel>
+  <select bind:value={uiScale}>
+    {#each uiScaleSteps.includes(uiScale) ? uiScaleSteps : [...uiScaleSteps, uiScale] as step (step)}
+      <option value={step}>{step}%</option>
+    {/each}
+  </select>
+  {#if fields.uiScale}<span class="help">{fields.uiScale}</span>{/if}
 </label>
 
 <fieldset class="sticker-labels">
@@ -121,13 +134,13 @@
   .orgs {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .org {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: calc(4px * var(--ui-scale));
   }
 
   .sticker-labels {
@@ -137,7 +150,7 @@
   }
 
   .sticker-labels legend {
-    margin-bottom: 10px;
+    margin-bottom: calc(10px * var(--ui-scale));
     padding: 0;
     font: var(--display-sm);
     color: var(--text-primary);
@@ -146,13 +159,13 @@
   .sticker-fields {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 14px 18px;
+    gap: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
   }
 
   .chime {
     display: inline-flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     font: var(--machine-md);
     color: var(--text-primary);
     cursor: pointer;
@@ -160,8 +173,8 @@
 
   .chime input {
     appearance: none;
-    width: 13px;
-    height: 13px;
+    width: calc(13px * var(--ui-scale));
+    height: calc(13px * var(--ui-scale));
     margin: 0;
     border: var(--border-width) solid var(--border-default);
     background: transparent;
@@ -178,12 +191,38 @@
     box-shadow: var(--shadow-focus);
   }
 
+  .scale {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-2);
+  }
+
+  .scale select {
+    border: 1px solid var(--border-default);
+    background: var(--surface-chrome);
+    padding: var(--space-3) var(--space-5);
+    font: var(--machine-md);
+    color: var(--text-primary);
+  }
+
+  .scale select:focus-visible {
+    outline: none;
+    border-color: var(--accent-action);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .scale .help {
+    font: var(--machine-sm);
+    color: var(--state-failed);
+  }
+
   .banner {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 14px;
-    padding: 10px 12px;
+    gap: calc(14px * var(--ui-scale));
+    padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
     background: var(--surface-chrome);
     border: 1px solid var(--border-subtle);
     font: var(--machine-sm);

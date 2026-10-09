@@ -30,16 +30,16 @@
   .marks {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
     flex: none;
   }
 
   .mark {
     display: inline-flex;
     align-items: center;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -48,8 +48,8 @@
   }
 
   .square {
-    width: 9px;
-    height: 9px;
+    width: calc(9px * var(--ui-scale));
+    height: calc(9px * var(--ui-scale));
     box-shadow: inset 0 0 0 1px var(--ctp-surface-2);
   }
 

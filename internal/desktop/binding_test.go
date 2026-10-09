@@ -77,7 +77,7 @@ func TestTheConversationURLIsServedWithoutARedirect(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := assetHandler(assets, nil)
+	handler := assetHandler(assets, nil, nil)
 	request := httptest.NewRequest(http.MethodGet, frontendRoot, nil)
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
@@ -107,7 +107,7 @@ func TestTheHandlerServesThePaletteBesideTheEmbeddedTree(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, theme.Path, nil))
+	assetHandler(assets, nil, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, theme.Path, nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("%s answered %d", theme.Path, recorder.Code)
 	}
@@ -127,7 +127,7 @@ func TestTheConversationPageLinksThePalette(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, frontendRoot, nil))
+	assetHandler(assets, nil, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, frontendRoot, nil))
 	if !strings.Contains(recorder.Body.String(), theme.Path) {
 		t.Fatalf("%s does not link %s", frontendRoot, theme.Path)
 	}
@@ -139,7 +139,7 @@ func TestTheHandlerServesTheNotesPageAtItsOwnRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	recorder := httptest.NewRecorder()
-	assetHandler(assets, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, notesRoot, nil))
+	assetHandler(assets, nil, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, notesRoot, nil))
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("%s answered %d", notesRoot, recorder.Code)
 	}
@@ -178,5 +178,19 @@ func TestThePickerSendsTheRowsItWasToldToTakeUp(t *testing.T) {
 	wire := regexp.MustCompile(`upgrades:[\w$.]*\.upgrading`)
 	if !wire.MatchString(builtBundle(t)) {
 		t.Fatal("the built pages confirm the picker without the rows to take up for editing")
+	}
+}
+
+func TestBothPagesLinkTheStoredScale(t *testing.T) {
+	assets, err := frontend()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, page := range []string{frontendRoot, notesRoot} {
+		recorder := httptest.NewRecorder()
+		assetHandler(assets, nil, nil).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, page, nil))
+		if !strings.Contains(recorder.Body.String(), uiScalePath) {
+			t.Fatalf("%s does not link %s", page, uiScalePath)
+		}
 	}
 }

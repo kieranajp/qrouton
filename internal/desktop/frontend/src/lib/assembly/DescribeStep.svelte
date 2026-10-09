@@ -67,6 +67,6 @@
   .pair {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 16px;
+    gap: calc(16px * var(--ui-scale));
   }
 </style>

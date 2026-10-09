@@ -3,6 +3,7 @@
   import { MENU_WIDTH } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import { copyImage, revealPath } from "../sessions.js";
   import { copyText } from "../wails.js";
 
@@ -26,6 +27,7 @@
       at,
       { width: MENU_WIDTH, height: menuHeight(items) },
       { width: window.innerWidth, height: window.innerHeight },
+      uiScale() / 100,
     ),
   );
 

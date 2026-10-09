@@ -120,8 +120,8 @@
   .activity {
     display: flex;
     flex-direction: column;
-    gap: 6px;
-    padding-top: 10px;
+    gap: calc(6px * var(--ui-scale));
+    padding-top: calc(10px * var(--ui-scale));
     border-top: 1px solid var(--border-subtle);
   }
 
@@ -141,30 +141,30 @@
     min-width: 0;
     display: flex;
     align-items: baseline;
-    gap: 8px;
-    padding: 5px 0;
+    gap: calc(8px * var(--ui-scale));
+    padding: calc(5px * var(--ui-scale)) 0;
     font: var(--machine-xs);
-    font-size: 9.5px;
+    font-size: calc(9.5px * var(--ui-scale));
   }
 
   .lead {
-    padding-left: 15px;
+    padding-left: calc(15px * var(--ui-scale));
   }
 
   .sub {
-    padding: 3px 0;
+    padding: calc(3px * var(--ui-scale)) 0;
   }
 
   .dot {
     flex: none;
-    width: 7px;
-    height: 7px;
+    width: calc(7px * var(--ui-scale));
+    height: calc(7px * var(--ui-scale));
     background: var(--state-running);
   }
 
   .dot.small {
-    width: 6px;
-    height: 6px;
+    width: calc(6px * var(--ui-scale));
+    height: calc(6px * var(--ui-scale));
   }
 
   .dot.waiting {
@@ -189,7 +189,7 @@
   }
 
   .who {
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-primary);
     white-space: nowrap;
     overflow: hidden;
@@ -211,15 +211,15 @@
   .disclose {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     width: 100%;
-    padding: 4px 0 4px 30px;
+    padding: calc(4px * var(--ui-scale)) 0 calc(4px * var(--ui-scale)) calc(30px * var(--ui-scale));
     background: transparent;
     border: 0;
     text-align: left;
     cursor: pointer;
     font: var(--machine-xs);
-    font-size: 9.5px;
+    font-size: calc(9.5px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -248,7 +248,7 @@
   .subagents {
     display: flex;
     flex-direction: column;
-    padding-left: 30px;
+    padding-left: calc(30px * var(--ui-scale));
   }
 
   .name {
@@ -268,7 +268,7 @@
   .capability,
   .group-label {
     font: var(--machine-xs);
-    font-size: 9.5px;
+    font-size: calc(9.5px * var(--ui-scale));
     color: var(--text-faint);
   }
 

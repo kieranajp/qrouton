@@ -58,11 +58,11 @@
   .group {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
   }
 
   .modes {
     display: flex;
-    gap: 12px;
+    gap: calc(12px * var(--ui-scale));
   }
 </style>

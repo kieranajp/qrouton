@@ -2,6 +2,9 @@ import "../src/tokens/index.css";
 import { mount } from "svelte";
 import DockedDocument from "../src/lib/DockedDocument.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
+import { startScale } from "../src/lib/scale.svelte.js";
+
+startScale();
 
 export const DEFAULT_DIFF = [
   "diff --git a/notes.txt b/notes.txt",

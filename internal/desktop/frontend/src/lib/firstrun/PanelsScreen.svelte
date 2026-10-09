@@ -79,7 +79,7 @@
 
   .split {
     display: flex;
-    gap: 34px;
+    gap: calc(34px * var(--ui-scale));
     align-items: flex-start;
   }
 
@@ -87,7 +87,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
   }
 
   p {
@@ -100,20 +100,20 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
   }
 
   .panels {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .panel {
-    height: 96px;
+    height: calc(96px * var(--ui-scale));
     min-width: 0;
     display: flex;
     align-items: flex-start;
-    padding: 10px;
+    padding: calc(10px * var(--ui-scale));
     border: 1px solid;
   }
 
@@ -128,16 +128,16 @@
   .note {
     display: flex;
     align-items: baseline;
-    gap: 10px;
-    padding: 10px 12px;
+    gap: calc(10px * var(--ui-scale));
+    padding: calc(10px * var(--ui-scale)) calc(12px * var(--ui-scale));
     border: 1px solid var(--state-guided);
     font: var(--machine-sm);
     color: var(--text-secondary);
   }
 
   .swatch {
-    width: 12px;
-    height: 12px;
+    width: calc(12px * var(--ui-scale));
+    height: calc(12px * var(--ui-scale));
     flex: none;
     background: var(--state-guided);
   }
@@ -145,7 +145,7 @@
   .foot {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .foot p {

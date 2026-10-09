@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import "../src/tokens/typography.css";
 import "../src/lib/panes/markdown.css";
 import { render } from "../src/lib/panes/markdown.js";

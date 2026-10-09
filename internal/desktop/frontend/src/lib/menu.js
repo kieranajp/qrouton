@@ -13,12 +13,15 @@ export const menuHeight = (items = []) =>
  * @param {{x: number, y: number}} point
  * @param {{width: number, height: number}} size
  * @param {{width: number, height: number}} viewport
+ * @param {number} [scale] the UI scale the menu is drawn at, as a factor
  */
-export function place(point, size, viewport) {
-  const right = point.x + size.width + MARGIN > viewport.width;
-  const below = point.y + size.height + MARGIN > viewport.height;
+export function place(point, size, viewport, scale = 1) {
+  const width = size.width * scale;
+  const height = size.height * scale;
+  const right = point.x + width + MARGIN > viewport.width;
+  const below = point.y + height + MARGIN > viewport.height;
   return {
-    left: Math.max(MARGIN, right ? viewport.width - size.width - MARGIN : point.x),
-    top: Math.max(MARGIN, below ? point.y - size.height : point.y),
+    left: Math.max(MARGIN, right ? viewport.width - width - MARGIN : point.x),
+    top: Math.max(MARGIN, below ? point.y - height : point.y),
   };
 }

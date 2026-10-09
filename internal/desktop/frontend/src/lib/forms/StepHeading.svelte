@@ -12,7 +12,7 @@
   .heading {
     display: flex;
     align-items: flex-end;
-    gap: 18px;
+    gap: calc(18px * var(--ui-scale));
   }
 
   .title {
@@ -25,6 +25,6 @@
     flex: 1;
     font: var(--machine-sm);
     color: var(--text-muted);
-    padding-bottom: 5px;
+    padding-bottom: calc(5px * var(--ui-scale));
   }
 </style>

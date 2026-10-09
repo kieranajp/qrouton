@@ -3,6 +3,7 @@
   import { dismissible } from "../core/dismiss.js";
   import RoleToggle from "../forms/RoleToggle.svelte";
   import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import Menu from "../shell/Menu.svelte";
 
   const BASE_MENU_WIDTH = 232;
@@ -50,9 +51,10 @@
     }
     const box = event.currentTarget.getBoundingClientRect();
     menu = place(
-      { x: box.left, y: box.bottom + 4 },
+      { x: box.left, y: box.bottom + (4 * uiScale()) / 100 },
       { width: BASE_MENU_WIDTH, height: Math.min(menuHeight(items), BASE_MENU_MAX_HEIGHT) },
       { width: window.innerWidth, height: window.innerHeight },
+      uiScale() / 100,
     );
     onBaseOpen?.();
   }
@@ -89,8 +91,8 @@
   .row {
     display: flex;
     align-items: center;
-    gap: 14px;
-    padding: 9px 12px;
+    gap: calc(14px * var(--ui-scale));
+    padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
     background: transparent;
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -112,7 +114,7 @@
 
   .meta {
     font: var(--machine-sm);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -123,14 +125,14 @@
   .base {
     display: flex;
     align-items: center;
-    gap: 6px;
-    max-width: 148px;
-    padding: 3px 7px;
+    gap: calc(6px * var(--ui-scale));
+    max-width: calc(148px * var(--ui-scale));
+    padding: calc(3px * var(--ui-scale)) calc(7px * var(--ui-scale));
     background: transparent;
     border: 1px solid var(--border-default);
     cursor: pointer;
     font: var(--machine-sm);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-muted);
   }
 

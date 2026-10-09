@@ -50,8 +50,8 @@
     flex: none;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 0 14px 0 var(--w-traffic-lights);
+    gap: calc(12px * var(--ui-scale));
+    padding: 0 calc(14px * var(--ui-scale)) 0 var(--w-traffic-lights);
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
@@ -75,7 +75,7 @@
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-    padding: 22px 26px 30px;
+    padding: calc(22px * var(--ui-scale)) calc(26px * var(--ui-scale)) calc(30px * var(--ui-scale));
     color: var(--text-secondary);
   }
 </style>

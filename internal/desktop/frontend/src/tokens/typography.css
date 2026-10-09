@@ -8,32 +8,32 @@
   --font-terminal: "JetBrainsMono Nerd Font Mono", Menlo, ui-monospace, monospace;
 
   /* display — headings only, always tight */
-  --display-lg: 700 31px/1.05 var(--font-display);
-  --display-md: 700 26px/1.06 var(--font-display);
-  --display-sm: 700 21px/1.1 var(--font-display);
-  --display-xs: 700 15px/1.15 var(--font-display);
+  --display-lg: 700 calc(31px * var(--ui-scale))/1.05 var(--font-display);
+  --display-md: 700 calc(26px * var(--ui-scale))/1.06 var(--font-display);
+  --display-sm: 700 calc(21px * var(--ui-scale))/1.1 var(--font-display);
+  --display-xs: 700 calc(15px * var(--ui-scale))/1.15 var(--font-display);
   --display-tracking: -0.03em;
 
   /* instruction — ALWAYS uppercase, always tracked, never a sentence */
-  --instruction: 600 10px/1 var(--font-instruction);
-  --instruction-sm: 600 9.5px/1 var(--font-instruction);
+  --instruction: 600 calc(10px * var(--ui-scale))/1 var(--font-instruction);
+  --instruction-sm: 600 calc(9.5px * var(--ui-scale))/1 var(--font-instruction);
   --instruction-tracking: 0.14em;
   --instruction-tracking-sm: 0.12em;
 
   /* machine — body copy, values, buttons, everything else */
-  --machine-lg: 400 13.5px/1.7 var(--font-machine);
-  --machine-md: 400 12.5px/1.6 var(--font-machine);
-  --machine-sm: 400 11.5px/1.55 var(--font-machine);
-  --machine-xs: 400 10.5px/1.5 var(--font-machine);
-  --machine-bold: 700 12px/1.4 var(--font-machine);
-  --button: 700 11.5px/1 var(--font-machine);
+  --machine-lg: 400 calc(13.5px * var(--ui-scale))/1.7 var(--font-machine);
+  --machine-md: 400 calc(12.5px * var(--ui-scale))/1.6 var(--font-machine);
+  --machine-sm: 400 calc(11.5px * var(--ui-scale))/1.55 var(--font-machine);
+  --machine-xs: 400 calc(10.5px * var(--ui-scale))/1.5 var(--font-machine);
+  --machine-bold: 700 calc(12px * var(--ui-scale))/1.4 var(--font-machine);
+  --button: 700 calc(11.5px * var(--ui-scale))/1 var(--font-machine);
 
   /* terminal — inside xterm panes and code blocks. xterm sizes its own cell, so
      it reads the size rather than the shorthand. */
   --terminal-size: 13px;
-  --terminal: var(--terminal-size)/1.55 var(--font-terminal);
-  --terminal-sm: 12.5px/1.5 var(--font-terminal);
+  --terminal: calc(var(--terminal-size) * var(--ui-scale))/1.55 var(--font-terminal);
+  --terminal-sm: calc(12.5px * var(--ui-scale))/1.5 var(--font-terminal);
 
   /* literal — a URL, branch, path or binary name quoted inside prose */
-  --literal: 400 12px/1.5 var(--font-terminal);
+  --literal: 400 calc(12px * var(--ui-scale))/1.5 var(--font-terminal);
 }

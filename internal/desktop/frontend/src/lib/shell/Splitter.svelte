@@ -104,7 +104,7 @@
   .splitter::after {
     content: "";
     position: absolute;
-    inset: 0 -4px;
+    inset: 0 calc(-4px * var(--ui-scale));
   }
 
   .splitter:hover,

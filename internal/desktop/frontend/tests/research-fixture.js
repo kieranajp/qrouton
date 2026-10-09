@@ -1,9 +1,13 @@
+import "../src/tokens/scale.css";
 import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import ResearchFixture from "./ResearchFixture.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
+import { startScale } from "../src/lib/scale.svelte.js";
+
+startScale();
 
 export const RESEARCH = [
   "---", // 1

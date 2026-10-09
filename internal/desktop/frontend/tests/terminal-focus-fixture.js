@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { createTerminalActivation } from "../src/lib/terminal-focus.js";
 
 const conversation = document.querySelector("#conversation");

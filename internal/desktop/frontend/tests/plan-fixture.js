@@ -1,9 +1,14 @@
+import "../src/tokens/scale.css";
 import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import PlanFixture from "./PlanFixture.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
+import { startScale } from "../src/lib/scale.svelte.js";
+import { UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";
+
+startScale();
 
 export const AROUND = [
   "# Sections either side",
@@ -330,6 +335,7 @@ window.pushRequest = (line) => window.pushContent({ line, to: line, viewportEpoc
 // without the plan being finished.
 window.pushSecondMet = () =>
   window.pushContent({ text: PLAN.replace("- [ ] one check not", "- [x] one check not") });
+window.announceScale = (percent) => emitWailsEvent(UI_SCALE_EVENT, percent);
 window.emitChrome = (fields) => emitWailsEvent("chrome:update", fields);
 window.bar = () => {
   const bar = document.querySelector(".bar");

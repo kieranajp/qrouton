@@ -13,20 +13,20 @@
   );
 </script>
 
-<span class="mark" style:width="{size}px" style:height="{size}px" {...rest}>
+<span class="mark" style:width="calc({size}px * var(--ui-scale))" style:height="calc({size}px * var(--ui-scale))" {...rest}>
   <span
     class="square back"
-    style:left="{off}px"
-    style:top="{off}px"
-    style:width="{inner}px"
-    style:height="{inner}px"
+    style:left="calc({off}px * var(--ui-scale))"
+    style:top="calc({off}px * var(--ui-scale))"
+    style:width="calc({inner}px * var(--ui-scale))"
+    style:height="calc({inner}px * var(--ui-scale))"
     style:background-color={back}
     style:background-image={hatch}
   ></span>
   <span
     class="square face"
-    style:width="{inner}px"
-    style:height="{inner}px"
+    style:width="calc({inner}px * var(--ui-scale))"
+    style:height="calc({inner}px * var(--ui-scale))"
     style:background={face}
   ></span>
 </span>

@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import "../src/tokens/typography.css";
 import { mount } from "svelte";
 import FirstRunOverlay from "../src/lib/firstrun/FirstRunOverlay.svelte";

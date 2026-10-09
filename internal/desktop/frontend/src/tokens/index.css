@@ -1,5 +1,6 @@
 /* The token layer, minus colours: internal/theme renders those and the
    workbench serves them, so no copy is checked in here to drift from it. */
+@import "./scale.css";
 @import "./fonts.css";
 @import "./typography.css";
 @import "./spacing.css";

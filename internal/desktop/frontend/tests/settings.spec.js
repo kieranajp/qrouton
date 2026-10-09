@@ -51,6 +51,7 @@ test("sticker meanings load and save together without asking for a restart", asy
         exclamation: "Broken here",
       },
       chime: true,
+      uiScale: 130,
     },
   ]);
   await expect(page.getByText("Quit qrouton to use the new sessions root")).toHaveCount(0);
@@ -82,4 +83,27 @@ test("the chime loads ticked and saves unticked", async ({ page }) => {
   await expect
     .poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.chime)))
     .toEqual([false]);
+});
+
+test("the UI scale loads its stored step and saves the chosen one", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  const scale = page.getByRole("combobox", { name: "UI scale" });
+  await expect(scale).toHaveValue("130");
+  await expect(scale.locator("option")).toHaveText(["80%", "90%", "100%", "110%", "120%", "130%", "140%", "150%"]);
+
+  await scale.selectOption({ label: "150%" });
+  await page.getByRole("button", { name: "Save" }).click();
+
+  await expect
+    .poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.uiScale)))
+    .toEqual([150]);
+});
+
+test("the UI scale follows a change announced while the panel is open", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  const scale = page.getByRole("combobox", { name: "UI scale" });
+  await expect(scale).toHaveValue("130");
+
+  await page.evaluate(() => window.settingsFixture.announceScale(90));
+  await expect(scale).toHaveValue("90");
 });

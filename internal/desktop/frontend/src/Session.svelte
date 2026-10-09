@@ -80,7 +80,7 @@
       onReset={view.resetSidebar}
       label="Resize the sidebar" />
 
-    <div class="agent">
+    <div class="agent" class:kept={!view.human}>
       <PaneHeader>
         {#snippet lead()}
           {#if fields.mode === MODE_LABELS.ASSISTANT}
@@ -136,6 +136,7 @@
 
     <div
       class="human"
+      class:dragged={view.human}
       style:width={view.human ? view.human + "px" : null}
       bind:clientWidth={view.measured}>
       <TabStrip
@@ -213,7 +214,7 @@
     position: relative;
     display: flex;
     align-items: center;
-    padding: 0 14px 0 var(--w-traffic-lights);
+    padding: 0 calc(14px * var(--ui-scale)) 0 var(--w-traffic-lights);
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
     user-select: none;
@@ -232,7 +233,7 @@
     transform: translateX(-50%);
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
     max-width: 60%;
     min-width: 0;
     --wails-draggable: no-drag;
@@ -248,10 +249,10 @@
   .name {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     min-width: 0;
-    max-width: 460px;
-    padding: 4px 8px;
+    max-width: calc(460px * var(--ui-scale));
+    padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
     background: transparent;
     border: 1px solid transparent;
     cursor: pointer;
@@ -278,7 +279,7 @@
   .tools {
     margin-left: auto;
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     --wails-draggable: no-drag;
   }
 
@@ -299,9 +300,14 @@
     border-right: 1px solid var(--border-subtle);
   }
 
+  /* An undragged right pane gives way before the conversation drops below one rail width. */
+  .agent.kept {
+    min-width: var(--w-rail);
+  }
+
   .assistant-mode {
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-primary);
   }
 
@@ -309,7 +315,7 @@
     flex: none;
     display: flex;
     justify-content: flex-end;
-    padding: 6px 8px;
+    padding: calc(6px * var(--ui-scale)) calc(8px * var(--ui-scale));
     background: var(--surface-chrome);
     border-bottom: 1px solid var(--border-subtle);
   }
@@ -317,9 +323,14 @@
   /* A zero-size point for the menu to resolve its own position against. */
   .human {
     width: var(--w-human-pane);
-    flex: none;
+    flex: 0 1 auto;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     background: var(--surface-terminal);
+  }
+
+  .human.dragged {
+    flex: none;
   }
 </style>

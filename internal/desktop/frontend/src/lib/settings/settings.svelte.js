@@ -1,5 +1,5 @@
-import { SETTINGS_FIELDS } from "../bridge/generated.js";
-import { call } from "../wails.js";
+import { SETTINGS_FIELDS, UI_SCALE_EVENT } from "../bridge/generated.js";
+import { call, Events } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
 import { addOrg, removeOrg } from "./orgs.js";
@@ -21,6 +21,8 @@ export function settings(onClose) {
       exclamation: "",
     },
     chime: true,
+    uiScale: 100,
+    uiScaleSteps: /** @type {number[]} */ ([]),
   });
   let orgInput = $state("");
   let fields = $state(/** @type {Partial<Record<import("../bridge/generated.js").SettingsField, string>>} */ ({}));
@@ -47,8 +49,16 @@ export function settings(onClose) {
       exclamation: loaded?.stickerLabels?.exclamation ?? "",
     };
     form.chime = loaded?.chime ?? true;
+    form.uiScale = loaded?.uiScale ?? 100;
+    form.uiScaleSteps = loaded?.uiScaleSteps ?? [];
     if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
+
+  $effect(() =>
+    Events.On(UI_SCALE_EVENT, (event) => {
+      if (typeof event.data === "number") form.uiScale = event.data;
+    }),
+  );
 
   function add() {
     form.orgs = addOrg(form.orgs, orgInput);
@@ -72,6 +82,7 @@ export function settings(onClose) {
         linear: form.linear,
         stickerLabels: { ...form.stickerLabels },
         chime: form.chime,
+        uiScale: form.uiScale,
       });
     } catch (thrown) {
       err = thrown;

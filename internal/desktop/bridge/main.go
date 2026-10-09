@@ -66,6 +66,7 @@ var valueSets = []valueSet{
 	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
 	{name: "STICKER_IDS", typedef: "Sticker", dir: sessionPackage, goType: "Sticker", prefix: "Sticker"},
 	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
+	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_KINDS", typedef: "WindowKind", dir: workbenchPackage, goType: "WindowKind", prefix: "Kind"},
 }
 

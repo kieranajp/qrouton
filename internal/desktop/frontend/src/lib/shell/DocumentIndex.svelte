@@ -33,13 +33,13 @@
   .chip {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
     background: var(--surface-raised);
     color: var(--text-primary);
     border: 1px solid var(--border-default);
     border-radius: 0;
     font: var(--machine-sm);
-    padding: 4px 8px;
+    padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
     cursor: pointer;
   }
 
@@ -55,7 +55,7 @@
 
   .count {
     font: var(--machine-xs);
-    font-size: 10px;
+    font-size: calc(10px * var(--ui-scale));
     color: var(--text-faint);
   }
 

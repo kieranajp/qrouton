@@ -65,22 +65,22 @@
     border-bottom: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
-    padding: 0 14px;
-    gap: 14px;
+    padding: 0 calc(14px * var(--ui-scale));
+    gap: calc(14px * var(--ui-scale));
   }
 
   .agent .titlebar {
-    height: 40px;
+    height: calc(40px * var(--ui-scale));
   }
 
   .lights {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .light {
-    width: 12px;
-    height: 12px;
+    width: calc(12px * var(--ui-scale));
+    height: calc(12px * var(--ui-scale));
     border-radius: var(--radius-dot);
   }
 
@@ -108,13 +108,13 @@
   }
 
   .balance {
-    width: 60px;
+    width: calc(60px * var(--ui-scale));
   }
 
   .toolbar {
     margin-left: auto;
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .content {
@@ -132,7 +132,7 @@
     border-top: 1px solid var(--border-subtle);
     display: flex;
     align-items: center;
-    padding: 0 16px;
+    padding: 0 calc(16px * var(--ui-scale));
   }
 
   .agent .footer {

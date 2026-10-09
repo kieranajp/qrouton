@@ -66,8 +66,8 @@
   .everything {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 14px 16px;
+    gap: calc(8px * var(--ui-scale));
+    padding: calc(14px * var(--ui-scale)) calc(16px * var(--ui-scale));
     border: 1px solid var(--border-default);
   }
 

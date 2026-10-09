@@ -9,6 +9,7 @@
   import RailItem from "./RailItem.svelte";
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
@@ -107,6 +108,7 @@
           menu,
           { width: ROW_MENU_WIDTH, height: menuHeight(ROW_MENU) },
           { width: window.innerWidth, height: window.innerHeight },
+          uiScale() / 100,
         )
       : null,
   );
@@ -283,7 +285,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 0 12px;
+    padding: 0 calc(12px * var(--ui-scale));
   }
 
   /* Sessions is the only greedy child. Activity and this-session size to what
@@ -295,13 +297,13 @@
     overflow: hidden auto;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 0 12px;
+    gap: calc(4px * var(--ui-scale));
+    padding: 0 calc(12px * var(--ui-scale));
   }
 
   .allowance {
     flex: none;
-    height: 12px;
+    height: calc(12px * var(--ui-scale));
   }
 
   .detail-stack {
@@ -309,8 +311,8 @@
     min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 0 12px 12px;
+    gap: calc(10px * var(--ui-scale));
+    padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
   }
 
   /* Live work outranks the repository list, which is reference: activity takes
@@ -318,7 +320,7 @@
   .activity-scroll {
     flex: 0 0 auto;
     min-height: 0;
-    max-height: 250px;
+    max-height: calc(250px * var(--ui-scale));
     overflow: hidden auto;
   }
 
@@ -332,7 +334,7 @@
   .tell {
     display: flex;
     flex-direction: column;
-    gap: 9px;
+    gap: calc(9px * var(--ui-scale));
     line-height: 1.5;
   }
 
@@ -342,7 +344,7 @@
   }
 
   .tell ul {
-    padding-left: 18px;
+    padding-left: calc(18px * var(--ui-scale));
   }
 
   .lost {

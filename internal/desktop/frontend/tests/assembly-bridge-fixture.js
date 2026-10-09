@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import Overlay from "../src/lib/assembly/Overlay.svelte";
 

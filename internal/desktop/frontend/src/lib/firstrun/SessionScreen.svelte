@@ -69,7 +69,7 @@
 
   .split {
     display: flex;
-    gap: 34px;
+    gap: calc(34px * var(--ui-scale));
     align-items: flex-start;
   }
 
@@ -77,7 +77,7 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
   }
 
   p {
@@ -90,14 +90,14 @@
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: calc(14px * var(--ui-scale));
   }
 
   .tree {
     display: grid;
     grid-template-columns: max-content 1fr;
-    column-gap: 14px;
-    padding: 16px 18px;
+    column-gap: calc(14px * var(--ui-scale));
+    padding: calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
     background: var(--surface-terminal);
     border: 1px solid var(--border-subtle);
     font: var(--terminal-sm);
@@ -122,7 +122,7 @@
   }
 
   .gap {
-    height: 12px;
+    height: calc(12px * var(--ui-scale));
   }
 
   .label {
@@ -136,20 +136,20 @@
   .legend {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .entry {
     display: flex;
     align-items: baseline;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-secondary);
   }
 
   .swatch {
-    width: 13px;
-    height: 13px;
+    width: calc(13px * var(--ui-scale));
+    height: calc(13px * var(--ui-scale));
     flex: none;
   }
 

@@ -842,3 +842,190 @@ func TestSettingsChimeReadsOnForAnUntouchedConfigAndSavesAsQuiet(t *testing.T) {
 		t.Fatal("ticking the chime again left the config quiet")
 	}
 }
+
+func TestSettingsLoadAnswersTheEffectiveUIScaleAndItsSteps(t *testing.T) {
+	for _, tc := range []struct{ stored, want int }{{0, 100}, {130, 130}, {85, 100}} {
+		view := testSettings(t, &config.Config{UIScale: tc.stored}, nil, nil, nil).Load()
+		if view.UIScale != tc.want {
+			t.Fatalf("stored %d loads as %d, want %d", tc.stored, view.UIScale, tc.want)
+		}
+		if !reflect.DeepEqual(view.UIScaleSteps, config.UIScaleSteps()) {
+			t.Fatalf("steps = %v", view.UIScaleSteps)
+		}
+	}
+}
+
+func TestSettingsSaveRefusesAnOffGridUIScaleAndWritesNothing(t *testing.T) {
+	for _, scale := range []int{70, 105, 160} {
+		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+		cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+		s := testSettings(t, cfg, nil, nil, nil)
+		_, err := s.Save(SettingsInput{
+			Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: scale,
+		})
+		if !errors.Is(err, ErrUIScale) || !strings.HasPrefix(err.Error(), settingsFieldUIScale+": ") {
+			t.Fatalf("scale %d: error = %v", scale, err)
+		}
+		if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
+			t.Fatalf("scale %d: Save wrote config.json despite refusing it", scale)
+		}
+	}
+}
+
+func TestSettingsSaveAnnouncesTheUIScaleOnlyWhenItChanges(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	var announced []int
+	s := testSettings(t, cfg, nil, nil, nil)
+	s.emit = func(event string, payload any) {
+		if event == uiScaleEvent {
+			announced = append(announced, payload.(int))
+		}
+	}
+	input := SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels}
+	for _, scale := range []int{100, 150, 150, 0} {
+		input.UIScale = scale
+		if _, err := s.Save(input); err != nil {
+			t.Fatalf("Save(%d): %v", scale, err)
+		}
+	}
+	if want := []int{150, 100}; !reflect.DeepEqual(announced, want) {
+		t.Fatalf("announced = %v, want %v", announced, want)
+	}
+}
+
+func TestSettingsSaveStoresTheUIScaleAndDropsItAtTheDefault(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	input := SettingsInput{
+		Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: 150,
+	}
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(b), `"uiScale": 150`) || cfg.EffectiveUIScale() != 150 {
+		t.Fatalf("150 left live %d and wrote %s", cfg.EffectiveUIScale(), b)
+	}
+	input.UIScale = 100
+	if _, err := s.Save(input); err != nil {
+		t.Fatal(err)
+	}
+	if b, err = os.ReadFile(config.Path()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(b), "uiScale") || cfg.EffectiveUIScale() != 100 {
+		t.Fatalf("100 left live %d and wrote %s", cfg.EffectiveUIScale(), b)
+	}
+}
+
+func TestAdjustUIScaleStepsClampsAndResets(t *testing.T) {
+	cases := []struct {
+		name          string
+		stored        int
+		action        string
+		want, written int
+		announced     bool
+	}{
+		{"in from 100", 0, uiScaleActionIn, 110, 110, true},
+		{"out from 100", 0, uiScaleActionOut, 90, 90, true},
+		{"in at the top", 150, uiScaleActionIn, 150, -1, false},
+		{"out at the bottom", 80, uiScaleActionOut, 80, -1, false},
+		{"out from the top", 150, uiScaleActionOut, 140, 140, true},
+		{"in from the bottom", 80, uiScaleActionIn, 90, 90, true},
+		{"reset from 150", 150, uiScaleActionReset, 100, 0, true},
+		{"reset at 100", 0, uiScaleActionReset, 100, -1, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: []string{"vim"}, UIScale: tc.stored}
+			s := testSettings(t, cfg, nil, nil, nil)
+			if tc.written >= 0 {
+				if err := config.Save(cfg); err != nil {
+					t.Fatal(err)
+				}
+			}
+			var announced []int
+			s.emit = func(event string, payload any) {
+				if event == uiScaleEvent {
+					announced = append(announced, payload.(int))
+				}
+			}
+			got, err := s.AdjustUIScale(tc.action)
+			if err != nil || got != tc.want {
+				t.Fatalf("AdjustUIScale = %d, %v; want %d", got, err, tc.want)
+			}
+			if tc.announced != (len(announced) == 1 && announced[0] == tc.want) {
+				t.Fatalf("announced %v", announced)
+			}
+			b, err := os.ReadFile(config.Path())
+			if tc.written < 0 {
+				if !os.IsNotExist(err) {
+					t.Fatalf("a scale at its bound wrote config.json (%v)", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			var onDisk config.Config
+			if err := json.Unmarshal(b, &onDisk); err != nil {
+				t.Fatal(err)
+			}
+			if onDisk.UIScale != tc.written || !reflect.DeepEqual(onDisk.Editor, []string{"vim"}) || cfg.EffectiveUIScale() != tc.want {
+				t.Fatalf("wrote %s, live scale %d", b, cfg.EffectiveUIScale())
+			}
+		})
+	}
+}
+
+func TestAdjustUIScaleRefusesAnUnknownAction(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := testSettings(t, &config.Config{Root: t.TempDir()}, nil, nil, nil)
+	if _, err := s.AdjustUIScale("sideways"); !errors.Is(err, ErrUIScaleAction) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Stat(config.Path()); !os.IsNotExist(err) {
+		t.Fatal("an unknown action wrote config.json")
+	}
+}
+
+func TestAdjustUIScaleWritesTheFileAsWrittenNotTheRuntimeOverrides(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), []byte(`{"orgs": ["acme"], "root": "~/work-from-file"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("QROUTON_ROOT", t.TempDir())
+	t.Setenv("QROUTON_ORGS", "override")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+
+	if _, err := s.AdjustUIScale(uiScaleActionIn); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(config.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var onDisk config.Config
+	if err := json.Unmarshal(b, &onDisk); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk.Root != "~/work-from-file" || !reflect.DeepEqual(onDisk.Orgs, []string{"acme"}) || onDisk.UIScale != 110 {
+		t.Fatalf("wrote %s", b)
+	}
+	if live := cfg.Snapshot(); live.UIScale != 110 || !reflect.DeepEqual(live.Orgs, []string{"override"}) {
+		t.Fatalf("live config = %+v", live)
+	}
+}

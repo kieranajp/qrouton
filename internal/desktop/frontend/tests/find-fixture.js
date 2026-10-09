@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { activateMatch, clearMatches, markMatches } from "../src/lib/find.js";
 
 const root = document.querySelector("#root");

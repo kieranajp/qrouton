@@ -21,23 +21,23 @@
   .pips {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .row {
     display: flex;
     align-items: center;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
   }
 
   .pip {
-    width: 8px;
-    height: 8px;
+    width: calc(8px * var(--ui-scale));
+    height: calc(8px * var(--ui-scale));
     flex: none;
   }
 
   .pip.on {
-    width: 18px;
+    width: calc(18px * var(--ui-scale));
     background: var(--accent-action);
   }
 
@@ -53,7 +53,7 @@
 
   .counter {
     font: var(--machine-sm);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-faint);
   }
 </style>

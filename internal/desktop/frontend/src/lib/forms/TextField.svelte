@@ -46,22 +46,22 @@
   .field {
     display: flex;
     flex-direction: column;
-    gap: 7px;
+    gap: calc(7px * var(--ui-scale));
   }
 
   .row {
     display: flex;
-    gap: 8px;
+    gap: calc(8px * var(--ui-scale));
   }
 
   .input {
     flex: 1;
     display: flex;
     align-items: center;
-    gap: 9px;
+    gap: calc(9px * var(--ui-scale));
     border: 1px solid var(--border-default);
     background: var(--surface-chrome);
-    padding: 9px 12px;
+    padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
   }
 
   .input:focus-within {
@@ -71,7 +71,7 @@
 
   .icon {
     flex: none;
-    font-size: 12px;
+    font-size: calc(12px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -95,7 +95,7 @@
   }
 
   textarea {
-    min-height: 52px;
+    min-height: calc(52px * var(--ui-scale));
     resize: none;
   }
 
@@ -106,7 +106,7 @@
 
   .help {
     font: var(--machine-sm);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
   }
 
   code {

@@ -15,6 +15,6 @@
 
 <style>
   .plain {
-    padding: 12px 14px;
+    padding: calc(12px * var(--ui-scale)) calc(14px * var(--ui-scale));
   }
 </style>

@@ -1,3 +1,4 @@
+import "../src/tokens/scale.css";
 import { mount, unmount } from "svelte";
 import Overlay from "../src/lib/assembly/Overlay.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";

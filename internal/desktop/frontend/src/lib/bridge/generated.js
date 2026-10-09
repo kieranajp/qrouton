@@ -38,6 +38,7 @@ export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Se
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
+export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
 export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
@@ -68,6 +69,7 @@ export const PRESENTER_NOTES_EVENT = "presenter:notes";
 export const PTY_DATA_EVENT = "pty:data:";
 export const PTY_EXIT_EVENT = "pty:exit:";
 export const REPOS_REFRESH_EVENT = "repos:refresh";
+export const UI_SCALE_EVENT = "ui:scale";
 export const UPDATE_EVENT = "update:status";
 export const WINDOW_CONTENT_EVENT = "window:content:";
 export const WINDOW_DATA_EVENT = "window:data:";
@@ -184,7 +186,7 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
@@ -195,6 +197,7 @@ export const SETTINGS_FIELDS = Object.freeze({
   BOOKMARK: "bookmark",
   QUESTION: "question",
   EXCLAMATION: "exclamation",
+  UI_SCALE: "uiScale",
 });
 
 /** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */
@@ -211,6 +214,13 @@ export const TAB_STATUSES = Object.freeze({
   SUCCEEDED: "succeeded",
   FAILED: "failed",
   WAITING: "waiting",
+});
+
+/** @typedef {"in"|"out"|"reset"} UIScaleAction */
+export const UI_SCALE_ACTIONS = Object.freeze({
+  IN: "in",
+  OUT: "out",
+  RESET: "reset",
 });
 
 /** @typedef {"terminal"|"document"} WindowKind */

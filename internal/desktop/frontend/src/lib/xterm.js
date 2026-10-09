@@ -4,13 +4,18 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
-import { opensSettings, position } from "./shortcuts.js";
+import { terminalSize } from "./scale.js";
+import { uiScale } from "./scale.svelte.js";
+import { opensSettings, position, scaleAction } from "./shortcuts.js";
 export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
 export { Terminal };
 
 const token = (name) =>
   resolveToken((property) => getComputedStyle(document.documentElement).getPropertyValue(property), name);
+
+/** @param {number} percent */
+export const terminalFontSize = (percent) => terminalSize(parseFloat(token("--terminal-size")), percent);
 
 const terminalFont = () => `${token("--terminal-size")} ${token("--font-terminal")}`;
 
@@ -26,6 +31,7 @@ export const fontsReady = () =>
 const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
 
 const mounted = new WeakMap();
+const linux = navigator.userAgent.includes("Linux");
 
 /** terminalAt is the terminal a node sits inside, and undefined outside one. */
 export function terminalAt(node) {
@@ -43,7 +49,7 @@ export function terminalAt(node) {
 export function mount(host, { write, background = "--surface-app" }) {
   const term = new Terminal({
     fontFamily: token("--font-terminal"),
-    fontSize: parseFloat(token("--terminal-size")),
+    fontSize: terminalFontSize(uiScale()),
     allowProposedApi: true,
     macOptionIsMeta: true,
     theme: {
@@ -60,7 +66,7 @@ export function mount(host, { write, background = "--surface-app" }) {
   // the layer, so on Linux a keystroke stays unpainted until the next event
   // arrives and nothing repaints an idle terminal. The DOM renderer gives up
   // GPU throughput but paints when it is told to.
-  if (!navigator.userAgent.includes("Linux")) {
+  if (!linux) {
     try {
       term.loadAddon(new WebglAddon());
     } catch (e) {
@@ -73,7 +79,7 @@ export function mount(host, { write, background = "--surface-app" }) {
     if (event.type !== "keydown") return true;
     // Returning false without preventing the default leaves the keystroke to
     // bubble, which is how the session shortcut reaches the page from in here.
-    if (position(event) || opensSettings(event)) return false;
+    if (position(event) || opensSettings(event) || scaleAction(event, linux)) return false;
     if (event.key === "Enter" && event.shiftKey) {
       // Returning false stops xterm's keydown handling but not the browser's
       // own keypress, which would append a CR and submit.

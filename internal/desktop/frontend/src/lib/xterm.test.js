@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { terminalSize } from "./scale.js";
 import { createTerminalPainter, encode } from "./terminal-painter.js";
 
 const key = (kind, id) => [kind, id.prefix ?? "", id.intermediates ?? "", id.final].join(":");
@@ -137,4 +138,9 @@ test("disposing clears queued output and makes write callbacks inert", () => {
   assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc"]);
   assert.equal(term.handlers.size, 0);
   assert.equal(term.disposed.length, 9);
+});
+
+test("the terminal font takes each scale step to the half pixel", () => {
+  const steps = [80, 90, 100, 110, 120, 130, 140, 150].map((percent) => terminalSize(13, percent));
+  assert.deepEqual(steps, [10.5, 11.5, 13, 14.5, 15.5, 17, 18, 19.5]);
 });

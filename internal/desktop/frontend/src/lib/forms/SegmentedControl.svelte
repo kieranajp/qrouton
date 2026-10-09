@@ -43,13 +43,13 @@
   }
 
   .sm {
-    font-size: 10.5px;
-    padding: 4px 10px;
+    font-size: calc(10.5px * var(--ui-scale));
+    padding: calc(4px * var(--ui-scale)) calc(10px * var(--ui-scale));
   }
 
   .md {
-    font-size: 11px;
-    padding: 8px 12px;
+    font-size: calc(11px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) calc(12px * var(--ui-scale));
   }
 
   .segment + .segment {

@@ -1,5 +1,6 @@
 <script>
   import { STICKER_IDS } from "../bridge/generated.js";
+  import { uiScale } from "../scale.svelte.js";
   import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
@@ -40,7 +41,7 @@
       node.classList.remove("above");
       const rowBox = row.getBoundingClientRect();
       const scrollBox = scrollport.getBoundingClientRect();
-      const gap = 5;
+      const gap = (5 * uiScale()) / 100;
       const height = node.getBoundingClientRect().height;
       const below = scrollBox.bottom - rowBox.bottom;
       const above = rowBox.top - scrollBox.top;
@@ -154,10 +155,10 @@
   .item {
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: calc(10px * var(--ui-scale));
     min-width: 0;
     flex: 1;
-    padding: 8px 4px 8px 8px;
+    padding: calc(8px * var(--ui-scale)) calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale)) calc(8px * var(--ui-scale));
     cursor: pointer;
     border: 0;
     background: transparent;
@@ -178,13 +179,13 @@
 
   .avatar {
     position: relative;
-    width: 30px;
-    height: 30px;
+    width: calc(30px * var(--ui-scale));
+    height: calc(30px * var(--ui-scale));
     flex: none;
     display: flex;
     align-items: center;
     justify-content: center;
-    font: 700 13px var(--font-machine);
+    font: 700 calc(13px * var(--ui-scale)) var(--font-machine);
     background: transparent;
     border: 1px solid var(--border-subtle);
     color: var(--text-faint);
@@ -204,7 +205,7 @@
 
   .keyed {
     font: var(--machine-md);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
   }
 
   .text {
@@ -221,7 +222,7 @@
 
   .name {
     font: var(--machine-md);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-muted);
   }
 
@@ -231,14 +232,14 @@
 
   .selected .name {
     font: var(--machine-bold);
-    font-size: 11px;
+    font-size: calc(11px * var(--ui-scale));
     color: var(--text-primary);
   }
 
   .repositories,
   .facts {
     font: var(--machine-xs);
-    font-size: 9.5px;
+    font-size: calc(9.5px * var(--ui-scale));
     margin-top: 2px;
     color: var(--text-faint);
   }
@@ -256,7 +257,7 @@
   .facts {
     display: flex;
     flex-wrap: wrap;
-    column-gap: 6px;
+    column-gap: calc(6px * var(--ui-scale));
     row-gap: 1px;
   }
 
@@ -277,8 +278,8 @@
   }
 
   .sticker {
-    width: 24px;
-    height: 24px;
+    width: calc(24px * var(--ui-scale));
+    height: calc(24px * var(--ui-scale));
     flex: none;
     align-self: flex-start;
     display: flex;
@@ -287,9 +288,9 @@
     padding: 0;
     border: 1px solid transparent;
     background: color-mix(in srgb, currentColor 8%, transparent);
-    font: 400 15px/1 var(--font-machine);
+    font: 400 calc(15px * var(--ui-scale))/1 var(--font-machine);
     cursor: pointer;
-    margin: 4px 2px 0 0;
+    margin: calc(4px * var(--ui-scale)) 2px 0 0;
   }
 
   .sticker:hover {
@@ -308,12 +309,12 @@
   .feedback {
     position: absolute;
     right: 0;
-    top: calc(100% + 5px);
+    top: calc(100% + calc(5px * var(--ui-scale)));
     width: max-content;
-    max-width: min(220px, 100%);
+    max-width: min(calc(220px * var(--ui-scale)), 100%);
     z-index: 10;
     box-sizing: border-box;
-    padding: 5px 7px;
+    padding: calc(5px * var(--ui-scale)) calc(7px * var(--ui-scale));
     border: 1px solid var(--border-default);
     background: var(--surface-raised);
     box-shadow: var(--shadow-focus);
@@ -329,6 +330,6 @@
 
   .feedback.above {
     top: auto;
-    bottom: calc(100% + 5px);
+    bottom: calc(100% + calc(5px * var(--ui-scale)));
   }
 </style>

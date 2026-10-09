@@ -41,7 +41,7 @@
 <style>
   .repos {
     min-height: 0;
-    padding-top: 10px;
+    padding-top: calc(10px * var(--ui-scale));
     border-top: 1px solid var(--border-subtle);
     display: flex;
     flex-direction: column;
@@ -51,26 +51,26 @@
 
   .allowance {
     flex: none;
-    height: 6px;
+    height: calc(6px * var(--ui-scale));
   }
 
   .repo {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    padding: 5px 0;
+    padding: calc(5px * var(--ui-scale)) 0;
   }
 
   .empty {
     font: var(--machine-xs);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     color: var(--text-faint);
-    padding: 5px 0;
+    padding: calc(5px * var(--ui-scale)) 0;
   }
 
   .repo-name {
     font: var(--machine-xs);
-    font-size: 10.5px;
+    font-size: calc(10.5px * var(--ui-scale));
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -86,7 +86,7 @@
 
   .repo-stat {
     font: var(--machine-xs);
-    font-size: 9.5px;
+    font-size: calc(9.5px * var(--ui-scale));
     color: var(--text-faint);
   }
 

@@ -21,6 +21,8 @@ var (
 	ErrTerminalNotStarted = errors.New("terminal is not started")
 	ErrStaleFrontend      = errors.New(staleFrontendError)
 	ErrNoOwners           = errors.New(noOwnersError)
+	ErrUIScale            = errors.New(uiScaleRefusal)
+	ErrUIScaleAction      = errors.New(unknownUIScaleAction)
 
 	ErrNoWindowOptions      = errors.New("open request carries no window options")
 	ErrNoWindowCommand      = errors.New("a terminal window needs a command")
