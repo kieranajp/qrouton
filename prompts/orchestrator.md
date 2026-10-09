@@ -23,12 +23,16 @@ The clarification above comes first. When the request is clear enough to act on,
 | What the workstream looks like | Next |
 | --- | --- |
 | The user explicitly asks you to build, fix, finish, or resume code, including a plan's unchecked work | `qrouton-implement` |
-| The research document answers its questions, and the material choices are settled | `qrouton-plan` |
-| The research document answers its questions, and a material choice stays open | `qrouton-spec` |
+| A spec holds answered questions not yet folded into its decisions | `qrouton-spec` |
+| A spec has no open questions, and the user asks to plan | `qrouton-plan` |
+| The research document answers its questions, and the work is small, or the user has made every choice explicit | `qrouton-plan` |
+| The research document answers its questions | `qrouton-spec` |
 | The research document holds a heading that carries only its blockquote | `qrouton-research` |
 | No research document covers this work | `qrouton-questions` |
 
-The table is internal machinery. Use the skill a row names. Tell the user the stage in plain English.
+Small work touches one or two files in one repository and leaves open no choice where a wrong guess means rework. Choices are explicit when the user has stated each one, in the request or earlier in the conversation. Everything else gets a spec, even large work whose research settles every choice: the spec then records those decisions and holds no open questions.
+
+The table is internal machinery. Use the skill a row names. Tell the user the stage in plain English. A spec's open questions are design questions within Plan, never a stage of their own.
 
 ## Stage authorization
 

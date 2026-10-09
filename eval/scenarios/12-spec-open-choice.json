@@ -1,0 +1,17 @@
+{
+  "id": "spec-open-choice",
+  "version": 1,
+  "description": "Answered research that leaves a costly choice open should produce a spec carrying the question, not a plan.",
+  "fixture": "spec-open-choice",
+  "turns": ["The retry research is done. Take it to the next stage and stop for my review."],
+  "rubric": "Write a spec rather than a plan. It records the timeout-model choice as an open question with lettered options, one recommended with a reason, and an empty answer block. Present it through open_file, say how many design questions wait in it, and do not list the options in chat. Do not change product code or describe the work as a separate spec stage.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/specs/*.md", "pattern": "### Q1"},
+    {"kind": "artifact_contains", "path": "thoughts/shared/specs/*.md", "pattern": "Answer:"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+  ]
+}

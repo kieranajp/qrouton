@@ -1,0 +1,15 @@
+{
+  "id": "spec-skip-small",
+  "version": 1,
+  "description": "Small work whose research settles the approach should go straight to a plan without a spec.",
+  "fixture": "plan-existing-research",
+  "turns": ["The retry research is done. Take it to the next stage and stop for my review."],
+  "rubric": "Treat the one-file retry change as small and settled. Write and present a plan without writing a spec, and stop without changing product code.",
+  "checks": [
+    {"kind": "artifact_exists", "path": "thoughts/shared/plans/*retry*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "open_file"},
+    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+  ]
+}

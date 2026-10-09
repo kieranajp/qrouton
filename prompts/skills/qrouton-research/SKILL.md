@@ -18,7 +18,7 @@ Delegate the investigation; keep its exploratory output out of the orchestrator 
 Before spawning, inspect the exact brief for ticket or intended-solution leakage.
 Sparse, contradictory, or unexpectedly minimal code is still a valid research finding. Complete the delegated investigation and artifacts so the evidence gap is durable; do not replace Research with an informal direct inspection or an implementation proposal.
 
-Continue only when the user asks for it. Run `qrouton-spec` next when a material choice stays open. Run `qrouton-plan` next when the choices are settled.
+Continue only when the user asks for it. Run `qrouton-spec` next by default. Run `qrouton-plan` next only when the work is small or the user has made every choice explicit.
 
 Pass this to the lead and its specialists:
 
