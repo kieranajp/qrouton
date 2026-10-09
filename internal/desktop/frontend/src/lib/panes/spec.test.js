@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseSpec } from "./spec.js";
+import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
 
 const doc = (...lines) => lines.join("\n");
 
@@ -329,3 +329,57 @@ const INTEGRAL = doc(
   "- **Phase 1 changes routing for every session.** A loose question bar would put trivial work through a spec. The skip-case eval guards it.",
   "",
 );
+const outside = (before, after, question) => {
+  const a = before.split("\n");
+  const b = after.split("\n");
+  const head = a.slice(0, question.answer ? question.answer.from - 1 : question.optionsEnd);
+  assert.deepEqual(b.slice(0, head.length), head);
+  const tail = a.slice(question.answer ? question.answer.to : question.optionsEnd);
+  assert.deepEqual(b.slice(b.length - tail.length), tail);
+};
+
+test("splicing a letter into an empty answer touches that line only", () => {
+  const question = parseSpec(OPEN).open[2];
+  const after = spliceAnswer(OPEN, question, { letter: "B", note: "" });
+  outside(OPEN, after, question);
+  assert.equal(after.split("\n").length, OPEN.split("\n").length);
+  assert.equal(parseSpec(after).open[2].answer.letter, "B");
+});
+
+test("splicing replaces a whole multi-line answer and reads back the same", () => {
+  const question = parseSpec(OPEN).open[3];
+  const after = spliceAnswer(OPEN, question, { letter: "A", note: "Log it first.\r\nThen carry on." });
+  outside(OPEN, after, question);
+  assert.ok(!after.includes("\r"));
+  const read = parseSpec(after).open[3].answer;
+  assert.deepEqual([read.letter, read.note], ["A", "Log it first.\nThen carry on."]);
+  assert.deepEqual(parseSpec(after).open.map((q) => q.answer.raw), parseSpec(OPEN).open.map((q, at) => (at === 3 ? read.raw : q.answer.raw)));
+});
+
+test("a free-text answer splices without a letter", () => {
+  const question = parseSpec(OPEN).open[0];
+  const after = spliceAnswer(OPEN, question, { letter: "", note: "Neither, honestly" });
+  outside(OPEN, after, question);
+  const read = parseSpec(after).open[0].answer;
+  assert.deepEqual([read.letter, read.note], ["", "Neither, honestly"]);
+});
+
+test("a question with no answer line gains one after its options", () => {
+  const text = doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "## Decisions", "");
+  const question = parseSpec(text).open[0];
+  const after = spliceAnswer(text, question, { letter: "A", note: "" });
+  assert.equal(after, doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Answer: A", "", "## Decisions", ""));
+});
+
+test("drafts go back on the question with the same id and heading", () => {
+  const drafts = new Map([
+    [draftKey({ id: "Q2", heading: "Where does the deadline come from?" }), { id: "Q2", heading: "Where does the deadline come from?", note: "kept" }],
+    [draftKey({ id: "Q3", heading: "What happens on expiry?" }), { id: "Q3", heading: "What happens on expiry?", note: "renamed" }],
+    [draftKey({ id: "Q9", heading: "Gone" }), { id: "Q9", heading: "Gone", note: "removed" }],
+  ]);
+  const renamed = OPEN.replace("### Q3 - What happens on expiry?", "### Q3 - What happens when time runs out?");
+  const { questions, detached } = reapply(parseSpec(renamed), drafts);
+  assert.equal(questions[1].draft.note, "kept");
+  assert.equal(questions[2].draft, null);
+  assert.deepEqual(detached.map((draft) => draft.note), ["renamed", "removed"]);
+});

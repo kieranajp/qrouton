@@ -90,10 +90,21 @@ export const FREEFORM = [
 ].join("\n");
 
 const params = new URLSearchParams(location.search);
-const text = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : OPEN;
+const initial = params.get("zero") ? ZERO : params.get("freeform") ? FREEFORM : OPEN;
+
+// Any stable digest will do: the pane only compares what it was given.
+const hashOf = (text) => {
+  let h = 0;
+  for (const c of text) h = (Math.imul(h, 31) + c.charCodeAt(0)) | 0;
+  return `h${(h >>> 0).toString(16)}`;
+};
+
+window.file = initial;
+let stale = null;
 
 const document_ = (fields = {}) => ({
-  text,
+  text: window.file,
+  hash: hashOf(window.file),
   format: "markdown",
   source: "thoughts/shared/specs/S1-fixture.md",
   path: "/sessions/fixture/thoughts/shared/specs/S1-fixture.md",
@@ -109,10 +120,28 @@ window.wailsCall = async (name, ...args) => {
   window.calls.push({ name, args });
   if (name.endsWith(".Content")) return document_();
   if (name.endsWith(".RenderDiagrams")) return [];
+  if (name.endsWith(".SaveSpec")) {
+    const [, hash, text] = args;
+    if (stale !== null) {
+      window.file = stale;
+      stale = null;
+    }
+    if (hash !== hashOf(window.file)) throw new Error("the document changed on disk since the pane read it");
+    window.file = text;
+    return hashOf(text);
+  }
   return undefined;
 };
 
-window.pushContent = (fields) => emitWailsEvent("window:content:w1", document_(fields));
+// The next save finds the file already rewritten to this text.
+window.staleOnce = (text) => (stale = text);
+window.saves = () => window.calls.filter((call) => call.name.endsWith(".SaveSpec")).map((call) => call.args);
+window.OPEN = OPEN;
+
+window.pushContent = (text) => {
+  window.file = text;
+  emitWailsEvent("window:content:w1", document_());
+};
 
 const screens = () => [...document.querySelectorAll("[data-screen]")];
 window.shown = () =>

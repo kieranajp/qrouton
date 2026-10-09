@@ -16,7 +16,7 @@
     onFindAdapter,
   } = $props();
 
-  /** @type {{text: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, images?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
+  /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, images?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
   let windowID = "";
   let dispose = () => {};
@@ -44,7 +44,7 @@
       const content = await Call.ByName(WINDOWS_CONTENT, nextID);
       if (disposed) return;
       if (content?.format === DOCUMENT_FORMATS.IMAGES) accept(content);
-      else doc = live && doc ? { ...content, text: doc.text } : content;
+      else doc = live && doc ? { ...content, text: doc.text, hash: doc.hash } : content;
       await tick();
       if (!disposed) onReady?.();
     })();

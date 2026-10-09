@@ -4,6 +4,8 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import { tick, untrack } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
+  import { copyText } from "../wails.js";
   import ArtifactPane from "./ArtifactPane.svelte";
   import QuestionCard from "./QuestionCard.svelte";
   import ReaderPips from "./ReaderPips.svelte";
@@ -13,28 +15,54 @@
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
-  import { parseSpec } from "./spec.js";
+  import { freshContent, saveSpec } from "./spec-calls.js";
+  import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
-  let rendered = $derived(render(doc.text));
-  let spec = $derived(parseSpec(doc.text));
+  // The text the pane splices into: the last push, or the pane's own save, or
+  // what it fetched after a refused one, whichever came last.
+  let source = $state(untrack(() => ({ text: doc.text, hash: doc.hash ?? "" })));
+  let epoch = $state(untrack(() => doc.viewportEpoch ?? 0));
+  let pushed = untrack(() => doc.hash ?? doc.text);
+  $effect(() => {
+    const text = doc.text;
+    const hash = doc.hash ?? "";
+    const at = doc.viewportEpoch ?? 0;
+    untrack(() => {
+      if (at > epoch) epoch = at;
+      if ((hash || text) === pushed) return;
+      pushed = hash || text;
+      source = { text, hash };
+    });
+  });
+  let shown = $derived({ ...doc, text: source.text, viewportEpoch: epoch });
+
+  /** @type {SvelteMap<string, {id: string, heading: string, letter: string, note: string}>} */
+  const pending = new SvelteMap();
+  /** @type {SvelteMap<string, {state: string, message?: string}>} */
+  const saves = new SvelteMap();
+  let queue = Promise.resolve();
+
+  let rendered = $derived(render(source.text));
+  let spec = $derived(parseSpec(source.text));
+  let laid = $derived(reapply(spec, pending));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
 
   let slides = $derived(slidesOf(spec));
   // Ranges no screen shows still have to claim their blocks, or they would land in the overview.
   let parts = $derived(partition(rendered.body, [...slides, ...unshown(spec)]));
 
-  let drafts = $derived(spec.open.map((question) => draftOf(question)));
+  let drafts = $derived(laid.questions.map(({ question, draft }) => draft ?? draftOf(question)));
   let answered = $derived(drafts.filter((draft) => draft.letter || draft.note.trim()).length);
   let nextOpen = $derived(drafts.findIndex((draft) => !draft.letter && !draft.note.trim()));
 
   /** @param {ReturnType<typeof parseSpec>} parsed */
   function slidesOf(parsed) {
     const questions =
-      parsed.open.length > 0 && parsed.openSection
+      (parsed.open.length > 0 || laid.detached.length > 0) && parsed.openSection
         ? [{ kind: "questions", name: "Open questions", ...parsed.openSection }]
         : [];
     const decisions = parsed.decisions.map((decision) => ({
@@ -50,7 +78,8 @@
   /** @param {ReturnType<typeof parseSpec>} parsed */
   function unshown(parsed) {
     const hidden = [];
-    if (parsed.open.length === 0 && parsed.openSection) hidden.push(parsed.openSection);
+    if (parsed.open.length === 0 && laid.detached.length === 0 && parsed.openSection)
+      hidden.push(parsed.openSection);
     if (parsed.decisionsSection) {
       const first = parsed.decisions[0];
       hidden.push({
@@ -159,10 +188,68 @@
     focusCard(index);
   }
 
+  /** @param {number} index @param {Partial<{letter: string, note: string}>} change */
+  function edit(index, change) {
+    const question = spec.open[index];
+    if (!question) return "";
+    const key = draftKey(question);
+    pending.set(key, { id: question.id, heading: question.heading, ...drafts[index], ...change });
+    return key;
+  }
+
   /** @param {number} index @param {string} letter */
   function pick(index, letter) {
-    void index;
-    void letter;
+    commit(edit(index, { letter }));
+  }
+
+  /** @param {number} index @param {string} note */
+  function note(index, note) {
+    saves.set(edit(index, { note }), { state: "unsaved" });
+  }
+
+  /** Saves run one at a time, so each splices into the text the last one left. */
+  function commit(key) {
+    if (!key || !pending.has(key)) return;
+    queue = queue.then(() => save(key));
+  }
+
+  async function save(key) {
+    const draft = pending.get(key);
+    const question = spec.open.find((open) => draftKey(open) === key);
+    if (!draft || !question) return;
+    const text = spliceAnswer(source.text, question, draft);
+    if (text === source.text) {
+      pending.delete(key);
+      saves.delete(key);
+      return;
+    }
+    const hash = source.hash;
+    saves.set(key, { state: "saving" });
+    const saved = await saveSpec(id, hash, text);
+    if (saved.ok) {
+      source = { text, hash: saved.value };
+      if (pending.get(key) === draft) pending.delete(key);
+      saves.set(key, { state: pending.has(key) ? "unsaved" : "saved" });
+      return;
+    }
+    // Go refuses a stale hash; a fresh read tells that apart from a real failure.
+    const fresh = await freshContent(id);
+    if (fresh.ok && fresh.value.hash !== hash) {
+      source = { text: fresh.value.text, hash: fresh.value.hash };
+      epoch = Math.max(epoch, fresh.value.viewportEpoch ?? 0);
+      saves.set(key, {
+        state: "reloaded",
+        message: "The spec changed on disk, so it reloaded. Your answer is kept here: pick again or press ⌘↵ to save it.",
+      });
+      return;
+    }
+    saves.set(key, { state: "failed", message: `Could not save: ${saved.error?.message ?? saved.error}` });
+  }
+
+  /** @param {{id: string, heading: string}} draft */
+  function discard(draft) {
+    pending.delete(draftKey(draft));
+    saves.delete(draftKey(draft));
   }
 
   /** @param {KeyboardEvent} event */
@@ -185,7 +272,7 @@
 
   const port = viewport({
     span: () => clampedSpan(doc, at.current > 0 ? slides[at.current - 1] : spec.preamble),
-    epoch: () => doc.viewportEpoch,
+    epoch: () => epoch,
     marking: () => !untrack(() => at.retired),
   });
 </script>
@@ -193,7 +280,7 @@
 <svelte:window onkeydown={onKey} />
 
 {#if !spec.isSpec}
-  <MarkdownPane {doc} {id} {active} {scrollRoot} />
+  <MarkdownPane doc={shown} {id} {active} {scrollRoot} />
 {:else}
   <ArtifactPane
     {doc}
@@ -209,7 +296,7 @@
       {#if view.reading}
         <div class="reading" bind:this={reading}>
           <h1 class="display-lg">{spec.title || heading}</h1>
-          <MarkdownPane {doc} {id} {active} {scrollRoot} bare onMeasure={spy} />
+          <MarkdownPane doc={shown} {id} {active} {scrollRoot} bare onMeasure={spy} />
         </div>
       {:else}
         <div
@@ -217,8 +304,8 @@
           bind:this={sheet}
           data-document-source={doc.source}
           use:links={doc.source}
-          use:diagrams={{ id, text: doc.text }}
-          use:port={{ id, active, scrollRoot, key: at.current, request: doc.viewportEpoch }}>
+          use:diagrams={{ id, text: source.text }}
+          use:port={{ id, active, scrollRoot, key: at.current, request: epoch }}>
           <section class="screen hero" data-screen="overview" hidden={viewing !== 0}>
             <CapsLabel>Spec · {spec.decisions.length} {spec.decisions.length === 1 ? "decision" : "decisions"}</CapsLabel>
             <h1 class="display-lg">{spec.title || heading}</h1>
@@ -262,15 +349,35 @@
                 </div>
                 <h1 class="display-md">Open questions</h1>
                 <div class="cards">
-                  {#each spec.open as question, at (question.id + question.heading)}
+                  {#each spec.open as question, at (draftKey(question))}
                     <QuestionCard
                       {question}
                       draft={drafts[at]}
                       focused={focus === at}
+                      state={saves.get(draftKey(question))?.state}
+                      message={saves.get(draftKey(question))?.message}
                       onFocus={() => (focus = at)}
-                      onPick={(letter) => pick(at, letter)} />
+                      onPick={(letter) => pick(at, letter)}
+                      onNote={(text) => note(at, text)}
+                      onCommit={() => commit(draftKey(question))} />
                   {/each}
                 </div>
+                {#if laid.detached.length > 0}
+                  <div class="detached" data-detached>
+                    <CapsLabel>Detached answers</CapsLabel>
+                    <p class="hint">These questions were renamed or removed while you were answering. Your text is kept here.</p>
+                    {#each laid.detached as draft (draftKey(draft))}
+                      <div class="orphan" data-orphan={draft.id}>
+                        <span class="was">{draft.id} — {draft.heading}</span>
+                        <p class="kept">{[draft.letter, draft.note].filter(Boolean).join(" — ")}</p>
+                        <div class="actions">
+                          <Button variant="outline" size="sm" onclick={() => copyText([draft.letter, draft.note].filter(Boolean).join("\n\n"))}>Copy</Button>
+                          <Button variant="ghost" size="sm" onclick={() => discard(draft)}>Discard</Button>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               {:else}
                 {#if slide.kind !== "section"}
                   <div class="crumb">
@@ -453,7 +560,46 @@
     white-space: nowrap;
   }
 
+  .detached {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 26px;
+    padding-left: var(--gutter);
+  }
+
+  .hint,
+  .kept {
+    margin: 0;
+    font: var(--machine-sm);
+    color: var(--text-secondary);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .orphan {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 12px 14px;
+    border: var(--border-width) dashed var(--state-waiting);
+  }
+
+  .was {
+    font: var(--machine-bold);
+    color: var(--text-primary);
+  }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+  }
+
   @media (max-width: 420px) {
+    .detached {
+      padding-left: 0;
+    }
+
     .hero {
       padding-top: 6px;
     }

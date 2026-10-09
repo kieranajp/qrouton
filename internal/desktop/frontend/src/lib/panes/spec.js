@@ -24,7 +24,7 @@ function lastFilled(lines, from, to) {
 
 /** @typedef {{letter: string, text: string, recommended: boolean, reason: string}} Option */
 /** @typedef {{from: number, to: number, raw: string, letter: string, note: string}} Answer */
-/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], answer: Answer | null}} Question */
+/** @typedef {{id: string, heading: string, from: number, to: number, context: string, options: Option[], optionsEnd: number, answer: Answer | null}} Question */
 /** @typedef {{kind: "question" | "decision" | "section", id: string, label: string, from: number, to: number}} Decision */
 
 /** @param {string} raw @param {Option[]} options */
@@ -42,12 +42,14 @@ function readQuestion(lines, heading, to, named) {
   /** @type {Option[]} */
   const options = [];
   let firstOption = 0;
+  let optionsEnd = 0;
   let answerAt = 0;
   for (let at = from + 1; at <= to; at++) {
     const source = lines[at - 1];
     const option = OPTION.exec(source);
     if (option && !answerAt) {
       firstOption ||= at;
+      optionsEnd = at;
       const reason = RECOMMENDED.exec(option[2]);
       options.push({
         letter: option[1],
@@ -71,7 +73,7 @@ function readQuestion(lines, heading, to, named) {
     answer = { from: answerAt, to: end, raw, ...readAnswer(raw, options) };
   }
 
-  return { id: named[1], heading: named[2], from, to, context, options, answer };
+  return { id: named[1], heading: named[2], from, to, context, options, optionsEnd, answer };
 }
 
 /** @param {string[]} lines @param {{from: number, to: number, nodes: any[]}} section */
@@ -146,5 +148,45 @@ export function parseSpec(text) {
     sections: sections
       .filter((section) => section !== openSection && section !== decisionsSection)
       .map(({ name, from, to }) => ({ name, from, to })),
+  };
+}
+
+/** A draft is matched to its question by id and heading, so a renumbered question cannot take it.
+ * @param {{id: string, heading: string}} question */
+export const draftKey = (question) => `${question.id}\u0000${question.heading}`;
+
+/** @param {{letter: string, note: string}} answer */
+function answerLines({ letter, note }) {
+  const text = note.replace(/\r\n?/g, "\n").trim();
+  if (!text) return [letter ? `Answer: ${letter}` : "Answer:"];
+  const body = text.split("\n");
+  if (letter) return [`Answer: ${letter}`, "", ...body];
+  return body.length === 1 ? [`Answer: ${body[0]}`] : ["Answer:", "", ...body];
+}
+
+/** Rewrites one question's answer block and leaves every other line as it was.
+ * @param {string} text @param {Question} question @param {{letter: string, note: string}} answer */
+export function spliceAnswer(text, question, answer) {
+  const lines = text.split("\n");
+  const next = answerLines(answer);
+  if (question.answer) {
+    lines.splice(question.answer.from - 1, question.answer.to - question.answer.from + 1, ...next);
+    return lines.join("\n");
+  }
+  const after = question.optionsEnd || lastFilled(lines, question.from, question.to);
+  const blankAfter = lines[after] !== undefined && !lines[after].trim();
+  lines.splice(after, 0, "", ...next, ...(blankAfter ? [] : [""]));
+  return lines.join("\n");
+}
+
+/** Lays unsaved drafts back over a freshly parsed spec. A draft whose question
+ * is gone, or now has another heading, is detached rather than dropped.
+ * @template {{id: string, heading: string}} D
+ * @param {{open: Question[]}} parsed @param {Map<string, D>} drafts */
+export function reapply(parsed, drafts) {
+  const keys = new Set(parsed.open.map(draftKey));
+  return {
+    questions: parsed.open.map((question) => ({ question, draft: drafts.get(draftKey(question)) ?? null })),
+    detached: [...drafts.entries()].filter(([key]) => !keys.has(key)).map(([, draft]) => draft),
   };
 }

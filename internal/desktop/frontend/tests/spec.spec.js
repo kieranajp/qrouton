@@ -89,3 +89,79 @@ test("cards fit the pane without scrolling sideways", async ({ page }) => {
   const overflow = await deck.evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
 });
+
+const card = (page, id) => page.locator(`[data-question="${id}"]`);
+const questions = async (page) => {
+  await open(page);
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["questions"]);
+};
+
+test("one click saves the picked option into the file", async ({ page }) => {
+  await questions(page);
+  await card(page, "Q2").getByRole("button", { name: /The context's error/ }).click();
+
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(1);
+  const [[id, sent, text]] = await page.evaluate(() => window.saves());
+  expect(id).toBe("w1");
+  expect(sent).toMatch(/^h/);
+  const open = await page.evaluate(() => window.OPEN);
+  expect(text).toBe(open.replace("Answer:\n\n### Q3", "Answer: B\n\n### Q3"));
+  await expect(card(page, "Q2").locator(".state")).toHaveText("Saved");
+  await expect(page.locator(".crumb .count")).toHaveText("2 of 3 answered");
+});
+
+test("a typed note saves when the field loses focus", async ({ page }) => {
+  await questions(page);
+  const field = card(page, "Q3").locator("textarea");
+  await field.fill("Only when the caller asks");
+  await expect(card(page, "Q3").locator(".state")).toHaveText("Not saved");
+  expect(await page.evaluate(() => window.saves().length)).toBe(0);
+
+  await page.getByRole("heading", { name: "Open questions" }).click();
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(1);
+  const [[, , text]] = await page.evaluate(() => window.saves());
+  expect(text).toContain("- B. No\n\nAnswer: Only when the caller asks\n\n## Decisions");
+});
+
+test("a refused save reloads the spec and keeps the typed answer", async ({ page }) => {
+  await questions(page);
+  const moved = await page.evaluate(() => window.OPEN + "Appended by the agent.\n");
+  await page.evaluate((text) => window.staleOnce(text), moved);
+
+  const field = card(page, "Q2").locator("textarea");
+  await field.fill("kept draft");
+  await field.press("ControlOrMeta+Enter");
+
+  await expect(card(page, "Q2").locator(".message")).toContainText("changed on disk");
+  await expect(field).toHaveValue("kept draft");
+
+  await field.press("ControlOrMeta+Enter");
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(2);
+  const text = await page.evaluate(() => window.saves()[1][2]);
+  expect(text).toContain("Appended by the agent.");
+  expect(text).toContain("Answer: kept draft");
+  await expect(card(page, "Q2").locator(".state")).toHaveText("Saved");
+});
+
+test("a draft whose question is renamed under it is kept as detached", async ({ page }) => {
+  await questions(page);
+  await card(page, "Q3").locator("textarea").fill("my unsaved thought");
+  const renamed = await page.evaluate(() =>
+    window.OPEN.replace("### Q3 — Is zero attempts an error?", "### Q3 — Should zero attempts fail?"),
+  );
+  await page.evaluate((text) => window.pushContent(text), renamed);
+
+  await expect(page.locator('[data-orphan="Q3"]')).toContainText("my unsaved thought");
+  await expect(page.locator('[data-orphan="Q3"]')).toContainText("Is zero attempts an error?");
+  await expect(card(page, "Q3").locator("h2")).toHaveText("Should zero attempts fail?");
+  await expect(card(page, "Q3").locator("textarea")).toHaveValue("");
+});
+
+test("a letter key picks that option on the focused card", async ({ page }) => {
+  await questions(page);
+  await page.keyboard.press("j");
+  await page.keyboard.press("b");
+  await expect.poll(() => page.evaluate(() => window.saves().length)).toBe(1);
+  expect(await page.evaluate(() => window.saves()[0][2])).toContain("callers can test for it)**\n\nAnswer: B\n");
+});

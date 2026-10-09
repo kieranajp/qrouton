@@ -2,6 +2,8 @@ package desktop
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -18,6 +20,7 @@ import (
 // should scroll to and mark. Zero lines leave the page at the top.
 type document struct {
 	Text          string          `json:"text"`
+	Hash          string          `json:"hash"`
 	Format        string          `json:"format"`
 	Source        string          `json:"source"`
 	Path          string          `json:"path,omitempty"`
@@ -115,6 +118,7 @@ func documentFor(window *agentWindow) document {
 	}
 	doc := document{
 		Text:          window.opts.Content,
+		Hash:          contentHash(window.opts.Content),
 		Format:        string(window.opts.Format),
 		Source:        window.opts.Source,
 		Path:          path,
@@ -143,6 +147,11 @@ func documentFor(window *agentWindow) document {
 		doc.CurrentIndex, doc.Revision = rendered.currentImage, rendered.imageRevision
 	}
 	return doc
+}
+
+func contentHash(text string) string {
+	sum := sha256.Sum256([]byte(text))
+	return hex.EncodeToString(sum[:])
 }
 
 // follow keeps open documents current. A stat a second buys what a file

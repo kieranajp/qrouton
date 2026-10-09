@@ -2,8 +2,10 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import { render } from "./markdown.js";
 
-  /** @type {{question: import("./spec.js").Question, draft: {letter: string, note: string}, focused?: boolean, readonly?: boolean, onPick?: (letter: string) => void, onNote?: (text: string) => void, onFocus?: () => void}} */
-  let { question, draft, focused = false, readonly = true, onPick, onNote, onFocus } = $props();
+  /** @type {{question: import("./spec.js").Question, draft: {letter: string, note: string}, focused?: boolean, readonly?: boolean, state?: string, message?: string, onPick?: (letter: string) => void, onNote?: (text: string) => void, onCommit?: () => void, onFocus?: () => void}} */
+  let { question, draft, focused = false, readonly = false, state = "", message = "", onPick, onNote, onCommit, onFocus } = $props();
+
+  const STATES = { unsaved: "Not saved", saving: "Saving…", saved: "Saved", failed: "Not saved", reloaded: "Not saved" };
 
   // Line numbers here would count from the card, not the file.
   const unnumbered = (text) => render(text).body.replace(/ data-line(?:-end)?="\d+"/g, "");
@@ -22,7 +24,7 @@
   onfocusin={() => onFocus?.()}>
   <header class="head">
     <CapsLabel>{question.id}</CapsLabel>
-    <span class="state">{answered ? "Answered" : "Open"}</span>
+    <span class="state" data-state={state}>{STATES[state] ?? (answered ? "Answered" : "Open")}</span>
   </header>
   <h2 class="question">{question.heading}</h2>
   {#if context}
@@ -57,8 +59,18 @@
       rows="2"
       value={draft.note}
       disabled={readonly}
-      oninput={(event) => onNote?.(event.currentTarget.value)}></textarea>
+      oninput={(event) => onNote?.(event.currentTarget.value)}
+      onblur={() => onCommit?.()}
+      onkeydown={(event) => {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          onCommit?.();
+        }
+      }}></textarea>
   </label>
+  {#if message}
+    <p class="message" class:failed={state === "failed"} role="status">{message}</p>
+  {/if}
 </article>
 
 <style>
@@ -89,8 +101,26 @@
     color: var(--text-muted);
   }
 
-  .answered .state {
+  .answered .state,
+  .state[data-state="saved"] {
     color: var(--state-success);
+  }
+
+  .state[data-state="unsaved"],
+  .state[data-state="reloaded"],
+  .state[data-state="saving"] {
+    color: var(--state-waiting);
+  }
+
+  .state[data-state="failed"],
+  .message.failed {
+    color: var(--state-failed);
+  }
+
+  .message {
+    margin: 0;
+    font: var(--machine-sm);
+    color: var(--state-waiting);
   }
 
   .question {
