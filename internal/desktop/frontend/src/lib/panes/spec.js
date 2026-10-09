@@ -121,23 +121,32 @@ function readDecisions(section) {
   return decisions;
 }
 
-/** A spec is answerable once it has an open-questions section or a resolved question.
+/** @param {{nodes: any[]}} section */
+function isNone(section) {
+  const [only, ...rest] = section.nodes;
+  return rest.length === 0 && only?.type === "paragraph" && /^none\.$/i.test(flatten(only).trim());
+}
+
+/** A spec is answerable once Open questions holds questions or "None.", or Decisions holds a resolved question.
  * @param {string} text */
 export function parseSpec(text) {
   const { title, preamble, sections } = sliceSections(text);
   const lines = text.split("\n");
   const named = (name) => sections.find((section) => section.name.toLowerCase() === name);
-  const openSection = named(OPEN) ?? null;
+  const found = named(OPEN) ?? null;
   const decisionsSection = named(DECISIONS) ?? null;
 
-  const open = openSection ? readQuestions(lines, openSection) : [];
+  const asked = found ? readQuestions(lines, found) : [];
+  const shaped = found !== null && (asked.length > 0 || isNone(found));
+  const openSection = shaped ? found : null;
+  const open = shaped ? asked : [];
   const decisions = decisionsSection ? readDecisions(decisionsSection) : [];
   const answered = open.filter((question) => question.answer?.raw).length;
 
   return {
     title,
     preamble,
-    isSpec: Boolean(openSection) || decisions.some((decision) => decision.kind === "question"),
+    isSpec: shaped || decisions.some((decision) => decision.kind === "question"),
     open,
     answered,
     decisions,

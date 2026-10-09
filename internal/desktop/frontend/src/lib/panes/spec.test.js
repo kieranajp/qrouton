@@ -145,6 +145,48 @@ test("a freeform spec is not one", () => {
   assert.equal(parseSpec(FREEFORM).isSpec, false);
 });
 
+test("legacy bullets under Open questions fall back to markdown", () => {
+  const legacy = doc(
+    "# Old spec",
+    "",
+    "## Open questions",
+    "",
+    "- Should retries have an overall deadline?",
+    "",
+    "## Decisions",
+    "",
+    "- use X",
+    "",
+  );
+  const spec = parseSpec(legacy);
+  assert.equal(spec.isSpec, false);
+  assert.deepEqual(spec.open, []);
+});
+
+test("prose or unrecognised headings under Open questions fall back to markdown", () => {
+  assert.equal(parseSpec(doc("## Open questions", "", "Still deciding.", "")).isSpec, false);
+  assert.equal(parseSpec(doc("## Open questions", "", "### Retries", "", "Unsure.", "")).isSpec, false);
+  assert.equal(parseSpec(doc("## Open questions", "")).isSpec, false);
+});
+
+test("None. under Open questions stays structured", () => {
+  const spec = parseSpec(ZERO);
+  assert.equal(spec.isSpec, true);
+  assert.deepEqual(spec.openSection && [spec.openSection.from, spec.openSection.to], [3, 6]);
+});
+
+test("Q headings under Open questions stay structured", () => {
+  const spec = parseSpec(OPEN);
+  assert.equal(spec.isSpec, true);
+  assert.equal(spec.open.length > 0, true);
+});
+
+test("resolved Q blocks under Decisions stay structured without Open questions", () => {
+  const spec = parseSpec(doc("# Spec", "", "## Decisions", "", "### Q1 — Per attempt or overall?", "", "Overall.", ""));
+  assert.equal(spec.isSpec, true);
+  assert.deepEqual(spec.decisions.map((d) => d.kind), ["question"]);
+});
+
 test("a decision runs up to the next one", () => {
   const [first, second] = parseSpec(ZERO).decisions;
   assert.deepEqual([first.from, first.to], [9, 10]);
