@@ -3,7 +3,10 @@ import { test } from "node:test";
 import { artifactInk, artifactLabel, artifactTone } from "./artifacts.js";
 
 test("each artifact kind resolves to its design token", () => {
-  assert.equal(artifactTone("PLAN"), "var(--artifact-plan)");
+  assert.equal(artifactTone("REVIEW"), "var(--artifact-review)");
+ assert.equal(artifactLabel("REVIEW"), "REVIEW");
+ assert.equal(artifactLabel("REVIEW", { long: true }), "REVIEW");
+ assert.equal(artifactTone("PLAN"), "var(--artifact-plan)");
   assert.equal(artifactTone("SPEC"), "var(--artifact-spec)");
   assert.equal(artifactTone("RESEARCH"), "var(--artifact-research)");
   assert.equal(artifactTone("NOTE"), "var(--artifact-note)");

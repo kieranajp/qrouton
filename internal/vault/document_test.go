@@ -6,6 +6,9 @@ func TestDocumentsTakeTheirIdentityFromThePath(t *testing.T) {
 	for _, tc := range []struct {
 		name, text, kind, title string
 	}{
+		{"s/shared/reviews/review-x.md", "# Review\n", KindReview, "Review"},
+		{"s/shared/reviews/review-y.md", "---\nkind: review\ntitle: Result\nplan: ../plans/P1.md\n---\n[Plan](../plans/P1.md)\n", KindReview, "Result"},
+		{"s/shared/reviews/review-z.md", "---\nkind: note\n---\n# Relabelled\n", "note", "Relabelled"},
 		{"notes/a.md", "# Heading title\n\nText\n", "", "Heading title"},
 		{"notes/b.md", "---\nkind: plan\ntitle: From frontmatter\n---\nText\n", "plan", "From frontmatter"},
 		{"notes/c.md", "---\nkind: whatever\n---\nno heading\n", "", "c"},

@@ -137,6 +137,52 @@ const (
 	claudeMaintainProjectWorkingDirValue  = "1"
 )
 
+const (
+	openCodeDatabaseEnvVar               = "OPENCODE_DB"
+	agyCLIStateDirName                   = "antigravity-cli"
+	codexLongConfigFlag                  = "--config"
+	reviewerModelHelp                    = "Enter the model identifier accepted by this harness."
+	openCodeReviewerModelHelp            = "Enter a model identifier in provider/model form."
+	reviewerDefaultReasoningHelp         = "Choose a supported effort, or leave blank for the provider default."
+	codexReviewerReasoningHelp           = "Enter the effort accepted by your model, or leave blank for the provider default."
+	openCodeReviewerReasoningHelp        = "OpenCode reasoning uses the provider default; leave this value blank."
+	reviewerHarnessErrorFormat           = "%w: choose a supported harness, got %q (supported: %s)"
+	reviewerModelErrorFormat             = "%w: model must be nonblank UTF-8 text without control characters"
+	reviewerModelCapabilityErrorFormat   = "%w: model is unsupported for %s. %s"
+	reviewerReasoningEncodingErrorFormat = "%w: reasoning must be UTF-8 text without control characters"
+	reviewerReasoningErrorFormat         = "%w: reasoning is unsupported for %s. %s"
+	reviewerOverrideErrorFormat          = "%w: %s argument %q; move model, role and effort options to reviewer Settings and remove resume, headless or working-directory arguments"
+)
+
+var (
+	agySharedReviewerFiles  = []string{"settings.json", "keybindings.json", "bin", "builtin"}
+	claudeReviewerEfforts   = []string{"low", "medium", "high", "xhigh", "max"}
+	agyReviewerEfforts      = []string{"low", "medium", "high"}
+	claudeReviewerOverrides = reviewerOverridePolicy{
+		Flags:         []string{"--continue", "-c", "--resume", "-r", "--fork-session", "--session-id", "--from-pr", "--teleport", "--print", "-p", "--background", "--bg", "--model", "--fallback-model", "--effort", "--agent", "--agents", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file", "--worktree", "-w", "--add-dir"},
+		Commands:      []string{"attach"},
+		PathListFlags: []string{"--mcp-config", "--plugin-dir"},
+		PathFlags:     []string{"--settings", "--debug-file", "--add-dir", "--append-system-prompt-file", "--system-prompt-file"},
+		ValueFlags:    []string{"--settings", "--name", "-n", "--permission-mode", "--mcp-config", "--add-dir", "--allowedTools", "--allowed-tools", "--disallowedTools", "--disallowed-tools", "--tools", "--debug-file", "--setting-sources"},
+	}
+	codexReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--model", "-m", "--last", "--cd", "-C"},
+		Commands:   []string{"resume", "fork", "exec", "e", "review", "exec-server", "app-server"},
+		ValueFlags: []string{"--enable", "--disable", "--remote", "--remote-auth-token-env", "--image", "-i", "--local-provider", "--profile", "-p", "--sandbox", "-s", "--cd", "-C", "--add-dir", "--ask-for-approval", "-a"},
+		PathFlags:  []string{"--image", "-i", "--add-dir"},
+		ConfigKeys: []string{"model", "model_reasoning_effort", "developer_instructions"},
+	}
+	openCodeReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--continue", "-c", "--session", "-s", "--fork", "--model", "-m", "--agent", "--prompt", "--variant"},
+		Commands:   []string{"run", "serve", "web", "acp", "attach"},
+		ValueFlags: []string{"--log-level", "--port", "--hostname", "--mdns-domain", "--cors", "--replay-limit"},
+	}
+	agyReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--continue", "-c", "--conversation", "--print", "-p", "--prompt", "--prompt-interactive", "-i", "--model", "--effort", "--agent", "--project", "--gemini_dir"},
+		ValueFlags: []string{"--add-dir", "--log-file", "--gemini_dir", "--mode"},
+	}
+)
+
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP
 // servers and hooks in its own shape.
 const (
@@ -216,4 +262,32 @@ var (
 
 	// fallbackEditors are tried last, as terminal editors that accept +line.
 	fallbackEditors = []string{"nvim", "vim", "vi"}
+)
+
+const (
+	ReviewModeStandard            = "standard"
+	ReviewModeAdversarial         = "adversarial"
+	ReviewerSubcommand            = "reviewer"
+	ReviewRequestFlag             = "request"
+	reviewerModelFlag             = "--model"
+	reviewerEffortFlag            = "--effort"
+	reviewerAgentFlag             = "--agent"
+	claudeAppendSystemFlag        = "--append-system-prompt"
+	codexDeveloperInstructionsKey = "developer_instructions="
+	codexReasoningKey             = "model_reasoning_effort="
+	openCodeAgentsKey             = "agent"
+	openCodeModeKey               = "mode"
+	openCodePrimaryValue          = "primary"
+	openCodeAgentPromptKey        = "prompt"
+	reviewerAgentName             = "qrouton-reviewer"
+	reviewFieldLimit              = 16 << 10
+	reviewPrivateMode             = 0o700
+	reviewRequestMode             = 0o400
+	reviewReportMode              = 0o644
+	reviewWindowPrefix            = "review-"
+	reviewTitlePrefix             = "Independent review "
+	reviewPlaceholderFormat       = "---\nkind: review\ntitle: %s\nplan: %s\nreview_mode: adversarial\n---\n\n# %s\n\nNo completed review has been recorded. This request may be pending, interrupted, or failed.\n\n[Plan](<%s>)\n\nReview mode: adversarial (independent reviewer).\n\nRequested harness: %s; model: %s; reasoning: %s. Actual runtime harness/model/reasoning: unknown until verified.\n\n%s"
+	reviewRepoFormat              = "- %s (%s): base `%s`, head `%s`\n"
+	reviewTaskFormat              = "Act only as the independent adversarial implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata, review_mode: adversarial and visible Plan link. Distinguish requested settings from actual runtime identity; record actual harness/model/reasoning only when known from reliable context and mark unknown values explicitly. Use absolute paths within the session root below for project context. Read its session manifest for reference repositories and read applicable repository instructions. Reference repositories provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nSession root: %s\nPlan: %s\nSpec: %s\nReport: %s\nReview mode: adversarial (independent reviewer)\nRequested harness: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
+	reviewDefaultReasoning        = "provider default"
 )

@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
@@ -24,6 +26,23 @@ type Runner struct {
 	Command  []string
 	Path     string
 	Override bool
+	Reviewer ReviewerCapabilities
+}
+
+type ReviewerCapabilities struct {
+	ReasoningValues   []string
+	ReasoningHelp     string
+	ModelHelp         string
+	ReasoningEditable bool
+}
+
+type reviewerOverridePolicy struct {
+	Flags         []string
+	Commands      []string
+	ValueFlags    []string
+	ConfigKeys    []string
+	PathFlags     []string
+	PathListFlags []string
 }
 
 type runnerSpec struct {
@@ -42,15 +61,25 @@ type runnerSpec struct {
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
 	// Hooks are the agent-event hooks Inject wires, which is everything the
 	// workbench can learn about the runner's agents.
-	Hooks []string
+	Hooks             []string
+	Reviewer          ReviewerCapabilities
+	ReviewOverrides   reviewerOverridePolicy
+	ValidateModel     func(string) bool
+	ReviewArgs        func([]string, config.Reviewer, string) []string
+	ReviewOpeningRole bool
+	ReviewCwd         func(string, string) string
 }
 
 type injectContext struct {
-	qroutonBin string
-	dir        string
-	handle     workbench.Handle
-	mcpArgs    []string
-	generation uint64
+	qroutonBin  string
+	dir         string
+	handle      workbench.Handle
+	mcpArgs     []string
+	generation  uint64
+	reviewer    bool
+	reviewHome  string
+	reviewRunID string
+	reviewRole  string
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -66,46 +95,71 @@ var claudeHooks = []string{
 var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
-		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptAsArgument,
-		MCP:     claudeMCP,
-		Inject:  injectClaude,
-		Hooks:   claudeHooks,
+		Reviewer:        ReviewerCapabilities{ReasoningValues: claudeReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides: claudeReviewerOverrides,
+		Command:         []string{runnerIDClaude, claudeSkipPermissionsFlag},
+		Resume:          resumeWith(claudeContinueFlag),
+		Prompt:          promptAsArgument,
+		MCP:             claudeMCP,
+		Inject:          injectClaude,
+		Hooks:           claudeHooks,
+		ReviewArgs:      reviewClaudeArgs,
+		ReviewCwd:       sessionpaths.ReviewRun,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
-		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
-		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
-		Prompt:  promptAsArgument,
-		MCP:     codexMCP,
-		Inject:  injectCodex,
-		Hooks:   []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		Reviewer:        ReviewerCapabilities{ReasoningEditable: true, ReasoningHelp: codexReviewerReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides: codexReviewerOverrides,
+		Command:         []string{runnerIDCodex, codexBypassSandboxFlag},
+		Resume:          resumeWith(codexResumeCmd, codexResumeLast),
+		Prompt:          promptAsArgument,
+		MCP:             codexMCP,
+		Inject:          injectCodex,
+		ReviewArgs:      reviewCodexArgs,
+		ReviewCwd:       sessionpaths.ReviewRun,
+		Hooks:           []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,
-		Command: []string{runnerIDOpenCode, openCodeAutoFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptBehindFlag(openCodePromptFlag),
-		MCP:     openCodeMCP,
-		Inject:  injectOpenCode,
+		Reviewer:        ReviewerCapabilities{ReasoningHelp: openCodeReviewerReasoningHelp, ModelHelp: openCodeReviewerModelHelp},
+		ReviewOverrides: openCodeReviewerOverrides,
+		ValidateModel: func(model string) bool {
+			provider, name, ok := strings.Cut(model, "/")
+			return ok && strings.TrimSpace(provider) != "" && strings.TrimSpace(name) != ""
+		},
+		Command:    []string{runnerIDOpenCode, openCodeAutoFlag},
+		Resume:     resumeWith(claudeContinueFlag),
+		Prompt:     promptBehindFlag(openCodePromptFlag),
+		MCP:        openCodeMCP,
+		Inject:     injectOpenCode,
+		ReviewArgs: reviewOpenCodeArgs,
+		ReviewCwd:  reviewSessionRoot,
 	},
 	{
 		ID: runnerIDAgy, Label: runnerLabelAgy,
-		Command: []string{runnerIDAgy, agySkipPermissionsFlag},
-		Resume:  resumeWith(agyContinueFlag),
-		Prompt:  promptBehindFlag(agyPromptInteractiveFlag),
-		MCP:     agyMCP,
-		Inject:  injectAgy,
+		Reviewer:          ReviewerCapabilities{ReasoningValues: agyReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides:   agyReviewerOverrides,
+		Command:           []string{runnerIDAgy, agySkipPermissionsFlag},
+		Resume:            resumeWith(agyContinueFlag),
+		Prompt:            promptBehindFlag(agyPromptInteractiveFlag),
+		MCP:               agyMCP,
+		Inject:            injectAgy,
+		ReviewArgs:        reviewAgyArgs,
+		ReviewOpeningRole: true,
+		ReviewCwd:         reviewSessionRoot,
 	},
 }
+
+func reviewSessionRoot(root, _ string) string { return root }
 
 var builtinRunners = builtins()
 
 func builtins() []Runner {
 	out := make([]Runner, len(runnerSpecs))
 	for i, spec := range runnerSpecs {
-		out[i] = Runner{ID: spec.ID, Label: spec.Label, Command: slices.Clone(spec.Command)}
+		capabilities := spec.Reviewer
+		capabilities.ReasoningValues = slices.Clone(capabilities.ReasoningValues)
+		out[i] = Runner{ID: spec.ID, Label: spec.Label, Command: slices.Clone(spec.Command), Reviewer: capabilities}
 	}
 	return out
 }
@@ -156,6 +210,8 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 	copy(out, builtinRunners)
 	byID := make(map[string]int, len(out))
 	for i := range out {
+		out[i].Command = slices.Clone(out[i].Command)
+		out[i].Reviewer.ReasoningValues = slices.Clone(out[i].Reviewer.ReasoningValues)
 		byID[out[i].ID] = i
 	}
 	for id, command := range cfg.Launch {
@@ -175,6 +231,80 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
 	return out, nil
+}
+
+func ValidateReviewer(reviewer *config.Reviewer, overrides map[string][]string) error {
+	if reviewer == nil {
+		return nil
+	}
+	id := strings.TrimSpace(reviewer.Harness)
+	spec, ok := specFor(id)
+	if !ok {
+		return fmt.Errorf(reviewerHarnessErrorFormat, ErrInvalidReviewer, reviewer.Harness, strings.Join(builtinIDs(), ", "))
+	}
+	if strings.TrimSpace(reviewer.Model) == "" || !validReviewerText(reviewer.Model) {
+		return fmt.Errorf(reviewerModelErrorFormat, ErrInvalidReviewer)
+	}
+	if spec.ValidateModel != nil && !spec.ValidateModel(strings.TrimSpace(reviewer.Model)) {
+		return fmt.Errorf(reviewerModelCapabilityErrorFormat, ErrInvalidReviewer, id, spec.Reviewer.ModelHelp)
+	}
+	if !validReviewerText(reviewer.Reasoning) {
+		return fmt.Errorf(reviewerReasoningEncodingErrorFormat, ErrInvalidReviewer)
+	}
+	reasoning := strings.TrimSpace(reviewer.Reasoning)
+	if reasoning != "" && !spec.Reviewer.ReasoningEditable && !slices.Contains(spec.Reviewer.ReasoningValues, reasoning) {
+		return fmt.Errorf(reviewerReasoningErrorFormat, ErrInvalidReviewer, id, spec.Reviewer.ReasoningHelp)
+	}
+	runners, err := Runners(&config.Config{Launch: overrides})
+	if err != nil {
+		return err
+	}
+	selected := slices.IndexFunc(runners, func(runner Runner) bool { return runner.ID == id })
+	if selected < 0 || runners[selected].Path == "" {
+		return fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
+	}
+	runner := runners[selected]
+	if argument := conflictingReviewerArgument(runner.Command, spec.ReviewOverrides); argument != "" {
+		return fmt.Errorf(reviewerOverrideErrorFormat, ErrReviewerOverrideConflict, id, argument)
+	}
+	return nil
+}
+
+func validReviewerText(value string) bool {
+	return utf8.ValidString(value) && !strings.ContainsFunc(value, unicode.IsControl)
+}
+
+func conflictingReviewerArgument(argv []string, policy reviewerOverridePolicy) string {
+	for i := 1; i < len(argv); i++ {
+		argument := argv[i]
+		flag, value, inline := strings.Cut(argument, "=")
+		if slices.Contains(policy.Flags, flag) || slices.Contains(policy.Commands, argument) {
+			return argument
+		}
+		for _, short := range policy.Flags {
+			if len(short) == 2 && !strings.HasPrefix(short, flagPrefix) && strings.HasPrefix(argument, short) {
+				return argument
+			}
+		}
+		if len(policy.ConfigKeys) > 0 && (flag == codex.ConfigFlag || flag == codexLongConfigFlag || strings.HasPrefix(argument, codex.ConfigFlag) && !strings.HasPrefix(argument, flagPrefix)) {
+			if flag != codex.ConfigFlag && flag != codexLongConfigFlag {
+				value = strings.TrimPrefix(argument, codex.ConfigFlag)
+			} else if !inline && i+1 < len(argv) {
+				i++
+				value = argv[i]
+			}
+			key, _, _ := strings.Cut(value, "=")
+			key = strings.Trim(strings.TrimSpace(key), `"'`)
+			if slices.Contains(policy.ConfigKeys, key) {
+				return argument
+			}
+			continue
+		}
+		if !inline && slices.Contains(policy.ValueFlags, flag) && i+1 < len(argv) {
+			i++
+		}
+	}
+	return ""
 }
 
 func builtinIDs() []string {
@@ -241,10 +371,13 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if name := sessionName(c.dir); name != "" {
+	if name := sessionName(c.dir); name != "" && !c.reviewer {
 		argv = append(argv, claudeNameFlag, name)
 	}
 	argv = append(argv, mcp.Args...)
+	if c.reviewer {
+		return argv, workbench.WithEnv(reviewerEnv(), claudeMaintainProjectWorkingDirEnvVar, claudeMaintainProjectWorkingDirValue), nil
+	}
 	hookCommand := ShellQuote(c.qroutonBin) + " " + AgentEventSubcommand +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
@@ -268,6 +401,9 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 		return nil, nil, err
 	}
 	argv = append(argv, mcp.Args...)
+	if c.reviewer {
+		return argv, reviewerEnv(), nil
+	}
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
@@ -312,7 +448,27 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, config), nil
+	env := os.Environ()
+	if c.reviewer {
+		var content map[string]any
+		if err := json.Unmarshal([]byte(config), &content); err != nil {
+			return nil, nil, err
+		}
+		agents, _ := content[openCodeAgentsKey].(map[string]any)
+		if agents == nil {
+			agents = map[string]any{}
+		}
+		agents[reviewerAgentName] = map[string]any{openCodeModeKey: openCodePrimaryValue, openCodeAgentPromptKey: c.reviewRole}
+		content[openCodeAgentsKey] = agents
+		raw, err := json.Marshal(content)
+		if err != nil {
+			return nil, nil, err
+		}
+		config = string(raw)
+		env = reviewerEnv()
+		env = workbench.WithEnv(env, openCodeDatabaseEnvVar, sessionpaths.ReviewOpenCodeDatabase(c.dir, c.reviewRunID))
+	}
+	return argv, workbench.WithEnv(env, openCodeConfigEnvVar, config), nil
 }
 
 // injectAgy moves agy's whole configuration root into the session, because a
@@ -321,11 +477,14 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 // their model, their history and their trusted workspaces still apply.
 func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 	home := sessionpaths.AgyHome(c.dir)
+	if c.reviewer {
+		home = c.reviewHome
+	}
 	config := filepath.Join(home, agyMCPConfigPath())
 	if err := os.MkdirAll(filepath.Dir(config), dirMode); err != nil {
 		return nil, nil, err
 	}
-	if err := linkGeminiRoot(home); err != nil {
+	if err := linkGeminiRoot(home, c.reviewer); err != nil {
 		return nil, nil, err
 	}
 	content, err := agyMCPConfig(config, c.qroutonBin, c.mcpArgs)
@@ -335,12 +494,16 @@ func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 	if err := os.WriteFile(config, []byte(content), configMode); err != nil {
 		return nil, nil, err
 	}
-	return append(argv, agyGeminiDirFlag, home), os.Environ(), nil
+	env := os.Environ()
+	if c.reviewer {
+		env = reviewerEnv()
+	}
+	return append(argv, agyGeminiDirFlag, home), env, nil
 }
 
 // linkGeminiRoot links the user's .gemini tree into the session's, entry by
 // entry, so the one file qrouton generates is the only thing that differs.
-func linkGeminiRoot(home string) error {
+func linkGeminiRoot(home string, reviewer bool) error {
 	userHome, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -348,8 +511,29 @@ func linkGeminiRoot(home string) error {
 	root := filepath.Join(userHome, geminiDirName)
 	// The config directory is shadowed rather than linked: qrouton owns a file
 	// inside it, and a link would put that file in the user's tree.
-	if err := linkEntries(root, home, agyConfigDirName); err != nil {
+	generated := []string{agyConfigDirName}
+	if reviewer {
+		generated = append(generated, agyCLIStateDirName)
+	}
+	if err := linkEntries(root, home, generated...); err != nil {
 		return err
+	}
+	if reviewer {
+		source, destination := filepath.Join(root, agyCLIStateDirName), filepath.Join(home, agyCLIStateDirName)
+		if err := os.MkdirAll(destination, reviewPrivateMode); err != nil {
+			return err
+		}
+		for _, name := range agySharedReviewerFiles {
+			target := filepath.Join(source, name)
+			if _, err := os.Stat(target); errors.Is(err, fs.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return err
+			}
+			if err := os.Symlink(target, filepath.Join(destination, name)); err != nil && !errors.Is(err, fs.ErrExist) {
+				return err
+			}
+		}
 	}
 	return linkEntries(filepath.Join(root, agyConfigDirName),
 		filepath.Join(home, agyConfigDirName), agyMCPConfigName)
@@ -553,4 +737,40 @@ func openingMessage(mode, provider, initialPrompt string) string {
 		return message + requestSeparator + prompt
 	}
 	return message + fmt.Sprintf(providerRequestSeparator, provider) + prompt
+}
+
+func reviewClaudeArgs(argv []string, settings config.Reviewer, role string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model, claudeAppendSystemFlag, role)
+	if settings.Reasoning != "" {
+		argv = append(argv, reviewerEffortFlag, settings.Reasoning)
+	}
+	return argv
+}
+
+func reviewCodexArgs(argv []string, settings config.Reviewer, role string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model, codex.ConfigFlag, codexDeveloperInstructionsKey+quotedConfigString(role))
+	if settings.Reasoning != "" {
+		argv = append(argv, codex.ConfigFlag, codexReasoningKey+quotedConfigString(settings.Reasoning))
+	}
+	return argv
+}
+
+func reviewOpenCodeArgs(argv []string, settings config.Reviewer, _ string) []string {
+	return append(argv, reviewerModelFlag, settings.Model, reviewerAgentFlag, reviewerAgentName)
+}
+
+func reviewAgyArgs(argv []string, settings config.Reviewer, _ string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model)
+	if settings.Reasoning != "" {
+		argv = append(argv, reviewerEffortFlag, settings.Reasoning)
+	}
+	return argv
+}
+
+func reviewerEnv() []string {
+	env := os.Environ()
+	for _, key := range []string{agentevent.QroutonBinEnvVar, agentevent.WorkbenchEnvVar, agentevent.GenerationEnvVar, agentevent.ProviderEnvVar} {
+		env = workbench.WithoutEnv(env, key)
+	}
+	return env
 }

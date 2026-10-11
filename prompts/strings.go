@@ -24,6 +24,9 @@ const (
 	evidenceDisciplineFileName    = "evidence-discipline.md"
 	evidenceDisciplinePlaceholder = "{{evidence-discipline}}"
 
+	reviewRubricFileName    = "review-rubric.md"
+	reviewRubricPlaceholder = "{{review-rubric}}"
+
 	returnContractFileName    = "return-contract.md"
 	returnContractPlaceholder = "{{return-contract}}"
 
@@ -56,6 +59,7 @@ var partials = map[string]string{
 	evidenceDisciplinePlaceholder: evidenceDisciplineFileName,
 	returnContractPlaceholder:     returnContractFileName,
 	sessionSummaryPlaceholder:     sessionSummaryFileName,
+	reviewRubricPlaceholder:       reviewRubricFileName,
 }
 
 // The leads, by the agent type the runner reports them as.
@@ -75,9 +79,10 @@ var (
 	}
 
 	workspaceWriteAgents = map[string]bool{
-		ResearchLead:       true,
-		PlanningLead:       true,
-		ImplementationLead: true,
-		"test-verifier":    true,
+		ResearchLead:              true,
+		PlanningLead:              true,
+		ImplementationLead:        true,
+		"test-verifier":           true,
+		"implementation-reviewer": true,
 	}
 )

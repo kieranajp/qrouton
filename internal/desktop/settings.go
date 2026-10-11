@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -17,6 +18,8 @@ import (
 
 // SettingsView carries the editable config and Linear document on the wire.
 type SettingsView struct {
+	Reviewer      *config.Reviewer     `json:"reviewer"`
+	ReviewerError string               `json:"reviewerError,omitempty"`
 	Orgs          []string             `json:"orgs"`
 	Root          string               `json:"root"`
 	Editor        string               `json:"editor"`
@@ -50,6 +53,7 @@ type ThoughtsRow struct {
 }
 
 type SettingsInput struct {
+	Reviewer      *config.Reviewer     `json:"reviewer"`
 	Orgs          []string             `json:"orgs"`
 	Root          string               `json:"root"`
 	Editor        string               `json:"editor"`
@@ -68,14 +72,16 @@ type SaveResult struct {
 }
 
 type Settings struct {
-	cfg            *config.Config
-	emit           emitter
-	validateEditor func([]string) error
-	validateLaunch func(map[string][]string) error
-	quit           func()
-	wakeChrome     func()
-	reconfigure    func(*config.Config) error
-	linear         lineartools.Tools
+	cfg              *config.Config
+	emit             emitter
+	validateEditor   func([]string) error
+	validateLaunch   func(map[string][]string) error
+	validateReviewer func(*config.Reviewer, map[string][]string) error
+	runners          func(map[string][]string) ([]assembly.Runner, error)
+	quit             func()
+	wakeChrome       func()
+	reconfigure      func(*config.Config) error
+	linear           lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
@@ -102,7 +108,12 @@ func (s *Settings) Load() SettingsView {
 		}
 	}
 	linear, linearErr := s.linear.Load()
+	var reviewerErr error
+	if cfg.Reviewer != nil && s.validateReviewer != nil {
+		reviewerErr = s.validateReviewer(cfg.Reviewer, cfg.Launch)
+	}
 	return SettingsView{
+		Reviewer: cfg.Reviewer, ReviewerError: errorText(reviewerErr),
 		Orgs:          cfg.Orgs,
 		Root:          cfg.Root,
 		Editor:        editorCommand(cfg.Editor),
@@ -116,6 +127,31 @@ func (s *Settings) Load() SettingsView {
 		UIScaleSteps:  config.UIScaleSteps(),
 		Thoughts:      thoughtsView(cfg),
 	}
+}
+
+func (s *Settings) Runners(launch string) ([]assembly.Runner, error) {
+	var overrides map[string][]string
+	if strings.TrimSpace(launch) != "" {
+		if err := json.Unmarshal([]byte(launch), &overrides); err != nil {
+			return nil, fmt.Errorf(settingsWrappedFormat, settingsFieldLaunch, err)
+		}
+	}
+	if s.runners == nil {
+		return nil, ErrNoAgentCommand
+	}
+	all, err := s.runners(overrides)
+	if err != nil {
+		return nil, err
+	}
+	return assembly.Installed(all), nil
+}
+
+func reviewerFromInput(in *config.Reviewer) *config.Reviewer {
+	if in == nil {
+		return nil
+	}
+	return &config.Reviewer{Harness: strings.TrimSpace(in.Harness),
+		Model: strings.TrimSpace(in.Model), Reasoning: strings.TrimSpace(in.Reasoning)}
 }
 
 func thoughtsView(cfg *config.Config) ThoughtsView {
@@ -201,12 +237,21 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 	}
 	result := SaveResult{}
-	err = saveConfig(s.cfg, func(next *config.Config) {
+	reviewer := reviewerFromInput(in.Reviewer)
+	err = saveConfig(s.cfg, func(next *config.Config) error {
+		if reviewer != nil && (next.Reviewer == nil || *next.Reviewer != *reviewer ||
+			!slices.Equal(next.Launch[reviewer.Harness], launch[reviewer.Harness])) && s.validateReviewer != nil {
+			if err := s.validateReviewer(reviewer, launch); err != nil {
+				return fmt.Errorf(settingsWrappedFormat, settingsFieldReviewer, err)
+			}
+		}
+		next.Reviewer = reviewer
 		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
 		next.StickerLabels = &stickerLabels
 		next.Quiet = !in.Chime
 		next.UIScale = storedUIScale(uiScale)
 		next.Thoughts = thoughts
+		return nil
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
@@ -316,11 +361,13 @@ func (s *Settings) Quit() { s.quit() }
 // saveConfig persists Root but keeps the live boot value used by the rail
 // scanner. A changed Root holds back the thoughts too, since the live default
 // still derives from the old one.
-func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
+func saveConfig(cfg *config.Config, mutate func(*config.Config) error, persist func() error,
 	reconfigure func(*config.Config) error, publish func(current, live *config.Config)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
 		next := snapshot.Snapshot()
-		mutate(next)
+		if err := mutate(next); err != nil {
+			return err
+		}
 		live := next.Snapshot()
 		live.Root = snapshot.Root
 		if filepath.Clean(config.ExpandHome(next.Root)) != filepath.Clean(snapshot.Root) {

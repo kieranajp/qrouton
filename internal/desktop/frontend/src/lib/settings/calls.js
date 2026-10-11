@@ -1,4 +1,4 @@
-import { SETTINGS_ADJUST_UI_SCALE, SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE } from "../bridge/generated.js";
+import { ASSEMBLY_RUNNERS, SETTINGS_RUNNERS, SETTINGS_ADJUST_UI_SCALE, SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE } from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
 /**
@@ -11,6 +11,8 @@ import { Call } from "../wails.js";
 
 /**
  * @typedef {object} SettingsFields
+ * @property {{harness: string, model: string, reasoning: string} | null} reviewer
+ * @property {string} [reviewerError]
  * @property {string[]} orgs
  * @property {string} root
  * @property {string} editor
@@ -41,3 +43,13 @@ export const quit = () => Call.ByName(SETTINGS_QUIT);
  * @returns {Promise<number>}
  */
 export const adjustUIScale = (action) => Call.ByName(SETTINGS_ADJUST_UI_SCALE, action);
+
+
+/** @typedef {{id: string, label: string, reviewer: {reasoningValues?: string[], reasoningEditable?: boolean, reasoningHelp?: string, modelHelp?: string}}} ReviewerRunner */
+
+/** @returns {Promise<ReviewerRunner[]>} */
+export const runners = () => Call.ByName(ASSEMBLY_RUNNERS);
+
+/** @param {string} launch
+ * @returns {Promise<ReviewerRunner[]>} */
+export const candidateRunners = (launch) => Call.ByName(SETTINGS_RUNNERS, launch);

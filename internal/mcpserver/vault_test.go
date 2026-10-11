@@ -2,6 +2,8 @@ package mcpserver
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -132,5 +134,37 @@ func TestOpenVaultShowsTheWholeDocumentAtItsLines(t *testing.T) {
 	text, _ = callText(t, cs, toolReadThoughts, readVaultInput{Ref: "s/R1-x", Line: 12})
 	if !strings.HasPrefix(text, "X (s/R1-x, ref personal:s/research/R1-x.md), lines 1-30 of 30:") {
 		t.Fatalf("read text = %q", text)
+	}
+}
+
+func TestReviewThoughtsSearchReadAndOpenKeepsPlanLink(t *testing.T) {
+	root := t.TempDir()
+	text := "---\nkind: review\ntitle: Review\nplan: ../plans/P1.md\n---\n\n# Review\n\nNo completed review has been recorded.\n[Plan](../plans/P1.md)\n"
+	source := "thoughts/shared/reviews/review-x.md"
+	path := filepath.Join(root, source)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	ref := "test:" + filepath.Base(root) + "/shared/reviews/review-x.md"
+	ex := vault.Excerpt{Document: vault.Document{ID: "review-x", Kind: vault.KindReview, Title: "Review"}, Ref: ref, Content: text}
+	if got := currentThoughtsSource(root, ex); got != source {
+		t.Fatalf("source = %q", got)
+	}
+	host := &vaultHost{excerpt: ex, result: vault.Result{Status: vault.Status{Lexical: vault.StatusReady, Semantic: vault.StatusUnavailable}, Hits: []vault.Hit{{Kind: vault.KindReview, Ref: ref, Title: "Review"}}}}
+	cs := connectVault(t, host)
+	callText(t, cs, toolSearchThoughts, searchVaultInput{Query: "review", Kinds: []string{vault.KindReview}})
+	if host.queries[0].Kinds[0] != vault.KindReview {
+		t.Fatal("kind lost")
+	}
+	body, _ := callText(t, cs, toolReadThoughts, readVaultInput{Ref: ref})
+	if !strings.Contains(body, text) {
+		t.Fatal("report body lost")
+	}
+	callText(t, cs, toolOpenThoughts, openVaultInput{Ref: ref})
+	if host.opens[0].Content != text {
+		t.Fatal("open content lost")
 	}
 }

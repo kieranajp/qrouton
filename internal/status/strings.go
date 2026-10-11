@@ -14,6 +14,7 @@ const (
 	KindResearch  = "RESEARCH"
 	KindNote      = "NOTE"
 	KindExplainer = "EXPLAINER"
+	KindReview    = "REVIEW"
 
 	repoSeparator  = "/"
 	fieldSeparator = " "

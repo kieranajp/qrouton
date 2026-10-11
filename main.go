@@ -11,6 +11,7 @@ import (
 	agenteventcmd "github.com/kieranajp/qrouton/cmd/agentevent"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
+	reviewercmd "github.com/kieranajp/qrouton/cmd/reviewer"
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -40,7 +41,7 @@ func main() {
 			&cli.StringFlag{Name: ticketFlag, Usage: ticketFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command, reviewercmd.Command},
 		Action:   open,
 	}
 	if err := app.Run(os.Args); err != nil {
@@ -277,13 +278,19 @@ func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOpti
 }
 
 func (p workbenchPorts) Runners() ([]assembly.Runner, error) {
-	runners, err := launch.Runners(p.cfg.Snapshot())
+	return reviewerRunners(p.cfg.Snapshot().Launch)
+}
+
+func reviewerRunners(overrides map[string][]string) ([]assembly.Runner, error) {
+	runners, err := launch.Runners(&config.Config{Launch: overrides})
 	if err != nil {
 		return nil, err
 	}
 	out := make([]assembly.Runner, len(runners))
 	for i, r := range runners {
-		out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != ""}
+		out[i] = assembly.Runner{ID: r.ID, Label: r.Label, Installed: r.Path != "",
+			Reviewer: assembly.ReviewerCapabilities{ReasoningValues: r.Reviewer.ReasoningValues,
+				ReasoningEditable: r.Reviewer.ReasoningEditable, ReasoningHelp: r.Reviewer.ReasoningHelp, ModelHelp: r.Reviewer.ModelHelp}}
 	}
 	return out, nil
 }
@@ -301,6 +308,14 @@ func (p workbenchPorts) ValidateEditor(argv []string) error {
 func (p workbenchPorts) ValidateLaunch(overrides map[string][]string) error {
 	_, err := launch.Runners(&config.Config{Launch: overrides})
 	return err
+}
+
+func (p workbenchPorts) ValidateReviewer(reviewer *config.Reviewer, overrides map[string][]string) error {
+	return launch.ValidateReviewer(reviewer, overrides)
+}
+
+func (p workbenchPorts) ReviewerRunners(overrides map[string][]string) ([]assembly.Runner, error) {
+	return reviewerRunners(overrides)
 }
 
 // Relaunch replaces this workbench with one that loads the config again, on no

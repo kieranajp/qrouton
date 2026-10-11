@@ -161,6 +161,9 @@ func TestDocumentsAreClassifiedByArtifactTaxonomyThenFilenamePrefix(t *testing.T
 	shared := filepath.Join(dir, "thoughts", "shared")
 	kinds := []struct{ path, want string }{
 		{"readme.md", "NOTE"},
+		{"reviews/review-run.md", KindReview},
+		{"V1-review.md", KindReview},
+		{"reviews/R9-review.md", KindReview},
 		{"research/questions-about-p1.md", "RESEARCH"},
 		{"research/parity-checklist.md", "RESEARCH"},
 		{"research/R7-editor.md", "RESEARCH"},
@@ -596,14 +599,16 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 func TestArtifactIDIsTheNumberedPrefixTheFilenameStates(t *testing.T) {
 	for path, want := range map[string]string{
 		"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md": "P002",
-		"p12_notes.md":     "P12",
-		"R001.md":          "R001",
-		"S3-shape.md":      "S3",
-		"E9-explainer.md":  "E9",
-		"plans/notes.md":   "",
-		"P-unnumbered.md":  "",
-		"P002nodelim.md":   "",
-		"draft-P002-do.md": "",
+		"p12_notes.md":          "P12",
+		"R001.md":               "R001",
+		"S3-shape.md":           "S3",
+		"E9-explainer.md":       "E9",
+		"V3-review.md":          "V3",
+		"reviews/review-run.md": "",
+		"plans/notes.md":        "",
+		"P-unnumbered.md":       "",
+		"P002nodelim.md":        "",
+		"draft-P002-do.md":      "",
 	} {
 		if got := ArtifactID(path); got != want {
 			t.Errorf("ArtifactID(%q) = %q, want %q", path, got, want)

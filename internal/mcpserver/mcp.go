@@ -108,11 +108,16 @@ func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In
 	}
 }
 
-func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost, mode session.SessionMode) *mcp.Server {
+func newMCPServer(root string, editor launch.EditorCommand, host workbench.WindowHost, mode session.SessionMode, handles ...workbench.Handle) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: "qrouton", Version: "1"}, &mcp.ServerOptions{
 		Instructions: serverInstructions,
 	})
 	windows := newWindowManager(root, editor, host)
+	var handle workbench.Handle
+	if len(handles) > 0 {
+		handle = handles[0]
+	}
+	addReviewTools(server, windows, handle)
 	mcp.AddTool(server, &mcp.Tool{Name: toolReportBug, Description: descReportBug},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input reportBugInput) (*mcp.CallToolResult, reportBugOutput, error) {
 			out, err := windows.reportBug(ctx, input)
@@ -181,7 +186,7 @@ func Run(root, editorJSON, workbenchJSON string) error {
 	if err != nil {
 		return fmt.Errorf("mcp: %w", err)
 	}
-	return newMCPServer(root, editor, handle.WindowHost(), sessionMode(root)).
+	return newMCPServer(root, editor, handle.WindowHost(), sessionMode(root), handle).
 		Run(context.Background(), &mcp.StdioTransport{})
 }
 

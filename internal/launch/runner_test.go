@@ -924,3 +924,175 @@ func TestEachRunnerWiresExactlyTheHooksItDeclares(t *testing.T) {
 		})
 	}
 }
+
+func installedReviewRunners(t *testing.T) {
+	t.Helper()
+	old := findExecutable
+	t.Cleanup(func() { findExecutable = old })
+	findExecutable = func(name string) (string, error) { return "/bin/" + filepath.Base(name), nil }
+}
+
+func TestReviewerValidatesProviderOptionsWithoutInventingDefaults(t *testing.T) {
+	installedReviewRunners(t)
+	for _, tc := range []struct {
+		id, model, effort string
+		valid             bool
+	}{
+		{"codex", "future-model", "future-effort", true},
+		{"codex", "future-model", "", true},
+		{"claude", "custom", "xhigh", true},
+		{"claude", "custom", "max", true},
+		{"claude", "custom", "ultracode", false},
+		{"agy", "custom", "high", true},
+		{"agy", "custom", "xhigh", false},
+		{"opencode", "provider/model", "", true},
+		{"opencode", "provider/model", "medium", false},
+		{"opencode", "model", "", false},
+		{"opencode", "/model", "", false},
+		{"opencode", "provider/", "", false},
+		{"claude", "custom", "", true},
+		{"codex", "  future-model  ", " medium ", true},
+		{"codex", " ", "medium", false},
+		{"codex", "model\n", "medium", false},
+		{"codex", string([]byte{0xff}), "medium", false},
+		{"codex", "model", "med\x00ium", false},
+		{"codex", "model", string([]byte{0xff}), false},
+		{"unknown", "model", "", false},
+	} {
+		reviewer := &config.Reviewer{Harness: tc.id, Model: tc.model, Reasoning: tc.effort}
+		before := *reviewer
+		err := ValidateReviewer(reviewer, nil)
+		if tc.valid && err != nil || !tc.valid && !errors.Is(err, ErrInvalidReviewer) {
+			t.Errorf("%+v: validation = %v, valid %t", reviewer, err, tc.valid)
+		}
+		if *reviewer != before {
+			t.Fatalf("validation rewrote the preference: before %+v, after %+v", before, reviewer)
+		}
+	}
+	findExecutable = func(name string) (string, error) { t.Fatalf("disabled reviewer looked up %s", name); return "", nil }
+	if err := ValidateReviewer(nil, map[string][]string{"broken": {}}); err != nil {
+		t.Fatalf("None requires no provider: %v", err)
+	}
+}
+
+func TestReviewerUsesCandidateOverrideInstallationAndPreservesCommands(t *testing.T) {
+	installedReviewRunners(t)
+	findExecutable = func(name string) (string, error) {
+		if name == "review-codex" {
+			return "/bin/review-codex", nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+	reviewer := &config.Reviewer{Harness: "codex", Model: "model", Reasoning: "medium"}
+	if err := ValidateReviewer(reviewer, nil); !errors.Is(err, ErrRunnerUnavailable) {
+		t.Fatalf("unavailable selection = %v", err)
+	}
+	overrides := map[string][]string{"codex": {"review-codex", "--search", "-c", "agents.max_depth=5"}}
+	before := slices.Clone(overrides["codex"])
+	if err := ValidateReviewer(reviewer, overrides); err != nil {
+		t.Fatalf("candidate override was not discovered: %v", err)
+	}
+	if !slices.Equal(overrides["codex"], before) {
+		t.Fatalf("validation rewrote command: %v", overrides)
+	}
+}
+
+func TestReviewerRejectsRecognizedOverrideConflicts(t *testing.T) {
+	installedReviewRunners(t)
+	for _, tc := range []struct {
+		id   string
+		args []string
+	}{
+		{"codex", []string{"resume", "--last"}},
+		{"codex", []string{"--search", "exec"}},
+		{"codex", []string{"--cd", "/other"}},
+		{"codex", []string{"-C/other"}},
+		{"codex", []string{"--model=other"}},
+		{"codex", []string{"-mother"}},
+		{"codex", []string{"-c", `model_reasoning_effort="high"`}},
+		{"codex", []string{`-cmodel="other"`}},
+		{"codex", []string{`--config=developer_instructions="other"`}},
+		{"claude", []string{"--resume=session"}},
+		{"claude", []string{"-p"}},
+		{"claude", []string{"--worktree"}},
+		{"claude", []string{"--add-dir", "/conversation"}},
+		{"claude", []string{"--effort", "max"}},
+		{"claude", []string{"--append-system-prompt", "other"}},
+		{"claude", []string{"--model", "other"}},
+		{"opencode", []string{"run"}},
+		{"opencode", []string{"--session", "old"}},
+		{"opencode", []string{"--agent=other"}},
+		{"agy", []string{"--conversation", "old"}},
+		{"agy", []string{"--project=/other"}},
+		{"agy", []string{"--gemini_dir", "/conversation"}},
+		{"agy", []string{"--prompt=task"}},
+		{"agy", []string{"--effort=medium"}},
+		{"agy", []string{"--model", "other"}},
+	} {
+		command := append([]string{tc.id}, tc.args...)
+		overrides := map[string][]string{tc.id: command}
+		model := "model"
+		if tc.id == "opencode" {
+			model = "provider/model"
+		}
+		err := ValidateReviewer(&config.Reviewer{Harness: tc.id, Model: model}, overrides)
+		if !errors.Is(err, ErrReviewerOverrideConflict) || !strings.Contains(err.Error(), "Settings") {
+			t.Errorf("%s %v: conflict = %v", tc.id, tc.args, err)
+		}
+		if !slices.Equal(command, append([]string{tc.id}, tc.args...)) {
+			t.Fatalf("override changed: %v", command)
+		}
+	}
+}
+
+func TestReviewerCapabilitiesShareDiscoveryWithoutMutableSlices(t *testing.T) {
+	installedReviewRunners(t)
+	runners, err := Runners(&config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runner := range runners {
+		spec, _ := specFor(runner.ID)
+		if !reflect.DeepEqual(runner.Reviewer, spec.Reviewer) {
+			t.Fatalf("%s capabilities drifted", runner.ID)
+		}
+		if runner.Reviewer.ModelHelp == "" || runner.Reviewer.ReasoningHelp == "" {
+			t.Fatalf("%s has no option guidance", runner.ID)
+		}
+		if len(runner.Reviewer.ReasoningValues) > 0 {
+			runner.Reviewer.ReasoningValues[0] = "changed"
+		}
+	}
+	again, err := Runners(&config.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runner := range again {
+		if slices.Contains(runner.Reviewer.ReasoningValues, "changed") {
+			t.Fatalf("%s discovery shares capability slices", runner.ID)
+		}
+	}
+}
+
+func TestReviewerSelectionDoesNotResolveAnotherHarnessExecutableAlias(t *testing.T) {
+	installedReviewRunners(t)
+	findExecutable = func(name string) (string, error) {
+		if name == "/wrappers/codex" || name == "review-codex" {
+			return name, nil
+		}
+		return "", fmt.Errorf("missing")
+	}
+	reviewer := &config.Reviewer{Harness: "codex", Model: "model", Reasoning: "medium"}
+	for _, tc := range []struct {
+		command []string
+		want    error
+	}{
+		{[]string{"missing"}, ErrRunnerUnavailable},
+		{[]string{"review-codex", "--model", "override"}, ErrReviewerOverrideConflict},
+	} {
+		overrides := map[string][]string{"claude": {"/wrappers/codex"}, "codex": tc.command}
+		if err := ValidateReviewer(reviewer, overrides); !errors.Is(err, tc.want) {
+			t.Fatalf("selected command %q: got %v, want %v", tc.command, err, tc.want)
+		}
+	}
+}

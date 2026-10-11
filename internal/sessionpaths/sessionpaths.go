@@ -152,3 +152,13 @@ func Within(base, path string) (string, bool) {
 	}
 	return rel, true
 }
+
+func ReviewRuns(root string) string        { return filepath.Join(Dir(root), "reviews") }
+func ReviewRun(root, id string) string     { return filepath.Join(ReviewRuns(root), id) }
+func ReviewRequest(root, id string) string { return filepath.Join(ReviewRun(root, id), "request.json") }
+func ReviewAgyHome(root, id string) string { return filepath.Join(ReviewRun(root, id), agyHomeDirName) }
+func ReviewOpenCodeDatabase(root, id string) string {
+	return filepath.Join(ReviewRun(root, id), "opencode.db")
+}
+func Reviews(root string) string          { return filepath.Join(Thoughts(root), "reviews") }
+func ReviewReport(root, id string) string { return filepath.Join(Reviews(root), "review-"+id+".md") }

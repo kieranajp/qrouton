@@ -19,7 +19,7 @@ Give the lead:
 - user decisions not already captured in the artifact;
 - the requirement to update durable progress and return a compact result.
 
-The lead owns the implementation context. For a supplied plan, it reads the plan fully and resumes at the first incomplete item. For a bounded concrete request without a tactical plan, the brief must record explicit user consent to that exception; otherwise the lead returns missing consent to the orchestrator without asking the user itself. With that consent, it inspects the files needed to implement and verify the task. It delegates independent exploration, implementation, tests, or review to specialist subagents where useful. It must coordinate shared-file edits to avoid collisions.
+The lead owns the implementation context. For a supplied plan, it reads the plan fully and resumes at the first incomplete item. For a bounded concrete request without a tactical plan, the brief must record explicit user consent to that exception; otherwise the lead returns missing consent to the orchestrator without asking the user itself. With that consent, it inspects the files needed to implement and verify the task. It delegates independent exploration, implementation, or tests to specialist subagents where useful. It must coordinate shared-file edits to avoid collisions.
 
 An ordinary request to implement a multi-phase plan authorizes only its first incomplete phase. Requests to complete the whole plan, all phases, or run it in one shot authorize every phase. A bounded concrete request without a multi-phase plan is one task; if it has no tactical plan, require explicit user consent to that exception. After consent, complete the bounded task without invented phase gates. Preserve authorization for focused fixes and reverification within the current phase.
 
@@ -34,6 +34,14 @@ Require this of the lead's return:
 - how you checked it: the verification commands and their results;
 - what stays unresolved: the remaining risks, failures, or decisions.
 
-Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
+Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification if warranted. The lead runs mandatory automated verification and focused fixes, but no buried final model review.
 
-`qrouton-implement` is the last skill in the workflow. Say whether one phase or the whole plan completed, report the remaining phases, and stop. Do not resume the lead until the user authorizes more work.
+Review is a visible orchestrator-owned step inside Implement in **Research → Plan → Implement**. Say whether one phase or the whole plan completed and report any remaining phases. After a phase-only or partial completion, stop without a whole-plan review offer. Do not resume the lead until the user authorizes more work.
+
+Only after verified whole-plan completion, call `reviewer_settings`. None selects standard non-adversarial review by the orchestrator in its current harness. A configured independent reviewer selects adversarial review in a fresh interactive tab. An enabled unavailable selection produces its explicit availability error without substitution; it stays selected.
+
+Offer optional review and state the selected mode. Whole-plan implementation alone authorizes the offer, not review. Declining ends without creating a request, report, run directory, or terminal. A prior explicit request to implement the whole plan and review it authorizes the selected mode without another permission question. Otherwise proceed only after explicit acceptance. Recheck settings before dispatch. Disabling after an offer prevents launch: explain standard mode and honor general review authority. An independent-only request cannot silently become standard review; explain the limitation and offer standard review or reviewer configuration.
+
+For standard mode, read [the standard review instructions](references/review.md) and perform review yourself in the current harness. Do not call `start_review`, spawn a review subagent, or launch a second model/process. For configured adversarial mode, call `start_review` with the completed plan, relevant spec, editing repositories' explicit base refs when supplied, completed scope, pinned commits, and recorded verification evidence. Configuration never authorizes review.
+
+Both modes write local `kind: review` thoughts linked to the plan with `review_mode: standard` or `review_mode: adversarial`, pinned committed scope, truthful known identity; mark unknown values explicitly. Read and open the finished report with `open_file` before describing a verdict. A request acknowledgement, process exit, or status mark never proves review completion. After an uncertain open, inspect its stable tab/report paths without retrying. Report completed implementation separately from failed or interrupted review. Findings authorize no fixes, pushes, PR creation, publication, or monitoring; those require a separate explicit request.

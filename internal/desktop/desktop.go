@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -129,11 +130,14 @@ func Run(opts Options) error {
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
-	validateEditor, validateLaunch := validators(opts.Validator)
-	r.register(application.NewService(newSettings(
+	validateEditor, validateLaunch, validateReviewer, reviewerRunners := validators(opts.Validator)
+	settingsService := newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,
 		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault),
-	)))
+	)
+	settingsService.validateReviewer = validateReviewer
+	settingsService.runners = reviewerRunners
+	r.register(application.NewService(settingsService))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
 	return run(r, term, windows, opts, quit)
@@ -146,11 +150,12 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 	return func() error { return relaunch(assembly.pendingTicket) }
 }
 
-func validators(v Validator) (func([]string) error, func(map[string][]string) error) {
+func validators(v Validator) (func([]string) error, func(map[string][]string) error,
+	func(*config.Reviewer, map[string][]string) error, func(map[string][]string) ([]assembly.Runner, error)) {
 	if v == nil {
-		return nil, nil
+		return nil, nil, nil, nil
 	}
-	return v.ValidateEditor, v.ValidateLaunch
+	return v.ValidateEditor, v.ValidateLaunch, v.ValidateReviewer, v.ReviewerRunners
 }
 
 func relaunchWith(r Relauncher) func(func() (string, string)) error {
