@@ -85,6 +85,11 @@ const opencode = {
 const trees = { default: session, opencode };
 const params = new URLSearchParams(location.search);
 const tree = trees[params.get("tree") ?? "default"];
+if (params.has("longdoing")) {
+  const root = tree.nodes.find((n) => n.root);
+  root.tool = "Bash";
+  root.target = "go test ./internal/desktop/... -run TestAgentTree -count=1 -v " + "./some/very/long/path/".repeat(12);
+}
 if (params.has("narrow")) document.querySelector("#fixture").classList.add("narrow");
 
 window.opened = [];

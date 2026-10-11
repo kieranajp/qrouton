@@ -119,6 +119,23 @@ test("add repos sits on the body column's right edge, wide and narrow", async ({
   }
 });
 
+test("the orchestrator's time sits on the body column's right edge", async ({ page }) => {
+  await open(page);
+  const [time, body] = await Promise.all([box(page.locator(".orchestrator .time")), box(page.locator(".orchestrator .body"))]);
+  expect(Math.abs(time.right - body.right)).toBeLessThanOrEqual(1);
+});
+
+test("a long root tool target truncates inside the row, left of the time", async ({ page }) => {
+  await open(page, "?longdoing");
+  const doing = page.locator(".orchestrator .doing");
+  await expect(doing).toBeVisible();
+  expect(await doing.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  expect(await doing.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+  const [d, time, body] = await Promise.all([box(doing), box(page.locator(".orchestrator .time")), box(page.locator(".orchestrator .body"))]);
+  expect(d.right).toBeLessThanOrEqual(time.left);
+  expect(time.right).toBeLessThanOrEqual(body.right + 1);
+});
+
 test("narrow, each label heads its tier and finished leads drop their count", async ({ page }) => {
   await open(page, "?narrow");
   const [label, body] = await Promise.all([box(page.locator(".leads .label")), box(page.locator(".leads .body"))]);

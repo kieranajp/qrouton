@@ -95,6 +95,8 @@
   }
 
   .line {
+    display: flex;
+    min-width: 0;
     flex-direction: row;
     align-items: baseline;
     gap: calc(10px * var(--ui-scale));
