@@ -431,3 +431,37 @@ test("Open config.json asks the workbench to open the file", async ({ page }) =>
   await page.getByRole("button", { name: "Open config.json" }).click();
   await expect.poll(() => calls(page)).toContain("OpenConfig");
 });
+
+const MIN_FIELD_WIDTH = 120;
+
+const atLargestScale = async (page) => {
+  await page.setViewportSize({ width: 1100, height: 760 });
+  await page.goto("/tests/settings.html");
+  await page.evaluate(() => document.documentElement.style.setProperty("--ui-scale", "1.5"));
+};
+
+test("at 150% in the default window a sticker meaning stays wide enough to type in", async ({ page }) => {
+  await atLargestScale(page);
+  await open(page, "Stickers");
+  await page.getByRole("button", { name: "Add sticker" }).click();
+  const meaning = page.getByRole("textbox", { name: "Sapphire star meaning" });
+  expect((await meaning.boundingBox()).width).toBeGreaterThanOrEqual(MIN_FIELD_WIDTH);
+  await meaning.fill("Waiting on review");
+  await expect(meaning).toHaveValue("Waiting on review");
+});
+
+test("at 150% in the default window no tab collapses a text field", async ({ page }) => {
+  await atLargestScale(page);
+  const measured = [];
+  for (const name of ["General", "GitHub", "Folders", "Search", "Stickers", "Advanced"]) {
+    await open(page, name);
+    const fields = page.getByRole("tabpanel").locator("input:not([type=checkbox]):not([type=radio]), textarea");
+    for (const field of await fields.all()) {
+      measured.push(name);
+      const box = await field.boundingBox();
+      const label = (await field.getAttribute("aria-label")) ?? (await field.getAttribute("placeholder"));
+      expect(box?.width ?? 0, `${name}: ${label}`).toBeGreaterThanOrEqual(MIN_FIELD_WIDTH);
+    }
+  }
+  expect(new Set(measured)).toEqual(new Set(["General", "GitHub", "Folders", "Stickers", "Advanced"]));
+});

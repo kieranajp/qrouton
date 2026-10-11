@@ -135,14 +135,17 @@
 </div>
 
 <style>
+  /* The editor wraps below the list once the list would drop under its minimum. */
   .split {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) calc(300px * var(--ui-scale));
+    display: flex;
+    flex-wrap: wrap;
     gap: calc(28px * var(--ui-scale));
-    align-items: start;
+    align-items: flex-start;
   }
 
   .list {
+    flex: 1 1 calc(280px * var(--ui-scale));
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: calc(10px * var(--ui-scale));
@@ -237,6 +240,7 @@
   }
 
   .editor {
+    flex: 0 1 calc(300px * var(--ui-scale));
     display: flex;
     flex-direction: column;
     gap: calc(16px * var(--ui-scale));
