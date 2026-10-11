@@ -26,6 +26,8 @@
   let noticeTimer;
   /** @type {HTMLButtonElement} */
   let primary = $state();
+  /** @type {HTMLVideoElement | undefined} */
+  let player = $state();
   /** @type {HTMLOListElement} */
   let strip = $state();
   let alive = true;
@@ -117,6 +119,7 @@
     if (!active) {
       expanded = false;
       menu = null;
+      player?.pause();
     }
   });
 
@@ -144,7 +147,7 @@
         {:else}
           {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
           <!-- svelte-ignore a11y_media_has_caption -->
-          <video src={shown.url} controls preload="metadata" aria-label={shown.source}
+          <video bind:this={player} src={shown.url} controls preload="metadata" aria-label={shown.source}
             onloadedmetadata={() => (loads[shown.url] = "loaded")}
             onerror={(event) => unplayable(shown.url, event)}></video>
         {/if}

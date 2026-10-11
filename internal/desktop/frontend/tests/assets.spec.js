@@ -209,6 +209,22 @@ test("selecting another entry removes the playing video", async ({ page }) => {
   expect(await playing.evaluate((video) => video.isConnected)).toBe(false);
 });
 
+test("switching tabs pauses the playing video and keeps its position", async ({ page }) => {
+  await selectPlayable(page);
+  await player(page).evaluate((video) => { video.muted = true; return video.play(); });
+  await expect.poll(() => player(page).evaluate((video) => video.currentTime)).toBeGreaterThan(0.2);
+
+  await page.evaluate(() => window.setActive(false));
+
+  await expect.poll(() => player(page).evaluate((video) => video.paused)).toBe(true);
+  const kept = await player(page).evaluate((video) => video.currentTime);
+  expect(kept).toBeGreaterThan(0.2);
+
+  await page.evaluate(() => window.setActive(true));
+  await page.waitForTimeout(300);
+  expect(await player(page).evaluate((video) => ({ paused: video.paused, time: video.currentTime }))).toEqual({ paused: true, time: kept });
+});
+
 test("the position label names a video", async ({ page }) => {
   await page.goto("/tests/assets.html");
   await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), PLAYABLE);

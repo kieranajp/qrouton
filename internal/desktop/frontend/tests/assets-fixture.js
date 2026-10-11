@@ -3,6 +3,7 @@ import { mount, unmount } from "svelte";
 import DockedDocument from "../src/lib/DockedDocument.svelte";
 import { MEDIA_KINDS } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
+import { reactiveProps } from "./reactive-props.svelte.js";
 
 const asset = (file) => `/tests/fixtures/assets/${file}`;
 const image = MEDIA_KINDS.IMAGE;
@@ -48,7 +49,15 @@ window.pushAssets = (changes) => {
 };
 window.errors = [];
 addEventListener("error", (event) => window.errors.push(String(event.message)));
-const attach = () => mount(DockedDocument, { target: document.querySelector("#fixture"), props: { id: windowID, slug: "fixture", active: true } });
+let props;
+const attach = () => {
+  props = reactiveProps({ id: windowID, slug: "fixture", active: true });
+  return mount(DockedDocument, { target: document.querySelector("#fixture"), props });
+};
+window.setActive = (active) => {
+  props.active = active;
+  document.querySelector("#fixture").style.display = active ? "" : "none";
+};
 component = attach();
 window.releaseInitial = () => initialRelease?.();
 window.replaceGallery = async (changes = {}) => {
