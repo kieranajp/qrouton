@@ -33,7 +33,22 @@ const params = new URLSearchParams(location.search);
 const narrow = params.has("narrow");
 if (narrow) document.querySelector("#fixture").style.width = "230px";
 
-const payload = () => ({ session: "fixture", selected: narrow ? "w1" : "w2", tabs });
+// Commands fills a 750px strip with running command tabs, each carrying two icons.
+if (params.has("commands")) {
+  document.querySelector("#fixture").style.width = "750px";
+  tabs = [
+    tabs[0],
+    ...["lint", "build", "unit tests", "dev server", "typecheck"].map((label, i) => ({
+      id: `c${i}`,
+      label,
+      icon: "command",
+      kind: "terminal",
+      status: "running",
+    })),
+  ];
+}
+
+const payload = () => ({ session: "fixture", selected: narrow ? "w1" : params.has("commands") ? "c0" : "w2", tabs });
 
 // The fixture stands in for the window registry, so a reorder or a close only
 // reaches the strip by coming back as the surfaces payload Go would send.

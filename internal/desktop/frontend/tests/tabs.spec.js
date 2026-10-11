@@ -116,6 +116,21 @@ test("the Overview tab gets its own treatment", async ({ page }) => {
   expect(style.width).toBeLessThan(140);
 });
 
+test("a tab too narrow for a readable label goes to the overflow menu", async ({ page }) => {
+  await open(page, "?commands");
+
+  const labels = await page.evaluate(() =>
+    [...document.querySelectorAll(".tab:not(.home) .label")].map((label) => ({
+      width: label.getBoundingClientRect().width,
+      whole: label.scrollWidth <= label.clientWidth,
+    })),
+  );
+  expect(labels.length).toBeGreaterThan(0);
+  for (const label of labels) expect(label.whole || label.width >= 36).toBe(true);
+  const hidden = 5 - labels.length;
+  if (hidden) await expect(page.getByRole("button", { name: new RegExp(`^${hidden} more tabs`) })).toBeVisible();
+});
+
 test("a tab Go names an icon for draws it before its label", async ({ page }) => {
   await open(page);
 

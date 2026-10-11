@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dominantStatus, dropIndex, split } from "./tabs.js";
+import { dominantStatus, dropIndex, fits, need, split } from "./tabs.js";
 
 const strip = ["shell", "plan", "shell 2", "shell 3", "research"];
 
@@ -130,4 +130,18 @@ test("a drop on the leftmost drawn tab goes to the front of the whole strip", ()
 
 test("a tab the strip never drew cannot be dragged anywhere", () => {
   assert.equal(dropIndex(entries(0, 1), 3, 1), 3);
+});
+
+test("a tab needs room for its marks and a readable label", () => {
+  const bare = need({});
+  assert.equal(need({ status: "idle" }), bare);
+  assert.equal(need({ status: "running", icon: "command" }), bare + 48);
+  assert.ok(need({ badge: "P002" }) > bare);
+});
+
+test("fits counts the leading tabs that sum within the room", () => {
+  assert.equal(fits([100, 100, 100], 250), 2);
+  assert.equal(fits([100, 100], 200), 2);
+  assert.equal(fits([300], 200), 0);
+  assert.equal(fits([], 200), 0);
 });
