@@ -1,0 +1,37 @@
+// The Mitre set on a 16 by 16 grid: straight segments only, drawn with square
+// caps and mitre joins.
+
+const icon = (stroke, fill) => Object.freeze({ stroke, fill });
+
+export const ICONS = Object.freeze({
+  agent: icon(null, "M5 3l7 5-7 5z"),
+  back: icon("M13 8H3M7 4L3 8l4 4", null),
+  branch: icon("M4 2v12M12 2v4l-4 4H4", null),
+  close: icon("M4 4l8 8M12 4l-8 8", null),
+  command: icon("M2 2h12v12H2zM2 5h12M5 8l2 1.5-2 1.5", null),
+  copy: icon("M3 3h7v7H3zM6 13h7V6", null),
+  "disclosure-closed": icon("M6 4.5v7l4-3.5z", null),
+  "disclosure-open": icon("M4.5 6h7L8 10z", null),
+  document: icon("M3 2h6l4 4v8H3zM9 2v4h4", null),
+  down: icon("M8 3v10M4 9l4 4 4-4", null),
+  editing: icon(null, "M3.5 3.5h9v9h-9z"),
+  excluded: icon("M3.75 3.75h8.5v8.5h-8.5z", null),
+  failed: icon("M4.5 4.5l7 7M11.5 4.5l-7 7", null),
+  forward: icon("M3 8h10M9 4l4 4-4 4", null),
+  menu: icon("M4 6l4 4 4-4", null),
+  new: icon("M8 3v10M3 8h10", null),
+  overflow: icon(null, "M2 7h2v2H2zM7 7h2v2H7zM12 7h2v2h-2z"),
+  pending: icon("M5 8h6", null),
+  reference: icon("M3.75 3.75h8.5v8.5h-8.5z", "M8 3.75h4.25v8.5H8z"),
+  refresh: icon("M13 9v4H3V3h7M10 1l2.5 2L10 5", null),
+  running: icon("M3 3h1M7.5 3h1M12 3h1M3 13h1M7.5 13h1M12 13h1M3 7.5v1M13 7.5v1", null),
+  search: icon("M3 3h7v7H3zM10 10l3.5 3.5", null),
+  session: icon("M2.5 2.5h8v8h-8zM13 5v8H5", null),
+  settings: icon("M2 5h12M2 11h12M5 3v4M11 9v4", null),
+  shell: icon("M3 4l4 4-4 4M9 12h4", null),
+  submenu: icon("M6 4l4 4-4 4", null),
+  succeeded: icon("M3 8.5l3 3 7-7", null),
+  up: icon("M8 13V3M4 7l4-4 4 4", null),
+  waiting: icon(null, "M3.5 2h9L3.5 14h9z"),
+  worktree: icon("M2 3h4l1.5 2H14v8H2z", null),
+});

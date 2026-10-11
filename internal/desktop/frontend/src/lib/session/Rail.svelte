@@ -201,7 +201,7 @@
   </div>
 
   <div class="footer">
-    <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>
+    <Button variant="cube" size="sm" icon="new" wide onclick={onNewSession}>New session</Button>
   </div>
 </div>
 

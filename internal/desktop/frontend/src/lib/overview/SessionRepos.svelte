@@ -30,7 +30,7 @@
   {:else}
     <span class="empty">no repositories yet</span>
   {/if}
-  <span class="add"><Button variant="cube" size="sm" glyph="+" wide onclick={onAddRepos}>Add repos</Button></span>
+  <span class="add"><Button variant="cube" size="sm" icon="new" wide onclick={onAddRepos}>Add repos</Button></span>
 </Tier>
 
 <style>

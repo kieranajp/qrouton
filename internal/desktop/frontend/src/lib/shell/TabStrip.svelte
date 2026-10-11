@@ -109,7 +109,7 @@
   {/if}
   {#if onNew}
     <span class="new" bind:clientWidth={reserved}>
-      <Button variant="cube" size="sm" glyph="+" onclick={onNew}>{newLabel}</Button>
+      <Button variant="cube" size="sm" icon="new" onclick={onNew}>{newLabel}</Button>
     </span>
   {/if}
 </div>
