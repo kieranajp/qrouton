@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -40,6 +41,8 @@ type Launcher interface {
 type Validator interface {
 	ValidateEditor(argv []string) error
 	ValidateLaunch(overrides map[string][]string) error
+	ValidateReviewer(reviewer *config.Reviewer, overrides map[string][]string) error
+	ReviewerRunners(overrides map[string][]string) ([]assembly.Runner, error)
 }
 
 // Relauncher replaces this workbench with one reading the config file afresh,

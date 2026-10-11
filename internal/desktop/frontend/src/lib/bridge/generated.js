@@ -45,6 +45,7 @@ export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/deskt
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
 export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
+export const SETTINGS_RUNNERS = "github.com/kieranajp/qrouton/internal/desktop.Settings.Runners";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
 export const TERM_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Term.Resize";
 export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.Start";
@@ -210,7 +211,7 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"|"reviewer"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
@@ -223,6 +224,7 @@ export const SETTINGS_FIELDS = Object.freeze({
   EXCLAMATION: "exclamation",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
+  REVIEWER: "reviewer",
 });
 
 /** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */

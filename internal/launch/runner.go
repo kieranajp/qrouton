@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
@@ -24,6 +26,21 @@ type Runner struct {
 	Command  []string
 	Path     string
 	Override bool
+	Reviewer ReviewerCapabilities
+}
+
+type ReviewerCapabilities struct {
+	ReasoningValues   []string
+	ReasoningHelp     string
+	ModelHelp         string
+	ReasoningEditable bool
+}
+
+type reviewerOverridePolicy struct {
+	Flags      []string
+	Commands   []string
+	ValueFlags []string
+	ConfigKeys []string
 }
 
 type runnerSpec struct {
@@ -42,7 +59,10 @@ type runnerSpec struct {
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
 	// Hooks are the agent-event hooks Inject wires, which is everything the
 	// workbench can learn about the runner's agents.
-	Hooks []string
+	Hooks           []string
+	Reviewer        ReviewerCapabilities
+	ReviewOverrides reviewerOverridePolicy
+	ValidateModel   func(string) bool
 }
 
 type injectContext struct {
@@ -66,24 +86,34 @@ var claudeHooks = []string{
 var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
-		Command: []string{runnerIDClaude, claudeSkipPermissionsFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptAsArgument,
-		MCP:     claudeMCP,
-		Inject:  injectClaude,
-		Hooks:   claudeHooks,
+		Reviewer:        ReviewerCapabilities{ReasoningValues: claudeReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides: claudeReviewerOverrides,
+		Command:         []string{runnerIDClaude, claudeSkipPermissionsFlag},
+		Resume:          resumeWith(claudeContinueFlag),
+		Prompt:          promptAsArgument,
+		MCP:             claudeMCP,
+		Inject:          injectClaude,
+		Hooks:           claudeHooks,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
-		Command: []string{runnerIDCodex, codexBypassSandboxFlag},
-		Resume:  resumeWith(codexResumeCmd, codexResumeLast),
-		Prompt:  promptAsArgument,
-		MCP:     codexMCP,
-		Inject:  injectCodex,
-		Hooks:   []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
+		Reviewer:        ReviewerCapabilities{ReasoningEditable: true, ReasoningHelp: codexReviewerReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides: codexReviewerOverrides,
+		Command:         []string{runnerIDCodex, codexBypassSandboxFlag},
+		Resume:          resumeWith(codexResumeCmd, codexResumeLast),
+		Prompt:          promptAsArgument,
+		MCP:             codexMCP,
+		Inject:          injectCodex,
+		Hooks:           []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
 	},
 	{
 		ID: runnerIDOpenCode, Label: runnerLabelOpenCode,
+		Reviewer:        ReviewerCapabilities{ReasoningHelp: openCodeReviewerReasoningHelp, ModelHelp: openCodeReviewerModelHelp},
+		ReviewOverrides: openCodeReviewerOverrides,
+		ValidateModel: func(model string) bool {
+			provider, name, ok := strings.Cut(model, "/")
+			return ok && strings.TrimSpace(provider) != "" && strings.TrimSpace(name) != ""
+		},
 		Command: []string{runnerIDOpenCode, openCodeAutoFlag},
 		Resume:  resumeWith(claudeContinueFlag),
 		Prompt:  promptBehindFlag(openCodePromptFlag),
@@ -92,11 +122,13 @@ var runnerSpecs = []runnerSpec{
 	},
 	{
 		ID: runnerIDAgy, Label: runnerLabelAgy,
-		Command: []string{runnerIDAgy, agySkipPermissionsFlag},
-		Resume:  resumeWith(agyContinueFlag),
-		Prompt:  promptBehindFlag(agyPromptInteractiveFlag),
-		MCP:     agyMCP,
-		Inject:  injectAgy,
+		Reviewer:        ReviewerCapabilities{ReasoningValues: agyReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides: agyReviewerOverrides,
+		Command:         []string{runnerIDAgy, agySkipPermissionsFlag},
+		Resume:          resumeWith(agyContinueFlag),
+		Prompt:          promptBehindFlag(agyPromptInteractiveFlag),
+		MCP:             agyMCP,
+		Inject:          injectAgy,
 	},
 }
 
@@ -105,7 +137,9 @@ var builtinRunners = builtins()
 func builtins() []Runner {
 	out := make([]Runner, len(runnerSpecs))
 	for i, spec := range runnerSpecs {
-		out[i] = Runner{ID: spec.ID, Label: spec.Label, Command: slices.Clone(spec.Command)}
+		capabilities := spec.Reviewer
+		capabilities.ReasoningValues = slices.Clone(capabilities.ReasoningValues)
+		out[i] = Runner{ID: spec.ID, Label: spec.Label, Command: slices.Clone(spec.Command), Reviewer: capabilities}
 	}
 	return out
 }
@@ -156,6 +190,8 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 	copy(out, builtinRunners)
 	byID := make(map[string]int, len(out))
 	for i := range out {
+		out[i].Command = slices.Clone(out[i].Command)
+		out[i].Reviewer.ReasoningValues = slices.Clone(out[i].Reviewer.ReasoningValues)
 		byID[out[i].ID] = i
 	}
 	for id, command := range cfg.Launch {
@@ -175,6 +211,80 @@ func Runners(cfg *config.Config) ([]Runner, error) {
 		out[i].Path, _ = findExecutable(out[i].Command[0])
 	}
 	return out, nil
+}
+
+func ValidateReviewer(reviewer *config.Reviewer, overrides map[string][]string) error {
+	if reviewer == nil {
+		return nil
+	}
+	id := strings.TrimSpace(reviewer.Harness)
+	spec, ok := specFor(id)
+	if !ok {
+		return fmt.Errorf(reviewerHarnessErrorFormat, ErrInvalidReviewer, reviewer.Harness, strings.Join(builtinIDs(), ", "))
+	}
+	if strings.TrimSpace(reviewer.Model) == "" || !validReviewerText(reviewer.Model) {
+		return fmt.Errorf(reviewerModelErrorFormat, ErrInvalidReviewer)
+	}
+	if spec.ValidateModel != nil && !spec.ValidateModel(strings.TrimSpace(reviewer.Model)) {
+		return fmt.Errorf(reviewerModelCapabilityErrorFormat, ErrInvalidReviewer, id, spec.Reviewer.ModelHelp)
+	}
+	if !validReviewerText(reviewer.Reasoning) {
+		return fmt.Errorf(reviewerReasoningEncodingErrorFormat, ErrInvalidReviewer)
+	}
+	reasoning := strings.TrimSpace(reviewer.Reasoning)
+	if reasoning != "" && !spec.Reviewer.ReasoningEditable && !slices.Contains(spec.Reviewer.ReasoningValues, reasoning) {
+		return fmt.Errorf(reviewerReasoningErrorFormat, ErrInvalidReviewer, id, spec.Reviewer.ReasoningHelp)
+	}
+	runners, err := Runners(&config.Config{Launch: overrides})
+	if err != nil {
+		return err
+	}
+	selected := slices.IndexFunc(runners, func(runner Runner) bool { return runner.ID == id })
+	if selected < 0 || runners[selected].Path == "" {
+		return fmt.Errorf("%w: %q", ErrRunnerUnavailable, id)
+	}
+	runner := runners[selected]
+	if argument := conflictingReviewerArgument(runner.Command, spec.ReviewOverrides); argument != "" {
+		return fmt.Errorf(reviewerOverrideErrorFormat, ErrReviewerOverrideConflict, id, argument)
+	}
+	return nil
+}
+
+func validReviewerText(value string) bool {
+	return utf8.ValidString(value) && !strings.ContainsFunc(value, unicode.IsControl)
+}
+
+func conflictingReviewerArgument(argv []string, policy reviewerOverridePolicy) string {
+	for i := 1; i < len(argv); i++ {
+		argument := argv[i]
+		flag, value, inline := strings.Cut(argument, "=")
+		if slices.Contains(policy.Flags, flag) || slices.Contains(policy.Commands, argument) {
+			return argument
+		}
+		for _, short := range policy.Flags {
+			if len(short) == 2 && !strings.HasPrefix(short, flagPrefix) && strings.HasPrefix(argument, short) {
+				return argument
+			}
+		}
+		if len(policy.ConfigKeys) > 0 && (flag == codex.ConfigFlag || flag == codexLongConfigFlag || strings.HasPrefix(argument, codex.ConfigFlag) && !strings.HasPrefix(argument, flagPrefix)) {
+			if flag != codex.ConfigFlag && flag != codexLongConfigFlag {
+				value = strings.TrimPrefix(argument, codex.ConfigFlag)
+			} else if !inline && i+1 < len(argv) {
+				i++
+				value = argv[i]
+			}
+			key, _, _ := strings.Cut(value, "=")
+			key = strings.Trim(strings.TrimSpace(key), `"'`)
+			if slices.Contains(policy.ConfigKeys, key) {
+				return argument
+			}
+			continue
+		}
+		if !inline && slices.Contains(policy.ValueFlags, flag) && i+1 < len(argv) {
+			i++
+		}
+	}
+	return ""
 }
 
 func builtinIDs() []string {

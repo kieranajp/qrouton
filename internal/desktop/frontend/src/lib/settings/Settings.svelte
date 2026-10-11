@@ -9,8 +9,14 @@
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{reviewer?: {harness: string, model: string, reasoning: string} | null, reviewerRunners?: import("./calls.js").ReviewerRunner[], reviewerError?: string, runnersReady?: boolean, onConfigureReviewer?: () => void, onSelectReviewer?: (harness: string) => void, orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
+    reviewer = $bindable(null),
+    reviewerRunners = [],
+    reviewerError = "",
+    runnersReady = false,
+    onConfigureReviewer,
+    onSelectReviewer,
     orgs = [],
     orgInput = $bindable(""),
     root = $bindable(""),
@@ -32,6 +38,11 @@
     onRemoveOrg,
     onQuit,
   } = $props();
+
+  const reviewerRunner = $derived(reviewerRunners.find((runner) => runner.id === reviewer?.harness));
+  const reasoningValues = $derived(reviewerRunner?.reviewer?.reasoningValues ?? []);
+  const unsupportedReasoning = $derived(!!reviewer?.reasoning && !reviewerRunner?.reviewer?.reasoningEditable && !reasoningValues.includes(reviewer.reasoning));
+
 </script>
 
 <StepHeading title="Settings">Written to config.json.</StepHeading>
@@ -122,6 +133,44 @@
   </div>
 </fieldset>
 
+<fieldset class="reviewer">
+  <legend>Independent code review</legend>
+  <label class="scale">
+    <CapsLabel>Reviewer harness</CapsLabel>
+    <select value={reviewer ? reviewer.harness || "__choose__" : ""} onchange={(event) => onSelectReviewer?.(event.currentTarget.value)}>
+      <option value="">None</option>
+      {#if reviewer && !reviewer.harness}<option value="__choose__" disabled>Choose an installed harness</option>{/if}
+      {#if reviewer?.harness && !reviewerRunner}
+        <option value={reviewer.harness} disabled>{reviewer.harness} (unavailable)</option>
+      {/if}
+      {#each reviewerRunners as runner (runner.id)}
+        <option value={runner.id}>{runner.label}</option>
+      {/each}
+    </select>
+  </label>
+  {#if !reviewer}
+    <span class="reviewer-help">None disables the extra reviewer.</span>
+    <Button variant="secondary" disabled={!runnersReady} onclick={onConfigureReviewer}>Configure reviewer</Button>
+  {:else}
+    <TextField label="Reviewer model" aria-label="Reviewer model" bind:value={reviewer.model} valueVoice="literal" help={reviewerRunner?.reviewer?.modelHelp} />
+    {#if reviewerRunner?.reviewer?.reasoningEditable}
+      <TextField label="Reviewer reasoning" aria-label="Reviewer reasoning" bind:value={reviewer.reasoning} valueVoice="literal" help={reviewerRunner.reviewer.reasoningHelp} />
+    {:else}
+      <label class="scale">
+        <CapsLabel>Reviewer reasoning</CapsLabel>
+        <select bind:value={reviewer.reasoning}>
+          <option value="">Provider default</option>
+          {#if unsupportedReasoning}<option value={reviewer.reasoning} disabled>{reviewer.reasoning} (unsupported)</option>{/if}
+          {#each reasoningValues as value (value)}<option {value}>{value}</option>{/each}
+        </select>
+        <span class="reviewer-help" class:failed={unsupportedReasoning}>{reviewerRunner?.reviewer?.reasoningHelp}</span>
+      </label>
+    {/if}
+    <span class="reviewer-help">Saving configures future reviews. It does not start a review.</span>
+  {/if}
+  {#if reviewerError}<span class="reviewer-help failed">{reviewerError}</span>{/if}
+</fieldset>
+
 <TextField
   label="Launch overrides"
   multiline
@@ -164,6 +213,32 @@
     display: flex;
     flex-direction: column;
     gap: calc(7px * var(--ui-scale));
+  }
+
+  .reviewer {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--space-5);
+    margin: 0;
+    border: 0;
+    padding: 0;
+  }
+
+  .reviewer legend {
+    margin-bottom: var(--space-5);
+    padding: 0;
+    font: var(--display-sm);
+    color: var(--text-primary);
+  }
+
+  .reviewer-help {
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .reviewer-help.failed {
+    color: var(--state-failed);
   }
 
   .sticker-labels {

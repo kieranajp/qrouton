@@ -137,6 +137,46 @@ const (
 	claudeMaintainProjectWorkingDirValue  = "1"
 )
 
+const (
+	codexLongConfigFlag                  = "--config"
+	reviewerModelHelp                    = "Enter the model identifier accepted by this harness."
+	openCodeReviewerModelHelp            = "Enter a model identifier in provider/model form."
+	reviewerDefaultReasoningHelp         = "Choose a supported effort, or leave blank for the provider default."
+	codexReviewerReasoningHelp           = "Enter the effort accepted by your model, or leave blank for the provider default."
+	openCodeReviewerReasoningHelp        = "OpenCode reasoning uses the provider default; leave this value blank."
+	reviewerHarnessErrorFormat           = "%w: choose a supported harness, got %q (supported: %s)"
+	reviewerModelErrorFormat             = "%w: model must be nonblank UTF-8 text without control characters"
+	reviewerModelCapabilityErrorFormat   = "%w: model is unsupported for %s. %s"
+	reviewerReasoningEncodingErrorFormat = "%w: reasoning must be UTF-8 text without control characters"
+	reviewerReasoningErrorFormat         = "%w: reasoning is unsupported for %s. %s"
+	reviewerOverrideErrorFormat          = "%w: %s argument %q; move model, role and effort options to reviewer Settings and remove resume or headless arguments"
+)
+
+var (
+	claudeReviewerEfforts   = []string{"low", "medium", "high", "xhigh", "max"}
+	agyReviewerEfforts      = []string{"low", "medium", "high"}
+	claudeReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--continue", "-c", "--resume", "-r", "--fork-session", "--session-id", "--from-pr", "--teleport", "--print", "-p", "--background", "--bg", "--model", "--fallback-model", "--effort", "--agent", "--agents", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file"},
+		Commands:   []string{"attach"},
+		ValueFlags: []string{"--settings", "--name", "-n", "--permission-mode", "--mcp-config", "--add-dir", "--allowedTools", "--allowed-tools", "--disallowedTools", "--disallowed-tools", "--tools", "--debug-file", "--setting-sources"},
+	}
+	codexReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--model", "-m", "--last"},
+		Commands:   []string{"resume", "fork", "exec", "e", "review", "exec-server", "app-server"},
+		ValueFlags: []string{"--enable", "--disable", "--remote", "--remote-auth-token-env", "--image", "-i", "--local-provider", "--profile", "-p", "--sandbox", "-s", "--cd", "-C", "--add-dir", "--ask-for-approval", "-a"},
+		ConfigKeys: []string{"model", "model_reasoning_effort", "developer_instructions"},
+	}
+	openCodeReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--continue", "-c", "--session", "-s", "--fork", "--model", "-m", "--agent", "--prompt", "--variant"},
+		Commands:   []string{"run", "serve", "web", "acp", "attach"},
+		ValueFlags: []string{"--log-level", "--port", "--hostname", "--mdns-domain", "--cors", "--replay-limit"},
+	}
+	agyReviewerOverrides = reviewerOverridePolicy{
+		Flags:      []string{"--continue", "-c", "--conversation", "--print", "-p", "--prompt", "--prompt-interactive", "-i", "--model", "--effort", "--agent"},
+		ValueFlags: []string{"--project", "--add-dir", "--log-file", "--gemini_dir", "--mode"},
+	}
+)
+
 // Keys in the runner configuration qrouton injects. Each runner accepts MCP
 // servers and hooks in its own shape.
 const (

@@ -129,6 +129,7 @@ const (
 	settingsFieldExclamation = "exclamation"
 	settingsFieldUIScale     = "uiScale"
 	settingsFieldThoughts    = "thoughts"
+	settingsFieldReviewer    = "reviewer"
 
 	thoughtsOrgJoin  = ", "
 	thoughtsOrgSplit = ","

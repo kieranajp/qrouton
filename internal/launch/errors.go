@@ -11,7 +11,9 @@ var (
 	// otherwise report the runner as not installed rather than misconfigured.
 	ErrEmptyOverride = errors.New("launch override has no command")
 
-	ErrRunnerUnavailable = errors.New("runner is unavailable")
+	ErrRunnerUnavailable        = errors.New("runner is unavailable")
+	ErrInvalidReviewer          = errors.New("reviewer options are invalid")
+	ErrReviewerOverrideConflict = errors.New("launch override conflicts with reviewer settings")
 
 	// ErrUnsupportedRunner means a Runner reached the launch path with an id no
 	// spec claims, so there is no MCP and hook wiring to launch it with.

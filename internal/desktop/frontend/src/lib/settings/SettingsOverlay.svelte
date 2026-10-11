@@ -25,6 +25,12 @@
   onPrimary={panel.save}
   onEscape={panel.cancel}>
   <Settings
+    bind:reviewer={panel.form.reviewer}
+    reviewerRunners={panel.reviewerRunners}
+    reviewerError={panel.reviewerError}
+    runnersReady={panel.runnersReady}
+    onConfigureReviewer={panel.configureReviewer}
+    onSelectReviewer={panel.selectReviewer}
     orgs={panel.form.orgs}
     bind:orgInput={panel.orgInput}
     bind:root={panel.form.root}
