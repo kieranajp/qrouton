@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -18,6 +17,7 @@ type Chrome struct {
 	fields      status.Fields
 	initialized bool
 	emit        emitter
+	tree        func(slug string) status.AgentTree
 }
 
 func newChrome(emit emitter) *Chrome {
@@ -76,43 +76,13 @@ type measurement struct {
 	stats []status.RepoStat
 }
 
-type chromeExpiryTimer interface {
-	channel() <-chan time.Time
-	reset(time.Duration)
-	stop()
-}
-
-type realChromeExpiryTimer struct{ timer *time.Timer }
-
-func newChromeExpiryTimer() chromeExpiryTimer {
-	timer := time.NewTimer(time.Hour)
-	timer.Stop()
-	return &realChromeExpiryTimer{timer: timer}
-}
-
-func (t *realChromeExpiryTimer) channel() <-chan time.Time { return t.timer.C }
-func (t *realChromeExpiryTimer) reset(after time.Duration) { t.timer.Reset(after) }
-func (t *realChromeExpiryTimer) stop() {
-	if !t.timer.Stop() {
-		select {
-		case <-t.timer.C:
-		default:
-		}
-	}
-}
-
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
 func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts) {
-	watchWithExpiryTimer(ctx, reg, root, cfg, emit, field, slow, count, newChromeExpiryTimer())
-}
-
-func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts, expiry chromeExpiryTimer) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
-	defer expiry.stop()
 
 	measured := map[string][]status.RepoStat{}
 	unseen := count.all(root)
@@ -134,7 +104,6 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 
 	refresh()
 	pushChrome(reg, root, cfg, measured, unseen, emit)
-	resetAgentExpiry(expiry, reg)
 	for {
 		select {
 		case <-ctx.Done():
@@ -160,24 +129,12 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 				}
 			}
 		case <-fields.C:
-		case <-expiry.channel():
 		}
 		pushChrome(reg, root, cfg, measured, unseen, emit)
-		resetAgentExpiry(expiry, reg)
+		if reg.trees != nil {
+			reg.trees.schedule(reg.current())
+		}
 	}
-}
-
-func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
-	timer.stop()
-	expires := reg.earliestAgentExpiry()
-	if expires.IsZero() {
-		return
-	}
-	after := expires.Sub(reg.now())
-	if after < 0 {
-		after = 0
-	}
-	timer.reset(after)
 }
 
 // pushChrome emits even with the session-level fields empty: the page cannot
@@ -220,12 +177,6 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	}
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
-		for _, repo := range repos {
-			if repo.Pushed {
-				fields.Stages.Implement = true
-				break
-			}
-		}
 	}
 	agentSnapshots := reg.agentActivitySnapshots()
 	// Dereferenced on every tick: a value captured at wiring time re-raises the
@@ -234,11 +185,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	// that always opens on one stays unasked until it opens on none.
 	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
-		panel := agentPanel(snapshot)
-		if panel.Provider == "" {
-			panel.Provider = fields.Agents.Provider
-		}
-		fields.Agents = panel
+		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
 	}
 	// The rail populates with nothing on screen: a window opening on no session at
 	// all still has to offer the ones on disk.
@@ -267,9 +214,17 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 		Active:    snapshot.Active,
 		Coverage:  status.AgentCoverageNone,
 		Running:   snapshot.Running,
+		Tools:     snapshot.Capabilities.Parents,
 	}
 	if !snapshot.Running {
 		return summary
+	}
+	for _, record := range snapshot.Records {
+		if record.Root && record.Generation == snapshot.Generation {
+			summary.State, summary.Reason = record.State, record.Reason
+			summary.Tool, summary.Target = record.Tool, record.Target
+			break
+		}
 	}
 	if snapshot.Capabilities.Children {
 		summary.Coverage = status.AgentCoverageFull
@@ -284,24 +239,4 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 		summary.Attention = status.AgentAttentionUnknown
 	}
 	return summary
-}
-
-func agentPanel(snapshot agentActivitySnapshot) status.AgentPanel {
-	records := make([]status.AgentRecord, 0, len(snapshot.Records))
-	for _, record := range snapshot.Records {
-		records = append(records, status.AgentRecord{
-			ID: record.ID, RunID: record.RunID, Provider: record.Provider, ParentID: record.ParentID,
-			Type: record.Type, Role: record.Role, State: record.State,
-			ParentKnown: record.ParentKnown, StartedAt: record.StartedAt, FinishedAt: record.FinishedAt,
-		})
-	}
-	return status.AgentPanel{
-		Provider:       snapshot.Provider,
-		ProviderLabel:  launch.RunnerLabel(snapshot.Provider),
-		AttentionKnown: snapshot.Capabilities.Attention,
-		ChildrenKnown:  snapshot.Capabilities.Children,
-		ParentsKnown:   snapshot.Capabilities.Parents,
-		OutcomesKnown:  snapshot.Capabilities.Outcomes,
-		Agents:         records,
-	}
 }

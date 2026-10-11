@@ -54,6 +54,13 @@ var partials = map[string]string{
 	returnContractPlaceholder:     returnContractFileName,
 }
 
+// The leads, by the agent type the runner reports them as.
+const (
+	ResearchLead       = "qrouton-research-lead"
+	PlanningLead       = "qrouton-planning-lead"
+	ImplementationLead = "qrouton-implementation-lead"
+)
+
 var (
 	readOnlyAgents = map[string]bool{
 		"code-reviewer":       true,
@@ -64,9 +71,9 @@ var (
 	}
 
 	workspaceWriteAgents = map[string]bool{
-		"qrouton-research-lead":       true,
-		"qrouton-planning-lead":       true,
-		"qrouton-implementation-lead": true,
-		"test-verifier":               true,
+		ResearchLead:       true,
+		PlanningLead:       true,
+		ImplementationLead: true,
+		"test-verifier":    true,
 	}
 )

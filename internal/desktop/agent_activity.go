@@ -4,7 +4,6 @@ import (
 	"slices"
 	"sort"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 
@@ -27,22 +26,75 @@ type agentRecord struct {
 	Provider    string
 	ParentID    string
 	Type        string
-	Role        string
+	Description string
 	State       string
 	ParentKnown bool
 	Root        bool
 	Generation  uint64
 	StartedAt   time.Time
 	FinishedAt  time.Time
+
+	// spawn is the tool_use_id of the Agent call this record is placed by, and
+	// confirmed means that call's own result named it.
+	spawn     string
+	confirmed bool
+
+	Outcome     string
+	Tokens      int
+	DurationMs  int64
+	ToolCount   int
+	LastMessage string
+	Tools       []agentToolCall
+	Files       []string
+
+	// Reason, Tool and Target are filled when a snapshot derives the state.
+	// A failed record keeps its reason.
+	Reason string
+	Tool   string
+	Target string
+
+	// resumedAfter is when the activation this agent resumed from finished.
+	resumedAfter time.Time
+	// held is a stop that came while the agent's own children still ran: it
+	// waits on them until it acts again or stops with none left.
+	held   bool
+	heldAt time.Time
+
+	// needs is the root's: why the session waits on the user, which agent
+	// asked, and the ask call whose result clears it.
+	needs     string
+	needsTool string
+	needsFrom string
+	needsAt   time.Time
+	// turnEnded and background are the root's: its turn is over, and these
+	// background agents have not reported their outcome yet. Hooks race, so
+	// a stop or prompt older than the latest of the other is stale.
+	turnEnded  bool
+	background map[string]bool
+	promptAt   time.Time
+	stopAt     time.Time
+}
+
+type agentToolCall struct {
+	ID     string
+	Tool   string
+	Target string
+	Start  time.Time
+	End    time.Time
+	Failed bool
+	Closed bool
 }
 
 type agentActivitySnapshot struct {
 	Provider     string
+	Generation   uint64
 	Running      bool
 	Unread       bool
 	Active       int
 	Capabilities agentCapabilities
 	Records      []agentRecord
+	// LiveTypes are the types of the current run's agents still running.
+	LiveTypes []string
 }
 
 type agentRecordKey struct {
@@ -53,78 +105,73 @@ type agentRecordKey struct {
 }
 
 type agentActivity struct {
-	mu        sync.Mutex
-	now       func() time.Time
-	retention time.Duration
+	mu  sync.Mutex
+	now func() time.Time
 
 	provider   string
 	generation uint64
 	setupRuns  uint64
-	running    bool
-	waiting    bool
-	unread     bool
-	rung       bool
-	spoke      time.Time
-	records    map[agentRecordKey]*agentRecord
-	stopped    map[agentRecordKey]struct{}
+	// lastRun is the run whose tree is kept until the next one starts.
+	lastRun string
+	running bool
+	waiting bool
+	unread  bool
+	rung    bool
+	spoke   time.Time
+	records map[agentRecordKey]*agentRecord
+	run     *agentRun
 }
 
-func newAgentActivity(now func() time.Time, retention time.Duration) *agentActivity {
+func newAgentActivity(now func() time.Time) *agentActivity {
 	return &agentActivity{
-		now:       now,
-		retention: retention,
-		records:   map[agentRecordKey]*agentRecord{},
-		stopped:   map[agentRecordKey]struct{}{},
+		now:     now,
+		records: map[agentRecordKey]*agentRecord{},
+		run:     newAgentRun(),
 	}
 }
 
 func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	now := a.now()
-	a.pruneLocked(now)
 	if generation == a.generation && a.generation != 0 {
 		return false
 	}
-	a.finishActiveLocked(now, agentStateFinished)
+	now := a.now()
+	a.finishActiveLocked(now, agentStateEnded)
+	a.keepOnlyLocked(a.lastRun)
 	a.provider = provider
 	a.generation = generation
-	a.stopped = map[agentRecordKey]struct{}{}
+	a.run = newAgentRun()
 	a.running = true
 	a.waiting = false
 	a.unread = false
 	a.rung = false
 	a.spoke = time.Time{}
 	runID := strconv.FormatUint(generation, 10)
-	key := agentRecordKey{provider: provider, runID: runID, id: agentRootID, root: true}
-	a.records[key] = &agentRecord{
+	a.lastRun = runID
+	a.records[a.keyLocked(agentRootID, true)] = &agentRecord{
 		ID: agentRootID, RunID: runID, Provider: provider,
-		Role: agentRoleOrchestrator, State: agentStateActive, Root: true,
-		Generation: generation, StartedAt: now,
+		State: agentLive, Root: true, ParentKnown: true,
+		Generation: generation, StartedAt: now, turnEnded: true,
 	}
 	return true
 }
 
+// lifecycle is a runner that reports only its children starting and stopping.
+// A child hangs off the agent its parent names when that agent is known, and
+// off the root otherwise.
 func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if !a.currentLocked(event.Provider, event.Generation) || event.ID == "" {
+		return false
+	}
 	now := a.now()
-	a.pruneLocked(now)
-	if !a.running || event.Generation != a.generation || event.Provider != a.provider || event.ID == "" {
-		return false
-	}
-	runID := strconv.FormatUint(event.Generation, 10)
-	key := agentRecordKey{provider: event.Provider, runID: runID, id: event.ID}
-	if _, stopped := a.stopped[key]; stopped {
-		return false
-	}
+	key := a.keyLocked(event.ID, false)
 	record := a.records[key]
-	role := delegatedRole(event.Type)
-	parentID := event.ParentID
-	if role == agentRoleLead {
-		parentID = agentRootID
-	} else if parentID == "" {
-		parentID = a.soleActiveLeadLocked(event.Provider, runID)
+	parentID := agentRootID
+	if event.ParentID != "" && a.records[a.keyLocked(event.ParentID, false)] != nil {
+		parentID = event.ParentID
 	}
 	switch event.Kind {
 	case workbench.LifecycleStart:
@@ -136,71 +183,65 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 			started = now
 		}
 		a.records[key] = &agentRecord{
-			ID: event.ID, RunID: runID, Provider: event.Provider,
-			ParentID: parentID, Type: event.Type, Role: role,
-			State: agentStateActive, ParentKnown: parentID != "", Generation: event.Generation,
-			StartedAt: started,
+			ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
+			ParentID: parentID, Type: event.Type, State: agentLive, ParentKnown: true,
+			Generation: event.Generation, StartedAt: started,
 		}
-		return true
 	case workbench.LifecycleStop:
-		a.stopped[key] = struct{}{}
 		if record == nil {
 			a.records[key] = &agentRecord{
-				ID: event.ID, RunID: runID, Provider: event.Provider,
-				ParentID: parentID, Type: event.Type, Role: role,
-				State: agentStateFinished, ParentKnown: parentID != "", Generation: event.Generation,
-				FinishedAt: now,
+				ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
+				ParentID: parentID, Type: event.Type, State: agentStateDone, ParentKnown: true,
+				Generation: event.Generation, FinishedAt: now,
 			}
-			return true
+			break
 		}
-		if record.State != agentStateActive {
+		if record.State != agentLive {
 			return false
 		}
-		record.State = agentStateFinished
+		record.State = agentStateDone
 		record.FinishedAt = now
-		return true
 	default:
 		return false
 	}
+	a.capLocked()
+	return true
 }
 
-func (a *agentActivity) soleActiveLeadLocked(provider, runID string) string {
-	lead := ""
-	for _, record := range a.records {
-		if record.Provider != provider || record.RunID != runID || record.Role != agentRoleLead || record.State != agentStateActive {
-			continue
-		}
-		if lead != "" {
-			return ""
-		}
-		lead = record.ID
-	}
-	return lead
+func (a *agentActivity) currentLocked(provider string, generation uint64) bool {
+	return a.running && generation == a.generation && provider == a.provider
 }
 
-func (a *agentActivity) attention(generation uint64, state string) bool {
+func (a *agentActivity) keyLocked(id string, root bool) agentRecordKey {
+	return agentRecordKey{provider: a.provider, runID: a.lastRun, id: id, root: root}
+}
+
+// attention is a lifecycle-only runner's own word on its root. Waiting and a
+// turn ending with nothing delegated still running ask for the chime.
+func (a *agentActivity) attention(generation uint64, state string) (changed, alert bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !a.running || generation != a.generation {
-		return false
+		return false, false
 	}
 	switch state {
 	case status.ActivityWaiting:
 		a.waiting = true
 		a.unread = true
+		return true, true
 	case status.ActivityWorking:
 		a.waiting = false
 		a.spoke = a.now()
+		return true, false
 	case status.ActivityTurnEnded:
 		if a.delegatingLocked() {
-			return false
+			return false, false
 		}
 		a.waiting = true
 		a.unread = true
-	default:
-		return false
+		return true, true
 	}
-	return true
+	return false, false
 }
 
 // ring claims the one chime a session gets between two things the user types,
@@ -217,7 +258,7 @@ func (a *agentActivity) ring() bool {
 
 func (a *agentActivity) delegatingLocked() bool {
 	for _, record := range a.records {
-		if !record.Root && record.Generation == a.generation && record.State == agentStateActive {
+		if !record.Root && record.Generation == a.generation && record.State == agentLive {
 			return true
 		}
 	}
@@ -235,6 +276,9 @@ func (a *agentActivity) output() {
 func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if root := a.rootLocked(); root != nil {
+		root.needs, root.needsTool, root.needsFrom = "", "", ""
+	}
 	a.waiting = false
 	a.unread = false
 	a.rung = false
@@ -247,12 +291,24 @@ func (a *agentActivity) seen() {
 	a.unread = false
 }
 
-// state is what the rail says about this session: waiting comes from the
-// runner's own hook, working and idle are the PTY's timing, never its contents.
+// state is what the rail says about this session. A runner that reports its
+// tool calls is read from its events; any other from its own waiting hook and
+// the PTY's timing, never its contents.
 func (a *agentActivity) state() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.stateLocked(a.now())
+	now := a.now()
+	root := a.rootLocked()
+	if !a.toolsLocked() || root == nil || root.State != agentLive {
+		return a.stateLocked(now)
+	}
+	switch state, _, _, _ := a.displayLocked(root, now); state {
+	case agentStateNeedsYou, agentStateYourTurn:
+		return status.ActivityWaiting
+	case agentStateWorking, agentStateWaitingAgents:
+		return status.ActivityWorking
+	}
+	return status.ActivityIdle
 }
 
 func (a *agentActivity) stateLocked(now time.Time) string {
@@ -270,8 +326,7 @@ func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.now()
-	a.pruneLocked(now)
-	rootState := agentStateFinished
+	rootState := agentStateDone
 	if code != 0 {
 		rootState = agentStateFailed
 	}
@@ -281,25 +336,23 @@ func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 		}
 		a.setupRuns++
 		runID := agentSetupRunPrefix + strconv.FormatUint(a.setupRuns, 10)
+		a.keepOnlyLocked(a.lastRun)
+		a.lastRun = runID
 		a.provider = provider
 		a.waiting = false
 		a.spoke = time.Time{}
 		key := agentRecordKey{provider: provider, runID: runID, id: agentRootID, root: true}
 		a.records[key] = &agentRecord{
-			ID: agentRootID, RunID: runID, Provider: provider, Role: agentRoleOrchestrator,
+			ID: agentRootID, RunID: runID, Provider: provider, ParentKnown: true,
 			State: rootState, Root: true, StartedAt: now, FinishedAt: now,
 		}
 		return true
 	}
-	a.finishActiveLocked(now, agentStateFinished)
-	runID := strconv.FormatUint(a.generation, 10)
-	key := agentRecordKey{provider: a.provider, runID: runID, id: agentRootID, root: true}
-	if root := a.records[key]; root != nil {
+	if root := a.records[a.keyLocked(agentRootID, true)]; root != nil {
 		root.State = rootState
 		root.FinishedAt = now
 	}
-	a.running = false
-	a.waiting = false
+	a.finishActiveLocked(now, agentStateEnded)
 	a.spoke = time.Time{}
 	return true
 }
@@ -308,17 +361,21 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.now()
-	a.pruneLocked(now)
 	records := make([]agentRecord, 0, len(a.records))
 	active := 0
+	var live []string
 	for _, record := range a.records {
-		if record.State == agentStateActive {
+		if record.State == agentLive {
 			active++
+			if a.running && !record.Root && record.Generation == a.generation && record.Type != "" {
+				live = append(live, record.Type)
+			}
 		}
 		copy := *record
-		if copy.Root && copy.State == agentStateActive {
-			copy.State = agentStateFor(a.stateLocked(now))
-		}
+		copy.Tools = slices.Clone(record.Tools)
+		copy.Files = slices.Clone(record.Files)
+		copy.background = nil
+		copy.State, copy.Reason, copy.Tool, copy.Target = a.displayLocked(record, now)
 		records = append(records, copy)
 	}
 	sort.Slice(records, func(i, j int) bool {
@@ -342,51 +399,69 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		return records[i].ID < records[j].ID
 	})
 	return agentActivitySnapshot{
-		Provider: a.provider, Running: a.running, Unread: a.running && a.unread,
+		Provider: a.provider, Generation: a.generation, Running: a.running, Unread: a.running && a.unread,
 		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
+		LiveTypes: live,
 	}
 }
 
-func (a *agentActivity) earliestExpiry() time.Time {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	var earliest time.Time
+// finishActiveLocked closes the run: whatever had not stopped by then ended
+// with it rather than finishing.
+func (a *agentActivity) finishActiveLocked(now time.Time, state string) {
 	for _, record := range a.records {
-		if record.FinishedAt.IsZero() {
+		if record.State != agentLive {
 			continue
 		}
-		expires := record.FinishedAt.Add(a.retention)
-		if earliest.IsZero() || expires.Before(earliest) {
-			earliest = expires
-		}
-	}
-	return earliest
-}
-
-func (a *agentActivity) finishActiveLocked(now time.Time, delegatedState string) {
-	for _, record := range a.records {
-		if record.State != agentStateActive {
-			continue
-		}
-		record.State = delegatedState
+		record.State = state
 		record.FinishedAt = now
 	}
 	a.running = false
 	a.waiting = false
 }
 
-func (a *agentActivity) pruneLocked(now time.Time) {
-	for key, record := range a.records {
-		if !record.FinishedAt.IsZero() && !now.Before(record.FinishedAt.Add(a.retention)) {
+// keepOnlyLocked drops every run but one, which is how the previous run's tree
+// stays on screen until the next relaunch.
+func (a *agentActivity) keepOnlyLocked(runID string) {
+	for key := range a.records {
+		if key.runID != runID {
 			delete(a.records, key)
 		}
+	}
+}
+
+// capLocked drops the oldest finished leaves once the tree outgrows its cap. A
+// live agent or one with children is never dropped.
+func (a *agentActivity) capLocked() {
+	if len(a.records) <= agentRecordCap {
+		return
+	}
+	type runAgent struct{ run, id string }
+	parents := map[runAgent]bool{}
+	for key, record := range a.records {
+		parents[runAgent{key.runID, record.ParentID}] = true
+	}
+	var leaves []agentRecordKey
+	for key, record := range a.records {
+		if record.Root || record.State == agentLive || parents[runAgent{key.runID, record.ID}] {
+			continue
+		}
+		leaves = append(leaves, key)
+	}
+	sort.Slice(leaves, func(i, j int) bool {
+		return a.records[leaves[i]].FinishedAt.Before(a.records[leaves[j]].FinishedAt)
+	})
+	for _, key := range leaves {
+		if len(a.records) <= agentRecordCap {
+			return
+		}
+		delete(a.records, key)
 	}
 }
 
 func agentStateFor(activity string) string {
 	switch activity {
 	case status.ActivityWaiting:
-		return agentStateWaiting
+		return agentStateYourTurn
 	case status.ActivityWorking:
 		return agentStateWorking
 	default:
@@ -396,19 +471,11 @@ func agentStateFor(activity string) string {
 
 func capabilitiesFor(provider string) agentCapabilities {
 	hooks := launch.RunnerHooks(provider)
+	tools := slices.Contains(hooks, agentevent.HookPostToolUse)
 	return agentCapabilities{
 		Attention: slices.Contains(hooks, agentevent.HookNotification),
 		Children:  slices.Contains(hooks, agentevent.HookSubagentStart),
-	}
-}
-
-func delegatedRole(agentType string) string {
-	switch {
-	case agentType == "":
-		return agentRoleUnavailable
-	case strings.HasSuffix(agentType, "-lead"):
-		return agentRoleLead
-	default:
-		return agentRoleSpecialist
+		Parents:   tools,
+		Outcomes:  tools,
 	}
 }

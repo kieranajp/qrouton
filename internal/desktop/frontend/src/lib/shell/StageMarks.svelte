@@ -1,25 +1,26 @@
 <script>
   import { workflowTone } from "../workflow.js";
 
-  /** @type {{stages?: {research?: boolean, plan?: boolean, implement?: boolean}}} */
-  let { stages = {} } = $props();
+  /** @type {{stages?: {research?: boolean, plan?: boolean, implement?: boolean}, live?: {research?: boolean, plan?: boolean, implement?: boolean}}} */
+  let { stages = {}, live = {} } = $props();
 
   // Implement writes no document of its own, so it wears the success colour
   // rather than an artifact's.
   let marks = $derived([
-    { letter: "R", done: Boolean(stages.research), tone: workflowTone("RESEARCH"), state: "written" },
-    { letter: "P", done: Boolean(stages.plan), tone: workflowTone("PLAN"), state: "written" },
-    { letter: "I", done: Boolean(stages.implement), tone: workflowTone("IMPLEMENT"), state: "complete" },
+    { letter: "R", done: Boolean(stages.research), live: Boolean(live.research), tone: workflowTone("RESEARCH"), state: "written" },
+    { letter: "P", done: Boolean(stages.plan), live: Boolean(live.plan), tone: workflowTone("PLAN"), state: "written" },
+    { letter: "I", done: Boolean(stages.implement), live: Boolean(live.implement), tone: workflowTone("IMPLEMENT"), state: "complete" },
   ]);
 
-  const said = (mark) => `${mark.letter}: ${mark.done ? mark.state : `not ${mark.state} yet`}`;
+  const said = (mark) =>
+    `${mark.letter}: ${mark.done ? mark.state : `not ${mark.state} yet`}${mark.live ? ", lead running" : ""}`;
 </script>
 
 <div class="marks" aria-label="Workflow stages">
   {#each marks as mark (mark.letter)}
-    <span class="mark" class:done={mark.done} aria-label={said(mark)}>
+    <span class="mark" class:done={mark.done} class:live={mark.live} aria-label={said(mark)}>
       <!-- Filled or hollow, never part-filled: a progress bar would imply a
-           fraction qrouton cannot observe. -->
+           fraction qrouton cannot observe. A running lead rings the square. -->
       <span class="square" style:--tone={mark.tone} aria-hidden="true"></span>
       {mark.letter}
     </span>
@@ -43,7 +44,8 @@
     color: var(--text-faint);
   }
 
-  .done {
+  .done,
+  .live {
     color: var(--text-primary);
   }
 
@@ -56,5 +58,23 @@
   .done .square {
     background: var(--tone);
     box-shadow: none;
+  }
+
+  .live .square {
+    outline: 1px solid var(--tone);
+    outline-offset: calc(2px * var(--ui-scale));
+    animation: throb 1.6s ease-in-out infinite;
+  }
+
+  @keyframes throb {
+    50% {
+      outline-color: transparent;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .live .square {
+      animation: none;
+    }
   }
 </style>

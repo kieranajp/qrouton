@@ -18,6 +18,15 @@ const (
 	repoSeparator  = "/"
 	fieldSeparator = " "
 	markdownSuffix = ".md"
+
+	StageResearch  = "research"
+	StagePlan      = "plan"
+	StageImplement = "implement"
+
+	researchDir           = "research"
+	plansDir              = "plans"
+	legacyQuestionsSuffix = "-questions.md"
+	summaryHeading        = "Summary"
 )
 
 // Activity is what the workbench observes. Waiting only ever comes from the
@@ -41,15 +50,14 @@ const (
 	AgentCoverageRoot = "root"
 	AgentCoverageNone = "none"
 
-	AgentRoleOrchestrator = "Orchestrator"
-	AgentRoleLead         = "Lead"
-	AgentRoleSpecialist   = "Specialist"
-	AgentRoleUnavailable  = "Role unavailable"
-
-	AgentStateWaiting  = "Waiting for you"
-	AgentStateWorking  = "Working"
-	AgentStateIdle     = "Idle"
-	AgentStateActive   = "Active"
-	AgentStateFinished = "Finished"
-	AgentStateFailed   = "Failed"
+	// AgentState is one agent's state. Idle is only ever the PTY's timing, for
+	// a runner that reports no tool calls.
+	AgentStateWorking       = "working"
+	AgentStateWaitingAgents = "waiting_agents"
+	AgentStateNeedsYou      = "needs_you"
+	AgentStateYourTurn      = "your_turn"
+	AgentStateIdle          = "idle"
+	AgentStateDone          = "done"
+	AgentStateFailed        = "failed"
+	AgentStateEnded         = "ended"
 )

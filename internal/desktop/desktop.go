@@ -180,19 +180,41 @@ func ringer(cfg *config.Config, state *sessionState, watched func(*sessionState)
 	}
 }
 
-func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(string, uint64) {
-	return func(value string, generation uint64) {
-		if !state.agents.attention(generation, value) {
+// attend is the one path a session's attention change takes: mark it seen if
+// it is on screen, push the chrome, and ring when the change asks for it.
+func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(changed, alert bool) {
+	return func(changed, alert bool) {
+		if !changed {
 			return
 		}
 		if shown() == state {
 			state.agents.seen()
 		}
 		touch()
-		if value == status.ActivityWaiting || value == status.ActivityTurnEnded {
+		if alert {
 			ring()
 		}
 	}
+}
+
+func sessionTree(state *sessionState) status.AgentTree {
+	snapshot := state.agents.snapshot()
+	fallback := ""
+	if snapshot.Provider == "" {
+		fallback = manifestRunner(state.root())
+	}
+	return agentTree(snapshot, fallback, state.root())
+}
+
+func manifestRunner(root string) string {
+	if root == "" {
+		return ""
+	}
+	m, err := session.Load(root)
+	if err != nil {
+		return ""
+	}
+	return m.Runner
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
@@ -207,6 +229,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	launcher := opts.Launcher
 	shell := &shellWindow{windows: windows, launcher: launcher}
+	overviewTab := &overviewWindow{windows: windows}
 
 	reg.boot = booting{
 		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
@@ -215,12 +238,15 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {
 				return reg.current() == s && r.Focused(mainWindowName)
 			})
+			notify := attend(state, reg.current, reg.touch, ring)
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
 				thoughts:   opts.Config.ThoughtsRoots,
-				attention:  attend(state, reg.current, reg.touch, ring),
-				ring:       ring,
+				attention: func(value string, generation uint64) {
+					notify(state.agents.attention(generation, value))
+				},
+				ring: ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
 					if req.Provider != state.provider {
 						return
@@ -234,6 +260,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 						reg.touch()
 					}
 				},
+				agentEvent: func(req workbench.AgentEventRequest) {
+					notify(state.agents.apply(req))
+				},
 				picker: reg.queuePicker,
 			})
 		},
@@ -245,7 +274,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			if root := state.root(); root != "" {
 				_ = session.MarkOpened(root, time.Now())
 			}
-			shell.open(state)
+			overviewTab.open(state)
 		},
 		teardown: windows.stop,
 		// The destructive paths address a session by the sessions root and the
@@ -257,8 +286,15 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		copyFile:    func(path string) error { return copyFile(launcher.CopyFile(path)) },
 	}
 	chromeEmit := r.Emit
+	reg.trees = newAgentTrees(r.Emit, agentTreeInterval, reg.current, sessionTree)
 	if opts.chrome != nil {
 		chromeEmit = opts.chrome.publish
+		opts.chrome.answerTrees(func(slug string) status.AgentTree {
+			if state := reg.bySlug(slug); state != nil {
+				return sessionTree(state)
+			}
+			return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
+		})
 	}
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 	if opts.updates != nil {
@@ -334,29 +370,35 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	return r.Run()
 }
 
-// shellWindow opens a session's user shells: one unasked, and however many more
-// the user asks for. The numbering is the session's, so a second one restarts it.
-type shellWindow struct {
-	windows  *Windows
-	launcher Launcher
+// overviewWindow opens the session's Overview tab. Adoption may call it again once
+// the session is known, which must not leave two.
+type overviewWindow struct {
+	windows *Windows
 }
 
-// open gives a session a shell without being asked. Adoption may call it again
-// once the session is known, which must not leave two.
-func (s *shellWindow) open(owner *sessionState) {
+func (a *overviewWindow) open(owner *sessionState) {
 	if owner == nil {
 		return
 	}
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
-	if owner.shell != "" && s.windows.exists(owner.shell) {
+	if owner.overviewWindow != "" && a.windows.exists(owner.overviewWindow) {
 		return
 	}
-	id, err := s.spawn(owner)
+	id, err := a.windows.openStructural(owner, workbench.WindowOptions{
+		Kind: workbench.KindOverview, Label: overviewWindowLabel,
+	})
 	if err != nil {
 		return
 	}
-	owner.shell = id
+	owner.overviewWindow = id
+}
+
+// shellWindow opens the user shells the session asks for. The numbering is the
+// session's, so a second one restarts it.
+type shellWindow struct {
+	windows  *Windows
+	launcher Launcher
 }
 
 // another is the tab strip's + button.

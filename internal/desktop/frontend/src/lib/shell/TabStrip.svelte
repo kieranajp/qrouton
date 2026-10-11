@@ -7,7 +7,7 @@
   import { uiScale } from "../scale.svelte.js";
   import { dominantStatus, dropIndex, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let {
     tabs = [],
     selected = 0,
@@ -58,6 +58,7 @@
     const from = drawn.shown.find((entry) => key(entry.tab) === lifted)?.index ?? -1;
     settle();
     if (from < 0) return;
+    if (tabs[index]?.pinned) return;
     const to = dropIndex(drawn.shown, from, index);
     if (to !== from) onReorder?.(from, to);
   }
@@ -71,7 +72,8 @@
       artifact={tab.artifact}
       status={tab.status}
       selected={index === selected}
-      closable={tab.closable !== false}
+      closable={tab.closable !== false && !tab.pinned}
+      pinned={tab.pinned}
       dragging={key(tab) === lifted}
       over={key(tab) === hovered && key(tab) !== lifted}
       onSelect={() => onSelect?.(index)}

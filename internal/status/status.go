@@ -18,8 +18,7 @@ import (
 
 // Fields is the session the workbench window draws around its terminal. Read
 // leaves Activity and Sessions empty; Repos carries manifest-backed rows without
-// git measurements. Agents carries only the manifest provider until the
-// workbench overlays live data.
+// git measurements.
 type Fields struct {
 	BugReportID     string `json:"bugReportID"`
 	BugReportStatus string `json:"bugReportStatus"`
@@ -37,11 +36,12 @@ type Fields struct {
 	RepositoryDocuments []RepositoryDocuments `json:"repositoryDocuments"`
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
-	Agents              AgentPanel            `json:"agents"`
-	// Stages is the durable progress the window draws as three marks. Research
-	// and Plan come from documents; Implement also incorporates pushed work when
-	// the workbench overlays repository measurements.
+	// Stages is the durable progress the window draws as three marks, read
+	// from the latest research document and plan.
 	Stages Stages `json:"stages"`
+	// StagesLive marks the stages whose lead is running now. Workbench-side
+	// knowledge, so a file read never sets it.
+	StagesLive Stages `json:"stagesLive"`
 	// Root is where the session lives on disk, so the window can hand its path
 	// over and open it. Empty for a window holding no session.
 	Root string `json:"root"`
@@ -65,7 +65,6 @@ func EmptyFields() Fields {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
-		Agents:              AgentPanel{Agents: []AgentRecord{}},
 	}
 }
 
@@ -93,43 +92,75 @@ type StickerLabels struct {
 	Exclamation string `json:"exclamation"`
 }
 
-// Stages is the R, P and I of a session's workflow. Research means a research
-// document holds findings, Plan means a plan exists, and Implement means every
-// box in one is ticked or the session branch has been pushed.
+// Stages is the R, P and I of a session's workflow. Research means the latest
+// research document is answered, Plan means a plan exists, and Implement means
+// every Verify item in every phase of the latest plan is ticked.
 type Stages struct {
 	Research  bool `json:"research"`
 	Plan      bool `json:"plan"`
 	Implement bool `json:"implement"`
 }
 
+// AgentSummary is a session row's headline: its root's state, why it needs
+// the user, and what it is doing, plus how many agents are live.
 type AgentSummary struct {
 	Attention string `json:"attention"`
 	Active    int    `json:"active"`
 	Coverage  string `json:"coverage"`
 	Running   bool   `json:"running"`
+	Tools     bool   `json:"tools"`
+	State     string `json:"state"`
+	Reason    string `json:"reason"`
+	Tool      string `json:"tool"`
+	Target    string `json:"target"`
 }
 
-type AgentRecord struct {
-	ID          string    `json:"id"`
-	RunID       string    `json:"run_id"`
-	Provider    string    `json:"provider"`
-	ParentID    string    `json:"parent_id"`
-	Type        string    `json:"type"`
-	Role        string    `json:"role"`
-	State       string    `json:"state"`
-	ParentKnown bool      `json:"parent_known"`
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at"`
+// AgentTree is every agent qrouton knows of in a session's current and
+// previous run, flat: each node names its parent within its run.
+type AgentTree struct {
+	Provider      string `json:"provider"`
+	ProviderLabel string `json:"providerLabel"`
+	// Coverage says what the runner cannot report, and is empty when it reports
+	// the whole tree.
+	Coverage string `json:"coverage"`
+	// Tools means the runner reports its tool calls, so an agent between
+	// them can be told apart from one at work.
+	Tools bool        `json:"tools"`
+	Nodes []AgentNode `json:"nodes"`
 }
 
-type AgentPanel struct {
-	Provider       string        `json:"provider"`
-	ProviderLabel  string        `json:"provider_label"`
-	AttentionKnown bool          `json:"attention_known"`
-	ChildrenKnown  bool          `json:"children_known"`
-	ParentsKnown   bool          `json:"parents_known"`
-	OutcomesKnown  bool          `json:"outcomes_known"`
-	Agents         []AgentRecord `json:"agents"`
+type AgentNode struct {
+	ID     string `json:"id"`
+	Run    string `json:"run"`
+	Parent string `json:"parent"`
+	Root   bool   `json:"root"`
+	Placed bool   `json:"placed"`
+	Type   string `json:"type"`
+	// Stage is the R, P or I a lead works on, and empty for any other agent.
+	Stage       string `json:"stage"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+	// Reason is the harness's own words for a needs-you or failed state.
+	Reason      string    `json:"reason"`
+	Tool        string    `json:"tool"`
+	Target      string    `json:"target"`
+	Started     time.Time `json:"started"`
+	Finished    time.Time `json:"finished"`
+	ToolCount   int       `json:"toolCount"`
+	Tokens      int       `json:"tokens"`
+	LastMessage string    `json:"lastMessage"`
+	Files       []string  `json:"files"`
+	// Documents are the workflow artifacts among Files, inside the session.
+	Documents []Document       `json:"documents"`
+	Tools     []AgentToolEvent `json:"tools"`
+}
+
+type AgentToolEvent struct {
+	Tool   string    `json:"tool"`
+	Target string    `json:"target"`
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Failed bool      `json:"failed"`
 }
 
 type SessionRepo struct {
@@ -163,7 +194,6 @@ type RepoStat struct {
 	Insertions int    `json:"insertions"`
 	Deletions  int    `json:"deletions"`
 	Measured   bool   `json:"measured"`
-	Pushed     bool   `json:"-"`
 }
 
 // Read reports everything a file read can answer about a session. A root with no
@@ -180,7 +210,6 @@ func Read(root string) Fields {
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
-	fields.Agents.Provider = m.Runner
 	fields.Repos = manifestRepos(m.Repos)
 	fields.Documents = documents(root)
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
@@ -216,7 +245,6 @@ func Repos(ctx context.Context, root string) []RepoStat {
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
 			Measured:   stat.Measured,
-			Pushed:     stat.Pushed,
 		})
 	}
 	return out
@@ -227,15 +255,6 @@ func modeLabel(m session.Manifest) string {
 		return modeRPILabel
 	}
 	return modeAssistantLabel
-}
-
-// stages is which of the three has produced its document.
-func stages(root string, m session.Manifest) Stages {
-	if len(m.Repos) == 0 {
-		return Stages{}
-	}
-	ws := session.Status(filepath.Dir(root), m)
-	return Stages{Research: ws.Research, Plan: ws.Plan, Implement: ws.Implement}
 }
 
 // phase is the macro-phase only: scratch until repositories exist, then the

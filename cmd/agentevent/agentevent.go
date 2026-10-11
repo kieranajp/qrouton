@@ -3,9 +3,11 @@ package agentevent
 import (
 	"context"
 	"os"
+	"slices"
 	"time"
 
 	eventlog "github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/urfave/cli/v2"
@@ -26,14 +28,33 @@ var EventCommand = &cli.Command{
 		&cli.StringFlag{Name: providerFlag, Usage: providerUsage, EnvVars: []string{eventlog.ProviderEnvVar}, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		event, hook, err := eventlog.Record(c.String(providerFlag), os.Stdin)
-		signal(c.String(workbenchJSONFlag), c.Uint64(generationFlag), event, attention[hook])
+		provider, generation := c.String(providerFlag), c.Uint64(generationFlag)
+		// A runner reporting its tool calls gets the whole reduced event; one
+		// reporting lifecycle only keeps the lifecycle and attention pair.
+		if slices.Contains(launch.RunnerHooks(provider), eventlog.HookPostToolUse) {
+			var root string
+			if handle, perr := workbench.ParseHandle(c.String(workbenchJSONFlag)); perr == nil {
+				root = handle.SessionRoot
+			}
+			event, err := eventlog.ReduceIn(provider, root, os.Stdin)
+			if err == nil {
+				event.Generation = generation
+				send(c.String(workbenchJSONFlag), func(ctx context.Context, h workbench.Handle) {
+					_ = h.AgentEvent(ctx, event)
+				})
+			}
+			return err
+		}
+		event, hook, err := eventlog.Record(provider, os.Stdin)
+		send(c.String(workbenchJSONFlag), func(ctx context.Context, h workbench.Handle) {
+			lifecycle(ctx, h, generation, event, attention[hook])
+		})
 		return err
 	},
 }
 
 // Best-effort: a failed hook is noise in the runner's own output.
-func signal(marshalled string, generation uint64, event eventlog.Event, activity string) {
+func send(marshalled string, call func(context.Context, workbench.Handle)) {
 	if marshalled == "" {
 		return
 	}
@@ -43,6 +64,10 @@ func signal(marshalled string, generation uint64, event eventlog.Event, activity
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), signalTimeout)
 	defer cancel()
+	call(ctx, handle)
+}
+
+func lifecycle(ctx context.Context, handle workbench.Handle, generation uint64, event eventlog.Event, activity string) {
 	if event.AgentID != "" {
 		kind := ""
 		switch event.HookEventName {

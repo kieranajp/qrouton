@@ -5,6 +5,7 @@
   import CapsLabel from "./lib/core/CapsLabel.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
+  import OverviewPane from "./lib/overview/OverviewPane.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
@@ -61,11 +62,8 @@
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
-      repos={fields.repos}
-      agents={fields.agents}
       stickerLabels={fields.stickerLabels}
       onNewSession={() => (view.requested = true)}
-      onAddRepos={() => (view.added = fields.slug)}
       onDismissed={view.handBack}
       size={view.sidebarSize}
       bind:width={view.railMeasured} />
@@ -91,7 +89,7 @@
               disabled={view.escalating}
               onclick={view.escalate}>Escalate</Button>
           {:else}
-            <StageMarks stages={fields.stages} />
+            <StageMarks stages={fields.stages} live={fields.stagesLive} />
           {/if}
         {/snippet}
         <CapsLabel tone="dim">Agent</CapsLabel>
@@ -157,6 +155,13 @@
             focus={view.focusOf(tab.id)}
             focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
+        {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
+          <OverviewPane
+            slug={fields.slug}
+            active={i === view.selected}
+            root={fields.root}
+            repos={fields.repos}
+            onAddRepos={() => (view.added = fields.slug)} />
         {:else}
           <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
         {/if}

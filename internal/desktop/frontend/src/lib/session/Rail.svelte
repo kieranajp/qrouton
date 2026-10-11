@@ -5,9 +5,7 @@
   import { dismissible } from "../core/dismiss.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
-  import ActivityPanel from "./ActivityPanel.svelte";
   import RailItem from "./RailItem.svelte";
-  import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
   import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
@@ -15,15 +13,12 @@
   import { rowAt, shortcut } from "../shortcuts.js";
   import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, repos: any[], agents: any, stickerLabels: Record<string, string>, onNewSession: () => void, onAddRepos: () => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, stickerLabels: Record<string, string>, onNewSession: () => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
-    repos,
-    agents,
     stickerLabels = DEFAULT_STICKER_LABELS,
     onNewSession,
-    onAddRepos,
     onDismissed,
     size = 0,
     // The splitter needs to know how much room the rail leaves the panes, and
@@ -203,16 +198,10 @@
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
     {/each}
-
-    <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>
-    <span class="allowance"></span>
   </div>
 
-  <div class="detail-stack" aria-label="Selected session details">
-    <div class="activity-scroll">
-      <ActivityPanel {agents} />
-    </div>
-    <RepoList {repos} {onAddRepos} />
+  <div class="footer">
+    <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>
   </div>
 </div>
 
@@ -276,8 +265,8 @@
     overflow: hidden;
   }
 
-  /* Centred in the band, not sat on its floor: AGENT is centred in the pane
-     header beside it, so this is where the two headings share a line. */
+  /* Centred in the band, not sat on its floor: the tab labels are centred
+     in the pane header beside it, so this is where the two headings share a line. */
   .band {
     height: var(--h-pane-header);
     box-sizing: border-box;
@@ -288,9 +277,7 @@
     padding: 0 calc(12px * var(--ui-scale));
   }
 
-  /* Sessions is the only greedy child. Activity and this-session size to what
-     they hold, so an empty panel occupies nothing rather than a share of the
-     rail. */
+  /* The session list scrolls; the footer below it stays put. */
   .session-list {
     flex: 1 1 auto;
     min-height: 0;
@@ -301,27 +288,12 @@
     padding: 0 calc(12px * var(--ui-scale));
   }
 
-  .allowance {
+  .footer {
     flex: none;
-    height: calc(12px * var(--ui-scale));
-  }
-
-  .detail-stack {
-    flex: 0 1 auto;
-    min-height: 0;
     display: flex;
     flex-direction: column;
-    gap: calc(10px * var(--ui-scale));
-    padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  }
-
-  /* Live work outranks the repository list, which is reference: activity takes
-     what it needs up to its cap, and the list below scrolls for the rest. */
-  .activity-scroll {
-    flex: 0 0 auto;
-    min-height: 0;
-    max-height: calc(250px * var(--ui-scale));
-    overflow: hidden auto;
+    border-top: 1px solid var(--border-subtle);
+    padding: calc(12px * var(--ui-scale));
   }
 
   .anchor {

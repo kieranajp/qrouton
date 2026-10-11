@@ -608,63 +608,6 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	r.Quit()
 }
 
-// Decision 10: a shell is always available, opened by the workbench rather than
-// asked for. Asking gets you another; adoption running twice does not.
-func TestTheWorkbenchOpensOneUserShellAlongsideTheConversation(t *testing.T) {
-	r := newFakeRenderer()
-	opts, boot := testOptions(t)
-	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-
-	startWorkbench(t, r, term, windows, opts)
-	<-r.opened
-	owner := shownSession(t, reg)
-
-	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
-	tab := windows.surfaces(owner).Tabs[0]
-	if tab.Label != shellWindowLabel {
-		t.Fatalf("first tab is %q, want the user shell", tab.Label)
-	}
-	window, ok := windows.window(tab.ID)
-	if !ok {
-		t.Fatalf("the shell %q is not registered", tab.ID)
-	}
-	if window.opts.Cwd != opts.SessionRoot {
-		t.Fatalf("the shell is rooted at %q, not the session", window.opts.Cwd)
-	}
-	if got := strings.Join(window.opts.Command, " "); got != "/bin/cat "+opts.SessionRoot {
-		t.Fatalf("shell command = %q", got)
-	}
-	if !window.opts.CloseOnExit {
-		t.Fatal("a shell that exits cleanly leaves its tab behind")
-	}
-	if len(r.opened) != 0 {
-		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
-	}
-
-	if err := windows.Close(tab.ID); err != nil {
-		t.Fatal(err)
-	}
-	if len(windows.surfaces(owner).Tabs) != 0 {
-		t.Fatal("the shell tab survived being closed")
-	}
-	for want := 1; want <= 2; want++ {
-		id, err := windows.OpenShell()
-		if err != nil {
-			t.Fatal(err)
-		}
-		tabs := windows.surfaces(owner).Tabs
-		if len(tabs) != want {
-			t.Fatalf("%d tabs after asking %d times: %+v", len(tabs), want, tabs)
-		}
-		// The page selects the tab by the id it gets back, so a wrong one
-		// focuses a terminal the user did not ask for.
-		if tabs[len(tabs)-1].ID != id {
-			t.Fatalf("OpenShell returned %q, newest tab is %q", id, tabs[len(tabs)-1].ID)
-		}
-	}
-}
-
 // The header's document chip is one control for two states: nothing open yet,
 // and the window already showing it. A second tab on the same document is the
 // failure the user sees.
@@ -683,7 +626,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	const doc = "thoughts/shared/research/R7-editor-surfaces.md"
 	id, err := windows.OpenDocument(doc)
@@ -823,15 +766,15 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the shell tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
-	for range 2 {
+	for range 3 {
 		if _, err := windows.OpenShell(); err != nil {
 			t.Fatal(err)
 		}
 	}
 	tabs := windows.surfaces(owner).Tabs
-	want := []string{shellWindowLabel, "$ shell 2", "$ shell 3"}
+	want := []string{overviewWindowLabel, shellWindowLabel, "$ shell 2", "$ shell 3"}
 	if len(tabs) != len(want) {
 		t.Fatalf("tabs = %+v", tabs)
 	}
@@ -1090,7 +1033,7 @@ func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.
 	})
 
 	empty := chrome.Snapshot()
-	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil || empty.Agents.Agents == nil {
+	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil {
 		t.Fatalf("initial snapshot has nil slices: %+v", empty)
 	}
 	first := status.Fields{
@@ -2464,11 +2407,12 @@ func TestAWorkbenchWithNoShellCommandRefuses(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	if _, err := windows.OpenShell(); !errors.Is(err, ErrNoShellCommand) {
 		t.Fatalf("a shell with nothing to run = %v, want ErrNoShellCommand", err)
 	}
-	if tabs := windows.surfaces(owner).Tabs; len(tabs) != 0 {
+	if tabs := windows.surfaces(owner).Tabs; len(tabs) != 1 {
 		t.Fatalf("the refused shell opened %d tabs", len(tabs))
 	}
 	if _, err := windows.OpenDocument("thoughts/shared/plans/P1.md"); !errors.Is(err, ErrNoEditorCommand) {

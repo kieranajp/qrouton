@@ -42,6 +42,7 @@ const (
 	OpAttention          = "attention"
 	OpRunnerGeneration   = "runner-generation"
 	OpDelegatedLifecycle = "delegated-lifecycle"
+	OpAgentEvent         = "agent-event"
 	OpOpenTicket         = "open-ticket"
 	OpVaultSearch        = "vault-search"
 	OpVaultRead          = "vault-read"

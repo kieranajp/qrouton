@@ -27,6 +27,7 @@ type controlHooks struct {
 	ring       func()
 	generation func(req workbench.RunnerGenerationRequest)
 	lifecycle  func(req workbench.DelegatedLifecycleRequest)
+	agentEvent func(req workbench.AgentEventRequest)
 	openTicket func(url, prompt string) (string, error)
 	focus      func()
 }
@@ -218,6 +219,15 @@ var handlers = map[string]handler{
 			return workbench.Response{}, nil
 		},
 	},
+	workbench.OpAgentEvent: {
+		guards: []guard{needsSession, needsAgentEvent},
+		run: func(c *control, req workbench.Request) (workbench.Response, error) {
+			if c.hooks.agentEvent != nil {
+				c.hooks.agentEvent(*req.AgentEvent)
+			}
+			return workbench.Response{}, nil
+		},
+	},
 	workbench.OpVaultSearch: {
 		guards: []guard{needsSession, needsVault},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
@@ -327,6 +337,13 @@ func needsRunnerGeneration(_ *control, req workbench.Request) error {
 func needsLifecycle(_ *control, req workbench.Request) error {
 	if req.Lifecycle == nil {
 		return ErrNoDelegatedLifecycle
+	}
+	return nil
+}
+
+func needsAgentEvent(_ *control, req workbench.Request) error {
+	if req.AgentEvent == nil {
+		return ErrNoAgentEvent
 	}
 	return nil
 }

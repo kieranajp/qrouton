@@ -97,11 +97,6 @@ func TestDeleteKeepsDocumentsWrittenThroughTheThoughtsLink(t *testing.T) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	// Status still infers phase through the symlink.
-	if got := Status(root, m); !got.Research {
-		t.Fatalf("status through symlink = %#v", got)
-	}
-
 	if err := Delete(root, m); err != nil {
 		t.Fatal(err)
 	}

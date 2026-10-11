@@ -297,6 +297,7 @@ test("empty and selected stickers stay usable at minimum and default rail widths
 });
 
 test("feedback flips above a fully visible row at the bottom of the scrollport", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 420 });
   const list = page.getByLabel("Sessions");
   const row = page.locator(".row").nth(8);
   await row.evaluate((element) => {
@@ -382,53 +383,9 @@ test("the badge carries the row's state", async ({ page }) => {
   expect(await background(avatar(/^Session 2/))).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("activity shows an orchestrator, its leads, and subagents behind a count", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await expect(activity.getByLabel("Orchestrator · Claude Code · Waiting for you")).toBeVisible();
-  const lead = activity.getByLabel("Lead · Qrouton Planning Lead · Active");
-  await expect(lead).toBeVisible();
-
-  // A subagent is a detail, not a row, until it is asked for.
-  await expect(activity).not.toContainText("Code Reviewer");
-  const disclosure = activity.getByRole("button", { name: /subagent/ });
-  await expect(disclosure).toContainText("1 subagent · 0 done");
-  await disclosure.click();
-  await expect(activity).toContainText("Code Reviewer");
-
-  // Depth is an indent step, and no rank draws a rule down its left.
-  const indent = (locator) =>
-    locator.locator(".dot").evaluate((element) => element.getBoundingClientRect().left);
-  expect(await indent(lead)).toBe(
-    (await indent(activity.getByLabel("Orchestrator · Claude Code · Waiting for you"))) + 15,
-  );
-  expect(await activity.locator(".rank").evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe(
-    "0px",
-  );
-});
-
-test("waiting is the orchestrator's alone", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  const waiting = await token(page, "--state-waiting");
-  const running = await token(page, "--state-running");
-  const dot = (label) =>
-    activity.getByLabel(label).locator(".dot").evaluate((el) => getComputedStyle(el).backgroundColor);
-
-  expect(await dot("Orchestrator · Claude Code · Waiting for you")).toBe(waiting);
-  expect(await dot("Lead · Qrouton Planning Lead · Active")).toBe(running);
-});
-
-test("the rail prints no name it cannot read", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await expect(activity).not.toContainText("unavailable");
-  await expect(activity).toContainText("Test Verifier");
-
-  await page.evaluate(() => window.sessionRail.removeFinished());
-  await expect(activity).not.toContainText("Test Verifier");
-});
-
 test("the rail headings all read at one rank, centred", async ({ page }) => {
   const faint = await token(page, "--text-faint");
-  for (const heading of ["Sessions", "Activity", "This session"]) {
+  for (const heading of ["Sessions"]) {
     const caps = page.locator(".caps", { hasText: heading }).first();
     expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(faint);
     expect(await caps.evaluate((el) => getComputedStyle(el).textAlign)).toBe("center");
@@ -449,8 +406,8 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
   expect(header).toBe(paneHeader);
   expect(await band.evaluate((el) => getComputedStyle(el).borderBottomWidth)).toBe("0px");
 
-  // Centred in the band, not sat on its floor: AGENT is centred in the pane
-  // header beside it, and sitting the label low left a hand's width of nothing
+  // Centred in the band, not sat on its floor: the tab labels are centred in
+  // the pane header beside it, and sitting the label low left a hand's width of nothing
   // above it.
   const centres = await band.evaluate((el) => {
     const caps = el.querySelector(".caps").getBoundingClientRect();
@@ -460,35 +417,23 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
   expect(centres.label).toBeCloseTo(centres.band, 0);
 });
 
-test("provider coverage and missing capabilities are textual", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await page.evaluate(() => window.sessionRail.rootOnly("codex", "Codex CLI"));
+test("a summary without a root state falls back to the active count", async ({ page }) => {
+  await page.evaluate(() => window.sessionRail.stateless());
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");
   expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
     await token(page, "--state-running"),
   );
-  await expect(activity).toContainText("Orchestrator");
-  await expect(activity).toContainText("Codex");
-  await expect(activity).not.toContainText("Attention unavailable.");
-  await expect(activity).not.toContainText("Codex provides root activity only.");
-
-  await page.evaluate(() => window.sessionRail.rootOnly("opencode", "OpenCode"));
-  await expect(activity).toContainText("OpenCode provides root activity only.");
 });
 
-test("reference detail and Add repos stay in the lower detail stack", async ({ page }) => {
-  const detail = page.getByLabel("Selected session details");
-  await expect(detail).toContainText("This session");
-  await expect(detail).toContainText("acme/reference-docs");
-  await expect(detail).toContainText("read-only");
-  await detail.getByRole("button", { name: "Add repos" }).click();
-  await expect.poll(() => page.evaluate(() => window.sessionRail.added())).toBe(1);
+test("the rail holds sessions only; the repositories moved to the Overview", async ({ page }) => {
+  await expect(page.getByLabel("Selected session details")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add repos" })).toHaveCount(0);
 });
 
 test("the anything-new buttons are cubes that sink when pressed", async ({ page }) => {
-  for (const name of ["New session", "Add repos"]) {
+  for (const name of ["New session"]) {
     const cube = page.getByRole("button", { name });
     const style = await cube.evaluate((el) => {
       const computed = getComputedStyle(el);
@@ -499,12 +444,10 @@ test("the anything-new buttons are cubes that sink when pressed", async ({ page 
   }
 });
 
-test("sessions take the rail, and activity sizes to what it holds", async ({ page }) => {
+test("sessions take the rail", async ({ page }) => {
   const sessions = page.getByLabel("Sessions");
-  const activity = page.locator(".activity-scroll");
   const box = async (locator) =>
     locator.evaluate((element) => ({
-      height: element.getBoundingClientRect().height,
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
       scrollTop: element.scrollTop,
@@ -512,20 +455,49 @@ test("sessions take the rail, and activity sizes to what it holds", async ({ pag
 
   // Sessions is the only greedy child, so it is the list that overflows.
   expect((await box(sessions)).scrollHeight).toBeGreaterThan((await box(sessions)).clientHeight);
-  expect((await box(activity)).height).toBeLessThanOrEqual(250);
-
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await box(sessions)).scrollTop).toBeGreaterThan(0);
-  expect((await box(activity)).scrollTop).toBe(0);
-
-  await activity.evaluate((element) => element.scrollTo(0, element.scrollHeight));
-  expect((await box(activity)).scrollTop).toBeGreaterThan(0);
 });
 
-test("an empty activity panel occupies nothing", async ({ page }) => {
-  const activity = page.locator(".activity-scroll");
-  const before = await activity.evaluate((el) => el.getBoundingClientRect().height);
-  await page.evaluate(() => window.sessionRail.quiet());
-  const after = await activity.evaluate((el) => el.getBoundingClientRect().height);
-  expect(after).toBeLessThan(before);
+test("New session stays pinned below the scrolling list", async ({ page }) => {
+  const sessions = page.getByLabel("Sessions");
+  const create = page.getByRole("button", { name: "New session" });
+  const viewport = page.viewportSize();
+
+  await expect(create).toBeInViewport();
+  const before = await create.boundingBox();
+  const list = await sessions.boundingBox();
+  expect(before.y).toBeGreaterThanOrEqual(list.y + list.height);
+
+  await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  expect(await sessions.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await expect(create).toBeInViewport();
+  const after = await create.boundingBox();
+  expect(after).toEqual(before);
+  expect(after.y + after.height).toBeLessThanOrEqual(viewport.height);
+});
+
+test("a row's headline says what its root is doing", async ({ page }) => {
+  const row = () => page.getByRole("button", { name: /^Checkout migration/ });
+  const headline = (summary) => page.evaluate((s) => window.sessionRail.headline(s), summary);
+
+  await headline({ state: "working", active: 3, tool: "Bash", target: "go test ./internal/desktop/... -run TestAgentTree" });
+  await expect(row().locator(".fact.agents")).toHaveText(/Working · 2 agents/);
+  const tool = row().locator(".fact.tool");
+  await expect(tool).toHaveText("Bash go test ./internal/desktop/... -run TestAgentTree");
+  expect(await tool.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+  expect(await tool.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  await headline({ state: "needs_you", reason: "Which branch should I cut from?", active: 1, attention: "unread" });
+  const attention = row().locator(".fact.attention");
+  await expect(attention).toHaveText(/Needs you/);
+  await expect(attention).toHaveAttribute("title", "Which branch should I cut from?");
+  expect(await attention.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--state-waiting"));
+
+  await headline({ state: "your_turn", active: 1 });
+  await expect(row().locator(".fact.agents")).toHaveText(/Your turn/);
+
+  await headline({ state: "idle", active: 1, coverage: "root" });
+  await expect(row().locator(".fact.agents")).toHaveText(/Idle/);
 });

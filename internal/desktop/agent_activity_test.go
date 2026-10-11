@@ -28,7 +28,7 @@ func (c *activityClock) now() time.Time { return c.at }
 
 func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 12, 0, 0, 0, time.UTC)}
-	tracker := newAgentActivity(clock.now, 10*time.Second)
+	tracker := newAgentActivity(clock.now)
 	if !tracker.begin(agentProviderClaude, 1) {
 		t.Fatal("first generation was rejected")
 	}
@@ -45,9 +45,6 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	if record := delegatedRecord(t, tracker.snapshot(), "agent-1"); !record.ParentKnown || record.ParentID != agentRootID {
 		t.Fatalf("known parent was lost: %+v", record)
 	}
-	if tracker.snapshot().Capabilities.Parents {
-		t.Fatal("one known parent was promoted to provider-wide parent coverage")
-	}
 	clock.at = clock.at.Add(time.Second)
 	stop := start
 	stop.Kind = workbench.LifecycleStop
@@ -60,7 +57,7 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 		t.Fatal("duplicate stop changed the tracker")
 	}
 	if got := delegatedRecord(t, tracker.snapshot(), "agent-1").FinishedAt; !got.Equal(finishedAt) {
-		t.Fatalf("duplicate stop extended retention from %s to %s", finishedAt, got)
+		t.Fatalf("duplicate stop moved the finish from %s to %s", finishedAt, got)
 	}
 	if tracker.lifecycle(start) {
 		t.Fatal("a delayed start resurrected a stopped agent")
@@ -74,7 +71,7 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 		t.Fatal("unmatched stop did not create a tombstone")
 	}
 	record := delegatedRecord(t, tracker.snapshot(), "agent-2")
-	if record.State != agentStateFinished || record.Role != agentRoleSpecialist || !record.StartedAt.IsZero() {
+	if record.State != agentStateDone || !record.StartedAt.IsZero() {
 		t.Fatalf("tombstone = %+v", record)
 	}
 	tombstone.Kind = workbench.LifecycleStart
@@ -83,74 +80,55 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 }
 
-func TestDelegatedStopRemainsTerminalAfterItsDisplayRetentionExpires(t *testing.T) {
+func TestFinishedAgentsStayForTheRunAndTheOneAfter(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 12, 30, 0, 0, time.UTC)}
-	retention := 10 * time.Second
-	tracker := newAgentActivity(clock.now, retention)
-	tracker.begin(agentProviderClaude, 1)
+	tracker := newAgentActivity(clock.now)
+	tracker.begin(agentProviderCodex, 1)
 	event := workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "agent-1", Type: "explorer",
+		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "agent-1", Type: "explorer",
 	}
-	if !tracker.lifecycle(event) {
-		t.Fatal("start was rejected")
-	}
+	tracker.lifecycle(event)
 	event.Kind = workbench.LifecycleStop
-	if !tracker.lifecycle(event) {
-		t.Fatal("stop was rejected")
+	tracker.lifecycle(event)
+	clock.at = clock.at.Add(time.Hour)
+	if _, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok {
+		t.Fatal("a finished agent left the tree within its run")
 	}
-	clock.at = clock.at.Add(retention)
-	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
-		t.Fatal("finished record survived its display retention")
+	tracker.begin(agentProviderCodex, 2)
+	if _, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok {
+		t.Fatal("the previous run's tree went at the first relaunch")
 	}
-	event.Kind = workbench.LifecycleStart
-	if tracker.lifecycle(event) {
-		t.Fatal("a delayed start resurrected an expired stopped agent")
-	}
-	event.Kind = workbench.LifecycleStop
-	if tracker.lifecycle(event) {
-		t.Fatal("a duplicate stop recreated an expired tombstone")
-	}
-	if got := tracker.snapshot().Active; got != 1 {
-		t.Fatalf("active records = %d, want only the root", got)
-	}
-	if _, ok := findRecord(tracker.snapshot(), event.ID, event.Generation); ok {
-		t.Fatal("late lifecycle events restarted display retention")
+	tracker.begin(agentProviderCodex, 3)
+	if _, ok := findRecord(tracker.snapshot(), "agent-1", 1); ok {
+		t.Fatal("a run two relaunches old is still kept")
 	}
 }
 
-func TestSpecialistUsesTheSoleActiveLeadWithoutInventingAnAmbiguousParent(t *testing.T) {
+// A lifecycle-only child hangs off the agent its parent id names when the
+// tracker knows that agent, and off the root otherwise. Its type is never read
+// for rank.
+func TestLifecycleChildHangsOffAKnownParentOrTheRoot(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
-	tracker.begin(agentProviderClaude, 1)
-	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "lead-1", Type: "qrouton-research-lead",
-	})
-	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "specialist-1", Type: "explorer",
-	})
-	if record := delegatedRecord(t, tracker.snapshot(), "specialist-1"); !record.ParentKnown || record.ParentID != "lead-1" {
-		t.Fatalf("specialist under one active lead = %+v", record)
+	tracker := newAgentActivity(clock.now)
+	tracker.begin(agentProviderCodex, 1)
+	for _, event := range []workbench.DelegatedLifecycleRequest{
+		{ID: "lead-1", Type: "qrouton-research-lead", ParentID: "session-1"},
+		{ID: "specialist-1", Type: "explorer", ParentID: "lead-1"},
+		{ID: "specialist-2", Type: "reviewer-lead", ParentID: "unknown"},
+	} {
+		event.Provider, event.Generation, event.Kind = agentProviderCodex, 1, workbench.LifecycleStart
+		tracker.lifecycle(event)
 	}
-
-	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "lead-2", Type: "qrouton-planning-lead",
-	})
-	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "specialist-2", Type: "reviewer",
-	})
-	if record := delegatedRecord(t, tracker.snapshot(), "specialist-2"); record.ParentKnown || record.ParentID != "" {
-		t.Fatalf("specialist under two active leads = %+v", record)
+	for id, parent := range map[string]string{"lead-1": agentRootID, "specialist-1": "lead-1", "specialist-2": agentRootID} {
+		if record := delegatedRecord(t, tracker.snapshot(), id); !record.ParentKnown || record.ParentID != parent {
+			t.Fatalf("%s = %+v, want parent %s", id, record, parent)
+		}
 	}
 }
 
 func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 13, 0, 0, 0, time.UTC)}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
@@ -167,14 +145,14 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 	}
 	for _, id := range []string{agentRootID, "agent-1"} {
 		old := recordForRun(t, view, id, 1)
-		if old.State != agentStateFinished || old.FinishedAt.IsZero() {
+		if old.State != agentStateEnded || old.FinishedAt.IsZero() {
 			t.Fatalf("old %s = %+v", id, old)
 		}
 	}
 	late := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart, ID: "ghost",
 	}
-	if tracker.lifecycle(late) || tracker.attention(1, status.ActivityWaiting) {
+	if changed, _ := tracker.attention(1, status.ActivityWaiting); tracker.lifecycle(late) || changed {
 		t.Fatal("old-generation hook was accepted")
 	}
 	if _, ok := findRecord(tracker.snapshot(), "ghost", 1); ok {
@@ -185,10 +163,9 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 	}
 }
 
-func TestRootExitFinalizesChildrenAndRetentionPrunesAtTheExactBoundary(t *testing.T) {
+func TestRootExitEndsItsChildrenAndKeepsThem(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 14, 0, 0, 0, time.UTC)}
-	retention := 10 * time.Second
-	tracker := newAgentActivity(clock.now, retention)
+	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
@@ -206,37 +183,29 @@ func TestRootExitFinalizesChildrenAndRetentionPrunesAtTheExactBoundary(t *testin
 	if root := recordForRun(t, view, agentRootID, 1); root.State != agentStateFailed {
 		t.Fatalf("failed root = %+v", root)
 	}
-	if child := delegatedRecord(t, view, "agent-1"); child.State != agentStateFinished {
-		t.Fatalf("child outcome was inferred as %+v", child)
+	if child := delegatedRecord(t, view, "agent-1"); child.State != agentStateEnded {
+		t.Fatalf("a child the exit closed = %+v, want ended with the run", child)
 	}
-	wantExpiry := clock.now().Add(retention)
-	if got := tracker.earliestExpiry(); !got.Equal(wantExpiry) {
-		t.Fatalf("earliest expiry = %s, want %s", got, wantExpiry)
-	}
-	clock.at = wantExpiry.Add(-time.Millisecond)
+	clock.at = clock.at.Add(time.Hour)
 	if got := len(tracker.snapshot().Records); got != 2 {
-		t.Fatalf("records at 9.999s = %d, want 2", got)
-	}
-	clock.at = wantExpiry
-	if got := len(tracker.snapshot().Records); got != 0 {
-		t.Fatalf("records at 10s = %d, want 0", got)
+		t.Fatalf("records an hour after exit = %d, want both kept", got)
 	}
 }
 
 func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
-	tracker.begin(agentProviderClaude, 88)
+	tracker := newAgentActivity(clock.now)
+	tracker.begin(agentProviderCodex, 88)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 88, Kind: workbench.LifecycleStart, ID: "reused-id",
+		Provider: agentProviderCodex, Generation: 88, Kind: workbench.LifecycleStart, ID: "reused-id",
 	})
 	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
-	if !tracker.begin(agentProviderClaude, 7) {
+	if !tracker.begin(agentProviderCodex, 7) {
 		t.Fatal("a new supervisor generation was mistaken for an old numeric generation")
 	}
 	if !tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 7, Kind: workbench.LifecycleStart, ID: "reused-id",
+		Provider: agentProviderCodex, Generation: 7, Kind: workbench.LifecycleStart, ID: "reused-id",
 	}) {
 		t.Fatal("provider ID could not be reused in the new run")
 	}
@@ -245,14 +214,14 @@ func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 		t.Fatalf("coexisting runs have %d records, want two roots and two children: %+v", len(view.Records), view.Records)
 	}
 	if recordForRun(t, view, agentRootID, 7).State != agentStateIdle ||
-		recordForRun(t, view, agentRootID, 88).State != agentStateFinished {
+		recordForRun(t, view, agentRootID, 88).State != agentStateDone {
 		t.Fatalf("coexisting roots = %+v", view.Records)
 	}
 }
 
 func TestPreGenerationExitRetainsAnExplicitSetupRunAlongsideTheLaterRun(t *testing.T) {
 	clock := &activityClock{at: time.Date(2026, 8, 28, 15, 0, 0, 0, time.UTC)}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	if !tracker.exitWithProvider(agentProviderCodex, 7) {
 		t.Fatal("pre-generation exit was ignored")
 	}
@@ -278,20 +247,25 @@ func TestPreGenerationExitRetainsAnExplicitSetupRunAlongsideTheLaterRun(t *testi
 	}
 }
 
-func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T) {
+func TestTrackerMapsCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.output()
-	root := recordForRun(t, tracker.snapshot(), agentRootID, 1)
-	if root.State != agentStateWorking || root.Role != agentRoleOrchestrator {
+	if root := recordForRun(t, tracker.snapshot(), agentRootID, 1); root.State != agentStateYourTurn {
+		t.Fatalf("a Claude root's terminal output moved it off your turn: %+v", root)
+	}
+	tracker.begin(agentProviderOpenCode, 9)
+	tracker.output()
+	root := recordForRun(t, tracker.snapshot(), agentRootID, 9)
+	if root.State != agentStateWorking {
 		t.Fatalf("root after output = %+v", root)
 	}
 	clock.at = clock.at.Add(activityQuiet)
-	if root := recordForRun(t, tracker.snapshot(), agentRootID, 1); root.State != agentStateIdle {
+	if root := recordForRun(t, tracker.snapshot(), agentRootID, 9); root.State != agentStateIdle {
 		t.Fatalf("root at quiet boundary = %+v", root)
 	}
-	if caps := tracker.snapshot().Capabilities; !caps.Attention || !caps.Children || caps.Parents || caps.Outcomes {
+	if caps := capabilitiesFor(agentProviderClaude); !caps.Attention || !caps.Children || !caps.Parents || !caps.Outcomes {
 		t.Fatalf("Claude capabilities = %+v", caps)
 	}
 	tracker.begin(agentProviderCodex, 2)
@@ -306,21 +280,12 @@ func TestTrackerMapsRolesCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T)
 	if caps := tracker.snapshot().Capabilities; caps.Attention || caps.Children || caps.Parents || caps.Outcomes {
 		t.Fatalf("Agy capabilities = %+v", caps)
 	}
-	for agentType, role := range map[string]string{
-		"qrouton-implementation-lead": agentRoleLead,
-		"explorer":                    agentRoleSpecialist,
-		"":                            agentRoleUnavailable,
-	} {
-		if got := delegatedRole(agentType); got != role {
-			t.Errorf("delegatedRole(%q) = %q, want %q", agentType, got, role)
-		}
-	}
 }
 
 func TestSessionSwitchKeepsRecentActivityAndCleanupDropsIt(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	reg.boot.root = func(slug string) string { return filepath.Join(root, slug) }
 	reg.boot.cleanup = func(string) error { return nil }
 	reg.boot.teardown = func(*sessionState) {}
@@ -348,8 +313,8 @@ func TestLifecycleSocketMutatesOnlyItsOwningSession(t *testing.T) {
 	windows, _ := testWindows(t)
 	clock := &activityClock{at: time.Now()}
 	trackers := []*agentActivity{
-		newAgentActivity(clock.now, time.Minute),
-		newAgentActivity(clock.now, time.Minute),
+		newAgentActivity(clock.now),
+		newAgentActivity(clock.now),
 	}
 	for i, tracker := range trackers {
 		socket, err := workbench.NewSocketPath()
@@ -428,7 +393,7 @@ func recordForRunID(t *testing.T, snapshot agentActivitySnapshot, id, runID stri
 
 func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	if got := tracker.state(); got != status.ActivityIdle {
 		t.Fatalf("a terminal that has never spoken = %q, want idle", got)
 	}
@@ -438,7 +403,7 @@ func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 		t.Fatalf("output before any generation = %q, want working", got)
 	}
 
-	tracker.begin(agentProviderClaude, 1)
+	tracker.begin(agentProviderCodex, 1)
 	if got := tracker.state(); got != status.ActivityIdle {
 		t.Fatalf("a new run left stale state %q, want idle", got)
 	}
@@ -468,7 +433,7 @@ func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 
 	tracker.output()
 	tracker.attention(1, status.ActivityWaiting)
-	tracker.exitWithProvider(agentProviderClaude, 0)
+	tracker.exitWithProvider(agentProviderCodex, 0)
 	if got := tracker.state(); got != status.ActivityIdle {
 		t.Fatalf("a root exit left stale state %q, want idle", got)
 	}
@@ -482,7 +447,7 @@ func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
 	windows, _ := testWindows(t)
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
@@ -510,7 +475,7 @@ func TestTheControlSocketCarriesTheAttentionSignal(t *testing.T) {
 func TestAReopenedSessionRejoinsTheRailIdle(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	reg.boot.teardown = func(*sessionState) {}
 	first := reg.add(filepath.Join(root, "alpha"), []string{"/bin/cat"}, os.Environ())
 	first.agents.begin(agentProviderClaude, 1)
@@ -540,11 +505,12 @@ func recordChimes(t *testing.T) *chimes {
 
 func chimingSession(t *testing.T, cfg *config.Config, watched func(*sessionState) bool) (*sessionState, func(string, uint64), func()) {
 	t.Helper()
-	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
+	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now)
 	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
-	state.agents.begin(agentProviderClaude, 1)
+	state.agents.begin(agentProviderCodex, 1)
 	ring := ringer(cfg, state, watched)
-	return state, attend(state, reg.current, func() {}, ring), ring
+	notify := attend(state, reg.current, func() {}, ring)
+	return state, func(value string, generation uint64) { notify(state.agents.attention(generation, value)) }, ring
 }
 
 // An orchestrator ends a turn each time a background lead reports back, so only
@@ -553,7 +519,7 @@ func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
 	chimed := recordChimes(t)
 	state, hook, _ := chimingSession(t, &config.Config{}, unwatched)
 	lead := workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart,
 		ID: "agent-1", Type: "qrouton-research-lead",
 	}
 	state.agents.lifecycle(lead)
@@ -629,14 +595,15 @@ func TestAQuietConfigNeverChimes(t *testing.T) {
 }
 
 func TestASessionIsUnreadUntilShownAndNeverWhileShown(t *testing.T) {
-	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now, time.Minute)
+	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now)
 	background := reg.add(sessionDir(t, t.TempDir(), "background"), []string{"/bin/cat"}, os.Environ())
 	onscreen := reg.add(sessionDir(t, t.TempDir(), "onscreen"), []string{"/bin/cat"}, os.Environ())
-	background.agents.begin(agentProviderClaude, 1)
-	onscreen.agents.begin(agentProviderClaude, 1)
+	background.agents.begin(agentProviderCodex, 1)
+	onscreen.agents.begin(agentProviderCodex, 1)
 	reg.reveal(onscreen)
 	hookFor := func(state *sessionState) func(string, uint64) {
-		return attend(state, reg.current, func() {}, func() {})
+		notify := attend(state, reg.current, func() {}, func() {})
+		return func(value string, generation uint64) { notify(state.agents.attention(generation, value)) }
 	}
 
 	hookFor(background)(status.ActivityTurnEnded, 1)

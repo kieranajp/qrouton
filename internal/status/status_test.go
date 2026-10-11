@@ -44,7 +44,6 @@ func TestReadScratchAssistant(t *testing.T) {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
-		Agents:              AgentPanel{Agents: []AgentRecord{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -103,7 +102,6 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
-		Agents: AgentPanel{Agents: []AgentRecord{}},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
@@ -119,18 +117,6 @@ func TestFieldsCarryTheSessionsSlug(t *testing.T) {
 	}
 	if got := Read(t.TempDir()).Slug; got != "" {
 		t.Fatalf("a directory with no manifest answered with slug %q", got)
-	}
-}
-
-func TestReadPreservesKnownProviderAndLeavesLegacyProviderUnknown(t *testing.T) {
-	root := t.TempDir()
-	known := sessionDir(t, root, session.Manifest{Slug: "known", Runner: "codex"})
-	legacy := sessionDir(t, root, session.Manifest{Slug: "legacy"})
-	if got := Read(known).Agents.Provider; got != "codex" {
-		t.Fatalf("known provider = %q, want codex", got)
-	}
-	if got := Read(legacy).Agents.Provider; got != "" {
-		t.Fatalf("legacy provider = %q, want unknown", got)
 	}
 }
 
@@ -345,31 +331,6 @@ func TestSessionRowsKeepLegacyEditingRolesAndOmitReferences(t *testing.T) {
 	}
 }
 
-func TestAgentContractCarriesProviderAndNeverMarshalsANullRecordList(t *testing.T) {
-	fields := Read(t.TempDir())
-	fields.Agents.Provider = "claude"
-	b, err := json.Marshal(fields)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var keyed map[string]json.RawMessage
-	if err := json.Unmarshal(b, &keyed); err != nil {
-		t.Fatal(err)
-	}
-	var panel map[string]json.RawMessage
-	if err := json.Unmarshal(keyed["agents"], &panel); err != nil {
-		t.Fatal(err)
-	}
-	if got := string(panel["provider"]); got != `"claude"` {
-		t.Fatalf("provider marshalled as %s", got)
-	}
-	if got := string(panel["agents"]); got != "[]" {
-		t.Fatalf("agent records marshalled as %s, want []", got)
-	}
-}
-
-// A nil slice marshals as null, and the page's defaults only fill keys the
-// payload omits, so null reaches a .length and unwinds the render.
 func TestSessionRowsWithoutRepositoriesCarryAnEmptyList(t *testing.T) {
 	root := t.TempDir()
 	sessionDir(t, root, session.Manifest{Slug: "bare", Name: "Bare"})
@@ -609,14 +570,6 @@ func TestEmptySlicesMarshalAsArraysNotNull(t *testing.T) {
 			t.Errorf("%q marshalled as null", key)
 		}
 	}
-	var agents map[string]json.RawMessage
-	if err := json.Unmarshal(keyed["agents"], &agents); err != nil {
-		t.Fatal(err)
-	}
-	if string(agents["agents"]) == "null" {
-		t.Error("agent records marshalled as null")
-	}
-
 	// The failure paths are the ones that reach for a bare nil.
 	if got := Repos(t.Context(), t.TempDir()); got == nil {
 		t.Error("Repos returned nil for a directory with no manifest")

@@ -34,52 +34,30 @@ const (
 		`"cwd":"/work/webhook","hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"ls"}}`
 )
 
-func TestNotificationHookAsksTheWorkbenchForAttention(t *testing.T) {
+// Claude reports its tool calls, so each of its hooks becomes one reduced event
+// and the workbench derives lifecycle and attention from it.
+func TestClaudeHooksSendOneReducedEventEach(t *testing.T) {
 	root := t.TempDir()
 	socket, requests := controlSocket(t)
-	if err := runEvent(t, "claude", handleFor(socket, root), notificationPayload); err != nil {
-		t.Fatal(err)
+	for _, tc := range []struct{ payload, hook, agent, tool string }{
+		{notificationPayload, "Notification", "", ""},
+		{stopPayload, "Stop", "", ""},
+		{subagentStartPayload, "SubagentStart", "agent_017c", ""},
+		{subagentStopPayload, "SubagentStop", "agent_017c", ""},
+		{preToolUsePayload, "PreToolUse", "", "Bash"},
+	} {
+		if err := runEvent(t, "claude", handleFor(socket, root), tc.payload); err != nil {
+			t.Fatal(err)
+		}
+		req := await(t, requests)
+		event := req.AgentEvent
+		if req.Op != workbench.OpAgentEvent || event == nil || event.Hook != tc.hook || event.Generation != 7 ||
+			event.Provider != "claude" || event.AgentID != tc.agent || event.Tool != tc.tool || event.Timestamp.IsZero() {
+			t.Fatalf("%s request = %#v event %+v", tc.hook, req, event)
+		}
 	}
-	req := await(t, requests)
-	if req.Op != workbench.OpAttention || req.Activity != status.ActivityWaiting || req.Generation != 7 {
-		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", req, workbench.OpAttention, status.ActivityWaiting)
-	}
-}
-
-func TestStopHookTellsTheWorkbenchTheTurnEnded(t *testing.T) {
-	root := t.TempDir()
-	socket, requests := controlSocket(t)
-	if err := runEvent(t, "claude", handleFor(socket, root), stopPayload); err != nil {
-		t.Fatal(err)
-	}
-	req := await(t, requests)
-	if req.Op != workbench.OpAttention || req.Activity != status.ActivityTurnEnded || req.Generation != 7 {
-		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", req, workbench.OpAttention, status.ActivityTurnEnded)
-	}
-}
-
-func TestSubagentHooksSendLifecycleAndStartClearsAttentionToWorking(t *testing.T) {
-	root := t.TempDir()
-	socket, requests := controlSocket(t)
-	if err := runEvent(t, "claude", handleFor(socket, root), subagentStartPayload); err != nil {
-		t.Fatal(err)
-	}
-	start := await(t, requests)
-	if start.Op != workbench.OpDelegatedLifecycle || start.Lifecycle == nil ||
-		start.Lifecycle.Kind != workbench.LifecycleStart || start.Lifecycle.ID != "agent_017c" ||
-		start.Lifecycle.Type != "Explore" || start.Lifecycle.Generation != 7 || start.Lifecycle.Timestamp.IsZero() {
-		t.Fatalf("start request = %#v", start)
-	}
-	attention := await(t, requests)
-	if attention.Op != workbench.OpAttention || attention.Activity != status.ActivityWorking || attention.Generation != 7 {
-		t.Fatalf("request = %#v, want generation-scoped op %q and activity %q", attention, workbench.OpAttention, status.ActivityWorking)
-	}
-	if err := runEvent(t, "claude", handleFor(socket, root), subagentStopPayload); err != nil {
-		t.Fatal(err)
-	}
-	stop := await(t, requests)
-	if stop.Op != workbench.OpDelegatedLifecycle || stop.Lifecycle == nil || stop.Lifecycle.Kind != workbench.LifecycleStop {
-		t.Fatalf("stop request = %#v", stop)
+	if len(requests) != 0 {
+		t.Fatalf("%d extra requests; one hook is one event", len(requests))
 	}
 }
 
@@ -99,19 +77,19 @@ func TestCodexHookSendsProviderAndParentLifecycle(t *testing.T) {
 	}
 }
 
-// A hook outside the map says nothing about attention, so it must not dial at
-// all: the desktop reads any activity that is not "waiting" as an answer, so an
-// empty one would clear a header the user has not looked at yet.
+// A Codex hook outside the map says nothing about attention, so it must not
+// dial at all: the desktop reads any activity that is not "waiting" as an
+// answer, so an empty one would clear a header the user has not looked at yet.
 func TestUnmappedHookSendsNothing(t *testing.T) {
 	root := t.TempDir()
 	socket, requests := controlSocket(t)
 	handle := handleFor(socket, root)
-	if err := runEvent(t, "claude", handle, preToolUsePayload); err != nil {
+	if err := runEvent(t, "codex", handle, preToolUsePayload); err != nil {
 		t.Fatal(err)
 	}
 	// The mapped hook that follows is the barrier: its request proves the socket
 	// was reachable all along, so an empty queue before it means nothing was sent.
-	if err := runEvent(t, "claude", handle, notificationPayload); err != nil {
+	if err := runEvent(t, "codex", handle, notificationPayload); err != nil {
 		t.Fatal(err)
 	}
 	if got := len(requests); got != 1 {

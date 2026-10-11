@@ -1169,3 +1169,125 @@ func TestRescanCannotRaceTheReadsOfTheTextItRewrites(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func openOverview(t *testing.T, w *Windows, owner *sessionState) string {
+	t.Helper()
+	(&overviewWindow{windows: w}).open(owner)
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.overviewWindow == "" {
+		t.Fatal("the Overview tab did not open")
+	}
+	return owner.overviewWindow
+}
+
+func TestOverviewWindowOpensOncePinnedAndFirst(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openOverview(t, w, owner)
+	if again := openOverview(t, w, owner); again != id {
+		t.Fatalf("showing the session again opened a second Overview tab %q", again)
+	}
+	tabs := w.Surfaces(owner.slug()).Tabs
+	if len(tabs) != 1 {
+		t.Fatalf("tabs = %+v, want the one Overview tab", tabs)
+	}
+	if tab := tabs[0]; tab.Kind != string(workbench.KindOverview) || tab.Label != overviewWindowLabel || !tab.Pinned {
+		t.Fatalf("Overview tab = %+v", tab)
+	}
+}
+
+func TestOverviewWindowRefusesClose(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openOverview(t, w, owner)
+	if err := w.Close(id); !errors.Is(err, ErrOverviewWindowPinned) {
+		t.Fatalf("Close = %v, want ErrOverviewWindowPinned", err)
+	}
+	if !w.exists(id) {
+		t.Fatal("a refused close removed the Overview tab")
+	}
+}
+
+func TestOverviewWindowGoesWithItsSession(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openOverview(t, w, owner)
+	w.stop(owner)
+	if w.exists(id) {
+		t.Fatal("teardown left the Overview tab open")
+	}
+}
+
+func TestOverviewWindowStaysLeftmost(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	overview := openOverview(t, w, owner)
+	docs := openDocuments(t, w, owner, 2)
+
+	if err := w.Reorder(owner.slug(), overview, 2); !errors.Is(err, ErrOverviewWindowPinned) {
+		t.Fatalf("moving the Overview tab = %v, want ErrOverviewWindowPinned", err)
+	}
+	if err := w.Reorder(owner.slug(), docs[1], 0); !errors.Is(err, ErrOverviewWindowPinned) {
+		t.Fatalf("moving a tab before the Overview tab = %v, want ErrOverviewWindowPinned", err)
+	}
+	if err := w.Reorder(owner.slug(), docs[1], 1); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{overview, docs[1], docs[0]}; !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+func TestOverviewWindowIsTheWorkbenchsToOpen(t *testing.T) {
+	w, _ := testWindows(t)
+	_, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindOverview, Label: "Overview"})
+	if !errors.Is(err, ErrOverviewWindowReserved) {
+		t.Fatalf("an agent opening an Overview tab = %v, want ErrOverviewWindowReserved", err)
+	}
+}
+
+// A shell is the user's to ask for: the session opens on its Overview tab, + adds
+// a shell, and showing the session again does not bring a closed one back.
+func TestOverviewWindowOpensInPlaceOfAShell(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	if tab := windows.surfaces(owner).Tabs[0]; tab.Kind != string(workbench.KindOverview) {
+		t.Fatalf("first tab = %+v, want the Overview tab", tab)
+	}
+
+	id, err := windows.OpenShell()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.surfaces(owner).Tabs
+	if len(tabs) != 2 || tabs[1].ID != id || tabs[1].Label != shellWindowLabel {
+		t.Fatalf("tabs after + = %+v", tabs)
+	}
+	window, _ := windows.window(id)
+	if window.opts.Cwd != opts.SessionRoot || !window.opts.CloseOnExit {
+		t.Fatalf("shell options = %+v", window.opts)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
+	}
+
+	if err := windows.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	reg.reveal(owner)
+	if err := reg.Show(owner.slug()); err != nil {
+		t.Fatal(err)
+	}
+	if tabs := windows.surfaces(owner).Tabs; len(tabs) != 1 {
+		t.Fatalf("showing the session again reopened a shell: %+v", tabs)
+	}
+}

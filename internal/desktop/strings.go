@@ -40,6 +40,7 @@ const (
 	notesWindowWidth  = 520
 	notesWindowHeight = 720
 
+	overviewWindowLabel     = "Overview"
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 
@@ -82,6 +83,8 @@ const (
 	ptyDataEvent = "pty:data:"
 	ptyExitEvent = "pty:exit:"
 	chromeEvent  = "chrome:update"
+	// agentTreeEvent carries the shown session's whole agent tree, named by slug.
+	agentTreeEvent = "agents:tree:"
 
 	windowDataEvent    = "window:data:"
 	windowExitEvent    = "window:exit:"
@@ -203,8 +206,6 @@ const (
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second
 
-	finishedAgentRetention = 90 * time.Second
-
 	// terminateGrace is how long a PTY's process tree gets to exit on SIGTERM
 	// before it is killed outright. launch has its own for the runner the
 	// supervisor signals; the two bound different processes and need not agree.
@@ -239,17 +240,35 @@ const (
 	agentRootID         = "root"
 	agentSetupRunPrefix = "setup-"
 
-	agentRoleOrchestrator = status.AgentRoleOrchestrator
-	agentRoleLead         = status.AgentRoleLead
-	agentRoleSpecialist   = status.AgentRoleSpecialist
-	agentRoleUnavailable  = status.AgentRoleUnavailable
+	agentStateWorking       = status.AgentStateWorking
+	agentStateWaitingAgents = status.AgentStateWaitingAgents
+	agentStateNeedsYou      = status.AgentStateNeedsYou
+	agentStateYourTurn      = status.AgentStateYourTurn
+	agentStateIdle          = status.AgentStateIdle
+	agentStateDone          = status.AgentStateDone
+	agentStateFailed        = status.AgentStateFailed
+	agentStateEnded         = status.AgentStateEnded
+	// agentLive marks a record still running; its shown state is derived.
+	agentLive = "live"
 
-	agentStateWaiting  = status.AgentStateWaiting
-	agentStateWorking  = status.AgentStateWorking
-	agentStateIdle     = status.AgentStateIdle
-	agentStateActive   = status.AgentStateActive
-	agentStateFinished = status.AgentStateFinished
-	agentStateFailed   = status.AgentStateFailed
+	// agentTreeInterval coalesces tree pushes; tool calls arrive several a second.
+	agentTreeInterval = 250 * time.Millisecond
+	agentFileLimit    = 50
+
+	agentCoverageRootOnly = "%s reports the root agent only, so working and idle come from its terminal."
+	agentCoverageNoTools  = "%s reports its agents starting and stopping, not what they are doing."
+
+	agentReasonQuestion = "Asking you a question"
+	agentReasonPlan     = "Plan ready for your review"
+
+	notificationPermission  = "permission_prompt"
+	notificationElicitation = "elicitation_dialog"
+
+	// agentRecordCap bounds one session's tree; the oldest finished leaves go first.
+	agentRecordCap = 500
+	// agentToolHistory is how many tool calls an agent remembers.
+	agentToolHistory      = 20
+	agentOutcomeCompleted = "completed"
 )
 
 var deckExtraMediaTypes = map[string]string{

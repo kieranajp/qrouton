@@ -31,72 +31,6 @@
       sticker: "",
     })),
   ]);
-  let agents = $state({
-    provider: "claude",
-    provider_label: "Claude Code",
-    attention_known: true,
-    children_known: true,
-    parents_known: false,
-    outcomes_known: false,
-    agents: [
-      {
-        id: "root",
-        run_id: "7",
-        provider: "claude",
-        role: "Orchestrator",
-        state: "Waiting for you",
-      },
-      {
-        id: "lead-1",
-        run_id: "7",
-        provider: "claude",
-        parent_id: "root",
-        parent_known: true,
-        type: "qrouton-planning-lead",
-        role: "Lead",
-        state: "Active",
-      },
-      {
-        id: "agent-flat",
-        run_id: "7",
-        provider: "claude",
-        parent_id: "lead-1",
-        parent_known: true,
-        type: "code-reviewer",
-        role: "Specialist",
-        state: "Active",
-      },
-      {
-        id: "agent-finished",
-        run_id: "6",
-        provider: "claude",
-        parent_known: false,
-        type: "test-verifier",
-        role: "Specialist",
-        state: "Finished",
-      },
-      ...Array.from({ length: 5 }, (_, index) => ({
-        id: `agent-${index}`,
-        run_id: "7",
-        provider: "claude",
-        parent_known: false,
-        type: `specialist-${index}`,
-        role: "Specialist",
-        state: "Active",
-      })),
-    ],
-  });
-  const repos = [
-    { name: "acme/web", role: "editing", measured: true, commits: 2 },
-    { name: "acme/reference-docs", role: "reference", measured: true, commits: 0 },
-    ...Array.from({ length: 7 }, (_, index) => ({
-      name: `acme/repository-${index}`,
-      role: "editing",
-      measured: true,
-      commits: index,
-    })),
-  ];
-  let added = $state(0);
   let selected = $state("checkout");
   let stickerLabels = $state({ ...DEFAULT_STICKER_LABELS });
 
@@ -106,41 +40,23 @@
     }),
   );
 
-  function rootOnly(provider, label) {
-    const childrenKnown = provider === "codex";
+  function stateless() {
     sessions = sessions.map((session) =>
       session.slug === "checkout"
-        ? { ...session, summary: { attention: "unknown", active: 1, coverage: childrenKnown ? "full" : "root", running: true } }
+        ? { ...session, summary: { attention: "unknown", active: 1, coverage: "full", running: true } }
         : session,
     );
-    agents = {
-      provider,
-      provider_label: label,
-      attention_known: false,
-      children_known: childrenKnown,
-      parents_known: false,
-      outcomes_known: false,
-      agents: [
-        {
-          id: "root",
-          run_id: "8",
-          provider,
-          role: "Orchestrator",
-          state: "Working",
-        },
-      ],
-    };
+  }
+
+  function headline(summary) {
+    sessions = sessions.map((session) =>
+      session.slug === "checkout" ? { ...session, summary: { coverage: "full", running: true, ...summary } } : session,
+    );
   }
 
   window.sessionRail = {
-    quiet: () => {
-      agents = { ...agents, agents: [] };
-    },
-    removeFinished: () => {
-      agents = { ...agents, agents: agents.agents.filter((agent) => agent.state !== "Finished") };
-    },
-    rootOnly,
-    added: () => added,
+    stateless,
+    headline,
     shown: (slug) => (selected = slug),
     rename: (slug, name) => {
       sessions = sessions.map((session) => (session.slug === slug ? { ...session, name } : session));
@@ -159,11 +75,8 @@
   <Rail
     {sessions}
     slug={selected}
-    {repos}
-    {agents}
     {stickerLabels}
     onNewSession={() => {}}
-    onAddRepos={() => added++}
     onDismissed={() => {}} />
 </div>
 

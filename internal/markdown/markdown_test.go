@@ -1,6 +1,8 @@
 package markdown
 
 import (
+	"encoding/json"
+	"os"
 	"slices"
 	"testing"
 )
@@ -128,5 +130,38 @@ func TestMarpIsDeclaredInFrontmatter(t *testing.T) {
 				t.Fatalf("Marp(%q) = %v; want %v", tc.text, got, tc.want)
 			}
 		})
+	}
+}
+
+// The plan pane parses the same cases, so the stage mark and the pane's meter
+// cannot disagree about a plan.
+func TestPlanPhasesMatchesTheSharedCases(t *testing.T) {
+	body, err := os.ReadFile("testdata/plan-phases.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct {
+		Name   string `json:"name"`
+		Text   string `json:"text"`
+		Phases []struct {
+			Number int `json:"number"`
+			Met    int `json:"met"`
+			Total  int `json:"total"`
+		} `json:"phases"`
+	}
+	if err := json.Unmarshal(body, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range cases {
+		got := PlanPhases(tc.Text)
+		if len(got) != len(tc.Phases) {
+			t.Errorf("%s: %d phases, want %d: %+v", tc.Name, len(got), len(tc.Phases), got)
+			continue
+		}
+		for i, want := range tc.Phases {
+			if got[i].Number != want.Number || got[i].Met != want.Met || got[i].Total != want.Total {
+				t.Errorf("%s: phase %d = %+v, want %+v", tc.Name, i, got[i], want)
+			}
+		}
 	}
 }

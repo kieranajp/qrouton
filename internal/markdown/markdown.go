@@ -1,7 +1,11 @@
 // Package markdown reads titles, bodies, and section state without rendering.
 package markdown
 
-import "strings"
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 // fence opens and closes a frontmatter block.
 const fence = "---"
@@ -138,4 +142,84 @@ func Sections(text string) []Section {
 		section.State = SectionAnswered
 	}
 	return sections
+}
+
+// Phase is one `## Phase <n> — <name>` section of a plan, counted by the task
+// items under its `### Verify` heading.
+type Phase struct {
+	Number int
+	Name   string
+	Met    int
+	Total  int
+}
+
+var (
+	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$`)
+	taskItem     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[([^\]])\]\s`)
+	atxHeading   = regexp.MustCompile(`^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
+)
+
+const verifyHeading = "verify"
+
+// PlanPhases reads a plan's phases the way the plan pane does. A task item
+// with any marker but x counts as unmet, and items under any other heading,
+// `### See` included, count for nothing.
+func PlanPhases(text string) []Phase {
+	var phases []Phase
+	var phase *Phase
+	verifying, verified, fenced := false, false, ""
+	for _, line := range body(text) {
+		trimmed := strings.TrimSpace(line)
+		if marker := fenceMarker(trimmed); marker != "" {
+			switch {
+			case fenced == "":
+				fenced = marker
+				continue
+			case marker[0] == fenced[0] && len(marker) >= len(fenced) && strings.TrimLeft(trimmed, marker[:1]) == "":
+				fenced = ""
+				continue
+			}
+		}
+		if fenced != "" {
+			continue
+		}
+		if match := atxHeading.FindStringSubmatch(line); match != nil {
+			depth, name := len(match[1]), strings.TrimSpace(match[2])
+			if verifying && depth <= 3 {
+				verifying, verified = false, true
+			}
+			if depth <= 2 {
+				phase, verified = nil, false
+				if found := phaseHeading.FindStringSubmatch(name); depth == 2 && found != nil {
+					number, _ := strconv.Atoi(found[1])
+					phases = append(phases, Phase{Number: number, Name: found[2]})
+					phase = &phases[len(phases)-1]
+				}
+			} else if depth == 3 && !verified {
+				verifying = phase != nil && strings.EqualFold(name, verifyHeading)
+			}
+			continue
+		}
+		if !verifying {
+			continue
+		}
+		if match := taskItem.FindStringSubmatch(line); match != nil {
+			phase.Total++
+			if match[1] == "x" || match[1] == "X" {
+				phase.Met++
+			}
+		}
+	}
+	return phases
+}
+
+// fenceMarker is the run of backticks or tildes a fence line opens with.
+func fenceMarker(trimmed string) string {
+	for _, char := range []string{"`", "~"} {
+		run := len(trimmed) - len(strings.TrimLeft(trimmed, char))
+		if run >= 3 {
+			return trimmed[:run]
+		}
+	}
+	return ""
 }

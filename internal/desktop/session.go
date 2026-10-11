@@ -39,7 +39,7 @@ type sessionState struct {
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
 	process         *ptyProcess
-	shell           string
+	overviewWindow  string
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
@@ -246,23 +246,23 @@ type Sessions struct {
 	// that moved would rename every shortcut under the user's fingers.
 	rail []string
 
-	now         func() time.Time
-	retention   time.Duration
-	agents      map[string]*agentActivity
+	now    func() time.Time
+	agents map[string]*agentActivity
+	// trees pushes the shown session's agent tree; nil until the workbench runs.
+	trees       *agentTrees
 	repoChanges map[string]struct{}
 }
 
 func newSessions() *Sessions {
-	return newSessionsWithActivity(time.Now, finishedAgentRetention)
+	return newSessionsWithActivity(time.Now)
 }
 
-func newSessionsWithActivity(now func() time.Time, retention time.Duration) *Sessions {
+func newSessionsWithActivity(now func() time.Time) *Sessions {
 	return &Sessions{
 		touched:     make(chan struct{}, 1),
 		slugs:       map[string]*sessionState{},
 		terms:       map[string]*sessionState{},
 		now:         now,
-		retention:   retention,
 		agents:      map[string]*agentActivity{},
 		repoChanges: map[string]struct{}{},
 	}
@@ -585,7 +585,7 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 	slug := slugFor(root)
 	tracker := s.agents[slug]
 	if tracker == nil {
-		tracker = newAgentActivity(s.now, s.retention)
+		tracker = newAgentActivity(s.now)
 		s.agents[slug] = tracker
 	}
 	state := &sessionState{
@@ -614,22 +614,6 @@ func (s *Sessions) agentActivitySnapshots() map[string]agentActivitySnapshot {
 		snapshots[slug] = tracker.snapshot()
 	}
 	return snapshots
-}
-
-func (s *Sessions) earliestAgentExpiry() time.Time {
-	s.mu.Lock()
-	trackers := make([]*agentActivity, 0, len(s.agents))
-	for _, tracker := range s.agents {
-		trackers = append(trackers, tracker)
-	}
-	s.mu.Unlock()
-	var earliest time.Time
-	for _, tracker := range trackers {
-		if expiry := tracker.earliestExpiry(); !expiry.IsZero() && (earliest.IsZero() || expiry.Before(earliest)) {
-			earliest = expiry
-		}
-	}
-	return earliest
 }
 
 func (s *Sessions) dropAgentActivity(slug string) {

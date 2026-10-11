@@ -1,11 +1,11 @@
 <script>
   import { STICKER_IDS } from "../bridge/generated.js";
   import { uiScale } from "../scale.svelte.js";
-  import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
+  import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: {attention?: string, active?: number, coverage?: string, running?: boolean}, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     initials,
     shortcut = "",
@@ -86,12 +86,13 @@
       </div>
       <div class="facts">
         {#each facts as fact (fact.kind)}
-          <span class="fact {fact.kind}">
+          <span class="fact {fact.kind}" title={fact.title}>
+            {#if fact.kind === "tool"}{fact.label}{:else}
             {#if fact.kind !== "agents" || fact.active}
               <span class="glyph" class:running={fact.active} aria-hidden="true"
                 >{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
             {/if}
-            {fact.label}
+            {fact.label}{/if}
           </span>
         {/each}
       </div>
@@ -267,6 +268,15 @@
 
   .fact.attention {
     color: var(--state-waiting);
+  }
+
+  /* The tool line takes a row of its own and ellipsises at the rail's width. */
+  .fact.tool {
+    flex: 1 0 100%;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
   }
 
   .glyph.running {
