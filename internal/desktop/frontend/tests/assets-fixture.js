@@ -13,7 +13,7 @@ const entries = [
   { source: "thoughts/assets/z/screen.png", url: asset("small.png") + "?entry=3", kind: image },
   { source: "thoughts/assets/日本語 and spaces/" + "long-caption-".repeat(12) + ".jpg", url: asset("sample.jpg"), kind: image },
   ...["gif", "webp"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: image })),
-  ...["webm", "mp4"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: video })),
+  ...["sample-vp9.mp4", "sample.mp4"].map((file) => ({ source: `thoughts/assets/${file}`, url: asset(file), kind: video })),
   { source: "thoughts/assets/sample.avif", url: asset("sample.avif"), kind: image },
 ].map((entry) => ({ ...entry, path: "/sessions/fixture/" + entry.source }));
 const unplayable = { source: "thoughts/assets/not-a-video.mp4", path: "/sessions/fixture/thoughts/assets/not-a-video.mp4", url: asset("not-a-video.mp4"), kind: video };

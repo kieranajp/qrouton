@@ -31,7 +31,6 @@ var assetMedia = map[string]Media{
 	".mp4":  {"video/mp4", MediaVideo},
 	".m4v":  {"video/mp4", MediaVideo},
 	".mov":  {"video/quicktime", MediaVideo},
-	".webm": {"video/webm", MediaVideo},
 }
 
 func AssetMedia(name string) (Media, bool) {

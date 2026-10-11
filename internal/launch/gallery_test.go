@@ -112,7 +112,7 @@ func TestAssetReferencesRejectsUnreadableRegularFile(t *testing.T) {
 
 func TestAssetReferencesAdmitsMixedMediaInOrder(t *testing.T) {
 	root := t.TempDir()
-	names := []string{"a.png", "b.mp4", "c.MOV", "d.webm", "a.png"}
+	names := []string{"a.png", "b.mp4", "c.MOV", "d.m4v", "a.png"}
 	for _, name := range names {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("asset"), 0o644); err != nil {
 			t.Fatal(err)
@@ -126,6 +126,16 @@ func TestAssetReferencesAdmitsMixedMediaInOrder(t *testing.T) {
 		if ref.Source != names[i] {
 			t.Errorf("refs[%d] = %q, want %q", i, ref.Source, names[i])
 		}
+	}
+}
+
+func TestAssetReferencesRefusesWebM(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "clip.webm"), []byte("video"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := AssetReferences(root, []string{"clip.webm"}); !errors.Is(err, ErrUnsupportedAsset) {
+		t.Fatalf("webm = %v, want %v", err, ErrUnsupportedAsset)
 	}
 }
 

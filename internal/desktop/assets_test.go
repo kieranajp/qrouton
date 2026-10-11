@@ -26,6 +26,7 @@ func deckSession(t *testing.T) (root, outside string) {
 	for name, body := range map[string]string{
 		"shot.png":   "\x89PNG picture",
 		"clip.mp4":   "video",
+		"clip.webm":  "video",
 		"notes.md":   "# not media",
 		"deck.md":    "---\nmarp: true\n---\n",
 		"deck.marps": "",
@@ -60,6 +61,7 @@ func TestTheDeckRouteServesItsOwnMediaAndNothingElse(t *testing.T) {
 	}{
 		{"a picture beside the deck", "/deck/goodtoken/shot.png", "image/png", http.StatusOK},
 		{"a video beside the deck", "/deck/goodtoken/clip.mp4", "video/mp4", http.StatusOK},
+		{"a WebM beside the deck", "/deck/goodtoken/clip.webm", "video/webm", http.StatusOK},
 		{"a file that is not media", "/deck/goodtoken/notes.md", "", http.StatusNotFound},
 		{"a file that does not exist", "/deck/goodtoken/absent.png", "", http.StatusNotFound},
 		{"a token no window holds", "/deck/othertoken/shot.png", "", http.StatusNotFound},

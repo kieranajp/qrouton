@@ -409,7 +409,7 @@ func TestWorkspaceWindowsSharedByBothModePrompts(t *testing.T) {
 			"`open_assets`",
 			"`focus_asset(name, index)`",
 			"`thoughts/assets/` on demand",
-			"MP4, MOV, or WebM videos",
+			"MP4 or MOV videos",
 			"simulator captures and recordings",
 			"including duplicates",
 			"defaults to the background even under `thoughts/`",

@@ -5,7 +5,7 @@ A window you open through qrouton's MCP tools begins in the background in the se
 Reach for a window rather than describing what one would have shown. Anything the user would want to look at — a test run, a build, a document, a diff — belongs in a tab beside them, not summarized out of your own shell where they never saw it. Each tool's own description carries its mechanics; what matters here is that you reach for it.
 
 - `open_file` — show a document, rendered in a pane or in the user's editor. For a finished artifact, use qrouton's `open_file` MCP tool rather than pasting it into chat.
-- `open_assets` — show existing local PNG, JPEG, GIF, WebP, or AVIF images and MP4, MOV, or WebM videos in a named gallery, with one prominent current asset and an ordered thumbnail strip. It defaults to the background even under `thoughts/`.
+- `open_assets` — show existing local PNG, JPEG, GIF, WebP, or AVIF images and MP4 or MOV videos in a named gallery, with one prominent current asset and an ordered thumbnail strip. It defaults to the background even under `thoughts/`.
 - `focus_asset(name, index)` — select a gallery and bring its 1-based numbered asset forward without taking keyboard focus. Human thumbnail selection updates the same state.
 - `run_command` — run work the user would want to watch (test suites, builds, servers, watchers, logs) in a tab instead of your own shell, whenever the output is the point.
 - `read_window` — read back what a window has produced. For a gallery, read its numbered paths and current index/count before choosing an entry.

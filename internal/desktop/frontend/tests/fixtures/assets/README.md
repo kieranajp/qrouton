@@ -9,10 +9,10 @@ magick small.png sample.webp
 magick small.png sample.avif
 ```
 
-The two one-second clips were generated with FFmpeg.
+The two one-second clips were generated with FFmpeg. Both are MP4. The VP9 one carries the playback tests, because every Chromium build decodes VP9, while H.264 depends on the build.
 
 ```sh
-ffmpeg -f lavfi -i testsrc=size=160x90:rate=10 -t 1 -c:v libvpx-vp9 -an sample.webm
+ffmpeg -f lavfi -i testsrc=size=160x90:rate=10 -t 1 -c:v libvpx-vp9 -an -movflags +faststart sample-vp9.mp4
 ffmpeg -f lavfi -i testsrc=size=160x90:rate=10 -t 1 -c:v libx264 -pix_fmt yuv420p -an sample.mp4
 ```
 

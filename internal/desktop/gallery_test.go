@@ -57,7 +57,7 @@ func TestAssetGalleryRegistryContentReadAndAssetRoute(t *testing.T) {
 func TestAssetGalleryPayloadCarriesEachEntrysKind(t *testing.T) {
 	w, _ := testWindows(t)
 	root := w.shown().root()
-	names := []string{"a.png", "b.mp4", "c.mov", "d.webm", "a.png"}
+	names := []string{"a.png", "b.mp4", "c.mov", "d.m4v", "a.png"}
 	refs := make([]workbench.AssetRef, len(names))
 	for i, name := range names {
 		if err := os.WriteFile(filepath.Join(root, name), []byte("asset"), 0o644); err != nil {

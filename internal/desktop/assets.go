@@ -139,8 +139,8 @@ func deckAsset(decks deckLookup) http.HandlerFunc {
 		known := false
 		if m, ok := workbench.AssetMedia(rel); ok {
 			media, known = m.Type, true
-		} else if strings.EqualFold(path.Ext(rel), deckSVGExt) {
-			media, known = deckSVGType, true
+		} else if extra, ok := deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]; ok {
+			media, known = extra, true
 		}
 		if !split || rel == "" || !known || decks == nil {
 			http.NotFound(w, r)

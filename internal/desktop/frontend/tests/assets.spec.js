@@ -170,34 +170,34 @@ test("a pending human request cannot affect a replacement gallery", async ({ pag
   await expect(page.locator(".position")).toHaveText("Image 1 of 9");
 });
 
-const WEBM = 7;
+const PLAYABLE = 7;
 const MP4 = 8;
 const thumbnail = (page, index) => page.locator(".asset-strip li").nth(index - 1).locator("video");
 const player = (page) => page.locator(".primary video");
 
-async function selectWebm(page) {
+async function selectPlayable(page) {
   await page.goto("/tests/assets.html");
-  await page.locator(".asset-strip button").nth(WEBM - 1).click();
-  await expect(player(page)).toHaveAttribute("src", /sample\.webm/);
+  await page.locator(".asset-strip button").nth(PLAYABLE - 1).click();
+  await expect(player(page)).toHaveAttribute("src", /sample-vp9\.mp4/);
   await expect.poll(() => player(page).evaluate((video) => video.readyState)).toBeGreaterThanOrEqual(1);
 }
 
-test("the WebM thumbnail paints a frame under its play glyph", async ({ page }) => {
+test("the VP9 MP4 thumbnail paints a frame under its play glyph", async ({ page }) => {
   await page.goto("/tests/assets.html");
-  const video = thumbnail(page, WEBM);
-  await expect(video).toHaveAttribute("src", /sample\.webm#t=0\.1$/);
+  const video = thumbnail(page, PLAYABLE);
+  await expect(video).toHaveAttribute("src", /sample-vp9\.mp4#t=0\.1$/);
   await expect.poll(() => video.evaluate((v) => v.readyState >= 2 && v.videoWidth > 0)).toBe(true);
-  await expect(page.locator(".asset-strip li").nth(WEBM - 1).locator(".play")).toBeVisible();
+  await expect(page.locator(".asset-strip li").nth(PLAYABLE - 1).locator(".play")).toBeVisible();
 });
 
-test("selecting the WebM shows a paused player without autoplay", async ({ page }) => {
-  await selectWebm(page);
+test("selecting the VP9 MP4 shows a paused player without autoplay", async ({ page }) => {
+  await selectPlayable(page);
   expect(await player(page).evaluate((video) => ({ paused: video.paused, autoplay: video.autoplay, controls: video.controls })))
     .toEqual({ paused: true, autoplay: false, controls: true });
 });
 
 test("selecting another entry removes the playing video", async ({ page }) => {
-  await selectWebm(page);
+  await selectPlayable(page);
   const playing = await player(page).elementHandle();
   await playing.evaluate((video) => { video.muted = true; return video.play(); });
   expect(await playing.evaluate((video) => video.paused)).toBe(false);
@@ -211,13 +211,13 @@ test("selecting another entry removes the playing video", async ({ page }) => {
 
 test("the position label names a video", async ({ page }) => {
   await page.goto("/tests/assets.html");
-  await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), WEBM);
-  await expect(page.locator(".position")).toHaveText(`Video ${WEBM} of 9`);
-  await expect(page.locator(".asset-strip button").nth(WEBM - 1)).toHaveAccessibleName(/^Video 7: /);
+  await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), PLAYABLE);
+  await expect(page.locator(".position")).toHaveText(`Video ${PLAYABLE} of 9`);
+  await expect(page.locator(".asset-strip button").nth(PLAYABLE - 1)).toHaveAccessibleName(/^Video 7: /);
 });
 
 test("clicking a video's main view opens no lightbox", async ({ page }) => {
-  await selectWebm(page);
+  await selectPlayable(page);
   await expect(page.locator(".primary button")).toHaveCount(0);
   await player(page).click({ position: { x: 20, y: 20 } });
   await expect(page.locator(".lightbox")).toHaveCount(0);
@@ -226,7 +226,7 @@ test("clicking a video's main view opens no lightbox", async ({ page }) => {
 
 test("lightbox stepping skips videos and keeps focus in the lightbox", async ({ page }) => {
   await page.goto("/tests/assets.html");
-  await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), WEBM - 1);
+  await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), PLAYABLE - 1);
   await expect.poll(() => decoded(primary(page))).toBe(true);
   await primary(page).click();
   const lightbox = page.getByRole("dialog", { name: /Expanded image/ });
@@ -284,12 +284,12 @@ test("the menu on an undecodable video still offers Copy Path and Reveal", async
 });
 
 test("Copy on a video says the video was copied", async ({ page }) => {
-  await selectWebm(page);
-  await menuLabels(page, page.locator(".asset-strip button").nth(WEBM - 1));
+  await selectPlayable(page);
+  await menuLabels(page, page.locator(".asset-strip button").nth(PLAYABLE - 1));
   await page.locator(".anchor").getByRole("button", { name: "Copy", exact: true }).click();
   await expect(page.locator(".notice")).toHaveText("Video copied");
   expect(await page.evaluate(() => window.bridgeCalls.filter((call) => call.name.endsWith(".CopyAsset")).map((call) => call.args)))
-    .toEqual([["fixture", "/sessions/fixture/thoughts/assets/sample.webm"]]);
+    .toEqual([["fixture", "/sessions/fixture/thoughts/assets/sample-vp9.mp4"]]);
 });
 
 test("Copy on an image still says the image was copied", async ({ page }) => {
@@ -301,10 +301,10 @@ test("Copy on an image still says the image was copied", async ({ page }) => {
 
 test("the main view keeps loading while only the thumbnail has loaded", async ({ page }) => {
   await page.goto("/tests/assets.html");
-  await expect.poll(() => thumbnail(page, WEBM).evaluate((video) => video.readyState)).toBeGreaterThanOrEqual(1);
-  await page.route("**/sample.webm", () => {});
-  await page.locator(".asset-strip button").nth(WEBM - 1).click();
-  await expect(player(page)).toHaveAttribute("src", /sample\.webm$/);
+  await expect.poll(() => thumbnail(page, PLAYABLE).evaluate((video) => video.readyState)).toBeGreaterThanOrEqual(1);
+  await page.route("**/sample-vp9.mp4", () => {});
+  await page.locator(".asset-strip button").nth(PLAYABLE - 1).click();
+  await expect(player(page)).toHaveAttribute("src", /sample-vp9\.mp4$/);
   await expect(page.locator(".primary .loading")).toHaveText("Loading video…");
   expect(await player(page).evaluate((video) => video.readyState)).toBe(0);
 });
@@ -314,7 +314,7 @@ test.describe("on Linux", () => {
 
   test("the menu leaves out Copy", async ({ page }) => {
     await page.goto("/tests/assets.html");
-    expect(await menuLabels(page, page.locator(".asset-strip button").nth(WEBM - 1))).toEqual(["Copy Path", "Reveal"]);
+    expect(await menuLabels(page, page.locator(".asset-strip button").nth(PLAYABLE - 1))).toEqual(["Copy Path", "Reveal"]);
   });
 
   test("the format failure names the GStreamer packages", async ({ page }) => {
