@@ -17,19 +17,19 @@ test("the tabs past capacity go to the menu, keeping their own indexes", () => {
   const { shown, hidden } = split(strip, 0, 3);
   assert.deepEqual(
     shown.map((entry) => entry.tab),
-    ["shell", "plan"],
+    ["shell", "plan", "shell 2"],
   );
   assert.deepEqual(
     hidden.map((entry) => entry.index),
-    [2, 3, 4],
+    [3, 4],
   );
 });
 
 // A click has to reach the window it named, not the one at that spot in the menu.
 test("a hidden tab reports the index it has in the whole strip", () => {
   const { hidden } = split(strip, 0, 3);
-  assert.equal(hidden[2].tab, "research");
-  assert.equal(strip[hidden[2].index], "research");
+  assert.equal(hidden[1].tab, "research");
+  assert.equal(strip[hidden[1].index], "research");
 });
 
 test("the selected tab is drawn even when it sits past capacity", () => {

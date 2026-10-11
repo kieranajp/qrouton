@@ -125,10 +125,15 @@ test("a tab too narrow for a readable label goes to the overflow menu", async ({
       whole: label.scrollWidth <= label.clientWidth,
     })),
   );
-  expect(labels.length).toBeGreaterThan(0);
+  // 750px less the New and overflow buttons leaves about 583px: the measured
+  // Overview tab plus three command tabs at their 141px minimum.
+  expect(labels).toHaveLength(3);
   for (const label of labels) expect(label.whole || label.width >= 36).toBe(true);
-  const hidden = 5 - labels.length;
-  if (hidden) await expect(page.getByRole("button", { name: new RegExp(`^${hidden} more tabs`) })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^2 more tabs/ })).toBeVisible();
+  const widest = await page.evaluate(() =>
+    Math.max(...[...document.querySelectorAll(".tab:not(.home)")].map((tab) => tab.getBoundingClientRect().width)),
+  );
+  expect(widest).toBeLessThanOrEqual(160);
 });
 
 test("a tab Go names an icon for draws it before its label", async ({ page }) => {

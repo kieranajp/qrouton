@@ -99,7 +99,8 @@
     background: transparent;
     flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(210px * var(--ui-scale));
+    box-sizing: border-box;
+    max-width: calc(160px * var(--ui-scale));
     overflow: hidden;
   }
 

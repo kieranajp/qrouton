@@ -7,8 +7,8 @@ import { TAB_STATUSES } from "../bridge/generated.js";
 export function split(tabs, selected, capacity) {
   const all = tabs.map((tab, index) => ({ tab, index }));
   if (all.length <= capacity) return { shown: all, hidden: [] };
-  const shown = capacity > 1 ? all.slice(0, capacity - 1) : [];
-  if (!shown.some((entry) => entry.index === selected) && all[selected]) shown.push(all[selected]);
+  const shown = all.slice(0, Math.max(0, capacity));
+  if (all[selected] && !shown.some((entry) => entry.index === selected)) shown.splice(-1, 1, all[selected]);
   const drawn = new Set(shown.map((entry) => entry.index));
   return { shown, hidden: all.filter((entry) => !drawn.has(entry.index)) };
 }
