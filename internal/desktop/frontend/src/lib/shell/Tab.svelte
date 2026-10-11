@@ -1,5 +1,5 @@
 <script>
-  import StatusDot from "../core/StatusDot.svelte";
+  import Icon from "../core/Icon.svelte";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import { tabLabel } from "./tabs.js";
 
@@ -76,13 +76,14 @@
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
     {#if pinned}<span class="glyph" aria-hidden="true"></span>{/if}
-    {#if status}<StatusDot state={status} size={7} />{/if}
+    {#if status && status !== "idle"}<Icon name={status} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
     <span class="label">{label}</span>
   </button>
   {#if closable}
-    <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}
-      >&#10005;</button>
+    <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}>
+      <Icon name="close" />
+    </button>
   {/if}
 </div>
 
@@ -148,7 +149,6 @@
   }
 
   .close {
-    font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
   }
 

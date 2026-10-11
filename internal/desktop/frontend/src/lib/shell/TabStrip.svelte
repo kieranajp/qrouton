@@ -1,6 +1,6 @@
 <script>
   import Button from "../core/Button.svelte";
-  import StatusDot from "../core/StatusDot.svelte";
+  import Icon from "../core/Icon.svelte";
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
@@ -15,7 +15,7 @@
     onClose,
     onReorder,
     onNew,
-    newLabel = "New ▾",
+    newLabel = "New",
     ...rest
   } = $props();
 
@@ -91,10 +91,9 @@
         size="sm"
         onclick={() => (listing = !listing)}
         aria-label="{drawn.hidden.length} more tabs{hiddenStatus ? `, ${hiddenStatus}` : ''}">
-        {#if hiddenStatus}
-          <StatusDot state={hiddenStatus} size={7} />
-        {/if}
-        {drawn.hidden.length} ▾
+        {#if hiddenStatus}<Icon name={hiddenStatus} />{/if}
+        {drawn.hidden.length}
+        <Icon name="overflow" />
       </Button>
       {#if listing}
         <Menu
