@@ -4,15 +4,13 @@ import {
   activeAgent,
   capabilityNote,
   duration,
-  hierarchy,
   projectAgents,
   providerLabel,
   recordLabel,
   repositoryLine,
-  roleLabel,
   rowLabel,
+  rows,
   stateLabel,
-  subagentTally,
   summaryFacts,
   typeLabel,
 } from "./activity.js";
@@ -50,7 +48,6 @@ test("a running session with unreadable coverage claims nothing about it", () =>
 });
 
 test("a name qrouton cannot read is a line it does not draw", () => {
-  assert.equal(roleLabel("Coordinator"), "");
   assert.equal(stateLabel("Maybe"), "");
   assert.equal(providerLabel(""), "");
   assert.equal(typeLabel(""), "");
@@ -58,15 +55,14 @@ test("a name qrouton cannot read is a line it does not draw", () => {
   assert.equal(activeAgent({ state: "Active" }), true);
   assert.equal(activeAgent({ state: "Finished" }), false);
   assert.equal(
-    recordLabel({ role: "Specialist", type: "code-reviewer", state: "Finished" }),
-    "Specialist · Code Reviewer · Finished",
+    recordLabel({ id: "a1", type: "code-reviewer", state: "Finished" }),
+    "Code Reviewer · Finished",
   );
 });
 
-test("waiting is the orchestrator's alone: only it can be blocked on the user", () => {
-  assert.equal(stateLabel("Waiting for you", "Orchestrator"), "Waiting for you");
-  assert.equal(stateLabel("Waiting for you", "Lead"), "Working");
-  assert.equal(stateLabel("Waiting for you", "Specialist"), "Working");
+test("waiting is the root's alone: only it can be blocked on the user", () => {
+  assert.equal(stateLabel("Waiting for you", true), "Waiting for you");
+  assert.equal(stateLabel("Waiting for you", false), "Working");
 });
 
 test("one repository is named and the rest are counted", () => {
@@ -97,21 +93,13 @@ test("a run with no start stamp behind it reports no duration", () => {
   );
 });
 
-test("the disclosure line counts the subagents and how many are through", () => {
-  assert.equal(
-    subagentTally([{ state: "Working" }, { state: "Finished" }, { state: "Failed" }]),
-    "3 subagents · 2 done",
-  );
-  assert.equal(subagentTally([{ state: "Working" }]), "1 subagent · 0 done");
-});
-
 test("the session's runner is called what Go calls it, and any other provider is humanized", () => {
   const panel = { provider: "agy", provider_label: "Antigravity CLI" };
   assert.equal(providerLabel("agy", panel), "Antigravity CLI");
   assert.equal(providerLabel("some-runner", panel), "Some Runner");
   assert.equal(providerLabel("agy"), "Agy");
   assert.equal(
-    recordLabel({ role: "Orchestrator", provider: "agy", state: "Working" }, panel),
+    recordLabel({ id: "root", provider: "agy", state: "Working" }, panel),
     "Orchestrator · Antigravity CLI · Working",
   );
 });
@@ -132,18 +120,12 @@ test("provider capability copy reports coverage without mentioning attention", (
   );
 });
 
-test("tree projection uses exact known parents and leaves unknown parentage flat", () => {
-  const root = { id: "root", run_id: "7", provider: "claude", role: "Orchestrator" };
-  const lead = {
-    id: "lead-1", run_id: "7", provider: "claude", parent_id: "root", parent_known: true,
-  };
-  const specialist = {
-    id: "specialist-1", run_id: "7", provider: "claude", parent_id: "lead-1", parent_known: true,
-  };
-  const unknown = { id: "agent-2", run_id: "7", provider: "claude", parent_known: false };
-  const wrongRun = {
-    id: "agent-3", run_id: "8", provider: "claude", parent_id: "lead-1", parent_known: true,
-  };
+test("tree projection uses exact known parents and leaves unknown parentage observed", () => {
+  const root = { id: "root", run_id: "7", provider: "claude" };
+  const lead = { id: "lead-1", run_id: "7", parent_id: "root", parent_known: true };
+  const specialist = { id: "specialist-1", run_id: "7", parent_id: "lead-1", parent_known: true };
+  const unknown = { id: "agent-2", run_id: "7", parent_id: "root", parent_known: false };
+  const wrongRun = { id: "agent-3", run_id: "8", parent_id: "lead-1", parent_known: true };
 
   const projected = projectAgents([root, lead, specialist, unknown, wrongRun]);
   assert.equal(projected.trees.length, 1);
@@ -152,21 +134,29 @@ test("tree projection uses exact known parents and leaves unknown parentage flat
   assert.deepEqual(projected.observed, [unknown, wrongRun]);
 });
 
-test("the hierarchy is three ranks, with subagents held behind their lead", () => {
-  const root = { id: "root", run_id: "7", provider: "claude", role: "Orchestrator" };
-  const lead = {
-    id: "lead-1", run_id: "7", provider: "claude", parent_id: "root", parent_known: true,
-    role: "Lead", type: "qrouton-planning-lead",
-  };
-  const sub = {
-    id: "sub-1", run_id: "7", provider: "claude", parent_id: "lead-1", parent_known: true,
-    role: "Specialist",
-  };
+test("the tree follows parents to any depth, in either record order", () => {
+  const chain = [
+    { id: "root", run_id: "7" },
+    { id: "a", run_id: "7", parent_id: "root", parent_known: true },
+    { id: "b", run_id: "7", parent_id: "a", parent_known: true },
+    { id: "c", run_id: "7", parent_id: "b", parent_known: true },
+    { id: "d", run_id: "7", parent_id: "c", parent_known: true },
+  ];
+  for (const records of [chain, [...chain].reverse()]) {
+    const projected = projectAgents(records);
+    assert.deepEqual(
+      rows(projected.trees).map((node) => [node.record.id, node.level]),
+      [["root", 1], ["a", 2], ["b", 3], ["c", 4], ["d", 5]],
+    );
+    assert.deepEqual(projected.observed, []);
+  }
+});
 
-  const ranks = hierarchy([root, lead, sub]);
-  assert.equal(ranks.roots.length, 1);
-  assert.equal(ranks.roots[0].record, root);
-  assert.equal(ranks.roots[0].leads.length, 1);
-  assert.equal(ranks.roots[0].leads[0].record, lead);
-  assert.deepEqual(ranks.roots[0].leads[0].subagents, [sub]);
+test("a parent cycle cut off from the root is observed, not looped over", () => {
+  const records = [
+    { id: "root", run_id: "7" },
+    { id: "x", run_id: "7", parent_id: "y", parent_known: true },
+    { id: "y", run_id: "7", parent_id: "x", parent_known: true },
+  ];
+  assert.deepEqual(projectAgents(records).observed.map((record) => record.id), ["x", "y"]);
 });

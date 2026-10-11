@@ -20,7 +20,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	backgroundRoot := sessionDir(t, root, "background")
 	shownRoot := sessionDir(t, root, "onscreen")
 	sessionDir(t, root, "cold")
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	background := reg.add(backgroundRoot, []string{"/bin/cat"}, os.Environ())
 	shown := reg.add(shownRoot, []string{"/bin/cat"}, os.Environ())
 	reg.reveal(shown)
@@ -62,7 +62,7 @@ func TestSelectedAgentDetailFollowsTheSelectedSlugAndKeepsReferenceStats(t *test
 	root := t.TempDir()
 	alphaRoot := sessionDir(t, root, "alpha")
 	betaRoot := sessionDir(t, root, "beta")
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
 	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
 	alpha.agents.begin(agentProviderClaude, 10)
@@ -187,7 +187,7 @@ func TestAPushedSessionCommitLightsImplementation(t *testing.T) {
 
 func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now, time.Minute)
+	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
@@ -201,19 +201,6 @@ func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
 		t.Fatalf("record providers = %+v", providers)
 	}
 }
-
-type fakeChromeExpiryTimer struct {
-	ch     chan time.Time
-	resets chan time.Duration
-}
-
-func newFakeChromeExpiryTimer() *fakeChromeExpiryTimer {
-	return &fakeChromeExpiryTimer{ch: make(chan time.Time, 1), resets: make(chan time.Duration, 8)}
-}
-
-func (t *fakeChromeExpiryTimer) channel() <-chan time.Time { return t.ch }
-func (t *fakeChromeExpiryTimer) reset(after time.Duration) { t.resets <- after }
-func (t *fakeChromeExpiryTimer) stop()                     {}
 
 type chromeClock struct {
 	mu sync.Mutex
@@ -230,62 +217,6 @@ func (c *chromeClock) advance(by time.Duration) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.at = c.at.Add(by)
-}
-
-func TestAgentExpiryTimerPushesPrunedChromeAtTheExactBoundary(t *testing.T) {
-	clock := &chromeClock{at: time.Date(2026, 8, 28, 15, 0, 0, 0, time.UTC)}
-	retention := 10 * time.Second
-	root := t.TempDir()
-	dir := sessionDir(t, root, "octopus")
-	reg := newSessionsWithActivity(clock.now, retention)
-	state := reg.add(dir, []string{"/bin/cat"}, os.Environ())
-	reg.reveal(state)
-	state.agents.begin(agentProviderClaude, 1)
-	state.agents.exitWithProvider("", 0)
-	select {
-	case <-reg.touched:
-	default:
-	}
-
-	timer := newFakeChromeExpiryTimer()
-	updates := make(chan status.Fields, 16)
-	emit := func(event string, payload any) {
-		if event == chromeEvent {
-			updates <- payload.(status.Fields)
-		}
-	}
-	counts := unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, false },
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	go watchWithExpiryTimer(ctx, reg, root, nil, emit, time.Hour, time.Hour, counts, timer)
-
-	initial := <-updates
-	if len(initial.Agents.Agents) != 1 {
-		t.Fatalf("initial recent agents = %+v", initial.Agents.Agents)
-	}
-	if after := <-timer.resets; after != retention {
-		t.Fatalf("expiry timer reset to %s, want %s", after, retention)
-	}
-	clock.advance(retention - time.Millisecond)
-	pushChrome(reg, root, nil, nil, nil, emit)
-	if before := <-updates; len(before.Agents.Agents) != 1 {
-		t.Fatalf("record pruned before boundary: %+v", before.Agents.Agents)
-	}
-	clock.advance(time.Millisecond)
-	timer.ch <- clock.now()
-	for {
-		select {
-		case fields := <-updates:
-			if len(fields.Agents.Agents) == 0 {
-				return
-			}
-		case <-time.After(2 * time.Second):
-			t.Fatal("expiry timer did not publish the pruned activity panel")
-		}
-	}
 }
 
 func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
@@ -387,7 +318,7 @@ func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
 func TestRailRowAndAgentPanelAgreeOnOneSessionsActivity(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	shown := reg.add(sessionDir(t, root, "octopus"), []string{"/bin/cat"}, os.Environ())
 	reg.reveal(shown)
 	shown.agents.begin(agentProviderClaude, 1)

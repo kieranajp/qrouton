@@ -115,7 +115,7 @@ type AgentRecord struct {
 	Provider    string    `json:"provider"`
 	ParentID    string    `json:"parent_id"`
 	Type        string    `json:"type"`
-	Role        string    `json:"role"`
+	Description string    `json:"description"`
 	State       string    `json:"state"`
 	ParentKnown bool      `json:"parent_known"`
 	StartedAt   time.Time `json:"started_at"`

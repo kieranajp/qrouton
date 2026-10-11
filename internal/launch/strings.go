@@ -150,10 +150,7 @@ const (
 	claudeHooksKey      = "hooks"
 	claudeCommandType   = "command"
 
-	claudeSubagentStartHook = agentevent.HookSubagentStart
-	claudeSubagentStopHook  = agentevent.HookSubagentStop
-	claudeNotificationHook  = agentevent.HookNotification
-	claudeStopHook          = agentevent.HookStop
+	claudeAsyncKey = "async"
 
 	codexMCPCommandKey           = "mcp_servers." + serverName + ".command="
 	codexMCPArgsKey              = "mcp_servers." + serverName + ".args="

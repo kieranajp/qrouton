@@ -17,7 +17,7 @@ import (
 func bugReportSetup(t *testing.T) (*BugReports, *sessionState, *chromeClock) {
 	t.Helper()
 	clock := &chromeClock{at: time.Now()}
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	s := reg.add(t.TempDir(), nil, nil)
 	b := newBugReports(reg)
 	b.write = func(context.Context, string, string) (github.Issue, error) {
@@ -225,7 +225,7 @@ func TestBugReportMissingCredentialMakesNoRequest(t *testing.T) {
 func TestBugReportChromeHydratesAndExpiresOnlyOwnedPreview(t *testing.T) {
 	clock := &chromeClock{at: time.Now()}
 	root := t.TempDir()
-	reg := newSessionsWithActivity(clock.now, time.Minute)
+	reg := newSessionsWithActivity(clock.now)
 	first := reg.add(sessionDir(t, root, "first"), nil, nil)
 	second := reg.add(sessionDir(t, root, "second"), nil, nil)
 	b := newBugReports(reg)

@@ -282,6 +282,49 @@ func TestClaudeHookCommandsSurviveShellMetacharacters(t *testing.T) {
 	}
 }
 
+// Every Claude hook runs async, so no tool call waits on the workbench, and the
+// hooks wired are exactly the ones the tracker reads capabilities from.
+func TestClaudeHooksAreAsyncAndMatchRunnerHooks(t *testing.T) {
+	r := Runner{ID: "claude", Command: []string{"claude"}}
+	argv, _, err := runnerLaunch(r, "/bin/qrouton", "/work/s", EditorCommand{}, workbench.Handle{Socket: "/tmp/s.sock"}, 1, false, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := argv[slices.Index(argv, "--settings")+1]
+	var settings struct {
+		Hooks map[string][]struct {
+			Hooks []struct {
+				Async bool `json:"async"`
+			} `json:"hooks"`
+		} `json:"hooks"`
+	}
+	if err := json.Unmarshal([]byte(raw), &settings); err != nil {
+		t.Fatal(err)
+	}
+	wired := make([]string, 0, len(settings.Hooks))
+	for hook, groups := range settings.Hooks {
+		wired = append(wired, hook)
+		for _, group := range groups {
+			for _, entry := range group.Hooks {
+				if !entry.Async {
+					t.Errorf("%s hook is not async", hook)
+				}
+			}
+		}
+	}
+	want := RunnerHooks("claude")
+	slices.Sort(wired)
+	slices.Sort(want)
+	if !slices.Equal(wired, want) {
+		t.Fatalf("wired hooks = %v, want %v", wired, want)
+	}
+	for _, hook := range []string{"PreToolUse", "PostToolUse", "PostToolUseFailure", "UserPromptSubmit", "StopFailure"} {
+		if !slices.Contains(want, hook) {
+			t.Errorf("Claude is not wired for %s", hook)
+		}
+	}
+}
+
 func TestRunnerLaunchInjectsCodexAgentHooks(t *testing.T) {
 	r := Runner{ID: runnerIDCodex, Command: []string{runnerIDCodex, codexBypassSandboxFlag}}
 	handle := testHandle()

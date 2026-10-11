@@ -52,7 +52,6 @@ var valueSets = []valueSet{
 	{name: "ACTIVITIES", typedef: "Activity", dir: statusPackage, prefix: "Activity"},
 	{name: "AGENT_ATTENTION", typedef: "AgentAttention", dir: statusPackage, prefix: "AgentAttention"},
 	{name: "AGENT_COVERAGE", typedef: "AgentCoverage", dir: statusPackage, prefix: "AgentCoverage"},
-	{name: "AGENT_ROLES", typedef: "AgentRole", dir: statusPackage, prefix: "AgentRole"},
 	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
 	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind"},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},

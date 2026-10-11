@@ -51,6 +51,7 @@ type Request struct {
 	Ticket           *TicketRequest             `json:"ticket,omitempty"`
 	RunnerGeneration *RunnerGenerationRequest   `json:"runner_generation,omitempty"`
 	Lifecycle        *DelegatedLifecycleRequest `json:"lifecycle,omitempty"`
+	AgentEvent       *AgentEventRequest         `json:"agent_event,omitempty"`
 	VaultSearch      *vault.Query               `json:"vault_search,omitempty"`
 	VaultRead        *vault.ReadRequest         `json:"vault_read,omitempty"`
 }
@@ -90,6 +91,56 @@ type DelegatedLifecycleRequest struct {
 	Type       string    `json:"type,omitempty"`
 	ParentID   string    `json:"parent_id,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
+}
+
+// AgentEventRequest is one runner hook, reduced by the hook binary to what the
+// agent tree needs. Model text arrives truncated and is shown, never read.
+type AgentEventRequest struct {
+	Provider   string    `json:"provider"`
+	Generation uint64    `json:"generation"`
+	Hook       string    `json:"hook"`
+	Timestamp  time.Time `json:"timestamp"`
+	// AgentID is the agent the hook fired in, and empty for the root.
+	AgentID   string `json:"agent_id,omitempty"`
+	AgentType string `json:"agent_type,omitempty"`
+
+	ToolUseID string `json:"tool_use_id,omitempty"`
+	Tool      string `json:"tool,omitempty"`
+	Target    string `json:"target,omitempty"`
+
+	Spawn   *AgentSpawn   `json:"spawn,omitempty"`
+	ChildID string        `json:"child_id,omitempty"`
+	Outcome *AgentOutcome `json:"outcome,omitempty"`
+
+	Message          string `json:"message,omitempty"`
+	NotificationType string `json:"notification_type,omitempty"`
+
+	BackgroundTasks []string           `json:"background_tasks,omitempty"`
+	Notifications   []TaskNotification `json:"notifications,omitempty"`
+}
+
+// AgentSpawn is the Agent tool's input: what the caller asked for.
+type AgentSpawn struct {
+	Type        string `json:"type,omitempty"`
+	Description string `json:"description,omitempty"`
+	Async       bool   `json:"async,omitempty"`
+}
+
+// AgentOutcome is how a spawned agent finished, as the harness reports it.
+type AgentOutcome struct {
+	Status     string `json:"status"`
+	Tokens     int    `json:"tokens,omitempty"`
+	DurationMs int64  `json:"duration_ms,omitempty"`
+	ToolUses   int    `json:"tool_uses,omitempty"`
+}
+
+// TaskNotification is a background agent's result, delivered to its caller as
+// a prompt.
+type TaskNotification struct {
+	TaskID    string       `json:"task_id"`
+	ToolUseID string       `json:"tool_use_id,omitempty"`
+	Result    string       `json:"result,omitempty"`
+	Outcome   AgentOutcome `json:"outcome"`
 }
 
 // NewSocketPath reserves an address for a desktop process's control socket.
@@ -282,6 +333,11 @@ func (h Handle) Attention(ctx context.Context, activity string, generation uint6
 func (h Handle) RunnerGeneration(ctx context.Context, provider string, generation uint64) error {
 	_, err := h.client().call(ctx, Request{Op: OpRunnerGeneration,
 		RunnerGeneration: &RunnerGenerationRequest{Provider: provider, Generation: generation}})
+	return err
+}
+
+func (h Handle) AgentEvent(ctx context.Context, event AgentEventRequest) error {
+	_, err := h.client().call(ctx, Request{Op: OpAgentEvent, AgentEvent: &event})
 	return err
 }
 

@@ -56,6 +56,13 @@ type injectContext struct {
 	override bool
 }
 
+var claudeHooks = []string{
+	agentevent.HookSubagentStart, agentevent.HookSubagentStop,
+	agentevent.HookNotification, agentevent.HookStop, agentevent.HookStopFailure,
+	agentevent.HookPreToolUse, agentevent.HookPostToolUse, agentevent.HookPostToolUseFailure,
+	agentevent.HookUserPromptSubmit,
+}
+
 var runnerSpecs = []runnerSpec{
 	{
 		ID: runnerIDClaude, Label: runnerLabelClaude,
@@ -64,8 +71,7 @@ var runnerSpecs = []runnerSpec{
 		Prompt:  promptAsArgument,
 		MCP:     claudeMCP,
 		Inject:  injectClaude,
-		Hooks: []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop,
-			agentevent.HookNotification, agentevent.HookStop},
+		Hooks:   claudeHooks,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
@@ -243,13 +249,14 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
 		" " + providerFlag + " " + runnerIDClaude
+	// Async, so a tool call never waits on the workbench; the tracker accepts
+	// events in any order.
+	hooks := map[string]any{}
+	for _, hook := range claudeHooks {
+		hooks[hook] = commandHook(true, hookCommand)
+	}
 	// Strings and maps of them: marshalling cannot fail.
-	settings, _ := json.Marshal(map[string]any{claudeHooksKey: map[string]any{
-		claudeSubagentStartHook: commandHook(hookCommand),
-		claudeSubagentStopHook:  commandHook(hookCommand),
-		claudeNotificationHook:  commandHook(hookCommand),
-		claudeStopHook:          commandHook(hookCommand),
-	}})
+	settings, _ := json.Marshal(map[string]any{claudeHooksKey: hooks})
 	env := workbench.WithEnv(os.Environ(), claudeMaintainProjectWorkingDirEnvVar,
 		claudeMaintainProjectWorkingDirValue)
 	return append(argv, claudeSettingsFlag, string(settings)), env, nil
@@ -501,10 +508,13 @@ func agyMCPConfig(existing, bin string, args []string) (string, error) {
 	return string(b), nil
 }
 
-func commandHook(commands ...string) []map[string]any {
-	entries := make([]map[string]string, len(commands))
+func commandHook(async bool, commands ...string) []map[string]any {
+	entries := make([]map[string]any, len(commands))
 	for i, command := range commands {
-		entries[i] = map[string]string{claudeTypeKey: claudeCommandType, claudeCommandKey: command}
+		entries[i] = map[string]any{claudeTypeKey: claudeCommandType, claudeCommandKey: command}
+		if async {
+			entries[i][claudeAsyncKey] = true
+		}
 	}
 	return []map[string]any{{claudeHooksKey: entries}}
 }

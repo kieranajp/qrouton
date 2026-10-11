@@ -41,15 +41,11 @@ const (
 	AgentCoverageRoot = "root"
 	AgentCoverageNone = "none"
 
-	AgentRoleOrchestrator = "Orchestrator"
-	AgentRoleLead         = "Lead"
-	AgentRoleSpecialist   = "Specialist"
-	AgentRoleUnavailable  = "Role unavailable"
-
 	AgentStateWaiting  = "Waiting for you"
 	AgentStateWorking  = "Working"
 	AgentStateIdle     = "Idle"
 	AgentStateActive   = "Active"
 	AgentStateFinished = "Finished"
 	AgentStateFailed   = "Failed"
+	AgentStateEnded    = "Ended with run"
 )

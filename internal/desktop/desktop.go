@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -195,6 +196,20 @@ func attend(state *sessionState, shown func() *sessionState, touch, ring func())
 	}
 }
 
+// hookAttention is what a reduced hook says about the root's attention: the
+// same three signals the lifecycle-only runners send on their own.
+func hookAttention(req workbench.AgentEventRequest) string {
+	switch {
+	case req.Hook == agentevent.HookNotification:
+		return status.ActivityWaiting
+	case req.Hook == agentevent.HookStop && req.AgentID == "":
+		return status.ActivityTurnEnded
+	case req.Hook == agentevent.HookSubagentStart:
+		return status.ActivityWorking
+	}
+	return ""
+}
+
 // run is Run with the renderer already built, so the window lifecycle and the
 // control socket are exercised against a double instead of a display.
 func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
@@ -216,11 +231,12 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {
 				return reg.current() == s && r.Focused(mainWindowName)
 			})
+			attention := attend(state, reg.current, reg.touch, ring)
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
 				thoughts:   opts.Config.ThoughtsRoots,
-				attention:  attend(state, reg.current, reg.touch, ring),
+				attention:  attention,
 				ring:       ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
 					if req.Provider != state.provider {
@@ -233,6 +249,14 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 				lifecycle: func(req workbench.DelegatedLifecycleRequest) {
 					if state.agents.lifecycle(req) {
 						reg.touch()
+					}
+				},
+				agentEvent: func(req workbench.AgentEventRequest) {
+					if state.agents.apply(req) {
+						reg.touch()
+					}
+					if value := hookAttention(req); value != "" {
+						attention(value, req.Generation)
 					}
 				},
 				picker: reg.queuePicker,

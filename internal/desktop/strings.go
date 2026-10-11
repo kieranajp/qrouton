@@ -204,8 +204,6 @@ const (
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second
 
-	finishedAgentRetention = 90 * time.Second
-
 	// terminateGrace is how long a PTY's process tree gets to exit on SIGTERM
 	// before it is killed outright. launch has its own for the runner the
 	// supervisor signals; the two bound different processes and need not agree.
@@ -240,17 +238,19 @@ const (
 	agentRootID         = "root"
 	agentSetupRunPrefix = "setup-"
 
-	agentRoleOrchestrator = status.AgentRoleOrchestrator
-	agentRoleLead         = status.AgentRoleLead
-	agentRoleSpecialist   = status.AgentRoleSpecialist
-	agentRoleUnavailable  = status.AgentRoleUnavailable
-
 	agentStateWaiting  = status.AgentStateWaiting
 	agentStateWorking  = status.AgentStateWorking
 	agentStateIdle     = status.AgentStateIdle
 	agentStateActive   = status.AgentStateActive
 	agentStateFinished = status.AgentStateFinished
 	agentStateFailed   = status.AgentStateFailed
+	agentStateEnded    = status.AgentStateEnded
+
+	// agentRecordCap bounds one session's tree; the oldest finished leaves go first.
+	agentRecordCap = 500
+	// agentToolHistory is how many tool calls an agent remembers.
+	agentToolHistory      = 20
+	agentOutcomeCompleted = "completed"
 )
 
 var deckExtraMediaTypes = map[string]string{

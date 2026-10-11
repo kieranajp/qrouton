@@ -23,3 +23,33 @@ const (
 
 	providerCodex = codex.Binary
 )
+
+const (
+	HookPreToolUse         = "PreToolUse"
+	HookPostToolUse        = "PostToolUse"
+	HookPostToolUseFailure = "PostToolUseFailure"
+	HookUserPromptSubmit   = "UserPromptSubmit"
+	HookStopFailure        = "StopFailure"
+
+	// TargetLimit and MessageLimit are in runes, and keep a reduced event small
+	// whatever the tool was handed or the model wrote.
+	TargetLimit  = 160
+	MessageLimit = 1000
+
+	toolAgent        = "Agent"
+	toolTaskLegacy   = "Task"
+	toolBash         = "Bash"
+	toolGrep         = "Grep"
+	toolGlob         = "Glob"
+	toolWebFetch     = "WebFetch"
+	toolWebSearch    = "WebSearch"
+	mcpToolPrefix    = "mcp__"
+	mcpToolSeparator = "__"
+	mcpTargetJoin    = " · "
+	truncationMark   = "…"
+
+	spawnAsyncStatus = "async_launched"
+)
+
+// fileInputKeys are where a file tool names its file, in the order tried.
+var fileInputKeys = []string{"file_path", "notebook_path", "path"}

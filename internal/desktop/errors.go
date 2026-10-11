@@ -47,6 +47,7 @@ var (
 	ErrProcessIngressOnly   = errors.New("open ticket is available only on the published process socket")
 	ErrNoRunnerGeneration   = errors.New("runner generation request carries no generation")
 	ErrNoDelegatedLifecycle = errors.New("delegated lifecycle request carries no event")
+	ErrNoAgentEvent         = errors.New("agent event request carries no event")
 	ErrAgentsWindowPinned   = errors.New("the Agents tab stays open and stays first")
 	ErrAgentsWindowReserved = errors.New("only the workbench opens the Agents tab")
 	ErrNoVault              = errors.New("no thoughts index is available; carry on without it")

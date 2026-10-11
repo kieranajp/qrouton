@@ -1,9 +1,10 @@
-import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_ROLES, AGENT_ROOT_ID, AGENT_STATES } from "../bridge/generated.js";
+import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_ROOT_ID, AGENT_STATES } from "../bridge/generated.js";
 
 /** @type {Set<string>} */
-const ROLES = new Set([AGENT_ROLES.ORCHESTRATOR, AGENT_ROLES.LEAD, AGENT_ROLES.SPECIALIST]);
-/** @type {Set<string>} */
 const STATES = new Set(Object.values(AGENT_STATES));
+
+/** @type {string[]} */
+const FINISHED = [AGENT_STATES.FINISHED, AGENT_STATES.FAILED, AGENT_STATES.ENDED];
 
 /** @type {string[]} */
 const WORKING = [AGENT_STATES.WAITING, AGENT_STATES.WORKING, AGENT_STATES.IDLE, AGENT_STATES.ACTIVE];
@@ -34,17 +35,15 @@ export function typeLabel(type) {
   return type ? humanize(type) : "";
 }
 
-/** @param {string} role */
-export function roleLabel(role) {
-  return ROLES.has(role) ? role : "";
-}
+/** @param {AgentRecord} record */
+export const isRoot = (record) => record.id === AGENT_ROOT_ID;
 
-/** Only orchestrators can present a waiting-for-user state.
+/** Only the root can present a waiting-for-user state.
  * @param {string} state
- * @param {string} [role] */
-export function stateLabel(state, role = "") {
+ * @param {boolean} [root] */
+export function stateLabel(state, root = false) {
   if (!STATES.has(state)) return "";
-  if (state === AGENT_STATES.WAITING && role !== AGENT_ROLES.ORCHESTRATOR) return AGENT_STATES.WORKING;
+  if (state === AGENT_STATES.WAITING && !root) return AGENT_STATES.WORKING;
   return state;
 }
 
@@ -55,27 +54,20 @@ export function activeAgent(record) {
 
 /** @param {AgentRecord} record */
 export function finishedAgent(record) {
-  return record.state === AGENT_STATES.FINISHED || record.state === AGENT_STATES.FAILED;
+  return FINISHED.includes(record.state ?? "");
 }
 
 /** @param {AgentRecord} record */
 export function runningRoot(record) {
-  return (
-    (record.role === AGENT_ROLES.ORCHESTRATOR || record.id === AGENT_ROOT_ID) &&
-    activeAgent(record)
-  );
+  return isRoot(record) && activeAgent(record);
 }
 
 /** @param {AgentRecord} record @param {{provider?: string, provider_label?: string}} [panel] */
 export function recordLabel(record, panel = {}) {
-  const role = roleLabel(record.role ?? "") || "Agent";
-  const identity =
-    record.role === AGENT_ROLES.ORCHESTRATOR
-      ? providerLabel(record.provider || panel.provider, panel)
-      : typeLabel(record.type ?? "");
-  return [role, identity, stateLabel(record.state ?? "", record.role ?? "")]
-    .filter(Boolean)
-    .join(" · ");
+  const identity = isRoot(record)
+    ? ["Orchestrator", providerLabel(record.provider || panel.provider, panel)]
+    : [typeLabel(record.type ?? "") || "Agent"];
+  return [...identity, stateLabel(record.state ?? "", isRoot(record))].filter(Boolean).join(" · ");
 }
 
 const SECOND = 1000;
@@ -101,13 +93,6 @@ export function duration(record, now = Date.now()) {
   const hours = Math.floor(span / HOUR);
   const minutes = Math.floor((span % HOUR) / MINUTE);
   return minutes ? `${hours}h ${minutes}m` : `${hours}h`;
-}
-
-/** @param {AgentRecord[]} records */
-export function subagentTally(records = []) {
-  const done = records.filter(finishedAgent).length;
-  const plural = records.length === 1 ? "subagent" : "subagents";
-  return `${records.length} ${plural} · ${done} done`;
 }
 
 /**
@@ -159,55 +144,47 @@ export function capabilityNote(panel = {}) {
 }
 
 /** @typedef {{id?: string, run_id?: string, provider?: string, parent_id?: string,
- * type?: string, role?: string, state?: string, parent_known?: boolean,
+ * type?: string, description?: string, state?: string, parent_known?: boolean,
  * started_at?: string, finished_at?: string}} AgentRecord */
 /** @typedef {{record: AgentRecord, level: number, children: AgentNode[]}} AgentNode */
 
-/** Parent-child relationships never cross provider runs.
+/** Places every agent under its parent at any depth. Parents never cross runs;
+ * an agent with no known parent, or one whose parent is gone, is observed.
  * @param {AgentRecord[]} records
  * @returns {{trees: AgentNode[], observed: AgentRecord[]}} */
 export function projectAgents(records = []) {
+  const key = (run, id) => `${run ?? ""}\u0000${id ?? ""}`;
+  /** @type {AgentNode[]} */
   const nodes = records.map((record) => ({ record, level: 0, children: [] }));
-  const key = (record) => `${record.provider ?? ""}\u0000${record.run_id ?? ""}\u0000${record.id ?? ""}`;
-  const indexed = new Map(nodes.map((node) => [key(node.record), node]));
-  const trees = nodes.filter(
-    (node) => node.record.role === AGENT_ROLES.ORCHESTRATOR || node.record.id === AGENT_ROOT_ID,
-  );
-  for (const root of trees) root.level = 1;
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const node of nodes) {
-      if (node.level || !node.record.parent_known || !node.record.parent_id) continue;
-      const parent = indexed.get(
-        key({ ...node.record, id: node.record.parent_id }),
-      );
-      if (!parent?.level || parent.level >= 3 || parent === node) continue;
-      node.level = parent.level + 1;
-      parent.children.push(node);
-      changed = true;
-    }
+  const indexed = new Map(nodes.map((node) => [key(node.record.run_id, node.record.id), node]));
+  const trees = nodes.filter((node) => isRoot(node.record));
+  const placed = new Set(trees);
+  for (const node of nodes) {
+    if (placed.has(node) || !node.record.parent_known || !node.record.parent_id) continue;
+    const parent = indexed.get(key(node.record.run_id, node.record.parent_id));
+    if (parent && parent !== node) parent.children.push(node);
   }
-
-  const observed = nodes
-    .filter((node) => !node.level)
-    .map((node) => node.record);
-  return { trees, observed };
+  /** @param {AgentNode} node @param {number} level */
+  const descend = (node, level) => {
+    node.level = level;
+    placed.add(node);
+    for (const child of node.children) if (!placed.has(child)) descend(child, level + 1);
+  };
+  for (const root of trees) descend(root, 1);
+  for (const node of nodes) node.children = node.children.filter((child) => child.level === node.level + 1);
+  return { trees, observed: nodes.filter((node) => !placed.has(node)).map((node) => node.record) };
 }
 
-/** Subagents remain collapsed beneath their lead until requested.
- * @param {AgentRecord[]} records */
-export function hierarchy(records = []) {
-  const { trees, observed } = projectAgents(records);
-  return {
-    roots: trees.map((root) => ({
-      record: root.record,
-      leads: root.children.map((lead) => ({
-        record: lead.record,
-        subagents: lead.children.map((node) => node.record),
-      })),
-    })),
-    observed,
+/** Flattens a tree into rows in display order, each carrying its depth.
+ * @param {AgentNode[]} trees @returns {AgentNode[]} */
+export function rows(trees = []) {
+  /** @type {AgentNode[]} */
+  const out = [];
+  /** @param {AgentNode} node */
+  const walk = (node) => {
+    out.push(node);
+    node.children.forEach(walk);
   };
+  trees.forEach(walk);
+  return out;
 }

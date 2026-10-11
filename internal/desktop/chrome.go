@@ -76,43 +76,13 @@ type measurement struct {
 	stats []status.RepoStat
 }
 
-type chromeExpiryTimer interface {
-	channel() <-chan time.Time
-	reset(time.Duration)
-	stop()
-}
-
-type realChromeExpiryTimer struct{ timer *time.Timer }
-
-func newChromeExpiryTimer() chromeExpiryTimer {
-	timer := time.NewTimer(time.Hour)
-	timer.Stop()
-	return &realChromeExpiryTimer{timer: timer}
-}
-
-func (t *realChromeExpiryTimer) channel() <-chan time.Time { return t.timer.C }
-func (t *realChromeExpiryTimer) reset(after time.Duration) { t.timer.Reset(after) }
-func (t *realChromeExpiryTimer) stop() {
-	if !t.timer.Stop() {
-		select {
-		case <-t.timer.C:
-		default:
-		}
-	}
-}
-
 // watch takes its intervals and its unseen count so a test can drive the two
 // tickers apart. Everything a background session costs rides the slow one.
 func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts) {
-	watchWithExpiryTimer(ctx, reg, root, cfg, emit, field, slow, count, newChromeExpiryTimer())
-}
-
-func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *config.Config, emit emitter, field, slow time.Duration, count unseenCounts, expiry chromeExpiryTimer) {
 	fields := time.NewTicker(field)
 	defer fields.Stop()
 	stats := time.NewTicker(slow)
 	defer stats.Stop()
-	defer expiry.stop()
 
 	measured := map[string][]status.RepoStat{}
 	unseen := count.all(root)
@@ -134,7 +104,6 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 
 	refresh()
 	pushChrome(reg, root, cfg, measured, unseen, emit)
-	resetAgentExpiry(expiry, reg)
 	for {
 		select {
 		case <-ctx.Done():
@@ -160,24 +129,9 @@ func watchWithExpiryTimer(ctx context.Context, reg *Sessions, root string, cfg *
 				}
 			}
 		case <-fields.C:
-		case <-expiry.channel():
 		}
 		pushChrome(reg, root, cfg, measured, unseen, emit)
-		resetAgentExpiry(expiry, reg)
 	}
-}
-
-func resetAgentExpiry(timer chromeExpiryTimer, reg *Sessions) {
-	timer.stop()
-	expires := reg.earliestAgentExpiry()
-	if expires.IsZero() {
-		return
-	}
-	after := expires.Sub(reg.now())
-	if after < 0 {
-		after = 0
-	}
-	timer.reset(after)
 }
 
 // pushChrome emits even with the session-level fields empty: the page cannot
@@ -291,7 +245,7 @@ func agentPanel(snapshot agentActivitySnapshot) status.AgentPanel {
 	for _, record := range snapshot.Records {
 		records = append(records, status.AgentRecord{
 			ID: record.ID, RunID: record.RunID, Provider: record.Provider, ParentID: record.ParentID,
-			Type: record.Type, Role: record.Role, State: record.State,
+			Type: record.Type, Description: record.Description, State: record.State,
 			ParentKnown: record.ParentKnown, StartedAt: record.StartedAt, FinishedAt: record.FinishedAt,
 		})
 	}

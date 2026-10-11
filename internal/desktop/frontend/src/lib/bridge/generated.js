@@ -105,15 +105,7 @@ export const AGENT_COVERAGE = Object.freeze({
   NONE: "none",
 });
 
-/** @typedef {"Orchestrator"|"Lead"|"Specialist"|"Role unavailable"} AgentRole */
-export const AGENT_ROLES = Object.freeze({
-  ORCHESTRATOR: "Orchestrator",
-  LEAD: "Lead",
-  SPECIALIST: "Specialist",
-  UNAVAILABLE: "Role unavailable",
-});
-
-/** @typedef {"Waiting for you"|"Working"|"Idle"|"Active"|"Finished"|"Failed"} AgentState */
+/** @typedef {"Waiting for you"|"Working"|"Idle"|"Active"|"Finished"|"Failed"|"Ended with run"} AgentState */
 export const AGENT_STATES = Object.freeze({
   WAITING: "Waiting for you",
   WORKING: "Working",
@@ -121,6 +113,7 @@ export const AGENT_STATES = Object.freeze({
   ACTIVE: "Active",
   FINISHED: "Finished",
   FAILED: "Failed",
+  ENDED: "Ended with run",
 });
 
 /** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
