@@ -158,7 +158,16 @@ type Manifest struct {
 	Escalation *EscalationOutcome `json:"escalation,omitempty"`
 	// ThoughtsRoot is the id of the root chosen at creation; the thoughts link
 	// wins when the two disagree.
-	ThoughtsRoot string `json:"thoughtsRoot,omitempty"`
+	ThoughtsRoot string  `json:"thoughtsRoot,omitempty"`
+	Summary      Summary `json:"summary,omitzero"`
+}
+
+// Summary is the orchestrator's own line on what the session is building.
+// Stage is empty when it was written before the session had repositories.
+type Summary struct {
+	Text  string    `json:"text"`
+	Stage string    `json:"stage,omitempty"`
+	At    time.Time `json:"at"`
 }
 
 // EscalationStatus is how a picker-driven escalation attempt ended.
