@@ -90,11 +90,11 @@ func Run(opts Options) error {
 			return "", "", false
 		}
 		return windows.registry.deckDirectory(token)
-	}, func(token string, index int) (imageAssetRef, bool) {
+	}, func(token string, index int) (galleryAssetRef, bool) {
 		if windows == nil {
-			return imageAssetRef{}, false
+			return galleryAssetRef{}, false
 		}
-		return windows.registry.imageAsset(token, index)
+		return windows.registry.lookupGalleryAsset(token, index)
 	})
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
@@ -412,7 +412,7 @@ func reveal(argv []string) error {
 
 // copyImage puts a picture on the clipboard. The conversion runs while the
 // command does, so waiting on it is what says the clipboard now holds the
-// image.
+// asset.
 func copyImage(argv []string) error {
 	if len(argv) == 0 {
 		return ErrNoCopyImageCommand

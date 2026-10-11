@@ -5,7 +5,7 @@ import (
 	"strings"
 )
 
-type ImageRef struct {
+type AssetRef struct {
 	Source string `json:"source"`
 }
 

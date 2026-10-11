@@ -16,7 +16,7 @@ const (
 	editorWindowName = "editor"
 
 	defaultCommandWindowName = "command"
-	defaultImagesWindowName  = "images"
+	defaultAssetsWindowName  = "assets"
 
 	// diffWindowName labels an all-repos diff; a single repo appends its basename.
 	diffWindowName      = "diff"
@@ -82,7 +82,7 @@ const (
 	sessionRootScope  = "the session root"
 
 	notifiedFormat     = "Notified the user: %s"
-	openedImagesFormat = "Showing %d images in gallery %q. Current image: 1 of %d."
+	openedAssetsFormat = "Showing %d assets in gallery %q. Current asset: 1 of %d."
 
 	noWindowsOpen     = "No qrouton-managed windows are open."
 	openWindowsPrefix = "Open windows: "
@@ -116,8 +116,8 @@ const (
 )
 
 const (
-	focusedImageFormat    = "Selected image %d of %d in gallery %q (the conversation keeps keyboard focus)."
-	focusImageErrorFormat = "focus image in %q: %w"
+	focusedAssetFormat    = "Selected asset %d of %d in gallery %q (the conversation keeps keyboard focus)."
+	focusAssetErrorFormat = "focus asset in %q: %w"
 )
 
 const (

@@ -1,6 +1,6 @@
 import {
   SESSIONS_CLEANUP,
-  SESSIONS_COPY_IMAGE,
+  SESSIONS_COPY_ASSET,
   SESSIONS_CYCLE_STICKER,
   SESSIONS_RELOAD,
   SESSIONS_REVEAL,
@@ -17,4 +17,4 @@ export const reveal = (slug) => Call.ByName(SESSIONS_REVEAL, slug);
 export const revealPath = (slug, path) => Call.ByName(SESSIONS_REVEAL_PATH, slug, path);
 export const uncommitted = (slug) => Call.ByName(SESSIONS_UNCOMMITTED, slug);
 export const cleanup = (slug) => Call.ByName(SESSIONS_CLEANUP, slug);
-export const copyImage = (slug, path) => Call.ByName(SESSIONS_COPY_IMAGE, slug, path);
+export const copyAsset = (slug, path) => Call.ByName(SESSIONS_COPY_ASSET, slug, path);

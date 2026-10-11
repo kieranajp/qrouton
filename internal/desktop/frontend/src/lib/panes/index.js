@@ -1,5 +1,5 @@
 import { ARTIFACT_KINDS, DOCUMENT_FORMATS } from "../bridge/generated.js";
-import ImagesPane from "./ImagesPane.svelte";
+import AssetsPane from "./AssetsPane.svelte";
 import DiffPane from "./DiffPane.svelte";
 import MarkdownPane from "./MarkdownPane.svelte";
 import PlainPane from "./PlainPane.svelte";
@@ -11,7 +11,7 @@ import SpecPane from "./SpecPane.svelte";
 // A pane per document format. The window declares its format; guessing it from
 // the text would paint a plain document that quotes a diff as one.
 const PANES = {
-  [DOCUMENT_FORMATS.IMAGES]: ImagesPane,
+  [DOCUMENT_FORMATS.ASSETS]: AssetsPane,
   [DOCUMENT_FORMATS.DIFF]: DiffPane,
   [DOCUMENT_FORMATS.MARKDOWN]: MarkdownPane,
 };

@@ -136,25 +136,25 @@ func resolveForeground(foreground *bool, defaultSelect bool) bool {
 	return defaultSelect
 }
 
-func (m *windowManager) openImages(ctx context.Context, input openImagesInput) (string, error) {
-	refs, err := launch.ImageReferences(m.root, input.Paths)
+func (m *windowManager) openAssets(ctx context.Context, input openAssetsInput) (string, error) {
+	refs, err := launch.AssetReferences(m.root, input.Paths)
 	if err != nil {
 		return "", err
 	}
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
-		name = defaultImagesWindowName
+		name = defaultAssetsWindowName
 	}
 	if name == editorWindowName {
 		return "", ErrReservedWindowName
 	}
 	if _, err := m.open(ctx, name, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: name, Format: workbench.FormatImages,
-		Images: refs, Select: resolveForeground(input.Foreground, false),
+		Kind: workbench.KindDocument, Label: name, Format: workbench.FormatAssets,
+		Assets: refs, Select: resolveForeground(input.Foreground, false),
 	}); err != nil {
-		return "", fmt.Errorf("open image gallery: %w", err)
+		return "", fmt.Errorf("open asset gallery: %w", err)
 	}
-	return fmt.Sprintf(openedImagesFormat, len(refs), name, len(refs)), nil
+	return fmt.Sprintf(openedAssetsFormat, len(refs), name, len(refs)), nil
 }
 
 func thoughtsSource(source string) bool {
@@ -499,7 +499,7 @@ func shellOutput(ctx context.Context, dir, command string) string {
 	return string(out)
 }
 
-func (m *windowManager) focusImage(ctx context.Context, input focusImageInput) (string, error) {
+func (m *windowManager) focusAsset(ctx context.Context, input focusAssetInput) (string, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		return "", ErrNameRequired
@@ -508,9 +508,9 @@ func (m *windowManager) focusImage(ctx context.Context, input focusImageInput) (
 	if err != nil {
 		return "", err
 	}
-	selected, err := m.host.FocusImage(ctx, id, input.Index)
+	selected, err := m.host.FocusAsset(ctx, id, input.Index)
 	if err != nil {
-		return "", fmt.Errorf(focusImageErrorFormat, name, err)
+		return "", fmt.Errorf(focusAssetErrorFormat, name, err)
 	}
-	return fmt.Sprintf(focusedImageFormat, selected.CurrentIndex, selected.Count, name), nil
+	return fmt.Sprintf(focusedAssetFormat, selected.CurrentIndex, selected.Count, name), nil
 }

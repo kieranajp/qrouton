@@ -51,9 +51,9 @@ type documentContent struct {
 	viewport      *workbench.DocumentViewport
 	viewportEpoch uint64
 	viewportSeq   uint64
-	images        []workbench.ImageRef
-	currentImage  int
-	imageRevision uint64
+	assets        []workbench.AssetRef
+	currentAsset  int
+	assetRevision uint64
 	// read is the file as the window last saw it, so a rescan can tell a
 	// rewritten document from an untouched one.
 	read struct {
@@ -93,14 +93,14 @@ type registry struct {
 	sessions *Sessions
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu     sync.Mutex
-	imageFocusMu sync.Mutex
+	assetFocusMu sync.Mutex
 
 	mu                sync.Mutex
 	seq               int
 	open              map[string]*agentWindow
 	selected          map[*sessionState]string
-	imageOwnersClosed map[*sessionState]bool
-	imagesClosed      bool
+	assetOwnersClosed map[*sessionState]bool
+	assetsClosed      bool
 }
 
 func newRegistry(emit emitter, sessions *Sessions) *registry {
@@ -108,7 +108,7 @@ func newRegistry(emit emitter, sessions *Sessions) *registry {
 		emit: emit, sessions: sessions,
 		open:              map[string]*agentWindow{},
 		selected:          map[*sessionState]string{},
-		imageOwnersClosed: map[*sessionState]bool{},
+		assetOwnersClosed: map[*sessionState]bool{},
 	}
 }
 
@@ -250,14 +250,14 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	asset := ""
 	if opts.Kind == workbench.KindDocument {
 		asset = assetToken()
-		if opts.Format == workbench.FormatImages && asset == "" {
-			return "", ErrImageAssetToken
+		if opts.Format == workbench.FormatAssets && asset == "" {
+			return "", ErrGalleryAssetToken
 		}
 	}
 	r.mu.Lock()
-	if opts.Format == workbench.FormatImages && (r.imagesClosed || r.imageOwnersClosed[owner]) {
+	if opts.Format == workbench.FormatAssets && (r.assetsClosed || r.assetOwnersClosed[owner]) {
 		r.mu.Unlock()
-		return "", ErrImageGalleryClosed
+		return "", ErrAssetGalleryClosed
 	}
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
@@ -311,8 +311,8 @@ func (r *registry) readWindow(id string, full bool) (string, error) {
 			return nil
 		}
 		text = window.opts.Content
-		if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
-			text = imageManifest(rendered.images, rendered.currentImage)
+		if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatAssets {
+			text = assetManifest(rendered.assets, rendered.currentAsset)
 		}
 		return nil
 	}); err != nil {
@@ -396,7 +396,7 @@ func (r *registry) ordered(owner *sessionState) []*agentWindow {
 
 func (r *registry) stop(owner *sessionState) {
 	r.mu.Lock()
-	r.imageOwnersClosed[owner] = true
+	r.assetOwnersClosed[owner] = true
 	r.mu.Unlock()
 	for _, id := range r.list() {
 		if window, ok := r.window(id); ok && window.session == owner {
@@ -407,7 +407,7 @@ func (r *registry) stop(owner *sessionState) {
 
 func (r *registry) stopAll() {
 	r.mu.Lock()
-	r.imagesClosed = true
+	r.assetsClosed = true
 	r.mu.Unlock()
 	for _, id := range r.list() {
 		r.discard(id)

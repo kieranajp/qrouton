@@ -258,13 +258,13 @@ var deckExtraMediaTypes = map[string]string{
 }
 
 const (
-	imageAssetPath           = "/images/"
-	imageAssetURLFormat      = "/images/%s/%d"
+	galleryAssetPath         = "/gallery/"
+	galleryAssetURLFormat    = "/gallery/%s/%d"
 	cacheControlHeader       = "Cache-Control"
 	cacheControlNoStore      = "no-store"
 	contentTypeOptionsHeader = "X-Content-Type-Options"
 	contentTypeNoSniff       = "nosniff"
-	currentImageFormat       = "Current image: %d of %d"
+	currentAssetFormat       = "Current asset: %d of %d"
 )
 
-const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"
+const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"

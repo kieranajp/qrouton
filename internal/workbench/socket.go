@@ -33,13 +33,13 @@ type processDescriptor struct {
 }
 
 // Request is one call on the control socket.
-type ImageFocusRequest struct {
+type AssetFocusRequest struct {
 	Index int `json:"index"`
 }
 
 type Request struct {
 	BugReport        *BugReportRequest          `json:"bug_report,omitempty"`
-	ImageFocus       *ImageFocusRequest         `json:"image_focus,omitempty"`
+	AssetFocus       *AssetFocusRequest         `json:"asset_focus,omitempty"`
 	Op               string                     `json:"op"`
 	ID               string                     `json:"id,omitempty"`
 	Full             bool                       `json:"full,omitempty"`
@@ -58,7 +58,7 @@ type Request struct {
 // Response is the desktop process's single-line answer.
 type Response struct {
 	BugReport      *BugReport        `json:"bug_report,omitempty"`
-	ImageSelection *ImageSelection   `json:"image_selection,omitempty"`
+	AssetSelection *AssetSelection   `json:"asset_selection,omitempty"`
 	ID             string            `json:"id,omitempty"`
 	Text           string            `json:"text,omitempty"`
 	Exists         bool              `json:"exists,omitempty"`
@@ -398,14 +398,14 @@ func (c *client) call(ctx context.Context, req Request) (Response, error) {
 	return res, nil
 }
 
-func (c *client) FocusImage(ctx context.Context, id string, index int) (ImageSelection, error) {
-	res, err := c.call(ctx, Request{Op: OpFocusImage, ID: id, ImageFocus: &ImageFocusRequest{Index: index}})
+func (c *client) FocusAsset(ctx context.Context, id string, index int) (AssetSelection, error) {
+	res, err := c.call(ctx, Request{Op: OpFocusAsset, ID: id, AssetFocus: &AssetFocusRequest{Index: index}})
 	if err != nil {
-		return ImageSelection{}, err
+		return AssetSelection{}, err
 	}
-	selection := res.ImageSelection
+	selection := res.AssetSelection
 	if selection == nil || selection.CurrentIndex < 1 || selection.CurrentIndex > selection.Count || selection.Revision == 0 {
-		return ImageSelection{}, ErrImageSelectionUnavailable
+		return AssetSelection{}, ErrAssetSelectionUnavailable
 	}
 	return *selection, nil
 }

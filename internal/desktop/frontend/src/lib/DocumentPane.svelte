@@ -16,7 +16,7 @@
     onFindAdapter,
   } = $props();
 
-  /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, images?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
+  /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, assets?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
   let windowID = "";
   let dispose = () => {};
@@ -31,7 +31,7 @@
     doc = undefined;
     const accept = (incoming) => {
       if (disposed || !incoming) return;
-      if (incoming.format === DOCUMENT_FORMATS.IMAGES && doc?.format === DOCUMENT_FORMATS.IMAGES &&
+      if (incoming.format === DOCUMENT_FORMATS.ASSETS && doc?.format === DOCUMENT_FORMATS.ASSETS &&
           (incoming.revision ?? 0) <= (doc.revision ?? 0)) return;
       doc = incoming;
     };
@@ -43,7 +43,7 @@
     (async () => {
       const content = await Call.ByName(WINDOWS_CONTENT, nextID);
       if (disposed) return;
-      if (content?.format === DOCUMENT_FORMATS.IMAGES) accept(content);
+      if (content?.format === DOCUMENT_FORMATS.ASSETS) accept(content);
       else doc = live && doc ? { ...content, text: doc.text, hash: doc.hash } : content;
       await tick();
       if (!disposed) onReady?.();

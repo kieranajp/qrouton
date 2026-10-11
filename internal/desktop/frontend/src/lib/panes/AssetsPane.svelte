@@ -1,23 +1,23 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { WINDOWS_FOCUS_IMAGE } from "../bridge/generated.js";
+  import { WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
-  import ImageMenu from "./ImageMenu.svelte";
+  import AssetMenu from "./AssetMenu.svelte";
 
-  /** @type {{doc: {images?: {source: string, path?: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {assets?: {source: string, path?: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
 
-  let images = $derived(doc.images ?? []);
+  let assets = $derived(doc.assets ?? []);
   let current = $derived(doc.currentIndex ?? 1);
-  let entry = $derived(images[current - 1]);
+  let entry = $derived(assets[current - 1]);
   /** @type {Record<string, 'loaded' | 'error'>} */
   let loads = $state({});
   /** @type {Record<string, number>} */
   let aspects = $state({});
   let selectionError = $state("");
   let expanded = $state(false);
-  /** @type {{image: {source: string, path?: string}, x: number, y: number} | null} */
+  /** @type {{asset: {source: string, path?: string}, x: number, y: number} | null} */
   let menu = $state(null);
   let notice = $state("");
   let noticeTimer;
@@ -29,11 +29,11 @@
   let request = 0;
   onDestroy(() => { alive = false; clearTimeout(noticeTimer); });
 
-  function openMenu(event, image) {
+  function openMenu(event, asset) {
     // The webview draws one of its own otherwise, and the workbench's own
     // text menu stands down on the same signal.
     event.preventDefault();
-    menu = { image, x: event.clientX, y: event.clientY };
+    menu = { asset, x: event.clientX, y: event.clientY };
   }
 
   function show(text) {
@@ -44,7 +44,7 @@
 
   function step(by) {
     const next = current + by;
-    if (next >= 1 && next <= images.length) select(next);
+    if (next >= 1 && next <= assets.length) select(next);
   }
 
   function loaded(url, event) {
@@ -64,7 +64,7 @@
     const revision = doc.revision;
     selectionError = "";
     try {
-      await Call.ByName(WINDOWS_FOCUS_IMAGE, slug, id, index);
+      await Call.ByName(WINDOWS_FOCUS_ASSET, slug, id, index);
     } catch {
       if (alive && attempt === request && doc.revision === revision) {
         selectionError = "Could not select image. Try again.";
@@ -102,11 +102,11 @@
   const basename = (source) => source.split("/").pop();
 </script>
 
-<article class="images-pane" aria-label="Image gallery">
+<article class="assets-pane" aria-label="Asset gallery">
   {#if entry}
     <figure class="primary">
       <figcaption>
-        <span class="position">Image {current} of {images.length}</span>
+        <span class="position">Image {current} of {assets.length}</span>
         <strong>{basename(entry.source)}</strong>
         <span class="path">{entry.source}</span>
       </figcaption>
@@ -134,26 +134,26 @@
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
   {#if notice}<p class="notice" role="status">{notice}</p>{/if}
-  <ol bind:this={strip} class="image-strip" aria-label="Images in supplied order">
-    {#each images as image, index (image.url)}
+  <ol bind:this={strip} class="asset-strip" aria-label="Images in supplied order">
+    {#each assets as asset, index (asset.url)}
       <li>
         <button type="button" class:current={index + 1 === current}
-          aria-pressed={index + 1 === current} aria-label={`Image ${index + 1}: ${image.source}`}
-          oncontextmenu={(event) => openMenu(event, image)}
+          aria-pressed={index + 1 === current} aria-label={`Image ${index + 1}: ${asset.source}`}
+          oncontextmenu={(event) => openMenu(event, asset)}
           onclick={() => select(index + 1)}>
         <span class="number">{index + 1}</span>
         <div class="thumbnail-frame">
-          {#if loads[image.url] === "error"}
+          {#if loads[asset.url] === "error"}
             <span class="load-error">Could not load image</span>
           {:else}
-            {#if !loads[image.url]}<span class="loading">Loading…</span>{/if}
-            <img src={image.url} alt={image.source}
-              onload={(event) => loaded(image.url, event)}
-              onerror={() => (loads[image.url] = "error")} />
+            {#if !loads[asset.url]}<span class="loading">Loading…</span>{/if}
+            <img src={asset.url} alt={asset.source}
+              onload={(event) => loaded(asset.url, event)}
+              onerror={() => (loads[asset.url] = "error")} />
           {/if}
         </div>
-        <strong>{basename(image.source)}</strong>
-        <span class="path">{image.source}</span>
+        <strong>{basename(asset.source)}</strong>
+        <span class="path">{asset.source}</span>
         </button>
       </li>
     {/each}
@@ -165,18 +165,18 @@
     image={entry}
     aspect={aspects[entry.url] ?? 1}
     index={current}
-    total={images.length}
+    total={assets.length}
     {slug}
     onStep={step}
     onClose={closeLightbox} />
 {/if}
 
 {#if menu}
-  <ImageMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={show} />
+  <AssetMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={show} />
 {/if}
 
 <style>
-  .images-pane {
+  .assets-pane {
     padding: calc(16px * var(--ui-scale));
     min-width: 0;
     font: var(--machine-sm);
@@ -249,7 +249,7 @@
     max-height: min(55vh, calc(560px * var(--ui-scale)));
   }
 
-  .image-strip {
+  .asset-strip {
     display: flex;
     gap: calc(10px * var(--ui-scale));
     overflow-x: auto;
@@ -263,7 +263,7 @@
     min-width: 0;
   }
 
-  .image-strip button {
+  .asset-strip button {
     width: 100%;
     height: 100%;
     text-align: left;
@@ -277,11 +277,11 @@
     border-radius: calc(6px * var(--ui-scale));
   }
 
-  .image-strip button.current {
+  .asset-strip button.current {
     border-color: var(--accent-action);
   }
 
-  .image-strip button:focus-visible {
+  .asset-strip button:focus-visible {
     outline: 2px solid var(--accent-action);
     outline-offset: 2px;
   }

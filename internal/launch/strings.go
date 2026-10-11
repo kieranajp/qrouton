@@ -205,10 +205,10 @@ const (
 const (
 	editorWindowLabel       = "Editor"
 	documentLabelFormat     = "◆ %s"
-	imagePathsRequiredError = "image paths are required"
-	imagePathRequiredError  = "image path is required"
-	unsupportedImageError   = "unsupported image format"
-	imageEntryErrorFormat   = "image %d %q: %w"
+	assetPathsRequiredError = "asset paths are required"
+	assetPathRequiredError  = "asset path is required"
+	unsupportedAssetError   = "unsupported asset format"
+	assetEntryErrorFormat   = "asset %d %q: %w"
 )
 
 var (

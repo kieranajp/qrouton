@@ -4,16 +4,16 @@
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
-  import { copyImage, revealPath } from "../sessions.js";
+  import { copyAsset, revealPath } from "../sessions.js";
   import { copyText } from "../wails.js";
 
-  /** @type {{slug?: string, at: {image: {source: string, path?: string}, x: number, y: number}, onDismiss: () => void, onNotice?: (text: string) => void}} */
+  /** @type {{slug?: string, at: {asset: {source: string, path?: string}, x: number, y: number}, onDismiss: () => void, onNotice?: (text: string) => void}} */
   let { slug = "", at, onDismiss, onNotice } = $props();
 
   // A gallery the workbench has no session for names no file on disk, so the
   // two items that reach for one are left out rather than drawn dead.
   let items = $derived(
-    at.image.path && slug
+    at.asset.path && slug
       ? [
           { label: "Copy", act: "copy" },
           { label: "Copy Path", act: "copyPath" },
@@ -32,12 +32,12 @@
   );
 
   async function act(item) {
-    const path = at.image.path;
+    const path = at.asset.path;
     onDismiss();
     try {
       switch (item.act) {
         case "copy":
-          await copyImage(slug, path);
+          await copyAsset(slug, path);
           onNotice?.("Image copied");
           break;
         case "copyPath":

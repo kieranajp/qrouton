@@ -159,7 +159,7 @@ func TestThePaneRegistryDrawsEveryDocumentFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, format := range []workbench.DocumentFormat{workbench.FormatDiff, workbench.FormatImages, workbench.FormatMarkdown} {
+	for _, format := range []workbench.DocumentFormat{workbench.FormatDiff, workbench.FormatAssets, workbench.FormatMarkdown} {
 		key := regexp.MustCompile(`(?m)^  (\w+): "` + string(format) + `",$`).FindSubmatch(generated)
 		if key == nil {
 			t.Errorf("the generated formats do not name %q", format)

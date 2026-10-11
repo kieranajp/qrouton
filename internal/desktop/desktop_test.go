@@ -2544,8 +2544,8 @@ func lastChrome(t *testing.T, r *fakeRenderer) status.Fields {
 }
 
 // The page names the file, so the guards are what keep a gallery's menu from
-// handing an arbitrary path to the image converter.
-func TestCopyImageTakesOnlyAnImageInsideTheSession(t *testing.T) {
+// handing an arbitrary path to the asset converter.
+func TestCopyAssetTakesOnlyAnAssetInsideTheSession(t *testing.T) {
 	root := t.TempDir()
 	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
 	var copied []string
@@ -2556,7 +2556,7 @@ func TestCopyImageTakesOnlyAnImageInsideTheSession(t *testing.T) {
 	kraken := sessionDir(t, root, "kraken")
 	shot := filepath.Join(kraken, "thoughts", "assets", "shot.png")
 
-	if err := reg.CopyImage("kraken", shot); err != nil {
+	if err := reg.CopyAsset("kraken", shot); err != nil {
 		t.Fatal(err)
 	}
 	if len(copied) != 1 || copied[0] != shot {
@@ -2564,10 +2564,10 @@ func TestCopyImageTakesOnlyAnImageInsideTheSession(t *testing.T) {
 	}
 
 	for name, call := range map[string]func() error{
-		"a slug with no session": func() error { return reg.CopyImage("ghost", shot) },
-		"a path outside it":      func() error { return reg.CopyImage("kraken", filepath.Join(root, "elsewhere.png")) },
-		"a file that is not an image": func() error {
-			return reg.CopyImage("kraken", filepath.Join(kraken, "notes.md"))
+		"a slug with no session": func() error { return reg.CopyAsset("ghost", shot) },
+		"a path outside it":      func() error { return reg.CopyAsset("kraken", filepath.Join(root, "elsewhere.png")) },
+		"a file that is not an asset": func() error {
+			return reg.CopyAsset("kraken", filepath.Join(kraken, "notes.md"))
 		},
 	} {
 		if err := call(); err == nil {

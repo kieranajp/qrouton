@@ -1,12 +1,12 @@
 <script>
   import { onMount } from "svelte";
   import Button from "../core/Button.svelte";
-  import ImageMenu from "./ImageMenu.svelte";
+  import AssetMenu from "./AssetMenu.svelte";
 
   /** @type {{image: {source: string, path?: string, url: string}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
   let { image, aspect, index = 1, total = 1, slug = "", onStep, onClose } = $props();
 
-  /** @type {{image: {source: string, path?: string}, x: number, y: number} | null} */
+  /** @type {{asset: {source: string, path?: string}, x: number, y: number} | null} */
   let menu = $state(null);
   let first = $derived(index <= 1);
   let last = $derived(index >= total);
@@ -66,7 +66,7 @@
   function openMenu(event) {
     // The webview draws one of its own otherwise.
     event.preventDefault();
-    menu = { image, x: event.clientX, y: event.clientY };
+    menu = { asset: image, x: event.clientX, y: event.clientY };
   }
 
   function key(event) {
@@ -122,7 +122,7 @@
     <Button variant="ghost" size="sm" onclick={onClose}>Close</Button>
   </div>
   {#if menu}
-    <ImageMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={say} />
+    <AssetMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={say} />
   {/if}
 </div>
 
