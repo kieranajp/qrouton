@@ -40,7 +40,9 @@ You add progress to the plan and you leave the planning lead's text in place. Ho
 
 {{return-contract}}
 
-- what happened: the phases you completed, and the outcome of each;
-- where the work lives: the repositories and files you changed, and the plan path with its updated status;
-- how you checked it: the verification commands you ran, and their results;
-- what stays unresolved: the remaining risks, failures, and blockers.
+- what happened: the phases you completed, their authorized scope, whether the whole plan is verified complete, and the outcome of each;
+- where the work lives: the repositories and files you changed, completed commits and reviewed base/head scope, and the plan path with its updated status;
+- how you checked it: the verification commands you ran, their results and the commits they cover, and the independent final pass outcome;
+- what stays unresolved: the remaining phases, risks, unrun manual checks, failures, and blockers.
+
+The orchestrator owns the optional configured whole-plan review offer after your verified handoff. Do not start that reviewer yourself or treat its configuration as authorization. Your existing independent final pass remains required.

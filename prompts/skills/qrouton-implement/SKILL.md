@@ -36,4 +36,10 @@ Require this of the lead's return:
 
 Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
 
-`qrouton-implement` is the last skill in the workflow. Say whether one phase or the whole plan completed, report the remaining phases, and stop. Do not resume the lead until the user authorizes more work.
+`qrouton-implement` is the last skill in the workflow. Say whether one phase or the whole plan completed and report any remaining phases. After a phase-only or partial completion, stop without a whole-plan independent-review offer. Do not resume the lead until the user authorizes more work.
+
+Only after verified whole-plan completion, call `reviewer_settings`. None produces no independent-review offer or launch; end the workflow. If the user explicitly requested review while disabled, explain the Settings requirement; select no harness and create no request, report, or tab. An enabled unavailable selection produces its explicit availability error without substitution.
+
+For an enabled available reviewer, offer optional independent review. Whole-plan implementation alone authorizes the offer, not the launch. Declining ends without creating anything. A prior explicit request to implement the whole plan and review it authorizes `start_review` without another permission question. Otherwise launch only after explicit acceptance. Supply the completed plan, relevant spec, editing repositories' base refs when explicit, completed scope, pinned commits, and recorded verification evidence. The capability rechecks Settings, so disabling after an offer prevents launch.
+
+Keep the implementation lead's independent final pass regardless of reviewer configuration. The fresh reviewer writes local `kind: review` thoughts linked to the plan and delivers them through `open_file`. Read the report before describing a verdict. A request acknowledgement, process exit, or status mark never proves review completion. After an uncertain open, inspect its stable tab/report paths without retrying. Report completed implementation separately from failed or interrupted review. Findings authorize no fixes, pushes, PR creation, publication, or monitoring; those require a separate explicit request.

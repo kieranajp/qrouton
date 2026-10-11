@@ -2570,3 +2570,48 @@ func TestCopyAssetTakesOnlyAnAssetInsideTheSession(t *testing.T) {
 		t.Fatalf("a refused request still reached the clipboard: %v %v", pictures, files)
 	}
 }
+
+func TestIndependentReviewTabPreservesConversationAndResume(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, windows, r := testSessions(t, root, boot)
+	sessionDir(t, root, "octopus")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	owner := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(owner.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	original := owner.process
+	tab, err := windows.openWindow(owner, workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "review-codex", Command: []string{"/bin/sh", "-c", "printf codex-review; exit 0"}, Cwd: owner.root(), CloseOnExit: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.Start(tab, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "review child exit", func() bool { r.mu.Lock(); defer r.mu.Unlock(); _, ok := r.events[windowExitEvent+tab]; return ok })
+	if owner.process != original || !owner.alive() || !windows.exists(tab) {
+		t.Fatal("review replaced conversation or lost output")
+	}
+	if err := windows.Close(tab); err != nil {
+		t.Fatal(err)
+	}
+	if owner.process != original || !owner.alive() {
+		t.Fatal("closing review ended conversation")
+	}
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != owner {
+		t.Fatal("showing session replaced conversation")
+	}
+	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
+		t.Fatalf("review booted conversation services: %d %d", agents, serves)
+	}
+	if !boot.resumed(t, owner.root()) {
+		t.Fatal("conversation resume changed")
+	}
+}

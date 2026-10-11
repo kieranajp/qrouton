@@ -842,3 +842,28 @@ func TestImplementationReviewerLoadsCanonicalRoleAndRubric(t *testing.T) {
 		t.Fatal("reviewer permission boundary changed")
 	}
 }
+
+func TestOptionalWholePlanReviewPreservesAuthorizationAndPhasePass(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	for _, id := range []ID{Orchestrator, ID("skills/qrouton-implement")} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(prompt.Content)
+		for _, phrase := range []string{"verified whole-plan completion", "`reviewer_settings`", "None", "no independent-review offer or launch", "phase-only", "`start_review`", "prior explicit request", "Declin", "Settings requirement", "unavailable", "Disabling after an offer prevents launch", "no fixes, pushes, PR creation, publication, or monitoring", "separate explicit request", "uncertain open", "verdict"} {
+			if !strings.Contains(strings.ToLower(text), strings.ToLower(phrase)) {
+				t.Errorf("%s lacks %q", id, phrase)
+			}
+		}
+	}
+	lead, err := loader.Load(context.Background(), ID("agents/qrouton-implementation-lead"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"`code-reviewer` for an independent final pass", "writes must be single-threaded", "explicit user consent", "first incomplete phase", "completed commits and reviewed base/head scope", "commits they cover", "unrun manual checks", "Do not start that reviewer yourself"} {
+		if !strings.Contains(string(lead.Content), phrase) {
+			t.Errorf("lead lacks %q", phrase)
+		}
+	}
+}
