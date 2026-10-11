@@ -93,6 +93,16 @@ func (a *agentActivity) rootStateLocked() string {
 	return state
 }
 
+// abandonLocked closes the calls an agent's turn ended without. A result that
+// arrives later still lands on its call.
+func abandonLocked(agent *agentRecord, at time.Time) {
+	for i := range agent.Tools {
+		if call := &agent.Tools[i]; !call.Closed {
+			call.Closed, call.Abandoned, call.End = true, true, at
+		}
+	}
+}
+
 // reopenLocked returns a finished agent to work when one of its hooks was
 // stamped after it finished, whichever order the hooks arrive in. History,
 // tokens and the tool count stay.
@@ -220,6 +230,7 @@ func (a *agentActivity) stopLocked(event workbench.AgentEventRequest, at time.Ti
 		return false
 	}
 	root.stopAt = at
+	abandonLocked(root, at)
 	root.turnEnded = true
 	root.needs, root.needsTool, root.needsFrom = "", "", ""
 	root.background = map[string]bool{}
@@ -275,7 +286,11 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 				call.Start = at
 			}
 		} else {
-			a.recordCallLocked(caller, agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at})
+			call := agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at}
+			if caller.Root && caller.turnEnded && at.Before(caller.stopAt) {
+				call.Closed, call.Abandoned, call.End = true, true, caller.stopAt
+			}
+			a.recordCallLocked(caller, call)
 		}
 	}
 	if event.Spawn != nil && event.ToolUseID != "" {
@@ -313,6 +328,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 	a.answeredLocked(caller, event.ToolUseID, at)
 	if event.Interrupt && caller.Root && !at.Before(caller.promptAt) {
 		caller.turnEnded, caller.stopAt = true, at
+		defer abandonLocked(caller, at)
 	}
 	if !failed && event.Target != "" && slices.Contains(agentevent.FileWriteTools, event.Tool) &&
 		!slices.Contains(caller.Files, event.Target) && len(caller.Files) < agentFileLimit {
@@ -321,7 +337,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
 			if call := a.callLocked(event.ToolUseID); call != nil {
-				call.End, call.Failed, call.Closed = at, failed, true
+				call.End, call.Failed, call.Closed, call.Abandoned = at, failed, true, false
 			}
 		} else {
 			a.recordCallLocked(caller, agentToolCall{
@@ -388,6 +404,7 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 		return true
 	}
 	record.held = false
+	abandonLocked(record, at)
 	if record.State == agentLive {
 		record.State = agentStateDone
 	}

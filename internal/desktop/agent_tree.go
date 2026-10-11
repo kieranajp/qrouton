@@ -60,6 +60,7 @@ func agentTree(snapshot agentActivitySnapshot, fallback, root string) status.Age
 		for _, call := range record.Tools {
 			node.Tools = append(node.Tools, status.AgentToolEvent{
 				Tool: call.Tool, Target: call.Target, Start: call.Start, End: call.End, Failed: call.Failed,
+				Abandoned: call.Abandoned,
 			})
 		}
 		tree.Nodes = append(tree.Nodes, node)

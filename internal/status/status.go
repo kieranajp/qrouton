@@ -160,6 +160,8 @@ type AgentToolEvent struct {
 	Start  time.Time `json:"start"`
 	End    time.Time `json:"end"`
 	Failed bool      `json:"failed"`
+	// Abandoned is a call whose turn ended with no result for it.
+	Abandoned bool `json:"abandoned"`
 }
 
 type SessionRepo struct {

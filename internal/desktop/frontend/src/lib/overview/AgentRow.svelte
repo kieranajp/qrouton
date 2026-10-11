@@ -61,7 +61,7 @@
         <div class="event" class:failed={event.failed}>
           <span class="cue">{clock(event.start)}</span>
           <span>{nowLine(event, root)}</span>
-          {#if event.failed}<span>failed</span>{/if}
+          {#if event.failed}<span>failed</span>{:else if event.abandoned}<span class="cue">no result</span>{/if}
         </div>
       {/each}
       {#if tokenLabel(node.tokens)}<div class="cue">{tokenLabel(node.tokens)}</div>{/if}
