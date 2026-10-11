@@ -184,7 +184,7 @@ export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(
 /** @type {string[]} */
 const STAGE_ORDER = [AGENT_STAGES.RESEARCH, AGENT_STAGES.PLAN, AGENT_STAGES.IMPLEMENT];
 
-const STAGE_NAMES = {
+export const STAGE_NAMES = {
   [AGENT_STAGES.RESEARCH]: "Research",
   [AGENT_STAGES.PLAN]: "Plan",
   [AGENT_STAGES.IMPLEMENT]: "Implementation",

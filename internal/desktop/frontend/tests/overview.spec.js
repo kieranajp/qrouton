@@ -19,7 +19,7 @@ test("one tier column: orchestrator, leads in stage order, this session", async 
   expect(body.left).toBeGreaterThan(label.right);
 });
 
-test("every tier after the first is divided from the one above by a hairline", async ({ page }) => {
+test("every tier is divided from the block above by a hairline", async ({ page }) => {
   await open(page);
   const edges = await page.locator(".tier").evaluateAll((tiers) =>
     tiers.map((el) => {
@@ -28,8 +28,59 @@ test("every tier after the first is divided from the one above by a hairline", a
     }),
   );
   expect(edges).toHaveLength(3);
-  expect(edges[0].top).toBe("0px");
-  for (const edge of edges.slice(1)) expect(edge).toEqual({ top: "1px", pad: "12px" });
+  for (const edge of edges) expect(edge).toEqual({ top: "1px", pad: "12px" });
+});
+
+test("the summary heads the pane above the first tier, with no tier label", async ({ page }) => {
+  await open(page);
+  const summary = page.locator(".summary");
+  await expect(summary.locator(".text")).toHaveText(/^Migrating checkout to the PaymentIntent v2 client/);
+  await expect(summary.locator(".label")).toHaveCount(0);
+  const [block, tier] = await Promise.all([box(summary), box(page.locator(".tier").first())]);
+  expect(block.bottom).toBeLessThanOrEqual(tier.top);
+  expect(await summary.evaluate((el) => el.nextElementSibling?.classList.contains("orchestrator"))).toBe(true);
+});
+
+test("a settled summary names the stage it was written for", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".summary .meta")).toHaveText(/^As of Implementation · \d+m ago$/);
+  await open(page, "?summary=short");
+  await expect(page.locator(".summary .meta")).toHaveText(/^As of Plan · (now|\d+m ago)$/);
+});
+
+test("a session without a summary says when one will come", async ({ page }) => {
+  await open(page, "?summary=empty");
+  await expect(page.locator(".summary .text")).toHaveText("No summary yet");
+  await expect(page.locator(".summary .meta")).toHaveText("Written when the first lead starts");
+  const ink = (selector) => page.locator(selector).evaluate((el) => getComputedStyle(el).color);
+  expect(await ink(".summary .text")).toBe(await ink(".summary .meta"));
+});
+
+test("the empty summary holds a short summary's footprint", async ({ page }) => {
+  const height = async (query) => {
+    await open(page, query);
+    return (await box(page.locator(".summary"))).height;
+  };
+  expect(await height("?summary=empty")).toBe(await height("?summary=short"));
+});
+
+test("narrow, the long summary wraps across the full width without ellipsis", async ({ page }) => {
+  await open(page, "?narrow");
+  const text = page.locator(".summary .text");
+  const shape = await text.evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      lines: Math.round(el.getBoundingClientRect().height / parseFloat(style.lineHeight)),
+      overflow: style.textOverflow,
+      clipped: el.scrollWidth > el.clientWidth,
+    };
+  });
+  expect(shape.lines).toBeGreaterThan(2);
+  expect(shape.overflow).not.toBe("ellipsis");
+  expect(shape.clipped).toBe(false);
+  const [line, body] = await Promise.all([box(text), box(page.locator(".orchestrator"))]);
+  expect(Math.abs(line.left - body.left)).toBeLessThanOrEqual(1);
+  expect(Math.abs(line.right - body.right)).toBeLessThanOrEqual(1);
 });
 
 test("only the live lead opens; finished leads keep their document and count", async ({ page }) => {

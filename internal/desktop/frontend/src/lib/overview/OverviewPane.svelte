@@ -4,13 +4,15 @@
   import { Call, Events, call } from "../wails.js";
   import LeadRow from "./LeadRow.svelte";
   import SessionRepos from "./SessionRepos.svelte";
+  import SessionSummary from "./SessionSummary.svelte";
   import Tier from "./Tier.svelte";
   import { elapsed, nowLine, overview, rootWords } from "./tree.js";
 
-  /** The session's Overview: the orchestrator, its leads in stage order, and
-   * the session's repositories.
-   * @type {{slug: string, active?: boolean, root?: string, repos?: any[], onAddRepos?: () => void}} */
-  let { slug, active = false, root = "", repos = [], onAddRepos } = $props();
+  /** The session's Overview: its summary, the orchestrator, its leads in stage
+   * order, and the session's repositories.
+   * @type {{slug: string, active?: boolean, root?: string, summary?: import("./summary.js").SessionSummary,
+   * repos?: any[], onAddRepos?: () => void}} */
+  let { slug, active = false, root = "", summary, repos = [], onAddRepos } = $props();
 
   /** @type {import("./tree.js").AgentTree | undefined} */
   let tree = $state();
@@ -59,6 +61,7 @@
 </script>
 
 <div class="overview" style:display={active ? "flex" : "none"}>
+  <SessionSummary {summary} {now} />
   <Tier label="Orchestrator" name="orchestrator">
     <div class="line">
       <span class="provider">{tree?.providerLabel ?? ""}</span>
