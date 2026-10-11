@@ -254,19 +254,17 @@ const (
 
 var deckExtraMediaTypes = map[string]string{
 	".svg":  "image/svg+xml",
-	".mp4":  "video/mp4",
 	".webm": "video/webm",
-	".mov":  "video/quicktime",
 }
 
 const (
-	imageAssetPath           = "/images/"
-	imageAssetURLFormat      = "/images/%s/%d"
+	galleryAssetPath         = "/gallery/"
+	galleryAssetURLFormat    = "/gallery/%s/%d"
 	cacheControlHeader       = "Cache-Control"
 	cacheControlNoStore      = "no-store"
 	contentTypeOptionsHeader = "X-Content-Type-Options"
 	contentTypeNoSniff       = "nosniff"
-	currentImageFormat       = "Current image: %d of %d"
+	currentAssetFormat       = "Current asset: %d of %d"
 )
 
-const imageIndexErrorFormat = "%w: %d (expected 1 through %d)"
+const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"

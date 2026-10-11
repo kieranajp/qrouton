@@ -27,7 +27,7 @@ type DocumentFormat string
 
 const (
 	FormatDiff     DocumentFormat = "diff"
-	FormatImages   DocumentFormat = "images"
+	FormatAssets   DocumentFormat = "assets"
 	FormatMarkdown DocumentFormat = "markdown"
 )
 
@@ -58,7 +58,7 @@ type WindowOptions struct {
 	Command []string       `json:"command,omitempty"`
 	Content string         `json:"content,omitempty"`
 	Format  DocumentFormat `json:"format,omitempty"`
-	Images  []ImageRef     `json:"images,omitempty"`
+	Assets  []AssetRef     `json:"assets,omitempty"`
 	Span    LineSpan       `json:"span,omitzero"`
 	// Deck is a Markdown document whose frontmatter declares it slides. It rides
 	// beside Format rather than replacing it, since a deck is still whatever
@@ -124,14 +124,14 @@ func (s LineSpan) Bounds() (first, last int, ok bool) {
 	return s.Line, s.Through, true
 }
 
-type ImageSelection struct {
+type AssetSelection struct {
 	CurrentIndex int    `json:"currentIndex"`
 	Count        int    `json:"count"`
 	Revision     uint64 `json:"revision"`
 }
 
 type WindowHost interface {
-	FocusImage(ctx context.Context, id string, index int) (ImageSelection, error)
+	FocusAsset(ctx context.Context, id string, index int) (AssetSelection, error)
 	Open(ctx context.Context, opts WindowOptions) (id string, err error)
 	Close(ctx context.Context, id string) error
 	// Read returns a terminal window's output with escape sequences stripped, or

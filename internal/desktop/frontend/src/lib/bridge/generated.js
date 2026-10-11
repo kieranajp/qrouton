@@ -34,7 +34,7 @@ export const REPOSITORIES_CACHED = "github.com/kieranajp/qrouton/internal/deskto
 export const REPOSITORIES_REFRESH = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Refresh";
 export const REPOSITORIES_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Repositories.Select";
 export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Cleanup";
-export const SESSIONS_COPY_IMAGE = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CopyImage";
+export const SESSIONS_COPY_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CopyAsset";
 export const SESSIONS_CYCLE_STICKER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CycleSticker";
 export const SESSIONS_RELOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reload";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
@@ -51,7 +51,7 @@ export const TERM_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Term.Wr
 export const UPDATES_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Updates.Status";
 export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Close";
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
-export const WINDOWS_FOCUS_IMAGE = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusImage";
+export const WINDOWS_FOCUS_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusAsset";
 export const WINDOWS_OPEN_DOCUMENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenDocument";
 export const WINDOWS_OPEN_SHELL = "github.com/kieranajp/qrouton/internal/desktop.Windows.OpenShell";
 export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/desktop.Windows.RenderDiagrams";
@@ -143,10 +143,10 @@ export const BUG_REPORT_STATUSES = Object.freeze({
   UNKNOWN: "unknown",
 });
 
-/** @typedef {"diff"|"images"|"markdown"} DocumentFormat */
+/** @typedef {"diff"|"assets"|"markdown"} DocumentFormat */
 export const DOCUMENT_FORMATS = Object.freeze({
   DIFF: "diff",
-  IMAGES: "images",
+  ASSETS: "assets",
   MARKDOWN: "markdown",
 });
 
@@ -156,6 +156,12 @@ export const DRAFT_FIELDS = Object.freeze({
   BRANCH_DESCRIPTION: "branchDescription",
   TICKET: "ticket",
   REPOS: "repos",
+});
+
+/** @typedef {"image"|"video"} MediaKind */
+export const MEDIA_KINDS = Object.freeze({
+  IMAGE: "image",
+  VIDEO: "video",
 });
 
 /** @typedef {"ASSISTANT"|"RPI"} ModeLabel */

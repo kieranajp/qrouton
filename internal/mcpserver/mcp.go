@@ -11,8 +11,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type focusImageInput struct {
-	Name  string `json:"name" jsonschema:"Name of an open image gallery"`
+type focusAssetInput struct {
+	Name  string `json:"name" jsonschema:"Name of an open asset gallery"`
 	Index int    `json:"index" jsonschema:"One-based position in the gallery numbered manifest"`
 }
 
@@ -23,9 +23,9 @@ type openFileInput struct {
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
-type openImagesInput struct {
-	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to raster image files in the qrouton session"`
-	Name       string   `json:"name,omitempty" jsonschema:"Gallery window name; reusing it replaces that window. Defaults to images"`
+type openAssetsInput struct {
+	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to image or video files in the qrouton session"`
+	Name       string   `json:"name,omitempty" jsonschema:"Gallery window name; reusing it replaces that window. Defaults to assets"`
 	Foreground *bool    `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
@@ -122,8 +122,8 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		})
 
 	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
-	addTool(server, toolFocusImage, descFocusImage, keyMessage, messageOnly(windows.focusImage))
-	addTool(server, toolOpenImages, descOpenImages, keyMessage, messageOnly(windows.openImages))
+	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
+	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
 			return sharePage(root, input)

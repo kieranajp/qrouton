@@ -85,6 +85,9 @@ const (
 	// sh -c takes the script's own name before its arguments; $1 is the path.
 	shellArgv0 = "sh"
 
+	osascriptCommand = "osascript"
+	osascriptExecute = "-e"
+
 	findCommand   = "find"
 	findRoot      = "."
 	findDepthFlag = "-maxdepth"
@@ -205,10 +208,10 @@ const (
 const (
 	editorWindowLabel       = "Editor"
 	documentLabelFormat     = "◆ %s"
-	imagePathsRequiredError = "image paths are required"
-	imagePathRequiredError  = "image path is required"
-	unsupportedImageError   = "unsupported image format"
-	imageEntryErrorFormat   = "image %d %q: %w"
+	assetPathsRequiredError = "asset paths are required"
+	assetPathRequiredError  = "asset path is required"
+	unsupportedAssetError   = "unsupported asset format"
+	assetEntryErrorFormat   = "asset %d %q: %w"
 )
 
 var (

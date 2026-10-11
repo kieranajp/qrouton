@@ -269,6 +269,8 @@ func (p workbenchPorts) Reveal(sessionRoot string) []string { return launch.Reve
 
 func (p workbenchPorts) CopyImage(path string) []string { return launch.CopyImageArgv(path) }
 
+func (p workbenchPorts) CopyFile(path string) []string { return launch.CopyFileArgv(path) }
+
 // Document reaches the same decision the agent's file tool does.
 func (p workbenchPorts) Document(sessionRoot, name string) (workbench.WindowOptions, error) {
 	return launch.DocumentWindow(sessionRoot, name, p.spec.Editor, workbench.LineSpan{})

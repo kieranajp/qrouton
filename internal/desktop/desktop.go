@@ -90,11 +90,11 @@ func Run(opts Options) error {
 			return "", "", false
 		}
 		return windows.registry.deckDirectory(token)
-	}, func(token string, index int) (imageAssetRef, bool) {
+	}, func(token string, index int) (galleryAssetRef, bool) {
 		if windows == nil {
-			return imageAssetRef{}, false
+			return galleryAssetRef{}, false
 		}
-		return windows.registry.imageAsset(token, index)
+		return windows.registry.lookupGalleryAsset(token, index)
 	})
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
@@ -254,6 +254,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		cleanup:     func(root string) error { return session.Remove(opts.Root, root) },
 		reveal:      func(root string) error { return reveal(launcher.Reveal(root)) },
 		copyImage:   func(path string) error { return copyImage(launcher.CopyImage(path)) },
+		copyFile:    func(path string) error { return copyFile(launcher.CopyFile(path)) },
 	}
 	chromeEmit := r.Emit
 	if opts.chrome != nil {
@@ -416,6 +417,13 @@ func reveal(argv []string) error {
 func copyImage(argv []string) error {
 	if len(argv) == 0 {
 		return ErrNoCopyImageCommand
+	}
+	return exec.Command(argv[0], argv[1:]...).Run()
+}
+
+func copyFile(argv []string) error {
+	if len(argv) == 0 {
+		return ErrNoCopyFileCommand
 	}
 	return exec.Command(argv[0], argv[1:]...).Run()
 }

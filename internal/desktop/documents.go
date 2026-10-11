@@ -30,15 +30,16 @@ type document struct {
 	Line          int             `json:"line"`
 	To            int             `json:"to"`
 	ViewportEpoch uint64          `json:"viewportEpoch,omitempty"`
-	Images        []documentImage `json:"images,omitempty"`
+	Assets        []documentAsset `json:"assets,omitempty"`
 	CurrentIndex  int             `json:"currentIndex,omitempty"`
 	Revision      uint64          `json:"revision,omitempty"`
 }
 
-type documentImage struct {
+type documentAsset struct {
 	Source string `json:"source"`
 	Path   string `json:"path,omitempty"`
 	URL    string `json:"url"`
+	Kind   string `json:"kind"`
 }
 
 type ViewportReport struct {
@@ -73,9 +74,9 @@ func contentFor(opts workbench.WindowOptions) windowContent {
 		return &terminalContent{buffer: &ring{limit: windowScrollback}}
 	case workbench.KindDocument:
 		content := &documentContent{}
-		if opts.Format == workbench.FormatImages {
-			content.images = append([]workbench.ImageRef(nil), opts.Images...)
-			content.currentImage, content.imageRevision = 1, 1
+		if opts.Format == workbench.FormatAssets {
+			content.assets = append([]workbench.AssetRef(nil), opts.Assets...)
+			content.currentAsset, content.assetRevision = 1, 1
 		}
 		if opts.Format == workbench.FormatMarkdown {
 			content.viewport = workbench.UnmeasuredViewport(opts.Source)
@@ -129,22 +130,23 @@ func documentFor(window *agentWindow) document {
 		To:            last,
 		ViewportEpoch: viewportEpoch,
 	}
-	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatImages {
+	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatAssets {
 		var root string
 		if window.session != nil {
 			root = window.session.root()
 		}
-		doc.Images = make([]documentImage, len(rendered.images))
-		for i, ref := range rendered.images {
+		doc.Assets = make([]documentAsset, len(rendered.assets))
+		for i, ref := range rendered.assets {
 			// A gallery with no session behind it can still be drawn; only the
 			// items that name a file on disk go missing from its menu.
 			var path string
 			if root != "" {
 				path = filepath.Join(root, filepath.FromSlash(ref.Source))
 			}
-			doc.Images[i] = documentImage{Source: ref.Source, Path: path, URL: fmt.Sprintf(imageAssetURLFormat, window.asset, i+1)}
+			media, _ := workbench.AssetMedia(ref.Source)
+			doc.Assets[i] = documentAsset{Source: ref.Source, Path: path, URL: fmt.Sprintf(galleryAssetURLFormat, window.asset, i+1), Kind: string(media.Kind)}
 		}
-		doc.CurrentIndex, doc.Revision = rendered.currentImage, rendered.imageRevision
+		doc.CurrentIndex, doc.Revision = rendered.currentAsset, rendered.assetRevision
 	}
 	return doc
 }

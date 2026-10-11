@@ -126,11 +126,11 @@ var handlers = map[string]handler{
 			return workbench.Response{BugReport: &out}, err
 		},
 	},
-	workbench.OpFocusImage: {
-		guards: []guard{needsSession, needsImageFocus},
+	workbench.OpFocusAsset: {
+		guards: []guard{needsSession, needsAssetFocus},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
-			selected, err := c.windows.focusImage(c.owner, req.ID, req.ImageFocus.Index)
-			return workbench.Response{ImageSelection: &selected}, err
+			selected, err := c.windows.focusAsset(c.owner, req.ID, req.AssetFocus.Index)
+			return workbench.Response{AssetSelection: &selected}, err
 		},
 	},
 	workbench.OpOpen: {
@@ -361,9 +361,9 @@ func (c *control) Close() error {
 	return err
 }
 
-func needsImageFocus(_ *control, req workbench.Request) error {
-	if req.ImageFocus == nil {
-		return ErrNoImageFocus
+func needsAssetFocus(_ *control, req workbench.Request) error {
+	if req.AssetFocus == nil {
+		return ErrNoAssetFocus
 	}
 	return nil
 }

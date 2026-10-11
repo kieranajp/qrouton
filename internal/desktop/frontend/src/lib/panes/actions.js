@@ -1,4 +1,5 @@
 import {
+  MEDIA_KINDS,
   WINDOW_DIAGRAM_EVENT,
   WINDOWS_RENDER_DIAGRAMS,
   WINDOWS_REPORT_VIEWPORT,
@@ -63,7 +64,7 @@ export function diagrams(body, { id, fit }) {
     const lightbox = mount(ImageLightbox, {
       target: document.body,
       props: {
-        image: { source: "Diagram", url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}` },
+        image: { source: "Diagram", kind: MEDIA_KINDS.IMAGE, url: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(markup)}` },
         aspect: emitted.width / emitted.height,
         onClose: () => close?.(),
       },

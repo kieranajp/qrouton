@@ -1,10 +1,9 @@
 import { UI_SCALE_EVENT } from "./bridge/generated.js";
+import { linux } from "./platform.js";
 import { isNarrow } from "./scale.js";
 import { adjustUIScale } from "./settings/calls.js";
 import { scaleAction } from "./shortcuts.js";
 import { call, Events } from "./wails.js";
-
-const linux = navigator.userAgent.includes("Linux");
 
 /** @type {Set<(percent: number) => void>} */
 const listeners = new Set();

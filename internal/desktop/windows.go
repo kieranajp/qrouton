@@ -115,10 +115,10 @@ func (w *Windows) stopAll() {
 	w.diagrams.stop()
 }
 
-func (w *Windows) FocusImage(slug, id string, index int) (workbench.ImageSelection, error) {
+func (w *Windows) FocusAsset(slug, id string, index int) (workbench.AssetSelection, error) {
 	owner := w.sessions.bySlug(slug)
 	if owner == nil {
-		return workbench.ImageSelection{}, unknownSession(slug)
+		return workbench.AssetSelection{}, unknownSession(slug)
 	}
-	return w.focusImage(owner, id, index)
+	return w.focusAsset(owner, id, index)
 }

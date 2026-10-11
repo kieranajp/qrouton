@@ -1,39 +1,44 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { WINDOWS_FOCUS_IMAGE } from "../bridge/generated.js";
+  import { MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { linux } from "../platform.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
-  import ImageMenu from "./ImageMenu.svelte";
+  import AssetMenu from "./AssetMenu.svelte";
 
-  /** @type {{doc: {images?: {source: string, path?: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {assets?: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
 
-  let images = $derived(doc.images ?? []);
+  let assets = $derived(doc.assets ?? []);
   let current = $derived(doc.currentIndex ?? 1);
-  let entry = $derived(images[current - 1]);
-  /** @type {Record<string, 'loaded' | 'error'>} */
+  let entry = $derived(assets[current - 1]);
+  /** @type {Record<string, 'loaded' | 'error' | 'unsupported'>} */
   let loads = $state({});
+  /** @type {Record<string, 'loaded' | 'error'>} */
+  let thumbs = $state({});
   /** @type {Record<string, number>} */
   let aspects = $state({});
   let selectionError = $state("");
   let expanded = $state(false);
-  /** @type {{image: {source: string, path?: string}, x: number, y: number} | null} */
+  /** @type {{asset: {source: string, path?: string, kind: import("../bridge/generated.js").MediaKind}, x: number, y: number} | null} */
   let menu = $state(null);
   let notice = $state("");
   let noticeTimer;
   /** @type {HTMLButtonElement} */
   let primary = $state();
+  /** @type {HTMLVideoElement | undefined} */
+  let player = $state();
   /** @type {HTMLOListElement} */
   let strip = $state();
   let alive = true;
   let request = 0;
   onDestroy(() => { alive = false; clearTimeout(noticeTimer); });
 
-  function openMenu(event, image) {
+  function openMenu(event, asset) {
     // The webview draws one of its own otherwise, and the workbench's own
     // text menu stands down on the same signal.
     event.preventDefault();
-    menu = { image, x: event.clientX, y: event.clientY };
+    menu = { asset, x: event.clientX, y: event.clientY };
   }
 
   function show(text) {
@@ -42,21 +47,35 @@
     noticeTimer = setTimeout(() => (notice = ""), 1600);
   }
 
-  function step(by) {
-    const next = current + by;
-    if (next >= 1 && next <= images.length) select(next);
+  function stepImages(by) {
+    for (let next = current + by; next >= 1 && next <= assets.length; next += by) {
+      if (!isVideo(assets[next - 1])) return select(next);
+    }
   }
 
-  function loaded(url, event) {
-    loads[url] = "loaded";
+  function loaded(states, url, event) {
+    states[url] = "loaded";
     const image = /** @type {HTMLImageElement} */ (event.currentTarget);
     aspects[url] = image.naturalWidth / image.naturalHeight;
+  }
+
+  function unplayable(url, event) {
+    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
+    loads[url] = video.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED ? "unsupported" : "error";
+  }
+
+  const reseeked = new WeakSet();
+  function unpainted(event) {
+    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
+    if (video.readyState !== HTMLMediaElement.HAVE_METADATA || reseeked.has(video)) return;
+    reseeked.add(video);
+    video.currentTime = 0.1;
   }
 
   async function closeLightbox() {
     expanded = false;
     await tick();
-    if (active) primary?.focus();
+    if (active) (primary ?? strip?.children[current - 1]?.querySelector("button"))?.focus();
   }
 
   async function select(index) {
@@ -64,10 +83,10 @@
     const revision = doc.revision;
     selectionError = "";
     try {
-      await Call.ByName(WINDOWS_FOCUS_IMAGE, slug, id, index);
+      await Call.ByName(WINDOWS_FOCUS_ASSET, slug, id, index);
     } catch {
       if (alive && attempt === request && doc.revision === revision) {
-        selectionError = "Could not select image. Try again.";
+        selectionError = "Could not select asset. Try again.";
       }
     }
   }
@@ -93,25 +112,47 @@
   });
 
   $effect(() => {
+    if (expanded && entry && isVideo(entry)) closeLightbox();
+  });
+
+  $effect(() => {
     if (!active) {
       expanded = false;
       menu = null;
+      player?.pause();
     }
   });
 
   const basename = (source) => source.split("/").pop();
+  const isVideo = (asset) => asset.kind === MEDIA_KINDS.VIDEO;
+  const noun = (asset) => (isVideo(asset) ? "Video" : "Image");
 </script>
 
-<article class="images-pane" aria-label="Image gallery">
+<article class="assets-pane" aria-label="Asset gallery">
   {#if entry}
     <figure class="primary">
       <figcaption>
-        <span class="position">Image {current} of {images.length}</span>
+        <span class="position">{noun(entry)} {current} of {assets.length}</span>
         <strong>{basename(entry.source)}</strong>
         <span class="path">{entry.source}</span>
       </figcaption>
       {#key entry.url}
       {@const shown = entry}
+      {#if isVideo(shown)}
+      <div class="primary-frame player" role="presentation" oncontextmenu={(event) => openMenu(event, shown)}>
+        {#if loads[shown.url] === "unsupported"}
+          <p class="load-error">This video's format can't be played here{#if linux}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
+        {:else if loads[shown.url] === "error"}
+          <p class="load-error">Could not play video</p>
+        {:else}
+          {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
+          <!-- svelte-ignore a11y_media_has_caption -->
+          <video bind:this={player} src={shown.url} controls preload="metadata" aria-label={shown.source}
+            onloadedmetadata={() => (loads[shown.url] = "loaded")}
+            onerror={(event) => unplayable(shown.url, event)}></video>
+        {/if}
+      </div>
+      {:else}
       <button
         type="button"
         class="primary-frame"
@@ -125,58 +166,68 @@
         {:else}
           {#if !loads[shown.url]}<span class="loading">Loading image…</span>{/if}
           <img src={shown.url} alt={shown.source}
-            onload={(event) => loaded(shown.url, event)}
+            onload={(event) => loaded(loads, shown.url, event)}
             onerror={() => (loads[shown.url] = "error")} />
         {/if}
       </button>
+      {/if}
       {/key}
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
   {#if notice}<p class="notice" role="status">{notice}</p>{/if}
-  <ol bind:this={strip} class="image-strip" aria-label="Images in supplied order">
-    {#each images as image, index (image.url)}
+  <ol bind:this={strip} class="asset-strip" aria-label="Assets in supplied order">
+    {#each assets as asset, index (asset.url)}
       <li>
         <button type="button" class:current={index + 1 === current}
-          aria-pressed={index + 1 === current} aria-label={`Image ${index + 1}: ${image.source}`}
-          oncontextmenu={(event) => openMenu(event, image)}
+          aria-pressed={index + 1 === current} aria-label={`${noun(asset)} ${index + 1}: ${asset.source}`}
+          oncontextmenu={(event) => openMenu(event, asset)}
           onclick={() => select(index + 1)}>
         <span class="number">{index + 1}</span>
         <div class="thumbnail-frame">
-          {#if loads[image.url] === "error"}
+          {#if isVideo(asset)}
+            {#if thumbs[asset.url] !== "error"}
+              {#if !thumbs[asset.url]}<span class="loading">Loading…</span>{/if}
+              <video src={asset.url + "#t=0.1"} muted playsinline preload="metadata" aria-hidden="true"
+                onloadedmetadata={() => (thumbs[asset.url] = "loaded")}
+                onerror={() => (thumbs[asset.url] = "error")}
+                onsuspend={unpainted}></video>
+            {/if}
+            <span class="play" aria-hidden="true"></span>
+          {:else if thumbs[asset.url] === "error"}
             <span class="load-error">Could not load image</span>
           {:else}
-            {#if !loads[image.url]}<span class="loading">Loading…</span>{/if}
-            <img src={image.url} alt={image.source}
-              onload={(event) => loaded(image.url, event)}
-              onerror={() => (loads[image.url] = "error")} />
+            {#if !thumbs[asset.url]}<span class="loading">Loading…</span>{/if}
+            <img src={asset.url} alt={asset.source}
+              onload={(event) => loaded(thumbs, asset.url, event)}
+              onerror={() => (thumbs[asset.url] = "error")} />
           {/if}
         </div>
-        <strong>{basename(image.source)}</strong>
-        <span class="path">{image.source}</span>
+        <strong>{basename(asset.source)}</strong>
+        <span class="path">{asset.source}</span>
         </button>
       </li>
     {/each}
   </ol>
 </article>
 
-{#if expanded && active && entry}
+{#if expanded && active && entry && !isVideo(entry)}
   <ImageLightbox
     image={entry}
     aspect={aspects[entry.url] ?? 1}
     index={current}
-    total={images.length}
+    total={assets.length}
     {slug}
-    onStep={step}
+    onStep={stepImages}
     onClose={closeLightbox} />
 {/if}
 
 {#if menu}
-  <ImageMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={show} />
+  <AssetMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={show} />
 {/if}
 
 <style>
-  .images-pane {
+  .assets-pane {
     padding: calc(16px * var(--ui-scale));
     min-width: 0;
     font: var(--machine-sm);
@@ -237,7 +288,7 @@
     outline-offset: -2px;
   }
 
-  img {
+  img, video {
     display: block;
     width: auto;
     height: auto;
@@ -245,11 +296,15 @@
     object-fit: contain;
   }
 
-  .primary-frame img {
+  .primary-frame.player {
+    cursor: auto;
+  }
+
+  .primary-frame img, .primary-frame video {
     max-height: min(55vh, calc(560px * var(--ui-scale)));
   }
 
-  .image-strip {
+  .asset-strip {
     display: flex;
     gap: calc(10px * var(--ui-scale));
     overflow-x: auto;
@@ -263,7 +318,7 @@
     min-width: 0;
   }
 
-  .image-strip button {
+  .asset-strip button {
     width: 100%;
     height: 100%;
     text-align: left;
@@ -277,11 +332,11 @@
     border-radius: calc(6px * var(--ui-scale));
   }
 
-  .image-strip button.current {
+  .asset-strip button.current {
     border-color: var(--accent-action);
   }
 
-  .image-strip button:focus-visible {
+  .asset-strip button:focus-visible {
     outline: 2px solid var(--accent-action);
     outline-offset: 2px;
   }
@@ -299,8 +354,24 @@
     margin: calc(6px * var(--ui-scale)) 0;
   }
 
-  .thumbnail-frame img {
+  .thumbnail-frame img, .thumbnail-frame video {
     max-height: calc(90px * var(--ui-scale));
+  }
+
+  .play {
+    position: absolute;
+    width: calc(28px * var(--ui-scale));
+    height: calc(28px * var(--ui-scale));
+    border-radius: 50%;
+    background: rgb(0 0 0 / 55%);
+  }
+
+  .play::after {
+    content: "";
+    position: absolute;
+    inset: 28% 26% 28% 36%;
+    background: var(--text-primary);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
   }
 
   .loading {

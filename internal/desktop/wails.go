@@ -14,13 +14,13 @@ type wailsRenderer struct {
 	running atomic.Bool
 }
 
-func newWailsRenderer(assets fs.FS, icon []byte, uiScale func() int, decks deckLookup, images ...imageLookup) *wailsRenderer {
+func newWailsRenderer(assets fs.FS, icon []byte, uiScale func() int, decks deckLookup, galleries ...galleryLookup) *wailsRenderer {
 	r := &wailsRenderer{}
 	r.app = application.New(application.Options{
 		Name:        applicationName,
 		Description: applicationDescription,
 		Icon:        icon,
-		Assets:      application.AssetOptions{Handler: assetHandler(assets, uiScale, decks, images...)},
+		Assets:      application.AssetOptions{Handler: assetHandler(assets, uiScale, decks, galleries...)},
 		Mac:         application.MacOptions{ApplicationShouldTerminateAfterLastWindowClosed: true},
 	})
 	if runtime.GOOS == "darwin" {

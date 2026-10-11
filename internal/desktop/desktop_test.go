@@ -122,6 +122,7 @@ type stubBoot struct {
 	shell    func(sessionRoot string) []string
 	reveal   func(sessionRoot string) []string
 	copyPic  func(path string) []string
+	copyDoc  func(path string) []string
 	document func(sessionRoot, name string) (workbench.WindowOptions, error)
 
 	mu      sync.Mutex
@@ -170,6 +171,13 @@ func (b *stubBoot) CopyImage(path string) []string {
 		return nil
 	}
 	return b.copyPic(path)
+}
+
+func (b *stubBoot) CopyFile(path string) []string {
+	if b.copyDoc == nil {
+		return nil
+	}
+	return b.copyDoc(path)
 }
 
 func (b *stubBoot) Document(sessionRoot, name string) (workbench.WindowOptions, error) {
@@ -2544,37 +2552,70 @@ func lastChrome(t *testing.T, r *fakeRenderer) status.Fields {
 }
 
 // The page names the file, so the guards are what keep a gallery's menu from
-// handing an arbitrary path to the image converter.
-func TestCopyImageTakesOnlyAnImageInsideTheSession(t *testing.T) {
+// handing an arbitrary path to the clipboard commands.
+func TestCopyAssetTakesOnlyAnAssetInsideTheSession(t *testing.T) {
 	root := t.TempDir()
 	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
-	var copied []string
+	var pictures, files []string
 	reg.boot.copyImage = func(path string) error {
-		copied = append(copied, path)
+		pictures = append(pictures, path)
+		return nil
+	}
+	reg.boot.copyFile = func(path string) error {
+		files = append(files, path)
 		return nil
 	}
 	kraken := sessionDir(t, root, "kraken")
-	shot := filepath.Join(kraken, "thoughts", "assets", "shot.png")
-
-	if err := reg.CopyImage("kraken", shot); err != nil {
+	assets := filepath.Join(kraken, "thoughts", "assets")
+	if err := os.MkdirAll(assets, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if len(copied) != 1 || copied[0] != shot {
-		t.Fatalf("copied %v, want %q", copied, shot)
+	write := func(dir, name string) string {
+		t.Helper()
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		real, err := filepath.EvalSymlinks(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return real
+	}
+	shot := write(assets, "shot.png")
+	clip := write(assets, "sim.mov")
+	notes := write(kraken, "notes.md")
+	text := write(assets, "plain.txt")
+	outside := write(root, "elsewhere.png")
+	disguised := filepath.Join(assets, "disguised.png")
+	if err := os.Symlink(text, disguised); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := reg.CopyAsset("kraken", shot); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.CopyAsset("kraken", clip); err != nil {
+		t.Fatal(err)
+	}
+	if len(pictures) != 1 || pictures[0] != shot {
+		t.Fatalf("pictures %v, want [%q]", pictures, shot)
+	}
+	if len(files) != 1 || files[0] != clip {
+		t.Fatalf("files %v, want [%q]", files, clip)
 	}
 
 	for name, call := range map[string]func() error{
-		"a slug with no session": func() error { return reg.CopyImage("ghost", shot) },
-		"a path outside it":      func() error { return reg.CopyImage("kraken", filepath.Join(root, "elsewhere.png")) },
-		"a file that is not an image": func() error {
-			return reg.CopyImage("kraken", filepath.Join(kraken, "notes.md"))
-		},
+		"a slug with no session":      func() error { return reg.CopyAsset("ghost", shot) },
+		"a path outside it":           func() error { return reg.CopyAsset("kraken", outside) },
+		"a file that is not an asset": func() error { return reg.CopyAsset("kraken", notes) },
+		"a png that points at a txt":  func() error { return reg.CopyAsset("kraken", disguised) },
 	} {
 		if err := call(); err == nil {
 			t.Fatalf("%s was copied anyway", name)
 		}
 	}
-	if len(copied) != 1 {
-		t.Fatalf("a refused request still reached the clipboard: %v", copied)
+	if len(pictures) != 1 || len(files) != 1 {
+		t.Fatalf("a refused request still reached the clipboard: %v %v", pictures, files)
 	}
 }

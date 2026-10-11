@@ -59,9 +59,9 @@ func validateFrontend(assets fs.FS) error {
 // deckLookup answers a deck's asset token with the session root its window
 // belongs to and the directory the deck itself sits in.
 type deckLookup func(token string) (root, dir string, ok bool)
-type imageLookup func(token string, index int) (imageAssetRef, bool)
+type galleryLookup func(token string, index int) (galleryAssetRef, bool)
 
-func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, imageLookups ...imageLookup) http.Handler {
+func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, galleryLookups ...galleryLookup) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))
 	mux.HandleFunc(theme.Path, func(w http.ResponseWriter, _ *http.Request) {
@@ -78,13 +78,13 @@ func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, imageLooku
 		_, _ = fmt.Fprintf(w, uiScaleCSSFormat, strconv.FormatFloat(float64(percent)/100, 'f', -1, 64))
 	})
 	mux.HandleFunc(deckAssetPath, deckAsset(decks))
-	var images imageLookup
-	if len(imageLookups) > 0 {
-		images = imageLookups[0]
+	var lookup galleryLookup
+	if len(galleryLookups) > 0 {
+		lookup = galleryLookups[0]
 	}
-	gallery := imageAsset(images)
+	gallery := galleryAsset(lookup)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.URL.Path, imageAssetPath) {
+		if strings.HasPrefix(r.URL.Path, galleryAssetPath) {
 			gallery(w, r)
 			return
 		}
@@ -92,21 +92,21 @@ func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, imageLooku
 	})
 }
 
-func imageAsset(images imageLookup) http.HandlerFunc {
+func galleryAsset(lookup galleryLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		token, rawIndex, split := strings.Cut(strings.TrimPrefix(r.URL.Path, imageAssetPath), "/")
+		token, rawIndex, split := strings.Cut(strings.TrimPrefix(r.URL.Path, galleryAssetPath), "/")
 		index, err := strconv.Atoi(rawIndex)
-		if !split || token == "" || index < 1 || err != nil || images == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
+		if !split || token == "" || index < 1 || err != nil || lookup == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
 			http.NotFound(w, r)
 			return
 		}
-		ref, ok := images(token, index)
+		ref, ok := lookup(token, index)
 		if !ok {
 			http.NotFound(w, r)
 			return
 		}
 		name, err := launch.ResolveSessionFile(ref.root, ref.source)
-		media, known := workbench.RasterMediaType(name)
+		media, known := workbench.AssetMedia(name)
 		if err != nil || !known {
 			http.NotFound(w, r)
 			return
@@ -122,7 +122,7 @@ func imageAsset(images imageLookup) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set(contentTypeHeader, media)
+		w.Header().Set(contentTypeHeader, media.Type)
 		w.Header().Set(cacheControlHeader, cacheControlNoStore)
 		w.Header().Set(contentTypeOptionsHeader, contentTypeNoSniff)
 		http.ServeContent(w, r, "", info.ModTime(), file)
@@ -135,9 +135,12 @@ func imageAsset(images imageLookup) http.HandlerFunc {
 func deckAsset(decks deckLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rel, split := strings.Cut(strings.TrimPrefix(r.URL.Path, deckAssetPath), "/")
-		media, known := workbench.RasterMediaType(rel)
-		if !known {
-			media, known = deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]
+		var media string
+		known := false
+		if m, ok := workbench.AssetMedia(rel); ok {
+			media, known = m.Type, true
+		} else if extra, ok := deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]; ok {
+			media, known = extra, true
 		}
 		if !split || rel == "" || !known || decks == nil {
 			http.NotFound(w, r)

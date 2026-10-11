@@ -101,7 +101,7 @@ func TestSchemaDefaultsNameTheDefaultWindows(t *testing.T) {
 		input any
 		want  string
 	}{
-		{openImagesInput{}, "Defaults to " + defaultImagesWindowName},
+		{openAssetsInput{}, "Defaults to " + defaultAssetsWindowName},
 		{runCommandInput{}, "Defaults to \"" + defaultCommandWindowName + "\""},
 	} {
 		field, _ := reflect.TypeOf(tc.input).FieldByName("Name")
