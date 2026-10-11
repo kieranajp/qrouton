@@ -2,7 +2,7 @@
   import { MODE_LABELS, REPO_ROLES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import Chip from "../core/Chip.svelte";
-  import { GLYPHS, READ_ONLY } from "../roles.js";
+  import { READ_ONLY } from "../roles.js";
 
   /** @type {{initials?: string, name?: string, mode?: string, lastOpened?: string, description?: string, repos?: {name: string, role: string}[], progress?: {label: string, state: string}[], selected?: boolean, actions?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
@@ -38,7 +38,7 @@
         {#each repos as repo (repo.name)}
           <Chip
             tone={repo.role}
-            glyph={GLYPHS[repo.role]}
+            icon={repo.role}
             meta={repo.role === REPO_ROLES.EDITING ? REPO_ROLES.EDITING : READ_ONLY}>{repo.name}</Chip>
         {/each}
       </div>

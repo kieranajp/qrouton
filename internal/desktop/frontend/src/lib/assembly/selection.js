@@ -1,7 +1,7 @@
 // Which repositories a session takes, and in what order.
 
 import { REPO_ROLES } from "../bridge/generated.js";
-import { GLYPHS, READ_ONLY } from "../roles.js";
+import { READ_ONLY } from "../roles.js";
 import { repoID } from "./filter.js";
 
 /** @typedef {"off" | import("../bridge/generated.js").RepoRole} Role */
@@ -160,14 +160,13 @@ export const upgrading = (selection) => [...selection.upgrades];
 /** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
- * @param {string} branch @returns {{id: string, role: Role, glyph: string, meta: string}[]} */
+ * @param {string} branch @returns {{id: string, role: Role, meta: string}[]} */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
   const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));
   return [...taken, ...ordered(selection)].map(({ id, role }) => ({
     id,
     role,
-    glyph: GLYPHS[role],
     meta:
       role === REPO_ROLES.EDITING
         ? editingMeta(branch)
@@ -175,6 +174,6 @@ export function summary(selection, repos, branch) {
   }));
 }
 
-const editingMeta = (branch) => (branch ? "→ " + branch : "");
+const editingMeta = (branch) => branch ?? "";
 
-const referenceMeta = (pinned) => (pinned ? `→ ${pinned}, ${READ_ONLY}` : "→ " + READ_ONLY);
+const referenceMeta = (pinned) => (pinned ? `${pinned}, ${READ_ONLY}` : READ_ONLY);

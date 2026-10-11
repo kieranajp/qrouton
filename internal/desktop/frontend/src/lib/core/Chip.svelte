@@ -1,5 +1,7 @@
 <script>
   import { REPO_ROLES } from "../bridge/generated.js";
+  import Icon from "./Icon.svelte";
+
   const TONES = {
     neutral: "var(--text-secondary)",
     [REPO_ROLES.EDITING]: "var(--role-editing)",
@@ -12,19 +14,20 @@
     failed: "var(--state-failed)",
   };
 
-  /** @type {{tone?: string, selected?: boolean, glyph?: string, meta?: string, children?: import('svelte').Snippet, [attribute: string]: any}} */
-  let { tone = "neutral", selected = false, glyph, meta, children, ...rest } = $props();
+  /** @type {{tone?: string, selected?: boolean, icon?: string, meta?: string, metaIcon?: string, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  let { tone = "neutral", selected = false, icon, meta, metaIcon, children, ...rest } = $props();
 </script>
 
 <span class="chip" class:selected style:--tone={TONES[tone]} {...rest}>
-  {#if glyph}<span aria-hidden="true">{glyph}</span>{/if}
+  {#if icon}<Icon name={icon} inherit={selected} />{/if}
   {@render children?.()}
-  {#if meta}<span class="meta">{meta}</span>{/if}
+  {#if meta}<span class="meta">{#if metaIcon}<Icon name={metaIcon} />{/if}{meta}</span>{/if}
 </span>
 
 <style>
   .chip {
     display: inline-flex;
+    align-items: center;
     gap: calc(6px * var(--ui-scale));
     font: var(--machine-sm);
     font-size: calc(11px * var(--ui-scale));
@@ -44,6 +47,9 @@
   }
 
   .meta {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(4px * var(--ui-scale));
     color: var(--text-faint);
   }
 </style>

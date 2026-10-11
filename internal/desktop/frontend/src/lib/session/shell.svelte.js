@@ -145,8 +145,8 @@ export function shell() {
   let identityOpen = $state(false);
   let editing = $derived(fields.repos.filter((repo) => repo.role === REPO_ROLES.EDITING && repo.path));
   let identityMenu = $derived([
-    ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, disabled: true }, "-"] : []),
-    { label: "Copy branch name", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
+    ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : []),
+    { label: "Copy branch name", icon: "copy", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
     ...worktreeItems(),
   ]);
 
@@ -157,17 +157,19 @@ export function shell() {
     if (editing.length === 1) {
       const path = editing[0].path;
       return [
-        { label: "Copy path to worktree", act: () => copyText(path) },
-        { label: "Open worktree in Finder", act: () => revealWorktree(path) },
+        { label: "Copy path to worktree", icon: "copy", act: () => copyText(path) },
+        { label: "Open worktree in Finder", icon: "worktree", act: () => revealWorktree(path) },
       ];
     }
     return [
       {
         label: "Copy path to worktree",
+        icon: "copy",
         items: editing.map((repo) => ({ label: repo.name, act: () => copyText(repo.path) })),
       },
       {
         label: "Open worktree in Finder",
+        icon: "worktree",
         items: editing.map((repo) => ({ label: repo.name, act: () => revealWorktree(repo.path) })),
       },
     ];

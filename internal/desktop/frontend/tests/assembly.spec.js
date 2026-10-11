@@ -41,7 +41,7 @@ test("the base menu shows the default branch before Repositories.Branches answer
   const base = page.locator(".rows button.base");
   await expect(base).toHaveCount(0);
   await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
-  await expect(base).toHaveText("main ▾");
+  await expect(base).toHaveText("main");
   await base.click();
 
   const menu = page.locator(".anchor .menu");
@@ -74,7 +74,7 @@ test("a failed branches answer still offers the default branch, disabled with a 
 
   await menu.getByRole("button", { name: "main", exact: true }).click();
   await expect(page.locator(".anchor")).toHaveCount(0);
-  await expect(page.locator(".rows button.base")).toHaveText("main ▾");
+  await expect(page.locator(".rows button.base")).toHaveText("main");
 });
 
 test("a chosen non-default base branch reaches the create payload", async ({ page }) => {
@@ -89,7 +89,7 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
     window.assembly.resolveBranches({ branches: ["main", "develop"], default: "main" }),
   );
   await page.locator(".anchor .menu").getByRole("button", { name: "develop", exact: true }).click();
-  await expect(page.locator(".rows button.base")).toHaveText("develop ▾");
+  await expect(page.locator(".rows button.base")).toHaveText("develop");
 
   await page.getByRole("button", { name: "Choose an agent →" }).click();
   await page.getByRole("button", { name: "Create session →" }).click();
