@@ -2,6 +2,7 @@ import { SETTINGS_FIELDS, UI_SCALE_EVENT } from "../bridge/generated.js";
 import { call, Events } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
+import { firstErroredTab } from "./tabs.js";
 import { addOrg, removeOrg } from "./orgs.js";
 import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
 
@@ -21,7 +22,9 @@ export function settings(onClose) {
     uiScaleSteps: /** @type {number[]} */ ([]),
     thoughts: fromView(undefined),
     pinned: { root: false, orgs: false },
+    runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
+  let tab = $state("general");
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -47,6 +50,7 @@ export function settings(onClose) {
     form.uiScaleSteps = loaded?.uiScaleSteps ?? [];
     form.thoughts = fromView(loaded?.thoughts);
     form.pinned = { root: !!loaded?.pinned?.root, orgs: !!loaded?.pinned?.orgs };
+    form.runners = loaded?.runners ?? [];
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
     if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
@@ -100,6 +104,7 @@ export function settings(onClose) {
     fields = outcome.fields;
     status = outcome.status;
     if (outcome.restartRequired !== undefined) restartRequired = outcome.restartRequired;
+    tab = firstErroredTab(fields) ?? tab;
     if (!err) {
       form.thoughts = fromView(toInput(form.thoughts));
       loadedThoughts = { ...fromView(toInput(form.thoughts)), derived: loadedThoughts.derived };
@@ -118,6 +123,12 @@ export function settings(onClose) {
 
   return {
     form,
+    get tab() {
+      return tab;
+    },
+    set tab(value) {
+      tab = value;
+    },
     get orgInput() {
       return orgInput;
     },

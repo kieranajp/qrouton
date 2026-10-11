@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -23,7 +24,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
-	}, []string{"LINEAR_PROMPT"}, quit, nil, nil)
+	}, []string{"LINEAR_PROMPT"}, quit, nil, nil, nil)
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
@@ -110,6 +111,20 @@ func TestSettingsLoadAnswersTheEffectiveStickers(t *testing.T) {
 	listed := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
 	if got := testSettings(t, &config.Config{Stickers: &listed}, nil, nil, nil).Load().Stickers; !reflect.DeepEqual(got, listed) {
 		t.Fatalf("listed stickers = %#v", got)
+	}
+}
+
+func TestSettingsLoadListsTheRunnerIdsLaunchKnows(t *testing.T) {
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	if got := s.Load().Runners; got == nil || len(got) != 0 {
+		t.Fatalf("no runner source = %#v, want an empty list", got)
+	}
+	s.runners = func() ([]assembly.Runner, error) {
+		return []assembly.Runner{{ID: "claude", Label: "Claude Code", Installed: true}, {ID: "agy", Label: "Antigravity"}}, nil
+	}
+	want := []RunnerLegend{{ID: "claude", Label: "Claude Code"}, {ID: "agy", Label: "Antigravity"}}
+	if got := s.Load().Runners; !reflect.DeepEqual(got, want) {
+		t.Fatalf("runners = %#v, want %#v", got, want)
 	}
 }
 

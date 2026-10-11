@@ -132,7 +132,7 @@ func Run(opts Options) error {
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch,
-		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault),
+		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault), opts.Launcher.Runners,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))

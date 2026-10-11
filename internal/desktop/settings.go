@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/google/shlex"
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -32,6 +33,13 @@ type SettingsView struct {
 	UIScaleSteps []int            `json:"uiScaleSteps"`
 	Thoughts     ThoughtsView     `json:"thoughts"`
 	Pinned       SettingsPinned   `json:"pinned"`
+	Runners      []RunnerLegend   `json:"runners"`
+}
+
+// RunnerLegend names a runner id the launch overrides may key on.
+type RunnerLegend struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
 }
 
 // SettingsPinned names the fields an environment variable overrides for this run.
@@ -84,13 +92,15 @@ type Settings struct {
 	quit           func()
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
+	runners        func() ([]assembly.Runner, error)
 	linear         lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
-	reconfigure func(*config.Config) error) *Settings {
+	reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error)) *Settings {
 	return &Settings{
+		runners:        runners,
 		reconfigure:    reconfigure,
 		cfg:            cfg,
 		emit:           emit,
@@ -135,7 +145,23 @@ func (s *Settings) Load() SettingsView {
 		UIScaleSteps: config.UIScaleSteps(),
 		Thoughts:     thoughtsView(file.Thoughts, root),
 		Pinned:       SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
+		Runners:      s.runnerLegend(),
 	}
+}
+
+func (s *Settings) runnerLegend() []RunnerLegend {
+	legend := []RunnerLegend{}
+	if s.runners == nil {
+		return legend
+	}
+	runners, err := s.runners()
+	if err != nil {
+		return legend
+	}
+	for _, r := range runners {
+		legend = append(legend, RunnerLegend{ID: r.ID, Label: r.Label})
+	}
+	return legend
 }
 
 func thoughtsView(thoughts config.Thoughts, root string) ThoughtsView {

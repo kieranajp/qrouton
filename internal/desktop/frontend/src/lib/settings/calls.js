@@ -17,6 +17,7 @@ import { Call } from "../wails.js";
  * @property {string} [linearPath]
  * @property {string} [linearError]
  * @property {{root: boolean, orgs: boolean}} [pinned]
+ * @property {{id: string, label: string}[]} [runners]
  */
 
 /** @returns {Promise<SettingsFields>} */

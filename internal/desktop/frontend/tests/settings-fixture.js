@@ -6,18 +6,29 @@ import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 
 // ?fail=<method> makes that one bridge call reject, which is how a workbench
 // that cannot answer is reproduced without a workbench.
-const failing = new URLSearchParams(location.search).get("fail") ?? "";
-const invalid = new URLSearchParams(location.search).get("invalid") ?? "";
-const pinned = (new URLSearchParams(location.search).get("pinned") ?? "").split(",");
+const params = new URLSearchParams(location.search);
+const failing = params.get("fail") ?? "";
+const invalid = params.get("invalid") ?? "";
+const pinned = (params.get("pinned") ?? "").split(",");
+const restart = params.get("restart") === "1";
+const ollama = {
+  state: params.get("ollama") ?? "ready",
+  model: "nomic-embed-text",
+  installed: params.get("installed") === "1",
+};
 const saves = [];
+const calls = [];
 
 window.settingsFixture = {
   saves: () => [...saves],
+  calls: () => [...calls],
   announceScale: (percent) => emitWailsEvent(UI_SCALE_EVENT, percent),
 };
 
 window.wailsCall = async (name, input) => {
+  calls.push(name.split(".").pop());
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
+  if (name.endsWith("Ollama.Check")) return ollama;
   if (name.endsWith(".Load"))
     return {
       orgs: ["acme"],
@@ -43,13 +54,19 @@ window.wailsCall = async (name, input) => {
         ],
       },
       pinned: { root: pinned.includes("root"), orgs: pinned.includes("orgs") },
+      runners: [
+        { id: "claude", label: "Claude Code" },
+        { id: "codex", label: "Codex" },
+        { id: "opencode", label: "OpenCode" },
+        { id: "agy", label: "Antigravity" },
+      ],
     };
   if (name.endsWith(".Save")) {
     saves.push(input);
     if (invalid === "thoughts") throw new Error("thoughts: an org maps to two thoughts roots");
     const blank = (input?.stickers ?? []).findIndex((item) => !item.label.trim());
     if (invalid === "stickers" && blank >= 0) throw new Error(`stickers.${blank}: cannot be empty`);
-    return { restartRequired: false };
+    return { restartRequired: restart };
   }
   return undefined;
 };
