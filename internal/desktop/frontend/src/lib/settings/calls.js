@@ -23,6 +23,7 @@ import { Call } from "../wails.js";
  * @property {{default: string, derived?: string, roots: {id: string, path: string, orgs: string}[]}} thoughts
  * @property {string} [linearPath]
  * @property {string} [linearError]
+ * @property {{root: boolean, orgs: boolean}} [pinned]
  */
 
 /** @returns {Promise<SettingsFields>} */

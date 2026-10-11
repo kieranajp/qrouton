@@ -35,6 +35,7 @@
     bind:chime={panel.form.chime}
     bind:uiScale={panel.form.uiScale}
     uiScaleSteps={panel.form.uiScaleSteps}
+    pinned={panel.form.pinned}
     bind:thoughts={panel.form.thoughts}
     loadedThoughts={panel.loadedThoughts}
     onAddFolder={panel.addFolder}

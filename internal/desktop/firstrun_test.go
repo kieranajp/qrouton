@@ -219,7 +219,7 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 	if !reflect.DeepEqual(live.Orgs, []string{"second"}) || !reflect.DeepEqual(disk.Orgs, live.Orgs) {
 		t.Fatalf("final disk/live orgs = %#v / %#v", disk.Orgs, live.Orgs)
 	}
-	if disk.Root != oldRoot || live.Root != oldRoot || disk.Welcomed != live.Welcomed {
+	if disk.Root != oldRoot || live.Root != oldRoot || !disk.Welcomed {
 		t.Fatalf("final disk = %+v, live = %+v", disk, live)
 	}
 }

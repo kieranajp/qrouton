@@ -25,6 +25,7 @@ export function settings(onClose) {
     uiScale: 100,
     uiScaleSteps: /** @type {number[]} */ ([]),
     thoughts: fromView(undefined),
+    pinned: { root: false, orgs: false },
   });
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
@@ -55,6 +56,7 @@ export function settings(onClose) {
     form.uiScale = loaded?.uiScale ?? 100;
     form.uiScaleSteps = loaded?.uiScaleSteps ?? [];
     form.thoughts = fromView(loaded?.thoughts);
+    form.pinned = { root: !!loaded?.pinned?.root, orgs: !!loaded?.pinned?.orgs };
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
     if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });

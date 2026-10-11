@@ -8,6 +8,7 @@ import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 // that cannot answer is reproduced without a workbench.
 const failing = new URLSearchParams(location.search).get("fail") ?? "";
 const invalid = new URLSearchParams(location.search).get("invalid") ?? "";
+const pinned = (new URLSearchParams(location.search).get("pinned") ?? "").split(",");
 const saves = [];
 
 window.settingsFixture = {
@@ -41,6 +42,7 @@ window.wailsCall = async (name, input) => {
           { id: "club", path: "/sync/club", orgs: "club, club-labs" },
         ],
       },
+      pinned: { root: pinned.includes("root"), orgs: pinned.includes("orgs") },
     };
   if (name.endsWith(".Save")) {
     saves.push(input);

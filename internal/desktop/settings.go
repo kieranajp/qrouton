@@ -29,6 +29,13 @@ type SettingsView struct {
 	UIScale       int                  `json:"uiScale"`
 	UIScaleSteps  []int                `json:"uiScaleSteps"`
 	Thoughts      ThoughtsView         `json:"thoughts"`
+	Pinned        SettingsPinned       `json:"pinned"`
+}
+
+// SettingsPinned names the fields an environment variable overrides for this run.
+type SettingsPinned struct {
+	Root bool `json:"root"`
+	Orgs bool `json:"orgs"`
 }
 
 type ThoughtsView struct {
@@ -93,8 +100,18 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 	}
 }
 
+// Load shows root, orgs and thoughts as config.json holds them, so a Save
+// never writes back an environment override or an expanded ~.
 func (s *Settings) Load() SettingsView {
 	cfg := s.cfg.Snapshot()
+	file, err := config.ReadFile()
+	if err != nil {
+		file = cfg
+	}
+	root := file.Root
+	if strings.TrimSpace(root) == "" {
+		root = config.DefaultRoot()
+	}
 	launch := ""
 	if len(cfg.Launch) > 0 {
 		if b, err := json.MarshalIndent(cfg.Launch, "", "  "); err == nil {
@@ -103,8 +120,8 @@ func (s *Settings) Load() SettingsView {
 	}
 	linear, linearErr := s.linear.Load()
 	return SettingsView{
-		Orgs:          cfg.Orgs,
-		Root:          cfg.Root,
+		Orgs:          file.Orgs,
+		Root:          root,
 		Editor:        editorCommand(cfg.Editor),
 		Launch:        launch,
 		Linear:        linear,
@@ -114,31 +131,40 @@ func (s *Settings) Load() SettingsView {
 		Chime:         !cfg.Quiet,
 		UIScale:       cfg.EffectiveUIScale(),
 		UIScaleSteps:  config.UIScaleSteps(),
-		Thoughts:      thoughtsView(cfg),
+		Thoughts:      thoughtsView(file.Thoughts, root),
+		Pinned:        SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
 	}
 }
 
-func thoughtsView(cfg *config.Config) ThoughtsView {
+func thoughtsView(thoughts config.Thoughts, root string) ThoughtsView {
 	view := ThoughtsView{
-		Default: cfg.Thoughts.Default,
-		Derived: filepath.Join(cfg.Root, sessionpaths.ThoughtsDirName),
+		Default: thoughts.Default,
+		Derived: filepath.Join(root, sessionpaths.ThoughtsDirName),
 		Roots:   []ThoughtsRow{},
 	}
-	for _, r := range cfg.Thoughts.Roots {
+	for _, r := range thoughts.Roots {
 		view.Roots = append(view.Roots, ThoughtsRow{ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin)})
 	}
 	return view
 }
 
-// The live config routes new sessions from these paths, so ~ is expanded here.
 func thoughtsFromInput(in ThoughtsInput) config.Thoughts {
-	out := config.Thoughts{Default: config.ExpandHome(strings.TrimSpace(in.Default))}
+	out := config.Thoughts{Default: strings.TrimSpace(in.Default)}
 	for _, row := range in.Roots {
 		out.Roots = append(out.Roots, config.ThoughtsRoot{
 			ID:   strings.TrimSpace(row.ID),
-			Path: config.ExpandHome(strings.TrimSpace(row.Path)),
+			Path: strings.TrimSpace(row.Path),
 			Orgs: dedupOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
 		})
+	}
+	return out
+}
+
+// expandThoughts resolves ~ for the live config, which routes new sessions by these paths.
+func expandThoughts(in config.Thoughts) config.Thoughts {
+	out := config.Thoughts{Default: config.ExpandHome(in.Default)}
+	for _, r := range in.Roots {
+		out.Roots = append(out.Roots, config.ThoughtsRoot{ID: r.ID, Path: config.ExpandHome(r.Path), Orgs: slices.Clone(r.Orgs)})
 	}
 	return out
 }
@@ -155,7 +181,7 @@ func editorCommand(argv []string) string {
 }
 
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
-	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
+	orgs, root, _, err := validateOwnersAndRoot(in.Orgs, in.Root)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -201,23 +227,29 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 	}
 	result := SaveResult{}
-	err = saveConfig(s.cfg, func(next *config.Config) {
-		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
-		next.StickerLabels = &stickerLabels
-		next.Quiet = !in.Chime
-		next.UIScale = storedUIScale(uiScale)
-		next.Thoughts = thoughts
+	err = saveConfig(s.cfg, func(next, live *config.Config) {
+		next.Orgs, next.Root, next.Thoughts = orgs, root, thoughts
+		if !config.OrgsOverridden() {
+			live.Orgs = orgs
+		}
+		live.Thoughts = expandThoughts(thoughts)
+		for _, c := range []*config.Config{next, live} {
+			c.Editor, c.Launch = editor, launch
+			c.StickerLabels = &stickerLabels
+			c.Quiet = !in.Chime
+			c.UIScale = storedUIScale(uiScale)
+		}
 	}, func() error {
 		if err := s.linear.Save(linear); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
 		}
 		return nil
-	}, s.reconfigure, func(current, live *config.Config) {
-		changed := !slices.Equal(current.Orgs, orgs)
+	}, s.reconfigure, func(current, live *config.Config, restart bool) {
+		changed := !slices.Equal(current.Orgs, live.Orgs)
 		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
-		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)
+		result.RestartRequired = restart
 		if changed {
-			s.emit(orgsChangedEvent, orgs)
+			s.emit(orgsChangedEvent, live.Orgs)
 		}
 		if labelsChanged && s.wakeChrome != nil {
 			s.wakeChrome()
@@ -313,17 +345,22 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 // Quit tears down every session supervisor and PTY before exiting.
 func (s *Settings) Quit() { s.quit() }
 
-// saveConfig persists Root but keeps the live boot value used by the rail
-// scanner. A changed Root holds back the thoughts too, since the live default
+// saveConfig writes next over config.json as written and publishes live over
+// the running config. Live keeps the boot Root used by the rail scanner, and a
+// Root that needs a restart holds back the thoughts too, since the live default
 // still derives from the old one.
-func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() error,
-	reconfigure func(*config.Config) error, publish func(current, live *config.Config)) error {
+func saveConfig(cfg *config.Config, mutate func(next, live *config.Config), persist func() error,
+	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
-		next := snapshot.Snapshot()
-		mutate(next)
-		live := next.Snapshot()
+		onDisk, err := config.ReadFile()
+		if err != nil {
+			return err
+		}
+		next, live := onDisk.Snapshot(), snapshot.Snapshot()
+		mutate(next, live)
 		live.Root = snapshot.Root
-		if filepath.Clean(config.ExpandHome(next.Root)) != filepath.Clean(snapshot.Root) {
+		restart := restartRequired(snapshot, onDisk, next)
+		if restart {
 			live.Thoughts = snapshot.Thoughts
 		}
 		if err := config.CheckThoughts(live); err != nil {
@@ -333,7 +370,7 @@ func saveConfig(cfg *config.Config, mutate func(*config.Config), persist func() 
 			return err
 		}
 		if publish != nil {
-			publish(snapshot, live)
+			publish(snapshot, live, restart)
 		}
 		return nil
 	})
@@ -363,6 +400,23 @@ func commitLive(cfg, current, next, live *config.Config, reconfigure func(*confi
 	}
 	cfg.Replace(live)
 	return nil
+}
+
+// restartRequired compares the saved root with the one a restart would replace:
+// the live root, or config.json's previous root while QROUTON_ROOT pins the live one.
+func restartRequired(live, onDisk, next *config.Config) bool {
+	saved := resolvedRoot(next.Root)
+	if config.RootOverridden() {
+		return saved != resolvedRoot(onDisk.Root)
+	}
+	return saved != filepath.Clean(live.Root)
+}
+
+func resolvedRoot(root string) string {
+	if strings.TrimSpace(root) == "" {
+		root = config.DefaultRoot()
+	}
+	return filepath.Clean(config.ExpandHome(strings.TrimSpace(root)))
 }
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.

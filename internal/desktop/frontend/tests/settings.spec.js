@@ -175,3 +175,10 @@ test("a thoughts refusal shows under the section and keeps the panel open", asyn
   await expect(status(page)).toHaveText("an org maps to two thoughts roots");
   await expect(page.locator(".dialog")).toBeVisible();
 });
+
+test("a root pinned by QROUTON_ROOT says the file's value is what Save writes", async ({ page }) => {
+  await page.goto("/tests/settings.html?pinned=root");
+  await expect(root(page)).toHaveValue("/sessions");
+  await expect(page.locator(".dialog")).toContainText("Set by QROUTON_ROOT for this run. Save writes the file's value.");
+  await expect(page.locator(".dialog")).not.toContainText("QROUTON_ORGS");
+});

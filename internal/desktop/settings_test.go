@@ -27,6 +27,22 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	return s
 }
 
+// writeConfigFile gives the test a config.json holding cfg, as a booted app has.
+func writeConfigFile(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func requireBlocked(t *testing.T, done <-chan error, what string) {
 	t.Helper()
 	select {
@@ -43,6 +59,7 @@ func TestSettingsLoadRoundTripsEditorAndLaunch(t *testing.T) {
 		Editor: []string{"code", "--wait", "{}"},
 		Launch: map[string][]string{"claude": {"claude", "--verbose"}},
 	}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 
 	got := s.Load()
@@ -68,6 +85,7 @@ func TestSettingsPreserveEditorArgumentsWhenSaving(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	want := []string{"/Applications/Visual Studio Code.app/bin/code", "--wait", "{}", "a'b", `a"b`, `a\b`, "", "#profile", "line\nbreak"}
 	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}, Editor: want}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 	loaded := s.Load()
 	_, err := s.Save(SettingsInput{
@@ -502,18 +520,18 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 	errs := make(chan error, 2)
 
 	go func() {
-		err := saveConfig(cfg, func(next *config.Config) {
+		err := saveConfig(cfg, func(next, live *config.Config) {
 			close(firstEntered)
 			<-releaseFirst
-			next.Orgs = []string{"first"}
+			next.Orgs, live.Orgs = []string{"first"}, []string{"first"}
 		}, nil, nil, nil)
 		errs <- err
 	}()
 	<-firstEntered
 	go func() {
 		close(secondStarted)
-		err := saveConfig(cfg, func(next *config.Config) {
-			next.Orgs = []string{"second"}
+		err := saveConfig(cfg, func(next, live *config.Config) {
+			next.Orgs, live.Orgs = []string{"second"}, []string{"second"}
 		}, nil, nil, nil)
 		errs <- err
 	}()
@@ -549,6 +567,7 @@ func TestSettingsSaveKeepsTheWelcomedMarker(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	cfg := &config.Config{Root: root, Welcomed: true}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 
 	if _, err := s.Save(SettingsInput{
@@ -994,6 +1013,7 @@ func TestSettingsLoadAnswersTheThoughtsFoldersAndTheDerivedDefault(t *testing.T)
 	cfg := &config.Config{Root: "/sessions", Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
 		{ID: "work", Path: "/sync/work", Orgs: []string{"acme", "acme-labs"}},
 	}}}
+	writeConfigFile(t, cfg)
 	got := testSettings(t, cfg, nil, nil, nil).Load().Thoughts
 	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs"}}}
 	if !reflect.DeepEqual(got, want) {
@@ -1079,6 +1099,104 @@ func TestAdjustUIScaleWritesTheFileAsWrittenNotTheRuntimeOverrides(t *testing.T)
 	}
 }
 
+func overriddenSettings(t *testing.T) (*Settings, *config.Config, string) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	shared := filepath.Join(home, "shared")
+	for _, dir := range []string{filepath.Join(home, "work"), shared} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := `{"orgs": ["acme"], "root": "~/work", "thoughts": {"roots": [{"id": "work", "path": "~/shared", "orgs": ["acme"]}]}}`
+	if err := os.WriteFile(config.Path(), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	override := t.TempDir()
+	t.Setenv("QROUTON_ROOT", override)
+	t.Setenv("QROUTON_ORGS", "pinned-org")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return testSettings(t, cfg, nil, nil, nil), cfg, override
+}
+
+func TestSettingsLoadShowsTheFileValuesAndNamesTheOverrides(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+
+	got := s.Load()
+	if got.Root != "~/work" || !reflect.DeepEqual(got.Orgs, []string{"acme"}) || got.Thoughts.Roots[0].Path != "~/shared" {
+		t.Fatalf("view = root %q, orgs %v, thoughts %+v", got.Root, got.Orgs, got.Thoughts)
+	}
+	if !got.Pinned.Root || !got.Pinned.Orgs {
+		t.Fatalf("pinned = %+v", got.Pinned)
+	}
+}
+
+func TestSettingsLoadShowsTheUnexpandedDefaultRootForAnEmptyFile(t *testing.T) {
+	writeConfigFile(t, &config.Config{})
+	t.Setenv("QROUTON_ROOT", "")
+	t.Setenv("QROUTON_ORGS", "")
+	got := testSettings(t, &config.Config{Root: "/expanded/work"}, nil, nil, nil).Load()
+	if got.Root != config.DefaultRoot() || got.Pinned.Root || got.Pinned.Orgs {
+		t.Fatalf("root = %q, pinned = %+v", got.Root, got.Pinned)
+	}
+}
+
+func TestSettingsSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(t *testing.T) {
+	s, cfg, override := overriddenSettings(t)
+	view := s.Load()
+
+	res, err := s.Save(SettingsInput{
+		Orgs: view.Orgs, Root: view.Root, Linear: `{}`, StickerLabels: view.StickerLabels, Chime: false,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.RestartRequired {
+		t.Fatal("an unchanged root asked for a restart under QROUTON_ROOT")
+	}
+	onDisk, err := config.ReadFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if onDisk.Root != "~/work" || !reflect.DeepEqual(onDisk.Orgs, []string{"acme"}) || onDisk.Thoughts.Roots[0].Path != "~/shared" {
+		t.Fatalf("on disk = root %q, orgs %v, thoughts %+v", onDisk.Root, onDisk.Orgs, onDisk.Thoughts)
+	}
+	if !onDisk.Quiet {
+		t.Fatal("the typed chime did not reach the file")
+	}
+	live := cfg.Snapshot()
+	if live.Root != override || !reflect.DeepEqual(live.Orgs, []string{"pinned-org"}) {
+		t.Fatalf("live = root %q, orgs %v", live.Root, live.Orgs)
+	}
+	if want := filepath.Join(os.Getenv("HOME"), "shared"); live.Thoughts.Roots[0].Path != want {
+		t.Fatalf("live thoughts path = %q, want %q", live.Thoughts.Roots[0].Path, want)
+	}
+}
+
+func TestSettingsSaveUnderAnOverrideAsksForARestartWhenTheFileRootChanges(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+	view := s.Load()
+	res, err := s.Save(SettingsInput{
+		Orgs: view.Orgs, Root: t.TempDir(), Linear: `{}`, StickerLabels: view.StickerLabels,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.RestartRequired {
+		t.Fatal("a changed root did not ask for a restart")
+	}
+}
+
 func TestSettingsSaveThatAddsAThoughtsFolderReachesSearchWithoutARestart(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root, shared := t.TempDir(), t.TempDir()
@@ -1113,6 +1231,7 @@ func TestSettingsSaveThatLeavesThoughtsAloneDoesNotReconfigureSearch(t *testing.
 	cfg := &config.Config{Root: root, Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
 		{ID: "work", Path: shared, Orgs: []string{"acme"}},
 	}}}
+	writeConfigFile(t, cfg)
 	reconfigures := 0
 	s := testSettings(t, cfg, nil, nil, nil)
 	s.reconfigure = func(*config.Config) error { reconfigures++; return nil }

@@ -354,6 +354,15 @@ func Save(cfg *Config) error {
 	return atomicfile.Replace(Path(), b, fileMode)
 }
 
+// RootOverridden reports whether QROUTON_ROOT replaces config.json's root for this run.
+func RootOverridden() bool { return os.Getenv(rootEnvVar) != "" }
+
+// OrgsOverridden reports whether QROUTON_ORGS replaces config.json's orgs for this run.
+func OrgsOverridden() bool { return os.Getenv(orgsEnvVar) != "" }
+
+// DefaultRoot is the root an empty config.json resolves to, before ~ expansion.
+func DefaultRoot() string { return defaultRoot }
+
 // WithoutOverrides drops the runtime overrides from an environment, so a process
 // inheriting it reads the config file's answer rather than this one's.
 func WithoutOverrides(env []string) []string {

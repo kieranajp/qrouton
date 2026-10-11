@@ -8,8 +8,10 @@
   import ThoughtsSettings from "./ThoughtsSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
+  /** @param {string} variable */
+  const pinnedNote = (variable) => `Set by ${variable} for this run. Save writes the file's value.`;
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], pinned?: {root: boolean, orgs: boolean}, thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -22,6 +24,7 @@
     chime = $bindable(true),
     uiScale = $bindable(100),
     uiScaleSteps = [],
+    pinned = { root: false, orgs: false },
     thoughts = $bindable({ default: "", roots: [] }),
     loadedThoughts = { default: "", roots: [], derived: "" },
     onAddFolder,
@@ -36,7 +39,11 @@
 
 <StepHeading title="Settings">Written to config.json.</StepHeading>
 
-<TextField label="GitHub orgs" bind:value={orgInput} placeholder="org-name">
+<TextField
+  label="GitHub orgs"
+  bind:value={orgInput}
+  placeholder="org-name"
+  help={pinned.orgs ? pinnedNote("QROUTON_ORGS") : undefined}>
   {#snippet trailing()}
     <Button variant="secondary" onclick={onAddOrg}>Add</Button>
   {/snippet}
@@ -55,7 +62,8 @@
 <TextField
   label="Sessions root"
   bind:value={root}
-  help={fields.root ?? "Takes effect for sessions started after a restart"}
+  help={fields.root ??
+    (pinned.root ? pinnedNote("QROUTON_ROOT") : "Takes effect for sessions started after a restart")}
   helpTone={fields.root ? "failed" : "muted"} />
 
 <ThoughtsSettings
