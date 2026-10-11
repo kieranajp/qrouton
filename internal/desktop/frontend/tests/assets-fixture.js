@@ -1,15 +1,20 @@
 import "../src/tokens/index.css";
 import { mount, unmount } from "svelte";
 import DockedDocument from "../src/lib/DockedDocument.svelte";
+import { MEDIA_KINDS } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
 const asset = (file) => `/tests/fixtures/assets/${file}`;
+const image = MEDIA_KINDS.IMAGE;
+const video = MEDIA_KINDS.VIDEO;
 const entries = [
-  { source: "thoughts/assets/z/screen.png", url: asset("small.png") + "?entry=1" },
-  { source: "thoughts/assets/a/screen.png", url: asset("large.png") + "?entry=2" },
-  { source: "thoughts/assets/z/screen.png", url: asset("small.png") + "?entry=3" },
-  { source: "thoughts/assets/日本語 and spaces/" + "long-caption-".repeat(12) + ".jpg", url: asset("sample.jpg") },
-  ...["gif", "webp", "avif"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`) })),
+  { source: "thoughts/assets/z/screen.png", url: asset("small.png") + "?entry=1", kind: image },
+  { source: "thoughts/assets/a/screen.png", url: asset("large.png") + "?entry=2", kind: image },
+  { source: "thoughts/assets/z/screen.png", url: asset("small.png") + "?entry=3", kind: image },
+  { source: "thoughts/assets/日本語 and spaces/" + "long-caption-".repeat(12) + ".jpg", url: asset("sample.jpg"), kind: image },
+  ...["gif", "webp"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: image })),
+  ...["webm", "mp4"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: video })),
+  { source: "thoughts/assets/sample.avif", url: asset("sample.avif"), kind: image },
 ];
 let doc = { text: "", source: "", format: "assets", assets: entries, currentIndex: 1, revision: 1, line: 0, to: 0 };
 let windowID = "assets-1";

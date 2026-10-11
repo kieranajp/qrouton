@@ -158,6 +158,12 @@ export const DRAFT_FIELDS = Object.freeze({
   REPOS: "repos",
 });
 
+/** @typedef {"image"|"video"} MediaKind */
+export const MEDIA_KINDS = Object.freeze({
+  IMAGE: "image",
+  VIDEO: "video",
+});
+
 /** @typedef {"ASSISTANT"|"RPI"} ModeLabel */
 export const MODE_LABELS = Object.freeze({
   ASSISTANT: "ASSISTANT",

@@ -396,7 +396,7 @@ func (s *Sessions) CopyAsset(slug, path string) error {
 	if _, inside := sessionpaths.Within(root, path); !inside {
 		return ErrPathOutsideSession
 	}
-	if _, ok := workbench.RasterMediaType(path); !ok {
+	if _, ok := workbench.AssetMedia(path); !ok {
 		return ErrNotAnAsset
 	}
 	return s.boot.copyImage(path)

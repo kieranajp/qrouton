@@ -39,6 +39,7 @@ type documentAsset struct {
 	Source string `json:"source"`
 	Path   string `json:"path,omitempty"`
 	URL    string `json:"url"`
+	Kind   string `json:"kind"`
 }
 
 type ViewportReport struct {
@@ -142,7 +143,8 @@ func documentFor(window *agentWindow) document {
 			if root != "" {
 				path = filepath.Join(root, filepath.FromSlash(ref.Source))
 			}
-			doc.Assets[i] = documentAsset{Source: ref.Source, Path: path, URL: fmt.Sprintf(galleryAssetURLFormat, window.asset, i+1)}
+			media, _ := workbench.AssetMedia(ref.Source)
+			doc.Assets[i] = documentAsset{Source: ref.Source, Path: path, URL: fmt.Sprintf(galleryAssetURLFormat, window.asset, i+1), Kind: string(media.Kind)}
 		}
 		doc.CurrentIndex, doc.Revision = rendered.currentAsset, rendered.assetRevision
 	}

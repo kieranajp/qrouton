@@ -74,7 +74,6 @@ func TestAssetReferencesRejectsInvalidEntriesWithoutExpanding(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "outside.png")
 	_ = os.WriteFile(outside, []byte("asset"), 0o644)
 	_ = os.WriteFile(filepath.Join(root, "vector.svg"), []byte("svg"), 0o644)
-	_ = os.WriteFile(filepath.Join(root, "clip.mp4"), []byte("video"), 0o644)
 	_ = os.WriteFile(filepath.Join(root, "note.txt"), []byte("text"), 0o644)
 	_ = os.WriteFile(filepath.Join(root, "actual.png"), []byte("asset"), 0o644)
 	_ = os.Mkdir(filepath.Join(root, "folder.png"), 0o755)
@@ -82,7 +81,7 @@ func TestAssetReferencesRejectsInvalidEntriesWithoutExpanding(t *testing.T) {
 	for name, paths := range map[string][]string{
 		"empty list": {}, "empty member": {"actual.png", ""}, "missing": {"missing.png"},
 		"directory": {"folder.png"}, "outside": {outside}, "external symlink": {"escape.png"}, "svg": {"vector.svg"},
-		"video": {"clip.mp4"}, "unsupported": {"note.txt"}, "literal glob": {"*.png"},
+		"unsupported": {"note.txt"}, "literal glob": {"*.png"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := AssetReferences(root, paths); err == nil {
@@ -111,13 +110,34 @@ func TestAssetReferencesRejectsUnreadableRegularFile(t *testing.T) {
 	}
 }
 
-func TestRasterMediaTypes(t *testing.T) {
-	for name, want := range map[string]string{"x.PNG": "image/png", "x.jpg": "image/jpeg", "x.JPEG": "image/jpeg", "x.gif": "image/gif", "x.webp": "image/webp", "x.avif": "image/avif"} {
-		if got, ok := workbench.RasterMediaType(name); !ok || got != want {
-			t.Errorf("%s = %q, %v", name, got, ok)
+func TestAssetReferencesAdmitsMixedMediaInOrder(t *testing.T) {
+	root := t.TempDir()
+	names := []string{"a.png", "b.mp4", "c.MOV", "d.webm", "a.png"}
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("asset"), 0o644); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if _, ok := workbench.RasterMediaType("x.svg"); ok {
-		t.Fatal("accepted SVG")
+	refs, err := AssetReferences(root, names)
+	if err != nil || len(refs) != len(names) {
+		t.Fatalf("refs = %+v, %v", refs, err)
+	}
+	for i, ref := range refs {
+		if ref.Source != names[i] {
+			t.Errorf("refs[%d] = %q, want %q", i, ref.Source, names[i])
+		}
+	}
+}
+
+func TestAssetReferencesJudgesTheSymlinkTarget(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "notes.txt"), []byte("text"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("notes.txt", filepath.Join(root, "clip.mp4")); err != nil {
+		t.Skip("symlinks unavailable")
+	}
+	if _, err := AssetReferences(root, []string{"clip.mp4"}); !errors.Is(err, ErrUnsupportedAsset) {
+		t.Fatalf("err = %v", err)
 	}
 }

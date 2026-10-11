@@ -250,12 +250,10 @@ const (
 	agentStateFailed   = status.AgentStateFailed
 )
 
-var deckExtraMediaTypes = map[string]string{
-	".svg":  "image/svg+xml",
-	".mp4":  "video/mp4",
-	".webm": "video/webm",
-	".mov":  "video/quicktime",
-}
+const (
+	deckSVGExt  = ".svg"
+	deckSVGType = "image/svg+xml"
+)
 
 const (
 	galleryAssetPath         = "/gallery/"

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 // deckSession lays out a session the way one is on disk: a root, a thoughts
@@ -135,5 +137,31 @@ func TestTheScaleRouteAnswersTheStoredScaleUncached(t *testing.T) {
 		if got := recorder.Header().Get(cacheControlHeader); got != cacheControlNoStore {
 			t.Fatalf("Cache-Control = %q", got)
 		}
+	}
+}
+
+func TestTheGalleryRouteAnswersRangeRequestsForVideo(t *testing.T) {
+	w, _ := testWindows(t)
+	root := w.shown().root()
+	if err := os.WriteFile(filepath.Join(root, "sim.mov"), []byte("0123456789abcdefghij"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatAssets,
+		Assets: []workbench.AssetRef{{Source: "sim.mov"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := w.Content(id)
+	if err != nil || len(page.Assets) != 1 {
+		t.Fatalf("content = %+v, %v", page, err)
+	}
+	handler := assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, nil, w.lookupGalleryAsset)
+	request := httptest.NewRequest(http.MethodGet, page.Assets[0].URL, nil)
+	request.Header.Set("Range", "bytes=0-9")
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusPartialContent || response.Header().Get("Content-Range") != "bytes 0-9/20" ||
+		response.Header().Get("Content-Type") != "video/quicktime" || response.Body.String() != "0123456789" {
+		t.Fatalf("range = %d, %v, %q", response.Code, response.Header(), response.Body.String())
 	}
 }

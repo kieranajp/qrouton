@@ -54,6 +54,32 @@ func TestAssetGalleryRegistryContentReadAndAssetRoute(t *testing.T) {
 	}
 }
 
+func TestAssetGalleryPayloadCarriesEachEntrysKind(t *testing.T) {
+	w, _ := testWindows(t)
+	root := w.shown().root()
+	names := []string{"a.png", "b.mp4", "c.mov", "d.webm", "a.png"}
+	refs := make([]workbench.AssetRef, len(names))
+	for i, name := range names {
+		if err := os.WriteFile(filepath.Join(root, name), []byte("asset"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		refs[i] = workbench.AssetRef{Source: name}
+	}
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatAssets, Assets: refs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	page, err := w.Content(id)
+	if err != nil || len(page.Assets) != len(names) {
+		t.Fatalf("content = %+v, %v", page, err)
+	}
+	for i, want := range []string{"image", "video", "video", "video", "image"} {
+		if page.Assets[i].Kind != want || page.Assets[i].Source != names[i] {
+			t.Errorf("asset %d = %+v, want kind %s", i, page.Assets[i], want)
+		}
+	}
+}
+
 func TestAssetGalleryDesktopAdmissionRejectsMalformedOptions(t *testing.T) {
 	w, _ := testWindows(t)
 	root := w.shown().root()

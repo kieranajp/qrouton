@@ -1,11 +1,11 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
 
-  /** @type {{doc: {assets?: {source: string, path?: string, url: string}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
+  /** @type {{doc: {assets?: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
 
   let assets = $derived(doc.assets ?? []);
@@ -53,6 +53,20 @@
     aspects[url] = image.naturalWidth / image.naturalHeight;
   }
 
+  function measured(url, event) {
+    loads[url] = "loaded";
+    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
+    aspects[url] = video.videoWidth / video.videoHeight;
+  }
+
+  const reseeked = new WeakSet();
+  function unpainted(event) {
+    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
+    if (video.readyState !== HTMLMediaElement.HAVE_METADATA || reseeked.has(video)) return;
+    reseeked.add(video);
+    video.currentTime = 0.1;
+  }
+
   async function closeLightbox() {
     expanded = false;
     await tick();
@@ -93,6 +107,10 @@
   });
 
   $effect(() => {
+    if (entry && isVideo(entry)) expanded = false;
+  });
+
+  $effect(() => {
     if (!active) {
       expanded = false;
       menu = null;
@@ -100,18 +118,29 @@
   });
 
   const basename = (source) => source.split("/").pop();
+  const isVideo = (asset) => asset.kind === MEDIA_KINDS.VIDEO;
+  const noun = (asset) => (isVideo(asset) ? "Video" : "Image");
 </script>
 
 <article class="assets-pane" aria-label="Asset gallery">
   {#if entry}
     <figure class="primary">
       <figcaption>
-        <span class="position">Image {current} of {assets.length}</span>
+        <span class="position">{noun(entry)} {current} of {assets.length}</span>
         <strong>{basename(entry.source)}</strong>
         <span class="path">{entry.source}</span>
       </figcaption>
       {#key entry.url}
       {@const shown = entry}
+      {#if isVideo(shown)}
+      <div class="primary-frame player">
+        {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
+        <!-- svelte-ignore a11y_media_has_caption -->
+        <video src={shown.url} controls preload="metadata" aria-label={shown.source}
+          oncontextmenu={(event) => openMenu(event, shown)}
+          onloadedmetadata={(event) => measured(shown.url, event)}></video>
+      </div>
+      {:else}
       <button
         type="button"
         class="primary-frame"
@@ -129,22 +158,29 @@
             onerror={() => (loads[shown.url] = "error")} />
         {/if}
       </button>
+      {/if}
       {/key}
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
   {#if notice}<p class="notice" role="status">{notice}</p>{/if}
-  <ol bind:this={strip} class="asset-strip" aria-label="Images in supplied order">
+  <ol bind:this={strip} class="asset-strip" aria-label="Assets in supplied order">
     {#each assets as asset, index (asset.url)}
       <li>
         <button type="button" class:current={index + 1 === current}
-          aria-pressed={index + 1 === current} aria-label={`Image ${index + 1}: ${asset.source}`}
+          aria-pressed={index + 1 === current} aria-label={`${noun(asset)} ${index + 1}: ${asset.source}`}
           oncontextmenu={(event) => openMenu(event, asset)}
           onclick={() => select(index + 1)}>
         <span class="number">{index + 1}</span>
         <div class="thumbnail-frame">
           {#if loads[asset.url] === "error"}
             <span class="load-error">Could not load image</span>
+          {:else if isVideo(asset)}
+            {#if !loads[asset.url]}<span class="loading">Loading…</span>{/if}
+            <video src={asset.url + "#t=0.1"} muted playsinline preload="metadata" aria-hidden="true"
+              onloadedmetadata={(event) => measured(asset.url, event)}
+              onsuspend={unpainted}></video>
+            <span class="play" aria-hidden="true"></span>
           {:else}
             {#if !loads[asset.url]}<span class="loading">Loading…</span>{/if}
             <img src={asset.url} alt={asset.source}
@@ -237,7 +273,7 @@
     outline-offset: -2px;
   }
 
-  img {
+  img, video {
     display: block;
     width: auto;
     height: auto;
@@ -245,7 +281,11 @@
     object-fit: contain;
   }
 
-  .primary-frame img {
+  .primary-frame.player {
+    cursor: auto;
+  }
+
+  .primary-frame img, .primary-frame video {
     max-height: min(55vh, calc(560px * var(--ui-scale)));
   }
 
@@ -299,8 +339,24 @@
     margin: calc(6px * var(--ui-scale)) 0;
   }
 
-  .thumbnail-frame img {
+  .thumbnail-frame img, .thumbnail-frame video {
     max-height: calc(90px * var(--ui-scale));
+  }
+
+  .play {
+    position: absolute;
+    width: calc(28px * var(--ui-scale));
+    height: calc(28px * var(--ui-scale));
+    border-radius: 50%;
+    background: rgb(0 0 0 / 55%);
+  }
+
+  .play::after {
+    content: "";
+    position: absolute;
+    inset: 28% 26% 28% 36%;
+    background: var(--text-primary);
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
   }
 
   .loading {

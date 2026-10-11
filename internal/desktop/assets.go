@@ -106,7 +106,7 @@ func galleryAsset(lookup galleryLookup) http.HandlerFunc {
 			return
 		}
 		name, err := launch.ResolveSessionFile(ref.root, ref.source)
-		media, known := workbench.RasterMediaType(name)
+		media, known := workbench.AssetMedia(name)
 		if err != nil || !known {
 			http.NotFound(w, r)
 			return
@@ -122,7 +122,7 @@ func galleryAsset(lookup galleryLookup) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		w.Header().Set(contentTypeHeader, media)
+		w.Header().Set(contentTypeHeader, media.Type)
 		w.Header().Set(cacheControlHeader, cacheControlNoStore)
 		w.Header().Set(contentTypeOptionsHeader, contentTypeNoSniff)
 		http.ServeContent(w, r, "", info.ModTime(), file)
@@ -135,9 +135,12 @@ func galleryAsset(lookup galleryLookup) http.HandlerFunc {
 func deckAsset(decks deckLookup) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rel, split := strings.Cut(strings.TrimPrefix(r.URL.Path, deckAssetPath), "/")
-		media, known := workbench.RasterMediaType(rel)
-		if !known {
-			media, known = deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]
+		var media string
+		known := false
+		if m, ok := workbench.AssetMedia(rel); ok {
+			media, known = m.Type, true
+		} else if strings.EqualFold(path.Ext(rel), deckSVGExt) {
+			media, known = deckSVGType, true
 		}
 		if !split || rel == "" || !known || decks == nil {
 			http.NotFound(w, r)
