@@ -222,7 +222,7 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 	for _, record := range snapshot.Records {
 		if record.Root && record.Generation == snapshot.Generation {
 			summary.State, summary.Reason = record.State, record.Reason
-			summary.Tool, summary.Target = record.Tool, record.Target
+			summary.Tool = record.Tool
 			break
 		}
 	}

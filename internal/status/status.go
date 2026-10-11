@@ -112,7 +112,6 @@ type AgentSummary struct {
 	State     string `json:"state"`
 	Reason    string `json:"reason"`
 	Tool      string `json:"tool"`
-	Target    string `json:"target"`
 }
 
 // AgentTree is every agent qrouton knows of in a session's current and

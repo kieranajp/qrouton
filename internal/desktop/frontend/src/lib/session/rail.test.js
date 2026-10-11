@@ -46,11 +46,10 @@ test("one repository is named and the rest are counted", () => {
   assert.deepEqual(repositoryLine([]), { name: "No editing repositories", extra: "" });
 });
 
-test("a row's headline names the root's state, its live agents and its tool", () => {
+test("a row's headline names the root's state, and its live agents", () => {
   const running = { running: true, coverage: "full", attention: "none" };
-  assert.deepEqual(summaryFacts({ ...running, state: "working", active: 3, tool: "Bash", target: "go test ./..." }), [
+  assert.deepEqual(summaryFacts({ ...running, state: "working", active: 3, tool: "Bash" }), [
     { kind: "agents", label: "Working · 2 agents", active: true },
-    { kind: "tool", label: "Bash go test ./..." },
   ]);
   assert.deepEqual(summaryFacts({ ...running, state: "working", active: 1 }), [
     { kind: "agents", label: "Thinking", active: true },

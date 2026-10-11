@@ -396,7 +396,7 @@ func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
 	background.agents.begin(agentProviderClaude, 1)
 	background.agents.apply(event(agentevent.HookUserPromptSubmit, "", "", ""))
 	background.agents.apply(event(agentevent.HookPreToolUse, "Bash", "t1", "go test ./..."))
-	if got := row(); got.State != agentStateWorking || got.Tool != "Bash" || got.Target != "go test ./..." {
+	if got := row(); got.State != agentStateWorking || got.Tool != "Bash" {
 		t.Fatalf("working headline = %+v", got)
 	}
 	background.agents.apply(event(agentevent.HookPostToolUse, "Bash", "t1", "go test ./..."))

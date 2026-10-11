@@ -87,12 +87,11 @@
       <div class="facts">
         {#each facts as fact (fact.kind)}
           <span class="fact {fact.kind}" title={fact.title}>
-            {#if fact.kind === "tool"}{fact.label}{:else}
             {#if fact.kind !== "agents" || fact.active}
               <span class="glyph" class:running={fact.active} aria-hidden="true"
                 >{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
             {/if}
-            {fact.label}{/if}
+            {fact.label}
           </span>
         {/each}
       </div>
@@ -268,15 +267,6 @@
 
   .fact.attention {
     color: var(--state-waiting);
-  }
-
-  /* The tool line takes a row of its own and ellipsises at the rail's width. */
-  .fact.tool {
-    flex: 1 0 100%;
-    min-width: 0;
-    overflow: hidden;
-    white-space: nowrap;
-    text-overflow: ellipsis;
   }
 
   .glyph.running {
