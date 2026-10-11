@@ -15,7 +15,8 @@ import (
 type agentRun struct {
 	spawns  map[string]*agentSpawn
 	pending []*agentSpawn
-	// calls names the agent each tool call belongs to.
+	// calls names the agent each tool call belongs to, including calls the
+	// history has since dropped, so a late hook for one is not counted twice.
 	calls map[string]string
 }
 
@@ -154,8 +155,16 @@ func (a *agentActivity) needsLocked(id, typ, reason, tool string, at time.Time) 
 	if reason == "" {
 		reason = agentReasonQuestion
 	}
-	agent.needs, agent.needsTool = reason, tool
+	agent.needs, agent.needsTool, agent.needsAt = reason, tool, at
 	return true
+}
+
+// movedOnLocked clears a wait no ask call answers once the agent calls a tool
+// after it.
+func movedOnLocked(agent *agentRecord, at time.Time) {
+	if agent.needs != "" && agent.needsTool == "" && at.After(agent.needsAt) {
+		agent.needs = ""
+	}
 }
 
 // promptLocked is the user, or a background agent's result, starting the
@@ -167,10 +176,13 @@ func (a *agentActivity) promptLocked(event workbench.AgentEventRequest, at time.
 	if event.AgentID != "" {
 		return len(event.Notifications) > 0
 	}
-	if root := a.rootLocked(); root != nil {
-		root.turnEnded = false
-		root.needs, root.needsTool = "", ""
+	root := a.rootLocked()
+	if root == nil || at.Before(root.stopAt) {
+		return len(event.Notifications) > 0
 	}
+	root.promptAt = at
+	root.turnEnded = false
+	root.needs, root.needsTool = "", ""
 	return true
 }
 
@@ -179,9 +191,10 @@ func (a *agentActivity) stopLocked(event workbench.AgentEventRequest, at time.Ti
 		return false
 	}
 	root := a.rootLocked()
-	if root == nil {
+	if root == nil || at.Before(root.promptAt) {
 		return false
 	}
+	root.stopAt = at
 	root.turnEnded = true
 	root.needs, root.needsTool = "", ""
 	root.background = map[string]bool{}
@@ -222,8 +235,11 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 	if caller == nil {
 		return false
 	}
+	movedOnLocked(caller, at)
+	answered := false
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
+			answered = true
 			if call := a.callLocked(event.ToolUseID); call != nil && call.Start.IsZero() {
 				call.Start = at
 			}
@@ -237,10 +253,11 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 			a.queueLocked(spawn)
 		}
 	}
-	switch event.Tool {
-	case agentevent.ToolAskUserQuestion:
+	switch {
+	case answered:
+	case event.Tool == agentevent.ToolAskUserQuestion:
 		a.needsLocked(event.AgentID, event.AgentType, firstOf(event.Target, agentReasonQuestion), event.ToolUseID, at)
-	case agentevent.ToolExitPlanMode:
+	case event.Tool == agentevent.ToolExitPlanMode:
 		a.needsLocked(event.AgentID, event.AgentType, agentReasonPlan, event.ToolUseID, at)
 	}
 	return true
@@ -264,6 +281,10 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 	if caller.needsTool != "" && caller.needsTool == event.ToolUseID {
 		caller.needs, caller.needsTool = "", ""
 	}
+	movedOnLocked(caller, at)
+	if event.Interrupt && caller.Root && !at.Before(caller.promptAt) {
+		caller.turnEnded, caller.stopAt = true, at
+	}
 	if !failed && event.Target != "" && slices.Contains(agentevent.FileWriteTools, event.Tool) &&
 		!slices.Contains(caller.Files, event.Target) && len(caller.Files) < agentFileLimit {
 		caller.Files = append(caller.Files, event.Target)
@@ -277,6 +298,13 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 			a.recordCallLocked(caller, agentToolCall{
 				ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, End: at, Failed: failed, Closed: true,
 			})
+		}
+	}
+	if failed && event.Spawn != nil {
+		if spawn := a.run.spawns[event.ToolUseID]; spawn != nil && spawn.child != "" {
+			if child := a.records[a.keyLocked(spawn.child, false)]; child != nil && child.State == agentLive {
+				child.State, child.Reason, child.FinishedAt = agentStateFailed, event.Message, at
+			}
 		}
 	}
 	if event.Spawn == nil || event.ToolUseID == "" || event.ChildID == "" {
@@ -336,8 +364,8 @@ func (a *agentActivity) taskNotificationLocked(n workbench.TaskNotification, at 
 	var child *agentRecord
 	if spawn := a.run.spawns[n.ToolUseID]; spawn != nil {
 		child = a.confirmLocked(spawn, n.TaskID, at)
-	} else {
-		child = a.agentLocked(n.TaskID, "", at)
+	} else if child = a.records[a.keyLocked(n.TaskID, false)]; child == nil {
+		return
 	}
 	outcomeLocked(child, n.Outcome, n.Result, at)
 }
@@ -364,7 +392,8 @@ func (a *agentActivity) spawnLocked(event workbench.AgentEventRequest, caller *a
 // type already started.
 func (a *agentActivity) queueLocked(spawn *agentSpawn) {
 	for _, record := range a.recordsByStartLocked() {
-		if record.spawn == "" && !record.Root && !record.ParentKnown && record.ID != spawn.caller && record.Type == spawn.typ {
+		if record.spawn == "" && !record.Root && !record.ParentKnown && record.State == agentLive &&
+			record.ID != spawn.caller && record.Type == spawn.typ {
 			a.bindLocked(record, spawn, false)
 			return
 		}
@@ -470,9 +499,6 @@ func (a *agentActivity) recordCallLocked(agent *agentRecord, call agentToolCall)
 	agent.ToolCount++
 	agent.Tools = append(agent.Tools, call)
 	if extra := len(agent.Tools) - agentToolHistory; extra > 0 {
-		for _, dropped := range agent.Tools[:extra] {
-			delete(a.run.calls, dropped.ID)
-		}
 		agent.Tools = append([]agentToolCall(nil), agent.Tools[extra:]...)
 	}
 	a.run.calls[call.ID] = agent.ID

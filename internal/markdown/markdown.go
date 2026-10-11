@@ -17,7 +17,6 @@ const (
 	heading    = "# "
 	subheading = "## "
 	codeFence  = "```"
-	tildeFence = "~~~"
 	quote      = ">"
 )
 
@@ -168,30 +167,35 @@ const verifyHeading = "verify"
 func PlanPhases(text string) []Phase {
 	var phases []Phase
 	var phase *Phase
-	verifying, fenced := false, ""
+	verifying, verified, fenced := false, false, ""
 	for _, line := range body(text) {
 		trimmed := strings.TrimSpace(line)
-		if marker := fenceMarker(trimmed); marker != "" && (fenced == "" || strings.HasPrefix(trimmed, fenced)) {
-			if fenced == "" {
+		if marker := fenceMarker(trimmed); marker != "" {
+			switch {
+			case fenced == "":
 				fenced = marker
-			} else {
+				continue
+			case marker[0] == fenced[0] && len(marker) >= len(fenced) && strings.TrimLeft(trimmed, marker[:1]) == "":
 				fenced = ""
+				continue
 			}
-			continue
 		}
 		if fenced != "" {
 			continue
 		}
 		if match := atxHeading.FindStringSubmatch(line); match != nil {
 			depth, name := len(match[1]), strings.TrimSpace(match[2])
+			if verifying && depth <= 3 {
+				verifying, verified = false, true
+			}
 			if depth <= 2 {
-				phase, verifying = nil, false
+				phase, verified = nil, false
 				if found := phaseHeading.FindStringSubmatch(name); depth == 2 && found != nil {
 					number, _ := strconv.Atoi(found[1])
 					phases = append(phases, Phase{Number: number, Name: found[2]})
 					phase = &phases[len(phases)-1]
 				}
-			} else if depth == 3 {
+			} else if depth == 3 && !verified {
 				verifying = phase != nil && strings.EqualFold(name, verifyHeading)
 			}
 			continue
@@ -209,10 +213,12 @@ func PlanPhases(text string) []Phase {
 	return phases
 }
 
+// fenceMarker is the run of backticks or tildes a fence line opens with.
 func fenceMarker(trimmed string) string {
-	for _, marker := range []string{codeFence, tildeFence} {
-		if strings.HasPrefix(trimmed, marker) {
-			return marker
+	for _, char := range []string{"`", "~"} {
+		run := len(trimmed) - len(strings.TrimLeft(trimmed, char))
+		if run >= 3 {
+			return trimmed[:run]
 		}
 	}
 	return ""

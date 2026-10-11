@@ -114,6 +114,8 @@ type AgentEventRequest struct {
 
 	Message          string `json:"message,omitempty"`
 	NotificationType string `json:"notification_type,omitempty"`
+	// Interrupt is a tool failure the user caused by interrupting the turn.
+	Interrupt bool `json:"interrupt,omitempty"`
 
 	BackgroundTasks []string           `json:"background_tasks,omitempty"`
 	Notifications   []TaskNotification `json:"notifications,omitempty"`

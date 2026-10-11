@@ -54,13 +54,17 @@ type agentRecord struct {
 	Target string
 
 	// needs is why the agent waits on the user, and needsTool the ask call
-	// whose result clears it.
+	// whose result clears it. Without one, the agent's next tool call does.
 	needs     string
 	needsTool string
+	needsAt   time.Time
 	// turnEnded and background are the root's: its turn is over, and these
-	// background agents have not reported their outcome yet.
+	// background agents have not reported their outcome yet. Hooks race, so
+	// a stop or prompt older than the latest of the other is stale.
 	turnEnded  bool
 	background map[string]bool
+	promptAt   time.Time
+	stopAt     time.Time
 }
 
 type agentToolCall struct {
@@ -423,13 +427,14 @@ func (a *agentActivity) capLocked() {
 	if len(a.records) <= agentRecordCap {
 		return
 	}
-	parents := map[string]bool{}
+	type runAgent struct{ run, id string }
+	parents := map[runAgent]bool{}
 	for key, record := range a.records {
-		parents[key.runID+"\x00"+record.ParentID] = true
+		parents[runAgent{key.runID, record.ParentID}] = true
 	}
 	var leaves []agentRecordKey
 	for key, record := range a.records {
-		if record.Root || record.State == agentLive || parents[key.runID+"\x00"+record.ID] {
+		if record.Root || record.State == agentLive || parents[runAgent{key.runID, record.ID}] {
 			continue
 		}
 		leaves = append(leaves, key)
@@ -448,7 +453,7 @@ func (a *agentActivity) capLocked() {
 func agentStateFor(activity string) string {
 	switch activity {
 	case status.ActivityWaiting:
-		return agentStateNeedsYou
+		return agentStateYourTurn
 	case status.ActivityWorking:
 		return agentStateWorking
 	default:

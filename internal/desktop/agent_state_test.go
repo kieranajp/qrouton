@@ -278,3 +278,102 @@ func TestAgentTreeEmitSkipsASessionNotOnScreen(t *testing.T) {
 		t.Fatal("a background session's tree was pushed")
 	}
 }
+
+// Async hooks race: a Stop that reaches the workbench after a newer prompt
+// must not end the turn the prompt began, nor ring for it.
+func TestAgentStateIgnoresAStopOlderThanTheLatestPrompt(t *testing.T) {
+	start := time.Now()
+	at := func(offset time.Duration, hook string) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) { e.Timestamp = start.Add(offset) })
+	}
+	tracker := replayed(t, []workbench.AgentEventRequest{at(0, agentevent.HookUserPromptSubmit)})
+	tracker.apply(at(2*time.Second, agentevent.HookUserPromptSubmit))
+	if _, alert := tracker.apply(at(time.Second, agentevent.HookStop)); alert {
+		t.Fatal("a stale Stop rang the chime")
+	}
+	if got := stateOf(t, tracker, agentRootID).State; got != agentStateWorking {
+		t.Fatalf("after a stale Stop the root = %q", got)
+	}
+	tracker.apply(at(3*time.Second, agentevent.HookStop))
+	tracker.apply(at(2500*time.Millisecond, agentevent.HookUserPromptSubmit))
+	if got := stateOf(t, tracker, agentRootID).State; got != agentStateYourTurn {
+		t.Fatalf("a stale prompt reopened the turn: %q", got)
+	}
+}
+
+func TestAgentStateAnInterruptEndsTheTurn(t *testing.T) {
+	tracker := replayed(t, []workbench.AgentEventRequest{claudeEvent(agentevent.HookUserPromptSubmit, nil)})
+	tracker.apply(claudeEvent(agentevent.HookPreToolUse, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t1" }))
+	tracker.apply(claudeEvent(agentevent.HookPostToolUseFailure, func(e *workbench.AgentEventRequest) {
+		e.Tool, e.ToolUseID, e.Interrupt = "Bash", "t1", true
+	}))
+	if got := stateOf(t, tracker, agentRootID).State; got != agentStateYourTurn {
+		t.Fatalf("after an interrupt the root = %q", got)
+	}
+}
+
+func TestAgentStateAFailedAgentCallFailsItsChild(t *testing.T) {
+	spawn := func(hook string) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
+			e.Tool, e.ToolUseID, e.Spawn, e.Message = "Agent", "t1", &workbench.AgentSpawn{Type: "explorer"}, "tool failed"
+		})
+	}
+	tracker := replayed(t, []workbench.AgentEventRequest{
+		claudeEvent(agentevent.HookUserPromptSubmit, nil),
+		spawn(agentevent.HookPreToolUse),
+		claudeEvent(agentevent.HookSubagentStart, func(e *workbench.AgentEventRequest) { e.AgentID, e.AgentType = "c1", "explorer" }),
+		spawn(agentevent.HookPostToolUseFailure),
+		claudeEvent(agentevent.HookStop, nil),
+	})
+	if c := stateOf(t, tracker, "c1"); c.State != agentStateFailed || c.Reason != "tool failed" {
+		t.Fatalf("child of a failed call = %+v", c)
+	}
+	if got := stateOf(t, tracker, agentRootID).State; got != agentStateYourTurn {
+		t.Fatalf("the root waits on a child whose call failed: %q", got)
+	}
+}
+
+func TestAgentStateASubagentPermissionClearsOnItsNextTool(t *testing.T) {
+	sub := func(hook string, fill func(*workbench.AgentEventRequest)) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
+			e.AgentID, e.AgentType = "c1", "explorer"
+			if fill != nil {
+				fill(e)
+			}
+		})
+	}
+	tracker := replayed(t, []workbench.AgentEventRequest{
+		sub(agentevent.HookSubagentStart, nil),
+		sub(agentevent.HookNotification, func(e *workbench.AgentEventRequest) {
+			e.NotificationType, e.Message = notificationPermission, "allow Bash?"
+		}),
+	})
+	if c := stateOf(t, tracker, "c1"); c.State != agentStateNeedsYou {
+		t.Fatalf("subagent awaiting permission = %+v", c)
+	}
+	tracker.apply(sub(agentevent.HookPostToolUse, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t9" }))
+	if c := stateOf(t, tracker, "c1"); c.State == agentStateNeedsYou {
+		t.Fatalf("a tool call after the permission left the subagent needing you: %+v", c)
+	}
+}
+
+func TestAgentStateAnAskAnsweredBeforeItsStartArrivesNeedsNothing(t *testing.T) {
+	ask := func(hook string) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = agentevent.ToolAskUserQuestion, "ask-1" })
+	}
+	tracker := replayed(t, []workbench.AgentEventRequest{
+		claudeEvent(agentevent.HookUserPromptSubmit, nil), ask(agentevent.HookPostToolUse), ask(agentevent.HookPreToolUse),
+	})
+	if got := stateOf(t, tracker, agentRootID).State; got == agentStateNeedsYou {
+		t.Fatal("a late ask start left the root needing the user")
+	}
+}
+
+func TestAgentStateDropsANotificationForNoKnownAgent(t *testing.T) {
+	tracker := replayed(t, []workbench.AgentEventRequest{claudeEvent(agentevent.HookUserPromptSubmit, func(e *workbench.AgentEventRequest) {
+		e.Notifications = []workbench.TaskNotification{{TaskID: "shell-1", Outcome: workbench.AgentOutcome{Status: "completed"}}}
+	})})
+	if kids := children(tracker.snapshot()); len(kids) != 0 {
+		t.Fatalf("a notification for no known agent made %+v", kids)
+	}
+}

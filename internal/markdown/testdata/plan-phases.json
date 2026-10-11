@@ -74,5 +74,27 @@
     "name": "a document with no phases",
     "text": "# Notes\n\n## Decisions\n\n### Verify\n- [ ] not a phase\n",
     "phases": []
+  },
+  {
+    "name": "a longer fence is not closed by a shorter one",
+    "text": "## Phase 1 — G\n\n### Verify\n- [x] real\n\n````md\n```\n- [ ] quoted\n```\n````\n- [x] after\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 2,
+        "total": 2
+      }
+    ]
+  },
+  {
+    "name": "only the first Verify section counts",
+    "text": "## Phase 1 — H\n\n### Verify\n- [x] first\n\n### Notes\n\n### Verify\n- [ ] second\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 1,
+        "total": 1
+      }
+    ]
   }
 ]

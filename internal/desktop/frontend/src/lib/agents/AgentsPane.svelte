@@ -15,15 +15,19 @@
   $effect(() => {
     const session = slug;
     let live = false;
+    let gone = false;
     tree = undefined;
     const off = Events.On(AGENT_TREE_EVENT + session, (event) => {
       live = true;
       tree = event.data;
     });
     call(Call.ByName(CHROME_AGENT_TREE, session)).then((answer) => {
-      if (answer.ok && !live && answer.value) tree = answer.value;
+      if (answer.ok && !live && !gone && answer.value) tree = answer.value;
     });
-    return off;
+    return () => {
+      gone = true;
+      off();
+    };
   });
 
   $effect(() => {

@@ -298,7 +298,7 @@ func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 		record string
 	}{
 		{"output", shown.agents.output, status.ActivityWorking, agentStateWorking},
-		{"attention", func() { shown.agents.attention(1, status.ActivityWaiting) }, status.ActivityWaiting, agentStateNeedsYou},
+		{"attention", func() { shown.agents.attention(1, status.ActivityWaiting) }, status.ActivityWaiting, agentStateYourTurn},
 		{"typing", shown.agents.input, status.ActivityWorking, agentStateWorking},
 		{"silence", func() { clock.at = clock.at.Add(activityQuiet) }, status.ActivityIdle, agentStateIdle},
 	} {

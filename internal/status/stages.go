@@ -56,7 +56,8 @@ func researched(path string) bool {
 	return answered
 }
 
-// implemented means the plan has phases and every Verify item in each is ticked.
+// implemented means the plan has phases, each has Verify items, and every one
+// is ticked.
 func implemented(path string) bool {
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -64,7 +65,7 @@ func implemented(path string) bool {
 	}
 	phases := markdown.PlanPhases(string(body))
 	for _, phase := range phases {
-		if phase.Met != phase.Total {
+		if phase.Total == 0 || phase.Met != phase.Total {
 			return false
 		}
 	}

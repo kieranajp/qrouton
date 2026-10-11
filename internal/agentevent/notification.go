@@ -7,11 +7,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-const (
-	notificationOpen  = "<task-notification>"
-	notificationClose = "</task-notification>"
-)
-
 // TaskNotifications reads each background agent result Claude Code delivers to
 // its caller as a prompt. The result is kept as text to show; only the status
 // and the usage figures are read.
@@ -33,31 +28,35 @@ func TaskNotifications(prompt string) []workbench.TaskNotification {
 		block := prompt[:end]
 		prompt = prompt[end+len(notificationClose):]
 		n := workbench.TaskNotification{
-			TaskID:    tag(block, "task-id"),
-			ToolUseID: tag(block, "tool-use-id"),
-			Result:    truncate(tag(block, "result"), MessageLimit),
-			Outcome:   workbench.AgentOutcome{Status: tag(block, "status")},
+			TaskID:    truncate(tag(block, tagTaskID, false), IDLimit),
+			ToolUseID: truncate(tag(block, tagToolUseID, false), IDLimit),
+			Result:    truncate(tag(block, tagResult, true), MessageLimit),
+			Outcome:   workbench.AgentOutcome{Status: truncate(tag(block, tagStatus, false), IDLimit)},
 		}
-		usage := tag(block, "usage")
-		n.Outcome.Tokens = int(number(usage, "subagent_tokens", "total_tokens"))
-		n.Outcome.ToolUses = int(number(usage, "tool_uses"))
-		n.Outcome.DurationMs = number(usage, "duration_ms")
-		if n.TaskID != "" {
+		usage := tag(block, tagUsage, false)
+		n.Outcome.Tokens = int(number(usage, tagSubagentTokens, tagTotalTokens))
+		n.Outcome.ToolUses = int(number(usage, tagToolUses))
+		n.Outcome.DurationMs = number(usage, tagDurationMs)
+		if n.TaskID != "" && len(out) < ListLimit {
 			out = append(out, n)
 		}
 	}
 }
 
-// tag is the text between a tag's first opening and its last closing, so a
-// result quoting markup of its own stays whole.
-func tag(text, name string) string {
+// tag is the text inside a tag's first opening and its first closing. A
+// result runs to its last closing instead, so one quoting markup stays whole;
+// it comes after every other tag, so their first closings are their own.
+func tag(text, name string, last bool) string {
 	open, close := "<"+name+">", "</"+name+">"
 	start := strings.Index(text, open)
 	if start < 0 {
 		return ""
 	}
 	rest := text[start+len(open):]
-	end := strings.LastIndex(rest, close)
+	end := strings.Index(rest, close)
+	if last {
+		end = strings.LastIndex(rest, close)
+	}
 	if end < 0 {
 		return ""
 	}
@@ -66,7 +65,7 @@ func tag(text, name string) string {
 
 func number(text string, names ...string) int64 {
 	for _, name := range names {
-		if value, err := strconv.ParseInt(tag(text, name), 10, 64); err == nil {
+		if value, err := strconv.ParseInt(tag(text, name, false), 10, 64); err == nil {
 			return value
 		}
 	}

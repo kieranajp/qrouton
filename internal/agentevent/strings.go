@@ -35,6 +35,10 @@ const (
 	// whatever the tool was handed or the model wrote.
 	TargetLimit  = 160
 	MessageLimit = 1000
+	// IDLimit bounds ids, names and statuses; ListLimit bounds how many
+	// background tasks and task notifications one event carries.
+	IDLimit   = 128
+	ListLimit = 8
 
 	ToolAskUserQuestion = "AskUserQuestion"
 	ToolExitPlanMode    = "ExitPlanMode"
@@ -51,7 +55,20 @@ const (
 	mcpTargetJoin    = " · "
 	truncationMark   = "…"
 
-	spawnAsyncStatus = "async_launched"
+	spawnAsyncStatus   = "async_launched"
+	backgroundSubagent = "subagent"
+
+	notificationOpen  = "<task-notification>"
+	notificationClose = "</task-notification>"
+	tagTaskID         = "task-id"
+	tagToolUseID      = "tool-use-id"
+	tagStatus         = "status"
+	tagResult         = "result"
+	tagUsage          = "usage"
+	tagSubagentTokens = "subagent_tokens"
+	tagTotalTokens    = "total_tokens"
+	tagToolUses       = "tool_uses"
+	tagDurationMs     = "duration_ms"
 )
 
 // FileWriteTools are the tools whose target is a file the agent wrote.

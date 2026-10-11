@@ -4,8 +4,10 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -205,5 +207,67 @@ func TestCodexFixtureStillDecodesAsLifecycle(t *testing.T) {
 	}
 	if starts == 0 {
 		t.Fatal("no Codex SubagentStart carried an agent and a parent")
+	}
+}
+
+// A result quoting the notification's own tags must not bleed into the
+// fields before it.
+func TestTaskNotificationKeepsFieldsWhenTheResultQuotesTags(t *testing.T) {
+	prompt := "<task-notification>\n<task-id>a1</task-id>\n<tool-use-id>t1</tool-use-id>\n<status>completed</status>\n" +
+		"<result>See <status>x</status> and </task-id> in fixtures.</result>\n" +
+		"<usage><subagent_tokens>10</subagent_tokens></usage>\n</task-notification>"
+	got := TaskNotifications(prompt)
+	if len(got) != 1 || got[0].TaskID != "a1" || got[0].ToolUseID != "t1" || got[0].Outcome.Status != "completed" ||
+		got[0].Result != "See <status>x</status> and </task-id> in fixtures." || got[0].Outcome.Tokens != 10 {
+		t.Fatalf("notification = %+v", got)
+	}
+}
+
+func TestReduceKeepsOnlySubagentBackgroundTasks(t *testing.T) {
+	payload := `{"hook_event_name":"Stop","background_tasks":[` +
+		`{"id":"a1","type":"subagent"},{"id":"b1","type":"shell"},{"id":"c1"}]}`
+	event, err := Reduce("claude", strings.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(event.BackgroundTasks, []string{"a1", "c1"}) {
+		t.Fatalf("background tasks = %v", event.BackgroundTasks)
+	}
+}
+
+func TestReduceBoundsIdsAndLists(t *testing.T) {
+	long := strings.Repeat("x", 4*IDLimit)
+	var tasks, notes []string
+	for i := range 3 * ListLimit {
+		tasks = append(tasks, fmt.Sprintf(`{"id":"%s%d","type":"subagent"}`, long, i))
+		notes = append(notes, fmt.Sprintf("<task-notification><task-id>%s%d</task-id><status>%s</status><result>%s</result></task-notification>",
+			long, i, long, strings.Repeat("é", MessageLimit)))
+	}
+	stop := fmt.Sprintf(`{"hook_event_name":"Stop","agent_id":%q,"background_tasks":[%s]}`, long, strings.Join(tasks, ","))
+	prompt, _ := json.Marshal(map[string]string{"hook_event_name": "UserPromptSubmit", "prompt": strings.Join(notes, "\n")})
+	for _, payload := range []string{stop, string(prompt)} {
+		event, err := Reduce("claude", strings.NewReader(payload))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len([]rune(event.AgentID)) > IDLimit || len(event.BackgroundTasks) > ListLimit || len(event.Notifications) > ListLimit {
+			t.Fatalf("%s kept %d runes of id, %d tasks, %d notifications", event.Hook,
+				len([]rune(event.AgentID)), len(event.BackgroundTasks), len(event.Notifications))
+		}
+		for _, n := range event.Notifications {
+			if len([]rune(n.TaskID)) > IDLimit || len([]rune(n.Outcome.Status)) > IDLimit {
+				t.Fatalf("notification kept an unbounded id or status")
+			}
+		}
+	}
+}
+
+func TestReduceCarriesAnInterrupt(t *testing.T) {
+	event, err := Reduce("claude", strings.NewReader(`{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_use_id":"t1","error":"interrupted","is_interrupt":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !event.Interrupt {
+		t.Fatalf("interrupt dropped: %+v", event)
 	}
 }

@@ -25,11 +25,13 @@ type claudePayload struct {
 	LastAssistantMessage string           `json:"last_assistant_message"`
 	Error                json.RawMessage  `json:"error"`
 	ErrorDetails         string           `json:"error_details"`
+	IsInterrupt          bool             `json:"is_interrupt"`
 	BackgroundTasks      []backgroundTask `json:"background_tasks"`
 }
 
 type backgroundTask struct {
-	ID string `json:"id"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
 }
 
 type spawnInput struct {
@@ -61,17 +63,17 @@ func Reduce(provider string, input io.Reader) (workbench.AgentEventRequest, erro
 		return workbench.AgentEventRequest{}, err
 	}
 	event := workbench.AgentEventRequest{
-		Provider: provider, Hook: p.HookEventName, Timestamp: at,
-		AgentID: p.AgentID, AgentType: p.AgentType,
-		ToolUseID: p.ToolUseID, Tool: p.ToolName,
-		NotificationType: p.NotificationType,
+		Provider: provider, Hook: truncate(p.HookEventName, IDLimit), Timestamp: at,
+		AgentID: truncate(p.AgentID, IDLimit), AgentType: truncate(p.AgentType, IDLimit),
+		ToolUseID: truncate(p.ToolUseID, IDLimit), Tool: truncate(p.ToolName, IDLimit),
+		NotificationType: truncate(p.NotificationType, IDLimit), Interrupt: p.IsInterrupt,
 	}
 	if p.ToolName != "" {
 		event.Target = truncate(Target(p.ToolName, p.ToolInput), TargetLimit)
 	}
 	for _, task := range p.BackgroundTasks {
-		if task.ID != "" {
-			event.BackgroundTasks = append(event.BackgroundTasks, task.ID)
+		if task.ID != "" && (task.Type == "" || task.Type == backgroundSubagent) && len(event.BackgroundTasks) < ListLimit {
+			event.BackgroundTasks = append(event.BackgroundTasks, truncate(task.ID, IDLimit))
 		}
 	}
 	switch p.HookEventName {
@@ -101,7 +103,7 @@ func reduceSpawn(event *workbench.AgentEventRequest, p claudePayload) {
 	var in spawnInput
 	_ = json.Unmarshal(p.ToolInput, &in)
 	event.Spawn = &workbench.AgentSpawn{
-		Type: in.SubagentType, Description: truncate(in.Description, TargetLimit), Async: in.RunInBackground,
+		Type: truncate(in.SubagentType, IDLimit), Description: truncate(in.Description, TargetLimit), Async: in.RunInBackground,
 	}
 	if p.HookEventName != HookPostToolUse || len(p.ToolResponse) == 0 {
 		return
@@ -110,13 +112,13 @@ func reduceSpawn(event *workbench.AgentEventRequest, p claudePayload) {
 	if json.Unmarshal(p.ToolResponse, &out) != nil {
 		return
 	}
-	event.ChildID = out.AgentID
+	event.ChildID = truncate(out.AgentID, IDLimit)
 	if out.IsAsync || out.Status == "" || out.Status == spawnAsyncStatus {
 		event.Spawn.Async = true
 		return
 	}
 	event.Outcome = &workbench.AgentOutcome{
-		Status: out.Status, Tokens: out.TotalTokens,
+		Status: truncate(out.Status, IDLimit), Tokens: out.TotalTokens,
 		DurationMs: out.TotalDurationMs, ToolUses: out.TotalToolUseCount,
 	}
 	texts := make([]string, 0, len(out.Content))

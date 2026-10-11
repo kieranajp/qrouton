@@ -93,6 +93,7 @@ func TestImplementFillsWhenEveryVerifyItemIsTicked(t *testing.T) {
 		{"every Verify ticked, a See open", "# Plan\n\n## Phase 1 — A\n\n### Verify\n- [x] one\n- [x] two\n\n### See\n- [ ] look\n", true, true},
 		{"one Verify open", "# Plan\n\n## Phase 1 — A\n\n### Verify\n- [x] one\n- [ ] two\n", true, false},
 		{"no phases", "# Plan\n\n- [x] all done\n", true, false},
+		{"a phase without Verify items", "# Plan\n\n## Phase 1 — A\n\n### Verify\n- [x] one\n\n## Phase 2 — B\n\nProse only.\n", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := thoughtsDir(t.TempDir())
