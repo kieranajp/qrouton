@@ -5,7 +5,7 @@ import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import { AGENT_TREE_EVENT, CHROME_AGENT_TREE, WINDOWS_OPEN_DOCUMENT } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
-import AgentsFixture from "./AgentsFixture.svelte";
+import OverviewFixture from "./OverviewFixture.svelte";
 
 const NEVER = "0001-01-01T00:00:00Z";
 const node = (id, parent, extra = {}) => ({
@@ -96,4 +96,4 @@ window.wailsCall = async (name, ...args) => {
 window.pushTree = (key) => emitWailsEvent(AGENT_TREE_EVENT + "fixture", trees[key]);
 window.trees = trees;
 
-mount(AgentsFixture, { target: document.querySelector("#fixture") });
+mount(OverviewFixture, { target: document.querySelector("#fixture") });

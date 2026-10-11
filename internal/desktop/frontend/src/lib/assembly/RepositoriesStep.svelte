@@ -5,7 +5,7 @@
   import SegmentedControl from "../forms/SegmentedControl.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
-  import RepoRow from "../session/RepoRow.svelte";
+  import RepoRow from "./RepoRow.svelte";
 
   /** @typedef {{id: string, meta: string, role: "off" | import("../bridge/generated.js").RepoRole, offers: ("off" | import("../bridge/generated.js").RepoRole)[], rebasable: boolean, base: string, branches: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}}} Row */
 

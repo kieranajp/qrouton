@@ -99,7 +99,7 @@ func (w *Windows) Close(id string) error {
 		return noSuchWindow(id)
 	}
 	if pinned(window) {
-		return ErrAgentsWindowPinned
+		return ErrOverviewWindowPinned
 	}
 	w.discard(id)
 	return nil

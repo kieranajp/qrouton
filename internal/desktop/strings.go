@@ -40,7 +40,7 @@ const (
 	notesWindowWidth  = 520
 	notesWindowHeight = 720
 
-	agentsWindowLabel       = "Overview"
+	overviewWindowLabel     = "Overview"
 	shellWindowLabel        = "$ shell"
 	shellWindowLabelNumbers = "$ shell %d"
 

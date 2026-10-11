@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import AssemblyStep from "../session/AssemblyStep.svelte";
+  import AssemblyStep from "./AssemblyStep.svelte";
   import AgentStep from "./AgentStep.svelte";
   import DescribeStep from "./DescribeStep.svelte";
   import Dialog from "./Dialog.svelte";

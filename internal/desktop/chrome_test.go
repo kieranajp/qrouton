@@ -281,7 +281,7 @@ func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
 	}
 }
 
-// The rail row and the Agents pane read one tracker, so a terminal-timed
+// The rail row and the Overview tab read one tracker, so a terminal-timed
 // session's activity reaches the page as one answer in two vocabularies.
 func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 	clock := &activityClock{at: time.Now()}

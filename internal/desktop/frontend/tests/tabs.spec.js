@@ -82,12 +82,12 @@ test("the middle mouse button closes a tab", async ({ page }) => {
 
 test("the pinned Overview tab cannot be closed or moved", async ({ page }) => {
   await open(page);
-  const agents = page.locator('.tab[title="Overview"]');
+  const overview = page.locator('.tab[title="Overview"]');
 
-  await expect(agents.getByRole("button", { name: "Close tab" })).toHaveCount(0);
-  await expect(agents).toHaveAttribute("draggable", "false");
-  await agents.click({ button: "middle" });
-  await page.locator(".tab").nth(2).dragTo(agents);
+  await expect(overview.getByRole("button", { name: "Close tab" })).toHaveCount(0);
+  await expect(overview).toHaveAttribute("draggable", "false");
+  await overview.click({ button: "middle" });
+  await page.locator(".tab").nth(2).dragTo(overview);
 
   await expect
     .poll(() => titles(page))

@@ -1,5 +1,5 @@
 <script>
-  import AgentsPane from "../src/lib/agents/AgentsPane.svelte";
+  import OverviewPane from "../src/lib/overview/OverviewPane.svelte";
 
   const repos = [
     { name: "acme/web", role: "editing", measured: true, commits: 2, insertions: 74, deletions: 35 },
@@ -10,4 +10,4 @@
   window.overviewAdded = () => added;
 </script>
 
-<AgentsPane slug="fixture" active={true} root="/s/checkout" {repos} onAddRepos={() => added++} />
+<OverviewPane slug="fixture" active={true} root="/s/checkout" {repos} onAddRepos={() => added++} />

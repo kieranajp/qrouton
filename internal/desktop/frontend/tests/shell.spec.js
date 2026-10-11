@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const TABS = [
-  { id: "window-1", label: "Overview", kind: "agents", pinned: true },
+  { id: "window-1", label: "Overview", kind: "overview", pinned: true },
   { id: "window-2", label: "$ shell", kind: "terminal" },
   { id: "window-3", label: "Research", kind: "document" },
 ];

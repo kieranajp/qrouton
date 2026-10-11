@@ -135,8 +135,8 @@ func (r *registry) each(fn func(id string, window *agentWindow)) {
 }
 
 func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
-	if opts.Kind == workbench.KindAgents {
-		return "", ErrAgentsWindowReserved
+	if opts.Kind == workbench.KindOverview {
+		return "", ErrOverviewWindowReserved
 	}
 	var err error
 	opts, err = admittedWindowOptions(owner, opts)
@@ -216,7 +216,7 @@ func (r *registry) reorder(slug, id string, to int) error {
 	to = min(max(to, 0), len(live)-1)
 	if pinned(window) || (to == 0 && pinned(live[0])) {
 		r.mu.Unlock()
-		return ErrAgentsWindowPinned
+		return ErrOverviewWindowPinned
 	}
 	if to == from {
 		r.mu.Unlock()
@@ -472,7 +472,7 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 
 // pinned is the Overview tab, which neither the user nor the agent can close or
 // move; only session teardown removes it.
-func pinned(window *agentWindow) bool { return window.opts.Kind == workbench.KindAgents }
+func pinned(window *agentWindow) bool { return window.opts.Kind == workbench.KindOverview }
 
 func tabStatus(window *agentWindow) string {
 	if window.opts.Attention {

@@ -774,7 +774,7 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 		}
 	}
 	tabs := windows.surfaces(owner).Tabs
-	want := []string{agentsWindowLabel, shellWindowLabel, "$ shell 2", "$ shell 3"}
+	want := []string{overviewWindowLabel, shellWindowLabel, "$ shell 2", "$ shell 3"}
 	if len(tabs) != len(want) {
 		t.Fatalf("tabs = %+v", tabs)
 	}

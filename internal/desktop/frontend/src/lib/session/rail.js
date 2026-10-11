@@ -1,5 +1,5 @@
 import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_STATES } from "../bridge/generated.js";
-import { stateWords } from "../agents/tree.js";
+import { stateWords } from "../overview/tree.js";
 
 /** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
  * state?: string, reason?: string, tool?: string, target?: string}} Summary */

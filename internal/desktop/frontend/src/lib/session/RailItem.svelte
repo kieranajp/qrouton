@@ -1,11 +1,11 @@
 <script>
   import { STICKER_IDS } from "../bridge/generated.js";
   import { uiScale } from "../scale.svelte.js";
-  import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
+  import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./activity.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     initials,
     shortcut = "",

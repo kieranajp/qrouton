@@ -229,7 +229,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	launcher := opts.Launcher
 	shell := &shellWindow{windows: windows, launcher: launcher}
-	agentsTab := &agentsWindow{windows: windows}
+	overviewTab := &overviewWindow{windows: windows}
 
 	reg.boot = booting{
 		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
@@ -274,7 +274,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			if root := state.root(); root != "" {
 				_ = session.MarkOpened(root, time.Now())
 			}
-			agentsTab.open(state)
+			overviewTab.open(state)
 		},
 		teardown: windows.stop,
 		// The destructive paths address a session by the sessions root and the
@@ -370,28 +370,28 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	return r.Run()
 }
 
-// agentsWindow opens the session's Overview tab. Adoption may call it again once
+// overviewWindow opens the session's Overview tab. Adoption may call it again once
 // the session is known, which must not leave two.
-type agentsWindow struct {
+type overviewWindow struct {
 	windows *Windows
 }
 
-func (a *agentsWindow) open(owner *sessionState) {
+func (a *overviewWindow) open(owner *sessionState) {
 	if owner == nil {
 		return
 	}
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
-	if owner.agentsWindow != "" && a.windows.exists(owner.agentsWindow) {
+	if owner.overviewWindow != "" && a.windows.exists(owner.overviewWindow) {
 		return
 	}
 	id, err := a.windows.openStructural(owner, workbench.WindowOptions{
-		Kind: workbench.KindAgents, Label: agentsWindowLabel,
+		Kind: workbench.KindOverview, Label: overviewWindowLabel,
 	})
 	if err != nil {
 		return
 	}
-	owner.agentsWindow = id
+	owner.overviewWindow = id
 }
 
 // shellWindow opens the user shells the session asks for. The numbering is the

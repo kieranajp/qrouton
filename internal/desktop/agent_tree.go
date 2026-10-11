@@ -12,7 +12,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-// AgentTree answers the Agents pane on load; agentTreeEvent only fires on a
+// AgentTree answers the Overview tab on load; agentTreeEvent only fires on a
 // change after that.
 func (c *Chrome) AgentTree(slug string) status.AgentTree {
 	c.mu.RLock()

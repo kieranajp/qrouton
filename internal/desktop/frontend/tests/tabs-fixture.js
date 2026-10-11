@@ -10,7 +10,7 @@ import TabsFixture from "./TabsFixture.svelte";
 // shell, a badged plan, a badged research document that must not borrow the
 // plan's colour, and a document with no id to badge with.
 let tabs = [
-  { id: "w0", label: "Overview", kind: "agents", pinned: true },
+  { id: "w0", label: "Overview", kind: "overview", pinned: true },
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
   { id: "w2", label: "Pane smoke test", badge: "P002", artifact: "PLAN", kind: "document" },
   { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document" },

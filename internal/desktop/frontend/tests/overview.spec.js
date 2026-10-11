@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const open = async (page, query = "") => {
-  await page.goto("/tests/agents.html" + query);
+  await page.goto("/tests/overview.html" + query);
   await page.waitForSelector(".orchestrator .words");
 };
 

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
+import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
 
 test("summary facts preserve attention, agent, and unseen order", () => {
   const facts = summaryFacts(

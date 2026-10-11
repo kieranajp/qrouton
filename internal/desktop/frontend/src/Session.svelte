@@ -5,7 +5,7 @@
   import CapsLabel from "./lib/core/CapsLabel.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
-  import AgentsPane from "./lib/agents/AgentsPane.svelte";
+  import OverviewPane from "./lib/overview/OverviewPane.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
@@ -155,8 +155,8 @@
             focus={view.focusOf(tab.id)}
             focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
-        {:else if tab.kind === WINDOW_KINDS.AGENTS}
-          <AgentsPane
+        {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
+          <OverviewPane
             slug={fields.slug}
             active={i === view.selected}
             root={fields.root}
