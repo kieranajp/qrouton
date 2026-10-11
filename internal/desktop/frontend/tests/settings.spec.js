@@ -329,7 +329,7 @@ test("a duplicate pair is flagged on its row before Save and refused after it", 
   await page.getByRole("button", { name: "Edit Green bookmark" }).click();
   await page.getByRole("group", { name: "Colour" }).getByRole("button", { name: "blue" }).click();
   await page.getByRole("group", { name: "Symbol" }).getByRole("button", { name: "star", exact: true }).click();
-  await expect(stickerRows(page).nth(1)).toContainText("Another sticker already uses this colour and symbol.");
+  await expect(stickerRows(page).nth(1)).toContainText("another sticker already uses this colour and symbol");
   await save(page);
   await expect(status(page)).toHaveText("another sticker already uses this colour and symbol");
   await expect(stickerRows(page).nth(1)).toContainText("another sticker already uses this colour and symbol");

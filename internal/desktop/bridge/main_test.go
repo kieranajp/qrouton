@@ -91,3 +91,23 @@ func TestAValueSetKeepsSourceOrderAndItsOwnType(t *testing.T) {
 		t.Fatalf("generated\n%s\nwant\n%s", js.String(), want)
 	}
 }
+
+func TestAValueListKeepsSourceOrderAndStopsTheGeneratorWhenMissing(t *testing.T) {
+	dir := t.TempDir()
+	source := "package config\n\nvar colours = []string{\"blue\", \"teal\", \"grey\"}\n"
+	if err := os.WriteFile(filepath.Join(dir, "strings.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var js bytes.Buffer
+	if err := writeLists(&js, []valueList{{name: "COLOURS", typedef: "Colour", dir: dir, goName: "colours"}}); err != nil {
+		t.Fatal(err)
+	}
+	want := "/** @typedef {\"blue\"|\"teal\"|\"grey\"} Colour */\n/** @type {readonly Colour[]} */\n" +
+		"export const COLOURS = Object.freeze([\"blue\", \"teal\", \"grey\"]);\n\n"
+	if js.String() != want {
+		t.Fatalf("generated\n%s\nwant\n%s", js.String(), want)
+	}
+	if err := writeLists(&js, []valueList{{name: "SYMBOLS", typedef: "Symbol", dir: dir, goName: "symbols"}}); err == nil {
+		t.Fatal("a missing list generated anyway")
+	}
+}

@@ -1,7 +1,10 @@
+import { STICKER_COLOURS } from "../bridge/generated.js";
+
 /** @typedef {{name: string, fill?: string, stroke?: string, width?: number}} StickerSymbol */
 
-/** @type {Readonly<Record<string, StickerSymbol>>} */
-export const STICKER_SYMBOLS = Object.freeze({
+/** Drawing data only: Go owns which symbols exist.
+ * @type {Readonly<Record<string, StickerSymbol>>} */
+export const STICKER_GLYPHS = Object.freeze({
   star: Object.freeze({ name: "star", fill: "m8 1.5 1.9 3.85 4.25.62-3.08 3 0.73 4.23L8 11.2l-3.8 2 .73-4.23-3.08-3 4.25-.62L8 1.5Z" }),
   bookmark: Object.freeze({ name: "bookmark", fill: "M4 2.25h8v11.5L8 11.2l-4 2.55V2.25Z" }),
   question: Object.freeze({
@@ -36,29 +39,13 @@ export const STICKER_SYMBOLS = Object.freeze({
  * @returns {Sticker | null} */
 export const sticker = (id, stickers = []) => (id ? (stickers ?? []).find((s) => s.id === id) ?? null : null);
 
-const CSS = Object.freeze({
-  blue: "var(--sticker-blue)",
-  sapphire: "var(--sticker-sapphire)",
-  teal: "var(--sticker-teal)",
-  green: "var(--sticker-green)",
-  yellow: "var(--sticker-yellow)",
-  orange: "var(--sticker-orange)",
-  red: "var(--sticker-red)",
-  maroon: "var(--sticker-maroon)",
-  pink: "var(--sticker-pink)",
-  mauve: "var(--sticker-mauve)",
-  lavender: "var(--sticker-lavender)",
-  grey: "var(--sticker-grey)",
-});
-
-export const STICKER_COLOURS = Object.freeze(Object.keys(CSS));
-
 /** @param {string} colour */
-export const stickerCss = (colour) => CSS[colour] ?? "currentColor";
+export const stickerCss = (colour) =>
+  /** @type {readonly string[]} */ (STICKER_COLOURS).includes(colour) ? `var(--sticker-${colour})` : "currentColor";
 
 /** @param {{colour: string, symbol: string}} item */
 export const stickerName = (item) =>
-  `${item.colour.charAt(0).toUpperCase()}${item.colour.slice(1)} ${STICKER_SYMBOLS[item.symbol]?.name ?? item.symbol}`;
+  `${item.colour.charAt(0).toUpperCase()}${item.colour.slice(1)} ${STICKER_GLYPHS[item.symbol]?.name ?? item.symbol}`;
 
 export const stickerText = (id, stickers = []) => {
   const item = sticker(id, stickers);

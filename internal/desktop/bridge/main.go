@@ -30,6 +30,7 @@ const (
 	sessionPackage   = "../../session"
 	githubPackage    = "../../github"
 	assemblyPackage  = "../../assembly"
+	configPackage    = "../../config"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 )
@@ -78,6 +79,18 @@ type valueName struct{ dir, goName string }
 
 var valueNames = []valueName{
 	{desktopPackage, "agentRootID"},
+	{desktopPackage, "stickerDuplicate"},
+}
+
+// valueList is an ordered list of strings that Go holds as a package-level
+// slice literal rather than as constants.
+type valueList struct {
+	name, typedef, dir, goName string
+}
+
+var valueLists = []valueList{
+	{name: "STICKER_COLOURS", typedef: "StickerColour", dir: configPackage, goName: "stickerColours"},
+	{name: "STICKER_SYMBOLS", typedef: "StickerSymbol", dir: configPackage, goName: "stickerSymbols"},
 }
 
 func main() {
@@ -130,6 +143,9 @@ func render(desktopDir, statusDir, modPath string) ([]byte, error) {
 	}
 	js.WriteString("\n")
 	if err := writeValues(&js, valueSets, valueNames); err != nil {
+		return nil, err
+	}
+	if err := writeLists(&js, valueLists); err != nil {
 		return nil, err
 	}
 	fmt.Fprintf(&js, "/** @type {%s} */\n", defaults.typing(0))
@@ -332,6 +348,64 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 		fmt.Fprintf(js, "export const %s = %q;\n\n", screaming(single.goName), found[i].value)
 	}
 	return nil
+}
+
+func writeLists(js *bytes.Buffer, lists []valueList) error {
+	for _, list := range lists {
+		files, err := parsePackage(list.dir)
+		if err != nil {
+			return err
+		}
+		values, ok := stringList(files, list.goName)
+		if !ok || len(values) == 0 {
+			return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+		}
+		quoted := make([]string, len(values))
+		for i, v := range values {
+			quoted[i] = strconv.Quote(v)
+		}
+		fmt.Fprintf(js, "/** @typedef {%s} %s */\n", strings.Join(quoted, "|"), list.typedef)
+		fmt.Fprintf(js, "/** @type {readonly %s[]} */\n", list.typedef)
+		fmt.Fprintf(js, "export const %s = Object.freeze([%s]);\n\n", list.name, strings.Join(quoted, ", "))
+	}
+	return nil
+}
+
+// stringList reads a package-level var whose value is a []string literal of
+// string literals only.
+func stringList(files []*ast.File, name string) ([]string, bool) {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			decl, ok := decl.(*ast.GenDecl)
+			if !ok || decl.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range decl.Specs {
+				spec, ok := spec.(*ast.ValueSpec)
+				if !ok || len(spec.Names) != 1 || spec.Names[0].Name != name || len(spec.Values) != 1 {
+					continue
+				}
+				lit, ok := spec.Values[0].(*ast.CompositeLit)
+				if !ok {
+					return nil, false
+				}
+				var out []string
+				for _, elt := range lit.Elts {
+					text, ok := elt.(*ast.BasicLit)
+					if !ok || text.Kind != token.STRING {
+						return nil, false
+					}
+					value, err := strconv.Unquote(text.Value)
+					if err != nil {
+						return nil, false
+					}
+					out = append(out, value)
+				}
+				return out, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // stringConstants are a package's string-literal constants in source order,

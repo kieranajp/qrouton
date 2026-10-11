@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { STICKER_COLOURS, STICKER_SYMBOLS } from "../bridge/generated.js";
 import {
-  STICKER_COLOURS,
-  STICKER_SYMBOLS,
+  STICKER_GLYPHS,
   sticker,
   stickerControlLabel,
   stickerCss,
@@ -41,8 +41,12 @@ test("a listed id reads its colour, symbol and label from the list", () => {
   assert.equal(stickerCss("lavender"), "var(--sticker-lavender)");
 });
 
-test("the palette holds twelve colours and fourteen drawable symbols", () => {
-  assert.equal(STICKER_COLOURS.length, 12);
-  assert.equal(Object.keys(STICKER_SYMBOLS).length, 14);
-  for (const symbol of Object.values(STICKER_SYMBOLS)) assert.ok(symbol.fill || symbol.stroke);
+test("every symbol Go accepts has a glyph, and no glyph is left over", () => {
+  assert.deepEqual(Object.keys(STICKER_GLYPHS), [...STICKER_SYMBOLS]);
+  for (const glyph of Object.values(STICKER_GLYPHS)) assert.ok(glyph.fill || glyph.stroke);
+});
+
+test("only a colour Go accepts gets a sticker token", () => {
+  for (const colour of STICKER_COLOURS) assert.equal(stickerCss(colour), `var(--sticker-${colour})`);
+  assert.equal(stickerCss("chartreuse"), "currentColor");
 });

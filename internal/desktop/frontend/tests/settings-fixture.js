@@ -1,7 +1,7 @@
 import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
-import { UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";
+import { STICKER_DUPLICATE, UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";
 import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 
 // ?fail=<method> makes that one bridge call reject, which is how a workbench
@@ -77,7 +77,7 @@ window.wailsCall = async (name, input) => {
     if (invalid === "stickers" && blank >= 0) throw new Error(`stickers.${blank}: cannot be empty`);
     const pairs = (input?.stickers ?? []).map((item) => `${item.colour}/${item.symbol}`);
     const repeat = pairs.findIndex((pair, index) => pairs.indexOf(pair) !== index);
-    if (repeat >= 0) throw new Error(`stickers.${repeat}: another sticker already uses this colour and symbol`);
+    if (repeat >= 0) throw new Error(`stickers.${repeat}: ${STICKER_DUPLICATE}`);
     return { restartRequired: restart };
   }
   return undefined;

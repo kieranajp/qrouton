@@ -3,8 +3,9 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import StickerIcon from "../session/StickerIcon.svelte";
-  import { STICKER_COLOURS, STICKER_SYMBOLS, stickerCss, stickerName } from "../session/stickers.js";
-  import { DUPLICATE, addSticker, duplicates, removeSticker, updateSticker } from "./stickers.js";
+  import { STICKER_COLOURS, STICKER_DUPLICATE, STICKER_SYMBOLS } from "../bridge/generated.js";
+  import { STICKER_GLYPHS, stickerCss, stickerName } from "../session/stickers.js";
+  import { addSticker, duplicates, removeSticker, updateSticker } from "./stickers.js";
   import TabHeader from "./TabHeader.svelte";
 
   /** @type {{panel: ReturnType<typeof import("./settings.svelte.js").settings>, labelledby?: string}} */
@@ -18,7 +19,7 @@
   const inputs = [];
 
   /** @param {number} index */
-  const errorFor = (index) => panel.fields[`stickers.${index}`] ?? (repeated.has(index) ? DUPLICATE : "");
+  const errorFor = (index) => panel.fields[`stickers.${index}`] ?? (repeated.has(index) ? STICKER_DUPLICATE : "");
 
   async function add() {
     form.stickers = addSticker(form.stickers);
@@ -113,7 +114,8 @@
       <div class="pick">
         <CapsLabel id="sticker-symbol">Symbol</CapsLabel>
         <div class="symbols" role="group" aria-labelledby="sticker-symbol">
-          {#each Object.entries(STICKER_SYMBOLS) as [symbol, drawn] (symbol)}
+          {#each STICKER_SYMBOLS as symbol (symbol)}
+            {@const drawn = STICKER_GLYPHS[symbol]}
             <button
               type="button"
               class="symbol"

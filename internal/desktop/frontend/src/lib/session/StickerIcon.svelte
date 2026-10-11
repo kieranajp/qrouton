@@ -1,10 +1,10 @@
 <script>
-  import { STICKER_SYMBOLS, stickerCss } from "./stickers.js";
+  import { STICKER_GLYPHS, stickerCss } from "./stickers.js";
 
   /** @type {{symbol?: string, colour?: string, size?: number, outline?: boolean}} */
   let { symbol = "", colour = "", size = 14, outline = false } = $props();
 
-  let drawn = $derived(outline ? STICKER_SYMBOLS.star : STICKER_SYMBOLS[symbol]);
+  let drawn = $derived(outline ? STICKER_GLYPHS.star : STICKER_GLYPHS[symbol]);
 </script>
 
 <svg

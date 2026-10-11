@@ -264,6 +264,16 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
+export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
+
+/** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
+/** @type {readonly StickerColour[]} */
+export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
+
+/** @typedef {"star"|"bookmark"|"question"|"exclamation"|"dot"|"square"|"diamond"|"triangle"|"heart"|"bolt"|"flag"|"check"|"cross"|"pause"} StickerSymbol */
+/** @type {readonly StickerSymbol[]} */
+export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
+
 /** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",

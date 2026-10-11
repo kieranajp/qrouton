@@ -1,13 +1,11 @@
-import { STICKER_COLOURS, STICKER_SYMBOLS } from "../session/stickers.js";
+import { STICKER_COLOURS, STICKER_SYMBOLS } from "../bridge/generated.js";
 
 /** @typedef {import("../session/stickers.js").Sticker} Sticker */
-
-export const DUPLICATE = "Another sticker already uses this colour and symbol.";
 
 /** Symbols outer and colours inner, so new stickers try every colour of a star first.
  * @param {Sticker[]} list */
 export function firstUnusedPair(list) {
-  for (const symbol of Object.keys(STICKER_SYMBOLS)) {
+  for (const symbol of STICKER_SYMBOLS) {
     for (const colour of STICKER_COLOURS) {
       if (!list.some((item) => item.colour === colour && item.symbol === symbol)) return { colour, symbol };
     }
