@@ -7,7 +7,7 @@
   import { uiScale } from "../scale.svelte.js";
   import { dominantStatus, dropIndex, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let {
     tabs = [],
     selected = 0,
@@ -70,6 +70,7 @@
       label={tab.label}
       badge={tab.badge}
       artifact={tab.artifact}
+      icon={tab.icon}
       status={tab.status}
       selected={index === selected}
       closable={tab.closable !== false && !tab.pinned}

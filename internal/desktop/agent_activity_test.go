@@ -643,7 +643,7 @@ func TestOpeningAnAttentionTabRingsTheSession(t *testing.T) {
 	handle := workbench.Handle{Socket: socket, SessionRoot: windows.shown().root()}
 	for _, attention := range []bool{false, true} {
 		if _, err := handle.WindowHost().Open(context.Background(), workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "🔔", Content: "done", Attention: attention,
+			Kind: workbench.KindDocument, Label: "qrouton", Content: "done", Attention: attention,
 		}); err != nil {
 			t.Fatal(err)
 		}

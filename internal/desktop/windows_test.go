@@ -29,7 +29,8 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	w, r := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind:    workbench.KindTerminal,
-		Label:   "▶ dev",
+		Label:   "dev",
+		Icon:    workbench.IconCommand,
 		Cwd:     t.TempDir(),
 		Command: []string{"/bin/cat"},
 		Select:  true,
@@ -40,7 +41,7 @@ func TestOpenTerminalWindowRegistersATabWithoutOpeningARendererWindow(t *testing
 	if !w.exists(id) || len(w.list()) != 1 {
 		t.Fatalf("registry = %v after one open", w.list())
 	}
-	if tabs := w.surfaces(w.shown()).Tabs; len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "▶ dev" {
+	if tabs := w.surfaces(w.shown()).Tabs; len(tabs) != 1 || tabs[0].ID != id || tabs[0].Label != "dev" || tabs[0].Icon != workbench.IconCommand {
 		t.Fatalf("tabs = %+v, want the opened terminal", tabs)
 	}
 	if got := w.Surfaces(w.shown().slug()).Selected; got != id {
@@ -65,7 +66,7 @@ func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
 		}
 	}, reg)
 	id, err := w.openWindow(owner, workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "dev", Command: []string{"/bin/cat"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -98,20 +99,20 @@ func TestAgentWindowSelectionFollowsItsOptions(t *testing.T) {
 		opts workbench.WindowOptions
 	}{
 		{name: "terminal", opts: workbench.WindowOptions{
-			Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+			Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 		}},
 		{name: "document", opts: workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md",
+			Kind: workbench.KindDocument, Label: "P006", Source: "thoughts/shared/plans/P006.md",
 			Content: "# P006\n", Format: workbench.FormatMarkdown,
 		}},
 		{name: "attention", opts: workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "🔔", Content: "build finished", Attention: true,
+			Kind: workbench.KindDocument, Label: "qrouton", Content: "build finished", Attention: true,
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			w, _ := testWindows(t)
 			if _, err := w.openStructural(w.shown(), workbench.WindowOptions{
-				Kind: workbench.KindTerminal, Label: "$ shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+				Kind: workbench.KindTerminal, Label: "shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 			}); err != nil {
 				t.Fatal(err)
 			}
@@ -119,7 +120,7 @@ func TestAgentWindowSelectionFollowsItsOptions(t *testing.T) {
 				t.Fatalf("structural shell selected %q", got)
 			}
 			baseline, err := w.openStructural(w.shown(), workbench.WindowOptions{
-				Kind: workbench.KindTerminal, Label: "$ selected", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+				Kind: workbench.KindTerminal, Label: "selected", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -158,7 +159,7 @@ func TestStartRefusesADocumentWindow(t *testing.T) {
 	w, _ := testWindows(t)
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
+		Kind: workbench.KindDocument, Label: "qrouton", Content: "build finished",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -174,7 +175,7 @@ func TestStartRefusesADocumentWindow(t *testing.T) {
 func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ diff", Content: "diff --git a/x b/x",
+		Kind: workbench.KindDocument, Label: "diff", Content: "diff --git a/x b/x",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -194,7 +195,7 @@ func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) {
 	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ diff",
+		Kind: workbench.KindDocument, Label: "diff",
 		Content: "@@ -1 +1 @@\n-old\n+new", Format: workbench.FormatDiff,
 	})
 	if err != nil {
@@ -216,7 +217,7 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 	}
 
 	plain, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
+		Kind: workbench.KindDocument, Label: "qrouton", Content: "build finished",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +401,7 @@ func TestAnAttentionWindowReportsWaitingAndRemainsUntilClosed(t *testing.T) {
 	w, _ := testWindows(t)
 
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "🔔", Content: "build finished",
+		Kind: workbench.KindDocument, Label: "qrouton", Content: "build finished",
 		Attention: true,
 	})
 	if err != nil {
@@ -663,7 +664,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 	for _, tc := range []struct {
 		owner *sessionState
 		label string
-	}{{alpha, "▶ alpha dev"}, {beta, "▶ beta dev"}} {
+	}{{alpha, "alpha dev"}, {beta, "beta dev"}} {
 		if _, err := w.openWindow(tc.owner, workbench.WindowOptions{
 			Kind: workbench.KindTerminal, Label: tc.label, Cwd: t.TempDir(), Command: []string{"/bin/cat"}, Select: true,
 		}); err != nil {
@@ -674,7 +675,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 	for _, tc := range []struct {
 		slug  string
 		label string
-	}{{"alpha", "▶ alpha dev"}, {"beta", "▶ beta dev"}} {
+	}{{"alpha", "alpha dev"}, {"beta", "beta dev"}} {
 		drawn := w.Surfaces(tc.slug)
 		if drawn.Session != tc.slug {
 			t.Fatalf("surfaces for %q name session %q", tc.slug, drawn.Session)
@@ -850,7 +851,7 @@ func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
 	owner := w.shown()
 
 	id, err := w.openWindow(owner, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ P006", Source: "thoughts/shared/plans/P006.md", Content: "# P006\n", Select: true,
+		Kind: workbench.KindDocument, Label: "P006", Source: "thoughts/shared/plans/P006.md", Content: "# P006\n", Select: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -887,7 +888,7 @@ func diagramDocument(t *testing.T, text string) (*Windows, string, <-chan emitte
 	}, testRegistry(t, t.TempDir()))
 	t.Cleanup(w.stopAll)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ notes", Format: workbench.FormatMarkdown,
+		Kind: workbench.KindDocument, Label: "notes", Format: workbench.FormatMarkdown,
 		Source: "thoughts/notes.md", Content: text,
 	})
 	if err != nil {
@@ -961,10 +962,10 @@ func TestRenderDiagramsHasNothingToSayAboutOtherWindows(t *testing.T) {
 	w, _ := testWindows(t)
 	for name, opts := range map[string]workbench.WindowOptions{
 		"a terminal": {
-			Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+			Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 		},
 		"a plain document": {
-			Kind: workbench.KindDocument, Label: "🔔", Content: "```d2\na -> b\n```\n",
+			Kind: workbench.KindDocument, Label: "qrouton", Content: "```d2\na -> b\n```\n",
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -1027,7 +1028,7 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 		t.Fatal(err)
 	}
 	terminal, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Source: logged, Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "dev", Source: logged, Command: []string{"/bin/cat"},
 	})
 	if err != nil {
 		t.Fatal(err)

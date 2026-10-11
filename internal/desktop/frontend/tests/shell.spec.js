@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const TABS = [
   { id: "window-1", label: "Overview", kind: "overview", pinned: true },
-  { id: "window-2", label: "$ shell", kind: "terminal" },
+  { id: "window-2", label: "shell", icon: "shell", kind: "terminal" },
   { id: "window-3", label: "Research", kind: "document" },
 ];
 
@@ -130,7 +130,7 @@ test("an unselected session opens on its leftmost tab, the Overview tab", async 
 
 test("a click asks Go, and the strip moves when Go answers", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "$ shell" }).click();
+  await page.getByRole("button", { name: "shell", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.shell.selects())).toEqual([
     ["octopus", "window-2"],
   ]);
@@ -140,7 +140,7 @@ test("a click asks Go, and the strip moves when Go answers", async ({ page }) =>
     ([tabs]) => window.shell.windows("window-2", tabs),
     /** @type {const} */ ([TABS]),
   );
-  await expect(selected(page)).toHaveText("$ shell");
+  await expect(selected(page)).toHaveText("shell");
 });
 
 // A refused Select used to leave the strip claiming a tab Go had not selected,
@@ -148,7 +148,7 @@ test("a click asks Go, and the strip moves when Go answers", async ({ page }) =>
 test("a refused selection leaves the strip where Go put it", async ({ page }) => {
   await open(page, "window-1");
   await page.evaluate(() => window.shell.refuseSelect(true));
-  await page.getByRole("button", { name: "$ shell" }).click();
+  await page.getByRole("button", { name: "shell", exact: true }).click();
   await expect.poll(() => page.evaluate(() => window.shell.selects().length)).toBe(1);
   await expect(selected(page)).toHaveText("Overview");
 });
@@ -182,7 +182,7 @@ test("a selected document stays mounted and keeps its scroll through tab selecti
     scrollTop: 240,
   });
 
-  await page.locator('.tab[title="$ shell"] .select').click();
+  await page.locator('.tab[title="shell"] .select').click();
   await page.evaluate(() => window.shell.acknowledge("window-2"));
   await expect.poll(() => page.evaluate(() => window.shell.documentState()?.visible)).toBe(false);
   await page.getByRole("button", { name: "Research" }).click();

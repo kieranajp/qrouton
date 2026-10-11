@@ -14,7 +14,7 @@ let tabs = [
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
   { id: "w2", label: "Pane smoke test", badge: "P002", artifact: "PLAN", kind: "document" },
   { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document", status: "idle" },
-  { id: "w4", label: "◆ Findings", kind: "document", status: "succeeded" },
+  { id: "w4", label: "Findings", icon: "document", kind: "document", status: "succeeded" },
 ];
 
 // The strip draws the process state Go names, so a run that finished carries

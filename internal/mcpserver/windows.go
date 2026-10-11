@@ -251,7 +251,8 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 	}
 	if _, err := m.open(ctx, name, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
-		Label:       commandWindowLabel + name,
+		Label:       name,
+		Icon:        workbench.IconCommand,
 		Cwd:         cwd,
 		Command:     []string{shellBin, shellLoginFlag, input.Command},
 		CloseOnExit: true,
@@ -361,7 +362,8 @@ func (m *windowManager) showDiff(ctx context.Context, input showDiffInput) (stri
 	}
 	if _, err := m.open(ctx, label, workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
-		Label:   diffWindowLabel + label,
+		Label:   label,
+		Icon:    workbench.IconDocument,
 		Content: text,
 		Format:  workbench.FormatDiff,
 		Select:  resolveForeground(input.Foreground, false),
@@ -379,7 +381,7 @@ func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, 
 	if _, err := m.open(ctx, notifyWindowName, workbench.WindowOptions{
 		Kind:      workbench.KindDocument,
 		Label:     notifyWindowLabel,
-		Content:   fmt.Sprintf(toastFormat, message),
+		Content:   message,
 		Attention: true,
 		Select:    resolveForeground(input.Foreground, false),
 	}); err != nil {

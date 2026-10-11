@@ -171,16 +171,16 @@ func TestDocumentWindowNamesADottedFileRelativeToTheSession(t *testing.T) {
 // would be lying.
 func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 	for name, body := range map[string]string{
-		"◆ Document panes": "# Document panes\n\nbody\n",
-		"◆ Behind the fence": "---\ndate: 2026-08-11\ntitle: not this one\n---\n\n" +
+		"Document panes": "# Document panes\n\nbody\n",
+		"Behind the fence": "---\ndate: 2026-08-11\ntitle: not this one\n---\n\n" +
 			"# Behind the fence\n",
-		"◆ headless.md": "No heading here, just prose.\n",
-		"◆ deeper.md":   "## Only a second-level heading\n",
-		"◆ fenced.md":   "```sh\n# not a title, a shell comment\n```\n",
-		"◆ sectioned.md": "Intro prose the document opens with.\n\n" +
+		"headless.md": "No heading here, just prose.\n",
+		"deeper.md":   "## Only a second-level heading\n",
+		"fenced.md":   "```sh\n# not a title, a shell comment\n```\n",
+		"sectioned.md": "Intro prose the document opens with.\n\n" +
 			"# Section two\n",
 	} {
-		file := strings.TrimPrefix(name, "◆ ")
+		file := name
 		if !strings.HasSuffix(file, ".md") {
 			file = "doc.md"
 		}
@@ -197,7 +197,7 @@ func TestDocumentWindowNamesThePaneAfterTheDocument(t *testing.T) {
 
 // An artifact's tab leads with the id its filename states, so a reader with
 // several open tells them apart before reading a word of the title. A document
-// with no id keeps the diamond it has always had.
+// with no id takes the document icon instead.
 func TestDocumentWindowBadgesAnArtifactTabWithItsID(t *testing.T) {
 	const titled = "# Pane smoke test\n\nbody\n"
 
@@ -206,18 +206,19 @@ func TestDocumentWindowBadgesAnArtifactTabWithItsID(t *testing.T) {
 		body  string
 		badge string
 		label string
+		icon  workbench.WindowIcon
 	}{
-		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "P002", "Pane smoke test"},
-		{"thoughts/shared/plans/p002-lowercase.md", titled, "P002", "Pane smoke test"},
+		{"thoughts/shared/plans/P002-2026-08-29-pane-smoke-test.md", titled, "P002", "Pane smoke test", ""},
+		{"thoughts/shared/plans/p002-lowercase.md", titled, "P002", "Pane smoke test", ""},
 		// Nothing to name the tab after but the file, and the badge already
 		// carries the part of that name it would otherwise say twice.
-		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "P002", "2026-08-29-untitled.md"},
-		{"thoughts/shared/research/R002-findings.md", titled, "R002", "Pane smoke test"},
-		{"thoughts/shared/specs/S002-shape.md", titled, "S002", "Pane smoke test"},
-		{"thoughts/shared/explainers/E002-how.md", titled, "E002", "Pane smoke test"},
+		{"thoughts/shared/plans/P002-2026-08-29-untitled.md", "Prose, no heading.\n", "P002", "2026-08-29-untitled.md", ""},
+		{"thoughts/shared/research/R002-findings.md", titled, "R002", "Pane smoke test", ""},
+		{"thoughts/shared/specs/S002-shape.md", titled, "S002", "Pane smoke test", ""},
+		{"thoughts/shared/explainers/E002-how.md", titled, "E002", "Pane smoke test", ""},
 		// Unnumbered, wherever it sits: nothing to badge with.
-		{"thoughts/shared/plans/notes.md", titled, "", "◆ Pane smoke test"},
-		{"thoughts/shared/scratch.md", titled, "", "◆ Pane smoke test"},
+		{"thoughts/shared/plans/notes.md", titled, "", "Pane smoke test", workbench.IconDocument},
+		{"thoughts/shared/scratch.md", titled, "", "Pane smoke test", workbench.IconDocument},
 	} {
 		t.Run(tc.file, func(t *testing.T) {
 			root := documentRoot(t, map[string]string{tc.file: tc.body})
@@ -225,8 +226,8 @@ func TestDocumentWindowBadgesAnArtifactTabWithItsID(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if opts.Badge != tc.badge || opts.Label != tc.label {
-				t.Fatalf("badge %q label %q, want %q and %q", opts.Badge, opts.Label, tc.badge, tc.label)
+			if opts.Badge != tc.badge || opts.Label != tc.label || opts.Icon != tc.icon {
+				t.Fatalf("badge %q label %q icon %q, want %q %q %q", opts.Badge, opts.Label, opts.Icon, tc.badge, tc.label, tc.icon)
 			}
 		})
 	}

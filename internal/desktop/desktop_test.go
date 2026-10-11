@@ -617,7 +617,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	boot.document = func(root, name string) (workbench.WindowOptions, error) {
 		return workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "◆ " + filepath.Base(name),
+			Kind: workbench.KindDocument, Label: "" + filepath.Base(name),
 			Source: name, Content: "# " + name, Format: workbench.FormatMarkdown,
 		}, nil
 	}
@@ -637,7 +637,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	if len(tabs) != 2 || tabs[1].ID != id {
 		t.Fatalf("the document is not the newest tab: %+v", tabs)
 	}
-	if tabs[1].Label != "◆ R7-editor-surfaces.md" {
+	if tabs[1].Label != "R7-editor-surfaces.md" {
 		t.Fatalf("the document tab reads %q", tabs[1].Label)
 	}
 	if tabs[1].Kind != string(workbench.KindDocument) {
@@ -703,13 +703,13 @@ func TestAnAgentReplacesTheDocumentTheUserOpened(t *testing.T) {
 	w, _ := testWindows(t)
 	const doc = "thoughts/shared/plans/P006.md"
 	old, err := w.openStructural(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ old", Source: doc, Content: "old",
+		Kind: workbench.KindDocument, Label: "old", Source: doc, Content: "old",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	fresh, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ fresh", Source: doc, Content: "fresh",
+		Kind: workbench.KindDocument, Label: "fresh", Source: doc, Content: "fresh",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -730,7 +730,7 @@ func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
 	w, _ := testWindows(t)
 	const doc = "thoughts/shared/plans/P006.md"
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ P006", Source: doc, Content: "plan",
+		Kind: workbench.KindDocument, Label: "P006", Source: doc, Content: "plan",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -754,7 +754,7 @@ func TestOpeningAnExistingDocumentSelectsItsTab(t *testing.T) {
 	}
 }
 
-// Tabs that all read "$ shell" are tabs nobody can tell apart. The number goes
+// Tabs that all read "shell" are tabs nobody can tell apart. The number goes
 // in the label the registry stores, so read_window and the manifest's record
 // agree with the tab strip.
 func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
@@ -774,13 +774,16 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 		}
 	}
 	tabs := windows.surfaces(owner).Tabs
-	want := []string{overviewWindowLabel, shellWindowLabel, "$ shell 2", "$ shell 3"}
+	want := []string{overviewWindowLabel, shellWindowLabel, "shell 2", "shell 3"}
 	if len(tabs) != len(want) {
 		t.Fatalf("tabs = %+v", tabs)
 	}
 	for i, label := range want {
 		if tabs[i].Label != label {
 			t.Fatalf("tab %d reads %q, want %q", i, tabs[i].Label, label)
+		}
+		if i > 0 && tabs[i].Icon != workbench.IconShell {
+			t.Fatalf("tab %d draws icon %q, want the shell", i, tabs[i].Icon)
 		}
 		window, ok := windows.window(tabs[i].ID)
 		if !ok || window.opts.Label != label {
@@ -1654,7 +1657,7 @@ func TestAnOpOnOneSessionsListenerTouchesOnlyThatSessionsWindows(t *testing.T) {
 	alpha := filepath.Join(root, "alpha")
 	host := (workbench.Handle{Socket: boot.socket(t, alpha), SessionRoot: alpha}).WindowHost()
 	id, err := host.Open(context.Background(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ alpha dev", Cwd: alpha, Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "alpha dev", Cwd: alpha, Command: []string{"/bin/cat"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1686,7 +1689,7 @@ func TestTheProcessSocketAnswersReadinessAndRefusesAWindowOp(t *testing.T) {
 	host := (workbench.Handle{Socket: opts.Socket, SessionRoot: opts.SessionRoot}).WindowHost()
 	ctx := context.Background()
 	if _, err := host.Open(ctx, workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: opts.SessionRoot, Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "dev", Cwd: opts.SessionRoot, Command: []string{"/bin/cat"},
 	}); err == nil {
 		t.Fatal("the process socket opened a window with no session to own it")
 	} else if errors.Is(err, workbench.ErrWorkbenchUnreachable) {
@@ -2091,7 +2094,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	socket := boot.socket(t, dir)
 	host := (workbench.Handle{Socket: socket, SessionRoot: dir}).WindowHost()
 	if _, err := host.Open(context.Background(), workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: dir, Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "dev", Cwd: dir, Command: []string{"/bin/cat"},
 	}); err != nil {
 		t.Fatal(err)
 	}

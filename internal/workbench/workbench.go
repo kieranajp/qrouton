@@ -22,6 +22,15 @@ const (
 	KindOverview WindowKind = "overview"
 )
 
+// WindowIcon names the icon a tab draws before its label. Empty draws none.
+type WindowIcon string
+
+const (
+	IconCommand  WindowIcon = "command"
+	IconDocument WindowIcon = "document"
+	IconShell    WindowIcon = "shell"
+)
+
 // DocumentFormat is how a document window renders its text. The caller
 // declares it; empty is plain text, and nothing infers it from the content.
 type DocumentFormat string
@@ -54,6 +63,7 @@ type WindowOptions struct {
 	Kind    WindowKind     `json:"kind"`
 	Label   string         `json:"label"`
 	Badge   string         `json:"badge,omitempty"`
+	Icon    WindowIcon     `json:"icon,omitempty"`
 	Source  string         `json:"source,omitempty"`
 	Cwd     string         `json:"cwd,omitempty"`
 	Command []string       `json:"command,omitempty"`

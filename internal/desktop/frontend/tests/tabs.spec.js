@@ -30,7 +30,7 @@ test("a badged tab leads with its id in a filled block of its own hue", async ({
       badge: "R001",
       badgeColour: RESEARCH_SKY,
     },
-    { text: "◆ Findings", title: "◆ Findings", badge: "", badgeColour: "" },
+    { text: "Findings", title: "Findings", badge: "", badgeColour: "" },
   ]);
 });
 
@@ -69,7 +69,7 @@ test("a tab dragged onto another takes the place it was dropped on", async ({ pa
 
   await expect
     .poll(() => titles(page))
-    .toEqual(["Overview", "Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
+    .toEqual(["Overview", "Pane smoke test", "Pane selection", "Shell", "Findings"]);
 });
 
 test("the middle mouse button closes a tab", async ({ page }) => {
@@ -77,7 +77,7 @@ test("the middle mouse button closes a tab", async ({ page }) => {
 
   await page.locator(".tab").nth(2).click({ button: "middle" });
 
-  await expect.poll(() => titles(page)).toEqual(["Overview", "Shell", "Pane selection", "◆ Findings"]);
+  await expect.poll(() => titles(page)).toEqual(["Overview", "Shell", "Pane selection", "Findings"]);
 });
 
 test("the pinned Overview tab cannot be closed or moved", async ({ page }) => {
@@ -91,7 +91,7 @@ test("the pinned Overview tab cannot be closed or moved", async ({ page }) => {
 
   await expect
     .poll(() => titles(page))
-    .toEqual(["Overview", "Shell", "Pane smoke test", "Pane selection", "◆ Findings"]);
+    .toEqual(["Overview", "Shell", "Pane smoke test", "Pane selection", "Findings"]);
 });
 
 // The Overview is the session's home, not a document: sized to its label,
@@ -114,4 +114,12 @@ test("the Overview tab gets its own treatment", async ({ page }) => {
   const shell = await page.locator('.tab[title="Shell"]').evaluate((el) => getComputedStyle(el).borderRightWidth);
   expect(shell).toBe("1px");
   expect(style.width).toBeLessThan(140);
+});
+
+test("a tab Go names an icon for draws it before its label", async ({ page }) => {
+  await open(page);
+
+  const findings = page.locator('.tab[title="Findings"]');
+  await expect(findings.locator('.select [data-icon="document"]')).toHaveCount(1);
+  await expect(page.locator('.tab[title="Shell"] .select [data-icon="document"]')).toHaveCount(0);
 });
