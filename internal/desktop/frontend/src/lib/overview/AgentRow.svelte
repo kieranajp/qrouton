@@ -1,7 +1,7 @@
 <script>
   import AgentRow from "./AgentRow.svelte";
   import { AGENT_STATES } from "../bridge/generated.js";
-  import { elapsed, isFinished, nowLine, stateTone, stateWords, tokenLabel, typeLabel, wroteLine } from "./tree.js";
+  import { agentName, elapsed, isFinished, nowLine, stateTone, stateWords, tokenLabel, wroteLine } from "./tree.js";
 
   /** One subagent: its head line, then what it is doing now and what it wrote.
    * @type {{branch: import("./tree.js").Branch, now: number, root?: string, tools?: boolean}} */
@@ -11,7 +11,7 @@
 
   let node = $derived(branch.node);
   let finished = $derived(isFinished(node.state));
-  let title = $derived(typeLabel(node.type) || "Agent");
+  let title = $derived(agentName(node));
   let words = $derived(stateWords(node, tools));
   let doing = $derived(nowLine(node, root));
   let wrote = $derived(wroteLine(node.files));
@@ -61,7 +61,7 @@
         <div class="event" class:failed={event.failed}>
           <span class="cue">{clock(event.start)}</span>
           <span>{nowLine(event, root)}</span>
-          {#if event.failed}<span>failed</span>{/if}
+          {#if event.failed}<span>failed</span>{:else if event.abandoned}<span class="cue">no result</span>{/if}
         </div>
       {/each}
       {#if tokenLabel(node.tokens)}<div class="cue">{tokenLabel(node.tokens)}</div>{/if}

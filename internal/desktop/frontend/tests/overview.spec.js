@@ -19,6 +19,19 @@ test("one tier column: orchestrator, leads in stage order, this session", async 
   expect(body.left).toBeGreaterThan(label.right);
 });
 
+test("every tier after the first is divided from the one above by a hairline", async ({ page }) => {
+  await open(page);
+  const edges = await page.locator(".tier").evaluateAll((tiers) =>
+    tiers.map((el) => {
+      const style = getComputedStyle(el);
+      return { top: style.borderTopWidth, pad: style.paddingTop };
+    }),
+  );
+  expect(edges).toHaveLength(3);
+  expect(edges[0].top).toBe("0px");
+  for (const edge of edges.slice(1)) expect(edge).toEqual({ top: "1px", pad: "12px" });
+});
+
 test("only the live lead opens; finished leads keep their document and count", async ({ page }) => {
   await open(page);
   await expect(lead(page, "Implementation")).toHaveAttribute("aria-expanded", "true");
@@ -106,6 +119,34 @@ test("this session lists the repositories and adds more", async ({ page }) => {
   await expect(session).toContainText("read-only");
   await session.getByRole("button", { name: "Add repos" }).click();
   await expect.poll(() => page.evaluate(() => window.overviewAdded())).toBe(1);
+});
+
+test("add repos sits on the body column's right edge, wide and narrow", async ({ page }) => {
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const [button, body] = await Promise.all([
+      box(page.getByRole("region", { name: "This session" }).getByRole("button", { name: "Add repos" })),
+      box(page.locator(".session .body")),
+    ]);
+    expect(Math.abs(button.right - body.right)).toBeLessThanOrEqual(1);
+  }
+});
+
+test("the orchestrator's time sits on the body column's right edge", async ({ page }) => {
+  await open(page);
+  const [time, body] = await Promise.all([box(page.locator(".orchestrator .time")), box(page.locator(".orchestrator .body"))]);
+  expect(Math.abs(time.right - body.right)).toBeLessThanOrEqual(1);
+});
+
+test("a long root tool target truncates inside the row, left of the time", async ({ page }) => {
+  await open(page, "?longdoing");
+  const doing = page.locator(".orchestrator .doing");
+  await expect(doing).toBeVisible();
+  expect(await doing.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  expect(await doing.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+  const [d, time, body] = await Promise.all([box(doing), box(page.locator(".orchestrator .time")), box(page.locator(".orchestrator .body"))]);
+  expect(d.right).toBeLessThanOrEqual(time.left);
+  expect(time.right).toBeLessThanOrEqual(body.right + 1);
 });
 
 test("narrow, each label heads its tier and finished leads drop their count", async ({ page }) => {

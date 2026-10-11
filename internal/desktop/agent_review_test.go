@@ -271,3 +271,45 @@ func TestTheTreeNamesALeadsStageAndTheDocumentsItWrote(t *testing.T) {
 		t.Fatalf("lead node = stage %q documents %+v", node.Stage, node.Documents)
 	}
 }
+
+// A denied tool call fires PreToolUse and nothing after it. The turn ending
+// abandons it, so the root reads your turn, and later calls show normally.
+func TestAgentStateATurnEndAbandonsACallThatNeverReturned(t *testing.T) {
+	start := time.Date(2026, 10, 12, 9, 0, 0, 0, time.UTC)
+	at := func(s int, hook string, fill func(*workbench.AgentEventRequest)) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
+			e.Timestamp = start.Add(time.Duration(s) * time.Second)
+			if fill != nil {
+				fill(e)
+			}
+		})
+	}
+	bash := func(id, target string) func(*workbench.AgentEventRequest) {
+		return func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID, e.Target = "Bash", id, target }
+	}
+	tracker := replayed(t, []workbench.AgentEventRequest{
+		at(0, agentevent.HookUserPromptSubmit, nil),
+		at(1, agentevent.HookPreToolUse, bash("denied", "make front")),
+		at(2, agentevent.HookStop, nil),
+	})
+	if root := stateOf(t, tracker, agentRootID); root.State != agentStateYourTurn || root.Tool != "" {
+		t.Fatalf("after the denied call's turn ended the root = %q tool %q", root.State, root.Tool)
+	}
+
+	tracker.apply(at(3, agentevent.HookUserPromptSubmit, nil))
+	tracker.apply(at(4, agentevent.HookPreToolUse, bash("next", "go test ./...")))
+	if root := stateOf(t, tracker, agentRootID); root.State != agentStateWorking || root.Target != "go test ./..." {
+		t.Fatalf("the next call = %q %q", root.State, root.Target)
+	}
+	tracker.apply(at(5, agentevent.HookPostToolUse, bash("next", "go test ./...")))
+	tracker.apply(at(6, agentevent.HookPostToolUse, bash("denied", "make front")))
+	root := stateOf(t, tracker, agentRootID)
+	if root.Tool != "" {
+		t.Fatalf("a late result reopened a call: %+v", root.Tool)
+	}
+	for _, call := range root.Tools {
+		if call.ID == "denied" && (call.Abandoned || !call.Closed) {
+			t.Fatalf("the late result was not recorded: %+v", call)
+		}
+	}
+}

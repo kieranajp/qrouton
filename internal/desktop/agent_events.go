@@ -40,7 +40,7 @@ func newAgentRun() *agentRun {
 func (a *agentActivity) apply(event workbench.AgentEventRequest) (changed, alert bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.currentLocked(event.Provider, event.Generation) {
+	if !a.currentLocked(event.Provider, event.Generation) || a.helperLocked(event) {
 		return false, false
 	}
 	at := event.Timestamp
@@ -80,6 +80,12 @@ func (a *agentActivity) apply(event workbench.AgentEventRequest) (changed, alert
 	return true, alert
 }
 
+// helperLocked is a hook from an agent Claude Code runs for itself: it names
+// an agent no spawn or start ever typed, and carries no type of its own.
+func (a *agentActivity) helperLocked(event workbench.AgentEventRequest) bool {
+	return event.AgentID != "" && event.AgentType == "" && a.records[a.keyLocked(event.AgentID, false)] == nil
+}
+
 func (a *agentActivity) rootLocked() *agentRecord {
 	return a.records[a.keyLocked(agentRootID, true)]
 }
@@ -91,6 +97,16 @@ func (a *agentActivity) rootStateLocked() string {
 	}
 	state, _, _, _ := a.displayLocked(root, a.now())
 	return state
+}
+
+// abandonLocked closes the calls an agent's turn ended without. A result that
+// arrives later still lands on its call.
+func abandonLocked(agent *agentRecord, at time.Time) {
+	for i := range agent.Tools {
+		if call := &agent.Tools[i]; !call.Closed {
+			call.Closed, call.Abandoned, call.End = true, true, at
+		}
+	}
 }
 
 // reopenLocked returns a finished agent to work when one of its hooks was
@@ -220,6 +236,7 @@ func (a *agentActivity) stopLocked(event workbench.AgentEventRequest, at time.Ti
 		return false
 	}
 	root.stopAt = at
+	abandonLocked(root, at)
 	root.turnEnded = true
 	root.needs, root.needsTool, root.needsFrom = "", "", ""
 	root.background = map[string]bool{}
@@ -275,7 +292,11 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 				call.Start = at
 			}
 		} else {
-			a.recordCallLocked(caller, agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at})
+			call := agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at}
+			if caller.Root && caller.turnEnded && at.Before(caller.stopAt) {
+				call.Closed, call.Abandoned, call.End = true, true, caller.stopAt
+			}
+			a.recordCallLocked(caller, call)
 		}
 	}
 	if event.Spawn != nil && event.ToolUseID != "" {
@@ -313,6 +334,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 	a.answeredLocked(caller, event.ToolUseID, at)
 	if event.Interrupt && caller.Root && !at.Before(caller.promptAt) {
 		caller.turnEnded, caller.stopAt = true, at
+		defer abandonLocked(caller, at)
 	}
 	if !failed && event.Target != "" && slices.Contains(agentevent.FileWriteTools, event.Tool) &&
 		!slices.Contains(caller.Files, event.Target) && len(caller.Files) < agentFileLimit {
@@ -321,7 +343,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
 			if call := a.callLocked(event.ToolUseID); call != nil {
-				call.End, call.Failed, call.Closed = at, failed, true
+				call.End, call.Failed, call.Closed, call.Abandoned = at, failed, true, false
 			}
 		} else {
 			a.recordCallLocked(caller, agentToolCall{
@@ -361,14 +383,9 @@ func (a *agentActivity) subagentStartLocked(event workbench.AgentEventRequest, a
 	return true
 }
 
-// subagentStopLocked marks an agent stopped. A stop naming neither a type nor
-// a start the tracker saw is dropped: Claude Code sends some at exit for
-// agents nothing else ever mentioned.
+// subagentStopLocked marks an agent stopped.
 func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at time.Time) bool {
 	if event.AgentID == "" {
-		return false
-	}
-	if a.records[a.keyLocked(event.AgentID, false)] == nil && event.AgentType == "" {
 		return false
 	}
 	record := a.agentLocked(event.AgentID, event.AgentType, at)
@@ -388,6 +405,7 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 		return true
 	}
 	record.held = false
+	abandonLocked(record, at)
 	if record.State == agentLive {
 		record.State = agentStateDone
 	}

@@ -2,7 +2,7 @@ import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_STATES } from "../bridge/generat
 import { stateWords } from "../overview/tree.js";
 
 /** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
- * state?: string, reason?: string, tool?: string, target?: string}} Summary */
+ * state?: string, reason?: string, tool?: string}} Summary */
 /** @typedef {{kind: string, label: string, active?: boolean, title?: string}} Fact */
 
 /** @type {string[]} */
@@ -11,7 +11,7 @@ const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
 /** @param {string} words */
 const capital = (words) => words.charAt(0).toUpperCase() + words.slice(1);
 
-/** A row's headline: root state, live agents, current tool, unseen documents.
+/** A row's headline: root state, live agents, unseen documents.
  * @param {Summary} summary @param {number} unseen @param {string} [idleAge] @returns {Fact[]} */
 export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   /** @type {Fact[]} */
@@ -39,9 +39,6 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
     facts.push({ kind: "agents", label: "Root active", active: true });
   }
 
-  if (summary.running && summary.tool && state === AGENT_STATES.WORKING) {
-    facts.push({ kind: "tool", label: [summary.tool, summary.target].filter(Boolean).join(" ") });
-  }
   if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });
   return facts;
 }

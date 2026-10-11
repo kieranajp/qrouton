@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
+import { agentName, buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -139,4 +139,10 @@ test("paths inside the session read from the repository down", () => {
   assert.equal(sessionPath("/elsewhere/a.ts", "/s/x"), "/elsewhere/a.ts");
   assert.equal(nowLine({ tool: "Edit", target: "/s/x/src/web/pay.ts" }, "/s/x"), "Edit web/pay.ts");
   assert.equal(wroteLine(["/s/x/src/web/intent.ts", "/s/x/src/pay/stripe.go"]), "intent.ts, stripe.go");
+});
+
+test("an agent with no type is named by what it was spawned to do", () => {
+  assert.equal(agentName({ type: "code-reviewer", description: "Review" }), "Code Reviewer");
+  assert.equal(agentName({ type: "", description: "Run echo one" }), "Run echo one");
+  assert.equal(agentName({ type: "", description: "" }), "Agent");
 });

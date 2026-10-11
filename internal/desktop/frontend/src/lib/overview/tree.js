@@ -1,6 +1,6 @@
 import { AGENT_STAGES, AGENT_STATES } from "../bridge/generated.js";
 
-/** @typedef {{tool: string, target: string, start: string, end: string, failed: boolean}} AgentTool */
+/** @typedef {{tool: string, target: string, start: string, end: string, failed: boolean, abandoned?: boolean}} AgentTool */
 /** @typedef {{name: string, path: string, kind: string, id: string}} AgentDocument */
 /** @typedef {{id: string, run: string, parent: string, root: boolean, placed: boolean, type: string, stage?: string,
  * description: string, state: string, reason: string, tool: string, target: string, started: string, finished: string,
@@ -144,6 +144,11 @@ export function tokenLabel(tokens) {
   if (tokens < 1000) return `${tokens} tokens`;
   return `${(tokens / 1000).toFixed(1)}k tokens`;
 }
+
+/** An agent's name: its type, or what it was spawned to do when no type
+ * reached the workbench.
+ * @param {{type?: string, description?: string}} node */
+export const agentName = (node) => typeLabel(node.type ?? "") || node.description || "Agent";
 
 /** @param {string} type */
 export function typeLabel(type) {

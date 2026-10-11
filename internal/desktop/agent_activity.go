@@ -83,6 +83,9 @@ type agentToolCall struct {
 	End    time.Time
 	Failed bool
 	Closed bool
+	// Abandoned is a call its agent's turn ended without, such as one the
+	// user denied, which fires no result.
+	Abandoned bool
 }
 
 type agentActivitySnapshot struct {

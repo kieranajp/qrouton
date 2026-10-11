@@ -3,7 +3,7 @@
   import { workflowTone } from "../workflow.js";
   import AgentRow from "./AgentRow.svelte";
   import StageSquare from "./StageSquare.svelte";
-  import { elapsed, isFinished, nowLine, stageName, stageTone, stateTone, stateWords, typeLabel } from "./tree.js";
+  import { agentName, elapsed, isFinished, nowLine, stageName, stageTone, stateTone, stateWords } from "./tree.js";
 
   /** One lead: its stage square and name, its document, and its subagents
    * while open. Only a live lead opens on its own.
@@ -15,7 +15,7 @@
   /** @type {boolean | undefined} */
   let chosen = $state();
   let open = $derived(chosen ?? !finished);
-  let name = $derived(stageName(node.stage) || typeLabel(node.type) || "Agent");
+  let name = $derived(stageName(node.stage) || agentName(node));
   let stage = $derived(stageTone(node.stage));
   let tone = $derived(stage ? workflowTone(stage) : `var(${stateTone(node.state)})`);
   let document = $derived(node.documents?.at(-1));

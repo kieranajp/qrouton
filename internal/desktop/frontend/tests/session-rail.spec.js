@@ -482,12 +482,10 @@ test("a row's headline says what its root is doing", async ({ page }) => {
   const row = () => page.getByRole("button", { name: /^Checkout migration/ });
   const headline = (summary) => page.evaluate((s) => window.sessionRail.headline(s), summary);
 
-  await headline({ state: "working", active: 3, tool: "Bash", target: "go test ./internal/desktop/... -run TestAgentTree" });
+  await headline({ state: "working", active: 3, tool: "Bash" });
   await expect(row().locator(".fact.agents")).toHaveText(/Working · 2 agents/);
-  const tool = row().locator(".fact.tool");
-  await expect(tool).toHaveText("Bash go test ./internal/desktop/... -run TestAgentTree");
-  expect(await tool.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
-  expect(await tool.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await expect(row().locator(".fact.tool")).toHaveCount(0);
+  await expect(row()).not.toContainText("Bash");
 
   await headline({ state: "needs_you", reason: "Which branch should I cut from?", active: 1, attention: "unread" });
   const attention = row().locator(".fact.attention");
