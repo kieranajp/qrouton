@@ -100,3 +100,19 @@ func TestCopyImageStopsWhenTheConversionFails(t *testing.T) {
 		t.Fatal("the clipboard was set from a conversion that failed")
 	}
 }
+
+func TestCopyFileArgvPassesThePathAsOneArgument(t *testing.T) {
+	path := `/tmp/a "loud" clip.mov`
+	argv := CopyFileArgv(path)
+
+	want := []string{
+		"osascript",
+		"-e", "on run argv",
+		"-e", "set the clipboard to (POSIX file (item 1 of argv))",
+		"-e", "end run",
+		path,
+	}
+	if strings.Join(argv, "\x00") != strings.Join(want, "\x00") {
+		t.Fatalf("argv = %q, want %q", argv, want)
+	}
+}

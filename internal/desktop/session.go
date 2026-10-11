@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -220,6 +221,7 @@ type booting struct {
 	cleanup     func(sessionRoot string) error
 	reveal      func(sessionRoot string) error
 	copyImage   func(path string) error
+	copyFile    func(path string) error
 }
 
 type Sessions struct {
@@ -385,21 +387,26 @@ func (s *Sessions) RevealPath(slug, path string) error {
 	return s.boot.reveal(path)
 }
 
-// CopyAsset puts one of a gallery's assets on the clipboard. The path is the
-// page's, so it is refused unless it resolves inside the session it names and
-// carries an extension a gallery would have shown.
+// CopyAsset puts one of a gallery's assets on the clipboard: an image as a
+// picture, a video as a file. The page's path is refused unless it resolves
+// inside the session, and the resolved target decides the kind.
 func (s *Sessions) CopyAsset(slug, path string) error {
 	root := s.boot.root(slug)
 	if root == "" {
 		return unknownSession(slug)
 	}
-	if _, inside := sessionpaths.Within(root, path); !inside {
-		return ErrPathOutsideSession
+	target, err := launch.ResolveSessionFile(root, path)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrPathOutsideSession, err)
 	}
-	if _, ok := workbench.AssetMedia(path); !ok {
+	media, ok := workbench.AssetMedia(target)
+	if !ok {
 		return ErrNotAnAsset
 	}
-	return s.boot.copyImage(path)
+	if media.Kind == workbench.MediaVideo {
+		return s.boot.copyFile(target)
+	}
+	return s.boot.copyImage(target)
 }
 
 // Uncommitted names the repositories a cleanup would take changes from. It is a

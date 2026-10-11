@@ -17,3 +17,5 @@ ffmpeg -f lavfi -i testsrc=size=160x90:rate=10 -t 1 -c:v libx264 -pix_fmt yuv420
 ```
 
 The small PNG retains transparent margins. JPEG, GIF, WebP, and AVIF exercise browser decoding of each admitted raster format.
+
+`not-a-video.mp4` is a byte copy of `small.png`, so Chromium rejects it with `MEDIA_ERR_SRC_NOT_SUPPORTED`.

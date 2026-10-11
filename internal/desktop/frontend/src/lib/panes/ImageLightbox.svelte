@@ -3,10 +3,10 @@
   import Button from "../core/Button.svelte";
   import AssetMenu from "./AssetMenu.svelte";
 
-  /** @type {{image: {source: string, path?: string, url: string}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
+  /** @type {{image: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
   let { image, aspect, index = 1, total = 1, slug = "", onStep, onClose } = $props();
 
-  /** @type {{asset: {source: string, path?: string}, x: number, y: number} | null} */
+  /** @type {{asset: {source: string, path?: string, kind: import("../bridge/generated.js").MediaKind}, x: number, y: number} | null} */
   let menu = $state(null);
   let first = $derived(index <= 1);
   let last = $derived(index >= total);

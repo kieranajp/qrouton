@@ -4,6 +4,7 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
+import { linux } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
 import { opensSettings, position, scaleAction } from "./shortcuts.js";
@@ -31,7 +32,6 @@ export const fontsReady = () =>
 const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
 
 const mounted = new WeakMap();
-const linux = navigator.userAgent.includes("Linux");
 
 /** terminalAt is the terminal a node sits inside, and undefined outside one. */
 export function terminalAt(node) {

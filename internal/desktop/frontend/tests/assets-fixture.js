@@ -15,7 +15,8 @@ const entries = [
   ...["gif", "webp"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: image })),
   ...["webm", "mp4"].map((ext) => ({ source: `thoughts/assets/sample.${ext}`, url: asset(`sample.${ext}`), kind: video })),
   { source: "thoughts/assets/sample.avif", url: asset("sample.avif"), kind: image },
-];
+].map((entry) => ({ ...entry, path: "/sessions/fixture/" + entry.source }));
+const unplayable = { source: "thoughts/assets/not-a-video.mp4", path: "/sessions/fixture/thoughts/assets/not-a-video.mp4", url: asset("not-a-video.mp4"), kind: video };
 let doc = { text: "", source: "", format: "assets", assets: entries, currentIndex: 1, revision: 1, line: 0, to: 0 };
 let windowID = "assets-1";
 let component;
@@ -57,6 +58,8 @@ window.replaceGallery = async (changes = {}) => {
   window.delayInitial = false;
   component = attach();
 };
+
+window.pushUnplayable = () => window.pushAssets({ assets: [...entries, unplayable], currentIndex: entries.length + 1, revision: doc.revision + 1 });
 
 window.pushOldAssets = () => emitWailsEvent("window:content:assets-1", { ...doc, revision: 100, currentIndex: 3 });
 

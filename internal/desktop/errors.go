@@ -34,6 +34,7 @@ var (
 	ErrNoEditorCommand      = errors.New("workbench has no editor command to open a document with")
 	ErrNoRevealCommand      = errors.New("workbench has no command to reveal a session's directory with")
 	ErrNoCopyImageCommand   = errors.New("workbench has no command to copy an image to the clipboard with")
+	ErrNoCopyFileCommand    = errors.New("workbench has no command to copy a file to the clipboard with")
 	ErrNotAnAsset           = errors.New("that file is not an asset the gallery shows")
 	ErrPathOutsideSession   = errors.New("that path is not inside the session it names")
 	ErrNoRelaunch           = errors.New("workbench has no way to relaunch itself into a new sessions root")

@@ -29,6 +29,7 @@ type Launcher interface {
 	Shell(sessionRoot string) []string
 	Reveal(sessionRoot string) []string
 	CopyImage(path string) []string
+	CopyFile(path string) []string
 	Document(sessionRoot, name string) (workbench.WindowOptions, error)
 	Runners() ([]assembly.Runner, error)
 	Signal(sessionRoot string)

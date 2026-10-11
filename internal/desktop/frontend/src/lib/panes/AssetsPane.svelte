@@ -1,6 +1,7 @@
 <script>
   import { onDestroy, tick } from "svelte";
   import { MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { linux } from "../platform.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
@@ -11,13 +12,15 @@
   let assets = $derived(doc.assets ?? []);
   let current = $derived(doc.currentIndex ?? 1);
   let entry = $derived(assets[current - 1]);
-  /** @type {Record<string, 'loaded' | 'error'>} */
+  /** @type {Record<string, 'loaded' | 'error' | 'unsupported'>} */
   let loads = $state({});
+  /** @type {Record<string, 'loaded' | 'error'>} */
+  let thumbs = $state({});
   /** @type {Record<string, number>} */
   let aspects = $state({});
   let selectionError = $state("");
   let expanded = $state(false);
-  /** @type {{asset: {source: string, path?: string}, x: number, y: number} | null} */
+  /** @type {{asset: {source: string, path?: string, kind: import("../bridge/generated.js").MediaKind}, x: number, y: number} | null} */
   let menu = $state(null);
   let notice = $state("");
   let noticeTimer;
@@ -47,16 +50,21 @@
     if (next >= 1 && next <= assets.length) select(next);
   }
 
-  function loaded(url, event) {
-    loads[url] = "loaded";
+  function loaded(states, url, event) {
+    states[url] = "loaded";
     const image = /** @type {HTMLImageElement} */ (event.currentTarget);
     aspects[url] = image.naturalWidth / image.naturalHeight;
   }
 
-  function measured(url, event) {
-    loads[url] = "loaded";
+  function measured(states, url, event) {
+    states[url] = "loaded";
     const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
     aspects[url] = video.videoWidth / video.videoHeight;
+  }
+
+  function unplayable(url, event) {
+    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
+    loads[url] = video.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED ? "unsupported" : "error";
   }
 
   const reseeked = new WeakSet();
@@ -81,7 +89,7 @@
       await Call.ByName(WINDOWS_FOCUS_ASSET, slug, id, index);
     } catch {
       if (alive && attempt === request && doc.revision === revision) {
-        selectionError = "Could not select image. Try again.";
+        selectionError = "Could not select asset. Try again.";
       }
     }
   }
@@ -133,12 +141,18 @@
       {#key entry.url}
       {@const shown = entry}
       {#if isVideo(shown)}
-      <div class="primary-frame player">
-        {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
-        <!-- svelte-ignore a11y_media_has_caption -->
-        <video src={shown.url} controls preload="metadata" aria-label={shown.source}
-          oncontextmenu={(event) => openMenu(event, shown)}
-          onloadedmetadata={(event) => measured(shown.url, event)}></video>
+      <div class="primary-frame player" role="presentation" oncontextmenu={(event) => openMenu(event, shown)}>
+        {#if loads[shown.url] === "unsupported"}
+          <p class="load-error">This video's format can't be played here{#if linux}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
+        {:else if loads[shown.url] === "error"}
+          <p class="load-error">Could not play video</p>
+        {:else}
+          {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
+          <!-- svelte-ignore a11y_media_has_caption -->
+          <video src={shown.url} controls preload="metadata" aria-label={shown.source}
+            onloadedmetadata={(event) => measured(loads, shown.url, event)}
+            onerror={(event) => unplayable(shown.url, event)}></video>
+        {/if}
       </div>
       {:else}
       <button
@@ -154,7 +168,7 @@
         {:else}
           {#if !loads[shown.url]}<span class="loading">Loading image…</span>{/if}
           <img src={shown.url} alt={shown.source}
-            onload={(event) => loaded(shown.url, event)}
+            onload={(event) => loaded(loads, shown.url, event)}
             onerror={() => (loads[shown.url] = "error")} />
         {/if}
       </button>
@@ -173,19 +187,22 @@
           onclick={() => select(index + 1)}>
         <span class="number">{index + 1}</span>
         <div class="thumbnail-frame">
-          {#if loads[asset.url] === "error"}
-            <span class="load-error">Could not load image</span>
-          {:else if isVideo(asset)}
-            {#if !loads[asset.url]}<span class="loading">Loading…</span>{/if}
-            <video src={asset.url + "#t=0.1"} muted playsinline preload="metadata" aria-hidden="true"
-              onloadedmetadata={(event) => measured(asset.url, event)}
-              onsuspend={unpainted}></video>
+          {#if isVideo(asset)}
+            {#if thumbs[asset.url] !== "error"}
+              {#if !thumbs[asset.url]}<span class="loading">Loading…</span>{/if}
+              <video src={asset.url + "#t=0.1"} muted playsinline preload="metadata" aria-hidden="true"
+                onloadedmetadata={(event) => measured(thumbs, asset.url, event)}
+                onerror={() => (thumbs[asset.url] = "error")}
+                onsuspend={unpainted}></video>
+            {/if}
             <span class="play" aria-hidden="true"></span>
+          {:else if thumbs[asset.url] === "error"}
+            <span class="load-error">Could not load image</span>
           {:else}
-            {#if !loads[asset.url]}<span class="loading">Loading…</span>{/if}
+            {#if !thumbs[asset.url]}<span class="loading">Loading…</span>{/if}
             <img src={asset.url} alt={asset.source}
-              onload={(event) => loaded(asset.url, event)}
-              onerror={() => (loads[asset.url] = "error")} />
+              onload={(event) => loaded(thumbs, asset.url, event)}
+              onerror={() => (thumbs[asset.url] = "error")} />
           {/if}
         </div>
         <strong>{basename(asset.source)}</strong>

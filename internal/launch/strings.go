@@ -85,6 +85,9 @@ const (
 	// sh -c takes the script's own name before its arguments; $1 is the path.
 	shellArgv0 = "sh"
 
+	osascriptCommand = "osascript"
+	osascriptExecute = "-e"
+
 	findCommand   = "find"
 	findRoot      = "."
 	findDepthFlag = "-maxdepth"

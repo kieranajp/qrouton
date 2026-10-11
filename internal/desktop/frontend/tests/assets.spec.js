@@ -105,7 +105,7 @@ test("agent and thumbnail selection share state without agent keyboard focus", a
   expect(await page.evaluate(() => window.bridgeCalls.filter((call) => call.name.endsWith(".FocusAsset")).map((call) => call.args))).toEqual([["fixture", "assets-1", 3], ["fixture", "assets-1", 2]]);
   await page.evaluate(() => { window.failSelection = true; });
   await buttons.nth(0).click();
-  await expect(page.getByRole("alert")).toContainText("Could not select image");
+  await expect(page.getByRole("alert")).toContainText("Could not select asset");
   await expect(page.locator(".position")).toHaveText("Image 2 of 9");
 });
 
@@ -226,4 +226,84 @@ test("the MP4 entry renders as a video", async ({ page }) => {
   await expect(page.locator(".position")).toHaveText(`Video ${MP4} of 9`);
   await expect(player(page)).toHaveAttribute("src", /sample\.mp4$/);
   await expect(page.locator(".primary img")).toHaveCount(0);
+});
+
+const LINUX_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+const UNPLAYABLE = 10;
+
+async function showUnplayable(page) {
+  await page.goto("/tests/assets.html");
+  await page.evaluate(() => window.pushUnplayable());
+  await expect(page.locator(".position")).toHaveText(`Video ${UNPLAYABLE} of ${UNPLAYABLE}`);
+}
+
+async function menuLabels(page, target) {
+  await target.click({ button: "right" });
+  const labels = page.locator(".anchor .item .label");
+  await expect(labels.first()).toBeVisible();
+  return labels.allTextContents();
+}
+
+test("an undecodable video shows the format failure and a glyph tile", async ({ page }) => {
+  await showUnplayable(page);
+  await expect(page.locator(".primary .load-error")).toHaveText("This video's format can't be played here");
+  await expect(player(page)).toHaveCount(0);
+  await expect(page.locator(".primary .loading")).toHaveCount(0);
+  const tile = page.locator(".asset-strip li").nth(UNPLAYABLE - 1);
+  await expect(tile.locator("video")).toHaveCount(0);
+  await expect(tile.locator(".play")).toBeVisible();
+  await expect(tile.locator(".load-error")).toHaveCount(0);
+});
+
+test("the menu on an undecodable video still offers Copy Path and Reveal", async ({ page }) => {
+  await showUnplayable(page);
+  await expect(page.locator(".primary .load-error")).toBeVisible();
+  expect(await menuLabels(page, page.locator(".primary .load-error"))).toEqual(["Copy", "Copy Path", "Reveal"]);
+  await page.locator(".anchor").getByRole("button", { name: "Copy Path", exact: true }).click();
+  await expect(page.locator(".notice")).toHaveText("Path copied");
+  expect(await page.evaluate(() => window.clipboardText)).toBe("/sessions/fixture/thoughts/assets/not-a-video.mp4");
+});
+
+test("Copy on a video says the video was copied", async ({ page }) => {
+  await selectWebm(page);
+  await menuLabels(page, page.locator(".asset-strip button").nth(WEBM - 1));
+  await page.locator(".anchor").getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.locator(".notice")).toHaveText("Video copied");
+  expect(await page.evaluate(() => window.bridgeCalls.filter((call) => call.name.endsWith(".CopyAsset")).map((call) => call.args)))
+    .toEqual([["fixture", "/sessions/fixture/thoughts/assets/sample.webm"]]);
+});
+
+test("Copy on an image still says the image was copied", async ({ page }) => {
+  await page.goto("/tests/assets.html");
+  await menuLabels(page, page.locator(".asset-strip button").nth(0));
+  await page.locator(".anchor").getByRole("button", { name: "Copy", exact: true }).click();
+  await expect(page.locator(".notice")).toHaveText("Image copied");
+});
+
+test("the main view keeps loading while only the thumbnail has loaded", async ({ page }) => {
+  await page.goto("/tests/assets.html");
+  await expect.poll(() => thumbnail(page, WEBM).evaluate((video) => video.readyState)).toBeGreaterThanOrEqual(1);
+  await page.route("**/sample.webm", () => {});
+  await page.locator(".asset-strip button").nth(WEBM - 1).click();
+  await expect(player(page)).toHaveAttribute("src", /sample\.webm$/);
+  await expect(page.locator(".primary .loading")).toHaveText("Loading video…");
+  expect(await player(page).evaluate((video) => video.readyState)).toBe(0);
+});
+
+test.describe("on Linux", () => {
+  test.use({ userAgent: LINUX_UA });
+
+  test("the menu leaves out Copy", async ({ page }) => {
+    await page.goto("/tests/assets.html");
+    expect(await menuLabels(page, page.locator(".asset-strip button").nth(WEBM - 1))).toEqual(["Copy Path", "Reveal"]);
+  });
+
+  test("the format failure names the GStreamer packages", async ({ page }) => {
+    await showUnplayable(page);
+    const failure = page.locator(".primary .load-error");
+    await expect(failure).toContainText("This video's format can't be played here");
+    await expect(failure).toContainText("gstreamer1.0-plugins-good");
+    await expect(failure).toContainText("gstreamer1.0-libav");
+    expect(await menuLabels(page, failure)).toEqual(["Copy Path", "Reveal"]);
+  });
 });

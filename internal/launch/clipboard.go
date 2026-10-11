@@ -10,8 +10,26 @@ sips -s format png "$1" --out "$dir/image.png" >/dev/null
 osascript -e 'on run argv' -e 'set the clipboard to (read (POSIX file (item 1 of argv)) as «class PNGf»)' -e 'end run' "$dir/image.png"
 `
 
+// A video is attached rather than pictured, so the clipboard holds the file
+// itself, the way Finder's copy does.
+var copyFileScript = []string{
+	"on run argv",
+	"set the clipboard to (POSIX file (item 1 of argv))",
+	"end run",
+}
+
 // CopyImageArgv copies an image file to the clipboard as a picture, so it
 // pastes into a chat or a ticket rather than as its own name.
 func CopyImageArgv(path string) []string {
 	return []string{defaultShell, shellCommandFlag, copyImageScript, shellArgv0, path}
+}
+
+// CopyFileArgv puts the file itself on the clipboard, so it pastes into Finder
+// or a chat as an attachment.
+func CopyFileArgv(path string) []string {
+	argv := []string{osascriptCommand}
+	for _, line := range copyFileScript {
+		argv = append(argv, osascriptExecute, line)
+	}
+	return append(argv, path)
 }
