@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -231,4 +233,89 @@ func TestAgentTreeArrivesOverTheControlSocket(t *testing.T) {
 		t.Fatal(err)
 	}
 	delegatedRecord(t, tracker.snapshot(), "agent-1")
+}
+
+func TestCodexIdentityArrivesOverLifecycleSocketAndProjectsToTree(t *testing.T) {
+	windows, _ := testWindows(t)
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderCodex, 1)
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{
+		lifecycle: func(req workbench.DelegatedLifecycleRequest) { tracker.lifecycle(req) },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	root := t.TempDir()
+	handle := workbench.Handle{Socket: socket, SessionRoot: root}
+	for _, tc := range []struct{ id, parent, name string }{
+		{"lead-a", "session", "/root/research_a"},
+		{"lead-b", "session", "/root/research_b"},
+		{"nested", "lead-a", "/root/research_a/inspect"},
+		{"unnamed", "session", ""},
+	} {
+		path := filepath.Join(root, tc.id+".jsonl")
+		metadata, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]string{"id": tc.id, "agent_path": tc.name}})
+		if err := os.WriteFile(path, metadata, 0600); err != nil {
+			t.Fatal(err)
+		}
+		for _, hook := range []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop} {
+			payload, _ := json.Marshal(map[string]string{"session_id": tc.parent, "hook_event_name": hook, "agent_id": tc.id, "agent_type": "codebase-researcher", "transcript_path": path, "agent_transcript_path": path})
+			event, _, err := agentevent.Record(agentProviderCodex, bytes.NewReader(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			kind := workbench.LifecycleStart
+			if hook == agentevent.HookSubagentStop {
+				kind = workbench.LifecycleStop
+			}
+			at, _ := time.Parse(time.RFC3339Nano, event.Timestamp)
+			if err := handle.DelegatedLifecycle(context.Background(), workbench.DelegatedLifecycleRequest{
+				Provider: event.Provider, Generation: 1, Kind: kind, ID: event.AgentID,
+				Type: event.AgentType, TaskName: event.TaskName, ParentID: event.ParentID, Timestamp: at,
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+		tree := agentTree(tracker.snapshot(), "", root)
+		found := false
+		for _, node := range tree.Nodes {
+			if node.ID != tc.id {
+				continue
+			}
+			found = true
+			parent := agentRootID
+			if tc.id == "nested" {
+				parent = "lead-a"
+			}
+			if node.TaskName != tc.name || node.Type != "codebase-researcher" || node.Parent != parent || node.State != agentStateDone {
+				t.Fatalf("node = %+v", node)
+			}
+			wire, _ := json.Marshal(node)
+			if tc.name != "" && !bytes.Contains(wire, []byte(`"taskName":"`+tc.name+`"`)) {
+				t.Fatalf("missing frontend taskName in %s", wire)
+			}
+		}
+		if !found || tree.Tools || tree.Coverage != "" {
+			t.Fatalf("tree = %+v", tree)
+		}
+	}
+}
+
+func TestCoverageRemovalIsLimitedToCodex(t *testing.T) {
+	for _, provider := range []string{"", agentProviderCodex, agentProviderClaude} {
+		if note := coverageNote(provider, capabilitiesFor(provider)); note != "" {
+			t.Fatalf("%s coverage = %q", provider, note)
+		}
+	}
+	if note := coverageNote(agentProviderOpenCode, capabilitiesFor(agentProviderOpenCode)); note != "OpenCode reports the root agent only, so working and idle come from its terminal." {
+		t.Fatalf("OpenCode coverage = %q", note)
+	}
+	if note := coverageNote("other", agentCapabilities{Children: true}); !strings.Contains(note, "reports its agents starting and stopping") {
+		t.Fatalf("generic lifecycle coverage = %q", note)
+	}
 }

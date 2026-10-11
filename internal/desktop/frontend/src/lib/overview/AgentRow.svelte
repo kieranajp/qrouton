@@ -12,6 +12,7 @@
   let node = $derived(branch.node);
   let finished = $derived(isFinished(node.state));
   let title = $derived(agentName(node));
+  let taskName = $derived(node.taskName || "");
   let words = $derived(stateWords(node, tools));
   let doing = $derived(nowLine(node, root));
   let wrote = $derived(wroteLine(node.files));
@@ -25,11 +26,11 @@
   };
 </script>
 
-<div class="agent" class:finished>
+<div class="agent" class:finished data-agent-id={node.id}>
   <button
     type="button"
     class="head"
-    aria-label="{title} · {words}"
+    aria-label="{title}{taskName ? ` · ${taskName}` : ""} · {words}"
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}>
     {#if stateIcon(node.state)}
@@ -38,6 +39,7 @@
       <span class="slot"></span>
     {/if}
     <span class="who">{title}</span>
+    {#if taskName}<span class="task-name" title={taskName}>· {taskName}</span>{/if}
     {#if node.description}<span class="what">{node.description}</span>{/if}
     {#if finished && wrote}<span class="what">wrote {wrote}</span>{/if}
     <span class="time">{elapsed(node.started, node.finished, now)}</span>
@@ -111,6 +113,15 @@
     flex: none;
     font: var(--machine-sm);
     color: var(--text-primary);
+  }
+
+  .task-name {
+    flex: 1 1 0;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
   }
 
   .what {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -85,7 +86,7 @@ func TestFinishedAgentsStayForTheRunAndTheOneAfter(t *testing.T) {
 	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderCodex, 1)
 	event := workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "agent-1", Type: "explorer",
+		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "agent-1", Type: "explorer", TaskName: "/root/retained",
 	}
 	tracker.lifecycle(event)
 	event.Kind = workbench.LifecycleStop
@@ -95,7 +96,7 @@ func TestFinishedAgentsStayForTheRunAndTheOneAfter(t *testing.T) {
 		t.Fatal("a finished agent left the tree within its run")
 	}
 	tracker.begin(agentProviderCodex, 2)
-	if _, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok {
+	if record, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok || record.TaskName != "/root/retained" {
 		t.Fatal("the previous run's tree went at the first relaunch")
 	}
 	tracker.begin(agentProviderCodex, 3)
@@ -707,5 +708,88 @@ func TestAFocusReportLeavesTheChimeClaimed(t *testing.T) {
 	hook(status.ActivityWaiting, 1)
 	if len(chimed.rung) != 2 {
 		t.Fatalf("a keystroke did not re-arm the chime: rang %d times", len(chimed.rung))
+	}
+}
+
+func TestLifecycleNamesEnrichWithoutMovingStateOrTimes(t *testing.T) {
+	for _, tc := range []struct{ first, update string }{
+		{workbench.LifecycleStart, workbench.LifecycleStart},
+		{workbench.LifecycleStart, workbench.LifecycleStop},
+		{workbench.LifecycleStop, workbench.LifecycleStop},
+		{workbench.LifecycleStop, workbench.LifecycleStart},
+	} {
+		t.Run(tc.first+tc.update, func(t *testing.T) {
+			clock := &activityClock{at: time.Now()}
+			tracker := newAgentActivity(clock.now)
+			tracker.begin(agentProviderCodex, 1)
+			event := workbench.DelegatedLifecycleRequest{Provider: agentProviderCodex, Generation: 1, Kind: tc.first, ID: "a", Type: "explorer"}
+			tracker.lifecycle(event)
+			before := delegatedRecord(t, tracker.snapshot(), "a")
+			clock.at = clock.at.Add(time.Second)
+			event.Kind, event.TaskName = tc.update, "/root/lead/review"
+			if !tracker.lifecycle(event) {
+				t.Fatal("name enrichment did not report a change")
+			}
+			after := delegatedRecord(t, tracker.snapshot(), "a")
+			if after.TaskName != event.TaskName || !after.StartedAt.Equal(before.StartedAt) || after.Type != before.Type || after.ParentID != before.ParentID {
+				t.Fatalf("before %+v, after %+v", before, after)
+			}
+			if tc.first == workbench.LifecycleStop && (after.State != before.State || !after.FinishedAt.Equal(before.FinishedAt)) {
+				t.Fatal("name enrichment moved a finished lifecycle")
+			}
+			if tc.first == tc.update && (after.State != before.State || !after.FinishedAt.Equal(before.FinishedAt)) {
+				t.Fatal("duplicate lifecycle moved state or timestamps")
+			}
+			for _, name := range []string{"", "/root/conflict", event.TaskName} {
+				event.TaskName = name
+				if tracker.lifecycle(event) {
+					t.Fatal("duplicate or conflicting name reported a change")
+				}
+			}
+			if got := delegatedRecord(t, tracker.snapshot(), "a").TaskName; got != "/root/lead/review" {
+				t.Fatalf("first name replaced by %q", got)
+			}
+		})
+	}
+}
+
+func TestLifecycleNamesRejectStaleAndUnknownEvents(t *testing.T) {
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderCodex, 1)
+	event := workbench.DelegatedLifecycleRequest{Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "a"}
+	tracker.lifecycle(event)
+	for _, change := range []func(*workbench.DelegatedLifecycleRequest){
+		func(e *workbench.DelegatedLifecycleRequest) { e.Generation = 2 },
+		func(e *workbench.DelegatedLifecycleRequest) { e.Provider = agentProviderClaude },
+		func(e *workbench.DelegatedLifecycleRequest) { e.Kind = "unknown" },
+	} {
+		stale := event
+		stale.TaskName = "/root/stale"
+		change(&stale)
+		if tracker.lifecycle(stale) || delegatedRecord(t, tracker.snapshot(), "a").TaskName != "" {
+			t.Fatal("stale or unknown event enriched a name")
+		}
+	}
+	tracker.begin(agentProviderCodex, 2)
+	event.TaskName = "/root/old"
+	if tracker.lifecycle(event) || recordForRun(t, tracker.snapshot(), "a", 1).TaskName != "" {
+		t.Fatal("old run enriched a retained name")
+	}
+}
+
+func TestConcurrentSameTypeLifecycleNamesStayWithTheirIDs(t *testing.T) {
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderCodex, 1)
+	var group sync.WaitGroup
+	for _, id := range []string{"a", "b", "c"} {
+		group.Go(func() {
+			tracker.lifecycle(workbench.DelegatedLifecycleRequest{Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: id, Type: "codebase-researcher", TaskName: "/root/" + id})
+		})
+	}
+	group.Wait()
+	for _, id := range []string{"a", "b", "c"} {
+		if record := delegatedRecord(t, tracker.snapshot(), id); record.TaskName != "/root/"+id || record.Type != "codebase-researcher" {
+			t.Fatalf("record = %+v", record)
+		}
 	}
 }

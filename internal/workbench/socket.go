@@ -89,6 +89,7 @@ type DelegatedLifecycleRequest struct {
 	Kind       string    `json:"kind"`
 	ID         string    `json:"id"`
 	Type       string    `json:"type,omitempty"`
+	TaskName   string    `json:"task_name,omitempty"`
 	ParentID   string    `json:"parent_id,omitempty"`
 	Timestamp  time.Time `json:"timestamp"`
 }

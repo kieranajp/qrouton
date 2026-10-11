@@ -26,6 +26,7 @@ type agentRecord struct {
 	Provider    string
 	ParentID    string
 	Type        string
+	TaskName    string
 	Description string
 	State       string
 	ParentKnown bool
@@ -172,6 +173,12 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	now := a.now()
 	key := a.keyLocked(event.ID, false)
 	record := a.records[key]
+	enriched := false
+	if record != nil && record.TaskName == "" && event.TaskName != "" &&
+		(event.Kind == workbench.LifecycleStart || event.Kind == workbench.LifecycleStop) {
+		record.TaskName = event.TaskName
+		enriched = true
+	}
 	parentID := agentRootID
 	if event.ParentID != "" && a.records[a.keyLocked(event.ParentID, false)] != nil {
 		parentID = event.ParentID
@@ -179,7 +186,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	switch event.Kind {
 	case workbench.LifecycleStart:
 		if record != nil {
-			return false
+			return enriched
 		}
 		started := event.Timestamp
 		if started.IsZero() {
@@ -187,20 +194,20 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		}
 		a.records[key] = &agentRecord{
 			ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-			ParentID: parentID, Type: event.Type, State: agentLive, ParentKnown: true,
+			ParentID: parentID, Type: event.Type, TaskName: event.TaskName, State: agentLive, ParentKnown: true,
 			Generation: event.Generation, StartedAt: started,
 		}
 	case workbench.LifecycleStop:
 		if record == nil {
 			a.records[key] = &agentRecord{
 				ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-				ParentID: parentID, Type: event.Type, State: agentStateDone, ParentKnown: true,
+				ParentID: parentID, Type: event.Type, TaskName: event.TaskName, State: agentStateDone, ParentKnown: true,
 				Generation: event.Generation, FinishedAt: now,
 			}
 			break
 		}
 		if record.State != agentLive {
-			return false
+			return enriched
 		}
 		record.State = agentStateDone
 		record.FinishedAt = now

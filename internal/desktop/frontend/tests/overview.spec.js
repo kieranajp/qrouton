@@ -98,6 +98,44 @@ test("only the live lead opens; finished leads keep their document and count", a
   await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/research/R3-retry.md"]);
 });
 
+test("same-type direct children keep their own assigned names and fallback labels", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator('[data-agent-id="codex-direct-a"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/review_security · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-b"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/a_very_long_assigned_name_for_security_research_that_should_truncate_in_the_row · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-unnamed"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-finished"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/finished_research · done",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-a"] .toggle .task-name')).toHaveAttribute("title", "/root/review_security");
+});
+
+test("nested names stay with their UUIDs, including finished rows", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator('[data-agent-id="codex-nested-named"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · /root/review_security/child_work/check_authentication_and_authorization_for_every_privileged_request_and_token_refresh_case · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-nested-unnamed"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-nested-finished"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · /root/review_security/child_work/write_tests · done",
+  );
+});
+
+test("a pushed name enrichment updates the matching row", async ({ page }) => {
+  await open(page, "?tree=codex");
+  const row = page.locator('[data-agent-id="codex-direct-unnamed"] .toggle');
+  await expect(row).toHaveAttribute("aria-label", "Codebase Researcher · working");
+  await page.evaluate(() => window.pushTree("enriched"));
+  await expect(row).toHaveAttribute("aria-label", "Codebase Researcher · /root/late_name · working");
+});
+
 test("a lead's square fills once done and rings while live", async ({ page }) => {
   await open(page);
   const square = (name) =>
@@ -225,6 +263,43 @@ test("a provider that reports only the root shows its note and says working", as
   );
   await expect(page.locator(".orchestrator .words")).toHaveText("working");
   await expect(page.locator(".leads")).toHaveCount(0);
+});
+
+test("Codex has no coverage sentence", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator(".coverage")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Codex CLI reports its agents starting and stopping");
+});
+
+test("narrow long names truncate while state and disclosure controls remain usable", async ({ page }) => {
+  for (const query of ["?tree=codex", "?tree=codex&narrow"]) {
+    await open(page, query);
+    const direct = page.locator('[data-agent-id="codex-direct-b"]');
+    const directName = direct.locator(".task-name");
+    await expect(directName).toBeVisible();
+    expect(await directName.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    const [nameBox, factsBox] = await Promise.all([box(directName), box(direct.locator(".facts"))]);
+    expect(nameBox.right).toBeLessThanOrEqual(factsBox.left);
+    await expect(direct.locator(".square")).toBeVisible();
+    await expect(direct.locator(".facts")).toBeVisible();
+    await expect(direct.locator(".toggle")).toHaveAttribute("aria-expanded", "true");
+
+    const nested = page.locator('[data-agent-id="codex-nested-named"]');
+    const nestedName = nested.locator(".task-name");
+    expect(await nestedName.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    const [nestedNameBox, timeBox] = await Promise.all([box(nestedName), box(nested.locator(".time"))]);
+    expect(nestedNameBox.right).toBeLessThanOrEqual(timeBox.left);
+    await expect(nested.locator(".time")).toBeVisible();
+    await expect(nested.locator(".head")).toHaveAttribute("aria-expanded", "false");
+    await nested.locator(".head").click();
+    await expect(nested.locator(".head")).toHaveAttribute("aria-expanded", "true");
+
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth > document.body.clientWidth,
+      document: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    }));
+    expect(overflow).toEqual({ body: false, document: false });
+  }
 });
 
 test("a pushed tree replaces the drawn one", async ({ page }) => {

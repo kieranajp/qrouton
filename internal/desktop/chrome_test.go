@@ -3,7 +3,6 @@ package desktop
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"strings"
 	"sync"
@@ -55,7 +54,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	if cold := rows["cold"].Summary; cold.Running || cold.Coverage != status.AgentCoverageNone || cold.Attention != status.AgentAttentionNone {
 		t.Fatalf("cold row summary = %+v", cold)
 	}
-	if tree := agentTree(shown.agents.snapshot(), "", ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage == "" {
+	if tree := agentTree(shown.agents.snapshot(), "", ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage != "" {
 		t.Fatalf("selected tree = %+v", tree)
 	}
 }
@@ -94,7 +93,7 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir), "")
-	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != fmt.Sprintf(agentCoverageNoTools, tree.ProviderLabel) {
+	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != "" {
 		t.Fatalf("cold tree = %+v", tree)
 	}
 }

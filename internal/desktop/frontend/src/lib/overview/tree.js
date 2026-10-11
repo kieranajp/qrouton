@@ -3,7 +3,7 @@ import { AGENT_STAGES, AGENT_STATES } from "../bridge/generated.js";
 /** @typedef {{tool: string, target: string, start: string, end: string, failed: boolean, abandoned?: boolean}} AgentTool */
 /** @typedef {{name: string, path: string, kind: string, id: string}} AgentDocument */
 /** @typedef {{id: string, run: string, parent: string, root: boolean, placed: boolean, type: string, stage?: string,
- * description: string, state: string, reason: string, tool: string, target: string, started: string, finished: string,
+ * taskName?: string, description: string, state: string, reason: string, tool: string, target: string, started: string, finished: string,
  * toolCount: number, tokens: number, lastMessage: string, files: string[], documents?: AgentDocument[],
  * tools: AgentTool[]}} AgentNode */
 /** @typedef {{provider: string, providerLabel: string, coverage: string, tools: boolean, nodes: AgentNode[]}} AgentTree */

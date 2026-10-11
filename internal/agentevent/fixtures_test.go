@@ -271,3 +271,47 @@ func TestReduceCarriesAnInterrupt(t *testing.T) {
 		t.Fatalf("interrupt dropped: %+v", event)
 	}
 }
+
+func TestCodexFixtureJoinsChildIdentityOnStartAndStop(t *testing.T) {
+	body, err := os.ReadFile("testdata/codex-0.162.0/hooks.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := os.ReadFile("testdata/codex-0.162.0/agent-identity.jsonl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	child := identityFile(t, string(metadata))
+	parent := identityFile(t, identityRecord("01a12a13-9c95-7430-8bd5-b1d57b3c804a", "/root/parent"))
+	count := 0
+	for _, line := range bytes.Split(bytes.TrimSpace(body), []byte("\n")) {
+		original, hook, err := Record("codex", bytes.NewReader(line))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if original.TaskName != "" {
+			t.Fatalf("unavailable original fixture acquired a name: %+v", original)
+		}
+		if hook != HookSubagentStart && hook != HookSubagentStop {
+			continue
+		}
+		var payload map[string]any
+		if err := json.Unmarshal(line, &payload); err != nil {
+			t.Fatal(err)
+		}
+		payload["transcript_path"] = child
+		if hook == HookSubagentStop {
+			payload["transcript_path"] = parent
+			payload["agent_transcript_path"] = child
+		}
+		rewritten, _ := json.Marshal(payload)
+		event, _, err := Record("codex", bytes.NewReader(rewritten))
+		if err != nil || event.AgentID != original.AgentID || event.TaskName != "/root/plan_codex_agent_names" {
+			t.Fatalf("%s = %+v, err %v", hook, event, err)
+		}
+		count++
+	}
+	if count != 2 {
+		t.Fatalf("decoded %d lifecycle events", count)
+	}
+}

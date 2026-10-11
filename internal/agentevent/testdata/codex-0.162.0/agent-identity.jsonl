@@ -1,0 +1,2 @@
+{"type":"session_meta","payload":{"id":"01a12a13-b3e8-78d3-9586-65055d99f541","agent_path":"/root/plan_codex_agent_names","cli_version":"0.162.0"}}
+{"type":"sentinel","payload":"This record is never consumed by the identity adapter."}
