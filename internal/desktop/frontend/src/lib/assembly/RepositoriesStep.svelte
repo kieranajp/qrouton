@@ -45,7 +45,7 @@
 
 <div class="controls">
   <div class="search">
-    <TextField icon="⌕" valueVoice="literal" bind:value={query} />
+    <TextField icon="search" valueVoice="literal" bind:value={query} />
   </div>
   <SegmentedControl {segments} value={owners} multiple onSelect={onOwner} />
   <Button variant="secondary" onclick={onRefresh} disabled={refreshing}

@@ -62,7 +62,7 @@ test("assistant mode replaces RPI marks with a cube escalation action", async ({
       repos: [],
     }),
   );
-  await expect(page.getByRole("button", { name: "Escalate →", exact: true })).toBeVisible();
+  await expect(page.locator(".dialog").getByRole("button", { name: "Escalate", exact: true })).toBeVisible();
 });
 
 test("RPI mode keeps its workflow marks and has no escalation action", async ({ page }) => {

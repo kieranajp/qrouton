@@ -7,7 +7,7 @@ import { record } from "./progress.js";
 import { blocks, folder, last, refusal } from "./steps.js";
 import { loader } from "./ticket.js";
 
-const TICKET_LOADED = "✓ Loaded — session and branch details filled in";
+const TICKET_LOADED = "Loaded — session and branch details filled in";
 const NO_RUNNERS = "No agent was found on your PATH, so there is nothing to run this session with.";
 
 // Long enough that a typed word is one branch preview rather than six.

@@ -10,8 +10,8 @@ const opened = async (page, search = "") => {
 
 const toAgentStep = async (page) => {
   await name(page).fill("thing");
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
-  await page.getByRole("button", { name: "Choose an agent →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
+  await page.getByRole("button", { name: "Choose an agent" }).click();
   await expect(page.getByText("Who runs it, and how?")).toBeVisible();
 };
 
@@ -42,7 +42,7 @@ test("typing the name asks for one branch preview, and for no rules until advanc
   expect(await page.evaluate(() => window.bridge.count("Check"))).toBe(0);
   expect(await page.evaluate(() => window.bridge.count("Preview"))).toBeLessThanOrEqual(settled + 3);
 
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
   await expect.poll(() => page.evaluate(() => window.bridge.count("Check"))).toBe(1);
 });
 

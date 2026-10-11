@@ -51,8 +51,10 @@
 <Dialog
   steps={labels}
   active={wizard.step}
-  secondary={trapped ? undefined : wizard.step ? "← Back" : "Cancel"}
+  secondary={trapped ? undefined : wizard.step ? "Back" : "Cancel"}
+  secondaryIcon={wizard.step ? "back" : undefined}
   primary={primary(wizard.step)}
+  primaryIcon="forward"
   status={footer}
   busy={wizard.creating}
   onSecondary={() => (wizard.step ? wizard.back() : onClose())}

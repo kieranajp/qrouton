@@ -21,7 +21,7 @@ test("saved orgs reach the repositories step without it being rebuilt", async ({
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
   await expect(page.locator(".controls .segment")).toHaveText(["acme"]);
 
   await page.evaluate(() => window.assembly.emit("orgs:changed", ["acme", "other"]));
@@ -36,7 +36,7 @@ test("the base menu shows the default branch before Repositories.Branches answer
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
 
   const base = page.locator(".rows button.base");
   await expect(base).toHaveCount(0);
@@ -60,7 +60,7 @@ test("a failed branches answer still offers the default branch, disabled with a 
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
 
   await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
   await page.locator(".rows button.base").click();
@@ -81,7 +81,7 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
 
   await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
   await page.locator(".rows button.base").click();
@@ -91,8 +91,8 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
   await page.locator(".anchor .menu").getByRole("button", { name: "develop", exact: true }).click();
   await expect(page.locator(".rows button.base")).toHaveText("develop");
 
-  await page.getByRole("button", { name: "Choose an agent →" }).click();
-  await page.getByRole("button", { name: "Create session →" }).click();
+  await page.getByRole("button", { name: "Choose an agent" }).click();
+  await page.getByRole("button", { name: "Create session" }).click();
 
   await expect.poll(() => page.evaluate(() =>
     window.assembly.calls().some(
@@ -109,7 +109,7 @@ test("the base button closes the menu it opened", async ({ page }) => {
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
   await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
 
   const base = page.locator(".rows button.base");
@@ -124,7 +124,7 @@ test("a long branch list scrolls inside a menu that does not move when it lands"
   await page.goto("/tests/assembly.html");
   await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
   await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
-  await page.getByRole("button", { name: "Choose repositories →" }).click();
+  await page.getByRole("button", { name: "Choose repositories" }).click();
   await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
   await page.locator(".rows button.base").click();
 

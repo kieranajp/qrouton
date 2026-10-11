@@ -21,8 +21,8 @@ const REPOS = { field: DRAFT_FIELDS.REPOS, message: "At least one editing repo i
 
 test("each step names itself and its own way forward", () => {
   assert.equal(labels.length, 3);
-  assert.equal(primary(0), "Choose repositories →");
-  assert.equal(primary(last), "Create session →");
+  assert.equal(primary(0), "Choose repositories");
+  assert.equal(primary(last), "Create session");
 });
 
 // Step 1 has nothing on screen to pick a repository with.

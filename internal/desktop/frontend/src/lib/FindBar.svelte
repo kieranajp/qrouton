@@ -1,5 +1,6 @@
 <script>
   import { onMount } from "svelte";
+  import Icon from "./core/Icon.svelte";
 
   /** @type {{query?: string, count?: number, current?: number, field?: HTMLInputElement, onQuery?: (value: string) => void, onPrevious?: () => void, onNext?: () => void, onClose?: () => void}} */
   let {
@@ -38,7 +39,7 @@
 </script>
 
 <div class="find" role="search">
-  <span class="glyph" aria-hidden="true">⌕</span>
+  <span class="glyph"><Icon name="search" /></span>
   <input
     bind:this={field}
     type="text"
@@ -49,10 +50,10 @@
     onkeydown={key} />
   <span class="tally" role="status" aria-live="polite">{tally}</span>
   <button type="button" aria-label="Previous match" title="Previous match" onclick={() => move(onPrevious)}
-    >↑</button>
+    ><Icon name="up" /></button>
   <button type="button" aria-label="Next match" title="Next match" onclick={() => move(onNext)}
-    >↓</button>
-  <button type="button" aria-label="Close find" title="Close find" onclick={onClose}>×</button>
+    ><Icon name="down" /></button>
+  <button type="button" aria-label="Close find" title="Close find" onclick={onClose}><Icon name="close" /></button>
 </div>
 
 <style>
@@ -68,7 +69,6 @@
 
   .glyph {
     color: var(--text-faint);
-    font: var(--machine-md);
   }
 
   input {
@@ -103,6 +103,9 @@
   }
 
   button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
     width: calc(25px * var(--ui-scale));
     height: calc(25px * var(--ui-scale));
     flex: none;

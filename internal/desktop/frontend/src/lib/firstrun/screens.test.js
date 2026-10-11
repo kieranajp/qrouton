@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { back, blocking, caps, last, pip, primary, stepFor, total } from "./screens.js";
+import { back, blocking, caps, icons, last, pip, primary, stepFor, total } from "./screens.js";
 
 test("there are seven screens: three explaining, three asking and one optional", () => {
   assert.equal(total, 7);
@@ -15,17 +15,17 @@ test("there are seven screens: three explaining, three asking and one optional",
 // First run is a gate: there is nowhere to go back to from the first screen.
 test("only the first screen has nothing to go back to", () => {
   assert.equal(back(0), "");
-  for (const step of [1, 2, 3, 4, 5, 6]) assert.equal(back(step), "← Back");
+  for (const step of [1, 2, 3, 4, 5, 6]) assert.equal(back(step), "Back");
 });
 
 test("each screen names its own way forward", () => {
-  assert.equal(primary(0), "Show me →");
-  assert.equal(primary(1), "Next →");
-  assert.equal(primary(2), "Set it up →");
-  assert.equal(primary(3), "Next →");
-  assert.equal(primary(4), "Next →");
-  assert.equal(primary(5), "Next →");
-  assert.equal(primary(last), "Find my repositories →");
+  assert.equal(primary(0), "Show me");
+  assert.equal(primary(1), "Next");
+  assert.equal(primary(2), "Set it up");
+  assert.equal(primary(3), "Next");
+  assert.equal(primary(4), "Next");
+  assert.equal(primary(5), "Next");
+  assert.equal(primary(last), "Find my repositories");
 });
 
 test("the lit pip is the step, and a step outside the seven still lights one", () => {
@@ -36,7 +36,7 @@ test("the lit pip is the step, and a step outside the seven still lights one", (
 });
 
 test("a step outside the seven falls back to the first screen's chrome", () => {
-  assert.equal(primary(9), "Show me →");
+  assert.equal(primary(9), "Show me");
   assert.equal(back(9), "");
 });
 
@@ -70,4 +70,8 @@ test("a refused field returns to the screen that asks it", () => {
   assert.equal(stepFor("thoughts"), 5);
   assert.equal(stepFor("editor"), -1);
   assert.equal(stepFor(), -1);
+});
+
+test("the way forward points forward and the way back points back", () => {
+  assert.deepEqual(icons, { primary: "forward", back: "back" });
 });
