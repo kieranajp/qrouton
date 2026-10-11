@@ -106,7 +106,7 @@ func (w *Windows) Close(id string) error {
 }
 
 // Surfaces answers a session's page on load: the event only fires on a change,
-// and the Agents tab opens before anything is subscribed.
+// and the Overview tab opens before anything is subscribed.
 func (w *Windows) Surfaces(slug string) surfaces { return w.surfacesBySlug(slug) }
 
 func (w *Windows) viewport(owner *sessionState, id string) (*workbench.DocumentViewport, error) {

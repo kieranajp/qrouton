@@ -130,25 +130,29 @@ type AgentTree struct {
 }
 
 type AgentNode struct {
-	ID          string `json:"id"`
-	Run         string `json:"run"`
-	Parent      string `json:"parent"`
-	Root        bool   `json:"root"`
-	Placed      bool   `json:"placed"`
-	Type        string `json:"type"`
+	ID     string `json:"id"`
+	Run    string `json:"run"`
+	Parent string `json:"parent"`
+	Root   bool   `json:"root"`
+	Placed bool   `json:"placed"`
+	Type   string `json:"type"`
+	// Stage is the R, P or I a lead works on, and empty for any other agent.
+	Stage       string `json:"stage"`
 	Description string `json:"description"`
 	State       string `json:"state"`
 	// Reason is the harness's own words for a needs-you or failed state.
-	Reason      string           `json:"reason"`
-	Tool        string           `json:"tool"`
-	Target      string           `json:"target"`
-	Started     time.Time        `json:"started"`
-	Finished    time.Time        `json:"finished"`
-	ToolCount   int              `json:"toolCount"`
-	Tokens      int              `json:"tokens"`
-	LastMessage string           `json:"lastMessage"`
-	Files       []string         `json:"files"`
-	Tools       []AgentToolEvent `json:"tools"`
+	Reason      string    `json:"reason"`
+	Tool        string    `json:"tool"`
+	Target      string    `json:"target"`
+	Started     time.Time `json:"started"`
+	Finished    time.Time `json:"finished"`
+	ToolCount   int       `json:"toolCount"`
+	Tokens      int       `json:"tokens"`
+	LastMessage string    `json:"lastMessage"`
+	Files       []string  `json:"files"`
+	// Documents are the workflow artifacts among Files, inside the session.
+	Documents []Document       `json:"documents"`
+	Tools     []AgentToolEvent `json:"tools"`
 }
 
 type AgentToolEvent struct {

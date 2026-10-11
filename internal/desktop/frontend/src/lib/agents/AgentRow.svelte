@@ -1,19 +1,20 @@
 <script>
   import AgentRow from "./AgentRow.svelte";
-  import { elapsed, isFinished, stateTone, stateWords, tokenLabel, toolLine, typeLabel } from "./tree.js";
+  import { AGENT_STATES } from "../bridge/generated.js";
+  import { elapsed, isFinished, nowLine, stateTone, stateWords, tokenLabel, typeLabel, wroteLine } from "./tree.js";
 
-  /** @type {{branch: import("./tree.js").Branch, depth?: number, now: number, tools?: boolean}} */
-  let { branch, depth = 0, now, tools = true } = $props();
+  /** One subagent: its head line, then what it is doing now and what it wrote.
+   * @type {{branch: import("./tree.js").Branch, now: number, root?: string, tools?: boolean}} */
+  let { branch, now, root = "", tools = true } = $props();
 
   let expanded = $state(false);
-  let showFinished = $state(false);
 
   let node = $derived(branch.node);
   let finished = $derived(isFinished(node.state));
-  let words = $derived(stateWords(node, tools));
   let title = $derived(typeLabel(node.type) || "Agent");
-  let live = $derived(branch.children.filter((child) => !isFinished(child.node.state)));
-  let spent = $derived(branch.children.filter((child) => isFinished(child.node.state)));
+  let words = $derived(stateWords(node, tools));
+  let doing = $derived(nowLine(node, root));
+  let wrote = $derived(wroteLine(node.files));
 
   /** @param {string} stamp */
   const clock = (stamp) => {
@@ -24,168 +25,175 @@
   };
 </script>
 
-<div class="branch">
+<div class="agent" class:finished>
   <button
     type="button"
-    class="row"
-    class:spent={finished}
-    style:padding-left="calc({depth * 16 + 4}px * var(--ui-scale))"
+    class="head"
     aria-label="{title} · {words}"
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}>
-    <span class="dot" style:background="var({stateTone(node.state)})" aria-hidden="true"></span>
+    {#if finished}
+      <span class="mark" class:failed={node.state === AGENT_STATES.FAILED} aria-hidden="true"
+        >{node.state === AGENT_STATES.FAILED ? "✗" : "✓"}</span>
+    {:else}
+      <span class="dot" style:background="var({stateTone(node.state)})" aria-hidden="true"></span>
+    {/if}
     <span class="who">{title}</span>
     {#if node.description}<span class="what">{node.description}</span>{/if}
-    <span class="words">{words}</span>
-    {#if node.tool}
-      <span class="tool">{toolLine(node)}</span>
-    {/if}
-    <span class="meta">{elapsed(node.started, node.finished, now)}</span>
-    {#if node.toolCount}<span class="meta">{node.toolCount} tools</span>{/if}
-    {#if finished && tokenLabel(node.tokens)}<span class="meta">{tokenLabel(node.tokens)}</span>{/if}
+    {#if finished && wrote}<span class="what">wrote {wrote}</span>{/if}
+    <span class="time">{elapsed(node.started, node.finished, now)}</span>
   </button>
 
-  {#if expanded}
-    <div class="detail" style:margin-left="calc({depth * 16 + 20}px * var(--ui-scale))">
-      {#each node.tools ?? [] as event, i (i)}
-        <div class="event" class:failed={event.failed}>
-          <span class="clock">{clock(event.start)}</span>
-          <span>{event.tool}</span>
-          <span class="target">{event.target}</span>
-          {#if event.failed}<span>failed</span>{/if}
-        </div>
-      {/each}
-      {#if node.files?.length}
-        <div class="label">Files written</div>
-        {#each node.files as file (file)}<div class="target">{file}</div>{/each}
+  {#if !finished}
+    <div class="lines">
+      {#if doing}
+        <span class="line"><span class="cue">now</span> {doing}</span>
+      {:else}
+        <span class="line cue">{words}</span>
       {/if}
-      {#if finished && node.reason}<div class="outcome">{node.reason}</div>{/if}
-      {#if finished && node.lastMessage}<div class="message">{node.lastMessage}</div>{/if}
+      {#if wrote}<span class="line"><span class="cue">wrote</span> {wrote}</span>{/if}
     </div>
   {/if}
 
-  {#each live as child (child.node.id)}
-    <AgentRow branch={child} depth={depth + 1} {now} {tools} />
-  {/each}
-
-  {#if spent.length}
-    <button
-      type="button"
-      class="toggle"
-      style:padding-left="calc({(depth + 1) * 16 + 4}px * var(--ui-scale))"
-      aria-expanded={showFinished}
-      onclick={() => (showFinished = !showFinished)}>
-      {spent.length} finished
-    </button>
-    {#if showFinished}
-      {#each spent as child (child.node.id)}
-        <AgentRow branch={child} depth={depth + 1} {now} {tools} />
+  {#if expanded}
+    <div class="detail">
+      {#each node.tools ?? [] as event, i (i)}
+        <div class="event" class:failed={event.failed}>
+          <span class="cue">{clock(event.start)}</span>
+          <span>{nowLine(event, root)}</span>
+          {#if event.failed}<span>failed</span>{/if}
+        </div>
       {/each}
-    {/if}
+      {#if tokenLabel(node.tokens)}<div class="cue">{tokenLabel(node.tokens)}</div>{/if}
+      {#if node.reason}<div class="outcome">{node.reason}</div>{/if}
+      {#if node.lastMessage}<div class="message">{node.lastMessage}</div>{/if}
+    </div>
+  {/if}
+
+  {#if branch.children.length}
+    <div class="children">
+      {#each branch.children as child (child.node.id)}
+        <AgentRow branch={child} {now} {root} {tools} />
+      {/each}
+    </div>
   {/if}
 </div>
 
 <style>
-  .row,
-  .toggle {
+  .agent {
     display: flex;
-    align-items: baseline;
-    gap: calc(8px * var(--ui-scale));
-    width: 100%;
+    flex-direction: column;
+    gap: calc(3px * var(--ui-scale));
     min-width: 0;
-    padding-block: calc(4px * var(--ui-scale));
-    padding-right: calc(4px * var(--ui-scale));
-    border: 0;
-    background: none;
-    color: var(--text-primary);
-    font: var(--machine-xs);
-    text-align: left;
-    cursor: pointer;
   }
 
-  .toggle {
+  .head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    column-gap: calc(8px * var(--ui-scale));
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font: var(--machine-xs);
     color: var(--text-muted);
   }
 
-  .spent .who {
-    color: var(--text-faint);
+  .dot,
+  .mark {
+    flex: none;
+    width: calc(7px * var(--ui-scale));
   }
 
   .dot {
-    flex: none;
-    width: calc(7px * var(--ui-scale));
     height: calc(7px * var(--ui-scale));
+  }
+
+  .mark {
+    color: var(--state-success);
+    line-height: 1;
+  }
+
+  .mark.failed {
+    color: var(--state-failed);
   }
 
   .who {
     flex: none;
+    font: var(--machine-sm);
+    color: var(--text-primary);
   }
 
   .what {
     flex: 1 1 0;
     min-width: 0;
-    color: var(--text-muted);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .words,
-  .meta,
-  .tool {
+  .time {
     flex: none;
-    color: var(--text-muted);
-  }
-
-  .tool {
-    max-width: 40%;
-    min-width: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .target {
-    min-width: 0;
+    margin-left: auto;
     color: var(--text-faint);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
   }
 
+  .finished .head,
+  .finished .who {
+    font: var(--machine-xs);
+    color: var(--text-faint);
+  }
+
+  .lines,
   .detail {
     display: flex;
     flex-direction: column;
-    gap: calc(2px * var(--ui-scale));
-    padding: calc(4px * var(--ui-scale)) calc(8px * var(--ui-scale));
-    border-left: 1px solid var(--border-subtle);
+    padding-left: calc(15px * var(--ui-scale));
     font: var(--machine-xs);
-    color: var(--text-muted);
-  }
-
-  .event {
-    display: flex;
-    gap: calc(8px * var(--ui-scale));
+    color: var(--text-secondary);
     min-width: 0;
   }
 
-  .failed {
-    color: var(--state-failed);
+  .line {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .clock,
-  .label {
+  .cue {
     color: var(--text-faint);
   }
 
-  .outcome,
-  .message {
-    margin-top: calc(4px * var(--ui-scale));
-    color: var(--text-primary);
+  .event.failed {
+    color: var(--state-failed);
+  }
+
+  .outcome {
+    color: var(--state-failed);
   }
 
   .message {
     white-space: pre-wrap;
-    overflow-wrap: anywhere;
+    color: var(--text-muted);
+  }
+
+  .children {
+    display: flex;
+    flex-direction: column;
+    gap: calc(10px * var(--ui-scale));
+    padding: calc(4px * var(--ui-scale)) 0 0 calc(15px * var(--ui-scale));
+  }
+
+  /* Narrow, a subagent's description takes the line under its name. */
+  @container overview (max-width: 27.5rem) {
+    .what {
+      order: 3;
+      flex-basis: 100%;
+      padding-left: calc(15px * var(--ui-scale));
+    }
   }
 </style>

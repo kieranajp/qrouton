@@ -31,17 +31,6 @@
       sticker: "",
     })),
   ]);
-  const repos = [
-    { name: "acme/web", role: "editing", measured: true, commits: 2 },
-    { name: "acme/reference-docs", role: "reference", measured: true, commits: 0 },
-    ...Array.from({ length: 7 }, (_, index) => ({
-      name: `acme/repository-${index}`,
-      role: "editing",
-      measured: true,
-      commits: index,
-    })),
-  ];
-  let added = $state(0);
   let selected = $state("checkout");
   let stickerLabels = $state({ ...DEFAULT_STICKER_LABELS });
 
@@ -69,7 +58,6 @@
   window.sessionRail = {
     rootOnly,
     headline,
-    added: () => added,
     shown: (slug) => (selected = slug),
     rename: (slug, name) => {
       sessions = sessions.map((session) => (session.slug === slug ? { ...session, name } : session));
@@ -88,10 +76,8 @@
   <Rail
     {sessions}
     slug={selected}
-    {repos}
     {stickerLabels}
     onNewSession={() => {}}
-    onAddRepos={() => added++}
     onDismissed={() => {}} />
 </div>
 

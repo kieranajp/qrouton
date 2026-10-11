@@ -203,7 +203,7 @@ func sessionTree(state *sessionState) status.AgentTree {
 	if snapshot.Provider == "" {
 		fallback = manifestRunner(state.root())
 	}
-	return agentTree(snapshot, fallback)
+	return agentTree(snapshot, fallback, state.root())
 }
 
 func manifestRunner(root string) string {
@@ -293,7 +293,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			if state := reg.bySlug(slug); state != nil {
 				return sessionTree(state)
 			}
-			return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)))
+			return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
 		})
 	}
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
@@ -370,7 +370,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	return r.Run()
 }
 
-// agentsWindow opens the session's Agents tab. Adoption may call it again once
+// agentsWindow opens the session's Overview tab. Adoption may call it again once
 // the session is known, which must not leave two.
 type agentsWindow struct {
 	windows *Windows

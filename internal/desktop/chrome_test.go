@@ -55,7 +55,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	if cold := rows["cold"].Summary; cold.Running || cold.Coverage != status.AgentCoverageNone || cold.Attention != status.AgentAttentionNone {
 		t.Fatalf("cold row summary = %+v", cold)
 	}
-	if tree := agentTree(shown.agents.snapshot(), ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage == "" {
+	if tree := agentTree(shown.agents.snapshot(), "", ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage == "" {
 		t.Fatalf("selected tree = %+v", tree)
 	}
 }
@@ -93,7 +93,7 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "cold", Runner: agentProviderCodex}); err != nil {
 		t.Fatal(err)
 	}
-	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir))
+	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir), "")
 	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != fmt.Sprintf(agentCoverageNoTools, tree.ProviderLabel) {
 		t.Fatalf("cold tree = %+v", tree)
 	}
@@ -185,7 +185,7 @@ func (c *chromeClock) advance(by time.Duration) {
 func TestAgentTreeJSONNeverCarriesANullList(t *testing.T) {
 	tracker := newAgentActivity(time.Now)
 	tracker.begin(agentProviderClaude, 1)
-	for _, tree := range []status.AgentTree{agentTree(agentActivitySnapshot{}, ""), agentTree(tracker.snapshot(), "")} {
+	for _, tree := range []status.AgentTree{agentTree(agentActivitySnapshot{}, "", ""), agentTree(tracker.snapshot(), "", "")} {
 		body, err := json.Marshal(tree)
 		if err != nil {
 			t.Fatal(err)
@@ -312,7 +312,7 @@ func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 		if len(fields.Sessions) != 1 || fields.Sessions[0].Activity != step.rail {
 			t.Fatalf("%s: rail rows = %+v, want activity %q", step.name, fields.Sessions, step.rail)
 		}
-		if got := treeRoot(t, agentTree(shown.agents.snapshot(), "")).State; got != step.record {
+		if got := treeRoot(t, agentTree(shown.agents.snapshot(), "", "")).State; got != step.record {
 			t.Fatalf("%s: tree root reads %q while the rail reads %q", step.name, got, step.rail)
 		}
 	}

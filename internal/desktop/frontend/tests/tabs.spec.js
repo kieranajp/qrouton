@@ -16,7 +16,7 @@ test("a badged tab leads with its id in a filled block of its own hue", async ({
   await open(page);
 
   await expect.poll(() => page.evaluate(() => window.labels())).toEqual([
-    { text: "Agents", title: "Agents", badge: "", badgeColour: "" },
+    { text: "Overview", title: "Overview", badge: "", badgeColour: "" },
     { text: "Shell", title: "Shell", badge: "", badgeColour: "" },
     {
       text: "Pane smoke test",
@@ -69,7 +69,7 @@ test("a tab dragged onto another takes the place it was dropped on", async ({ pa
 
   await expect
     .poll(() => titles(page))
-    .toEqual(["Agents", "Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
+    .toEqual(["Overview", "Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
 });
 
 test("the middle mouse button closes a tab", async ({ page }) => {
@@ -77,12 +77,12 @@ test("the middle mouse button closes a tab", async ({ page }) => {
 
   await page.locator(".tab").nth(2).click({ button: "middle" });
 
-  await expect.poll(() => titles(page)).toEqual(["Agents", "Shell", "Pane selection", "◆ Findings"]);
+  await expect.poll(() => titles(page)).toEqual(["Overview", "Shell", "Pane selection", "◆ Findings"]);
 });
 
-test("the pinned Agents tab cannot be closed or moved", async ({ page }) => {
+test("the pinned Overview tab cannot be closed or moved", async ({ page }) => {
   await open(page);
-  const agents = page.locator('.tab[title="Agents"]');
+  const agents = page.locator('.tab[title="Overview"]');
 
   await expect(agents.getByRole("button", { name: "Close tab" })).toHaveCount(0);
   await expect(agents).toHaveAttribute("draggable", "false");
@@ -91,5 +91,27 @@ test("the pinned Agents tab cannot be closed or moved", async ({ page }) => {
 
   await expect
     .poll(() => titles(page))
-    .toEqual(["Agents", "Shell", "Pane smoke test", "Pane selection", "◆ Findings"]);
+    .toEqual(["Overview", "Shell", "Pane smoke test", "Pane selection", "◆ Findings"]);
+});
+
+// The Overview is the session's home, not a document: sized to its label,
+// named in caps, and closed off from the other tabs by a heavier divider.
+test("the Overview tab gets its own treatment", async ({ page }) => {
+  await open(page);
+  const home = page.locator('.tab[title="Overview"]');
+  const style = await home.evaluate((el) => {
+    const tab = getComputedStyle(el);
+    const label = getComputedStyle(el.querySelector(".label"));
+    return {
+      grow: tab.flexGrow,
+      divider: tab.borderRightWidth,
+      caps: label.textTransform,
+      glyph: Boolean(el.querySelector(".glyph")),
+      width: el.getBoundingClientRect().width,
+    };
+  });
+  expect(style).toMatchObject({ grow: "0", divider: "3px", caps: "uppercase", glyph: true });
+  const shell = await page.locator('.tab[title="Shell"]').evaluate((el) => getComputedStyle(el).borderRightWidth);
+  expect(shell).toBe("1px");
+  expect(style.width).toBeLessThan(140);
 });

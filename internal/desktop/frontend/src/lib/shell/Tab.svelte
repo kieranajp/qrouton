@@ -61,6 +61,7 @@
 
 <div
   class="tab"
+  class:home={pinned}
   class:selected
   class:dragging
   class:over
@@ -74,6 +75,7 @@
   onauxclick={auxiliary}
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
+    {#if pinned}<span class="glyph" aria-hidden="true"></span>{/if}
     {#if status}<StatusDot state={status} size={7} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
     <span class="label">{label}</span>
@@ -148,5 +150,37 @@
   .close {
     font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
+  }
+
+  /* The session's home: sized to its label, set off from the tabs that come
+     and go by a heavier divider, and named in the caps-label voice. */
+  .home {
+    flex: none;
+    max-width: none;
+    padding: 0 calc(16px * var(--ui-scale));
+    border-right: calc(3px * var(--ui-scale)) solid var(--border-default);
+    background: var(--surface-app);
+  }
+
+  .home.selected {
+    background: var(--wash-selected);
+  }
+
+  .home .label {
+    font: var(--instruction);
+    letter-spacing: var(--instruction-tracking);
+    text-transform: uppercase;
+  }
+
+  .glyph {
+    flex: none;
+    width: calc(10px * var(--ui-scale));
+    height: calc(10px * var(--ui-scale));
+    box-shadow: inset 0 0 0 1.5px currentColor;
+    color: var(--text-muted);
+  }
+
+  .home.selected .glyph {
+    color: var(--text-primary);
   }
 </style>

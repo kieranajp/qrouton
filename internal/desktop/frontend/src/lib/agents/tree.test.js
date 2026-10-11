@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel } from "./tree.js";
+import { buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -109,4 +109,34 @@ test("only a runner reporting its tool calls can be thinking", () => {
   assert.equal(stateWords({ state: "working", tool: "" }, true), "thinking");
   assert.equal(stateWords({ state: "working", tool: "" }, false), "working");
   assert.equal(stateWords({ state: "working", tool: "Bash" }, false), "working");
+});
+
+const lead = (id, stage, started, state = "done", run = "1") => ({
+  id, run, parent: "root", root: false, placed: true, type: "", stage, description: "", state, reason: "",
+  tool: "", target: "", started, finished: "", toolCount: 0, tokens: 0, lastMessage: "", files: [], tools: [],
+});
+
+test("the overview lists leads in stage order, then by start, across runs", () => {
+  const root = { ...lead("root", "", "2026-09-01T12:00:00Z", "waiting_agents"), root: true, parent: "" };
+  const { leads } = overview([
+    root,
+    lead("i1", "implement", "2026-09-01T12:30:00Z", "working"),
+    lead("x1", "", "2026-09-01T12:01:00Z"),
+    lead("p1", "plan", "2026-09-01T12:20:00Z"),
+    lead("r2", "research", "2026-09-01T12:10:00Z"),
+    lead("r1", "research", "2026-09-01T11:00:00Z", "done", "0"),
+  ]);
+  assert.deepEqual(leads.map((branch) => branch.node.id), ["r1", "r2", "p1", "i1", "x1"]);
+  assert.equal(rootWords(root, leads), "waiting on Implementation");
+  assert.equal(stageName("plan"), "Plan");
+  assert.equal(stageTone("implement"), "IMPLEMENT");
+  assert.equal(stageTone(""), undefined);
+});
+
+test("paths inside the session read from the repository down", () => {
+  assert.equal(sessionPath("/s/x/src/web/a.ts", "/s/x"), "web/a.ts");
+  assert.equal(sessionPath("/s/x/thoughts/p.md", "/s/x"), "thoughts/p.md");
+  assert.equal(sessionPath("/elsewhere/a.ts", "/s/x"), "/elsewhere/a.ts");
+  assert.equal(nowLine({ tool: "Edit", target: "/s/x/src/web/pay.ts" }, "/s/x"), "Edit web/pay.ts");
+  assert.equal(wroteLine(["/s/x/src/web/intent.ts", "/s/x/src/pay/stripe.go"]), "intent.ts, stripe.go");
 });

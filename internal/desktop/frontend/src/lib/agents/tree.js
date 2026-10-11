@@ -1,10 +1,11 @@
-import { AGENT_STATES } from "../bridge/generated.js";
+import { AGENT_STAGES, AGENT_STATES } from "../bridge/generated.js";
 
 /** @typedef {{tool: string, target: string, start: string, end: string, failed: boolean}} AgentTool */
-/** @typedef {{id: string, run: string, parent: string, root: boolean, placed: boolean,
- * type: string, description: string, state: string, reason: string, tool: string, target: string,
- * started: string, finished: string, toolCount: number, tokens: number, lastMessage: string,
- * files: string[], tools: AgentTool[]}} AgentNode */
+/** @typedef {{name: string, path: string, kind: string, id: string}} AgentDocument */
+/** @typedef {{id: string, run: string, parent: string, root: boolean, placed: boolean, type: string, stage?: string,
+ * description: string, state: string, reason: string, tool: string, target: string, started: string, finished: string,
+ * toolCount: number, tokens: number, lastMessage: string, files: string[], documents?: AgentDocument[],
+ * tools: AgentTool[]}} AgentNode */
 /** @typedef {{provider: string, providerLabel: string, coverage: string, tools: boolean, nodes: AgentNode[]}} AgentTree */
 /** @typedef {{node: AgentNode, children: Branch[]}} Branch */
 /** @typedef {{run: string, root: AgentNode | undefined, children: Branch[]}} Run */
@@ -156,3 +157,66 @@ export function typeLabel(type) {
 
 /** @param {{tool?: string, target?: string}} node */
 export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(" ");
+
+/** @type {string[]} */
+const STAGE_ORDER = [AGENT_STAGES.RESEARCH, AGENT_STAGES.PLAN, AGENT_STAGES.IMPLEMENT];
+
+const STAGE_NAMES = {
+  [AGENT_STAGES.RESEARCH]: "Research",
+  [AGENT_STAGES.PLAN]: "Plan",
+  [AGENT_STAGES.IMPLEMENT]: "Implementation",
+};
+
+const STAGE_TONES = {
+  [AGENT_STAGES.RESEARCH]: "RESEARCH",
+  [AGENT_STAGES.PLAN]: "PLAN",
+  [AGENT_STAGES.IMPLEMENT]: "IMPLEMENT",
+};
+
+/** @param {string | undefined} stage */
+export const stageName = (stage) => STAGE_NAMES[stage ?? ""] ?? "";
+
+/** The workflow stage a lead's square wears the tone of, for workflowTone.
+ * @param {string | undefined} stage @returns {"RESEARCH" | "PLAN" | "IMPLEMENT" | undefined} */
+export const stageTone = (stage) => STAGE_TONES[stage ?? ""];
+
+/** @param {Branch} branch */
+const rank = (branch) => {
+  const at = STAGE_ORDER.indexOf(branch.node.stage ?? "");
+  return at < 0 ? STAGE_ORDER.length : at;
+};
+
+/** The root's direct children are its leads, in R → P → I order and then by
+ * start; an earlier run's leads are earlier rows of the same list.
+ * @param {AgentNode[]} nodes @returns {{root: AgentNode | undefined, leads: Branch[]}} */
+export function overview(nodes = []) {
+  const runs = buildRuns(nodes);
+  const leads = runs.flatMap((run) => run.children);
+  leads.sort((a, b) => rank(a) - rank(b) || millis(a.node.started) - millis(b.node.started));
+  return { root: runs[0]?.root, leads };
+}
+
+/** @param {AgentNode} root @param {Branch[]} leads @param {boolean} [tools] */
+export function rootWords(root, leads, tools = true) {
+  if (root.state === AGENT_STATES.WAITING_AGENTS) {
+    const live = leads.find((lead) => !isFinished(lead.node.state) && stageName(lead.node.stage));
+    if (live) return `waiting on ${stageName(live.node.stage)}`;
+  }
+  return stateWords(root, tools);
+}
+
+/** A path inside the session reads from its repository down.
+ * @param {string} path @param {string} [root] */
+export function sessionPath(path, root = "") {
+  if (!root || !path.startsWith(root + "/")) return path;
+  const rest = path.slice(root.length + 1);
+  return rest.startsWith("src/") ? rest.slice(4) : rest;
+}
+
+/** @param {{tool?: string, target?: string}} node @param {string} [root] */
+export function nowLine(node, root = "") {
+  return [node.tool, sessionPath(node.target ?? "", root)].filter(Boolean).join(" ");
+}
+
+/** @param {string[]} files */
+export const wroteLine = (files = []) => files.map((file) => file.split("/").pop()).join(", ");

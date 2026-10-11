@@ -297,6 +297,7 @@ test("empty and selected stickers stay usable at minimum and default rail widths
 });
 
 test("feedback flips above a fully visible row at the bottom of the scrollport", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 420 });
   const list = page.getByLabel("Sessions");
   const row = page.locator(".row").nth(8);
   await row.evaluate((element) => {
@@ -384,7 +385,7 @@ test("the badge carries the row's state", async ({ page }) => {
 
 test("the rail headings all read at one rank, centred", async ({ page }) => {
   const faint = await token(page, "--text-faint");
-  for (const heading of ["Sessions", "This session"]) {
+  for (const heading of ["Sessions"]) {
     const caps = page.locator(".caps", { hasText: heading }).first();
     expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(faint);
     expect(await caps.evaluate((el) => getComputedStyle(el).textAlign)).toBe("center");
@@ -426,17 +427,13 @@ test("provider coverage is textual on the row", async ({ page }) => {
   );
 });
 
-test("reference detail and Add repos stay in the lower detail stack", async ({ page }) => {
-  const detail = page.getByLabel("Selected session details");
-  await expect(detail).toContainText("This session");
-  await expect(detail).toContainText("acme/reference-docs");
-  await expect(detail).toContainText("read-only");
-  await detail.getByRole("button", { name: "Add repos" }).click();
-  await expect.poll(() => page.evaluate(() => window.sessionRail.added())).toBe(1);
+test("the rail holds sessions only; the repositories moved to the Overview", async ({ page }) => {
+  await expect(page.getByLabel("Selected session details")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Add repos" })).toHaveCount(0);
 });
 
 test("the anything-new buttons are cubes that sink when pressed", async ({ page }) => {
-  for (const name of ["New session", "Add repos"]) {
+  for (const name of ["New session"]) {
     const cube = page.getByRole("button", { name });
     const style = await cube.evaluate((el) => {
       const computed = getComputedStyle(el);

@@ -155,7 +155,7 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 
 // openStructural opens a tab the workbench owns rather than the agent. It
 // leaves the selection alone: every caller either selects the tab itself once
-// it has the id, or is the Agents tab, which has nothing to steal
+// it has the id, or is the Overview tab, which has nothing to steal
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	var err error
@@ -470,7 +470,7 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 	return out
 }
 
-// pinned is the Agents tab, which neither the user nor the agent can close or
+// pinned is the Overview tab, which neither the user nor the agent can close or
 // move; only session teardown removes it.
 func pinned(window *agentWindow) bool { return window.opts.Kind == workbench.KindAgents }
 

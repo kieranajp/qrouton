@@ -6,11 +6,11 @@ import { mount } from "svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
 import TabsFixture from "./TabsFixture.svelte";
 
-// One tab of each shape a session holds: the pinned Agents tab, a running
+// One tab of each shape a session holds: the pinned Overview tab, a running
 // shell, a badged plan, a badged research document that must not borrow the
 // plan's colour, and a document with no id to badge with.
 let tabs = [
-  { id: "w0", label: "Agents", kind: "agents", pinned: true },
+  { id: "w0", label: "Overview", kind: "agents", pinned: true },
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
   { id: "w2", label: "Pane smoke test", badge: "P002", artifact: "PLAN", kind: "document" },
   { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document" },

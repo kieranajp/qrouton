@@ -626,7 +626,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the Agents tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	const doc = "thoughts/shared/research/R7-editor-surfaces.md"
 	id, err := windows.OpenDocument(doc)
@@ -766,7 +766,7 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the Agents tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	for range 3 {
 		if _, err := windows.OpenShell(); err != nil {
@@ -2407,7 +2407,7 @@ func TestAWorkbenchWithNoShellCommandRefuses(t *testing.T) {
 	startWorkbench(t, r, term, windows, opts)
 	<-r.opened
 	owner := shownSession(t, reg)
-	waitFor(t, "the Agents tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 
 	if _, err := windows.OpenShell(); !errors.Is(err, ErrNoShellCommand) {
 		t.Fatalf("a shell with nothing to run = %v, want ErrNoShellCommand", err)

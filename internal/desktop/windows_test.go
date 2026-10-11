@@ -1176,7 +1176,7 @@ func openAgents(t *testing.T, w *Windows, owner *sessionState) string {
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
 	if owner.agentsWindow == "" {
-		t.Fatal("the Agents tab did not open")
+		t.Fatal("the Overview tab did not open")
 	}
 	return owner.agentsWindow
 }
@@ -1186,14 +1186,14 @@ func TestAgentsWindowOpensOncePinnedAndFirst(t *testing.T) {
 	owner := w.shown()
 	id := openAgents(t, w, owner)
 	if again := openAgents(t, w, owner); again != id {
-		t.Fatalf("showing the session again opened a second Agents tab %q", again)
+		t.Fatalf("showing the session again opened a second Overview tab %q", again)
 	}
 	tabs := w.Surfaces(owner.slug()).Tabs
 	if len(tabs) != 1 {
-		t.Fatalf("tabs = %+v, want the one Agents tab", tabs)
+		t.Fatalf("tabs = %+v, want the one Overview tab", tabs)
 	}
 	if tab := tabs[0]; tab.Kind != string(workbench.KindAgents) || tab.Label != agentsWindowLabel || !tab.Pinned {
-		t.Fatalf("Agents tab = %+v", tab)
+		t.Fatalf("Overview tab = %+v", tab)
 	}
 }
 
@@ -1205,7 +1205,7 @@ func TestAgentsWindowRefusesClose(t *testing.T) {
 		t.Fatalf("Close = %v, want ErrAgentsWindowPinned", err)
 	}
 	if !w.exists(id) {
-		t.Fatal("a refused close removed the Agents tab")
+		t.Fatal("a refused close removed the Overview tab")
 	}
 }
 
@@ -1215,7 +1215,7 @@ func TestAgentsWindowGoesWithItsSession(t *testing.T) {
 	id := openAgents(t, w, owner)
 	w.stop(owner)
 	if w.exists(id) {
-		t.Fatal("teardown left the Agents tab open")
+		t.Fatal("teardown left the Overview tab open")
 	}
 }
 
@@ -1226,10 +1226,10 @@ func TestAgentsWindowStaysLeftmost(t *testing.T) {
 	docs := openDocuments(t, w, owner, 2)
 
 	if err := w.Reorder(owner.slug(), agents, 2); !errors.Is(err, ErrAgentsWindowPinned) {
-		t.Fatalf("moving the Agents tab = %v, want ErrAgentsWindowPinned", err)
+		t.Fatalf("moving the Overview tab = %v, want ErrAgentsWindowPinned", err)
 	}
 	if err := w.Reorder(owner.slug(), docs[1], 0); !errors.Is(err, ErrAgentsWindowPinned) {
-		t.Fatalf("moving a tab before the Agents tab = %v, want ErrAgentsWindowPinned", err)
+		t.Fatalf("moving a tab before the Overview tab = %v, want ErrAgentsWindowPinned", err)
 	}
 	if err := w.Reorder(owner.slug(), docs[1], 1); err != nil {
 		t.Fatal(err)
@@ -1243,11 +1243,11 @@ func TestAgentsWindowIsTheWorkbenchsToOpen(t *testing.T) {
 	w, _ := testWindows(t)
 	_, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindAgents, Label: "Agents"})
 	if !errors.Is(err, ErrAgentsWindowReserved) {
-		t.Fatalf("an agent opening an Agents tab = %v, want ErrAgentsWindowReserved", err)
+		t.Fatalf("an agent opening an Overview tab = %v, want ErrAgentsWindowReserved", err)
 	}
 }
 
-// A shell is the user's to ask for: the session opens on its Agents tab, + adds
+// A shell is the user's to ask for: the session opens on its Overview tab, + adds
 // a shell, and showing the session again does not bring a closed one back.
 func TestAgentsWindowOpensInPlaceOfAShell(t *testing.T) {
 	r := newFakeRenderer()
@@ -1259,9 +1259,9 @@ func TestAgentsWindowOpensInPlaceOfAShell(t *testing.T) {
 	<-r.opened
 	owner := shownSession(t, reg)
 
-	waitFor(t, "the Agents tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
 	if tab := windows.surfaces(owner).Tabs[0]; tab.Kind != string(workbench.KindAgents) {
-		t.Fatalf("first tab = %+v, want the Agents tab", tab)
+		t.Fatalf("first tab = %+v, want the Overview tab", tab)
 	}
 
 	id, err := windows.OpenShell()

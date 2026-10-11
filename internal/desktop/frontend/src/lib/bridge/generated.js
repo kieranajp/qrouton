@@ -119,6 +119,13 @@ export const AGENT_STATES = Object.freeze({
   ENDED: "ended",
 });
 
+/** @typedef {"research"|"plan"|"implement"} AgentStage */
+export const AGENT_STAGES = Object.freeze({
+  RESEARCH: "research",
+  PLAN: "plan",
+  IMPLEMENT: "implement",
+});
+
 /** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
   PLAN: "PLAN",

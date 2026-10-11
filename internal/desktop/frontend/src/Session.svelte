@@ -62,10 +62,8 @@
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
-      repos={fields.repos}
       stickerLabels={fields.stickerLabels}
       onNewSession={() => (view.requested = true)}
-      onAddRepos={() => (view.added = fields.slug)}
       onDismissed={view.handBack}
       size={view.sidebarSize}
       bind:width={view.railMeasured} />
@@ -158,7 +156,12 @@
             focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else if tab.kind === WINDOW_KINDS.AGENTS}
-          <AgentsPane slug={fields.slug} active={i === view.selected} />
+          <AgentsPane
+            slug={fields.slug}
+            active={i === view.selected}
+            root={fields.root}
+            repos={fields.repos}
+            onAddRepos={() => (view.added = fields.slug)} />
         {:else}
           <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
         {/if}

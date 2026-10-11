@@ -19,6 +19,10 @@ const (
 	fieldSeparator = " "
 	markdownSuffix = ".md"
 
+	StageResearch  = "research"
+	StagePlan      = "plan"
+	StageImplement = "implement"
+
 	researchDir           = "research"
 	plansDir              = "plans"
 	legacyQuestionsSuffix = "-questions.md"

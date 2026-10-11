@@ -231,11 +231,43 @@ func TestTheTreeAndSummarySayWhetherTheRunnerReportsTools(t *testing.T) {
 	} {
 		tracker := newAgentActivity(time.Now)
 		tracker.begin(provider, 1)
-		if got := agentTree(tracker.snapshot(), "").Tools; got != want {
+		if got := agentTree(tracker.snapshot(), "", "").Tools; got != want {
 			t.Errorf("%s tree tools = %v, want %v", provider, got, want)
 		}
 		if got := agentSummary(tracker.snapshot()).Tools; got != want {
 			t.Errorf("%s summary tools = %v, want %v", provider, got, want)
 		}
+	}
+}
+
+// The Overview names each lead's stage, and the workflow documents it wrote
+// inside the session, which it opens from the lead's row.
+func TestTheTreeNamesALeadsStageAndTheDocumentsItWrote(t *testing.T) {
+	root := t.TempDir()
+	tracker := replayed(t, nil)
+	lead := func(hook, tool, id, target string) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
+			e.AgentID, e.AgentType, e.Tool, e.ToolUseID, e.Target = "lead-1", "qrouton-research-lead", tool, id, target
+		})
+	}
+	for i, path := range []string{
+		root + "/thoughts/shared/research/R3-2026-10-11-retry.md",
+		root + "/src/web/notes.md",
+		"/elsewhere/thoughts/shared/plans/P9-other.md",
+	} {
+		id := string(rune('a' + i))
+		tracker.apply(lead(agentevent.HookPreToolUse, "Write", id, path))
+		tracker.apply(lead(agentevent.HookPostToolUse, "Write", id, path))
+	}
+	var node status.AgentNode
+	for _, n := range agentTree(tracker.snapshot(), "", root).Nodes {
+		if n.ID == "lead-1" {
+			node = n
+		}
+	}
+	if node.Stage != status.StageResearch || len(node.Documents) != 1 ||
+		node.Documents[0].ID != "R3" || node.Documents[0].Kind != status.KindResearch ||
+		node.Documents[0].Path != "thoughts/shared/research/R3-2026-10-11-retry.md" {
+		t.Fatalf("lead node = stage %q documents %+v", node.Stage, node.Documents)
 	}
 }

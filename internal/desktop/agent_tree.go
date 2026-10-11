@@ -2,11 +2,13 @@ package desktop
 
 import (
 	"fmt"
+	"path/filepath"
 	"reflect"
 	"sync"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -17,7 +19,7 @@ func (c *Chrome) AgentTree(slug string) status.AgentTree {
 	tree := c.tree
 	c.mu.RUnlock()
 	if tree == nil {
-		return agentTree(agentActivitySnapshot{}, "")
+		return agentTree(agentActivitySnapshot{}, "", "")
 	}
 	return tree(slug)
 }
@@ -28,9 +30,10 @@ func (c *Chrome) answerTrees(tree func(slug string) status.AgentTree) {
 	c.tree = tree
 }
 
-// agentTree is what the Agents pane draws. fallback names the runner a session
-// with no announced run was assembled with.
-func agentTree(snapshot agentActivitySnapshot, fallback string) status.AgentTree {
+// agentTree is what the Overview draws. fallback names the runner a session
+// with no announced run was assembled with, and root is the session's
+// directory, which a written file must be inside to count as its document.
+func agentTree(snapshot agentActivitySnapshot, fallback, root string) status.AgentTree {
 	provider := snapshot.Provider
 	if provider == "" {
 		provider = fallback
@@ -43,11 +46,13 @@ func agentTree(snapshot agentActivitySnapshot, fallback string) status.AgentTree
 	for _, record := range snapshot.Records {
 		node := status.AgentNode{
 			ID: record.ID, Run: record.RunID, Parent: record.ParentID, Root: record.Root,
-			Placed: record.ParentKnown, Type: record.Type, Description: record.Description,
-			State: record.State, Reason: record.Reason, Tool: record.Tool, Target: record.Target,
+			Placed: record.ParentKnown, Type: record.Type, Stage: status.StageOf(record.Type),
+			Description: record.Description,
+			State:       record.State, Reason: record.Reason, Tool: record.Tool, Target: record.Target,
 			Started: record.StartedAt, Finished: record.FinishedAt,
 			ToolCount: record.ToolCount, Tokens: record.Tokens, LastMessage: record.LastMessage,
-			Files: append([]string{}, record.Files...), Tools: make([]status.AgentToolEvent, 0, len(record.Tools)),
+			Files: append([]string{}, record.Files...), Documents: writtenDocuments(root, record.Files),
+			Tools: make([]status.AgentToolEvent, 0, len(record.Tools)),
 		}
 		if node.Root {
 			node.Parent = ""
@@ -60,6 +65,25 @@ func agentTree(snapshot agentActivitySnapshot, fallback string) status.AgentTree
 		tree.Nodes = append(tree.Nodes, node)
 	}
 	return tree
+}
+
+func writtenDocuments(root string, files []string) []status.Document {
+	documents := []status.Document{}
+	if root == "" {
+		return documents
+	}
+	for _, file := range files {
+		rel, inside := sessionpaths.Within(root, file)
+		if !inside {
+			continue
+		}
+		if id := status.ArtifactID(rel); id != "" {
+			documents = append(documents, status.Document{
+				Name: filepath.Base(rel), Path: rel, Kind: status.DocumentKind(rel), ID: id,
+			})
+		}
+	}
+	return documents
 }
 
 func coverageNote(provider string, caps agentCapabilities) string {

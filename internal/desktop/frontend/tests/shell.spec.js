@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 const TABS = [
-  { id: "window-1", label: "Agents", kind: "agents", pinned: true },
+  { id: "window-1", label: "Overview", kind: "agents", pinned: true },
   { id: "window-2", label: "$ shell", kind: "terminal" },
   { id: "window-3", label: "Research", kind: "document" },
 ];
@@ -121,11 +121,11 @@ test("retained terminal queries do not reply while live queries and typing do", 
   ]);
 });
 
-test("an unselected session opens on its leftmost tab, the Agents tab", async ({ page }) => {
+test("an unselected session opens on its leftmost tab, the Overview tab", async ({ page }) => {
   await open(page);
-  await expect(selected(page)).toHaveText("Agents");
-  await expect(page.locator(".human .agents")).toBeVisible();
-  await expect(page.locator('.tab[title="Agents"]').getByRole("button", { name: "Close tab" })).toHaveCount(0);
+  await expect(selected(page)).toHaveText("Overview");
+  await expect(page.locator(".human .overview")).toBeVisible();
+  await expect(page.locator('.tab[title="Overview"]').getByRole("button", { name: "Close tab" })).toHaveCount(0);
 });
 
 test("a click asks Go, and the strip moves when Go answers", async ({ page }) => {
@@ -134,7 +134,7 @@ test("a click asks Go, and the strip moves when Go answers", async ({ page }) =>
   await expect.poll(() => page.evaluate(() => window.shell.selects())).toEqual([
     ["octopus", "window-2"],
   ]);
-  await expect(selected(page)).toHaveText("Agents");
+  await expect(selected(page)).toHaveText("Overview");
 
   await page.evaluate(
     ([tabs]) => window.shell.windows("window-2", tabs),
@@ -150,12 +150,12 @@ test("a refused selection leaves the strip where Go put it", async ({ page }) =>
   await page.evaluate(() => window.shell.refuseSelect(true));
   await page.getByRole("button", { name: "$ shell" }).click();
   await expect.poll(() => page.evaluate(() => window.shell.selects().length)).toBe(1);
-  await expect(selected(page)).toHaveText("Agents");
+  await expect(selected(page)).toHaveText("Overview");
 });
 
 test("a selection naming no open tab selects none of them", async ({ page }) => {
   await open(page, "window-1");
-  await expect(selected(page)).toHaveText("Agents");
+  await expect(selected(page)).toHaveText("Overview");
 
   await page.evaluate(
     ([tabs]) => window.shell.windows("window-9", tabs),
@@ -302,7 +302,7 @@ const agentTree = (target) => ({
 
 // A chrome update or a new tree changes the rows in place: rebuilding them is
 // a visible flicker on every refresh.
-test("the Agents pane keeps its rows through chrome and tree updates", async ({ page }) => {
+test("the Overview keeps its rows through chrome and tree updates", async ({ page }) => {
   await open(page, "window-1");
   await page.evaluate((tree) => window.shell.agentTree(tree), agentTree("sleep 1"));
   const row = page.getByRole("button", { name: /^Explorer/ });
@@ -315,5 +315,5 @@ test("the Agents pane keeps its rows through chrome and tree updates", async ({ 
   await page.evaluate((tree) => window.shell.agentTree(tree), agentTree("sleep 20"));
   await expect(row).toContainText("Bash sleep 20");
   expect(await row.evaluate((el) => el === window.agentRow)).toBe(true);
-  await expect(page.locator(".human .head")).toContainText("Bash sleep 20");
+  await expect(page.locator(".human .orchestrator")).toContainText("Bash sleep 20");
 });

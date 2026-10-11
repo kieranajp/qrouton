@@ -114,20 +114,28 @@ func latest(found []artifact) string {
 	return best.path
 }
 
-// stageLeads names the lead whose run a stage mark pulses for.
-var stageLeads = map[string]func(*Stages){
-	prompts.ResearchLead:       func(s *Stages) { s.Research = true },
-	prompts.PlanningLead:       func(s *Stages) { s.Plan = true },
-	prompts.ImplementationLead: func(s *Stages) { s.Implement = true },
+// stageLeads names the stage each lead works on.
+var stageLeads = map[string]string{
+	prompts.ResearchLead:       StageResearch,
+	prompts.PlanningLead:       StagePlan,
+	prompts.ImplementationLead: StageImplement,
 }
+
+// StageOf is the stage an agent type leads, and empty for any other agent.
+func StageOf(agentType string) string { return stageLeads[agentType] }
 
 // StagesFor is which stage marks have their lead running, given the types of
 // the agents live in the current run.
 func StagesFor(types []string) Stages {
 	var live Stages
 	for _, typ := range types {
-		if mark, ok := stageLeads[typ]; ok {
-			mark(&live)
+		switch StageOf(typ) {
+		case StageResearch:
+			live.Research = true
+		case StagePlan:
+			live.Plan = true
+		case StageImplement:
+			live.Implement = true
 		}
 	}
 	return live
