@@ -82,8 +82,10 @@
   }
 
   .add {
+    align-self: flex-end;
     max-width: calc(200px * var(--ui-scale));
-    padding: 0 calc(3px * var(--ui-scale)) calc(3px * var(--ui-scale)) 0;
+    margin-right: calc(-3px * var(--ui-scale));
+    padding-bottom: calc(3px * var(--ui-scale));
   }
 
   /* Narrow, a repository takes two lines. */

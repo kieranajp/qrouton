@@ -108,6 +108,17 @@ test("this session lists the repositories and adds more", async ({ page }) => {
   await expect.poll(() => page.evaluate(() => window.overviewAdded())).toBe(1);
 });
 
+test("add repos sits on the body column's right edge, wide and narrow", async ({ page }) => {
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const [button, body] = await Promise.all([
+      box(page.getByRole("region", { name: "This session" }).getByRole("button", { name: "Add repos" })),
+      box(page.locator(".session .body")),
+    ]);
+    expect(Math.abs(button.right - body.right)).toBeLessThanOrEqual(1);
+  }
+});
+
 test("narrow, each label heads its tier and finished leads drop their count", async ({ page }) => {
   await open(page, "?narrow");
   const [label, body] = await Promise.all([box(page.locator(".leads .label")), box(page.locator(".leads .body"))]);
