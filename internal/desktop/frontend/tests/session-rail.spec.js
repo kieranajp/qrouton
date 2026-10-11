@@ -492,6 +492,7 @@ test("a row's headline says what its root is doing", async ({ page }) => {
   await expect(attention).toHaveText(/Needs you/);
   await expect(attention).toHaveAttribute("title", "Which branch should I cut from?");
   expect(await attention.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--state-waiting"));
+  await expect(attention.locator("[data-icon]")).toHaveCount(0);
 
   await headline({ state: "your_turn", active: 1 });
   await expect(row().locator(".fact.agents")).toHaveText(/Your turn/);

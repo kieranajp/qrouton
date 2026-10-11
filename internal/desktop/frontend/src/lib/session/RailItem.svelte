@@ -88,8 +88,8 @@
       <div class="facts">
         {#each facts as fact (fact.kind)}
           <span class="fact {fact.kind}" title={fact.title}>
-            {#if fact.kind !== "agents" || fact.active}
-              <Icon name={fact.kind === "attention" ? "waiting" : fact.kind === "unseen" ? "document" : "running"} />
+            {#if fact.kind === "unseen" || (fact.kind === "agents" && fact.active)}
+              <Icon name={fact.kind === "unseen" ? "document" : "running"} />
             {/if}
             {fact.label}
           </span>
