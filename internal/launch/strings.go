@@ -265,6 +265,8 @@ var (
 )
 
 const (
+	ReviewModeStandard            = "standard"
+	ReviewModeAdversarial         = "adversarial"
 	ReviewerSubcommand            = "reviewer"
 	ReviewRequestFlag             = "request"
 	reviewerModelFlag             = "--model"
@@ -284,8 +286,8 @@ const (
 	reviewReportMode              = 0o644
 	reviewWindowPrefix            = "review-"
 	reviewTitlePrefix             = "Independent review "
-	reviewPlaceholderFormat       = "---\nkind: review\ntitle: %s\nplan: %s\n---\n\n# %s\n\nNo completed review has been recorded. This request may be pending, interrupted, or failed.\n\n[Plan](<%s>)\n\nReviewer: %s; model: %s; reasoning: %s.\n\n%s"
+	reviewPlaceholderFormat       = "---\nkind: review\ntitle: %s\nplan: %s\nreview_mode: adversarial\n---\n\n# %s\n\nNo completed review has been recorded. This request may be pending, interrupted, or failed.\n\n[Plan](<%s>)\n\nReview mode: adversarial (independent reviewer).\n\nRequested harness: %s; model: %s; reasoning: %s. Actual runtime harness/model/reasoning: unknown until verified.\n\n%s"
 	reviewRepoFormat              = "- %s (%s): base `%s`, head `%s`\n"
-	reviewTaskFormat              = "Act only as the independent implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata and visible Plan link. Use absolute paths within the session root below for project context. Read its session manifest for reference repositories and read applicable repository instructions. Reference repositories provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nSession root: %s\nPlan: %s\nSpec: %s\nReport: %s\nReviewer: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
+	reviewTaskFormat              = "Act only as the independent adversarial implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata, review_mode: adversarial and visible Plan link. Distinguish requested settings from actual runtime identity; record actual harness/model/reasoning only when known from reliable context and mark unknown values explicitly. Use absolute paths within the session root below for project context. Read its session manifest for reference repositories and read applicable repository instructions. Reference repositories provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nSession root: %s\nPlan: %s\nSpec: %s\nReport: %s\nReview mode: adversarial (independent reviewer)\nRequested harness: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
 	reviewDefaultReasoning        = "provider default"
 )

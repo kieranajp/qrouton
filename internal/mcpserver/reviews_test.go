@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -59,7 +60,7 @@ func TestDisabledReviewToolsCreateNothing(t *testing.T) {
 	host := &fakeHost{}
 	m := newWindowManager(root, testEditor, host)
 	out, err := m.startReview(context.Background(), workbench.Handle{}, startReviewInput{})
-	if err != nil || out.Requested || out.Settings != nil || !strings.Contains(out.Message, "Settings") {
+	if err != nil || out.Requested || out.Mode != launch.ReviewModeStandard || out.Settings != nil || !strings.Contains(out.Message, "standard non-adversarial review") || !strings.Contains(out.Message, "current harness") {
 		t.Fatalf("None = %+v %v", out, err)
 	}
 	entries, _ := os.ReadDir(root)
@@ -68,7 +69,7 @@ func TestDisabledReviewToolsCreateNothing(t *testing.T) {
 	}
 	cs := connectVault(t, host)
 	_, state := callText(t, cs, toolReviewerSettings, struct{}{})
-	if state["enabled"] != false || state["available"] != false {
+	if state["mode"] != launch.ReviewModeStandard || state["enabled"] != false || state["available"] != false || state["settings"] != nil {
 		t.Fatalf("settings = %+v", state)
 	}
 }
@@ -76,7 +77,7 @@ func TestDisabledReviewToolsCreateNothing(t *testing.T) {
 func TestStartReviewReturnsPinnedReportAndRetainedBackgroundTab(t *testing.T) {
 	m, handle, input, host := reviewServerFixture(t)
 	out, err := m.startReview(context.Background(), handle, input)
-	if err != nil || !out.Requested || out.RunID == "" || out.Settings.Model != "chosen" {
+	if err != nil || !out.Requested || out.Mode != launch.ReviewModeAdversarial || out.RunID == "" || out.Settings.Model != "chosen" {
 		t.Fatalf("request = %+v %v", out, err)
 	}
 	if len(host.opens) != 1 {
@@ -87,7 +88,7 @@ func TestStartReviewReturnsPinnedReportAndRetainedBackgroundTab(t *testing.T) {
 		t.Fatalf("window = %+v", opts)
 	}
 	data, err := os.ReadFile(out.ReportPath)
-	if err != nil || !strings.Contains(string(data), "kind: review") || !strings.Contains(string(data), "No completed review") || !strings.Contains(string(data), "../plans/P1.md") {
+	if err != nil || !strings.Contains(string(data), "kind: review") || !strings.Contains(string(data), "review_mode: adversarial") || !strings.Contains(string(data), "No completed review") || !strings.Contains(string(data), "../plans/P1.md") {
 		t.Fatalf("report = %s %v", data, err)
 	}
 }
@@ -136,18 +137,21 @@ func TestReviewDisabledAfterSettingsInspectionPreventsLaunch(t *testing.T) {
 	m, handle, input, host := reviewServerFixture(t)
 	cs := connectVault(t, host)
 	_, state := callText(t, cs, toolReviewerSettings, struct{}{})
-	if state["enabled"] != true || state["available"] != true {
+	if state["mode"] != launch.ReviewModeAdversarial || state["enabled"] != true || state["available"] != true {
 		t.Fatalf("offer settings = %+v", state)
 	}
 	if err := config.Save(&config.Config{}); err != nil {
 		t.Fatal(err)
 	}
 	out, err := m.startReview(context.Background(), handle, input)
-	if err != nil || out.Requested || len(host.opens) != 0 {
+	if err != nil || out.Requested || out.Mode != launch.ReviewModeStandard || out.Settings != nil || !strings.Contains(out.Message, "do not call start_review") || len(host.opens) != 0 {
 		t.Fatalf("disabled = %+v %v", out, err)
 	}
 	if _, err := os.Stat(sessionpaths.ReviewRuns(m.root)); !os.IsNotExist(err) {
 		t.Fatal("disabled allocated run")
+	}
+	if _, err := os.Stat(sessionpaths.Reviews(m.root)); !os.IsNotExist(err) {
+		t.Fatal("disabled allocated report")
 	}
 }
 
@@ -159,12 +163,12 @@ func TestUnavailableReviewerKeepsSavedSelection(t *testing.T) {
 	host := &fakeHost{}
 	cs := connectVault(t, host)
 	_, state := callText(t, cs, toolReviewerSettings, struct{}{})
-	if state["enabled"] != true || state["available"] != false || state["settings"] == nil || state["error"] == "" {
+	if state["mode"] != launch.ReviewModeAdversarial || state["enabled"] != true || state["available"] != false || state["settings"] == nil || state["error"] == "" {
 		t.Fatalf("unavailable = %+v", state)
 	}
 	m := newWindowManager(t.TempDir(), testEditor, host)
 	out, err := m.startReview(context.Background(), workbench.Handle{}, startReviewInput{})
-	if err != nil || out.Requested || out.Settings.Harness != "codex" || out.Error == "" || len(host.opens) != 0 {
+	if err != nil || out.Requested || out.Mode != launch.ReviewModeAdversarial || out.Settings.Harness != "codex" || out.Error == "" || len(host.opens) != 0 {
 		t.Fatalf("unavailable start = %+v %v", out, err)
 	}
 }

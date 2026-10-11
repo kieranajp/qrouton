@@ -20,6 +20,7 @@ type startReviewInput struct {
 }
 
 type startReviewOutput struct {
+	Mode       string           `json:"mode"`
 	Requested  bool             `json:"requested"`
 	RunID      string           `json:"run_id,omitempty"`
 	WindowName string           `json:"window_name,omitempty"`
@@ -62,7 +63,7 @@ func (m *windowManager) startReview(ctx context.Context, handle workbench.Handle
 		return startReviewOutput{}, err
 	}
 	state := launch.ReviewerSettings(cfg)
-	out := startReviewOutput{Settings: state.Settings}
+	out := startReviewOutput{Mode: state.Mode, Settings: state.Settings}
 	if !state.Enabled {
 		out.Message = reviewerDisabledMessage
 		return out, nil

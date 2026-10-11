@@ -149,7 +149,7 @@
     </select>
   </label>
   {#if !reviewer}
-    <span class="reviewer-help">None disables the extra reviewer.</span>
+    <span class="reviewer-help">None uses standard non-adversarial review in the orchestrator’s current harness, without a second reviewer.</span>
     <Button variant="secondary" disabled={!runnersReady} onclick={onConfigureReviewer}>Configure reviewer</Button>
   {:else}
     <TextField label="Reviewer model" aria-label="Reviewer model" bind:value={reviewer.model} valueVoice="literal" help={reviewerRunner?.reviewer?.modelHelp} />
@@ -166,7 +166,7 @@
         <span class="reviewer-help" class:failed={unsupportedReasoning}>{reviewerRunner?.reviewer?.reasoningHelp}</span>
       </label>
     {/if}
-    <span class="reviewer-help">Saving configures future reviews. It does not start a review.</span>
+    <span class="reviewer-help">Saving enables independent adversarial review availability. It does not start a review.</span>
   {/if}
   {#if reviewerError}<span class="reviewer-help failed">{reviewerError}</span>{/if}
 </fieldset>

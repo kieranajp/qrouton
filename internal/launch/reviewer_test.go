@@ -85,7 +85,7 @@ func readReviewRequest(t *testing.T, path string) reviewRequest {
 func TestDisabledReviewerHasNoSideEffects(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{Launch: map[string][]string{"broken": nil}}
-	if state := ReviewerSettings(cfg); state.Enabled || state.Available || state.Settings != nil || state.Error != "" {
+	if state := ReviewerSettings(cfg); state.Mode != ReviewModeStandard || state.Enabled || state.Available || state.Settings != nil || state.Error != "" {
 		t.Fatalf("None = %+v", state)
 	}
 	_, err := PrepareReview(context.Background(), cfg, root, "", workbench.Handle{}, EditorCommand{}, ReviewInput{})
@@ -95,6 +95,21 @@ func TestDisabledReviewerHasNoSideEffects(t *testing.T) {
 	entries, err := os.ReadDir(root)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("disabled wrote artifacts: %v %v", entries, err)
+	}
+}
+
+func TestReviewerModeRetainsUnavailableIndependentSelection(t *testing.T) {
+	installedReviewRunners(t)
+	cfg := &config.Config{Reviewer: &config.Reviewer{Harness: "codex", Model: "model", Reasoning: "medium"}}
+	state := ReviewerSettings(cfg)
+	if state.Mode != ReviewModeAdversarial || !state.Enabled || !state.Available || state.Error != "" {
+		t.Fatalf("available = %+v", state)
+	}
+	findExecutable = exec.LookPath
+	cfg.Launch = map[string][]string{"codex": {"/missing/codex"}}
+	state = ReviewerSettings(cfg)
+	if state.Mode != ReviewModeAdversarial || !state.Enabled || state.Available || state.Settings == nil || state.Settings.Harness != "codex" || state.Error == "" {
+		t.Fatalf("unavailable = %+v", state)
 	}
 }
 
@@ -128,7 +143,10 @@ func TestPrepareReviewPinsCommitsAndResolvesSharedPlan(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			var metadata struct{ Kind, Title, Plan string }
+			var metadata struct {
+				Kind, Title, Plan string
+				Mode              string `yaml:"review_mode"`
+			}
 			parts := strings.SplitN(string(raw), "---", 3)
 			if len(parts) != 3 {
 				t.Fatal("missing frontmatter")
@@ -137,11 +155,21 @@ func TestPrepareReviewPinsCommitsAndResolvesSharedPlan(t *testing.T) {
 				t.Fatal(err)
 			}
 			actual, err := filepath.EvalSymlinks(filepath.Join(filepath.Dir(prepared.ReportPath), metadata.Plan))
-			if err != nil || actual != request.Plan || metadata.Kind != "review" || metadata.Title == "" {
+			if err != nil || actual != request.Plan || metadata.Kind != "review" || metadata.Title == "" || metadata.Mode != ReviewModeAdversarial {
 				t.Fatalf("invalid plan reference: %+v %q %v", metadata, actual, err)
 			}
 			if !strings.Contains(string(raw), "[Plan](<"+metadata.Plan+">)") || !strings.Contains(string(raw), "No completed review has been recorded") {
 				t.Fatalf("untruthful placeholder: %s", raw)
+			}
+			for _, phrase := range []string{"adversarial (independent reviewer)", "Requested harness: codex; model: model; reasoning: medium", "Actual runtime harness/model/reasoning: unknown until verified"} {
+				if !strings.Contains(string(raw), phrase) {
+					t.Errorf("placeholder lacks %q", phrase)
+				}
+			}
+			for _, phrase := range []string{"review_mode: adversarial", "Distinguish requested settings from actual runtime identity", "mark unknown values explicitly", "Requested harness: codex; model: model; reasoning: medium"} {
+				if !strings.Contains(request.Task, phrase) {
+					t.Errorf("task lacks %q", phrase)
+				}
 			}
 			if prepared.Window.Select || prepared.Window.CloseOnExit || prepared.Window.Kind != workbench.KindTerminal || prepared.Window.Cwd != sessionpaths.ReviewRun(root, prepared.RunID) || !slices.Equal(prepared.Window.Command, []string{"/bin/qrouton", "reviewer", "--request", prepared.RequestPath}) {
 				t.Fatalf("window = %+v", prepared.Window)

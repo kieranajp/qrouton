@@ -822,7 +822,7 @@ func TestImplementationReviewerLoadsCanonicalRoleAndRubric(t *testing.T) {
 	if err != nil || body != parsed.body {
 		t.Fatalf("role parity: %v", err)
 	}
-	for _, phrase := range []string{"write only the assigned report", "kind: review", "visible Plan link", "Do not delegate", "pinned base/head commits", "## Correctness", "## Architecture and maintenance", "## Refactor completeness", "## Plan alignment", "## UI and platform behavior", "## Evidence and delivery", "P0", "P3", "new explicit request", "Explicit repository verification requirements take precedence"} {
+	for _, phrase := range []string{"write only the assigned report", "kind: review", "visible Plan link", "Do not delegate", "pinned base/head commits", "review_mode: adversarial", "requested harness/model/reasoning settings separately from actual runtime identity", "mark unknown values explicitly", "## Correctness", "## Architecture and maintenance", "## Refactor completeness", "## Plan alignment", "## UI and platform behavior", "## Evidence and delivery", "P0", "P3", "new explicit request", "Explicit repository verification requirements take precedence"} {
 		if !strings.Contains(body, phrase) {
 			t.Errorf("role lacks %q", phrase)
 		}
@@ -843,7 +843,7 @@ func TestImplementationReviewerLoadsCanonicalRoleAndRubric(t *testing.T) {
 	}
 }
 
-func TestOptionalWholePlanReviewPreservesAuthorizationAndPhasePass(t *testing.T) {
+func TestVisibleWholePlanReviewPreservesAuthorizationAndVerification(t *testing.T) {
 	loader := NewEmbeddedLoader()
 	for _, id := range []ID{Orchestrator, ID("skills/qrouton-implement")} {
 		prompt, err := loader.Load(context.Background(), id)
@@ -851,9 +851,14 @@ func TestOptionalWholePlanReviewPreservesAuthorizationAndPhasePass(t *testing.T)
 			t.Fatal(err)
 		}
 		text := string(prompt.Content)
-		for _, phrase := range []string{"verified whole-plan completion", "`reviewer_settings`", "None", "no independent-review offer or launch", "phase-only", "`start_review`", "prior explicit request", "Declin", "Settings requirement", "unavailable", "Disabling after an offer prevents launch", "no fixes, pushes, PR creation, publication, or monitoring", "separate explicit request", "uncertain open", "verdict"} {
+		for _, phrase := range []string{"verified whole-plan completion", "Research → Plan → Implement", "`reviewer_settings`", "None", "standard non-adversarial review", "adversarial review", "current harness", "phase-only", "`start_review`", "prior explicit request", "Declin", "independent-only request cannot silently become standard review", "unavailable", "Disabling after an offer prevents launch", "no fixes, pushes, PR creation, publication, or monitoring", "separate explicit request", "uncertain open", "verdict", "review_mode: standard", "review_mode: adversarial", "mark unknown values explicitly"} {
 			if !strings.Contains(strings.ToLower(text), strings.ToLower(phrase)) {
 				t.Errorf("%s lacks %q", id, phrase)
+			}
+		}
+		for _, phrase := range []string{"None produces no independent-review offer or launch", "final pass remains required", "Keep the lead's existing independent final pass"} {
+			if strings.Contains(text, phrase) {
+				t.Errorf("%s retains obsolete rule %q", id, phrase)
 			}
 		}
 	}
@@ -861,9 +866,53 @@ func TestOptionalWholePlanReviewPreservesAuthorizationAndPhasePass(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`code-reviewer` for an independent final pass", "writes must be single-threaded", "explicit user consent", "first incomplete phase", "completed commits and reviewed base/head scope", "commits they cover", "unrun manual checks", "Do not start that reviewer yourself"} {
+	for _, phrase := range []string{"do not run a final model review or relabel one as test verification", "Mandatory automated verification, focused failure fixes, and reverification", "writes must be single-threaded", "explicit user consent", "first incomplete phase", "completed commits and pinned implementation base/head scope", "commits they cover", "unrun manual checks", "Do not start that reviewer yourself", "Commit only what you have verified"} {
 		if !strings.Contains(string(lead.Content), phrase) {
 			t.Errorf("lead lacks %q", phrase)
+		}
+	}
+	for _, phrase := range []string{"`code-reviewer`", "final pass remains required", "independent final pass outcome"} {
+		if strings.Contains(string(lead.Content), phrase) {
+			t.Errorf("lead retains hidden review obligation %q", phrase)
+		}
+	}
+}
+
+func TestStandardReviewReferenceSharesRubricAndReportContract(t *testing.T) {
+	ctx := context.Background()
+	prompt, err := NewEmbeddedLoader().Load(ctx, ID("skills/qrouton-implement"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fsPrompt, err := NewFSLoader(os.DirFS(".")).Load(ctx, ID("skills/qrouton-implement"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(prompt.Files) != 1 || prompt.Files[0].Path != "references/review.md" || len(fsPrompt.Files) != 1 || string(prompt.Files[0].Content) != string(fsPrompt.Files[0].Content) {
+		t.Fatal("standard reference missing or embedded/filesystem parity differs")
+	}
+	text := string(prompt.Files[0].Content)
+	for _, phrase := range []string{"non-adversarial review", "Do not delegate", "second model/process", "owner/name", "ownerless legacy entry", "unknown or ambiguous base keys", "rev-parse --verify --end-of-options", "merge-base --all", "exactly one merge base", "before reading", "moving HEAD never extends", "exclusive creation", "open(path, \"x\")", "including thoughts symlinks", "kind: review", "review_mode: standard", "visible Plan link", "pinned base/head commits", "mark unknown values explicitly", "Do not borrow configured independent settings", "unrelated dirty work", "Keep incomplete status if interrupted", "open_file", "unrun checks", "stop"} {
+		if !strings.Contains(text, phrase) {
+			t.Errorf("standard reference lacks %q", phrase)
+		}
+	}
+	rubric, err := os.ReadFile(reviewRubricFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	independent, err := ImplementationReviewer(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, body := range []string{text, independent} {
+		if !strings.Contains(body, string(rubric)) || strings.Contains(body, "{{review-rubric}}") {
+			t.Error("review modes do not share the expanded canonical rubric")
+		}
+		for _, phrase := range []string{"## Changeset proportionality", "unrelated cleanup", "unnecessary abstractions", "duplicated machinery", "generated churn", "avoidable file changes", "Size alone is not a finding", "credible maintenance or review cost", "preserves requirements and verification", "Review findings authorize no fixes, pushes, PR creation, publication, or monitoring"} {
+			if !strings.Contains(body, phrase) {
+				t.Errorf("review mode lacks rubric constraint %q", phrase)
+			}
 		}
 	}
 }

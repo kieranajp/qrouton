@@ -14,6 +14,10 @@ Trace behavior across boundaries, error paths, concurrency, cancellation, loadin
 
 Check responsibilities, dependency direction, state ownership, and the cost of adding the next similar behavior. Apply SOLID and DRY to concrete coupling or repeated facts. Avoid abstractions justified only by superficial similarity. Check stale comments, docs, dependencies, exports, and generated consumers.
 
+## Changeset proportionality
+
+Check whether the changes exceed what the required behavior needs: unrelated cleanup, unnecessary abstractions, duplicated machinery, generated churn, or avoidable file changes. Size alone is not a finding. Identify concrete excess, a credible maintenance or review cost, and a proportionate reduction that preserves requirements and verification. Apply the same evidence bar in standard and adversarial review.
+
 ## Refactor completeness
 
 Follow callers and all renamed or moved consumers. Look for dead paths, orphaned configuration, outdated generators, tests, and documentation. Explain any remaining contract that no longer matches its implementation.

@@ -184,6 +184,7 @@ const model = (page) => page.getByRole("textbox", { name: "Reviewer model" });
 test("reviewer starts at None and unrelated settings saves keep it disabled", async ({ page }) => {
   await page.goto("/tests/settings.html");
   await expect(harness(page)).toHaveValue("");
+  await expect(page.getByText("None uses standard non-adversarial review in the orchestrator’s current harness, without a second reviewer.")).toBeVisible();
   await expect(model(page)).toHaveCount(0);
   await expect(harness(page).locator("option")).toHaveText(["None", "Codex CLI", "Claude Code", "OpenCode"]);
   await page.getByRole("button", { name: "Save" }).click();
@@ -195,10 +196,12 @@ test("explicit configuration drafts preferred Codex values and cancel never save
   await configure(page).click();
   await expect(harness(page)).toHaveValue("codex");
   await expect(model(page)).toHaveValue("gpt-6.1-sol");
+  await expect(page.getByText("Saving enables independent adversarial review availability. It does not start a review.")).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Reviewer reasoning" })).toHaveValue("medium");
   await page.getByRole("button", { name: "Cancel" }).click();
   expect(await page.evaluate(() => window.settingsFixture.saves())).toEqual([]);
   expect(await page.evaluate(() => window.settingsFixture.closed())).toBe(1);
+  expect(await page.evaluate(() => window.settingsFixture.bridgeCalls().filter((name) => /review|launch|open/i.test(name)))).toEqual([]);
 });
 
 test("enabling saves editable reviewer values without changing conversation overrides", async ({ page }) => {
@@ -210,6 +213,7 @@ test("enabling saves editable reviewer values without changing conversation over
   await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().map(({ reviewer, launch }) => ({ reviewer, launch })))).toEqual([
     { reviewer: { harness: "codex", model: "my-model", reasoning: "high" }, launch: "" },
   ]);
+  expect(await page.evaluate(() => window.settingsFixture.bridgeCalls().filter((name) => /review|launch|open/i.test(name)))).toEqual([]);
 });
 
 test("an enabled reviewer loads its saved values and selecting None disables it", async ({ page }) => {

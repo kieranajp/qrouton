@@ -12,6 +12,7 @@ const saves = [];
 const query = new URLSearchParams(location.search);
 let closed = 0;
 const runnerCalls = [];
+const bridgeCalls = [];
 const runners = [
   { id: "codex", label: "Codex CLI", reviewer: { reasoningEditable: true, reasoningHelp: "Editable effort; blank uses the provider default.", modelHelp: "Editable model identifier." } },
   { id: "claude", label: "Claude Code", reviewer: { reasoningValues: ["low", "medium", "high", "xhigh", "max"], reasoningHelp: "Choose a supported effort or the provider default.", modelHelp: "Editable model identifier." } },
@@ -24,10 +25,12 @@ window.settingsFixture = {
   saves: () => [...saves],
   closed: () => closed,
   runnerCalls: () => [...runnerCalls],
+  bridgeCalls: () => [...bridgeCalls],
   announceScale: (percent) => emitWailsEvent(UI_SCALE_EVENT, percent),
 };
 
 window.wailsCall = async (name, input) => {
+  bridgeCalls.push(name);
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith(".Runners")) {
     runnerCalls.push({ name, input });

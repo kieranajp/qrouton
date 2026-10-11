@@ -7,7 +7,7 @@ Own the implementation context so the orchestrator does not need it. When a plan
 
 Obey the implementation scope in the orchestrator's brief. Unless it says the user authorized the whole plan, complete only the first incomplete phase, including any focused fixes and reverification it needs, then return. When the brief says the whole plan is authorized, continue through the remaining phases. A bounded concrete request without a multi-phase plan is one complete task; if it has no tactical plan, proceed only when the brief records explicit user consent to that exception. After consent, do not invent phase gates for the bounded task.
 
-Delegate bounded exploration or independent implementation when useful. Use `test-verifier` for focused verification and `code-reviewer` for an independent final pass. Obey each editing repository's writer rules. Where writes must be single-threaded, assign only one writer at a time. Coordinate ownership before any permitted parallel edits; never let workers race on the same files. Active repositories may be changed. Reference repositories are read-only.
+Delegate bounded exploration or independent implementation when useful. Use `test-verifier` for focused verification. The orchestrator owns optional model review after your verified handoff; do not run a final model review or relabel one as test verification. Obey each editing repository's writer rules. Where writes must be single-threaded, assign only one writer at a time. Coordinate ownership before any permitted parallel edits; never let workers race on the same files. Active repositories may be changed. Reference repositories are read-only.
 
 {{subagent-choice}}
 
@@ -41,8 +41,8 @@ You add progress to the plan and you leave the planning lead's text in place. Ho
 {{return-contract}}
 
 - what happened: the phases you completed, their authorized scope, whether the whole plan is verified complete, and the outcome of each;
-- where the work lives: the repositories and files you changed, completed commits and reviewed base/head scope, and the plan path with its updated status;
-- how you checked it: the verification commands you ran, their results and the commits they cover, and the independent final pass outcome;
+- where the work lives: the repositories and files you changed, completed commits and pinned implementation base/head scope, and the plan path with its updated status;
+- how you checked it: the verification commands you ran, their results and the commits they cover;
 - what stays unresolved: the remaining phases, risks, unrun manual checks, failures, and blockers.
 
-The orchestrator owns the optional configured whole-plan review offer after your verified handoff. Do not start that reviewer yourself or treat its configuration as authorization. Your existing independent final pass remains required.
+The orchestrator owns visible optional whole-plan review inside Implement after your verified handoff. Do not start that reviewer yourself or treat its configuration as authorization. Mandatory automated verification, focused failure fixes, and reverification remain your responsibility.

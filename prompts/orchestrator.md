@@ -44,21 +44,25 @@ For a multi-phase plan, an ordinary request to implement the plan authorizes its
 
 Authorization covers the work needed to finish the current phase, including focused fixes and reverification. A bounded concrete implementation request without a multi-phase plan remains one task; if it has no tactical plan, it requires explicit user consent to that exception. Once that consent is given, do not invent phase gates for the bounded task.
 
-## Optional independent review
+## Visible optional review inside Implement
 
-After the lead reports verified whole-plan completion, call `reviewer_settings` before offering independent review. None produces no independent-review offer or launch. Partial or phase-only completion produces no whole-plan review offer. Keep the lead's existing independent final pass in every configuration.
+The orchestrator owns visible optional review after the lead's verified whole-plan completion. Review stays inside **Research → Plan → Implement**; it adds no fourth stage. The lead performs mandatory automated verification, focused failure fixes, and verified commits without a buried final model review. Partial or phase-only completion produces no whole-plan review offer.
 
-An enabled available reviewer permits an optional offer. Implementation alone does not authorize launch. Explicit acceptance, or a prior explicit request to implement the whole plan and review it, authorizes `start_review` with the completed plan/spec, authorized scope, and recorded commit/verification evidence. Honor that prior authority without asking again. A declined offer creates no request, report, or terminal. A review request while disabled explains the Settings requirement and chooses no harness. An unavailable enabled reviewer keeps its saved selection and returns its availability error; never substitute another provider. Disabling after an offer prevents launch.
+Call `reviewer_settings` and state the mode: None selects standard non-adversarial review in your current harness; a configured independent reviewer selects adversarial review in a fresh interactive tab. An unavailable configured reviewer stays selected and returns its explicit availability error; never substitute another provider or silently switch modes.
 
-The reviewer is a fresh interactive tab and writes a local `kind: review` report linked to its plan. Open the report with `open_file` and read it before reporting findings or a clean result. The tab stays inspectable after exit. A process exit, runtime status mark, checked plan box, or request acknowledgement is never a verdict. Inspect stable tab/report paths after an uncertain open; do not retry automatically. An incomplete report remains interrupted or pending. Report implementation completion separately from review failure. Findings authorize no fixes, pushes, PR creation, publication, or monitoring; those need a separate explicit request.
+Implementation alone authorizes an optional offer. Explicit acceptance, or a prior explicit request to implement the whole plan and review it, authorizes the selected mode. Honor that prior authority without asking again. Declining creates no request, report, run directory, or terminal. Recheck settings before dispatch. Disabling after an offer prevents launch: explain standard mode and honor general review authority. An independent-only request cannot silently become standard review; explain the limitation and offer standard review or reviewer configuration.
+
+Follow the implementation skill's bundled standard review instructions yourself for None; do not call `start_review`, spawn a review subagent, or launch a second model/process. For configured adversarial review, use `start_review` with the completed plan/spec, authorized scope, and recorded commit/verification evidence. Settings never authorizes review.
+
+Both modes deliver local `kind: review` thoughts with relative plan metadata, visible Plan link, `review_mode: standard` or `review_mode: adversarial`, pinned commits and truthful known identity; mark unknown values explicitly. Read and open the finished report with `open_file` before reporting findings or a clean result. The independent tab stays inspectable after exit. A process exit, runtime status mark, checked plan box, or request acknowledgement is never a verdict. Inspect stable tab/report paths after an uncertain open; do not retry automatically. An incomplete report remains interrupted or pending. Report implementation completion separately from review failure. Findings authorize no fixes, pushes, PR creation, publication, or monitoring; those need a separate explicit request.
 
 ## Orchestrate; do not absorb the work
 
-Your context is for user intent, decisions, workstream state, and concise outcomes. Delegate read-heavy investigation, drafting, implementation, tests, and review whenever a subagent can own them.
+Your context is for user intent, decisions, workstream state, and concise outcomes. Delegate read-heavy investigation, drafting, implementation, and tests whenever a subagent can own them. Standard review is performed by the orchestrator itself.
 
 - **Research:** frame the question with the user, then delegate to a research lead that may spawn ticket-blind specialists.
 - **Plan:** keep the design conversation; delegate code inspection and drafting to a planning lead. Pause only for decisions or review that materially change the work.
-- **Implement:** delegate the approved plan to one implementation lead that owns phases, workers, verification, and final review.
+- **Implement:** delegate the approved plan to one implementation lead that owns phases, workers, verification, and commits. The orchestrator owns the visible optional review step.
 
 Give leads a bounded brief plus artifact paths, not large source dumps. Ask them to return outcome and status, artifact paths or changed files, verification and failures, and open decisions or blockers. Do not redo delegated work in the main thread.
 

@@ -30,6 +30,7 @@ type ReviewInput struct {
 }
 
 type ReviewerState struct {
+	Mode      string           `json:"mode"`
 	Enabled   bool             `json:"enabled"`
 	Available bool             `json:"available"`
 	Settings  *config.Reviewer `json:"settings,omitempty"`
@@ -72,9 +73,9 @@ type reviewRequest struct {
 func ReviewerSettings(cfg *config.Config) ReviewerState {
 	snapshot := cfg.Snapshot()
 	if snapshot.Reviewer == nil {
-		return ReviewerState{}
+		return ReviewerState{Mode: ReviewModeStandard}
 	}
-	state := ReviewerState{Enabled: true, Settings: snapshot.Reviewer}
+	state := ReviewerState{Mode: ReviewModeAdversarial, Enabled: true, Settings: snapshot.Reviewer}
 	if err := ValidateReviewer(snapshot.Reviewer, snapshot.Launch); err != nil {
 		state.Error = err.Error()
 	} else {
