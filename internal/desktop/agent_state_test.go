@@ -333,7 +333,9 @@ func TestAgentStateAFailedAgentCallFailsItsChild(t *testing.T) {
 	}
 }
 
-func TestAgentStateASubagentPermissionClearsOnItsNextTool(t *testing.T) {
+// A permission prompt carrying a child's agent id is the root's to show; the
+// child's next tool call, its permitted one returning, clears it.
+func TestAgentStateAChildsPermissionPromptIsTheRoots(t *testing.T) {
 	sub := func(hook string, fill func(*workbench.AgentEventRequest)) workbench.AgentEventRequest {
 		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
 			e.AgentID, e.AgentType = "c1", "explorer"
@@ -343,17 +345,22 @@ func TestAgentStateASubagentPermissionClearsOnItsNextTool(t *testing.T) {
 		})
 	}
 	tracker := replayed(t, []workbench.AgentEventRequest{
+		claudeEvent(agentevent.HookUserPromptSubmit, nil),
 		sub(agentevent.HookSubagentStart, nil),
-		sub(agentevent.HookNotification, func(e *workbench.AgentEventRequest) {
-			e.NotificationType, e.Message = notificationPermission, "allow Bash?"
-		}),
+		sub(agentevent.HookPreToolUse, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t9" }),
 	})
-	if c := stateOf(t, tracker, "c1"); c.State != agentStateNeedsYou {
-		t.Fatalf("subagent awaiting permission = %+v", c)
+	_, alert := tracker.apply(sub(agentevent.HookNotification, func(e *workbench.AgentEventRequest) {
+		e.NotificationType, e.Message = notificationPermission, "allow Bash?"
+	}))
+	if c := stateOf(t, tracker, "c1"); c.State != agentStateWorking || c.Tool != "Bash" {
+		t.Fatalf("child awaiting permission = %+v, want working in Bash", c)
+	}
+	if root := stateOf(t, tracker, agentRootID); root.State != agentStateNeedsYou || root.Reason != "allow Bash?" || !alert {
+		t.Fatalf("root = %+v, alert %v", root, alert)
 	}
 	tracker.apply(sub(agentevent.HookPostToolUse, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t9" }))
-	if c := stateOf(t, tracker, "c1"); c.State == agentStateNeedsYou {
-		t.Fatalf("a tool call after the permission left the subagent needing you: %+v", c)
+	if got := stateOf(t, tracker, agentRootID).State; got == agentStateNeedsYou {
+		t.Fatal("the permitted call returned and the root still needs the user")
 	}
 }
 

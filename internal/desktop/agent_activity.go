@@ -53,10 +53,11 @@ type agentRecord struct {
 	Tool   string
 	Target string
 
-	// needs is why the agent waits on the user, and needsTool the ask call
-	// whose result clears it. Without one, the agent's next tool call does.
+	// needs is the root's: why the session waits on the user, which agent
+	// asked, and the ask call whose result clears it.
 	needs     string
 	needsTool string
+	needsFrom string
 	needsAt   time.Time
 	// turnEnded and background are the root's: its turn is over, and these
 	// background agents have not reported their outcome yet. Hooks race, so
@@ -269,7 +270,7 @@ func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if root := a.rootLocked(); root != nil {
-		root.needs, root.needsTool = "", ""
+		root.needs, root.needsTool, root.needsFrom = "", "", ""
 	}
 	a.waiting = false
 	a.unread = false

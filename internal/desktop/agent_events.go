@@ -93,6 +93,15 @@ func (a *agentActivity) rootStateLocked() string {
 	return state
 }
 
+// reopenLocked returns a finished agent to work when a newer activation of it
+// starts. History, tokens and the tool count stay.
+func reopenLocked(agent *agentRecord, at time.Time) {
+	if agent.Root || agent.State == agentLive || !at.After(agent.FinishedAt) {
+		return
+	}
+	agent.State, agent.FinishedAt, agent.Outcome, agent.Reason = agentLive, time.Time{}, "", ""
+}
+
 func (a *agentActivity) toolsLocked() bool { return capabilitiesFor(a.provider).Parents }
 
 // displayLocked derives what an agent is doing from what its hooks said: a
@@ -145,25 +154,33 @@ func (a *agentActivity) liveChildLocked(parent *agentRecord) bool {
 	return false
 }
 
-// needsLocked marks an agent as waiting on the user. tool is the ask call whose
-// result answers it, and empty when only the user's next message does.
+// needsLocked puts the root in front of the user. Only the orchestrator talks
+// to the user, so a request any agent raises is the root's to show. tool is
+// the ask call whose result answers it; without one, the asking agent's next
+// tool call does.
 func (a *agentActivity) needsLocked(id, typ, reason, tool string, at time.Time) bool {
-	agent := a.agentLocked(id, typ, at)
-	if agent == nil || agent.State != agentLive {
+	asker := a.agentLocked(id, typ, at)
+	root := a.rootLocked()
+	if asker == nil || root == nil || root.State != agentLive {
 		return false
 	}
 	if reason == "" {
 		reason = agentReasonQuestion
 	}
-	agent.needs, agent.needsTool, agent.needsAt = reason, tool, at
+	root.needs, root.needsTool, root.needsFrom, root.needsAt = reason, tool, asker.ID, at
 	return true
 }
 
-// movedOnLocked clears a wait no ask call answers once the agent calls a tool
-// after it.
-func movedOnLocked(agent *agentRecord, at time.Time) {
-	if agent.needs != "" && agent.needsTool == "" && at.After(agent.needsAt) {
-		agent.needs = ""
+// answeredLocked clears the root's request once the call that asked it
+// returns, or the agent that asked moves on to another tool.
+func (a *agentActivity) answeredLocked(caller *agentRecord, toolUse string, at time.Time) {
+	root := a.rootLocked()
+	if root == nil || root.needs == "" {
+		return
+	}
+	if (root.needsTool != "" && root.needsTool == toolUse) ||
+		(root.needsTool == "" && root.needsFrom == caller.ID && at.After(root.needsAt)) {
+		root.needs, root.needsTool, root.needsFrom = "", "", ""
 	}
 }
 
@@ -182,7 +199,7 @@ func (a *agentActivity) promptLocked(event workbench.AgentEventRequest, at time.
 	}
 	root.promptAt = at
 	root.turnEnded = false
-	root.needs, root.needsTool = "", ""
+	root.needs, root.needsTool, root.needsFrom = "", "", ""
 	return true
 }
 
@@ -196,7 +213,7 @@ func (a *agentActivity) stopLocked(event workbench.AgentEventRequest, at time.Ti
 	}
 	root.stopAt = at
 	root.turnEnded = true
-	root.needs, root.needsTool = "", ""
+	root.needs, root.needsTool, root.needsFrom = "", "", ""
 	root.background = map[string]bool{}
 	for _, id := range event.BackgroundTasks {
 		if child := a.records[a.keyLocked(id, false)]; child == nil || child.Outcome == "" {
@@ -235,7 +252,9 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 	if caller == nil {
 		return false
 	}
-	movedOnLocked(caller, at)
+	if _, seen := a.run.calls[event.ToolUseID]; !seen {
+		a.answeredLocked(caller, "", at)
+	}
 	answered := false
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
@@ -244,6 +263,7 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 				call.Start = at
 			}
 		} else {
+			reopenLocked(caller, at)
 			a.recordCallLocked(caller, agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at})
 		}
 	}
@@ -278,10 +298,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 		return false
 	}
 	failed := event.Hook == agentevent.HookPostToolUseFailure
-	if caller.needsTool != "" && caller.needsTool == event.ToolUseID {
-		caller.needs, caller.needsTool = "", ""
-	}
-	movedOnLocked(caller, at)
+	a.answeredLocked(caller, event.ToolUseID, at)
 	if event.Interrupt && caller.Root && !at.Before(caller.promptAt) {
 		caller.turnEnded, caller.stopAt = true, at
 	}
@@ -322,6 +339,7 @@ func (a *agentActivity) subagentStartLocked(event workbench.AgentEventRequest, a
 		return false
 	}
 	record := a.agentLocked(event.AgentID, event.AgentType, at)
+	reopenLocked(record, at)
 	if at.Before(record.StartedAt) {
 		record.StartedAt = at
 	}
