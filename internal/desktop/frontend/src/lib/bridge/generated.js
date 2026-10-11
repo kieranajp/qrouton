@@ -127,13 +127,14 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
+/** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"|"REVIEW"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
   PLAN: "PLAN",
   SPEC: "SPEC",
   RESEARCH: "RESEARCH",
   NOTE: "NOTE",
   EXPLAINER: "EXPLAINER",
+  REVIEW: "REVIEW",
 });
 
 /** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */

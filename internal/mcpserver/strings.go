@@ -136,3 +136,16 @@ const (
 	vaultOpenedFormat     = "Showing %s (%s) rendered in a pane (the conversation keeps focus)."
 	vaultOpenedSpanFormat = "Showing %s (%s) rendered in a pane, marking %s (the conversation keeps focus)."
 )
+
+const (
+	reviewCloseTimeout       = 2 * time.Second
+	toolReviewerSettings     = "reviewer_settings"
+	toolStartReview          = "start_review"
+	descReviewerSettings     = "Read the optional independent reviewer configuration and availability. None disables review; saved unavailable selections remain explicit. This does not authorize or start review."
+	descStartReview          = "Request a fresh interactive independent reviewer for explicitly authorized committed scope. Requires enabled Settings. Returns stable tab/report references, never a completed verdict; do not retry uncertain opens."
+	reviewerDisabledMessage  = "Independent review is disabled. Configure a reviewer in Settings before requesting review. No harness, report, run directory, or terminal was created."
+	reviewerAvailableMessage = "The configured independent reviewer is available. Configuration does not authorize a launch."
+	reviewRequestedFormat    = "Review requested in background tab %q. Read %s for the durable report; the placeholder is incomplete and this acknowledgement is not a verdict."
+	reviewUncertainFormat    = "Opening review tab %q failed or had an uncertain outcome. Inspect that tab and %s; no automatic retry was made and no completed review is recorded."
+	reviewInterruptedFormat  = "Review request interrupted after opening tab %q. Only that review tab was requested to close; inspect %s and any retained tab. No completed review is recorded."
+)

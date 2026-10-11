@@ -149,3 +149,12 @@ test("a document link resolves against the document holding it", () => {
   assert.equal(documentPath("P006.md#phase-1", from), "thoughts/shared/plans/P006.md");
   assert.equal(documentPath("/AGENTS.md", from), "AGENTS.md");
 });
+
+test("review metadata stays hidden and its body links to the binding plan", () => {
+  const source = "thoughts/shared/reviews/review-x.md";
+  const { body } = render("---\nkind: review\ntitle: Result\nplan: ../plans/P1.md\n---\n\n# Result\n\nNo completed review has been recorded.\n\n[Plan](../plans/P1.md)\n");
+  assert.ok(!body.includes("kind: review"));
+  assert.ok(!body.includes("plan:"));
+  assert.ok(body.includes('href="../plans/P1.md"'));
+  assert.equal(documentPath("../plans/P1.md", source), "thoughts/shared/plans/P1.md");
+});

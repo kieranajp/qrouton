@@ -38,11 +38,12 @@ const (
 	AdmittedDense = "dense_top"
 
 	KindResearch = "research"
+	KindReview   = "review"
 )
 
 var (
-	kinds    = map[string]bool{KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
-	dirKinds = map[string]string{"research": KindResearch, "specs": "spec", "plans": "plan"}
+	kinds    = map[string]bool{KindReview: true, KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
+	dirKinds = map[string]string{"reviews": KindReview, "research": KindResearch, "specs": "spec", "plans": "plan"}
 )
 
 const (

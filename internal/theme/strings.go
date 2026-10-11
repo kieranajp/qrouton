@@ -20,6 +20,7 @@ const (
 	RoleArtifactResearch  = "artifact-research"
 	RoleArtifactNote      = "artifact-note"
 	RoleArtifactExplainer = "artifact-explainer"
+	RoleArtifactReview    = "artifact-review"
 )
 
 const (

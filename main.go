@@ -11,6 +11,7 @@ import (
 	agenteventcmd "github.com/kieranajp/qrouton/cmd/agentevent"
 	mcpcmd "github.com/kieranajp/qrouton/cmd/mcp"
 	modecmd "github.com/kieranajp/qrouton/cmd/mode"
+	reviewercmd "github.com/kieranajp/qrouton/cmd/reviewer"
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -40,7 +41,7 @@ func main() {
 			&cli.StringFlag{Name: ticketFlag, Usage: ticketFlagUsage},
 			&cli.StringFlag{Name: workbenchSpecFlag, Hidden: true},
 		},
-		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command},
+		Commands: []*cli.Command{mcpcmd.Command, agenteventcmd.EventCommand, agentcmd.Command, modecmd.Command, shellcmd.Command, reviewercmd.Command},
 		Action:   open,
 	}
 	if err := app.Run(os.Args); err != nil {

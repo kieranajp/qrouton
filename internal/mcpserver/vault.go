@@ -3,6 +3,9 @@ package mcpserver
 import (
 	"context"
 	"fmt"
+	"github.com/kieranajp/qrouton/internal/launch"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -12,7 +15,7 @@ import (
 
 type searchVaultInput struct {
 	Query string   `json:"query" jsonschema:"What to look for, in plain words"`
-	Kinds []string `json:"kinds,omitempty" jsonschema:"Only these artifact kinds: research, spec, plan, note or dead_end"`
+	Kinds []string `json:"kinds,omitempty" jsonschema:"Only these artifact kinds: research, spec, plan, review, note or dead_end"`
 	Limit int      `json:"limit,omitempty" jsonschema:"Documents to take in fused order; defaults to 5"`
 }
 
@@ -58,6 +61,7 @@ func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.Va
 		span := workbench.LineSpan{Line: input.Line, Through: input.Through}
 		if _, err := windows.open(ctx, vaultWindowName, workbench.WindowOptions{
 			Kind: workbench.KindDocument, Label: ex.Title, Content: ex.Content,
+			Source: currentThoughtsSource(windows.root, ex),
 			Format: workbench.FormatMarkdown, Span: span, Select: resolveForeground(input.Foreground, true),
 		}); err != nil {
 			return "", fmt.Errorf("open thoughts document: %w", err)
@@ -100,4 +104,25 @@ func formatHits(res vault.Result) string {
 		fmt.Fprintf(&b, vaultEvidenceFormat, strings.Join(evidence, vaultEvidenceJoiner), h.FusedRank, h.AdmittedBy, h.Snippet)
 	}
 	return b.String()
+}
+
+func currentThoughtsSource(root string, ex vault.Excerpt) string {
+	_, name, ok := strings.Cut(ex.Ref, ":")
+	if !ok {
+		return ""
+	}
+	name, ok = strings.CutPrefix(name, filepath.Base(root)+"/")
+	if !ok {
+		return ""
+	}
+	source := filepath.Join("thoughts", filepath.FromSlash(name))
+	path, err := launch.ResolveSessionFile(root, source)
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != ex.Content {
+		return ""
+	}
+	return filepath.ToSlash(source)
 }

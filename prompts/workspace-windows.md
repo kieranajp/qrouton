@@ -7,6 +7,8 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `open_file` — show a document, rendered in a pane or in the user's editor. For a finished artifact, use qrouton's `open_file` MCP tool rather than pasting it into chat.
 - `open_assets` — show existing local PNG, JPEG, GIF, WebP, or AVIF images and MP4 or MOV videos in a named gallery, with one prominent current asset and an ordered thumbnail strip. It defaults to the background even under `thoughts/`.
 - `focus_asset(name, index)` — select a gallery and bring its 1-based numbered asset forward without taking keyboard focus. Human thumbnail selection updates the same state.
+- `reviewer_settings` — inspect the saved independent reviewer and its availability. None is disabled and selects no harness.
+- `start_review` — explicitly request an enabled reviewer in a fresh background interactive tab with pinned commits and a local report. The tab keeps output after exit; its acknowledgement and incomplete report are never a verdict. Inspect the stable tab/report paths after an uncertain open; do not retry automatically.
 - `run_command` — run work the user would want to watch (test suites, builds, servers, watchers, logs) in a tab instead of your own shell, whenever the output is the point.
 - `read_window` — read back what a window has produced. For a gallery, read its numbered paths and current index/count before choosing an entry.
 - `show_diff` — display a repo's changes for review, or every repo's at once.

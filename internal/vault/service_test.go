@@ -345,3 +345,31 @@ func TestAWindowThatKeepsFailingIsSkipped(t *testing.T) {
 		t.Fatalf("the good window lost its embedding: %+v", res.Hits)
 	}
 }
+
+func TestReviewReportsRefreshAndReadWithoutSemanticIndexing(t *testing.T) {
+	root := t.TempDir()
+	name := "session/shared/reviews/review-x.md"
+	path := filepath.Join(root, name)
+	incomplete := "---\nkind: review\ntitle: Independent review\nplan: ../plans/P1.md\n---\n\n# Review\n\nNo completed review has been recorded.\n\n[Plan](../plans/P1.md)\n"
+	writeFile(t, path, incomplete)
+	writeFile(t, filepath.Join(root, "session/shared/plans/P1.md"), "# Plan\nReview scope.\n")
+	s := newTestService(t, root, &stubEmbedder{down: true})
+	res := search(t, s, Query{Text: "completed review", Kinds: []string{KindReview}})
+	if len(res.Hits) != 1 || res.Hits[0].Kind != KindReview || res.Status.Semantic != StatusUnavailable {
+		t.Fatalf("review hits = %+v", res)
+	}
+	ex, err := s.Read(ReadRequest{Ref: res.Hits[0].Ref, Full: true})
+	if err != nil || ex.Content != incomplete {
+		t.Fatalf("placeholder read = %+v %v", ex, err)
+	}
+	completed := strings.Replace(incomplete, "No completed review has been recorded.", "No material findings. Verified pinned commits.", 1)
+	writeFile(t, path, completed)
+	res = search(t, s, Query{Text: "verified pinned commits", Kinds: []string{KindReview}})
+	if len(res.Hits) != 1 {
+		t.Fatalf("completed hits = %+v", res)
+	}
+	ex, err = s.Read(ReadRequest{Ref: res.Hits[0].Ref, Full: true})
+	if err != nil || ex.Content != completed || !strings.Contains(ex.Content, "plan: ../plans/P1.md") {
+		t.Fatalf("completed read = %+v %v", ex, err)
+	}
+}

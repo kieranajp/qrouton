@@ -21,6 +21,7 @@ var embeddedPromptIDs = []string{
 	"agents/code-reviewer",
 	"agents/codebase-researcher",
 	"agents/external-researcher",
+	"agents/implementation-reviewer",
 	"agents/pattern-finder",
 	"agents/qrouton-implementation-lead",
 	"agents/qrouton-planning-lead",
@@ -805,5 +806,39 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 	}
 	if sections[2].Name != "Open Questions" || sections[2].State != markdown.SectionEmpty {
 		t.Errorf("the closing section reads as %#v", sections[2])
+	}
+}
+
+func TestImplementationReviewerLoadsCanonicalRoleAndRubric(t *testing.T) {
+	body, err := ImplementationReviewer(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	fsPrompt, err := NewFSLoader(os.DirFS(".")).Load(context.Background(), ID("agents/implementation-reviewer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsed, err := parseAgentPrompt(fsPrompt.Content)
+	if err != nil || body != parsed.body {
+		t.Fatalf("role parity: %v", err)
+	}
+	for _, phrase := range []string{"write only the assigned report", "kind: review", "visible Plan link", "Do not delegate", "pinned base/head commits", "## Correctness", "## Architecture and maintenance", "## Refactor completeness", "## Plan alignment", "## UI and platform behavior", "## Evidence and delivery", "P0", "P3", "new explicit request", "Explicit repository verification requirements take precedence"} {
+		if !strings.Contains(body, phrase) {
+			t.Errorf("role lacks %q", phrase)
+		}
+	}
+	phase, err := NewEmbeddedLoader().Load(context.Background(), ID("agents/code-reviewer"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rubric, err := os.ReadFile(reviewRubricFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(phase.Content), string(rubric)) || !strings.Contains(body, string(rubric)) {
+		t.Fatal("reviewers do not share canonical rubric")
+	}
+	if !readOnlyAgents["code-reviewer"] || workspaceWriteAgents["code-reviewer"] || !workspaceWriteAgents["implementation-reviewer"] {
+		t.Fatal("reviewer permission boundary changed")
 	}
 }

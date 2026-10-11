@@ -59,10 +59,12 @@ type runnerSpec struct {
 	Inject func(argv []string, c injectContext) (outArgv, env []string, err error)
 	// Hooks are the agent-event hooks Inject wires, which is everything the
 	// workbench can learn about the runner's agents.
-	Hooks           []string
-	Reviewer        ReviewerCapabilities
-	ReviewOverrides reviewerOverridePolicy
-	ValidateModel   func(string) bool
+	Hooks             []string
+	Reviewer          ReviewerCapabilities
+	ReviewOverrides   reviewerOverridePolicy
+	ValidateModel     func(string) bool
+	ReviewArgs        func([]string, config.Reviewer, string) []string
+	ReviewOpeningRole bool
 }
 
 type injectContext struct {
@@ -71,6 +73,9 @@ type injectContext struct {
 	handle     workbench.Handle
 	mcpArgs    []string
 	generation uint64
+	reviewer   bool
+	reviewHome string
+	reviewRole string
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -94,6 +99,7 @@ var runnerSpecs = []runnerSpec{
 		MCP:             claudeMCP,
 		Inject:          injectClaude,
 		Hooks:           claudeHooks,
+		ReviewArgs:      reviewClaudeArgs,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
@@ -104,6 +110,7 @@ var runnerSpecs = []runnerSpec{
 		Prompt:          promptAsArgument,
 		MCP:             codexMCP,
 		Inject:          injectCodex,
+		ReviewArgs:      reviewCodexArgs,
 		Hooks:           []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
 	},
 	{
@@ -114,21 +121,24 @@ var runnerSpecs = []runnerSpec{
 			provider, name, ok := strings.Cut(model, "/")
 			return ok && strings.TrimSpace(provider) != "" && strings.TrimSpace(name) != ""
 		},
-		Command: []string{runnerIDOpenCode, openCodeAutoFlag},
-		Resume:  resumeWith(claudeContinueFlag),
-		Prompt:  promptBehindFlag(openCodePromptFlag),
-		MCP:     openCodeMCP,
-		Inject:  injectOpenCode,
+		Command:    []string{runnerIDOpenCode, openCodeAutoFlag},
+		Resume:     resumeWith(claudeContinueFlag),
+		Prompt:     promptBehindFlag(openCodePromptFlag),
+		MCP:        openCodeMCP,
+		Inject:     injectOpenCode,
+		ReviewArgs: reviewOpenCodeArgs,
 	},
 	{
 		ID: runnerIDAgy, Label: runnerLabelAgy,
-		Reviewer:        ReviewerCapabilities{ReasoningValues: agyReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
-		ReviewOverrides: agyReviewerOverrides,
-		Command:         []string{runnerIDAgy, agySkipPermissionsFlag},
-		Resume:          resumeWith(agyContinueFlag),
-		Prompt:          promptBehindFlag(agyPromptInteractiveFlag),
-		MCP:             agyMCP,
-		Inject:          injectAgy,
+		Reviewer:          ReviewerCapabilities{ReasoningValues: agyReviewerEfforts, ReasoningHelp: reviewerDefaultReasoningHelp, ModelHelp: reviewerModelHelp},
+		ReviewOverrides:   agyReviewerOverrides,
+		Command:           []string{runnerIDAgy, agySkipPermissionsFlag},
+		Resume:            resumeWith(agyContinueFlag),
+		Prompt:            promptBehindFlag(agyPromptInteractiveFlag),
+		MCP:               agyMCP,
+		Inject:            injectAgy,
+		ReviewArgs:        reviewAgyArgs,
+		ReviewOpeningRole: true,
 	},
 }
 
@@ -351,10 +361,13 @@ func injectClaude(argv []string, c injectContext) ([]string, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if name := sessionName(c.dir); name != "" {
+	if name := sessionName(c.dir); name != "" && !c.reviewer {
 		argv = append(argv, claudeNameFlag, name)
 	}
 	argv = append(argv, mcp.Args...)
+	if c.reviewer {
+		return argv, workbench.WithEnv(reviewerEnv(), claudeMaintainProjectWorkingDirEnvVar, claudeMaintainProjectWorkingDirValue), nil
+	}
 	hookCommand := ShellQuote(c.qroutonBin) + " " + AgentEventSubcommand +
 		" " + workbenchJSONFlag + " " + ShellQuote(c.handle.Marshal()) +
 		" " + generationFlag + " " + fmt.Sprint(c.generation) +
@@ -378,6 +391,9 @@ func injectCodex(argv []string, c injectContext) ([]string, []string, error) {
 		return nil, nil, err
 	}
 	argv = append(argv, mcp.Args...)
+	if c.reviewer {
+		return argv, reviewerEnv(), nil
+	}
 	// Codex defaults to one level of nesting, which is a lead that cannot spawn
 	// the specialists qrouton's topology has it delegate to. Raise it, unless
 	// the user's own command already asks for at least as much.
@@ -422,7 +438,26 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 	if err != nil {
 		return nil, nil, err
 	}
-	return argv, workbench.WithEnv(os.Environ(), openCodeConfigEnvVar, config), nil
+	env := os.Environ()
+	if c.reviewer {
+		var content map[string]any
+		if err := json.Unmarshal([]byte(config), &content); err != nil {
+			return nil, nil, err
+		}
+		agents, _ := content[openCodeAgentsKey].(map[string]any)
+		if agents == nil {
+			agents = map[string]any{}
+		}
+		agents[reviewerAgentName] = map[string]any{openCodeModeKey: openCodePrimaryValue, openCodeAgentPromptKey: c.reviewRole}
+		content[openCodeAgentsKey] = agents
+		raw, err := json.Marshal(content)
+		if err != nil {
+			return nil, nil, err
+		}
+		config = string(raw)
+		env = reviewerEnv()
+	}
+	return argv, workbench.WithEnv(env, openCodeConfigEnvVar, config), nil
 }
 
 // injectAgy moves agy's whole configuration root into the session, because a
@@ -431,6 +466,9 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 // their model, their history and their trusted workspaces still apply.
 func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 	home := sessionpaths.AgyHome(c.dir)
+	if c.reviewer {
+		home = c.reviewHome
+	}
 	config := filepath.Join(home, agyMCPConfigPath())
 	if err := os.MkdirAll(filepath.Dir(config), dirMode); err != nil {
 		return nil, nil, err
@@ -445,7 +483,11 @@ func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 	if err := os.WriteFile(config, []byte(content), configMode); err != nil {
 		return nil, nil, err
 	}
-	return append(argv, agyGeminiDirFlag, home), os.Environ(), nil
+	env := os.Environ()
+	if c.reviewer {
+		env = reviewerEnv()
+	}
+	return append(argv, agyGeminiDirFlag, home), env, nil
 }
 
 // linkGeminiRoot links the user's .gemini tree into the session's, entry by
@@ -663,4 +705,40 @@ func openingMessage(mode, provider, initialPrompt string) string {
 		return message + requestSeparator + prompt
 	}
 	return message + fmt.Sprintf(providerRequestSeparator, provider) + prompt
+}
+
+func reviewClaudeArgs(argv []string, settings config.Reviewer, role string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model, claudeAppendSystemFlag, role)
+	if settings.Reasoning != "" {
+		argv = append(argv, reviewerEffortFlag, settings.Reasoning)
+	}
+	return argv
+}
+
+func reviewCodexArgs(argv []string, settings config.Reviewer, role string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model, codex.ConfigFlag, codexDeveloperInstructionsKey+quotedConfigString(role))
+	if settings.Reasoning != "" {
+		argv = append(argv, codex.ConfigFlag, codexReasoningKey+quotedConfigString(settings.Reasoning))
+	}
+	return argv
+}
+
+func reviewOpenCodeArgs(argv []string, settings config.Reviewer, _ string) []string {
+	return append(argv, reviewerModelFlag, settings.Model, reviewerAgentFlag, reviewerAgentName)
+}
+
+func reviewAgyArgs(argv []string, settings config.Reviewer, _ string) []string {
+	argv = append(argv, reviewerModelFlag, settings.Model)
+	if settings.Reasoning != "" {
+		argv = append(argv, reviewerEffortFlag, settings.Reasoning)
+	}
+	return argv
+}
+
+func reviewerEnv() []string {
+	env := os.Environ()
+	for _, key := range []string{agentevent.QroutonBinEnvVar, agentevent.WorkbenchEnvVar, agentevent.GenerationEnvVar, agentevent.ProviderEnvVar} {
+		env = workbench.WithoutEnv(env, key)
+	}
+	return env
 }

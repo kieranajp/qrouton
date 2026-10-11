@@ -462,6 +462,7 @@ var artifactKinds = []struct{ dir, kind, letter string }{
 	{dir: "specs", kind: KindSpec, letter: "s"},
 	{dir: "research", kind: KindResearch, letter: "r"},
 	{dir: "explainers", kind: KindExplainer, letter: "e"},
+	{dir: "reviews", kind: KindReview, letter: "v"},
 }
 
 var kindByDir, kindByLetter, artifactPrefix = indexArtifacts()

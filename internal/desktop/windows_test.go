@@ -1292,3 +1292,31 @@ func TestOverviewWindowOpensInPlaceOfAShell(t *testing.T) {
 		t.Fatalf("showing the session again reopened a shell: %+v", tabs)
 	}
 }
+
+func TestReviewTerminalRetainsExitAndClosesIndependently(t *testing.T) {
+	w, r := testWindows(t)
+	conversation, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "conversation", Command: []string{"/bin/cat"}, Select: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	review, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "review-run", Command: []string{"/bin/sh", "-c", "printf review; exit 0"}, CloseOnExit: false})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.Surfaces(w.shown().slug()).Selected != conversation {
+		t.Fatal("review changed selected conversation")
+	}
+	if err := w.Start(review, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "review exit", func() bool { r.mu.Lock(); defer r.mu.Unlock(); _, ok := r.events[windowExitEvent+review]; return ok })
+	if !w.exists(review) || !w.exists(conversation) {
+		t.Fatal("review exit removed a tab")
+	}
+	if err := w.Close(review); err != nil {
+		t.Fatal(err)
+	}
+	if !w.exists(conversation) || w.exists(review) {
+		t.Fatal("closing review affected conversation")
+	}
+}

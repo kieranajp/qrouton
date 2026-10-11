@@ -7,6 +7,7 @@
     { tag: "SPEC", id: "S1", label: "spec.md" },
     { tag: "RESEARCH", id: "R1", label: "research.md" },
     { tag: "NOTE", label: "note.md" },
+ { tag: "REVIEW", label: "reviews/review-x.md", path: "thoughts/shared/reviews/review-x.md" },
   ];
   const repository = {
     label: "qrouton",

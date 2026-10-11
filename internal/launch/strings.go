@@ -257,3 +257,29 @@ var (
 	// fallbackEditors are tried last, as terminal editors that accept +line.
 	fallbackEditors = []string{"nvim", "vim", "vi"}
 )
+
+const (
+	ReviewerSubcommand            = "reviewer"
+	ReviewRequestFlag             = "request"
+	reviewerModelFlag             = "--model"
+	reviewerEffortFlag            = "--effort"
+	reviewerAgentFlag             = "--agent"
+	claudeAppendSystemFlag        = "--append-system-prompt"
+	codexDeveloperInstructionsKey = "developer_instructions="
+	codexReasoningKey             = "model_reasoning_effort="
+	openCodeAgentsKey             = "agent"
+	openCodeModeKey               = "mode"
+	openCodePrimaryValue          = "primary"
+	openCodeAgentPromptKey        = "prompt"
+	reviewerAgentName             = "qrouton-reviewer"
+	reviewFieldLimit              = 16 << 10
+	reviewPrivateMode             = 0o700
+	reviewRequestMode             = 0o400
+	reviewReportMode              = 0o644
+	reviewWindowPrefix            = "review-"
+	reviewTitlePrefix             = "Independent review "
+	reviewPlaceholderFormat       = "---\nkind: review\ntitle: %s\nplan: %s\n---\n\n# %s\n\nNo completed review has been recorded. This request may be pending, interrupted, or failed.\n\n[Plan](<%s>)\n\nReviewer: %s; model: %s; reasoning: %s.\n\n%s"
+	reviewRepoFormat              = "- %s (%s): base `%s`, head `%s`\n"
+	reviewTaskFormat              = "Act only as the independent implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata and visible Plan link. Read the session manifest for reference repositories, which provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nPlan: %s\nSpec: %s\nReport: %s\nReviewer: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
+	reviewDefaultReasoning        = "provider default"
+)
