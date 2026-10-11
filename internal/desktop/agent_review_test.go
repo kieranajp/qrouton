@@ -222,3 +222,20 @@ func TestAgentStateALeadWaitingOnBackgroundChildrenIsNotDone(t *testing.T) {
 		t.Fatalf("the lead after its last stop = %+v", l)
 	}
 }
+
+// Thinking means between tool calls, which only a runner reporting its tool
+// calls can tell; the page reads that from the tree and the row summary.
+func TestTheTreeAndSummarySayWhetherTheRunnerReportsTools(t *testing.T) {
+	for provider, want := range map[string]bool{
+		agentProviderClaude: true, agentProviderCodex: false, agentProviderOpenCode: false, agentProviderAgy: false,
+	} {
+		tracker := newAgentActivity(time.Now)
+		tracker.begin(provider, 1)
+		if got := agentTree(tracker.snapshot(), "").Tools; got != want {
+			t.Errorf("%s tree tools = %v, want %v", provider, got, want)
+		}
+		if got := agentSummary(tracker.snapshot()).Tools; got != want {
+			t.Errorf("%s summary tools = %v, want %v", provider, got, want)
+		}
+	}
+}

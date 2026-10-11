@@ -214,6 +214,7 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 		Active:    snapshot.Active,
 		Coverage:  status.AgentCoverageNone,
 		Running:   snapshot.Running,
+		Tools:     snapshot.Capabilities.Parents,
 	}
 	if !snapshot.Running {
 		return summary

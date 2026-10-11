@@ -2,15 +2,15 @@
   import AgentRow from "./AgentRow.svelte";
   import { elapsed, isFinished, stateTone, stateWords, tokenLabel, toolLine, typeLabel } from "./tree.js";
 
-  /** @type {{branch: import("./tree.js").Branch, depth?: number, now: number}} */
-  let { branch, depth = 0, now } = $props();
+  /** @type {{branch: import("./tree.js").Branch, depth?: number, now: number, tools?: boolean}} */
+  let { branch, depth = 0, now, tools = true } = $props();
 
   let expanded = $state(false);
   let showFinished = $state(false);
 
   let node = $derived(branch.node);
   let finished = $derived(isFinished(node.state));
-  let words = $derived(stateWords(node));
+  let words = $derived(stateWords(node, tools));
   let title = $derived(typeLabel(node.type) || "Agent");
   let live = $derived(branch.children.filter((child) => !isFinished(child.node.state)));
   let spent = $derived(branch.children.filter((child) => isFinished(child.node.state)));
@@ -65,7 +65,7 @@
   {/if}
 
   {#each live as child (child.node.id)}
-    <AgentRow branch={child} depth={depth + 1} {now} />
+    <AgentRow branch={child} depth={depth + 1} {now} {tools} />
   {/each}
 
   {#if spent.length}
@@ -79,7 +79,7 @@
     </button>
     {#if showFinished}
       {#each spent as child (child.node.id)}
-        <AgentRow branch={child} depth={depth + 1} {now} />
+        <AgentRow branch={child} depth={depth + 1} {now} {tools} />
       {/each}
     {/if}
   {/if}

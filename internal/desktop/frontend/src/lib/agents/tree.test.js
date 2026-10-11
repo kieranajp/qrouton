@@ -104,3 +104,9 @@ test("a tool and its target read as two words", () => {
   assert.equal(toolLine({ tool: "Bash", target: "" }), "Bash");
   assert.equal(toolLine({}), "");
 });
+
+test("only a runner reporting its tool calls can be thinking", () => {
+  assert.equal(stateWords({ state: "working", tool: "" }, true), "thinking");
+  assert.equal(stateWords({ state: "working", tool: "" }, false), "working");
+  assert.equal(stateWords({ state: "working", tool: "Bash" }, false), "working");
+});

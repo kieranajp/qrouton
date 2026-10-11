@@ -37,7 +37,8 @@ func agentTree(snapshot agentActivitySnapshot, fallback string) status.AgentTree
 	}
 	tree := status.AgentTree{
 		Provider: provider, ProviderLabel: launch.RunnerLabel(provider),
-		Coverage: coverageNote(provider, capabilitiesFor(provider)), Nodes: []status.AgentNode{},
+		Coverage: coverageNote(provider, capabilitiesFor(provider)), Tools: capabilitiesFor(provider).Parents,
+		Nodes: []status.AgentNode{},
 	}
 	for _, record := range snapshot.Records {
 		node := status.AgentNode{

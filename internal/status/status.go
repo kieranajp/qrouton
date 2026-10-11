@@ -108,6 +108,7 @@ type AgentSummary struct {
 	Active    int    `json:"active"`
 	Coverage  string `json:"coverage"`
 	Running   bool   `json:"running"`
+	Tools     bool   `json:"tools"`
 	State     string `json:"state"`
 	Reason    string `json:"reason"`
 	Tool      string `json:"tool"`
@@ -121,8 +122,11 @@ type AgentTree struct {
 	ProviderLabel string `json:"providerLabel"`
 	// Coverage says what the runner cannot report, and is empty when it reports
 	// the whole tree.
-	Coverage string      `json:"coverage"`
-	Nodes    []AgentNode `json:"nodes"`
+	Coverage string `json:"coverage"`
+	// Tools means the runner reports its tool calls, so an agent between
+	// them can be told apart from one at work.
+	Tools bool        `json:"tools"`
+	Nodes []AgentNode `json:"nodes"`
 }
 
 type AgentNode struct {

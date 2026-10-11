@@ -73,3 +73,9 @@ test("needs you takes the attention treatment with the reason as its title", () 
     [{ kind: "attention", label: "Needs you", title: "Which branch?" }],
   );
 });
+
+test("a runner without tool hooks reads working, never thinking", () => {
+  assert.deepEqual(summaryFacts({ running: true, coverage: "full", attention: "unknown", state: "working", active: 2, tools: false }), [
+    { kind: "agents", label: "Working · 1 agent", active: true },
+  ]);
+});

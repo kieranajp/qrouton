@@ -1,7 +1,7 @@
 import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_STATES } from "../bridge/generated.js";
 import { stateWords } from "../agents/tree.js";
 
-/** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean,
+/** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
  * state?: string, reason?: string, tool?: string, target?: string}} Summary */
 /** @typedef {{kind: string, label: string, active?: boolean, title?: string}} Fact */
 
@@ -30,7 +30,7 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
     const count = summary.coverage === AGENT_COVERAGE.FULL && agents ? ` · ${agents} ${agents === 1 ? "agent" : "agents"}` : "";
     facts.push({
       kind: "agents",
-      label: capital(stateWords({ state, tool: summary.tool })) + count,
+      label: capital(stateWords({ state, tool: summary.tool }, summary.tools ?? true)) + count,
       active: BUSY.includes(state),
     });
   } else if (!state && summary.coverage === AGENT_COVERAGE.FULL) {

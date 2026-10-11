@@ -53,7 +53,7 @@
       <span class="provider">{tree.providerLabel}</span>
       {#if root}
         <span class="dot" style:background="var({stateTone(root.state)})" aria-hidden="true"></span>
-        <span class="words">{stateWords(root)}</span>
+        <span class="words">{stateWords(root, tree.tools)}</span>
         {#if root.reason}<span class="muted">{root.reason}</span>{/if}
         {#if root.tool}
           <span class="muted">{toolLine(root)}</span>
@@ -63,7 +63,7 @@
     {#if tree.coverage}<p class="coverage">{tree.coverage}</p>{/if}
 
     {#each current?.children ?? [] as branch (branch.node.id)}
-      <AgentRow {branch} {now} />
+      <AgentRow {branch} {now} tools={tree.tools} />
     {/each}
 
     {#if previous.length}
@@ -76,7 +76,7 @@
       </button>
       {#if showPrevious}
         {#each previous as run (run.run)}
-          {#if run.root}<AgentRow branch={{ node: run.root, children: run.children }} {now} />{/if}
+          {#if run.root}<AgentRow branch={{ node: run.root, children: run.children }} {now} tools={tree.tools} />{/if}
         {/each}
       {/if}
     {/if}

@@ -5,7 +5,7 @@ import { AGENT_STATES } from "../bridge/generated.js";
  * type: string, description: string, state: string, reason: string, tool: string, target: string,
  * started: string, finished: string, toolCount: number, tokens: number, lastMessage: string,
  * files: string[], tools: AgentTool[]}} AgentNode */
-/** @typedef {{provider: string, providerLabel: string, coverage: string, nodes: AgentNode[]}} AgentTree */
+/** @typedef {{provider: string, providerLabel: string, coverage: string, tools: boolean, nodes: AgentNode[]}} AgentTree */
 /** @typedef {{node: AgentNode, children: Branch[]}} Branch */
 /** @typedef {{run: string, root: AgentNode | undefined, children: Branch[]}} Run */
 
@@ -92,9 +92,10 @@ const WORDS = {
   [AGENT_STATES.ENDED]: "ended with run",
 };
 
-/** @param {{state: string, tool?: string}} node */
-export function stateWords(node) {
-  if (node.state === AGENT_STATES.WORKING) return node.tool ? "working" : "thinking";
+/** Between tool calls is thinking, which only a runner reporting its tool calls can tell.
+ * @param {{state: string, tool?: string}} node @param {boolean} [tools] */
+export function stateWords(node, tools = true) {
+  if (node.state === AGENT_STATES.WORKING) return node.tool || !tools ? "working" : "thinking";
   return WORDS[node.state] ?? node.state;
 }
 
