@@ -57,11 +57,11 @@ func (w *Windows) SaveSpec(id, hash, text string) (string, error) {
 }
 
 func specAnswersLine(source string) []byte {
-	return []byte(fmt.Sprintf(specAnswersInFormat, source) + conversationSubmit)
+	return []byte(pasteStart + fmt.Sprintf(specAnswersInFormat, source) + pasteEnd + conversationSubmit)
 }
 
-// SendSpecAnswers types one fixed line into the spec's conversation, as if the
-// user had. Only the window id comes from the page.
+// SendSpecAnswers pastes one fixed line into the spec's conversation and
+// submits it. Only the window id comes from the page.
 func (w *Windows) SendSpecAnswers(id string) error {
 	var owner *sessionState
 	var source string
