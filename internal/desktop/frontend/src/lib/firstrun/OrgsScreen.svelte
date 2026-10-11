@@ -1,5 +1,6 @@
 <script>
   import Chip from "../core/Chip.svelte";
+  import Icon from "../core/Icon.svelte";
 
   /** @type {{orgs?: string[], orgInput?: string, login?: string, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void}} */
   let {
@@ -31,7 +32,7 @@
   {#each orgs as org (org)}
     <Chip selected>
       {org}
-      <button class="remove" aria-label="Remove {org}" onclick={() => onRemoveOrg?.(org)}>✕</button>
+      <button class="remove" aria-label="Remove {org}" onclick={() => onRemoveOrg?.(org)}><Icon name="close" /></button>
     </Chip>
   {/each}
   <input
@@ -84,6 +85,7 @@
   }
 
   .remove {
+    display: flex;
     border: 0;
     background: transparent;
     padding: 0;

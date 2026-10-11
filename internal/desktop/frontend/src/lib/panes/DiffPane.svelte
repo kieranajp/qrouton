@@ -1,5 +1,6 @@
 <script>
   import Button from "../core/Button.svelte";
+  import Icon from "../core/Icon.svelte";
   import "../diff.css";
   import { parsePatch } from "../diff.js";
   import { onDestroy, tick } from "svelte";
@@ -169,6 +170,7 @@
           {#each files as file (file.id)}
             <details class="diff-item" data-file={file.id} open={displayed(file)}>
               <summary onclick={(event) => toggle(event, file.id)}>
+                <span class="diff-disclosure"><Icon name={displayed(file) ? "disclosure-open" : "disclosure-closed"} /></span>
                 <span class="diff-path">{file.path}</span>
                 <span class="diff-status">{file.status}</span>
                 <span class="diff-counts">+{count(file, "additions")} −{count(file, "deletions")}</span>

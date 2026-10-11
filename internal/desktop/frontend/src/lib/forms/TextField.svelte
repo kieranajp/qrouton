@@ -1,5 +1,6 @@
 <script>
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Icon from "../core/Icon.svelte";
 
   const HELP_TONES = {
     muted: "var(--text-muted)",
@@ -28,7 +29,7 @@
   {#if label}<CapsLabel>{label}</CapsLabel>{/if}
   <div class="row">
     <div class="input" class:literal={valueVoice === "literal"}>
-      {#if icon}<span class="icon" aria-hidden="true">{icon}</span>{/if}
+      {#if icon}<span class="icon"><Icon name={icon} /></span>{/if}
       {#if multiline}
         <textarea bind:value {placeholder} {...rest}></textarea>
       {:else}
@@ -37,7 +38,7 @@
     </div>
     {@render trailing?.()}
   </div>
-  {#if help}<span class="help" style:color={HELP_TONES[helpTone]}>{help}{#if helpLiteral}&nbsp;<code
+  {#if help}<span class="help" style:color={HELP_TONES[helpTone]}>{#if helpTone === "success"}<Icon name="succeeded" />{/if}{help}{#if helpLiteral}&nbsp;<code
         >{helpLiteral}</code
       >{/if}</span>{/if}
 </div>
@@ -71,7 +72,6 @@
 
   .icon {
     flex: none;
-    font-size: calc(12px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -107,6 +107,12 @@
   .help {
     font: var(--machine-sm);
     font-size: calc(11px * var(--ui-scale));
+  }
+
+  .help :global(.icon) {
+    display: inline-block;
+    vertical-align: middle;
+    margin: calc(-2px * var(--ui-scale)) calc(5px * var(--ui-scale)) 0 0;
   }
 
   code {

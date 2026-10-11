@@ -259,13 +259,15 @@
             size="sm"
             aria-label="Previous screen"
             disabled={at.current === 0}
-            onclick={() => at.show(at.current - 1)}>←</Button>
+            icon="back"
+            onclick={() => at.show(at.current - 1)} />
           <Button
             variant="ghost"
             size="sm"
             aria-label="Next screen"
             disabled={at.current === plan.slides.length}
-            onclick={() => at.show(at.current + 1)}>→</Button>
+            icon="forward"
+            onclick={() => at.show(at.current + 1)} />
         </div>
       {/if}
     {/snippet}

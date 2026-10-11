@@ -1,5 +1,6 @@
 <script>
   import ArtifactTag from "../core/ArtifactTag.svelte";
+  import Icon from "../core/Icon.svelte";
   import { workflowTone } from "../workflow.js";
   import AgentRow from "./AgentRow.svelte";
   import StageSquare from "./StageSquare.svelte";
@@ -46,7 +47,7 @@
       {#if finished && count}<span class="count">{count} {count === 1 ? "subagent" : "subagents"} ·</span>{/if}
       {elapsed(node.started, node.finished, now)}
     </span>
-    <span class="caret" aria-hidden="true">{open ? "▾" : "▸"}</span>
+    <Icon name={open ? "disclosure-open" : "disclosure-closed"} />
   </div>
 
   {#if open && branch.children.length}
@@ -122,12 +123,6 @@
     flex: none;
     margin-left: auto;
     white-space: nowrap;
-  }
-
-  .caret {
-    flex: none;
-    width: calc(10px * var(--ui-scale));
-    text-align: right;
   }
 
   .subagents {

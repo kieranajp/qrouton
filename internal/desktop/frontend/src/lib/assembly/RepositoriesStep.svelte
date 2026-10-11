@@ -9,7 +9,7 @@
 
   /** @typedef {{id: string, meta: string, role: "off" | import("../bridge/generated.js").RepoRole, offers: ("off" | import("../bridge/generated.js").RepoRole)[], rebasable: boolean, base: string, branches: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}}} Row */
 
-  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: Row[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, glyph: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void, onBase?: (id: string, branch: string) => void, onBaseOpen?: (id: string) => void}} */
+  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: Row[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, branch: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void, onBase?: (id: string, branch: string) => void, onBaseOpen?: (id: string) => void}} */
   let {
     query = $bindable(""),
     orgs = [],
@@ -44,11 +44,11 @@
 
 <div class="controls">
   <div class="search">
-    <TextField icon="⌕" valueVoice="literal" bind:value={query} />
+    <TextField icon="search" valueVoice="literal" bind:value={query} />
   </div>
   <SegmentedControl {segments} value={owners} multiple onSelect={onOwner} />
-  <Button variant="secondary" onclick={onRefresh} disabled={refreshing}
-    >{refreshing ? "Refreshing…" : "↻ Refresh"}</Button>
+  <Button variant="secondary" icon="refresh" onclick={onRefresh} disabled={refreshing}
+    >{refreshing ? "Refreshing…" : "Refresh"}</Button>
 </div>
 
 <div class="list">
@@ -77,7 +77,7 @@
   <CapsLabel>Selected</CapsLabel>
   <div class="chips">
     {#each picks as pick (pick.id)}
-      <Chip tone={pick.role} glyph={pick.glyph} meta={pick.meta}>{pick.id}</Chip>
+      <Chip tone={pick.role} icon={pick.role} meta={pick.meta} metaIcon={pick.branch ? "branch" : undefined}>{pick.id}</Chip>
     {/each}
   </div>
 </div>

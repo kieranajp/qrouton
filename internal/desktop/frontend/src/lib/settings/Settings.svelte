@@ -46,8 +46,7 @@
     {#each orgs as org (org)}
       <span class="org">
         <Chip>{org}</Chip>
-        <Button variant="ghost" size="sm" aria-label="Remove {org}" onclick={() => onRemoveOrg?.(org)}
-          >×</Button>
+        <Button variant="ghost" size="sm" aria-label="Remove {org}" icon="close" onclick={() => onRemoveOrg?.(org)} />
       </span>
     {/each}
   </div>

@@ -1,13 +1,13 @@
 <script>
   import Button from "../core/Button.svelte";
-  import StatusDot from "../core/StatusDot.svelte";
+  import Icon from "../core/Icon.svelte";
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
   import { uiScale } from "../scale.svelte.js";
-  import { dominantStatus, dropIndex, split, tabLabel } from "./tabs.js";
+  import { dominantStatus, dropIndex, fits, need, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let {
     tabs = [],
     selected = 0,
@@ -15,26 +15,32 @@
     onClose,
     onReorder,
     onNew,
-    newLabel = "New ▾",
+    newLabel = "New",
     ...rest
   } = $props();
-
-  // Below this a tab is a coloured rectangle; the rest go to the menu.
-  const MIN_TAB = 104;
-  let minTab = $derived((MIN_TAB * uiScale()) / 100);
 
   let width = $state(0);
   let reserved = $state(0);
   let chip = $state(0);
+  let home = $state(0);
   let listing = $state(false);
+  /** @type {HTMLElement | undefined} */
+  let strip = $state();
 
+  // The pinned tab is sized to its label, so it is measured rather than estimated.
+  $effect(() => {
+    void tabs;
+    void width;
+    home = strip?.querySelector(".home")?.getBoundingClientRect().width ?? 0;
+  });
+
+  // A tab that cannot keep a readable label goes to the menu.
+  let widths = $derived(tabs.map((tab) => (tab.pinned ? home : (need(tab) * uiScale()) / 100)));
   let room = $derived(Math.max(0, width - reserved));
   // Decided before the chip is measured in: taking a tab off to make room for
   // the chip would otherwise remove the overflow that summoned it.
-  let overflowing = $derived(width > 0 && tabs.length > Math.floor(room / minTab));
-  let capacity = $derived(
-    overflowing ? Math.max(1, Math.floor((room - chip) / minTab)) : tabs.length,
-  );
+  let overflowing = $derived(width > 0 && fits(widths, room) < tabs.length);
+  let capacity = $derived(overflowing ? Math.max(1, fits(widths, room - chip)) : tabs.length);
   let drawn = $derived(split(tabs, selected, capacity));
   let hiddenStatus = $derived(dominantStatus(drawn.hidden.map(({ tab }) => tab)));
 
@@ -64,12 +70,13 @@
   }
 </script>
 
-<div class="strip" bind:clientWidth={width} {...rest}>
+<div class="strip" bind:this={strip} bind:clientWidth={width} {...rest}>
   {#each drawn.shown as { tab, index } (tab.id ?? tab.label)}
     <Tab
       label={tab.label}
       badge={tab.badge}
       artifact={tab.artifact}
+      icon={tab.icon}
       status={tab.status}
       selected={index === selected}
       closable={tab.closable !== false && !tab.pinned}
@@ -91,10 +98,9 @@
         size="sm"
         onclick={() => (listing = !listing)}
         aria-label="{drawn.hidden.length} more tabs{hiddenStatus ? `, ${hiddenStatus}` : ''}">
-        {#if hiddenStatus}
-          <StatusDot state={hiddenStatus} size={7} />
-        {/if}
-        {drawn.hidden.length} ▾
+        {#if hiddenStatus}<Icon name={hiddenStatus} />{/if}
+        {drawn.hidden.length}
+        <Icon name="overflow" />
       </Button>
       {#if listing}
         <Menu
@@ -109,7 +115,7 @@
   {/if}
   {#if onNew}
     <span class="new" bind:clientWidth={reserved}>
-      <Button variant="cube" size="sm" glyph="+" onclick={onNew}>{newLabel}</Button>
+      <Button variant="cube" size="sm" icon="new" onclick={onNew}>{newLabel}</Button>
     </span>
   {/if}
 </div>

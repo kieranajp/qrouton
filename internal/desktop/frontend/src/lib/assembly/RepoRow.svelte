@@ -1,6 +1,7 @@
 <script>
   import { REPO_ROLES } from "../bridge/generated.js";
   import { dismissible } from "../core/dismiss.js";
+  import Icon from "../core/Icon.svelte";
   import RoleToggle from "../forms/RoleToggle.svelte";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
@@ -66,8 +67,9 @@
   {#if rebasable && chosen && base}
     <span class="base-control" use:dismissible={() => (menu = null)}>
       <button class="base" onclick={toggleMenu} aria-haspopup="menu" aria-expanded={!!menu}>
+        <Icon name="branch" />
         <span class="branch">{base}</span>
-        <span class="caret">▾</span>
+        <Icon name="menu" />
       </button>
       {#if menu}
         <span class="anchor" style:left="{menu.left}px" style:top="{menu.top}px">
@@ -145,11 +147,6 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .caret {
-    flex: none;
-    line-height: 1;
   }
 
   .anchor {

@@ -428,12 +428,13 @@ func (r *registry) announce(owner *sessionState) {
 }
 
 type drawnWindow struct {
-	ID     string `json:"id"`
-	Label  string `json:"label"`
-	Badge  string `json:"badge,omitempty"`
-	Kind   string `json:"kind"`
-	Status string `json:"status,omitempty"`
-	Pinned bool   `json:"pinned,omitempty"`
+	ID     string               `json:"id"`
+	Label  string               `json:"label"`
+	Badge  string               `json:"badge,omitempty"`
+	Icon   workbench.WindowIcon `json:"icon,omitempty"`
+	Kind   string               `json:"kind"`
+	Status string               `json:"status,omitempty"`
+	Pinned bool                 `json:"pinned,omitempty"`
 
 	// Artifact colours the badge. Kind is the window's own, terminal or
 	// document, which says nothing about which artifact a document holds.
@@ -459,7 +460,7 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 	for _, window := range live {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
-			Badge: window.opts.Badge, Kind: string(window.opts.Kind), Status: tabStatus(window),
+			Badge: window.opts.Badge, Icon: window.opts.Icon, Kind: string(window.opts.Kind), Status: tabStatus(window),
 			Pinned: pinned(window),
 		}
 		if window.opts.Badge != "" {

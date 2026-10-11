@@ -1,5 +1,7 @@
 <script>
-  /** @type {{segments?: {key: string, label: string, accent?: string, ink?: string, disabled?: boolean}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
+  import Icon from "../core/Icon.svelte";
+
+  /** @type {{segments?: {key: string, label: string, icon?: string, accent?: string, ink?: string, disabled?: boolean}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
   let {
     segments = [],
     value,
@@ -23,7 +25,10 @@
       style:--on-fg={segment.ink || "var(--text-on-accent)"}
       aria-pressed={chosen.includes(segment.key)}
       disabled={disabled || segment.disabled}
-      onclick={() => onSelect?.(segment.key)}>{segment.label}</button>
+      onclick={() => onSelect?.(segment.key)}>
+      {#if segment.icon}<Icon name={segment.icon} inherit={chosen.includes(segment.key)} />{/if}
+      {segment.label}
+    </button>
   {/each}
 </div>
 
@@ -34,6 +39,9 @@
   }
 
   .segment {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(5px * var(--ui-scale));
     font: var(--machine-sm);
     color: var(--text-muted);
     background: transparent;

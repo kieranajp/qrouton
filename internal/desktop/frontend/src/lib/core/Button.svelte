@@ -1,10 +1,13 @@
 <script>
-  /** @type {{variant?: string, size?: string, disabled?: boolean, glyph?: string, wide?: boolean, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  import Icon from "./Icon.svelte";
+
+  /** @type {{variant?: string, size?: string, disabled?: boolean, icon?: string, iconEnd?: string, wide?: boolean, children?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
     variant = "primary",
     size = "md",
     disabled = false,
-    glyph,
+    icon,
+    iconEnd,
     wide = false,
     children,
     ...rest
@@ -12,8 +15,9 @@
 </script>
 
 <button class="button {variant} {size}" class:wide {disabled} {...rest}>
-  {#if glyph}<span class="glyph" aria-hidden="true">{glyph}</span>{/if}
+  {#if icon}<Icon name={icon} />{/if}
   {@render children?.()}
+  {#if iconEnd}<Icon name={iconEnd} />{/if}
 </button>
 
 <style>
@@ -81,11 +85,6 @@
     border: 1px solid var(--border-default);
     box-shadow: var(--shadow-cube);
     color: var(--text-primary);
-  }
-
-  .cube .glyph {
-    color: var(--accent-label);
-    font-weight: 700;
   }
 
   .outline {

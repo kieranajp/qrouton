@@ -15,7 +15,8 @@
 
 <Dialog
   secondary="Cancel"
-  primary={escalating ? "Escalate →" : "Add repositories →"}
+  primary={escalating ? "Escalate" : "Add repositories"}
+  primaryIcon="forward"
   status={footer}
   busy={picker.answering}
   onSecondary={picker.cancel}

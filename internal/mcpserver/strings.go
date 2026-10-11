@@ -34,11 +34,7 @@ const (
 	currentDir = "."
 )
 
-const (
-	commandWindowLabel = "▶ "
-	diffWindowLabel    = "◆ "
-	notifyWindowLabel  = "🔔 qrouton"
-)
+const notifyWindowLabel = "qrouton"
 
 const (
 	openedFileFormat = "Opened %s at line %d in an editor tab " +
@@ -98,8 +94,6 @@ const (
 
 	escalationTimeoutMessage = "The picker is still open; the user hasn't confirmed or cancelled yet."
 )
-
-const toastFormat = "🔔  %s"
 
 const (
 	allReposDiffFormat = `for d in %s/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; ` +

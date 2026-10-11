@@ -1,7 +1,6 @@
 package launch
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,10 +62,15 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 	// The page draws it as a filled block, which is the bracketing the id used to
 	// carry for itself.
 	id := status.ArtifactID(rel)
+	var icon workbench.WindowIcon
+	if id == "" {
+		icon = workbench.IconDocument
+	}
 	return workbench.WindowOptions{
 		Kind:    workbench.KindDocument,
 		Label:   documentLabel(text, rel, id),
 		Badge:   id,
+		Icon:    icon,
 		Source:  rel,
 		Cwd:     filepath.Dir(path),
 		Content: text,
@@ -78,16 +82,13 @@ func documentPane(path, rel string, format workbench.DocumentFormat, span workbe
 
 // documentLabel names the pane by what the document calls itself, since a tab
 // has room for a title and not for a path. A tab already leading with the
-// artifact's id neither repeats it nor needs the diamond.
+// artifact's id does not repeat it.
 func documentLabel(text, rel, id string) string {
 	name, titled := markdown.Title(text)
 	if !titled {
 		name = strings.TrimLeft(filepath.Base(rel)[len(id):], "-_.")
 	}
-	if id != "" {
-		return name
-	}
-	return fmt.Sprintf(documentLabelFormat, name)
+	return name
 }
 
 // SessionRelative names a file the way the session refers to it. The resolved

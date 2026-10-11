@@ -1,6 +1,7 @@
 <script>
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
+  import Icon from "../core/Icon.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import { untrack } from "svelte";
@@ -119,7 +120,9 @@
                 <!-- The pane owns what is open, not the element: its own toggle
                      lands a task later, and a redraw in between undoes it.
                      Enter and Space on a summary arrive here as clicks. -->
-                <summary onclick={(event) => turn(event, item.index)}>{item.name}</summary>
+                <summary onclick={(event) => turn(event, item.index)}
+                  ><span class="disclosure"><Icon name={open.has(item.index) ? "disclosure-open" : "disclosure-closed"} /></span
+                  >{item.name}</summary>
                 <div class="markdown lifted">{@html parts.sections[item.index].opening}</div>
                 <div class="markdown">{@html parts.sections[item.index].body}</div>
               </details>
@@ -210,20 +213,16 @@
     display: none;
   }
 
-  .item > summary::before {
-    content: "▸";
+  .disclosure {
     position: absolute;
     left: 0;
+    top: calc(12px * var(--ui-scale));
     width: var(--gutter);
     padding-right: 1.5ch;
     box-sizing: border-box;
-    font: var(--terminal-sm);
+    display: flex;
+    justify-content: flex-end;
     color: var(--text-faint);
-    text-align: right;
-  }
-
-  .item[open] > summary::before {
-    content: "▾";
   }
 
   .item > summary:hover {

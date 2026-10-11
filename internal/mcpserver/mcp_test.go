@@ -697,6 +697,9 @@ func TestRunCommandOpensATerminalWindowInTheResolvedCwd(t *testing.T) {
 	if opts.Cwd != realRepo {
 		t.Fatalf("cwd = %q, want %q", opts.Cwd, realRepo)
 	}
+	if opts.Label != "dev" || opts.Icon != workbench.IconCommand {
+		t.Fatalf("command tab reads %q with icon %q, want the bare name and the command icon", opts.Label, opts.Icon)
+	}
 	if want := []string{shellBin, shellLoginFlag, "npm run dev"}; !slices.Equal(opts.Command, want) {
 		t.Fatalf("command = %v, want %v", opts.Command, want)
 	}
@@ -984,6 +987,9 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	if strings.TrimSpace(single.Content) == "" {
 		t.Fatal("diff window opened with no captured diff")
 	}
+	if want := diffWindowName + diffWindowSeparator + "app"; single.Label != want || single.Icon != workbench.IconDocument {
+		t.Fatalf("diff tab reads %q with icon %q, want %q and the document icon", single.Label, single.Icon, want)
+	}
 	if single.Format != workbench.FormatDiff {
 		t.Fatalf("diff window format = %q, want %q; its page would render it as grey text", single.Format, workbench.FormatDiff)
 	}
@@ -1021,7 +1027,10 @@ func TestNotifyOpensADurableAttentionTab(t *testing.T) {
 	if !opts.Attention {
 		t.Fatal("notification tab does not request attention")
 	}
-	if !strings.Contains(opts.Content, "build finished") {
+	if opts.Label != notifyWindowLabel || opts.Icon != "" {
+		t.Fatalf("toast tab reads %q with icon %q, want %q and none", opts.Label, opts.Icon, notifyWindowLabel)
+	}
+	if opts.Content != "build finished" {
 		t.Fatalf("toast content = %q", opts.Content)
 	}
 	if opts.Format != "" {

@@ -143,16 +143,18 @@
       size="sm"
       aria-label="Previous slide"
       disabled={first}
-      onclick={() => move(-1)}>←</Button>
+      icon="back"
+      onclick={() => move(-1)} />
     <span class="present-counter">{present.current + 1} / {present.total}</span>
     <Button
       variant="ghost"
       size="sm"
       aria-label="Next slide"
       disabled={last}
-      onclick={() => move(1)}>→</Button>
+      icon="forward"
+      onclick={() => move(1)} />
     <Button variant="ghost" size="sm" aria-pressed={notes} onclick={toggleNotes}>Notes</Button>
-    <Button variant="ghost" size="sm" onclick={() => present.leave()}>Exit</Button>
+    <Button variant="ghost" size="sm" icon="close" onclick={() => present.leave()}>Exit</Button>
   </div>
 </div>
 

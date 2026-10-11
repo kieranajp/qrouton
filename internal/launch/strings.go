@@ -204,7 +204,6 @@ const (
 
 const (
 	editorWindowLabel       = "Editor"
-	documentLabelFormat     = "◆ %s"
 	assetPathsRequiredError = "asset paths are required"
 	assetPathRequiredError  = "asset path is required"
 	unsupportedAssetError   = "unsupported asset format"

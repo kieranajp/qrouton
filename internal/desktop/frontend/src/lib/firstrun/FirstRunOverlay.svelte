@@ -9,7 +9,7 @@
   import ThoughtsScreen from "./ThoughtsScreen.svelte";
   import Welcome from "./Welcome.svelte";
   import { firstRun } from "./firstrun.svelte.js";
-  import { back, blocking, caps, pip, primary, title, total } from "./screens.js";
+  import { back, blocking, caps, icons, pip, primary, title, total } from "./screens.js";
 
   const flow = firstRun();
 
@@ -20,7 +20,9 @@
   pips={total}
   active={pip(flow.step)}
   secondary={back(flow.step) || undefined}
+  secondaryIcon={icons.back}
   primary={primary(flow.step)}
+  primaryIcon={icons.primary}
   status={blocked || flow.status}
   busy={flow.busy}
   canAdvance={!blocked}

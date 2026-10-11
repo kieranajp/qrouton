@@ -347,11 +347,11 @@
               {:else}
                 <span class="says">{answered} of {spec.open.length} answered</span>
                 {#if nextOpen >= 0}
-                  <Button variant="outline" size="sm" onclick={() => showQuestions(nextOpen)}>
-                    Next open question →
+                  <Button variant="outline" size="sm" iconEnd="forward" onclick={() => showQuestions(nextOpen)}>
+                    Next open question
                   </Button>
                 {:else}
-                  <Button variant="outline" size="sm" onclick={() => showQuestions(0)}>Review answers →</Button>
+                  <Button variant="outline" size="sm" iconEnd="forward" onclick={() => showQuestions(0)}>Review answers</Button>
                 {/if}
               {/if}
             </div>
@@ -479,13 +479,15 @@
             size="sm"
             aria-label="Previous screen"
             disabled={at.current === 0}
-            onclick={() => at.show(at.current - 1)}>←</Button>
+            icon="back"
+            onclick={() => at.show(at.current - 1)} />
           <Button
             variant="ghost"
             size="sm"
             aria-label="Next screen"
             disabled={at.current === slides.length}
-            onclick={() => at.show(at.current + 1)}>→</Button>
+            icon="forward"
+            onclick={() => at.show(at.current + 1)} />
         </div>
       {/if}
     {/snippet}

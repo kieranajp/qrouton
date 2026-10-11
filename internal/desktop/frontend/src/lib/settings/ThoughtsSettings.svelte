@@ -54,7 +54,8 @@
         variant="ghost"
         size="sm"
         aria-label="Remove {row.id || 'shared folder'}"
-        onclick={() => onRemove?.(index)}>×</Button>
+        icon="close"
+        onclick={() => onRemove?.(index)} />
     </div>
   {/each}
   <div>

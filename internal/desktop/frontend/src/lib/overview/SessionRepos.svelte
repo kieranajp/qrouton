@@ -1,7 +1,8 @@
 <script>
   import { REPO_ROLES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
-  import { GLYPHS, READ_ONLY } from "../roles.js";
+  import Icon from "../core/Icon.svelte";
+  import { READ_ONLY } from "../roles.js";
   import Tier from "./Tier.svelte";
 
   /** @type {{repos?: any[], onAddRepos?: () => void}} */
@@ -13,7 +14,7 @@
     <div class="repos">
       {#each repos as repo (repo.name)}
         <div class="repo">
-          <span class="repo-name {repo.role}">{GLYPHS[repo.role]} {repo.name}</span>
+          <span class="repo-name {repo.role}"><Icon name={repo.role} />{repo.name}</span>
           {#if repo.role === REPO_ROLES.REFERENCE}
             <span class="stat">{READ_ONLY}</span><span></span>
           {:else if repo.measured === false}
@@ -30,7 +31,7 @@
   {:else}
     <span class="empty">no repositories yet</span>
   {/if}
-  <span class="add"><Button variant="cube" size="sm" glyph="+" wide onclick={onAddRepos}>Add repos</Button></span>
+  <span class="add"><Button variant="cube" size="sm" icon="new" wide onclick={onAddRepos}>Add repos</Button></span>
 </Tier>
 
 <style>
@@ -50,6 +51,13 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  /* Inline, so the row keeps the name's baseline for its label to line up with. */
+  .repo-name :global(.icon) {
+    display: inline-block;
+    vertical-align: middle;
+    margin: calc(-3px * var(--ui-scale)) calc(6px * var(--ui-scale)) 0 0;
   }
 
   .repo-name.editing {

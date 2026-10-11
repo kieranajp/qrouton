@@ -420,8 +420,8 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
 test("a summary without a root state falls back to the active count", async ({ page }) => {
   await page.evaluate(() => window.sessionRail.stateless());
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
-  const runningPip = row.locator(".glyph.running");
-  await expect(runningPip).toHaveText("●");
+  const runningPip = row.locator('[data-icon="running"]');
+  await expect(runningPip).toHaveCount(1);
   expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
     await token(page, "--state-running"),
   );
@@ -492,10 +492,42 @@ test("a row's headline says what its root is doing", async ({ page }) => {
   await expect(attention).toHaveText(/Needs you/);
   await expect(attention).toHaveAttribute("title", "Which branch should I cut from?");
   expect(await attention.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--state-waiting"));
+  await expect(attention.locator("[data-icon]")).toHaveCount(0);
 
   await headline({ state: "your_turn", active: 1 });
   await expect(row().locator(".fact.agents")).toHaveText(/Your turn/);
 
   await headline({ state: "idle", active: 1, coverage: "root" });
   await expect(row().locator(".fact.agents")).toHaveText(/Idle/);
+});
+
+test("attention and new docs are text facts that wrap whole inside a growing row", async ({ page }) => {
+  const row = () => page.getByRole("button", { name: /^Checkout migration/ });
+  const headline = (summary) => page.evaluate((s) => window.sessionRail.headline(s), summary);
+  await expect.poll(() => page.locator(".rail").evaluate((el) => el.getBoundingClientRect().width)).toBe(200);
+  await headline({ state: "needs_you", active: 1, attention: "unread" });
+  const facts = row().locator(".facts");
+  await expect(facts.locator(".fact")).toHaveText(["Needs you", "3 new docs"]);
+  await expect(facts.locator(".fact.attention [data-icon], .fact.unseen [data-icon]")).toHaveCount(0);
+
+  const layout = await facts.evaluate((el) => {
+    const line = parseFloat(getComputedStyle(el).fontSize) * 2;
+    const item = el.closest(".item").getBoundingClientRect();
+    return {
+      line,
+      left: el.getBoundingClientRect().left,
+      item,
+      facts: [...el.querySelectorAll(".fact")].map((fact) => {
+        const box = fact.getBoundingClientRect();
+        return { left: box.left, top: box.top, bottom: box.bottom, height: box.height, clipped: fact.scrollWidth > fact.clientWidth };
+      }),
+    };
+  });
+  for (const fact of layout.facts) {
+    expect(fact.height).toBeLessThan(layout.line);
+    expect(fact.clipped).toBe(false);
+    expect(fact.left).toBeCloseTo(layout.left, 0);
+    expect(fact.bottom).toBeLessThanOrEqual(layout.item.bottom);
+  }
+  expect(layout.facts[1].top).toBeGreaterThan(layout.facts[0].top);
 });

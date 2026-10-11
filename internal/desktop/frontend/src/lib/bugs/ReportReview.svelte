@@ -105,7 +105,11 @@
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}
     <div class="actions">
-      <Button variant="secondary" disabled={closing} onclick={dismiss}>{preview ? (pending ? preview.cancelLabel : preview.closeLabel) : "×"}</Button>
+      {#if preview}
+        <Button variant="secondary" disabled={closing} onclick={dismiss}>{pending ? preview.cancelLabel : preview.closeLabel}</Button>
+      {:else}
+        <Button variant="secondary" icon="close" aria-label="Close" disabled={closing} onclick={dismiss} />
+      {/if}
       {#if preview?.report.status === BUG_REPORT_STATUSES.PENDING}
         <Button disabled={!pending || closing} onclick={confirm}>{preview.createLabel}</Button>
       {/if}

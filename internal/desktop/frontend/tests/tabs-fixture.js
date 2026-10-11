@@ -10,25 +10,22 @@ import TabsFixture from "./TabsFixture.svelte";
 // shell, a badged plan, a badged research document that must not borrow the
 // plan's colour, and a document with no id to badge with.
 let tabs = [
-  { id: "w0", label: "Overview", kind: "overview", pinned: true },
+  { id: "w0", label: "Overview", icon: "tree", kind: "overview", pinned: true },
   { id: "w1", label: "Shell", kind: "terminal", status: "running" },
   { id: "w2", label: "Pane smoke test", badge: "P002", artifact: "PLAN", kind: "document" },
-  { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document" },
-  { id: "w4", label: "◆ Findings", kind: "document", status: "succeeded" },
+  { id: "w3", label: "Pane selection", badge: "R001", artifact: "RESEARCH", kind: "document", status: "idle" },
+  { id: "w4", label: "Findings", icon: "document", kind: "document", status: "succeeded" },
 ];
 
 // The strip draws the process state Go names, so a run that finished carries
 // the same word here that the window registry sent.
-window.dots = () =>
-  [...document.querySelectorAll(".tab")].map((tab) => {
-    const dot = tab.querySelector(".dot");
-    return dot ? getComputedStyle(dot).backgroundColor : "";
-  });
-window.menuDots = () =>
-  [...document.querySelectorAll(".menu .item")].map((item) => {
-    const dot = item.querySelector(".dot");
-    return dot ? getComputedStyle(dot).backgroundColor : "";
-  });
+const STATES = ["running", "succeeded", "failed", "waiting"];
+const stateColour = (root) => {
+  const icon = root.querySelector(STATES.map((name) => `[data-icon="${name}"]`).join(","));
+  return icon ? getComputedStyle(icon).color : "";
+};
+window.dots = () => [...document.querySelectorAll(".tab")].map(stateColour);
+window.menuDots = () => [...document.querySelectorAll(".menu .item")].map(stateColour);
 
 // Narrow squeezes the plan tab into the overflow menu, which only ever holds
 // tabs the reader has not selected.
@@ -36,7 +33,22 @@ const params = new URLSearchParams(location.search);
 const narrow = params.has("narrow");
 if (narrow) document.querySelector("#fixture").style.width = "230px";
 
-const payload = () => ({ session: "fixture", selected: narrow ? "w1" : "w2", tabs });
+// Commands fills a 750px strip with running command tabs, each carrying two icons.
+if (params.has("commands")) {
+  document.querySelector("#fixture").style.width = "750px";
+  tabs = [
+    tabs[0],
+    ...["lint", "build", "unit tests", "dev server", "typecheck"].map((label, i) => ({
+      id: `c${i}`,
+      label,
+      icon: "command",
+      kind: "terminal",
+      status: "running",
+    })),
+  ];
+}
+
+const payload = () => ({ session: "fixture", selected: narrow ? "w1" : params.has("commands") ? "c0" : "w2", tabs });
 
 // The fixture stands in for the window registry, so a reorder or a close only
 // reaches the strip by coming back as the surfaces payload Go would send.

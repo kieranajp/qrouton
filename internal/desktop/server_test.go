@@ -120,7 +120,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	ctx := context.Background()
 
 	id, err := host.Open(ctx, workbench.WindowOptions{
-		Kind: workbench.KindTerminal, Label: "▶ dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+		Kind: workbench.KindTerminal, Label: "dev", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -130,7 +130,7 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 	}
 
 	document, err := host.Open(ctx, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ plan", Content: "one change",
+		Kind: workbench.KindDocument, Label: "plan", Content: "one change",
 		Format: workbench.FormatMarkdown, Source: "thoughts/shared/plans/P1.md",
 	})
 	if err != nil {
@@ -173,7 +173,7 @@ index 6dad4ad..84db3de 100644
  twelve
 `
 	diffDocument, err := host.Open(ctx, workbench.WindowOptions{
-		Kind: workbench.KindDocument, Label: "◆ diff", Content: diff, Format: workbench.FormatDiff,
+		Kind: workbench.KindDocument, Label: "diff", Content: diff, Format: workbench.FormatDiff,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -483,7 +483,7 @@ func declaredOperations(t *testing.T) map[string]string {
 func TestDispatchRefusesEachOperationWithItsOwnSentinel(t *testing.T) {
 	windows, _ := testWindows(t)
 	owner := windows.shown()
-	options := &workbench.WindowOptions{Kind: workbench.KindDocument, Label: "◆ plan", Content: "one"}
+	options := &workbench.WindowOptions{Kind: workbench.KindDocument, Label: "plan", Content: "one"}
 
 	for _, tc := range []struct {
 		name  string

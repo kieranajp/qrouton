@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { dominantStatus, dropIndex, split } from "./tabs.js";
+import { dominantStatus, dropIndex, fits, need, split } from "./tabs.js";
 
 const strip = ["shell", "plan", "shell 2", "shell 3", "research"];
 
@@ -17,19 +17,19 @@ test("the tabs past capacity go to the menu, keeping their own indexes", () => {
   const { shown, hidden } = split(strip, 0, 3);
   assert.deepEqual(
     shown.map((entry) => entry.tab),
-    ["shell", "plan"],
+    ["shell", "plan", "shell 2"],
   );
   assert.deepEqual(
     hidden.map((entry) => entry.index),
-    [2, 3, 4],
+    [3, 4],
   );
 });
 
 // A click has to reach the window it named, not the one at that spot in the menu.
 test("a hidden tab reports the index it has in the whole strip", () => {
   const { hidden } = split(strip, 0, 3);
-  assert.equal(hidden[2].tab, "research");
-  assert.equal(strip[hidden[2].index], "research");
+  assert.equal(hidden[1].tab, "research");
+  assert.equal(strip[hidden[1].index], "research");
 });
 
 test("the selected tab is drawn even when it sits past capacity", () => {
@@ -130,4 +130,18 @@ test("a drop on the leftmost drawn tab goes to the front of the whole strip", ()
 
 test("a tab the strip never drew cannot be dragged anywhere", () => {
   assert.equal(dropIndex(entries(0, 1), 3, 1), 3);
+});
+
+test("a tab needs room for its marks and a readable label", () => {
+  const bare = need({});
+  assert.equal(need({ status: "idle" }), bare);
+  assert.equal(need({ status: "running", icon: "command" }), bare + 48);
+  assert.ok(need({ badge: "P002" }) > bare);
+});
+
+test("fits counts the leading tabs that sum within the room", () => {
+  assert.equal(fits([100, 100, 100], 250), 2);
+  assert.equal(fits([100, 100], 200), 2);
+  assert.equal(fits([300], 200), 0);
+  assert.equal(fits([], 200), 0);
 });

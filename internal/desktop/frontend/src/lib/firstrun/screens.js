@@ -3,18 +3,18 @@
 
 import { addOrg } from "../settings/orgs.js";
 
-const BACK = "← Back";
+const BACK = "Back";
 
 const NEEDS_OWNER = "Add at least one organisation or username to search.";
 
 const SCREENS = [
-  { caps: "", primary: "Show me →", back: false },
-  { caps: "The one idea to know", primary: "Next →", back: true },
-  { caps: "Where you will spend your time", primary: "Set it up →", back: true },
-  { caps: "Question 1 of 3", primary: "Next →", back: true, owners: true, field: "orgs" },
-  { caps: "Question 2 of 3", primary: "Next →", back: true, field: "root" },
-  { caps: "Question 3 of 3", primary: "Next →", back: true, field: "thoughts" },
-  { caps: "Optional", primary: "Find my repositories →", back: true },
+  { caps: "", primary: "Show me", back: false },
+  { caps: "The one idea to know", primary: "Next", back: true },
+  { caps: "Where you will spend your time", primary: "Set it up", back: true },
+  { caps: "Question 1 of 3", primary: "Next", back: true, owners: true, field: "orgs" },
+  { caps: "Question 2 of 3", primary: "Next", back: true, field: "root" },
+  { caps: "Question 3 of 3", primary: "Next", back: true, field: "thoughts" },
+  { caps: "Optional", primary: "Find my repositories", back: true },
 ];
 
 export const title = "Welcome to qrouton";
@@ -30,6 +30,8 @@ const screen = (step = 0) => SCREENS[step] ?? SCREENS[0];
 export const caps = (step = 0) => screen(step).caps;
 
 export const primary = (step = 0) => screen(step).primary;
+
+export const icons = { primary: "forward", back: "back" };
 
 /** back is the secondary label, or "" where there is nothing to go back to. */
 export const back = (step = 0) => (screen(step).back ? BACK : "");

@@ -38,13 +38,13 @@
   {:else if status.state === OLLAMA_STATES.UNREACHABLE && status.installed}
     <p>Ollama is installed but not running. Start it, then check again.</p>
     <div class="actions">
-      <Button variant="secondary" onclick={view.check}>Check again</Button>
+      <Button variant="secondary" icon="refresh" onclick={view.check}>Check again</Button>
     </div>
   {:else if status.state === OLLAMA_STATES.UNREACHABLE}
     <p>Ollama is not installed, so search will be keyword-only until it is.</p>
     <div class="actions">
       <Button variant="secondary" onclick={() => openURL(DOWNLOAD_URL)}>Get Ollama</Button>
-      <Button variant="ghost" onclick={view.check}>Check again</Button>
+      <Button variant="ghost" icon="refresh" onclick={view.check}>Check again</Button>
     </div>
   {:else if status.state === OLLAMA_STATES.FAILED}
     <p class="failed">The download failed: {status.reason}</p>

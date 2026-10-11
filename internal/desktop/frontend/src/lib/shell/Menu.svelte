@@ -1,6 +1,6 @@
 <script>
   import ArtifactTag from "../core/ArtifactTag.svelte";
-  import StatusDot from "../core/StatusDot.svelte";
+  import Icon from "../core/Icon.svelte";
 
   /** maxHeight caps a menu whose items are not a fixed vocabulary, which then
    * scrolls rather than running off the screen.
@@ -15,6 +15,8 @@
     onSelect,
     ...rest
   } = $props();
+
+  let marked = $derived(items.some((item) => item?.icon || (item?.status && item.status !== "idle")));
 </script>
 
 <div
@@ -41,15 +43,19 @@
           disabled={item.disabled}
           aria-haspopup={item.items?.length ? "menu" : undefined}
           onclick={item.items?.length ? undefined : () => onSelect?.(item, i)}>
-          {#if item.status}
-            <StatusDot state={item.status} size={7} />
+          {#if item.icon}
+            <Icon name={item.icon} />
+          {:else if item.status && item.status !== "idle"}
+            <Icon name={item.status} />
+          {:else if marked}
+            <span class="slot"></span>
           {/if}
           {#if item.tag}
             <ArtifactTag kind={item.tag} id={item.id ?? ""} fixed />
           {/if}
           <span class="label">{item.label}</span>
           {#if item.meta}<span class="meta">{item.meta}</span>{/if}
-          {#if item.items?.length}<span class="submenu-caret">&#8250;</span>{/if}
+          {#if item.items?.length}<span class="submenu-caret"><Icon name="submenu" /></span>{/if}
         </button>
         {#if item.items?.length}
           <div class="submenu" style:width="calc({item.width ?? width}px * var(--ui-scale))">
@@ -159,8 +165,11 @@
 
   .submenu-caret {
     color: var(--text-muted);
-    font-size: calc(16px * var(--ui-scale));
-    line-height: 0;
+    flex: none;
+  }
+
+  .slot {
+    width: calc(16px * var(--ui-scale));
     flex: none;
   }
 

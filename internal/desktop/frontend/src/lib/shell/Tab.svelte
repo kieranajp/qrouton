@@ -1,14 +1,15 @@
 <script>
-  import StatusDot from "../core/StatusDot.svelte";
+  import Icon from "../core/Icon.svelte";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import { tabLabel } from "./tabs.js";
 
   /** Status stays visible on unfocused tabs so failed runs remain apparent.
-   * @type {{label?: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", selected?: boolean, closable?: boolean, pinned?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
+   * @type {{label?: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus | "idle", selected?: boolean, closable?: boolean, pinned?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
   let {
     label,
     badge,
     artifact,
+    icon,
     status,
     selected = false,
     closable = true,
@@ -75,14 +76,15 @@
   onauxclick={auxiliary}
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
-    {#if pinned}<span class="glyph" aria-hidden="true"></span>{/if}
-    {#if status}<StatusDot state={status} size={7} />{/if}
+    {#if status && status !== "idle"}<Icon name={status} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
+    {#if icon}<Icon name={icon} />{/if}
     <span class="label">{label}</span>
   </button>
   {#if closable}
-    <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}
-      >&#10005;</button>
+    <button type="button" class="close" aria-label="Close tab" onclick={() => onClose?.()}>
+      <Icon name="close" />
+    </button>
   {/if}
 </div>
 
@@ -97,7 +99,8 @@
     background: transparent;
     flex: 1 1 auto;
     min-width: 0;
-    max-width: calc(210px * var(--ui-scale));
+    box-sizing: border-box;
+    max-width: calc(160px * var(--ui-scale));
     overflow: hidden;
   }
 
@@ -148,7 +151,6 @@
   }
 
   .close {
-    font-size: calc(11px * var(--ui-scale));
     color: var(--text-faint);
   }
 
@@ -170,17 +172,5 @@
     font: var(--instruction);
     letter-spacing: var(--instruction-tracking);
     text-transform: uppercase;
-  }
-
-  .glyph {
-    flex: none;
-    width: calc(10px * var(--ui-scale));
-    height: calc(10px * var(--ui-scale));
-    box-shadow: inset 0 0 0 1.5px currentColor;
-    color: var(--text-muted);
-  }
-
-  .home.selected .glyph {
-    color: var(--text-primary);
   }
 </style>

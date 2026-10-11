@@ -5,13 +5,15 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, primary: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
     active = 0,
     secondary,
+    secondaryIcon,
     primary,
+    primaryIcon,
     status = "",
     busy = false,
     canAdvance = true,
@@ -54,14 +56,14 @@
       {#if pips}
         <Pips total={pips} {active} />
       {:else if secondary}
-        <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
+        <Button variant="secondary" icon={secondaryIcon} disabled={busy} onclick={onSecondary}>{secondary}</Button>
       {/if}
       <div class="advance">
         {#if pips && secondary}
-          <Button variant="secondary" disabled={busy} onclick={onSecondary}>{secondary}</Button>
+          <Button variant="secondary" icon={secondaryIcon} disabled={busy} onclick={onSecondary}>{secondary}</Button>
         {/if}
         <span class="status">{status}</span>
-        <Button disabled={busy || !canAdvance} onclick={onPrimary}>{primary}</Button>
+        <Button iconEnd={primaryIcon} disabled={busy || !canAdvance} onclick={onPrimary}>{primary}</Button>
       </div>
     </div>
   </div>

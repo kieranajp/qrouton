@@ -6,9 +6,9 @@ import { DRAFT_FIELDS } from "../bridge/generated.js";
 /** @typedef {{field: import("../bridge/generated.js").DraftField, message: string}} Problem */
 
 const STEPS = [
-  { label: "Describe the work", primary: "Choose repositories →" },
-  { label: "Choose repositories", primary: "Choose an agent →" },
-  { label: "Agent and mode", primary: "Create session →" },
+  { label: "Describe the work", primary: "Choose repositories" },
+  { label: "Choose repositories", primary: "Choose an agent" },
+  { label: "Agent and mode", primary: "Create session" },
 ];
 
 export const labels = STEPS.map((step) => step.label);

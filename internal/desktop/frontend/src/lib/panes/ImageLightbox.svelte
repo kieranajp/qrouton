@@ -111,15 +111,17 @@
       size="sm"
       aria-label="Previous image"
       disabled={first}
-      onclick={() => step(-1)}>←</Button>
+      icon="back"
+      onclick={() => step(-1)} />
     <span class="counter">{index} / {total}</span>
     <Button
       variant="ghost"
       size="sm"
       aria-label="Next image"
       disabled={last}
-      onclick={() => step(1)}>→</Button>
-    <Button variant="ghost" size="sm" onclick={onClose}>Close</Button>
+      icon="forward"
+      onclick={() => step(1)} />
+    <Button variant="ghost" size="sm" icon="close" onclick={onClose}>Close</Button>
   </div>
   {#if menu}
     <AssetMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={say} />
