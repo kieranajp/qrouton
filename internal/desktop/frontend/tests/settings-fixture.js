@@ -66,6 +66,9 @@ window.wailsCall = async (name, input) => {
     if (invalid === "thoughts") throw new Error("thoughts: an org maps to two thoughts roots");
     const blank = (input?.stickers ?? []).findIndex((item) => !item.label.trim());
     if (invalid === "stickers" && blank >= 0) throw new Error(`stickers.${blank}: cannot be empty`);
+    const pairs = (input?.stickers ?? []).map((item) => `${item.colour}/${item.symbol}`);
+    const repeat = pairs.findIndex((pair, index) => pairs.indexOf(pair) !== index);
+    if (repeat >= 0) throw new Error(`stickers.${repeat}: another sticker already uses this colour and symbol`);
     return { restartRequired: restart };
   }
   return undefined;

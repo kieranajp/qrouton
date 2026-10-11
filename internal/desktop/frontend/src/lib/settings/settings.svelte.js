@@ -2,6 +2,7 @@ import { SETTINGS_FIELDS, UI_SCALE_EVENT } from "../bridge/generated.js";
 import { call, Events } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
+import { toInput as stickersInput } from "./stickers.js";
 import { firstErroredTab } from "./tabs.js";
 import { addOrg, removeOrg } from "./orgs.js";
 import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
@@ -90,7 +91,7 @@ export function settings(onClose) {
         editor: form.editor,
         launch: form.launch,
         linear: form.linear,
-        stickers: form.stickers.map((item) => ({ ...item })),
+        stickers: stickersInput(form.stickers),
         chime: form.chime,
         uiScale: form.uiScale,
         thoughts: toInput(form.thoughts),
@@ -110,6 +111,10 @@ export function settings(onClose) {
       loadedThoughts = { ...fromView(toInput(form.thoughts)), derived: loadedThoughts.derived };
     }
     if (outcome.close) onClose();
+  }
+
+  function clearStickerErrors() {
+    fields = Object.fromEntries(Object.entries(fields).filter(([field]) => !field.startsWith("stickers.")));
   }
 
   function cancel() {
@@ -156,6 +161,7 @@ export function settings(onClose) {
     removeFolder,
     save,
     cancel,
+    clearStickerErrors,
     quitAndRelaunch,
   };
 }

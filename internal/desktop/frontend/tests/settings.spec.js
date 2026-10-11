@@ -287,3 +287,64 @@ test("Advanced lists every runner id the launch overrides accept", async ({ page
   await expect(page.getByRole("textbox", { name: "Launch overrides" })).toBeVisible();
   await expect(page.getByRole("textbox", { name: "Linear custom script" })).toBeVisible();
 });
+
+const stickerRows = (page) => page.getByRole("list", { name: "Session stickers" }).getByRole("listitem");
+const savedStickers = async (page) => (await saves(page)).map((saved) => saved.stickers);
+
+test("a new sticker takes the first unused pair, can be recoloured and saves without an id", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Stickers");
+  await page.getByRole("button", { name: "Add sticker" }).click();
+  await expect(stickerRows(page)).toHaveCount(5);
+  const meaning = page.getByRole("textbox", { name: "Sapphire star meaning" });
+  await expect(meaning).toBeFocused();
+  await meaning.fill("Ship it");
+  await page.getByRole("group", { name: "Colour" }).getByRole("button", { name: "pink" }).click();
+  await page.getByRole("group", { name: "Symbol" }).getByRole("button", { name: "heart" }).click();
+  await expect(page.getByRole("textbox", { name: "Pink heart meaning" })).toHaveValue("Ship it");
+  await expect(page.getByRole("group", { name: "Edit sticker" })).toContainText("Pink heart");
+  await save(page);
+
+  await expect.poll(async () => (await savedStickers(page))[0]?.at(-1)).toEqual({
+    id: "",
+    colour: "pink",
+    symbol: "heart",
+    label: "Ship it",
+  });
+});
+
+test("removing a sticker drops it from the save", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Stickers");
+  await page.getByRole("button", { name: "Remove Read later" }).click();
+  await expect(stickerRows(page)).toHaveCount(3);
+  await save(page);
+  await expect
+    .poll(async () => (await savedStickers(page))[0]?.map((item) => item.id))
+    .toEqual(["star", "question", "exclamation"]);
+});
+
+test("a duplicate pair is flagged on its row before Save and refused after it", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Stickers");
+  await page.getByRole("button", { name: "Edit Green bookmark" }).click();
+  await page.getByRole("group", { name: "Colour" }).getByRole("button", { name: "blue" }).click();
+  await page.getByRole("group", { name: "Symbol" }).getByRole("button", { name: "star", exact: true }).click();
+  await expect(stickerRows(page).nth(1)).toContainText("Another sticker already uses this colour and symbol.");
+  await save(page);
+  await expect(status(page)).toHaveText("another sticker already uses this colour and symbol");
+  await expect(stickerRows(page).nth(1)).toContainText("another sticker already uses this colour and symbol");
+  await expect(page.locator(".dialog")).toBeVisible();
+});
+
+test("an empty sticker list saves as empty", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Stickers");
+  for (const label of ["Important", "Read later", "Needs follow-up", "Has bugs"]) {
+    await page.getByRole("button", { name: `Remove ${label}` }).click();
+  }
+  await expect(stickerRows(page)).toHaveCount(0);
+  await expect(page.getByRole("group", { name: "Edit sticker" })).toHaveCount(0);
+  await save(page);
+  await expect.poll(() => savedStickers(page)).toEqual([[]]);
+});
