@@ -36,8 +36,11 @@ const (
 	TargetLimit  = 160
 	MessageLimit = 1000
 
-	toolAgent        = "Agent"
-	toolTaskLegacy   = "Task"
+	ToolAskUserQuestion = "AskUserQuestion"
+	ToolExitPlanMode    = "ExitPlanMode"
+
+	ToolAgent        = "Agent"
+	ToolTaskLegacy   = "Task"
 	toolBash         = "Bash"
 	toolGrep         = "Grep"
 	toolGlob         = "Glob"
@@ -50,6 +53,9 @@ const (
 
 	spawnAsyncStatus = "async_launched"
 )
+
+// FileWriteTools are the tools whose target is a file the agent wrote.
+var FileWriteTools = []string{"Edit", "Write", "MultiEdit", "NotebookEdit"}
 
 // fileInputKeys are where a file tool names its file, in the order tried.
 var fileInputKeys = []string{"file_path", "notebook_path", "path"}

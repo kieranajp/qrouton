@@ -46,11 +46,14 @@ const (
 	AgentCoverageRoot = "root"
 	AgentCoverageNone = "none"
 
-	AgentStateWaiting  = "Waiting for you"
-	AgentStateWorking  = "Working"
-	AgentStateIdle     = "Idle"
-	AgentStateActive   = "Active"
-	AgentStateFinished = "Finished"
-	AgentStateFailed   = "Failed"
-	AgentStateEnded    = "Ended with run"
+	// AgentState is one agent's state. Idle is only ever the PTY's timing, for
+	// a runner that reports no tool calls.
+	AgentStateWorking       = "working"
+	AgentStateWaitingAgents = "waiting_agents"
+	AgentStateNeedsYou      = "needs_you"
+	AgentStateYourTurn      = "your_turn"
+	AgentStateIdle          = "idle"
+	AgentStateDone          = "done"
+	AgentStateFailed        = "failed"
+	AgentStateEnded         = "ended"
 )

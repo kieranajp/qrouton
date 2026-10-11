@@ -2,8 +2,10 @@ package desktop
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -53,12 +55,12 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	if cold := rows["cold"].Summary; cold.Running || cold.Coverage != status.AgentCoverageNone || cold.Attention != status.AgentAttentionNone {
 		t.Fatalf("cold row summary = %+v", cold)
 	}
-	if fields.Agents.Provider != agentProviderCodex || len(fields.Agents.Agents) != 1 || !fields.Agents.ChildrenKnown || fields.Agents.AttentionKnown {
-		t.Fatalf("selected panel = %+v", fields.Agents)
+	if tree := agentTree(shown.agents.snapshot(), ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage == "" {
+		t.Fatalf("selected tree = %+v", tree)
 	}
 }
 
-func TestSelectedAgentDetailFollowsTheSelectedSlugAndKeepsReferenceStats(t *testing.T) {
+func TestSelectedRepoStatsFollowTheSelectedSlug(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()
 	alphaRoot := sessionDir(t, root, "alpha")
@@ -74,33 +76,26 @@ func TestSelectedAgentDetailFollowsTheSelectedSlugAndKeepsReferenceStats(t *test
 	reg.reveal(alpha)
 	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, renderer.Emit)
 	fields := pushedChrome(t, renderer)
-	if fields.Agents.Provider != agentProviderClaude || len(fields.Agents.Agents) != 1 {
-		t.Fatalf("alpha detail = %+v", fields.Agents)
-	}
 	if len(fields.Repos) != 1 || fields.Repos[0] != reference {
 		t.Fatalf("selected reference stats = %+v", fields.Repos)
 	}
 
 	reg.reveal(beta)
 	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, renderer.Emit)
-	fields = pushedChrome(t, renderer)
-	if fields.Agents.Provider != agentProviderOpenCode || len(fields.Agents.Agents) != 1 {
-		t.Fatalf("beta detail = %+v", fields.Agents)
+	if fields = pushedChrome(t, renderer); len(fields.Repos) != 0 {
+		t.Fatalf("beta inherited alpha's stats: %+v", fields.Repos)
 	}
 }
 
-func TestSelectedColdSessionKeepsKnownManifestProvider(t *testing.T) {
+func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, "cold")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "cold", Runner: agentProviderCodex}); err != nil {
 		t.Fatal(err)
 	}
-	reg := testRegistry(t, dir)
-	renderer := newFakeRenderer()
-	pushChrome(reg, root, nil, nil, nil, renderer.Emit)
-	panel := pushedChrome(t, renderer).Agents
-	if panel.Provider != agentProviderCodex || len(panel.Agents) != 0 || panel.AttentionKnown || panel.ChildrenKnown {
-		t.Fatalf("cold known-provider panel = %+v", panel)
+	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir))
+	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != fmt.Sprintf(agentCoverageNoTools, tree.ProviderLabel) {
+		t.Fatalf("cold tree = %+v", tree)
 	}
 }
 
@@ -170,23 +165,6 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 	<-done
 }
 
-func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
-	clock := &activityClock{at: time.Now()}
-	tracker := newAgentActivity(clock.now)
-	tracker.begin(agentProviderClaude, 1)
-	tracker.exitWithProvider("", 0)
-	clock.at = clock.at.Add(time.Second)
-	tracker.begin(agentProviderCodex, 2)
-	panel := agentPanel(tracker.snapshot())
-	providers := map[string]string{}
-	for _, record := range panel.Agents {
-		providers[record.RunID] = record.Provider
-	}
-	if providers["1"] != agentProviderClaude || providers["2"] != agentProviderCodex {
-		t.Fatalf("record providers = %+v", providers)
-	}
-}
-
 type chromeClock struct {
 	mu sync.Mutex
 	at time.Time
@@ -204,12 +182,17 @@ func (c *chromeClock) advance(by time.Duration) {
 	c.at = c.at.Add(by)
 }
 
-func TestAgentPanelJSONAlwaysUsesAnArrayForRecords(t *testing.T) {
-	reg := testRegistry(t, filepath.Join(t.TempDir(), "octopus"))
-	renderer := newFakeRenderer()
-	pushChrome(reg, "", nil, nil, nil, renderer.Emit)
-	if fields := pushedChrome(t, renderer); fields.Agents.Agents == nil {
-		t.Fatal("chrome emitted a nil agent record list")
+func TestAgentTreeJSONNeverCarriesANullList(t *testing.T) {
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderClaude, 1)
+	for _, tree := range []status.AgentTree{agentTree(agentActivitySnapshot{}, ""), agentTree(tracker.snapshot(), "")} {
+		body, err := json.Marshal(tree)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "null") {
+			t.Fatalf("tree marshals a null: %s", body)
+		}
 	}
 }
 
@@ -298,15 +281,15 @@ func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
 	}
 }
 
-// The rail row and the agent panel read one tracker, so a session's activity
-// reaches the page as one answer in two vocabularies.
-func TestRailRowAndAgentPanelAgreeOnOneSessionsActivity(t *testing.T) {
+// The rail row and the Agents pane read one tracker, so a terminal-timed
+// session's activity reaches the page as one answer in two vocabularies.
+func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()
 	reg := newSessionsWithActivity(clock.now)
 	shown := reg.add(sessionDir(t, root, "octopus"), []string{"/bin/cat"}, os.Environ())
 	reg.reveal(shown)
-	shown.agents.begin(agentProviderClaude, 1)
+	shown.agents.begin(agentProviderOpenCode, 1)
 
 	for _, step := range []struct {
 		name   string
@@ -315,7 +298,7 @@ func TestRailRowAndAgentPanelAgreeOnOneSessionsActivity(t *testing.T) {
 		record string
 	}{
 		{"output", shown.agents.output, status.ActivityWorking, agentStateWorking},
-		{"attention", func() { shown.agents.attention(1, status.ActivityWaiting) }, status.ActivityWaiting, agentStateWaiting},
+		{"attention", func() { shown.agents.attention(1, status.ActivityWaiting) }, status.ActivityWaiting, agentStateNeedsYou},
 		{"typing", shown.agents.input, status.ActivityWorking, agentStateWorking},
 		{"silence", func() { clock.at = clock.at.Add(activityQuiet) }, status.ActivityIdle, agentStateIdle},
 	} {
@@ -329,21 +312,21 @@ func TestRailRowAndAgentPanelAgreeOnOneSessionsActivity(t *testing.T) {
 		if len(fields.Sessions) != 1 || fields.Sessions[0].Activity != step.rail {
 			t.Fatalf("%s: rail rows = %+v, want activity %q", step.name, fields.Sessions, step.rail)
 		}
-		if got := panelRoot(t, fields.Agents).State; got != step.record {
-			t.Fatalf("%s: panel root reads %q while the rail reads %q", step.name, got, step.rail)
+		if got := treeRoot(t, agentTree(shown.agents.snapshot(), "")).State; got != step.record {
+			t.Fatalf("%s: tree root reads %q while the rail reads %q", step.name, got, step.rail)
 		}
 	}
 }
 
-func panelRoot(t *testing.T, panel status.AgentPanel) status.AgentRecord {
+func treeRoot(t *testing.T, tree status.AgentTree) status.AgentNode {
 	t.Helper()
-	for _, record := range panel.Agents {
-		if record.ID == agentRootID {
-			return record
+	for _, node := range tree.Nodes {
+		if node.Root {
+			return node
 		}
 	}
-	t.Fatalf("no root record in %+v", panel.Agents)
-	return status.AgentRecord{}
+	t.Fatalf("no root node in %+v", tree.Nodes)
+	return status.AgentNode{}
 }
 
 // A stage mark pulses while its lead runs in the current run, and stops when

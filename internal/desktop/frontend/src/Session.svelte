@@ -158,7 +158,7 @@
             focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else if tab.kind === WINDOW_KINDS.AGENTS}
-          <AgentsPane agents={fields.agents} active={i === view.selected} />
+          <AgentsPane slug={fields.slug} active={i === view.selected} />
         {:else}
           <DockedDocument slug={fields.slug} id={tab.id} active={i === view.selected} />
         {/if}

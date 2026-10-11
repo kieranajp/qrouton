@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -18,6 +17,7 @@ type Chrome struct {
 	fields      status.Fields
 	initialized bool
 	emit        emitter
+	tree        func(slug string) status.AgentTree
 }
 
 func newChrome(emit emitter) *Chrome {
@@ -131,6 +131,9 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 		case <-fields.C:
 		}
 		pushChrome(reg, root, cfg, measured, unseen, emit)
+		if reg.trees != nil {
+			reg.trees.schedule(reg.current())
+		}
 	}
 }
 
@@ -183,11 +186,6 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
-		panel := agentPanel(snapshot)
-		if panel.Provider == "" {
-			panel.Provider = fields.Agents.Provider
-		}
-		fields.Agents = panel
 	}
 	// The rail populates with nothing on screen: a window opening on no session at
 	// all still has to offer the ones on disk.
@@ -233,24 +231,4 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 		summary.Attention = status.AgentAttentionUnknown
 	}
 	return summary
-}
-
-func agentPanel(snapshot agentActivitySnapshot) status.AgentPanel {
-	records := make([]status.AgentRecord, 0, len(snapshot.Records))
-	for _, record := range snapshot.Records {
-		records = append(records, status.AgentRecord{
-			ID: record.ID, RunID: record.RunID, Provider: record.Provider, ParentID: record.ParentID,
-			Type: record.Type, Description: record.Description, State: record.State,
-			ParentKnown: record.ParentKnown, StartedAt: record.StartedAt, FinishedAt: record.FinishedAt,
-		})
-	}
-	return status.AgentPanel{
-		Provider:       snapshot.Provider,
-		ProviderLabel:  launch.RunnerLabel(snapshot.Provider),
-		AttentionKnown: snapshot.Capabilities.Attention,
-		ChildrenKnown:  snapshot.Capabilities.Children,
-		ParentsKnown:   snapshot.Capabilities.Parents,
-		OutcomesKnown:  snapshot.Capabilities.Outcomes,
-		Agents:         records,
-	}
 }

@@ -72,7 +72,7 @@ func TestAgentTreePlacesADepthTwoChildUnderItsCaller(t *testing.T) {
 	if lead.ParentID != agentRootID || !lead.ParentKnown || inner.ParentID != lead.ID || !inner.ParentKnown {
 		t.Fatalf("depth-1 %+v, depth-2 %+v", lead, inner)
 	}
-	if inner.Description == "" || inner.State != agentStateFinished {
+	if inner.Description == "" || inner.State != agentStateDone {
 		t.Fatalf("depth-2 child = %+v", inner)
 	}
 }
@@ -97,7 +97,7 @@ func TestAgentTreeReadsABackgroundOutcomeFromItsNotification(t *testing.T) {
 	view := replayed(t, spikeEvents(t, "run4-bg-hooks")).snapshot()
 	child := delegatedRecord(t, view, "a5438536af5bc5c5e")
 	if child.Outcome != "completed" || child.Tokens != 40927 || child.DurationMs != 9040 ||
-		child.State != agentStateFinished || child.LastMessage == "" || child.ParentID != agentRootID {
+		child.State != agentStateDone || child.LastMessage == "" || child.ParentID != agentRootID {
 		t.Fatalf("background child = %+v", child)
 	}
 }
@@ -105,7 +105,7 @@ func TestAgentTreeReadsABackgroundOutcomeFromItsNotification(t *testing.T) {
 func TestAgentTreeReadsAForegroundOutcomeFromItsResult(t *testing.T) {
 	view := replayed(t, spikeEvents(t, "run3-fg-hooks")).snapshot()
 	child := delegatedRecord(t, view, "ab76fea07a9b71550")
-	if child.Outcome != "completed" || child.Tokens != 42191 || child.ToolCount != 1 || child.State != agentStateFinished {
+	if child.Outcome != "completed" || child.Tokens != 42191 || child.ToolCount != 1 || child.State != agentStateDone {
 		t.Fatalf("foreground child = %+v", child)
 	}
 }
@@ -122,7 +122,7 @@ func TestAgentTreeToleratesReversedDelivery(t *testing.T) {
 		}
 	}
 	child := delegatedRecord(t, view, "ab76fea07a9b71550")
-	if child.ParentID != agentRootID || !child.ParentKnown || child.State != agentStateFinished || len(child.Tools) != 1 {
+	if child.ParentID != agentRootID || !child.ParentKnown || child.State != agentStateDone || len(child.Tools) != 1 {
 		t.Fatalf("child = %+v", child)
 	}
 	root := recordForRun(t, view, agentRootID, 1)

@@ -71,7 +71,7 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 		t.Fatal("unmatched stop did not create a tombstone")
 	}
 	record := delegatedRecord(t, tracker.snapshot(), "agent-2")
-	if record.State != agentStateFinished || !record.StartedAt.IsZero() {
+	if record.State != agentStateDone || !record.StartedAt.IsZero() {
 		t.Fatalf("tombstone = %+v", record)
 	}
 	tombstone.Kind = workbench.LifecycleStart
@@ -152,7 +152,7 @@ func TestGenerationAdvanceFinishesTheOldRunAndRejectsItsLateEvents(t *testing.T)
 	late := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart, ID: "ghost",
 	}
-	if tracker.lifecycle(late) || tracker.attention(1, status.ActivityWaiting) {
+	if changed, _ := tracker.attention(1, status.ActivityWaiting); tracker.lifecycle(late) || changed {
 		t.Fatal("old-generation hook was accepted")
 	}
 	if _, ok := findRecord(tracker.snapshot(), "ghost", 1); ok {
@@ -195,17 +195,17 @@ func TestRootExitEndsItsChildrenAndKeepsThem(t *testing.T) {
 func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	tracker := newAgentActivity(clock.now)
-	tracker.begin(agentProviderClaude, 88)
+	tracker.begin(agentProviderCodex, 88)
 	tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 88, Kind: workbench.LifecycleStart, ID: "reused-id",
+		Provider: agentProviderCodex, Generation: 88, Kind: workbench.LifecycleStart, ID: "reused-id",
 	})
 	tracker.exitWithProvider("", 0)
 	clock.at = clock.at.Add(time.Second)
-	if !tracker.begin(agentProviderClaude, 7) {
+	if !tracker.begin(agentProviderCodex, 7) {
 		t.Fatal("a new supervisor generation was mistaken for an old numeric generation")
 	}
 	if !tracker.lifecycle(workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 7, Kind: workbench.LifecycleStart, ID: "reused-id",
+		Provider: agentProviderCodex, Generation: 7, Kind: workbench.LifecycleStart, ID: "reused-id",
 	}) {
 		t.Fatal("provider ID could not be reused in the new run")
 	}
@@ -214,7 +214,7 @@ func TestNewSupervisorRunCoexistsWithRetainedPriorGeneration(t *testing.T) {
 		t.Fatalf("coexisting runs have %d records, want two roots and two children: %+v", len(view.Records), view.Records)
 	}
 	if recordForRun(t, view, agentRootID, 7).State != agentStateIdle ||
-		recordForRun(t, view, agentRootID, 88).State != agentStateFinished {
+		recordForRun(t, view, agentRootID, 88).State != agentStateDone {
 		t.Fatalf("coexisting roots = %+v", view.Records)
 	}
 }
@@ -252,15 +252,20 @@ func TestTrackerMapsCapabilitiesAndRootOutputWithoutParsingIt(t *testing.T) {
 	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderClaude, 1)
 	tracker.output()
-	root := recordForRun(t, tracker.snapshot(), agentRootID, 1)
+	if root := recordForRun(t, tracker.snapshot(), agentRootID, 1); root.State != agentStateYourTurn {
+		t.Fatalf("a Claude root's terminal output moved it off your turn: %+v", root)
+	}
+	tracker.begin(agentProviderOpenCode, 9)
+	tracker.output()
+	root := recordForRun(t, tracker.snapshot(), agentRootID, 9)
 	if root.State != agentStateWorking {
 		t.Fatalf("root after output = %+v", root)
 	}
 	clock.at = clock.at.Add(activityQuiet)
-	if root := recordForRun(t, tracker.snapshot(), agentRootID, 1); root.State != agentStateIdle {
+	if root := recordForRun(t, tracker.snapshot(), agentRootID, 9); root.State != agentStateIdle {
 		t.Fatalf("root at quiet boundary = %+v", root)
 	}
-	if caps := tracker.snapshot().Capabilities; !caps.Attention || !caps.Children || !caps.Parents || !caps.Outcomes {
+	if caps := capabilitiesFor(agentProviderClaude); !caps.Attention || !caps.Children || !caps.Parents || !caps.Outcomes {
 		t.Fatalf("Claude capabilities = %+v", caps)
 	}
 	tracker.begin(agentProviderCodex, 2)
@@ -398,7 +403,7 @@ func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 		t.Fatalf("output before any generation = %q, want working", got)
 	}
 
-	tracker.begin(agentProviderClaude, 1)
+	tracker.begin(agentProviderCodex, 1)
 	if got := tracker.state(); got != status.ActivityIdle {
 		t.Fatalf("a new run left stale state %q, want idle", got)
 	}
@@ -428,7 +433,7 @@ func TestRootActivityRanksTheHookOverTheClock(t *testing.T) {
 
 	tracker.output()
 	tracker.attention(1, status.ActivityWaiting)
-	tracker.exitWithProvider(agentProviderClaude, 0)
+	tracker.exitWithProvider(agentProviderCodex, 0)
 	if got := tracker.state(); got != status.ActivityIdle {
 		t.Fatalf("a root exit left stale state %q, want idle", got)
 	}
@@ -502,9 +507,10 @@ func chimingSession(t *testing.T, cfg *config.Config, watched func(*sessionState
 	t.Helper()
 	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now)
 	state := reg.add(sessionDir(t, t.TempDir(), "octopus"), []string{"/bin/cat"}, os.Environ())
-	state.agents.begin(agentProviderClaude, 1)
+	state.agents.begin(agentProviderCodex, 1)
 	ring := ringer(cfg, state, watched)
-	return state, attend(state, reg.current, func() {}, ring), ring
+	notify := attend(state, reg.current, func() {}, ring)
+	return state, func(value string, generation uint64) { notify(state.agents.attention(generation, value)) }, ring
 }
 
 // An orchestrator ends a turn each time a background lead reports back, so only
@@ -513,7 +519,7 @@ func TestATurnEndingChimesOnlyOnceNothingDelegatedIsRunning(t *testing.T) {
 	chimed := recordChimes(t)
 	state, hook, _ := chimingSession(t, &config.Config{}, unwatched)
 	lead := workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
+		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart,
 		ID: "agent-1", Type: "qrouton-research-lead",
 	}
 	state.agents.lifecycle(lead)
@@ -592,11 +598,12 @@ func TestASessionIsUnreadUntilShownAndNeverWhileShown(t *testing.T) {
 	reg := newSessionsWithActivity((&activityClock{at: time.Now()}).now)
 	background := reg.add(sessionDir(t, t.TempDir(), "background"), []string{"/bin/cat"}, os.Environ())
 	onscreen := reg.add(sessionDir(t, t.TempDir(), "onscreen"), []string{"/bin/cat"}, os.Environ())
-	background.agents.begin(agentProviderClaude, 1)
-	onscreen.agents.begin(agentProviderClaude, 1)
+	background.agents.begin(agentProviderCodex, 1)
+	onscreen.agents.begin(agentProviderCodex, 1)
 	reg.reveal(onscreen)
 	hookFor := func(state *sessionState) func(string, uint64) {
-		return attend(state, reg.current, func() {}, func() {})
+		notify := attend(state, reg.current, func() {}, func() {})
+		return func(value string, generation uint64) { notify(state.agents.attention(generation, value)) }
 	}
 
 	hookFor(background)(status.ActivityTurnEnded, 1)

@@ -15,6 +15,17 @@ func Target(tool string, input json.RawMessage) string {
 		}
 		return server + mcpTargetJoin + name
 	}
+	if tool == ToolAskUserQuestion {
+		var ask struct {
+			Questions []struct {
+				Question string `json:"question"`
+			} `json:"questions"`
+		}
+		if json.Unmarshal(input, &ask) != nil || len(ask.Questions) == 0 {
+			return ""
+		}
+		return ask.Questions[0].Question
+	}
 	var fields map[string]any
 	if json.Unmarshal(input, &fields) != nil {
 		return ""
@@ -33,7 +44,7 @@ func Target(tool string, input json.RawMessage) string {
 		return field("url")
 	case toolWebSearch:
 		return field("query")
-	case toolAgent, toolTaskLegacy:
+	case ToolAgent, ToolTaskLegacy:
 		return field("description")
 	}
 	for _, key := range fileInputKeys {

@@ -246,8 +246,10 @@ type Sessions struct {
 	// that moved would rename every shortcut under the user's fingers.
 	rail []string
 
-	now         func() time.Time
-	agents      map[string]*agentActivity
+	now    func() time.Time
+	agents map[string]*agentActivity
+	// trees pushes the shown session's agent tree; nil until the workbench runs.
+	trees       *agentTrees
 	repoChanges map[string]struct{}
 }
 

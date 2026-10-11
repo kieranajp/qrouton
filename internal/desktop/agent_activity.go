@@ -45,6 +45,22 @@ type agentRecord struct {
 	ToolCount   int
 	LastMessage string
 	Tools       []agentToolCall
+	Files       []string
+
+	// Reason, Tool and Target are filled when a snapshot derives the state.
+	// A failed record keeps its reason.
+	Reason string
+	Tool   string
+	Target string
+
+	// needs is why the agent waits on the user, and needsTool the ask call
+	// whose result clears it.
+	needs     string
+	needsTool string
+	// turnEnded and background are the root's: its turn is over, and these
+	// background agents have not reported their outcome yet.
+	turnEnded  bool
+	background map[string]bool
 }
 
 type agentToolCall struct {
@@ -122,8 +138,8 @@ func (a *agentActivity) begin(provider string, generation uint64) bool {
 	a.lastRun = runID
 	a.records[a.keyLocked(agentRootID, true)] = &agentRecord{
 		ID: agentRootID, RunID: runID, Provider: provider,
-		State: agentStateActive, Root: true, ParentKnown: true,
-		Generation: generation, StartedAt: now,
+		State: agentLive, Root: true, ParentKnown: true,
+		Generation: generation, StartedAt: now, turnEnded: true,
 	}
 	return true
 }
@@ -155,22 +171,22 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		}
 		a.records[key] = &agentRecord{
 			ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-			ParentID: parentID, Type: event.Type, State: agentStateActive, ParentKnown: true,
+			ParentID: parentID, Type: event.Type, State: agentLive, ParentKnown: true,
 			Generation: event.Generation, StartedAt: started,
 		}
 	case workbench.LifecycleStop:
 		if record == nil {
 			a.records[key] = &agentRecord{
 				ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-				ParentID: parentID, Type: event.Type, State: agentStateFinished, ParentKnown: true,
+				ParentID: parentID, Type: event.Type, State: agentStateDone, ParentKnown: true,
 				Generation: event.Generation, FinishedAt: now,
 			}
 			break
 		}
-		if record.State != agentStateActive {
+		if record.State != agentLive {
 			return false
 		}
-		record.State = agentStateFinished
+		record.State = agentStateDone
 		record.FinishedAt = now
 	default:
 		return false
@@ -187,29 +203,32 @@ func (a *agentActivity) keyLocked(id string, root bool) agentRecordKey {
 	return agentRecordKey{provider: a.provider, runID: a.lastRun, id: id, root: root}
 }
 
-func (a *agentActivity) attention(generation uint64, state string) bool {
+// attention is a lifecycle-only runner's own word on its root. Waiting and a
+// turn ending with nothing delegated still running ask for the chime.
+func (a *agentActivity) attention(generation uint64, state string) (changed, alert bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !a.running || generation != a.generation {
-		return false
+		return false, false
 	}
 	switch state {
 	case status.ActivityWaiting:
 		a.waiting = true
 		a.unread = true
+		return true, true
 	case status.ActivityWorking:
 		a.waiting = false
 		a.spoke = a.now()
+		return true, false
 	case status.ActivityTurnEnded:
 		if a.delegatingLocked() {
-			return false
+			return false, false
 		}
 		a.waiting = true
 		a.unread = true
-	default:
-		return false
+		return true, true
 	}
-	return true
+	return false, false
 }
 
 // ring claims the one chime a session gets between two things the user types,
@@ -226,7 +245,7 @@ func (a *agentActivity) ring() bool {
 
 func (a *agentActivity) delegatingLocked() bool {
 	for _, record := range a.records {
-		if !record.Root && record.Generation == a.generation && record.State == agentStateActive {
+		if !record.Root && record.Generation == a.generation && record.State == agentLive {
 			return true
 		}
 	}
@@ -244,6 +263,9 @@ func (a *agentActivity) output() {
 func (a *agentActivity) input() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	if root := a.rootLocked(); root != nil {
+		root.needs, root.needsTool = "", ""
+	}
 	a.waiting = false
 	a.unread = false
 	a.rung = false
@@ -256,12 +278,24 @@ func (a *agentActivity) seen() {
 	a.unread = false
 }
 
-// state is what the rail says about this session: waiting comes from the
-// runner's own hook, working and idle are the PTY's timing, never its contents.
+// state is what the rail says about this session. A runner that reports its
+// tool calls is read from its events; any other from its own waiting hook and
+// the PTY's timing, never its contents.
 func (a *agentActivity) state() string {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	return a.stateLocked(a.now())
+	now := a.now()
+	root := a.rootLocked()
+	if !a.toolsLocked() || root == nil || root.State != agentLive {
+		return a.stateLocked(now)
+	}
+	switch state, _, _, _ := a.displayLocked(root, now); state {
+	case agentStateNeedsYou, agentStateYourTurn:
+		return status.ActivityWaiting
+	case agentStateWorking, agentStateWaitingAgents:
+		return status.ActivityWorking
+	}
+	return status.ActivityIdle
 }
 
 func (a *agentActivity) stateLocked(now time.Time) string {
@@ -279,7 +313,7 @@ func (a *agentActivity) exitWithProvider(provider string, code int) bool {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	now := a.now()
-	rootState := agentStateFinished
+	rootState := agentStateDone
 	if code != 0 {
 		rootState = agentStateFailed
 	}
@@ -318,7 +352,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	active := 0
 	var live []string
 	for _, record := range a.records {
-		if record.State == agentStateActive {
+		if record.State == agentLive {
 			active++
 			if a.running && !record.Root && record.Generation == a.generation && record.Type != "" {
 				live = append(live, record.Type)
@@ -326,9 +360,9 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		}
 		copy := *record
 		copy.Tools = slices.Clone(record.Tools)
-		if copy.Root && copy.State == agentStateActive {
-			copy.State = agentStateFor(a.stateLocked(now))
-		}
+		copy.Files = slices.Clone(record.Files)
+		copy.background = nil
+		copy.State, copy.Reason, copy.Tool, copy.Target = a.displayLocked(record, now)
 		records = append(records, copy)
 	}
 	sort.Slice(records, func(i, j int) bool {
@@ -362,7 +396,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 // with it rather than finishing.
 func (a *agentActivity) finishActiveLocked(now time.Time, state string) {
 	for _, record := range a.records {
-		if record.State != agentStateActive {
+		if record.State != agentLive {
 			continue
 		}
 		record.State = state
@@ -394,7 +428,7 @@ func (a *agentActivity) capLocked() {
 	}
 	var leaves []agentRecordKey
 	for key, record := range a.records {
-		if record.Root || record.State == agentStateActive || parents[key.runID+"\x00"+record.ID] {
+		if record.Root || record.State == agentLive || parents[key.runID+"\x00"+record.ID] {
 			continue
 		}
 		leaves = append(leaves, key)
@@ -413,7 +447,7 @@ func (a *agentActivity) capLocked() {
 func agentStateFor(activity string) string {
 	switch activity {
 	case status.ActivityWaiting:
-		return agentStateWaiting
+		return agentStateNeedsYou
 	case status.ActivityWorking:
 		return agentStateWorking
 	default:

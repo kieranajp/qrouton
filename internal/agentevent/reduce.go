@@ -95,7 +95,7 @@ func Reduce(provider string, input io.Reader) (workbench.AgentEventRequest, erro
 	return event, nil
 }
 
-func spawnTool(name string) bool { return name == toolAgent || name == toolTaskLegacy }
+func spawnTool(name string) bool { return name == ToolAgent || name == ToolTaskLegacy }
 
 func reduceSpawn(event *workbench.AgentEventRequest, p claudePayload) {
 	var in spawnInput

@@ -83,6 +83,8 @@ const (
 	ptyDataEvent = "pty:data:"
 	ptyExitEvent = "pty:exit:"
 	chromeEvent  = "chrome:update"
+	// agentTreeEvent carries the shown session's whole agent tree, named by slug.
+	agentTreeEvent = "agents:tree:"
 
 	windowDataEvent    = "window:data:"
 	windowExitEvent    = "window:exit:"
@@ -238,13 +240,29 @@ const (
 	agentRootID         = "root"
 	agentSetupRunPrefix = "setup-"
 
-	agentStateWaiting  = status.AgentStateWaiting
-	agentStateWorking  = status.AgentStateWorking
-	agentStateIdle     = status.AgentStateIdle
-	agentStateActive   = status.AgentStateActive
-	agentStateFinished = status.AgentStateFinished
-	agentStateFailed   = status.AgentStateFailed
-	agentStateEnded    = status.AgentStateEnded
+	agentStateWorking       = status.AgentStateWorking
+	agentStateWaitingAgents = status.AgentStateWaitingAgents
+	agentStateNeedsYou      = status.AgentStateNeedsYou
+	agentStateYourTurn      = status.AgentStateYourTurn
+	agentStateIdle          = status.AgentStateIdle
+	agentStateDone          = status.AgentStateDone
+	agentStateFailed        = status.AgentStateFailed
+	agentStateEnded         = status.AgentStateEnded
+	// agentLive marks a record still running; its shown state is derived.
+	agentLive = "live"
+
+	// agentTreeInterval coalesces tree pushes; tool calls arrive several a second.
+	agentTreeInterval = 250 * time.Millisecond
+	agentFileLimit    = 50
+
+	agentCoverageRootOnly = "%s reports the root agent only, so working and idle come from its terminal."
+	agentCoverageNoTools  = "%s reports its agents starting and stopping, not what they are doing."
+
+	agentReasonQuestion = "Asking you a question"
+	agentReasonPlan     = "Plan ready for your review"
+
+	notificationPermission  = "permission_prompt"
+	notificationElicitation = "elicitation_dialog"
 
 	// agentRecordCap bounds one session's tree; the oldest finished leaves go first.
 	agentRecordCap = 500

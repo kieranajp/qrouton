@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"slices"
 	"sort"
 	"time"
 
@@ -33,19 +34,19 @@ func newAgentRun() *agentRun {
 	return &agentRun{spawns: map[string]*agentSpawn{}, calls: map[string]string{}}
 }
 
-// apply folds one reduced hook into the tree, and reports whether the tree
-// changed.
-func (a *agentActivity) apply(event workbench.AgentEventRequest) bool {
+// apply folds one reduced hook into the tree. alert means the root has just
+// come to need the user, or just handed the turn back, which claims the chime.
+func (a *agentActivity) apply(event workbench.AgentEventRequest) (changed, alert bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if !a.currentLocked(event.Provider, event.Generation) {
-		return false
+		return false, false
 	}
 	at := event.Timestamp
 	if at.IsZero() {
 		at = a.now()
 	}
-	changed := false
+	before := a.rootStateLocked()
 	switch event.Hook {
 	case agentevent.HookPreToolUse:
 		changed = a.toolStartLocked(event, at)
@@ -56,15 +57,143 @@ func (a *agentActivity) apply(event workbench.AgentEventRequest) bool {
 	case agentevent.HookSubagentStop:
 		changed = a.subagentStopLocked(event, at)
 	case agentevent.HookUserPromptSubmit:
-		for _, n := range event.Notifications {
-			a.taskNotificationLocked(n, at)
-			changed = true
+		changed = a.promptLocked(event, at)
+	case agentevent.HookStop:
+		changed = a.stopLocked(event, at)
+	case agentevent.HookStopFailure:
+		changed = a.needsLocked(event.AgentID, event.AgentType, event.Message, "", at)
+	case agentevent.HookNotification:
+		if event.NotificationType == notificationPermission || event.NotificationType == notificationElicitation {
+			changed = a.needsLocked(event.AgentID, event.AgentType, event.Message, "", at)
 		}
 	}
-	if changed {
-		a.capLocked()
+	if !changed {
+		return false, false
 	}
-	return changed
+	a.capLocked()
+	after := a.rootStateLocked()
+	alert = after != before && (after == agentStateNeedsYou || after == agentStateYourTurn)
+	if alert {
+		a.unread = true
+	}
+	return true, alert
+}
+
+func (a *agentActivity) rootLocked() *agentRecord {
+	return a.records[a.keyLocked(agentRootID, true)]
+}
+
+func (a *agentActivity) rootStateLocked() string {
+	root := a.rootLocked()
+	if root == nil {
+		return ""
+	}
+	state, _, _, _ := a.displayLocked(root, a.now())
+	return state
+}
+
+func (a *agentActivity) toolsLocked() bool { return capabilitiesFor(a.provider).Parents }
+
+// displayLocked derives what an agent is doing from what its hooks said: a
+// finished agent keeps its outcome, a runner without tool hooks is timed by
+// its terminal, and otherwise the open call, the user, or its agents decide.
+func (a *agentActivity) displayLocked(r *agentRecord, now time.Time) (state, reason, tool, target string) {
+	if r.State != agentLive {
+		return r.State, r.Reason, "", ""
+	}
+	if !a.toolsLocked() {
+		if r.Root {
+			return agentStateFor(a.stateLocked(now)), "", "", ""
+		}
+		return agentStateWorking, "", "", ""
+	}
+	if r.needs != "" {
+		return agentStateNeedsYou, r.needs, "", ""
+	}
+	spawning := false
+	for i := len(r.Tools) - 1; i >= 0; i-- {
+		call := r.Tools[i]
+		if call.Closed {
+			continue
+		}
+		if call.Tool == agentevent.ToolAgent || call.Tool == agentevent.ToolTaskLegacy {
+			spawning = true
+			continue
+		}
+		return agentStateWorking, "", call.Tool, call.Target
+	}
+	waiting := spawning || a.liveChildLocked(r)
+	if r.Root && r.turnEnded {
+		if waiting || len(r.background) > 0 {
+			return agentStateWaitingAgents, "", "", ""
+		}
+		return agentStateYourTurn, "", "", ""
+	}
+	if waiting {
+		return agentStateWaitingAgents, "", "", ""
+	}
+	return agentStateWorking, "", "", ""
+}
+
+func (a *agentActivity) liveChildLocked(parent *agentRecord) bool {
+	for key, record := range a.records {
+		if key.runID == parent.RunID && !record.Root && record.ParentID == parent.ID && record.State == agentLive {
+			return true
+		}
+	}
+	return false
+}
+
+// needsLocked marks an agent as waiting on the user. tool is the ask call whose
+// result answers it, and empty when only the user's next message does.
+func (a *agentActivity) needsLocked(id, typ, reason, tool string, at time.Time) bool {
+	agent := a.agentLocked(id, typ, at)
+	if agent == nil || agent.State != agentLive {
+		return false
+	}
+	if reason == "" {
+		reason = agentReasonQuestion
+	}
+	agent.needs, agent.needsTool = reason, tool
+	return true
+}
+
+// promptLocked is the user, or a background agent's result, starting the
+// root's next turn.
+func (a *agentActivity) promptLocked(event workbench.AgentEventRequest, at time.Time) bool {
+	for _, n := range event.Notifications {
+		a.taskNotificationLocked(n, at)
+	}
+	if event.AgentID != "" {
+		return len(event.Notifications) > 0
+	}
+	if root := a.rootLocked(); root != nil {
+		root.turnEnded = false
+		root.needs, root.needsTool = "", ""
+	}
+	return true
+}
+
+func (a *agentActivity) stopLocked(event workbench.AgentEventRequest, at time.Time) bool {
+	if event.AgentID != "" {
+		return false
+	}
+	root := a.rootLocked()
+	if root == nil {
+		return false
+	}
+	root.turnEnded = true
+	root.needs, root.needsTool = "", ""
+	root.background = map[string]bool{}
+	for _, id := range event.BackgroundTasks {
+		if child := a.records[a.keyLocked(id, false)]; child == nil || child.Outcome == "" {
+			root.background[id] = true
+		}
+	}
+	if event.Message != "" {
+		root.LastMessage = event.Message
+	}
+	return true
 }
 
 // agentLocked is the record a hook fired in: the root for an empty id, and a
@@ -82,7 +211,7 @@ func (a *agentActivity) agentLocked(id, typ string, at time.Time) *agentRecord {
 	}
 	record := &agentRecord{
 		ID: id, RunID: a.lastRun, Provider: a.provider, ParentID: agentRootID,
-		Type: typ, State: agentStateActive, Generation: a.generation, StartedAt: at,
+		Type: typ, State: agentLive, Generation: a.generation, StartedAt: at,
 	}
 	a.records[key] = record
 	return record
@@ -108,7 +237,22 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 			a.queueLocked(spawn)
 		}
 	}
+	switch event.Tool {
+	case agentevent.ToolAskUserQuestion:
+		a.needsLocked(event.AgentID, event.AgentType, firstOf(event.Target, agentReasonQuestion), event.ToolUseID, at)
+	case agentevent.ToolExitPlanMode:
+		a.needsLocked(event.AgentID, event.AgentType, agentReasonPlan, event.ToolUseID, at)
+	}
 	return true
+}
+
+func firstOf(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time.Time) bool {
@@ -117,6 +261,13 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 		return false
 	}
 	failed := event.Hook == agentevent.HookPostToolUseFailure
+	if caller.needsTool != "" && caller.needsTool == event.ToolUseID {
+		caller.needs, caller.needsTool = "", ""
+	}
+	if !failed && event.Target != "" && slices.Contains(agentevent.FileWriteTools, event.Tool) &&
+		!slices.Contains(caller.Files, event.Target) && len(caller.Files) < agentFileLimit {
+		caller.Files = append(caller.Files, event.Target)
+	}
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
 			if call := a.callLocked(event.ToolUseID); call != nil {
@@ -166,8 +317,8 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 	if record.spawn == "" {
 		a.matchLocked(record)
 	}
-	if record.State == agentStateActive {
-		record.State = agentStateFinished
+	if record.State == agentLive {
+		record.State = agentStateDone
 	}
 	if record.FinishedAt.IsZero() {
 		record.FinishedAt = at
@@ -179,6 +330,9 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 }
 
 func (a *agentActivity) taskNotificationLocked(n workbench.TaskNotification, at time.Time) {
+	if root := a.rootLocked(); root != nil {
+		delete(root.background, n.TaskID)
+	}
 	var child *agentRecord
 	if spawn := a.run.spawns[n.ToolUseID]; spawn != nil {
 		child = a.confirmLocked(spawn, n.TaskID, at)
@@ -238,7 +392,7 @@ func (a *agentActivity) confirmLocked(spawn *agentSpawn, childID string, at time
 	if child == nil {
 		child = &agentRecord{
 			ID: childID, RunID: a.lastRun, Provider: a.provider, Type: spawn.typ,
-			State: agentStateActive, Generation: a.generation, StartedAt: at,
+			State: agentLive, Generation: a.generation, StartedAt: at,
 		}
 		a.records[a.keyLocked(childID, false)] = child
 	}
@@ -351,9 +505,10 @@ func outcomeLocked(record *agentRecord, outcome workbench.AgentOutcome, message 
 		record.LastMessage = message
 	}
 	if outcome.Status == agentOutcomeCompleted {
-		record.State = agentStateFinished
+		record.State = agentStateDone
 	} else {
 		record.State = agentStateFailed
+		record.Reason = outcome.Status
 	}
 	if record.FinishedAt.IsZero() {
 		record.FinishedAt = at

@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -181,33 +180,41 @@ func ringer(cfg *config.Config, state *sessionState, watched func(*sessionState)
 	}
 }
 
-func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(string, uint64) {
-	return func(value string, generation uint64) {
-		if !state.agents.attention(generation, value) {
+// attend is the one path a session's attention change takes: mark it seen if
+// it is on screen, push the chrome, and ring when the change asks for it.
+func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(changed, alert bool) {
+	return func(changed, alert bool) {
+		if !changed {
 			return
 		}
 		if shown() == state {
 			state.agents.seen()
 		}
 		touch()
-		if value == status.ActivityWaiting || value == status.ActivityTurnEnded {
+		if alert {
 			ring()
 		}
 	}
 }
 
-// hookAttention is what a reduced hook says about the root's attention: the
-// same three signals the lifecycle-only runners send on their own.
-func hookAttention(req workbench.AgentEventRequest) string {
-	switch {
-	case req.Hook == agentevent.HookNotification:
-		return status.ActivityWaiting
-	case req.Hook == agentevent.HookStop && req.AgentID == "":
-		return status.ActivityTurnEnded
-	case req.Hook == agentevent.HookSubagentStart:
-		return status.ActivityWorking
+func sessionTree(state *sessionState) status.AgentTree {
+	snapshot := state.agents.snapshot()
+	fallback := ""
+	if snapshot.Provider == "" {
+		fallback = manifestRunner(state.root())
 	}
-	return ""
+	return agentTree(snapshot, fallback)
+}
+
+func manifestRunner(root string) string {
+	if root == "" {
+		return ""
+	}
+	m, err := session.Load(root)
+	if err != nil {
+		return ""
+	}
+	return m.Runner
 }
 
 // run is Run with the renderer already built, so the window lifecycle and the
@@ -231,13 +238,15 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {
 				return reg.current() == s && r.Focused(mainWindowName)
 			})
-			attention := attend(state, reg.current, reg.touch, ring)
+			notify := attend(state, reg.current, reg.touch, ring)
 			return serveControl(socket, windows, state, controlHooks{
 				bugReports: opts.bugReports,
 				vault:      opts.vault,
 				thoughts:   opts.Config.ThoughtsRoots,
-				attention:  attention,
-				ring:       ring,
+				attention: func(value string, generation uint64) {
+					notify(state.agents.attention(generation, value))
+				},
+				ring: ring,
 				generation: func(req workbench.RunnerGenerationRequest) {
 					if req.Provider != state.provider {
 						return
@@ -252,12 +261,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 					}
 				},
 				agentEvent: func(req workbench.AgentEventRequest) {
-					if state.agents.apply(req) {
-						reg.touch()
-					}
-					if value := hookAttention(req); value != "" {
-						attention(value, req.Generation)
-					}
+					notify(state.agents.apply(req))
 				},
 				picker: reg.queuePicker,
 			})
@@ -282,8 +286,15 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		copyFile:    func(path string) error { return copyFile(launcher.CopyFile(path)) },
 	}
 	chromeEmit := r.Emit
+	reg.trees = newAgentTrees(r.Emit, agentTreeInterval, reg.current, sessionTree)
 	if opts.chrome != nil {
 		chromeEmit = opts.chrome.publish
+		opts.chrome.answerTrees(func(slug string) status.AgentTree {
+			if state := reg.bySlug(slug); state != nil {
+				return sessionTree(state)
+			}
+			return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)))
+		})
 	}
 	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 	if opts.updates != nil {

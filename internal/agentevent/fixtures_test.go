@@ -49,7 +49,7 @@ func find(events []workbench.AgentEventRequest, match func(workbench.AgentEventR
 }
 
 func agentCalls(hook string) func(workbench.AgentEventRequest) bool {
-	return func(e workbench.AgentEventRequest) bool { return e.Hook == hook && e.Tool == toolAgent }
+	return func(e workbench.AgentEventRequest) bool { return e.Hook == hook && e.Tool == ToolAgent }
 }
 
 func TestReduceNamesTheSpawnedChild(t *testing.T) {
@@ -146,6 +146,7 @@ func TestTargetPicksOneThingPerTool(t *testing.T) {
 		{"Agent", `{"description":"Trace hooks","prompt":"long"}`, "Trace hooks"},
 		{"mcp__qrouton__run_command", `{"command":"make"}`, "qrouton · run_command"},
 		{"TodoWrite", `{"todos":[]}`, ""},
+		{"AskUserQuestion", `{"questions":[{"question":"Which branch?","options":[]}]}`, "Which branch?"},
 	} {
 		if got := Target(tc.tool, json.RawMessage(tc.input)); got != tc.want {
 			t.Errorf("Target(%s) = %q, want %q", tc.tool, got, tc.want)

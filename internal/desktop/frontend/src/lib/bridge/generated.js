@@ -13,6 +13,7 @@ export const ASSEMBLY_RUNNERS = "github.com/kieranajp/qrouton/internal/desktop.A
 export const BUG_REPORTS_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Cancel";
 export const BUG_REPORTS_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Confirm";
 export const BUG_REPORTS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.BugReports.Load";
+export const CHROME_AGENT_TREE = "github.com/kieranajp/qrouton/internal/desktop.Chrome.AgentTree";
 export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Chrome.Snapshot";
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
@@ -65,6 +66,7 @@ export const WINDOWS_START = "github.com/kieranajp/qrouton/internal/desktop.Wind
 export const WINDOWS_SURFACES = "github.com/kieranajp/qrouton/internal/desktop.Windows.Surfaces";
 export const WINDOWS_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Write";
 
+export const AGENT_TREE_EVENT = "agents:tree:";
 export const ASSEMBLY_PROGRESS_EVENT = "assembly:progress";
 export const ASSEMBLY_REQUESTED_EVENT = "assembly:requested";
 export const CHROME_EVENT = "chrome:update";
@@ -105,15 +107,16 @@ export const AGENT_COVERAGE = Object.freeze({
   NONE: "none",
 });
 
-/** @typedef {"Waiting for you"|"Working"|"Idle"|"Active"|"Finished"|"Failed"|"Ended with run"} AgentState */
+/** @typedef {"working"|"waiting_agents"|"needs_you"|"your_turn"|"idle"|"done"|"failed"|"ended"} AgentState */
 export const AGENT_STATES = Object.freeze({
-  WAITING: "Waiting for you",
-  WORKING: "Working",
-  IDLE: "Idle",
-  ACTIVE: "Active",
-  FINISHED: "Finished",
-  FAILED: "Failed",
-  ENDED: "Ended with run",
+  WORKING: "working",
+  WAITING_AGENTS: "waiting_agents",
+  NEEDS_YOU: "needs_you",
+  YOUR_TURN: "your_turn",
+  IDLE: "idle",
+  DONE: "done",
+  FAILED: "failed",
+  ENDED: "ended",
 });
 
 /** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
@@ -247,7 +250,7 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, provider_label: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -263,15 +266,6 @@ export const CHROME_DEFAULTS = {
   repositoryDocuments: [],
   repos: [],
   activity: "",
-  agents: {
-    provider: "",
-    provider_label: "",
-    attention_known: false,
-    children_known: false,
-    parents_known: false,
-    outcomes_known: false,
-    agents: [],
-  },
   stages: {
     research: false,
     plan: false,

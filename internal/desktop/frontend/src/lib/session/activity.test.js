@@ -1,19 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  activeAgent,
-  capabilityNote,
-  duration,
-  projectAgents,
-  providerLabel,
-  recordLabel,
-  repositoryLine,
-  rowLabel,
-  rows,
-  stateLabel,
-  summaryFacts,
-  typeLabel,
-} from "./activity.js";
+import { repositoryLine, rowLabel, summaryFacts } from "./activity.js";
 
 test("summary facts preserve attention, agent, and unseen order", () => {
   const facts = summaryFacts(
@@ -47,24 +34,6 @@ test("a running session with unreadable coverage claims nothing about it", () =>
   assert.deepEqual(summaryFacts({ attention: "mystery", coverage: "mystery", running: true }), []);
 });
 
-test("a name qrouton cannot read is a line it does not draw", () => {
-  assert.equal(stateLabel("Maybe"), "");
-  assert.equal(providerLabel(""), "");
-  assert.equal(typeLabel(""), "");
-  assert.equal(typeLabel("qrouton-planning-lead"), "Qrouton Planning Lead");
-  assert.equal(activeAgent({ state: "Active" }), true);
-  assert.equal(activeAgent({ state: "Finished" }), false);
-  assert.equal(
-    recordLabel({ id: "a1", type: "code-reviewer", state: "Finished" }),
-    "Code Reviewer · Finished",
-  );
-});
-
-test("waiting is the root's alone: only it can be blocked on the user", () => {
-  assert.equal(stateLabel("Waiting for you", true), "Waiting for you");
-  assert.equal(stateLabel("Waiting for you", false), "Working");
-});
-
 test("one repository is named and the rest are counted", () => {
   assert.deepEqual(repositoryLine([{ name: "lifesum/lsx" }]), {
     name: "lifesum/lsx",
@@ -75,88 +44,4 @@ test("one repository is named and the rest are counted", () => {
     { name: "lifesum/gympass-users", extra: "+1" },
   );
   assert.deepEqual(repositoryLine([]), { name: "No editing repositories", extra: "" });
-});
-
-test("a run with no start stamp behind it reports no duration", () => {
-  const now = Date.parse("2026-09-01T12:00:00Z");
-  assert.equal(duration({}, now), "");
-  assert.equal(duration({ started_at: "2026-09-01T11:58:00Z" }, now), "2m");
-  assert.equal(duration({ started_at: "2026-09-01T11:57:56Z" }, now), "2m 4s");
-  assert.equal(duration({ started_at: "2026-09-01T11:59:20Z" }, now), "40s");
-  assert.equal(duration({ started_at: "2026-09-01T10:57:00Z" }, now), "1h 3m");
-  assert.equal(
-    duration(
-      { started_at: "2026-09-01T11:00:00Z", finished_at: "2026-09-01T11:05:00Z", state: "Finished" },
-      now,
-    ),
-    "5m",
-  );
-});
-
-test("the session's runner is called what Go calls it, and any other provider is humanized", () => {
-  const panel = { provider: "agy", provider_label: "Antigravity CLI" };
-  assert.equal(providerLabel("agy", panel), "Antigravity CLI");
-  assert.equal(providerLabel("some-runner", panel), "Some Runner");
-  assert.equal(providerLabel("agy"), "Agy");
-  assert.equal(
-    recordLabel({ id: "root", provider: "agy", state: "Working" }, panel),
-    "Orchestrator · Antigravity CLI · Working",
-  );
-});
-
-test("provider capability copy reports coverage without mentioning attention", () => {
-  assert.equal(capabilityNote({ provider: "codex", children_known: true }), "");
-  assert.equal(
-    capabilityNote({ provider: "opencode", provider_label: "OpenCode", children_known: false }),
-    "OpenCode provides root activity only.",
-  );
-  assert.equal(capabilityNote({}), "Provider unknown · live activity unavailable");
-  assert.equal(
-    capabilityNote({
-      provider: "claude",
-      children_known: true,
-    }),
-    "",
-  );
-});
-
-test("tree projection uses exact known parents and leaves unknown parentage observed", () => {
-  const root = { id: "root", run_id: "7", provider: "claude" };
-  const lead = { id: "lead-1", run_id: "7", parent_id: "root", parent_known: true };
-  const specialist = { id: "specialist-1", run_id: "7", parent_id: "lead-1", parent_known: true };
-  const unknown = { id: "agent-2", run_id: "7", parent_id: "root", parent_known: false };
-  const wrongRun = { id: "agent-3", run_id: "8", parent_id: "lead-1", parent_known: true };
-
-  const projected = projectAgents([root, lead, specialist, unknown, wrongRun]);
-  assert.equal(projected.trees.length, 1);
-  assert.equal(projected.trees[0].children[0].record, lead);
-  assert.equal(projected.trees[0].children[0].children[0].record, specialist);
-  assert.deepEqual(projected.observed, [unknown, wrongRun]);
-});
-
-test("the tree follows parents to any depth, in either record order", () => {
-  const chain = [
-    { id: "root", run_id: "7" },
-    { id: "a", run_id: "7", parent_id: "root", parent_known: true },
-    { id: "b", run_id: "7", parent_id: "a", parent_known: true },
-    { id: "c", run_id: "7", parent_id: "b", parent_known: true },
-    { id: "d", run_id: "7", parent_id: "c", parent_known: true },
-  ];
-  for (const records of [chain, [...chain].reverse()]) {
-    const projected = projectAgents(records);
-    assert.deepEqual(
-      rows(projected.trees).map((node) => [node.record.id, node.level]),
-      [["root", 1], ["a", 2], ["b", 3], ["c", 4], ["d", 5]],
-    );
-    assert.deepEqual(projected.observed, []);
-  }
-});
-
-test("a parent cycle cut off from the root is observed, not looped over", () => {
-  const records = [
-    { id: "root", run_id: "7" },
-    { id: "x", run_id: "7", parent_id: "y", parent_known: true },
-    { id: "y", run_id: "7", parent_id: "x", parent_known: true },
-  ];
-  assert.deepEqual(projectAgents(records).observed.map((record) => record.id), ["x", "y"]);
 });

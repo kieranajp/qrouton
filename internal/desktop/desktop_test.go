@@ -1033,7 +1033,7 @@ func TestChromeSnapshotsTheInitialStateAndSuppressesUnchangedUpdates(t *testing.
 	})
 
 	empty := chrome.Snapshot()
-	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil || empty.Agents.Agents == nil {
+	if empty.Sessions == nil || empty.Documents == nil || empty.RepositoryDocuments == nil || empty.Repos == nil {
 		t.Fatalf("initial snapshot has nil slices: %+v", empty)
 	}
 	first := status.Fields{

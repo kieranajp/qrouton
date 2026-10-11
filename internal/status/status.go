@@ -18,8 +18,7 @@ import (
 
 // Fields is the session the workbench window draws around its terminal. Read
 // leaves Activity and Sessions empty; Repos carries manifest-backed rows without
-// git measurements. Agents carries only the manifest provider until the
-// workbench overlays live data.
+// git measurements.
 type Fields struct {
 	BugReportID     string `json:"bugReportID"`
 	BugReportStatus string `json:"bugReportStatus"`
@@ -37,7 +36,6 @@ type Fields struct {
 	RepositoryDocuments []RepositoryDocuments `json:"repositoryDocuments"`
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
-	Agents              AgentPanel            `json:"agents"`
 	// Stages is the durable progress the window draws as three marks, read
 	// from the latest research document and plan.
 	Stages Stages `json:"stages"`
@@ -67,7 +65,6 @@ func EmptyFields() Fields {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
-		Agents:              AgentPanel{Agents: []AgentRecord{}},
 	}
 }
 
@@ -111,27 +108,45 @@ type AgentSummary struct {
 	Running   bool   `json:"running"`
 }
 
-type AgentRecord struct {
-	ID          string    `json:"id"`
-	RunID       string    `json:"run_id"`
-	Provider    string    `json:"provider"`
-	ParentID    string    `json:"parent_id"`
-	Type        string    `json:"type"`
-	Description string    `json:"description"`
-	State       string    `json:"state"`
-	ParentKnown bool      `json:"parent_known"`
-	StartedAt   time.Time `json:"started_at"`
-	FinishedAt  time.Time `json:"finished_at"`
+// AgentTree is every agent qrouton knows of in a session's current and
+// previous run, flat: each node names its parent within its run.
+type AgentTree struct {
+	Provider      string `json:"provider"`
+	ProviderLabel string `json:"providerLabel"`
+	// Coverage says what the runner cannot report, and is empty when it reports
+	// the whole tree.
+	Coverage string      `json:"coverage"`
+	Nodes    []AgentNode `json:"nodes"`
 }
 
-type AgentPanel struct {
-	Provider       string        `json:"provider"`
-	ProviderLabel  string        `json:"provider_label"`
-	AttentionKnown bool          `json:"attention_known"`
-	ChildrenKnown  bool          `json:"children_known"`
-	ParentsKnown   bool          `json:"parents_known"`
-	OutcomesKnown  bool          `json:"outcomes_known"`
-	Agents         []AgentRecord `json:"agents"`
+type AgentNode struct {
+	ID          string `json:"id"`
+	Run         string `json:"run"`
+	Parent      string `json:"parent"`
+	Root        bool   `json:"root"`
+	Placed      bool   `json:"placed"`
+	Type        string `json:"type"`
+	Description string `json:"description"`
+	State       string `json:"state"`
+	// Reason is the harness's own words for a needs-you or failed state.
+	Reason      string           `json:"reason"`
+	Tool        string           `json:"tool"`
+	Target      string           `json:"target"`
+	Started     time.Time        `json:"started"`
+	Finished    time.Time        `json:"finished"`
+	ToolCount   int              `json:"toolCount"`
+	Tokens      int              `json:"tokens"`
+	LastMessage string           `json:"lastMessage"`
+	Files       []string         `json:"files"`
+	Tools       []AgentToolEvent `json:"tools"`
+}
+
+type AgentToolEvent struct {
+	Tool   string    `json:"tool"`
+	Target string    `json:"target"`
+	Start  time.Time `json:"start"`
+	End    time.Time `json:"end"`
+	Failed bool      `json:"failed"`
 }
 
 type SessionRepo struct {
@@ -181,7 +196,6 @@ func Read(root string) Fields {
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
-	fields.Agents.Provider = m.Runner
 	fields.Repos = manifestRepos(m.Repos)
 	fields.Documents = documents(root)
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
