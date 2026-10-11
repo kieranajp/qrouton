@@ -2,8 +2,8 @@ import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_STATES } from "../bridge/generat
 import { stateWords } from "../overview/tree.js";
 
 /** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean, tools?: boolean,
- * state?: string, reason?: string, tool?: string}} Summary */
-/** @typedef {{kind: string, label: string, active?: boolean, title?: string}} Fact */
+ * state?: string, reason?: string, tool?: string, stage?: string}} Summary */
+/** @typedef {{kind: string, label: string, active?: boolean, stage?: string, title?: string}} Fact */
 
 /** @type {string[]} */
 const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
@@ -28,15 +28,27 @@ export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
   } else if (state && state !== AGENT_STATES.NEEDS_YOU) {
     const agents = Math.max(0, (summary.active ?? 0) - 1);
     const count = summary.coverage === AGENT_COVERAGE.FULL && agents ? ` · ${agents} ${agents === 1 ? "agent" : "agents"}` : "";
+    const active = BUSY.includes(state);
     facts.push({
       kind: "agents",
       label: capital(stateWords({ state, tool: summary.tool }, summary.tools ?? true)) + count,
-      active: BUSY.includes(state),
+      active,
+      ...(active && summary.stage ? { stage: summary.stage } : {}),
     });
   } else if (!state && summary.coverage === AGENT_COVERAGE.FULL) {
-    facts.push({ kind: "agents", label: `${Math.max(0, summary.active ?? 0)} active`, active: true });
+    facts.push({
+      kind: "agents",
+      label: `${Math.max(0, summary.active ?? 0)} active`,
+      active: true,
+      ...(summary.stage ? { stage: summary.stage } : {}),
+    });
   } else if (!state && summary.coverage === AGENT_COVERAGE.ROOT) {
-    facts.push({ kind: "agents", label: "Root active", active: true });
+    facts.push({
+      kind: "agents",
+      label: "Root active",
+      active: true,
+      ...(summary.stage ? { stage: summary.stage } : {}),
+    });
   }
 
   if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });

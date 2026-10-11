@@ -78,3 +78,24 @@ test("a runner without tool hooks reads working, never thinking", () => {
     { kind: "agents", label: "Working · 1 agent", active: true },
   ]);
 });
+
+test("a busy row carries its live stage on the agents fact", () => {
+  assert.deepEqual(
+    summaryFacts({ running: true, state: "working", active: 1, coverage: "full", stage: "plan" }),
+    [{ kind: "agents", label: "Thinking", active: true, stage: "plan" }],
+  );
+});
+
+test("a busy row with no stage carries none", () => {
+  const [fact] = summaryFacts({ running: true, state: "working", active: 1, coverage: "full" });
+  assert.equal("stage" in fact, false);
+});
+
+test("rows that are not busy drop a stage they were given", () => {
+  for (const summary of [
+    { running: true, state: "needs_you", stage: "plan" },
+    { running: false, stage: "plan" },
+  ]) {
+    for (const fact of summaryFacts(summary)) assert.equal("stage" in fact, false);
+  }
+});

@@ -128,3 +128,24 @@ func TestStagesForMapsEachLeadToItsMark(t *testing.T) {
 		}
 	}
 }
+
+func TestStagesLatestPicksTheFurthestLiveStage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		live Stages
+		want string
+	}{
+		{"none", Stages{}, ""},
+		{"research", Stages{Research: true}, StageResearch},
+		{"plan", Stages{Plan: true}, StagePlan},
+		{"implement", Stages{Implement: true}, StageImplement},
+		{"research and plan", Stages{Research: true, Plan: true}, StagePlan},
+		{"research and implement", Stages{Research: true, Implement: true}, StageImplement},
+		{"plan and implement", Stages{Plan: true, Implement: true}, StageImplement},
+		{"all three", Stages{Research: true, Plan: true, Implement: true}, StageImplement},
+	} {
+		if got := tc.live.Latest(); got != tc.want {
+			t.Errorf("%s: Latest() = %q, want %q", tc.name, got, tc.want)
+		}
+	}
+}

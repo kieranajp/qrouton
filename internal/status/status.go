@@ -112,6 +112,8 @@ type AgentSummary struct {
 	State     string `json:"state"`
 	Reason    string `json:"reason"`
 	Tool      string `json:"tool"`
+	// Stage is the latest stage whose lead is live.
+	Stage string `json:"stage"`
 }
 
 // AgentTree is every agent qrouton knows of in a session's current and

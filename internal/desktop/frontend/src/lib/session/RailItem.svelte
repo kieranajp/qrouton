@@ -2,6 +2,8 @@
   import { STICKER_IDS } from "../bridge/generated.js";
   import { uiScale } from "../scale.svelte.js";
   import Icon from "../core/Icon.svelte";
+  import StageSquare from "../overview/StageSquare.svelte";
+  import { stageTone } from "../workflow.js";
   import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
@@ -88,7 +90,9 @@
       <div class="facts">
         {#each facts as fact (fact.kind)}
           <span class="fact {fact.kind}" title={fact.title}>
-            {#if fact.kind === "agents" && fact.active}<Icon name="running" />{/if}
+            {#if fact.kind === "agents" && fact.stage}
+              <span class="stage"><StageSquare tone={stageTone(fact.stage)} done live /></span>
+            {:else if fact.kind === "agents" && fact.active}<Icon name="running" />{/if}
             {fact.label}
           </span>
         {/each}
@@ -265,6 +269,14 @@
     display: inline-flex;
     align-items: center;
     gap: calc(3px * var(--ui-scale));
+  }
+
+  .stage {
+    flex: none;
+    display: grid;
+    place-items: center;
+    width: calc(16px * var(--ui-scale));
+    height: calc(16px * var(--ui-scale));
   }
 
   .fact.attention {
