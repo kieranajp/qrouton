@@ -219,6 +219,21 @@ test("clicking a video's main view opens no lightbox", async ({ page }) => {
   await expect(page.getByRole("dialog")).toHaveCount(0);
 });
 
+test("lightbox stepping skips videos and keeps focus in the lightbox", async ({ page }) => {
+  await page.goto("/tests/assets.html");
+  await page.evaluate((index) => window.pushAssets({ currentIndex: index, revision: 2 }), WEBM - 1);
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+  await primary(page).click();
+  const lightbox = page.getByRole("dialog", { name: /Expanded image/ });
+  await expect(lightbox).toBeFocused();
+
+  await page.keyboard.press("ArrowRight");
+
+  await expect(page.locator(".position")).toHaveText(`Image ${MP4 + 1} of 9`);
+  await expect(lightbox).toBeFocused();
+  await expect(lightbox.locator("img")).toHaveAttribute("src", /sample\.avif$/);
+});
+
 test("the MP4 entry renders as a video", async ({ page }) => {
   await page.goto("/tests/assets.html");
   await expect(thumbnail(page, MP4)).toHaveAttribute("src", /sample\.mp4#t=0\.1$/);

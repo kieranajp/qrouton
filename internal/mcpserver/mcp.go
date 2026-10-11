@@ -24,7 +24,7 @@ type openFileInput struct {
 }
 
 type openAssetsInput struct {
-	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to raster asset files in the qrouton session"`
+	Paths      []string `json:"paths" jsonschema:"Nonempty ordered paths to image or video files in the qrouton session"`
 	Name       string   `json:"name,omitempty" jsonschema:"Gallery window name; reusing it replaces that window. Defaults to assets"`
 	Foreground *bool    `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }

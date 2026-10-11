@@ -413,7 +413,7 @@ func reveal(argv []string) error {
 
 // copyImage puts a picture on the clipboard. The conversion runs while the
 // command does, so waiting on it is what says the clipboard now holds the
-// asset.
+// image.
 func copyImage(argv []string) error {
 	if len(argv) == 0 {
 		return ErrNoCopyImageCommand

@@ -16,7 +16,7 @@
     onFindAdapter,
   } = $props();
 
-  /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, assets?: {source: string, url: string}[], currentIndex?: number, revision?: number} | undefined} */
+  /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, assets?: {source: string, path?: string, url: string, kind: import("./bridge/generated.js").MediaKind}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
   let windowID = "";
   let dispose = () => {};

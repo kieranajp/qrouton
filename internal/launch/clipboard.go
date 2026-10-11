@@ -10,8 +10,6 @@ sips -s format png "$1" --out "$dir/image.png" >/dev/null
 osascript -e 'on run argv' -e 'set the clipboard to (read (POSIX file (item 1 of argv)) as «class PNGf»)' -e 'end run' "$dir/image.png"
 `
 
-// A video is attached rather than pictured, so the clipboard holds the file
-// itself, the way Finder's copy does.
 var copyFileScript = []string{
 	"on run argv",
 	"set the clipboard to (POSIX file (item 1 of argv))",

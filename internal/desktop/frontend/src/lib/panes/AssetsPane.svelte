@@ -45,21 +45,16 @@
     noticeTimer = setTimeout(() => (notice = ""), 1600);
   }
 
-  function step(by) {
-    const next = current + by;
-    if (next >= 1 && next <= assets.length) select(next);
+  function stepImages(by) {
+    for (let next = current + by; next >= 1 && next <= assets.length; next += by) {
+      if (!isVideo(assets[next - 1])) return select(next);
+    }
   }
 
   function loaded(states, url, event) {
     states[url] = "loaded";
     const image = /** @type {HTMLImageElement} */ (event.currentTarget);
     aspects[url] = image.naturalWidth / image.naturalHeight;
-  }
-
-  function measured(states, url, event) {
-    states[url] = "loaded";
-    const video = /** @type {HTMLVideoElement} */ (event.currentTarget);
-    aspects[url] = video.videoWidth / video.videoHeight;
   }
 
   function unplayable(url, event) {
@@ -78,7 +73,7 @@
   async function closeLightbox() {
     expanded = false;
     await tick();
-    if (active) primary?.focus();
+    if (active) (primary ?? strip?.children[current - 1]?.querySelector("button"))?.focus();
   }
 
   async function select(index) {
@@ -115,7 +110,7 @@
   });
 
   $effect(() => {
-    if (entry && isVideo(entry)) expanded = false;
+    if (expanded && entry && isVideo(entry)) closeLightbox();
   });
 
   $effect(() => {
@@ -150,7 +145,7 @@
           {#if !loads[shown.url]}<span class="loading">Loading video…</span>{/if}
           <!-- svelte-ignore a11y_media_has_caption -->
           <video src={shown.url} controls preload="metadata" aria-label={shown.source}
-            onloadedmetadata={(event) => measured(loads, shown.url, event)}
+            onloadedmetadata={() => (loads[shown.url] = "loaded")}
             onerror={(event) => unplayable(shown.url, event)}></video>
         {/if}
       </div>
@@ -191,7 +186,7 @@
             {#if thumbs[asset.url] !== "error"}
               {#if !thumbs[asset.url]}<span class="loading">Loading…</span>{/if}
               <video src={asset.url + "#t=0.1"} muted playsinline preload="metadata" aria-hidden="true"
-                onloadedmetadata={(event) => measured(thumbs, asset.url, event)}
+                onloadedmetadata={() => (thumbs[asset.url] = "loaded")}
                 onerror={() => (thumbs[asset.url] = "error")}
                 onsuspend={unpainted}></video>
             {/if}
@@ -213,14 +208,14 @@
   </ol>
 </article>
 
-{#if expanded && active && entry}
+{#if expanded && active && entry && !isVideo(entry)}
   <ImageLightbox
     image={entry}
     aspect={aspects[entry.url] ?? 1}
     index={current}
     total={assets.length}
     {slug}
-    onStep={step}
+    onStep={stepImages}
     onClose={closeLightbox} />
 {/if}
 
