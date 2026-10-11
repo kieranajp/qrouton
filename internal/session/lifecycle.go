@@ -9,61 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/kieranajp/qrouton/internal/markdown"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
-
-type WorkflowStatus struct {
-	Research, Plan, Implement bool
-}
-
-// Status infers the user-facing RPI state from durable workflow documents.
-func Status(root string, m Manifest) WorkflowStatus {
-	dir := sessionpaths.Thoughts(filepath.Join(root, m.Slug))
-	research := markdownFiles(filepath.Join(dir, scaffoldResearch))
-	plans := markdownFiles(filepath.Join(dir, scaffoldPlans))
-	status := WorkflowStatus{Plan: len(plans) > 0}
-	for _, path := range research {
-		if researched(path) {
-			status.Research = true
-			break
-		}
-	}
-	for _, path := range plans {
-		body, err := os.ReadFile(path)
-		if err == nil {
-			lower := bytes.ToLower(body)
-			if bytes.Contains(lower, []byte(checkedBox)) && !bytes.Contains(lower, []byte(uncheckedBox)) {
-				status.Implement = true
-				break
-			}
-		}
-	}
-	return status
-}
-
-func researched(path string) bool {
-	if strings.HasSuffix(strings.ToLower(filepath.Base(path)), legacyQuestionsSuffix) {
-		return false
-	}
-	body, err := os.ReadFile(path)
-	if err != nil {
-		return false
-	}
-	sections := markdown.Sections(string(body))
-	for _, section := range sections {
-		if section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summaryHeading) {
-			return true
-		}
-	}
-	return len(sections) == 0 && strings.TrimSpace(markdown.Body(string(body))) != ""
-}
-
-func markdownFiles(dir string) []string {
-	files, _ := filepath.Glob(filepath.Join(dir, markdownGlob))
-	return files
-}
 
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	var dirty []string
@@ -158,8 +104,7 @@ func Remove(root, dir string) error {
 	return Delete(root, m)
 }
 
-// RepoStat is how far one repository has moved since it was branched. Pushed
-// means its remote-tracking session branch contains work beyond the base.
+// RepoStat is how far one repository has moved since it was branched.
 type RepoStat struct {
 	Org, Name  string
 	Role       RepoRole
@@ -168,7 +113,6 @@ type RepoStat struct {
 	Insertions int
 	Deletions  int
 	Measured   bool
-	Pushed     bool
 }
 
 // RepoStats measures each repository against the branch it was cut from. A
@@ -183,15 +127,14 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 			Path: filepath.Join(dir, repo.WorktreePath),
 		}
 		if stat.Role == RepoRoleEditing && (repo.BaseBranch != "" || repo.DefaultBranch != "") {
-			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch),
-				remoteRefPrefix+repo.Branch, &stat)
+			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch), &stat)
 		}
 		stats = append(stats, stat)
 	}
 	return stats
 }
 
-func measure(ctx context.Context, path, base, branch string, stat *RepoStat) {
+func measure(ctx context.Context, path, base string, stat *RepoStat) {
 	commits, ok := countCommits(ctx, path, base)
 	if !ok {
 		return
@@ -201,7 +144,6 @@ func measure(ctx context.Context, path, base, branch string, stat *RepoStat) {
 		return
 	}
 	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
-	stat.Pushed = branch != remoteRefPrefix && countPushedCommits(ctx, path, base, branch) > 0
 }
 
 func countCommits(ctx context.Context, path, base string) (int, bool) {
@@ -217,14 +159,6 @@ func countRange(ctx context.Context, path, revisionRange string) (int, bool) {
 	}
 	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
 	return count, err == nil
-}
-
-func countPushedCommits(ctx context.Context, path, base, branch string) int {
-	commits, ok := countRange(ctx, path, base+rangeSeparator+branch)
-	if !ok {
-		return 0
-	}
-	return commits
 }
 
 // countLines totals the diff since the merge base, so a base branch that has

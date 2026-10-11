@@ -1,0 +1,78 @@
+[
+  {
+    "name": "one phase, every criterion met",
+    "text": "# Plan\n\n## Phase 1 — Tab\n\n### Verify\n- [x] tests pass\n- [X] gate passes\n\n### See\n- [ ] looks right\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 2,
+        "total": 2
+      }
+    ]
+  },
+  {
+    "name": "part met, nested items count, deeper headings stay in Verify",
+    "text": "## Phase 1 — A\n\n### Verify\n- [x] first\n  - [ ] nested\n\n#### Detail\n- [ ] still a criterion\n\n## Phase 2: B\n\n### Verify\n- [ ] not yet\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 1,
+        "total": 3
+      },
+      {
+        "number": 2,
+        "met": 0,
+        "total": 1
+      }
+    ]
+  },
+  {
+    "name": "another marker counts as unmet",
+    "text": "## Phase 3 - C\n\n### Verify\n- [~] struck through\n- [x] done\n",
+    "phases": [
+      {
+        "number": 3,
+        "met": 1,
+        "total": 2
+      }
+    ]
+  },
+  {
+    "name": "a ticked See item does not count",
+    "text": "## Phase 1 — D\n\n### Verify\n- [x] done\n\n### See\n- [x] seen\n- [ ] not seen\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 1,
+        "total": 1
+      }
+    ]
+  },
+  {
+    "name": "a phase with no Verify heading has no criteria",
+    "text": "## Phase 1 — E\n\n- [x] loose item\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 0,
+        "total": 0
+      }
+    ]
+  },
+  {
+    "name": "items in a code fence are not criteria",
+    "text": "## Phase 1 — F\n\n### Verify\n- [x] real\n\n```md\n- [ ] example\n```\n",
+    "phases": [
+      {
+        "number": 1,
+        "met": 1,
+        "total": 1
+      }
+    ]
+  },
+  {
+    "name": "a document with no phases",
+    "text": "# Notes\n\n## Decisions\n\n### Verify\n- [ ] not a phase\n",
+    "phases": []
+  }
+]

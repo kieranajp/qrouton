@@ -247,7 +247,7 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, provider_label: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, agents: {provider: string, provider_label: string, attention_known: boolean, children_known: boolean, parents_known: boolean, outcomes_known: boolean, agents: any[]}, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -273,6 +273,11 @@ export const CHROME_DEFAULTS = {
     agents: [],
   },
   stages: {
+    research: false,
+    plan: false,
+    implement: false,
+  },
+  stagesLive: {
     research: false,
     plan: false,
     implement: false,

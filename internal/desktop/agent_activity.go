@@ -64,6 +64,8 @@ type agentActivitySnapshot struct {
 	Active       int
 	Capabilities agentCapabilities
 	Records      []agentRecord
+	// LiveTypes are the types of the current run's agents still running.
+	LiveTypes []string
 }
 
 type agentRecordKey struct {
@@ -314,9 +316,13 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	now := a.now()
 	records := make([]agentRecord, 0, len(a.records))
 	active := 0
+	var live []string
 	for _, record := range a.records {
 		if record.State == agentStateActive {
 			active++
+			if a.running && !record.Root && record.Generation == a.generation && record.Type != "" {
+				live = append(live, record.Type)
+			}
 		}
 		copy := *record
 		copy.Tools = slices.Clone(record.Tools)
@@ -348,6 +354,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 	return agentActivitySnapshot{
 		Provider: a.provider, Running: a.running, Unread: a.running && a.unread,
 		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
+		LiveTypes: live,
 	}
 }
 

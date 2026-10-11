@@ -38,10 +38,12 @@ type Fields struct {
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
 	Agents              AgentPanel            `json:"agents"`
-	// Stages is the durable progress the window draws as three marks. Research
-	// and Plan come from documents; Implement also incorporates pushed work when
-	// the workbench overlays repository measurements.
+	// Stages is the durable progress the window draws as three marks, read
+	// from the latest research document and plan.
 	Stages Stages `json:"stages"`
+	// StagesLive marks the stages whose lead is running now. Workbench-side
+	// knowledge, so a file read never sets it.
+	StagesLive Stages `json:"stagesLive"`
 	// Root is where the session lives on disk, so the window can hand its path
 	// over and open it. Empty for a window holding no session.
 	Root string `json:"root"`
@@ -93,9 +95,9 @@ type StickerLabels struct {
 	Exclamation string `json:"exclamation"`
 }
 
-// Stages is the R, P and I of a session's workflow. Research means a research
-// document holds findings, Plan means a plan exists, and Implement means every
-// box in one is ticked or the session branch has been pushed.
+// Stages is the R, P and I of a session's workflow. Research means the latest
+// research document is answered, Plan means a plan exists, and Implement means
+// every Verify item in every phase of the latest plan is ticked.
 type Stages struct {
 	Research  bool `json:"research"`
 	Plan      bool `json:"plan"`
@@ -163,7 +165,6 @@ type RepoStat struct {
 	Insertions int    `json:"insertions"`
 	Deletions  int    `json:"deletions"`
 	Measured   bool   `json:"measured"`
-	Pushed     bool   `json:"-"`
 }
 
 // Read reports everything a file read can answer about a session. A root with no
@@ -216,7 +217,6 @@ func Repos(ctx context.Context, root string) []RepoStat {
 			Insertions: stat.Insertions,
 			Deletions:  stat.Deletions,
 			Measured:   stat.Measured,
-			Pushed:     stat.Pushed,
 		})
 	}
 	return out
@@ -227,15 +227,6 @@ func modeLabel(m session.Manifest) string {
 		return modeRPILabel
 	}
 	return modeAssistantLabel
-}
-
-// stages is which of the three has produced its document.
-func stages(root string, m session.Manifest) Stages {
-	if len(m.Repos) == 0 {
-		return Stages{}
-	}
-	ws := session.Status(filepath.Dir(root), m)
-	return Stages{Research: ws.Research, Plan: ws.Plan, Implement: ws.Implement}
 }
 
 // phase is the macro-phase only: scratch until repositories exist, then the

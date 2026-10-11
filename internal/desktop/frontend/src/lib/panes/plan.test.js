@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { criteriaSpans, parsePlan } from "./plan.js";
@@ -196,4 +197,17 @@ test("a leading section keeps the preamble to what sits above it", () => {
   const { preamble, slides } = parsePlan(AROUND);
   assert.deepEqual(preamble, { from: 1, to: 4 });
   assert.equal(slides[0].from, 5);
+});
+
+// Go reads the same cases to fill the I mark, so the meter and the mark agree.
+test("the shared plan-phase cases parse as Go parses them", () => {
+  const url = new URL("../../../../../markdown/testdata/plan-phases.json", import.meta.url);
+  const cases = JSON.parse(readFileSync(url, "utf8"));
+  for (const { name, text, phases } of cases) {
+    assert.deepEqual(
+      parsePlan(text).phases.map(({ number, met, total }) => ({ number, met, total })),
+      phases,
+      name,
+    );
+  }
 });

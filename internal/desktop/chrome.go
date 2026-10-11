@@ -174,12 +174,6 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	}
 	if repos, ok := measured[shownRoot]; ok {
 		fields.Repos = repos
-		for _, repo := range repos {
-			if repo.Pushed {
-				fields.Stages.Implement = true
-				break
-			}
-		}
 	}
 	agentSnapshots := reg.agentActivitySnapshots()
 	// Dereferenced on every tick: a value captured at wiring time re-raises the
@@ -188,6 +182,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	// that always opens on one stays unasked until it opens on none.
 	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
+		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
 		panel := agentPanel(snapshot)
 		if panel.Provider == "" {
 			panel.Provider = fields.Agents.Provider

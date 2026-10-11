@@ -1,7 +1,11 @@
 // Package markdown reads titles, bodies, and section state without rendering.
 package markdown
 
-import "strings"
+import (
+	"regexp"
+	"strconv"
+	"strings"
+)
 
 // fence opens and closes a frontmatter block.
 const fence = "---"
@@ -13,6 +17,7 @@ const (
 	heading    = "# "
 	subheading = "## "
 	codeFence  = "```"
+	tildeFence = "~~~"
 	quote      = ">"
 )
 
@@ -138,4 +143,77 @@ func Sections(text string) []Section {
 		section.State = SectionAnswered
 	}
 	return sections
+}
+
+// Phase is one `## Phase <n> — <name>` section of a plan, counted by the task
+// items under its `### Verify` heading.
+type Phase struct {
+	Number int
+	Name   string
+	Met    int
+	Total  int
+}
+
+var (
+	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$`)
+	taskItem     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[([^\]])\]\s`)
+	atxHeading   = regexp.MustCompile(`^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
+)
+
+const verifyHeading = "verify"
+
+// PlanPhases reads a plan's phases the way the plan pane does. A task item
+// with any marker but x counts as unmet, and items under any other heading,
+// `### See` included, count for nothing.
+func PlanPhases(text string) []Phase {
+	var phases []Phase
+	var phase *Phase
+	verifying, fenced := false, ""
+	for _, line := range body(text) {
+		trimmed := strings.TrimSpace(line)
+		if marker := fenceMarker(trimmed); marker != "" && (fenced == "" || strings.HasPrefix(trimmed, fenced)) {
+			if fenced == "" {
+				fenced = marker
+			} else {
+				fenced = ""
+			}
+			continue
+		}
+		if fenced != "" {
+			continue
+		}
+		if match := atxHeading.FindStringSubmatch(line); match != nil {
+			depth, name := len(match[1]), strings.TrimSpace(match[2])
+			if depth <= 2 {
+				phase, verifying = nil, false
+				if found := phaseHeading.FindStringSubmatch(name); depth == 2 && found != nil {
+					number, _ := strconv.Atoi(found[1])
+					phases = append(phases, Phase{Number: number, Name: found[2]})
+					phase = &phases[len(phases)-1]
+				}
+			} else if depth == 3 {
+				verifying = phase != nil && strings.EqualFold(name, verifyHeading)
+			}
+			continue
+		}
+		if !verifying {
+			continue
+		}
+		if match := taskItem.FindStringSubmatch(line); match != nil {
+			phase.Total++
+			if match[1] == "x" || match[1] == "X" {
+				phase.Met++
+			}
+		}
+	}
+	return phases
+}
+
+func fenceMarker(trimmed string) string {
+	for _, marker := range []string{codeFence, tildeFence} {
+		if strings.HasPrefix(trimmed, marker) {
+			return marker
+		}
+	}
+	return ""
 }

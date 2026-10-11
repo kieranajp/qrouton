@@ -91,7 +91,7 @@
               disabled={view.escalating}
               onclick={view.escalate}>Escalate</Button>
           {:else}
-            <StageMarks stages={fields.stages} />
+            <StageMarks stages={fields.stages} live={fields.stagesLive} />
           {/if}
         {/snippet}
         <CapsLabel tone="dim">Agent</CapsLabel>

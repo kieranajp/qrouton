@@ -146,15 +146,3 @@ const (
 )
 
 var scaffoldDirs = []string{scaffoldResearch, scaffoldPlans, scaffoldSpecs}
-
-// Markers the workflow-status reader looks for: a plan whose checkboxes are all
-// ticked counts as implemented, and a research document is framing until
-// something stands under a heading other than its summary.
-const (
-	legacyQuestionsSuffix = "-questions.md"
-	summaryHeading        = "Summary"
-	checkedBox            = "- [x]"
-	uncheckedBox          = "- [ ]"
-
-	markdownGlob = "*.md"
-)

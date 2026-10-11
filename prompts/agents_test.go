@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path"
 	"slices"
 	"strconv"
@@ -242,6 +243,16 @@ func TestResearchPromptsCarryVaultIsolation(t *testing.T) {
 	} {
 		if !strings.Contains(string(skill.Content), phrase) {
 			t.Errorf("research skill is missing %q", phrase)
+		}
+	}
+}
+
+// The lead names are what the workbench reads a stage's lead off, so each must
+// still name an agent prompt.
+func TestLeadNamesNameAgentPrompts(t *testing.T) {
+	for _, lead := range []string{ResearchLead, PlanningLead, ImplementationLead} {
+		if _, err := fs.Stat(embedded, agentIDPrefix+lead+promptFileExt); err != nil {
+			t.Errorf("lead %q names no agent prompt: %v", lead, err)
 		}
 	}
 }

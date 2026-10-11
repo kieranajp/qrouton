@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -167,22 +168,6 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 		})
 	}
 	<-done
-}
-
-func TestAPushedSessionCommitLightsImplementation(t *testing.T) {
-	root := t.TempDir()
-	dir := sessionDir(t, root, "shared")
-	reg := testRegistry(t, dir)
-	renderer := newFakeRenderer()
-	repos := map[string][]status.RepoStat{
-		dir: {{Name: "lifesum/svc", Role: "editing", Commits: 1, Measured: true, Pushed: true}},
-	}
-
-	pushChrome(reg, root, nil, repos, nil, renderer.Emit)
-	fields := pushedChrome(t, renderer)
-	if !fields.Stages.Implement {
-		t.Fatalf("stages = %+v, want pushed work to complete implementation", fields.Stages)
-	}
 }
 
 func TestAgentPanelKeepsProviderIdentityPerRetainedRun(t *testing.T) {
@@ -359,4 +344,44 @@ func panelRoot(t *testing.T, panel status.AgentPanel) status.AgentRecord {
 	}
 	t.Fatalf("no root record in %+v", panel.Agents)
 	return status.AgentRecord{}
+}
+
+// A stage mark pulses while its lead runs in the current run, and stops when
+// the lead stops or the run is relaunched.
+func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now)
+	shown := reg.add(sessionDir(t, root, "onscreen"), []string{"/bin/cat"}, os.Environ())
+	reg.reveal(shown)
+	live := func() status.Stages {
+		renderer := newFakeRenderer()
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		return pushedChrome(t, renderer).StagesLive
+	}
+	lead := func(hook string) workbench.AgentEventRequest {
+		return workbench.AgentEventRequest{
+			Provider: agentProviderClaude, Generation: 1, Hook: hook,
+			AgentID: "lead-1", AgentType: "qrouton-research-lead", Timestamp: clock.now(),
+		}
+	}
+
+	shown.agents.begin(agentProviderClaude, 1)
+	shown.agents.apply(lead(agentevent.HookSubagentStart))
+	if got := live(); got != (status.Stages{Research: true}) {
+		t.Fatalf("live stages with the research lead running = %+v", got)
+	}
+	shown.agents.apply(lead(agentevent.HookSubagentStop))
+	if got := live(); got != (status.Stages{}) {
+		t.Fatalf("live stages after the lead stopped = %+v", got)
+	}
+
+	shown.agents.begin(agentProviderClaude, 2)
+	start := lead(agentevent.HookSubagentStart)
+	start.Generation, start.AgentID = 2, "lead-2"
+	shown.agents.apply(start)
+	shown.agents.begin(agentProviderClaude, 3)
+	if got := live(); got != (status.Stages{}) {
+		t.Fatalf("live stages after a relaunch = %+v", got)
+	}
 }
