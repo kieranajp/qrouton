@@ -75,10 +75,6 @@
     color: var(--text-faint);
   }
 
-  .live .row {
-    padding-top: calc(10px * var(--ui-scale));
-  }
-
   .toggle {
     display: flex;
     align-items: center;

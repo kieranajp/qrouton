@@ -45,6 +45,13 @@ test("a lead's square fills once done and rings while live", async ({ page }) =>
   expect(await square("Implementation")).toEqual({ filled: false, ringed: true });
 });
 
+test("a live lead's row sits as far below its top as a finished lead's", async ({ page }) => {
+  await open(page);
+  const inset = (name) =>
+    lead(page, name).evaluate((toggle) => toggle.getBoundingClientRect().top - toggle.closest(".lead").getBoundingClientRect().top);
+  expect(await inset("Implementation")).toBe(await inset("Research"));
+});
+
 test("each subagent says what it is doing now and what it wrote", async ({ page }) => {
   await open(page);
   const implementer = page.locator(".agent").filter({ hasText: "Swap PaymentIntent" });
