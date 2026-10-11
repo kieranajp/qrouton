@@ -28,10 +28,10 @@
 
   const ROW_MENU_WIDTH = 190;
   const ROW_MENU = [
-    { label: "Reload", act: reloadRow },
-    { label: "Reveal in Finder", act: revealRow },
+    { label: "Reload", icon: "refresh", act: reloadRow },
+    { label: "Reveal in Finder", icon: "worktree", act: revealRow },
     "-",
-    { label: "Clean up…", tone: "destructive", act: askCleanup },
+    { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
   ];
 
   const stickerQueues = new Map();

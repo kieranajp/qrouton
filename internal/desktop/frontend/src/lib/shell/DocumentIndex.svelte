@@ -1,5 +1,6 @@
 <script>
   import { dismissible } from "../core/dismiss.js";
+  import Icon from "../core/Icon.svelte";
 
   /** Counts every session-written document without implying authorship.
    * @type {{count?: number, open?: boolean, unseen?: boolean, onToggle?: () => void, children?: import('svelte').Snippet, [attribute: string]: any}} */
@@ -15,9 +16,10 @@
     disabled={!onToggle}
     aria-expanded={open}
     onclick={onToggle}>
+    <Icon name="document" />
     <span>Documents</span>
     <span class="count">{count}</span>
-    <span class="caret" aria-hidden="true">&#9662;</span>
+    <Icon name="menu" />
   </button>
   {#if open}{@render children?.()}{/if}
 </div>
@@ -57,9 +59,5 @@
     font: var(--machine-xs);
     font-size: calc(10px * var(--ui-scale));
     color: var(--text-faint);
-  }
-
-  .caret {
-    color: var(--text-muted);
   }
 </style>

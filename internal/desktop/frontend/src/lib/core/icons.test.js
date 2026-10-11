@@ -5,6 +5,7 @@ import { ICONS } from "./icons.js";
 const NAMES = [
   "agent",
   "back",
+  "bin",
   "branch",
   "close",
   "command",

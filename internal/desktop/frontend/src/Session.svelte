@@ -41,8 +41,9 @@
           class="name"
           aria-expanded={view.identityOpen}
           onclick={() => (view.identityOpen = !view.identityOpen)}>
+          <Icon name="session" />
           <span class="said">{fields.identity}</span>
-          <span class="caret" aria-hidden="true">&#9662;</span>
+          <span class="caret"><Icon name="menu" /></span>
         </button>
         {#if view.identityOpen}
           <Menu
@@ -55,7 +56,7 @@
     </div>
     <span class="tools">
       <UpdateButton />
-      <Button variant="ghost" size="sm" onclick={() => (view.settingsOpen = true)}>Settings</Button>
+      <Button variant="ghost" size="sm" icon="settings" onclick={() => (view.settingsOpen = true)}>Settings</Button>
     </span>
   </div>
 

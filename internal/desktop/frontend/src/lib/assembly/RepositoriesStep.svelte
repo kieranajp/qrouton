@@ -48,8 +48,8 @@
     <TextField icon="search" valueVoice="literal" bind:value={query} />
   </div>
   <SegmentedControl {segments} value={owners} multiple onSelect={onOwner} />
-  <Button variant="secondary" onclick={onRefresh} disabled={refreshing}
-    >{refreshing ? "Refreshing…" : "↻ Refresh"}</Button>
+  <Button variant="secondary" icon="refresh" onclick={onRefresh} disabled={refreshing}
+    >{refreshing ? "Refreshing…" : "Refresh"}</Button>
 </div>
 
 <div class="list">

@@ -13,7 +13,7 @@ test("every icon in the set draws as a hidden 16px SVG", async ({ page }) => {
   await open(page);
 
   const icons = page.locator("svg[data-icon]");
-  await expect(icons).toHaveCount(31);
+  await expect(icons).toHaveCount(32);
   for (const svg of await icons.all()) {
     await expect(svg).toHaveAttribute("aria-hidden", "true");
     await expect(svg).toHaveAttribute("viewBox", "0 0 16 16");

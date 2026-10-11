@@ -55,7 +55,7 @@
 
     <div class="note">
       <span class="swatch"></span>
-      <span>◆ Plans, diffs and docs open as their own surfaces. Close one and nothing stops.</span>
+      <span>Plans, diffs and docs open as their own surfaces. Close one and nothing stops.</span>
     </div>
   </div>
 </div>

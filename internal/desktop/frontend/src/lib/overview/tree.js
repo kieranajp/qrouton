@@ -209,7 +209,7 @@ const rank = (branch) => {
   return at < 0 ? STAGE_ORDER.length : at;
 };
 
-/** The root's direct children are its leads, in R → P → I order and then by
+/** The root's direct children are its leads, in research, plan, implement order, then by
  * start; an earlier run's leads are earlier rows of the same list.
  * @param {AgentNode[]} nodes @returns {{root: AgentNode | undefined, leads: Branch[]}} */
 export function overview(nodes = []) {

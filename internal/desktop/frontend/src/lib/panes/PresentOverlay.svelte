@@ -154,7 +154,7 @@
       icon="forward"
       onclick={() => move(1)} />
     <Button variant="ghost" size="sm" aria-pressed={notes} onclick={toggleNotes}>Notes</Button>
-    <Button variant="ghost" size="sm" onclick={() => present.leave()}>Exit</Button>
+    <Button variant="ghost" size="sm" icon="close" onclick={() => present.leave()}>Exit</Button>
   </div>
 </div>
 

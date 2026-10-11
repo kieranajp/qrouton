@@ -121,7 +121,7 @@
       disabled={last}
       icon="forward"
       onclick={() => step(1)} />
-    <Button variant="ghost" size="sm" onclick={onClose}>Close</Button>
+    <Button variant="ghost" size="sm" icon="close" onclick={onClose}>Close</Button>
   </div>
   {#if menu}
     <AssetMenu {slug} at={menu} onDismiss={() => (menu = null)} onNotice={say} />

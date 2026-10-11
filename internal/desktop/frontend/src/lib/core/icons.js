@@ -6,6 +6,7 @@ const icon = (stroke, fill) => Object.freeze({ stroke, fill });
 export const ICONS = Object.freeze({
   agent: icon(null, "M5 3l7 5-7 5z"),
   back: icon("M13 8H3M7 4L3 8l4 4", null),
+  bin: icon("M2 4h12M6 4V2h4v2M3.5 4l1 10h7l1-10M6.75 7v4M9.25 7v4", null),
   branch: icon("M4 2v12M12 2v4l-4 4H4", null),
   close: icon("M4 4l8 8M12 4l-8 8", null),
   command: icon("M2 2h12v12H2zM2 5h12M5 8l2 1.5-2 1.5", null),

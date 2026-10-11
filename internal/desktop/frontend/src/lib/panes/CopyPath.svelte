@@ -23,5 +23,6 @@
     size="sm"
     aria-label="Copy absolute path"
     title={path}
+    icon="copy"
     onclick={copy}>{copied ? "Copied" : "Copy"}</Button>
 {/if}
