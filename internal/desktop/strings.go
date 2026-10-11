@@ -23,6 +23,8 @@ const (
 
 	specAnswersInFormat = "I've answered the design questions in %s. Please fold them into Decisions."
 	conversationSubmit  = "\r"
+	pasteStart          = "\x1b[200~"
+	pasteEnd            = "\x1b[201~"
 
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"

@@ -149,7 +149,7 @@ func TestSaveSpecKeepsTheFileMode(t *testing.T) {
 	}
 }
 
-func TestSendSpecAnswersTypesTheFixedLineIntoTheConversation(t *testing.T) {
+func TestSendSpecAnswersPastesTheFixedLineIntoTheConversation(t *testing.T) {
 	rec := &recorder{}
 	reg, term, w := testWorkbench(t, newFakeRenderer(), rec.emit)
 	root := t.TempDir()
@@ -172,8 +172,11 @@ func TestSendSpecAnswersTypesTheFixedLineIntoTheConversation(t *testing.T) {
 		t.Fatal(err)
 	}
 	line := fmt.Sprintf(specAnswersInFormat, specSource)
-	if got := string(specAnswersLine(specSource)); got != line+"\r" {
-		t.Fatalf("line = %q, want the fixed sentence and a carriage return", got)
+	if strings.ContainsAny(line, "\r\n\x1b") {
+		t.Fatalf("line = %q, want no newline or paste marker inside it", line)
+	}
+	if got := string(specAnswersLine(specSource)); got != "\x1b[200~"+line+"\x1b[201~\r" {
+		t.Fatalf("line = %q, want the fixed sentence as a bracketed paste and a carriage return outside it", got)
 	}
 	waitFor(t, "the typed line", func() bool { return strings.Contains(rec.output(), line) })
 
