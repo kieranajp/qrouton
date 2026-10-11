@@ -40,7 +40,7 @@ func newAgentRun() *agentRun {
 func (a *agentActivity) apply(event workbench.AgentEventRequest) (changed, alert bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if !a.currentLocked(event.Provider, event.Generation) {
+	if !a.currentLocked(event.Provider, event.Generation) || a.helperLocked(event) {
 		return false, false
 	}
 	at := event.Timestamp
@@ -78,6 +78,12 @@ func (a *agentActivity) apply(event workbench.AgentEventRequest) (changed, alert
 		a.unread = true
 	}
 	return true, alert
+}
+
+// helperLocked is a hook from an agent Claude Code runs for itself: it names
+// an agent no spawn or start ever typed, and carries no type of its own.
+func (a *agentActivity) helperLocked(event workbench.AgentEventRequest) bool {
+	return event.AgentID != "" && event.AgentType == "" && a.records[a.keyLocked(event.AgentID, false)] == nil
 }
 
 func (a *agentActivity) rootLocked() *agentRecord {
@@ -377,14 +383,9 @@ func (a *agentActivity) subagentStartLocked(event workbench.AgentEventRequest, a
 	return true
 }
 
-// subagentStopLocked marks an agent stopped. A stop naming neither a type nor
-// a start the tracker saw is dropped: Claude Code sends some at exit for
-// agents nothing else ever mentioned.
+// subagentStopLocked marks an agent stopped.
 func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at time.Time) bool {
 	if event.AgentID == "" {
-		return false
-	}
-	if a.records[a.keyLocked(event.AgentID, false)] == nil && event.AgentType == "" {
 		return false
 	}
 	record := a.agentLocked(event.AgentID, event.AgentType, at)
