@@ -4,6 +4,7 @@
   import { Call, Events, call } from "../wails.js";
   import LeadRow from "./LeadRow.svelte";
   import SessionRepos from "./SessionRepos.svelte";
+  import Tier from "./Tier.svelte";
   import { elapsed, nowLine, overview, rootWords } from "./tree.js";
 
   /** The session's Overview: the orchestrator, its leads in stage order, and
@@ -58,9 +59,8 @@
 </script>
 
 <div class="overview" style:display={active ? "flex" : "none"}>
-  <section class="tier orchestrator" aria-label="Orchestrator">
-    <span class="label">Orchestrator</span>
-    <div class="body line">
+  <Tier label="Orchestrator" name="orchestrator">
+    <div class="line">
       <span class="provider">{tree?.providerLabel ?? ""}</span>
       {#if orchestrator}
         <span class="words">{rootWords(orchestrator, model.leads, tools)}</span>
@@ -69,18 +69,15 @@
         <span class="time">{elapsed(orchestrator.started, orchestrator.finished, now)}</span>
       {/if}
     </div>
-  </section>
+  </Tier>
   {#if tree?.coverage}<p class="coverage">{tree.coverage}</p>{/if}
 
   {#if model.leads.length}
-    <section class="tier leads" aria-label="Leads">
-      <span class="label">Leads</span>
-      <div class="body">
-        {#each model.leads as lead (lead.node.run + ":" + lead.node.id)}
-          <LeadRow branch={lead} {now} {root} {tools} onOpenDocument={read} />
-        {/each}
-      </div>
-    </section>
+    <Tier label="Leads" name="leads">
+      {#each model.leads as lead (lead.node.run + ":" + lead.node.id)}
+        <LeadRow branch={lead} {now} {root} {tools} onOpenDocument={read} />
+      {/each}
+    </Tier>
   {/if}
 
   <SessionRepos {repos} {onAddRepos} />
@@ -95,44 +92,6 @@
     padding: var(--space-10) var(--space-6) var(--space-6);
     background: var(--surface-app);
     container: overview / inline-size;
-  }
-
-  .tier {
-    display: flex;
-    align-items: baseline;
-    gap: calc(10px * var(--ui-scale));
-    min-width: 0;
-  }
-
-  .tier + .tier {
-    border-top: 1px solid var(--border-subtle);
-    padding-top: calc(12px * var(--ui-scale));
-  }
-
-  .orchestrator {
-    padding-bottom: calc(12px * var(--ui-scale));
-  }
-
-  .leads {
-    padding-bottom: calc(12px * var(--ui-scale));
-  }
-
-  .label {
-    flex: none;
-    width: calc(108px * var(--ui-scale));
-    font: var(--instruction);
-    letter-spacing: var(--instruction-tracking);
-    text-transform: uppercase;
-    white-space: nowrap;
-    color: var(--text-faint);
-  }
-
-  .body {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
   }
 
   .line {
@@ -177,20 +136,8 @@
     color: var(--text-faint);
   }
 
-  /* Narrow, each tier's label heads its content, the way the rail stacks
-     them. */
   @container overview (max-width: 27.5rem) {
-    .tier {
-      flex-direction: column;
-      align-items: stretch;
-      gap: calc(6px * var(--ui-scale));
-    }
-
-    .label {
-      width: auto;
-    }
-
-    .orchestrator .line {
+    .line {
       flex-wrap: wrap;
       column-gap: calc(6px * var(--ui-scale));
     }
