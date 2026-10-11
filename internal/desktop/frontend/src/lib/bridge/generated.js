@@ -210,27 +210,16 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"stickers"|"uiScale"|"thoughts"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
   EDITOR: "editor",
   LAUNCH: "launch",
   LINEAR: "linear",
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
+  STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
-});
-
-/** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */
-export const STICKER_IDS = Object.freeze({
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
 });
 
 /** @typedef {"running"|"succeeded"|"failed"|"waiting"} TabStatus */
@@ -265,7 +254,7 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}, sessionSummary: {text: string, stage: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -294,12 +283,7 @@ export const CHROME_DEFAULTS = {
   root: "",
   picker: false,
   welcoming: false,
-  stickerLabels: {
-    star: "",
-    bookmark: "",
-    question: "",
-    exclamation: "",
-  },
+  stickers: [],
   sessionSummary: {
     text: "",
     stage: "",

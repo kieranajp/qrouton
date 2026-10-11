@@ -25,12 +25,12 @@ window.wailsCall = async (name, input) => {
       editor: "",
       launch: "",
       linear: "",
-      stickerLabels: {
-        star: "Important",
-        bookmark: "Read later",
-        question: "Needs follow-up",
-        exclamation: "Has bugs",
-      },
+      stickers: [
+        { id: "star", colour: "blue", symbol: "star", label: "Important" },
+        { id: "bookmark", colour: "green", symbol: "bookmark", label: "Read later" },
+        { id: "question", colour: "orange", symbol: "question", label: "Needs follow-up" },
+        { id: "exclamation", colour: "red", symbol: "exclamation", label: "Has bugs" },
+      ],
       chime: true,
       uiScale: 130,
       uiScaleSteps: [80, 90, 100, 110, 120, 130, 140, 150],
@@ -47,9 +47,8 @@ window.wailsCall = async (name, input) => {
   if (name.endsWith(".Save")) {
     saves.push(input);
     if (invalid === "thoughts") throw new Error("thoughts: an org maps to two thoughts roots");
-    if (invalid && !input?.stickerLabels?.[invalid]?.trim()) {
-      throw new Error(`${invalid}: cannot be empty`);
-    }
+    const blank = (input?.stickers ?? []).findIndex((item) => !item.label.trim());
+    if (invalid === "stickers" && blank >= 0) throw new Error(`stickers.${blank}: cannot be empty`);
     return { restartRequired: false };
   }
   return undefined;

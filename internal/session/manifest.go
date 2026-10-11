@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
@@ -36,37 +37,20 @@ func (r RepoRole) Effective() RepoRole {
 
 func (r RepoRole) IsEditing() bool { return r.Effective() == RepoRoleEditing }
 
+// Sticker is the id of one of the user's configured stickers. An id the list no
+// longer holds reads as no sticker.
 type Sticker string
 
-const (
-	StickerStar        Sticker = "star"
-	StickerBookmark    Sticker = "bookmark"
-	StickerQuestion    Sticker = "question"
-	StickerExclamation Sticker = "exclamation"
-)
-
-func (s Sticker) Effective() Sticker {
-	switch s {
-	case StickerStar, StickerBookmark, StickerQuestion, StickerExclamation:
-		return s
-	default:
+// Next walks order: none or an unlisted id gives the first entry, and the last gives none.
+func (s Sticker) Next(order []Sticker) Sticker {
+	i := slices.Index(order, s)
+	if i+1 >= len(order) {
+		if i < 0 && len(order) > 0 {
+			return order[0]
+		}
 		return ""
 	}
-}
-
-func (s Sticker) Next() Sticker {
-	switch s.Effective() {
-	case "":
-		return StickerStar
-	case StickerStar:
-		return StickerBookmark
-	case StickerBookmark:
-		return StickerQuestion
-	case StickerQuestion:
-		return StickerExclamation
-	default:
-		return ""
-	}
+	return order[i+1]
 }
 
 // SessionMode selects the system prompt (and opening message) the runner starts
@@ -273,10 +257,10 @@ func SetMode(dir string, mode SessionMode) error {
 	})
 }
 
-func CycleSticker(dir string) (Sticker, error) {
+func CycleSticker(dir string, order []Sticker) (Sticker, error) {
 	var committed Sticker
 	err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-		m.Sticker = m.Sticker.Next()
+		m.Sticker = m.Sticker.Next(order)
 		committed = m.Sticker
 		return m, nil
 	})

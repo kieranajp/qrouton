@@ -1,13 +1,6 @@
 import { SETTINGS_ADJUST_UI_SCALE, SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE } from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
-/**
- * @typedef {object} StickerLabels
- * @property {string} star
- * @property {string} bookmark
- * @property {string} question
- * @property {string} exclamation
- */
 
 /**
  * @typedef {object} SettingsFields
@@ -16,7 +9,7 @@ import { Call } from "../wails.js";
  * @property {string} editor
  * @property {string} launch
  * @property {string} linear
- * @property {StickerLabels} stickerLabels
+ * @property {import("../session/stickers.js").Sticker[]} stickers
  * @property {boolean} chime
  * @property {number} uiScale
  * @property {number[]} [uiScaleSteps]

@@ -1,14 +1,13 @@
 <script>
-  import { STICKER_IDS } from "../bridge/generated.js";
   import { uiScale } from "../scale.svelte.js";
   import Icon from "../core/Icon.svelte";
   import StageSquare from "../overview/StageSquare.svelte";
   import { stageTone } from "../workflow.js";
   import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
   import StickerIcon from "./StickerIcon.svelte";
-  import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
+  import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickerLabels?: Record<string, string>, stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     initials,
     shortcut = "",
@@ -19,7 +18,7 @@
     idle = "",
     selected = false,
     stickerId = "",
-    stickerLabels = {},
+    stickers = [],
     stickerBusy = false,
     feedback = null,
     onSelect,
@@ -31,9 +30,9 @@
   let facts = $derived(summaryFacts(summary, unseen, idle));
   let label = $derived(rowLabel(name, repos, facts));
   let running = $derived(Boolean(summary.running));
-  let stickerItem = $derived(sticker(stickerId));
-  let stickerLabel = $derived(stickerControlLabel(name, stickerId, stickerLabels));
-  let stickerTooltip = $derived(stickerTitle(stickerId, stickerLabels));
+  let stickerItem = $derived(sticker(stickerId, stickers));
+  let stickerLabel = $derived(stickerControlLabel(name, stickerId, stickers));
+  let stickerTooltip = $derived(stickerTitle(stickerId, stickers));
 
   function fitFeedback(node) {
     const row = node.closest(".row");
@@ -107,13 +106,13 @@
     aria-label={stickerLabel}
     aria-busy={stickerBusy ? "true" : undefined}
     title={stickerTooltip}
-    style:color={stickerItem?.css}
+    style:color={stickerItem ? stickerCss(stickerItem.colour) : undefined}
     onmousedown={(event) => event.preventDefault()}
     onclick={onSticker}>
     {#if stickerItem}
-      <StickerIcon id={stickerItem.id} />
+      <StickerIcon symbol={stickerItem.symbol} />
     {:else}
-      <StickerIcon id={STICKER_IDS.STAR} outline />
+      <StickerIcon outline />
     {/if}
   </button>
 

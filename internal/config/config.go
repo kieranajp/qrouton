@@ -34,6 +34,10 @@ type Config struct {
 	// Absent reads false, so the chime stays on until someone turns it off.
 	Quiet bool `json:"quiet,omitempty"`
 
+	// Absent derives today's four stickers; an empty list means no stickers.
+	Stickers *[]Sticker `json:"stickers,omitempty"`
+
+	// Read only to derive Stickers from a config written before the list existed.
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 
 	Thoughts Thoughts `json:"thoughts,omitzero"`
@@ -58,6 +62,14 @@ type ThoughtsRoot struct {
 	ID   string   `json:"id"`
 	Path string   `json:"path"`
 	Orgs []string `json:"orgs,omitempty"`
+}
+
+// Sticker is one entry in the user's sticker list. List order is rail cycle order.
+type Sticker struct {
+	ID     string `json:"id"`
+	Colour string `json:"colour"`
+	Symbol string `json:"symbol"`
+	Label  string `json:"label"`
 }
 
 type StickerLabels struct {
@@ -119,6 +131,7 @@ func (c *Config) Replace(next *Config) {
 	c.Editor = replacement.Editor
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
+	c.Stickers = replacement.Stickers
 	c.StickerLabels = replacement.StickerLabels
 	c.Thoughts = replacement.Thoughts
 	c.UIScale = replacement.UIScale
@@ -140,6 +153,13 @@ func clone(c *Config) *Config {
 		for runner, argv := range c.Launch {
 			out.Launch[runner] = append([]string(nil), argv...)
 		}
+	}
+	if c.Stickers != nil {
+		stickers := slices.Clone(*c.Stickers)
+		if stickers == nil {
+			stickers = []Sticker{}
+		}
+		out.Stickers = &stickers
 	}
 	if c.StickerLabels != nil {
 		labels := *c.StickerLabels
@@ -223,8 +243,40 @@ func validateThoughts(roots []ThoughtsRoot) error {
 	return vault.Validate(profiles)
 }
 
-func (c *Config) EffectiveStickerLabels() StickerLabels {
-	return effectiveStickerLabels(c.Snapshot())
+// EffectiveStickers answers the sticker list, or the four legacy stickers
+// labelled from stickerLabels when config.json has no list yet.
+func (c *Config) EffectiveStickers() []Sticker {
+	snapshot := c.Snapshot()
+	if snapshot == nil {
+		snapshot = &Config{}
+	}
+	if snapshot.Stickers != nil {
+		return slices.Clone(*snapshot.Stickers)
+	}
+	labels := effectiveStickerLabels(snapshot)
+	return []Sticker{
+		{ID: LegacyStickerStar, Colour: "blue", Symbol: "star", Label: labels.Star},
+		{ID: LegacyStickerBookmark, Colour: "green", Symbol: "bookmark", Label: labels.Bookmark},
+		{ID: LegacyStickerQuestion, Colour: "orange", Symbol: "question", Label: labels.Question},
+		{ID: LegacyStickerExclamation, Colour: "red", Symbol: "exclamation", Label: labels.Exclamation},
+	}
+}
+
+// StickerColours lists the colours a sticker may take, in palette order.
+func StickerColours() []string { return slices.Clone(stickerColours) }
+
+// StickerSymbols lists the symbols a sticker may take, in palette order.
+func StickerSymbols() []string { return slices.Clone(stickerSymbols) }
+
+// CheckSticker refuses a colour or symbol outside the palette.
+func CheckSticker(s Sticker) error {
+	if !slices.Contains(stickerColours, s.Colour) {
+		return fmt.Errorf("%w: %q", ErrStickerColour, s.Colour)
+	}
+	if !slices.Contains(stickerSymbols, s.Symbol) {
+		return fmt.Errorf("%w: %q", ErrStickerSymbol, s.Symbol)
+	}
+	return nil
 }
 
 func effectiveStickerLabels(c *Config) StickerLabels {

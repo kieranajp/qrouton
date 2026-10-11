@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,19 +19,19 @@ import (
 
 // SettingsView carries the editable config and Linear document on the wire.
 type SettingsView struct {
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	LinearPath    string               `json:"linearPath"`
-	LinearError   string               `json:"linearError,omitempty"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
-	Chime         bool                 `json:"chime"`
-	UIScale       int                  `json:"uiScale"`
-	UIScaleSteps  []int                `json:"uiScaleSteps"`
-	Thoughts      ThoughtsView         `json:"thoughts"`
-	Pinned        SettingsPinned       `json:"pinned"`
+	Orgs         []string         `json:"orgs"`
+	Root         string           `json:"root"`
+	Editor       string           `json:"editor"`
+	Launch       string           `json:"launch"`
+	Linear       string           `json:"linear"`
+	LinearPath   string           `json:"linearPath"`
+	LinearError  string           `json:"linearError,omitempty"`
+	Stickers     []config.Sticker `json:"stickers"`
+	Chime        bool             `json:"chime"`
+	UIScale      int              `json:"uiScale"`
+	UIScaleSteps []int            `json:"uiScaleSteps"`
+	Thoughts     ThoughtsView     `json:"thoughts"`
+	Pinned       SettingsPinned   `json:"pinned"`
 }
 
 // SettingsPinned names the fields an environment variable overrides for this run.
@@ -57,15 +59,15 @@ type ThoughtsRow struct {
 }
 
 type SettingsInput struct {
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
-	Chime         bool                 `json:"chime"`
-	UIScale       int                  `json:"uiScale"`
-	Thoughts      ThoughtsInput        `json:"thoughts"`
+	Orgs     []string         `json:"orgs"`
+	Root     string           `json:"root"`
+	Editor   string           `json:"editor"`
+	Launch   string           `json:"launch"`
+	Linear   string           `json:"linear"`
+	Stickers []config.Sticker `json:"stickers"`
+	Chime    bool             `json:"chime"`
+	UIScale  int              `json:"uiScale"`
+	Thoughts ThoughtsInput    `json:"thoughts"`
 }
 
 // SaveResult reports whether the process needs to end for a changed Root to
@@ -120,19 +122,19 @@ func (s *Settings) Load() SettingsView {
 	}
 	linear, linearErr := s.linear.Load()
 	return SettingsView{
-		Orgs:          file.Orgs,
-		Root:          root,
-		Editor:        editorCommand(cfg.Editor),
-		Launch:        launch,
-		Linear:        linear,
-		LinearPath:    lineartools.ConfigPath,
-		LinearError:   errorText(linearErr),
-		StickerLabels: cfg.EffectiveStickerLabels(),
-		Chime:         !cfg.Quiet,
-		UIScale:       cfg.EffectiveUIScale(),
-		UIScaleSteps:  config.UIScaleSteps(),
-		Thoughts:      thoughtsView(file.Thoughts, root),
-		Pinned:        SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
+		Orgs:         file.Orgs,
+		Root:         root,
+		Editor:       editorCommand(cfg.Editor),
+		Launch:       launch,
+		Linear:       linear,
+		LinearPath:   lineartools.ConfigPath,
+		LinearError:  errorText(linearErr),
+		Stickers:     cfg.EffectiveStickers(),
+		Chime:        !cfg.Quiet,
+		UIScale:      cfg.EffectiveUIScale(),
+		UIScaleSteps: config.UIScaleSteps(),
+		Thoughts:     thoughtsView(file.Thoughts, root),
+		Pinned:       SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
 	}
 }
 
@@ -207,7 +209,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 			}
 		}
 	}
-	stickerLabels, err := validateStickerLabels(in.StickerLabels)
+	stickers, err := validateStickers(in.Stickers)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -235,7 +237,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		live.Thoughts = expandThoughts(thoughts)
 		for _, c := range []*config.Config{next, live} {
 			c.Editor, c.Launch = editor, launch
-			c.StickerLabels = &stickerLabels
+			c.Stickers, c.StickerLabels = &stickers, nil
 			c.Quiet = !in.Chime
 			c.UIScale = storedUIScale(uiScale)
 		}
@@ -246,7 +248,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return nil
 	}, s.reconfigure, func(current, live *config.Config, restart bool) {
 		changed := !slices.Equal(current.Orgs, live.Orgs)
-		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
+		labelsChanged := !slices.Equal(current.EffectiveStickers(), stickers)
 		result.RestartRequired = restart
 		if changed {
 			s.emit(orgsChangedEvent, live.Orgs)
@@ -264,25 +266,35 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	return result, nil
 }
 
-func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, error) {
-	labels.Star = strings.TrimSpace(labels.Star)
-	labels.Bookmark = strings.TrimSpace(labels.Bookmark)
-	labels.Question = strings.TrimSpace(labels.Question)
-	labels.Exclamation = strings.TrimSpace(labels.Exclamation)
-	for _, field := range []struct {
-		name  string
-		value string
-	}{
-		{name: settingsFieldStar, value: labels.Star},
-		{name: settingsFieldBookmark, value: labels.Bookmark},
-		{name: settingsFieldQuestion, value: labels.Question},
-		{name: settingsFieldExclamation, value: labels.Exclamation},
-	} {
-		if field.value == "" {
-			return config.StickerLabels{}, fmt.Errorf(settingsRefusalFormat, field.name, settingsEmpty)
+// validateStickers trims labels and gives each new sticker an id. Ids are
+// random so a removed sticker's id never comes back onto a session.
+func validateStickers(in []config.Sticker) ([]config.Sticker, error) {
+	out := make([]config.Sticker, 0, len(in))
+	seen := map[[2]string]bool{}
+	for i, s := range in {
+		field := fmt.Sprintf(stickerFieldFormat, settingsFieldStickers, i)
+		s.Label = strings.TrimSpace(s.Label)
+		if s.Label == "" {
+			return nil, fmt.Errorf(settingsRefusalFormat, field, settingsEmpty)
 		}
+		if err := config.CheckSticker(s); err != nil {
+			return nil, fmt.Errorf(settingsWrappedFormat, field, err)
+		}
+		pair := [2]string{s.Colour, s.Symbol}
+		if seen[pair] {
+			return nil, fmt.Errorf(settingsWrappedFormat, field, ErrStickerDuplicate)
+		}
+		seen[pair] = true
+		if s.ID == "" {
+			id := make([]byte, stickerIDBytes)
+			if _, err := rand.Read(id); err != nil {
+				return nil, err
+			}
+			s.ID = hex.EncodeToString(id)
+		}
+		out = append(out, s)
 	}
-	return labels, nil
+	return out, nil
 }
 
 // validateUIScale reads an unset scale as the default.

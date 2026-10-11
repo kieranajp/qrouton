@@ -63,7 +63,7 @@
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
-      stickerLabels={fields.stickerLabels}
+      stickers={fields.stickers}
       onNewSession={() => (view.requested = true)}
       onDismissed={view.handBack}
       size={view.sidebarSize}

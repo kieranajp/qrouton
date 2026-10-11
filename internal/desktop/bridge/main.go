@@ -66,7 +66,6 @@ var valueSets = []valueSet{
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
 	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},
 	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
-	{name: "STICKER_IDS", typedef: "Sticker", dir: sessionPackage, goType: "Sticker", prefix: "Sticker"},
 	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
 	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_ICONS", typedef: "WindowIcon", dir: workbenchPackage, goType: "WindowIcon", prefix: "Icon"},

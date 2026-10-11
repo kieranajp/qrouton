@@ -11,13 +11,13 @@
   import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
-  import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
+  import { stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, stickerLabels: Record<string, string>, onNewSession: () => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
-    stickerLabels = DEFAULT_STICKER_LABELS,
+    stickers = [],
     onNewSession,
     onDismissed,
     size = 0,
@@ -77,7 +77,7 @@
     const queued = previous
       .catch(() => {})
       .then(() => cycleSticker(slug))
-      .then((committed) => showRowNotice(slug, stickerFeedback(committed, stickerLabels)))
+      .then((committed) => showRowNotice(slug, stickerFeedback(committed, stickers)))
       .catch(() => showRowNotice(slug, "Sticker could not be changed", true))
       .finally(() => {
         pendingStickers = {
@@ -191,7 +191,7 @@
         selected={row.slug === slug}
         unseen={row.unseen}
         stickerId={row.sticker}
-        {stickerLabels}
+        {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
         feedback={rowNotice?.slug === row.slug ? rowNotice : null}
         onSelect={() => show(row.slug)}

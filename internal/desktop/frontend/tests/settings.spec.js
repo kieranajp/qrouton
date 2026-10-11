@@ -44,12 +44,12 @@ test("sticker meanings load and save together without asking for a restart", asy
       editor: "",
       launch: "",
       linear: "",
-      stickerLabels: {
-        star: "Priority",
-        bookmark: "Read after launch",
-        question: "Needs an answer",
-        exclamation: "Broken here",
-      },
+      stickers: [
+        { id: "star", colour: "blue", symbol: "star", label: "Priority" },
+        { id: "bookmark", colour: "green", symbol: "bookmark", label: "Read after launch" },
+        { id: "question", colour: "orange", symbol: "question", label: "Needs an answer" },
+        { id: "exclamation", colour: "red", symbol: "exclamation", label: "Broken here" },
+      ],
       chime: true,
       uiScale: 130,
       thoughts: {
@@ -65,7 +65,7 @@ test("sticker meanings load and save together without asking for a restart", asy
 });
 
 test("a blank sticker meaning names the field and stays open", async ({ page }) => {
-  await page.goto("/tests/settings.html?invalid=question");
+  await page.goto("/tests/settings.html?invalid=stickers");
   const question = page.getByRole("textbox", { name: "Orange question mark meaning" });
   await question.fill("   ");
   await page.getByRole("button", { name: "Save" }).click();

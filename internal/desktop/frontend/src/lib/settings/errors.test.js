@@ -9,6 +9,13 @@ test("a field: message error splits into both parts", () => {
   });
 });
 
+test("a sticker error names its row by index", () => {
+  assert.deepEqual(fieldError(new Error("stickers.3: cannot be empty")), {
+    field: "stickers.3",
+    message: "cannot be empty",
+  });
+});
+
 test("a message with no leading field name answers null", () => {
   assert.equal(fieldError(new Error("disk is full")), null);
 });

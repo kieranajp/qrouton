@@ -232,7 +232,14 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	overviewTab := &overviewWindow{windows: windows}
 
 	reg.boot = booting{
-		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
+		root: func(slug string) string { return session.Resumable(opts.Root, slug) },
+		stickers: func() []session.Sticker {
+			var ids []session.Sticker
+			for _, s := range opts.Config.EffectiveStickers() {
+				ids = append(ids, session.Sticker(s.ID))
+			}
+			return ids
+		},
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {

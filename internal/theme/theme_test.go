@@ -52,8 +52,10 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 
 func TestStickersHaveFixedDedicatedColours(t *testing.T) {
 	want := map[string]string{
-		"sticker-blue": "ctp-blue", "sticker-green": "ctp-green",
-		"sticker-orange": "ctp-peach", "sticker-red": "ctp-red",
+		"sticker-blue": "ctp-blue", "sticker-sapphire": "ctp-sapphire", "sticker-teal": "ctp-teal",
+		"sticker-green": "ctp-green", "sticker-yellow": "ctp-yellow", "sticker-orange": "ctp-peach",
+		"sticker-red": "ctp-red", "sticker-maroon": "ctp-maroon", "sticker-pink": "ctp-pink",
+		"sticker-mauve": "ctp-mauve", "sticker-lavender": "ctp-lavender", "sticker-grey": "ctp-subtext-0",
 	}
 	css := CSS()
 	for alias, palette := range want {

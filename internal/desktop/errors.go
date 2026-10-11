@@ -23,6 +23,7 @@ var (
 	ErrNoOwners           = errors.New(noOwnersError)
 	ErrUIScale            = errors.New(uiScaleRefusal)
 	ErrUIScaleAction      = errors.New(unknownUIScaleAction)
+	ErrStickerDuplicate   = errors.New(stickerDuplicate)
 
 	ErrNoWindowOptions        = errors.New("open request carries no window options")
 	ErrNoWindowCommand        = errors.New("a terminal window needs a command")

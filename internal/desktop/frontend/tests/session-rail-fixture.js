@@ -1,6 +1,7 @@
 import "../src/tokens/index.css";
 import { mount } from "svelte";
 import SessionRailFixture from "./SessionRailFixture.svelte";
+import { labelled } from "./session-rail-stickers.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
 const order = ["star", "bookmark", "question", "exclamation", ""];
@@ -13,7 +14,8 @@ window.sessionRailBridge = {
   calls: () => [...calls],
   failNext: () => (failing = true),
   setDelay: (milliseconds) => (delay = milliseconds),
-  saveStickerLabels: (stickerLabels) => emitWailsEvent("chrome:update", { stickerLabels }),
+  saveStickers: (list) => emitWailsEvent("chrome:update", { stickers: list }),
+  saveStickerLabels: (labels) => emitWailsEvent("chrome:update", { stickers: labelled(labels) }),
 };
 
 window.wailsCall = async (name, slug) => {

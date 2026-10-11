@@ -31,7 +31,7 @@
     bind:editor={panel.form.editor}
     bind:launch={panel.form.launch}
     bind:linear={panel.form.linear}
-    bind:stickerLabels={panel.form.stickerLabels}
+    bind:stickers={panel.form.stickers}
     bind:chime={panel.form.chime}
     bind:uiScale={panel.form.uiScale}
     uiScaleSteps={panel.form.uiScaleSteps}

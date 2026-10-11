@@ -41,3 +41,16 @@ const (
 	UIScaleStep    = 10
 	UIScaleDefault = 100
 )
+
+// Session manifests written before stickers were user-defined carry these ids,
+// so the derived list keeps them.
+const (
+	LegacyStickerStar        = "star"
+	LegacyStickerBookmark    = "bookmark"
+	LegacyStickerQuestion    = "question"
+	LegacyStickerExclamation = "exclamation"
+)
+
+var stickerColours = []string{"blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"}
+
+var stickerSymbols = []string{"star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"}

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -99,28 +100,28 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	}
 }
 
-func TestChromePublishesDefaultAndCustomStickerLabelsAndRefreshedRows(t *testing.T) {
+func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, "octopus")
 	reg := testRegistry(t, dir)
 	renderer := newFakeRenderer()
 
 	pushChrome(reg, root, nil, nil, nil, renderer.Emit)
-	if got, want := pushedChrome(t, renderer).StickerLabels, (status.StickerLabels{
-		Star: "Important", Bookmark: "Read later", Question: "Needs follow-up", Exclamation: "Has bugs",
-	}); got != want {
-		t.Fatalf("default labels = %#v, want %#v", got, want)
+	got := pushedChrome(t, renderer).Stickers
+	if len(got) != 4 || got[0] != (status.Sticker{ID: "star", Colour: "blue", Symbol: "star", Label: "Important"}) ||
+		got[3] != (status.Sticker{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"}) {
+		t.Fatalf("default stickers = %#v", got)
 	}
-	if _, err := session.CycleSticker(dir); err != nil {
+	if _, err := session.CycleSticker(dir, []session.Sticker{"a1b2c3d4"}); err != nil {
 		t.Fatal(err)
 	}
-	custom := &config.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}
-	pushChrome(reg, root, &config.Config{StickerLabels: custom}, nil, nil, renderer.Emit)
+	custom := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
+	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, renderer.Emit)
 	fields := pushedChrome(t, renderer)
-	if got := fields.StickerLabels; got != (status.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}) {
-		t.Fatalf("custom labels = %#v", got)
+	if want := []status.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}; !reflect.DeepEqual(fields.Stickers, want) {
+		t.Fatalf("custom stickers = %#v", fields.Stickers)
 	}
-	if len(fields.Sessions) != 1 || fields.Sessions[0].Sticker != string(session.StickerStar) {
+	if len(fields.Sessions) != 1 || fields.Sessions[0].Sticker != "a1b2c3d4" {
 		t.Fatalf("refreshed row = %#v", fields.Sessions)
 	}
 }
@@ -148,7 +149,7 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 	for range 1000 {
 		pushChrome(newSessions(), root, cfg, nil, nil, func(_ string, payload any) {
 			fields := payload.(status.Fields)
-			switch fields.StickerLabels.Star {
+			switch fields.Stickers[0].Label {
 			case "first":
 				if !fields.Welcoming {
 					t.Error("chrome mixed first labels with the second welcome state")
@@ -158,7 +159,7 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 					t.Error("chrome mixed second labels with the first welcome state")
 				}
 			default:
-				t.Errorf("chrome published unknown labels: %+v", fields.StickerLabels)
+				t.Errorf("chrome published unknown labels: %+v", fields.Stickers)
 			}
 		})
 	}

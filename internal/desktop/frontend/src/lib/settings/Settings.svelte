@@ -5,13 +5,15 @@
   import StepHeading from "../forms/StepHeading.svelte";
   import TextField from "../forms/TextField.svelte";
   import OllamaStatus from "../OllamaStatus.svelte";
+  import StickerIcon from "../session/StickerIcon.svelte";
+  import { stickerName } from "../session/stickers.js";
   import ThoughtsSettings from "./ThoughtsSettings.svelte";
 
   const LINEAR_HELP = "Used by Work on issue → Custom script.";
   /** @param {string} variable */
   const pinnedNote = (variable) => `Set by ${variable} for this run. Save writes the file's value.`;
 
-  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickerLabels?: {star: string, bookmark: string, question: string, exclamation: string}, chime?: boolean, uiScale?: number, uiScaleSteps?: number[], pinned?: {root: boolean, orgs: boolean}, thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
+  /** @type {{orgs?: string[], orgInput?: string, root?: string, editor?: string, launch?: string, linear?: string, linearPath?: string, stickers?: import("../session/stickers.js").Sticker[], chime?: boolean, uiScale?: number, uiScaleSteps?: number[], pinned?: {root: boolean, orgs: boolean}, thoughts?: import("./thoughts.js").ThoughtsForm, loadedThoughts?: import("./thoughts.js").ThoughtsForm & {derived?: string}, onAddFolder?: () => void, onRemoveFolder?: (index: number) => void, fields?: Record<string, string>, restartRequired?: boolean, onAddOrg?: () => void, onRemoveOrg?: (org: string) => void, onQuit?: () => void}} */
   let {
     orgs = [],
     orgInput = $bindable(""),
@@ -20,7 +22,7 @@
     launch = $bindable(""),
     linear = $bindable(""),
     linearPath = "",
-    stickerLabels = $bindable({ star: "", bookmark: "", question: "", exclamation: "" }),
+    stickers = $bindable([]),
     chime = $bindable(true),
     uiScale = $bindable(100),
     uiScaleSteps = [],
@@ -103,30 +105,18 @@
 <fieldset class="sticker-labels">
   <legend>Session stickers</legend>
   <div class="sticker-fields">
-    <TextField
-      label="Blue star"
-      aria-label="Blue star meaning"
-      bind:value={stickerLabels.star}
-      help={fields.star}
-      helpTone={fields.star ? "failed" : "muted"} />
-    <TextField
-      label="Green bookmark"
-      aria-label="Green bookmark meaning"
-      bind:value={stickerLabels.bookmark}
-      help={fields.bookmark}
-      helpTone={fields.bookmark ? "failed" : "muted"} />
-    <TextField
-      label="Orange question mark"
-      aria-label="Orange question mark meaning"
-      bind:value={stickerLabels.question}
-      help={fields.question}
-      helpTone={fields.question ? "failed" : "muted"} />
-    <TextField
-      label="Red exclamation mark"
-      aria-label="Red exclamation mark meaning"
-      bind:value={stickerLabels.exclamation}
-      help={fields.exclamation}
-      helpTone={fields.exclamation ? "failed" : "muted"} />
+    {#each stickers as item, index (index)}
+      <TextField
+        label={stickerName(item)}
+        aria-label="{stickerName(item)} meaning"
+        bind:value={item.label}
+        help={fields[`stickers.${index}`]}
+        helpTone={fields[`stickers.${index}`] ? "failed" : "muted"}>
+        {#snippet trailing()}
+          <span class="sticker-glyph"><StickerIcon symbol={item.symbol} colour={item.colour} /></span>
+        {/snippet}
+      </TextField>
+    {/each}
   </div>
 </fieldset>
 
@@ -191,6 +181,11 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: calc(14px * var(--ui-scale)) calc(18px * var(--ui-scale));
+  }
+
+  .sticker-glyph {
+    display: flex;
+    align-items: center;
   }
 
   .chime {

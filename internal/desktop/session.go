@@ -222,6 +222,7 @@ type booting struct {
 	reveal      func(sessionRoot string) error
 	copyImage   func(path string) error
 	copyFile    func(path string) error
+	stickers    func() []session.Sticker
 }
 
 type Sessions struct {
@@ -334,12 +335,16 @@ func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
 	if root == "" || !directSessionRoot(root, slug) {
 		return "", unknownSession(slug)
 	}
+	var order []session.Sticker
+	if s.boot.stickers != nil {
+		order = s.boot.stickers()
+	}
 	var sticker session.Sticker
 	err := session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
 		if m.Slug != slug {
 			return m, unknownSession(slug)
 		}
-		m.Sticker = m.Sticker.Next()
+		m.Sticker = m.Sticker.Next(order)
 		sticker = m.Sticker
 		return m, nil
 	})

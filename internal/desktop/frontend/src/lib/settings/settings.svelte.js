@@ -15,12 +15,7 @@ export function settings(onClose) {
     launch: "",
     linear: "",
     linearPath: "",
-    stickerLabels: {
-      star: "",
-      bookmark: "",
-      question: "",
-      exclamation: "",
-    },
+    stickers: /** @type {import("../session/stickers.js").Sticker[]} */ ([]),
     chime: true,
     uiScale: 100,
     uiScaleSteps: /** @type {number[]} */ ([]),
@@ -29,7 +24,7 @@ export function settings(onClose) {
   });
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
-  let fields = $state(/** @type {Partial<Record<import("../bridge/generated.js").SettingsField, string>>} */ ({}));
+  let fields = $state(/** @type {Record<string, string>} */ ({}));
   let status = $state("");
   let saving = $state(false);
   let restartRequired = $state(false);
@@ -46,12 +41,7 @@ export function settings(onClose) {
     form.launch = loaded?.launch ?? "";
     form.linear = loaded?.linear ?? "";
     form.linearPath = loaded?.linearPath ?? "";
-    form.stickerLabels = {
-      star: loaded?.stickerLabels?.star ?? "",
-      bookmark: loaded?.stickerLabels?.bookmark ?? "",
-      question: loaded?.stickerLabels?.question ?? "",
-      exclamation: loaded?.stickerLabels?.exclamation ?? "",
-    };
+    form.stickers = (loaded?.stickers ?? []).map((item) => ({ ...item }));
     form.chime = loaded?.chime ?? true;
     form.uiScale = loaded?.uiScale ?? 100;
     form.uiScaleSteps = loaded?.uiScaleSteps ?? [];
@@ -96,7 +86,7 @@ export function settings(onClose) {
         editor: form.editor,
         launch: form.launch,
         linear: form.linear,
-        stickerLabels: { ...form.stickerLabels },
+        stickers: form.stickers.map((item) => ({ ...item })),
         chime: form.chime,
         uiScale: form.uiScale,
         thoughts: toInput(form.thoughts),

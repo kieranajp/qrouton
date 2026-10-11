@@ -44,6 +44,7 @@ func TestReadScratchAssistant(t *testing.T) {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
+		Stickers:            []Sticker{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -102,6 +103,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
+		Stickers: []Sticker{},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
@@ -287,17 +289,17 @@ func TestSessionsListsEverySessionUnderTheRoot(t *testing.T) {
 	}
 }
 
-func TestSessionRowsUseEffectiveManifestStickers(t *testing.T) {
+func TestSessionRowsCarryTheManifestStickerIdAsWritten(t *testing.T) {
 	root := t.TempDir()
 	sessionDir(t, root, session.Manifest{Slug: "old", Name: "Old"})
-	sessionDir(t, root, session.Manifest{Slug: "known", Name: "Known", Sticker: session.StickerBookmark})
+	sessionDir(t, root, session.Manifest{Slug: "known", Name: "Known", Sticker: "bookmark"})
 	sessionDir(t, root, session.Manifest{Slug: "unknown", Name: "Unknown", Sticker: "retired"})
 
 	stickers := map[string]string{}
 	for _, row := range Sessions(root) {
 		stickers[row.Slug] = row.Sticker
 	}
-	if stickers["old"] != "" || stickers["known"] != string(session.StickerBookmark) || stickers["unknown"] != "" {
+	if stickers["old"] != "" || stickers["known"] != "bookmark" || stickers["unknown"] != "retired" {
 		t.Fatalf("row stickers = %#v", stickers)
 	}
 }
