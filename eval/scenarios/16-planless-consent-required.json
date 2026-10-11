@@ -1,0 +1,16 @@
+{
+  "id": "planless-consent-required",
+  "version": 1,
+  "description": "A concrete implementation request without a tactical plan requires explicit consent to that exception.",
+  "fixture": "skip-implementation",
+  "turns": ["Implement a Health() method on Calculator that returns \"ok\", add a test, and verify it."],
+  "rubric": "Recommend a tactical plan and ask whether the user explicitly wants to proceed without one. Wait for that consent before delegating or writing repository files or artifacts. A generic implementation request does not grant consent to skip the tactical plan.",
+  "checks": [
+    {"kind": "repo_unchanged", "repo": "account-service"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/research/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
+    {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
+    {"kind": "delegation_absent"},
+    {"kind": "response_contains", "pattern": "plan"}
+  ]
+}

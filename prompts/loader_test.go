@@ -304,7 +304,7 @@ func TestEmbeddedLoaderAndAgentRendering(t *testing.T) {
 	if len(assets) != 3 || assets[0].Path != ".claude/agents/qrouton-research-lead.md" || assets[1].Path != ".codex/agents/qrouton-research-lead.toml" || assets[2].Path != ".agents/agents/qrouton-research-lead/agent.md" {
 		t.Fatalf("rendered assets = %#v", assets)
 	}
-	if !strings.Contains(string(assets[1].Content), `sandbox_mode = "workspace-write"`) || !strings.Contains(string(assets[1].Content), "Lead a bounded") {
+	if !strings.Contains(string(assets[1].Content), `sandbox_mode = "workspace-write"`) || !strings.Contains(string(assets[1].Content), "Investigate the repositories read-only") {
 		t.Fatalf("Codex rendering missing metadata or instructions:\n%s", assets[1].Content)
 	}
 	all, err := loader.List(context.Background())
@@ -530,7 +530,7 @@ func TestPartialsHoldNoPlaceholderOfTheirOwn(t *testing.T) {
 // is checked, because moving one and leaving another behind is the likelier
 // mistake than restating all three.
 func TestTheArtifactLengthsAreStatedOnce(t *testing.T) {
-	for _, figure := range []string{"400 lines", "300 to 350", "200 to 250"} {
+	for _, figure := range []string{"400 lines", "300–350", "200–250"} {
 		var carriers []string
 		err := fs.WalkDir(embedded, ".", func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, promptFileExt) {
