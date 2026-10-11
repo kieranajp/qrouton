@@ -1,24 +1,47 @@
-import { AGENT_ATTENTION, AGENT_COVERAGE } from "../bridge/generated.js";
+import { AGENT_ATTENTION, AGENT_COVERAGE, AGENT_STATES } from "../bridge/generated.js";
+import { stateWords } from "../agents/tree.js";
 
-/**
- * @param {{attention?: string, active?: number, coverage?: string, running?: boolean}} summary
- * @param {number} unseen
- * @param {string} [idleAge]
- */
+/** @typedef {{attention?: string, active?: number, coverage?: string, running?: boolean,
+ * state?: string, reason?: string, tool?: string, target?: string}} Summary */
+/** @typedef {{kind: string, label: string, active?: boolean, title?: string}} Fact */
+
+/** @type {string[]} */
+const BUSY = [AGENT_STATES.WORKING, AGENT_STATES.WAITING_AGENTS];
+
+/** @param {string} words */
+const capital = (words) => words.charAt(0).toUpperCase() + words.slice(1);
+
+/** A row's headline: root state, live agents, current tool, unseen documents.
+ * @param {Summary} summary @param {number} unseen @param {string} [idleAge] @returns {Fact[]} */
 export function summaryFacts(summary = {}, unseen = 0, idleAge = "") {
+  /** @type {Fact[]} */
   const facts = [];
-  if (summary.running && summary.attention === AGENT_ATTENTION.UNREAD) {
+  const state = summary.running ? (summary.state ?? "") : "";
+  if (state === AGENT_STATES.NEEDS_YOU) {
+    facts.push({ kind: "attention", label: "Needs you", title: summary.reason || undefined });
+  } else if (summary.running && summary.attention === AGENT_ATTENTION.UNREAD) {
     facts.push({ kind: "attention", label: "Unread" });
   }
 
   if (!summary.running) {
     facts.push({ kind: "agents", label: idleAge ? `Idle · ${idleAge}` : "Idle" });
-  } else if (summary.coverage === AGENT_COVERAGE.FULL) {
+  } else if (state && state !== AGENT_STATES.NEEDS_YOU) {
+    const agents = Math.max(0, (summary.active ?? 0) - 1);
+    const count = summary.coverage === AGENT_COVERAGE.FULL && agents ? ` · ${agents} ${agents === 1 ? "agent" : "agents"}` : "";
+    facts.push({
+      kind: "agents",
+      label: capital(stateWords({ state, tool: summary.tool })) + count,
+      active: BUSY.includes(state),
+    });
+  } else if (!state && summary.coverage === AGENT_COVERAGE.FULL) {
     facts.push({ kind: "agents", label: `${Math.max(0, summary.active ?? 0)} active`, active: true });
-  } else if (summary.coverage === AGENT_COVERAGE.ROOT) {
+  } else if (!state && summary.coverage === AGENT_COVERAGE.ROOT) {
     facts.push({ kind: "agents", label: "Root active", active: true });
   }
 
+  if (summary.running && summary.tool && state === AGENT_STATES.WORKING) {
+    facts.push({ kind: "tool", label: [summary.tool, summary.target].filter(Boolean).join(" ") });
+  }
   if (unseen > 0) facts.push({ kind: "unseen", label: `${unseen} new ${unseen === 1 ? "doc" : "docs"}` });
   return facts;
 }

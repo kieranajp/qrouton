@@ -461,3 +461,27 @@ test("sessions take the rail", async ({ page }) => {
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await box(sessions)).scrollTop).toBeGreaterThan(0);
 });
+
+test("a row's headline says what its root is doing", async ({ page }) => {
+  const row = () => page.getByRole("button", { name: /^Checkout migration/ });
+  const headline = (summary) => page.evaluate((s) => window.sessionRail.headline(s), summary);
+
+  await headline({ state: "working", active: 3, tool: "Bash", target: "go test ./internal/desktop/... -run TestAgentTree" });
+  await expect(row().locator(".fact.agents")).toHaveText(/Working · 2 agents/);
+  const tool = row().locator(".fact.tool");
+  await expect(tool).toHaveText("Bash go test ./internal/desktop/... -run TestAgentTree");
+  expect(await tool.evaluate((el) => getComputedStyle(el).textOverflow)).toBe("ellipsis");
+  expect(await tool.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+
+  await headline({ state: "needs_you", reason: "Which branch should I cut from?", active: 1, attention: "unread" });
+  const attention = row().locator(".fact.attention");
+  await expect(attention).toHaveText(/Needs you/);
+  await expect(attention).toHaveAttribute("title", "Which branch should I cut from?");
+  expect(await attention.evaluate((el) => getComputedStyle(el).color)).toBe(await token(page, "--state-waiting"));
+
+  await headline({ state: "your_turn", active: 1 });
+  await expect(row().locator(".fact.agents")).toHaveText(/Your turn/);
+
+  await headline({ state: "idle", active: 1, coverage: "root" });
+  await expect(row().locator(".fact.agents")).toHaveText(/Idle/);
+});

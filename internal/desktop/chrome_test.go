@@ -368,3 +368,40 @@ func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
 		t.Fatalf("live stages after a relaunch = %+v", got)
 	}
 }
+
+func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now)
+	background := reg.add(sessionDir(t, root, "background"), []string{"/bin/cat"}, os.Environ())
+	shown := reg.add(sessionDir(t, root, "onscreen"), []string{"/bin/cat"}, os.Environ())
+	reg.reveal(shown)
+	row := func() status.AgentSummary {
+		renderer := newFakeRenderer()
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		for _, r := range pushedChrome(t, renderer).Sessions {
+			if r.Slug == "background" {
+				return r.Summary
+			}
+		}
+		t.Fatal("no background row")
+		return status.AgentSummary{}
+	}
+	event := func(hook, tool, id, target string) workbench.AgentEventRequest {
+		return workbench.AgentEventRequest{
+			Provider: agentProviderClaude, Generation: 1, Hook: hook, Tool: tool, ToolUseID: id, Target: target, Timestamp: clock.now(),
+		}
+	}
+
+	background.agents.begin(agentProviderClaude, 1)
+	background.agents.apply(event(agentevent.HookUserPromptSubmit, "", "", ""))
+	background.agents.apply(event(agentevent.HookPreToolUse, "Bash", "t1", "go test ./..."))
+	if got := row(); got.State != agentStateWorking || got.Tool != "Bash" || got.Target != "go test ./..." {
+		t.Fatalf("working headline = %+v", got)
+	}
+	background.agents.apply(event(agentevent.HookPostToolUse, "Bash", "t1", "go test ./..."))
+	background.agents.apply(event(agentevent.HookPreToolUse, agentevent.ToolAskUserQuestion, "ask-1", "Which branch?"))
+	if got := row(); got.State != agentStateNeedsYou || got.Reason != "Which branch?" || got.Attention != status.AgentAttentionUnread {
+		t.Fatalf("needs-you headline = %+v", got)
+	}
+}

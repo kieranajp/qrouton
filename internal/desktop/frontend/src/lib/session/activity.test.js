@@ -45,3 +45,31 @@ test("one repository is named and the rest are counted", () => {
   );
   assert.deepEqual(repositoryLine([]), { name: "No editing repositories", extra: "" });
 });
+
+test("a row's headline names the root's state, its live agents and its tool", () => {
+  const running = { running: true, coverage: "full", attention: "none" };
+  assert.deepEqual(summaryFacts({ ...running, state: "working", active: 3, tool: "Bash", target: "go test ./..." }), [
+    { kind: "agents", label: "Working · 2 agents", active: true },
+    { kind: "tool", label: "Bash go test ./..." },
+  ]);
+  assert.deepEqual(summaryFacts({ ...running, state: "working", active: 1 }), [
+    { kind: "agents", label: "Thinking", active: true },
+  ]);
+  assert.deepEqual(summaryFacts({ ...running, state: "waiting_agents", active: 2 }), [
+    { kind: "agents", label: "Waiting on agents · 1 agent", active: true },
+  ]);
+  assert.deepEqual(summaryFacts({ ...running, state: "your_turn", active: 1, attention: "unread" }), [
+    { kind: "attention", label: "Unread" },
+    { kind: "agents", label: "Your turn", active: false },
+  ]);
+  assert.deepEqual(summaryFacts({ running: true, coverage: "root", state: "idle", active: 1 }), [
+    { kind: "agents", label: "Idle", active: false },
+  ]);
+});
+
+test("needs you takes the attention treatment with the reason as its title", () => {
+  assert.deepEqual(
+    summaryFacts({ running: true, coverage: "full", attention: "unread", state: "needs_you", reason: "Which branch?", active: 1 }),
+    [{ kind: "attention", label: "Needs you", title: "Which branch?" }],
+  );
+});

@@ -60,8 +60,15 @@
     );
   }
 
+  function headline(summary) {
+    sessions = sessions.map((session) =>
+      session.slug === "checkout" ? { ...session, summary: { coverage: "full", running: true, ...summary } } : session,
+    );
+  }
+
   window.sessionRail = {
     rootOnly,
+    headline,
     added: () => added,
     shown: (slug) => (selected = slug),
     rename: (slug, name) => {

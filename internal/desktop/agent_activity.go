@@ -75,6 +75,7 @@ type agentToolCall struct {
 
 type agentActivitySnapshot struct {
 	Provider     string
+	Generation   uint64
 	Running      bool
 	Unread       bool
 	Active       int
@@ -386,7 +387,7 @@ func (a *agentActivity) snapshot() agentActivitySnapshot {
 		return records[i].ID < records[j].ID
 	})
 	return agentActivitySnapshot{
-		Provider: a.provider, Running: a.running, Unread: a.running && a.unread,
+		Provider: a.provider, Generation: a.generation, Running: a.running, Unread: a.running && a.unread,
 		Active: active, Capabilities: capabilitiesFor(a.provider), Records: records,
 		LiveTypes: live,
 	}

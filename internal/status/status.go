@@ -101,11 +101,17 @@ type Stages struct {
 	Implement bool `json:"implement"`
 }
 
+// AgentSummary is a session row's headline: its root's state, why it needs
+// the user, and what it is doing, plus how many agents are live.
 type AgentSummary struct {
 	Attention string `json:"attention"`
 	Active    int    `json:"active"`
 	Coverage  string `json:"coverage"`
 	Running   bool   `json:"running"`
+	State     string `json:"state"`
+	Reason    string `json:"reason"`
+	Tool      string `json:"tool"`
+	Target    string `json:"target"`
 }
 
 // AgentTree is every agent qrouton knows of in a session's current and

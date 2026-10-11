@@ -218,6 +218,13 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 	if !snapshot.Running {
 		return summary
 	}
+	for _, record := range snapshot.Records {
+		if record.Root && record.Generation == snapshot.Generation {
+			summary.State, summary.Reason = record.State, record.Reason
+			summary.Tool, summary.Target = record.Tool, record.Target
+			break
+		}
+	}
 	if snapshot.Capabilities.Children {
 		summary.Coverage = status.AgentCoverageFull
 	} else {
