@@ -13,6 +13,7 @@ var (
 	ErrMessageRequired      = errors.New("message is required")
 	ErrNameRequired         = errors.New("name is required")
 	ErrSummaryRequired      = errors.New("summary is required")
+	ErrSummaryStage         = errors.New("stage must be research, plan or implement")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )

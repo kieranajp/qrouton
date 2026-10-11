@@ -114,22 +114,6 @@ func latest(found []artifact) string {
 	return best.path
 }
 
-// StageFor is the stage the session's documents put it in, or empty before it
-// has repositories. It reads only the thoughts on disk, never the manifest, so
-// it is safe inside a manifest update.
-func StageFor(root string, m session.Manifest) string {
-	if len(m.Repos) == 0 {
-		return ""
-	}
-	return stageOfPhase[phase(stages(root, m), m)]
-}
-
-var stageOfPhase = map[string]string{
-	phaseResearch:  StageResearch,
-	phasePlan:      StagePlan,
-	phaseImplement: StageImplement,
-}
-
 // stageLeads names the stage each lead works on.
 var stageLeads = map[string]string{
 	prompts.ResearchLead:       StageResearch,

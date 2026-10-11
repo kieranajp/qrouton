@@ -11,6 +11,11 @@ import (
 )
 
 func setSummary(root string, input setSummaryInput) (string, error) {
+	switch input.Stage {
+	case status.StageResearch, status.StagePlan, status.StageImplement:
+	default:
+		return "", fmt.Errorf("%w, got %q", ErrSummaryStage, input.Stage)
+	}
 	text := strings.TrimSpace(input.Summary)
 	count := utf8.RuneCountInString(text)
 	switch {
@@ -20,7 +25,7 @@ func setSummary(root string, input setSummaryInput) (string, error) {
 		return "", summaryTooLong(count)
 	}
 	err := session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
-		m.Summary = session.Summary{Text: text, Stage: status.StageFor(root, m), At: time.Now().UTC()}
+		m.Summary = session.Summary{Text: text, Stage: input.Stage, At: time.Now().UTC()}
 		return m, nil
 	})
 	if err != nil {

@@ -9,7 +9,7 @@ Enter implementation only when the user explicitly asked to build, fix, finish, 
 
 Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent.
 
-{{session-summary}}
+{{session-summary}} Pass `stage` as `implement`.
 
 Give the lead:
 

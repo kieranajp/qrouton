@@ -49,7 +49,7 @@ func TestSetSummaryWritesOnlyTheSummary(t *testing.T) {
 	before := rawManifest(t, dir)
 	start := time.Now().UTC()
 
-	if _, err := setSummary(dir, setSummaryInput{Summary: "  Retrying webhooks with backoff in org/svc.  "}); err != nil {
+	if _, err := setSummary(dir, setSummaryInput{Stage: status.StageResearch, Summary: "  Retrying webhooks with backoff in org/svc.  "}); err != nil {
 		t.Fatalf("setSummary: %v", err)
 	}
 
@@ -78,8 +78,8 @@ func TestSetSummaryWritesOnlyTheSummary(t *testing.T) {
 	}
 }
 
-func TestSetSummaryTakesTheStageFromDisk(t *testing.T) {
-	dir := summarySession(t)
+func writePlan(t *testing.T, dir string) {
+	t.Helper()
 	plans := filepath.Join(sessionpaths.Thoughts(dir), "plans")
 	if err := os.MkdirAll(plans, 0o755); err != nil {
 		t.Fatal(err)
@@ -87,15 +87,49 @@ func TestSetSummaryTakesTheStageFromDisk(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(plans, "P1-plan.md"), []byte("# Plan\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := setSummary(dir, setSummaryInput{Summary: "Building it."}); err != nil {
-		t.Fatal(err)
-	}
+}
+
+func storedStage(t *testing.T, dir string) string {
+	t.Helper()
 	m, err := session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if m.Summary.Stage != status.StageImplement {
-		t.Errorf("stage = %q, want %q", m.Summary.Stage, status.StageImplement)
+	return m.Summary.Stage
+}
+
+func TestSetSummaryStoresTheStageItIsGiven(t *testing.T) {
+	t.Run("revising an existing plan stores plan", func(t *testing.T) {
+		dir := summarySession(t)
+		writePlan(t, dir)
+		if _, err := setSummary(dir, setSummaryInput{Stage: status.StagePlan, Summary: "Revising it."}); err != nil {
+			t.Fatal(err)
+		}
+		if got := storedStage(t, dir); got != status.StagePlan {
+			t.Errorf("stage = %q, want %q", got, status.StagePlan)
+		}
+	})
+	t.Run("implementing with no plan stores implement", func(t *testing.T) {
+		dir := summarySession(t)
+		if _, err := setSummary(dir, setSummaryInput{Stage: status.StageImplement, Summary: "Building it."}); err != nil {
+			t.Fatal(err)
+		}
+		if got := storedStage(t, dir); got != status.StageImplement {
+			t.Errorf("stage = %q, want %q", got, status.StageImplement)
+		}
+	})
+}
+
+func TestSetSummaryRejectsAnUnknownStage(t *testing.T) {
+	for _, stage := range []string{"", "spec", "Plan", "implementation"} {
+		dir := summarySession(t)
+		_, err := setSummary(dir, setSummaryInput{Stage: stage, Summary: "Fine text."})
+		if !errors.Is(err, ErrSummaryStage) {
+			t.Errorf("stage %q: err = %v, want %v", stage, err, ErrSummaryStage)
+		}
+		if _, ok := rawManifest(t, dir)["summary"]; ok {
+			t.Errorf("stage %q: a rejected summary was written", stage)
+		}
 	}
 }
 
@@ -112,7 +146,7 @@ func TestSetSummaryHoldsTheLimitInRunes(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := summarySession(t)
-			_, err := setSummary(dir, setSummaryInput{Summary: tc.text})
+			_, err := setSummary(dir, setSummaryInput{Stage: status.StagePlan, Summary: tc.text})
 			if tc.ok {
 				if err != nil {
 					t.Fatalf("setSummary: %v", err)
@@ -136,7 +170,7 @@ func TestSetSummaryHoldsTheLimitInRunes(t *testing.T) {
 
 func TestSetSummaryRejectsBlankText(t *testing.T) {
 	dir := summarySession(t)
-	if _, err := setSummary(dir, setSummaryInput{Summary: " \n\t "}); !errors.Is(err, ErrSummaryRequired) {
+	if _, err := setSummary(dir, setSummaryInput{Stage: status.StagePlan, Summary: " \n\t "}); !errors.Is(err, ErrSummaryRequired) {
 		t.Fatalf("err = %v, want %v", err, ErrSummaryRequired)
 	}
 }
@@ -154,6 +188,32 @@ func TestStageSkillsStateTheSummaryLimit(t *testing.T) {
 	for _, id := range []string{"skills/qrouton-research", "skills/qrouton-spec", "skills/qrouton-plan", "skills/qrouton-implement"} {
 		if !strings.Contains(corpus[id], want) {
 			t.Errorf("%s does not say %q", id, want)
+		}
+	}
+}
+
+func TestSummarySchemaAndDescriptionNameTheStages(t *testing.T) {
+	field, _ := reflect.TypeOf(setSummaryInput{}).FieldByName("Stage")
+	for _, text := range []string{field.Tag.Get("jsonschema"), descSetSummary} {
+		for _, stage := range []string{status.StageResearch, status.StagePlan, status.StageImplement} {
+			if !strings.Contains(text, stage) {
+				t.Errorf("%q does not name %s", text, stage)
+			}
+		}
+	}
+}
+
+func TestStageSkillsPassAValidStage(t *testing.T) {
+	want := map[string]string{
+		"skills/qrouton-research":  status.StageResearch,
+		"skills/qrouton-spec":      status.StagePlan,
+		"skills/qrouton-plan":      status.StagePlan,
+		"skills/qrouton-implement": status.StageImplement,
+	}
+	corpus := promptCorpus(t)
+	for id, stage := range want {
+		if !strings.Contains(corpus[id], "Pass `stage` as `"+stage+"`") {
+			t.Errorf("%s does not tell the orchestrator to pass stage %q", id, stage)
 		}
 	}
 }

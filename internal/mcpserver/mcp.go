@@ -57,6 +57,7 @@ type sharePageInput struct {
 }
 
 type setSummaryInput struct {
+	Stage   string `json:"stage" jsonschema:"The stage whose lead you are about to spawn: research, plan or implement. Spec work is plan"`
 	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
 }
 

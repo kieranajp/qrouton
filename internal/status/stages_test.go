@@ -6,8 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
@@ -128,31 +126,5 @@ func TestStagesForMapsEachLeadToItsMark(t *testing.T) {
 		if got := StagesFor(tc.types); got != tc.want {
 			t.Errorf("StagesFor(%v) = %+v, want %+v", tc.types, got, tc.want)
 		}
-	}
-}
-
-func TestStageForReadsTheStageFromTheSessionThoughts(t *testing.T) {
-	withRepo := session.Manifest{Repos: []session.ManifestRepo{{Name: "svc", Org: "org"}}}
-	for _, tc := range []struct {
-		name string
-		m    session.Manifest
-		docs map[string]string
-		want string
-	}{
-		{"no repos", session.Manifest{}, map[string]string{plansDir: "# P\n"}, ""},
-		{"research framed", withRepo, map[string]string{researchDir: framedResearch}, StageResearch},
-		{"research answered", withRepo, map[string]string{researchDir: answeredResearch}, StagePlan},
-		{"plan present", withRepo, map[string]string{researchDir: framedResearch, plansDir: "# P\n"}, StageImplement},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			root := t.TempDir()
-			dir := thoughtsDir(sessionpaths.Thoughts(root))
-			for kind, body := range tc.docs {
-				dir.write(t, kind, "X1-doc.md", body)
-			}
-			if got := StageFor(root, tc.m); got != tc.want {
-				t.Fatalf("StageFor = %q, want %q", got, tc.want)
-			}
-		})
 	}
 }
