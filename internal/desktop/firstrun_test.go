@@ -399,3 +399,27 @@ func TestFirstRunRefusesAThoughtsFolderHoldingTheRootAndWritesNothing(t *testing
 		t.Fatal("a refused save marked the config welcomed")
 	}
 }
+
+func TestFirstRunSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(t *testing.T) {
+	_, cfg, override := overriddenSettings(t)
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+
+	result, err := f.Save(FirstRunInput{Orgs: []string{"acme", "typed-org"}, Root: "~/work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Relaunching {
+		t.Fatal("an unchanged root relaunched under QROUTON_ROOT")
+	}
+	onDisk := savedConfig(t)
+	if onDisk.Root != "~/work" || onDisk.Thoughts.Roots[0].Path != "~/shared" || !onDisk.Welcomed {
+		t.Fatalf("on disk = root %q, thoughts %+v, welcomed %v", onDisk.Root, onDisk.Thoughts, onDisk.Welcomed)
+	}
+	if !reflect.DeepEqual(onDisk.Orgs, []string{"acme", "typed-org"}) {
+		t.Fatalf("on disk orgs = %v, want the typed ones", onDisk.Orgs)
+	}
+	live := cfg.Snapshot()
+	if live.Root != override || !reflect.DeepEqual(live.Orgs, []string{"pinned-org"}) || !live.Welcomed {
+		t.Fatalf("live = root %q, orgs %v, welcomed %v", live.Root, live.Orgs, live.Welcomed)
+	}
+}

@@ -29,13 +29,15 @@ type FirstRun struct {
 	reg         *Sessions
 	relaunch    func() error
 	quit        func()
+	pinnedRoot  string
 	choose      func() (string, error)
 	reconfigure func(*config.Config) error
 }
 
 func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
 	choose func() (string, error), reconfigure func(*config.Config) error) *FirstRun {
-	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose, reconfigure: reconfigure}
+	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, pinnedRoot: pinnedFileRoot(),
+		choose: choose, reconfigure: reconfigure}
 }
 
 // Login is the GitHub account the owners screen names. No account is an answer
@@ -79,17 +81,23 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	}
 	changed := false
 	err = f.cfg.Transact(func(current *config.Config) error {
-		changed = expanded != filepath.Clean(current.Root)
-		next := current.Snapshot()
-		next.Orgs, next.Root, next.Welcomed = orgs, root, true
-		next.Thoughts.Default = thoughts
+		next, live, restart, err := stageConfig(current, f.pinnedRoot, func(next, live *config.Config) {
+			next.Orgs, next.Root, next.Welcomed = orgs, root, true
+			next.Thoughts.Default = thoughts
+			if !config.OrgsOverridden() {
+				live.Orgs = orgs
+			}
+			live.Welcomed = true
+			live.Thoughts.Default = config.ExpandHome(thoughts)
+		})
+		if err != nil {
+			return err
+		}
+		changed = restart
 		if err := config.CheckThoughts(next); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
 		if !changed {
-			live := next.Snapshot()
-			live.Root = current.Root
-			live.Thoughts.Default = config.ExpandHome(thoughts)
 			return commitLive(f.cfg, current, next, live, f.reconfigure)
 		}
 		if err := config.Save(next); err != nil {

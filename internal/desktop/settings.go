@@ -500,16 +500,9 @@ func (s *Settings) linearView() LinearView {
 func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *config.Config),
 	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
-		onDisk, err := config.ReadFile()
+		next, live, restart, err := stageConfig(snapshot, pinnedRoot, mutate)
 		if err != nil {
 			return err
-		}
-		next, live := onDisk.Snapshot(), snapshot.Snapshot()
-		mutate(next, live)
-		live.Root = snapshot.Root
-		restart := restartRequired(snapshot, pinnedRoot, next)
-		if restart {
-			live.Thoughts = snapshot.Thoughts
 		}
 		if err := config.CheckThoughts(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
@@ -522,6 +515,23 @@ func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *c
 		}
 		return nil
 	})
+}
+
+// stageConfig builds the file copy from config.json as written and the live copy
+// from the running config. Until a restart, live keeps the root and thoughts it booted with.
+func stageConfig(snapshot *config.Config, pinnedRoot string, mutate func(next, live *config.Config)) (next, live *config.Config, restart bool, err error) {
+	onDisk, err := config.ReadFile()
+	if err != nil {
+		return nil, nil, false, err
+	}
+	next, live = onDisk.Snapshot(), snapshot.Snapshot()
+	mutate(next, live)
+	live.Root = snapshot.Root
+	restart = restartRequired(snapshot, pinnedRoot, next)
+	if restart {
+		live.Thoughts = snapshot.Thoughts
+	}
+	return next, live, restart, nil
 }
 
 // commitLive reindexes before it writes or publishes anything, so routing and
