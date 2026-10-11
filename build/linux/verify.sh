@@ -25,7 +25,7 @@ printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$' || fail 'invalid 
 [ "$(dpkg-deb --field "$package" Section)" = devel ] || fail 'unexpected package section'
 [ "$(dpkg-deb --field "$package" Priority)" = optional ] || fail 'unexpected package priority'
 [ "$(dpkg-deb --field "$package" Homepage)" = https://github.com/kieranajp/qrouton ] || fail 'unexpected homepage'
-for field in Description Depends; do
+for field in Description Depends Recommends; do
 	[ -n "$(dpkg-deb --field "$package" "$field")" ] || fail "empty metadata field: $field"
 done
 [ "$(dpkg-deb --field "$package" Maintainer)" = 'Kieran Patel <me@kieranajp.co.uk>' ] || fail 'unexpected maintainer'
@@ -34,6 +34,9 @@ printf '%s\n' "$installed_size" | grep -Eq '^[1-9][0-9]*$' || fail 'invalid inst
 depends=$(dpkg-deb --field "$package" Depends)
 printf '%s\n' "$depends" | grep -Eq '(^|, )git(,|$)' || fail 'git dependency is missing'
 printf '%s\n' "$depends" | grep -Eq '(^|, )ca-certificates(,|$)' || fail 'ca-certificates dependency is missing'
+recommends=$(dpkg-deb --field "$package" Recommends)
+printf '%s\n' "$recommends" | grep -Eq '(^|, )gstreamer1\.0-plugins-good(,|$)' || fail 'gstreamer1.0-plugins-good recommendation is missing'
+printf '%s\n' "$recommends" | grep -Eq '(^|, )gstreamer1\.0-libav(,|$)' || fail 'gstreamer1.0-libav recommendation is missing'
 checksum="$directory/checksums-linux-amd64.txt"
 [ -f "$checksum" ] || fail 'Linux checksum file is missing'
 expected=$(cd "$directory" && sha256sum "$archive")

@@ -55,7 +55,7 @@ if [ -z "$depends" ]; then
 fi
 installed_size=$(du -sk "$staged/usr" | cut -f1)
 mkdir -p "$staged/DEBIAN"
-printf 'Package: qrouton\nVersion: %s\nArchitecture: amd64\nSection: devel\nPriority: optional\nMaintainer: %s\nHomepage: https://github.com/kieranajp/qrouton\nInstalled-Size: %s\nDepends: %s, git, ca-certificates\nDescription: Multi-repo agent workspaces\n A desktop workbench for coding agents and shared repository worktrees.\n' \
+printf 'Package: qrouton\nVersion: %s\nArchitecture: amd64\nSection: devel\nPriority: optional\nMaintainer: %s\nHomepage: https://github.com/kieranajp/qrouton\nInstalled-Size: %s\nDepends: %s, git, ca-certificates\nRecommends: gstreamer1.0-plugins-good, gstreamer1.0-libav\nDescription: Multi-repo agent workspaces\n A desktop workbench for coding agents and shared repository worktrees.\n' \
 	"$version" "$maintainer" "$installed_size" "$depends" > "$staged/DEBIAN/control"
 chmod 755 "$staged/DEBIAN"
 chmod 644 "$staged/DEBIAN/control"
