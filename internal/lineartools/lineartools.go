@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"slices"
 
+	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/config"
 )
 
@@ -81,7 +82,7 @@ func (t Tools) Install() error {
 	if err := os.MkdirAll(filepath.Dir(t.File), dirMode); err != nil {
 		return err
 	}
-	return os.WriteFile(t.File, append(b, '\n'), fileMode)
+	return atomicfile.Replace(t.File, append(b, '\n'), fileMode)
 }
 
 func (t Tools) entry() (json.RawMessage, error) {

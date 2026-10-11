@@ -68,7 +68,7 @@
         <span class="note">{linear.path} already has a different openIssue entry. Install replaces only that one.</span>
       {/if}
     </div>
-    <p>Or write the following to <code>{linear.path}</code></p>
+    <p>Or add this entry to <code>{linear.path}</code> yourself, keeping any other keys in it.</p>
     <div class="snippet">
       <button type="button" class="copy" aria-label="Copy the Linear entry" onclick={copySnippet}>
         {copied ? "Copied" : "Copy"}

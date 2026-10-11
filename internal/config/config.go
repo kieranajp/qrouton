@@ -262,12 +262,6 @@ func (c *Config) EffectiveStickers() []Sticker {
 	}
 }
 
-// StickerColours lists the colours a sticker may take, in palette order.
-func StickerColours() []string { return slices.Clone(stickerColours) }
-
-// StickerSymbols lists the symbols a sticker may take, in palette order.
-func StickerSymbols() []string { return slices.Clone(stickerSymbols) }
-
 // CheckSticker refuses a colour or symbol outside the palette.
 func CheckSticker(s Sticker) error {
 	if !slices.Contains(stickerColours, s.Colour) {
@@ -406,10 +400,8 @@ func Save(cfg *Config) error {
 	return atomicfile.Replace(Path(), b, fileMode)
 }
 
-// RootOverridden reports whether QROUTON_ROOT replaces config.json's root for this run.
 func RootOverridden() bool { return os.Getenv(rootEnvVar) != "" }
 
-// OrgsOverridden reports whether QROUTON_ORGS replaces config.json's orgs for this run.
 func OrgsOverridden() bool { return os.Getenv(orgsEnvVar) != "" }
 
 // DefaultRoot is the root an empty config.json resolves to, before ~ expansion.

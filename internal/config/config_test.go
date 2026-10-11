@@ -251,8 +251,8 @@ func TestCheckStickerRefusesValuesOutsideThePalette(t *testing.T) {
 	if err := CheckSticker(Sticker{Colour: "blue", Symbol: "moon"}); !errors.Is(err, ErrStickerSymbol) {
 		t.Fatalf("unknown symbol = %v", err)
 	}
-	if len(StickerColours()) != 12 || len(StickerSymbols()) != 14 {
-		t.Fatalf("palette = %d colours, %d symbols", len(StickerColours()), len(StickerSymbols()))
+	if len(stickerColours) != 12 || len(stickerSymbols) != 14 {
+		t.Fatalf("palette = %d colours, %d symbols", len(stickerColours), len(stickerSymbols))
 	}
 }
 

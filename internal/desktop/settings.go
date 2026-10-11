@@ -112,6 +112,7 @@ type Settings struct {
 	validateLaunch func(map[string][]string) error
 	relaunch       func() error
 	quit           func()
+	pinnedRoot     string
 	openText       func(path string) []string
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
@@ -125,9 +126,10 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
 	openText func(path string) []string) *Settings {
 	return &Settings{
-		relaunch: relaunch,
-		openText: openText,
-		runners:  runners,
+		pinnedRoot: pinnedFileRoot(),
+		relaunch:   relaunch,
+		openText:   openText,
+		runners:    runners,
 		login: func(ctx context.Context, token string) (string, error) {
 			return github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
 		},
@@ -239,7 +241,14 @@ func editorCommand(argv []string) string {
 }
 
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
-	orgs, root, _, err := validateOwnersAndRoot(in.Orgs, in.Root)
+	var orgs []string
+	var root string
+	var err error
+	if config.OrgsOverridden() && len(dedupOrgs(in.Orgs)) == 0 {
+		root, _, err = validateRoot(in.Root)
+	} else {
+		orgs, root, _, err = validateOwnersAndRoot(in.Orgs, in.Root)
+	}
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -281,8 +290,11 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 	}
 	result := SaveResult{}
-	err = saveConfig(s.cfg, func(next, live *config.Config) {
-		next.Orgs, next.Root, next.Thoughts = orgs, root, thoughts
+	err = saveConfig(s.cfg, s.pinnedRoot, func(next, live *config.Config) {
+		if next.Root != "" || root != config.DefaultRoot() {
+			next.Root = root
+		}
+		next.Orgs, next.Thoughts = orgs, thoughts
 		if !config.OrgsOverridden() {
 			live.Orgs = orgs
 		}
@@ -432,7 +444,8 @@ func (s *Settings) Relaunch() error {
 	return nil
 }
 
-// OpenConfig opens config.json in the desktop's default text editor.
+// OpenConfig writes config.json first when it does not exist yet, so the editor
+// has a file to open.
 func (s *Settings) OpenConfig() error {
 	var argv []string
 	if s.openText != nil {
@@ -441,7 +454,21 @@ func (s *Settings) OpenConfig() error {
 	if len(argv) == 0 {
 		return ErrNoOpenTextCommand
 	}
-	return exec.Command(argv[0], argv[1:]...).Run()
+	if _, err := os.Stat(config.Path()); errors.Is(err, fs.ErrNotExist) {
+		if err := s.cfg.Transact(func(*config.Config) error {
+			onDisk, err := config.ReadFile()
+			if err != nil {
+				return err
+			}
+			return config.Save(onDisk)
+		}); err != nil {
+			return err
+		}
+	}
+	if out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", ErrOpenConfig, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 // InstallLinear writes qrouton's openIssue entry at once; Cancel does not undo it.
@@ -472,7 +499,7 @@ func (s *Settings) linearView() LinearView {
 // the running config. Live keeps the boot Root used by the rail scanner, and a
 // Root that needs a restart holds back the thoughts too, since the live default
 // still derives from the old one.
-func saveConfig(cfg *config.Config, mutate func(next, live *config.Config),
+func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *config.Config),
 	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
 		onDisk, err := config.ReadFile()
@@ -482,7 +509,7 @@ func saveConfig(cfg *config.Config, mutate func(next, live *config.Config),
 		next, live := onDisk.Snapshot(), snapshot.Snapshot()
 		mutate(next, live)
 		live.Root = snapshot.Root
-		restart := restartRequired(snapshot, onDisk, next)
+		restart := restartRequired(snapshot, pinnedRoot, next)
 		if restart {
 			live.Thoughts = snapshot.Thoughts
 		}
@@ -518,14 +545,25 @@ func commitLive(cfg, current, next, live *config.Config, reconfigure func(*confi
 	return nil
 }
 
-// restartRequired compares the saved root with the one a restart would replace:
-// the live root, or config.json's previous root while QROUTON_ROOT pins the live one.
-func restartRequired(live, onDisk, next *config.Config) bool {
+// restartRequired compares the saved root with the one this process runs on.
+// While QROUTON_ROOT pins the live root, that is the file's root at boot.
+func restartRequired(live *config.Config, pinnedRoot string, next *config.Config) bool {
 	saved := resolvedRoot(next.Root)
-	if config.RootOverridden() {
-		return saved != resolvedRoot(onDisk.Root)
+	if pinnedRoot != "" {
+		return saved != pinnedRoot
 	}
 	return saved != filepath.Clean(live.Root)
+}
+
+func pinnedFileRoot() string {
+	if !config.RootOverridden() {
+		return ""
+	}
+	file, err := config.ReadFile()
+	if err != nil {
+		return ""
+	}
+	return resolvedRoot(file.Root)
 }
 
 func resolvedRoot(root string) string {

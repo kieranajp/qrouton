@@ -583,7 +583,7 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 	errs := make(chan error, 2)
 
 	go func() {
-		err := saveConfig(cfg, func(next, live *config.Config) {
+		err := saveConfig(cfg, "", func(next, live *config.Config) {
 			close(firstEntered)
 			<-releaseFirst
 			next.Orgs, live.Orgs = []string{"first"}, []string{"first"}
@@ -593,7 +593,7 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 	<-firstEntered
 	go func() {
 		close(secondStarted)
-		err := saveConfig(cfg, func(next, live *config.Config) {
+		err := saveConfig(cfg, "", func(next, live *config.Config) {
 			next.Orgs, live.Orgs = []string{"second"}, []string{"second"}
 		}, nil, nil)
 		errs <- err
@@ -1250,6 +1250,66 @@ func TestSettingsSaveUnderAnOverrideAsksForARestartWhenTheFileRootChanges(t *tes
 	}
 	if !res.RestartRequired {
 		t.Fatal("a changed root did not ask for a restart")
+	}
+}
+
+func TestSettingsSaveUnderAnOverrideKeepsTheRestartUntilTheRootIsTypedBack(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+	view := s.Load()
+	in := SettingsInput{Orgs: view.Orgs, Root: t.TempDir(), Stickers: view.Stickers,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots}}
+	for _, step := range []struct {
+		root string
+		want bool
+	}{{in.Root, true}, {in.Root, true}, {view.Root, false}} {
+		in.Root = step.root
+		res, err := s.Save(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.RestartRequired != step.want {
+			t.Fatalf("Save(root %q) restart = %v, want %v", step.root, res.RestartRequired, step.want)
+		}
+	}
+}
+
+func TestSettingsSaveAcceptsNoOrgsWhileQROUTONORGSSuppliesThem(t *testing.T) {
+	writeConfigFile(t, &config.Config{Root: t.TempDir()})
+	t.Setenv("QROUTON_ORGS", "pinned-org")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	view := s.Load()
+	if _, err := s.Save(SettingsInput{Orgs: view.Orgs, Root: view.Root, Stickers: view.Stickers}); err != nil {
+		t.Fatalf("Save with orgs only from the env = %v", err)
+	}
+	if onDisk, _ := config.ReadFile(); len(onDisk.Orgs) != 0 {
+		t.Fatalf("file orgs = %v", onDisk.Orgs)
+	}
+	if live := cfg.Snapshot().Orgs; !reflect.DeepEqual(live, []string{"pinned-org"}) {
+		t.Fatalf("live orgs = %v", live)
+	}
+}
+
+func TestSettingsSaveLeavesAnUnsetRootUnsetWhenTheDefaultIsKept(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfigFile(t, &config.Config{Orgs: []string{"acme"}})
+	t.Setenv("QROUTON_ROOT", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	view := s.Load()
+	res, err := s.Save(SettingsInput{Orgs: view.Orgs, Root: view.Root, Stickers: view.Stickers})
+	if err != nil || res.RestartRequired {
+		t.Fatalf("Save = %+v, %v", res, err)
+	}
+	if onDisk, _ := config.ReadFile(); onDisk.Root != "" {
+		t.Fatalf("file root = %q, want unset", onDisk.Root)
 	}
 }
 

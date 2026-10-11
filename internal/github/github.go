@@ -265,7 +265,6 @@ func CredentialSource(ctx context.Context) Credential {
 	return CredentialSignedOut
 }
 
-// TokenEnvVar names the environment variable Token falls back to.
 func TokenEnvVar() string { return tokenEnvVar }
 
 // AuthenticatedLogin is the account the token belongs to, which is how a screen

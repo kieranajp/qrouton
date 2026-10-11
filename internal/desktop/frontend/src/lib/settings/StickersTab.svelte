@@ -38,6 +38,7 @@
   /** @param {Partial<import("../session/stickers.js").Sticker>} patch */
   function change(patch) {
     form.stickers = updateSticker(form.stickers, selected, patch);
+    panel.clearStickerErrors();
   }
 </script>
 
@@ -66,7 +67,8 @@
               placeholder="What it means"
               bind:this={inputs[index]}
               bind:value={item.label}
-              onfocus={() => (selected = index)} />
+              onfocus={() => (selected = index)}
+              oninput={panel.clearStickerErrors} />
             {#if error}<span class="error">{error}</span>{/if}
           </div>
           <button
