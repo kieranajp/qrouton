@@ -15,6 +15,8 @@ The user experiences this as design questions within Plan, never a stage of its 
 
 A spec with no open questions is complete as written. Present it and offer to Plan.
 
+After presenting or revising the spec, make the next action clear in plain language. If questions remain, tell the user to answer them in the document. If none remain, explain that the next step is a tactical plan for an implementation lead and invite the user to proceed. An invitation does not authorize the next stage.
+
 The spec records what and why. File-by-file execution belongs in the tactical plan. Answering questions does not authorise Plan; run `qrouton-plan` only when the user asks for it.
 
 Pass this to the lead, and hold the returned spec to it:
