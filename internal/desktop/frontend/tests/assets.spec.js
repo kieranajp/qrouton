@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
 
+const MAC_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+const LINUX_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
+
+test.use({ userAgent: MAC_UA });
+
 const primary = (page) => page.locator(".primary-frame img");
 const decoded = (locator) => locator.evaluate((img) => img.complete && img.naturalWidth > 0);
 
@@ -243,7 +248,6 @@ test("the MP4 entry renders as a video", async ({ page }) => {
   await expect(page.locator(".primary img")).toHaveCount(0);
 });
 
-const LINUX_UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15";
 const UNPLAYABLE = 10;
 
 async function showUnplayable(page) {
