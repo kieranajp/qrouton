@@ -13,6 +13,7 @@ import (
 // tool's input and response stay raw until the tool is known.
 type claudePayload struct {
 	HookEventName        string           `json:"hook_event_name"`
+	Cwd                  string           `json:"cwd"`
 	AgentID              string           `json:"agent_id"`
 	AgentType            string           `json:"agent_type"`
 	ToolName             string           `json:"tool_name"`
@@ -57,6 +58,12 @@ type spawnResponse struct {
 // sent. It keeps ids, the tool and its target, the spawn and its outcome, and
 // one truncated message; tool inputs and responses go no further.
 func Reduce(provider string, input io.Reader) (workbench.AgentEventRequest, error) {
+	return ReduceIn(provider, "", input)
+}
+
+// ReduceIn is Reduce for a session rooted at root, so a Bash target can be
+// written relative to the session.
+func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventRequest, error) {
 	at := time.Now().UTC()
 	var p claudePayload
 	if err := json.NewDecoder(input).Decode(&p); err != nil {
@@ -69,7 +76,11 @@ func Reduce(provider string, input io.Reader) (workbench.AgentEventRequest, erro
 		NotificationType: truncate(p.NotificationType, IDLimit), Interrupt: p.IsInterrupt,
 	}
 	if p.ToolName != "" {
-		event.Target = truncate(Target(p.ToolName, p.ToolInput), TargetLimit)
+		target := Target(p.ToolName, p.ToolInput)
+		if p.ToolName == toolBash {
+			target = TrimCommand(target, p.Cwd, root)
+		}
+		event.Target = truncate(target, TargetLimit)
 	}
 	for _, task := range p.BackgroundTasks {
 		if task.ID != "" && (task.Type == "" || task.Type == backgroundSubagent) && len(event.BackgroundTasks) < ListLimit {

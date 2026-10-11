@@ -32,7 +32,11 @@ var EventCommand = &cli.Command{
 		// A runner reporting its tool calls gets the whole reduced event; one
 		// reporting lifecycle only keeps the lifecycle and attention pair.
 		if slices.Contains(launch.RunnerHooks(provider), eventlog.HookPostToolUse) {
-			event, err := eventlog.Reduce(provider, os.Stdin)
+			var root string
+			if handle, perr := workbench.ParseHandle(c.String(workbenchJSONFlag)); perr == nil {
+				root = handle.SessionRoot
+			}
+			event, err := eventlog.ReduceIn(provider, root, os.Stdin)
 			if err == nil {
 				event.Generation = generation
 				send(c.String(workbenchJSONFlag), func(ctx context.Context, h workbench.Handle) {
