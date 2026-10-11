@@ -198,9 +198,10 @@
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
     {/each}
+  </div>
 
+  <div class="footer">
     <Button variant="cube" size="sm" glyph="+" wide onclick={onNewSession}>New session</Button>
-    <span class="allowance"></span>
   </div>
 </div>
 
@@ -289,9 +290,12 @@
     padding: 0 calc(12px * var(--ui-scale));
   }
 
-  .allowance {
+  .footer {
     flex: none;
-    height: calc(12px * var(--ui-scale));
+    display: flex;
+    flex-direction: column;
+    border-top: 1px solid var(--border-subtle);
+    padding: calc(12px * var(--ui-scale));
   }
 
   .anchor {

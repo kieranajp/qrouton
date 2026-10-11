@@ -459,6 +459,25 @@ test("sessions take the rail", async ({ page }) => {
   expect((await box(sessions)).scrollTop).toBeGreaterThan(0);
 });
 
+test("New session stays pinned below the scrolling list", async ({ page }) => {
+  const sessions = page.getByLabel("Sessions");
+  const create = page.getByRole("button", { name: "New session" });
+  const viewport = page.viewportSize();
+
+  await expect(create).toBeInViewport();
+  const before = await create.boundingBox();
+  const list = await sessions.boundingBox();
+  expect(before.y).toBeGreaterThanOrEqual(list.y + list.height);
+
+  await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+  expect(await sessions.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+
+  await expect(create).toBeInViewport();
+  const after = await create.boundingBox();
+  expect(after).toEqual(before);
+  expect(after.y + after.height).toBeLessThanOrEqual(viewport.height);
+});
+
 test("a row's headline says what its root is doing", async ({ page }) => {
   const row = () => page.getByRole("button", { name: /^Checkout migration/ });
   const headline = (summary) => page.evaluate((s) => window.sessionRail.headline(s), summary);
