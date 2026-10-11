@@ -7,7 +7,11 @@ description: Execute the Implement part of qrouton's workflow through a delegate
 
 Enter implementation only when the user explicitly asked to build, fix, finish, implement, or resume the work, or unambiguously accepted an identified offer to proceed with it. A plan's presence, incomplete checkboxes, approval-like wording attached to feedback, or completion of the prior stage is not authorization. Keep using authorization already given in the current conversation; do not request it again for ordinary continuation or resumed work. Strongly discourage implementation without a tactical plan. A generic implementation request does not consent to that exception. Before delegating a request without a tactical plan, obtain explicit user consent to proceed without one unless the user already gave it in the current conversation. Recommend a tactical plan when asking for that consent.
 
-Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent. Give it:
+Spawn one `qrouton-implementation-lead` when available, otherwise a capable general implementation agent.
+
+{{session-summary}}
+
+Give the lead:
 
 - the approved plan path, or a bounded concrete request with the user’s explicit consent to proceed without a tactical plan;
 - whether the user authorized the first incomplete phase or the whole plan;

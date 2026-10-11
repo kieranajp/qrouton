@@ -56,6 +56,10 @@ type sharePageInput struct {
 	Path string `json:"path" jsonschema:"Path to a markdown document in the qrouton session, relative to its root"`
 }
 
+type setSummaryInput struct {
+	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
+}
+
 type notifyInput struct {
 	Message    string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
@@ -127,6 +131,10 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
 			return sharePage(root, input)
+		}))
+	addTool(server, toolSetSummary, descSetSummary, keyMessage,
+		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
+			return setSummary(root, input)
 		}))
 	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
 	addTool(server, toolReadWindow, descReadWindow, keyOutput, windows.read)
