@@ -93,13 +93,21 @@ func (a *agentActivity) rootStateLocked() string {
 	return state
 }
 
-// reopenLocked returns a finished agent to work when a newer activation of it
-// starts. History, tokens and the tool count stay.
+// reopenLocked returns a finished agent to work when one of its hooks was
+// stamped after it finished, whichever order the hooks arrive in. History,
+// tokens and the tool count stay.
 func reopenLocked(agent *agentRecord, at time.Time) {
 	if agent.Root || agent.State == agentLive || !at.After(agent.FinishedAt) {
 		return
 	}
+	agent.resumedAfter = agent.FinishedAt
 	agent.State, agent.FinishedAt, agent.Outcome, agent.Reason = agentLive, time.Time{}, "", ""
+}
+
+// stale is a stop or outcome stamped before the agent last resumed,
+// which belongs to the activation that already finished.
+func stale(agent *agentRecord, at time.Time) bool {
+	return !agent.resumedAfter.IsZero() && !at.After(agent.resumedAfter)
 }
 
 func (a *agentActivity) toolsLocked() bool { return capabilitiesFor(a.provider).Parents }
@@ -255,6 +263,7 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 	if _, seen := a.run.calls[event.ToolUseID]; !seen {
 		a.answeredLocked(caller, "", at)
 	}
+	reopenLocked(caller, at)
 	answered := false
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
@@ -263,7 +272,6 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 				call.Start = at
 			}
 		} else {
-			reopenLocked(caller, at)
 			a.recordCallLocked(caller, agentToolCall{ID: event.ToolUseID, Tool: event.Tool, Target: event.Target, Start: at})
 		}
 	}
@@ -298,6 +306,7 @@ func (a *agentActivity) toolEndLocked(event workbench.AgentEventRequest, at time
 		return false
 	}
 	failed := event.Hook == agentevent.HookPostToolUseFailure
+	reopenLocked(caller, at)
 	a.answeredLocked(caller, event.ToolUseID, at)
 	if event.Interrupt && caller.Root && !at.Before(caller.promptAt) {
 		caller.turnEnded, caller.stopAt = true, at
@@ -360,6 +369,9 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 		return false
 	}
 	record := a.agentLocked(event.AgentID, event.AgentType, at)
+	if stale(record, at) {
+		return false
+	}
 	if record.spawn == "" {
 		a.matchLocked(record)
 	}
@@ -537,6 +549,9 @@ func (a *agentActivity) callLocked(id string) *agentToolCall {
 }
 
 func outcomeLocked(record *agentRecord, outcome workbench.AgentOutcome, message string, at time.Time) {
+	if stale(record, at) {
+		return
+	}
 	record.Outcome = outcome.Status
 	if outcome.Tokens > 0 {
 		record.Tokens = outcome.Tokens

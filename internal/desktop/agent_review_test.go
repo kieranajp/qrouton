@@ -51,8 +51,8 @@ func TestAgentStateAChildsQuestionReachesTheUserThroughTheRoot(t *testing.T) {
 	}
 }
 
-// A completed background child the user messages again works again, and the
-// late hooks of the activation that finished never reopen it.
+// A completed background child the user messages again works again, and hooks
+// stamped before it finished never reopen it.
 func TestAgentStateAResumedChildWorksAgain(t *testing.T) {
 	events := spikeEvents(t, "run4-bg-hooks")
 	tracker := replayed(t, events)
@@ -65,8 +65,9 @@ func TestAgentStateAResumedChildWorksAgain(t *testing.T) {
 	}
 	finished := stateOf(t, tracker, id)
 
-	tracker.apply(at(time.Second, agentevent.HookPostToolUse, "late-post"))
-	tracker.apply(at(time.Second, agentevent.HookPreToolUse, "toolu_01Fg8Hhh4PXjSNUf3sBWMgaH"))
+	before := finished.FinishedAt.Sub(last)
+	tracker.apply(at(before-time.Second, agentevent.HookPostToolUse, "late-post"))
+	tracker.apply(at(before-2*time.Second, agentevent.HookPreToolUse, "toolu_01Fg8Hhh4PXjSNUf3sBWMgaH"))
 	stale := claudeEvent(agentevent.HookSubagentStart, func(e *workbench.AgentEventRequest) {
 		e.AgentID, e.AgentType, e.Timestamp = id, "spike-a", finished.FinishedAt.Add(-time.Second)
 	})
@@ -93,5 +94,68 @@ func TestAgentStateAResumedChildWorksAgain(t *testing.T) {
 	tracker.apply(restart)
 	if c := stateOf(t, tracker, id); c.State == agentStateDone {
 		t.Fatalf("a newer SubagentStart left the child done: %+v", c)
+	}
+}
+
+func resumedChild(t *testing.T) (*agentActivity, agentRecord, func(time.Duration, string, string) workbench.AgentEventRequest) {
+	t.Helper()
+	events := spikeEvents(t, "run4-bg-hooks")
+	tracker := replayed(t, events)
+	const id = "a5438536af5bc5c5e"
+	finished := stateOf(t, tracker, id)
+	at := func(offset time.Duration, hook, toolUse string) workbench.AgentEventRequest {
+		return claudeEvent(hook, func(e *workbench.AgentEventRequest) {
+			e.AgentID, e.AgentType, e.Tool, e.ToolUseID, e.Target = id, "spike-a", "Bash", toolUse, "echo again"
+			e.Timestamp = finished.FinishedAt.Add(offset)
+		})
+	}
+	return tracker, finished, at
+}
+
+// A resumed call whose result reaches the workbench before its start still
+// reopens the child: both were stamped after it finished.
+func TestAgentStateAResumedCallReopensWhicheverHookArrivesFirst(t *testing.T) {
+	tracker, _, at := resumedChild(t)
+	tracker.apply(at(2*time.Second, agentevent.HookPostToolUse, "resume-1"))
+	tracker.apply(at(time.Second, agentevent.HookPreToolUse, "resume-1"))
+	if c := stateOf(t, tracker, "a5438536af5bc5c5e"); c.State != agentStateWorking {
+		t.Fatalf("resumed child with its result first = %+v", c)
+	}
+	if live := tracker.snapshot().LiveTypes; len(live) != 1 {
+		t.Fatalf("live types = %v", live)
+	}
+}
+
+// The previous activation's stop, held back until after the child resumed,
+// must not finish the resumed activation.
+func TestAgentStateAStaleStopDoesNotFinishAResumedChild(t *testing.T) {
+	events := spikeEvents(t, "run4-bg-hooks")
+	var stop workbench.AgentEventRequest
+	kept := events[:0:0]
+	for _, e := range events {
+		if e.Hook == agentevent.HookSubagentStop {
+			stop = e
+			continue
+		}
+		kept = append(kept, e)
+	}
+	tracker := replayed(t, kept)
+	const id = "a5438536af5bc5c5e"
+	finished := stateOf(t, tracker, id)
+	tracker.apply(claudeEvent(agentevent.HookPreToolUse, func(e *workbench.AgentEventRequest) {
+		e.AgentID, e.AgentType, e.Tool, e.ToolUseID = id, "spike-a", "Bash", "resume-1"
+		e.Timestamp = finished.FinishedAt.Add(time.Second)
+	}))
+	tracker.apply(stop)
+	stale := claudeEvent(agentevent.HookUserPromptSubmit, func(e *workbench.AgentEventRequest) {
+		e.Timestamp = finished.FinishedAt
+		e.Notifications = []workbench.TaskNotification{{TaskID: id, Outcome: workbench.AgentOutcome{Status: "completed"}}}
+	})
+	tracker.apply(stale)
+	if c := stateOf(t, tracker, id); c.State != agentStateWorking || c.Tool != "Bash" {
+		t.Fatalf("resumed child after its old stop and outcome = %+v", c)
+	}
+	if live := tracker.snapshot().LiveTypes; len(live) != 1 {
+		t.Fatalf("live types = %v", live)
 	}
 }

@@ -53,6 +53,9 @@ type agentRecord struct {
 	Tool   string
 	Target string
 
+	// resumedAfter is when the activation this agent resumed from finished.
+	resumedAfter time.Time
+
 	// needs is the root's: why the session waits on the user, which agent
 	// asked, and the ask call whose result clears it.
 	needs     string
