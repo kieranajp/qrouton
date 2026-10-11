@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentName, buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
+import { agentName, buildRuns, elapsed, stateIcon, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -145,4 +145,15 @@ test("an agent with no type is named by what it was spawned to do", () => {
   assert.equal(agentName({ type: "code-reviewer", description: "Review" }), "Code Reviewer");
   assert.equal(agentName({ type: "", description: "Run echo one" }), "Run echo one");
   assert.equal(agentName({ type: "", description: "" }), "Agent");
+});
+
+test("a state names the icon its row draws, and idle draws none", () => {
+  assert.equal(stateIcon("working"), "running");
+  assert.equal(stateIcon("waiting_agents"), "running");
+  assert.equal(stateIcon("needs_you"), "waiting");
+  assert.equal(stateIcon("failed"), "failed");
+  assert.equal(stateIcon("done"), "succeeded");
+  assert.equal(stateIcon("ended"), "succeeded");
+  assert.equal(stateIcon("idle"), "");
+  assert.equal(stateIcon("your_turn"), "");
 });

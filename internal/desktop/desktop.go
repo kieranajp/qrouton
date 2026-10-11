@@ -386,7 +386,7 @@ func (a *overviewWindow) open(owner *sessionState) {
 		return
 	}
 	id, err := a.windows.openStructural(owner, workbench.WindowOptions{
-		Kind: workbench.KindOverview, Label: overviewWindowLabel,
+		Kind: workbench.KindOverview, Label: overviewWindowLabel, Icon: workbench.IconTree,
 	})
 	if err != nil {
 		return

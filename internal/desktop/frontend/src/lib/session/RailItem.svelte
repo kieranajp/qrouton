@@ -1,6 +1,7 @@
 <script>
   import { STICKER_IDS } from "../bridge/generated.js";
   import { uiScale } from "../scale.svelte.js";
+  import Icon from "../core/Icon.svelte";
   import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerTitle } from "./stickers.js";
@@ -88,8 +89,7 @@
         {#each facts as fact (fact.kind)}
           <span class="fact {fact.kind}" title={fact.title}>
             {#if fact.kind !== "agents" || fact.active}
-              <span class="glyph" class:running={fact.active} aria-hidden="true"
-                >{fact.kind === "attention" ? "!" : fact.kind === "unseen" ? "◆" : "●"}</span>
+              <Icon name={fact.kind === "attention" ? "waiting" : fact.kind === "unseen" ? "document" : "running"} />
             {/if}
             {fact.label}
           </span>
@@ -263,14 +263,13 @@
 
   .fact {
     flex: none;
+    display: inline-flex;
+    align-items: center;
+    gap: calc(3px * var(--ui-scale));
   }
 
   .fact.attention {
     color: var(--state-waiting);
-  }
-
-  .glyph.running {
-    color: var(--state-running);
   }
 
   .fact.unseen {

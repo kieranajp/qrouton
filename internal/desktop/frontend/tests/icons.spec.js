@@ -13,7 +13,7 @@ test("every icon in the set draws as a hidden 16px SVG", async ({ page }) => {
   await open(page);
 
   const icons = page.locator("svg[data-icon]");
-  await expect(icons).toHaveCount(30);
+  await expect(icons).toHaveCount(31);
   for (const svg of await icons.all()) {
     await expect(svg).toHaveAttribute("aria-hidden", "true");
     await expect(svg).toHaveAttribute("viewBox", "0 0 16 16");
@@ -41,6 +41,16 @@ test("reference draws an outline and a fill", async ({ page }) => {
   await expect(paths).toHaveCount(2);
   await expect(paths.nth(0)).toHaveAttribute("stroke", "currentColor");
   await expect(paths.nth(1)).toHaveAttribute("fill", "currentColor");
+});
+
+test("tree's stroke takes its context's colour and its leaves are teal", async ({ page }) => {
+  await open(page);
+
+  const paths = icon(page, "tree").locator("path");
+  await expect(paths.nth(0)).toHaveAttribute("stroke", "currentColor");
+  await expect(paths.nth(1)).toHaveAttribute("fill", "var(--ctp-teal)");
+  expect(await paths.nth(1).evaluate((path) => getComputedStyle(path).fill)).toBe("rgb(139, 213, 202)");
+  expect(await icon(page, "tree").evaluate((svg) => getComputedStyle(svg).color)).toBe(SECONDARY);
 });
 
 test("the five fixed colours hold and the rest take their context's", async ({ page }) => {

@@ -31,6 +31,7 @@ export const ICONS = Object.freeze({
   shell: icon("M3 4l4 4-4 4M9 12h4", null),
   submenu: icon("M6 4l4 4-4 4", null),
   succeeded: icon("M3 8.5l3 3 7-7", null),
+  tree: icon("M2.5 1.5h6v5h-6zM5.5 6.5v7h4M5.5 9.5h4", "M9.5 8h4v3h-4zM9.5 12h4v3h-4z"),
   up: icon("M8 13V3M4 7l4-4 4 4", null),
   waiting: icon(null, "M3.5 2h9L3.5 14h9z"),
   worktree: icon("M2 3h4l1.5 2H14v8H2z", null),

@@ -1,17 +1,14 @@
 <script>
-  const STATES = {
-    done: { glyph: "✓", color: "var(--state-success)" },
-    running: { glyph: "◌", color: "var(--state-running)" },
-    failed: { glyph: "✗", color: "var(--state-failed)" },
-    pending: { glyph: "◌", color: "var(--text-faint)" },
-  };
+  import Icon from "../core/Icon.svelte";
+
+  const ICONS = { done: "succeeded", running: "running", failed: "failed", pending: "pending" };
 
   /** @type {{state?: 'pending'|'running'|'done'|'failed', label?: string, detail?: string, percent?: number, [attribute: string]: any}} */
   let { state = "pending", label, detail, percent, ...rest } = $props();
 </script>
 
 <div class="step" {...rest}>
-  <span class="glyph" aria-hidden="true" style:color={STATES[state].color}>{STATES[state].glyph}</span>
+  <Icon name={ICONS[state]} />
   <span class="label" class:pending={state === "pending"}>{label}</span>
   {#if detail}<span class="detail">{detail}</span>{/if}
   {#if percent !== undefined}
@@ -26,11 +23,6 @@
     align-items: center;
     gap: calc(12px * var(--ui-scale));
     padding: calc(8px * var(--ui-scale)) 0;
-  }
-
-  .glyph {
-    font: var(--machine-md);
-    width: calc(14px * var(--ui-scale));
   }
 
   .label {

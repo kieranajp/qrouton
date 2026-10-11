@@ -98,6 +98,17 @@ test("each subagent says what it is doing now and what it wrote", async ({ page 
   await expect(finished).toContainText("wrote refund.test.ts");
 });
 
+test("a subagent's state is a Mitre icon and a lead's caret a disclosure", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".agent.finished .head [data-icon]")).toHaveAttribute("data-icon", "succeeded");
+  await expect(page.locator(".agent:not(.finished) .head [data-icon]")).toHaveCount(3);
+  for (const icon of await page.locator(".agent:not(.finished) .head [data-icon]").all()) {
+    await expect(icon).toHaveAttribute("data-icon", "running");
+  }
+  await expect(lead(page, "Implementation").locator("..").locator('[data-icon="disclosure-open"]')).toHaveCount(1);
+  await expect(lead(page, "Research").locator("..").locator('[data-icon="disclosure-closed"]')).toHaveCount(1);
+});
+
 test("clicking a subagent expands its tool history and outcome", async ({ page }) => {
   await open(page);
   const writer = page.getByRole("button", { name: /^Test Writer/ });

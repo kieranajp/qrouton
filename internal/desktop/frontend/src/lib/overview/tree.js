@@ -100,6 +100,24 @@ export function stateWords(node, tools = true) {
   return WORDS[node.state] ?? node.state;
 }
 
+/** @param {string} state @returns {string} the state icon, or "" for none */
+export function stateIcon(state) {
+  switch (state) {
+    case AGENT_STATES.WORKING:
+    case AGENT_STATES.WAITING_AGENTS:
+      return "running";
+    case AGENT_STATES.NEEDS_YOU:
+      return "waiting";
+    case AGENT_STATES.FAILED:
+      return "failed";
+    case AGENT_STATES.DONE:
+    case AGENT_STATES.ENDED:
+      return "succeeded";
+    default:
+      return "";
+  }
+}
+
 /** @param {string} state */
 export function stateTone(state) {
   switch (state) {

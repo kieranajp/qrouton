@@ -76,7 +76,6 @@
   onauxclick={auxiliary}
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
-    {#if pinned}<span class="glyph" aria-hidden="true"></span>{/if}
     {#if status && status !== "idle"}<Icon name={status} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
     {#if icon}<Icon name={icon} />{/if}
@@ -172,17 +171,5 @@
     font: var(--instruction);
     letter-spacing: var(--instruction-tracking);
     text-transform: uppercase;
-  }
-
-  .glyph {
-    flex: none;
-    width: calc(10px * var(--ui-scale));
-    height: calc(10px * var(--ui-scale));
-    box-shadow: inset 0 0 0 1.5px currentColor;
-    color: var(--text-muted);
-  }
-
-  .home.selected .glyph {
-    color: var(--text-primary);
   }
 </style>

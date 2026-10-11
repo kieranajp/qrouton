@@ -248,11 +248,12 @@ export const UI_SCALE_ACTIONS = Object.freeze({
   RESET: "reset",
 });
 
-/** @typedef {"command"|"document"|"shell"} WindowIcon */
+/** @typedef {"command"|"document"|"shell"|"tree"} WindowIcon */
 export const WINDOW_ICONS = Object.freeze({
   COMMAND: "command",
   DOCUMENT: "document",
   SHELL: "shell",
+  TREE: "tree",
 });
 
 /** @typedef {"terminal"|"document"|"overview"} WindowKind */

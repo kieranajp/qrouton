@@ -3,6 +3,7 @@
   import Button from "./lib/core/Button.svelte";
   import ReportReview from "./lib/bugs/ReportReview.svelte";
   import CapsLabel from "./lib/core/CapsLabel.svelte";
+  import Icon from "./lib/core/Icon.svelte";
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
@@ -92,7 +93,7 @@
             <StageMarks stages={fields.stages} live={fields.stagesLive} />
           {/if}
         {/snippet}
-        <CapsLabel tone="dim">Agent</CapsLabel>
+        <span class="agent-label"><Icon name="agent" /><CapsLabel tone="dim">Agent</CapsLabel></span>
         {#snippet actions()}
           <DocumentIndex
             count={fields.documents.length}
@@ -274,6 +275,12 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .agent-label {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(6px * var(--ui-scale));
   }
 
   .caret {

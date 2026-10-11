@@ -29,6 +29,7 @@ const (
 	IconCommand  WindowIcon = "command"
 	IconDocument WindowIcon = "document"
 	IconShell    WindowIcon = "shell"
+	IconTree     WindowIcon = "tree"
 )
 
 // DocumentFormat is how a document window renders its text. The caller

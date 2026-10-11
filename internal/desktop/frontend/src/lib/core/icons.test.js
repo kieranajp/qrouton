@@ -30,6 +30,7 @@ const NAMES = [
   "shell",
   "submenu",
   "succeeded",
+  "tree",
   "up",
   "waiting",
   "worktree",

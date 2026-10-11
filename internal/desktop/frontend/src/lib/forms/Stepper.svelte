@@ -1,4 +1,6 @@
 <script>
+  import Icon from "../core/Icon.svelte";
+
   /** @type {{steps?: string[], active?: number, [attribute: string]: any}} */
   let { steps = [], active = 0, ...rest } = $props();
 </script>
@@ -8,7 +10,7 @@
     {#if i}<div class="rule"></div>{/if}
     <div class="step">
       <div class="marker" class:on={i === active} class:done={i < active}>
-        {i < active ? "✓" : i + 1}
+        {#if i < active}<Icon name="succeeded" />{:else}{i + 1}{/if}
       </div>
       <span class="label" class:on={i === active}>{step}</span>
     </div>

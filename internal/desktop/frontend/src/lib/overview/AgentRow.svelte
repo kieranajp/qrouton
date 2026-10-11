@@ -1,7 +1,7 @@
 <script>
   import AgentRow from "./AgentRow.svelte";
-  import { AGENT_STATES } from "../bridge/generated.js";
-  import { agentName, elapsed, isFinished, nowLine, stateTone, stateWords, tokenLabel, wroteLine } from "./tree.js";
+  import Icon from "../core/Icon.svelte";
+  import { agentName, elapsed, isFinished, nowLine, stateIcon, stateWords, tokenLabel, wroteLine } from "./tree.js";
 
   /** One subagent: its head line, then what it is doing now and what it wrote.
    * @type {{branch: import("./tree.js").Branch, now: number, root?: string, tools?: boolean}} */
@@ -32,11 +32,10 @@
     aria-label="{title} · {words}"
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}>
-    {#if finished}
-      <span class="mark" class:failed={node.state === AGENT_STATES.FAILED} aria-hidden="true"
-        >{node.state === AGENT_STATES.FAILED ? "✗" : "✓"}</span>
+    {#if stateIcon(node.state)}
+      <Icon name={stateIcon(node.state)} />
     {:else}
-      <span class="dot" style:background="var({stateTone(node.state)})" aria-hidden="true"></span>
+      <span class="slot"></span>
     {/if}
     <span class="who">{title}</span>
     {#if node.description}<span class="what">{node.description}</span>{/if}
@@ -103,23 +102,9 @@
     color: var(--text-muted);
   }
 
-  .dot,
-  .mark {
+  .slot {
     flex: none;
-    width: calc(7px * var(--ui-scale));
-  }
-
-  .dot {
-    height: calc(7px * var(--ui-scale));
-  }
-
-  .mark {
-    color: var(--state-success);
-    line-height: 1;
-  }
-
-  .mark.failed {
-    color: var(--state-failed);
+    width: calc(16px * var(--ui-scale));
   }
 
   .who {
@@ -152,7 +137,7 @@
   .detail {
     display: flex;
     flex-direction: column;
-    padding-left: calc(15px * var(--ui-scale));
+    padding-left: calc(24px * var(--ui-scale));
     font: var(--machine-xs);
     color: var(--text-secondary);
     min-width: 0;
@@ -185,7 +170,7 @@
     display: flex;
     flex-direction: column;
     gap: calc(10px * var(--ui-scale));
-    padding: calc(4px * var(--ui-scale)) 0 0 calc(15px * var(--ui-scale));
+    padding: calc(4px * var(--ui-scale)) 0 0 calc(24px * var(--ui-scale));
   }
 
   /* Narrow, a subagent's description takes the line under its name. */
@@ -193,7 +178,7 @@
     .what {
       order: 3;
       flex-basis: 100%;
-      padding-left: calc(15px * var(--ui-scale));
+      padding-left: calc(24px * var(--ui-scale));
     }
   }
 </style>

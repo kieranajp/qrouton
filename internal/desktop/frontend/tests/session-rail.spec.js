@@ -420,8 +420,8 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
 test("a summary without a root state falls back to the active count", async ({ page }) => {
   await page.evaluate(() => window.sessionRail.stateless());
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
-  const runningPip = row.locator(".glyph.running");
-  await expect(runningPip).toHaveText("●");
+  const runningPip = row.locator('[data-icon="running"]');
+  await expect(runningPip).toHaveCount(1);
   expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
     await token(page, "--state-running"),
   );

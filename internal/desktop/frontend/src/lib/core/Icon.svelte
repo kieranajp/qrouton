@@ -15,6 +15,8 @@
     reference: "var(--role-reference)",
   };
 
+  const FILLS = { tree: "var(--ctp-teal)" };
+
   /** @type {{name: string, inherit?: boolean}} */
   let { name, inherit = false } = $props();
 
@@ -37,7 +39,7 @@
       stroke-linejoin="miter" />
   {/if}
   {#if paths?.fill}
-    <path d={paths.fill} fill="currentColor" />
+    <path d={paths.fill} fill={(!inherit && FILLS[name]) || "currentColor"} />
   {/if}
 </svg>
 

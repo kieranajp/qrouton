@@ -782,8 +782,12 @@ func TestTheSecondShellOnwardsIsNumbered(t *testing.T) {
 		if tabs[i].Label != label {
 			t.Fatalf("tab %d reads %q, want %q", i, tabs[i].Label, label)
 		}
-		if i > 0 && tabs[i].Icon != workbench.IconShell {
-			t.Fatalf("tab %d draws icon %q, want the shell", i, tabs[i].Icon)
+		icon := workbench.IconShell
+		if i == 0 {
+			icon = workbench.IconTree
+		}
+		if tabs[i].Icon != icon {
+			t.Fatalf("tab %d draws icon %q, want %q", i, tabs[i].Icon, icon)
 		}
 		window, ok := windows.window(tabs[i].ID)
 		if !ok || window.opts.Label != label {

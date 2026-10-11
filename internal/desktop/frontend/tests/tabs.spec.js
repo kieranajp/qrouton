@@ -106,11 +106,11 @@ test("the Overview tab gets its own treatment", async ({ page }) => {
       grow: tab.flexGrow,
       divider: tab.borderRightWidth,
       caps: label.textTransform,
-      glyph: Boolean(el.querySelector(".glyph")),
+      tree: Boolean(el.querySelector('.select [data-icon="tree"]')),
       width: el.getBoundingClientRect().width,
     };
   });
-  expect(style).toMatchObject({ grow: "0", divider: "3px", caps: "uppercase", glyph: true });
+  expect(style).toMatchObject({ grow: "0", divider: "3px", caps: "uppercase", tree: true });
   const shell = await page.locator('.tab[title="Shell"]').evaluate((el) => getComputedStyle(el).borderRightWidth);
   expect(shell).toBe("1px");
   expect(style.width).toBeLessThan(140);
