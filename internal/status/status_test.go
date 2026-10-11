@@ -108,6 +108,23 @@ func TestReadWithoutManifest(t *testing.T) {
 	}
 }
 
+func TestReadLeavesSessionSummaryEmptyWithoutSummary(t *testing.T) {
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "quiet", Description: "what assembly wrote"})
+	if got := Read(dir).SessionSummary; got != (SessionSummary{}) {
+		t.Fatalf("session summary = %#v, want empty", got)
+	}
+}
+
+func TestReadCopiesSessionSummary(t *testing.T) {
+	at := time.Date(2026, 10, 11, 14, 58, 14, 0, time.UTC)
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "told", Description: "what assembly wrote",
+		Summary: session.Summary{Text: "Fixing the refund webhook.", Stage: "plan", At: at}})
+	want := SessionSummary{Text: "Fixing the refund webhook.", Stage: "plan", At: "2026-10-11T14:58:14Z"}
+	if got := Read(dir).SessionSummary; got != want {
+		t.Fatalf("session summary = %#v, want %#v", got, want)
+	}
+}
+
 // The slug is how the page addresses a session: its rail row, its window
 // surfaces and its documents are all keyed on it.
 func TestFieldsCarryTheSessionsSlug(t *testing.T) {

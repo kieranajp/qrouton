@@ -51,8 +51,17 @@ type Fields struct {
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
-	Welcoming     bool          `json:"welcoming"`
-	StickerLabels StickerLabels `json:"stickerLabels"`
+	Welcoming      bool           `json:"welcoming"`
+	StickerLabels  StickerLabels  `json:"stickerLabels"`
+	SessionSummary SessionSummary `json:"sessionSummary"`
+}
+
+// SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
+// or empty when no summary was written.
+type SessionSummary struct {
+	Text  string `json:"text"`
+	Stage string `json:"stage"`
+	At    string `json:"at"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
@@ -215,7 +224,16 @@ func Read(root string) Fields {
 	fields.Documents = documents(root)
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	fields.Root = root
+	fields.SessionSummary = sessionSummary(m.Summary)
 	return fields
+}
+
+func sessionSummary(s session.Summary) SessionSummary {
+	out := SessionSummary{Text: s.Text, Stage: s.Stage}
+	if !s.At.IsZero() {
+		out.At = s.At.Format(time.RFC3339)
+	}
+	return out
 }
 
 func manifestRepos(repos []session.ManifestRepo) []RepoStat {
