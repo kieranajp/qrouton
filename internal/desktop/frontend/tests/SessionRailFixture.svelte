@@ -40,11 +40,10 @@
     }),
   );
 
-  function rootOnly(provider) {
-    const childrenKnown = provider === "codex";
+  function stateless() {
     sessions = sessions.map((session) =>
       session.slug === "checkout"
-        ? { ...session, summary: { attention: "unknown", active: 1, coverage: childrenKnown ? "full" : "root", running: true } }
+        ? { ...session, summary: { attention: "unknown", active: 1, coverage: "full", running: true } }
         : session,
     );
   }
@@ -56,7 +55,7 @@
   }
 
   window.sessionRail = {
-    rootOnly,
+    stateless,
     headline,
     shown: (slug) => (selected = slug),
     rename: (slug, name) => {

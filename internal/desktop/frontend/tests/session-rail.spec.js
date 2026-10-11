@@ -406,8 +406,8 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
   expect(header).toBe(paneHeader);
   expect(await band.evaluate((el) => getComputedStyle(el).borderBottomWidth)).toBe("0px");
 
-  // Centred in the band, not sat on its floor: AGENT is centred in the pane
-  // header beside it, and sitting the label low left a hand's width of nothing
+  // Centred in the band, not sat on its floor: the tab labels are centred in
+  // the pane header beside it, and sitting the label low left a hand's width of nothing
   // above it.
   const centres = await band.evaluate((el) => {
     const caps = el.querySelector(".caps").getBoundingClientRect();
@@ -417,8 +417,8 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
   expect(centres.label).toBeCloseTo(centres.band, 0);
 });
 
-test("provider coverage is textual on the row", async ({ page }) => {
-  await page.evaluate(() => window.sessionRail.rootOnly("codex"));
+test("a summary without a root state falls back to the active count", async ({ page }) => {
+  await page.evaluate(() => window.sessionRail.stateless());
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");

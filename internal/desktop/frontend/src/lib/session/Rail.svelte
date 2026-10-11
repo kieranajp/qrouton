@@ -265,8 +265,8 @@
     overflow: hidden;
   }
 
-  /* Centred in the band, not sat on its floor: AGENT is centred in the pane
-     header beside it, so this is where the two headings share a line. */
+  /* Centred in the band, not sat on its floor: the tab labels are centred
+     in the pane header beside it, so this is where the two headings share a line. */
   .band {
     height: var(--h-pane-header);
     box-sizing: border-box;
@@ -277,9 +277,7 @@
     padding: 0 calc(12px * var(--ui-scale));
   }
 
-  /* Sessions is the only greedy child. Activity and this-session size to what
-     they hold, so an empty panel occupies nothing rather than a share of the
-     rail. */
+  /* The session list scrolls; the footer below it stays put. */
   .session-list {
     flex: 1 1 auto;
     min-height: 0;
