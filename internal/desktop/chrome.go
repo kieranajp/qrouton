@@ -219,6 +219,7 @@ func agentSummary(snapshot agentActivitySnapshot) status.AgentSummary {
 	if !snapshot.Running {
 		return summary
 	}
+	summary.Stage = status.StagesFor(snapshot.LiveTypes).Latest()
 	for _, record := range snapshot.Records {
 		if record.Root && record.Generation == snapshot.Generation {
 			summary.State, summary.Reason = record.State, record.Reason

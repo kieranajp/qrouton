@@ -369,6 +369,44 @@ func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
 	}
 }
 
+// A background session's row carries the stage of its live lead, and drops it
+// when the lead stops.
+func TestChromeRowStageFollowsABackgroundSessionsLead(t *testing.T) {
+	clock := &activityClock{at: time.Now()}
+	root := t.TempDir()
+	reg := newSessionsWithActivity(clock.now)
+	background := reg.add(sessionDir(t, root, "background"), []string{"/bin/cat"}, os.Environ())
+	shown := reg.add(sessionDir(t, root, "onscreen"), []string{"/bin/cat"}, os.Environ())
+	reg.reveal(shown)
+	stage := func() string {
+		renderer := newFakeRenderer()
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		for _, r := range pushedChrome(t, renderer).Sessions {
+			if r.Slug == "background" {
+				return r.Summary.Stage
+			}
+		}
+		t.Fatal("no background row")
+		return ""
+	}
+	lead := func(hook string) workbench.AgentEventRequest {
+		return workbench.AgentEventRequest{
+			Provider: agentProviderClaude, Generation: 1, Hook: hook,
+			AgentID: "lead-1", AgentType: "qrouton-research-lead", Timestamp: clock.now(),
+		}
+	}
+
+	background.agents.begin(agentProviderClaude, 1)
+	background.agents.apply(lead(agentevent.HookSubagentStart))
+	if got := stage(); got != "research" {
+		t.Fatalf("stage with the research lead running = %q", got)
+	}
+	background.agents.apply(lead(agentevent.HookSubagentStop))
+	if got := stage(); got != "" {
+		t.Fatalf("stage after the lead stopped = %q", got)
+	}
+}
+
 func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
 	clock := &activityClock{at: time.Now()}
 	root := t.TempDir()

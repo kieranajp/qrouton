@@ -140,3 +140,16 @@ func StagesFor(types []string) Stages {
 	}
 	return live
 }
+
+// Latest is the furthest stage with a live lead, and empty when none is live.
+func (s Stages) Latest() string {
+	switch {
+	case s.Implement:
+		return StageImplement
+	case s.Plan:
+		return StagePlan
+	case s.Research:
+		return StageResearch
+	}
+	return ""
+}
