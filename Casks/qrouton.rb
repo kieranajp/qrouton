@@ -1,8 +1,8 @@
 cask "qrouton" do
-  version "0.12.1"
-  sha256 "ae35cdc17ba9cd6e1392cb9e210b81954e6cb80d3e54ed42a58ab2456a193636"
+  version "0.13.0"
+  sha256 "3d455fb121c3e25de5bd555ce6d9711579e30a76758a5c783e8c90915c70966b"
 
-  url "https://github.com/kieranajp/qrouton/releases/download/v0.12.1/qrouton-0.12.1-macos-universal.zip"
+  url "https://github.com/kieranajp/qrouton/releases/download/v0.13.0/qrouton-0.13.0-macos-universal.zip"
   name "qrouton"
   desc "Multi-repository workspace manager for coding agents"
   homepage "https://github.com/kieranajp/qrouton"
