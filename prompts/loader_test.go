@@ -482,6 +482,13 @@ var (
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
+
+	sessionSummaryHomes = []ID{
+		ID(skillIDPrefix + "qrouton-research"),
+		ID(skillIDPrefix + "qrouton-spec"),
+		ID(skillIDPrefix + "qrouton-plan"),
+		ID(skillIDPrefix + "qrouton-implement"),
+	}
 )
 
 // A partial is one text with several homes. Each home has to carry it word for
@@ -492,6 +499,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		artifactDisciplineFileName: artifactDisciplineHomes,
 		evidenceDisciplineFileName: evidenceDisciplineHomes,
 		returnContractFileName:     returnContractHomes,
+		sessionSummaryFileName:     sessionSummaryHomes,
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {

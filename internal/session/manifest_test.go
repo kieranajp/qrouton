@@ -42,6 +42,16 @@ func TestManifestRepoWithNoBaseOmitsTheKeyEntirely(t *testing.T) {
 	}
 }
 
+func TestManifestWithNoSummaryOmitsTheKeyEntirely(t *testing.T) {
+	got, err := json.Marshal(Manifest{Slug: "s", Description: "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(got), `"summary"`) {
+		t.Fatalf("manifest with no summary carries a summary key: %s", got)
+	}
+}
+
 func TestManifestRepoWithoutBaseBranchDecodesEmpty(t *testing.T) {
 	doc := `{"name":"svc","org":"org","role":"editing","branch":"feat/svc","defaultBranch":"main","worktreePath":"src/svc"}`
 	var repo ManifestRepo

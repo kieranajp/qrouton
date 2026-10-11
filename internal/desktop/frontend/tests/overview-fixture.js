@@ -90,6 +90,17 @@ if (params.has("longdoing")) {
   root.tool = "Bash";
   root.target = "go test ./internal/desktop/... -run TestAgentTree -count=1 -v " + "./some/very/long/path/".repeat(12);
 }
+const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60000).toISOString();
+const summaries = {
+  long: {
+    text: "Migrating checkout to the PaymentIntent v2 client, with partial-capture refunds and webhook parity in acme/payments. Docs stay read-only.",
+    stage: "implement",
+    at: minutesAgo(4),
+  },
+  short: { text: "Fix flaky refund webhook test.", stage: "plan", at: minutesAgo(1) },
+  empty: { text: "", stage: "", at: "" },
+};
+const summary = summaries[params.get("summary") ?? "long"];
 if (params.has("narrow")) document.querySelector("#fixture").classList.add("narrow");
 
 window.opened = [];
@@ -101,4 +112,4 @@ window.wailsCall = async (name, ...args) => {
 window.pushTree = (key) => emitWailsEvent(AGENT_TREE_EVENT + "fixture", trees[key]);
 window.trees = trees;
 
-mount(OverviewFixture, { target: document.querySelector("#fixture") });
+mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary } });

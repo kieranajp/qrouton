@@ -27,6 +27,9 @@ const (
 	returnContractFileName    = "return-contract.md"
 	returnContractPlaceholder = "{{return-contract}}"
 
+	sessionSummaryFileName    = "session-summary.md"
+	sessionSummaryPlaceholder = "{{session-summary}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -52,6 +55,7 @@ var partials = map[string]string{
 	artifactDisciplinePlaceholder: artifactDisciplineFileName,
 	evidenceDisciplinePlaceholder: evidenceDisciplineFileName,
 	returnContractPlaceholder:     returnContractFileName,
+	sessionSummaryPlaceholder:     sessionSummaryFileName,
 }
 
 // The leads, by the agent type the runner reports them as.
