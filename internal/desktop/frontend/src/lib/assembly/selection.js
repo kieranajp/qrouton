@@ -160,18 +160,19 @@ export const upgrading = (selection) => [...selection.upgrades];
 /** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
- * @param {string} branch @returns {{id: string, role: Role, meta: string}[]} */
+ * @param {string} branch @returns {{id: string, role: Role, branch: string, meta: string}[]} */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
   const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));
-  return [...taken, ...ordered(selection)].map(({ id, role }) => ({
-    id,
-    role,
-    meta:
-      role === REPO_ROLES.EDITING
-        ? editingMeta(branch)
-        : referenceMeta(baseOf(selection, id) || pinned.get(id)),
-  }));
+  return [...taken, ...ordered(selection)].map(({ id, role }) => {
+    const shown = role === REPO_ROLES.EDITING ? branch : baseOf(selection, id) || pinned.get(id);
+    return {
+      id,
+      role,
+      branch: shown ?? "",
+      meta: role === REPO_ROLES.EDITING ? editingMeta(branch) : referenceMeta(shown),
+    };
+  });
 }
 
 const editingMeta = (branch) => branch ?? "";

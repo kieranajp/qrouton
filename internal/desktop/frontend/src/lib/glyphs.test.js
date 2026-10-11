@@ -5,14 +5,29 @@ import test from "node:test";
 
 const SRC = join(import.meta.dirname, "..");
 
-const GLYPHS = [..."✕×⌕▾▸▲›↻←→↑↓✓✗◌●◐◆▶", "🔔"];
+const GLYPHS = [..."✕×⌕▾▸▲▼›‹↻⟳←→↑↓✓✔✗✖◌●◐◆▶", "🔔"];
 
-const NAMED = { times: "×", rsaquo: "›", larr: "←", rarr: "→", uarr: "↑", darr: "↓", check: "✓" };
+const NAMED = {
+  times: "×",
+  rsaquo: "›",
+  lsaquo: "‹",
+  larr: "←",
+  rarr: "→",
+  uarr: "↑",
+  darr: "↓",
+  check: "✓",
+  checkmark: "✓",
+  cross: "✗",
+  rtrif: "▸",
+  dtrif: "▾",
+  utrif: "▴",
+};
 
 const ALLOWED = ["Used by Work on issue → Custom script."];
 
 const decode = (text) =>
   text
+    .replace(/\\u\{?([0-9a-f]{4,5})\}?/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCodePoint(parseInt(hex, 16)))
     .replace(/&#(\d+);/g, (_, dec) => String.fromCodePoint(Number(dec)))
     .replace(/&([a-z]+);/gi, (entity, name) => NAMED[name] ?? entity);

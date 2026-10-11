@@ -1,6 +1,3 @@
-// The Mitre set on a 16 by 16 grid: straight segments only, drawn with square
-// caps and mitre joins.
-
 const icon = (stroke, fill) => Object.freeze({ stroke, fill });
 
 export const ICONS = Object.freeze({

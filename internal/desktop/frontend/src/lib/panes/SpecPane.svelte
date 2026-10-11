@@ -480,14 +480,14 @@
             aria-label="Previous screen"
             disabled={at.current === 0}
             icon="back"
-      onclick={() => at.show(at.current - 1)} />
+            onclick={() => at.show(at.current - 1)} />
           <Button
             variant="ghost"
             size="sm"
             aria-label="Next screen"
             disabled={at.current === slides.length}
             icon="forward"
-      onclick={() => at.show(at.current + 1)} />
+            onclick={() => at.show(at.current + 1)} />
         </div>
       {/if}
     {/snippet}

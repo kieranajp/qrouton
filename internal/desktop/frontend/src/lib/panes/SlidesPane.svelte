@@ -121,14 +121,14 @@
           aria-label="Previous slide"
           disabled={deck.current === 0 || cards.length === 0}
           icon="back"
-      onclick={() => deck.show(deck.current - 1)} />
+          onclick={() => deck.show(deck.current - 1)} />
         <Button
           variant="ghost"
           size="sm"
           aria-label="Next slide"
           disabled={deck.current >= cards.length - 1}
           icon="forward"
-      onclick={() => deck.show(deck.current + 1)} />
+          onclick={() => deck.show(deck.current + 1)} />
       </div>
     {/snippet}
   </ReaderFooter>

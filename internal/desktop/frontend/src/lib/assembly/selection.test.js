@@ -162,8 +162,8 @@ test("the summary names the branch editing repos join and the branch reference r
   selection = setRole(selection, "acme/api", "editing");
   selection = setRole(selection, "other/web", "reference");
   assert.deepEqual(summary(selection, repos, "feat/extract-billing"), [
-    { id: "acme/api", role: "editing", meta: "feat/extract-billing" },
-    { id: "other/web", role: "reference", meta: "trunk, read-only" },
+    { id: "acme/api", role: "editing", branch: "feat/extract-billing", meta: "feat/extract-billing" },
+    { id: "other/web", role: "reference", branch: "trunk", meta: "trunk, read-only" },
   ]);
 });
 
@@ -171,7 +171,7 @@ test("the summary names the branch editing repos join and the branch reference r
 test("an editing chip names no branch while there is none", () => {
   const selection = setRole(seed(), "acme/api", "editing");
   assert.deepEqual(summary(selection, [], ""), [
-    { id: "acme/api", role: "editing", meta: "" },
+    { id: "acme/api", role: "editing", branch: "", meta: "" },
   ]);
 });
 
@@ -185,8 +185,8 @@ test("a row being taken up leads the chips, naming the branch it joins", () => {
   selection = setRole(selection, "acme/docs", "editing");
   selection = setRole(selection, "other/web", "reference");
   assert.deepEqual(summary(selection, repos, "feat/extract-billing"), [
-    { id: "acme/docs", role: "editing", meta: "feat/extract-billing" },
-    { id: "other/web", role: "reference", meta: "read-only" },
+    { id: "acme/docs", role: "editing", branch: "feat/extract-billing", meta: "feat/extract-billing" },
+    { id: "other/web", role: "reference", branch: "", meta: "read-only" },
   ]);
 
   selection = setRole(selection, "acme/docs", "reference");
@@ -251,6 +251,6 @@ test("summary names the chosen branch on a reference chip instead of the default
   let selection = setRole(seed(), "acme/docs", "reference");
   selection = setBase(selection, "acme/docs", "feat/cut");
   assert.deepEqual(summary(selection, repos, "feat/extract-billing"), [
-    { id: "acme/docs", role: "reference", meta: "feat/cut, read-only" },
+    { id: "acme/docs", role: "reference", branch: "feat/cut", meta: "feat/cut, read-only" },
   ]);
 });

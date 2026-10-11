@@ -617,7 +617,7 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	boot.document = func(root, name string) (workbench.WindowOptions, error) {
 		return workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "" + filepath.Base(name),
+			Kind: workbench.KindDocument, Label: filepath.Base(name),
 			Source: name, Content: "# " + name, Format: workbench.FormatMarkdown,
 		}, nil
 	}

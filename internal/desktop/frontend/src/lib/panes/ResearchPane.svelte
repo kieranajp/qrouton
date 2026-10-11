@@ -216,8 +216,7 @@
   .disclosure {
     position: absolute;
     left: 0;
-    top: 50%;
-    transform: translateY(-50%);
+    top: calc(12px * var(--ui-scale));
     width: var(--gutter);
     padding-right: 1.5ch;
     box-sizing: border-box;
