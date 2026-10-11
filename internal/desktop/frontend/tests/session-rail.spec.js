@@ -427,6 +427,51 @@ test("a summary without a root state falls back to the active count", async ({ p
   );
 });
 
+test("a live lead's stage square replaces the running icon", async ({ page }) => {
+  const row = page.getByRole("button", { name: /^Checkout migration · / });
+  await page.evaluate(() => window.sessionRail.headline({ state: "working", active: 2, stage: "implement" }));
+  const square = row.locator(".facts .agents .square");
+  await expect(square).toHaveCount(1);
+  await expect(row.locator('[data-icon="running"]')).toHaveCount(0);
+  expect(await square.evaluate((el) => getComputedStyle(el).backgroundColor)).toBe(
+    await page.evaluate(() => {
+      const probe = document.createElement("span");
+      probe.style.color = "var(--state-success)";
+      document.body.append(probe);
+      const colour = getComputedStyle(probe).color;
+      probe.remove();
+      return colour;
+    }),
+  );
+
+  await page.evaluate(() => window.sessionRail.headline({ state: "working", active: 2 }));
+  await expect(row.locator('[data-icon="running"]')).toHaveCount(1);
+  await expect(row.locator(".square")).toHaveCount(0);
+});
+
+test("the stage square keeps the running icon's footprint", async ({ page }) => {
+  const row = page.getByRole("button", { name: /^Checkout migration · / });
+  const measure = () =>
+    row.evaluate((el) => {
+      const fact = el.querySelector(".facts .agents");
+      const mark = fact.querySelector(".stage, [data-icon='running']");
+      const box = (node) => {
+        const { x, y, width, height } = node.getBoundingClientRect();
+        return { x, y, width, height };
+      };
+      return { row: box(el), fact: box(fact), mark: box(mark) };
+    });
+  await page.evaluate(() => window.sessionRail.headline({ state: "working", active: 2 }));
+  await expect(row.locator('[data-icon="running"]')).toHaveCount(1);
+  const icon = await measure();
+  await page.evaluate(() => window.sessionRail.headline({ state: "working", active: 2, stage: "plan" }));
+  await expect(row.locator(".stage")).toHaveCount(1);
+  const square = await measure();
+  expect(square).toEqual(icon);
+  await page.waitForTimeout(900);
+  expect(await measure()).toEqual(icon);
+});
+
 test("the rail holds sessions only; the repositories moved to the Overview", async ({ page }) => {
   await expect(page.getByLabel("Selected session details")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Add repos" })).toHaveCount(0);
