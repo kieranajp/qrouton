@@ -41,7 +41,6 @@
           class="name"
           aria-expanded={view.identityOpen}
           onclick={() => (view.identityOpen = !view.identityOpen)}>
-          <Icon name="session" />
           <span class="said">{fields.identity}</span>
           <span class="caret"><Icon name="menu" /></span>
         </button>
