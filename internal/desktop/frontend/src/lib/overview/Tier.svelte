@@ -17,7 +17,7 @@
     padding-bottom: calc(12px * var(--ui-scale));
   }
 
-  .tier + .tier,
+  .tier:not(:first-child),
   .footer {
     border-top: 1px solid var(--border-subtle);
     padding-top: calc(12px * var(--ui-scale));

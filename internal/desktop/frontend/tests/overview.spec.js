@@ -19,6 +19,19 @@ test("one tier column: orchestrator, leads in stage order, this session", async 
   expect(body.left).toBeGreaterThan(label.right);
 });
 
+test("every tier after the first is divided from the one above by a hairline", async ({ page }) => {
+  await open(page);
+  const edges = await page.locator(".tier").evaluateAll((tiers) =>
+    tiers.map((el) => {
+      const style = getComputedStyle(el);
+      return { top: style.borderTopWidth, pad: style.paddingTop };
+    }),
+  );
+  expect(edges).toHaveLength(3);
+  expect(edges[0].top).toBe("0px");
+  for (const edge of edges.slice(1)) expect(edge).toEqual({ top: "1px", pad: "12px" });
+});
+
 test("only the live lead opens; finished leads keep their document and count", async ({ page }) => {
   await open(page);
   await expect(lead(page, "Implementation")).toHaveAttribute("aria-expanded", "true");
