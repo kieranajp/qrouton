@@ -52,6 +52,28 @@ test("a live lead's row sits as far below its top as a finished lead's", async (
   expect(await inset("Implementation")).toBe(await inset("Research"));
 });
 
+test("each section label shares a baseline with its first row", async ({ page }) => {
+  await open(page);
+  const baseline = (locator) =>
+    locator.evaluate((el) => {
+      const probe = document.createElement("span");
+      probe.style.cssText = "display:inline-block;width:0;height:0;vertical-align:baseline";
+      el.prepend(probe);
+      const y = probe.getBoundingClientRect().bottom;
+      probe.remove();
+      return y;
+    });
+  const pairs = [
+    [".orchestrator .label", ".orchestrator .provider"],
+    [".leads .label", ".leads .name"],
+    [".session .label", ".session .repo-name"],
+  ];
+  for (const [label, row] of pairs) {
+    const [a, b] = await Promise.all([baseline(page.locator(label).first()), baseline(page.locator(row).first())]);
+    expect(Math.abs(a - b)).toBeLessThanOrEqual(1.5);
+  }
+});
+
 test("each subagent says what it is doing now and what it wrote", async ({ page }) => {
   await open(page);
   const implementer = page.locator(".agent").filter({ hasText: "Swap PaymentIntent" });

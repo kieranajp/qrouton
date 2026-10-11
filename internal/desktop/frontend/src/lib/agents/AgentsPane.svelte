@@ -119,13 +119,14 @@
     min-height: 0;
     flex-direction: column;
     overflow: hidden auto;
-    padding: calc(14px * var(--ui-scale));
+    padding: var(--space-10) var(--space-6) var(--space-6);
     background: var(--surface-app);
     container: overview / inline-size;
   }
 
   .tier {
     display: flex;
+    align-items: baseline;
     gap: calc(10px * var(--ui-scale));
     min-width: 0;
   }
@@ -150,16 +151,11 @@
   .label {
     flex: none;
     width: calc(108px * var(--ui-scale));
-    padding-top: calc(4px * var(--ui-scale));
     font: var(--instruction);
     letter-spacing: var(--instruction-tracking);
     text-transform: uppercase;
     white-space: nowrap;
     color: var(--text-faint);
-  }
-
-  .orchestrator .label {
-    padding-top: 0;
   }
 
   .body {
@@ -273,12 +269,12 @@
   @container overview (max-width: 27.5rem) {
     .tier {
       flex-direction: column;
+      align-items: stretch;
       gap: calc(6px * var(--ui-scale));
     }
 
     .label {
       width: auto;
-      padding-top: 0;
     }
 
     .orchestrator .line {
