@@ -88,9 +88,7 @@
       <div class="facts">
         {#each facts as fact (fact.kind)}
           <span class="fact {fact.kind}" title={fact.title}>
-            {#if fact.kind === "unseen" || (fact.kind === "agents" && fact.active)}
-              <Icon name={fact.kind === "unseen" ? "document" : "running"} />
-            {/if}
+            {#if fact.kind === "agents" && fact.active}<Icon name="running" />{/if}
             {fact.label}
           </span>
         {/each}
@@ -263,6 +261,7 @@
 
   .fact {
     flex: none;
+    white-space: nowrap;
     display: inline-flex;
     align-items: center;
     gap: calc(3px * var(--ui-scale));
