@@ -90,7 +90,7 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 			live := next.Snapshot()
 			live.Root = current.Root
 			live.Thoughts.Default = config.ExpandHome(thoughts)
-			return commitLive(f.cfg, current, next, live, f.reconfigure, nil)
+			return commitLive(f.cfg, current, next, live, f.reconfigure)
 		}
 		if err := config.Save(next); err != nil {
 			return err

@@ -10,12 +10,11 @@ test("every settings field lives on one tab", () => {
   assert.equal(tabOf("thoughts"), "folders");
   assert.equal(tabOf("stickers.3"), "stickers");
   assert.equal(tabOf("launch"), "advanced");
-  assert.equal(tabOf("linear"), "advanced");
   assert.equal(tabOf("unknown"), undefined);
 });
 
 test("the first errored tab follows index order, not field order", () => {
-  const fields = { linear: "not JSON", "stickers.0": "cannot be empty", root: "cannot be empty" };
+  const fields = { launch: "not JSON", "stickers.0": "cannot be empty", root: "cannot be empty" };
   assert.deepEqual([...erroredTabs(fields)].sort(), ["advanced", "folders", "stickers"]);
   assert.equal(firstErroredTab(fields), "folders");
   assert.equal(firstErroredTab({}), undefined);

@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -22,15 +23,13 @@ import (
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-// SettingsView carries the editable config and Linear document on the wire.
+// SettingsView carries the editable config, and what Install would write for Linear.
 type SettingsView struct {
 	Orgs         []string         `json:"orgs"`
 	Root         string           `json:"root"`
 	Editor       string           `json:"editor"`
 	Launch       string           `json:"launch"`
-	Linear       string           `json:"linear"`
-	LinearPath   string           `json:"linearPath"`
-	LinearError  string           `json:"linearError,omitempty"`
+	Linear       LinearView       `json:"linear"`
 	Stickers     []config.Sticker `json:"stickers"`
 	Chime        bool             `json:"chime"`
 	UIScale      int              `json:"uiScale"`
@@ -38,6 +37,15 @@ type SettingsView struct {
 	Thoughts     ThoughtsView     `json:"thoughts"`
 	Pinned       SettingsPinned   `json:"pinned"`
 	Runners      []RunnerLegend   `json:"runners"`
+}
+
+// LinearView is the coding-tools.json entry Install writes. Replaces means the
+// file already holds a different one; Error says why neither could be read.
+type LinearView struct {
+	Path     string `json:"path"`
+	Snippet  string `json:"snippet"`
+	Replaces bool   `json:"replaces"`
+	Error    string `json:"error,omitempty"`
 }
 
 // RunnerLegend names a runner id the launch overrides may key on.
@@ -85,7 +93,6 @@ type SettingsInput struct {
 	Root     string           `json:"root"`
 	Editor   string           `json:"editor"`
 	Launch   string           `json:"launch"`
-	Linear   string           `json:"linear"`
 	Stickers []config.Sticker `json:"stickers"`
 	Chime    bool             `json:"chime"`
 	UIScale  int              `json:"uiScale"`
@@ -103,7 +110,9 @@ type Settings struct {
 	emit           emitter
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
+	relaunch       func() error
 	quit           func()
+	openText       func(path string) []string
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
 	runners        func() ([]assembly.Runner, error)
@@ -112,10 +121,13 @@ type Settings struct {
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
-	reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error)) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, relaunch func() error,
+	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
+	openText func(path string) []string) *Settings {
 	return &Settings{
-		runners: runners,
+		relaunch: relaunch,
+		openText: openText,
+		runners:  runners,
 		login: func(ctx context.Context, token string) (string, error) {
 			return github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
 		},
@@ -148,15 +160,12 @@ func (s *Settings) Load() SettingsView {
 			launch = string(b)
 		}
 	}
-	linear, linearErr := s.linear.Load()
 	return SettingsView{
 		Orgs:         file.Orgs,
 		Root:         root,
 		Editor:       editorCommand(cfg.Editor),
 		Launch:       launch,
-		Linear:       linear,
-		LinearPath:   lineartools.ConfigPath,
-		LinearError:  errorText(linearErr),
+		Linear:       s.linearView(),
 		Stickers:     cfg.EffectiveStickers(),
 		Chime:        !cfg.Quiet,
 		UIScale:      cfg.EffectiveUIScale(),
@@ -265,10 +274,6 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, err
 	}
 
-	linear, err := lineartools.Validate(in.Linear)
-	if err != nil {
-		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
-	}
 	thoughts := thoughtsFromInput(in.Thoughts)
 	candidate := s.cfg.Snapshot()
 	candidate.Root, candidate.Thoughts = root, thoughts
@@ -288,11 +293,6 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 			c.Quiet = !in.Chime
 			c.UIScale = storedUIScale(uiScale)
 		}
-	}, func() error {
-		if err := s.linear.Save(linear); err != nil {
-			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
-		}
-		return nil
 	}, s.reconfigure, func(current, live *config.Config, restart bool) {
 		changed := !slices.Equal(current.Orgs, live.Orgs)
 		labelsChanged := !slices.Equal(current.EffectiveStickers(), stickers)
@@ -418,14 +418,61 @@ func (s *Settings) GitHubStatus() GitHubStatus {
 	return status
 }
 
-// Quit tears down every session supervisor and PTY before exiting.
-func (s *Settings) Quit() { s.quit() }
+// Relaunch starts a successor that reads config.json afresh, on no session, then
+// tears this workbench down. Holding the config writer keeps a save from
+// landing between the successor's read and this process's exit.
+func (s *Settings) Relaunch() error {
+	if s.relaunch == nil || s.quit == nil {
+		return ErrNoRelaunch
+	}
+	if err := s.cfg.Transact(func(*config.Config) error { return s.relaunch() }); err != nil {
+		return err
+	}
+	s.quit()
+	return nil
+}
+
+// OpenConfig opens config.json in the desktop's default text editor.
+func (s *Settings) OpenConfig() error {
+	var argv []string
+	if s.openText != nil {
+		argv = s.openText(config.Path())
+	}
+	if len(argv) == 0 {
+		return ErrNoOpenTextCommand
+	}
+	return exec.Command(argv[0], argv[1:]...).Run()
+}
+
+// InstallLinear writes qrouton's openIssue entry at once; Cancel does not undo it.
+func (s *Settings) InstallLinear() (LinearView, error) {
+	if err := s.linear.Install(); err != nil {
+		return s.linearView(), err
+	}
+	return s.linearView(), nil
+}
+
+func (s *Settings) linearView() LinearView {
+	view := LinearView{Path: lineartools.ConfigPath}
+	snippet, err := s.linear.Snippet()
+	if err != nil {
+		view.Error = err.Error()
+		return view
+	}
+	view.Snippet = snippet
+	replaces, err := s.linear.Replaces()
+	if err != nil {
+		view.Error = err.Error()
+	}
+	view.Replaces = replaces
+	return view
+}
 
 // saveConfig writes next over config.json as written and publishes live over
 // the running config. Live keeps the boot Root used by the rail scanner, and a
 // Root that needs a restart holds back the thoughts too, since the live default
 // still derives from the old one.
-func saveConfig(cfg *config.Config, mutate func(next, live *config.Config), persist func() error,
+func saveConfig(cfg *config.Config, mutate func(next, live *config.Config),
 	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
 		onDisk, err := config.ReadFile()
@@ -442,7 +489,7 @@ func saveConfig(cfg *config.Config, mutate func(next, live *config.Config), pers
 		if err := config.CheckThoughts(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
-		if err := commitLive(cfg, snapshot, next, live, reconfigure, persist); err != nil {
+		if err := commitLive(cfg, snapshot, next, live, reconfigure); err != nil {
 			return err
 		}
 		if publish != nil {
@@ -454,21 +501,14 @@ func saveConfig(cfg *config.Config, mutate func(next, live *config.Config), pers
 
 // commitLive reindexes before it writes or publishes anything, so routing and
 // search never disagree. A failed write puts the old index back.
-func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error, persist func() error) error {
+func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error) error {
 	reindex := reconfigure != nil && !slices.Equal(thoughtsProfiles(current), thoughtsProfiles(live))
 	if reindex {
 		if err := reconfigure(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
 	}
-	var err error
-	if persist != nil {
-		err = persist()
-	}
-	if err == nil {
-		err = config.Save(next)
-	}
-	if err != nil {
+	if err := config.Save(next); err != nil {
 		if reindex {
 			err = errors.Join(err, reconfigure(current))
 		}

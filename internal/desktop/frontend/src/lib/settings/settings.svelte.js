@@ -1,4 +1,4 @@
-import { SETTINGS_FIELDS, UI_SCALE_EVENT } from "../bridge/generated.js";
+import { UI_SCALE_EVENT } from "../bridge/generated.js";
 import { call, Events } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
@@ -15,8 +15,6 @@ export function settings(onClose) {
     root: "",
     editor: "",
     launch: "",
-    linear: "",
-    linearPath: "",
     stickers: /** @type {import("../session/stickers.js").Sticker[]} */ ([]),
     chime: true,
     uiScale: 100,
@@ -26,6 +24,10 @@ export function settings(onClose) {
     runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
   let tab = $state("general");
+  let linear = $state(/** @type {import("./calls.js").LinearView} */ ({ path: "", snippet: "", replaces: false }));
+  let installed = $state(false);
+  let installing = $state(false);
+  let actionError = $state("");
   let github = $state(/** @type {{state: string, login: string, variable: string} | null} */ (null));
   let checkingGitHub = $state(false);
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
@@ -45,8 +47,7 @@ export function settings(onClose) {
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
-    form.linear = loaded?.linear ?? "";
-    form.linearPath = loaded?.linearPath ?? "";
+    linear = loaded?.linear ?? linear;
     form.stickers = (loaded?.stickers ?? []).map((item) => ({ ...item }));
     form.chime = loaded?.chime ?? true;
     form.uiScale = loaded?.uiScale ?? 100;
@@ -55,7 +56,6 @@ export function settings(onClose) {
     form.pinned = { root: !!loaded?.pinned?.root, orgs: !!loaded?.pinned?.orgs };
     form.runners = loaded?.runners ?? [];
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
-    if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
 
   $effect(() =>
@@ -92,7 +92,6 @@ export function settings(onClose) {
         root: form.root,
         editor: form.editor,
         launch: form.launch,
-        linear: form.linear,
         stickers: stickersInput(form.stickers),
         chime: form.chime,
         uiScale: form.uiScale,
@@ -131,13 +130,45 @@ export function settings(onClose) {
     onClose();
   }
 
-  // Quitting ends the process; there is nothing here to await.
-  function quitAndRelaunch() {
-    go.quit();
+  // A relaunch that works ends this process, so only a failure answers.
+  async function relaunch() {
+    const answer = await call(go.relaunch());
+    if (!answer.ok) status = String(answer.error?.message ?? answer.error);
+  }
+
+  async function openConfig() {
+    actionError = "";
+    const answer = await call(go.openConfig());
+    if (!answer.ok) actionError = String(answer.error?.message ?? answer.error);
+  }
+
+  async function installLinear() {
+    if (installing) return;
+    installing = true;
+    const answer = await call(go.installLinear());
+    installing = false;
+    if (answer.ok) {
+      linear = answer.value ?? linear;
+      installed = true;
+    } else {
+      linear = { ...linear, error: String(answer.error?.message ?? answer.error) };
+    }
   }
 
   return {
     form,
+    get linear() {
+      return linear;
+    },
+    get installed() {
+      return installed;
+    },
+    get installing() {
+      return installing;
+    },
+    get actionError() {
+      return actionError;
+    },
     get github() {
       return github;
     },
@@ -179,6 +210,8 @@ export function settings(onClose) {
     cancel,
     clearStickerErrors,
     checkGitHub,
-    quitAndRelaunch,
+    relaunch,
+    openConfig,
+    installLinear,
   };
 }

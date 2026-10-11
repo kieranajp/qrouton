@@ -6,20 +6,32 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
 func testTools(t *testing.T) Tools {
 	t.Helper()
 	return Tools{
-		File: filepath.Join(t.TempDir(), "coding-tools.json"),
+		File: filepath.Join(t.TempDir(), "linear", "coding-tools.json"),
 		Command: []string{
 			"/Applications/qrouton.app/Contents/MacOS/qrouton",
 			"--linear-issue",
 		},
 		Env: []string{"LINEAR_PROMPT"},
 	}
+}
+
+func readDoc(t *testing.T, file string) map[string]any {
+	t.Helper()
+	b, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		t.Fatalf("%s is not JSON: %v", file, err)
+	}
+	return doc
 }
 
 func TestNewReadsLinearsOwnPath(t *testing.T) {
@@ -31,140 +43,105 @@ func TestNewReadsLinearsOwnPath(t *testing.T) {
 	}
 }
 
-// The starter is what the user is offered before they have a file, so it has to
-// name the running executable and carry Linear's own placeholder.
-func TestLoadGeneratesAStarterPointingAtTheCommand(t *testing.T) {
+func TestSnippetIsTheOpenIssueEntryWithLinearsPlaceholderAndEnv(t *testing.T) {
 	tools := testTools(t)
-
-	raw, err := tools.Load()
+	raw, err := tools.Snippet()
 	if err != nil {
 		t.Fatal(err)
 	}
-	var starter document
-	if err := json.Unmarshal([]byte(raw), &starter); err != nil {
-		t.Fatalf("starter is not valid JSON: %v (%q)", err, raw)
+	var doc struct {
+		OpenIssue command `json:"openIssue"`
 	}
-	if starter.OpenIssue.Path != tools.Command[0] {
-		t.Fatalf("executable = %q, want %q", starter.OpenIssue.Path, tools.Command[0])
+	if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+		t.Fatalf("snippet is not JSON: %v (%q)", err, raw)
 	}
-	wantArgs := []string{tools.Command[1], issueTemplate}
-	if !reflect.DeepEqual(starter.OpenIssue.Args, wantArgs) {
-		t.Fatalf("args = %#v, want %#v", starter.OpenIssue.Args, wantArgs)
-	}
-	if !reflect.DeepEqual(starter.OpenIssue.Env, tools.Env) {
-		t.Fatalf("env = %#v, want %#v", starter.OpenIssue.Env, tools.Env)
+	want := command{Path: tools.Command[0], Args: []string{"--linear-issue", issueTemplate}, Env: tools.Env}
+	if !reflect.DeepEqual(doc.OpenIssue, want) {
+		t.Fatalf("openIssue = %#v, want %#v", doc.OpenIssue, want)
 	}
 	if _, err := os.Stat(tools.File); !os.IsNotExist(err) {
-		t.Fatal("generating the starter wrote the file")
+		t.Fatal("building the snippet wrote the file")
 	}
 }
 
-// The file is the user's, so the panel is given the bytes it holds rather than a
-// document reformatted through the starter's shape.
-func TestLoadKeepsAnExistingFileVerbatim(t *testing.T) {
+func TestInstallCreatesTheFileAndItsDirectory(t *testing.T) {
 	tools := testTools(t)
-	existing := "{\n  \"openIssue\": {\"path\": \"/other/tool\"}\n}\n\n"
+	if err := tools.Install(); err != nil {
+		t.Fatal(err)
+	}
+	snippet, _ := tools.Snippet()
+	var want map[string]any
+	_ = json.Unmarshal([]byte(snippet), &want)
+	if got := readDoc(t, tools.File); !reflect.DeepEqual(got, want) {
+		t.Fatalf("installed %v, want %v", got, want)
+	}
+	if replaces, err := tools.Replaces(); err != nil || replaces {
+		t.Fatalf("Replaces after install = %v, %v", replaces, err)
+	}
+}
+
+func TestInstallKeepsEveryOtherKeyAndReportsAReplacement(t *testing.T) {
+	tools := testTools(t)
+	if err := os.MkdirAll(filepath.Dir(tools.File), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	existing := `{"openIssue": {"path": "/usr/local/bin/other", "args": []}, "openPullRequest": {"path": "/bin/gh"}}`
 	if err := os.WriteFile(tools.File, []byte(existing), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	got, err := tools.Load()
-	if err != nil || got != existing {
-		t.Fatalf("Load = %q, %v, want %q", got, err, existing)
+	if replaces, err := tools.Replaces(); err != nil || !replaces {
+		t.Fatalf("Replaces before install = %v, %v", replaces, err)
+	}
+	if err := tools.Install(); err != nil {
+		t.Fatal(err)
+	}
+	doc := readDoc(t, tools.File)
+	if !reflect.DeepEqual(doc["openPullRequest"], map[string]any{"path": "/bin/gh"}) {
+		t.Fatalf("another key changed: %v", doc)
+	}
+	if issue := doc["openIssue"].(map[string]any); issue["path"] != tools.Command[0] {
+		t.Fatalf("openIssue = %v", issue)
 	}
 }
 
-func TestLoadNamesAMissingCommandInsteadOfWritingABrokenStarter(t *testing.T) {
+func TestReplacesIsFalseWithoutAnOpenIssueOrAFile(t *testing.T) {
 	tools := testTools(t)
-	tools.Command = nil
-
-	got, err := tools.Load()
-	if got != "" || !errors.Is(err, ErrNoCommand) {
-		t.Fatalf("Load = %q, %v, want ErrNoCommand", got, err)
+	if replaces, err := tools.Replaces(); err != nil || replaces {
+		t.Fatalf("no file = %v, %v", replaces, err)
+	}
+	_ = os.MkdirAll(filepath.Dir(tools.File), 0o755)
+	_ = os.WriteFile(tools.File, []byte(`{"other": 1}`), 0o644)
+	if replaces, err := tools.Replaces(); err != nil || replaces {
+		t.Fatalf("no openIssue = %v, %v", replaces, err)
 	}
 }
 
-func TestValidateRefusesAnythingThatIsNotAJSONObject(t *testing.T) {
-	for _, raw := range []string{"", "   ", "{not json", "null", "[]", `"text"`} {
-		if body, err := Validate(raw); err == nil {
-			t.Fatalf("Validate(%q) = %q, want a refusal", raw, body)
+func TestInstallRefusesAFileThatIsNotAJSONObject(t *testing.T) {
+	for _, body := range []string{"null", "[1]", "{not json"} {
+		tools := testTools(t)
+		_ = os.MkdirAll(filepath.Dir(tools.File), 0o755)
+		_ = os.WriteFile(tools.File, []byte(body), 0o644)
+		if err := tools.Install(); err == nil {
+			t.Fatalf("Install over %q succeeded", body)
+		}
+		if b, _ := os.ReadFile(tools.File); string(b) != body {
+			t.Fatalf("Install over %q rewrote it to %q", body, b)
 		}
 	}
-	if _, err := Validate("null"); !errors.Is(err, ErrNotAnObject) {
-		t.Fatal("a JSON null was not refused as a non-object")
-	}
-}
-
-// The body Validate answers is what lands on disk: trimmed, and newline
-// terminated so the file is not one long line without an ending.
-func TestValidateAnswersTheTrimmedDocumentWithOneTrailingNewline(t *testing.T) {
-	body, err := Validate("  {\n  \"openIssue\": {}\n}\n\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "{\n  \"openIssue\": {}\n}\n"; string(body) != want {
-		t.Fatalf("Validate = %q, want %q", body, want)
-	}
-}
-
-func TestSaveCreatesTheFileAndItsDirectory(t *testing.T) {
 	tools := testTools(t)
-	tools.File = filepath.Join(t.TempDir(), ".linear", "coding-tools.json")
-
-	body, err := Validate(`{"openIssue": {"path": "/bin/true"}}`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tools.Save(body); err != nil {
-		t.Fatal(err)
-	}
-	written, err := os.ReadFile(tools.File)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(written) != string(body) {
-		t.Fatalf("wrote %q, want %q", written, body)
+	_ = os.MkdirAll(filepath.Dir(tools.File), 0o755)
+	_ = os.WriteFile(tools.File, []byte("null"), 0o644)
+	if err := tools.Install(); !errors.Is(err, ErrNotAnObject) {
+		t.Fatalf("null = %v, want ErrNotAnObject", err)
 	}
 }
 
-// A save that changed nothing must not reformat the file: the user's own
-// spacing is part of what they wrote.
-func TestSaveLeavesAFileWhoseContentIsUnchangedAlone(t *testing.T) {
-	tools := testTools(t)
-	existing := "{\n  \"custom\": true\n}\n\n"
-	if err := os.WriteFile(tools.File, []byte(existing), 0o600); err != nil {
-		t.Fatal(err)
+func TestInstallNamesAMissingCommand(t *testing.T) {
+	tools := Tools{File: filepath.Join(t.TempDir(), "coding-tools.json")}
+	if err := tools.Install(); !errors.Is(err, ErrNoCommand) {
+		t.Fatalf("Install = %v, want ErrNoCommand", err)
 	}
-
-	body, err := Validate(existing)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := tools.Save(body); err != nil {
-		t.Fatal(err)
-	}
-	written, err := os.ReadFile(tools.File)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(written) != existing {
-		t.Fatalf("an unchanged document was rewritten as %q", written)
-	}
-}
-
-func TestSaveReportsADirectoryItCannotCreate(t *testing.T) {
-	blocked := filepath.Join(t.TempDir(), "notadir")
-	if err := os.WriteFile(blocked, []byte("x"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	tools := testTools(t)
-	tools.File = filepath.Join(blocked, ".linear", "coding-tools.json")
-
-	err := tools.Save([]byte("{}\n"))
-	if err == nil {
-		t.Fatal("Save reported success for a directory it could not create")
-	}
-	if strings.TrimSpace(err.Error()) == "" {
-		t.Fatal("Save refused without saying why")
+	if _, err := os.Stat(tools.File); !os.IsNotExist(err) {
+		t.Fatal("a failed install wrote the file")
 	}
 }

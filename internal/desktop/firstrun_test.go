@@ -196,7 +196,7 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 	}, nil, nil)
 	go func() {
 		_, err := settings.Save(SettingsInput{
-			Orgs: []string{"second"}, Root: oldRoot, Editor: "code", Linear: `{}`,
+			Orgs: []string{"second"}, Root: oldRoot, Editor: "code",
 			Stickers: defaultStickers(),
 		})
 		secondDone <- err

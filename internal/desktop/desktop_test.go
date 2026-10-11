@@ -166,6 +166,8 @@ func (b *stubBoot) Reveal(sessionRoot string) []string {
 	return b.reveal(sessionRoot)
 }
 
+func (b *stubBoot) OpenText(string) []string { return nil }
+
 func (b *stubBoot) CopyImage(path string) []string {
 	if b.copyPic == nil {
 		return nil

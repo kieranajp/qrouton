@@ -17,6 +17,11 @@ const ollama = {
   installed: params.get("installed") === "1",
 };
 const gh = params.get("gh") ?? "cli";
+const linear = {
+  path: "~/.linear/coding-tools.json",
+  snippet: '{\n  "openIssue": {\n    "path": "/usr/local/bin/qrouton",\n    "args": ["--linear-issue", "{{issue.identifier}}"]\n  }\n}',
+  replaces: params.get("linear") === "replaces",
+};
 const saves = [];
 const calls = [];
 
@@ -38,7 +43,7 @@ window.wailsCall = async (name, input) => {
       root: "/sessions",
       editor: "",
       launch: "",
-      linear: "",
+      linear,
       stickers: [
         { id: "star", colour: "blue", symbol: "star", label: "Important" },
         { id: "bookmark", colour: "green", symbol: "bookmark", label: "Read later" },
@@ -64,6 +69,7 @@ window.wailsCall = async (name, input) => {
         { id: "agy", label: "Antigravity" },
       ],
     };
+  if (name.endsWith(".InstallLinear")) return { ...linear, replaces: false };
   if (name.endsWith(".Save")) {
     saves.push(input);
     if (invalid === "thoughts") throw new Error("thoughts: an org maps to two thoughts roots");

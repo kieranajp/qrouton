@@ -18,7 +18,6 @@ const FIELD_TABS = Object.freeze({
   [SETTINGS_FIELDS.THOUGHTS]: "folders",
   [SETTINGS_FIELDS.STICKERS]: "stickers",
   [SETTINGS_FIELDS.LAUNCH]: "advanced",
-  [SETTINGS_FIELDS.LINEAR]: "advanced",
 });
 
 /** A sticker row's field is named stickers.<index>, so only the part before the dot picks the tab.

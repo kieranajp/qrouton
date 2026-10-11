@@ -28,6 +28,7 @@ type Launcher interface {
 	Agent(AgentRequest) (AgentCommand, error)
 	Shell(sessionRoot string) []string
 	Reveal(sessionRoot string) []string
+	OpenText(path string) []string
 	CopyImage(path string) []string
 	CopyFile(path string) []string
 	Document(sessionRoot, name string) (workbench.WindowOptions, error)

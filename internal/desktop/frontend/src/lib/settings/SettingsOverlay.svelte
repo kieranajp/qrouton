@@ -31,8 +31,8 @@
   <Settings {panel} />
   {#snippet footer()}
     {#if panel.restartRequired}
-      <span class="restart"><Icon name="refresh" />Quit qrouton to use the new sessions root and thoughts folders</span>
-      <Button variant="cube" onclick={panel.quitAndRelaunch}>Quit qrouton</Button>
+      <span class="restart"><Icon name="refresh" />Saved. Quit and restart to use the new folders.</span>
+      <Button variant="cube" onclick={panel.relaunch}>Quit and restart</Button>
     {/if}
   {/snippet}
 </Dialog>

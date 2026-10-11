@@ -122,7 +122,6 @@ const (
 	settingsFieldRoot     = "root"
 	settingsFieldEditor   = "editor"
 	settingsFieldLaunch   = "launch"
-	settingsFieldLinear   = "linear"
 	settingsFieldStickers = "stickers"
 	settingsFieldUIScale  = "uiScale"
 	settingsFieldThoughts = "thoughts"

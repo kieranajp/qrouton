@@ -7,6 +7,8 @@ const (
 
 	// issueTemplate is the placeholder Linear substitutes the issue for.
 	issueTemplate = "{{issue.identifier}}"
+
+	openIssueKey = "openIssue"
 )
 
 const (

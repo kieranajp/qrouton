@@ -78,7 +78,6 @@ test("sticker meanings load and save together without asking for a restart", asy
       root: "/sessions",
       editor: "",
       launch: "",
-      linear: "",
       stickers: [
         { id: "star", colour: "blue", symbol: "star", label: "Priority" },
         { id: "bookmark", colour: "green", symbol: "bookmark", label: "Read after launch" },
@@ -96,7 +95,7 @@ test("sticker meanings load and save together without asking for a restart", asy
       },
     },
   ]);
-  await expect(page.getByText("Quit qrouton to use the new sessions root and thoughts folders")).toHaveCount(0);
+  await expect(page.getByText("Saved. Quit and restart to use the new folders.")).toHaveCount(0);
 });
 
 test("a refused field switches to its tab, marks it, and keeps the panel open", async ({ page }) => {
@@ -115,14 +114,14 @@ test("a refused field switches to its tab, marks it, and keeps the panel open", 
 
 test("the restart footer appears only after a save that needs a restart", async ({ page }) => {
   await page.goto("/tests/settings.html?restart=1");
-  const footer = page.getByText("Quit qrouton to use the new sessions root and thoughts folders");
+  const footer = page.getByText("Saved. Quit and restart to use the new folders.");
   await open(page, "Folders");
   await expect(footer).toHaveCount(0);
   await open(page, "General");
   await save(page);
   await expect(footer).toBeVisible();
-  await page.getByRole("button", { name: "Quit qrouton" }).click();
-  await expect.poll(() => page.evaluate(() => window.settingsFixture.calls())).toContain("Quit");
+  await page.getByRole("button", { name: "Quit and restart" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.calls())).toContain("Relaunch");
 });
 
 test("an editor preset fills the field and shows as chosen", async ({ page }) => {
@@ -285,7 +284,7 @@ test("Advanced lists every runner id the launch overrides accept", async ({ page
   await open(page, "Advanced");
   await expect(page.locator(".legend .term")).toHaveText(["claude", "codex", "opencode", "agy"]);
   await expect(page.getByRole("textbox", { name: "Launch overrides" })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Linear custom script" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Linear custom script" })).toHaveCount(0);
 });
 
 const stickerRows = (page) => page.getByRole("list", { name: "Session stickers" }).getByRole("listitem");
@@ -398,4 +397,37 @@ test("a missing shared folder is flagged until its path is edited", async ({ pag
   await expect(shared(page).locator(".cell.path").nth(1)).toContainText("· missing");
   await shared(page).getByRole("textbox", { name: "Shared folder path" }).nth(1).fill("/sync/club-now");
   await expect(flags).toHaveCount(0);
+});
+
+const calls = (page) => page.evaluate(() => window.settingsFixture.calls());
+
+test("Install Linear integration runs at once and Save carries no Linear text", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await expect(page.getByLabel("Linear entry", { exact: true })).toContainText("{{issue.identifier}}");
+  await page.getByRole("button", { name: "Install Linear integration" }).click();
+  await expect(page.getByText("Installed in ~/.linear/coding-tools.json")).toBeVisible();
+  expect(await calls(page)).toContain("InstallLinear");
+  await page.getByRole("button", { name: "Copy the Linear entry" }).click();
+  await expect.poll(() => page.evaluate(() => window.clipboardText)).toContain('"openIssue"');
+  await save(page);
+  await expect.poll(async () => (await saves(page)).length).toBe(1);
+  expect(Object.keys((await saves(page))[0])).not.toContain("linear");
+});
+
+test("Install says it replaces an openIssue entry that is already there", async ({ page }) => {
+  await page.goto("/tests/settings.html?linear=replaces");
+  await open(page, "Advanced");
+  await expect(
+    page.getByRole("button", { name: "Install Linear integration, replacing the current entry" }),
+  ).toBeVisible();
+  await expect(page.getByText("already has a different openIssue entry")).toBeVisible();
+});
+
+test("Open config.json asks the workbench to open the file", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await expect(page.getByText("Opens in your default text editor. Every setting lives here.")).toBeVisible();
+  await page.getByRole("button", { name: "Open config.json" }).click();
+  await expect.poll(() => calls(page)).toContain("OpenConfig");
 });
