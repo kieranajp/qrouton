@@ -26,6 +26,7 @@ type agentRecord struct {
 	Provider    string
 	ParentID    string
 	Type        string
+	TaskName    string
 	Description string
 	State       string
 	ParentKnown bool
@@ -187,7 +188,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		}
 		a.records[key] = &agentRecord{
 			ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-			ParentID: parentID, Type: event.Type, State: agentLive, ParentKnown: true,
+			ParentID: parentID, Type: event.Type, TaskName: event.TaskName, State: agentLive, ParentKnown: true,
 			Generation: event.Generation, StartedAt: started,
 		}
 	case workbench.LifecycleStop:

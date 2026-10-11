@@ -130,8 +130,7 @@ type AgentSummary struct {
 type AgentTree struct {
 	Provider      string `json:"provider"`
 	ProviderLabel string `json:"providerLabel"`
-	// Coverage says what the runner cannot report, and is empty when it reports
-	// the whole tree.
+	// Coverage is an optional note about what the runner can report.
 	Coverage string `json:"coverage"`
 	// Tools means the runner reports its tool calls, so an agent between
 	// them can be told apart from one at work.
@@ -149,6 +148,7 @@ type AgentNode struct {
 	// Stage is the R, P or I a lead works on, and empty for any other agent.
 	Stage       string `json:"stage"`
 	Description string `json:"description"`
+	TaskName    string `json:"taskName,omitempty"`
 	State       string `json:"state"`
 	// Reason is the harness's own words for a needs-you or failed state.
 	Reason      string    `json:"reason"`

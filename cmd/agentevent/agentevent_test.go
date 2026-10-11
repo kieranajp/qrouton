@@ -7,6 +7,7 @@ package agentevent
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"net"
 	"os"
@@ -191,5 +192,39 @@ func await(t *testing.T, requests chan workbench.Request) workbench.Request {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no request reached the control socket")
 		return workbench.Request{}
+	}
+}
+
+func TestCodexLifecycleDeliversOnlyVerifiedChildNames(t *testing.T) {
+	root := t.TempDir()
+	child := filepath.Join(root, "child.jsonl")
+	parent := filepath.Join(root, "parent.jsonl")
+	for path, id := range map[string]string{child: "agent_017c", parent: "lead_012"} {
+		body, _ := json.Marshal(map[string]any{"type": "session_meta", "payload": map[string]string{"id": id, "agent_path": "/root/" + id}})
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct{ provider, hook, transcript, want string }{
+		{"codex", "SubagentStart", child, "/root/agent_017c"},
+		{"codex", "SubagentStart", parent, ""},
+		{"codex", "SubagentStop", child, ""},
+		{"opencode", "SubagentStart", child, ""},
+	} {
+		t.Run(tc.provider+tc.hook+tc.want, func(t *testing.T) {
+			socket, requests := controlSocket(t)
+			payload, _ := json.Marshal(map[string]string{"session_id": "lead_012", "hook_event_name": tc.hook, "agent_id": "agent_017c", "agent_type": "code-reviewer", "transcript_path": tc.transcript, "task_name": "/root/unverified"})
+			if err := runEvent(t, tc.provider, handleFor(socket, root), string(payload)); err != nil {
+				t.Fatal(err)
+			}
+			req := await(t, requests)
+			if req.Lifecycle == nil || req.Lifecycle.TaskName != tc.want || req.Lifecycle.ID != "agent_017c" || req.AgentEvent != nil {
+				t.Fatalf("request = %+v", req)
+			}
+			wire, _ := json.Marshal(req)
+			if bytes.Contains(wire, []byte(root)) || bytes.Contains(wire, []byte("session_meta")) {
+				t.Fatal("metadata path or record escaped into lifecycle request")
+			}
+		})
 	}
 }

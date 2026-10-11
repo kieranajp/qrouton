@@ -81,8 +81,43 @@ const opencode = {
   tools: false,
   nodes: [node("root", "", { root: true, state: "working" })],
 };
+const codex = {
+  provider: "codex",
+  providerLabel: "Codex",
+  coverage: "",
+  tools: false,
+  nodes: [
+    node("codex-root", "", { root: true, state: "waiting_agents" }),
+    node("codex-direct-a", "codex-root", {
+      type: "codebase-researcher", taskName: "/root/review_security", started: "2026-09-01T12:01:00Z",
+    }),
+    node("codex-direct-b", "codex-root", {
+      type: "codebase-researcher",
+      taskName: "/root/a_very_long_assigned_name_for_security_research_that_should_truncate_in_the_row",
+      started: "2026-09-01T12:02:00Z",
+    }),
+    node("codex-direct-unnamed", "codex-root", {
+      type: "codebase-researcher", started: "2026-09-01T12:03:00Z",
+    }),
+    node("codex-direct-finished", "codex-root", {
+      type: "codebase-researcher", taskName: "/root/finished_research", started: "2026-09-01T12:04:00Z",
+      ...done("2026-09-01T12:05:00Z"),
+    }),
+    node("codex-parent", "codex-direct-a", { type: "implementer", taskName: "/root/review_security/child_work" }),
+    node("codex-nested-named", "codex-parent", {
+      type: "code-reviewer", taskName: "/root/review_security/child_work/check_authentication_and_authorization_for_every_privileged_request_and_token_refresh_case", started: "2026-09-01T12:06:00Z",
+    }),
+    node("codex-nested-unnamed", "codex-parent", {
+      type: "code-reviewer", started: "2026-09-01T12:07:00Z",
+    }),
+    node("codex-nested-finished", "codex-parent", {
+      type: "code-reviewer", taskName: "/root/review_security/child_work/write_tests", started: "2026-09-01T12:08:00Z",
+      ...done("2026-09-01T12:09:00Z"),
+    }),
+  ],
+};
 
-const trees = { default: session, opencode };
+const trees = { default: session, opencode, codex };
 const params = new URLSearchParams(location.search);
 const tree = trees[params.get("tree") ?? "default"];
 if (params.has("longdoing")) {

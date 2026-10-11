@@ -17,6 +17,7 @@
   let chosen = $state();
   let open = $derived(chosen ?? !finished);
   let name = $derived(stageName(node.stage) || agentName(node));
+  let taskName = $derived(node.taskName || "");
   let stage = $derived(stageTone(node.stage));
   let tone = $derived(stage ? workflowTone(stage) : `var(${stateTone(node.state)})`);
   let document = $derived(node.documents?.at(-1));
@@ -24,16 +25,17 @@
   let doing = $derived(nowLine(node, root) || stateWords(node, tools));
 </script>
 
-<div class="lead" class:live={!finished}>
+<div class="lead" class:live={!finished} data-agent-id={node.id}>
   <div class="row">
     <button
       type="button"
       class="toggle"
-      aria-label="{name} · {finished ? stateWords(node, tools) : doing}"
+      aria-label="{name}{taskName ? ` · ${taskName}` : ""} · {finished ? stateWords(node, tools) : doing}"
       aria-expanded={open}
       onclick={() => (chosen = !open)}>
       <StageSquare {tone} done={finished && node.state !== "failed" && node.state !== "ended"} live={!finished} />
       <span class="name">{name}</span>
+      {#if taskName}<span class="task-name" title={taskName}>· {taskName}</span>{/if}
       {#if !finished}<span class="doing">{doing}</span>{/if}
     </button>
     {#if document}
@@ -95,6 +97,15 @@
     flex: none;
     font: var(--machine-sm);
     color: var(--text-secondary);
+  }
+
+  .task-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
   }
 
   .live .name {
