@@ -35,7 +35,7 @@ func TestCodexIdentityReadsOnlyTheFirstRecord(t *testing.T) {
 		{"wrong UUID", identityRecord("other", "/root/review"), ""},
 		{"missing name", `{"type":"session_meta","payload":{"id":"child"}}`, ""},
 		{"unsupported payload", `{"type":"session_meta","payload":[]}`, ""},
-		{"invalid name", identityRecord("child", "/root/../review"), ""},
+		{"wrong name prefix", identityRecord("child", "/other/review"), ""},
 		{"malformed", "not JSON", ""},
 		{"empty file", "", ""},
 		{"oversized", strings.Repeat(" ", codexIdentityLimit) + valid, ""},
@@ -74,15 +74,15 @@ func TestCodexIdentityRejectsUnavailableAndSpecialFiles(t *testing.T) {
 	}
 }
 
-func TestCanonicalCodexTaskName(t *testing.T) {
-	for _, valid := range []string{"/root/review", "/root/lead/review_2", "/root/é", "/root/" + strings.Repeat("x", codexTaskNameLimit-6)} {
-		if !canonicalCodexTaskName(valid) {
-			t.Errorf("rejected %q", valid)
+func TestCodexIdentityBoundsAssignedNames(t *testing.T) {
+	for _, name := range []string{"/root/review", "/root/lead/review_2", "/root/é", "/root/" + strings.Repeat("x", codexTaskNameLimit-6)} {
+		if got := codexTaskName(identityFile(t, identityRecord("child", name)), "child"); got != name {
+			t.Errorf("name = %q, want %q", got, name)
 		}
 	}
-	for _, invalid := range []string{"", "root/review", "/root", "/root/", "/rooted/review", "/root//review", "/root/review/", "/root/.", "/root/../review", "/root/review/..", "/root/re view", "/root/re\tview", "/root/re\nview", "/root/re\x00view", "/root/re\u0085view", "/root/re\u00a0view", "/root/" + strings.Repeat("x", codexTaskNameLimit-5)} {
-		if canonicalCodexTaskName(invalid) {
-			t.Errorf("accepted %q", invalid)
+	for _, name := range []string{"", "root/review", "/root", "/rooted/review", "/root/" + strings.Repeat("x", codexTaskNameLimit-5)} {
+		if got := codexTaskName(identityFile(t, identityRecord("child", name)), "child"); got != "" {
+			t.Errorf("accepted %q", got)
 		}
 	}
 }

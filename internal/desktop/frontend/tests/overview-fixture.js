@@ -117,12 +117,7 @@ const codex = {
   ],
 };
 
-const enriched = {
-  ...codex,
-  nodes: codex.nodes.map((entry) => entry.id === "codex-direct-unnamed" ? { ...entry, taskName: "/root/late_name" } : entry),
-};
-
-const trees = { default: session, opencode, codex, enriched };
+const trees = { default: session, opencode, codex };
 const params = new URLSearchParams(location.search);
 const tree = trees[params.get("tree") ?? "default"];
 if (params.has("longdoing")) {

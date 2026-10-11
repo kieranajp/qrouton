@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -264,7 +266,7 @@ func TestCodexIdentityArrivesOverLifecycleSocketAndProjectsToTree(t *testing.T) 
 			t.Fatal(err)
 		}
 		for _, hook := range []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop} {
-			payload, _ := json.Marshal(map[string]string{"session_id": tc.parent, "hook_event_name": hook, "agent_id": tc.id, "agent_type": "codebase-researcher", "transcript_path": path, "agent_transcript_path": path})
+			payload, _ := json.Marshal(map[string]string{"session_id": tc.parent, "hook_event_name": hook, "agent_id": tc.id, "agent_type": "codebase-researcher", "transcript_path": path})
 			event, _, err := agentevent.Record(agentProviderCodex, bytes.NewReader(payload))
 			if err != nil {
 				t.Fatal(err)
@@ -312,7 +314,7 @@ func TestCoverageRemovalIsLimitedToCodex(t *testing.T) {
 			t.Fatalf("%s coverage = %q", provider, note)
 		}
 	}
-	if note := coverageNote(agentProviderOpenCode, capabilitiesFor(agentProviderOpenCode)); note != "OpenCode reports the root agent only, so working and idle come from its terminal." {
+	if note := coverageNote(agentProviderOpenCode, capabilitiesFor(agentProviderOpenCode)); note != fmt.Sprintf(agentCoverageRootOnly, launch.RunnerLabel(agentProviderOpenCode)) {
 		t.Fatalf("OpenCode coverage = %q", note)
 	}
 	if note := coverageNote("other", agentCapabilities{Children: true}); !strings.Contains(note, "reports its agents starting and stopping") {

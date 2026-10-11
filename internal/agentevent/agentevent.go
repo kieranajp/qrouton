@@ -23,8 +23,7 @@ type Event struct {
 func Record(provider string, input io.Reader) (Event, string, error) {
 	var hook struct {
 		Event
-		TranscriptPath      string `json:"transcript_path"`
-		AgentTranscriptPath string `json:"agent_transcript_path"`
+		TranscriptPath string `json:"transcript_path"`
 	}
 	if err := json.NewDecoder(input).Decode(&hook); err != nil {
 		return Event{}, "", err
@@ -37,12 +36,8 @@ func Record(provider string, input io.Reader) (Event, string, error) {
 	if event.AgentID == "" || (event.HookEventName != HookSubagentStart && event.HookEventName != HookSubagentStop) {
 		return event, event.HookEventName, nil
 	}
-	if provider == providerCodex {
-		path := hook.TranscriptPath
-		if event.HookEventName == HookSubagentStop {
-			path = hook.AgentTranscriptPath
-		}
-		event.TaskName = codexTaskName(path, event.AgentID)
+	if provider == providerCodex && event.HookEventName == HookSubagentStart {
+		event.TaskName = codexTaskName(hook.TranscriptPath, event.AgentID)
 	}
 	event.Timestamp = time.Now().UTC().Format(time.RFC3339Nano)
 	return event, event.HookEventName, nil

@@ -205,16 +205,15 @@ func TestCodexLifecycleDeliversOnlyVerifiedChildNames(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	for _, tc := range []struct{ provider, hook, transcript, agentTranscript, want string }{
-		{"codex", "SubagentStart", child, "", "/root/agent_017c"},
-		{"codex", "SubagentStart", parent, "", ""},
-		{"codex", "SubagentStop", parent, child, "/root/agent_017c"},
-		{"codex", "SubagentStop", child, "", ""},
-		{"opencode", "SubagentStart", child, "", ""},
+	for _, tc := range []struct{ provider, hook, transcript, want string }{
+		{"codex", "SubagentStart", child, "/root/agent_017c"},
+		{"codex", "SubagentStart", parent, ""},
+		{"codex", "SubagentStop", child, ""},
+		{"opencode", "SubagentStart", child, ""},
 	} {
-		t.Run(tc.provider+tc.hook+tc.want+tc.agentTranscript, func(t *testing.T) {
+		t.Run(tc.provider+tc.hook+tc.want, func(t *testing.T) {
 			socket, requests := controlSocket(t)
-			payload, _ := json.Marshal(map[string]string{"session_id": "lead_012", "hook_event_name": tc.hook, "agent_id": "agent_017c", "agent_type": "code-reviewer", "transcript_path": tc.transcript, "agent_transcript_path": tc.agentTranscript, "task_name": "/root/unverified"})
+			payload, _ := json.Marshal(map[string]string{"session_id": "lead_012", "hook_event_name": tc.hook, "agent_id": "agent_017c", "agent_type": "code-reviewer", "transcript_path": tc.transcript, "task_name": "/root/unverified"})
 			if err := runEvent(t, tc.provider, handleFor(socket, root), string(payload)); err != nil {
 				t.Fatal(err)
 			}

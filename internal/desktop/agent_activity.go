@@ -173,12 +173,6 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	now := a.now()
 	key := a.keyLocked(event.ID, false)
 	record := a.records[key]
-	enriched := false
-	if record != nil && record.TaskName == "" && event.TaskName != "" &&
-		(event.Kind == workbench.LifecycleStart || event.Kind == workbench.LifecycleStop) {
-		record.TaskName = event.TaskName
-		enriched = true
-	}
 	parentID := agentRootID
 	if event.ParentID != "" && a.records[a.keyLocked(event.ParentID, false)] != nil {
 		parentID = event.ParentID
@@ -186,7 +180,7 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 	switch event.Kind {
 	case workbench.LifecycleStart:
 		if record != nil {
-			return enriched
+			return false
 		}
 		started := event.Timestamp
 		if started.IsZero() {
@@ -201,13 +195,13 @@ func (a *agentActivity) lifecycle(event workbench.DelegatedLifecycleRequest) boo
 		if record == nil {
 			a.records[key] = &agentRecord{
 				ID: event.ID, RunID: a.lastRun, Provider: event.Provider,
-				ParentID: parentID, Type: event.Type, TaskName: event.TaskName, State: agentStateDone, ParentKnown: true,
+				ParentID: parentID, Type: event.Type, State: agentStateDone, ParentKnown: true,
 				Generation: event.Generation, FinishedAt: now,
 			}
 			break
 		}
 		if record.State != agentLive {
-			return enriched
+			return false
 		}
 		record.State = agentStateDone
 		record.FinishedAt = now

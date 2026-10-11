@@ -128,14 +128,6 @@ test("nested names stay with their UUIDs, including finished rows", async ({ pag
   );
 });
 
-test("a pushed name enrichment updates the matching row", async ({ page }) => {
-  await open(page, "?tree=codex");
-  const row = page.locator('[data-agent-id="codex-direct-unnamed"] .toggle');
-  await expect(row).toHaveAttribute("aria-label", "Codebase Researcher · working");
-  await page.evaluate(() => window.pushTree("enriched"));
-  await expect(row).toHaveAttribute("aria-label", "Codebase Researcher · /root/late_name · working");
-});
-
 test("a lead's square fills once done and rings while live", async ({ page }) => {
   await open(page);
   const square = (name) =>
