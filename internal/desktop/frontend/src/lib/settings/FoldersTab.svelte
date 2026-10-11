@@ -59,7 +59,14 @@
         placeholder="name"
         bind:value={row.id}
         readonly={row.saved} />
-      <input class="cell path" aria-label="Shared folder path" placeholder="~/Sync/thoughts" bind:value={row.path} />
+      <span class="cell path" class:missing={row.missing}>
+        <input
+          aria-label="Shared folder path"
+          placeholder="~/Sync/thoughts"
+          bind:value={row.path}
+          oninput={() => (row.missing = false)} />
+        {#if row.missing}<span class="flag">· missing</span>{/if}
+      </span>
       <input class="cell orgs" aria-label="Shared folder orgs" placeholder="org, other-org" bind:value={row.orgs} />
       <button
         type="button"
@@ -151,6 +158,46 @@
     font: var(--literal);
     color: var(--text-secondary);
     caret-color: var(--caret);
+  }
+
+  .cell.path {
+    display: flex;
+    align-items: baseline;
+    gap: calc(6px * var(--ui-scale));
+  }
+
+  .cell.path input {
+    flex: 1;
+    min-width: 0;
+    border: 0;
+    outline: none;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    caret-color: var(--caret);
+  }
+
+  .cell.path input::placeholder {
+    color: var(--text-faint);
+  }
+
+  .cell.path.missing {
+    color: var(--state-failed);
+  }
+
+  .flag {
+    flex: none;
+    font: var(--machine-xs);
+  }
+
+  .cell.path:hover {
+    background: var(--wash-selected);
+  }
+
+  .cell.path:focus-within {
+    background: var(--surface-chrome);
+    box-shadow: inset 0 calc(-1px * var(--ui-scale)) 0 var(--accent-action);
   }
 
   .cell.name {

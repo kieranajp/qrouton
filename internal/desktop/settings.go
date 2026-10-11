@@ -1,11 +1,14 @@
 package desktop
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
 	"path/filepath"
 	"slices"
@@ -14,6 +17,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -59,11 +63,21 @@ type ThoughtsInput struct {
 	Roots   []ThoughtsRow `json:"roots"`
 }
 
-// ThoughtsRow carries a shared folder's orgs as the comma-separated text the panel edits.
+// ThoughtsRow carries a shared folder's orgs as the comma-separated text the
+// panel edits. Missing reports on Load only, and Save ignores it.
 type ThoughtsRow struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
-	Orgs string `json:"orgs"`
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Orgs    string `json:"orgs"`
+	Missing bool   `json:"missing,omitempty"`
+}
+
+// GitHubStatus is the credential the app would use. Login names the account
+// when one is signed in and GitHub answered; Variable names the env fallback.
+type GitHubStatus struct {
+	State    github.Credential `json:"state"`
+	Login    string            `json:"login"`
+	Variable string            `json:"variable"`
 }
 
 type SettingsInput struct {
@@ -93,6 +107,7 @@ type Settings struct {
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
 	runners        func() ([]assembly.Runner, error)
+	login          func(ctx context.Context, token string) (string, error)
 	linear         lineartools.Tools
 }
 
@@ -100,7 +115,10 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
 	reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error)) *Settings {
 	return &Settings{
-		runners:        runners,
+		runners: runners,
+		login: func(ctx context.Context, token string) (string, error) {
+			return github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
+		},
 		reconfigure:    reconfigure,
 		cfg:            cfg,
 		emit:           emit,
@@ -171,7 +189,10 @@ func thoughtsView(thoughts config.Thoughts, root string) ThoughtsView {
 		Roots:   []ThoughtsRow{},
 	}
 	for _, r := range thoughts.Roots {
-		view.Roots = append(view.Roots, ThoughtsRow{ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin)})
+		_, err := os.Stat(config.ExpandHome(r.Path))
+		view.Roots = append(view.Roots, ThoughtsRow{
+			ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin), Missing: errors.Is(err, fs.ErrNotExist),
+		})
 	}
 	return view
 }
@@ -378,6 +399,23 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 		return 0, err
 	}
 	return scale, nil
+}
+
+// GitHubStatus checks the credential each time it is asked, so Check again sees
+// a gh install or sign-in that happened since.
+func (s *Settings) GitHubStatus() GitHubStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
+	defer cancel()
+	status := GitHubStatus{State: github.CredentialSource(ctx), Variable: github.TokenEnvVar()}
+	if status.State != github.CredentialCLI && status.State != github.CredentialEnv {
+		return status
+	}
+	token, err := github.TokenContext(ctx)
+	if err != nil || s.login == nil {
+		return status
+	}
+	status.Login, _ = s.login(ctx, token)
+	return status
 }
 
 // Quit tears down every session supervisor and PTY before exiting.

@@ -26,6 +26,8 @@ export function settings(onClose) {
     runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
   let tab = $state("general");
+  let github = $state(/** @type {{state: string, login: string, variable: string} | null} */ (null));
+  let checkingGitHub = $state(false);
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
   let fields = $state(/** @type {Record<string, string>} */ ({}));
@@ -113,6 +115,14 @@ export function settings(onClose) {
     if (outcome.close) onClose();
   }
 
+  async function checkGitHub() {
+    if (checkingGitHub) return;
+    checkingGitHub = true;
+    const answer = await call(go.gitHubStatus());
+    checkingGitHub = false;
+    if (answer.ok) github = answer.value ?? null;
+  }
+
   function clearStickerErrors() {
     fields = Object.fromEntries(Object.entries(fields).filter(([field]) => !field.startsWith("stickers.")));
   }
@@ -128,6 +138,12 @@ export function settings(onClose) {
 
   return {
     form,
+    get github() {
+      return github;
+    },
+    get checkingGitHub() {
+      return checkingGitHub;
+    },
     get tab() {
       return tab;
     },
@@ -162,6 +178,7 @@ export function settings(onClose) {
     save,
     cancel,
     clearStickerErrors,
+    checkGitHub,
     quitAndRelaunch,
   };
 }

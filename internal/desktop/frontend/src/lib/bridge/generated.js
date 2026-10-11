@@ -43,6 +43,7 @@ export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/deskt
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
+export const SETTINGS_GIT_HUB_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Settings.GitHubStatus";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
 export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
@@ -159,6 +160,14 @@ export const DRAFT_FIELDS = Object.freeze({
   BRANCH_DESCRIPTION: "branchDescription",
   TICKET: "ticket",
   REPOS: "repos",
+});
+
+/** @typedef {"cli"|"env"|"missing"|"signed-out"} GitHubCredential */
+export const GITHUB_CREDENTIALS = Object.freeze({
+  CLI: "cli",
+  ENV: "env",
+  MISSING: "missing",
+  SIGNED_OUT: "signed-out",
 });
 
 /** @typedef {"image"|"video"} MediaKind */

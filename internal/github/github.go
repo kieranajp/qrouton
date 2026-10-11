@@ -240,6 +240,34 @@ func TokenContext(ctx context.Context) (string, error) {
 	return "", ErrNoToken
 }
 
+// Credential says where the token Token would use comes from, or why there is none.
+type Credential string
+
+const (
+	CredentialCLI       Credential = "cli"
+	CredentialEnv       Credential = "env"
+	CredentialMissing   Credential = "missing"
+	CredentialSignedOut Credential = "signed-out"
+)
+
+// CredentialSource checks in the order TokenContext reads: the GitHub CLI, then
+// the environment, and only then whether gh is on PATH at all.
+func CredentialSource(ctx context.Context) Credential {
+	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil && strings.TrimSpace(string(out)) != "" {
+		return CredentialCLI
+	}
+	if os.Getenv(tokenEnvVar) != "" {
+		return CredentialEnv
+	}
+	if _, err := exec.LookPath(ghBin); err != nil {
+		return CredentialMissing
+	}
+	return CredentialSignedOut
+}
+
+// TokenEnvVar names the environment variable Token falls back to.
+func TokenEnvVar() string { return tokenEnvVar }
+
 // AuthenticatedLogin is the account the token belongs to, which is how a screen
 // naming the signed-in user says whose repositories it can see.
 func AuthenticatedLogin(ctx context.Context, client *http.Client, token string) (string, error) {

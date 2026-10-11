@@ -1,4 +1,10 @@
-import { SETTINGS_ADJUST_UI_SCALE, SETTINGS_LOAD, SETTINGS_QUIT, SETTINGS_SAVE } from "../bridge/generated.js";
+import {
+  SETTINGS_ADJUST_UI_SCALE,
+  SETTINGS_GIT_HUB_STATUS,
+  SETTINGS_LOAD,
+  SETTINGS_QUIT,
+  SETTINGS_SAVE,
+} from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
 
@@ -30,6 +36,9 @@ export const load = () => Call.ByName(SETTINGS_LOAD);
 export const save = (input) => Call.ByName(SETTINGS_SAVE, input);
 
 export const quit = () => Call.ByName(SETTINGS_QUIT);
+
+/** @returns {Promise<{state: import("../bridge/generated.js").GitHubCredential, login: string, variable: string}>} */
+export const gitHubStatus = () => Call.ByName(SETTINGS_GIT_HUB_STATUS);
 
 /**
  * @param {import("../bridge/generated.js").UIScaleAction} action

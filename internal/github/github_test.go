@@ -511,3 +511,36 @@ func TestTokenFallsBackToTheEnvironmentWhenGhCannotAnswer(t *testing.T) {
 		t.Fatalf("Token() = %q, %v; want %v", got, err, ErrNoToken)
 	}
 }
+
+func fakeGH(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if script != "" {
+		if err := os.WriteFile(filepath.Join(dir, ghBin), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestCredentialSourceFollowsTheOrderTokenReads(t *testing.T) {
+	cases := []struct {
+		name, script, env string
+		want              Credential
+	}{
+		{"cli answers", "echo gho_cli", "env-token", CredentialCLI},
+		{"cli signed out, env token", "exit 1", "env-token", CredentialEnv},
+		{"no gh, env token", "", "env-token", CredentialEnv},
+		{"no gh, no token", "", "", CredentialMissing},
+		{"gh signed out, no token", "exit 1", "", CredentialSignedOut},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGH(t, tc.script)
+			t.Setenv(tokenEnvVar, tc.env)
+			if got := CredentialSource(context.Background()); got != tc.want {
+				t.Fatalf("CredentialSource() = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

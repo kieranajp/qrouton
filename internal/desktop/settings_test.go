@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
@@ -1063,7 +1065,7 @@ func TestSettingsLoadAnswersTheThoughtsFoldersAndTheDerivedDefault(t *testing.T)
 	}}}
 	writeConfigFile(t, cfg)
 	got := testSettings(t, cfg, nil, nil, nil).Load().Thoughts
-	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs"}}}
+	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs", Missing: true}}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("thoughts = %+v, want %+v", got, want)
 	}
@@ -1392,5 +1394,59 @@ func TestSessionThoughtsRefusesAFolderWithNoIndexInsideAWiderOne(t *testing.T) {
 	}
 	if _, err := sessionThoughts(set, roots, sessionDir); !errors.Is(err, ErrNoThoughtsRoot) {
 		t.Fatalf("sessionThoughts = %v, want %v", err, ErrNoThoughtsRoot)
+	}
+}
+
+func fakeGitHubCLI(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if script != "" {
+		if err := os.WriteFile(filepath.Join(dir, "gh"), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestSettingsGitHubStatusReportsEachCredentialStateAndTheLogin(t *testing.T) {
+	cases := []struct {
+		name, script, env string
+		want              GitHubStatus
+	}{
+		{"cli", "echo gho_cli", "", GitHubStatus{State: github.CredentialCLI, Login: "gho_cli-user", Variable: "GITHUB_TOKEN"}},
+		{"env", "exit 1", "ghp_env", GitHubStatus{State: github.CredentialEnv, Login: "ghp_env-user", Variable: "GITHUB_TOKEN"}},
+		{"missing", "", "", GitHubStatus{State: github.CredentialMissing, Variable: "GITHUB_TOKEN"}},
+		{"signed out", "exit 1", "", GitHubStatus{State: github.CredentialSignedOut, Variable: "GITHUB_TOKEN"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGitHubCLI(t, tc.script)
+			t.Setenv("GITHUB_TOKEN", tc.env)
+			s := testSettings(t, &config.Config{}, nil, nil, nil)
+			asked := 0
+			s.login = func(_ context.Context, token string) (string, error) {
+				asked++
+				return token + "-user", nil
+			}
+			if got := s.GitHubStatus(); got != tc.want {
+				t.Fatalf("GitHubStatus() = %+v, want %+v", got, tc.want)
+			}
+			if signedIn := tc.want.Login != ""; signedIn != (asked == 1) {
+				t.Fatalf("login asked %d times for %s", asked, tc.name)
+			}
+		})
+	}
+}
+
+func TestSettingsLoadFlagsASharedFolderMissingOnDisk(t *testing.T) {
+	present := t.TempDir()
+	cfg := &config.Config{Root: t.TempDir(), Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
+		{ID: "here", Path: present, Orgs: []string{"acme"}},
+		{ID: "gone", Path: filepath.Join(present, "not-synced-yet"), Orgs: []string{"club"}},
+	}}}
+	writeConfigFile(t, cfg)
+	roots := testSettings(t, cfg, nil, nil, nil).Load().Thoughts.Roots
+	if roots[0].Missing || !roots[1].Missing {
+		t.Fatalf("missing flags = %v, %v", roots[0].Missing, roots[1].Missing)
 	}
 }

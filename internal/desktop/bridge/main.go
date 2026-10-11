@@ -58,6 +58,7 @@ var valueSets = []valueSet{
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
+	{name: "GITHUB_CREDENTIALS", typedef: "GitHubCredential", dir: githubPackage, goType: "Credential", prefix: "Credential"},
 	{name: "MEDIA_KINDS", typedef: "MediaKind", dir: workbenchPackage, goType: "MediaKind", prefix: "Media"},
 	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
 	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},

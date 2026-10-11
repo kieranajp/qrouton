@@ -1,19 +1,69 @@
 <script>
+  import { onMount } from "svelte";
+  import { GITHUB_CREDENTIALS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import { openURL } from "../wails.js";
+  import CommandRow from "./CommandRow.svelte";
   import { pinnedNote } from "./pinned.js";
+  import StatusLine from "./StatusLine.svelte";
   import TabHeader from "./TabHeader.svelte";
+
+  const CLI_URL = "https://cli.github.com";
 
   /** @type {{panel: ReturnType<typeof import("./settings.svelte.js").settings>, labelledby?: string}} */
   let { panel, labelledby } = $props();
 
   let form = $derived(panel.form);
   let help = $derived(panel.fields.orgs ?? (form.pinned.orgs ? pinnedNote("QROUTON_ORGS") : ""));
+  let gh = $derived(panel.github);
+
+  onMount(() => {
+    if (!panel.github) panel.checkGitHub();
+  });
 </script>
 
 <TabHeader title="GitHub" id={labelledby}>
   Orgs and personal accounts whose repositories appear in the picker.
 </TabHeader>
+
+{#if gh?.state === GITHUB_CREDENTIALS.CLI || gh?.state === GITHUB_CREDENTIALS.ENV}
+  <StatusLine tone="success">
+    {@const source = gh.state === GITHUB_CREDENTIALS.CLI ? "the GitHub CLI" : gh.variable}
+    {#if gh.login}Signed in as <span class="login">{gh.login}</span> via {source}{:else}Signed in via {source}{/if}
+  </StatusLine>
+{:else if gh?.state === GITHUB_CREDENTIALS.MISSING}
+  <StatusLine tone="faint" boxed>
+    The GitHub CLI isn't installed
+    {#snippet body()}
+      <p class="body">
+        qrouton lists your repos with the account gh is signed in to. Until it's installed, the repo picker can't
+        search these orgs. You can still add them now.
+      </p>
+      <div class="commands">
+        <CommandRow command="brew install gh" />
+        <CommandRow command="gh auth login" />
+      </div>
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="cube" disabled={panel.checkingGitHub} onclick={panel.checkGitHub}>Check again</Button>
+      <a href={CLI_URL} onclick={(event) => (event.preventDefault(), openURL(CLI_URL))}>cli.github.com</a>
+    {/snippet}
+  </StatusLine>
+{:else if gh?.state === GITHUB_CREDENTIALS.SIGNED_OUT}
+  <StatusLine tone="waiting" boxed>
+    The GitHub CLI isn't signed in
+    {#snippet body()}
+      <p class="body">gh is installed, but has no account. Sign in once in a terminal and qrouton uses the same account.</p>
+      <CommandRow command="gh auth login" />
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="cube" disabled={panel.checkingGitHub} onclick={panel.checkGitHub}>Check again</Button>
+    {/snippet}
+  </StatusLine>
+{:else}
+  <StatusLine>Checking the GitHub CLI…</StatusLine>
+{/if}
 
 <div class="orgs-field">
   <CapsLabel id="orgs-label">Orgs</CapsLabel>
@@ -39,6 +89,33 @@
 {/if}
 
 <style>
+  .login {
+    color: var(--text-primary);
+  }
+
+  .body {
+    margin: 0;
+    font: var(--machine-sm);
+    font-size: calc(11px * var(--ui-scale));
+    color: var(--text-muted);
+    text-wrap: pretty;
+  }
+
+  .commands {
+    display: flex;
+    flex-direction: column;
+  }
+
+  a {
+    font: var(--machine-xs);
+    color: var(--accent-action);
+    text-decoration: none;
+  }
+
+  a:hover {
+    color: var(--ctp-lavender);
+  }
+
   .orgs-field {
     display: flex;
     flex-direction: column;

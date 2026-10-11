@@ -348,3 +348,54 @@ test("an empty sticker list saves as empty", async ({ page }) => {
   await save(page);
   await expect.poll(() => savedStickers(page)).toEqual([[]]);
 });
+
+const gitHubChecks = async (page) =>
+  (await page.evaluate(() => window.settingsFixture.calls())).filter((call) => call === "GitHubStatus").length;
+
+test("GitHub status is checked when its tab first opens, not before", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await expect(tab(page, "General")).toHaveAttribute("aria-selected", "true");
+  expect(await gitHubChecks(page)).toBe(0);
+  await open(page, "GitHub");
+  await expect(page.getByText("Signed in as kieranajp via the GitHub CLI")).toBeVisible();
+  await open(page, "General");
+  await open(page, "GitHub");
+  expect(await gitHubChecks(page)).toBe(1);
+});
+
+test("an environment token names its variable", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=env");
+  await open(page, "GitHub");
+  await expect(page.getByText("Signed in as kieranajp via GITHUB_TOKEN")).toBeVisible();
+});
+
+test("a missing GitHub CLI offers the install commands, the site and Check again", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=missing");
+  await open(page, "GitHub");
+  await expect(page.getByText("The GitHub CLI isn't installed")).toBeVisible();
+  await page.getByRole("button", { name: "Copy brew install gh" }).click();
+  await expect.poll(() => page.evaluate(() => window.clipboardText)).toBe("brew install gh");
+  await expect(page.getByRole("button", { name: "Copy gh auth login" })).toBeVisible();
+  await page.getByRole("link", { name: "cli.github.com" }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://cli.github.com");
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect.poll(() => gitHubChecks(page)).toBe(2);
+});
+
+test("a signed-out GitHub CLI asks for gh auth login", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=signed-out");
+  await open(page, "GitHub");
+  await expect(page.getByText("The GitHub CLI isn't signed in")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy gh auth login" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy brew install gh" })).toHaveCount(0);
+});
+
+test("a missing shared folder is flagged until its path is edited", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Folders");
+  const flags = page.getByText("· missing");
+  await expect(flags).toHaveCount(1);
+  await expect(shared(page).locator(".cell.path").nth(1)).toContainText("· missing");
+  await shared(page).getByRole("textbox", { name: "Shared folder path" }).nth(1).fill("/sync/club-now");
+  await expect(flags).toHaveCount(0);
+});

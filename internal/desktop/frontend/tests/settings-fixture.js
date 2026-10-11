@@ -16,6 +16,7 @@ const ollama = {
   model: "nomic-embed-text",
   installed: params.get("installed") === "1",
 };
+const gh = params.get("gh") ?? "cli";
 const saves = [];
 const calls = [];
 
@@ -29,6 +30,8 @@ window.wailsCall = async (name, input) => {
   calls.push(name.split(".").pop());
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith("Ollama.Check")) return ollama;
+  if (name.endsWith(".GitHubStatus"))
+    return { state: gh, login: gh === "cli" || gh === "env" ? "kieranajp" : "", variable: "GITHUB_TOKEN" };
   if (name.endsWith(".Load"))
     return {
       orgs: ["acme"],
@@ -50,7 +53,7 @@ window.wailsCall = async (name, input) => {
         derived: "/sessions/thoughts",
         roots: [
           { id: "work", path: "/sync/work", orgs: "acme" },
-          { id: "club", path: "/sync/club", orgs: "club, club-labs" },
+          { id: "club", path: "/sync/club", orgs: "club, club-labs", missing: true },
         ],
       },
       pinned: { root: pinned.includes("root"), orgs: pinned.includes("orgs") },
