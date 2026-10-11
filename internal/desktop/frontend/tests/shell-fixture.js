@@ -54,6 +54,7 @@ window.overlapOwner = () => {
 
 window.shell = {
   chrome: (fields) => emitWailsEvent("chrome:update", { slug: "octopus", ...fields }),
+  agentTree: (tree) => emitWailsEvent("agents:tree:octopus", tree),
   windows: (selected, tabs) => {
     currentTabs = tabs;
     emitWailsEvent("window:open", { session: "octopus", selected, tabs });

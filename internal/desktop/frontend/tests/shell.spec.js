@@ -289,3 +289,31 @@ for (const scale of [1, 1.3, 1.5]) {
     else expect((await box(".human")).width).toBeLessThan(640 * scale);
   });
 }
+
+const agentNode = (id, parent, target) => ({
+  id, run: "1", parent, root: !parent, placed: true, type: parent ? "explorer" : "", description: "",
+  state: "working", reason: "", tool: "Bash", target, started: "2026-09-01T12:00:00Z",
+  finished: "0001-01-01T00:00:00Z", toolCount: 1, tokens: 0, lastMessage: "", files: [], tools: [],
+});
+const agentTree = (target) => ({
+  provider: "claude", providerLabel: "Claude Code", coverage: "",
+  nodes: [agentNode("root", "", target), agentNode("c1", "root", target)],
+});
+
+// A chrome update or a new tree changes the rows in place: rebuilding them is
+// a visible flicker on every refresh.
+test("the Agents pane keeps its rows through chrome and tree updates", async ({ page }) => {
+  await open(page, "window-1");
+  await page.evaluate((tree) => window.shell.agentTree(tree), agentTree("sleep 1"));
+  const row = page.getByRole("button", { name: /^Explorer/ });
+  await expect(row).toContainText("Bash sleep 1");
+  await row.evaluate((el) => (window.agentRow = el));
+
+  await page.evaluate(() =>
+    window.shell.chrome({ identity: "Octopus", mode: "RPI", terminal: "term-1", repos: [], activity: "working" }),
+  );
+  await page.evaluate((tree) => window.shell.agentTree(tree), agentTree("sleep 20"));
+  await expect(row).toContainText("Bash sleep 20");
+  expect(await row.evaluate((el) => el === window.agentRow)).toBe(true);
+  await expect(page.locator(".human .head")).toContainText("Bash sleep 20");
+});

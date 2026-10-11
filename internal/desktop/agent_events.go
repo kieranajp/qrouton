@@ -140,7 +140,7 @@ func (a *agentActivity) displayLocked(r *agentRecord, now time.Time) (state, rea
 		}
 		return agentStateWorking, "", call.Tool, call.Target
 	}
-	waiting := spawning || a.liveChildLocked(r)
+	waiting := spawning || r.held || a.liveChildLocked(r)
 	if r.Root && r.turnEnded {
 		if waiting || len(r.background) > 0 {
 			return agentStateWaitingAgents, "", "", ""
@@ -264,6 +264,9 @@ func (a *agentActivity) toolStartLocked(event workbench.AgentEventRequest, at ti
 		a.answeredLocked(caller, "", at)
 	}
 	reopenLocked(caller, at)
+	if caller.held && at.After(caller.heldAt) {
+		caller.held = false
+	}
 	answered := false
 	if event.ToolUseID != "" {
 		if _, seen := a.run.calls[event.ToolUseID]; seen {
@@ -375,14 +378,21 @@ func (a *agentActivity) subagentStopLocked(event workbench.AgentEventRequest, at
 	if record.spawn == "" {
 		a.matchLocked(record)
 	}
+	if event.Message != "" {
+		record.LastMessage = event.Message
+	}
+	// background_tasks lists the whole session's tasks, the stopping agent's
+	// own included, so only its live children in the tree hold it open.
+	if record.State == agentLive && a.liveChildLocked(record) {
+		record.held, record.heldAt = true, at
+		return true
+	}
+	record.held = false
 	if record.State == agentLive {
 		record.State = agentStateDone
 	}
 	if record.FinishedAt.IsZero() {
 		record.FinishedAt = at
-	}
-	if event.Message != "" {
-		record.LastMessage = event.Message
 	}
 	return true
 }

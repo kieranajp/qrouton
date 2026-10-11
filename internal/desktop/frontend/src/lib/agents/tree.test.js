@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildRuns, elapsed, stateTone, stateWords, tokenLabel, typeLabel } from "./tree.js";
+import { buildRuns, elapsed, stateTone, stateWords, tokenLabel, toolLine, typeLabel } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -97,4 +97,10 @@ test("labels", () => {
   assert.equal(tokenLabel(850), "850 tokens");
   assert.equal(tokenLabel(42191), "42.2k tokens");
   assert.equal(typeLabel("qrouton-planning-lead"), "Qrouton Planning Lead");
+});
+
+test("a tool and its target read as two words", () => {
+  assert.equal(toolLine({ tool: "Bash", target: "sleep 20" }), "Bash sleep 20");
+  assert.equal(toolLine({ tool: "Bash", target: "" }), "Bash");
+  assert.equal(toolLine({}), "");
 });

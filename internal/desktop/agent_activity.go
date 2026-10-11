@@ -55,6 +55,10 @@ type agentRecord struct {
 
 	// resumedAfter is when the activation this agent resumed from finished.
 	resumedAfter time.Time
+	// held is a stop that came while the agent's own children still ran: it
+	// waits on them until it acts again or stops with none left.
+	held   bool
+	heldAt time.Time
 
 	// needs is the root's: why the session waits on the user, which agent
 	// asked, and the ask call whose result clears it.

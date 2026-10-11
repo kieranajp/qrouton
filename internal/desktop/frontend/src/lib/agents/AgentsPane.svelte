@@ -2,7 +2,7 @@
   import { AGENT_TREE_EVENT, CHROME_AGENT_TREE } from "../bridge/generated.js";
   import { Call, Events, call } from "../wails.js";
   import AgentRow from "./AgentRow.svelte";
-  import { buildRuns, stateTone, stateWords } from "./tree.js";
+  import { buildRuns, stateTone, stateWords, toolLine } from "./tree.js";
 
   /** @type {{slug: string, active?: boolean}} */
   let { slug, active = false } = $props();
@@ -12,16 +12,20 @@
   let now = $state(Date.now());
   let showPrevious = $state(false);
 
+  // A derived compares by value, so a chrome update that keeps the slug does
+  // not reload the tree and rebuild every row.
+  let session = $derived(slug);
+
   $effect(() => {
-    const session = slug;
+    const current = session;
     let live = false;
     let gone = false;
     tree = undefined;
-    const off = Events.On(AGENT_TREE_EVENT + session, (event) => {
+    const off = Events.On(AGENT_TREE_EVENT + current, (event) => {
       live = true;
       tree = event.data;
     });
-    call(Call.ByName(CHROME_AGENT_TREE, session)).then((answer) => {
+    call(Call.ByName(CHROME_AGENT_TREE, current)).then((answer) => {
       if (answer.ok && !live && !gone && answer.value) tree = answer.value;
     });
     return () => {
@@ -52,7 +56,7 @@
         <span class="words">{stateWords(root)}</span>
         {#if root.reason}<span class="muted">{root.reason}</span>{/if}
         {#if root.tool}
-          <span class="muted">{root.tool}{#if root.target} {root.target}{/if}</span>
+          <span class="muted">{toolLine(root)}</span>
         {/if}
       {/if}
     </header>

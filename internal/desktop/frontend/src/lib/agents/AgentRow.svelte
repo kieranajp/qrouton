@@ -1,6 +1,6 @@
 <script>
   import AgentRow from "./AgentRow.svelte";
-  import { elapsed, isFinished, stateTone, stateWords, tokenLabel, typeLabel } from "./tree.js";
+  import { elapsed, isFinished, stateTone, stateWords, tokenLabel, toolLine, typeLabel } from "./tree.js";
 
   /** @type {{branch: import("./tree.js").Branch, depth?: number, now: number}} */
   let { branch, depth = 0, now } = $props();
@@ -38,7 +38,7 @@
     {#if node.description}<span class="what">{node.description}</span>{/if}
     <span class="words">{words}</span>
     {#if node.tool}
-      <span class="tool">{node.tool}{#if node.target}<span class="target"> {node.target}</span>{/if}</span>
+      <span class="tool">{toolLine(node)}</span>
     {/if}
     <span class="meta">{elapsed(node.started, node.finished, now)}</span>
     {#if node.toolCount}<span class="meta">{node.toolCount} tools</span>{/if}
@@ -138,9 +138,11 @@
   }
 
   .tool {
-    display: flex;
     max-width: 40%;
     min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .target {

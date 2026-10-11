@@ -159,3 +159,66 @@ func TestAgentStateAStaleStopDoesNotFinishAResumedChild(t *testing.T) {
 		t.Fatalf("live types = %v", live)
 	}
 }
+
+// A lead that launches background specialists ends its own turn while they
+// work. It waits on its agents, not done, until a later stop with nothing of
+// its own still running.
+func TestAgentStateALeadWaitingOnBackgroundChildrenIsNotDone(t *testing.T) {
+	start := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
+	step := 0
+	ev := func(hook, agent, typ string, fill func(*workbench.AgentEventRequest)) workbench.AgentEventRequest {
+		step++
+		e := workbench.AgentEventRequest{
+			Provider: agentProviderClaude, Generation: 1, Hook: hook, AgentID: agent, AgentType: typ,
+			Timestamp: start.Add(time.Duration(step) * time.Second),
+		}
+		if fill != nil {
+			fill(&e)
+		}
+		return e
+	}
+	spawn := func(hook, caller, callerType, toolUse, typ, child string) workbench.AgentEventRequest {
+		return ev(hook, caller, callerType, func(e *workbench.AgentEventRequest) {
+			e.Tool, e.ToolUseID, e.ChildID = "Agent", toolUse, child
+			e.Spawn = &workbench.AgentSpawn{Type: typ, Async: true}
+		})
+	}
+	const lead, leadType, child = "lead-1", "qrouton-research-lead", "spec-1"
+	tracker := replayed(t, []workbench.AgentEventRequest{
+		ev(agentevent.HookUserPromptSubmit, "", "", nil),
+		spawn(agentevent.HookPreToolUse, "", "", "t0", leadType, ""),
+		spawn(agentevent.HookPostToolUse, "", "", "t0", leadType, lead),
+		ev(agentevent.HookSubagentStart, lead, leadType, nil),
+		spawn(agentevent.HookPreToolUse, lead, leadType, "t1", "codebase-researcher", ""),
+		spawn(agentevent.HookPostToolUse, lead, leadType, "t1", "codebase-researcher", child),
+		ev(agentevent.HookSubagentStart, child, "codebase-researcher", nil),
+		ev(agentevent.HookSubagentStop, lead, leadType, func(e *workbench.AgentEventRequest) {
+			e.Message, e.BackgroundTasks = "Launched the specialist.", []string{lead, child}
+		}),
+	})
+	if l := stateOf(t, tracker, lead); l.State != agentStateWaitingAgents || !l.FinishedAt.IsZero() {
+		t.Fatalf("a lead with a specialist still running = %+v", l)
+	}
+	if live := tracker.snapshot().LiveTypes; len(live) != 2 {
+		t.Fatalf("live types = %v, want the lead and its specialist", live)
+	}
+
+	tracker.apply(ev(agentevent.HookPreToolUse, child, "codebase-researcher", func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t2" }))
+	tracker.apply(ev(agentevent.HookPostToolUse, child, "codebase-researcher", func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Bash", "t2" }))
+	tracker.apply(ev(agentevent.HookSubagentStop, child, "codebase-researcher", nil))
+	if l := stateOf(t, tracker, lead); l.State != agentStateWaitingAgents {
+		t.Fatalf("a lead not yet woken by its specialist's result = %q", l.State)
+	}
+
+	tracker.apply(ev(agentevent.HookPreToolUse, lead, leadType, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Write", "t3" }))
+	if l := stateOf(t, tracker, lead); l.State != agentStateWorking || l.Tool != "Write" {
+		t.Fatalf("the woken lead = %+v", l)
+	}
+	tracker.apply(ev(agentevent.HookPostToolUse, lead, leadType, func(e *workbench.AgentEventRequest) { e.Tool, e.ToolUseID = "Write", "t3" }))
+	tracker.apply(ev(agentevent.HookSubagentStop, lead, leadType, func(e *workbench.AgentEventRequest) {
+		e.BackgroundTasks = []string{lead}
+	}))
+	if l := stateOf(t, tracker, lead); l.State != agentStateDone {
+		t.Fatalf("the lead after its last stop = %+v", l)
+	}
+}

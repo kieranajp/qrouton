@@ -152,3 +152,6 @@ export function typeLabel(type) {
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
 }
+
+/** @param {{tool?: string, target?: string}} node */
+export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(" ");
