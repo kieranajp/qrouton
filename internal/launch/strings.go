@@ -138,6 +138,8 @@ const (
 )
 
 const (
+	openCodeDatabaseEnvVar               = "OPENCODE_DB"
+	agyCLIStateDirName                   = "antigravity-cli"
 	codexLongConfigFlag                  = "--config"
 	reviewerModelHelp                    = "Enter the model identifier accepted by this harness."
 	openCodeReviewerModelHelp            = "Enter a model identifier in provider/model form."
@@ -149,21 +151,25 @@ const (
 	reviewerModelCapabilityErrorFormat   = "%w: model is unsupported for %s. %s"
 	reviewerReasoningEncodingErrorFormat = "%w: reasoning must be UTF-8 text without control characters"
 	reviewerReasoningErrorFormat         = "%w: reasoning is unsupported for %s. %s"
-	reviewerOverrideErrorFormat          = "%w: %s argument %q; move model, role and effort options to reviewer Settings and remove resume or headless arguments"
+	reviewerOverrideErrorFormat          = "%w: %s argument %q; move model, role and effort options to reviewer Settings and remove resume, headless or working-directory arguments"
 )
 
 var (
+	agySharedReviewerFiles  = []string{"settings.json", "keybindings.json", "bin", "builtin"}
 	claudeReviewerEfforts   = []string{"low", "medium", "high", "xhigh", "max"}
 	agyReviewerEfforts      = []string{"low", "medium", "high"}
 	claudeReviewerOverrides = reviewerOverridePolicy{
-		Flags:      []string{"--continue", "-c", "--resume", "-r", "--fork-session", "--session-id", "--from-pr", "--teleport", "--print", "-p", "--background", "--bg", "--model", "--fallback-model", "--effort", "--agent", "--agents", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file"},
-		Commands:   []string{"attach"},
-		ValueFlags: []string{"--settings", "--name", "-n", "--permission-mode", "--mcp-config", "--add-dir", "--allowedTools", "--allowed-tools", "--disallowedTools", "--disallowed-tools", "--tools", "--debug-file", "--setting-sources"},
+		Flags:         []string{"--continue", "-c", "--resume", "-r", "--fork-session", "--session-id", "--from-pr", "--teleport", "--print", "-p", "--background", "--bg", "--model", "--fallback-model", "--effort", "--agent", "--agents", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file", "--worktree", "-w", "--add-dir"},
+		Commands:      []string{"attach"},
+		PathListFlags: []string{"--mcp-config", "--plugin-dir"},
+		PathFlags:     []string{"--settings", "--debug-file", "--add-dir", "--append-system-prompt-file", "--system-prompt-file"},
+		ValueFlags:    []string{"--settings", "--name", "-n", "--permission-mode", "--mcp-config", "--add-dir", "--allowedTools", "--allowed-tools", "--disallowedTools", "--disallowed-tools", "--tools", "--debug-file", "--setting-sources"},
 	}
 	codexReviewerOverrides = reviewerOverridePolicy{
-		Flags:      []string{"--model", "-m", "--last"},
+		Flags:      []string{"--model", "-m", "--last", "--cd", "-C"},
 		Commands:   []string{"resume", "fork", "exec", "e", "review", "exec-server", "app-server"},
 		ValueFlags: []string{"--enable", "--disable", "--remote", "--remote-auth-token-env", "--image", "-i", "--local-provider", "--profile", "-p", "--sandbox", "-s", "--cd", "-C", "--add-dir", "--ask-for-approval", "-a"},
+		PathFlags:  []string{"--image", "-i", "--add-dir"},
 		ConfigKeys: []string{"model", "model_reasoning_effort", "developer_instructions"},
 	}
 	openCodeReviewerOverrides = reviewerOverridePolicy{
@@ -172,8 +178,8 @@ var (
 		ValueFlags: []string{"--log-level", "--port", "--hostname", "--mdns-domain", "--cors", "--replay-limit"},
 	}
 	agyReviewerOverrides = reviewerOverridePolicy{
-		Flags:      []string{"--continue", "-c", "--conversation", "--print", "-p", "--prompt", "--prompt-interactive", "-i", "--model", "--effort", "--agent"},
-		ValueFlags: []string{"--project", "--add-dir", "--log-file", "--gemini_dir", "--mode"},
+		Flags:      []string{"--continue", "-c", "--conversation", "--print", "-p", "--prompt", "--prompt-interactive", "-i", "--model", "--effort", "--agent", "--project", "--gemini_dir"},
+		ValueFlags: []string{"--add-dir", "--log-file", "--gemini_dir", "--mode"},
 	}
 )
 
@@ -280,6 +286,6 @@ const (
 	reviewTitlePrefix             = "Independent review "
 	reviewPlaceholderFormat       = "---\nkind: review\ntitle: %s\nplan: %s\n---\n\n# %s\n\nNo completed review has been recorded. This request may be pending, interrupted, or failed.\n\n[Plan](<%s>)\n\nReviewer: %s; model: %s; reasoning: %s.\n\n%s"
 	reviewRepoFormat              = "- %s (%s): base `%s`, head `%s`\n"
-	reviewTaskFormat              = "Act only as the independent implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata and visible Plan link. Read the session manifest for reference repositories, which provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nPlan: %s\nSpec: %s\nReport: %s\nReviewer: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
+	reviewTaskFormat              = "Act only as the independent implementation reviewer, regardless of the conversation orchestrator instructions at the session root. Do not delegate, modify implementation or reference files, or publish. Write only the assigned report; preserve its kind, title, relative plan metadata and visible Plan link. Use absolute paths within the session root below for project context. Read its session manifest for reference repositories and read applicable repository instructions. Reference repositories provide read-only context. Review committed changes at these pinned commits; later HEAD changes are outside this review.\n\nSession root: %s\nPlan: %s\nSpec: %s\nReport: %s\nReviewer: %s; model: %s; reasoning: %s\n\nRepositories:\n%s\nPurpose:\n%s\n\nPrior verification:\n%s"
 	reviewDefaultReasoning        = "provider default"
 )

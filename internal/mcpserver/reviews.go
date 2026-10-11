@@ -14,7 +14,7 @@ import (
 type startReviewInput struct {
 	Plan         string            `json:"plan" jsonschema:"Binding plan Markdown path within this session"`
 	Spec         string            `json:"spec,omitempty" jsonschema:"Optional binding spec Markdown path within this session"`
-	Bases        map[string]string `json:"bases,omitempty" jsonschema:"Optional explicit base refs keyed by editing repository name"`
+	Bases        map[string]string `json:"bases,omitempty" jsonschema:"Optional explicit base refs keyed by owner/name from the manifest (or name for an ownerless legacy entry)"`
 	Brief        string            `json:"brief" jsonschema:"Review purpose and authorized completed scope, at most 16 KiB"`
 	Verification string            `json:"verification,omitempty" jsonschema:"Recorded verification evidence for the reviewed commits, at most 16 KiB"`
 }

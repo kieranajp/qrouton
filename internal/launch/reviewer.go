@@ -157,6 +157,8 @@ func PrepareReview(ctx context.Context, cfg *config.Config, root, bin string, ha
 		return PreparedReview{}, ErrRunnerUnavailable
 	}
 	runner := runners[selected]
+	specification, _ := specFor(runner.ID)
+	command := reviewCommand(runner.Command, specification.ReviewOverrides, root)
 	settings := *snapshot.Reviewer
 	settings.Harness, settings.Model, settings.Reasoning = strings.TrimSpace(settings.Harness), strings.TrimSpace(settings.Model), strings.TrimSpace(settings.Reasoning)
 	if err := ctx.Err(); err != nil {
@@ -199,8 +201,8 @@ func PrepareReview(ctx context.Context, cfg *config.Config, root, bin string, ha
 		return PreparedReview{}, fmt.Errorf("%w: %w", ErrReviewAllocation, err)
 	}
 	reportCreated = true
-	request := reviewRequest{RunID: id, Root: root, Bin: bin, Plan: plan, Spec: spec, Report: report, Settings: settings, Command: slices.Clone(runner.Command), Override: runner.Override, Handle: handle, Editor: editor, Repositories: repositories, Role: role,
-		Task: fmt.Sprintf(reviewTaskFormat, plan, spec, report, settings.Harness, settings.Model, reasoning, scope, input.Brief, input.Verification)}
+	request := reviewRequest{RunID: id, Root: root, Bin: bin, Plan: plan, Spec: spec, Report: report, Settings: settings, Command: command, Override: runner.Override, Handle: handle, Editor: editor, Repositories: repositories, Role: role,
+		Task: fmt.Sprintf(reviewTaskFormat, root, plan, spec, report, settings.Harness, settings.Model, reasoning, scope, input.Brief, input.Verification)}
 	raw, err := json.MarshalIndent(request, "", "  ")
 	if err != nil {
 		return PreparedReview{}, err
@@ -214,7 +216,39 @@ func PrepareReview(ctx context.Context, cfg *config.Config, root, bin string, ha
 	}
 	complete = true
 	name := reviewWindowPrefix + id
-	return PreparedReview{RunID: id, WindowName: name, ReportPath: report, RequestPath: requestPath, Settings: settings, Window: workbench.WindowOptions{Kind: workbench.KindTerminal, Label: name, Cwd: root, Command: []string{bin, ReviewerSubcommand, flagPrefix + ReviewRequestFlag, requestPath}, CloseOnExit: false, Select: false}}, nil
+	return PreparedReview{RunID: id, WindowName: name, ReportPath: report, RequestPath: requestPath, Settings: settings, Window: workbench.WindowOptions{Kind: workbench.KindTerminal, Label: name, Cwd: specification.ReviewCwd(root, id), Command: []string{bin, ReviewerSubcommand, flagPrefix + ReviewRequestFlag, requestPath}, CloseOnExit: false, Select: false}}, nil
+}
+
+func reviewCommand(command []string, policy reviewerOverridePolicy, root string) []string {
+	command = slices.Clone(command)
+	resolve := func(value string) string {
+		if value == "" || filepath.IsAbs(value) || strings.HasPrefix(strings.TrimSpace(value), "{") {
+			return value
+		}
+		return filepath.Join(root, value)
+	}
+	if strings.ContainsRune(command[0], filepath.Separator) {
+		command[0] = resolve(command[0])
+	}
+	for i := 1; i < len(command); i++ {
+		flag, value, inline := strings.Cut(command[i], "=")
+		if !slices.Contains(policy.PathFlags, flag) && !slices.Contains(policy.PathListFlags, flag) {
+			continue
+		}
+		if inline {
+			command[i] = flag + "=" + resolve(value)
+		} else if i+1 < len(command) {
+			i++
+			command[i] = resolve(command[i])
+		}
+		if slices.Contains(policy.PathListFlags, flag) {
+			for i+1 < len(command) && !strings.HasPrefix(command[i+1], "-") {
+				i++
+				command[i] = resolve(command[i])
+			}
+		}
+	}
+	return command
 }
 
 func reviewArtifact(root, path string) (string, error) {
@@ -264,10 +298,11 @@ func pinReviewRepositories(ctx context.Context, root string, bases map[string]st
 		if !repo.Role.IsEditing() {
 			continue
 		}
-		if repo.Name == "" || seen[repo.Name] {
-			return nil, fmt.Errorf("%w: %q", ErrReviewScope, repo.Name)
+		id := reviewRepositoryID(repo)
+		if repo.Name == "" || seen[id] {
+			return nil, fmt.Errorf("%w: %q", ErrReviewScope, id)
 		}
-		seen[repo.Name] = true
+		seen[id] = true
 		path, err := ResolveSessionDir(root, repo.WorktreePath)
 		if err != nil {
 			return nil, fmt.Errorf("%w: %s: %w", ErrReviewScope, repo.Name, err)
@@ -284,7 +319,7 @@ func pinReviewRepositories(ctx context.Context, root string, bases map[string]st
 		if err != nil {
 			return nil, err
 		}
-		baseRef, explicit := bases[repo.Name]
+		baseRef, explicit := bases[id]
 		if !explicit {
 			baseRef = repo.BaseBranch
 			if baseRef == "" {
@@ -307,7 +342,7 @@ func pinReviewRepositories(ctx context.Context, root string, bases map[string]st
 				return nil, fmt.Errorf("%w: %s", ErrReviewScope, repo.Name)
 			}
 		}
-		repositories = append(repositories, reviewRepository{Name: repo.Name, Path: path, Base: base, Head: head})
+		repositories = append(repositories, reviewRepository{Name: id, Path: path, Base: base, Head: head})
 	}
 	for name := range bases {
 		if !seen[name] {
@@ -318,6 +353,13 @@ func pinReviewRepositories(ctx context.Context, root string, bases map[string]st
 		return nil, ErrReviewScope
 	}
 	return repositories, nil
+}
+
+func reviewRepositoryID(repo session.ManifestRepo) string {
+	if repo.Org == "" {
+		return repo.Name
+	}
+	return repo.Org + "/" + repo.Name
 }
 
 func reviewCommit(ctx context.Context, path, ref string) (string, error) {
@@ -353,7 +395,7 @@ func reviewerLaunch(request reviewRequest) ([]string, []string, error) {
 		task = request.Role + noticeSeparator + task
 	}
 	argv = spec.Prompt(argv, task)
-	return spec.Inject(argv, injectContext{qroutonBin: request.Bin, dir: request.Root, handle: request.Handle, override: request.Override, reviewer: true, reviewHome: sessionpaths.ReviewAgyHome(request.Root, request.RunID), reviewRole: request.Role,
+	return spec.Inject(argv, injectContext{qroutonBin: request.Bin, dir: request.Root, handle: request.Handle, override: request.Override, reviewer: true, reviewHome: sessionpaths.ReviewAgyHome(request.Root, request.RunID), reviewRunID: request.RunID, reviewRole: request.Role,
 		mcpArgs: []string{MCPSubcommand, sessionRootFlag, request.Root, editorJSONFlag, request.Editor.Marshal(), workbenchJSONFlag, request.Handle.Marshal()}})
 }
 
@@ -373,7 +415,8 @@ func RunReviewer(requestPath string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %w", ErrReviewLaunch, err)
 	}
-	if err := os.Chdir(request.Root); err != nil {
+	specification, _ := specFor(request.Settings.Harness)
+	if err := os.Chdir(specification.ReviewCwd(request.Root, request.RunID)); err != nil {
 		return fmt.Errorf("%w: %w", ErrReviewLaunch, err)
 	}
 	path, err := findExecutable(request.Command[0])

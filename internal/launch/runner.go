@@ -37,10 +37,12 @@ type ReviewerCapabilities struct {
 }
 
 type reviewerOverridePolicy struct {
-	Flags      []string
-	Commands   []string
-	ValueFlags []string
-	ConfigKeys []string
+	Flags         []string
+	Commands      []string
+	ValueFlags    []string
+	ConfigKeys    []string
+	PathFlags     []string
+	PathListFlags []string
 }
 
 type runnerSpec struct {
@@ -65,17 +67,19 @@ type runnerSpec struct {
 	ValidateModel     func(string) bool
 	ReviewArgs        func([]string, config.Reviewer, string) []string
 	ReviewOpeningRole bool
+	ReviewCwd         func(string, string) string
 }
 
 type injectContext struct {
-	qroutonBin string
-	dir        string
-	handle     workbench.Handle
-	mcpArgs    []string
-	generation uint64
-	reviewer   bool
-	reviewHome string
-	reviewRole string
+	qroutonBin  string
+	dir         string
+	handle      workbench.Handle
+	mcpArgs     []string
+	generation  uint64
+	reviewer    bool
+	reviewHome  string
+	reviewRunID string
+	reviewRole  string
 	// override is true when the user replaced this runner's command, which
 	// OpenCode reads before it writes a permission default over their config.
 	override bool
@@ -100,6 +104,7 @@ var runnerSpecs = []runnerSpec{
 		Inject:          injectClaude,
 		Hooks:           claudeHooks,
 		ReviewArgs:      reviewClaudeArgs,
+		ReviewCwd:       sessionpaths.ReviewRun,
 	},
 	{
 		ID: runnerIDCodex, Label: runnerLabelCodex,
@@ -111,6 +116,7 @@ var runnerSpecs = []runnerSpec{
 		MCP:             codexMCP,
 		Inject:          injectCodex,
 		ReviewArgs:      reviewCodexArgs,
+		ReviewCwd:       sessionpaths.ReviewRun,
 		Hooks:           []string{agentevent.HookSubagentStart, agentevent.HookSubagentStop},
 	},
 	{
@@ -127,6 +133,7 @@ var runnerSpecs = []runnerSpec{
 		MCP:        openCodeMCP,
 		Inject:     injectOpenCode,
 		ReviewArgs: reviewOpenCodeArgs,
+		ReviewCwd:  reviewSessionRoot,
 	},
 	{
 		ID: runnerIDAgy, Label: runnerLabelAgy,
@@ -139,8 +146,11 @@ var runnerSpecs = []runnerSpec{
 		Inject:            injectAgy,
 		ReviewArgs:        reviewAgyArgs,
 		ReviewOpeningRole: true,
+		ReviewCwd:         reviewSessionRoot,
 	},
 }
+
+func reviewSessionRoot(root, _ string) string { return root }
 
 var builtinRunners = builtins()
 
@@ -456,6 +466,7 @@ func injectOpenCode(argv []string, c injectContext) ([]string, []string, error) 
 		}
 		config = string(raw)
 		env = reviewerEnv()
+		env = workbench.WithEnv(env, openCodeDatabaseEnvVar, sessionpaths.ReviewOpenCodeDatabase(c.dir, c.reviewRunID))
 	}
 	return argv, workbench.WithEnv(env, openCodeConfigEnvVar, config), nil
 }
@@ -473,7 +484,7 @@ func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 	if err := os.MkdirAll(filepath.Dir(config), dirMode); err != nil {
 		return nil, nil, err
 	}
-	if err := linkGeminiRoot(home); err != nil {
+	if err := linkGeminiRoot(home, c.reviewer); err != nil {
 		return nil, nil, err
 	}
 	content, err := agyMCPConfig(config, c.qroutonBin, c.mcpArgs)
@@ -492,7 +503,7 @@ func injectAgy(argv []string, c injectContext) ([]string, []string, error) {
 
 // linkGeminiRoot links the user's .gemini tree into the session's, entry by
 // entry, so the one file qrouton generates is the only thing that differs.
-func linkGeminiRoot(home string) error {
+func linkGeminiRoot(home string, reviewer bool) error {
 	userHome, err := os.UserHomeDir()
 	if err != nil {
 		return err
@@ -500,8 +511,29 @@ func linkGeminiRoot(home string) error {
 	root := filepath.Join(userHome, geminiDirName)
 	// The config directory is shadowed rather than linked: qrouton owns a file
 	// inside it, and a link would put that file in the user's tree.
-	if err := linkEntries(root, home, agyConfigDirName); err != nil {
+	generated := []string{agyConfigDirName}
+	if reviewer {
+		generated = append(generated, agyCLIStateDirName)
+	}
+	if err := linkEntries(root, home, generated...); err != nil {
 		return err
+	}
+	if reviewer {
+		source, destination := filepath.Join(root, agyCLIStateDirName), filepath.Join(home, agyCLIStateDirName)
+		if err := os.MkdirAll(destination, reviewPrivateMode); err != nil {
+			return err
+		}
+		for _, name := range agySharedReviewerFiles {
+			target := filepath.Join(source, name)
+			if _, err := os.Stat(target); errors.Is(err, fs.ErrNotExist) {
+				continue
+			} else if err != nil {
+				return err
+			}
+			if err := os.Symlink(target, filepath.Join(destination, name)); err != nil && !errors.Is(err, fs.ErrExist) {
+				return err
+			}
+		}
 	}
 	return linkEntries(filepath.Join(root, agyConfigDirName),
 		filepath.Join(home, agyConfigDirName), agyMCPConfigName)
