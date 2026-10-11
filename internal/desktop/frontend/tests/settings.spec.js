@@ -389,6 +389,34 @@ test("a signed-out GitHub CLI asks for gh auth login", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Copy brew install gh" })).toHaveCount(0);
 });
 
+test("a token GitHub rejects from the CLI asks to refresh or sign in again", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=cli&check=rejected");
+  await open(page, "GitHub");
+  await expect(page.getByText("GitHub rejected the token from the GitHub CLI")).toBeVisible();
+  await expect(page.getByText(/Signed in/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Copy gh auth refresh" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy gh auth login" })).toBeVisible();
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect.poll(() => gitHubChecks(page)).toBe(2);
+});
+
+test("a rejected environment token says to fix the variable", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=env&check=rejected");
+  await open(page, "GitHub");
+  await expect(page.getByText("GitHub rejected the token from GITHUB_TOKEN")).toBeVisible();
+  await expect(page.getByText("Set GITHUB_TOKEN to a working token")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy gh auth refresh" })).toHaveCount(0);
+});
+
+test("an unreachable GitHub claims neither signed in nor rejected", async ({ page }) => {
+  await page.goto("/tests/settings.html?gh=cli&check=unreachable");
+  await open(page, "GitHub");
+  await expect(page.getByText("Couldn't reach GitHub to check the sign-in")).toBeVisible();
+  await expect(page.getByText(/Signed in|rejected/)).toHaveCount(0);
+  await page.getByRole("button", { name: "Check again" }).click();
+  await expect.poll(() => gitHubChecks(page)).toBe(2);
+});
+
 test("a missing shared folder is flagged until its path is edited", async ({ page }) => {
   await page.goto("/tests/settings.html");
   await open(page, "Folders");

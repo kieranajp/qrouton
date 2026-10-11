@@ -1474,13 +1474,16 @@ func fakeGitHubCLI(t *testing.T, script string) {
 	t.Setenv("PATH", dir)
 }
 
-func TestSettingsGitHubStatusReportsEachCredentialStateAndTheLogin(t *testing.T) {
+func TestSettingsGitHubStatusReportsEachCredentialStateAndWhatGitHubSaid(t *testing.T) {
 	cases := []struct {
 		name, script, env string
 		want              GitHubStatus
 	}{
-		{"cli", "echo gho_cli", "", GitHubStatus{State: github.CredentialCLI, Login: "gho_cli-user", Variable: "GITHUB_TOKEN"}},
-		{"env", "exit 1", "ghp_env", GitHubStatus{State: github.CredentialEnv, Login: "ghp_env-user", Variable: "GITHUB_TOKEN"}},
+		{"cli", "echo gho_cli", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenValid, Login: "gho_cli-user", Variable: "GITHUB_TOKEN"}},
+		{"env", "exit 1", "ghp_env", GitHubStatus{State: github.CredentialEnv, Check: github.TokenValid, Login: "ghp_env-user", Variable: "GITHUB_TOKEN"}},
+		{"cli rejected", "echo gho_revoked", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenRejected, Variable: "GITHUB_TOKEN"}},
+		{"env rejected", "exit 1", "ghp_revoked", GitHubStatus{State: github.CredentialEnv, Check: github.TokenRejected, Variable: "GITHUB_TOKEN"}},
+		{"unreachable", "echo gho_offline", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenUnreachable, Variable: "GITHUB_TOKEN"}},
 		{"missing", "", "", GitHubStatus{State: github.CredentialMissing, Variable: "GITHUB_TOKEN"}},
 		{"signed out", "exit 1", "", GitHubStatus{State: github.CredentialSignedOut, Variable: "GITHUB_TOKEN"}},
 	}
@@ -1490,17 +1493,38 @@ func TestSettingsGitHubStatusReportsEachCredentialStateAndTheLogin(t *testing.T)
 			t.Setenv("GITHUB_TOKEN", tc.env)
 			s := testSettings(t, &config.Config{}, nil, nil, nil)
 			asked := 0
-			s.login = func(_ context.Context, token string) (string, error) {
+			s.checkToken = func(_ context.Context, token string) (github.TokenCheck, string) {
 				asked++
-				return token + "-user", nil
+				switch {
+				case strings.HasSuffix(token, "_revoked"):
+					return github.TokenRejected, ""
+				case strings.HasSuffix(token, "_offline"):
+					return github.TokenUnreachable, ""
+				}
+				return github.TokenValid, token + "-user"
 			}
 			if got := s.GitHubStatus(); got != tc.want {
 				t.Fatalf("GitHubStatus() = %+v, want %+v", got, tc.want)
 			}
-			if signedIn := tc.want.Login != ""; signedIn != (asked == 1) {
-				t.Fatalf("login asked %d times for %s", asked, tc.name)
+			if hasToken := tc.want.Check != ""; hasToken != (asked == 1) {
+				t.Fatalf("GitHub asked %d times for %s", asked, tc.name)
 			}
 		})
+	}
+}
+
+func TestSettingsGitHubStatusRunsGHOnce(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	fakeGitHubCLI(t, "echo run >> "+calls+"\necho gho_cli")
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	s.checkToken = func(context.Context, string) (github.TokenCheck, string) { return github.TokenValid, "octocat" }
+	s.GitHubStatus()
+	got, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(got), "run"); n != 1 {
+		t.Fatalf("gh ran %d times for one check", n)
 	}
 }
 

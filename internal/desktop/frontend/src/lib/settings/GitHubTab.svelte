@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { GITHUB_CREDENTIALS } from "../bridge/generated.js";
+  import { GITHUB_CREDENTIALS, GITHUB_TOKEN_CHECKS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { openURL } from "../wails.js";
@@ -17,6 +17,8 @@
   let form = $derived(panel.form);
   let help = $derived(panel.fields.orgs ?? (form.pinned.orgs ? pinnedNote("QROUTON_ORGS") : ""));
   let gh = $derived(panel.github);
+  let cli = $derived(gh?.state === GITHUB_CREDENTIALS.CLI);
+  let source = $derived(cli ? "the GitHub CLI" : gh?.variable);
 
   onMount(() => {
     if (!panel.github) panel.checkGitHub();
@@ -27,10 +29,37 @@
   Orgs and personal accounts whose repositories appear in the picker.
 </TabHeader>
 
-{#if gh?.state === GITHUB_CREDENTIALS.CLI || gh?.state === GITHUB_CREDENTIALS.ENV}
+{#if gh?.check === GITHUB_TOKEN_CHECKS.VALID}
   <StatusLine tone="success">
-    {@const source = gh.state === GITHUB_CREDENTIALS.CLI ? "the GitHub CLI" : gh.variable}
     {#if gh.login}Signed in as <span class="login">{gh.login}</span> via {source}{:else}Signed in via {source}{/if}
+  </StatusLine>
+{:else if gh?.check === GITHUB_TOKEN_CHECKS.REJECTED}
+  <StatusLine tone="failed" boxed>
+    GitHub rejected the token from {source}
+    {#snippet body()}
+      {#if cli}
+        <p class="body">gh is signed in, but GitHub no longer accepts its token. Refresh the sign-in, or sign in again.</p>
+        <div class="commands">
+          <CommandRow command="gh auth refresh" />
+          <CommandRow command="gh auth login" />
+        </div>
+      {:else}
+        <p class="body">
+          Set {gh.variable} to a working token and start qrouton again, or sign in with gh and qrouton uses that instead.
+        </p>
+        <CommandRow command="gh auth login" />
+      {/if}
+    {/snippet}
+    {#snippet actions()}
+      <Button variant="cube" disabled={panel.checkingGitHub} onclick={panel.checkGitHub}>Check again</Button>
+    {/snippet}
+  </StatusLine>
+{:else if gh?.check === GITHUB_TOKEN_CHECKS.UNREACHABLE}
+  <StatusLine tone="waiting" boxed detail="Found a token from {source}, but GitHub didn't answer">
+    Couldn't reach GitHub to check the sign-in
+    {#snippet actions()}
+      <Button variant="cube" disabled={panel.checkingGitHub} onclick={panel.checkGitHub}>Check again</Button>
+    {/snippet}
   </StatusLine>
 {:else if gh?.state === GITHUB_CREDENTIALS.MISSING}
   <StatusLine tone="faint" boxed>

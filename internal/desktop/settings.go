@@ -80,10 +80,11 @@ type ThoughtsRow struct {
 	Missing bool   `json:"missing,omitempty"`
 }
 
-// GitHubStatus is the credential the app would use. Login names the account
-// when one is signed in and GitHub answered; Variable names the env fallback.
+// GitHubStatus is the credential the app would use and what GitHub said about
+// it. Check is empty when there is no token to ask about.
 type GitHubStatus struct {
 	State    github.Credential `json:"state"`
+	Check    github.TokenCheck `json:"check"`
 	Login    string            `json:"login"`
 	Variable string            `json:"variable"`
 }
@@ -117,7 +118,7 @@ type Settings struct {
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
 	runners        func() ([]assembly.Runner, error)
-	login          func(ctx context.Context, token string) (string, error)
+	checkToken     func(ctx context.Context, token string) (github.TokenCheck, string)
 	linear         lineartools.Tools
 }
 
@@ -130,8 +131,8 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 		relaunch:   relaunch,
 		openText:   openText,
 		runners:    runners,
-		login: func(ctx context.Context, token string) (string, error) {
-			return github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
+		checkToken: func(ctx context.Context, token string) (github.TokenCheck, string) {
+			return github.CheckToken(ctx, &http.Client{Timeout: githubCheckTimeout}, token)
 		},
 		reconfigure:    reconfigure,
 		cfg:            cfg,
@@ -416,17 +417,14 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 // GitHubStatus checks the credential each time it is asked, so Check again sees
 // a gh install or sign-in that happened since.
 func (s *Settings) GitHubStatus() GitHubStatus {
-	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), githubCheckTimeout)
 	defer cancel()
-	status := GitHubStatus{State: github.CredentialSource(ctx), Variable: github.TokenEnvVar()}
-	if status.State != github.CredentialCLI && status.State != github.CredentialEnv {
+	state, token := github.ResolveCredential(ctx)
+	status := GitHubStatus{State: state, Variable: github.TokenEnvVar()}
+	if token == "" || s.checkToken == nil {
 		return status
 	}
-	token, err := github.TokenContext(ctx)
-	if err != nil || s.login == nil {
-		return status
-	}
-	status.Login, _ = s.login(ctx, token)
+	status.Check, status.Login = s.checkToken(ctx, token)
 	return status
 }
 

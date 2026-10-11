@@ -60,6 +60,7 @@ var valueSets = []valueSet{
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
 	{name: "GITHUB_CREDENTIALS", typedef: "GitHubCredential", dir: githubPackage, goType: "Credential", prefix: "Credential"},
+	{name: "GITHUB_TOKEN_CHECKS", typedef: "GitHubTokenCheck", dir: githubPackage, goType: "TokenCheck", prefix: "Token"},
 	{name: "MEDIA_KINDS", typedef: "MediaKind", dir: workbenchPackage, goType: "MediaKind", prefix: "Media"},
 	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
 	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},

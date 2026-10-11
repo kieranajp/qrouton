@@ -172,6 +172,13 @@ export const GITHUB_CREDENTIALS = Object.freeze({
   SIGNED_OUT: "signed-out",
 });
 
+/** @typedef {"valid"|"rejected"|"unreachable"} GitHubTokenCheck */
+export const GITHUB_TOKEN_CHECKS = Object.freeze({
+  VALID: "valid",
+  REJECTED: "rejected",
+  UNREACHABLE: "unreachable",
+});
+
 /** @typedef {"image"|"video"} MediaKind */
 export const MEDIA_KINDS = Object.freeze({
   IMAGE: "image",

@@ -17,6 +17,7 @@ const ollama = {
   installed: params.get("installed") === "1",
 };
 const gh = params.get("gh") ?? "cli";
+const ghCheck = params.get("check") ?? "valid";
 const linear = {
   path: "~/.linear/coding-tools.json",
   snippet: '{\n  "openIssue": {\n    "path": "/usr/local/bin/qrouton",\n    "args": ["--linear-issue", "{{issue.identifier}}"]\n  }\n}',
@@ -35,8 +36,10 @@ window.wailsCall = async (name, input) => {
   calls.push(name.split(".").pop());
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith("Ollama.Check")) return ollama;
-  if (name.endsWith(".GitHubStatus"))
-    return { state: gh, login: gh === "cli" || gh === "env" ? "kieranajp" : "", variable: "GITHUB_TOKEN" };
+  if (name.endsWith(".GitHubStatus")) {
+    const check = gh === "cli" || gh === "env" ? ghCheck : "";
+    return { state: gh, check, login: check === "valid" ? "kieranajp" : "", variable: "GITHUB_TOKEN" };
+  }
   if (name.endsWith(".Load"))
     return {
       orgs: ["acme"],

@@ -55,7 +55,7 @@ export const openConfig = () => Call.ByName(SETTINGS_OPEN_CONFIG);
 /** @returns {Promise<LinearView>} */
 export const installLinear = () => Call.ByName(SETTINGS_INSTALL_LINEAR);
 
-/** @returns {Promise<{state: import("../bridge/generated.js").GitHubCredential, login: string, variable: string}>} */
+/** @returns {Promise<{state: import("../bridge/generated.js").GitHubCredential, check: import("../bridge/generated.js").GitHubTokenCheck | "", login: string, variable: string}>} */
 export const gitHubStatus = () => Call.ByName(SETTINGS_GIT_HUB_STATUS);
 
 /**

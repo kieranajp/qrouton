@@ -28,7 +28,7 @@ export function settings(onClose) {
   let installed = $state(false);
   let installing = $state(false);
   let actionError = $state("");
-  let github = $state(/** @type {{state: string, login: string, variable: string} | null} */ (null));
+  let github = $state(/** @type {{state: string, check: string, login: string, variable: string} | null} */ (null));
   let checkingGitHub = $state(false);
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");

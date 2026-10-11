@@ -213,6 +213,7 @@ const (
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
+	githubCheckTimeout = 4 * time.Second
 	ticketFetchTimeout = 15 * time.Second
 
 	// branchListTimeout bounds the branch listing GitHub is asked for, which the
