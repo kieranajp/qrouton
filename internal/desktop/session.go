@@ -39,7 +39,7 @@ type sessionState struct {
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
 	process         *ptyProcess
-	shell           string
+	agentsWindow    string
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest

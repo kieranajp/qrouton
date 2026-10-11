@@ -1169,3 +1169,125 @@ func TestRescanCannotRaceTheReadsOfTheTextItRewrites(t *testing.T) {
 	}()
 	wg.Wait()
 }
+
+func openAgents(t *testing.T, w *Windows, owner *sessionState) string {
+	t.Helper()
+	(&agentsWindow{windows: w}).open(owner)
+	owner.mu.Lock()
+	defer owner.mu.Unlock()
+	if owner.agentsWindow == "" {
+		t.Fatal("the Agents tab did not open")
+	}
+	return owner.agentsWindow
+}
+
+func TestAgentsWindowOpensOncePinnedAndFirst(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openAgents(t, w, owner)
+	if again := openAgents(t, w, owner); again != id {
+		t.Fatalf("showing the session again opened a second Agents tab %q", again)
+	}
+	tabs := w.Surfaces(owner.slug()).Tabs
+	if len(tabs) != 1 {
+		t.Fatalf("tabs = %+v, want the one Agents tab", tabs)
+	}
+	if tab := tabs[0]; tab.Kind != string(workbench.KindAgents) || tab.Label != agentsWindowLabel || !tab.Pinned {
+		t.Fatalf("Agents tab = %+v", tab)
+	}
+}
+
+func TestAgentsWindowRefusesClose(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openAgents(t, w, owner)
+	if err := w.Close(id); !errors.Is(err, ErrAgentsWindowPinned) {
+		t.Fatalf("Close = %v, want ErrAgentsWindowPinned", err)
+	}
+	if !w.exists(id) {
+		t.Fatal("a refused close removed the Agents tab")
+	}
+}
+
+func TestAgentsWindowGoesWithItsSession(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	id := openAgents(t, w, owner)
+	w.stop(owner)
+	if w.exists(id) {
+		t.Fatal("teardown left the Agents tab open")
+	}
+}
+
+func TestAgentsWindowStaysLeftmost(t *testing.T) {
+	w, _ := testWindows(t)
+	owner := w.shown()
+	agents := openAgents(t, w, owner)
+	docs := openDocuments(t, w, owner, 2)
+
+	if err := w.Reorder(owner.slug(), agents, 2); !errors.Is(err, ErrAgentsWindowPinned) {
+		t.Fatalf("moving the Agents tab = %v, want ErrAgentsWindowPinned", err)
+	}
+	if err := w.Reorder(owner.slug(), docs[1], 0); !errors.Is(err, ErrAgentsWindowPinned) {
+		t.Fatalf("moving a tab before the Agents tab = %v, want ErrAgentsWindowPinned", err)
+	}
+	if err := w.Reorder(owner.slug(), docs[1], 1); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := tabIDs(w, owner.slug()), []string{agents, docs[1], docs[0]}; !slices.Equal(got, want) {
+		t.Fatalf("order = %v, want %v", got, want)
+	}
+}
+
+func TestAgentsWindowIsTheWorkbenchsToOpen(t *testing.T) {
+	w, _ := testWindows(t)
+	_, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindAgents, Label: "Agents"})
+	if !errors.Is(err, ErrAgentsWindowReserved) {
+		t.Fatalf("an agent opening an Agents tab = %v, want ErrAgentsWindowReserved", err)
+	}
+}
+
+// A shell is the user's to ask for: the session opens on its Agents tab, + adds
+// a shell, and showing the session again does not bring a closed one back.
+func TestAgentsWindowOpensInPlaceOfAShell(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+
+	waitFor(t, "the Agents tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+	if tab := windows.surfaces(owner).Tabs[0]; tab.Kind != string(workbench.KindAgents) {
+		t.Fatalf("first tab = %+v, want the Agents tab", tab)
+	}
+
+	id, err := windows.OpenShell()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.surfaces(owner).Tabs
+	if len(tabs) != 2 || tabs[1].ID != id || tabs[1].Label != shellWindowLabel {
+		t.Fatalf("tabs after + = %+v", tabs)
+	}
+	window, _ := windows.window(id)
+	if window.opts.Cwd != opts.SessionRoot || !window.opts.CloseOnExit {
+		t.Fatalf("shell options = %+v", window.opts)
+	}
+	if len(r.opened) != 0 {
+		t.Fatalf("%d OS windows opened; the shell is a tab", len(r.opened))
+	}
+
+	if err := windows.Close(id); err != nil {
+		t.Fatal(err)
+	}
+	reg.reveal(owner)
+	if err := reg.Show(owner.slug()); err != nil {
+		t.Fatal(err)
+	}
+	if tabs := windows.surfaces(owner).Tabs; len(tabs) != 1 {
+		t.Fatalf("showing the session again reopened a shell: %+v", tabs)
+	}
+}

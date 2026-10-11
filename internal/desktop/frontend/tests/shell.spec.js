@@ -1,8 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 const TABS = [
-  { id: "window-1", label: "Shell", kind: "terminal" },
-  { id: "window-2", label: "Agent", kind: "terminal" },
+  { id: "window-1", label: "Agents", kind: "agents", pinned: true },
+  { id: "window-2", label: "$ shell", kind: "terminal" },
   { id: "window-3", label: "Research", kind: "document" },
 ];
 
@@ -32,7 +32,6 @@ test("the conversation starts on Term and a tab on Windows", async ({ page }) =>
   await open(page, "window-1");
   await expect.poll(() => page.evaluate(() => window.shell.started())).toEqual([
     ["Term", "term-1"],
-    ["Windows", "window-1"],
     ["Windows", "window-2"],
   ]);
 });
@@ -75,12 +74,12 @@ test("RPI mode keeps its workflow marks and has no escalation action", async ({ 
 });
 
 test("a retained shell replay replaces phantom cells with its prompt", async ({ page }) => {
-  await open(page, "window-1");
-  await page.evaluate(() => window.shell.terminalData("window-1", "orphaned a"));
+  await open(page, "window-2");
+  await page.evaluate(() => window.shell.terminalData("window-2", "orphaned a"));
   await expect.poll(() => page.evaluate(() => window.shell.terminalText())).toContain("orphaned a");
 
   await page.evaluate(() =>
-    window.shell.terminalData("window-1", "Lifesum/4_Qrouton/tweaks-66d9\r\n❯ ", true),
+    window.shell.terminalData("window-2", "Lifesum/4_Qrouton/tweaks-66d9\r\n❯ ", true),
   );
   await expect.poll(() => page.evaluate(() => window.shell.terminalText())).toContain(
     "Lifesum/4_Qrouton/tweaks-66d9\n❯",
@@ -91,55 +90,57 @@ test("a retained shell replay replaces phantom cells with its prompt", async ({ 
 test("retained terminal queries do not reply while live queries and typing do", async ({ page }) => {
   const query = "\x1bP$qm\x1b\\";
   const response = "\x1bP1$r0m\x1b\\";
-  await open(page, "window-1");
+  await open(page, "window-2");
   await expect.poll(() => page.evaluate(() => window.shell.started())).toContainEqual([
     "Windows",
-    "window-1",
+    "window-2",
   ]);
   await page.evaluate(() => window.shell.focusTerminal());
 
   await page.evaluate(
-    ([query]) => window.shell.terminalData("window-1", query, true),
+    ([query]) => window.shell.terminalData("window-2", query, true),
     [query],
   );
   await page.keyboard.type("x");
-  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toContain("x");
-  expect(await page.evaluate(() => window.shell.writes("window-1"))).not.toContain(response);
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-2"))).toContain("x");
+  expect(await page.evaluate(() => window.shell.writes("window-2"))).not.toContain(response);
 
   await page.evaluate(
     ([query]) => {
-      window.shell.terminalData("window-1", query);
-      window.shell.terminalData("window-1", query, true);
-      window.shell.terminalData("window-1", query);
-      window.shell.terminalData("window-1", query, true);
+      window.shell.terminalData("window-2", query);
+      window.shell.terminalData("window-2", query, true);
+      window.shell.terminalData("window-2", query);
+      window.shell.terminalData("window-2", query, true);
     },
     [query],
   );
-  await expect.poll(() => page.evaluate(() => window.shell.writes("window-1"))).toEqual([
+  await expect.poll(() => page.evaluate(() => window.shell.writes("window-2"))).toEqual([
     "x",
     response,
     response,
   ]);
 });
 
-test("an unselected session opens on its leftmost tab", async ({ page }) => {
+test("an unselected session opens on its leftmost tab, the Agents tab", async ({ page }) => {
   await open(page);
-  await expect(selected(page)).toHaveText("Shell");
+  await expect(selected(page)).toHaveText("Agents");
+  await expect(page.locator(".human .agents")).toBeVisible();
+  await expect(page.locator('.tab[title="Agents"]').getByRole("button", { name: "Close tab" })).toHaveCount(0);
 });
 
 test("a click asks Go, and the strip moves when Go answers", async ({ page }) => {
   await open(page);
-  await page.getByRole("button", { name: "Agent" }).click();
+  await page.getByRole("button", { name: "$ shell" }).click();
   await expect.poll(() => page.evaluate(() => window.shell.selects())).toEqual([
     ["octopus", "window-2"],
   ]);
-  await expect(selected(page)).toHaveText("Shell");
+  await expect(selected(page)).toHaveText("Agents");
 
   await page.evaluate(
     ([tabs]) => window.shell.windows("window-2", tabs),
     /** @type {const} */ ([TABS]),
   );
-  await expect(selected(page)).toHaveText("Agent");
+  await expect(selected(page)).toHaveText("$ shell");
 });
 
 // A refused Select used to leave the strip claiming a tab Go had not selected,
@@ -147,14 +148,14 @@ test("a click asks Go, and the strip moves when Go answers", async ({ page }) =>
 test("a refused selection leaves the strip where Go put it", async ({ page }) => {
   await open(page, "window-1");
   await page.evaluate(() => window.shell.refuseSelect(true));
-  await page.getByRole("button", { name: "Agent" }).click();
+  await page.getByRole("button", { name: "$ shell" }).click();
   await expect.poll(() => page.evaluate(() => window.shell.selects().length)).toBe(1);
-  await expect(selected(page)).toHaveText("Shell");
+  await expect(selected(page)).toHaveText("Agents");
 });
 
 test("a selection naming no open tab selects none of them", async ({ page }) => {
   await open(page, "window-1");
-  await expect(selected(page)).toHaveText("Shell");
+  await expect(selected(page)).toHaveText("Agents");
 
   await page.evaluate(
     ([tabs]) => window.shell.windows("window-9", tabs),
@@ -181,8 +182,8 @@ test("a selected document stays mounted and keeps its scroll through tab selecti
     scrollTop: 240,
   });
 
-  await page.locator('.tab[title="Shell"] .select').click();
-  await page.evaluate(() => window.shell.acknowledge("window-1"));
+  await page.locator('.tab[title="$ shell"] .select').click();
+  await page.evaluate(() => window.shell.acknowledge("window-2"));
   await expect.poll(() => page.evaluate(() => window.shell.documentState()?.visible)).toBe(false);
   await page.getByRole("button", { name: "Research" }).click();
   await page.evaluate(() => window.shell.acknowledge("window-3"));

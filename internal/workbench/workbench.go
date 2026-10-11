@@ -12,13 +12,14 @@ import (
 	"time"
 )
 
-// WindowKind separates a window running a command from one holding text a
-// process has already finished producing.
+// WindowKind is what a tab holds: a running command, text a process has
+// already finished producing, or the session's agent tree.
 type WindowKind string
 
 const (
 	KindTerminal WindowKind = "terminal"
 	KindDocument WindowKind = "document"
+	KindAgents   WindowKind = "agents"
 )
 
 // DocumentFormat is how a document window renders its text. The caller

@@ -382,53 +382,9 @@ test("the badge carries the row's state", async ({ page }) => {
   expect(await background(avatar(/^Session 2/))).toBe("rgba(0, 0, 0, 0)");
 });
 
-test("activity shows an orchestrator, its leads, and subagents behind a count", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await expect(activity.getByLabel("Orchestrator · Claude Code · Waiting for you")).toBeVisible();
-  const lead = activity.getByLabel("Lead · Qrouton Planning Lead · Active");
-  await expect(lead).toBeVisible();
-
-  // A subagent is a detail, not a row, until it is asked for.
-  await expect(activity).not.toContainText("Code Reviewer");
-  const disclosure = activity.getByRole("button", { name: /subagent/ });
-  await expect(disclosure).toContainText("1 subagent · 0 done");
-  await disclosure.click();
-  await expect(activity).toContainText("Code Reviewer");
-
-  // Depth is an indent step, and no rank draws a rule down its left.
-  const indent = (locator) =>
-    locator.locator(".dot").evaluate((element) => element.getBoundingClientRect().left);
-  expect(await indent(lead)).toBe(
-    (await indent(activity.getByLabel("Orchestrator · Claude Code · Waiting for you"))) + 15,
-  );
-  expect(await activity.locator(".rank").evaluate((el) => getComputedStyle(el).borderLeftWidth)).toBe(
-    "0px",
-  );
-});
-
-test("waiting is the orchestrator's alone", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  const waiting = await token(page, "--state-waiting");
-  const running = await token(page, "--state-running");
-  const dot = (label) =>
-    activity.getByLabel(label).locator(".dot").evaluate((el) => getComputedStyle(el).backgroundColor);
-
-  expect(await dot("Orchestrator · Claude Code · Waiting for you")).toBe(waiting);
-  expect(await dot("Lead · Qrouton Planning Lead · Active")).toBe(running);
-});
-
-test("the rail prints no name it cannot read", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await expect(activity).not.toContainText("unavailable");
-  await expect(activity).toContainText("Test Verifier");
-
-  await page.evaluate(() => window.sessionRail.removeFinished());
-  await expect(activity).not.toContainText("Test Verifier");
-});
-
 test("the rail headings all read at one rank, centred", async ({ page }) => {
   const faint = await token(page, "--text-faint");
-  for (const heading of ["Sessions", "Activity", "This session"]) {
+  for (const heading of ["Sessions", "This session"]) {
     const caps = page.locator(".caps", { hasText: heading }).first();
     expect(await caps.evaluate((el) => getComputedStyle(el).color)).toBe(faint);
     expect(await caps.evaluate((el) => getComputedStyle(el).textAlign)).toBe("center");
@@ -460,22 +416,14 @@ test("the rail's first row starts on the pane header's line", async ({ page }) =
   expect(centres.label).toBeCloseTo(centres.band, 0);
 });
 
-test("provider coverage and missing capabilities are textual", async ({ page }) => {
-  const activity = page.getByRole("region", { name: "Activity" });
-  await page.evaluate(() => window.sessionRail.rootOnly("codex", "Codex CLI"));
+test("provider coverage is textual on the row", async ({ page }) => {
+  await page.evaluate(() => window.sessionRail.rootOnly("codex"));
   const row = page.getByRole("button", { name: /Checkout migration .* 1 active · 3 new docs/ });
   const runningPip = row.locator(".glyph.running");
   await expect(runningPip).toHaveText("●");
   expect(await runningPip.evaluate((pip) => getComputedStyle(pip).color)).toBe(
     await token(page, "--state-running"),
   );
-  await expect(activity).toContainText("Orchestrator");
-  await expect(activity).toContainText("Codex");
-  await expect(activity).not.toContainText("Attention unavailable.");
-  await expect(activity).not.toContainText("Codex provides root activity only.");
-
-  await page.evaluate(() => window.sessionRail.rootOnly("opencode", "OpenCode"));
-  await expect(activity).toContainText("OpenCode provides root activity only.");
 });
 
 test("reference detail and Add repos stay in the lower detail stack", async ({ page }) => {
@@ -499,12 +447,10 @@ test("the anything-new buttons are cubes that sink when pressed", async ({ page 
   }
 });
 
-test("sessions take the rail, and activity sizes to what it holds", async ({ page }) => {
+test("sessions take the rail", async ({ page }) => {
   const sessions = page.getByLabel("Sessions");
-  const activity = page.locator(".activity-scroll");
   const box = async (locator) =>
     locator.evaluate((element) => ({
-      height: element.getBoundingClientRect().height,
       clientHeight: element.clientHeight,
       scrollHeight: element.scrollHeight,
       scrollTop: element.scrollTop,
@@ -512,20 +458,6 @@ test("sessions take the rail, and activity sizes to what it holds", async ({ pag
 
   // Sessions is the only greedy child, so it is the list that overflows.
   expect((await box(sessions)).scrollHeight).toBeGreaterThan((await box(sessions)).clientHeight);
-  expect((await box(activity)).height).toBeLessThanOrEqual(250);
-
   await sessions.evaluate((element) => element.scrollTo(0, element.scrollHeight));
   expect((await box(sessions)).scrollTop).toBeGreaterThan(0);
-  expect((await box(activity)).scrollTop).toBe(0);
-
-  await activity.evaluate((element) => element.scrollTo(0, element.scrollHeight));
-  expect((await box(activity)).scrollTop).toBeGreaterThan(0);
-});
-
-test("an empty activity panel occupies nothing", async ({ page }) => {
-  const activity = page.locator(".activity-scroll");
-  const before = await activity.evaluate((el) => el.getBoundingClientRect().height);
-  await page.evaluate(() => window.sessionRail.quiet());
-  const after = await activity.evaluate((el) => el.getBoundingClientRect().height);
-  expect(after).toBeLessThan(before);
 });

@@ -207,6 +207,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	launcher := opts.Launcher
 	shell := &shellWindow{windows: windows, launcher: launcher}
+	agentsTab := &agentsWindow{windows: windows}
 
 	reg.boot = booting{
 		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
@@ -245,7 +246,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			if root := state.root(); root != "" {
 				_ = session.MarkOpened(root, time.Now())
 			}
-			shell.open(state)
+			agentsTab.open(state)
 		},
 		teardown: windows.stop,
 		// The destructive paths address a session by the sessions root and the
@@ -334,29 +335,35 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	return r.Run()
 }
 
-// shellWindow opens a session's user shells: one unasked, and however many more
-// the user asks for. The numbering is the session's, so a second one restarts it.
-type shellWindow struct {
-	windows  *Windows
-	launcher Launcher
+// agentsWindow opens the session's Agents tab. Adoption may call it again once
+// the session is known, which must not leave two.
+type agentsWindow struct {
+	windows *Windows
 }
 
-// open gives a session a shell without being asked. Adoption may call it again
-// once the session is known, which must not leave two.
-func (s *shellWindow) open(owner *sessionState) {
+func (a *agentsWindow) open(owner *sessionState) {
 	if owner == nil {
 		return
 	}
 	owner.mu.Lock()
 	defer owner.mu.Unlock()
-	if owner.shell != "" && s.windows.exists(owner.shell) {
+	if owner.agentsWindow != "" && a.windows.exists(owner.agentsWindow) {
 		return
 	}
-	id, err := s.spawn(owner)
+	id, err := a.windows.openStructural(owner, workbench.WindowOptions{
+		Kind: workbench.KindAgents, Label: agentsWindowLabel,
+	})
 	if err != nil {
 		return
 	}
-	owner.shell = id
+	owner.agentsWindow = id
+}
+
+// shellWindow opens the user shells the session asks for. The numbering is the
+// session's, so a second one restarts it.
+type shellWindow struct {
+	windows  *Windows
+	launcher Launcher
 }
 
 // another is the tab strip's + button.

@@ -4,7 +4,7 @@
   import { tabLabel } from "./tabs.js";
 
   /** Status stays visible on unfocused tabs so failed runs remain apparent.
-   * @type {{label?: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", selected?: boolean, closable?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
+   * @type {{label?: string, badge?: string, artifact?: string, status?: import("../bridge/generated.js").TabStatus | "idle", selected?: boolean, closable?: boolean, pinned?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
   let {
     label,
     badge,
@@ -12,6 +12,7 @@
     status,
     selected = false,
     closable = true,
+    pinned = false,
     dragging = false,
     over = false,
     onSelect,
@@ -64,7 +65,7 @@
   class:dragging
   class:over
   title={whole}
-  draggable="true"
+  draggable={pinned ? "false" : "true"}
   ondragstart={lift}
   ondragover={hover}
   ondragleave={() => onDragLeave?.()}

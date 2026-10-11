@@ -245,10 +245,11 @@ export const UI_SCALE_ACTIONS = Object.freeze({
   RESET: "reset",
 });
 
-/** @typedef {"terminal"|"document"} WindowKind */
+/** @typedef {"terminal"|"document"|"agents"} WindowKind */
 export const WINDOW_KINDS = Object.freeze({
   TERMINAL: "terminal",
   DOCUMENT: "document",
+  AGENTS: "agents",
 });
 
 export const AGENT_ROOT_ID = "root";

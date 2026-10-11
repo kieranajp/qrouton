@@ -135,6 +135,9 @@ func (r *registry) each(fn func(id string, window *agentWindow)) {
 }
 
 func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	if opts.Kind == workbench.KindAgents {
+		return "", ErrAgentsWindowReserved
+	}
 	var err error
 	opts, err = admittedWindowOptions(owner, opts)
 	if err != nil {
@@ -152,7 +155,7 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 
 // openStructural opens a tab the workbench owns rather than the agent. It
 // leaves the selection alone: every caller either selects the tab itself once
-// it has the id, or is the unasked-for first shell, which has nothing to steal
+// it has the id, or is the Agents tab, which has nothing to steal
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
 	var err error
@@ -211,6 +214,10 @@ func (r *registry) reorder(slug, id string, to int) error {
 	live := r.ordered(owner)
 	from := slices.Index(live, window)
 	to = min(max(to, 0), len(live)-1)
+	if pinned(window) || (to == 0 && pinned(live[0])) {
+		r.mu.Unlock()
+		return ErrAgentsWindowPinned
+	}
 	if to == from {
 		r.mu.Unlock()
 		return nil
@@ -426,6 +433,7 @@ type drawnWindow struct {
 	Badge  string `json:"badge,omitempty"`
 	Kind   string `json:"kind"`
 	Status string `json:"status,omitempty"`
+	Pinned bool   `json:"pinned,omitempty"`
 
 	// Artifact colours the badge. Kind is the window's own, terminal or
 	// document, which says nothing about which artifact a document holds.
@@ -452,6 +460,7 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 		drawn := drawnWindow{
 			ID: fmt.Sprintf(windowIDFormat, window.seq), Label: window.opts.Label,
 			Badge: window.opts.Badge, Kind: string(window.opts.Kind), Status: tabStatus(window),
+			Pinned: pinned(window),
 		}
 		if window.opts.Badge != "" {
 			drawn.Artifact = status.DocumentKind(window.opts.Source)
@@ -460,6 +469,10 @@ func (r *registry) surfaces(owner *sessionState) surfaces {
 	}
 	return out
 }
+
+// pinned is the Agents tab, which neither the user nor the agent can close or
+// move; only session teardown removes it.
+func pinned(window *agentWindow) bool { return window.opts.Kind == workbench.KindAgents }
 
 func tabStatus(window *agentWindow) string {
 	if window.opts.Attention {

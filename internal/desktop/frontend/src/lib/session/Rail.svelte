@@ -5,7 +5,6 @@
   import { dismissible } from "../core/dismiss.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
-  import ActivityPanel from "./ActivityPanel.svelte";
   import RailItem from "./RailItem.svelte";
   import RepoList from "./RepoList.svelte";
   import { menuHeight, place } from "../menu.js";
@@ -15,12 +14,11 @@
   import { rowAt, shortcut } from "../shortcuts.js";
   import { DEFAULT_STICKER_LABELS, stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, repos: any[], agents: any, stickerLabels: Record<string, string>, onNewSession: () => void, onAddRepos: () => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, repos: any[], stickerLabels: Record<string, string>, onNewSession: () => void, onAddRepos: () => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
     repos,
-    agents,
     stickerLabels = DEFAULT_STICKER_LABELS,
     onNewSession,
     onAddRepos,
@@ -209,9 +207,6 @@
   </div>
 
   <div class="detail-stack" aria-label="Selected session details">
-    <div class="activity-scroll">
-      <ActivityPanel {agents} />
-    </div>
     <RepoList {repos} {onAddRepos} />
   </div>
 </div>
@@ -313,15 +308,6 @@
     flex-direction: column;
     gap: calc(10px * var(--ui-scale));
     padding: 0 calc(12px * var(--ui-scale)) calc(12px * var(--ui-scale));
-  }
-
-  /* Live work outranks the repository list, which is reference: activity takes
-     what it needs up to its cap, and the list below scrolls for the rest. */
-  .activity-scroll {
-    flex: 0 0 auto;
-    min-height: 0;
-    max-height: calc(250px * var(--ui-scale));
-    overflow: hidden auto;
   }
 
   .anchor {

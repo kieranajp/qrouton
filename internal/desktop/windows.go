@@ -94,15 +94,19 @@ func (w *Windows) ReportViewport(id string, report ViewportReport) error {
 // Close serves the agent's window tool and the tab strip's close control. Wails
 // binds exported methods only, so unexporting this silently breaks the tab.
 func (w *Windows) Close(id string) error {
-	if !w.exists(id) {
+	window, ok := w.window(id)
+	if !ok {
 		return noSuchWindow(id)
+	}
+	if pinned(window) {
+		return ErrAgentsWindowPinned
 	}
 	w.discard(id)
 	return nil
 }
 
 // Surfaces answers a session's page on load: the event only fires on a change,
-// and the shell opens before anything is subscribed.
+// and the Agents tab opens before anything is subscribed.
 func (w *Windows) Surfaces(slug string) surfaces { return w.surfacesBySlug(slug) }
 
 func (w *Windows) viewport(owner *sessionState, id string) (*workbench.DocumentViewport, error) {

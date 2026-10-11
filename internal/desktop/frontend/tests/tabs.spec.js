@@ -16,6 +16,7 @@ test("a badged tab leads with its id in a filled block of its own hue", async ({
   await open(page);
 
   await expect.poll(() => page.evaluate(() => window.labels())).toEqual([
+    { text: "Agents", title: "Agents", badge: "", badgeColour: "" },
     { text: "Shell", title: "Shell", badge: "", badgeColour: "" },
     {
       text: "Pane smoke test",
@@ -46,6 +47,7 @@ test("a finished run is green under the word the workbench sends for it", async 
   await open(page);
 
   await expect.poll(() => page.evaluate(() => window.dots())).toEqual([
+    "",
     RUNNING_TEAL,
     "",
     "",
@@ -63,17 +65,31 @@ test("the overflow menu keeps a hidden run's colour", async ({ page }) => {
 test("a tab dragged onto another takes the place it was dropped on", async ({ page }) => {
   await open(page);
 
-  await page.locator(".tab").first().dragTo(page.locator(".tab").nth(2));
+  await page.locator(".tab").nth(1).dragTo(page.locator(".tab").nth(3));
 
   await expect
     .poll(() => titles(page))
-    .toEqual(["Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
+    .toEqual(["Agents", "Pane smoke test", "Pane selection", "Shell", "◆ Findings"]);
 });
 
 test("the middle mouse button closes a tab", async ({ page }) => {
   await open(page);
 
-  await page.locator(".tab").nth(1).click({ button: "middle" });
+  await page.locator(".tab").nth(2).click({ button: "middle" });
 
-  await expect.poll(() => titles(page)).toEqual(["Shell", "Pane selection", "◆ Findings"]);
+  await expect.poll(() => titles(page)).toEqual(["Agents", "Shell", "Pane selection", "◆ Findings"]);
+});
+
+test("the pinned Agents tab cannot be closed or moved", async ({ page }) => {
+  await open(page);
+  const agents = page.locator('.tab[title="Agents"]');
+
+  await expect(agents.getByRole("button", { name: "Close tab" })).toHaveCount(0);
+  await expect(agents).toHaveAttribute("draggable", "false");
+  await agents.click({ button: "middle" });
+  await page.locator(".tab").nth(2).dragTo(agents);
+
+  await expect
+    .poll(() => titles(page))
+    .toEqual(["Agents", "Shell", "Pane smoke test", "Pane selection", "◆ Findings"]);
 });
