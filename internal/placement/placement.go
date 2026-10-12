@@ -46,13 +46,11 @@ const (
 	ResultFailed   Result = "failed"
 )
 
-// Root names a thoughts root by id and path.
 type Root struct {
 	ID   string `json:"id"`
 	Path string `json:"path"`
 }
 
-// Item is one session's placement.
 type Item struct {
 	Slug   string `json:"slug"`
 	Name   string `json:"name"`
@@ -63,7 +61,6 @@ type Item struct {
 	To     Root   `json:"to"`
 }
 
-// Report is what Scan found.
 type Report struct {
 	Items []Item `json:"items"`
 }
@@ -87,7 +84,6 @@ func (r Report) with(state State) []Item {
 	return out
 }
 
-// Outcome is what Move did with one session.
 type Outcome struct {
 	Slug   string `json:"slug"`
 	Result Result `json:"result"`
@@ -128,7 +124,12 @@ func (p placer) scan() (Report, error) {
 				Reason: ReasonUnreadable, Detail: fmt.Sprintf(detailUnreadableFmt, err)})
 		default:
 			item, act := p.inspect(dir, m)
-			if act != nil && item.State != StateMisplaced {
+			if item.State == StateMisplaced {
+				if err := p.clearStaleMarker(slugOf(dir), m, item); err != nil {
+					item.State, item.Detail = StatePending, fmt.Sprintf(detailPendingFormat, err)
+				}
+			}
+			if act != nil && item.State != StateMisplaced && item.State != StatePending {
 				if err := act(); err != nil {
 					item.State, item.Detail = StatePending, fmt.Sprintf(detailPendingFormat, err)
 				}
@@ -140,6 +141,18 @@ func (p placer) scan() (Report, error) {
 	}
 	return report, nil
 }
+
+// clearStaleMarker removes the marker a move wrote before its rename never
+// happened, so no marker lingers in a folder a sync tool shares.
+func (p placer) clearStaleMarker(slug string, m session.Manifest, item Item) error {
+	source := resolve(filepath.Join(item.From.Path, slug))
+	if !marked(source, marker(slug, m)) {
+		return nil
+	}
+	return os.Remove(filepath.Join(source, moveMarker))
+}
+
+func slugOf(dir string) string { return filepath.Base(dir) }
 
 func (p placer) move(slugs []string) []Outcome {
 	out := make([]Outcome, 0, len(slugs))

@@ -2,9 +2,11 @@ package artefact
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -30,6 +32,7 @@ func fixedAuthor(t *testing.T, name string) {
 
 func newSession(t *testing.T, repos ...session.ManifestRepo) string {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	root := t.TempDir()
 	err := session.WriteManifest(root, session.Manifest{SchemaVersion: 2, Name: "Team sync", Slug: "team-sync", Repos: repos})
 	if err != nil {
@@ -111,16 +114,66 @@ func TestCreateNumbersPastGapsAndIgnoresConflictCopies(t *testing.T) {
 func TestCreateRetriesWhenTheNameIsTaken(t *testing.T) {
 	fixedAuthor(t, "Kieran")
 	root := newSession(t)
-	first, err := Create(root, "spec", "Same", now)
+	dir := filepath.Join(sessionpaths.Thoughts(root), "specs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "S1-2026-10-12-same.md"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := nextNumber
+	t.Cleanup(func() { nextNumber = old })
+	nextNumber = func(string) int { return 1 }
+	rel, err := Create(root, "spec", "Same", now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, err := Create(root, "spec", "Same", now)
+	if filepath.Base(rel) != "S2-2026-10-12-same.md" {
+		t.Fatalf("path = %q, want the retry to take S2", rel)
+	}
+}
+
+func TestConcurrentCreatesWithDifferentTitlesGetDistinctNumbers(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	const n = 12
+	paths := make([]string, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rel, err := Create(root, "research", fmt.Sprintf("Topic %d", i), now)
+			if err != nil {
+				t.Error(err)
+			}
+			paths[i] = rel
+		}()
+	}
+	wg.Wait()
+	seen := map[string]bool{}
+	for _, rel := range paths {
+		id := status.ArtifactID(rel)
+		if id == "" || seen[id] {
+			t.Fatalf("ids repeat or are missing: %v", paths)
+		}
+		seen[id] = true
+	}
+}
+
+func TestALongTitleGivesACappedSlugCutAtAHyphen(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	rel, err := Create(root, "plan", strings.Repeat("retry budgets ", 25), now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if first == second || filepath.Base(second) != "S2-2026-10-12-same.md" {
-		t.Fatalf("first %q second %q", first, second)
+	slug := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(rel), "P1-2026-10-12-"), ".md")
+	if len(slug) > slugLimit || strings.HasSuffix(slug, "-") || strings.HasPrefix(slug, "-") || !strings.HasSuffix(slug, "budgets") {
+		t.Fatalf("slug = %q", slug)
+	}
+	if got := capSlug(strings.Repeat("a", 100)); len(got) != slugLimit {
+		t.Fatalf("an unbroken slug was cut to %d", len(got))
 	}
 }
 
@@ -158,6 +211,7 @@ func TestCreateRejectsAnUnknownKindNamingTheValidOnes(t *testing.T) {
 
 func TestCreateRecordsRevisionsForReferenceAndEditingRepos(t *testing.T) {
 	fixedAuthor(t, "Kieran")
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	root := t.TempDir()
 	worktree := gittest.Worktree(t, filepath.Join(root, "src", "app"))
 	head := gittest.Head(t, worktree)

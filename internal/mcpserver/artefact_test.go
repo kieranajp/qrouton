@@ -11,6 +11,7 @@ import (
 )
 
 func TestCreateArtefactReturnsTheNewPath(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	dir := summarySession(t)
 	message, err := createArtefact(dir, createArtefactInput{Kind: " Research ", Title: "Team sync"})
 	if err != nil {

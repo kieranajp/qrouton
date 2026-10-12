@@ -4,6 +4,8 @@ package artefact
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -14,13 +16,14 @@ import (
 
 	"go.yaml.in/yaml/v3"
 
+	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
-// Kinds are the artefact kinds Create accepts.
 var Kinds = []string{"research", "spec", "plan"}
 
 // Create writes a new artefact of the given kind into the session and returns
@@ -46,11 +49,29 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return "", err
 	}
-	slug := session.Slugify(title)
+	slug := capSlug(session.Slugify(title))
 	if slug == "" {
 		slug = untitledSlug
 	}
-	number := status.NextNumber(dir)
+	var name string
+	err = withFolderLock(dir, func() error {
+		var err error
+		name, err = write(dir, letter, slug, content, now)
+		return err
+	})
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(sessionpaths.ThoughtsDirName, sessionpaths.SharedDirName, folder, name), nil
+}
+
+var nextNumber = status.NextNumber
+
+// write creates the file under the folder lock, so concurrent creates cannot
+// both pick the same number. The exclusive create covers a file a sync tool
+// delivers meanwhile.
+func write(dir, letter, slug string, content []byte, now time.Time) (string, error) {
+	number := nextNumber(dir)
 	for range maxNameTries {
 		name := fmt.Sprintf(nameFormat, letter, number, now.Format(dateFormat), slug)
 		f, err := os.OpenFile(filepath.Join(dir, name), os.O_WRONLY|os.O_CREATE|os.O_EXCL, fileMode)
@@ -65,12 +86,37 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 		if cerr := f.Close(); werr == nil {
 			werr = cerr
 		}
-		if werr != nil {
-			return "", werr
-		}
-		return filepath.Join(sessionpaths.ThoughtsDirName, sessionpaths.SharedDirName, folder, name), nil
+		return name, werr
 	}
 	return "", ErrNumberTaken
+}
+
+// withFolderLock serialises writers to one folder across processes. The lock
+// file lives in the cache directory, so it never lands in a synced folder.
+func withFolderLock(dir string, fn func() error) error {
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		dir = resolved
+	}
+	locks := filepath.Join(filepath.Dir(config.CachePath()), lockDirName)
+	if err := os.MkdirAll(locks, dirMode); err != nil {
+		return err
+	}
+	sum := sha256.Sum256([]byte(dir))
+	return atomicfile.WithLock(filepath.Join(locks, hex.EncodeToString(sum[:8])+lockSuffix), fileMode, fn)
+}
+
+// capSlug shortens a slug to slugLimit characters, cutting at a hyphen.
+func capSlug(slug string) string {
+	if len(slug) <= slugLimit {
+		return slug
+	}
+	cut := slug[:slugLimit]
+	if slug[slugLimit] != '-' {
+		if i := strings.LastIndex(cut, "-"); i > 0 {
+			cut = cut[:i]
+		}
+	}
+	return strings.TrimRight(cut, "-")
 }
 
 // stamp turns a template into a document: the stamped keys first, then any the

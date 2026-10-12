@@ -1,7 +1,10 @@
 package desktop
 
 import (
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/placement"
@@ -204,5 +207,36 @@ func TestClosingAManualCheckLeavesTheFlagAlone(t *testing.T) {
 	}
 	if reg.placing() || savedConfig(t).ThoughtsPlacementChecked || cfg.Snapshot().ThoughtsPlacementChecked {
 		t.Fatalf("placing %v, flag %v", reg.placing(), savedConfig(t).ThoughtsPlacementChecked)
+	}
+}
+
+func TestPlacementOperationsNeverOverlap(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
+	p, _, _ := newTestPlacement(t, cfg, placement.Report{})
+	var active, peak atomic.Int32
+	enter := func() {
+		n := active.Add(1)
+		for {
+			old := peak.Load()
+			if n <= old || peak.CompareAndSwap(old, n) {
+				break
+			}
+		}
+		time.Sleep(5 * time.Millisecond)
+		active.Add(-1)
+	}
+	p.scan = func(*config.Config) (placement.Report, error) { enter(); return placement.Report{}, nil }
+	p.move = func(_ *config.Config, slugs []string) []placement.Outcome { enter(); return nil }
+	var wg sync.WaitGroup
+	for range 4 {
+		wg.Add(4)
+		go func() { defer wg.Done(); p.checkOnce() }()
+		go func() { defer wg.Done(); _ = p.Check() }()
+		go func() { defer wg.Done(); p.Move([]string{"a"}) }()
+		go func() { defer wg.Done(); _ = p.Close() }()
+	}
+	wg.Wait()
+	if peak.Load() != 1 {
+		t.Fatalf("%d operations ran at once", peak.Load())
 	}
 }

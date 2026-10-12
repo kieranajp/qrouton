@@ -20,6 +20,9 @@ const (
 	gitUserName   = "user.name"
 	gitConfigCmd  = "config"
 	gitGlobalFlag = "--global"
+	slugLimit     = 60
+	lockDirName   = "artefact-locks"
+	lockSuffix    = ".lock"
 	maxNameTries  = 5
 	fileMode      = 0o644
 	dirMode       = 0o755

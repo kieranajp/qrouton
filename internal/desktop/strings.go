@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	placementLeavingNote  = "Moving a session out of a shared folder stops sharing it. Sync deletes the folder on your teammates' machines, but their versioned copies may remain."
+	placementLeavingNote  = "Moving a session out of a shared folder stops sharing it. Your sync tool will usually delete the folder on your teammates' machines, but versioned copies may remain."
 	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
 
 	bugReportReviewLabel      = "Review bug report"

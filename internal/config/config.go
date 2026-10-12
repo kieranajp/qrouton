@@ -31,7 +31,7 @@ type Config struct {
 	// Set once the first-launch check of where session thoughts live has run.
 	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
 
-	// Stamped on new artefacts. Absent falls back to git's user.name.
+	// Stamped on new artefacts. Absent falls back to git's user.name, then the login name.
 	Author string `json:"author,omitempty"`
 
 	// Absent reads false, so a hand-written config sees the first-run flow once.

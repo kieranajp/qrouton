@@ -491,3 +491,19 @@ func TestAuthorSurvivesSnapshotAndReplace(t *testing.T) {
 		t.Fatalf("replaced author = %q", dst.Author)
 	}
 }
+
+func TestThoughtsPlacementCheckedSurvivesSnapshotAndReplace(t *testing.T) {
+	src := &Config{Root: "/sessions", ThoughtsPlacementChecked: true}
+	if !src.Snapshot().ThoughtsPlacementChecked {
+		t.Fatal("snapshot dropped the flag")
+	}
+	dst := &Config{}
+	dst.Replace(src)
+	if !dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace dropped the flag")
+	}
+	dst.Replace(&Config{Root: "/sessions"})
+	if dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace kept a stale flag")
+	}
+}

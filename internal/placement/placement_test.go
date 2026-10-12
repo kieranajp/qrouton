@@ -522,3 +522,39 @@ func TestAnUnmarkedDestinationIsNeverAdopted(t *testing.T) {
 		}
 	}
 }
+
+func TestAStaleMoveMarkerInTheSourceIsClearedByScan(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("stale", "acme")
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, filepath.Join(f.def, "stale", moveMarker), marker("stale", m))
+	expectItem(t, f.scan(), "stale", StateMisplaced)
+	if exists(filepath.Join(f.def, "stale", moveMarker)) {
+		t.Fatal("stale marker left in the source folder")
+	}
+}
+
+func TestAStaleMarkerThatCannotBeClearedIsPending(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("stuck", "acme")
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(f.def, "stuck")
+	mustWrite(t, filepath.Join(source, moveMarker), marker("stuck", m))
+	if err := os.Chmod(source, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(source, 0o755) })
+	report, err := newPlacer(f.cfg).scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Pending() {
+		t.Fatalf("report = %+v, want a pending marker", report)
+	}
+}

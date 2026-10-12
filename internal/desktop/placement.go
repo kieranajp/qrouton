@@ -8,8 +8,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/placement"
 )
 
-// PlacementRow is one misplaced session as the overlay draws it. Leaving marks
-// a move out of a shared folder, which cannot recall teammates' copies.
 type PlacementRow struct {
 	placement.Item
 	Leaving bool `json:"leaving"`
@@ -31,6 +29,8 @@ type Placement struct {
 	reg        *Sessions
 	pinnedRoot string
 
+	// op keeps the automatic check, the Settings check, Move and Close from overlapping.
+	op     sync.Mutex
 	mu     sync.Mutex
 	report placement.Report
 	manual bool
@@ -42,9 +42,11 @@ func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
 	return &Placement{cfg: cfg, reg: reg, pinnedRoot: pinnedFileRoot(), scan: placement.Scan, move: placement.Move}
 }
 
-// checkOnce is the automatic run: once per install, after first run, and only
-// loud when a session is misplaced.
+// checkOnce is the automatic run: once per install, after first run, and loud
+// when any session is misplaced or skipped.
 func (p *Placement) checkOnce() {
+	p.op.Lock()
+	defer p.op.Unlock()
 	snapshot := p.cfg.Snapshot()
 	if snapshot.ThoughtsPlacementChecked || !snapshot.Welcomed {
 		return
@@ -65,6 +67,8 @@ func (p *Placement) checkOnce() {
 // Check is the user's own run from Settings. It offers every session that is
 // misplaced now and never touches the record of the automatic check.
 func (p *Placement) Check() error {
+	p.op.Lock()
+	defer p.op.Unlock()
 	report, err := p.scan(p.cfg)
 	if err != nil {
 		return err
@@ -80,7 +84,6 @@ func (p *Placement) show(report placement.Report, manual bool) {
 	p.reg.setPlacing(true)
 }
 
-// Report is the overlay's content.
 func (p *Placement) Report() PlacementView {
 	p.mu.Lock()
 	report := p.report
@@ -102,14 +105,17 @@ func (p *Placement) Report() PlacementView {
 	return view
 }
 
-// Move moves each named session on its own and reports an outcome for each.
 func (p *Placement) Move(slugs []string) []placement.Outcome {
+	p.op.Lock()
+	defer p.op.Unlock()
 	return p.move(p.cfg, slugs)
 }
 
 // Close dismisses the overlay. After the automatic check it records that check
 // as done, unless an interrupted move is still waiting to be finished.
 func (p *Placement) Close() error {
+	p.op.Lock()
+	defer p.op.Unlock()
 	p.reg.setPlacing(false)
 	p.mu.Lock()
 	manual := p.manual
