@@ -182,9 +182,6 @@ func scalar(value string) *yaml.Node {
 	return &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: value}
 }
 
-// revisionOf is the commit a repository is at: the pinned one for a reference
-// repository, the worktree's HEAD for an editing one, and empty when neither
-// can be read.
 func revisionOf(sessionRoot string, repo session.ManifestRepo) string {
 	if !repo.Role.IsEditing() {
 		return repo.Revision

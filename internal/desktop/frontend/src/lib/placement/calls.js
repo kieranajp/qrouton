@@ -4,7 +4,7 @@ import { Call } from "../wails.js";
 /**
  * @typedef {{id: string, path: string}} PlacementRoot
  * @typedef {{slug: string, name: string, state: string, reason?: string, detail?: string, from: PlacementRoot, to: PlacementRoot, leaving?: boolean}} PlacementItem
- * @typedef {{misplaced: PlacementItem[], skipped: PlacementItem[], leavingNote: string, relaunchNote: string}} PlacementView
+ * @typedef {{misplaced: PlacementItem[], skipped: PlacementItem[], pending: PlacementItem[], leavingNote: string, relaunchNote: string}} PlacementView
  * @typedef {{slug: string, result: string, detail?: string}} PlacementOutcome
  */
 

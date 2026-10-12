@@ -18,6 +18,7 @@ type PlacementRow struct {
 type PlacementView struct {
 	Misplaced    []PlacementRow   `json:"misplaced"`
 	Skipped      []placement.Item `json:"skipped"`
+	Pending      []placement.Item `json:"pending"`
 	LeavingNote  string           `json:"leavingNote"`
 	RelaunchNote string           `json:"relaunchNote"`
 }
@@ -42,23 +43,25 @@ func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
 	return &Placement{cfg: cfg, reg: reg, pinnedRoot: pinnedFileRoot(), scan: placement.Scan, move: placement.Move}
 }
 
-// checkOnce is the automatic run: once per install, after first run, and loud
-// when any session is misplaced or skipped.
+// checkOnce runs at every launch to recover interrupted moves. The popup is
+// automatic once per install, after first run, when any session is misplaced,
+// skipped or pending; a recovery that fails raises it on any launch.
 func (p *Placement) checkOnce() {
 	p.op.Lock()
 	defer p.op.Unlock()
 	snapshot := p.cfg.Snapshot()
-	if snapshot.ThoughtsPlacementChecked || !snapshot.Welcomed {
-		return
-	}
 	report, err := p.scan(p.cfg)
 	if err != nil {
 		return
 	}
-	if len(report.Misplaced()) == 0 && len(report.Skipped()) == 0 {
-		if !report.Pending() {
-			_ = p.markChecked()
+	if snapshot.ThoughtsPlacementChecked || !snapshot.Welcomed {
+		if report.Pending() {
+			p.show(report, true)
 		}
+		return
+	}
+	if len(report.Misplaced()) == 0 && len(report.Skipped()) == 0 && !report.Pending() {
+		_ = p.markChecked()
 		return
 	}
 	p.show(report, false)
@@ -88,9 +91,12 @@ func (p *Placement) Report() PlacementView {
 	p.mu.Lock()
 	report := p.report
 	p.mu.Unlock()
-	view := PlacementView{Misplaced: []PlacementRow{}, Skipped: report.Skipped()}
+	view := PlacementView{Misplaced: []PlacementRow{}, Skipped: report.Skipped(), Pending: report.PendingItems()}
 	if view.Skipped == nil {
 		view.Skipped = []placement.Item{}
+	}
+	if view.Pending == nil {
+		view.Pending = []placement.Item{}
 	}
 	for _, item := range report.Misplaced() {
 		leaving := item.From.ID != config.DefaultThoughtsID

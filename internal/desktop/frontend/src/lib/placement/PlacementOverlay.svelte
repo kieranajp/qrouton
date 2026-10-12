@@ -92,8 +92,20 @@
     {#if view?.leavingNote}
       <p class="note">{view.leavingNote}</p>
     {/if}
-  {:else if view && !view.skipped.length}
+  {:else if view && !view.skipped.length && !view.pending.length}
     <p class="note">Every session is where it belongs.</p>
+  {/if}
+
+  {#if view?.pending.length}
+    <CapsLabel>Needs attention</CapsLabel>
+    <ul class="rows">
+      {#each view.pending as row (row.slug)}
+        <li>
+          <span class="name">{row.name}</span>
+          <span class="route failed">{row.detail}</span>
+        </li>
+      {/each}
+    </ul>
   {/if}
 
   {#if view?.skipped.length}
@@ -102,7 +114,7 @@
       {#each view.skipped as row (row.slug)}
         <li>
           <span class="name">{row.name}</span>
-          <span class="route">{reasonLabel(row.reason)}</span>
+          <span class="route">{reasonLabel(row)}</span>
         </li>
       {/each}
     </ul>
@@ -152,6 +164,10 @@
     font: var(--machine-sm);
     color: var(--text-muted);
     text-wrap: pretty;
+  }
+
+  .route.failed {
+    color: var(--state-failed);
   }
 
   .outcome {

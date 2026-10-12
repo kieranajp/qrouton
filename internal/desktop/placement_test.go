@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -8,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/placement"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -42,20 +45,11 @@ func misplacedReport() placement.Report {
 	}}}
 }
 
-func TestAPlacementCheckAlreadyDoneIsNotRunAgain(t *testing.T) {
-	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
-	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
-	if stubs.scans != 0 || reg.placing() {
-		t.Fatalf("scans %d, placing %v", stubs.scans, reg.placing())
-	}
-}
-
 func TestAPlacementCheckWaitsForFirstRun(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
 	p.checkOnce()
-	if stubs.scans != 0 || reg.placing() || cfg.ThoughtsPlacementChecked {
+	if reg.placing() || cfg.ThoughtsPlacementChecked || stubs.scans > 1 {
 		t.Fatalf("scans %d, placing %v, checked %v", stubs.scans, reg.placing(), cfg.ThoughtsPlacementChecked)
 	}
 }
@@ -238,5 +232,90 @@ func TestPlacementOperationsNeverOverlap(t *testing.T) {
 	wg.Wait()
 	if peak.Load() != 1 {
 		t.Fatalf("%d operations ran at once", peak.Load())
+	}
+}
+
+func TestRecoveryScansEveryLaunchEvenAfterTheFlagIsSet(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
+	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
+	p.checkOnce()
+	if stubs.scans != 1 {
+		t.Fatalf("scans = %d, want the recovery scan to run", stubs.scans)
+	}
+	if reg.placing() {
+		t.Fatal("a misplaced session raised the popup a second time")
+	}
+}
+
+func TestAPendingRecoveryRaisesThePopupOnAnyLaunch(t *testing.T) {
+	pending := placement.Report{Items: []placement.Item{{Slug: "crashed", Name: "Crashed", State: placement.StatePending, Detail: "denied"}}}
+	for name, cfg := range map[string]*config.Config{
+		"flag set":      {Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true},
+		"automatic run": {Root: t.TempDir(), Welcomed: true},
+	} {
+		t.Run(name, func(t *testing.T) {
+			p, reg, _ := newTestPlacement(t, cfg, pending)
+			p.checkOnce()
+			if !reg.placing() {
+				t.Fatal("popup not raised")
+			}
+			if view := p.Report(); len(view.Pending) != 1 || view.Pending[0].Detail != "denied" {
+				t.Fatalf("view = %+v", view)
+			}
+		})
+	}
+}
+
+func TestACrashedManualMoveIsRepairedOnTheNextLaunchWithTheFlagSet(t *testing.T) {
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, work := filepath.Join(base, "sessions"), filepath.Join(base, "work")
+	def := filepath.Join(root, "thoughts")
+	for _, d := range []string{def, work} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := &config.Config{Root: root, Welcomed: true, ThoughtsPlacementChecked: true,
+		Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{{ID: "work", Path: work, Orgs: []string{"acme"}}}}}
+	created := time.Now()
+	dir := filepath.Join(root, "kraken")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := session.Manifest{SchemaVersion: 2, Name: "kraken", Slug: "kraken", CreatedAt: created,
+		Repos: []session.ManifestRepo{{Org: "acme", Name: "svc", WorktreePath: "src/svc"}}}
+	if err := session.WriteManifest(dir, m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join("..", "thoughts", "kraken"), filepath.Join(dir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(work, "kraken")
+	if err := os.MkdirAll(moved, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mark := "kraken " + created.UTC().Format(time.RFC3339Nano)
+	if err := os.WriteFile(filepath.Join(moved, ".thoughtsmove"), []byte(mark), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	reg := newSessions()
+	newPlacement(cfg, reg).checkOnce()
+
+	if target, err := os.Readlink(filepath.Join(dir, "thoughts")); err != nil || target != moved {
+		t.Fatalf("link = %q, %v, want %q", target, err, moved)
+	}
+	if _, err := os.Stat(filepath.Join(moved, ".thoughtsmove")); err == nil {
+		t.Fatal("marker left behind")
+	}
+	if reg.placing() {
+		t.Fatal("a repaired move raised the popup")
 	}
 }

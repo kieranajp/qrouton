@@ -558,3 +558,37 @@ func TestAStaleMarkerThatCannotBeClearedIsPending(t *testing.T) {
 		t.Fatalf("report = %+v, want a pending marker", report)
 	}
 }
+
+func TestAMarkerLeftAfterTheRecordIsRemovedByTheNextScan(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("done", "acme")
+	f.interrupt(dir)
+	if err := os.Remove(filepath.Join(dir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	f.link(dir, filepath.Join(f.work, "done"))
+	if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.ThoughtsRoot = "work"
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if !exists(filepath.Join(f.work, "done", moveMarker)) {
+		t.Fatal("fixture left no marker")
+	}
+	f.scan()
+	if exists(filepath.Join(f.work, "done", moveMarker)) {
+		t.Fatal("the leftover marker stayed in the destination")
+	}
+}
+
+func TestASessionOutsideTheConfiguredFoldersNamesWhereItsThoughtsLive(t *testing.T) {
+	f := newFixture(t)
+	elsewhere := filepath.Join(f.base, "removed-root", "stranded")
+	mustMkdir(t, elsewhere)
+	f.link(f.legacy("stranded", "acme"), elsewhere)
+	item := expectItem(t, f.scan(), "stranded", StateSkipped)
+	if item.Reason != ReasonOutsideRoots || item.From.Path != elsewhere {
+		t.Fatalf("item = %+v, want the resolved link target %s", item, elsewhere)
+	}
+}

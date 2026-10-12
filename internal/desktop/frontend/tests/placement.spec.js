@@ -46,3 +46,15 @@ test("only skipped sessions shows their reasons with just a Close button", async
   await page.getByRole("button", { name: "Close" }).click();
   await expect.poll(() => page.evaluate(() => window.closes)).toBe(1);
 });
+
+test("a pending recovery is listed with its reason and never reads as all clear", async ({ page }) => {
+  await page.goto("/tests/placement.html?clear&pending");
+  await expect(page.getByText("interrupted move could not be finished: permission denied")).toBeVisible();
+  await expect(page.getByText("Every session is where it belongs.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Move" })).toHaveCount(0);
+});
+
+test("a session outside the configured folders names where its thoughts live", async ({ page }) => {
+  await page.goto("/tests/placement.html?outside");
+  await expect(page.getByText("Its thoughts live in /old/sync/octopus, outside your configured folders. Move them by hand")).toBeVisible();
+});

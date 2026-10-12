@@ -74,6 +74,9 @@ func (r Report) Skipped() []Item { return r.with(StateSkipped) }
 // Pending reports whether an interrupted move is still unfinished.
 func (r Report) Pending() bool { return len(r.with(StatePending)) > 0 }
 
+// PendingItems lists the sessions whose interrupted move could not be finished.
+func (r Report) PendingItems() []Item { return r.with(StatePending) }
+
 func (r Report) with(state State) []Item {
 	var out []Item
 	for _, item := range r.Items {
@@ -224,7 +227,7 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 
 	if target == to && isDir(to) {
 		item.State, item.From = StatePlaced, item.To
-		if m.ThoughtsRoot == routed.ID {
+		if m.ThoughtsRoot == routed.ID && !marked(to, marker(slug, m)) {
 			return item, nil
 		}
 		return item, func() error { return settle(dir, home, routed.ID) }
@@ -232,6 +235,7 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 
 	from, ok := p.sourceRoot(slug, target)
 	if !ok {
+		item.From = Root{Path: target}
 		item.Reason, item.Detail = ReasonOutsideRoots, fmt.Sprintf(detailOutsideFormat, target)
 		return item, nil
 	}
