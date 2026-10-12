@@ -423,3 +423,39 @@ func TestFirstRunSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(
 		t.Fatalf("live = root %q, orgs %v, welcomed %v", live.Root, live.Orgs, live.Welcomed)
 	}
 }
+
+func TestFirstRunSaveUnderOverridesRefusesAThoughtsFolderHoldingTheOverrideRoot(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	vault := t.TempDir()
+	override := filepath.Join(vault, "sessions")
+	t.Setenv("QROUTON_ROOT", override)
+	fileRoot := filepath.Join(t.TempDir(), "work")
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := `{"orgs": ["acme"], "root": "` + fileRoot + `"}`
+	if err := os.WriteFile(config.Path(), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := cfg.Snapshot()
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+
+	_, err = f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: fileRoot, Thoughts: vault})
+	if !errors.Is(err, config.ErrThoughtsHoldsRoot) || !strings.HasPrefix(err.Error(), "thoughts: ") {
+		t.Fatalf("Save = %v, want a thoughts field refusal", err)
+	}
+	disk, readErr := os.ReadFile(config.Path())
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(disk) != file || savedConfig(t).Welcomed {
+		t.Fatalf("a refused save changed config.json: %s", disk)
+	}
+	if !reflect.DeepEqual(cfg.Snapshot(), before) {
+		t.Fatalf("a refused save changed the live config: %+v", cfg.Snapshot())
+	}
+}

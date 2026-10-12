@@ -98,6 +98,9 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
 		if !changed {
+			if err := checkLiveThoughts(live); err != nil {
+				return err
+			}
 			return commitLive(f.cfg, current, next, live, f.reconfigure)
 		}
 		if err := config.Save(next); err != nil {

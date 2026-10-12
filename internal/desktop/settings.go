@@ -504,8 +504,8 @@ func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *c
 		if err != nil {
 			return err
 		}
-		if err := config.CheckThoughts(live); err != nil {
-			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		if err := checkLiveThoughts(live); err != nil {
+			return err
 		}
 		if err := commitLive(cfg, snapshot, next, live, reconfigure); err != nil {
 			return err
@@ -515,6 +515,13 @@ func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *c
 		}
 		return nil
 	})
+}
+
+func checkLiveThoughts(live *config.Config) error {
+	if err := config.CheckThoughts(live); err != nil {
+		return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+	}
+	return nil
 }
 
 // stageConfig builds the file copy from config.json as written and the live copy
