@@ -18,7 +18,7 @@ Keep your own context lean. When a chunk of work is genuinely read-heavy or self
 
 {{subagent-choice}}
 
-Persist anything worth keeping in code or in `thoughts/shared/` — work survives conversation loss through files, not chat.
+Persist anything worth keeping in code or in `thoughts/shared/`; create a new research, spec or plan with `create_artefact` rather than naming the file yourself — work survives conversation loss through files, not chat.
 
 {{workspace-windows}}
 

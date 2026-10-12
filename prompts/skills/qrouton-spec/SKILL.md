@@ -8,7 +8,7 @@ description: Internally capture design decisions during the Plan part of qrouton
 The user experiences this as design questions within Plan, never a stage of its own.
 
 1. Read the relevant research and follow its workstream links.
-2. Have a `qrouton-planning-lead` draft `thoughts/shared/specs/S<n>-<date>-<slug>.md`. It inspects the live code, states the end state and scope, records the decisions it can make with their rejected alternatives, and writes each remaining open question into the file with lettered options and a recommendation. The shape is in `references/spec-shape.md` beside this file, including the bar a question must clear. Read it and pass its absolute path to the lead, which starts in a fresh context and cannot resolve a path relative to this file.
+2. Have a `qrouton-planning-lead` draft the spec. It calls `create_artefact` with `kind: spec` and a short title, then fills the file it returns and sets `research:` to the research document's relative path. It inspects the live code, states the end state and scope, records the decisions it can make with their rejected alternatives, and writes each remaining open question into the file with lettered options and a recommendation. The shape is in `references/spec-shape.md` beside this file, including the bar a question must clear. Read it and pass its absolute path to the lead, which starts in a fresh context and cannot resolve a path relative to this file.
 
    {{session-summary}} Pass `stage` as `plan`, because spec work belongs to Plan.
 3. Open the spec with `open_file`. Tell the user what it decides and how many design questions wait in it, and that they answer them in the document. Do not walk through the options in chat.

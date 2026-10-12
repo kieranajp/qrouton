@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -736,13 +737,13 @@ func TestResearchSkillDefersItsShapeToAReference(t *testing.T) {
 	}
 	var found bool
 	for _, file := range prompt.Files {
-		if file.Path != "references/research-shape.md" {
+		if file.Path != "references/research-template.md" {
 			continue
 		}
 		found = true
 		for _, heading := range headings {
 			if !strings.Contains(string(file.Content), heading) {
-				t.Errorf("the shape reference is missing %q", heading)
+				t.Errorf("the research template is missing %q", heading)
 			}
 		}
 	}
@@ -778,19 +779,14 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var shape string
+	var template string
 	for _, file := range prompt.Files {
-		if file.Path == "references/research-shape.md" {
-			shape = string(file.Content)
+		if file.Path == "references/research-template.md" {
+			template = string(file.Content)
 		}
 	}
-	template, _, found := strings.Cut(shape, "\n```\n")
-	if !found {
-		t.Fatal("the shape reference holds no fenced template")
-	}
-	_, template, found = strings.Cut(template, "```markdown\n")
-	if !found {
-		t.Fatal("the shape reference's template is not fenced as markdown")
+	if template == "" {
+		t.Fatal("the research skill ships no template")
 	}
 
 	sections := markdown.Sections(template)
@@ -805,5 +801,31 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 	}
 	if sections[2].Name != "Open Questions" || sections[2].State != markdown.SectionEmpty {
 		t.Errorf("the closing section reads as %#v", sections[2])
+	}
+}
+
+func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
+	handBuilt := regexp.MustCompile(`[RSP]<n>-`)
+	for skill, kind := range map[string]string{
+		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan",
+	} {
+		prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+skill))
+		if err != nil {
+			t.Fatal(err)
+		}
+		text := string(prompt.Content)
+		if !strings.Contains(text, "`create_artefact`") || !strings.Contains(text, "`kind: "+kind+"`") {
+			t.Errorf("%s does not call create_artefact with kind %s", skill, kind)
+		}
+		if handBuilt.MatchString(text) {
+			t.Errorf("%s still builds an artefact path by hand", skill)
+		}
+	}
+	research, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+"qrouton-research"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if handBuilt.MatchString(string(research.Content)) {
+		t.Error("qrouton-research still builds an artefact path by hand")
 	}
 }
