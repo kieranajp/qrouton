@@ -4,9 +4,10 @@ test("rows render ticked beside their routes, with the sessions left alone below
   await page.goto("/tests/placement.html");
   await expect(page.getByLabel("Kraken")).toBeChecked();
   await expect(page.getByLabel("Squid")).toBeChecked();
-  await expect(page.getByText("work to default")).toBeVisible();
+  await expect(page.getByText("lifesum to thoughts")).toBeVisible();
+  await expect(page.getByTitle("/Users/me/Sync/lifesum").first()).toBeVisible();
   await expect(page.getByText("An agent is running in it")).toBeVisible();
-  await expect(page.getByText("Sync deletes the folder")).toBeVisible();
+  await expect(page.getByText("usually delete the folder")).toBeVisible();
 });
 
 test("unticking a row leaves it out of Move, and each outcome renders", async ({ page }) => {

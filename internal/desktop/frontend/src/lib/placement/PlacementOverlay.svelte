@@ -4,6 +4,7 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import { PLACEMENT_RESULTS } from "../bridge/generated.js";
   import { close, move, report } from "./calls.js";
+  import { folderName } from "./folders.js";
   import { reasonLabel } from "./reasons.js";
 
   /** @type {import("./calls.js").PlacementView | null} */
@@ -16,6 +17,9 @@
   let rows = $derived(view?.misplaced ?? []);
   let chosen = $derived(rows.filter((row) => ticked[row.slug] && !outcomes[row.slug]));
   let moving = $derived(rows.length > 0);
+  let sections = $derived(
+    [rows.length, view?.pending.length ?? 0, view?.skipped.length ?? 0].filter(Boolean).length,
+  );
 
   onMount(async () => {
     try {
@@ -54,6 +58,7 @@
 </script>
 
 <Dialog
+  compact
   secondary={moving ? "Close" : undefined}
   primary={moving ? "Move" : "Close"}
   {status}
@@ -62,14 +67,19 @@
   onSecondary={dismiss}
   onPrimary={moving ? run : dismiss}
   onEscape={dismiss}>
-  <h1>Some sessions keep their thoughts in the wrong folder</h1>
+  <h1>Some sessions are in the wrong thoughts folder</h1>
+
+  <p class="lead">
+    qrouton keeps a session's thoughts in the folder for its repos' organisation.
+    {#if moving}Move puts these where they belong.{:else}These need your attention.{/if}
+  </p>
 
   {#if view?.relaunchNote}
     <p class="note">{view.relaunchNote}</p>
   {/if}
 
   {#if moving}
-    <CapsLabel>Move these</CapsLabel>
+    {#if sections > 1}<CapsLabel tone="dim">Move these</CapsLabel>{/if}
     <ul class="rows">
       {#each rows as row (row.slug)}
         <li>
@@ -80,7 +90,10 @@
               disabled={busy || Boolean(outcomes[row.slug])} />
             <span class="name">{row.name}</span>
           </label>
-          <span class="route">{row.from.id} to {row.to.id}</span>
+          <span class="route">
+            <span title={row.from.path}>{folderName(row.from.path)}</span> to
+            <span title={row.to.path}>{folderName(row.to.path)}</span>
+          </span>
           {#if outcomes[row.slug]}
             <span class="outcome" class:failed={outcomes[row.slug].result !== PLACEMENT_RESULTS.MOVED}>
               {outcomeText(outcomes[row.slug])}
@@ -97,7 +110,7 @@
   {/if}
 
   {#if view?.pending.length}
-    <CapsLabel>Needs attention</CapsLabel>
+    {#if sections > 1}<CapsLabel tone="dim">Needs attention</CapsLabel>{/if}
     <ul class="rows">
       {#each view.pending as row (row.slug)}
         <li>
@@ -109,7 +122,7 @@
   {/if}
 
   {#if view?.skipped.length}
-    <CapsLabel tone="dim">Left where they are</CapsLabel>
+    {#if sections > 1}<CapsLabel tone="dim">Left where they are</CapsLabel>{/if}
     <ul class="rows">
       {#each view.skipped as row (row.slug)}
         <li>
@@ -124,8 +137,25 @@
 <style>
   h1 {
     margin: 0;
-    font: var(--instruction);
+    font: var(--display-md);
+    letter-spacing: var(--display-tracking);
     color: var(--text-primary);
+  }
+
+  p {
+    margin: 0;
+    max-width: 78ch;
+    text-wrap: pretty;
+  }
+
+  .lead {
+    font: var(--machine-md);
+    color: var(--text-secondary);
+  }
+
+  .note {
+    font: var(--machine-sm);
+    color: var(--text-muted);
   }
 
   .rows {
@@ -148,6 +178,7 @@
     align-items: baseline;
     gap: calc(10px * var(--ui-scale));
     min-width: 0;
+    font: var(--machine-md);
   }
 
   input {
@@ -155,12 +186,11 @@
   }
 
   .name {
+    font: var(--machine-md);
     color: var(--text-primary);
   }
 
-  .route,
-  .note {
-    margin: 0;
+  .route {
     font: var(--machine-sm);
     color: var(--text-muted);
     text-wrap: pretty;
