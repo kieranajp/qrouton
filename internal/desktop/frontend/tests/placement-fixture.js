@@ -11,7 +11,7 @@ const attention = query.has("attention");
 const single = query.has("single");
 
 const pendingRows = query.has("pending") || attention
-  ? [{ slug: "crashed", name: "Crashed", state: "pending", detail: "interrupted move could not be finished: permission denied", from: { id: "", path: "" }, to: { id: "", path: "" } }]
+  ? [{ slug: "crashed", name: "Crashed", state: "pending", detail: "Interrupted move could not be finished: permission denied", from: { id: "", path: "" }, to: { id: "", path: "" } }]
   : [];
 const outside = query.has("outside");
 

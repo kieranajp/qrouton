@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Dialog from "../assembly/Dialog.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Checkbox from "../core/Checkbox.svelte";
   import { PLACEMENT_RESULTS } from "../bridge/generated.js";
   import { close, move, report } from "./calls.js";
   import { folderName } from "./folders.js";
@@ -54,7 +55,9 @@
 
   /** @param {import("./calls.js").PlacementOutcome} outcome */
   const outcomeText = (outcome) =>
-    outcome.result === PLACEMENT_RESULTS.MOVED ? "Moved" : `${outcome.result}: ${outcome.detail ?? ""}`;
+    outcome.result === PLACEMENT_RESULTS.MOVED ? "Moved" : `${sentence(outcome.result)}: ${outcome.detail ?? ""}`;
+  /** @param {string} text */
+  const sentence = (text) => text.charAt(0).toUpperCase() + text.slice(1);
 </script>
 
 <Dialog
@@ -83,15 +86,11 @@
     <ul class="rows">
       {#each rows as row (row.slug)}
         <li>
-          <label>
-            <input
-              type="checkbox"
-              bind:checked={ticked[row.slug]}
-              disabled={busy || Boolean(outcomes[row.slug])} />
+          <Checkbox bind:checked={ticked[row.slug]} disabled={busy || Boolean(outcomes[row.slug])}>
             <span class="name">{row.name}</span>
-          </label>
+          </Checkbox>
           <span class="route">
-            <span title={row.from.path}>{folderName(row.from.path)}</span> to
+            now in <span title={row.from.path}>{folderName(row.from.path)}</span> · belongs in
             <span title={row.to.path}>{folderName(row.to.path)}</span>
           </span>
           {#if outcomes[row.slug]}
@@ -171,18 +170,6 @@
     gap: calc(16px * var(--ui-scale));
     padding: calc(9px * var(--ui-scale)) 0;
     border-bottom: 1px solid var(--border-subtle);
-  }
-
-  label {
-    display: flex;
-    align-items: baseline;
-    gap: calc(10px * var(--ui-scale));
-    min-width: 0;
-    font: var(--machine-md);
-  }
-
-  input {
-    accent-color: var(--accent-action);
   }
 
   .name {

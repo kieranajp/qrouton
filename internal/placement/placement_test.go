@@ -423,7 +423,7 @@ func TestACrossDeviceMoveIsSkipped(t *testing.T) {
 		return 1
 	}
 	item := expectItem(t, f.scanWith(p), "far", StateSkipped)
-	if item.Reason != ReasonCrossDevice || !strings.Contains(item.Detail, "cross-device") {
+	if item.Reason != ReasonCrossDevice || !strings.Contains(item.Detail, "Cross-device") {
 		t.Fatalf("item = %+v", item)
 	}
 	expectOutcome(t, f.moveWith(p, "far"), "far", ResultRefused)
