@@ -52,7 +52,7 @@ type Fields struct {
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
 	Welcoming      bool           `json:"welcoming"`
-	StickerLabels  StickerLabels  `json:"stickerLabels"`
+	Stickers       []Sticker      `json:"stickers"`
 	SessionSummary SessionSummary `json:"sessionSummary"`
 }
 
@@ -74,6 +74,7 @@ func EmptyFields() Fields {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
+		Stickers:            []Sticker{},
 	}
 }
 
@@ -94,11 +95,12 @@ type SessionRow struct {
 	Sticker  string        `json:"sticker"`
 }
 
-type StickerLabels struct {
-	Star        string `json:"star"`
-	Bookmark    string `json:"bookmark"`
-	Question    string `json:"question"`
-	Exclamation string `json:"exclamation"`
+// Sticker is one of the user's configured stickers, in rail cycle order.
+type Sticker struct {
+	ID     string `json:"id"`
+	Colour string `json:"colour"`
+	Symbol string `json:"symbol"`
+	Label  string `json:"label"`
 }
 
 // Stages is the R, P and I of a session's workflow. Research means the latest
@@ -309,7 +311,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
-			Sticker: string(m.Sticker.Effective()),
+			Sticker: string(m.Sticker),
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}

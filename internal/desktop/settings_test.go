@@ -1,17 +1,21 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
@@ -22,9 +26,25 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
-	}, []string{"LINEAR_PROMPT"}, quit, nil, nil)
+	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil, nil, nil)
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
+}
+
+// writeConfigFile gives the test a config.json holding cfg, as a booted app has.
+func writeConfigFile(t *testing.T, cfg *config.Config) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	b, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.Path(), b, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func requireBlocked(t *testing.T, done <-chan error, what string) {
@@ -43,6 +63,7 @@ func TestSettingsLoadRoundTripsEditorAndLaunch(t *testing.T) {
 		Editor: []string{"code", "--wait", "{}"},
 		Launch: map[string][]string{"claude": {"claude", "--verbose"}},
 	}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 
 	got := s.Load()
@@ -68,11 +89,12 @@ func TestSettingsPreserveEditorArgumentsWhenSaving(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	want := []string{"/Applications/Visual Studio Code.app/bin/code", "--wait", "{}", "a'b", `a"b`, `a\b`, "", "#profile", "line\nbreak"}
 	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}, Editor: want}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 	loaded := s.Load()
 	_, err := s.Save(SettingsInput{
 		Orgs: loaded.Orgs, Root: loaded.Root, Editor: loaded.Editor,
-		Launch: loaded.Launch, Linear: loaded.Linear, StickerLabels: loaded.StickerLabels,
+		Launch: loaded.Launch, Stickers: loaded.Stickers,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -82,18 +104,29 @@ func TestSettingsPreserveEditorArgumentsWhenSaving(t *testing.T) {
 	}
 }
 
-func TestSettingsLoadAnswersEffectiveStickerLabels(t *testing.T) {
-	defaults := testSettings(t, &config.Config{}, nil, nil, nil).Load()
-	if defaults.StickerLabels != config.DefaultStickerLabels {
-		t.Fatalf("default sticker labels = %#v, want %#v", defaults.StickerLabels, config.DefaultStickerLabels)
-	}
+func defaultStickers() []config.Sticker { return (&config.Config{}).EffectiveStickers() }
 
-	cfg := &config.Config{StickerLabels: &config.StickerLabels{
-		Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken",
-	}}
-	custom := testSettings(t, cfg, nil, nil, nil).Load()
-	if custom.StickerLabels != *cfg.StickerLabels {
-		t.Fatalf("custom sticker labels = %#v, want %#v", custom.StickerLabels, *cfg.StickerLabels)
+func TestSettingsLoadAnswersTheEffectiveStickers(t *testing.T) {
+	if got := testSettings(t, &config.Config{}, nil, nil, nil).Load().Stickers; !reflect.DeepEqual(got, defaultStickers()) {
+		t.Fatalf("default stickers = %#v", got)
+	}
+	listed := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
+	if got := testSettings(t, &config.Config{Stickers: &listed}, nil, nil, nil).Load().Stickers; !reflect.DeepEqual(got, listed) {
+		t.Fatalf("listed stickers = %#v", got)
+	}
+}
+
+func TestSettingsLoadListsTheRunnerIdsLaunchKnows(t *testing.T) {
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	if got := s.Load().Runners; got == nil || len(got) != 0 {
+		t.Fatalf("no runner source = %#v, want an empty list", got)
+	}
+	s.runners = func() ([]assembly.Runner, error) {
+		return []assembly.Runner{{ID: "claude", Label: "Claude Code", Installed: true}, {ID: "agy", Label: "Antigravity"}}, nil
+	}
+	want := []RunnerLegend{{ID: "claude", Label: "Claude Code"}, {ID: "agy", Label: "Antigravity"}}
+	if got := s.Load().Runners; !reflect.DeepEqual(got, want) {
+		t.Fatalf("runners = %#v, want %#v", got, want)
 	}
 }
 
@@ -104,38 +137,93 @@ func TestSettingsLoadAnswersEmptyStringForNoLaunchOverrides(t *testing.T) {
 	}
 }
 
-func TestSettingsLoadCarriesTheLinearDocumentAndWhereItLives(t *testing.T) {
+func TestSettingsLoadOffersTheLinearEntryAndWhetherInstallWouldReplaceOne(t *testing.T) {
 	s := testSettings(t, &config.Config{}, nil, nil, nil)
-	document := "{\n  \"openIssue\": {\"path\": \"/other/tool\"}\n}\n"
-	if err := os.WriteFile(s.linear.File, []byte(document), 0o644); err != nil {
+	got := s.Load().Linear
+	if got.Path != lineartools.ConfigPath || got.Replaces || got.Error != "" || !strings.Contains(got.Snippet, `"openIssue"`) {
+		t.Fatalf("linear = %+v", got)
+	}
+	if err := os.WriteFile(s.linear.File, []byte(`{"openIssue": {"path": "/bin/other"}}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
-
-	got := s.Load()
-	if got.Linear != document {
-		t.Fatalf("linear = %q, want %q", got.Linear, document)
-	}
-	if got.LinearPath != lineartools.ConfigPath {
-		t.Fatalf("linear path = %q, want %q", got.LinearPath, lineartools.ConfigPath)
-	}
-	if got.LinearError != "" {
-		t.Fatalf("linear error = %q", got.LinearError)
+	if got := s.Load().Linear; !got.Replaces {
+		t.Fatalf("an existing different entry did not report a replacement: %+v", got)
 	}
 }
 
-// The panel draws the reason in place of the document, so a Linear file that
-// cannot be read or generated has to reach the view as text.
-func TestSettingsLoadReportsWhyTheLinearDocumentIsUnavailable(t *testing.T) {
+func TestSettingsLoadReportsWhyTheLinearEntryIsUnavailable(t *testing.T) {
 	s := testSettings(t, &config.Config{}, nil, nil, nil)
 	s.linear.Command = nil
-
-	got := s.Load()
-	if got.Linear != "" || got.LinearError != lineartools.ErrNoCommand.Error() {
-		t.Fatalf("linear = %q, error = %q", got.Linear, got.LinearError)
+	if got := s.Load().Linear; got.Snippet != "" || got.Error != lineartools.ErrNoCommand.Error() {
+		t.Fatalf("linear = %+v", got)
 	}
 }
 
-// Save refuses Orgs, Root, Editor, Launch, then Linear in that order, and never
+func TestSettingsInstallLinearKeepsOtherKeysAndClearsTheReplacement(t *testing.T) {
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	if err := os.WriteFile(s.linear.File, []byte(`{"openIssue": {"path": "/bin/other"}, "keep": true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	view, err := s.InstallLinear()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Replaces {
+		t.Fatalf("after install = %+v", view)
+	}
+	raw, _ := os.ReadFile(s.linear.File)
+	if !strings.Contains(string(raw), `"keep": true`) || !strings.Contains(string(raw), "--linear-issue") {
+		t.Fatalf("installed %s", raw)
+	}
+}
+
+func TestSettingsSaveLeavesTheLinearFileAlone(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	if _, err := s.Save(SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers()}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(s.linear.File); !os.IsNotExist(err) {
+		t.Fatal("Save wrote coding-tools.json")
+	}
+}
+
+func TestSettingsRelaunchNeedsARelauncher(t *testing.T) {
+	s := testSettings(t, &config.Config{}, nil, nil, func() { t.Fatal("quit without a successor") })
+	if err := s.Relaunch(); !errors.Is(err, ErrNoRelaunch) {
+		t.Fatalf("Relaunch = %v, want ErrNoRelaunch", err)
+	}
+	s.relaunch = func() error { return errors.New("successor never answered") }
+	if err := s.Relaunch(); err == nil {
+		t.Fatal("a failed relaunch reported success")
+	}
+}
+
+func TestSettingsOpenConfigRunsTheOpenTextArgvOnConfigPath(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	if err := s.OpenConfig(); !errors.Is(err, ErrNoOpenTextCommand) {
+		t.Fatalf("OpenConfig without a command = %v", err)
+	}
+	record := filepath.Join(t.TempDir(), "opened")
+	var asked string
+	s.openText = func(path string) []string {
+		asked = path
+		return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", path, record}
+	}
+	if err := s.OpenConfig(); err != nil {
+		t.Fatal(err)
+	}
+	if asked != config.Path() {
+		t.Fatalf("opened %q, want %q", asked, config.Path())
+	}
+	if b, _ := os.ReadFile(record); string(b) != config.Path() {
+		t.Fatalf("the command saw %q", b)
+	}
+}
+
+// Save refuses Orgs, Root, Editor, then Launch in that order, and never
 // writes config.json for an input that fails any of them.
 func TestSettingsSaveRefusesTheFirstInvalidFieldAndWritesNothing(t *testing.T) {
 	unwritable := filepath.Join(t.TempDir(), "notadir")
@@ -216,7 +304,7 @@ func TestSettingsSaveRefusesAnEmptyOwnerListAndWritesNothing(t *testing.T) {
 
 	root := filepath.Join(t.TempDir(), "sessions")
 	for _, orgs := range [][]string{nil, {}, {"", "   "}} {
-		_, err := s.Save(SettingsInput{Orgs: orgs, Root: root, Linear: `{}`})
+		_, err := s.Save(SettingsInput{Orgs: orgs, Root: root})
 		if !errors.Is(err, ErrNoOwners) {
 			t.Fatalf("Save(%q) error = %v, want ErrNoOwners", orgs, err)
 		}
@@ -261,80 +349,81 @@ func TestSettingsSaveKeepsTheJSONErrorMessageVerbatim(t *testing.T) {
 	}
 }
 
-func TestSettingsSaveRefusesAnInvalidLinearConfigBeforeWritingEitherFile(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	s := testSettings(t, &config.Config{Root: t.TempDir()}, nil, nil, nil)
-
-	for _, raw := range []string{"{not json", "null"} {
-		_, err := s.Save(SettingsInput{
-			Orgs: []string{"acme"}, Root: t.TempDir(), Linear: raw,
-			StickerLabels: config.DefaultStickerLabels,
-		})
-		if err == nil || !strings.HasPrefix(err.Error(), "linear: ") {
-			t.Fatalf("Save(%q) error = %v, want a Linear field error", raw, err)
-		}
-		if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
-			t.Fatalf("Save(%q) wrote config.json despite refusing Linear", raw)
-		}
-		if _, statErr := os.Stat(s.linear.File); !os.IsNotExist(statErr) {
-			t.Fatalf("Save(%q) wrote coding-tools.json despite refusing Linear", raw)
-		}
-	}
-}
-
-func TestSettingsSaveRefusesEachBlankStickerLabelBeforeWritingEitherFile(t *testing.T) {
-	fields := []struct {
+func TestSettingsSaveRefusesAnInvalidStickerBeforeWritingEitherFile(t *testing.T) {
+	cases := []struct {
 		name  string
-		blank func(*config.StickerLabels)
+		edit  func([]config.Sticker) []config.Sticker
+		field string
 	}{
-		{name: "star", blank: func(labels *config.StickerLabels) { labels.Star = " \t" }},
-		{name: "bookmark", blank: func(labels *config.StickerLabels) { labels.Bookmark = "" }},
-		{name: "question", blank: func(labels *config.StickerLabels) { labels.Question = "\n" }},
-		{name: "exclamation", blank: func(labels *config.StickerLabels) { labels.Exclamation = "  " }},
+		{"blank label", func(s []config.Sticker) []config.Sticker { s[1].Label = " \t"; return s }, "stickers.1: cannot be empty"},
+		{"unknown colour", func(s []config.Sticker) []config.Sticker { s[2].Colour = "beige"; return s }, "stickers.2: "},
+		{"unknown symbol", func(s []config.Sticker) []config.Sticker { s[0].Symbol = "moon"; return s }, "stickers.0: "},
+		{"duplicate pair", func(s []config.Sticker) []config.Sticker {
+			return append(s, config.Sticker{Colour: "blue", Symbol: "star", Label: "Again"})
+		}, "stickers.4: " + stickerDuplicate},
 	}
-	for _, field := range fields {
-		t.Run(field.name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 			cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
 			s := testSettings(t, cfg, nil, nil, nil)
-			labels := config.DefaultStickerLabels
-			field.blank(&labels)
 
 			_, err := s.Save(SettingsInput{
-				Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: labels,
+				Orgs: cfg.Orgs, Root: cfg.Root, Stickers: tc.edit(defaultStickers()),
 			})
-			if err == nil || !strings.HasPrefix(err.Error(), field.name+": ") {
-				t.Fatalf("Save error = %v, want a %s field error", err, field.name)
+			if err == nil || !strings.HasPrefix(err.Error(), tc.field) {
+				t.Fatalf("Save error = %v, want %q", err, tc.field)
 			}
 			if _, statErr := os.Stat(config.Path()); !os.IsNotExist(statErr) {
-				t.Fatal("Save wrote config.json despite refusing a sticker label")
+				t.Fatal("Save wrote config.json despite refusing a sticker")
 			}
 			if _, statErr := os.Stat(s.linear.File); !os.IsNotExist(statErr) {
-				t.Fatal("Save wrote coding-tools.json despite refusing a sticker label")
+				t.Fatal("Save wrote coding-tools.json despite refusing a sticker")
 			}
 		})
 	}
 }
 
-// Save writes both files, so the Linear document the panel handed back lands on
-// disk beside config.json.
-func TestSettingsSaveWritesTheLinearDocumentBesideTheConfig(t *testing.T) {
+func TestSettingsSaveGivesNewStickersAnIdAndKeepsExistingOnes(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	root := t.TempDir()
-	s := testSettings(t, &config.Config{Root: root}, nil, nil, nil)
-	document := `{"openIssue": {"path": "/bin/true"}}`
-
-	if _, err := s.Save(SettingsInput{
-		Orgs: []string{"acme"}, Root: root, Linear: document, StickerLabels: config.DefaultStickerLabels,
-	}); err != nil {
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	in := append(defaultStickers(), config.Sticker{Colour: "pink", Symbol: "heart", Label: " Ship it "})
+	if _, err := s.Save(SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Stickers: in}); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(s.linear.File)
+	onDisk, err := config.ReadFile()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := document + "\n"; string(raw) != want {
-		t.Fatalf("wrote %q, want %q", raw, want)
+	if onDisk.Stickers == nil || onDisk.StickerLabels != nil {
+		t.Fatalf("on disk = stickers %v, labels %v", onDisk.Stickers, onDisk.StickerLabels)
+	}
+	got := *onDisk.Stickers
+	if len(got) != 5 || got[0].ID != "star" || got[3].ID != "exclamation" {
+		t.Fatalf("stickers = %#v", got)
+	}
+	if added := got[4]; len(added.ID) != 8 || added.Label != "Ship it" || slices.Contains([]string{"star", "bookmark", "question", "exclamation"}, added.ID) {
+		t.Fatalf("added sticker = %#v", added)
+	}
+	if live := cfg.EffectiveStickers(); !reflect.DeepEqual(live, got) {
+		t.Fatalf("live stickers = %#v, want %#v", live, got)
+	}
+}
+
+func TestSettingsSaveKeepsAnEmptyStickerList(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
+	s := testSettings(t, cfg, nil, nil, nil)
+	if _, err := s.Save(SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Stickers: []config.Sticker{}}); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := config.ReadFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := reloaded.EffectiveStickers(); len(got) != 0 {
+		t.Fatalf("reloaded stickers = %#v", got)
 	}
 }
 
@@ -348,14 +437,11 @@ func TestSettingsSaveWritesTheFileAndUpdatesEveryLiveFieldExceptRoot(t *testing.
 
 	newRoot := t.TempDir()
 	result, err := s.Save(SettingsInput{
-		Orgs:   []string{" acme ", "acme", "", "second-org"},
-		Root:   newRoot,
-		Editor: "code --wait {}",
-		Launch: `{"claude": ["claude", "--verbose"]}`,
-		Linear: `{}`,
-		StickerLabels: config.StickerLabels{
-			Star: " Priority ", Bookmark: " Later ", Question: " Clarify ", Exclamation: " Broken ",
-		},
+		Orgs:     []string{" acme ", "acme", "", "second-org"},
+		Root:     newRoot,
+		Editor:   "code --wait {}",
+		Launch:   `{"claude": ["claude", "--verbose"]}`,
+		Stickers: []config.Sticker{{ID: "star", Colour: "blue", Symbol: "star", Label: " Priority "}},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -378,11 +464,9 @@ func TestSettingsSaveWritesTheFileAndUpdatesEveryLiveFieldExceptRoot(t *testing.
 	if cfg.Root != liveRoot {
 		t.Fatalf("live root changed to %q; Root must stay the boot value", cfg.Root)
 	}
-	wantLabels := config.StickerLabels{
-		Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken",
-	}
-	if cfg.StickerLabels == nil || *cfg.StickerLabels != wantLabels {
-		t.Fatalf("live sticker labels = %#v, want %#v", cfg.StickerLabels, wantLabels)
+	wantStickers := []config.Sticker{{ID: "star", Colour: "blue", Symbol: "star", Label: "Priority"}}
+	if got := cfg.EffectiveStickers(); !reflect.DeepEqual(got, wantStickers) {
+		t.Fatalf("live stickers = %#v, want %#v", got, wantStickers)
 	}
 
 	raw, err := os.ReadFile(config.Path())
@@ -405,12 +489,12 @@ func TestSettingsSaveWritesTheFileAndUpdatesEveryLiveFieldExceptRoot(t *testing.
 	if !reflect.DeepEqual(onDisk.Launch, wantLaunch) {
 		t.Fatalf("on-disk launch = %#v, want %#v", onDisk.Launch, wantLaunch)
 	}
-	if onDisk.StickerLabels == nil || *onDisk.StickerLabels != wantLabels {
-		t.Fatalf("on-disk sticker labels = %#v, want %#v", onDisk.StickerLabels, wantLabels)
+	if got := onDisk.EffectiveStickers(); !reflect.DeepEqual(got, wantStickers) {
+		t.Fatalf("on-disk stickers = %#v, want %#v", got, wantStickers)
 	}
 }
 
-func TestSettingsSaveWakesChromeOnceOnlyWhenNormalisedLabelsChange(t *testing.T) {
+func TestSettingsSaveWakesChromeOnceOnlyWhenNormalisedStickersChange(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	cfg := &config.Config{Orgs: []string{"acme"}, Root: root}
@@ -418,10 +502,10 @@ func TestSettingsSaveWakesChromeOnceOnlyWhenNormalisedLabelsChange(t *testing.T)
 	wakes := 0
 	s.wakeChrome = func() { wakes++ }
 
-	save := func(labels config.StickerLabels) SaveResult {
+	save := func(stickers []config.Sticker) SaveResult {
 		t.Helper()
 		result, err := s.Save(SettingsInput{
-			Orgs: cfg.Orgs, Root: root, Linear: `{}`, StickerLabels: labels,
+			Orgs: cfg.Orgs, Root: root, Stickers: stickers,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -429,29 +513,27 @@ func TestSettingsSaveWakesChromeOnceOnlyWhenNormalisedLabelsChange(t *testing.T)
 		return result
 	}
 
-	if result := save(config.DefaultStickerLabels); result.RestartRequired {
+	if result := save(defaultStickers()); result.RestartRequired {
 		t.Fatal("persisting effective defaults asked for a restart")
 	}
 	if wakes != 0 {
 		t.Fatalf("persisting unchanged defaults woke chrome %d times", wakes)
 	}
 
-	custom := config.StickerLabels{
-		Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken",
-	}
+	custom := defaultStickers()
+	custom[0].Label = "Priority"
 	if result := save(custom); result.RestartRequired {
-		t.Fatal("changing sticker labels asked for a restart")
+		t.Fatal("changing a sticker asked for a restart")
 	}
 	if wakes != 1 {
-		t.Fatalf("changing labels woke chrome %d times, want once", wakes)
+		t.Fatalf("changing a sticker woke chrome %d times, want once", wakes)
 	}
 
-	padded := config.StickerLabels{
-		Star: " Priority ", Bookmark: "\tLater", Question: "Clarify\n", Exclamation: " Broken ",
-	}
+	padded := defaultStickers()
+	padded[0].Label = " Priority\t"
 	save(padded)
 	if wakes != 1 {
-		t.Fatalf("re-saving normalised labels woke chrome %d times, want once total", wakes)
+		t.Fatalf("re-saving normalised stickers woke chrome %d times, want once total", wakes)
 	}
 }
 
@@ -473,11 +555,10 @@ func TestSettingsSaveDoesNotWakeChromeWhenConfigWriteFails(t *testing.T) {
 		}
 	}
 
-	labels := config.StickerLabels{
-		Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken",
-	}
+	stickers := defaultStickers()
+	stickers[0].Label = "Priority"
 	if _, err := s.Save(SettingsInput{
-		Orgs: []string{"acme", "other"}, Root: root, Linear: `{}`, StickerLabels: labels,
+		Orgs: []string{"acme", "other"}, Root: root, Stickers: stickers,
 	}); err == nil {
 		t.Fatal("Save succeeded despite an unwritable config path")
 	}
@@ -487,8 +568,8 @@ func TestSettingsSaveDoesNotWakeChromeWhenConfigWriteFails(t *testing.T) {
 	if orgEvents != 0 {
 		t.Fatalf("failed config write emitted %d org events", orgEvents)
 	}
-	if cfg.StickerLabels != nil {
-		t.Fatalf("failed config write changed live labels to %#v", cfg.StickerLabels)
+	if cfg.Stickers != nil {
+		t.Fatalf("failed config write changed live stickers to %#v", cfg.Stickers)
 	}
 }
 
@@ -502,19 +583,19 @@ func TestSaveConfigSerializesOverlappingWritersThroughDiskAndLiveState(t *testin
 	errs := make(chan error, 2)
 
 	go func() {
-		err := saveConfig(cfg, func(next *config.Config) {
+		err := saveConfig(cfg, "", func(next, live *config.Config) {
 			close(firstEntered)
 			<-releaseFirst
-			next.Orgs = []string{"first"}
-		}, nil, nil, nil)
+			next.Orgs, live.Orgs = []string{"first"}, []string{"first"}
+		}, nil, nil)
 		errs <- err
 	}()
 	<-firstEntered
 	go func() {
 		close(secondStarted)
-		err := saveConfig(cfg, func(next *config.Config) {
-			next.Orgs = []string{"second"}
-		}, nil, nil, nil)
+		err := saveConfig(cfg, "", func(next, live *config.Config) {
+			next.Orgs, live.Orgs = []string{"second"}, []string{"second"}
+		}, nil, nil)
 		errs <- err
 	}()
 	<-secondStarted
@@ -549,10 +630,11 @@ func TestSettingsSaveKeepsTheWelcomedMarker(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	cfg := &config.Config{Root: root, Welcomed: true}
+	writeConfigFile(t, cfg)
 	s := testSettings(t, cfg, nil, nil, nil)
 
 	if _, err := s.Save(SettingsInput{
-		Orgs: []string{"acme"}, Root: root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme"}, Root: root, Stickers: defaultStickers(),
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -589,7 +671,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	s := testSettings(t, cfg, nil, nil, nil)
 
 	result, err := s.Save(SettingsInput{
-		Orgs: []string{"acme"}, Root: "~/work/", Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme"}, Root: "~/work/", Stickers: defaultStickers(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -599,7 +681,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	}
 
 	result, err = s.Save(SettingsInput{
-		Root: liveRoot, Orgs: []string{"acme"}, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Root: liveRoot, Orgs: []string{"acme"}, Stickers: defaultStickers(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -610,7 +692,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 
 	otherRoot := t.TempDir()
 	result, err = s.Save(SettingsInput{
-		Orgs: []string{"acme"}, Root: otherRoot, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme"}, Root: otherRoot, Stickers: defaultStickers(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -623,7 +705,7 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	}
 
 	result, err = s.Save(SettingsInput{
-		Orgs: []string{"acme"}, Root: liveRoot, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme"}, Root: liveRoot, Stickers: defaultStickers(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -633,10 +715,10 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	}
 }
 
-// Settings.Quit must run the exact teardown closing the conversation window
+// Settings.Relaunch must run the exact teardown closing the conversation window
 // runs, not a bare renderer Quit: every open session ends and the renderer's
 // own Quit is reached only after that teardown completes.
-func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
+func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
 	reg, term, windows := testWorkbench(t, r, r.Emit)
@@ -647,6 +729,8 @@ func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 		r.Quit()
 	})
 	settings := testSettings(t, &config.Config{}, nil, nil, quit)
+	relaunched := false
+	settings.relaunch = func() error { relaunched = true; return nil }
 
 	done := make(chan error, 1)
 	stopped := make(chan struct{})
@@ -662,7 +746,12 @@ func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	<-r.opened
 	state := shownSession(t, reg)
 
-	settings.Quit()
+	if err := settings.Relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if !relaunched {
+		t.Fatal("Settings.Relaunch quit without starting a successor")
+	}
 
 	if err := <-done; err != nil {
 		t.Fatal(err)
@@ -671,13 +760,13 @@ func TestSettingsQuitRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	quitReached := r.quit
 	r.mu.Unlock()
 	if !quitReached {
-		t.Fatal("Settings.Quit did not reach the renderer's own Quit")
+		t.Fatal("Settings.Relaunch did not reach the renderer's own Quit")
 	}
 	state.mu.Lock()
 	stoppedSession := state.stopped
 	state.mu.Unlock()
 	if !stoppedSession {
-		t.Fatal("Settings.Quit did not stop the session registry")
+		t.Fatal("Settings.Relaunch did not stop the session registry")
 	}
 }
 
@@ -693,12 +782,12 @@ func TestSettingsSaveAnnouncesOrgsThatChanged(t *testing.T) {
 	}
 
 	if _, err := s.Save(SettingsInput{
-		Orgs: []string{"acme", "other"}, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme", "other"}, Root: cfg.Root, Stickers: defaultStickers(),
 	}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
 	if _, err := s.Save(SettingsInput{
-		Orgs: []string{"acme", "other"}, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: []string{"acme", "other"}, Root: cfg.Root, Stickers: defaultStickers(),
 	}); err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -718,8 +807,6 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	firstEmitting := make(chan struct{})
 	releaseFirst := make(chan struct{})
 	first := testSettings(t, cfg, nil, nil, nil)
-	sharedLinear := filepath.Join(t.TempDir(), "coding-tools.json")
-	first.linear.File = sharedLinear
 	first.emit = func(event string, payload any) {
 		if event != orgsChangedEvent {
 			return
@@ -735,7 +822,6 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 		close(secondValidated)
 		return nil
 	}, nil, nil)
-	second.linear.File = sharedLinear
 	second.emit = func(event string, payload any) {
 		if event != orgsChangedEvent {
 			return
@@ -748,8 +834,8 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	firstDone := make(chan error, 1)
 	go func() {
 		_, err := first.Save(SettingsInput{
-			Orgs: []string{"first"}, Root: root, Linear: `{"generation":"first"}`,
-			StickerLabels: config.DefaultStickerLabels,
+			Orgs: []string{"first"}, Root: root,
+			Stickers: defaultStickers(),
 		})
 		firstDone <- err
 	}()
@@ -757,8 +843,8 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	secondDone := make(chan error, 1)
 	go func() {
 		_, err := second.Save(SettingsInput{
-			Orgs: []string{"second"}, Root: root, Editor: "code", Linear: `{"generation":"second"}`,
-			StickerLabels: config.DefaultStickerLabels,
+			Orgs: []string{"second"}, Root: root, Editor: "code",
+			Stickers: defaultStickers(),
 		})
 		secondDone <- err
 	}()
@@ -769,13 +855,6 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	mu.Unlock()
 	if !reflect.DeepEqual(beforeRelease, [][]string{{"first"}}) {
 		t.Fatalf("announced before first notification completed = %#v", beforeRelease)
-	}
-	linearBeforeRelease, err := os.ReadFile(sharedLinear)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(linearBeforeRelease) != "{\"generation\":\"first\"}\n" {
-		t.Fatalf("Linear file before first notification completed = %q", linearBeforeRelease)
 	}
 
 	close(releaseFirst)
@@ -801,15 +880,11 @@ func TestOverlappingSettingsSavesAnnounceOrgsInCommitOrder(t *testing.T) {
 	if err := json.Unmarshal(raw, &disk); err != nil {
 		t.Fatal(err)
 	}
-	linear, err := os.ReadFile(sharedLinear)
-	if err != nil {
-		t.Fatal(err)
-	}
 	if !reflect.DeepEqual(live.Orgs, []string{"second"}) || !reflect.DeepEqual(disk.Orgs, live.Orgs) || !reflect.DeepEqual(got[len(got)-1], live.Orgs) {
 		t.Fatalf("last event/disk/live orgs = %#v / %#v / %#v", got[len(got)-1], disk.Orgs, live.Orgs)
 	}
-	if !reflect.DeepEqual(disk.Editor, []string{"code"}) || !reflect.DeepEqual(live.Editor, disk.Editor) || string(linear) != "{\"generation\":\"second\"}\n" {
-		t.Fatalf("final disk/live editor and Linear = %#v / %#v / %q", disk.Editor, live.Editor, linear)
+	if !reflect.DeepEqual(disk.Editor, []string{"code"}) || !reflect.DeepEqual(live.Editor, disk.Editor) {
+		t.Fatalf("final disk/live editor = %#v / %#v", disk.Editor, live.Editor)
 	}
 }
 
@@ -822,7 +897,7 @@ func TestSettingsChimeReadsOnForAnUntouchedConfigAndSavesAsQuiet(t *testing.T) {
 	}
 
 	input := SettingsInput{
-		Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+		Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers(),
 	}
 	if _, err := s.Save(input); err != nil {
 		t.Fatal(err)
@@ -862,7 +937,7 @@ func TestSettingsSaveRefusesAnOffGridUIScaleAndWritesNothing(t *testing.T) {
 		cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
 		s := testSettings(t, cfg, nil, nil, nil)
 		_, err := s.Save(SettingsInput{
-			Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: scale,
+			Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers(), UIScale: scale,
 		})
 		if !errors.Is(err, ErrUIScale) || !strings.HasPrefix(err.Error(), settingsFieldUIScale+": ") {
 			t.Fatalf("scale %d: error = %v", scale, err)
@@ -883,7 +958,7 @@ func TestSettingsSaveAnnouncesTheUIScaleOnlyWhenItChanges(t *testing.T) {
 			announced = append(announced, payload.(int))
 		}
 	}
-	input := SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels}
+	input := SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers()}
 	for _, scale := range []int{100, 150, 150, 0} {
 		input.UIScale = scale
 		if _, err := s.Save(input); err != nil {
@@ -900,7 +975,7 @@ func TestSettingsSaveStoresTheUIScaleAndDropsItAtTheDefault(t *testing.T) {
 	cfg := &config.Config{Orgs: []string{"acme"}, Root: t.TempDir()}
 	s := testSettings(t, cfg, nil, nil, nil)
 	input := SettingsInput{
-		Orgs: cfg.Orgs, Root: cfg.Root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels, UIScale: 150,
+		Orgs: cfg.Orgs, Root: cfg.Root, Stickers: defaultStickers(), UIScale: 150,
 	}
 	if _, err := s.Save(input); err != nil {
 		t.Fatal(err)
@@ -986,7 +1061,7 @@ func TestAdjustUIScaleStepsClampsAndResets(t *testing.T) {
 }
 
 func thoughtsInput(rows ...ThoughtsRow) SettingsInput {
-	return SettingsInput{Orgs: []string{"acme"}, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+	return SettingsInput{Orgs: []string{"acme"}, Stickers: defaultStickers(),
 		Thoughts: ThoughtsInput{Roots: rows}}
 }
 
@@ -994,8 +1069,9 @@ func TestSettingsLoadAnswersTheThoughtsFoldersAndTheDerivedDefault(t *testing.T)
 	cfg := &config.Config{Root: "/sessions", Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
 		{ID: "work", Path: "/sync/work", Orgs: []string{"acme", "acme-labs"}},
 	}}}
+	writeConfigFile(t, cfg)
 	got := testSettings(t, cfg, nil, nil, nil).Load().Thoughts
-	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs"}}}
+	want := ThoughtsView{Derived: "/sessions/thoughts", Roots: []ThoughtsRow{{ID: "work", Path: "/sync/work", Orgs: "acme, acme-labs", Missing: true}}}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("thoughts = %+v, want %+v", got, want)
 	}
@@ -1079,6 +1155,164 @@ func TestAdjustUIScaleWritesTheFileAsWrittenNotTheRuntimeOverrides(t *testing.T)
 	}
 }
 
+func overriddenSettings(t *testing.T) (*Settings, *config.Config, string) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	shared := filepath.Join(home, "shared")
+	for _, dir := range []string{filepath.Join(home, "work"), shared} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := `{"orgs": ["acme"], "root": "~/work", "thoughts": {"roots": [{"id": "work", "path": "~/shared", "orgs": ["acme"]}]}}`
+	if err := os.WriteFile(config.Path(), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	override := t.TempDir()
+	t.Setenv("QROUTON_ROOT", override)
+	t.Setenv("QROUTON_ORGS", "pinned-org")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return testSettings(t, cfg, nil, nil, nil), cfg, override
+}
+
+func TestSettingsLoadShowsTheFileValuesAndNamesTheOverrides(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+
+	got := s.Load()
+	if got.Root != "~/work" || !reflect.DeepEqual(got.Orgs, []string{"acme"}) || got.Thoughts.Roots[0].Path != "~/shared" {
+		t.Fatalf("view = root %q, orgs %v, thoughts %+v", got.Root, got.Orgs, got.Thoughts)
+	}
+	if !got.Pinned.Root || !got.Pinned.Orgs {
+		t.Fatalf("pinned = %+v", got.Pinned)
+	}
+}
+
+func TestSettingsLoadShowsTheUnexpandedDefaultRootForAnEmptyFile(t *testing.T) {
+	writeConfigFile(t, &config.Config{})
+	t.Setenv("QROUTON_ROOT", "")
+	t.Setenv("QROUTON_ORGS", "")
+	got := testSettings(t, &config.Config{Root: "/expanded/work"}, nil, nil, nil).Load()
+	if got.Root != config.DefaultRoot() || got.Pinned.Root || got.Pinned.Orgs {
+		t.Fatalf("root = %q, pinned = %+v", got.Root, got.Pinned)
+	}
+}
+
+func TestSettingsSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(t *testing.T) {
+	s, cfg, override := overriddenSettings(t)
+	view := s.Load()
+
+	res, err := s.Save(SettingsInput{
+		Orgs: view.Orgs, Root: view.Root, Stickers: view.Stickers, Chime: false,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.RestartRequired {
+		t.Fatal("an unchanged root asked for a restart under QROUTON_ROOT")
+	}
+	onDisk, err := config.ReadFile()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if onDisk.Root != "~/work" || !reflect.DeepEqual(onDisk.Orgs, []string{"acme"}) || onDisk.Thoughts.Roots[0].Path != "~/shared" {
+		t.Fatalf("on disk = root %q, orgs %v, thoughts %+v", onDisk.Root, onDisk.Orgs, onDisk.Thoughts)
+	}
+	if !onDisk.Quiet {
+		t.Fatal("the typed chime did not reach the file")
+	}
+	live := cfg.Snapshot()
+	if live.Root != override || !reflect.DeepEqual(live.Orgs, []string{"pinned-org"}) {
+		t.Fatalf("live = root %q, orgs %v", live.Root, live.Orgs)
+	}
+	if want := filepath.Join(os.Getenv("HOME"), "shared"); live.Thoughts.Roots[0].Path != want {
+		t.Fatalf("live thoughts path = %q, want %q", live.Thoughts.Roots[0].Path, want)
+	}
+}
+
+func TestSettingsSaveUnderAnOverrideAsksForARestartWhenTheFileRootChanges(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+	view := s.Load()
+	res, err := s.Save(SettingsInput{
+		Orgs: view.Orgs, Root: t.TempDir(), Stickers: view.Stickers,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.RestartRequired {
+		t.Fatal("a changed root did not ask for a restart")
+	}
+}
+
+func TestSettingsSaveUnderAnOverrideKeepsTheRestartUntilTheRootIsTypedBack(t *testing.T) {
+	s, _, _ := overriddenSettings(t)
+	view := s.Load()
+	in := SettingsInput{Orgs: view.Orgs, Root: t.TempDir(), Stickers: view.Stickers,
+		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots}}
+	for _, step := range []struct {
+		root string
+		want bool
+	}{{in.Root, true}, {in.Root, true}, {view.Root, false}} {
+		in.Root = step.root
+		res, err := s.Save(in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.RestartRequired != step.want {
+			t.Fatalf("Save(root %q) restart = %v, want %v", step.root, res.RestartRequired, step.want)
+		}
+	}
+}
+
+func TestSettingsSaveAcceptsNoOrgsWhileQROUTONORGSSuppliesThem(t *testing.T) {
+	writeConfigFile(t, &config.Config{Root: t.TempDir()})
+	t.Setenv("QROUTON_ORGS", "pinned-org")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	view := s.Load()
+	if _, err := s.Save(SettingsInput{Orgs: view.Orgs, Root: view.Root, Stickers: view.Stickers}); err != nil {
+		t.Fatalf("Save with orgs only from the env = %v", err)
+	}
+	if onDisk, _ := config.ReadFile(); len(onDisk.Orgs) != 0 {
+		t.Fatalf("file orgs = %v", onDisk.Orgs)
+	}
+	if live := cfg.Snapshot().Orgs; !reflect.DeepEqual(live, []string{"pinned-org"}) {
+		t.Fatalf("live orgs = %v", live)
+	}
+}
+
+func TestSettingsSaveLeavesAnUnsetRootUnsetWhenTheDefaultIsKept(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	writeConfigFile(t, &config.Config{Orgs: []string{"acme"}})
+	t.Setenv("QROUTON_ROOT", "")
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := testSettings(t, cfg, nil, nil, nil)
+	view := s.Load()
+	res, err := s.Save(SettingsInput{Orgs: view.Orgs, Root: view.Root, Stickers: view.Stickers})
+	if err != nil || res.RestartRequired {
+		t.Fatalf("Save = %+v, %v", res, err)
+	}
+	if onDisk, _ := config.ReadFile(); onDisk.Root != "" {
+		t.Fatalf("file root = %q, want unset", onDisk.Root)
+	}
+}
+
 func TestSettingsSaveThatAddsAThoughtsFolderReachesSearchWithoutARestart(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root, shared := t.TempDir(), t.TempDir()
@@ -1113,11 +1347,12 @@ func TestSettingsSaveThatLeavesThoughtsAloneDoesNotReconfigureSearch(t *testing.
 	cfg := &config.Config{Root: root, Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
 		{ID: "work", Path: shared, Orgs: []string{"acme"}},
 	}}}
+	writeConfigFile(t, cfg)
 	reconfigures := 0
 	s := testSettings(t, cfg, nil, nil, nil)
 	s.reconfigure = func(*config.Config) error { reconfigures++; return nil }
 	view := s.Load()
-	in := SettingsInput{Orgs: []string{"other"}, Root: root, Linear: `{}`, StickerLabels: config.DefaultStickerLabels,
+	in := SettingsInput{Orgs: []string{"other"}, Root: root, Stickers: defaultStickers(),
 		Thoughts: ThoughtsInput{Default: view.Thoughts.Default, Roots: view.Thoughts.Roots}}
 	if _, err := s.Save(in); err != nil {
 		t.Fatal(err)
@@ -1225,5 +1460,83 @@ func TestSessionThoughtsRefusesAFolderWithNoIndexInsideAWiderOne(t *testing.T) {
 	}
 	if _, err := sessionThoughts(set, roots, sessionDir); !errors.Is(err, ErrNoThoughtsRoot) {
 		t.Fatalf("sessionThoughts = %v, want %v", err, ErrNoThoughtsRoot)
+	}
+}
+
+func fakeGitHubCLI(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if script != "" {
+		if err := os.WriteFile(filepath.Join(dir, "gh"), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestSettingsGitHubStatusReportsEachCredentialStateAndWhatGitHubSaid(t *testing.T) {
+	cases := []struct {
+		name, script, env string
+		want              GitHubStatus
+	}{
+		{"cli", "echo gho_cli", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenValid, Login: "gho_cli-user", Variable: "GITHUB_TOKEN"}},
+		{"env", "exit 1", "ghp_env", GitHubStatus{State: github.CredentialEnv, Check: github.TokenValid, Login: "ghp_env-user", Variable: "GITHUB_TOKEN"}},
+		{"cli rejected", "echo gho_revoked", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenRejected, Variable: "GITHUB_TOKEN"}},
+		{"env rejected", "exit 1", "ghp_revoked", GitHubStatus{State: github.CredentialEnv, Check: github.TokenRejected, Variable: "GITHUB_TOKEN"}},
+		{"unreachable", "echo gho_offline", "", GitHubStatus{State: github.CredentialCLI, Check: github.TokenUnreachable, Variable: "GITHUB_TOKEN"}},
+		{"missing", "", "", GitHubStatus{State: github.CredentialMissing, Variable: "GITHUB_TOKEN"}},
+		{"signed out", "exit 1", "", GitHubStatus{State: github.CredentialSignedOut, Variable: "GITHUB_TOKEN"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGitHubCLI(t, tc.script)
+			t.Setenv("GITHUB_TOKEN", tc.env)
+			s := testSettings(t, &config.Config{}, nil, nil, nil)
+			asked := 0
+			s.checkToken = func(_ context.Context, token string) (github.TokenCheck, string) {
+				asked++
+				switch {
+				case strings.HasSuffix(token, "_revoked"):
+					return github.TokenRejected, ""
+				case strings.HasSuffix(token, "_offline"):
+					return github.TokenUnreachable, ""
+				}
+				return github.TokenValid, token + "-user"
+			}
+			if got := s.GitHubStatus(); got != tc.want {
+				t.Fatalf("GitHubStatus() = %+v, want %+v", got, tc.want)
+			}
+			if hasToken := tc.want.Check != ""; hasToken != (asked == 1) {
+				t.Fatalf("GitHub asked %d times for %s", asked, tc.name)
+			}
+		})
+	}
+}
+
+func TestSettingsGitHubStatusRunsGHOnce(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	fakeGitHubCLI(t, "echo run >> "+calls+"\necho gho_cli")
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	s.checkToken = func(context.Context, string) (github.TokenCheck, string) { return github.TokenValid, "octocat" }
+	s.GitHubStatus()
+	got, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(got), "run"); n != 1 {
+		t.Fatalf("gh ran %d times for one check", n)
+	}
+}
+
+func TestSettingsLoadFlagsASharedFolderMissingOnDisk(t *testing.T) {
+	present := t.TempDir()
+	cfg := &config.Config{Root: t.TempDir(), Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{
+		{ID: "here", Path: present, Orgs: []string{"acme"}},
+		{ID: "gone", Path: filepath.Join(present, "not-synced-yet"), Orgs: []string{"club"}},
+	}}}
+	writeConfigFile(t, cfg)
+	roots := testSettings(t, cfg, nil, nil, nil).Load().Thoughts.Roots
+	if roots[0].Missing || !roots[1].Missing {
+		t.Fatalf("missing flags = %v, %v", roots[0].Missing, roots[1].Missing)
 	}
 }

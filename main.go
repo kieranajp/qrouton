@@ -267,6 +267,8 @@ func (p workbenchPorts) Shell(sessionRoot string) []string {
 
 func (p workbenchPorts) Reveal(sessionRoot string) []string { return launch.RevealArgv(sessionRoot) }
 
+func (p workbenchPorts) OpenText(path string) []string { return launch.OpenTextArgv(path) }
+
 func (p workbenchPorts) CopyImage(path string) []string { return launch.CopyImageArgv(path) }
 
 func (p workbenchPorts) CopyFile(path string) []string { return launch.CopyFileArgv(path) }

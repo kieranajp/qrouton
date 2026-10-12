@@ -166,6 +166,8 @@ func (b *stubBoot) Reveal(sessionRoot string) []string {
 	return b.reveal(sessionRoot)
 }
 
+func (b *stubBoot) OpenText(string) []string { return nil }
+
 func (b *stubBoot) CopyImage(path string) []string {
 	if b.copyPic == nil {
 		return nil
@@ -1414,8 +1416,9 @@ func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	boot := newStubBoot("/bin/cat")
 	reg, _, _ := testSessions(t, root, boot)
 	dir := sessionDir(t, root, "octopus-0192")
+	reg.boot.stickers = func() []session.Sticker { return []session.Sticker{"a1b2c3d4", "star"} }
 
-	if got, err := reg.CycleSticker("octopus-0192"); err != nil || got != session.StickerStar {
+	if got, err := reg.CycleSticker("octopus-0192"); err != nil || got != "a1b2c3d4" {
 		t.Fatalf("CycleSticker() = %q, %v", got, err)
 	}
 	select {
@@ -1427,7 +1430,7 @@ func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Sticker != session.StickerStar {
+	if loaded.Sticker != "a1b2c3d4" {
 		t.Fatalf("persisted sticker = %q", loaded.Sticker)
 	}
 
@@ -1495,19 +1498,20 @@ func TestCycleStickerAcceptsExistingDirectChildSessionIdentifiers(t *testing.T) 
 			root := t.TempDir()
 			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
 			dir := sessionDir(t, root, slug)
+			reg.boot.stickers = func() []session.Sticker { return []session.Sticker{"star"} }
 
 			got, err := reg.CycleSticker(slug)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != session.StickerStar {
-				t.Fatalf("CycleSticker(%q) = %q, want %q", slug, got, session.StickerStar)
+			if got != session.Sticker("star") {
+				t.Fatalf("CycleSticker(%q) = %q, want %q", slug, got, session.Sticker("star"))
 			}
 			manifest, err := session.Load(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if manifest.Slug != slug || manifest.Sticker != session.StickerStar {
+			if manifest.Slug != slug || manifest.Sticker != session.Sticker("star") {
 				t.Fatalf("manifest = slug %q, sticker %q", manifest.Slug, manifest.Sticker)
 			}
 		})

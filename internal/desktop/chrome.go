@@ -149,18 +149,9 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	shownRoot := shown.root()
 	fields := status.Read(shownRoot)
 	configSnapshot := cfg.Snapshot()
-	if configSnapshot != nil {
-		labels := configSnapshot.EffectiveStickerLabels()
-		fields.StickerLabels = status.StickerLabels{
-			Star: labels.Star, Bookmark: labels.Bookmark,
-			Question: labels.Question, Exclamation: labels.Exclamation,
-		}
-	} else {
-		labels := config.DefaultStickerLabels
-		fields.StickerLabels = status.StickerLabels{
-			Star: labels.Star, Bookmark: labels.Bookmark,
-			Question: labels.Question, Exclamation: labels.Exclamation,
-		}
+	fields.Stickers = []status.Sticker{}
+	for _, s := range configSnapshot.EffectiveStickers() {
+		fields.Stickers = append(fields.Stickers, status.Sticker{ID: s.ID, Colour: s.Colour, Symbol: s.Symbol, Label: s.Label})
 	}
 	if shown != nil {
 		shown.mu.Lock()

@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import Rail from "../src/lib/session/Rail.svelte";
   import { CHROME_EVENT } from "../src/lib/bridge/generated.js";
-  import { DEFAULT_STICKER_LABELS } from "../src/lib/session/stickers.js";
+  import { labelled } from "./session-rail-stickers.js";
   import { Events } from "../src/lib/wails.js";
 
   const first = {
@@ -32,11 +32,11 @@
     })),
   ]);
   let selected = $state("checkout");
-  let stickerLabels = $state({ ...DEFAULT_STICKER_LABELS });
+  let stickers = $state(labelled({}));
 
   onMount(() =>
     Events.On(CHROME_EVENT, (event) => {
-      stickerLabels = { ...event.data.stickerLabels };
+      stickers = event.data.stickers;
     }),
   );
 
@@ -66,7 +66,8 @@
         session.slug === slug ? { ...session, sticker } : session,
       );
     },
-    setStickerLabels: (labels) => (stickerLabels = { ...stickerLabels, ...labels }),
+    setStickerLabels: (labels) =>
+      (stickers = stickers.map((item) => ({ ...item, label: labels[item.id] ?? item.label }))),
   };
 </script>
 
@@ -75,7 +76,7 @@
   <Rail
     {sessions}
     slug={selected}
-    {stickerLabels}
+    {stickers}
     onNewSession={() => {}}
     onDismissed={() => {}} />
 </div>

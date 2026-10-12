@@ -43,8 +43,11 @@ export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/deskt
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
+export const SETTINGS_GIT_HUB_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Settings.GitHubStatus";
+export const SETTINGS_INSTALL_LINEAR = "github.com/kieranajp/qrouton/internal/desktop.Settings.InstallLinear";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
-export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
+export const SETTINGS_OPEN_CONFIG = "github.com/kieranajp/qrouton/internal/desktop.Settings.OpenConfig";
+export const SETTINGS_RELAUNCH = "github.com/kieranajp/qrouton/internal/desktop.Settings.Relaunch";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
 export const TERM_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Term.Resize";
 export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.Start";
@@ -161,6 +164,21 @@ export const DRAFT_FIELDS = Object.freeze({
   REPOS: "repos",
 });
 
+/** @typedef {"cli"|"env"|"missing"|"signed-out"} GitHubCredential */
+export const GITHUB_CREDENTIALS = Object.freeze({
+  CLI: "cli",
+  ENV: "env",
+  MISSING: "missing",
+  SIGNED_OUT: "signed-out",
+});
+
+/** @typedef {"valid"|"rejected"|"unreachable"} GitHubTokenCheck */
+export const GITHUB_TOKEN_CHECKS = Object.freeze({
+  VALID: "valid",
+  REJECTED: "rejected",
+  UNREACHABLE: "unreachable",
+});
+
 /** @typedef {"image"|"video"} MediaKind */
 export const MEDIA_KINDS = Object.freeze({
   IMAGE: "image",
@@ -210,27 +228,15 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"stickers"|"uiScale"|"thoughts"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
   EDITOR: "editor",
   LAUNCH: "launch",
-  LINEAR: "linear",
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
+  STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
-});
-
-/** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */
-export const STICKER_IDS = Object.freeze({
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
 });
 
 /** @typedef {"running"|"succeeded"|"failed"|"waiting"} TabStatus */
@@ -265,7 +271,17 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}, sessionSummary: {text: string, stage: string, at: string}}} */
+export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
+
+/** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
+/** @type {readonly StickerColour[]} */
+export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
+
+/** @typedef {"star"|"bookmark"|"question"|"exclamation"|"dot"|"square"|"diamond"|"triangle"|"heart"|"bolt"|"flag"|"check"|"cross"|"pause"} StickerSymbol */
+/** @type {readonly StickerSymbol[]} */
+export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
+
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -294,12 +310,7 @@ export const CHROME_DEFAULTS = {
   root: "",
   picker: false,
   welcoming: false,
-  stickerLabels: {
-    star: "",
-    bookmark: "",
-    question: "",
-    exclamation: "",
-  },
+  stickers: [],
   sessionSummary: {
     text: "",
     stage: "",

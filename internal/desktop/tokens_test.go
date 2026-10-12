@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/theme"
 )
 
@@ -68,12 +69,35 @@ func TestEveryTokenThePageReadsIsDeclared(t *testing.T) {
 	}
 	var missing []string
 	for name, paths := range used {
-		if !declared[name] {
+		if !declared[name] && !declaresPrefix(declared, name) {
 			missing = append(missing, name+" in "+strings.Join(paths, ", "))
 		}
 	}
 	sort.Strings(missing)
 	for _, name := range missing {
 		t.Errorf("the page reads %s, which nothing declares", name)
+	}
+}
+
+// A name ending in a dash is completed at runtime, so any token under it counts.
+func declaresPrefix(declared map[string]bool, name string) bool {
+	if !strings.HasSuffix(name, "-") {
+		return false
+	}
+	for token := range declared {
+		if strings.HasPrefix(token, name) {
+			return true
+		}
+	}
+	return false
+}
+
+// The page names a sticker's token from its colour, so the source scan sees only the prefix.
+func TestEveryStickerColourHasAThemeToken(t *testing.T) {
+	css := theme.CSS()
+	for _, colour := range config.StickerColours() {
+		if !strings.Contains(css, "--sticker-"+colour+":") {
+			t.Errorf("the palette declares no --sticker-%s", colour)
+		}
 	}
 }

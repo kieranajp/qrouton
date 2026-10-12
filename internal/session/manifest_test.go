@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -164,9 +165,10 @@ func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.
 	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "stickers"}); err != nil {
 		t.Fatal(err)
 	}
-	want := []Sticker{StickerStar, StickerBookmark, StickerQuestion, StickerExclamation, ""}
+	order := []Sticker{"star", "bookmark", "question", "exclamation"}
+	want := append(slices.Clone(order), "")
 	for _, expected := range want {
-		got, err := CycleSticker(dir)
+		got, err := CycleSticker(dir, order)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -190,13 +192,18 @@ func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.
 	}
 }
 
-func TestStickerTreatsAbsentAndUnknownValuesAsNone(t *testing.T) {
-	for _, initial := range []Sticker{"", "retired"} {
-		if got := initial.Effective(); got != "" {
-			t.Fatalf("Sticker(%q).Effective() = %q, want none", initial, got)
+func TestNextWalksTheConfiguredOrder(t *testing.T) {
+	order := []Sticker{"a1", "b2", "c3"}
+	for _, tc := range []struct{ from, want Sticker }{
+		{"", "a1"}, {"retired", "a1"}, {"a1", "b2"}, {"b2", "c3"}, {"c3", ""},
+	} {
+		if got := tc.from.Next(order); got != tc.want {
+			t.Fatalf("Sticker(%q).Next() = %q, want %q", tc.from, got, tc.want)
 		}
-		if got := initial.Next(); got != StickerStar {
-			t.Fatalf("Sticker(%q).Next() = %q, want %q", initial, got, StickerStar)
+	}
+	for _, from := range []Sticker{"", "a1"} {
+		if got := from.Next(nil); got != "" {
+			t.Fatalf("Sticker(%q).Next(nil) = %q, want none", from, got)
 		}
 	}
 
@@ -204,12 +211,12 @@ func TestStickerTreatsAbsentAndUnknownValuesAsNone(t *testing.T) {
 	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "legacy", Sticker: "retired"}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := CycleSticker(dir)
+	got, err := CycleSticker(dir, order)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got != StickerStar {
-		t.Fatalf("CycleSticker() from unknown = %q, want %q", got, StickerStar)
+	if got != "a1" {
+		t.Fatalf("CycleSticker() from unknown = %q, want a1", got)
 	}
 }
 
@@ -223,7 +230,7 @@ func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if _, err := CycleSticker(dir); err != nil {
+		if _, err := CycleSticker(dir, []Sticker{"star"}); err != nil {
 			t.Errorf("CycleSticker: %v", err)
 		}
 	}()
@@ -243,7 +250,7 @@ func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Sticker != StickerStar || got.Runner != "codex" {
+	if got.Sticker != "star" || got.Runner != "codex" {
 		t.Fatalf("concurrent result = %+v", got)
 	}
 }

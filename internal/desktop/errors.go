@@ -23,6 +23,7 @@ var (
 	ErrNoOwners           = errors.New(noOwnersError)
 	ErrUIScale            = errors.New(uiScaleRefusal)
 	ErrUIScaleAction      = errors.New(unknownUIScaleAction)
+	ErrStickerDuplicate   = errors.New(stickerDuplicate)
 
 	ErrNoWindowOptions        = errors.New("open request carries no window options")
 	ErrNoWindowCommand        = errors.New("a terminal window needs a command")
@@ -33,6 +34,8 @@ var (
 	ErrNoDocumentName         = errors.New("open request names no document")
 	ErrNoEditorCommand        = errors.New("workbench has no editor command to open a document with")
 	ErrNoRevealCommand        = errors.New("workbench has no command to reveal a session's directory with")
+	ErrNoOpenTextCommand      = errors.New("workbench has no command to open a file in a text editor")
+	ErrOpenConfig             = errors.New("config.json could not be opened")
 	ErrNoCopyImageCommand     = errors.New("workbench has no command to copy an image to the clipboard with")
 	ErrNoCopyFileCommand      = errors.New("workbench has no command to copy a file to the clipboard with")
 	ErrNotAnAsset             = errors.New("that file is not an asset the gallery shows")

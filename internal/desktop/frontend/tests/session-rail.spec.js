@@ -576,3 +576,21 @@ test("attention and new docs are text facts that wrap whole inside a growing row
   }
   expect(layout.facts[1].top).toBeGreaterThan(layout.facts[0].top);
 });
+
+test("a user-defined sticker draws its own colour and symbol, and a removed one draws none", async ({ page }) => {
+  await page.evaluate(() => {
+    window.sessionRailBridge.saveStickers([{ id: "a1b2c3d4", colour: "pink", symbol: "heart", label: "Ship it" }]);
+    window.sessionRail.stickerChanged("checkout", "a1b2c3d4");
+  });
+  let sticker = page.getByRole("button", {
+    name: "Change sticker for Checkout migration; current sticker: Pink heart — Ship it",
+  });
+  await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "heart");
+  expect(await sticker.evaluate((button) => getComputedStyle(button).color)).toBe("rgb(245, 189, 230)");
+
+  await page.evaluate(() => window.sessionRailBridge.saveStickers([]));
+  sticker = page.getByRole("button", {
+    name: "Set sticker for Checkout migration; current sticker: No sticker",
+  });
+  await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "none");
+});

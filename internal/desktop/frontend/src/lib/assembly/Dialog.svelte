@@ -5,7 +5,7 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
@@ -20,6 +20,9 @@
     onSecondary,
     onPrimary,
     onEscape,
+    height = false,
+    flush = false,
+    footer,
     children,
   } = $props();
 
@@ -41,14 +44,14 @@
 </script>
 
 <div class="layer" role="presentation" tabindex="-1" bind:this={layer} onkeydown={key}>
-  <div class="dialog">
+  <div class="dialog" class:fixed={height}>
     {#if steps.length}
       <div class="steps">
         <Stepper {steps} {active} />
       </div>
     {/if}
 
-    <div class="body">
+    <div class="body" class:flush>
       {@render children()}
     </div>
 
@@ -63,6 +66,7 @@
           <Button variant="secondary" icon={secondaryIcon} disabled={busy} onclick={onSecondary}>{secondary}</Button>
         {/if}
         <span class="status">{status}</span>
+        {@render footer?.()}
         <Button iconEnd={primaryIcon} disabled={busy || !canAdvance} onclick={onPrimary}>{primary}</Button>
       </div>
     </div>
@@ -95,6 +99,12 @@
     overflow: hidden;
   }
 
+  /* A fixed height keeps the dialog still while its contents change. */
+  .fixed {
+    height: min(calc(640px * var(--ui-scale)), 100%);
+    min-height: 0;
+  }
+
   .steps {
     flex: none;
     padding: calc(22px * var(--ui-scale)) calc(34px * var(--ui-scale)) 0;
@@ -108,6 +118,12 @@
     gap: calc(18px * var(--ui-scale));
     padding: calc(22px * var(--ui-scale)) calc(34px * var(--ui-scale)) calc(30px * var(--ui-scale));
     overflow: hidden auto;
+  }
+
+  .body.flush {
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
   }
 
   .footer {

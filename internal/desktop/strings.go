@@ -118,17 +118,13 @@ const (
 
 // A Save refusal names the settings field it belongs under before the sentence.
 const (
-	settingsFieldOrgs        = "orgs"
-	settingsFieldRoot        = "root"
-	settingsFieldEditor      = "editor"
-	settingsFieldLaunch      = "launch"
-	settingsFieldLinear      = "linear"
-	settingsFieldStar        = "star"
-	settingsFieldBookmark    = "bookmark"
-	settingsFieldQuestion    = "question"
-	settingsFieldExclamation = "exclamation"
-	settingsFieldUIScale     = "uiScale"
-	settingsFieldThoughts    = "thoughts"
+	settingsFieldOrgs     = "orgs"
+	settingsFieldRoot     = "root"
+	settingsFieldEditor   = "editor"
+	settingsFieldLaunch   = "launch"
+	settingsFieldStickers = "stickers"
+	settingsFieldUIScale  = "uiScale"
+	settingsFieldThoughts = "thoughts"
 
 	thoughtsOrgJoin  = ", "
 	thoughtsOrgSplit = ","
@@ -136,6 +132,9 @@ const (
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"
 	settingsEmpty         = "cannot be empty"
+	stickerFieldFormat    = "%s.%d"
+	stickerDuplicate      = "another sticker already uses this colour and symbol"
+	stickerIDBytes        = 4
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 	unknownUIScaleAction  = "unknown UI scale action"
 )
@@ -214,6 +213,7 @@ const (
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
+	githubCheckTimeout = 4 * time.Second
 	ticketFetchTimeout = 15 * time.Second
 
 	// branchListTimeout bounds the branch listing GitHub is asked for, which the

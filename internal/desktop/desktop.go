@@ -131,8 +131,9 @@ func Run(opts Options) error {
 	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
-		opts.Config, r.Emit, validateEditor, validateLaunch,
-		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault),
+		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
+		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, reconfigureVault(opts.vault),
+		opts.Launcher.Runners, opts.Launcher.OpenText,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
 	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
@@ -144,6 +145,14 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 		return nil
 	}
 	return func() error { return relaunch(assembly.pendingTicket) }
+}
+
+// withoutTicket relaunches carrying no pending ticket, as a settings restart has none.
+func withoutTicket(relaunch func(func() (string, string)) error) func() error {
+	if relaunch == nil {
+		return nil
+	}
+	return func() error { return relaunch(nil) }
 }
 
 func validators(v Validator) (func([]string) error, func(map[string][]string) error) {
@@ -232,7 +241,14 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	overviewTab := &overviewWindow{windows: windows}
 
 	reg.boot = booting{
-		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
+		root: func(slug string) string { return session.Resumable(opts.Root, slug) },
+		stickers: func() []session.Sticker {
+			var ids []session.Sticker
+			for _, s := range opts.Config.EffectiveStickers() {
+				ids = append(ids, session.Sticker(s.ID))
+			}
+			return ids
+		},
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {

@@ -3,6 +3,7 @@ package launch
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -95,8 +96,21 @@ func TestShellArgvRootsTheShellInTheSession(t *testing.T) {
 // through a symlink, and quoting it is a directory Finder cannot find.
 func TestRevealArgvSelectsTheDirectoryVerbatim(t *testing.T) {
 	dir := "/sessions/octopus/../octopus/"
-	if got := RevealArgv(dir); len(got) != 3 || got[0] != "open" || got[1] != "-R" || got[2] != dir {
-		t.Fatalf("reveal argv = %q, want open -R %q", got, dir)
+	if got := revealArgv("darwin", dir); !reflect.DeepEqual(got, []string{"open", "-R", dir}) {
+		t.Fatalf("darwin reveal argv = %q, want open -R %q", got, dir)
+	}
+	if got := revealArgv("linux", dir); !reflect.DeepEqual(got, []string{"xdg-open", dir}) {
+		t.Fatalf("linux reveal argv = %q, want xdg-open %q", got, dir)
+	}
+}
+
+func TestOpenTextArgvUsesTheTextEditorOnMacAndXdgOpenElsewhere(t *testing.T) {
+	path := "/home/me/.config/qrouton/config.json"
+	if got := openTextArgv("darwin", path); !reflect.DeepEqual(got, []string{"open", "-t", path}) {
+		t.Fatalf("darwin argv = %q", got)
+	}
+	if got := openTextArgv("linux", path); !reflect.DeepEqual(got, []string{"xdg-open", path}) {
+		t.Fatalf("linux argv = %q", got)
 	}
 }
 

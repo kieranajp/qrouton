@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -229,16 +230,63 @@ func Token() (string, error) {
 }
 
 func TokenContext(ctx context.Context) (string, error) {
-	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
-		if t := strings.TrimSpace(string(out)); t != "" {
-			return t, nil
-		}
-	}
-	if t := os.Getenv(tokenEnvVar); t != "" {
+	if _, t := ResolveCredential(ctx); t != "" {
 		return t, nil
 	}
 	return "", ErrNoToken
 }
+
+// Credential says where the token Token would use comes from, or why there is none.
+type Credential string
+
+const (
+	CredentialCLI       Credential = "cli"
+	CredentialEnv       Credential = "env"
+	CredentialMissing   Credential = "missing"
+	CredentialSignedOut Credential = "signed-out"
+)
+
+// ResolveCredential answers where the token TokenContext would use comes from,
+// and the token itself, running gh once.
+func ResolveCredential(ctx context.Context) (Credential, string) {
+	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return CredentialCLI, t
+		}
+	}
+	if t := os.Getenv(tokenEnvVar); t != "" {
+		return CredentialEnv, t
+	}
+	if _, err := exec.LookPath(ghBin); err != nil {
+		return CredentialMissing, ""
+	}
+	return CredentialSignedOut, ""
+}
+
+// TokenCheck is what GitHub said about a token.
+type TokenCheck string
+
+const (
+	TokenValid       TokenCheck = "valid"
+	TokenRejected    TokenCheck = "rejected"
+	TokenUnreachable TokenCheck = "unreachable"
+)
+
+// CheckToken asks GitHub who the token belongs to. Only a 401 counts as
+// rejected; any other failure says nothing about the token.
+func CheckToken(ctx context.Context, client *http.Client, token string) (TokenCheck, string) {
+	login, err := AuthenticatedLogin(ctx, client, token)
+	switch {
+	case err == nil:
+		return TokenValid, login
+	case errors.Is(err, ErrTokenRejected):
+		return TokenRejected, ""
+	default:
+		return TokenUnreachable, ""
+	}
+}
+
+func TokenEnvVar() string { return tokenEnvVar }
 
 // AuthenticatedLogin is the account the token belongs to, which is how a screen
 // naming the signed-in user says whose repositories it can see.
@@ -367,6 +415,9 @@ func githubJSON(ctx context.Context, client *http.Client, token, requestURL stri
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusUnauthorized {
+		return fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
+	}
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s", resp.Status)
 	}

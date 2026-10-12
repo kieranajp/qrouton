@@ -4,11 +4,14 @@ import { SETTINGS_FIELDS } from "../bridge/generated.js";
 
 const msgLoadFailed = "Settings could not be read:";
 
-const SCOPED = new RegExp(`^([a-z]+|${Object.values(SETTINGS_FIELDS).join("|")}): (.*)$`, "s");
+const SCOPED = new RegExp(
+  `^(${SETTINGS_FIELDS.STICKERS}\\.\\d+|[a-z]+|${Object.values(SETTINGS_FIELDS).join("|")}): (.*)$`,
+  "s",
+);
 
 /** Unscoped failures return null instead of guessing a field.
  * @param {any} err
- * @returns {{field: import("../bridge/generated.js").SettingsField, message: string} | null} */
+ * @returns {{field: string, message: string} | null} */
 export function fieldError(err) {
   const text = String(err?.message ?? err ?? "");
   const found = text.match(SCOPED);
@@ -24,7 +27,7 @@ export function loadFailure(err) {
 /** Failures omit restartRequired so an existing restart banner remains unchanged.
  * @param {{restartRequired?: boolean} | undefined} result
  * @param {any} err
- * @returns {{close: boolean, restartRequired?: boolean, fields: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, status: string}} */
+ * @returns {{close: boolean, restartRequired?: boolean, fields: Record<string, string>, status: string}} */
 export function saveOutcome(result, err) {
   if (err) {
     const found = fieldError(err);
