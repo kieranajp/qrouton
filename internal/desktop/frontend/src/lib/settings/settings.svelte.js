@@ -142,6 +142,16 @@ export function settings(onClose) {
     if (!answer.ok) actionError = String(answer.error?.message ?? answer.error);
   }
 
+  async function checkPlacement() {
+    actionError = "";
+    const answer = await call(go.checkPlacement());
+    if (!answer.ok) {
+      actionError = String(answer.error?.message ?? answer.error);
+      return;
+    }
+    onClose();
+  }
+
   async function installLinear() {
     if (installing) return;
     installing = true;
@@ -212,6 +222,7 @@ export function settings(onClose) {
     checkGitHub,
     relaunch,
     openConfig,
+    checkPlacement,
     installLinear,
   };
 }

@@ -26,6 +26,7 @@ export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Pick
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";
 export const PICKER_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Picker.Load";
+export const PLACEMENT_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Placement.Check";
 export const PLACEMENT_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Close";
 export const PLACEMENT_MOVE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Move";
 export const PLACEMENT_REPORT = "github.com/kieranajp/qrouton/internal/desktop.Placement.Report";

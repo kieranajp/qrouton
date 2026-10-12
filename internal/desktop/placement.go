@@ -33,6 +33,7 @@ type Placement struct {
 
 	mu     sync.Mutex
 	report placement.Report
+	manual bool
 	scan   func(*config.Config) (placement.Report, error)
 	move   func(*config.Config, []string) []placement.Outcome
 }
@@ -58,8 +59,23 @@ func (p *Placement) checkOnce() {
 		}
 		return
 	}
+	p.show(report, false)
+}
+
+// Check is the user's own run from Settings. It offers every session that is
+// misplaced now and never touches the record of the automatic check.
+func (p *Placement) Check() error {
+	report, err := p.scan(p.cfg)
+	if err != nil {
+		return err
+	}
+	p.show(report, true)
+	return nil
+}
+
+func (p *Placement) show(report placement.Report, manual bool) {
 	p.mu.Lock()
-	p.report = report
+	p.report, p.manual = report, manual
 	p.mu.Unlock()
 	p.reg.setPlacing(true)
 }
@@ -91,10 +107,16 @@ func (p *Placement) Move(slugs []string) []placement.Outcome {
 	return p.move(p.cfg, slugs)
 }
 
-// Close dismisses the overlay and records the automatic check as done, unless
-// an interrupted move is still waiting to be finished.
+// Close dismisses the overlay. After the automatic check it records that check
+// as done, unless an interrupted move is still waiting to be finished.
 func (p *Placement) Close() error {
 	p.reg.setPlacing(false)
+	p.mu.Lock()
+	manual := p.manual
+	p.mu.Unlock()
+	if manual {
+		return nil
+	}
 	report, err := p.scan(p.cfg)
 	if err != nil || report.Pending() {
 		return nil

@@ -1,4 +1,5 @@
 import {
+  PLACEMENT_CHECK,
   SETTINGS_ADJUST_UI_SCALE,
   SETTINGS_GIT_HUB_STATUS,
   SETTINGS_INSTALL_LINEAR,
@@ -63,3 +64,5 @@ export const gitHubStatus = () => Call.ByName(SETTINGS_GIT_HUB_STATUS);
  * @returns {Promise<number>}
  */
 export const adjustUIScale = (action) => Call.ByName(SETTINGS_ADJUST_UI_SCALE, action);
+
+export const checkPlacement = () => Call.ByName(PLACEMENT_CHECK);

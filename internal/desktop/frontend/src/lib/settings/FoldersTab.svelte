@@ -81,6 +81,13 @@
   </div>
 </fieldset>
 
+<div class="placement">
+  <Button variant="cube" icon="refresh" onclick={panel.checkPlacement}>Check session placement</Button>
+  <span class="aside" class:failed={panel.actionError}>
+    {panel.actionError || "Offers to move sessions whose thoughts sit in a different folder from the one their repos route to."}
+  </span>
+</div>
+
 {#if panel.fields.thoughts}
   <p class="note failed">{panel.fields.thoughts}</p>
 {/if}
@@ -237,6 +244,16 @@
   .remove:focus-visible {
     color: var(--state-failed);
     outline: none;
+  }
+
+  .placement {
+    display: flex;
+    align-items: center;
+    gap: calc(16px * var(--ui-scale));
+  }
+
+  .aside.failed {
+    color: var(--state-failed);
   }
 
   .add {

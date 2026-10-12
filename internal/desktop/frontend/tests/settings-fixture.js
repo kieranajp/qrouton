@@ -25,15 +25,18 @@ const linear = {
 };
 const saves = [];
 const calls = [];
+let closes = 0;
 
 window.settingsFixture = {
   saves: () => [...saves],
   calls: () => [...calls],
+  closes: () => closes,
   announceScale: (percent) => emitWailsEvent(UI_SCALE_EVENT, percent),
 };
 
 window.wailsCall = async (name, input) => {
   calls.push(name.split(".").pop());
+  if (name.endsWith("Placement.Check")) window.placementChecks = (window.placementChecks ?? 0) + 1;
   if (failing && name.endsWith("." + failing)) throw new Error("config.json: permission denied");
   if (name.endsWith("Ollama.Check")) return ollama;
   if (name.endsWith(".GitHubStatus")) {
@@ -86,4 +89,4 @@ window.wailsCall = async (name, input) => {
   return undefined;
 };
 
-mount(SettingsOverlay, { target: document.querySelector("#fixture"), props: { onClose: () => {} } });
+mount(SettingsOverlay, { target: document.querySelector("#fixture"), props: { onClose: () => closes++ } });

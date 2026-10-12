@@ -156,3 +156,34 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
 }
+
+func TestAManualCheckOffersWhatTheAutomaticRunSkipped(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
+	skipped := placement.Report{Items: []placement.Item{{Slug: "kraken", State: placement.StateSkipped, Reason: placement.ReasonAgentRunning}}}
+	p, reg, stubs := newTestPlacement(t, cfg, skipped)
+	p.checkOnce()
+	if reg.placing() {
+		t.Fatal("the automatic run ran again")
+	}
+	stubs.report = misplacedReport()
+	if err := p.Check(); err != nil {
+		t.Fatal(err)
+	}
+	if !reg.placing() || len(p.Report().Misplaced) != 1 {
+		t.Fatalf("placing %v, view %+v", reg.placing(), p.Report())
+	}
+}
+
+func TestClosingAManualCheckLeavesTheFlagAlone(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
+	if err := p.Check(); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if reg.placing() || savedConfig(t).ThoughtsPlacementChecked || cfg.Snapshot().ThoughtsPlacementChecked {
+		t.Fatalf("placing %v, flag %v", reg.placing(), savedConfig(t).ThoughtsPlacementChecked)
+	}
+}
