@@ -203,7 +203,7 @@ export function shell() {
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
   let covered = $derived(
-    fields.welcoming || assembling || picker || settingsOpen || present.active || reviewing,
+    fields.welcoming || fields.placing || assembling || picker || settingsOpen || present.active || reviewing,
   );
 
   async function escalate() {

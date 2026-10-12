@@ -28,6 +28,9 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
+	// Set once the first-launch check of where session thoughts live has run.
+	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
+
 	// Stamped on new artefacts. Absent falls back to git's user.name.
 	Author string `json:"author,omitempty"`
 
@@ -133,6 +136,7 @@ func (c *Config) Replace(next *Config) {
 	c.Launch = replacement.Launch
 	c.Editor = replacement.Editor
 	c.Author = replacement.Author
+	c.ThoughtsPlacementChecked = replacement.ThoughtsPlacementChecked
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
 	c.Stickers = replacement.Stickers
@@ -143,15 +147,16 @@ func (c *Config) Replace(next *Config) {
 
 func clone(c *Config) *Config {
 	out := &Config{
-		mu:       &sync.RWMutex{},
-		writeMu:  &sync.Mutex{},
-		Orgs:     append([]string(nil), c.Orgs...),
-		Root:     c.Root,
-		Editor:   append([]string(nil), c.Editor...),
-		Author:   c.Author,
-		Welcomed: c.Welcomed,
-		Quiet:    c.Quiet,
-		UIScale:  c.UIScale,
+		mu:                       &sync.RWMutex{},
+		writeMu:                  &sync.Mutex{},
+		Orgs:                     append([]string(nil), c.Orgs...),
+		Root:                     c.Root,
+		Editor:                   append([]string(nil), c.Editor...),
+		Author:                   c.Author,
+		ThoughtsPlacementChecked: c.ThoughtsPlacementChecked,
+		Welcomed:                 c.Welcomed,
+		Quiet:                    c.Quiet,
+		UIScale:                  c.UIScale,
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))

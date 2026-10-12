@@ -51,7 +51,10 @@ type Fields struct {
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
-	Welcoming      bool           `json:"welcoming"`
+	Welcoming bool `json:"welcoming"`
+	// Placing means the check of where sessions keep their thoughts has
+	// something to show. Never set while Welcoming.
+	Placing        bool           `json:"placing"`
 	Stickers       []Sticker      `json:"stickers"`
 	SessionSummary SessionSummary `json:"sessionSummary"`
 }
