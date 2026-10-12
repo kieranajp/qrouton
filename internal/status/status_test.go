@@ -661,3 +661,32 @@ func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
 		t.Errorf("DocumentKind of an unclassified document = %q, want %q", got, KindNote)
 	}
 }
+
+func TestDocumentsAndUnseenSkipSyncCopiesAndDotNames(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "webhook"})
+	stamp := time.Now().Add(-time.Hour)
+	if err := session.MarkOpened(dir, stamp); err != nil {
+		t.Fatal(err)
+	}
+	at := stamp.Add(time.Minute)
+	sessionDoc(t, dir, "research/R1-findings.md", at)
+	for _, name := range []string{
+		"research/R9-findings.sync-conflict-20261012-120000-ABCDEFG.md",
+		"research/~syncthing~R1-findings.md.tmp.md",
+		"research/R1-findings (conflicted copy 2026-10-12).md",
+		"research/R1-findings (Conflict 2026-10-12).md",
+		"research/.hidden.md",
+		".stversions/R1-findings.md",
+	} {
+		sessionDoc(t, dir, name, at)
+	}
+
+	if got := Unseen(root)["webhook"]; got != 1 {
+		t.Fatalf("unseen = %d, want only the real document", got)
+	}
+	docs := Read(dir).Documents
+	if len(docs) != 1 || docs[0].Name != "R1-findings.md" {
+		t.Fatalf("documents = %#v, want only R1-findings.md", docs)
+	}
+}

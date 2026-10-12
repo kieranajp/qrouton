@@ -84,7 +84,7 @@ func artifacts(dir, excludeSuffix string) []artifact {
 	for _, entry := range entries {
 		name := entry.Name()
 		lower := strings.ToLower(name)
-		if entry.IsDir() || !strings.HasSuffix(lower, markdownSuffix) ||
+		if entry.IsDir() || ignoredName(name) || !strings.HasSuffix(lower, markdownSuffix) ||
 			(excludeSuffix != "" && strings.HasSuffix(lower, excludeSuffix)) {
 			continue
 		}

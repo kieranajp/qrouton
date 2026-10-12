@@ -353,8 +353,15 @@ func UnseenIn(sessionRoot string) (int, bool) {
 
 func writtenSince(root string, since time.Time) int {
 	count := 0
-	_ = filepath.WalkDir(sessionpaths.Thoughts(root), func(_ string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+	thoughts := sessionpaths.Thoughts(root)
+	_ = filepath.WalkDir(thoughts, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if path != thoughts && ignoredName(entry.Name()) {
+			return skipEntry(entry)
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
 			return nil
 		}
 		if info, err := entry.Info(); err == nil && info.ModTime().After(since) {
@@ -436,7 +443,13 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 func documentsUnder(root, dir string, name func(string) string) []Document {
 	out := []Document{}
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+		if err != nil {
+			return nil
+		}
+		if path != dir && ignoredName(entry.Name()) {
+			return skipEntry(entry)
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
 			return nil
 		}
 		info, err := entry.Info()
@@ -503,4 +516,17 @@ func ArtifactID(path string) string {
 		return ""
 	}
 	return strings.ToUpper(match[1])
+}
+
+// ignoredName is a dot-prefixed name or a copy a sync tool made, which the
+// thoughts index skips as well.
+func ignoredName(name string) bool {
+	return strings.HasPrefix(name, ".") || sessionpaths.SyncCopy(name)
+}
+
+func skipEntry(entry fs.DirEntry) error {
+	if entry.IsDir() {
+		return fs.SkipDir
+	}
+	return nil
 }

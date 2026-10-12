@@ -149,3 +149,13 @@ func TestStagesLatestPicksTheFurthestLiveStage(t *testing.T) {
 		}
 	}
 }
+
+func TestSyncCopiesAndDotFilesNeverBecomeTheLatestResearch(t *testing.T) {
+	dir := thoughtsDir(t.TempDir())
+	dir.write(t, researchDir, "R1-retry.md", answeredResearch)
+	dir.write(t, researchDir, "R9-retry.sync-conflict-20261012-120000-ABCDEFG.md", framedResearch)
+	dir.write(t, researchDir, ".R10-hidden.md", framedResearch)
+	if !stagesIn(string(dir)).Research {
+		t.Fatal("a conflict copy numbered above R1 displaced it as the latest research")
+	}
+}
