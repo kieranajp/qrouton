@@ -23,6 +23,8 @@ const (
 	skillFileName = "SKILL.md"
 	promptFileExt = ".md"
 
+	templatePathFormat = "skills/qrouton-%s/references/%s-template.md"
+
 	orchestratorFileName = string(Orchestrator) + promptFileExt
 	assistantFileName    = string(Assistant) + promptFileExt
 )
@@ -51,6 +53,15 @@ func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
 //go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md artifact-discipline.md evidence-discipline.md return-contract.md session-summary.md agents/*.md all:skills
 var embedded embed.FS
+
+// Template is the skeleton a new artefact of the given kind starts from.
+func Template(kind string) ([]byte, error) {
+	data, err := embedded.ReadFile(fmt.Sprintf(templatePathFormat, kind, kind))
+	if err != nil {
+		return nil, fmt.Errorf("%w: %q", ErrNoTemplate, kind)
+	}
+	return data, nil
+}
 
 func NewEmbeddedLoader() PromptLoader { return NewFSLoader(embedded) }
 

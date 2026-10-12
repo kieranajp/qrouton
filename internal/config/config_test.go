@@ -479,3 +479,15 @@ func TestThoughtsRootsMayNotHoldTheSessionsRoot(t *testing.T) {
 		t.Fatalf("<root>/thoughts warned: %q", w)
 	}
 }
+
+func TestAuthorSurvivesSnapshotAndReplace(t *testing.T) {
+	src := &Config{Root: "/sessions", Author: "Kieran"}
+	if got := src.Snapshot().Author; got != "Kieran" {
+		t.Fatalf("snapshot author = %q", got)
+	}
+	dst := &Config{}
+	dst.Replace(src)
+	if dst.Author != "Kieran" {
+		t.Fatalf("replaced author = %q", dst.Author)
+	}
+}

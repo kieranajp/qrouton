@@ -7,6 +7,7 @@ import "errors"
 var (
 	ErrInvalidPromptID   = errors.New("invalid prompt id")
 	ErrUnsupportedPrompt = errors.New("unsupported prompt id")
+	ErrNoTemplate        = errors.New("no template for artefact kind")
 
 	ErrNoFrontmatter           = errors.New("agent prompt has no frontmatter")
 	ErrUnterminatedFrontmatter = errors.New("agent prompt has unterminated frontmatter")

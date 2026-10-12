@@ -101,6 +101,16 @@ func artifacts(dir, excludeSuffix string) []artifact {
 	return out
 }
 
+// NextNumber is one more than the highest number any artifact in dir carries,
+// and 1 for a missing or empty folder.
+func NextNumber(dir string) int {
+	highest := 0
+	for _, a := range artifacts(dir, "") {
+		highest = max(highest, a.number)
+	}
+	return highest + 1
+}
+
 // latest is the highest-numbered artifact, or the most recently written when
 // none carries a number. A number is fixed when a workstream starts; a write
 // time moves with every edit to an old document.

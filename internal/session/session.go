@@ -287,6 +287,9 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 	return indexOfRepo(repos, org, name) >= 0
 }
 
+// HeadRevision is the full SHA a worktree's HEAD points at.
+func HeadRevision(worktree string) (string, error) { return resolveRevision(worktree, headRef) }
+
 func resolveRevision(mirror, ref string) (string, error) {
 	out, err := exec.Command(gitBin, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix).CombinedOutput()
 	if err != nil {

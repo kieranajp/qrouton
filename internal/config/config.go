@@ -28,6 +28,9 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
+	// Stamped on new artefacts. Absent falls back to git's user.name.
+	Author string `json:"author,omitempty"`
+
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 
@@ -129,6 +132,7 @@ func (c *Config) Replace(next *Config) {
 	c.Root = replacement.Root
 	c.Launch = replacement.Launch
 	c.Editor = replacement.Editor
+	c.Author = replacement.Author
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
 	c.Stickers = replacement.Stickers
@@ -144,6 +148,7 @@ func clone(c *Config) *Config {
 		Orgs:     append([]string(nil), c.Orgs...),
 		Root:     c.Root,
 		Editor:   append([]string(nil), c.Editor...),
+		Author:   c.Author,
 		Welcomed: c.Welcomed,
 		Quiet:    c.Quiet,
 		UIScale:  c.UIScale,

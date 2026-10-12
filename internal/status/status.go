@@ -479,6 +479,17 @@ var artifactKinds = []struct{ dir, kind, letter string }{
 	{dir: "explainers", kind: KindExplainer, letter: "e"},
 }
 
+// KindFiling is the directory a kind is filed under and the letter its
+// filenames open with, for a kind label in any case.
+func KindFiling(kind string) (dir, letter string, ok bool) {
+	for _, a := range artifactKinds {
+		if strings.EqualFold(a.kind, kind) {
+			return a.dir, strings.ToUpper(a.letter), true
+		}
+	}
+	return "", "", false
+}
+
 var kindByDir, kindByLetter, artifactPrefix = indexArtifacts()
 
 func indexArtifacts() (map[string]string, map[string]string, *regexp.Regexp) {

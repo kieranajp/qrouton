@@ -72,7 +72,7 @@ Work survives conversation loss through code and documents, not chat. Store arti
 
 Durable documents are human handoffs, not exhaustive archives. They should preserve conclusions, decisions, evidence, and executable next steps that a future reader cannot cheaply recover; omit exploration logs, repeated context, file-by-file narration, and raw subagent output. Prefer a short artifact with representative references and explicit gaps over a comprehensive artifact nobody will read.
 
-Internal storage names:
+Internal storage names. Call `create_artefact` with `kind` and `title` to make a new research, spec or plan: it picks the name below and stamps the file, and you fill the file it returns. The patterns are here so you can recognise existing files.
 
 - research: `R<n>-<YYYY-MM-DD>-<slug>.md`
 - spec: `S<n>-<YYYY-MM-DD>-<slug>.md`
