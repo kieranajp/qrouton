@@ -10,7 +10,6 @@ Only one workbench may run per user, found through `/tmp/qrouton-sock/<uid>`. Gi
 git worktree add --detach /tmp/qr-debug HEAD
 cd /tmp/qr-debug
 sed -i '' 's#"/tmp/qrouton-sock"#"/tmp/qrouton-sock-debug"#' internal/workbench/strings.go
-ln -s "$OLDPWD/internal/desktop/frontend/node_modules" internal/desktop/frontend/node_modules
 make front
 go build -o /tmp/qr-firstrun/qrouton-debug .
 ```
