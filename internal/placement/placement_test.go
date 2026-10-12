@@ -1,16 +1,18 @@
-package main
+package placement
 
 import (
 	"io/fs"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type fixture struct {
@@ -79,22 +81,46 @@ func (f *fixture) link(dir, target string) {
 	}
 }
 
-func (f *fixture) run(dryRun bool) map[string]result {
+func (f *fixture) scan() map[string]Item {
 	f.t.Helper()
-	return f.runWith(mover{cfg: f.cfg, dryRun: dryRun, device: device})
+	return f.scanWith(newPlacer(f.cfg))
 }
 
-func (f *fixture) runWith(mv mover) map[string]result {
+func (f *fixture) scanWith(p placer) map[string]Item {
 	f.t.Helper()
-	results, err := mv.run()
+	report, err := p.scan()
 	if err != nil {
 		f.t.Fatal(err)
 	}
-	out := map[string]result{}
-	for _, r := range results {
-		out[r.Slug] = r
+	out := map[string]Item{}
+	for _, item := range report.Items {
+		out[item.Slug] = item
 	}
 	return out
+}
+
+func (f *fixture) move(slugs ...string) map[string]Outcome {
+	f.t.Helper()
+	return f.moveWith(newPlacer(f.cfg), slugs...)
+}
+
+func (f *fixture) moveWith(p placer, slugs ...string) map[string]Outcome {
+	f.t.Helper()
+	out := map[string]Outcome{}
+	for _, o := range p.move(slugs) {
+		out[o.Slug] = o
+	}
+	return out
+}
+
+func (f *fixture) personalInWork(slug string) string {
+	f.t.Helper()
+	dir := f.legacy(slug, "kieranajp")
+	if err := os.Rename(filepath.Join(f.def, slug), filepath.Join(f.work, slug)); err != nil {
+		f.t.Fatal(err)
+	}
+	f.link(dir, filepath.Join(f.work, slug))
+	return dir
 }
 
 // snapshot records every path under base with its kind, link target and bytes.
@@ -156,22 +182,38 @@ func mustWrite(t *testing.T, path, body string) {
 	}
 }
 
-func expect(t *testing.T, results map[string]result, slug string, want outcome) result {
+func expectItem(t *testing.T, items map[string]Item, slug string, want State) Item {
 	t.Helper()
-	r, ok := results[slug]
+	item, ok := items[slug]
 	if !ok {
-		t.Fatalf("%s: no result", slug)
+		t.Fatalf("%s: not reported", slug)
 	}
-	if r.Outcome != want {
-		t.Fatalf("%s: %s (%s), want %s", slug, r.Outcome, r.Detail, want)
+	if item.State != want {
+		t.Fatalf("%s: %s (%s), want %s", slug, item.State, item.Detail, want)
 	}
-	return r
+	return item
 }
 
-func TestMovesALegacySessionIntoItsRoutedRoot(t *testing.T) {
+func expectOutcome(t *testing.T, outcomes map[string]Outcome, slug string, want Result) Outcome {
+	t.Helper()
+	o, ok := outcomes[slug]
+	if !ok {
+		t.Fatalf("%s: no outcome", slug)
+	}
+	if o.Result != want {
+		t.Fatalf("%s: %s (%s), want %s", slug, o.Result, o.Detail, want)
+	}
+	return o
+}
+
+func TestMovesAnOrgSessionOutOfTheDefaultRootIntoItsRoutedRoot(t *testing.T) {
 	f := newFixture(t)
 	dir := f.legacy("routed", "acme", "ACME")
-	expect(t, f.run(false), "routed", moved)
+	item := expectItem(t, f.scan(), "routed", StateMisplaced)
+	if item.From.ID != config.DefaultThoughtsID || item.To.ID != "work" {
+		t.Fatalf("from %+v to %+v", item.From, item.To)
+	}
+	expectOutcome(t, f.move("routed"), "routed", ResultMoved)
 	if exists(filepath.Join(f.def, "routed")) {
 		t.Fatal("source left in the default root")
 	}
@@ -192,61 +234,67 @@ func TestMovesALegacySessionIntoItsRoutedRoot(t *testing.T) {
 	}
 }
 
-func TestDryRunChangesNothing(t *testing.T) {
+func TestAPersonalSessionInASharedFolderMovesOut(t *testing.T) {
 	f := newFixture(t)
-	f.legacy("routed", "acme")
-	f.legacy("private", "kieranajp")
-	crashed := f.legacy("crashed", "acme")
-	f.interrupt(crashed)
-	before := f.snapshot()
-	results := f.run(true)
-	expect(t, results, "routed", moved)
-	expect(t, results, "private", skipped)
-	expect(t, results, "crashed", finished)
-	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
-		t.Fatalf("dry run changed the tree:\nbefore %v\nafter  %v", before, after)
+	dir := f.personalInWork("personal")
+	item := expectItem(t, f.scan(), "personal", StateMisplaced)
+	if item.From.ID != "work" || item.To.ID != config.DefaultThoughtsID {
+		t.Fatalf("from %+v to %+v", item.From, item.To)
 	}
-	if got := thoughtsRoot(t, crashed); got != "" {
+	expectOutcome(t, f.move("personal"), "personal", ResultMoved)
+	if got := readLink(t, dir); got != filepath.Join("..", "thoughts", "personal") {
+		t.Fatalf("thoughts -> %q", got)
+	}
+	if got := thoughtsRoot(t, dir); got != config.DefaultThoughtsID {
 		t.Fatalf("thoughtsRoot = %q", got)
 	}
+	if !isDir(filepath.Join(f.def, "personal", "shared", "research")) {
+		t.Fatal("documents did not arrive in the default root")
+	}
 }
 
-func TestSessionsThatRouteToTheDefaultAreSkippedUntouched(t *testing.T) {
+func TestScanMovesNothingMisplaced(t *testing.T) {
 	f := newFixture(t)
-	f.legacy("private", "kieranajp")
-	f.legacy("mixed", "acme", "kieranajp")
-	f.legacy("scratch")
+	f.legacy("routed", "acme")
+	f.personalInWork("personal")
 	before := f.snapshot()
-	results := f.run(false)
-	for _, slug := range []string{"private", "mixed", "scratch"} {
-		expect(t, results, slug, skipped)
-	}
+	items := f.scan()
+	expectItem(t, items, "routed", StateMisplaced)
+	expectItem(t, items, "personal", StateMisplaced)
 	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
-		t.Fatal("a default-routed session was changed")
+		t.Fatalf("a scan changed the tree:\nbefore %v\nafter  %v", before, after)
 	}
 }
 
-func TestALinkAlreadyInTheRoutedRootIsRecorded(t *testing.T) {
+func TestSessionsAlreadyWhereTheyRouteAreRecordedAndNotReported(t *testing.T) {
 	f := newFixture(t)
-	dir := f.legacy("linked", "acme")
+	private := f.legacy("private", "kieranajp")
+	mixed := f.legacy("mixed", "acme", "kieranajp")
+	scratch := f.legacy("scratch")
+	linked := f.legacy("linked", "acme")
 	if err := os.Rename(filepath.Join(f.def, "linked"), filepath.Join(f.work, "linked")); err != nil {
 		t.Fatal(err)
 	}
-	f.link(dir, filepath.Join(f.work, "linked"))
-	expect(t, f.run(false), "linked", unchanged)
-	if got := thoughtsRoot(t, dir); got != "work" {
-		t.Fatalf("thoughtsRoot = %q", got)
+	f.link(linked, filepath.Join(f.work, "linked"))
+	items := f.scan()
+	if len(items) != 0 {
+		t.Fatalf("placed sessions reported: %v", items)
+	}
+	for dir, want := range map[string]string{private: "default", mixed: "default", scratch: "default", linked: "work"} {
+		if got := thoughtsRoot(t, dir); got != want {
+			t.Errorf("%s: thoughtsRoot = %q, want %q", filepath.Base(dir), got, want)
+		}
 	}
 }
 
-func TestACrashBetweenRenameAndLinkSwapIsFinished(t *testing.T) {
+func TestACrashBetweenRenameAndLinkSwapIsFinishedByTheNextScan(t *testing.T) {
 	f := newFixture(t)
 	dir := f.legacy("crashed", "acme")
 	f.interrupt(dir)
 	if err := os.Symlink("stale", filepath.Join(dir, "thoughts"+linkStaging)); err != nil {
 		t.Fatal(err)
 	}
-	expect(t, f.run(false), "crashed", finished)
+	expectItem(t, f.scan(), "crashed", StateFinished)
 	if got := readLink(t, dir); got != filepath.Join(f.work, "crashed") {
 		t.Fatalf("thoughts -> %q", got)
 	}
@@ -258,15 +306,30 @@ func TestACrashBetweenRenameAndLinkSwapIsFinished(t *testing.T) {
 	}
 }
 
+func TestAnInterruptedMoveThatCannotBeFinishedIsPending(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("crashed", "acme")
+	f.interrupt(dir)
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+	report, err := newPlacer(f.cfg).scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Pending() {
+		t.Fatalf("report = %+v, want a pending move", report)
+	}
+}
+
 func TestAnExistingDestinationIsAConflict(t *testing.T) {
 	f := newFixture(t)
 	dir := f.legacy("taken", "acme")
 	mustMkdir(t, filepath.Join(f.work, "taken"))
 	before := f.snapshot()
-	r := f.run(false)["taken"]
-	if r.Outcome != conflict {
-		t.Fatalf("outcome = %s (%s)", r.Outcome, r.Detail)
-	}
+	expectItem(t, f.scan(), "taken", StateSkipped)
+	expectOutcome(t, f.move("taken"), "taken", ResultConflict)
 	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
 		t.Fatal("a conflict changed the tree")
 	}
@@ -275,7 +338,7 @@ func TestAnExistingDestinationIsAConflict(t *testing.T) {
 	}
 }
 
-func TestSessionsOutsideTheMoveAreLeftAlone(t *testing.T) {
+func TestSessionsThatCannotBeMovedAreSkippedUntouched(t *testing.T) {
 	f := newFixture(t)
 	elsewhere := filepath.Join(f.base, "elsewhere", "outside")
 	mustMkdir(t, elsewhere)
@@ -285,6 +348,29 @@ func TestSessionsOutsideTheMoveAreLeftAlone(t *testing.T) {
 	_ = os.Remove(filepath.Join(real, "thoughts"))
 	mustMkdir(t, filepath.Join(real, "thoughts"))
 
+	f.legacy("broken", "acme")
+	if err := os.RemoveAll(filepath.Join(f.def, "broken")); err != nil {
+		t.Fatal(err)
+	}
+
+	before := f.snapshot()
+	items := f.scan()
+	for slug, want := range map[string]Reason{"outside": ReasonOutsideRoots, "real-dir": ReasonLinkBroken, "broken": ReasonLinkBroken} {
+		if item := expectItem(t, items, slug, StateSkipped); item.Reason != want {
+			t.Errorf("%s: reason %s, want %s", slug, item.Reason, want)
+		}
+		expectOutcome(t, f.move(slug), slug, ResultRefused)
+	}
+	if !strings.Contains(items["outside"].Detail, elsewhere) {
+		t.Fatalf("outside detail = %q", items["outside"].Detail)
+	}
+	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
+		t.Fatal("a session left alone was changed")
+	}
+}
+
+func TestARecordedRootAndAnEscalatedSessionAreStillChecked(t *testing.T) {
+	f := newFixture(t)
 	chosen := f.legacy("chosen", "acme")
 	if err := session.UpdateManifest(chosen, func(m session.Manifest) (session.Manifest, error) {
 		m.ThoughtsRoot = config.DefaultThoughtsID
@@ -292,7 +378,6 @@ func TestSessionsOutsideTheMoveAreLeftAlone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
 	escalated := f.legacy("escalated", "acme")
 	if err := session.UpdateManifest(escalated, func(m session.Manifest) (session.Manifest, error) {
 		m.Escalation = &session.EscalationOutcome{Status: session.EscalationConfirmed, At: time.Now()}
@@ -300,39 +385,48 @@ func TestSessionsOutsideTheMoveAreLeftAlone(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-
-	f.legacy("broken", "acme")
-	if err := os.RemoveAll(filepath.Join(f.def, "broken")); err != nil {
-		t.Fatal(err)
-	}
-
-	before := f.snapshot()
-	results := f.run(false)
-	for _, slug := range []string{"outside", "real-dir", "chosen", "escalated", "broken"} {
-		expect(t, results, slug, skipped)
-	}
-	if !strings.Contains(results["outside"].Detail, elsewhere) {
-		t.Fatalf("outside detail = %q", results["outside"].Detail)
-	}
-	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
-		t.Fatal("a session left alone was changed")
+	items := f.scan()
+	expectItem(t, items, "chosen", StateMisplaced)
+	expectItem(t, items, "escalated", StateMisplaced)
+	expectOutcome(t, f.move("chosen"), "chosen", ResultMoved)
+	if got := thoughtsRoot(t, chosen); got != "work" {
+		t.Fatalf("thoughtsRoot = %q", got)
 	}
 }
 
-func TestACrossDeviceMoveIsRefused(t *testing.T) {
+func TestARunningAgentSkipsTheSession(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("busy", "acme")
+	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	mustWrite(t, sessionpaths.AgentPID(dir), strconv.Itoa(os.Getpid()))
+	before := f.snapshot()
+	if item := expectItem(t, f.scan(), "busy", StateSkipped); item.Reason != ReasonAgentRunning {
+		t.Fatalf("reason = %s", item.Reason)
+	}
+	expectOutcome(t, f.move("busy"), "busy", ResultRefused)
+	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
+		t.Fatal("a running agent's session was changed")
+	}
+}
+
+func TestACrossDeviceMoveIsSkipped(t *testing.T) {
 	f := newFixture(t)
 	dir := f.legacy("far", "acme")
 	before := f.snapshot()
-	fake := func(path string) uint64 {
+	p := newPlacer(f.cfg)
+	p.device = func(path string) uint64 {
 		if strings.HasPrefix(path, f.work) {
 			return 2
 		}
 		return 1
 	}
-	r := f.runWith(mover{cfg: f.cfg, device: fake})["far"]
-	if r.Outcome != refused || !strings.Contains(r.Detail, "cross-device") {
-		t.Fatalf("outcome = %s (%s)", r.Outcome, r.Detail)
+	item := expectItem(t, f.scanWith(p), "far", StateSkipped)
+	if item.Reason != ReasonCrossDevice || !strings.Contains(item.Detail, "cross-device") {
+		t.Fatalf("item = %+v", item)
 	}
+	expectOutcome(t, f.moveWith(p, "far"), "far", ResultRefused)
 	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
 		t.Fatal("a refused move changed the tree")
 	}
@@ -341,35 +435,45 @@ func TestACrossDeviceMoveIsRefused(t *testing.T) {
 	}
 }
 
-func TestAMissingRoutedRootIsRefused(t *testing.T) {
+func TestAMissingDestinationRootIsSkipped(t *testing.T) {
 	f := newFixture(t)
 	f.legacy("orphaned", "acme")
 	if err := os.Remove(f.work); err != nil {
 		t.Fatal(err)
 	}
 	before := f.snapshot()
-	if r := f.run(false)["orphaned"]; r.Outcome != refused {
-		t.Fatalf("outcome = %s (%s)", r.Outcome, r.Detail)
+	if item := expectItem(t, f.scan(), "orphaned", StateSkipped); item.Reason != ReasonDestinationMissing {
+		t.Fatalf("reason = %s", item.Reason)
 	}
 	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
-		t.Fatal("a refused move changed the tree")
+		t.Fatal("a skipped session changed the tree")
 	}
 }
 
-func TestASecondRunMovesNothing(t *testing.T) {
+func TestASecondMoveFindsNothingLeftToDo(t *testing.T) {
 	f := newFixture(t)
 	f.legacy("routed", "acme")
 	f.legacy("private", "kieranajp")
-	f.run(false)
+	expectOutcome(t, f.move("routed"), "routed", ResultMoved)
+	if items := f.scan(); len(items) != 0 {
+		t.Fatalf("scan after the move: %v", items)
+	}
 	before := f.snapshot()
-	for slug, r := range f.run(false) {
-		if r.Outcome != skipped {
-			t.Fatalf("%s: %s (%s)", slug, r.Outcome, r.Detail)
-		}
-	}
+	expectOutcome(t, f.move("routed"), "routed", ResultRefused)
 	if after := f.snapshot(); !reflect.DeepEqual(before, after) {
-		t.Fatal("a second run changed the tree")
+		t.Fatal("a second pass changed the tree")
 	}
+}
+
+func TestAFailureInOneSessionDoesNotStopTheOthers(t *testing.T) {
+	f := newFixture(t)
+	f.legacy("one", "acme")
+	f.legacy("two", "acme")
+	outcomes := f.move("../escape", "one", "missing", "two")
+	expectOutcome(t, outcomes, "../escape", ResultRefused)
+	expectOutcome(t, outcomes, "missing", ResultRefused)
+	expectOutcome(t, outcomes, "one", ResultMoved)
+	expectOutcome(t, outcomes, "two", ResultMoved)
 }
 
 func TestThoughtsWithoutASessionAreNeverTouched(t *testing.T) {
@@ -381,7 +485,7 @@ func TestThoughtsWithoutASessionAreNeverTouched(t *testing.T) {
 	mustMkdir(t, loose)
 	f.link(loose, filepath.Join("..", "thoughts", "orphan"))
 	f.legacy("routed", "acme")
-	f.run(false)
+	f.move("routed", "loose", "orphan")
 	if b, err := os.ReadFile(filepath.Join(orphan, "P1.md")); err != nil || string(b) != "# orphan" {
 		t.Fatalf("orphan changed: %q, %v", b, err)
 	}
@@ -407,7 +511,9 @@ func TestAnUnmarkedDestinationIsNeverAdopted(t *testing.T) {
 			mustWrite(t, filepath.Join(f.work, "borrowed", moveMarker), mark)
 		}
 		before := f.snapshot()
-		expect(t, f.run(false), "borrowed", conflict)
+		if item := expectItem(t, f.scan(), "borrowed", StateSkipped); item.Reason != ReasonConflict {
+			t.Fatalf("marker %q: reason %s", mark, item.Reason)
+		}
 		if after := f.snapshot(); !reflect.DeepEqual(before, after) {
 			t.Fatalf("marker %q: a conflict changed the tree", mark)
 		}
