@@ -54,3 +54,10 @@ const (
 var stickerColours = []string{"blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"}
 
 var stickerSymbols = []string{"star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"}
+
+const (
+	fingerprintFieldJoin = "\x00"
+	fingerprintOrgJoin   = ","
+	fingerprintEntryJoin = "\n"
+	fingerprintBytes     = 8
+)

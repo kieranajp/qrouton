@@ -28,7 +28,13 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
-	// Set once the first-launch check of where session thoughts live has run.
+	// ThoughtsPlacement is the fingerprint of the thoughts folders the last
+	// automatic placement check ran against. A different fingerprint at launch
+	// runs the check again.
+	ThoughtsPlacement string `json:"thoughtsPlacement,omitempty"`
+
+	// ThoughtsPlacementChecked is read only to migrate a config written before
+	// the fingerprint existed; saving drops it.
 	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
 
 	// Stamped on new artefacts. Absent falls back to git's user.name, then the login name.
@@ -136,6 +142,7 @@ func (c *Config) Replace(next *Config) {
 	c.Launch = replacement.Launch
 	c.Editor = replacement.Editor
 	c.Author = replacement.Author
+	c.ThoughtsPlacement = replacement.ThoughtsPlacement
 	c.ThoughtsPlacementChecked = replacement.ThoughtsPlacementChecked
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
@@ -153,6 +160,7 @@ func clone(c *Config) *Config {
 		Root:                     c.Root,
 		Editor:                   append([]string(nil), c.Editor...),
 		Author:                   c.Author,
+		ThoughtsPlacement:        c.ThoughtsPlacement,
 		ThoughtsPlacementChecked: c.ThoughtsPlacementChecked,
 		Welcomed:                 c.Welcomed,
 		Quiet:                    c.Quiet,

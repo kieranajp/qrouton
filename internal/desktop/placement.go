@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"reflect"
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
@@ -44,8 +43,9 @@ func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
 }
 
 // checkOnce runs at every launch to recover interrupted moves. The popup is
-// automatic once per install, after first run, when any session is misplaced,
-// skipped or pending; a recovery that fails raises it on any launch.
+// automatic after first run whenever the thoughts folders differ from the ones
+// last checked, if any session is misplaced, skipped or pending; a recovery
+// that fails raises it on any launch.
 func (p *Placement) checkOnce() {
 	p.op.Lock()
 	defer p.op.Unlock()
@@ -54,7 +54,11 @@ func (p *Placement) checkOnce() {
 	if err != nil {
 		return
 	}
-	if snapshot.ThoughtsPlacementChecked || !snapshot.Welcomed {
+	if snapshot.ThoughtsPlacement == "" && snapshot.ThoughtsPlacementChecked {
+		_ = p.markChecked()
+		snapshot.ThoughtsPlacement = snapshot.ThoughtsFingerprint()
+	}
+	if !snapshot.Welcomed || snapshot.ThoughtsPlacement == snapshot.ThoughtsFingerprint() {
 		if report.Pending() {
 			p.show(report, true)
 		}
@@ -136,12 +140,15 @@ func (p *Placement) Close() error {
 	return p.markChecked()
 }
 
-// markChecked writes the flag through the file's own values, so a saved but
-// not yet applied Folders change is not overwritten by the live config.
+// markChecked records the fingerprint of the folders the check ran against,
+// through the file's own values, so a saved but not yet applied Folders change
+// is not overwritten by the live config.
 func (p *Placement) markChecked() error {
 	return p.cfg.Transact(func(current *config.Config) error {
-		next, live, _, err := stageConfig(current, p.pinnedRoot, func(next, live *config.Config) {
-			next.ThoughtsPlacementChecked, live.ThoughtsPlacementChecked = true, true
+		fingerprint := current.ThoughtsFingerprint()
+		next, live, _, err := stageConfig(current, p.pinnedRoot, false, func(next, live *config.Config) {
+			next.ThoughtsPlacement, live.ThoughtsPlacement = fingerprint, fingerprint
+			next.ThoughtsPlacementChecked, live.ThoughtsPlacementChecked = false, false
 		})
 		if err != nil {
 			return err
@@ -162,13 +169,5 @@ func (p *Placement) relaunchPending() bool {
 	if err != nil {
 		return false
 	}
-	if restartRequired(live, p.pinnedRoot, file) {
-		return true
-	}
-	file.Root = live.Root
-	file.Thoughts.Default = config.ExpandHome(file.Thoughts.Default)
-	for i := range file.Thoughts.Roots {
-		file.Thoughts.Roots[i].Path = config.ExpandHome(file.Thoughts.Roots[i].Path)
-	}
-	return !reflect.DeepEqual(file.ThoughtsRoots(), live.ThoughtsRoots())
+	return restartRequired(live, p.pinnedRoot, file) || thoughtsRoutingChanged(live, file)
 }

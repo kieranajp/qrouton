@@ -492,18 +492,19 @@ func TestAuthorSurvivesSnapshotAndReplace(t *testing.T) {
 	}
 }
 
-func TestThoughtsPlacementCheckedSurvivesSnapshotAndReplace(t *testing.T) {
-	src := &Config{Root: "/sessions", ThoughtsPlacementChecked: true}
-	if !src.Snapshot().ThoughtsPlacementChecked {
-		t.Fatal("snapshot dropped the flag")
+func TestThoughtsPlacementSurvivesSnapshotAndReplace(t *testing.T) {
+	src := &Config{Root: "/sessions", ThoughtsPlacement: "abc", ThoughtsPlacementChecked: true}
+	snap := src.Snapshot()
+	if snap.ThoughtsPlacement != "abc" || !snap.ThoughtsPlacementChecked {
+		t.Fatal("snapshot dropped a placement field")
 	}
 	dst := &Config{}
 	dst.Replace(src)
-	if !dst.ThoughtsPlacementChecked {
-		t.Fatal("Replace dropped the flag")
+	if dst.ThoughtsPlacement != "abc" || !dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace dropped a placement field")
 	}
 	dst.Replace(&Config{Root: "/sessions"})
-	if dst.ThoughtsPlacementChecked {
-		t.Fatal("Replace kept a stale flag")
+	if dst.ThoughtsPlacement != "" || dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace kept stale placement fields")
 	}
 }

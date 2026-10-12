@@ -1313,31 +1313,49 @@ func TestSettingsSaveLeavesAnUnsetRootUnsetWhenTheDefaultIsKept(t *testing.T) {
 	}
 }
 
-func TestSettingsSaveThatAddsAThoughtsFolderReachesSearchWithoutARestart(t *testing.T) {
+func TestSettingsSaveThatAddsAThoughtsFolderAsksForARelaunchAndHoldsItBack(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root, shared := t.TempDir(), t.TempDir()
 	cfg := &config.Config{Root: root}
-	set := vault.NewSet(vault.NewOllama(), t.TempDir())
-	if err := set.Configure(thoughtsProfiles(cfg)); err != nil {
-		t.Fatal(err)
-	}
+	reconfigures := 0
 	s := testSettings(t, cfg, nil, nil, nil)
-	s.reconfigure = reconfigureVault(set)
-	link := filepath.Join(shared, "new-session")
-	if set.ForPath(link) != nil {
-		t.Fatal("the folder was searchable before it was added")
-	}
+	s.reconfigure = func(*config.Config) error { reconfigures++; return nil }
 
 	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
 	in.Root = root
-	if _, err := s.Save(in); err != nil {
+	res, err := s.Save(in)
+	if err != nil {
 		t.Fatal(err)
 	}
-	if set.ForPath(link) == nil {
-		t.Fatal("a session in the added folder has no thoughts root until a restart")
+	if !res.RestartRequired {
+		t.Fatal("a new shared folder did not ask for a relaunch")
 	}
-	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != "work" {
-		t.Fatalf("new acme sessions route to %s", got)
+	if reconfigures != 0 {
+		t.Fatal("a change waiting on a relaunch reconfigured search")
+	}
+	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != config.DefaultThoughtsID {
+		t.Fatalf("acme sessions route to %s before the relaunch", got)
+	}
+	if onDisk, _ := config.ReadFile(); len(onDisk.Thoughts.Roots) != 1 {
+		t.Fatalf("the shared folder did not reach the file: %+v", onDisk.Thoughts)
+	}
+
+	again, err := s.Save(in)
+	if err != nil || !again.RestartRequired {
+		t.Fatalf("a second save before the relaunch = %+v, %v; the prompt must stay", again, err)
+	}
+}
+
+func TestSettingsSaveThatChangesTheDefaultThoughtsFolderAsksForARelaunch(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	s := testSettings(t, cfg, nil, nil, nil)
+	in := SettingsInput{Root: root, Orgs: []string{"acme"}, Stickers: defaultStickers(),
+		Thoughts: ThoughtsInput{Default: t.TempDir()}}
+	res, err := s.Save(in)
+	if err != nil || !res.RestartRequired {
+		t.Fatalf("Save = %+v, %v", res, err)
 	}
 }
 
@@ -1411,35 +1429,6 @@ func TestSettingsSaveThatChangesTheRootHoldsBackItsThoughtsFoldersUntilTheRelaun
 	}
 	if _, err := thoughts.Read(vault.ReadRequest{Ref: "default:private.md"}); err == nil {
 		t.Fatal("a shared session read the default folder")
-	}
-}
-
-func TestSettingsSaveThatCannotReindexLeavesRoutingAndSearchAlone(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	root, shared := t.TempDir(), t.TempDir()
-	cfg := &config.Config{Root: root}
-	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
-	if err := set.Configure(thoughtsProfiles(cfg)); err != nil {
-		t.Fatal(err)
-	}
-	s := testSettings(t, cfg, nil, nil, nil)
-	s.reconfigure = func(*config.Config) error { return errOffline }
-
-	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
-	in.Root = root
-	if _, err := s.Save(in); !errors.Is(err, errOffline) {
-		t.Fatalf("Save = %v, want the reindex failure", err)
-	}
-	for _, path := range []string{config.Path(), s.linear.File} {
-		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
-			t.Fatalf("a refused save wrote %s", path)
-		}
-	}
-	if got := cfg.RouteThoughts([]string{"acme"}).ID; got != config.DefaultThoughtsID {
-		t.Fatalf("acme sessions route to %s after a refused save", got)
-	}
-	if set.ForProfile(vault.Profile{ID: "work", Root: shared}) != nil {
-		t.Fatal("a refused save indexed the folder")
 	}
 }
 

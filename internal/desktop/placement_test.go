@@ -49,8 +49,8 @@ func TestAPlacementCheckWaitsForFirstRun(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
 	p.checkOnce()
-	if reg.placing() || cfg.ThoughtsPlacementChecked || stubs.scans > 1 {
-		t.Fatalf("scans %d, placing %v, checked %v", stubs.scans, reg.placing(), cfg.ThoughtsPlacementChecked)
+	if reg.placing() || checkedLive(cfg) || stubs.scans > 1 {
+		t.Fatalf("scans %d, placing %v, checked %v", stubs.scans, reg.placing(), checkedLive(cfg))
 	}
 }
 
@@ -61,7 +61,7 @@ func TestNothingMisplacedSetsTheFlagWithoutAnOverlay(t *testing.T) {
 	if reg.placing() {
 		t.Fatal("overlay raised with nothing misplaced")
 	}
-	if !savedConfig(t).ThoughtsPlacementChecked || !cfg.Snapshot().ThoughtsPlacementChecked {
+	if !checkedOnDisk(t) || !checkedLive(cfg) {
 		t.Fatal("flag not recorded in the file and the live config")
 	}
 }
@@ -77,7 +77,7 @@ func TestOnlySkippedSessionsStillRaiseTheOverlay(t *testing.T) {
 	if !reg.placing() {
 		t.Fatal("overlay not raised for sessions that are misplaced but cannot move")
 	}
-	if savedConfig(t).ThoughtsPlacementChecked {
+	if checkedOnDisk(t) {
 		t.Fatal("flag set before the user answered")
 	}
 	if view := p.Report(); len(view.Misplaced) != 0 || len(view.Skipped) != 2 {
@@ -92,7 +92,7 @@ func TestAMisplacedSessionRaisesTheOverlayAndLeavesTheFlagUnset(t *testing.T) {
 	if !reg.placing() {
 		t.Fatal("overlay not raised")
 	}
-	if savedConfig(t).ThoughtsPlacementChecked {
+	if checkedOnDisk(t) {
 		t.Fatal("flag set before the user answered")
 	}
 	view := p.Report()
@@ -118,14 +118,14 @@ func TestClosingRecordsTheCheckUnlessAMoveIsStillPending(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if reg.placing() || savedConfig(t).ThoughtsPlacementChecked {
-		t.Fatalf("placing %v, flag %v", reg.placing(), savedConfig(t).ThoughtsPlacementChecked)
+	if reg.placing() || checkedOnDisk(t) {
+		t.Fatalf("placing %v, flag %v", reg.placing(), checkedOnDisk(t))
 	}
 	stubs.report = misplacedReport()
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if !savedConfig(t).ThoughtsPlacementChecked {
+	if !checkedOnDisk(t) {
 		t.Fatal("closing with no pending move left the flag unset")
 	}
 }
@@ -146,7 +146,7 @@ func TestMarkingTheCheckKeepsAFolderChangeWaitingForARelaunch(t *testing.T) {
 	if err := p.markChecked(); err != nil {
 		t.Fatal(err)
 	}
-	if got := savedConfig(t); len(got.Thoughts.Roots) != 1 || !got.ThoughtsPlacementChecked {
+	if got := savedConfig(t); len(got.Thoughts.Roots) != 1 || got.ThoughtsPlacement != live.ThoughtsFingerprint() {
 		t.Fatalf("saved = %+v", got)
 	}
 	if len(live.Snapshot().Thoughts.Roots) != 0 {
@@ -174,7 +174,7 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 }
 
 func TestAManualCheckOffersWhatTheAutomaticRunSkipped(t *testing.T) {
-	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
+	cfg := checkedConfig(t.TempDir())
 	skipped := placement.Report{Items: []placement.Item{{Slug: "kraken", State: placement.StateSkipped, Reason: placement.ReasonAgentRunning}}}
 	p, reg, stubs := newTestPlacement(t, cfg, skipped)
 	p.checkOnce()
@@ -199,8 +199,8 @@ func TestClosingAManualCheckLeavesTheFlagAlone(t *testing.T) {
 	if err := p.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if reg.placing() || savedConfig(t).ThoughtsPlacementChecked || cfg.Snapshot().ThoughtsPlacementChecked {
-		t.Fatalf("placing %v, flag %v", reg.placing(), savedConfig(t).ThoughtsPlacementChecked)
+	if reg.placing() || checkedOnDisk(t) || checkedLive(cfg) {
+		t.Fatalf("placing %v, flag %v", reg.placing(), checkedOnDisk(t))
 	}
 }
 
@@ -236,7 +236,7 @@ func TestPlacementOperationsNeverOverlap(t *testing.T) {
 }
 
 func TestRecoveryScansEveryLaunchEvenAfterTheFlagIsSet(t *testing.T) {
-	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
+	cfg := checkedConfig(t.TempDir())
 	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
 	p.checkOnce()
 	if stubs.scans != 1 {
@@ -250,7 +250,7 @@ func TestRecoveryScansEveryLaunchEvenAfterTheFlagIsSet(t *testing.T) {
 func TestAPendingRecoveryRaisesThePopupOnAnyLaunch(t *testing.T) {
 	pending := placement.Report{Items: []placement.Item{{Slug: "crashed", Name: "Crashed", State: placement.StatePending, Detail: "denied"}}}
 	for name, cfg := range map[string]*config.Config{
-		"flag set":      {Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true},
+		"flag set":      checkedConfig(t.TempDir()),
 		"automatic run": {Root: t.TempDir(), Welcomed: true},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -278,8 +278,9 @@ func TestACrashedManualMoveIsRepairedOnTheNextLaunchWithTheFlagSet(t *testing.T)
 			t.Fatal(err)
 		}
 	}
-	cfg := &config.Config{Root: root, Welcomed: true, ThoughtsPlacementChecked: true,
+	cfg := &config.Config{Root: root, Welcomed: true,
 		Thoughts: config.Thoughts{Roots: []config.ThoughtsRoot{{ID: "work", Path: work, Orgs: []string{"acme"}}}}}
+	cfg.ThoughtsPlacement = cfg.ThoughtsFingerprint()
 	created := time.Now()
 	dir := filepath.Join(root, "kraken")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -317,5 +318,66 @@ func TestACrashedManualMoveIsRepairedOnTheNextLaunchWithTheFlagSet(t *testing.T)
 	}
 	if reg.placing() {
 		t.Fatal("a repaired move raised the popup")
+	}
+}
+
+func checkedConfig(root string) *config.Config {
+	cfg := &config.Config{Root: root, Welcomed: true}
+	cfg.ThoughtsPlacement = cfg.ThoughtsFingerprint()
+	return cfg
+}
+
+func checkedOnDisk(t *testing.T) bool {
+	t.Helper()
+	saved := savedConfig(t)
+	return saved.ThoughtsPlacement != "" && saved.ThoughtsPlacement == (&config.Config{Root: saved.Root, Thoughts: saved.Thoughts}).ThoughtsFingerprint()
+}
+
+func checkedLive(cfg *config.Config) bool {
+	snap := cfg.Snapshot()
+	return snap.ThoughtsPlacement != "" && snap.ThoughtsPlacement == snap.ThoughtsFingerprint()
+}
+
+func TestAChangedThoughtsFingerprintRaisesThePopupAgain(t *testing.T) {
+	cfg := checkedConfig(t.TempDir())
+	cfg.ThoughtsPlacement = "from-an-older-config"
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
+	p.checkOnce()
+	if !reg.placing() {
+		t.Fatal("a changed set of folders did not raise the popup")
+	}
+	if checkedOnDisk(t) {
+		t.Fatal("the new fingerprint was recorded before the user answered")
+	}
+	if err := p.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if !checkedOnDisk(t) {
+		t.Fatal("closing did not record the new fingerprint")
+	}
+}
+
+func TestAnUnchangedThoughtsFingerprintStaysQuiet(t *testing.T) {
+	cfg := checkedConfig(t.TempDir())
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
+	p.checkOnce()
+	if reg.placing() {
+		t.Fatal("an unchanged set of folders raised the popup")
+	}
+}
+
+func TestTheLegacyCheckedFlagMigratesSilently(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
+	p.checkOnce()
+	if reg.placing() {
+		t.Fatal("the legacy flag raised the popup")
+	}
+	saved := savedConfig(t)
+	if saved.ThoughtsPlacement != cfg.ThoughtsFingerprint() || saved.ThoughtsPlacementChecked {
+		t.Fatalf("saved = fingerprint %q, legacy flag %v", saved.ThoughtsPlacement, saved.ThoughtsPlacementChecked)
+	}
+	if !checkedLive(cfg) {
+		t.Fatal("the live config did not take the fingerprint")
 	}
 }

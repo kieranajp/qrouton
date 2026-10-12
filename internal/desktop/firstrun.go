@@ -81,7 +81,7 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	}
 	changed := false
 	err = f.cfg.Transact(func(current *config.Config) error {
-		next, live, restart, err := stageConfig(current, f.pinnedRoot, func(next, live *config.Config) {
+		next, live, restart, err := stageConfig(current, f.pinnedRoot, false, func(next, live *config.Config) {
 			next.Orgs, next.Root, next.Welcomed = orgs, root, true
 			next.Thoughts.Default = thoughts
 			if !config.OrgsOverridden() {
