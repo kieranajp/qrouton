@@ -36,3 +36,13 @@ test("nothing misplaced shows the all-clear with one Close button", async ({ pag
   await page.getByRole("button", { name: "Close" }).click();
   await expect.poll(() => page.evaluate(() => window.closes)).toBe(1);
 });
+
+test("only skipped sessions shows their reasons with just a Close button", async ({ page }) => {
+  await page.goto("/tests/placement.html?skippedonly");
+  await expect(page.getByText("An agent is running in it")).toBeVisible();
+  await expect(page.getByText("Every session is where it belongs.")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Move" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Close" })).toHaveCount(1);
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect.poll(() => page.evaluate(() => window.closes)).toBe(1);
+});

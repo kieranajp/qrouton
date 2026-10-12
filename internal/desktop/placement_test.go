@@ -69,6 +69,25 @@ func TestNothingMisplacedSetsTheFlagWithoutAnOverlay(t *testing.T) {
 	}
 }
 
+func TestOnlySkippedSessionsStillRaiseTheOverlay(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
+	skipped := placement.Report{Items: []placement.Item{
+		{Slug: "far", State: placement.StateSkipped, Reason: placement.ReasonCrossDevice},
+		{Slug: "taken", State: placement.StateSkipped, Reason: placement.ReasonConflict},
+	}}
+	p, reg, _ := newTestPlacement(t, cfg, skipped)
+	p.checkOnce()
+	if !reg.placing() {
+		t.Fatal("overlay not raised for sessions that are misplaced but cannot move")
+	}
+	if savedConfig(t).ThoughtsPlacementChecked {
+		t.Fatal("flag set before the user answered")
+	}
+	if view := p.Report(); len(view.Misplaced) != 0 || len(view.Skipped) != 2 {
+		t.Fatalf("view = %+v", view)
+	}
+}
+
 func TestAMisplacedSessionRaisesTheOverlayAndLeavesTheFlagUnset(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())

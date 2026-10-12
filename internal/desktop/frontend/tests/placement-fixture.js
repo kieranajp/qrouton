@@ -6,15 +6,17 @@ import PlacementOverlay from "../src/lib/placement/PlacementOverlay.svelte";
 const query = new URLSearchParams(location.search);
 const clear = query.has("clear");
 
+const skippedOnly = query.has("skippedonly");
+
 const view = clear
   ? { misplaced: [], skipped: [], leavingNote: "", relaunchNote: "" }
   : {
-      misplaced: [
+      misplaced: skippedOnly ? [] : [
         { slug: "kraken", name: "Kraken", state: "misplaced", from: { id: "work", path: "/work" }, to: { id: "default", path: "/d" }, leaving: true },
         { slug: "squid", name: "Squid", state: "misplaced", from: { id: "default", path: "/d" }, to: { id: "work", path: "/work" }, leaving: false },
       ],
       skipped: [{ slug: "octopus", name: "Octopus", state: "skipped", reason: "agent-running", from: { id: "", path: "" }, to: { id: "", path: "" } }],
-      leavingNote: "Sync deletes the folder on your teammates' machines.",
+      leavingNote: skippedOnly ? "" : "Sync deletes the folder on your teammates' machines.",
       relaunchNote: query.has("relaunch") ? "A saved change is waiting for a relaunch." : "",
     };
 

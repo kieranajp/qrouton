@@ -92,7 +92,7 @@
     {#if view?.leavingNote}
       <p class="note">{view.leavingNote}</p>
     {/if}
-  {:else if view}
+  {:else if view && !view.skipped.length}
     <p class="note">Every session is where it belongs.</p>
   {/if}
 

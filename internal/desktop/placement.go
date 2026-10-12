@@ -53,7 +53,7 @@ func (p *Placement) checkOnce() {
 	if err != nil {
 		return
 	}
-	if len(report.Misplaced()) == 0 {
+	if len(report.Misplaced()) == 0 && len(report.Skipped()) == 0 {
 		if !report.Pending() {
 			_ = p.markChecked()
 		}
