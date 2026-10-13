@@ -1,10 +1,14 @@
 package desktop
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/github"
@@ -144,6 +148,23 @@ func TestPullFetchKeepsTheLastRowsOnServerErrors(t *testing.T) {
 
 	if rows := titles(second.list()); !reflect.DeepEqual(rows, []string{"acme/web#a"}) || second.list().SignedOut {
 		t.Fatalf("rows after 5xx = %v, signed out %v", rows, second.list().SignedOut)
+	}
+}
+
+func TestPullFetchLogsARepeatedFailureOnce(t *testing.T) {
+	var logged bytes.Buffer
+	log.SetOutput(&logged)
+	t.Cleanup(func() { log.SetOutput(os.Stderr) })
+	dir := pullSession(t)
+	fake := &fakePullAPI{token: "t", answers: map[string]pullAnswer{"web": {err: errors.New("502 Bad Gateway")}}}
+
+	pulls := sessionPulls{}
+	for range 3 {
+		pulls = fake.api().fetch(context.Background(), dir, pulls)
+	}
+
+	if got := strings.Count(logged.String(), "502 Bad Gateway"); got != 1 {
+		t.Fatalf("logged the failure %d times:\n%s", got, logged.String())
 	}
 }
 

@@ -20,7 +20,11 @@ type pullRequestAPI struct {
 
 func livePullRequestAPI() pullRequestAPI {
 	return pullRequestAPI{
-		credential: github.ResolveCredential,
+		credential: func(ctx context.Context) (github.Credential, string) {
+			ctx, cancel := context.WithTimeout(ctx, pullRequestTimeout)
+			defer cancel()
+			return github.ResolveCredential(ctx)
+		},
 		list: func(ctx context.Context, token, owner, repo, branch, etag string) ([]github.PullRequest, string, bool, error) {
 			ctx, cancel := context.WithTimeout(ctx, pullRequestTimeout)
 			defer cancel()
@@ -80,6 +84,9 @@ func (api pullRequestAPI) fetch(ctx context.Context, root string, previous sessi
 		id := pullRequestRepoID(repo)
 		cached := next.repos[id]
 		prs, etag, notModified, err := api.list(ctx, token, repo.Org, repo.Name, repo.Branch, cached.etag)
+		if ctx.Err() != nil {
+			return previous
+		}
 		switch {
 		case err == nil && notModified:
 			cached.failure = ""
@@ -89,6 +96,7 @@ func (api pullRequestAPI) fetch(ctx context.Context, root string, previous sessi
 			cached = repoPulls{}
 		case errors.Is(err, github.ErrTokenRejected):
 			next.signedOut = true
+			return next
 		default:
 			if text := err.Error(); text != cached.failure {
 				log.Printf(pullRequestLogFormat, id, err)

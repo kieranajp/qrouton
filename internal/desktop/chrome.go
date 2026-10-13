@@ -119,6 +119,9 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 	lastPulled := ""
 	fetch := func(arrivalOnly bool) {
 		shown := reg.current().root()
+		if shown == "" {
+			lastPulled = ""
+		}
 		if pullPending || shown == "" || (arrivalOnly && shown == lastPulled) {
 			return
 		}
@@ -151,6 +154,9 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 		case <-reg.touched:
 			for _, root := range reg.takeRepositoryChanges() {
 				delete(measured, root)
+				if root == lastPulled {
+					lastPulled = ""
+				}
 			}
 			refresh()
 			fetch(true)

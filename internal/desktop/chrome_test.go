@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -111,6 +112,74 @@ func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
 	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 || got.SignedOut {
 		t.Fatalf("beta inherited alpha's pull requests: %+v", got)
+	}
+}
+
+func TestPullRequestsFetchOnArrivalAndFollowASwitchMadeMidFetch(t *testing.T) {
+	root := t.TempDir()
+	alphaRoot := sessionDir(t, root, "alpha")
+	betaRoot := sessionDir(t, root, "beta")
+	reg := newSessions()
+	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
+	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
+	reg.reveal(alpha)
+
+	asked := make(chan string, 4)
+	release := make(chan struct{})
+	fetch := func(_ context.Context, root string, _ sessionPulls) sessionPulls {
+		asked <- root
+		<-release
+		row := status.PullRequest{Repo: "acme/web", Number: 1, Title: filepath.Base(root)}
+		return sessionPulls{order: []string{"acme/web"}, repos: map[string]repoPulls{"acme/web": {rows: []status.PullRequest{row}}}}
+	}
+	updates := make(chan status.Fields, 64)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer close(release)
+	go watch(ctx, reg, root, nil, func(event string, payload any) {
+		if event == chromeEvent {
+			select {
+			case updates <- payload.(status.Fields):
+			default:
+			}
+		}
+	}, time.Hour, time.Hour, time.Hour, unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, false },
+	}, fetch)
+
+	waitAsked := func(want string) {
+		t.Helper()
+		select {
+		case got := <-asked:
+			if got != want {
+				t.Fatalf("fetched %s, want %s", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no fetch for %s", want)
+		}
+	}
+	waitAsked(alphaRoot)
+	reg.reveal(beta)
+	select {
+	case got := <-asked:
+		t.Fatalf("fetched %s while another fetch was pending", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+	release <- struct{}{}
+	waitAsked(betaRoot)
+	release <- struct{}{}
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case fields := <-updates:
+			if items := fields.PullRequests.Items; fields.Slug == "beta" && len(items) == 1 && items[0].Title == "beta" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("beta's pull requests never reached the page")
+		}
 	}
 }
 
