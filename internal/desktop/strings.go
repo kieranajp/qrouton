@@ -44,6 +44,10 @@ const (
 	shellWindowLabel        = "shell"
 	shellWindowLabelNumbers = "shell %d"
 
+	sessionUnloadLabel   = "Unload"
+	sessionUnloadFailed  = "Session could not be unloaded"
+	sessionReorderFailed = "Session could not be moved"
+
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"

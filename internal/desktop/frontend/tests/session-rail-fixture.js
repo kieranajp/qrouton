@@ -9,19 +9,51 @@ const stickers = new Map();
 const calls = [];
 let delay = 40;
 let failing = false;
+let unloadFailing = false;
+let reorderFailing = false;
+let deferReorder = false;
+let completeReorder;
 
 window.sessionRailBridge = {
   calls: () => [...calls],
   failNext: () => (failing = true),
+  failNextUnload: () => (unloadFailing = true),
+  failNextReorder: () => (reorderFailing = true),
+  deferReorder: () => (deferReorder = true),
+  completeReorder: () => completeReorder?.(),
   setDelay: (milliseconds) => (delay = milliseconds),
   saveStickers: (list) => emitWailsEvent("chrome:update", { stickers: list }),
   saveStickerLabels: (labels) => emitWailsEvent("chrome:update", { stickers: labelled(labels) }),
 };
 
-window.wailsCall = async (name, slug) => {
+window.wailsCall = async (name, slug, targetSlug) => {
   if (name.endsWith(".Show")) {
     calls.push({ method: "show", slug });
     window.sessionRail?.shown(slug);
+    return;
+  }
+  if (name.endsWith(".Reorder")) {
+    calls.push({ method: "reorder", slug, targetSlug });
+    if (deferReorder) {
+      await new Promise((resolve) => (completeReorder = resolve));
+      deferReorder = false;
+      completeReorder = undefined;
+    }
+    if (reorderFailing) {
+      reorderFailing = false;
+      throw new Error("row unavailable");
+    }
+    window.sessionRail?.reordered(slug, targetSlug);
+    return;
+  }
+  if (name.endsWith(".Unload")) {
+    calls.push({ method: "unload", slug });
+    await new Promise((resolve) => setTimeout(resolve, delay));
+    if (unloadFailing) {
+      unloadFailing = false;
+      throw new Error("session unavailable");
+    }
+    window.sessionRail?.unloaded(slug);
     return;
   }
   if (name.endsWith(".CycleSticker")) {

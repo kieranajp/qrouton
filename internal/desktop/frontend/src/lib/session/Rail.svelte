@@ -8,7 +8,8 @@
   import RailItem from "./RailItem.svelte";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
-  import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
+  import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
+  import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
@@ -27,12 +28,108 @@
   } = $props();
 
   const ROW_MENU_WIDTH = 190;
-  const ROW_MENU = [
-    { label: "Reload", icon: "refresh", act: reloadRow },
-    { label: "Reveal in Finder", icon: "worktree", act: revealRow },
-    "-",
-    { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
-  ];
+
+  let dragSlug = $state("");
+  let targetSlug = $state("");
+  /** @type {HTMLDivElement} */
+  let sessionList;
+  /** @type {{pointerId: number, source: string, button: HTMLElement, startX: number, startY: number, x: number, y: number, moved: boolean} | null} */
+  let gesture = $state(null);
+  let scrollFrame = 0;
+
+  $effect(() => {
+    if ((gesture && !sessions.some((row) => row.slug === gesture.source)) ||
+        (targetSlug && !sessions.some((row) => row.slug === targetSlug))) {
+      clearDrag();
+    }
+  });
+
+  function clearDrag() {
+    const previous = gesture;
+    gesture = null;
+    dragSlug = "";
+    targetSlug = "";
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+    if (previous?.button.hasPointerCapture(previous.pointerId)) {
+      previous.button.releasePointerCapture(previous.pointerId);
+    }
+  }
+
+  function startPointer(event, source) {
+    event.preventDefault();
+    if (event.button !== 0 || !event.isPrimary || gesture) return;
+    gesture = {
+      pointerId: event.pointerId,
+      source,
+      button: event.currentTarget,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function findTarget() {
+    if (!gesture?.moved) return;
+    const row = document.elementFromPoint(gesture.x, gesture.y)?.closest("[data-session-slug]");
+    const slug = row && sessionList.contains(row) ? row.getAttribute("data-session-slug") : "";
+    targetSlug = slug && slug !== gesture.source && sessions.some((row) => row.slug === slug) ? slug : "";
+  }
+
+  function scrollDrag() {
+    if (!gesture?.moved) return;
+    const box = sessionList.getBoundingClientRect();
+    if (gesture.x >= box.left && gesture.x <= box.right &&
+        gesture.y >= box.top && gesture.y <= box.bottom) {
+      const edge = 28;
+      const top = gesture.y - box.top;
+      const bottom = box.bottom - gesture.y;
+      const delta = top < edge ? -(edge - top) / 2 : bottom < edge ? (edge - bottom) / 2 : 0;
+      sessionList.scrollTop += delta;
+      findTarget();
+    }
+    scrollFrame = requestAnimationFrame(scrollDrag);
+  }
+
+  function movePointer(event) {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    event.preventDefault();
+    gesture.x = event.clientX;
+    gesture.y = event.clientY;
+    if (!gesture.moved && Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY) >= 5) {
+      gesture.moved = true;
+      dragSlug = gesture.source;
+      scrollFrame = requestAnimationFrame(scrollDrag);
+    }
+    findTarget();
+  }
+
+  async function finishPointer(event) {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    movePointer(event);
+    const { source, moved } = gesture;
+    const target = targetSlug;
+    const sourceExists = sessions.some((row) => row.slug === source);
+    const valid = sourceExists && target && sessions.some((row) => row.slug === target);
+    clearDrag();
+    if (!moved) {
+      if (sourceExists) show(source);
+      return;
+    }
+    if (!valid) return;
+    try {
+      await reorder(source, target);
+    } catch {
+      showRowNotice(source, SESSION_REORDER_FAILED, true);
+    }
+  }
+
+  function cancelPointer(event) {
+    if (gesture?.pointerId === event.pointerId) clearDrag();
+  }
 
   const stickerQueues = new Map();
   let pendingStickers = $state({});
@@ -42,19 +139,25 @@
   let rowNoticeTimer;
   let mounted = true;
 
-  // A rail row's number is its position, so it moves when showing a session
-  // re-sorts the list.
   onMount(() => {
     const onKey = (event) => {
+      if (event.key === "Escape" && gesture) {
+        event.preventDefault();
+        clearDrag();
+        return;
+      }
       const row = rowAt(sessions, event);
       if (!row) return;
       event.preventDefault();
       show(row.slug);
     };
     window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", clearDrag);
     return () => {
       mounted = false;
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", clearDrag);
+      clearDrag();
       clearTimeout(rowNoticeTimer);
     };
   });
@@ -91,6 +194,18 @@
 
   /** @type {{row: any, x: number, y: number} | null} */
   let menu = $state(null);
+  const rowMenu = $derived([
+    { label: "Reload", icon: "refresh", act: reloadRow },
+    {
+      label: SESSION_UNLOAD_LABEL,
+      icon: "close",
+      act: unloadRow,
+      disabled: !sessions.find((row) => row.slug === menu?.row.slug)?.terminal,
+    },
+    { label: "Reveal in Finder", icon: "worktree", act: revealRow },
+    "-",
+    { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
+  ]);
   /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
   let confirming = $state(null);
   let cleaning = $state(false);
@@ -101,7 +216,7 @@
     menu
       ? place(
           menu,
-          { width: ROW_MENU_WIDTH, height: menuHeight(ROW_MENU) },
+          { width: ROW_MENU_WIDTH, height: menuHeight(rowMenu) },
           { width: window.innerWidth, height: window.innerHeight },
           uiScale() / 100,
         )
@@ -127,6 +242,15 @@
       await reload(row.slug);
     } catch {
       showRowNotice(row.slug, "Session could not be reloaded", true);
+    }
+  }
+
+  async function unloadRow(row) {
+    onDismissed();
+    try {
+      await unload(row.slug);
+    } catch {
+      showRowNotice(row.slug, SESSION_UNLOAD_FAILED, true);
     }
   }
 
@@ -179,9 +303,10 @@
     <CapsLabel tone="dim" centred>Sessions</CapsLabel>
   </div>
 
-  <div class="session-list" aria-label="Sessions">
+  <div class="session-list" aria-label="Sessions" bind:this={sessionList}>
     {#each sessions as row, i (row.slug)}
       <RailItem
+        slug={row.slug}
         initials={row.initials}
         shortcut={shortcut(i)}
         name={row.name}
@@ -189,6 +314,12 @@
         summary={row.summary}
         idle={row.summary?.running ? "" : age(row.opened)}
         selected={row.slug === slug}
+        dragging={row.slug === dragSlug}
+        over={row.slug === targetSlug}
+        onPointerDown={(event) => startPointer(event, row.slug)}
+        onPointerMove={movePointer}
+        onPointerUp={finishPointer}
+        onPointerCancel={cancelPointer}
         unseen={row.unseen}
         stickerId={row.sticker}
         {stickers}
@@ -212,7 +343,7 @@
     style:top="{anchor.top}px"
     use:dismissible={dismissMenu}>
     <Menu
-      items={ROW_MENU}
+      items={rowMenu}
       width={ROW_MENU_WIDTH}
       offsetY={0}
       onSelect={(item) => {
