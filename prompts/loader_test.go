@@ -538,9 +538,9 @@ func TestPartialsHoldNoPlaceholderOfTheirOwn(t *testing.T) {
 // The artifact lengths are calibration, not a limit, and a figure restated in a
 // second prompt is a figure that will disagree with the first one. Each figure
 // is checked, because moving one and leaving another behind is the likelier
-// mistake than restating all three.
+// mistake than restating them all.
 func TestTheArtifactLengthsAreStatedOnce(t *testing.T) {
-	for _, figure := range []string{"400 lines", "300–350", "200–250"} {
+	for _, figure := range []string{"400 lines", "80 lines of framing", "60–80", "450 lines", "200–250"} {
 		var carriers []string
 		err := fs.WalkDir(embedded, ".", func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, promptFileExt) {

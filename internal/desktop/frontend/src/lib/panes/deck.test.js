@@ -118,10 +118,11 @@ test("the criteria of one phase claim nothing in the next", () => {
         from: 9,
         to: 16,
         number: 1,
+        label: "1",
         name: "Groundwork",
         verify: { from: 13, to: 19 },
       },
-      { from: 17, to: 20, number: 2, name: "The middle", verify: null },
+      { from: 17, to: 20, number: 2, label: "2", name: "The middle", verify: null },
     ],
   });
   const after = block(19);

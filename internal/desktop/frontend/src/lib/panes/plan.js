@@ -2,10 +2,10 @@ import { flatten, sliceSections, walk } from "./sections.js";
 
 /** Phase headings are the sole source of slide numbering.
  * @param {string} name A slide's heading text.
- * @returns {{number: number, name: string} | null} */
+ * @returns {{number: number, label: string, name: string} | null} */
 function namesPhase(name) {
-  const match = /^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$/.exec(name);
-  return match ? { number: Number(match[1]), name: match[2] } : null;
+  const match = /^Phase\s+(\d+)([a-z])?\s*[—–:-]\s*(\S.*?)\s*$/.exec(name);
+  return match ? { number: Number(match[1]), label: match[1] + (match[2] ?? ""), name: match[3] } : null;
 }
 
 const CRITERIA_HEADING = "verify";
@@ -72,7 +72,7 @@ function stateOf(met, total) {
 }
 
 /** @typedef {{text: string, met: boolean, group: number}} Criterion */
-/** @typedef {{screen: number, name: string, number: number | null, from: number, to: number, criteria: Criterion[], met: number, total: number, state: "met" | "working" | "not-started" | null, verify: {from: number, to: number} | null}} Slide */
+/** @typedef {{screen: number, name: string, number: number | null, label: string | null, from: number, to: number, criteria: Criterion[], met: number, total: number, state: "met" | "working" | "not-started" | null, verify: {from: number, to: number} | null}} Slide */
 
 /** A document without second-level headings has no slides and renders plainly.
  * @param {string} text
@@ -86,6 +86,7 @@ export function parsePlan(text) {
       screen: at + 1,
       name: phase ? phase.name : section.name,
       number: phase ? phase.number : null,
+      label: phase ? phase.label : null,
       from: section.from,
       to: section.to,
     };

@@ -32,11 +32,26 @@ title: <title>
 ### See
 - [ ] <something a human confirms; not the meter>
 
+## Closing checklist
+
+- [ ] <an operational chore: move a file, promote, clean up>
+
 ## Blockers
 ```
 
 Sections other than the phases are yours to choose; the ones above are the ones
 we expect.
+
+## Where a phase ends
+
+A phase ends where the user must act, such as relabelling data, signing off or
+checking on a device, or at a clean code boundary someone could ship. Work one
+implementation lead would do in one go stays one phase, however many files it
+touches. Operational chores, such as moving files, promotion steps and cleanup,
+go in the closing checklist, not in a phase of their own.
+
+To add work mid-flight, insert a suffixed phase such as `Phase 5b`. Never
+renumber existing phases.
 
 ## How a plan reads
 

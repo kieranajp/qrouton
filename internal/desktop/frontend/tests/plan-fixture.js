@@ -158,6 +158,12 @@ export const FINISHED = PLAN.replace("- [ ] one check not", "- [x] one check not
 // Two phases numbered the same, which is what a plan mid-renumber looks like.
 export const RENUMBERED = PLAN.replace("## Phase 3 — The end", "## Phase 1 — The end");
 
+// A phase inserted mid-flight between 2 and 3.
+export const SUFFIXED = PLAN.replace(
+  "## Phase 3 — The end",
+  "## Phase 2b — The insert\n\n### Verify\n- [ ] inserted check\n\n## Phase 3 — The end",
+);
+
 // Six phases, every criterion ticked: the shape of a plan an agent has finished.
 export const DONE = [
   "---",
@@ -350,6 +356,7 @@ window.bar = () => {
   };
 };
 window.pushRenumbered = () => window.pushContent({ text: RENUMBERED });
+window.pushSuffixed = () => window.pushContent({ text: SUFFIXED });
 window.pushLeading = (stage) =>
   window.pushContent({ text: stage === "last" ? LEADING_LAST : LEADING_SECOND });
 // Where the footer sits relative to the bottom edge of the window itself.
