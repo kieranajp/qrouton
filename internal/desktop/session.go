@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -37,6 +38,7 @@ type sessionState struct {
 
 	mu              sync.Mutex
 	stopped         bool
+	windowsClosed   atomic.Bool
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
 	process         *ptyProcess
@@ -103,6 +105,13 @@ func (s *sessionState) alive() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return !s.stopped && (s.process == nil || !s.process.done())
+}
+
+func (s *sessionState) admissionClosed() bool {
+	if s == nil {
+		return false
+	}
+	return s.windowsClosed.Load()
 }
 
 // start launches the supervisor under a PTY sized to the terminal displaying it.
@@ -322,26 +331,21 @@ func (s *Sessions) Reload(slug string) error {
 func (s *Sessions) Unload(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
-	if err := s.validateSession(slug); err != nil {
+	root, err := s.validatedRoot(slug)
+	if err != nil {
 		return err
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return unknownSession(slug)
 	}
 	state := s.bySlug(slug)
 	if state == nil {
 		return nil
 	}
-	_, wasShown := s.recycle(state)
+	fallback, wasShown := s.recycle(state)
 	s.dropAgentActivity(slug)
 	if wasShown {
-		var fallback *sessionState
-		s.mu.Lock()
-		for i := len(s.history) - 1; i >= 0; i-- {
-			seen := s.history[i]
-			if s.slugs[seen.slug()] == seen && seen.alive() {
-				fallback = seen
-				break
-			}
-		}
-		s.mu.Unlock()
 		s.reveal(fallback)
 	} else {
 		s.touch()
@@ -349,26 +353,29 @@ func (s *Sessions) Unload(slug string) error {
 	return nil
 }
 
-func (s *Sessions) validateSession(slug string) error {
+func validateSessionSlug(slug string) error {
 	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\`) {
-		return unknownSession(slug)
-	}
-	root := s.boot.root(slug)
-	if root == "" || !directSessionRoot(root, slug) {
-		return unknownSession(slug)
-	}
-	manifest, err := session.Load(root)
-	if err != nil || manifest.Slug != slug {
 		return unknownSession(slug)
 	}
 	return nil
 }
 
+func (s *Sessions) validatedRoot(slug string) (string, error) {
+	if err := validateSessionSlug(slug); err != nil {
+		return "", err
+	}
+	root := s.boot.root(slug)
+	if root == "" || !directSessionRoot(root, slug) {
+		return "", unknownSession(slug)
+	}
+	return root, nil
+}
+
 func (s *Sessions) Reorder(slug, targetSlug string) error {
-	if err := s.validateSession(slug); err != nil {
+	if err := validateSessionSlug(slug); err != nil {
 		return err
 	}
-	if err := s.validateSession(targetSlug); err != nil {
+	if err := validateSessionSlug(targetSlug); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -411,19 +418,16 @@ func (s *Sessions) replace(root string, fallback *sessionState, emptied bool) er
 }
 
 func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
-	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\\`) {
-		return "", unknownSession(slug)
-	}
-	root := s.boot.root(slug)
-	if root == "" || !directSessionRoot(root, slug) {
-		return "", unknownSession(slug)
+	root, err := s.validatedRoot(slug)
+	if err != nil {
+		return "", err
 	}
 	var order []session.Sticker
 	if s.boot.stickers != nil {
 		order = s.boot.stickers()
 	}
 	var sticker session.Sticker
-	err := session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+	err = session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
 		if m.Slug != slug {
 			return m, unknownSession(slug)
 		}
@@ -727,8 +731,11 @@ func (s *Sessions) forget(state *sessionState) (fallback *sessionState, wasShown
 		return nil, false
 	}
 	s.showing = nil
-	if len(kept) > 0 {
-		return kept[len(kept)-1], true
+	for i := len(kept) - 1; i >= 0; i-- {
+		seen := kept[i]
+		if s.slugs[seen.slug()] == seen && seen.alive() {
+			return seen, true
+		}
 	}
 	return nil, true
 }
@@ -815,6 +822,7 @@ func without(history []*sessionState, state *sessionState) []*sessionState {
 			kept = append(kept, seen)
 		}
 	}
+	clear(history[len(kept):])
 	return kept
 }
 

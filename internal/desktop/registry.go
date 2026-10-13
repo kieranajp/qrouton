@@ -95,20 +95,18 @@ type registry struct {
 	sourceMu     sync.Mutex
 	assetFocusMu sync.Mutex
 
-	mu           sync.Mutex
-	seq          int
-	open         map[string]*agentWindow
-	selected     map[*sessionState]string
-	ownersClosed map[*sessionState]bool
-	closed       bool
+	mu       sync.Mutex
+	seq      int
+	open     map[string]*agentWindow
+	selected map[*sessionState]string
+	closed   bool
 }
 
 func newRegistry(emit emitter, sessions *Sessions) *registry {
 	return &registry{
 		emit: emit, sessions: sessions,
-		open:         map[string]*agentWindow{},
-		selected:     map[*sessionState]string{},
-		ownersClosed: map[*sessionState]bool{},
+		open:     map[string]*agentWindow{},
+		selected: map[*sessionState]string{},
 	}
 }
 
@@ -262,12 +260,12 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 		}
 	}
 	r.mu.Lock()
-	if r.closed || r.ownersClosed[owner] {
+	if r.closed || owner.admissionClosed() {
 		r.mu.Unlock()
 		if opts.Format == workbench.FormatAssets {
 			return "", ErrAssetGalleryClosed
 		}
-		return "", ErrNoSession
+		return "", ErrSessionUnloaded
 	}
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
@@ -406,7 +404,9 @@ func (r *registry) ordered(owner *sessionState) []*agentWindow {
 
 func (r *registry) stop(owner *sessionState) {
 	r.mu.Lock()
-	r.ownersClosed[owner] = true
+	if owner != nil {
+		owner.windowsClosed.Store(true)
+	}
 	r.mu.Unlock()
 	for _, id := range r.list() {
 		if window, ok := r.window(id); ok && window.session == owner {
