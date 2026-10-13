@@ -45,12 +45,32 @@ func misplacedReport() placement.Report {
 	}}}
 }
 
-func TestAPlacementCheckWaitsForFirstRun(t *testing.T) {
+func TestAPlacementCheckWaitsForFirstRunAndThenRaisesThePopup(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
-	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
 	p.checkOnce()
-	if reg.placing() || checkedLive(cfg) || stubs.scans > 1 {
-		t.Fatalf("scans %d, placing %v, checked %v", stubs.scans, reg.placing(), checkedLive(cfg))
+	if reg.placing() || checkedLive(cfg) {
+		t.Fatalf("before first run: placing %v, checked %v", reg.placing(), checkedLive(cfg))
+	}
+	cfg.Replace(&config.Config{Root: cfg.Root, Welcomed: true})
+	p.checkOnce()
+	if !reg.placing() {
+		t.Fatal("the check did not raise the popup once first run was done")
+	}
+}
+
+func TestFinishingFirstRunRunsThePlacementCheckWithoutARelaunch(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
+	f := newFirstRun(cfg, reg, nil, nil, nil, nil)
+	f.onWelcomed = p.checkOnce
+	result, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root})
+	if err != nil || result.Relaunching {
+		t.Fatalf("Save = %+v, %v", result, err)
+	}
+	if !reg.placing() {
+		t.Fatal("completing onboarding did not raise the popup for a misplaced session")
 	}
 }
 

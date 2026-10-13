@@ -271,3 +271,21 @@ func TestCreateRefusesAKindFolderThatLinksOutOfTheThoughts(t *testing.T) {
 		t.Fatalf("a file was written outside the thoughts: %v", entries)
 	}
 }
+
+func TestCreateRefusesASharedFolderThatLinksOutOfTheThoughts(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	outside := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "thoughts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "thoughts", "shared")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, "plan", "Escape", now); !errors.Is(err, ErrOutsideThoughts) {
+		t.Fatalf("err = %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("something was created outside the thoughts: %v", entries)
+	}
+}

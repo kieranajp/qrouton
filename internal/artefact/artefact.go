@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -45,12 +46,25 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 		return "", err
 	}
 
+	boundary, err := thoughtsBoundary(sessionRoot)
+	if err != nil {
+		return "", err
+	}
 	dir := filepath.Join(sessionpaths.Thoughts(sessionRoot), folder)
+	planned, err := resolvePlanned(dir)
+	if err != nil {
+		return "", err
+	}
+	if err := within(boundary, planned); err != nil {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return "", err
 	}
-	dir, err = insideThoughts(sessionRoot, dir)
-	if err != nil {
+	if dir, err = filepath.EvalSymlinks(dir); err != nil {
+		return "", err
+	}
+	if err := within(boundary, dir); err != nil {
 		return "", err
 	}
 	slug := capSlug(session.Slugify(title))
@@ -69,21 +83,39 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 	return filepath.Join(sessionpaths.ThoughtsDirName, sessionpaths.SharedDirName, folder, name), nil
 }
 
-// insideThoughts resolves the kind folder and refuses one that a link carries
-// out of the session's thoughts folder.
-func insideThoughts(sessionRoot, dir string) (string, error) {
-	resolved, err := filepath.EvalSymlinks(dir)
-	if err != nil {
+// thoughtsBoundary is the real folder the session's thoughts link points at.
+// Nothing created for an artefact may resolve outside it.
+func thoughtsBoundary(sessionRoot string) (string, error) {
+	link := filepath.Join(sessionRoot, sessionpaths.ThoughtsDirName)
+	if err := os.MkdirAll(link, dirMode); err != nil {
 		return "", err
 	}
-	thoughts, err := filepath.EvalSymlinks(sessionpaths.Thoughts(sessionRoot))
-	if err != nil {
-		return "", err
+	return filepath.EvalSymlinks(link)
+}
+
+// resolvePlanned resolves the links in the part of a path that exists and
+// appends the part that does not.
+func resolvePlanned(path string) (string, error) {
+	rest := ""
+	for current := path; ; {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			return filepath.Join(resolved, rest), nil
+		}
+		parent := filepath.Dir(current)
+		if !errors.Is(err, fs.ErrNotExist) || parent == current {
+			return "", err
+		}
+		rest = filepath.Join(filepath.Base(current), rest)
+		current = parent
 	}
-	if _, inside := sessionpaths.Within(thoughts, resolved); !inside {
-		return "", fmt.Errorf("%w: %s", ErrOutsideThoughts, resolved)
+}
+
+func within(boundary, path string) error {
+	if _, inside := sessionpaths.Within(boundary, path); !inside {
+		return fmt.Errorf("%w: %s", ErrOutsideThoughts, path)
 	}
-	return resolved, nil
+	return nil
 }
 
 var nextNumber = status.NextNumber

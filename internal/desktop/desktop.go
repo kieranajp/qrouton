@@ -137,8 +137,10 @@ func Run(opts Options) error {
 		opts.Launcher.Runners, opts.Launcher.OpenText,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
+	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))
+	r.register(application.NewService(firstRun))
 	opts.placement = newPlacement(opts.Config, reg)
+	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
 	r.register(application.NewService(opts.placement))
 	return run(r, term, windows, opts, quit)
 }
