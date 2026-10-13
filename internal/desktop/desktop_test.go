@@ -21,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -675,6 +676,48 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 	if reopened == id {
 		t.Fatal("the dismissed document came back with its old id")
+	}
+}
+
+// The session's thoughts is a symlink out of the session root.
+func TestALeadBadgePathOpensItsDocument(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "shared", "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "shared", "research", "R1-x.md"), []byte("# R1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(vault, filepath.Join(opts.SessionRoot, sessionpaths.ThoughtsDirName)); err != nil {
+		t.Fatal(err)
+	}
+	boot.document = func(root, name string) (workbench.WindowOptions, error) {
+		return launch.DocumentWindow(root, name, launch.EditorCommand{}, workbench.LineSpan{})
+	}
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+
+	written := filepath.Join(owner.root(), "thoughts", "shared", "research", "R1-x.md")
+	documents := writtenDocuments(owner.root(), []string{written})
+	if len(documents) != 1 || documents[0].Path != "thoughts/shared/research/R1-x.md" {
+		t.Fatalf("the badge's documents = %+v", documents)
+	}
+	id, err := windows.OpenDocument(documents[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.surfaces(owner).Tabs
+	if len(tabs) != 2 || tabs[1].ID != id || tabs[1].Kind != string(workbench.KindDocument) {
+		t.Fatalf("the badge did not open a document tab: %+v", tabs)
+	}
+	if selected := windows.Surfaces(owner.slug()).Selected; selected != id {
+		t.Fatalf("the badge selected %q, want %q", selected, id)
 	}
 }
 

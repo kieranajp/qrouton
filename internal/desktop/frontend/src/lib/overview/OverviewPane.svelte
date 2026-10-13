@@ -61,7 +61,9 @@
   async function read(path) {
     try {
       await openDocument(path);
-    } catch {}
+    } catch (error) {
+      console.error("open document", path, error);
+    }
   }
 </script>
 

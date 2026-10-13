@@ -99,15 +99,17 @@ test("only the live lead opens; finished leads keep their document and count", a
 });
 
 test("a finished lead's chevron opens and closes its subagents", async ({ page }) => {
-  await open(page);
-  const research = page.locator('[data-agent-id="research"]');
-  const researcher = page.getByRole("button", { name: /^Codebase Researcher/ });
-  await research.locator(".disclosure").click();
-  await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "true");
-  await expect(researcher).toBeVisible();
-  await research.locator(".disclosure").click();
-  await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
-  await expect(researcher).toHaveCount(0);
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const research = page.locator('[data-agent-id="research"]');
+    const researcher = page.getByRole("button", { name: /^Codebase Researcher/ });
+    await research.locator(".disclosure").click();
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "true");
+    await expect(researcher).toBeVisible();
+    await research.locator(".disclosure").click();
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
+    await expect(researcher).toHaveCount(0);
+  }
 });
 
 test("a lead with no subagents has no chevron and claims no expansion", async ({ page }) => {
@@ -120,6 +122,20 @@ test("a lead with no subagents has no chevron and claims no expansion", async ({
     box(page.locator('[data-agent-id="research"] .facts')),
   ]);
   expect(Math.abs(planTime.right - researchTime.right)).toBeLessThanOrEqual(1);
+});
+
+test("a click on a lead's badge lands on the badge and opens its document", async ({ page }) => {
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const badge = page.getByRole("button", { name: "Open R3-retry.md" });
+    const at = await box(badge);
+    const x = at.left + at.width / 2;
+    const y = at.top + at.height / 2;
+    expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".document"), [x, y])).toBe(true);
+    await page.mouse.click(x, y);
+    await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/research/R3-retry.md"]);
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
+  }
 });
 
 test("same-type direct children keep their own assigned names and fallback labels", async ({ page }) => {
