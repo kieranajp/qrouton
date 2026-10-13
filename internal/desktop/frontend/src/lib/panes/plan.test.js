@@ -205,7 +205,7 @@ test("the shared plan-phase cases parse as Go parses them", () => {
   const cases = JSON.parse(readFileSync(url, "utf8"));
   for (const { name, text, phases } of cases) {
     assert.deepEqual(
-      parsePlan(text).phases.map(({ number, met, total }) => ({ number, met, total })),
+      parsePlan(text).phases.map(({ number, label, met, total }) => ({ number, label, met, total })),
       phases,
       name,
     );

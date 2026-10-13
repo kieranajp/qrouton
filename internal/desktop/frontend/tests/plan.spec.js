@@ -463,6 +463,23 @@ test("phases sharing a number still render, each reporting its own", async ({ pa
   await expect.poll(() => page.evaluate(() => window.crumbs())).toContain("Phase 1 of 3");
 });
 
+test("a suffixed phase renders by its label, in document order", async ({ page }) => {
+  await open(page);
+  await page.evaluate(() => window.pushSuffixed());
+
+  await expect.poll(() => page.evaluate(() => window.counters())).toEqual([
+    "1 Groundwork 2/2",
+    "2 The middle 1/2",
+    "2b The insert 0/1",
+    "3 The end 0/1",
+  ]);
+  expect(await page.evaluate(() => window.errors)).toEqual([]);
+
+  await page.locator('.pip[aria-label="Phase 2b"]').click();
+  await expect.poll(() => page.evaluate(() => window.counter())).toBe("2b / 4");
+  await expect.poll(() => page.evaluate(() => window.crumbs())).toContain("Phase 2b of 4");
+});
+
 test("arrow keys are left to the plain body when nothing opens a phase", async ({ page }) => {
   await open(page, "?plain=true");
   await page.keyboard.press("ArrowRight");

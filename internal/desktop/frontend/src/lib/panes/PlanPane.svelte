@@ -80,7 +80,7 @@
   let pips = $derived([
     { label: "Overview", summary: true },
     ...plan.slides.map((slide) => ({
-      label: slide.number === null ? slide.name : `Phase ${slide.number}`,
+      label: slide.number === null ? slide.name : `Phase ${slide.label}`,
       summary: slide.number === null,
       color: slide.state ? DOT[slide.state] : undefined,
     })),
@@ -176,7 +176,7 @@
               {#each plan.phases as phase}
                 <li>
                   <button type="button" class="row" onclick={() => at.show(phase.screen)}>
-                    <span class="index">{phase.number}</span>
+                    <span class="index">{phase.label}</span>
                     <span class="name">{phase.name}</span>
                     <span class="dot" style:background={DOT[phase.state]}></span>
                     <span class="count">{phase.met}/{phase.total}</span>
@@ -188,11 +188,11 @@
           {#each plan.slides as slide, index}
             <section
               class="screen"
-              data-screen={slide.number ?? slide.name}
+              data-screen={slide.label ?? slide.name}
               hidden={viewing !== index + 1}>
               {#if slide.number !== null}
                 <div class="crumb">
-                  <CapsLabel>Phase {slide.number} of {plan.phases.length}</CapsLabel>
+                  <CapsLabel>Phase {slide.label} of {plan.phases.length}</CapsLabel>
                   <span class="state">
                     <span class="dot" style:background={DOT[slide.state]}></span>
                     {WORD[slide.state]}
@@ -207,7 +207,7 @@
                 <div class="criteria">
                   <div class="criteria-head">
                     <CapsLabel>Acceptance criteria</CapsLabel>
-                    <span class="count" data-count={slide.number}>
+                    <span class="count" data-count={slide.label}>
                       {slide.total > 0 ? `${slide.met} of ${slide.total} met` : "No checks stated"}
                     </span>
                   </div>
@@ -229,7 +229,7 @@
             {:else if at.following}
               Following the agent · {metered.name}
             {:else}
-              Agent is on phase {metered.number} · {metered.name}
+              Agent is on phase {metered.label} · {metered.name}
             {/if}
           </span>
           <!-- Every phase met leaves nothing to follow, so nothing is offered. -->

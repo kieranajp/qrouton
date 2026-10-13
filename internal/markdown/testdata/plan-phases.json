@@ -5,6 +5,7 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 2,
         "total": 2
       }
@@ -16,11 +17,13 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 1,
         "total": 3
       },
       {
         "number": 2,
+        "label": "2",
         "met": 0,
         "total": 1
       }
@@ -32,6 +35,7 @@
     "phases": [
       {
         "number": 3,
+        "label": "3",
         "met": 1,
         "total": 2
       }
@@ -43,6 +47,7 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 1,
         "total": 1
       }
@@ -54,6 +59,7 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 0,
         "total": 0
       }
@@ -65,6 +71,7 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 1,
         "total": 1
       }
@@ -81,6 +88,7 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 2,
         "total": 2
       }
@@ -92,9 +100,39 @@
     "phases": [
       {
         "number": 1,
+        "label": "1",
         "met": 1,
         "total": 1
       }
     ]
+  },
+  {
+    "name": "a suffixed phase keeps document order and counts its own criteria",
+    "text": "## Phase 5 — Five\n\n### Verify\n- [x] five\n\n## Phase 5b — Inserted\n\n### Verify\n- [x] first\n- [ ] second\n\n## Phase 6 — Six\n\n### Verify\n- [ ] six\n",
+    "phases": [
+      {
+        "number": 5,
+        "label": "5",
+        "met": 1,
+        "total": 1
+      },
+      {
+        "number": 5,
+        "label": "5b",
+        "met": 1,
+        "total": 2
+      },
+      {
+        "number": 6,
+        "label": "6",
+        "met": 0,
+        "total": 1
+      }
+    ]
+  },
+  {
+    "name": "an uppercase, doubled or spaced suffix is not a phase",
+    "text": "## Phase 5B — Upper\n\n### Verify\n- [ ] a\n\n## Phase 5bb — Doubled\n\n### Verify\n- [ ] b\n\n## Phase 5 b — Spaced\n\n### Verify\n- [ ] c\n",
+    "phases": []
   }
 ]
