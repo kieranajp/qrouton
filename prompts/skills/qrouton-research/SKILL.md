@@ -17,6 +17,8 @@ Delegate the investigation; keep its exploratory output out of the orchestrator 
 6. Fill in `thoughts/shared/research/R<n>-<date>-<slug>.md` in place, answering each question under the heading that already carries it, with inline evidence instead of a duplicate Code References catalogue. No second artifact is written. The shape is in `references/research-shape.md` beside this file: the heading convention the workbench builds its accordion from, and how a framed question becomes an answered one. Read it and pass it, or its absolute path, to the lead — the lead starts in a fresh context and cannot resolve a path relative to this file.
 7. Accept a compact return containing the outcome, artifact path, major findings, and unresolved questions. Present the useful conclusions naturally, then invite the user to design the solution next. When the work is small or the user has made every choice explicit, explain that the next step is a tactical plan and invite the user to proceed with it.
 
+   {{session-digest}}
+
 Before spawning, inspect the exact brief for ticket or intended-solution leakage.
 Sparse, contradictory, or unexpectedly minimal code is still a valid research finding. Complete the delegated investigation and artifacts so the evidence gap is durable; do not replace Research with an informal direct inspection or an implementation proposal.
 

@@ -21,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -678,6 +679,48 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 }
 
+// The session's thoughts is a symlink out of the session root.
+func TestALeadBadgePathOpensItsDocument(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "shared", "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "shared", "research", "R1-x.md"), []byte("# R1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(vault, filepath.Join(opts.SessionRoot, sessionpaths.ThoughtsDirName)); err != nil {
+		t.Fatal(err)
+	}
+	boot.document = func(root, name string) (workbench.WindowOptions, error) {
+		return launch.DocumentWindow(root, name, launch.EditorCommand{}, workbench.LineSpan{})
+	}
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+
+	written := filepath.Join(owner.root(), "thoughts", "shared", "research", "R1-x.md")
+	documents := writtenDocuments(owner.root(), []string{written})
+	if len(documents) != 1 || documents[0].Path != "thoughts/shared/research/R1-x.md" {
+		t.Fatalf("the badge's documents = %+v", documents)
+	}
+	id, err := windows.OpenDocument(documents[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.surfaces(owner).Tabs
+	if len(tabs) != 2 || tabs[1].ID != id || tabs[1].Kind != string(workbench.KindDocument) {
+		t.Fatalf("the badge did not open a document tab: %+v", tabs)
+	}
+	if selected := windows.Surfaces(owner.slug()).Selected; selected != id {
+		t.Fatalf("the badge selected %q, want %q", selected, id)
+	}
+}
+
 // The agent opens documents too, through its file tool. The chip has to find
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
@@ -828,7 +871,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 	reg := testRegistry(t, dir)
 	state := reg.current()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -849,7 +892,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
 	t.Helper()
 	r := newFakeRenderer()
-	pushChrome(reg, root, cfg, nil, nil, r.Emit)
+	pushChrome(reg, root, cfg, nil, nil, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	fields, ok := r.events[chromeEvent].(status.Fields)
@@ -921,7 +964,7 @@ func TestChromeNamesTheTerminalOfEveryBootedSessionAndTheSlugOnScreen(t *testing
 	}
 
 	reg := testRegistry(t, filepath.Join(root, "octopus"))
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -968,7 +1011,7 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1004,7 +1047,7 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 	}
 
 	measured := status.RepoStat{Name: "lifesum/svc", Role: "editing", Commits: 3, Measured: true}
-	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, r.Emit)
+	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1077,13 +1120,13 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 
 	reg := testRegistry(t, first)
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 1 || repos[0].Name != "lifesum/svc" {
 		t.Fatalf("chrome repos = %+v, want what was measured for the session on screen", repos)
 	}
 
 	reg.reveal(reg.add(second, []string{"/bin/cat"}, os.Environ()))
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 0 {
 		t.Fatalf("chrome repos = %+v after the switch, want none of the previous session's", repos)
 	}
@@ -1117,7 +1160,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, time.Hour, counts, noPulls)
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -1294,7 +1337,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
 
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	crashed := pushedChrome(t, r)
 	if crashed.Terminal != "" {
 		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
@@ -1319,7 +1362,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
 		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
 		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
 	}
@@ -1456,7 +1499,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if content, err := os.ReadFile(marker); err != nil || string(content) != "retained" {
 		t.Fatalf("Unload changed session files: %q, %v", content, err)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	fields := pushedChrome(t, r)
 	if len(fields.Sessions) != 1 || fields.Slug != "" || fields.Terminal != "" ||
 		rowTerminal(t, fields, "octopus") != "" || fields.Sessions[0].Activity != "" {
@@ -2923,7 +2966,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, time.Hour, counts, noPulls)
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())
@@ -3124,7 +3167,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 // does not race the background poller's own tick.
 func polledRail(t *testing.T, r *fakeRenderer, reg *Sessions, root string) []string {
 	t.Helper()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	var slugs []string
 	for _, row := range lastChrome(t, r).Sessions {
 		slugs = append(slugs, row.Slug)

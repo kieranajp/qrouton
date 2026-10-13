@@ -205,6 +205,11 @@ const (
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
 
+	// pullRequestInterval paces the shown session's GitHub pull request fetch.
+	pullRequestInterval  = 60 * time.Second
+	pullRequestTimeout   = 10 * time.Second
+	pullRequestLogFormat = "pull requests: %s: %v"
+
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second

@@ -289,7 +289,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -322,6 +322,14 @@ export const CHROME_DEFAULTS = {
   sessionSummary: {
     text: "",
     stage: "",
+    at: "",
+  },
+  pullRequests: {
+    items: [],
+    signedOut: false,
+  },
+  sessionDigest: {
+    text: "",
     at: "",
   },
 };

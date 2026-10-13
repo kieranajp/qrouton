@@ -54,6 +54,10 @@ type Fields struct {
 	Welcoming      bool           `json:"welcoming"`
 	Stickers       []Sticker      `json:"stickers"`
 	SessionSummary SessionSummary `json:"sessionSummary"`
+	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
+	// read never sets it.
+	PullRequests  PullRequestList `json:"pullRequests"`
+	SessionDigest SessionDigest   `json:"sessionDigest"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -62,6 +66,28 @@ type SessionSummary struct {
 	Text  string `json:"text"`
 	Stage string `json:"stage"`
 	At    string `json:"at"`
+}
+
+// SessionDigest is the manifest's digest as the page reads it. At is RFC 3339,
+// or empty when no digest was written.
+type SessionDigest struct {
+	Text string `json:"text"`
+	At   string `json:"at"`
+}
+
+// PullRequestList is the shown session's pull requests. SignedOut means GitHub
+// has no working credential, so Items says nothing.
+type PullRequestList struct {
+	Items     []PullRequest `json:"items"`
+	SignedOut bool          `json:"signedOut"`
+}
+
+// PullRequest is one row. Repo is org/name.
+type PullRequest struct {
+	Repo   string `json:"repo"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
@@ -75,6 +101,7 @@ func EmptyFields() Fields {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 }
 
@@ -229,7 +256,16 @@ func Read(root string) Fields {
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	fields.Root = root
 	fields.SessionSummary = sessionSummary(m.Summary)
+	fields.SessionDigest = sessionDigest(m.Digest)
 	return fields
+}
+
+func sessionDigest(d session.Digest) SessionDigest {
+	out := SessionDigest{Text: d.Text}
+	if !d.At.IsZero() {
+		out.At = d.At.Format(time.RFC3339)
+	}
+	return out
 }
 
 func sessionSummary(s session.Summary) SessionSummary {

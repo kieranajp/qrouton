@@ -162,6 +162,8 @@
             active={i === view.selected}
             root={fields.root}
             summary={fields.sessionSummary}
+            pullRequests={fields.pullRequests}
+            digest={fields.sessionDigest}
             repos={fields.repos}
             onAddRepos={() => (view.added = fields.slug)} />
         {:else}

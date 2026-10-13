@@ -136,6 +136,24 @@ const summaries = {
   empty: { text: "", stage: "", at: "" },
 };
 const summary = summaries[params.get("summary") ?? "long"];
+const pr = (repo, number, title) => ({ repo, number, title, url: `https://github.com/${repo}/pull/${number}` });
+const pulls = {
+  none: { items: [], signedOut: false },
+  rows: {
+    items: [pr("acme/web", 41, "Swap PaymentIntent for the v2 client"), pr("acme/payments", 7, "Partial-capture refunds")],
+    signedOut: false,
+  },
+  signedout: { items: [], signedOut: true },
+};
+const pullRequests = pulls[params.get("pulls") ?? "none"];
+const digests = {
+  none: { text: "", at: "" },
+  lines: {
+    text: "Research answered how refunds settle.\nPlan written in two phases.\nWaiting on the user to approve it.",
+    at: minutesAgo(4),
+  },
+};
+const digest = digests[params.get("digest") ?? "none"];
 if (params.has("narrow")) document.querySelector("#fixture").classList.add("narrow");
 
 window.opened = [];
@@ -147,4 +165,4 @@ window.wailsCall = async (name, ...args) => {
 window.pushTree = (key) => emitWailsEvent(AGENT_TREE_EVENT + "fixture", trees[key]);
 window.trees = trees;
 
-mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary } });
+mount(OverviewFixture, { target: document.querySelector("#fixture"), props: { summary, pullRequests, digest } });

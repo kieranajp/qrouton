@@ -28,9 +28,13 @@ const (
 	toolEscalate    = "escalate"
 	toolSharePage   = "share_page"
 	toolSetSummary  = "set_summary"
+	toolSetDigest   = "set_digest"
 )
 
-const summaryLimit = 140
+const (
+	summaryLimit = 140
+	digestLimit  = 600
+)
 
 const (
 	descOpenFile   = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use " + toolReadWindow + " on " + editorWindowName + " to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
@@ -64,5 +68,7 @@ const (
 )
 
 var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)
+
+var descSetDigest = fmt.Sprintf("Write the So far digest the user sees under the summary in the Overview tab: where this session stands. Call it after each lead returns and after the user settles a decision. Each call replaces the whole digest, so pass all of it, rewritten. Give a few plain past-tense lines, at most %d characters, on what is done, what is in progress and what waits on the user. Line breaks are kept. Longer text is rejected, never truncated: shorten it and call again.", digestLimit)
 
 var descSetSummary = fmt.Sprintf("Write the session summary the user sees at the top of the Overview tab. Call it when you start a stage's lead, passing stage as research, plan or implement for the lead you are about to spawn (spec work is plan). Give one or two plain sentences, at most %d characters, on what this session is building and where. Use no marketing words, no progress report and no stage name; qrouton adds the stage itself. An unknown stage is rejected. Longer text is rejected, never truncated: shorten it and call again. The session description is left alone.", summaryLimit)

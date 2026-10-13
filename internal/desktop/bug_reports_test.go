@@ -232,7 +232,10 @@ func TestBugReportChromeHydratesAndExpiresOnlyOwnedPreview(t *testing.T) {
 	queueTestBugReport(t, b, first, "one")
 	reg.reveal(second)
 	chrome := newChrome(func(string, any) {})
-	push := func() status.Fields { pushChrome(reg, root, nil, nil, nil, chrome.publish); return chrome.Snapshot() }
+	push := func() status.Fields {
+		pushChrome(reg, root, nil, nil, nil, nil, chrome.publish)
+		return chrome.Snapshot()
+	}
 	if push().BugReportID != "" {
 		t.Fatal("foreign report in chrome")
 	}

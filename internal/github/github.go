@@ -404,24 +404,41 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 }
 
 func githubJSON(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
+	_, _, err := githubConditionalJSON(ctx, client, token, requestURL, nil, dst)
+	return err
+}
+
+// githubConditionalJSON is githubJSON with request headers and the response's
+// status and headers. A 304 succeeds and leaves dst untouched.
+func githubConditionalJSON(ctx context.Context, client *http.Client, token, requestURL string, headers http.Header, dst any) (int, http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, getMethod, requestURL, nil)
 	if err != nil {
-		return err
+		return 0, nil, err
+	}
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
 	}
 	req.Header.Set(authorizationHeader, bearerPrefix+token)
 	req.Header.Set(acceptHeader, acceptGitHubJSON)
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return resp.StatusCode, resp.Header, json.NewDecoder(resp.Body).Decode(dst)
+	case http.StatusNotModified:
+		return resp.StatusCode, resp.Header, nil
+	case http.StatusUnauthorized:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
+	case http.StatusNotFound:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%w: %s", ErrNotFound, resp.Status)
+	default:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%s", resp.Status)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s", resp.Status)
-	}
-	return json.NewDecoder(resp.Body).Decode(dst)
 }
 
 func (r Repo) ID() string { return r.Org + repoIDSeparator + r.Name }

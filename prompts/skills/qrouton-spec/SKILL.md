@@ -15,6 +15,8 @@ The user experiences this as design questions within Plan, never a stage of its 
 4. If the user answers in chat instead, write each answer into that question's answer block.
 5. When the user says the answers are in, or their pane types that line into the conversation, re-read the spec from disk and have the lead fold each answered question into `## Decisions` in the shape the reference gives. Open the spec again and summarise what changed.
 
+{{session-digest}}
+
 A spec with no open questions is complete as written. Present it and offer to Plan.
 
 After presenting or revising the spec, make the next action clear in plain language. If questions remain, tell the user to answer them in the document. If none remain, explain that the next step is a tactical plan for an implementation lead and invite the user to proceed. An invitation does not authorize the next stage.
