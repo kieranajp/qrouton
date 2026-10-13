@@ -496,8 +496,8 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	renderer.mu.Lock()
 	replay, ok := renderer.events[windowDataEvent+id].(terminalChunk)
 	renderer.mu.Unlock()
-	if !ok || !replay.Replay {
-		t.Fatalf("remount event = %#v, want a retained replay", replay)
+	if !ok || !replay.Replay || replay.First {
+		t.Fatalf("remount event = %#v, want a retained replay not marked first", replay)
 	}
 	decoded, err := base64.StdEncoding.DecodeString(replay.Encoded)
 	if err != nil || !strings.Contains(string(decoded), "two-line prompt") {
@@ -1340,6 +1340,23 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "before mount") {
 		t.Fatalf("mount replay = %q, %v, want the retained line", replay, ok)
 	}
+	if chunk := lastChunk(renderer, id); !chunk.First {
+		t.Fatalf("first mount replay = %#v, want it marked first", chunk)
+	}
+
+	if err := w.Start(id, 120, 36); err != nil {
+		t.Fatal(err)
+	}
+	if chunk := lastChunk(renderer, id); !chunk.Replay || chunk.First {
+		t.Fatalf("remount replay = %#v, want a replay not marked first", chunk)
+	}
+}
+
+func lastChunk(r *fakeRenderer, id string) terminalChunk {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	chunk, _ := r.events[windowDataEvent+id].(terminalChunk)
+	return chunk
 }
 
 func TestLaunchingAMountedTerminalChangesNothing(t *testing.T) {
@@ -1393,6 +1410,9 @@ func TestMountingAFailedTerminalReplaysItsOutput(t *testing.T) {
 	}
 	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "boom") {
 		t.Fatalf("mount replay = %q, %v, want the failed output", replay, ok)
+	}
+	if chunk := lastChunk(renderer, id); chunk.First {
+		t.Fatalf("a finished process's replay = %#v, want it not marked first", chunk)
 	}
 }
 

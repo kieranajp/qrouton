@@ -17,6 +17,9 @@ type terminals struct {
 type terminalChunk struct {
 	Encoded string `json:"encoded"`
 	Replay  bool   `json:"replay,omitempty"`
+	// First marks a running process's first replay, whose queries the page
+	// answers as if live.
+	First bool `json:"first,omitempty"`
 }
 
 func newTerminals(emit emitter, reg *registry) *terminals {
@@ -26,7 +29,7 @@ func newTerminals(emit emitter, reg *registry) *terminals {
 // start serves the page: it launches the command if nothing has, and otherwise
 // attaches the freshly mounted view to the running or finished process.
 func (t *terminals) start(id string, cols, rows int) error {
-	terminal, started, err := t.fork(id, cols, rows)
+	terminal, started, err := t.fork(id, cols, rows, true)
 	if err != nil || started {
 		return err
 	}
@@ -35,11 +38,11 @@ func (t *terminals) start(id string, cols, rows int) error {
 
 // launch forks a terminal window's command unless it already has a process.
 func (t *terminals) launch(id string, cols, rows int) error {
-	_, _, err := t.fork(id, cols, rows)
+	_, _, err := t.fork(id, cols, rows, false)
 	return err
 }
 
-func (t *terminals) fork(id string, cols, rows int) (*terminalContent, bool, error) {
+func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalContent, bool, error) {
 	var started *ptyProcess
 	var terminal *terminalContent
 	err := t.registry.with(id, func(window *agentWindow) error {
@@ -58,6 +61,7 @@ func (t *terminals) fork(id string, cols, rows int) (*terminalContent, bool, err
 			return err
 		}
 		content.process = process
+		content.served = served
 		started = process
 		return nil
 	})
@@ -85,7 +89,8 @@ func (t *terminals) fork(id string, cols, rows int) (*terminalContent, bool, err
 func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
 	terminal.stream.Lock()
 	defer terminal.stream.Unlock()
-	if !terminal.process.done() {
+	running := !terminal.process.done()
+	if running {
 		if err := terminal.process.resize(cols, rows); err != nil {
 			return err
 		}
@@ -93,7 +98,9 @@ func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int)
 	t.emit(windowDataEvent+id, terminalChunk{
 		Encoded: base64.StdEncoding.EncodeToString(terminal.buffer.bytes()),
 		Replay:  true,
+		First:   running && !terminal.served,
 	})
+	terminal.served = true
 	return nil
 }
 
