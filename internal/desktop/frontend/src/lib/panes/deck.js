@@ -65,12 +65,12 @@ export function screenFor(slides, line) {
 }
 
 /** Non-phase slides use their names because they have no defined sequence position.
- * @param {{slides: {name: string, number: number | null}[], phases: unknown[]}} parsed
+ * @param {{slides: {name: string, number: number | null, label: string | null}[], phases: unknown[]}} parsed
  * @param {number} screen */
 export function counterFor(parsed, screen) {
   if (screen === 0) return "Overview";
   const slide = parsed.slides[screen - 1];
   return slide.number === null
     ? slide.name
-    : `${slide.number} / ${parsed.phases.length}`;
+    : `${slide.label} / ${parsed.phases.length}`;
 }

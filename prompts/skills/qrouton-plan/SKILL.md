@@ -15,7 +15,7 @@ The plan must:
 
 - link to its binding research/spec artifacts and identify the workstream;
 - state current and desired end states, scope exclusions, and approach;
-- use vertical phases that each deliver a coherent increment;
+- use vertical phases that end at natural stops, as the plan shape defines;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
 - follow the plan document shape, so progress is readable from the file itself;
@@ -37,6 +37,8 @@ Require this of the lead's return:
 - where the work lives: the plan artifact path;
 - how you checked it: the verification each phase carries;
 - what stays unresolved: the blockers the lead could not resolve.
+
+{{session-digest}}
 
 Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement. Plan feedback authorizes revisions to the plan, not implementation. Positive wording such as “looks good” does not change that when the same request asks for a revision. After revising the plan, wait for an explicit implementation request.
 

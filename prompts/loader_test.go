@@ -490,6 +490,12 @@ var (
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
+	sessionDigestHomes = []ID{
+		ID(skillIDPrefix + "qrouton-research"),
+		ID(skillIDPrefix + "qrouton-spec"),
+		ID(skillIDPrefix + "qrouton-plan"),
+		ID(skillIDPrefix + "qrouton-implement"),
+	}
 )
 
 // A partial is one text with several homes. Each home has to carry it word for
@@ -501,6 +507,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		evidenceDisciplineFileName: evidenceDisciplineHomes,
 		returnContractFileName:     returnContractHomes,
 		sessionSummaryFileName:     sessionSummaryHomes,
+		sessionDigestFileName:      sessionDigestHomes,
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {
@@ -516,6 +523,21 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 			if !strings.Contains(string(prompt.Content), string(partial)) {
 				t.Errorf("prompt %q does not carry %s verbatim", id, name)
 			}
+		}
+	}
+}
+
+// The digest is replaced whole, so a second writer would overwrite the
+// orchestrator's; no lead may be told to write it.
+func TestNoLeadWritesTheDigest(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	for _, lead := range []string{ResearchLead, PlanningLead, ImplementationLead} {
+		prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+lead))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(prompt.Content), "set_digest") {
+			t.Errorf("%s is told to call set_digest", lead)
 		}
 	}
 }
@@ -539,9 +561,9 @@ func TestPartialsHoldNoPlaceholderOfTheirOwn(t *testing.T) {
 // The artifact lengths are calibration, not a limit, and a figure restated in a
 // second prompt is a figure that will disagree with the first one. Each figure
 // is checked, because moving one and leaving another behind is the likelier
-// mistake than restating all three.
+// mistake than restating them all.
 func TestTheArtifactLengthsAreStatedOnce(t *testing.T) {
-	for _, figure := range []string{"400 lines", "300–350", "200–250"} {
+	for _, figure := range []string{"400 lines", "80 lines of framing", "60–80", "450 lines", "200–250"} {
 		var carriers []string
 		err := fs.WalkDir(embedded, ".", func(path string, entry fs.DirEntry, walkErr error) error {
 			if walkErr != nil || entry.IsDir() || !strings.HasSuffix(path, promptFileExt) {

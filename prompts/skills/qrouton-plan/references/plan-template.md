@@ -21,4 +21,8 @@ title: <title>
 ### See
 - [ ] <something a human confirms; not the meter>
 
+## Closing checklist
+
+- [ ] <an operational chore: move a file, promote, clean up>
+
 ## Blockers

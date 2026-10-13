@@ -45,6 +45,7 @@ func TestReadScratchAssistant(t *testing.T) {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("fields = %#v, want %#v", got, want)
@@ -103,7 +104,7 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 func TestReadWithoutManifest(t *testing.T) {
 	want := Fields{
 		Sessions: []SessionRow{}, Documents: []Document{}, RepositoryDocuments: []RepositoryDocuments{}, Repos: []RepoStat{},
-		Stickers: []Sticker{},
+		Stickers: []Sticker{}, PullRequests: PullRequestList{Items: []PullRequest{}},
 	}
 	if got := Read(t.TempDir()); !reflect.DeepEqual(got, want) {
 		t.Fatalf("missing manifest = %#v, want %#v", got, want)
@@ -124,6 +125,23 @@ func TestReadCopiesSessionSummary(t *testing.T) {
 	want := SessionSummary{Text: "Fixing the refund webhook.", Stage: "plan", At: "2026-10-11T14:58:14Z"}
 	if got := Read(dir).SessionSummary; got != want {
 		t.Fatalf("session summary = %#v, want %#v", got, want)
+	}
+}
+
+func TestReadLeavesSessionDigestEmptyWithoutDigest(t *testing.T) {
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "quiet"})
+	if got := Read(dir).SessionDigest; got != (SessionDigest{}) {
+		t.Fatalf("session digest = %#v, want empty", got)
+	}
+}
+
+func TestReadCopiesSessionDigest(t *testing.T) {
+	at := time.Date(2026, 10, 11, 14, 58, 14, 0, time.UTC)
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "told",
+		Digest: session.Digest{Text: "Plan written.\nWaiting on approval.", At: at}})
+	want := SessionDigest{Text: "Plan written.\nWaiting on approval.", At: "2026-10-11T14:58:14Z"}
+	if got := Read(dir).SessionDigest; got != want {
+		t.Fatalf("session digest = %#v, want %#v", got, want)
 	}
 }
 

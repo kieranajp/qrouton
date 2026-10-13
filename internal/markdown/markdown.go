@@ -145,16 +145,18 @@ func Sections(text string) []Section {
 }
 
 // Phase is one `## Phase <n> — <name>` section of a plan, counted by the task
-// items under its `### Verify` heading.
+// items under its `### Verify` heading. A phase inserted mid-flight carries one
+// lowercase letter, `## Phase 5b — <name>`: Number is 5 and Label is "5b".
 type Phase struct {
 	Number int
+	Label  string
 	Name   string
 	Met    int
 	Total  int
 }
 
 var (
-	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)\s*[—–:-]\s*(\S.*?)\s*$`)
+	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)([a-z])?\s*[—–:-]\s*(\S.*?)\s*$`)
 	taskItem     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[([^\]])\]\s`)
 	atxHeading   = regexp.MustCompile(`^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
 )
@@ -192,7 +194,7 @@ func PlanPhases(text string) []Phase {
 				phase, verified = nil, false
 				if found := phaseHeading.FindStringSubmatch(name); depth == 2 && found != nil {
 					number, _ := strconv.Atoi(found[1])
-					phases = append(phases, Phase{Number: number, Name: found[2]})
+					phases = append(phases, Phase{Number: number, Label: found[1] + found[2], Name: found[3]})
 					phase = &phases[len(phases)-1]
 				}
 			} else if depth == 3 && !verified {

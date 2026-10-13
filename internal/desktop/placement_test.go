@@ -183,11 +183,11 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 	reg := newSessions()
 	reg.setPlacing(true)
 	var fields status.Fields
-	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
 	if !fields.Welcoming || fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
-	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
 	if fields.Welcoming || !fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}

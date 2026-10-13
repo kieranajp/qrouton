@@ -30,6 +30,7 @@ var (
 	ErrNotATerminal           = errors.New("window is not a terminal")
 	ErrNoSessionRoot          = errors.New("picker request carries no session root")
 	ErrNoSession              = errors.New("this control socket serves no session")
+	ErrSessionUnloaded        = errors.New("this session has been unloaded")
 	ErrNoShellCommand         = errors.New("workbench has no shell command to run")
 	ErrNoDocumentName         = errors.New("open request names no document")
 	ErrNoEditorCommand        = errors.New("workbench has no editor command to open a document with")

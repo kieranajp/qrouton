@@ -47,6 +47,10 @@ const (
 	shellWindowLabel        = "shell"
 	shellWindowLabelNumbers = "shell %d"
 
+	sessionUnloadLabel   = "Unload"
+	sessionUnloadFailed  = "Session could not be unloaded"
+	sessionReorderFailed = "Session could not be moved"
+
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"
@@ -203,6 +207,11 @@ const (
 
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
+
+	// pullRequestInterval paces the shown session's GitHub pull request fetch.
+	pullRequestInterval  = 60 * time.Second
+	pullRequestTimeout   = 10 * time.Second
+	pullRequestLogFormat = "pull requests: %s: %v"
 
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.

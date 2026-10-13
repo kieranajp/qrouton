@@ -7,8 +7,9 @@
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{slug?: string, initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onPointerDown?: (event: PointerEvent) => void, onPointerMove?: (event: PointerEvent) => void, onPointerUp?: (event: PointerEvent) => void, onPointerCancel?: (event: PointerEvent) => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
+    slug = "",
     initials,
     shortcut = "",
     name = "",
@@ -17,6 +18,12 @@
     unseen = 0,
     idle = "",
     selected = false,
+    dragging = false,
+    over = false,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
     stickerId = "",
     stickers = [],
     stickerBusy = false,
@@ -66,6 +73,9 @@
   class="row"
   class:selected
   class:running
+  class:dragging
+  class:over
+  data-session-slug={slug}
   role="group"
   aria-label="{name} actions"
   oncontextmenu={onContextMenu}>
@@ -75,8 +85,15 @@
     aria-current={selected ? "page" : undefined}
     aria-label={label}
     title={label}
+    onpointerdown={onPointerDown}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerCancel}
+    onlostpointercapture={onPointerCancel}
     onmousedown={(event) => event.preventDefault()}
-    onclick={onSelect}>
+    onclick={(event) => {
+      if (event.detail === 0) onSelect?.();
+    }}>
     <div class="avatar" class:keyed={shortcut}>
       {shortcut || initials}
     </div>
@@ -153,7 +170,17 @@
     box-shadow: var(--shadow-focus);
   }
 
+  .dragging {
+    opacity: 0.4;
+  }
+
+  .over {
+    box-shadow: inset 0 0 0 1px var(--accent-action);
+  }
+
   .item {
+    touch-action: none;
+    user-select: none;
     display: flex;
     align-items: center;
     gap: calc(10px * var(--ui-scale));

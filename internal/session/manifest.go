@@ -144,6 +144,7 @@ type Manifest struct {
 	// wins when the two disagree.
 	ThoughtsRoot string  `json:"thoughtsRoot,omitempty"`
 	Summary      Summary `json:"summary,omitzero"`
+	Digest       Digest  `json:"digest,omitzero"`
 }
 
 // Summary is the orchestrator's own line on what the session is building.
@@ -152,6 +153,13 @@ type Summary struct {
 	Text  string    `json:"text"`
 	Stage string    `json:"stage,omitempty"`
 	At    time.Time `json:"at"`
+}
+
+// Digest is the orchestrator's prose on where the session stands, replaced whole
+// on every write.
+type Digest struct {
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
 }
 
 // EscalationStatus is how a picker-driven escalation attempt ended.

@@ -144,9 +144,10 @@ func TestPlanPhasesMatchesTheSharedCases(t *testing.T) {
 		Name   string `json:"name"`
 		Text   string `json:"text"`
 		Phases []struct {
-			Number int `json:"number"`
-			Met    int `json:"met"`
-			Total  int `json:"total"`
+			Number int    `json:"number"`
+			Label  string `json:"label"`
+			Met    int    `json:"met"`
+			Total  int    `json:"total"`
 		} `json:"phases"`
 	}
 	if err := json.Unmarshal(body, &cases); err != nil {
@@ -159,7 +160,7 @@ func TestPlanPhasesMatchesTheSharedCases(t *testing.T) {
 			continue
 		}
 		for i, want := range tc.Phases {
-			if got[i].Number != want.Number || got[i].Met != want.Met || got[i].Total != want.Total {
+			if got[i].Number != want.Number || got[i].Label != want.Label || got[i].Met != want.Met || got[i].Total != want.Total {
 				t.Errorf("%s: phase %d = %+v, want %+v", tc.Name, i, got[i], want)
 			}
 		}

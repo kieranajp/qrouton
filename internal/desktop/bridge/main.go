@@ -85,6 +85,9 @@ type valueName struct{ dir, goName string }
 var valueNames = []valueName{
 	{desktopPackage, "agentRootID"},
 	{desktopPackage, "stickerDuplicate"},
+	{desktopPackage, "sessionUnloadLabel"},
+	{desktopPackage, "sessionUnloadFailed"},
+	{desktopPackage, "sessionReorderFailed"},
 }
 
 // valueList is an ordered list of strings that Go holds as a package-level

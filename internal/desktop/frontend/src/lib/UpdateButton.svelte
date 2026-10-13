@@ -59,6 +59,7 @@
 <style>
   .anchored {
     position: relative;
+    display: flex;
   }
 
   .panel {

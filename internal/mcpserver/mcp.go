@@ -66,6 +66,10 @@ type setSummaryInput struct {
 	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
 }
 
+type setDigestInput struct {
+	Digest string `json:"digest" jsonschema:"The whole digest, rewritten: a few plain past-tense lines, at most 600 characters, on what is done, in progress and waiting on the user"`
+}
+
 type notifyInput struct {
 	Message    string `json:"message" jsonschema:"Short message to surface to the user, e.g. why you need their attention"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
@@ -145,6 +149,10 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolCreateArtefact, descCreateArtefact, keyMessage,
 		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
 			return createArtefact(root, input)
+		}))
+	addTool(server, toolSetDigest, descSetDigest, keyMessage,
+		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
+			return setDigest(root, input)
 		}))
 	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
 	addTool(server, toolReadWindow, descReadWindow, keyOutput, windows.read)

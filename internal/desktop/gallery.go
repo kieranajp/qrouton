@@ -48,7 +48,7 @@ func (r *registry) lookupGalleryAsset(token string, index int) (galleryAssetRef,
 	var ref galleryAssetRef
 	var found bool
 	r.each(func(_ string, window *agentWindow) {
-		if r.assetsClosed || r.assetOwnersClosed[window.session] || found || window.asset != token || window.opts.Format != workbench.FormatAssets {
+		if r.closed || window.session.admissionClosed() || found || window.asset != token || window.opts.Format != workbench.FormatAssets {
 			return
 		}
 		doc, ok := window.document()
@@ -66,7 +66,7 @@ func (r *registry) focusAsset(owner *sessionState, id string, index int) (workbe
 	var selected workbench.AssetSelection
 	var doc document
 	err := r.with(id, func(window *agentWindow) error {
-		if r.assetsClosed || r.assetOwnersClosed[owner] || owner == nil || window.session != owner {
+		if r.closed || owner.admissionClosed() || owner == nil || window.session != owner {
 			return noSuchWindow(id)
 		}
 		rendered, ok := window.document()
