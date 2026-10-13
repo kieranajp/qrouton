@@ -71,6 +71,10 @@ func (w *Windows) openAgentWindow(owner *sessionState, opts workbench.WindowOpti
 		return id, err
 	}
 	if err := w.terminals.launch(id, unmountedCols, unmountedRows); err != nil {
+		// A later open of the same source may already have replaced this tab.
+		if !w.exists(id) {
+			return id, nil
+		}
 		w.discard(id)
 		return "", err
 	}
