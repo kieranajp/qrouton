@@ -34,6 +34,7 @@
     <button
       type="button"
       class="toggle"
+      class:leaf={!count}
       aria-label="{name}{taskName ? ` · ${taskName}` : ""} · {finished ? stateWords(node, tools) : doing}"
       aria-expanded={count ? open : undefined}
       onclick={toggle}>
@@ -101,6 +102,10 @@
     cursor: pointer;
     font: var(--machine-xs);
     color: var(--text-muted);
+  }
+
+  .toggle.leaf {
+    cursor: default;
   }
 
   .name {
