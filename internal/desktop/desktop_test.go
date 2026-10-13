@@ -2417,6 +2417,183 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	}
 }
 
+func TestReorderMovesSessionsToTheTargetsFormerPosition(t *testing.T) {
+	for _, test := range []struct {
+		name, source, target string
+		want                 []string
+	}{
+		{"upward", "webhook", "kraken", []string{"webhook", "kraken", "octopus", "clam"}},
+		{"downward", "kraken", "webhook", []string{"octopus", "webhook", "kraken", "clam"}},
+		{"first-to-last", "kraken", "clam", []string{"octopus", "webhook", "clam", "kraken"}},
+		{"last-to-first", "clam", "kraken", []string{"clam", "kraken", "octopus", "webhook"}},
+		{"same-row", "octopus", "octopus", []string{"kraken", "octopus", "webhook", "clam"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+			rows := polled("kraken", "octopus", "webhook", "clam")
+			for _, row := range rows {
+				sessionDir(t, root, row.Slug)
+			}
+			reg.railOrder(rows)
+			if err := reg.Reorder(test.source, test.target); err != nil {
+				t.Fatal(err)
+			}
+			if got := railSlugs(reg, rows); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("reordered rail = %v, want %v", got, test.want)
+			}
+			if touched := len(reg.touched) != 0; touched != (test.source != test.target) {
+				t.Fatalf("chrome wakeup = %v for %s", touched, test.name)
+			}
+		})
+	}
+}
+
+func TestReorderRefusesUnknownStaleAndUnsafeRowsWithoutChangingOrder(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"kraken", "octopus", "gone", "unpolled", "mismatch"} {
+		sessionDir(t, root, slug)
+	}
+	if err := os.RemoveAll(filepath.Join(root, "gone")); err != nil {
+		t.Fatal(err)
+	}
+	if err := session.WriteManifest(filepath.Join(root, "mismatch"), session.Manifest{Slug: "other"}); err != nil {
+		t.Fatal(err)
+	}
+	external := sessionDir(t, t.TempDir(), "alias")
+	if err := os.Symlink(external, filepath.Join(root, "alias")); err != nil {
+		t.Fatal(err)
+	}
+	initial := []string{"kraken", "gone", "octopus", "mismatch", "alias"}
+	reg.railOrder(polled(initial...))
+	for _, bad := range []string{"unknown", "gone", "unpolled", "mismatch", "alias", "", ".", "..", "kraken/../octopus", "../octopus", `kraken\octopus`} {
+		for _, pair := range [][2]string{{bad, "kraken"}, {"kraken", bad}, {bad, bad}} {
+			if err := reg.Reorder(pair[0], pair[1]); err == nil {
+				t.Fatalf("Reorder accepted %q onto %q", pair[0], pair[1])
+			}
+			if !reflect.DeepEqual(reg.rail, initial) || len(reg.touched) != 0 {
+				t.Fatalf("refused reorder changed state: rail %v, wakeups %d", reg.rail, len(reg.touched))
+			}
+		}
+	}
+}
+
+func TestReorderRetainsMissingEntriesAndSurvivesPollsAndFreshSessions(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"kraken", "octopus", "webhook", "fresh"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "missing", "octopus", "webhook"))
+	if err := reg.Reorder("kraken", "webhook"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"missing", "octopus", "webhook", "kraken"}
+	if !reflect.DeepEqual(reg.rail, want) {
+		t.Fatalf("reorder changed missing entries: %v, want %v", reg.rail, want)
+	}
+	for _, rows := range [][]status.SessionRow{
+		polled("kraken", "octopus", "webhook"),
+		polled("webhook", "kraken", "octopus"),
+	} {
+		if got := railSlugs(reg, rows); !reflect.DeepEqual(got, []string{"octopus", "webhook", "kraken"}) {
+			t.Fatalf("poll lost the reordered sequence: %v", got)
+		}
+	}
+	if got := railSlugs(reg, polled("fresh", "kraken", "webhook", "octopus")); !reflect.DeepEqual(got, []string{"fresh", "octopus", "webhook", "kraken"}) {
+		t.Fatalf("fresh session did not prepend to the user order: %v", got)
+	}
+	sessionDir(t, root, "missing")
+	if got := railSlugs(reg, polled("missing", "fresh", "kraken", "webhook", "octopus")); !reflect.DeepEqual(got, []string{"fresh", "missing", "octopus", "webhook", "kraken"}) {
+		t.Fatalf("returning session lost its retained place: %v", got)
+	}
+}
+
+func TestReorderPreservesSelectionHistoryAndSessionLifecycleOrder(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	for _, slug := range []string{"kraken", "octopus", "inactive"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "octopus", "inactive"))
+	for _, slug := range []string{"kraken", "octopus"} {
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shown := reg.current()
+	history := append([]*sessionState(nil), reg.history...)
+	agents, serves := boot.counts()
+	if err := reg.Reorder("inactive", "kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != shown || !reflect.DeepEqual(reg.history, history) || reg.bySlug("inactive") != nil {
+		t.Fatal("reordering an inactive row changed selection, history or loaded it")
+	}
+	if afterAgents, afterServes := boot.counts(); afterAgents != agents || afterServes != serves {
+		t.Fatal("Reorder booted a session")
+	}
+	for _, action := range []func(string) error{reg.Show, reg.Unload, reg.Reload} {
+		if err := action("kraken"); err != nil {
+			t.Fatal(err)
+		}
+		if got := railSlugs(reg, polled("kraken", "octopus", "inactive")); !reflect.DeepEqual(got, []string{"inactive", "kraken", "octopus"}) {
+			t.Fatalf("session lifecycle changed user order: %v", got)
+		}
+	}
+}
+
+func TestConcurrentRailPollingAndReorderingPreserveEveryEntry(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"kraken", "octopus", "webhook", "fresh"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "missing", "octopus", "webhook"))
+	var wg sync.WaitGroup
+	failures := make(chan error, 2)
+	for _, pair := range [][2]string{{"kraken", "webhook"}, {"webhook", "octopus"}} {
+		wg.Add(1)
+		go func(pair [2]string) {
+			defer wg.Done()
+			for i := 0; i < 40; i++ {
+				if err := reg.Reorder(pair[0], pair[1]); err != nil {
+					failures <- err
+					return
+				}
+			}
+		}(pair)
+	}
+	for _, rows := range [][]status.SessionRow{polled("fresh", "kraken", "octopus", "webhook"), polled("webhook", "octopus", "kraken")} {
+		wg.Add(1)
+		go func(rows []status.SessionRow) {
+			defer wg.Done()
+			for i := 0; i < 40; i++ {
+				reg.railOrder(rows)
+			}
+		}(rows)
+	}
+	wg.Wait()
+	close(failures)
+	for err := range failures {
+		t.Error(err)
+	}
+	if len(reg.rail) != 5 || reg.rail[0] != "fresh" {
+		t.Fatalf("concurrent operations lost entries or fresh placement: %v", reg.rail)
+	}
+	seen := make(map[string]int)
+	for _, slug := range reg.rail {
+		seen[slug]++
+	}
+	for _, slug := range []string{"kraken", "missing", "octopus", "webhook", "fresh"} {
+		if seen[slug] != 1 {
+			t.Fatalf("entry %q appears %d times in %v", slug, seen[slug], reg.rail)
+		}
+	}
+}
+
 func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")

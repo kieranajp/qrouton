@@ -75,6 +75,17 @@
       load(slug);
     },
     load,
+    order: () => sessions.map((row) => row.slug),
+    remove: (slug) => (sessions = sessions.filter((row) => row.slug !== slug)),
+    reordered: (slug, targetSlug) => {
+      const source = sessions.findIndex((row) => row.slug === slug);
+      const target = sessions.findIndex((row) => row.slug === targetSlug);
+      if (source < 0 || target < 0) return;
+      const next = [...sessions];
+      const [row] = next.splice(source, 1);
+      next.splice(target, 0, row);
+      sessions = next;
+    },
     unloaded: (slug) => {
       sessions = sessions.map((session) =>
         session.slug === slug

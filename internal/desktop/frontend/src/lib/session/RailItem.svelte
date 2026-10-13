@@ -7,7 +7,7 @@
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onDragStart?: (event: DragEvent) => void, onDragOver?: (event: DragEvent) => void, onDragLeave?: (event: DragEvent) => void, onDrop?: (event: DragEvent) => void, onDragEnd?: () => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
     initials,
     shortcut = "",
@@ -17,6 +17,13 @@
     unseen = 0,
     idle = "",
     selected = false,
+    dragging = false,
+    over = false,
+    onDragStart,
+    onDragOver,
+    onDragLeave,
+    onDrop,
+    onDragEnd,
     stickerId = "",
     stickers = [],
     stickerBusy = false,
@@ -33,6 +40,24 @@
   let stickerItem = $derived(sticker(stickerId, stickers));
   let stickerLabel = $derived(stickerControlLabel(name, stickerId, stickers));
   let stickerTooltip = $derived(stickerTitle(stickerId, stickers));
+
+  /** @type {HTMLElement | null} */
+  let pointerFocus = null;
+
+  // Native dragging needs default pointer focus until dragstart.
+  function preservePointerFocus(event) {
+    if (event.button !== 0) {
+      event.preventDefault();
+      return;
+    }
+    pointerFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  }
+
+  function restorePointerFocus() {
+    const previous = pointerFocus;
+    pointerFocus = null;
+    previous?.focus({ preventScroll: true });
+  }
 
   function fitFeedback(node) {
     const row = node.closest(".row");
@@ -66,6 +91,11 @@
   class="row"
   class:selected
   class:running
+  class:dragging
+  class:over
+  ondragover={onDragOver}
+  ondragleave={onDragLeave}
+  ondrop={onDrop}
   role="group"
   aria-label="{name} actions"
   oncontextmenu={onContextMenu}>
@@ -75,7 +105,17 @@
     aria-current={selected ? "page" : undefined}
     aria-label={label}
     title={label}
-    onmousedown={(event) => event.preventDefault()}
+    draggable="true"
+    ondragstart={(event) => {
+      restorePointerFocus();
+      onDragStart?.(event);
+    }}
+    ondragend={() => {
+      restorePointerFocus();
+      onDragEnd?.();
+    }}
+    onmousedown={preservePointerFocus}
+    onmouseup={restorePointerFocus}
     onclick={onSelect}>
     <div class="avatar" class:keyed={shortcut}>
       {shortcut || initials}
@@ -151,6 +191,14 @@
     border-color: var(--accent-action);
     background: var(--surface-raised);
     box-shadow: var(--shadow-focus);
+  }
+
+  .dragging {
+    opacity: 0.4;
+  }
+
+  .over {
+    box-shadow: inset 0 0 0 1px var(--accent-action);
   }
 
   .item {

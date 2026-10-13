@@ -6,6 +6,7 @@ import (
 	"io"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -250,9 +251,7 @@ type Sessions struct {
 	// history is the order sessions were shown in, most recent last, so a
 	// supervisor exiting can hand the window back to the one before it.
 	history []*sessionState
-	// rail is the order the rail draws in, fixed by the first poll and only ever
-	// appended to. A row's position addresses it from the keyboard, so a position
-	// that moved would rename every shortcut under the user's fingers.
+	// rail retains user moves and missing slugs; new sessions prepend on polling.
 	rail []string
 
 	now    func() time.Time
@@ -323,16 +322,8 @@ func (s *Sessions) Reload(slug string) error {
 func (s *Sessions) Unload(slug string) error {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
-	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\`) {
-		return unknownSession(slug)
-	}
-	root := s.boot.root(slug)
-	if root == "" || !directSessionRoot(root, slug) {
-		return unknownSession(slug)
-	}
-	manifest, err := session.Load(root)
-	if err != nil || manifest.Slug != slug {
-		return unknownSession(slug)
+	if err := s.validateSession(slug); err != nil {
+		return err
 	}
 	state := s.bySlug(slug)
 	if state == nil {
@@ -355,6 +346,52 @@ func (s *Sessions) Unload(slug string) error {
 	} else {
 		s.touch()
 	}
+	return nil
+}
+
+func (s *Sessions) validateSession(slug string) error {
+	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\`) {
+		return unknownSession(slug)
+	}
+	root := s.boot.root(slug)
+	if root == "" || !directSessionRoot(root, slug) {
+		return unknownSession(slug)
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return unknownSession(slug)
+	}
+	return nil
+}
+
+func (s *Sessions) Reorder(slug, targetSlug string) error {
+	if err := s.validateSession(slug); err != nil {
+		return err
+	}
+	if err := s.validateSession(targetSlug); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	from, to := slices.Index(s.rail, slug), slices.Index(s.rail, targetSlug)
+	if from < 0 || to < 0 {
+		s.mu.Unlock()
+		if from < 0 {
+			return unknownSession(slug)
+		}
+		return unknownSession(targetSlug)
+	}
+	if from == to {
+		s.mu.Unlock()
+		return nil
+	}
+	if from < to {
+		copy(s.rail[from:to], s.rail[from+1:to+1])
+	} else {
+		copy(s.rail[to+1:from+1], s.rail[to:from])
+	}
+	s.rail[to] = slug
+	s.mu.Unlock()
+	s.touch()
 	return nil
 }
 
@@ -781,9 +818,7 @@ func without(history []*sessionState, state *sessionState) []*sessionState {
 	return kept
 }
 
-// railOrder puts a poll's rows in the order the rail was first drawn in. A session
-// assembled since then goes to the front, because it is the most recent and that
-// is the rule the rest of the list follows; nothing else moves a row.
+// railOrder preserves user moves and prepends newly discovered sessions.
 func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	found := make(map[string]status.SessionRow, len(rows))
 	for _, row := range rows {

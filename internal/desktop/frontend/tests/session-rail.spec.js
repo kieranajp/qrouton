@@ -678,3 +678,141 @@ test("an Unload refusal leaves the row loaded and returns focus with row feedbac
   await row.click({ button: "right" });
   await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
 });
+
+const sessionButton = (page, name) => page.getByRole("button", { name: new RegExp("^" + name + " ·") });
+const railOrder = (page) => page.locator(".session-list .name").allTextContents();
+const dragEvent = (locator, type) => locator.evaluate(
+  (element, eventType) => element.dispatchEvent(new DragEvent(eventType, {
+    bubbles: true, cancelable: true, dataTransfer: new DataTransfer(),
+  })),
+  type,
+);
+
+test("native pointer dragging moves loaded and dimmed sessions without selection or focus changes", async ({ page }) => {
+  const focus = page.getByRole("button", { name: "Conversation focus" });
+  await focus.focus();
+  const checkout = sessionButton(page, "Checkout migration");
+  const third = sessionButton(page, "Session 3");
+  await checkout.dragTo(third);
+  await expect.poll(() => railOrder(page)).toEqual([
+    "Session 2", "Session 3", "Checkout migration",
+    ...Array.from({ length: 9 }, (_, i) => "Session " + (i + 4)),
+  ]);
+  await expect(focus).toBeFocused();
+  await expect(checkout).toHaveAttribute("aria-current", "page");
+  await third.dragTo(sessionButton(page, "Session 2"));
+  await expect.poll(() => railOrder(page)).toEqual([
+    "Session 3", "Session 2", "Checkout migration",
+    ...Array.from({ length: 9 }, (_, i) => "Session " + (i + 4)),
+  ]);
+  await expect(focus).toBeFocused();
+  await expect(checkout).toHaveAttribute("aria-current", "page");
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "reorder", slug: "checkout", targetSlug: "session-3" },
+    { method: "reorder", slug: "session-3", targetSlug: "session-2" },
+  ]);
+});
+
+test("reorder waits for committed chrome and remaps shortcuts to displayed positions", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.deferReorder());
+  const checkout = sessionButton(page, "Checkout migration");
+  const second = sessionButton(page, "Session 2");
+  await dragEvent(second, "dragstart");
+  await dragEvent(checkout, "dragover");
+  await expect(page.locator(".row.over")).toHaveCount(1);
+  await expect(page.locator(".row.dragging")).toHaveCount(1);
+  await expect(page.locator(".row.dragging")).toHaveCSS("opacity", "0.4");
+  await dragEvent(checkout, "drop");
+  await expect(page.locator(".row.over, .row.dragging")).toHaveCount(0);
+  expect((await railOrder(page)).slice(0, 2)).toEqual(["Checkout migration", "Session 2"]);
+  await expect.poll(() => page.evaluate(() => window.sessionRailBridge.calls())).toContainEqual(
+    { method: "reorder", slug: "session-2", targetSlug: "checkout" },
+  );
+  await page.evaluate(() => window.sessionRailBridge.completeReorder());
+  await expect.poll(() => railOrder(page)).toEqual([
+    "Session 2", "Checkout migration", ...Array.from({ length: 10 }, (_, i) => "Session " + (i + 3)),
+  ]);
+  await expect(second.locator(".avatar")).toHaveText("⌘1");
+  await expect(checkout.locator(".avatar")).toHaveText("⌘2");
+  await page.keyboard.press("Meta+1");
+  await expect(second).toHaveAttribute("aria-current", "page");
+  expect((await page.evaluate(() => window.sessionRailBridge.calls())).at(-1)).toEqual(
+    { method: "show", slug: "session-2" },
+  );
+});
+
+test("self, cancelled, external and sticker drags do not reorder", async ({ page }) => {
+  const checkout = sessionButton(page, "Checkout migration");
+  const second = sessionButton(page, "Session 2");
+  const initial = await railOrder(page);
+  await dragEvent(checkout, "dragstart");
+  await dragEvent(checkout, "dragover");
+  await expect(page.locator(".row.over")).toHaveCount(0);
+  await dragEvent(checkout, "drop");
+  await dragEvent(checkout, "dragstart");
+  await dragEvent(second, "dragover");
+  await expect(page.locator(".row.over")).toHaveCount(1);
+  await dragEvent(second, "dragleave");
+  await expect(page.locator(".row.over")).toHaveCount(0);
+  await dragEvent(checkout, "dragend");
+  await expect(page.locator(".row.dragging")).toHaveCount(0);
+  await dragEvent(second, "dragover");
+  await dragEvent(second, "drop");
+  const sticker = page.locator(".row").first().locator(".sticker");
+  await expect(checkout).toHaveAttribute("draggable", "true");
+  expect(await sticker.evaluate((button) => button.draggable)).toBe(false);
+  await dragEvent(sticker, "dragstart");
+  await dragEvent(second, "dragover");
+  await expect(page.locator(".row.over, .row.dragging")).toHaveCount(0);
+  await dragEvent(second, "drop");
+  expect(await railOrder(page)).toEqual(initial);
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([]);
+  await sticker.click();
+  await expect.poll(() => page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "cycle", slug: "checkout" },
+  ]);
+});
+
+for (const removed of ["checkout", "session-2"]) {
+  test("removing " + removed + " during a drag cancels the move", async ({ page }) => {
+    const checkout = sessionButton(page, "Checkout migration");
+    const second = sessionButton(page, "Session 2");
+    await dragEvent(checkout, "dragstart");
+    await dragEvent(second, "dragover");
+    await expect(page.locator(".row.over")).toHaveCount(1);
+    await page.evaluate((slug) => window.sessionRail.remove(slug), removed);
+    await expect(page.locator(".row.over, .row.dragging")).toHaveCount(0);
+    await dragEvent(sessionButton(page, "Session 3"), "drop");
+    expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([]);
+  });
+}
+
+test("a refused reorder retains the order, selection and focus and reports on the source", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextReorder());
+  const focus = page.getByRole("button", { name: "Conversation focus" });
+  await focus.focus();
+  const initial = await railOrder(page);
+  const second = sessionButton(page, "Session 2");
+  await second.dragTo(sessionButton(page, "Checkout migration"));
+  await expect(page.getByRole("alert")).toHaveText("Session could not be moved");
+  await expect(page.getByRole("group", { name: "Session 2 actions" }).getByRole("alert")).toBeVisible();
+  expect(await railOrder(page)).toEqual(initial);
+  await expect(sessionButton(page, "Checkout migration")).toHaveAttribute("aria-current", "page");
+  await expect(focus).toBeFocused();
+  await expect(page.locator(".row.over, .row.dragging")).toHaveCount(0);
+});
+
+test("session pointer clicks retain focus while keyboard activation stays accessible", async ({ page }) => {
+  const focus = page.getByRole("button", { name: "Conversation focus" });
+  const second = sessionButton(page, "Session 2");
+  await focus.focus();
+  await second.click();
+  await expect(focus).toBeFocused();
+  await expect(second).toHaveAttribute("aria-current", "page");
+  const checkout = sessionButton(page, "Checkout migration");
+  await checkout.focus();
+  await expect(checkout).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(checkout).toHaveAttribute("aria-current", "page");
+  await expect(checkout).toBeFocused();
+});

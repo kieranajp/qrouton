@@ -38,6 +38,7 @@ export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_COPY_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CopyAsset";
 export const SESSIONS_CYCLE_STICKER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CycleSticker";
 export const SESSIONS_RELOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reload";
+export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reorder";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
@@ -277,6 +278,8 @@ export const STICKER_DUPLICATE = "another sticker already uses this colour and s
 export const SESSION_UNLOAD_LABEL = "Unload";
 
 export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
+
+export const SESSION_REORDER_FAILED = "Session could not be moved";
 
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
 /** @type {readonly StickerColour[]} */

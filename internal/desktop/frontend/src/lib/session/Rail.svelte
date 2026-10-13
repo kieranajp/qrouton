@@ -8,8 +8,8 @@
   import RailItem from "./RailItem.svelte";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
-  import { cleanup, cycleSticker, reload, reveal, show, uncommitted, unload } from "../sessions.js";
-  import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED } from "../bridge/generated.js";
+  import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
+  import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
@@ -29,6 +29,63 @@
 
   const ROW_MENU_WIDTH = 190;
 
+  let dragSlug = $state("");
+  let targetSlug = $state("");
+
+  $effect(() => {
+    if ((dragSlug && !sessions.some((row) => row.slug === dragSlug)) ||
+        (targetSlug && !sessions.some((row) => row.slug === targetSlug))) {
+      clearDrag();
+    }
+  });
+
+  function clearDrag() {
+    dragSlug = "";
+    targetSlug = "";
+  }
+
+  function startDrag(event, slug) {
+    if (!event.dataTransfer) return;
+    event.dataTransfer.setData("text/plain", slug);
+    event.dataTransfer.effectAllowed = "move";
+    dragSlug = slug;
+    targetSlug = "";
+  }
+
+  function validTarget(slug) {
+    return dragSlug && dragSlug !== slug &&
+      sessions.some((row) => row.slug === dragSlug) &&
+      sessions.some((row) => row.slug === slug);
+  }
+
+  function hoverDrag(event, slug) {
+    if (!validTarget(slug)) {
+      targetSlug = "";
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    targetSlug = slug;
+  }
+
+  function leaveDrag(event, slug) {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    if (targetSlug === slug) targetSlug = "";
+  }
+
+  async function dropDrag(event, slug) {
+    const source = dragSlug;
+    const valid = validTarget(slug);
+    clearDrag();
+    if (!valid) return;
+    event.preventDefault();
+    try {
+      await reorder(source, slug);
+    } catch {
+      showRowNotice(source, SESSION_REORDER_FAILED, true);
+    }
+  }
+
   const stickerQueues = new Map();
   let pendingStickers = $state({});
   /** @type {{slug: string, sequence: number, text: string, failed: boolean} | null} */
@@ -37,8 +94,6 @@
   let rowNoticeTimer;
   let mounted = true;
 
-  // A rail row's number is its position, so it moves when showing a session
-  // re-sorts the list.
   onMount(() => {
     const onKey = (event) => {
       const row = rowAt(sessions, event);
@@ -205,6 +260,13 @@
         summary={row.summary}
         idle={row.summary?.running ? "" : age(row.opened)}
         selected={row.slug === slug}
+        dragging={row.slug === dragSlug}
+        over={row.slug === targetSlug}
+        onDragStart={(event) => startDrag(event, row.slug)}
+        onDragOver={(event) => hoverDrag(event, row.slug)}
+        onDragLeave={(event) => leaveDrag(event, row.slug)}
+        onDrop={(event) => dropDrag(event, row.slug)}
+        onDragEnd={clearDrag}
         unseen={row.unseen}
         stickerId={row.sticker}
         {stickers}
