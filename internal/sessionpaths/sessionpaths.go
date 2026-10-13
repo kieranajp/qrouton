@@ -152,3 +152,9 @@ func Within(base, path string) (string, bool) {
 	}
 	return rel, true
 }
+
+// SyncCopy reports a copy a sync tool made beside a real file.
+func SyncCopy(base string) bool {
+	return strings.Contains(base, syncConflictInfix) || strings.HasPrefix(base, syncthingTempPrefix) ||
+		strings.Contains(base, conflictedCopyInfix) || strings.Contains(base, conflictInfix)
+}

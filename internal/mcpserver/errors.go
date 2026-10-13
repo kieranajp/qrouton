@@ -9,6 +9,7 @@ import (
 var (
 	ErrBugReportInput       = errors.New("report_bug requires a nonblank title and body")
 	ErrBugReportUnsupported = errors.New("this workbench does not support bug report review")
+	ErrArtefactTitle        = errors.New("title is required")
 	ErrCommandRequired      = errors.New("command is required")
 	ErrMessageRequired      = errors.New("message is required")
 	ErrNameRequired         = errors.New("name is required")

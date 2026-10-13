@@ -217,6 +217,7 @@ func pushChrome(reg *Sessions, root string, cfg *config.Config, measured map[str
 	// so the questions can never land over a live conversation — and an install
 	// that always opens on one stays unasked until it opens on none.
 	fields.Welcoming = configSnapshot != nil && !configSnapshot.Welcomed && fields.Slug == ""
+	fields.Placing = reg.placing() && !fields.Welcoming
 	if snapshot, ok := agentSnapshots[fields.Slug]; ok {
 		fields.StagesLive = status.StagesFor(snapshot.LiveTypes)
 	}

@@ -5,7 +5,7 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, compact?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
@@ -21,6 +21,7 @@
     onPrimary,
     onEscape,
     height = false,
+    compact = false,
     flush = false,
     footer,
     children,
@@ -38,13 +39,14 @@
     const meant = intent(event);
     if (!meant) return;
     event.preventDefault();
+    if (busy) return;
     if (meant === "cancel") onEscape?.();
     else if (canAdvance) onPrimary();
   }
 </script>
 
 <div class="layer" role="presentation" tabindex="-1" bind:this={layer} onkeydown={key}>
-  <div class="dialog" class:fixed={height}>
+  <div class="dialog" class:fixed={height} class:compact>
     {#if steps.length}
       <div class="steps">
         <Stepper {steps} {active} />
@@ -103,6 +105,13 @@
   .fixed {
     height: min(calc(640px * var(--ui-scale)), 100%);
     min-height: 0;
+  }
+
+  /* Sizes to its content, and scrolls the body once a list outgrows the window. */
+  .compact {
+    width: calc(720px * var(--ui-scale));
+    min-height: 0;
+    max-height: min(calc(640px * var(--ui-scale)), 100%);
   }
 
   .steps {

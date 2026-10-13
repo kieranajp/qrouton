@@ -14,6 +14,7 @@ func TestDocumentsTakeTheirIdentityFromThePath(t *testing.T) {
 		{"s/shared/plans/P1-x.md", "---\nkind: note\n---\n# Relabelled\n", "note", "Relabelled"},
 		{"s/shared/specs/S1-x.md", "---\nschema_version: 1\nid: other/x\n---\n# Spec\n", "spec", "Spec"},
 		{"research/R1-x.md", "# Not shared\n", "", "Not shared"},
+		{"s/shared/research/R2-x.md", "---\nkind: research\ntitle: 'Team: sync'\nauthor: Kieran\ncreated: \"2026-10-12T09:30:00+02:00\"\nsession: team-sync\nrevisions:\n  o/app: abc\n---\n# Team: sync\n", KindResearch, "Team: sync"},
 	} {
 		doc, _, _ := parseDocument(tc.name, tc.text)
 		if doc.ID != tc.name[:len(tc.name)-3] || doc.Kind != tc.kind || doc.Title != tc.title {

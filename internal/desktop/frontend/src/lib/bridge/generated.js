@@ -26,6 +26,10 @@ export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Pick
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";
 export const PICKER_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Picker.Load";
+export const PLACEMENT_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Placement.Check";
+export const PLACEMENT_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Close";
+export const PLACEMENT_MOVE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Move";
+export const PLACEMENT_REPORT = "github.com/kieranajp/qrouton/internal/desktop.Placement.Report";
 export const PRESENTER_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Close";
 export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Note";
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
@@ -202,6 +206,36 @@ export const OLLAMA_STATES = Object.freeze({
   FAILED: "failed",
 });
 
+/** @typedef {"agent-running"|"destination-missing"|"cross-device"|"link-broken"|"conflict"|"outside-roots"|"unreadable"|"marker-unsafe"|"no-thoughts-link"} PlacementReason */
+export const PLACEMENT_REASONS = Object.freeze({
+  AGENT_RUNNING: "agent-running",
+  DESTINATION_MISSING: "destination-missing",
+  CROSS_DEVICE: "cross-device",
+  LINK_BROKEN: "link-broken",
+  CONFLICT: "conflict",
+  OUTSIDE_ROOTS: "outside-roots",
+  UNREADABLE: "unreadable",
+  MARKER_UNSAFE: "marker-unsafe",
+  NO_LINK: "no-thoughts-link",
+});
+
+/** @typedef {"moved"|"conflict"|"refused"|"failed"} PlacementResult */
+export const PLACEMENT_RESULTS = Object.freeze({
+  MOVED: "moved",
+  CONFLICT: "conflict",
+  REFUSED: "refused",
+  FAILED: "failed",
+});
+
+/** @typedef {"placed"|"misplaced"|"finished"|"pending"|"skipped"} PlacementState */
+export const PLACEMENT_STATES = Object.freeze({
+  PLACED: "placed",
+  MISPLACED: "misplaced",
+  FINISHED: "finished",
+  PENDING: "pending",
+  SKIPPED: "skipped",
+});
+
 /** @typedef {"started"|"completed"|"failed"|"advanced"} ProgressStatus */
 export const PROGRESS_STATUSES = Object.freeze({
   STARTED: "started",
@@ -291,7 +325,7 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
@@ -320,6 +354,7 @@ export const CHROME_DEFAULTS = {
   root: "",
   picker: false,
   welcoming: false,
+  placing: false,
   stickers: [],
   sessionSummary: {
     text: "",

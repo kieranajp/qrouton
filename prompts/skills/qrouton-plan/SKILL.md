@@ -23,7 +23,7 @@ The plan must:
 
 The shape is in `references/plan-shape.md` beside this file: the heading convention the workbench reads progress from, and the template to write to. Read it and pass it, or its absolute path, to the lead — the lead starts in a fresh context and cannot resolve a path relative to this file.
 
-Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`.
+Call `create_artefact` with `kind: plan` and a short title, then fill the file it returns. Do not name or write a plan path by hand.
 
 Pass this to the lead, and hold the returned plan to it:
 

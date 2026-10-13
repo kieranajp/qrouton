@@ -2,7 +2,9 @@ package mcpserver
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -14,21 +16,22 @@ import (
 const serverInstructions = "Drive the user's qrouton workbench: window tools open or read tabs beside the conversation without taking the keyboard. All paths and working directories must belong to this session. " + toolReportBug + " proposes qrouton defects for the user's explicit desktop confirmation before GitHub issue creation."
 
 const (
-	toolReportBug   = "report_bug"
-	descReportBug   = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
-	toolOpenFile    = "open_file"
-	toolFocusAsset  = "focus_asset"
-	toolOpenAssets  = "open_assets"
-	toolRunCommand  = "run_command"
-	toolReadWindow  = "read_window"
-	toolShowDiff    = "show_diff"
-	toolNotify      = "notify"
-	toolCloseWindow = "close_window"
-	toolListWindows = "list_windows"
-	toolEscalate    = "escalate"
-	toolSharePage   = "share_page"
-	toolSetSummary  = "set_summary"
-	toolSetDigest   = "set_digest"
+	toolReportBug      = "report_bug"
+	descReportBug      = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
+	toolOpenFile       = "open_file"
+	toolFocusAsset     = "focus_asset"
+	toolOpenAssets     = "open_assets"
+	toolRunCommand     = "run_command"
+	toolReadWindow     = "read_window"
+	toolShowDiff       = "show_diff"
+	toolNotify         = "notify"
+	toolCloseWindow    = "close_window"
+	toolListWindows    = "list_windows"
+	toolEscalate       = "escalate"
+	toolSharePage      = "share_page"
+	toolSetSummary     = "set_summary"
+	toolCreateArtefact = "create_artefact"
+	toolSetDigest      = "set_digest"
 )
 
 const (
@@ -68,6 +71,8 @@ const (
 )
 
 var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)
+
+var descCreateArtefact = fmt.Sprintf("Create a new research, spec or plan document in this session's thoughts folder. qrouton picks the number and filename, stamps who made it, when, in which session and against which repository revisions, and writes the template's skeleton. kind must be one of %s. Returns the session-relative path of the new file. Fill that file in place; never name or write a new artefact by hand, and leave its author, created, session and revisions fields alone.", strings.Join(artefact.Kinds, ", "))
 
 var descSetDigest = fmt.Sprintf("Write the So far digest the user sees under the summary in the Overview tab: where this session stands. Call it after each lead returns and after the user settles a decision. Each call replaces the whole digest, so pass all of it, rewritten. Give a few plain past-tense lines, at most %d characters, on what is done, what is in progress and what waits on the user. Line breaks are kept. Longer text is rejected, never truncated: shorten it and call again.", digestLimit)
 

@@ -31,6 +31,7 @@ const (
 	githubPackage    = "../../github"
 	assemblyPackage  = "../../assembly"
 	configPackage    = "../../config"
+	placementPackage = "../../placement"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 )
@@ -64,6 +65,9 @@ var valueSets = []valueSet{
 	{name: "MEDIA_KINDS", typedef: "MediaKind", dir: workbenchPackage, goType: "MediaKind", prefix: "Media"},
 	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
 	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},
+	{name: "PLACEMENT_REASONS", typedef: "PlacementReason", dir: placementPackage, goType: "Reason", prefix: "Reason"},
+	{name: "PLACEMENT_RESULTS", typedef: "PlacementResult", dir: placementPackage, goType: "Result", prefix: "Result"},
+	{name: "PLACEMENT_STATES", typedef: "PlacementState", dir: placementPackage, goType: "State", prefix: "State"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},

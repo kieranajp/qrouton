@@ -493,3 +493,19 @@ test("at 150% in the default window no tab collapses a text field", async ({ pag
   }
   expect(new Set(measured)).toEqual(new Set(["General", "GitHub", "Folders", "Stickers", "Advanced"]));
 });
+
+test("Check session placement asks the workbench and closes settings", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Folders");
+  await page.getByRole("button", { name: "Check session placement" }).click();
+  await expect.poll(() => page.evaluate(() => window.placementChecks)).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.closes())).toBe(1);
+});
+
+test("a placement check that fails stays in settings and says why", async ({ page }) => {
+  await page.goto("/tests/settings.html?fail=Check");
+  await open(page, "Folders");
+  await page.getByRole("button", { name: "Check session placement" }).click();
+  await expect(page.getByText("permission denied")).toBeVisible();
+  expect(await page.evaluate(() => window.settingsFixture.closes())).toBe(0);
+});

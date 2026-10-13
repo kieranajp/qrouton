@@ -56,6 +56,11 @@ type sharePageInput struct {
 	Path string `json:"path" jsonschema:"Path to a markdown document in the qrouton session, relative to its root"`
 }
 
+type createArtefactInput struct {
+	Kind  string `json:"kind" jsonschema:"The kind of document to create: research, spec or plan"`
+	Title string `json:"title" jsonschema:"The document's title, a few plain words"`
+}
+
 type setSummaryInput struct {
 	Stage   string `json:"stage" jsonschema:"The stage whose lead you are about to spawn: research, plan or implement. Spec work is plan"`
 	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
@@ -140,6 +145,10 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolSetSummary, descSetSummary, keyMessage,
 		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
 			return setSummary(root, input)
+		}))
+	addTool(server, toolCreateArtefact, descCreateArtefact, keyMessage,
+		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
+			return createArtefact(root, input)
 		}))
 	addTool(server, toolSetDigest, descSetDigest, keyMessage,
 		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {

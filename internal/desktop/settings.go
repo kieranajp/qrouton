@@ -100,8 +100,9 @@ type SettingsInput struct {
 	Thoughts ThoughtsInput    `json:"thoughts"`
 }
 
-// SaveResult reports whether the process needs to end for a changed Root to
-// take effect. Nothing else Settings saves needs a restart.
+// SaveResult reports whether the process needs to end for a changed Root or
+// changed thoughts folders to take effect. Nothing else Settings saves needs a
+// restart.
 type SaveResult struct {
 	RestartRequired bool `json:"restartRequired"`
 }
@@ -500,7 +501,7 @@ func (s *Settings) linearView() LinearView {
 func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *config.Config),
 	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
 	return cfg.Transact(func(snapshot *config.Config) error {
-		next, live, restart, err := stageConfig(snapshot, pinnedRoot, mutate)
+		next, live, restart, err := stageConfig(snapshot, pinnedRoot, true, mutate)
 		if err != nil {
 			return err
 		}
@@ -526,7 +527,7 @@ func checkLiveThoughts(live *config.Config) error {
 
 // stageConfig builds the file copy from config.json as written and the live copy
 // from the running config. Until a restart, live keeps the root and thoughts it booted with.
-func stageConfig(snapshot *config.Config, pinnedRoot string, mutate func(next, live *config.Config)) (next, live *config.Config, restart bool, err error) {
+func stageConfig(snapshot *config.Config, pinnedRoot string, holdThoughts bool, mutate func(next, live *config.Config)) (next, live *config.Config, restart bool, err error) {
 	onDisk, err := config.ReadFile()
 	if err != nil {
 		return nil, nil, false, err
@@ -534,7 +535,7 @@ func stageConfig(snapshot *config.Config, pinnedRoot string, mutate func(next, l
 	next, live = onDisk.Snapshot(), snapshot.Snapshot()
 	mutate(next, live)
 	live.Root = snapshot.Root
-	restart = restartRequired(snapshot, pinnedRoot, next)
+	restart = restartRequired(snapshot, pinnedRoot, next) || (holdThoughts && thoughtsRoutingChanged(snapshot, next))
 	if restart {
 		live.Thoughts = snapshot.Thoughts
 	}
@@ -568,6 +569,14 @@ func restartRequired(live *config.Config, pinnedRoot string, next *config.Config
 		return saved != pinnedRoot
 	}
 	return saved != filepath.Clean(live.Root)
+}
+
+// thoughtsRoutingChanged compares the saved thoughts folders with the ones the
+// running process routes by. Routing changes apply at the next launch.
+func thoughtsRoutingChanged(live, next *config.Config) bool {
+	saved := next.Snapshot()
+	saved.Root = live.Root
+	return saved.ThoughtsFingerprint() != live.ThoughtsFingerprint()
 }
 
 func pinnedFileRoot() string {

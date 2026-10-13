@@ -32,6 +32,7 @@ type FirstRun struct {
 	pinnedRoot  string
 	choose      func() (string, error)
 	reconfigure func(*config.Config) error
+	onWelcomed  func()
 }
 
 func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
@@ -81,7 +82,7 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	}
 	changed := false
 	err = f.cfg.Transact(func(current *config.Config) error {
-		next, live, restart, err := stageConfig(current, f.pinnedRoot, func(next, live *config.Config) {
+		next, live, restart, err := stageConfig(current, f.pinnedRoot, false, func(next, live *config.Config) {
 			next.Orgs, next.Root, next.Welcomed = orgs, root, true
 			next.Thoughts.Default = thoughts
 			if !config.OrgsOverridden() {
@@ -118,6 +119,9 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	if !changed {
 		// Without the touch the overlay stays up until the next chrome tick.
 		f.reg.touch()
+		if f.onWelcomed != nil {
+			f.onWelcomed()
+		}
 		return FirstRunResult{}, nil
 	}
 

@@ -84,7 +84,7 @@ func artifacts(dir, excludeSuffix string) []artifact {
 	for _, entry := range entries {
 		name := entry.Name()
 		lower := strings.ToLower(name)
-		if entry.IsDir() || !strings.HasSuffix(lower, markdownSuffix) ||
+		if entry.IsDir() || ignoredName(name) || !strings.HasSuffix(lower, markdownSuffix) ||
 			(excludeSuffix != "" && strings.HasSuffix(lower, excludeSuffix)) {
 			continue
 		}
@@ -99,6 +99,16 @@ func artifacts(dir, excludeSuffix string) []artifact {
 		out = append(out, artifact{path: filepath.Join(dir, name), number: number, at: info.ModTime().UnixNano()})
 	}
 	return out
+}
+
+// NextNumber is one more than the highest number any artifact in dir carries,
+// and 1 for a missing or empty folder.
+func NextNumber(dir string) int {
+	highest := 0
+	for _, a := range artifacts(dir, "") {
+		highest = max(highest, a.number)
+	}
+	return highest + 1
 }
 
 // latest is the highest-numbered artifact, or the most recently written when

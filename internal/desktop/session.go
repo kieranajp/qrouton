@@ -268,6 +268,8 @@ type Sessions struct {
 	// trees pushes the shown session's agent tree; nil until the workbench runs.
 	trees       *agentTrees
 	repoChanges map[string]struct{}
+
+	placementShown atomic.Bool
 }
 
 func newSessions() *Sessions {
@@ -787,6 +789,13 @@ func (s *Sessions) all() []*sessionState {
 		out = append(out, state)
 	}
 	return out
+}
+
+func (s *Sessions) placing() bool { return s.placementShown.Load() }
+
+func (s *Sessions) setPlacing(shown bool) {
+	s.placementShown.Store(shown)
+	s.touch()
 }
 
 func (s *Sessions) touch() {

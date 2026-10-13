@@ -28,6 +28,18 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
+	// ThoughtsPlacement is the fingerprint of the thoughts folders the last
+	// automatic placement check ran against. A different fingerprint at launch
+	// runs the check again.
+	ThoughtsPlacement string `json:"thoughtsPlacement,omitempty"`
+
+	// ThoughtsPlacementChecked is read only to migrate a config written before
+	// the fingerprint existed. Only the placement check's own save clears it.
+	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
+
+	// Stamped on new artefacts. Absent falls back to git's user.name, then the login name.
+	Author string `json:"author,omitempty"`
+
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 
@@ -129,6 +141,9 @@ func (c *Config) Replace(next *Config) {
 	c.Root = replacement.Root
 	c.Launch = replacement.Launch
 	c.Editor = replacement.Editor
+	c.Author = replacement.Author
+	c.ThoughtsPlacement = replacement.ThoughtsPlacement
+	c.ThoughtsPlacementChecked = replacement.ThoughtsPlacementChecked
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
 	c.Stickers = replacement.Stickers
@@ -139,14 +154,17 @@ func (c *Config) Replace(next *Config) {
 
 func clone(c *Config) *Config {
 	out := &Config{
-		mu:       &sync.RWMutex{},
-		writeMu:  &sync.Mutex{},
-		Orgs:     append([]string(nil), c.Orgs...),
-		Root:     c.Root,
-		Editor:   append([]string(nil), c.Editor...),
-		Welcomed: c.Welcomed,
-		Quiet:    c.Quiet,
-		UIScale:  c.UIScale,
+		mu:                       &sync.RWMutex{},
+		writeMu:                  &sync.Mutex{},
+		Orgs:                     append([]string(nil), c.Orgs...),
+		Root:                     c.Root,
+		Editor:                   append([]string(nil), c.Editor...),
+		Author:                   c.Author,
+		ThoughtsPlacement:        c.ThoughtsPlacement,
+		ThoughtsPlacementChecked: c.ThoughtsPlacementChecked,
+		Welcomed:                 c.Welcomed,
+		Quiet:                    c.Quiet,
+		UIScale:                  c.UIScale,
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))

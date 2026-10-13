@@ -62,6 +62,7 @@ type Options struct {
 	updates    *Updates
 	vault      *vault.Set
 	ollama     *Ollama
+	placement  *Placement
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -136,7 +137,11 @@ func Run(opts Options) error {
 		opts.Launcher.Runners, opts.Launcher.OpenText,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
+	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))
+	r.register(application.NewService(firstRun))
+	opts.placement = newPlacement(opts.Config, reg)
+	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
+	r.register(application.NewService(opts.placement))
 	return run(r, term, windows, opts, quit)
 }
 
@@ -321,6 +326,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	}
 	if opts.ollama != nil {
 		opts.ollama.bind(ctx)
+	}
+	if opts.placement != nil {
+		go opts.placement.checkOnce()
 	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends

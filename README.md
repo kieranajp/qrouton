@@ -84,11 +84,43 @@ conversation that produced it.
 Two things qrouton does enforce, in both modes: worktrees, and heavy delegation
 to subagents, so the context you're talking to stays lean.
 
+### Sharing research with your team
+
+Point a thoughts folder at a directory a sync tool keeps in step between your
+machines, and your teammates' agents can search and read each other's research,
+specs and plans. qrouton ships no sync code. Syncthing is the tool I document
+and use; anything that keeps plain local files in step should work.
+
+1. Install [Syncthing](https://syncthing.net) on each machine and share one
+   folder, say `~/Sync/thoughts`, between them.
+2. In **Settings > Folders**, add a shared folder that points at it and lists
+   your org. A session whose repos all belong to that org keeps its documents
+   there, one folder per session, so only one person writes to any file.
+3. In Syncthing, turn on staggered file versioning for that folder. It keeps the
+   old copy when another machine overwrites a file.
+4. Everything under a synced folder is visible to the team: `assets/`, scratch
+   notes, whatever an agent left in the session's thoughts folder. Keep private
+   work in a session whose repos route to your default folder.
+5. After you add or change a shared folder and relaunch, open **Settings >
+   Folders** and press **Check session placement**. It offers to move sessions
+   that now sit in the wrong folder. qrouton also runs it once, on the first
+   launch after upgrading.
+
+Don't use a File Provider drive such as Google Drive, Dropbox or iCloud. They
+stream files as online-only placeholders that search can trigger a download of,
+and they name conflict copies in ways qrouton can't recognise. qrouton ignores
+Syncthing's conflict copies, so a clash doesn't show up as a second document.
+
+New research, specs and plans are created through qrouton, which numbers them
+and stamps the author, date, session and repository revisions into the
+frontmatter. Set `author` in `config.json` to choose the name; otherwise it
+uses your git `user.name`.
+
 ## 4. Next
 
-- **Artefact hosting in a knowledge graph.** Research and plans shared with your
-  team across sessions and across repos, instead of sitting in one person's
-  `thoughts/` directory.
+- **Artefact hosting in a knowledge graph.** Sharing a synced folder works
+  today, but it is still plain files and search. A graph of research across
+  sessions and repos is the part that is planned.
 - **Cross-family subagents.** Start a session on Opus today and every subagent
   beneath it is an Anthropic model. A specialist doing a bounded lookup has no
   business being tied to the orchestrator's family.

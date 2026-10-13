@@ -21,6 +21,7 @@
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
+  import PlacementOverlay from "./lib/placement/PlacementOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import PresentOverlay from "./lib/panes/PresentOverlay.svelte";
   import { present } from "./lib/panes/present.svelte.js";
@@ -183,6 +184,8 @@
 
   {#if fields.welcoming}
     <FirstRunOverlay />
+  {:else if fields.placing}
+    <PlacementOverlay />
   {:else if view.assembling}
     <Overlay gated={!fields.slug} onClose={() => (view.requested = false)} />
   {:else if view.picker}

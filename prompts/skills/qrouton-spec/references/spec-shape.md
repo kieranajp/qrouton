@@ -4,27 +4,15 @@ The workbench reads a spec as a set of questions the user answers in place.
 It finds them by heading, so keep the headings exactly as below. Every
 second-level heading is one screen in the reader.
 
+`create_artefact` writes the skeleton from `spec-template.md` beside this file:
+the frontmatter with `research:` empty, then `## End state`, `## Scope`,
+`## Open questions` holding `None.`, and `## Decisions`. Keep those headings
+exactly. Set `research:` to the relative path of the research document, and add
+any other section the work needs.
+
+An open question replaces the `None.` and looks like this:
+
 ```markdown
----
-kind: spec
-title: <title>
-research: <relative path to the research document>
----
-
-# <title>
-
-## End state
-
-<what is true when the work is done, a few sentences>
-
-## Scope
-
-**In:** <what this work covers>
-
-**Out:** <what it leaves alone>
-
-## Open questions
-
 ### Q1 — <the question>
 
 <the context the user needs to answer it: what depends on it, what the evidence says; a small d2 diagram if the options differ in shape>
@@ -34,13 +22,6 @@ research: <relative path to the research document>
 - C. <option>
 
 Answer:
-
-## Decisions
-
-**<the decision, in one sentence>.** <why, with evidence>
-Rejected: <the alternative and why it lost>
-
-## <any other section the work needs>
 ```
 
 ## Questions
