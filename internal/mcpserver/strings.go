@@ -78,6 +78,7 @@ const (
 	sessionRootScope  = "the session root"
 
 	summarySetFormat = "Session summary set (%d of %d characters)."
+	digestSetFormat  = "Session digest set (%d of %d characters)."
 
 	notifiedFormat     = "Notified the user: %s"
 	openedAssetsFormat = "Showing %d assets in gallery %q. Current asset: 1 of %d."

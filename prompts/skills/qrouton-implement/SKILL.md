@@ -34,6 +34,8 @@ Require this of the lead's return:
 - how you checked it: the verification commands and their results;
 - what stays unresolved: the remaining risks, failures, or decisions.
 
+{{session-digest}}
+
 Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification/review if warranted.
 
 `qrouton-implement` is the last skill in the workflow. Say whether one phase or the whole plan completed, report the remaining phases, and stop. Do not resume the lead until the user authorizes more work.

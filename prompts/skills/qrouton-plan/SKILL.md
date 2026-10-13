@@ -38,6 +38,8 @@ Require this of the lead's return:
 - how you checked it: the verification each phase carries;
 - what stays unresolved: the blockers the lead could not resolve.
 
+{{session-digest}}
+
 Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement. Plan feedback authorizes revisions to the plan, not implementation. Positive wording such as “looks good” does not change that when the same request asks for a revision. After revising the plan, wait for an explicit implementation request.
 
 After presenting or revising the plan, explain in plain language that the next step is to have an implementation lead carry it out and invite the user to proceed. The invitation does not authorize implementation.

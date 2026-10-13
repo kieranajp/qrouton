@@ -338,3 +338,25 @@ test("without a working GitHub credential the tier says so in one faint line", a
   const ink = (selector) => page.locator(selector).evaluate((el) => getComputedStyle(el).color);
   expect(await ink(".pulls .note")).toBe(await ink(".summary .meta"));
 });
+
+test("the digest sits under the pull requests and above the orchestrator", async ({ page }) => {
+  await open(page, "?pulls=rows&digest=lines");
+  await expect(page.locator(".tier .label")).toHaveText(["Pull requests", "So far", "Orchestrator", "Leads", "This session"]);
+  expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("pulls"))).toBe(true);
+  expect(await page.locator(".pulls").evaluate((el) => el.nextElementSibling?.classList.contains("digest"))).toBe(true);
+  expect(await page.locator(".digest").evaluate((el) => el.nextElementSibling?.classList.contains("orchestrator"))).toBe(true);
+});
+
+test("the digest keeps its line breaks and says how old it is", async ({ page }) => {
+  await open(page, "?digest=lines");
+  const text = page.locator(".digest .text");
+  await expect(text).toHaveText(/^Research answered how refunds settle\.\nPlan written in two phases\.\nWaiting on the user to approve it\.$/);
+  const lineHeight = parseFloat(await text.evaluate((el) => getComputedStyle(el).lineHeight));
+  expect((await box(text)).height).toBeGreaterThanOrEqual(lineHeight * 3 - 1);
+  await expect(page.locator(".digest .meta")).toHaveText(/^\d+m ago$/);
+});
+
+test("a session with no digest has no So far tier", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".digest")).toHaveCount(0);
+});

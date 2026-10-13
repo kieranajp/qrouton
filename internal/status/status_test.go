@@ -128,6 +128,23 @@ func TestReadCopiesSessionSummary(t *testing.T) {
 	}
 }
 
+func TestReadLeavesSessionDigestEmptyWithoutDigest(t *testing.T) {
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "quiet"})
+	if got := Read(dir).SessionDigest; got != (SessionDigest{}) {
+		t.Fatalf("session digest = %#v, want empty", got)
+	}
+}
+
+func TestReadCopiesSessionDigest(t *testing.T) {
+	at := time.Date(2026, 10, 11, 14, 58, 14, 0, time.UTC)
+	dir := sessionDir(t, t.TempDir(), session.Manifest{Slug: "told",
+		Digest: session.Digest{Text: "Plan written.\nWaiting on approval.", At: at}})
+	want := SessionDigest{Text: "Plan written.\nWaiting on approval.", At: "2026-10-11T14:58:14Z"}
+	if got := Read(dir).SessionDigest; got != want {
+		t.Fatalf("session digest = %#v, want %#v", got, want)
+	}
+}
+
 // The slug is how the page addresses a session: its rail row, its window
 // surfaces and its documents are all keyed on it.
 func TestFieldsCarryTheSessionsSlug(t *testing.T) {

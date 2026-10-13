@@ -56,7 +56,8 @@ type Fields struct {
 	SessionSummary SessionSummary `json:"sessionSummary"`
 	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
 	// read never sets it.
-	PullRequests PullRequestList `json:"pullRequests"`
+	PullRequests  PullRequestList `json:"pullRequests"`
+	SessionDigest SessionDigest   `json:"sessionDigest"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -65,6 +66,13 @@ type SessionSummary struct {
 	Text  string `json:"text"`
 	Stage string `json:"stage"`
 	At    string `json:"at"`
+}
+
+// SessionDigest is the manifest's digest as the page reads it. At is RFC 3339,
+// or empty when no digest was written.
+type SessionDigest struct {
+	Text string `json:"text"`
+	At   string `json:"at"`
 }
 
 // PullRequestList is the shown session's pull requests. SignedOut means GitHub
@@ -248,7 +256,16 @@ func Read(root string) Fields {
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	fields.Root = root
 	fields.SessionSummary = sessionSummary(m.Summary)
+	fields.SessionDigest = sessionDigest(m.Digest)
 	return fields
+}
+
+func sessionDigest(d session.Digest) SessionDigest {
+	out := SessionDigest{Text: d.Text}
+	if !d.At.IsZero() {
+		out.At = d.At.Format(time.RFC3339)
+	}
+	return out
 }
 
 func sessionSummary(s session.Summary) SessionSummary {

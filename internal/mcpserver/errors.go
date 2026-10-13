@@ -14,6 +14,7 @@ var (
 	ErrNameRequired         = errors.New("name is required")
 	ErrSummaryRequired      = errors.New("summary is required")
 	ErrSummaryStage         = errors.New("stage must be research, plan or implement")
+	ErrDigestRequired       = errors.New("digest is required")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
@@ -30,4 +31,8 @@ func windowGone(name string) error {
 
 func summaryTooLong(count int) error {
 	return fmt.Errorf("summary is %d characters; the limit is %d, so shorten it and call again", count, summaryLimit)
+}
+
+func digestTooLong(count int) error {
+	return fmt.Errorf("digest is %d characters; the limit is %d, so shorten it and call again", count, digestLimit)
 }

@@ -7,10 +7,12 @@
     { name: "acme/docs", role: "reference", measured: true, commits: 0 },
   ];
   /** @typedef {import("../src/lib/overview/pulls.js").PullRequestList} PullRequestList */
-  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary, pullRequests: PullRequestList}} */
-  let { summary, pullRequests } = $props();
+  /** @typedef {import("../src/lib/overview/digest.js").SessionDigest} Digest */
+  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary, pullRequests: PullRequestList,
+   * digest: Digest}} */
+  let { summary, pullRequests, digest } = $props();
   let added = $state(0);
   window.overviewAdded = () => added;
 </script>
 
-<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {repos} onAddRepos={() => added++} />
+<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {digest} {repos} onAddRepos={() => added++} />
