@@ -32,6 +32,7 @@
   });
 
   async function run() {
+    if (busy) return;
     busy = true;
     status = "";
     try {
@@ -44,6 +45,7 @@
   }
 
   async function dismiss() {
+    if (busy) return;
     busy = true;
     try {
       await close();

@@ -87,7 +87,9 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 // Nothing created for an artefact may resolve outside it.
 func thoughtsBoundary(sessionRoot string) (string, error) {
 	link := filepath.Join(sessionRoot, sessionpaths.ThoughtsDirName)
-	if err := os.MkdirAll(link, dirMode); err != nil {
+	if _, err := os.Lstat(link); errors.Is(err, fs.ErrNotExist) {
+		return "", fmt.Errorf("%w: %s", ErrNoThoughtsLink, link)
+	} else if err != nil {
 		return "", err
 	}
 	return filepath.EvalSymlinks(link)

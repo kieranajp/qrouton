@@ -59,3 +59,15 @@ test("a session outside the configured folders names where its thoughts live", a
   await page.goto("/tests/placement.html?outside");
   await expect(page.getByText("Its thoughts live in /old/sync/octopus, outside your configured folders. Move them by hand")).toBeVisible();
 });
+
+test("Enter twice queues one move, and Escape during a move does nothing", async ({ page }) => {
+  await page.goto("/tests/placement.html?slow");
+  await expect(page.getByLabel("Kraken")).toBeChecked();
+  const layer = page.locator(".layer");
+  await layer.press("Enter");
+  await layer.press("Enter");
+  await layer.press("Escape");
+  await expect(page.getByText("Moved")).toBeVisible();
+  expect(await page.evaluate(() => window.moves.length)).toBe(1);
+  expect(await page.evaluate(() => window.closes)).toBe(0);
+});

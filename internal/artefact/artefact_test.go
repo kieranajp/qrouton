@@ -34,6 +34,9 @@ func newSession(t *testing.T, repos ...session.ManifestRepo) string {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "thoughts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	err := session.WriteManifest(root, session.Manifest{SchemaVersion: 2, Name: "Team sync", Slug: "team-sync", Repos: repos})
 	if err != nil {
 		t.Fatal(err)
@@ -213,6 +216,9 @@ func TestCreateRecordsRevisionsForReferenceAndEditingRepos(t *testing.T) {
 	fixedAuthor(t, "Kieran")
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "thoughts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	worktree := gittest.Worktree(t, filepath.Join(root, "src", "app"))
 	head := gittest.Head(t, worktree)
 	pinned := strings.Repeat("a", 40)
@@ -287,5 +293,19 @@ func TestCreateRefusesASharedFolderThatLinksOutOfTheThoughts(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Fatalf("something was created outside the thoughts: %v", entries)
+	}
+}
+
+func TestCreateRefusesASessionWithNoThoughtsLink(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	if err := os.Remove(filepath.Join(root, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, "research", "Nowhere", now); !errors.Is(err, ErrNoThoughtsLink) {
+		t.Fatalf("err = %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "thoughts")); err == nil {
+		t.Fatal("a local thoughts directory was created")
 	}
 }

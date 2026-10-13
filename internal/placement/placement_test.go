@@ -654,3 +654,47 @@ func TestScanSnapshotsTheConfigSoASettingsSaveCannotRaceIt(t *testing.T) {
 	}
 	<-done
 }
+
+func TestAStaleMarkerOnASkippedSessionIsClearedOrHoldsTheCheckBack(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("crashed-early", "acme")
+	m, err := session.Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	source := filepath.Join(f.def, "crashed-early")
+	mustWrite(t, filepath.Join(source, moveMarker), marker("crashed-early", m))
+	if err := os.Remove(f.work); err != nil {
+		t.Fatal(err)
+	}
+	if item := expectItem(t, f.scan(), "crashed-early", StateSkipped); item.Reason != ReasonDestinationMissing {
+		t.Fatalf("reason = %s", item.Reason)
+	}
+	if exists(filepath.Join(source, moveMarker)) {
+		t.Fatal("the stale marker stayed in a skipped session's folder")
+	}
+
+	mustWrite(t, filepath.Join(source, moveMarker), marker("crashed-early", m))
+	if err := os.Chmod(source, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(source, 0o755) })
+	report, err := newPlacer(f.cfg).scan()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !report.Pending() {
+		t.Fatalf("report = %+v, want a pending marker", report)
+	}
+}
+
+func TestASessionWithNoThoughtsLinkIsSkippedWithItsOwnReason(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("unlinked", "acme")
+	if err := os.Remove(filepath.Join(dir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	if item := expectItem(t, f.scan(), "unlinked", StateSkipped); item.Reason != ReasonNoLink {
+		t.Fatalf("reason = %s", item.Reason)
+	}
+}

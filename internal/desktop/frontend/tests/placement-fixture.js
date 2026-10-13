@@ -38,6 +38,7 @@ window.wailsCall = async (name, input) => {
   if (name.endsWith("Placement.Report")) return view;
   if (name.endsWith("Placement.Move")) {
     window.moves.push(input);
+    if (query.has("slow")) await new Promise((resolve) => setTimeout(resolve, 400));
     return input.map((slug) =>
       slug === "squid" ? { slug, result: "conflict", detail: "already exists" } : { slug, result: "moved" },
     );

@@ -39,6 +39,7 @@
     const meant = intent(event);
     if (!meant) return;
     event.preventDefault();
+    if (busy) return;
     if (meant === "cancel") onEscape?.();
     else if (canAdvance) onPrimary();
   }

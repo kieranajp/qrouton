@@ -17,6 +17,7 @@ const (
 	detailUnreadableFmt  = "Unreadable manifest: %s"
 	detailAgentFormat    = "Agent running (pid %d)"
 	detailMarkerFormat   = "%s is not a regular file"
+	detailNoLinkFormat   = "No thoughts link at %s"
 	detailNotASlug       = "Not a session folder name"
 	detailNotMisplaced   = "Already in place"
 	detailPendingFormat  = "Interrupted move could not be finished: %s"

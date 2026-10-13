@@ -34,7 +34,7 @@ type Config struct {
 	ThoughtsPlacement string `json:"thoughtsPlacement,omitempty"`
 
 	// ThoughtsPlacementChecked is read only to migrate a config written before
-	// the fingerprint existed; saving drops it.
+	// the fingerprint existed. Only the placement check's own save clears it.
 	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
 
 	// Stamped on new artefacts. Absent falls back to git's user.name, then the login name.

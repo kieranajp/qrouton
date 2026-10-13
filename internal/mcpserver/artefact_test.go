@@ -13,6 +13,9 @@ import (
 func TestCreateArtefactReturnsTheNewPath(t *testing.T) {
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	dir := summarySession(t)
+	if err := os.MkdirAll(filepath.Join(dir, "thoughts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	message, err := createArtefact(dir, createArtefactInput{Kind: " Research ", Title: "Team sync"})
 	if err != nil {
 		t.Fatal(err)
@@ -28,6 +31,9 @@ func TestCreateArtefactReturnsTheNewPath(t *testing.T) {
 
 func TestCreateArtefactRejectsABlankTitleAndAnUnknownKind(t *testing.T) {
 	dir := summarySession(t)
+	if err := os.MkdirAll(filepath.Join(dir, "thoughts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := createArtefact(dir, createArtefactInput{Kind: "plan", Title: "  "}); !errors.Is(err, ErrArtefactTitle) {
 		t.Fatalf("blank title err = %v", err)
 	}

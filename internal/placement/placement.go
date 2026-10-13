@@ -36,6 +36,7 @@ const (
 	ReasonOutsideRoots       Reason = "outside-roots"
 	ReasonUnreadable         Reason = "unreadable"
 	ReasonMarkerUnsafe       Reason = "marker-unsafe"
+	ReasonNoLink             Reason = "no-thoughts-link"
 )
 
 type Result string
@@ -130,7 +131,7 @@ func (p placer) scan() (Report, error) {
 				Reason: ReasonUnreadable, Detail: fmt.Sprintf(detailUnreadableFmt, err)})
 		default:
 			item, act := p.inspect(dir, m)
-			if item.State == StateMisplaced {
+			if (item.State == StateMisplaced || item.State == StateSkipped) && item.From.Path != "" {
 				if err := p.clearStaleMarker(slugOf(dir), m, item); err != nil {
 					item.State, item.Detail = StatePending, fmt.Sprintf(detailPendingFormat, err)
 				}
@@ -214,8 +215,12 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 
 	link := filepath.Join(dir, sessionpaths.ThoughtsDirName)
 	info, err := os.Lstat(link)
+	if errors.Is(err, os.ErrNotExist) {
+		item.Reason, item.Detail = ReasonNoLink, fmt.Sprintf(detailNoLinkFormat, link)
+		return item, nil
+	}
 	if err != nil {
-		item.State = StatePlaced
+		item.Reason, item.Detail = ReasonLinkBroken, err.Error()
 		return item, nil
 	}
 	target, err := os.Readlink(link)
