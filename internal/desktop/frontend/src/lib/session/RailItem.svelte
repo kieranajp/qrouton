@@ -7,8 +7,9 @@
   import StickerIcon from "./StickerIcon.svelte";
   import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
-  /** @type {{initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onDragStart?: (event: DragEvent) => void, onDragOver?: (event: DragEvent) => void, onDragLeave?: (event: DragEvent) => void, onDrop?: (event: DragEvent) => void, onDragEnd?: () => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
+  /** @type {{slug?: string, initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onPointerDown?: (event: PointerEvent) => void, onPointerMove?: (event: PointerEvent) => void, onPointerUp?: (event: PointerEvent) => void, onPointerCancel?: (event: PointerEvent) => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
   let {
+    slug = "",
     initials,
     shortcut = "",
     name = "",
@@ -19,11 +20,10 @@
     selected = false,
     dragging = false,
     over = false,
-    onDragStart,
-    onDragOver,
-    onDragLeave,
-    onDrop,
-    onDragEnd,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
     stickerId = "",
     stickers = [],
     stickerBusy = false,
@@ -40,24 +40,6 @@
   let stickerItem = $derived(sticker(stickerId, stickers));
   let stickerLabel = $derived(stickerControlLabel(name, stickerId, stickers));
   let stickerTooltip = $derived(stickerTitle(stickerId, stickers));
-
-  /** @type {HTMLElement | null} */
-  let pointerFocus = null;
-
-  // Native dragging needs default pointer focus until dragstart.
-  function preservePointerFocus(event) {
-    if (event.button !== 0) {
-      event.preventDefault();
-      return;
-    }
-    pointerFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  }
-
-  function restorePointerFocus() {
-    const previous = pointerFocus;
-    pointerFocus = null;
-    previous?.focus({ preventScroll: true });
-  }
 
   function fitFeedback(node) {
     const row = node.closest(".row");
@@ -93,9 +75,7 @@
   class:running
   class:dragging
   class:over
-  ondragover={onDragOver}
-  ondragleave={onDragLeave}
-  ondrop={onDrop}
+  data-session-slug={slug}
   role="group"
   aria-label="{name} actions"
   oncontextmenu={onContextMenu}>
@@ -105,18 +85,15 @@
     aria-current={selected ? "page" : undefined}
     aria-label={label}
     title={label}
-    draggable="true"
-    ondragstart={(event) => {
-      restorePointerFocus();
-      onDragStart?.(event);
-    }}
-    ondragend={() => {
-      restorePointerFocus();
-      onDragEnd?.();
-    }}
-    onmousedown={preservePointerFocus}
-    onmouseup={restorePointerFocus}
-    onclick={onSelect}>
+    onpointerdown={onPointerDown}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerCancel}
+    onlostpointercapture={onPointerCancel}
+    onmousedown={(event) => event.preventDefault()}
+    onclick={(event) => {
+      if (event.detail === 0) onSelect?.();
+    }}>
     <div class="avatar" class:keyed={shortcut}>
       {shortcut || initials}
     </div>
@@ -202,6 +179,8 @@
   }
 
   .item {
+    touch-action: none;
+    user-select: none;
     display: flex;
     align-items: center;
     gap: calc(10px * var(--ui-scale));

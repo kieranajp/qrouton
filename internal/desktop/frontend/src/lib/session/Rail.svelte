@@ -31,59 +31,104 @@
 
   let dragSlug = $state("");
   let targetSlug = $state("");
+  /** @type {HTMLDivElement} */
+  let sessionList;
+  /** @type {{pointerId: number, source: string, button: HTMLElement, startX: number, startY: number, x: number, y: number, moved: boolean} | null} */
+  let gesture = $state(null);
+  let scrollFrame = 0;
 
   $effect(() => {
-    if ((dragSlug && !sessions.some((row) => row.slug === dragSlug)) ||
+    if ((gesture && !sessions.some((row) => row.slug === gesture.source)) ||
         (targetSlug && !sessions.some((row) => row.slug === targetSlug))) {
       clearDrag();
     }
   });
 
   function clearDrag() {
+    const previous = gesture;
+    gesture = null;
     dragSlug = "";
     targetSlug = "";
+    cancelAnimationFrame(scrollFrame);
+    scrollFrame = 0;
+    if (previous?.button.hasPointerCapture(previous.pointerId)) {
+      previous.button.releasePointerCapture(previous.pointerId);
+    }
   }
 
-  function startDrag(event, slug) {
-    if (!event.dataTransfer) return;
-    event.dataTransfer.setData("text/plain", slug);
-    event.dataTransfer.effectAllowed = "move";
-    dragSlug = slug;
-    targetSlug = "";
+  function startPointer(event, source) {
+    event.preventDefault();
+    if (event.button !== 0 || !event.isPrimary || gesture) return;
+    gesture = {
+      pointerId: event.pointerId,
+      source,
+      button: event.currentTarget,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      moved: false,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
   }
 
-  function validTarget(slug) {
-    return dragSlug && dragSlug !== slug &&
-      sessions.some((row) => row.slug === dragSlug) &&
-      sessions.some((row) => row.slug === slug);
+  function findTarget() {
+    if (!gesture?.moved) return;
+    const row = document.elementFromPoint(gesture.x, gesture.y)?.closest("[data-session-slug]");
+    const slug = row && sessionList.contains(row) ? row.getAttribute("data-session-slug") : "";
+    targetSlug = slug && slug !== gesture.source && sessions.some((row) => row.slug === slug) ? slug : "";
   }
 
-  function hoverDrag(event, slug) {
-    if (!validTarget(slug)) {
-      targetSlug = "";
+  function scrollDrag() {
+    if (!gesture?.moved) return;
+    const box = sessionList.getBoundingClientRect();
+    if (gesture.x >= box.left && gesture.x <= box.right &&
+        gesture.y >= box.top && gesture.y <= box.bottom) {
+      const edge = 28;
+      const top = gesture.y - box.top;
+      const bottom = box.bottom - gesture.y;
+      const delta = top < edge ? -(edge - top) / 2 : bottom < edge ? (edge - bottom) / 2 : 0;
+      sessionList.scrollTop += delta;
+      findTarget();
+    }
+    scrollFrame = requestAnimationFrame(scrollDrag);
+  }
+
+  function movePointer(event) {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    event.preventDefault();
+    gesture.x = event.clientX;
+    gesture.y = event.clientY;
+    if (!gesture.moved && Math.hypot(gesture.x - gesture.startX, gesture.y - gesture.startY) >= 5) {
+      gesture.moved = true;
+      dragSlug = gesture.source;
+      scrollFrame = requestAnimationFrame(scrollDrag);
+    }
+    findTarget();
+  }
+
+  async function finishPointer(event) {
+    if (!gesture || event.pointerId !== gesture.pointerId) return;
+    movePointer(event);
+    const { source, moved } = gesture;
+    const target = targetSlug;
+    const sourceExists = sessions.some((row) => row.slug === source);
+    const valid = sourceExists && target && sessions.some((row) => row.slug === target);
+    clearDrag();
+    if (!moved) {
+      if (sourceExists) show(source);
       return;
     }
-    event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-    targetSlug = slug;
-  }
-
-  function leaveDrag(event, slug) {
-    if (event.currentTarget.contains(event.relatedTarget)) return;
-    if (targetSlug === slug) targetSlug = "";
-  }
-
-  async function dropDrag(event, slug) {
-    const source = dragSlug;
-    const valid = validTarget(slug);
-    clearDrag();
     if (!valid) return;
-    event.preventDefault();
     try {
-      await reorder(source, slug);
+      await reorder(source, target);
     } catch {
       showRowNotice(source, SESSION_REORDER_FAILED, true);
     }
+  }
+
+  function cancelPointer(event) {
+    if (gesture?.pointerId === event.pointerId) clearDrag();
   }
 
   const stickerQueues = new Map();
@@ -96,15 +141,23 @@
 
   onMount(() => {
     const onKey = (event) => {
+      if (event.key === "Escape" && gesture) {
+        event.preventDefault();
+        clearDrag();
+        return;
+      }
       const row = rowAt(sessions, event);
       if (!row) return;
       event.preventDefault();
       show(row.slug);
     };
     window.addEventListener("keydown", onKey);
+    window.addEventListener("blur", clearDrag);
     return () => {
       mounted = false;
       window.removeEventListener("keydown", onKey);
+      window.removeEventListener("blur", clearDrag);
+      clearDrag();
       clearTimeout(rowNoticeTimer);
     };
   });
@@ -250,9 +303,10 @@
     <CapsLabel tone="dim" centred>Sessions</CapsLabel>
   </div>
 
-  <div class="session-list" aria-label="Sessions">
+  <div class="session-list" aria-label="Sessions" bind:this={sessionList}>
     {#each sessions as row, i (row.slug)}
       <RailItem
+        slug={row.slug}
         initials={row.initials}
         shortcut={shortcut(i)}
         name={row.name}
@@ -262,11 +316,10 @@
         selected={row.slug === slug}
         dragging={row.slug === dragSlug}
         over={row.slug === targetSlug}
-        onDragStart={(event) => startDrag(event, row.slug)}
-        onDragOver={(event) => hoverDrag(event, row.slug)}
-        onDragLeave={(event) => leaveDrag(event, row.slug)}
-        onDrop={(event) => dropDrag(event, row.slug)}
-        onDragEnd={clearDrag}
+        onPointerDown={(event) => startPointer(event, row.slug)}
+        onPointerMove={movePointer}
+        onPointerUp={finishPointer}
+        onPointerCancel={cancelPointer}
         unseen={row.unseen}
         stickerId={row.sticker}
         {stickers}

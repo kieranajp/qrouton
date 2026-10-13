@@ -121,12 +121,25 @@
     {stickers}
     onNewSession={() => {}}
     onDismissed={() => focusProbe?.focus()} />
+  <div class="editor-probes">
+    <input aria-label="Input drop probe" value="Input unchanged" />
+    <textarea aria-label="Textarea drop probe">Textarea unchanged</textarea>
+    <div contenteditable="true" role="textbox" aria-label="Editable drop probe">Editable unchanged</div>
+  </div>
 </div>
 
 <style>
   .frame {
     height: 100%;
     display: flex;
+  }
+
+  .editor-probes {
+    margin: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 240px;
   }
 
   .focus-probe {
