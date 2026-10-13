@@ -7,11 +7,13 @@ import {
   SESSIONS_REVEAL_PATH,
   SESSIONS_SHOW,
   SESSIONS_UNCOMMITTED,
+  SESSIONS_UNLOAD,
 } from "./bridge/generated.js";
 import { Call } from "./wails.js";
 
 export const show = (slug) => Call.ByName(SESSIONS_SHOW, slug);
 export const cycleSticker = (slug) => Call.ByName(SESSIONS_CYCLE_STICKER, slug);
+export const unload = (slug) => Call.ByName(SESSIONS_UNLOAD, slug);
 export const reload = (slug) => Call.ByName(SESSIONS_RELOAD, slug);
 export const reveal = (slug) => Call.ByName(SESSIONS_REVEAL, slug);
 export const revealPath = (slug, path) => Call.ByName(SESSIONS_REVEAL_PATH, slug, path);

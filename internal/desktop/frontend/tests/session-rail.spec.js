@@ -594,3 +594,87 @@ test("a user-defined sticker draws its own colour and symbol, and a removed one 
   });
   await expect(sticker.locator("svg")).toHaveAttribute("data-sticker", "none");
 });
+
+test("Unload follows Reload and the expanded menu fits near the viewport edge", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 420 });
+  await page.getByRole("button", { name: /^Checkout migration ·/ }).evaluate((button) => {
+    button.dispatchEvent(new MouseEvent("contextmenu", {
+      bubbles: true, clientX: 1275, clientY: 415,
+    }));
+  });
+  await expect(page.locator(".menu button.item")).toHaveText([
+    "Reload", "Unload", "Reveal in Finder", "Clean up…",
+  ]);
+  await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
+  const box = await page.locator(".menu").boundingBox();
+  expect(box.y).toBeGreaterThanOrEqual(8);
+  expect(box.y + box.height).toBeLessThanOrEqual(420);
+  expect(box.x + box.width).toBeLessThanOrEqual(1280);
+});
+
+test("Unload stays disabled for inactive rows and tracks an open menu's current terminal", async ({ page }) => {
+  const row = page.getByRole("button", { name: /^Session 2 ·/ });
+  await row.click({ button: "right" });
+  const unload = page.getByRole("button", { name: "Unload", exact: true });
+  await expect(unload).toBeDisabled();
+  await unload.evaluate((button) => button.click());
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([]);
+  await page.evaluate(() => window.sessionRail.load("session-2"));
+  await expect(unload).toBeEnabled();
+  await page.evaluate(() => window.sessionRail.unloaded("session-2"));
+  await expect(unload).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".menu")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
+});
+
+test("unloading a background row sends its slug, dims it and preserves selection and focus", async ({ page }) => {
+  await page.evaluate(() => window.sessionRail.load("session-2"));
+  const row = page.getByRole("button", { name: /^Session 2 ·/ });
+  await row.click({ button: "right" });
+  await page.getByRole("button", { name: "Unload", exact: true }).click();
+  await expect(page.locator(".menu")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
+  await expect(row.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
+  await expect(row).toContainText("Idle · 1d");
+  await expect(page.getByRole("button", { name: /^Checkout migration ·/ })).toHaveAttribute(
+    "aria-current", "page",
+  );
+  expect(await page.evaluate(() => window.sessionRailBridge.calls())).toEqual([
+    { method: "unload", slug: "session-2" },
+  ]);
+});
+
+test("unloading the selected row reveals a loaded fallback, then leaves dimmed resumable rows", async ({ page }) => {
+  await page.getByRole("button", { name: /^Session 2 ·/ }).click();
+  await page.getByRole("button", { name: /^Checkout migration ·/ }).click();
+  const checkout = page.getByRole("button", { name: /^Checkout migration ·/ });
+  const second = page.getByRole("button", { name: /^Session 2 ·/ });
+  await checkout.click({ button: "right" });
+  await page.getByRole("button", { name: "Unload", exact: true }).click();
+  await expect(second).toHaveAttribute("aria-current", "page");
+  await expect(checkout.locator(".name")).toHaveCSS("color", await token(page, "--text-muted"));
+  await second.click({ button: "right" });
+  await page.getByRole("button", { name: "Unload", exact: true }).click();
+  await expect(page.locator('[aria-current="page"]')).toHaveCount(0);
+  await expect(checkout).toBeVisible();
+  await expect(second).toBeVisible();
+  await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
+  await checkout.click();
+  await expect(checkout).toHaveAttribute("aria-current", "page");
+  await checkout.click({ button: "right" });
+  await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
+});
+
+test("an Unload refusal leaves the row loaded and returns focus with row feedback", async ({ page }) => {
+  await page.evaluate(() => window.sessionRailBridge.failNextUnload());
+  const row = page.getByRole("button", { name: /^Checkout migration ·/ });
+  await row.click({ button: "right" });
+  await page.getByRole("button", { name: "Unload", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Conversation focus" })).toBeFocused();
+  await expect(page.getByRole("alert")).toHaveText("Session could not be unloaded");
+  await expect(row).toHaveAttribute("aria-current", "page");
+  expect(await page.getByRole("alert").evaluate((node) => node.closest(".row")?.querySelector(".name")?.textContent)).toBe("Checkout migration");
+  await row.click({ button: "right" });
+  await expect(page.getByRole("button", { name: "Unload", exact: true })).toBeEnabled();
+});

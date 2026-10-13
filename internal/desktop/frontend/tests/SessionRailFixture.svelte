@@ -8,6 +8,7 @@
   const first = {
     name: "Checkout migration",
     slug: "checkout",
+    terminal: "conversation-checkout",
     initials: "CM",
     repos: [
       { name: "acme/web", role: "editing" },
@@ -32,6 +33,9 @@
     })),
   ]);
   let selected = $state("checkout");
+  let history = ["checkout"];
+  /** @type {HTMLButtonElement | undefined} */
+  let focusProbe;
   let stickers = $state(labelled({}));
 
   onMount(() =>
@@ -54,10 +58,37 @@
     );
   }
 
+  function load(slug) {
+    sessions = sessions.map((session) =>
+      session.slug === slug
+        ? { ...session, terminal: `conversation-${slug}`, summary: { ...session.summary, running: true } }
+        : session,
+    );
+  }
+
   window.sessionRail = {
     stateless,
     headline,
-    shown: (slug) => (selected = slug),
+    shown: (slug) => {
+      selected = slug;
+      history = [slug, ...history.filter((item) => item !== slug)];
+      load(slug);
+    },
+    load,
+    unloaded: (slug) => {
+      sessions = sessions.map((session) =>
+        session.slug === slug
+          ? {
+              ...session,
+              terminal: "",
+              summary: { attention: "none", active: 0, coverage: "none", running: false },
+            }
+          : session,
+      );
+      if (selected === slug) {
+        selected = history.find((item) => sessions.some((row) => row.slug === item && row.terminal)) ?? "";
+      }
+    },
     rename: (slug, name) => {
       sessions = sessions.map((session) => (session.slug === slug ? { ...session, name } : session));
     },
@@ -71,14 +102,14 @@
   };
 </script>
 
-<button class="focus-probe" aria-label="Conversation focus">Conversation focus</button>
+<button class="focus-probe" aria-label="Conversation focus" bind:this={focusProbe}>Conversation focus</button>
 <div class="frame">
   <Rail
     {sessions}
     slug={selected}
     {stickers}
     onNewSession={() => {}}
-    onDismissed={() => {}} />
+    onDismissed={() => focusProbe?.focus()} />
 </div>
 
 <style>

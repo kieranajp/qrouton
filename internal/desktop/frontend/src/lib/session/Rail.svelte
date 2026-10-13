@@ -8,7 +8,8 @@
   import RailItem from "./RailItem.svelte";
   import { menuHeight, place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
-  import { cleanup, cycleSticker, reload, reveal, show, uncommitted } from "../sessions.js";
+  import { cleanup, cycleSticker, reload, reveal, show, uncommitted, unload } from "../sessions.js";
+  import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
   import { rowAt, shortcut } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
@@ -27,12 +28,6 @@
   } = $props();
 
   const ROW_MENU_WIDTH = 190;
-  const ROW_MENU = [
-    { label: "Reload", icon: "refresh", act: reloadRow },
-    { label: "Reveal in Finder", icon: "worktree", act: revealRow },
-    "-",
-    { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
-  ];
 
   const stickerQueues = new Map();
   let pendingStickers = $state({});
@@ -91,6 +86,18 @@
 
   /** @type {{row: any, x: number, y: number} | null} */
   let menu = $state(null);
+  const rowMenu = $derived([
+    { label: "Reload", icon: "refresh", act: reloadRow },
+    {
+      label: SESSION_UNLOAD_LABEL,
+      icon: "close",
+      act: unloadRow,
+      disabled: !sessions.find((row) => row.slug === menu?.row.slug)?.terminal,
+    },
+    { label: "Reveal in Finder", icon: "worktree", act: revealRow },
+    "-",
+    { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
+  ]);
   /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
   let confirming = $state(null);
   let cleaning = $state(false);
@@ -101,7 +108,7 @@
     menu
       ? place(
           menu,
-          { width: ROW_MENU_WIDTH, height: menuHeight(ROW_MENU) },
+          { width: ROW_MENU_WIDTH, height: menuHeight(rowMenu) },
           { width: window.innerWidth, height: window.innerHeight },
           uiScale() / 100,
         )
@@ -127,6 +134,15 @@
       await reload(row.slug);
     } catch {
       showRowNotice(row.slug, "Session could not be reloaded", true);
+    }
+  }
+
+  async function unloadRow(row) {
+    onDismissed();
+    try {
+      await unload(row.slug);
+    } catch {
+      showRowNotice(row.slug, SESSION_UNLOAD_FAILED, true);
     }
   }
 
@@ -212,7 +228,7 @@
     style:top="{anchor.top}px"
     use:dismissible={dismissMenu}>
     <Menu
-      items={ROW_MENU}
+      items={rowMenu}
       width={ROW_MENU_WIDTH}
       offsetY={0}
       onSelect={(item) => {

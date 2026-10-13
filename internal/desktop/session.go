@@ -127,15 +127,23 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 			}
 			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
 		},
-		func(code int) {
-			s.recordExit(code)
-			emit(ptyExitEvent+s.terminal, code)
-			if exited != nil {
-				exited(s, code)
-			}
-		},
+		func(code int) { s.childExited(emit, exited, code) },
 	)
 	return nil
+}
+
+func (s *sessionState) childExited(emit emitter, exited func(*sessionState, int), code int) {
+	s.mu.Lock()
+	stopped := s.stopped
+	s.mu.Unlock()
+	if stopped {
+		return
+	}
+	s.recordExit(code)
+	emit(ptyExitEvent+s.terminal, code)
+	if exited != nil {
+		exited(s, code)
+	}
 }
 
 // recordExit logs a death the workbench did not cause. A supervisor it stopped
@@ -310,6 +318,44 @@ func (s *Sessions) Reload(slug string) error {
 		fallback, emptied = s.recycle(state)
 	}
 	return s.replace(root, fallback, emptied)
+}
+
+func (s *Sessions) Unload(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\`) {
+		return unknownSession(slug)
+	}
+	root := s.boot.root(slug)
+	if root == "" || !directSessionRoot(root, slug) {
+		return unknownSession(slug)
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return unknownSession(slug)
+	}
+	state := s.bySlug(slug)
+	if state == nil {
+		return nil
+	}
+	_, wasShown := s.recycle(state)
+	s.dropAgentActivity(slug)
+	if wasShown {
+		var fallback *sessionState
+		s.mu.Lock()
+		for i := len(s.history) - 1; i >= 0; i-- {
+			seen := s.history[i]
+			if s.slugs[seen.slug()] == seen && seen.alive() {
+				fallback = seen
+				break
+			}
+		}
+		s.mu.Unlock()
+		s.reveal(fallback)
+	} else {
+		s.touch()
+	}
+	return nil
 }
 
 // replace boots a session and puts it on screen. A boot that fails after
@@ -527,6 +573,12 @@ func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShow
 func (s *Sessions) retire(state *sessionState) {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
+	state.mu.Lock()
+	stopped := state.stopped
+	state.mu.Unlock()
+	if stopped || s.bySlug(state.slug()) != state {
+		return
+	}
 	s.retireLocked(state)
 }
 

@@ -42,6 +42,7 @@ export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Se
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
+export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
 export const SETTINGS_GIT_HUB_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Settings.GitHubStatus";
 export const SETTINGS_INSTALL_LINEAR = "github.com/kieranajp/qrouton/internal/desktop.Settings.InstallLinear";
@@ -272,6 +273,10 @@ export const WINDOW_KINDS = Object.freeze({
 export const AGENT_ROOT_ID = "root";
 
 export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
+
+export const SESSION_UNLOAD_LABEL = "Unload";
+
+export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
 
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
 /** @type {readonly StickerColour[]} */
