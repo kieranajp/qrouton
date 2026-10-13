@@ -252,3 +252,22 @@ func TestAuthorFallsBackFromConfigToGitToTheLoginName(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateRefusesAKindFolderThatLinksOutOfTheThoughts(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	outside := t.TempDir()
+	shared := sessionpaths.Thoughts(root)
+	if err := os.MkdirAll(shared, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(shared, "research")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Create(root, "research", "Escape", now); !errors.Is(err, ErrOutsideThoughts) {
+		t.Fatalf("err = %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Fatalf("a file was written outside the thoughts: %v", entries)
+	}
+}

@@ -204,7 +204,7 @@ export const OLLAMA_STATES = Object.freeze({
   FAILED: "failed",
 });
 
-/** @typedef {"agent-running"|"destination-missing"|"cross-device"|"link-broken"|"conflict"|"outside-roots"|"unreadable"} PlacementReason */
+/** @typedef {"agent-running"|"destination-missing"|"cross-device"|"link-broken"|"conflict"|"outside-roots"|"unreadable"|"marker-unsafe"} PlacementReason */
 export const PLACEMENT_REASONS = Object.freeze({
   AGENT_RUNNING: "agent-running",
   DESTINATION_MISSING: "destination-missing",
@@ -213,6 +213,7 @@ export const PLACEMENT_REASONS = Object.freeze({
   CONFLICT: "conflict",
   OUTSIDE_ROOTS: "outside-roots",
   UNREADABLE: "unreadable",
+  MARKER_UNSAFE: "marker-unsafe",
 });
 
 /** @typedef {"moved"|"conflict"|"refused"|"failed"} PlacementResult */

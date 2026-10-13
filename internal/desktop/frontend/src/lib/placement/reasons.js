@@ -7,6 +7,7 @@ const labels = {
   [PLACEMENT_REASONS.LINK_BROKEN]: "Its thoughts link is broken",
   [PLACEMENT_REASONS.CONFLICT]: "The destination already holds a folder for it",
     [PLACEMENT_REASONS.UNREADABLE]: "Its manifest cannot be read",
+  [PLACEMENT_REASONS.MARKER_UNSAFE]: "Its folder holds a .thoughtsmove entry that is not a plain file",
 };
 
 /** @param {import("./calls.js").PlacementItem} item */

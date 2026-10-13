@@ -35,6 +35,7 @@ const (
 	ReasonConflict           Reason = "conflict"
 	ReasonOutsideRoots       Reason = "outside-roots"
 	ReasonUnreadable         Reason = "unreadable"
+	ReasonMarkerUnsafe       Reason = "marker-unsafe"
 )
 
 type Result string
@@ -103,10 +104,12 @@ func newPlacer(cfg *config.Config) placer { return placer{cfg: cfg, device: devi
 // Scan inspects every session under the sessions root. It finishes an
 // interrupted move and records a root a session already sits in, and moves
 // nothing else.
-func Scan(cfg *config.Config) (Report, error) { return newPlacer(cfg).scan() }
+func Scan(cfg *config.Config) (Report, error) { return newPlacer(cfg.Snapshot()).scan() }
 
 // Move moves each named session on its own and reports one outcome apiece.
-func Move(cfg *config.Config, slugs []string) []Outcome { return newPlacer(cfg).move(slugs) }
+func Move(cfg *config.Config, slugs []string) []Outcome {
+	return newPlacer(cfg.Snapshot()).move(slugs)
+}
 
 func (p placer) scan() (Report, error) {
 	entries, err := os.ReadDir(p.cfg.Root)
@@ -244,6 +247,20 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 	item.Detail = fmt.Sprintf(detailMoveFormat, source, to)
 	mark := marker(slug, m)
 
+	if !exists(source) {
+		if dest, ok := p.markedDestination(slug, mark); ok {
+			item.State, item.To = StateFinished, Root{ID: dest.ID, Path: dest.Path}
+			destHome := filepath.Join(dest.Path, slug)
+			return item, func() error { return p.relink(dir, destHome, dest.ID) }
+		}
+	}
+	for _, folder := range []string{source, to} {
+		if unsafeMarker(folder) {
+			item.Reason, item.Detail = ReasonMarkerUnsafe, fmt.Sprintf(detailMarkerFormat, filepath.Join(folder, moveMarker))
+			return item, nil
+		}
+	}
+
 	switch {
 	case exists(source) && exists(to):
 		item.Reason, item.Detail = ReasonConflict, fmt.Sprintf(detailExistsFormat, to)
@@ -265,7 +282,7 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 		}
 		item.State = StateMisplaced
 		return item, func() error {
-			if err := os.WriteFile(filepath.Join(source, moveMarker), []byte(mark), markerMode); err != nil {
+			if err := writeMarker(source, mark); err != nil {
 				return err
 			}
 			if err := os.Rename(source, to); err != nil {
@@ -275,6 +292,19 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 		}
 	}
 	return item, nil
+}
+
+// markedDestination finds the folder a crashed move of this session reached,
+// in whichever configured root holds it, so recovery does not depend on how
+// the routing reads today.
+func (p placer) markedDestination(slug, mark string) (config.ThoughtsRoot, bool) {
+	for _, r := range p.cfg.ThoughtsRoots() {
+		folder := resolve(filepath.Join(r.Path, slug))
+		if isDir(folder) && marked(folder, mark) {
+			return r, true
+		}
+	}
+	return config.ThoughtsRoot{}, false
 }
 
 // sourceRoot is the configured root whose folder for this slug the link points at.
@@ -310,10 +340,52 @@ func settle(dir, home, id string) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(filepath.Join(home, moveMarker)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	return removeMarker(home)
+}
+
+// removeMarker deletes the marker only when it is a regular file.
+func removeMarker(dir string) error {
+	path := filepath.Join(dir, moveMarker)
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) || err == nil && !info.Mode().IsRegular() {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
 	return nil
+}
+
+// writeMarker creates the marker without following a link, replacing a stale
+// regular file and refusing anything else.
+func writeMarker(dir, content string) error {
+	path := filepath.Join(dir, moveMarker)
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() {
+			return fmt.Errorf("%w: %s", ErrMarkerUnsafe, path)
+		}
+		if err := os.Remove(path); err != nil {
+			return err
+		}
+	}
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL|syscall.O_NOFOLLOW, markerMode)
+	if err != nil {
+		return err
+	}
+	_, werr := f.WriteString(content)
+	if cerr := f.Close(); werr == nil {
+		werr = cerr
+	}
+	return werr
+}
+
+// unsafeMarker reports a marker entry that is not a regular file.
+func unsafeMarker(dir string) bool {
+	info, err := os.Lstat(filepath.Join(dir, moveMarker))
+	return err == nil && !info.Mode().IsRegular()
 }
 
 // marker names the session a move is for, so a rescan adopts only its own destination.
@@ -322,7 +394,11 @@ func marker(slug string, m session.Manifest) string {
 }
 
 func marked(dir, want string) bool {
-	b, err := os.ReadFile(filepath.Join(dir, moveMarker))
+	path := filepath.Join(dir, moveMarker)
+	if info, err := os.Lstat(path); err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	b, err := os.ReadFile(path)
 	return err == nil && string(b) == want
 }
 

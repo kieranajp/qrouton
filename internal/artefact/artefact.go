@@ -49,6 +49,10 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 	if err := os.MkdirAll(dir, dirMode); err != nil {
 		return "", err
 	}
+	dir, err = insideThoughts(sessionRoot, dir)
+	if err != nil {
+		return "", err
+	}
 	slug := capSlug(session.Slugify(title))
 	if slug == "" {
 		slug = untitledSlug
@@ -63,6 +67,23 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 		return "", err
 	}
 	return filepath.Join(sessionpaths.ThoughtsDirName, sessionpaths.SharedDirName, folder, name), nil
+}
+
+// insideThoughts resolves the kind folder and refuses one that a link carries
+// out of the session's thoughts folder.
+func insideThoughts(sessionRoot, dir string) (string, error) {
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return "", err
+	}
+	thoughts, err := filepath.EvalSymlinks(sessionpaths.Thoughts(sessionRoot))
+	if err != nil {
+		return "", err
+	}
+	if _, inside := sessionpaths.Within(thoughts, resolved); !inside {
+		return "", fmt.Errorf("%w: %s", ErrOutsideThoughts, resolved)
+	}
+	return resolved, nil
 }
 
 var nextNumber = status.NextNumber

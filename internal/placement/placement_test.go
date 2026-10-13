@@ -1,6 +1,7 @@
 package placement
 
 import (
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -591,4 +592,65 @@ func TestASessionOutsideTheConfiguredFoldersNamesWhereItsThoughtsLive(t *testing
 	if item.Reason != ReasonOutsideRoots || item.From.Path != elsewhere {
 		t.Fatalf("item = %+v, want the resolved link target %s", item, elsewhere)
 	}
+}
+
+func TestAMarkerThatIsALinkIsNeverFollowed(t *testing.T) {
+	f := newFixture(t)
+	f.legacy("linked-marker", "acme")
+	victim := filepath.Join(f.base, "victim.txt")
+	mustWrite(t, victim, "keep me")
+	source := filepath.Join(f.def, "linked-marker")
+	if err := os.Symlink(victim, filepath.Join(source, moveMarker)); err != nil {
+		t.Fatal(err)
+	}
+	if item := expectItem(t, f.scan(), "linked-marker", StateSkipped); item.Reason != ReasonMarkerUnsafe {
+		t.Fatalf("reason = %s", item.Reason)
+	}
+	expectOutcome(t, f.move("linked-marker"), "linked-marker", ResultRefused)
+	if b, _ := os.ReadFile(victim); string(b) != "keep me" {
+		t.Fatalf("the marker write reached the link target: %q", b)
+	}
+	if err := writeMarker(source, "x"); !errors.Is(err, ErrMarkerUnsafe) {
+		t.Fatalf("writeMarker = %v", err)
+	}
+	if b, _ := os.ReadFile(victim); string(b) != "keep me" {
+		t.Fatalf("writeMarker reached the link target: %q", b)
+	}
+}
+
+func TestACrashedMoveIsFinishedAtWhereItReachedAfterTheRoutingChanged(t *testing.T) {
+	f := newFixture(t)
+	dir := f.legacy("rerouted", "acme")
+	f.interrupt(dir)
+	f.cfg.Thoughts.Roots[0].Orgs = []string{"someone-else"}
+	expectItem(t, f.scan(), "rerouted", StateFinished)
+	if got := readLink(t, dir); got != filepath.Join(f.work, "rerouted") {
+		t.Fatalf("thoughts -> %q", got)
+	}
+	if got := thoughtsRoot(t, dir); got != "work" {
+		t.Fatalf("thoughtsRoot = %q", got)
+	}
+	if exists(filepath.Join(f.work, "rerouted", moveMarker)) {
+		t.Fatal("marker left behind")
+	}
+	expectItem(t, f.scan(), "rerouted", StateMisplaced)
+}
+
+func TestScanSnapshotsTheConfigSoASettingsSaveCannotRaceIt(t *testing.T) {
+	f := newFixture(t)
+	f.legacy("busy", "acme")
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 200 {
+			f.cfg.Replace(&config.Config{Root: f.root, Thoughts: f.cfg.Snapshot().Thoughts})
+		}
+	}()
+	for range 20 {
+		if _, err := Scan(f.cfg); err != nil {
+			t.Error(err)
+		}
+		Move(f.cfg, nil)
+	}
+	<-done
 }
