@@ -176,6 +176,10 @@ const (
 	// frame produces well under this, so a repaint arrives as one event.
 	ptyReadBuffer = 32 * 1024
 
+	// An agent's terminal starts at this size when no page has measured it yet.
+	unmountedCols = 80
+	unmountedRows = 24
+
 	windowScrollback = 256 * 1024
 
 	// windowScreenLines is what a read without full returns.

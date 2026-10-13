@@ -137,7 +137,7 @@ var handlers = map[string]handler{
 	workbench.OpOpen: {
 		guards: []guard{needsOptions, needsSession},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
-			id, err := c.windows.openWindow(c.owner, *req.Options)
+			id, err := c.windows.openAgentWindow(c.owner, *req.Options)
 			if err == nil && req.Options.Attention && c.hooks.ring != nil {
 				c.hooks.ring()
 			}
