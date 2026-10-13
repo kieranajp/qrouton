@@ -54,6 +54,9 @@ type Fields struct {
 	Welcoming      bool           `json:"welcoming"`
 	Stickers       []Sticker      `json:"stickers"`
 	SessionSummary SessionSummary `json:"sessionSummary"`
+	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
+	// read never sets it.
+	PullRequests PullRequestList `json:"pullRequests"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -62,6 +65,21 @@ type SessionSummary struct {
 	Text  string `json:"text"`
 	Stage string `json:"stage"`
 	At    string `json:"at"`
+}
+
+// PullRequestList is the shown session's pull requests. SignedOut means GitHub
+// has no working credential, so Items says nothing.
+type PullRequestList struct {
+	Items     []PullRequest `json:"items"`
+	SignedOut bool          `json:"signedOut"`
+}
+
+// PullRequest is one row. Repo is org/name.
+type PullRequest struct {
+	Repo   string `json:"repo"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
@@ -75,6 +93,7 @@ func EmptyFields() Fields {
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
 		Stickers:            []Sticker{},
+		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 }
 

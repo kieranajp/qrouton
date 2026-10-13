@@ -22,3 +22,5 @@ var ErrUnsupportedOwnerType = errors.New("unsupported owner type")
 func unsupportedOwnerType(ownerType, owner string) error {
 	return fmt.Errorf("github: %w %q for %s", ErrUnsupportedOwnerType, ownerType, owner)
 }
+
+var ErrNotFound = errors.New("not found on GitHub")

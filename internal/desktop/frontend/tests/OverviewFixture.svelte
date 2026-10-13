@@ -6,10 +6,11 @@
     { name: "acme/payments", role: "editing", measured: true, commits: 0, insertions: 12, deletions: 4 },
     { name: "acme/docs", role: "reference", measured: true, commits: 0 },
   ];
-  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary}} */
-  let { summary } = $props();
+  /** @typedef {import("../src/lib/overview/pulls.js").PullRequestList} PullRequestList */
+  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary, pullRequests: PullRequestList}} */
+  let { summary, pullRequests } = $props();
   let added = $state(0);
   window.overviewAdded = () => added;
 </script>
 
-<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {repos} onAddRepos={() => added++} />
+<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {repos} onAddRepos={() => added++} />

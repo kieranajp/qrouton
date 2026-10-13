@@ -310,3 +310,31 @@ test("reduced motion keeps the live lead's ring steady", async ({ page }) => {
     .evaluate((el) => getComputedStyle(el).animationName);
   expect(animated).toBe("none");
 });
+
+test("pull requests sit between the summary and the orchestrator, in arrival order", async ({ page }) => {
+  await open(page, "?pulls=rows");
+  await expect(page.locator(".tier .label")).toHaveText(["Pull requests", "Orchestrator", "Leads", "This session"]);
+  expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("pulls"))).toBe(true);
+  await expect(page.locator(".pulls .title")).toHaveText(["Swap PaymentIntent for the v2 client", "Partial-capture refunds"]);
+  await expect(page.locator(".pulls .number")).toHaveText(["#41", "#7"]);
+});
+
+test("clicking a pull request opens it on GitHub", async ({ page }) => {
+  await open(page, "?pulls=rows");
+  await page.getByRole("link", { name: /Partial-capture refunds/ }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/payments/pull/7");
+  expect(page.url()).toContain("/tests/overview.html");
+});
+
+test("a session with no pull requests has no Pull requests tier", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".pulls")).toHaveCount(0);
+});
+
+test("without a working GitHub credential the tier says so in one faint line", async ({ page }) => {
+  await open(page, "?pulls=signedout");
+  await expect(page.locator(".pulls .note")).toHaveText("GitHub is not signed in");
+  await expect(page.locator(".pulls .pull")).toHaveCount(0);
+  const ink = (selector) => page.locator(selector).evaluate((el) => getComputedStyle(el).color);
+  expect(await ink(".pulls .note")).toBe(await ink(".summary .meta"));
+});
