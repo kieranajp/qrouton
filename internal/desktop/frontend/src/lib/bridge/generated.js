@@ -271,6 +271,8 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
+export const GALLERY_LABEL = "GALLERY";
+
 export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
 
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */

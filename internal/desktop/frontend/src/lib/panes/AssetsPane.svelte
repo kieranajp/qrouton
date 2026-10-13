@@ -1,10 +1,12 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { GALLERY_LABEL, MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import Chip from "../core/Chip.svelte";
   import { linux } from "../platform.js";
   import { Call } from "../wails.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
+  import ArtifactHeader from "./ArtifactHeader.svelte";
 
   /** @type {{doc: {assets?: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}[], currentIndex?: number, revision?: number}, id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement}} */
   let { doc, id, slug = "", active = false, scrollRoot } = $props();
@@ -130,11 +132,12 @@
 
 <article class="assets-pane" aria-label="Asset gallery">
   {#if entry}
+    <ArtifactHeader source={entry.source} path={entry.path} face="var(--accent-label)">
+      {#snippet tag()}<Chip>{GALLERY_LABEL}</Chip>{/snippet}
+    </ArtifactHeader>
     <figure class="primary">
       <figcaption>
         <span class="position">{noun(entry)} {current} of {assets.length}</span>
-        <strong>{basename(entry.source)}</strong>
-        <span class="path">{entry.source}</span>
       </figcaption>
       {#key entry.url}
       {@const shown = entry}
@@ -228,19 +231,17 @@
 
 <style>
   .assets-pane {
-    padding: calc(16px * var(--ui-scale));
     min-width: 0;
     font: var(--machine-sm);
   }
 
   .primary {
-    margin: 0 0 calc(18px * var(--ui-scale));
+    margin: 0 calc(16px * var(--ui-scale)) calc(18px * var(--ui-scale));
     min-width: 0;
   }
 
   figcaption {
     display: flex;
-    flex-direction: column;
     gap: calc(4px * var(--ui-scale));
     margin-bottom: calc(12px * var(--ui-scale));
   }
@@ -309,7 +310,7 @@
     gap: calc(10px * var(--ui-scale));
     overflow-x: auto;
     margin: 0;
-    padding: calc(4px * var(--ui-scale)) 2px calc(12px * var(--ui-scale));
+    padding: calc(4px * var(--ui-scale)) calc(18px * var(--ui-scale)) calc(28px * var(--ui-scale));
     list-style: none;
   }
 
