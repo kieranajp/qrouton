@@ -80,6 +80,7 @@ type valueName struct{ dir, goName string }
 
 var valueNames = []valueName{
 	{desktopPackage, "agentRootID"},
+	{desktopPackage, "galleryLabel"},
 	{desktopPackage, "stickerDuplicate"},
 	{desktopPackage, "sessionUnloadLabel"},
 	{desktopPackage, "sessionUnloadFailed"},

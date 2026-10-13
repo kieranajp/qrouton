@@ -273,6 +273,8 @@ export const WINDOW_KINDS = Object.freeze({
 
 export const AGENT_ROOT_ID = "root";
 
+export const GALLERY_LABEL = "GALLERY";
+
 export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
 
 export const SESSION_UNLOAD_LABEL = "Unload";

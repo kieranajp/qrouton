@@ -286,6 +286,7 @@ var deckExtraMediaTypes = map[string]string{
 }
 
 const (
+	galleryLabel             = "GALLERY"
 	galleryAssetPath         = "/gallery/"
 	galleryAssetURLFormat    = "/gallery/%s/%d"
 	cacheControlHeader       = "Cache-Control"
