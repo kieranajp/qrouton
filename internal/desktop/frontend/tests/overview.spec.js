@@ -98,6 +98,30 @@ test("only the live lead opens; finished leads keep their document and count", a
   await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/research/R3-retry.md"]);
 });
 
+test("a finished lead's chevron opens and closes its subagents", async ({ page }) => {
+  await open(page);
+  const research = page.locator('[data-agent-id="research"]');
+  const researcher = page.getByRole("button", { name: /^Codebase Researcher/ });
+  await research.locator(".disclosure").click();
+  await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "true");
+  await expect(researcher).toBeVisible();
+  await research.locator(".disclosure").click();
+  await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
+  await expect(researcher).toHaveCount(0);
+});
+
+test("a lead with no subagents has no chevron and claims no expansion", async ({ page }) => {
+  await open(page);
+  const plan = page.locator('[data-agent-id="plan"]');
+  await expect(plan.locator(".disclosure")).toHaveCount(0);
+  await expect(lead(page, "Plan")).not.toHaveAttribute("aria-expanded");
+  const [planTime, researchTime] = await Promise.all([
+    box(plan.locator(".facts")),
+    box(page.locator('[data-agent-id="research"] .facts')),
+  ]);
+  expect(Math.abs(planTime.right - researchTime.right)).toBeLessThanOrEqual(1);
+});
+
 test("same-type direct children keep their own assigned names and fallback labels", async ({ page }) => {
   await open(page, "?tree=codex");
   await expect(page.locator('[data-agent-id="codex-direct-a"] .toggle')).toHaveAttribute(
@@ -274,7 +298,8 @@ test("narrow long names truncate while state and disclosure controls remain usab
     expect(nameBox.right).toBeLessThanOrEqual(factsBox.left);
     await expect(direct.locator(".square")).toBeVisible();
     await expect(direct.locator(".facts")).toBeVisible();
-    await expect(direct.locator(".toggle")).toHaveAttribute("aria-expanded", "true");
+    await expect(direct.locator(".toggle")).not.toHaveAttribute("aria-expanded");
+    await expect(direct.locator(".disclosure")).toHaveCount(0);
 
     const nested = page.locator('[data-agent-id="codex-nested-named"]');
     const nestedName = nested.locator(".task-name");

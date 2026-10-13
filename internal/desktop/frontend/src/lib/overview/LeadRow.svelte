@@ -23,6 +23,10 @@
   let document = $derived(node.documents?.at(-1));
   let count = $derived(branch.children.length);
   let doing = $derived(nowLine(node, root) || stateWords(node, tools));
+
+  function toggle() {
+    if (count) chosen = !open;
+  }
 </script>
 
 <div class="lead" class:live={!finished} data-agent-id={node.id}>
@@ -31,8 +35,8 @@
       type="button"
       class="toggle"
       aria-label="{name}{taskName ? ` · ${taskName}` : ""} · {finished ? stateWords(node, tools) : doing}"
-      aria-expanded={open}
-      onclick={() => (chosen = !open)}>
+      aria-expanded={count ? open : undefined}
+      onclick={toggle}>
       <StageSquare {tone} done={finished && node.state !== "failed" && node.state !== "ended"} live={!finished} />
       <span class="name">{name}</span>
       {#if taskName}<span class="task-name" title={taskName}>· {taskName}</span>{/if}
@@ -49,10 +53,16 @@
       {#if finished && count}<span class="count">{count} {count === 1 ? "subagent" : "subagents"} ·</span>{/if}
       {elapsed(node.started, node.finished, now)}
     </span>
-    <Icon name={open ? "disclosure-open" : "disclosure-closed"} />
+    {#if count}
+      <button type="button" class="disclosure" tabindex="-1" aria-hidden="true" onclick={toggle}>
+        <Icon name={open ? "disclosure-open" : "disclosure-closed"} />
+      </button>
+    {:else}
+      <span class="no-disclosure"></span>
+    {/if}
   </div>
 
-  {#if open && branch.children.length}
+  {#if open && count}
     <div class="subagents">
       {#each branch.children as child (child.node.id)}
         <AgentRow branch={child} {now} {root} {tools} />
@@ -121,13 +131,23 @@
     text-overflow: ellipsis;
   }
 
-  .document {
+  .document,
+  .disclosure {
     flex: none;
     display: flex;
     padding: 0;
     border: 0;
     background: none;
     cursor: pointer;
+  }
+
+  .disclosure {
+    color: inherit;
+  }
+
+  .no-disclosure {
+    flex: none;
+    width: calc(16px * var(--ui-scale));
   }
 
   .facts {
