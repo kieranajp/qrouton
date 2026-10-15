@@ -50,15 +50,15 @@ The five steps decide this way. Copies that disagree today are rot, whatever the
 
 A clone detector finds token copies. It must not make up most of tell 1. Hunt for copies that share a purpose but not their tokens:
 
-- a module that bypasses a shared client, pipeline or abstraction the rest of the code uses for the same job;
-- two or more status or state vocabularies for one concept, such as parallel enums, string unions or label maps;
-- several paths doing one lifecycle job, such as reset, teardown or persistence, that must each be updated when the job changes;
-- one fact read or formatted from two sources, such as the locale, the timezone or the host;
-- docs, skills, CI and config files that restate a fact the code holds, such as a version, a command, a path or a limit.
+- a module that bypasses a shared abstraction the rest of the code uses for the same job;
+- two or more vocabularies for one concept;
+- one job done by more than one path, so a change to the job must be made in each;
+- one fact read or derived from two sources;
+- a file outside the code that restates a fact the code holds.
 
-For each, find the shared form by its imports: the module most files import for that job. Then grep for the primitive it wraps, such as the raw network call, storage API, date or locale API, or environment read, outside that module. Every hit outside it is a candidate. For vocabularies, grep one status literal across the repo and list every declaration of the set it belongs to. For restated facts, take each version, command, path or limit from the docs and CI, and grep the code for its value.
+For each job the code routes through a shared module, find that module by its imports: the one most files import for the job. Then grep for the primitive it wraps outside that module. Every hit outside it is a candidate. For vocabularies, grep one member literal across the repo and list every declaration of the set it belongs to. For restated facts, take each concrete value from files outside the code and grep the code for it.
 
-For tell 2, trace every custom error class, every error or status category, and every injectable provider or seam to a live producer in shipped code. For each error class or category, grep for its constructor or literal outside tests; if nothing produces it, it is dead. Grep for exported names that set, override, reset or mock, or that are marked for tests only, and for each one list its callers: one called only from tests is a test seam left in shipped code. A production-mode reachability run catches files only tests import. It does not catch a test-only export inside a file that ships, so look for those by hand.
+For tell 2, trace the case each guard handles to something in shipped code that can produce it. Grep for that producer outside tests. If nothing produces the case, the guard is dead, and so is everything that exists only to handle it. Grep for exported names that exist to set, override or reset behaviour, and list each one's callers: one called only from tests is a test seam left in shipped code. A production-mode reachability run catches files only tests import. It does not catch a test-only export inside a file that ships, so look for those by hand.
 
 ## Write the audit
 
