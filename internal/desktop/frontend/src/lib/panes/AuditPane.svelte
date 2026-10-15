@@ -8,7 +8,7 @@
   import FindingCard from "./FindingCard.svelte";
   import { links, viewport } from "./actions.js";
   import { answerable } from "./answerable.svelte.js";
-  import { CHOICES, TRIAGED, byConfidence, parseAudit, reapply, spliceTriage } from "./audit.js";
+  import { CHOICES, IMPACTS, TRIAGED, byImpact, parseAudit, reapply, spliceTriage } from "./audit.js";
   import { clampedSpan, holding, partition } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
@@ -50,7 +50,7 @@
   let drafts = $derived(
     new Map(laid.findings.map(({ finding, draft }) => [finding.id, draft ?? { choice: finding.triage?.choice ?? "", note: finding.triage?.note ?? "" }])),
   );
-  let sorted = $derived(byConfidence(audit.findings));
+  let sorted = $derived(byImpact(audit.findings));
   let triaged = $derived([...drafts.values()].filter((draft) => draft.choice || draft.note.trim()).length);
 
   /** @param {{choice: string, note: string}} draft */
@@ -71,6 +71,13 @@
         audit.findings.map((finding) => (finding.step ? `Step ${finding.step} · ${STEPS[finding.step]}` : "No step named")),
         [],
       ).sort((a, b) => a.name.localeCompare(b.name)),
+    },
+    {
+      label: "By impact",
+      rows: tallied(
+        audit.findings.map((finding) => (IMPACTS.includes(finding.fields.impact) ? finding.fields.impact : "unrated")),
+        [...IMPACTS, "unrated"],
+      ),
     },
     {
       label: "By triage",
@@ -188,7 +195,7 @@
             {/if}
           </section>
           {#if sorted.length > 0}
-            <CapsLabel data-list>Findings, most confident first</CapsLabel>
+            <CapsLabel data-list>Findings, highest impact first</CapsLabel>
             <div class="cards">
               {#each sorted as finding (finding.id)}
                 <FindingCard

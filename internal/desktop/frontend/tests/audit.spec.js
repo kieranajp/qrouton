@@ -9,7 +9,7 @@ const card = (page, id) => page.locator(`[data-finding="${id}"]`);
 const sendButton = (page) => page.locator("[data-send]");
 const why = (page) => page.locator(".send .why");
 
-test("the overview tallies findings by tell, verdict and triage", async ({ page }) => {
+test("the overview tallies findings by tell, verdict, impact and triage", async ({ page }) => {
   await open(page);
   await expect(page.locator("[data-tally]")).toHaveText("1 of 3 triaged");
   await expect(page.locator('[data-group="By tell"] li')).toHaveText([
@@ -18,13 +18,16 @@ test("the overview tallies findings by tell, verdict and triage", async ({ page 
     /Homegrown library or platform behaviour\s*0/,
   ]);
   await expect(page.locator('[data-group="By verdict"] li')).toHaveText([/Step 1 · No tie\s*1/, /Step 3 · The guarded case cannot occur\s*2/]);
+  await expect(page.locator('[data-group="By impact"] li')).toHaveText([/high\s*1/, /medium\s*0/, /low\s*1/, /unrated\s*1/]);
   await expect(page.locator('[data-group="By triage"] li')).toHaveText([/Accepted\s*0/, /Rejected\s*1/, /Deferred\s*0/, /Note only\s*0/, /Untriaged\s*2/]);
 });
 
-test("cards run from the most confident finding to the least and show their fields", async ({ page }) => {
+test("cards run from the highest impact to the lowest, confidence breaking ties, and show their fields", async ({ page }) => {
   await open(page);
   await expect(page.locator(".card")).toHaveCount(3);
-  expect(await page.locator(".card").evaluateAll((cards) => cards.map((el) => el.dataset.finding))).toEqual(["F2", "F1", "F3"]);
+  expect(await page.locator(".card").evaluateAll((cards) => cards.map((el) => el.dataset.finding))).toEqual(["F1", "F2", "F3"]);
+  await expect(card(page, "F1").locator(".impact")).toHaveText("high impact");
+  await expect(card(page, "F3").locator(".impact")).toHaveText("unrated impact");
   await expect(card(page, "F1").locator(".locations code")).toHaveText(["src/api/http.ts:41", "src/sync/queue.ts:88"]);
   await expect(card(page, "F1")).toContainText("with a timer that rejects.");
   await expect(card(page, "F1").locator('[data-choice="reject"]')).toHaveAttribute("aria-pressed", "true");

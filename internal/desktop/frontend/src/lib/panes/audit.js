@@ -6,9 +6,10 @@ export const TELLS = [AUDIT_HEADINGS.DUPLICATED, AUDIT_HEADINGS.DEAD, AUDIT_HEAD
 export const CHOICES = ["accept", "reject", "defer"];
 export const TRIAGED = { accept: "Accepted", reject: "Rejected", defer: "Deferred" };
 export const CONFIDENCES = ["high", "medium", "low"];
+export const IMPACTS = ["high", "medium", "low"];
 
 const FINDING = /^(F\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
-const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Confidence|Source):[ \t]?(.*)$/;
+const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Impact|Confidence|Source):[ \t]?(.*)$/;
 const TRIAGE = /^Triage:[ \t]?(.*)$/;
 const STEP = /\bstep\s*([1-5])\b/i;
 const KEYS = {
@@ -18,6 +19,7 @@ const KEYS = {
   Verdict: "verdict",
   "Proposed fix": "fix",
   "Behaviour risk": "risk",
+  Impact: "impact",
   Confidence: "confidence",
   Source: "source",
 };
@@ -26,7 +28,7 @@ const KEYS = {
 const isChoice = (line) => CHOICES.includes(line.trim());
 
 /** @typedef {{from: number, to: number, raw: string, choice: string, note: string}} Triage */
-/** @typedef {{tell: string, locations: string[], evidence: string, verdict: string, fix: string, risk: string, confidence: string, source: string}} Fields */
+/** @typedef {{tell: string, locations: string[], evidence: string, verdict: string, fix: string, risk: string, impact: string, confidence: string, source: string}} Fields */
 /** @typedef {{id: string, title: string, section: string, from: number, to: number, fields: Fields, step: number, triage: Triage | null}} Finding */
 
 /** A choice counts only when it is all the Triage line holds; anything else is a note with no choice.
@@ -76,6 +78,7 @@ function readFinding(lines, from, to, section, named) {
     verdict: text("verdict"),
     fix: text("fix"),
     risk: text("risk"),
+    impact: text("impact").toLowerCase(),
     confidence: text("confidence").toLowerCase(),
     source: text("source"),
   };
@@ -120,14 +123,22 @@ export function parseAudit(text) {
   };
 }
 
-/** High, medium, low, then anything else, each in document order.
- * @template {{fields: {confidence: string}}} F @param {F[]} findings */
-export function byConfidence(findings) {
-  const rank = (finding) => {
-    const at = CONFIDENCES.indexOf(finding.fields.confidence);
-    return at < 0 ? CONFIDENCES.length : at;
+/** Impact first, then confidence, then document order. An unrated impact sorts after every rated one.
+ * @template {{fields: {impact: string, confidence: string}}} F @param {F[]} findings */
+export function byImpact(findings) {
+  const rank = (order, value) => {
+    const at = order.indexOf(value);
+    return at < 0 ? order.length : at;
   };
-  return findings.map((finding, at) => ({ finding, at })).sort((a, b) => rank(a.finding) - rank(b.finding) || a.at - b.at).map(({ finding }) => finding);
+  return findings
+    .map((finding, at) => ({ finding, at }))
+    .sort(
+      (a, b) =>
+        rank(IMPACTS, a.finding.fields.impact) - rank(IMPACTS, b.finding.fields.impact) ||
+        rank(CONFIDENCES, a.finding.fields.confidence) - rank(CONFIDENCES, b.finding.fields.confidence) ||
+        a.at - b.at,
+    )
+    .map(({ finding }) => finding);
 }
 
 /** @param {string} text @param {Finding} finding @param {{choice: string, note: string}} triage */

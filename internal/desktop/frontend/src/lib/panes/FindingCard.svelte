@@ -19,6 +19,7 @@
 <article class="card" class:triaged data-finding={finding.id} data-line={finding.from} data-line-end={finding.to}>
   <header class="head">
     <CapsLabel>{finding.id}</CapsLabel>
+    <span class="impact" data-impact={fields.impact}>{fields.impact || "unrated"} impact</span>
     <span class="confidence" data-confidence={fields.confidence}>{fields.confidence || "unrated"} confidence</span>
     <span class="state" data-state={state}>{STATES[state] ?? (TRIAGED[draft.choice] ?? (triaged ? "Note only" : "Untriaged"))}</span>
   </header>
@@ -102,11 +103,13 @@
     gap: calc(12px * var(--ui-scale));
   }
 
+  .impact,
   .confidence {
     font: var(--machine-sm);
     color: var(--text-muted);
   }
 
+  .impact[data-impact="high"],
   .confidence[data-confidence="high"] {
     color: var(--artifact-audit);
   }

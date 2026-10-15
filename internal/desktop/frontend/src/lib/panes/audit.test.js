@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { byConfidence, parseAudit, readTriage, reapply, spliceTriage } from "./audit.js";
+import { byImpact, parseAudit, readTriage, reapply, spliceTriage } from "./audit.js";
 
 const doc = (...lines) => lines.join("\n");
 
@@ -28,6 +28,7 @@ const AUDIT = doc(
   "Verdict: rot. Fails step 1, no tie: nothing fails if one copy drifts",
   "Proposed fix: keep the http helper and import it in sync.",
   "Behaviour risk: safe",
+  "Impact: high",
   "Confidence: medium",
   "Source: jscpd",
   "",
@@ -44,6 +45,7 @@ const AUDIT = doc(
   "Verdict: fails step 3: the guarded case cannot occur",
   "Proposed fix: drop the check.",
   "Behaviour risk: safe",
+  "Impact: low",
   "Confidence: high",
   "Source: llm",
   "",
@@ -91,6 +93,8 @@ test("an audit's findings carry their tell section and fields", () => {
   assert.equal(f1.fields.evidence, "both wrap a promise in a race\nwith a timer that rejects.");
   assert.equal(f1.fields.confidence, "medium");
   assert.equal(f1.fields.risk, "safe");
+  assert.equal(f1.fields.impact, "high");
+  assert.equal(audit.findings[2].fields.impact, "");
   assert.equal(f1.fields.source, "jscpd");
   assert.equal(f1.step, 1);
   assert.equal(audit.findings[2].step, 5);
@@ -151,10 +155,12 @@ test("every triage form reads back as it was written", () => {
   }
 });
 
-test("findings sort by confidence, high first, keeping document order within one", () => {
-  const extra = AUDIT.replace("Confidence: low", "Confidence: high");
-  assert.deepEqual(byConfidence(parseAudit(AUDIT).findings).map((finding) => finding.id), ["F2", "F1", "F3"]);
-  assert.deepEqual(byConfidence(parseAudit(extra).findings).map((finding) => finding.id), ["F2", "F3", "F1"]);
+test("findings sort by impact, then confidence, then document order, with unrated impact last", () => {
+  const ids = (text) => byImpact(parseAudit(text).findings).map((finding) => finding.id);
+  assert.deepEqual(ids(AUDIT), ["F1", "F2", "F3"]);
+  assert.deepEqual(ids(AUDIT.replace("Impact: low", "Impact: high")), ["F2", "F1", "F3"]);
+  assert.deepEqual(ids(AUDIT.replace("Confidence: low", "Confidence: high")), ["F1", "F2", "F3"]);
+  assert.deepEqual(ids(AUDIT.replace("Impact: high", "Impact: low")), ["F2", "F1", "F3"]);
 });
 
 test("a retitled finding keeps its unsaved triage, and a removed one detaches", () => {
