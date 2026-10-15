@@ -24,9 +24,10 @@ func stages(root string, m session.Manifest) Stages {
 
 func stagesIn(thoughts string) Stages {
 	research := latest(artifacts(filepath.Join(thoughts, researchDir), legacyQuestionsSuffix))
+	audit := latest(artifacts(filepath.Join(thoughts, auditsDir), ""))
 	plan := latest(artifacts(filepath.Join(thoughts, plansDir), ""))
 	return Stages{
-		Research:  research != "" && researched(research),
+		Research:  (research != "" && researched(research)) || (audit != "" && audited(audit)),
 		Plan:      plan != "",
 		Implement: plan != "" && implemented(plan),
 	}
@@ -45,6 +46,25 @@ func researched(path string) bool {
 		return strings.TrimSpace(markdown.Body(text)) != ""
 	}
 	return markdown.Researched(text)
+}
+
+// audited means the summary and every tell section hold content. Triage
+// changes nothing here.
+func audited(path string) bool {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	state := map[string]markdown.SectionState{}
+	for _, section := range markdown.Sections(string(body)) {
+		state[strings.ToLower(section.Name)] = section.State
+	}
+	for _, heading := range auditCompleteHeadings {
+		if state[strings.ToLower(heading)] != markdown.SectionAnswered {
+			return false
+		}
+	}
+	return true
 }
 
 // implemented means the plan has phases, each has Verify items, and every one

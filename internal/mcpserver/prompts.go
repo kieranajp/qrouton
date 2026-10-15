@@ -74,7 +74,9 @@ const (
 
 var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)
 
-var descCreateArtefact = fmt.Sprintf("Create a new research, spec or plan document in this session's thoughts folder. qrouton picks the number and filename, stamps who made it, when, in which session and against which repository revisions, and writes the template's skeleton. kind must be one of %s. Returns the session-relative path of the new file. Fill that file in place; never name or write a new artefact by hand, and leave its author, created, session and revisions fields alone.", strings.Join(artefact.Kinds, ", "))
+const descArtefactKind = "The kind of document to create: "
+
+var descCreateArtefact = fmt.Sprintf("Create a new %s document in this session's thoughts folder. qrouton picks the number and filename, stamps who made it, when, in which session and against which repository revisions, and writes the template's skeleton. kind must be one of %s. Returns the session-relative path of the new file. Fill that file in place; never name or write a new artefact by hand, and leave its author, created, session and revisions fields alone.", orList(artefact.Kinds), strings.Join(artefact.Kinds, ", "))
 
 const descDigestField = "The whole digest, rewritten: a few plain past-tense lines, at most %d characters, on what is done, in progress and waiting on the user"
 

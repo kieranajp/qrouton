@@ -196,6 +196,28 @@ func TestCreateWritesTheSpecsOwnKeysAfterTheStamp(t *testing.T) {
 	}
 }
 
+func TestCreateFilesAnAuditUnderAudits(t *testing.T) {
+	fixedAuthor(t, "Kieran")
+	root := newSession(t)
+	rel, err := Create(root, "audit", "Repo tells", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join("thoughts", "shared", "audits", "A1-2026-10-12-repo-tells.md"); rel != want {
+		t.Fatalf("path = %q, want %q", rel, want)
+	}
+	fm, body := frontmatterOf(t, root, rel)
+	if fm["kind"] != "audit" {
+		t.Errorf("kind = %v", fm["kind"])
+	}
+	if v, ok := fm["target"]; !ok || v != nil {
+		t.Fatalf("target = %v, present %v", v, ok)
+	}
+	if !strings.Contains(body, "## Duplicated behaviour or facts") {
+		t.Fatalf("body:\n%s", body)
+	}
+}
+
 func TestCreateRejectsAnUnknownKindNamingTheValidOnes(t *testing.T) {
 	root := newSession(t)
 	_, err := Create(root, "notes", "x", now)

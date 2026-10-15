@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -58,7 +59,7 @@ type sharePageInput struct {
 }
 
 type createArtefactInput struct {
-	Kind  string `json:"kind" jsonschema:"The kind of document to create: research, spec or plan"`
+	Kind  string `json:"kind"`
 	Title string `json:"title" jsonschema:"The document's title, a few plain words"`
 }
 
@@ -130,6 +131,15 @@ func setDigestSchema() *jsonschema.Schema {
 	return schema
 }
 
+func createArtefactSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[createArtefactInput](nil)
+	if err != nil {
+		panic(err)
+	}
+	schema.Properties["kind"].Description = descArtefactKind + orList(artefact.Kinds)
+	return schema
+}
+
 func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
 	return func(ctx context.Context, input In) (string, *workbench.DocumentViewport, error) {
 		message, err := fn(ctx, input)
@@ -166,7 +176,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
 			return setSummary(root, input)
 		}))
-	addTool(server, toolCreateArtefact, descCreateArtefact, keyMessage,
+	addToolWithSchema(server, toolCreateArtefact, descCreateArtefact, keyMessage, createArtefactSchema(),
 		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
 			return createArtefact(root, input)
 		}))

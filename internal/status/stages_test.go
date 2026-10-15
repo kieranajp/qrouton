@@ -3,6 +3,7 @@ package status
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,5 +160,45 @@ func TestSyncCopiesAndDotFilesNeverBecomeTheLatestResearch(t *testing.T) {
 	dir.write(t, researchDir, ".R10-hidden.md", framedResearch)
 	if !stagesIn(string(dir)).Research {
 		t.Fatal("a conflict copy numbered above R1 displaced it as the latest research")
+	}
+}
+
+const (
+	emptyAudit = "# Tells\n\n## Summary\n\n> what was audited\n\n## Duplicated behaviour or facts\n\n> findings\n\n" +
+		"## Dead or needlessly defensive code\n\n> findings\n\n## Homegrown library or platform behaviour\n\n> findings\n\n## Tools\n\n> tools\n"
+	completeAudit = "# Tells\n\n## Summary\n\nTwo findings.\n\n## Duplicated behaviour or facts\n\n### F1 — Two clocks\n\nTell: duplicated behaviour or facts\n\nTriage:\n\n" +
+		"## Dead or needlessly defensive code\n\nNone.\n\n## Homegrown library or platform behaviour\n\n### F2 — A URL parser\n\nTriage:\n\n## Tools\n\n> tools\n"
+)
+
+func TestACompleteAuditFillsResearch(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"skeleton only", emptyAudit, false},
+		{"one tell left framed", strings.Replace(completeAudit, "None.", "> findings", 1), false},
+		{"complete and untriaged", completeAudit, true},
+		{"triaged", strings.ReplaceAll(completeAudit, "Triage:\n", "Triage: reject\nkept on purpose\n"), true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := thoughtsDir(t.TempDir())
+			dir.write(t, auditsDir, "A1-tells.md", tc.body)
+			if got := stagesIn(string(dir)).Research; got != tc.want {
+				t.Fatalf("Research = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEitherAnsweredResearchOrACompleteAuditFillsResearch(t *testing.T) {
+	dir := thoughtsDir(t.TempDir())
+	dir.write(t, researchDir, "R1-retry.md", framedResearch)
+	dir.write(t, auditsDir, "A1-tells.md", completeAudit)
+	if !stagesIn(string(dir)).Research {
+		t.Fatal("a complete audit left R empty beside framed research")
+	}
+	dir.write(t, auditsDir, "A2-again.md", emptyAudit)
+	if stagesIn(string(dir)).Research {
+		t.Fatal("an older complete audit filled R while the latest is a skeleton")
 	}
 }

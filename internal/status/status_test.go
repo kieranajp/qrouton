@@ -12,6 +12,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 // sessionDir writes a session directory with the given manifest under a fake
@@ -683,5 +684,17 @@ func TestDocumentsAndUnseenSkipSyncCopiesAndDotNames(t *testing.T) {
 	docs := Read(dir).Documents
 	if len(docs) != 1 || docs[0].Name != "R1-findings.md" {
 		t.Fatalf("documents = %#v, want only R1-findings.md", docs)
+	}
+}
+
+func TestTheAuditTemplateCarriesEveryCompletenessHeading(t *testing.T) {
+	template, err := prompts.Template("audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, heading := range auditCompleteHeadings {
+		if !strings.Contains(string(template), "\n## "+heading+"\n") {
+			t.Errorf("the audit template has no ## %s", heading)
+		}
 	}
 }

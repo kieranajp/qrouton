@@ -58,7 +58,8 @@ var (
 	ErrNoThoughtsRoot         = errors.New("this session's thoughts are in no thoughts root")
 	ErrNoVaultRequest         = errors.New("thoughts request carries no query or reference")
 	ErrDocumentChanged        = errors.New("the document changed on disk since the pane read it")
-	ErrNotASpec               = errors.New("window is not a spec document")
+	ErrNotAnswerable          = errors.New("window is not a spec or an audit")
+	ErrWrongSend              = errors.New("that line is not the one this document sends")
 )
 
 // draftRefused turns a validation problem into the refusal the page's promise

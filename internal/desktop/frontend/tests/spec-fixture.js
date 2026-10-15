@@ -193,7 +193,7 @@ window.wailsCall = async (name, ...args) => {
         : [],
     );
   }
-  if (name.endsWith(".SaveSpec")) {
+  if (name.endsWith(".SaveAnswers")) {
     const [, hash, text] = args;
     if (hold) await hold;
     if (stale !== null) {
@@ -218,7 +218,7 @@ window.holdSaves = () => {
     resolve();
   }));
 };
-window.saves = () => window.calls.filter((call) => call.name.endsWith(".SaveSpec")).map((call) => call.args);
+window.saves = () => window.calls.filter((call) => call.name.endsWith(".SaveAnswers")).map((call) => call.args);
 window.OPEN = OPEN;
 
 window.pushContent = (text) => {

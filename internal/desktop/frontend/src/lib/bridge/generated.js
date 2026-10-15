@@ -68,8 +68,9 @@ export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/de
 export const WINDOWS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Windows.Reorder";
 export const WINDOWS_REPORT_VIEWPORT = "github.com/kieranajp/qrouton/internal/desktop.Windows.ReportViewport";
 export const WINDOWS_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Resize";
-export const WINDOWS_SAVE_SPEC = "github.com/kieranajp/qrouton/internal/desktop.Windows.SaveSpec";
+export const WINDOWS_SAVE_ANSWERS = "github.com/kieranajp/qrouton/internal/desktop.Windows.SaveAnswers";
 export const WINDOWS_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Select";
+export const WINDOWS_SEND_AUDIT_TRIAGE = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendAuditTriage";
 export const WINDOWS_SEND_SPEC_ANSWERS = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendSpecAnswers";
 export const WINDOWS_START = "github.com/kieranajp/qrouton/internal/desktop.Windows.Start";
 export const WINDOWS_SURFACES = "github.com/kieranajp/qrouton/internal/desktop.Windows.Surfaces";
@@ -135,13 +136,22 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"NOTE"} ArtifactKind */
+/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"AUDIT"|"NOTE"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
   RESEARCH: "RESEARCH",
   SPEC: "SPEC",
   PLAN: "PLAN",
   EXPLAINER: "EXPLAINER",
+  AUDIT: "AUDIT",
   NOTE: "NOTE",
+});
+
+/** @typedef {"Summary"|"Duplicated behaviour or facts"|"Dead or needlessly defensive code"|"Homegrown library or platform behaviour"} AuditHeading */
+export const AUDIT_HEADINGS = Object.freeze({
+  SUMMARY: "Summary",
+  DUPLICATED: "Duplicated behaviour or facts",
+  DEAD: "Dead or needlessly defensive code",
+  HOMEGROWN: "Homegrown library or platform behaviour",
 });
 
 /** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */

@@ -9,22 +9,28 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-// specWindow is the only kind of window the page may write a file through.
-func specWindow(window *agentWindow) (*documentContent, string, error) {
+// answerableWindow is the only kind of window the page may write a file
+// through: a spec the user answers or an audit the user triages. It returns
+// the document's kind as well.
+func answerableWindow(window *agentWindow) (*documentContent, string, string, error) {
 	rendered, ok := window.document()
 	path := window.sourcePath()
-	if !ok || path == "" || status.DocumentKind(window.opts.Source) != kinds.Spec.Label() {
-		return nil, "", ErrNotASpec
+	if !ok || path == "" {
+		return nil, "", "", ErrNotAnswerable
 	}
-	return rendered, path, nil
+	kind := status.DocumentKind(window.opts.Source)
+	if kind != kinds.Spec.Label() && kind != kinds.Audit.Label() {
+		return nil, "", "", ErrNotAnswerable
+	}
+	return rendered, path, kind, nil
 }
 
-// SaveSpec replaces a spec's text when the file still hashes to what the page
-// last read, and returns the new hash.
-func (w *Windows) SaveSpec(id, hash, text string) (string, error) {
+// SaveAnswers replaces an answerable document's text when the file still
+// hashes to what the page last read, and returns the new hash.
+func (w *Windows) SaveAnswers(id, hash, text string) (string, error) {
 	var saved string
 	err := w.with(id, func(window *agentWindow) error {
-		rendered, path, err := specWindow(window)
+		rendered, path, _, err := answerableWindow(window)
 		if err != nil {
 			return err
 		}
@@ -57,18 +63,32 @@ func (w *Windows) SaveSpec(id, hash, text string) (string, error) {
 	return saved, err
 }
 
-func specAnswersLine(source string) []byte {
-	return []byte(pasteStart + fmt.Sprintf(specAnswersInFormat, source) + pasteEnd + conversationSubmit)
+func fixedLine(format, source string) []byte {
+	return []byte(pasteStart + fmt.Sprintf(format, source) + pasteEnd + conversationSubmit)
 }
 
 // SendSpecAnswers pastes one fixed line into the spec's conversation and
 // submits it. Only the window id comes from the page.
 func (w *Windows) SendSpecAnswers(id string) error {
+	return w.sendFixedLine(id, kinds.Spec.Label(), specAnswersInFormat)
+}
+
+// SendAuditTriage pastes one fixed line into the audit's conversation and
+// submits it. Only the window id comes from the page.
+func (w *Windows) SendAuditTriage(id string) error {
+	return w.sendFixedLine(id, kinds.Audit.Label(), auditTriageInFormat)
+}
+
+func (w *Windows) sendFixedLine(id, want, format string) error {
 	var owner *sessionState
 	var source string
 	err := w.with(id, func(window *agentWindow) error {
-		if _, _, err := specWindow(window); err != nil {
+		_, _, kind, err := answerableWindow(window)
+		if err != nil {
 			return err
+		}
+		if kind != want {
+			return fmt.Errorf("%w: %s", ErrWrongSend, window.opts.Source)
 		}
 		owner, source = window.session, window.opts.Source
 		return nil
@@ -76,5 +96,5 @@ func (w *Windows) SendSpecAnswers(id string) error {
 	if err != nil {
 		return err
 	}
-	return owner.write(specAnswersLine(source))
+	return owner.write(fixedLine(format, source))
 }

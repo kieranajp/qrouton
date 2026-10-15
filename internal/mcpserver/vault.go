@@ -35,10 +35,14 @@ func searchVaultSchema() *jsonschema.Schema {
 	if err != nil {
 		panic(err)
 	}
-	names := vault.Kinds()
-	last := len(names) - 1
-	schema.Properties["kinds"].Description = descSearchKinds + strings.Join(names[:last], ", ") + " or " + names[last]
+	schema.Properties["kinds"].Description = descSearchKinds + orList(vault.Kinds())
 	return schema
+}
+
+// orList joins names as prose: "a, b or c".
+func orList(names []string) string {
+	last := len(names) - 1
+	return strings.Join(names[:last], ", ") + " or " + names[last]
 }
 
 func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.VaultHost) {
