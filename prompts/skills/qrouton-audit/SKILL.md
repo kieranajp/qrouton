@@ -9,7 +9,7 @@ An audit is Research to the user. It reports and never edits: fixes go through P
 
 Judge the live code only. The audit forms every finding from the target's code, config and docs. Do not read research, specs, plans or audits under `thoughts/` for it, and do not search them with `search_thoughts` or `read_thoughts`. A stale document must not plant or suppress a finding.
 
-1. Settle the target with the user if it is unclear: one repository from `qrouton.json`, and optionally a path inside it. The default is the whole repository, because the tells are cross-file.
+1. Settle the target with the user before starting, even when the request names a repository: one repository from `qrouton.json`, and optionally paths inside it to include or leave out. Offer the whole repository as the default, because the tells are cross-file, and name its main top-level areas so the user can narrow it in one reply.
 2. Call `create_artefact` with `kind: audit` and a short title naming the target. Do not name or write an audit path by hand.
 
    {{session-summary}} Pass `stage` as `research`.
