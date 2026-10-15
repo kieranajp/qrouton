@@ -20,11 +20,11 @@ target:
 
 ## Homegrown library or platform behaviour
 
-> <findings where code redoes what an installed library or the platform already provides>
+> <findings where code redoes what a well-known library or the platform provides, installed or not>
 
 ## Checked and deliberate
 
-> <candidates judged deliberate, one line each with the reason that holds>
+> <candidates judged deliberate, one line per candidate with its location and the tie or written reason that keeps it>
 
 ## Tools
 

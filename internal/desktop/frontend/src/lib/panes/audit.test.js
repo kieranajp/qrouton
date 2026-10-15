@@ -49,13 +49,13 @@ const AUDIT = doc(
   "",
   "Triage: accept, but after the release",
   "",
-  "### F3 — A second clamp on the backoff",
+  "### F3 — A backoff override only tests call",
   "",
   "Tell: dead or needlessly defensive code",
   "Locations: internal/retry/backoff.go:30",
-  "Evidence: the caller clamps already.",
-  "Verdict: fails step 3",
-  "Proposed fix: drop the inner clamp.",
+  "Evidence: every caller is a test.",
+  "Verdict: rot. Fails step 5: nothing shipped reaches it",
+  "Proposed fix: drop the override.",
   "Behaviour risk: needs a test first",
   "Confidence: low",
   "Source: llm",
@@ -93,6 +93,7 @@ test("an audit's findings carry their tell section and fields", () => {
   assert.equal(f1.fields.risk, "safe");
   assert.equal(f1.fields.source, "jscpd");
   assert.equal(f1.step, 1);
+  assert.equal(audit.findings[2].step, 5);
   assert.deepEqual(audit.sections.map((section) => section.name), ["Summary", "Checked and deliberate", "Tools"]);
 });
 

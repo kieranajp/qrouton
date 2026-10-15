@@ -6,7 +6,8 @@ same way and treat them as equal choices.
 
 Run each command against the target and write its output to a scratch
 directory outside it. Never pass `--fix`, never write a config file into the target,
-and never add a dependency.
+and never add a dependency to the target during the audit run. A proposed fix
+may add one.
 
 ## Reachability: knip
 
@@ -36,8 +37,9 @@ Check every candidate against these traps before it becomes a finding:
 jscpd finds token-level copies.
 
 - `npx --yes jscpd@4.3.0 --reporters json --output <scratch> --ignore "**/node_modules/**,**/dist/**" <target>`.
-- It finds exact and near-exact copies only. Two helpers that do the same
-  job in different words do not match: read for those yourself.
+- It finds token copies only. Two helpers that do the same job in different
+  words do not match, so its output must not make up most of tell 1. Hunt the
+  semantic copies with the lead's tell-1 method.
 
 ## Type-aware lint: typescript-eslint
 
@@ -51,3 +53,10 @@ cannot vary.
 - The rule trusts declared types. At an unparsed boundary, such as network
   input, storage or a bridge, the declared type is a claim, not a fact. Trace
   every flagged guard to the producer of its value before calling it dead.
+
+## Runtime
+
+The JavaScript engine alone does not decide which globals and APIs exist. A
+framework can install polyfills before the app's own code runs; Expo, for
+example, ships a runtime polyfill layer. Before anything in the audit says an
+API is missing, read what the framework installs at startup.

@@ -18,10 +18,10 @@ content.
 A finding sits under the section for its tell and looks like this:
 
 ```markdown
-### F3 — Two timeout helpers race a promise against a timer
+### F3 — Two date formatters build the same display string
 
 Tell: duplicated behaviour or facts
-Locations: src/api/http.ts:41, src/sync/queue.ts:88
+Locations: lib/reports/format.py:41, lib/export/rows.py:88
 Evidence: <what the code shows, with the lines that show it>
 Verdict: rot. Fails step 1, no tie: nothing fails if one copy drifts
 Proposed fix: <the change, in a sentence or two>
@@ -41,30 +41,50 @@ Each finding has:
 - `Locations:` as one or more `path:line`, comma-separated;
 - `Evidence:` with what the code shows. It may run onto following lines, up to
   the next field;
-- `Verdict:` with the step of the four-step check the code fails;
+- `Verdict:` with the step of the five-step check the code fails;
 - `Proposed fix:`;
 - `Behaviour risk:` as `safe`, `needs a test first` or `changes behaviour`;
 - `Confidence:` as `high`, `medium` or `low`;
 - `Source:` as the tool that found the candidate, or `llm`;
 - an empty `Triage:` line, last in the block.
 
-## The four-step check
+Write one finding per defect. When two candidates describe the same defect,
+even under different tells, merge them into one finding that lists every
+location. File it under the tell whose fix removes it, and name the other tell
+in `Evidence:`. Never bundle unrelated defects into one finding.
+
+A candidate you cannot settle goes among the findings with `Confidence: low`,
+or nowhere. No other section holds candidates.
+
+## The five-step check
 
 1. Is there a tie: a type or a test that fails when the copies drift?
-2. Is there a reason at the site that still holds?
+2. Is there a reason written at the site that still holds?
 3. Can the guarded case occur?
 4. Do the copies agree today?
+5. Does a live caller in shipped code reach it?
 
 How the steps decide:
 
 - Copies that disagree today are rot, whatever the intent.
-- Otherwise a copy with a tie, or with a reason at the site that still holds,
-  is deliberate. A reason that no longer holds is rot.
+- Otherwise a copy with a tie, or with a written reason that still holds, is
+  deliberate. A reason that no longer holds is rot.
 - A guard is rot unless a live producer can bring about the case it guards.
   A guard on an I/O boundary is never rot.
+- Code that no live caller in shipped code reaches, once the tool's traps are
+  ruled out, is rot whatever the other steps say. Callers in tests, stories and
+  fixtures do not count. Exported API that other modules consume counts as
+  reached.
 
-A deliberate candidate goes under `## Checked and deliberate` as one line
-with its location and the reason, never among findings.
+A reason counts only when it is written at the site: a comment, a doc, or the
+commit message for those lines. A reason the auditor supplies is not a reason.
+Check each runtime claim in a written reason against the layer that really
+runs the code before it decides anything.
+
+`## Checked and deliberate` holds one line per candidate, each with its
+location and the tie or written reason that keeps it. Never dismiss candidates
+as a group. A tool candidate that a known trap explains is not listed here:
+`## Tools` counts it by trap.
 
 ## Triage
 
@@ -73,7 +93,7 @@ holds one of `accept`, `reject` or `defer` and nothing else:
 
 ```markdown
 Triage: reject
-the copy in sync/ is kept for the offline build
+the export copy pads columns, so the two differ on purpose
 ```
 
 That is a reject with a note, which runs on the following lines up to the next

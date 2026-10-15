@@ -378,3 +378,79 @@ func TestAuditSkillRanksNoTool(t *testing.T) {
 		}
 	}
 }
+
+// Each anchor is a rule of the audit method. The test checks that the rule is
+// stated, not that it is stated well.
+func TestAuditPromptsCarryMethod(t *testing.T) {
+	const (
+		skill    = "skill"
+		lead     = "lead"
+		checker  = "checker"
+		shape    = "references/audit-shape.md"
+		template = "references/audit-template.md"
+	)
+	loader := NewEmbeddedLoader()
+	texts := map[string]string{}
+	for name, id := range map[string]ID{
+		skill:   ID(skillIDPrefix + "qrouton-audit"),
+		lead:    ID(agentIDPrefix + AuditLead),
+		checker: ID(agentIDPrefix + "audit-checker"),
+	} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		texts[name] = string(prompt.Content)
+		for _, file := range prompt.Files {
+			texts[file.Path] = string(file.Content)
+		}
+	}
+	leadPrompt, err := loader.Load(context.Background(), ID(agentIDPrefix+AuditLead))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rendered, err := Render(leadPrompt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, rule := range []struct {
+		name    string
+		phrases []string
+		in      []string
+	}{
+		{"tell 3 is wider", []string{"installed or not"}, []string{skill, lead, checker, template}},
+		{"tell 3 cost", []string{"install cost"}, []string{lead, checker}},
+		{"written reasons", []string{"written at the site"}, []string{lead, checker, shape}},
+		{"runtime claims", []string{"runtime claim"}, []string{lead, checker, shape}},
+		{"no bulk dismissal", []string{"one line per candidate"}, []string{lead, shape}},
+		{"no grab-bags", []string{"one finding per defect"}, []string{lead, shape}},
+		{"unreachable step", []string{"live caller in shipped code"}, []string{checker, shape}},
+		{"tell-1 and tell-2 method", []string{"bypasses a shared", "two sources", "called only from tests"}, []string{lead}},
+		{"low confidence", []string{"Confidence: low", "No other section holds candidates"}, []string{shape}},
+	} {
+		for _, where := range rule.in {
+			for _, phrase := range rule.phrases {
+				if !strings.Contains(texts[where], phrase) {
+					t.Errorf("%s: %s does not carry %q", rule.name, where, phrase)
+				}
+			}
+		}
+	}
+
+	for _, asset := range rendered {
+		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests"} {
+			if !strings.Contains(string(asset.Content), phrase) {
+				t.Errorf("%s does not carry %q", asset.Path, phrase)
+			}
+		}
+	}
+
+	for where, text := range texts {
+		for _, gone := range []string{"installed library", "four-step"} {
+			if strings.Contains(text, gone) {
+				t.Errorf("%s still says %q", where, gone)
+			}
+		}
+	}
+}

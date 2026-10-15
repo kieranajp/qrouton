@@ -6,8 +6,9 @@ same way and treat them as equal choices.
 
 Run each command against the target and write its output to a scratch
 directory outside it. Never pass a flag that rewrites code, never write a config file
-into the target, and never add a dependency: `go run pkg@version` fetches into
-the module cache, not the target's `go.mod`.
+into the target, and never add a dependency to the target during the audit
+run: `go run pkg@version` fetches into the module cache, not the target's
+`go.mod`. A proposed fix may add one.
 
 ## Reachability: deadcode
 
@@ -37,7 +38,7 @@ Check every candidate against these traps:
 - `go run github.com/mibk/dupl@v1.1.0 -t 50 <target>`, with the
   output redirected there.
 - It matches syntax trees, so it misses two functions that do the same job in
-  different shapes: read for those yourself.
+  different shapes. Hunt those with the lead's tell-1 method.
 
 ## Needless conditions
 

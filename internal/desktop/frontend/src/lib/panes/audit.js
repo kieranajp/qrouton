@@ -10,7 +10,7 @@ export const CONFIDENCES = ["high", "medium", "low"];
 const FINDING = /^(F\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Confidence|Source):[ \t]?(.*)$/;
 const TRIAGE = /^Triage:[ \t]?(.*)$/;
-const STEP = /\bstep\s*([1-4])\b/i;
+const STEP = /\bstep\s*([1-5])\b/i;
 const KEYS = {
   Tell: "tell",
   Locations: "locations",
