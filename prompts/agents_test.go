@@ -453,7 +453,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		phrases []string
 		in      []string
 	}{
-		{"tell 3 is wider", []string{"installed or not"}, []string{skill, lead, checker, template}},
+		{"tell 3 is wider", []string{"installed or not"}, []string{lead, checker, template}},
 		{"tell 3 cost", []string{"install cost"}, []string{lead, checker}},
 		{"written reasons", []string{"written at the site"}, []string{lead, checker, shape}},
 		{"runtime claims", []string{"runtime claim"}, []string{lead, checker, shape}},
@@ -462,19 +462,19 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"unreachable step", []string{"live caller in shipped code"}, []string{checker, shape}},
 		{"tell-1 and tell-2 method", []string{"bypasses a shared", "two sources", "called only from tests"}, []string{lead}},
 		{"low confidence", []string{"Confidence: low", "No other section holds candidates"}, []string{shape}},
-		{"job inventory", []string{"job inventory", "## Tools"}, []string{skill, lead, shape}},
+		{"job inventory", []string{"job inventory", "## Tools"}, []string{lead, shape}},
 		{"whole-family cost", []string{"whole family", "size and installed status"}, []string{lead, checker, shape}},
 		{"category sweep", []string{"category the repo hand-rolls"}, []string{lead, checker}},
 		{"no contradicting spare", []string{"contradicts another finding"}, []string{lead, shape}},
-		{"conformance pass", []string{"conformance pass"}, []string{skill, lead, shape}},
+		{"conformance pass", []string{"conformance pass"}, []string{lead, shape}},
 		{"inferred is not checked", []string{"is not a runtime check"}, []string{lead, checker, shape}},
 		{"impact field", []string{"Impact:", "by impact"}, []string{shape}},
 		{"impact order", []string{"by impact"}, []string{lead, template}},
 		{"cosmetic nits", []string{"one shared root cause"}, []string{lead, shape}},
-		{"full inventory", []string{"full inventory", "stated skip", "routes searched"}, []string{skill, lead, shape}},
+		{"full inventory", []string{"full inventory", "stated skip", "routes searched"}, []string{lead, shape}},
 		{"judgement skip", []string{"name what was compared"}, []string{lead, shape}},
 		{"shared machinery", []string{"kinds of shared machinery"}, []string{lead}},
-		{"independent re-read", []string{"independent re-read"}, []string{skill, lead, shape, verifier}},
+		{"independent re-read", []string{"independent re-read"}, []string{lead, shape, verifier}},
 		{"what the re-read verifies", []string{"agree or differ", "one route", "proposes to grow", "serve another purpose"}, []string{lead, shape, verifier}},
 		{"category outcomes", []string{"outcome per category", "none hand-rolled"}, []string{lead, checker, shape}},
 		{"platform comments", []string{"platform or runtime claims"}, []string{lead, checker}},
@@ -489,6 +489,12 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 					t.Errorf("%s: %s does not carry %q", rule.name, where, phrase)
 				}
 			}
+		}
+	}
+
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass"} {
+		if strings.Contains(texts[skill], phrase) {
+			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
 		}
 	}
 
