@@ -19,10 +19,12 @@ import (
 // embeddedPromptIDs is every prompt the binary carries, in the order List sorts
 // them. Naming them is what makes an addition or a loss legible in the failure.
 var embeddedPromptIDs = []string{
+	"agents/audit-checker",
 	"agents/code-reviewer",
 	"agents/codebase-researcher",
 	"agents/external-researcher",
 	"agents/pattern-finder",
+	"agents/qrouton-audit-lead",
 	"agents/qrouton-implementation-lead",
 	"agents/qrouton-planning-lead",
 	"agents/qrouton-research-lead",
@@ -30,6 +32,7 @@ var embeddedPromptIDs = []string{
 	"agents/thoughts-researcher",
 	"assistant",
 	"orchestrator",
+	"skills/qrouton-audit",
 	"skills/qrouton-development",
 	"skills/qrouton-evals",
 	"skills/qrouton-implement",
@@ -329,6 +332,7 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 	}
 	for _, id := range ids {
 		prompt, err := loader.Load(context.Background(), id)
@@ -457,6 +461,8 @@ func TestNoEmbeddedPromptShipsAnUnexpandedPartial(t *testing.T) {
 var (
 	artifactDisciplineHomes = []ID{
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(skillIDPrefix + "qrouton-questions"),
@@ -466,6 +472,8 @@ var (
 	}
 
 	evidenceDisciplineHomes = []ID{
+		ID(agentIDPrefix + "audit-checker"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 		ID(agentIDPrefix + "code-reviewer"),
 		ID(agentIDPrefix + "codebase-researcher"),
 		ID(agentIDPrefix + "external-researcher"),
@@ -478,6 +486,7 @@ var (
 
 	returnContractHomes = []ID{
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(skillIDPrefix + "qrouton-plan"),
@@ -485,12 +494,14 @@ var (
 	}
 
 	sessionSummaryHomes = []ID{
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(skillIDPrefix + "qrouton-research"),
 		ID(skillIDPrefix + "qrouton-spec"),
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
 	sessionDigestHomes = []ID{
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(skillIDPrefix + "qrouton-research"),
 		ID(skillIDPrefix + "qrouton-spec"),
 		ID(skillIDPrefix + "qrouton-plan"),
@@ -531,7 +542,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 // orchestrator's; no lead may be told to write it.
 func TestNoLeadWritesTheDigest(t *testing.T) {
 	loader := NewEmbeddedLoader()
-	for _, lead := range []string{ResearchLead, PlanningLead, ImplementationLead} {
+	for _, lead := range []string{ResearchLead, AuditLead, PlanningLead, ImplementationLead} {
 		prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+lead))
 		if err != nil {
 			t.Fatal(err)
@@ -831,9 +842,9 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 }
 
 func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
-	handBuilt := regexp.MustCompile(`[RSP]<n>-`)
+	handBuilt := regexp.MustCompile(`[RSPA]<n>-`)
 	for skill, kind := range map[string]string{
-		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan",
+		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan", "qrouton-audit": "audit",
 	} {
 		prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+skill))
 		if err != nil {

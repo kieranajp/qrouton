@@ -120,6 +120,7 @@ func TestStagesForMapsEachLeadToItsMark(t *testing.T) {
 		want  Stages
 	}{
 		{[]string{prompts.ResearchLead}, Stages{Research: true}},
+		{[]string{prompts.AuditLead}, Stages{Research: true}},
 		{[]string{prompts.PlanningLead}, Stages{Plan: true}},
 		{[]string{prompts.ImplementationLead}, Stages{Implement: true}},
 		{[]string{"code-reviewer", "default"}, Stages{}},

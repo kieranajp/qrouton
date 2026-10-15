@@ -16,7 +16,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
-var internalLeakPattern = regexp.MustCompile(`(?i)\bqrouton-(questions|research|spec|plan|implement)|\b(agent depth|document numbering)\b`)
+var internalLeakPattern = regexp.MustCompile(`(?i)\bqrouton-(questions|research|audit|spec|plan|implement)|\b(agent depth|document numbering)\b`)
 
 var subagentTypePattern = regexp.MustCompile(`"` + subagentTypeField + `"\s*:\s*"([^"]+)"`)
 

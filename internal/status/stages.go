@@ -138,6 +138,7 @@ func latest(found []artifact) string {
 // stageLeads names the stage each lead works on.
 var stageLeads = map[string]string{
 	prompts.ResearchLead:       StageResearch,
+	prompts.AuditLead:          StageResearch,
 	prompts.PlanningLead:       StagePlan,
 	prompts.ImplementationLead: StageImplement,
 }

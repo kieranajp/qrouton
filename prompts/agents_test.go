@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/fs"
 	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -300,9 +301,80 @@ func TestResearchPromptsCarryVaultIsolation(t *testing.T) {
 // The lead names are what the workbench reads a stage's lead off, so each must
 // still name an agent prompt.
 func TestLeadNamesNameAgentPrompts(t *testing.T) {
-	for _, lead := range []string{ResearchLead, PlanningLead, ImplementationLead} {
+	for _, lead := range []string{ResearchLead, AuditLead, PlanningLead, ImplementationLead} {
 		if _, err := fs.Stat(embedded, agentIDPrefix+lead+promptFileExt); err != nil {
 			t.Errorf("lead %q names no agent prompt: %v", lead, err)
+		}
+	}
+}
+
+// An audit's verdicts come from the code alone. Claude enforces the lead's
+// refusal from its frontmatter; Codex and agy read only the prose.
+func TestAuditPromptsJudgeLiveCode(t *testing.T) {
+	const denied = "mcp__qrouton__search_thoughts, mcp__qrouton__read_thoughts"
+	const liveCodeOnly = "Judge the live code only."
+	loader := NewEmbeddedLoader()
+	lead, err := loader.Load(context.Background(), ID(agentIDPrefix+AuditLead))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := frontmatterEntry(string(lead.Content), "disallowedTools"); got != denied {
+		t.Errorf("audit lead disallowedTools = %q", got)
+	}
+	assets, err := Render(lead)
+	if err != nil {
+		t.Fatal(err)
+	}
+	claude := renderedAsset(t, assets, claudeAgentsDir+AuditLead+promptFileExt)
+	if got, _ := frontmatterEntry(claude, "disallowedTools"); got != denied {
+		t.Errorf("the Claude rendering drops disallowedTools:\n%s", claude)
+	}
+
+	for _, id := range []ID{ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker"), ID(skillIDPrefix + "qrouton-audit")} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(prompt.Content), liveCodeOnly) {
+			t.Errorf("%s does not carry %q", id, liveCodeOnly)
+		}
+		if !strings.HasPrefix(string(id), agentIDPrefix) {
+			continue
+		}
+		rendered, err := Render(prompt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, asset := range rendered {
+			for _, phrase := range []string{liveCodeOnly, "`search_thoughts`", "`read_thoughts`"} {
+				if !strings.Contains(string(asset.Content), phrase) {
+					t.Errorf("%s does not carry %q", asset.Path, phrase)
+				}
+			}
+		}
+	}
+}
+
+// The worked examples are examples. A tool chosen for any other ecosystem is
+// an equal choice, so no line of the audit prompts may rank a tool.
+func TestAuditSkillRanksNoTool(t *testing.T) {
+	ranking := regexp.MustCompile(`(?i)\b(approved|gaps?|fallbacks?)\b`)
+	tool := regexp.MustCompile(`(?i)\b(tools?|detectors?|knip|jscpd|eslint|deadcode|dupl|staticcheck|vet)\b`)
+	loader := NewEmbeddedLoader()
+	var files []PromptFile
+	for _, id := range []ID{ID(skillIDPrefix + "qrouton-audit"), ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker")} {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		files = append(files, PromptFile{Path: string(id), Content: prompt.Content})
+		files = append(files, prompt.Files...)
+	}
+	for _, file := range files {
+		for i, line := range strings.Split(string(file.Content), "\n") {
+			if word := ranking.FindString(line); word != "" && tool.MatchString(line) {
+				t.Errorf("%s:%d says %q: %s", file.Path, i+1, word, line)
+			}
 		}
 	}
 }

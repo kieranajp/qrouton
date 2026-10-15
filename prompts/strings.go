@@ -74,12 +74,14 @@ var figures = map[string]string{
 // The leads, by the agent type the runner reports them as.
 const (
 	ResearchLead       = "qrouton-research-lead"
+	AuditLead          = "qrouton-audit-lead"
 	PlanningLead       = "qrouton-planning-lead"
 	ImplementationLead = "qrouton-implementation-lead"
 )
 
 var (
 	readOnlyAgents = map[string]bool{
+		"audit-checker":       true,
 		"code-reviewer":       true,
 		"codebase-researcher": true,
 		"external-researcher": true,
@@ -89,6 +91,7 @@ var (
 
 	workspaceWriteAgents = map[string]bool{
 		ResearchLead:       true,
+		AuditLead:          true,
 		PlanningLead:       true,
 		ImplementationLead: true,
 		"test-verifier":    true,

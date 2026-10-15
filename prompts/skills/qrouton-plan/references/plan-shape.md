@@ -14,6 +14,22 @@ holding checkbox commands, and `### See` holding checkbox observations. Add one
 such section per phase, and keep `## Decisions`, `### Out of scope`, `## Closing checklist`
 and `## Blockers`.
 
+Set `audit:` to the audit's relative path when the plan comes from one, and
+leave it empty otherwise.
+
+## A plan from an audit
+
+Plan only the accepted findings. A finding is accepted only when its
+`Triage:` line holds `accept` and nothing else; `accept, but later` is a
+note, not a choice. Group the accepted findings into phases by area. Leave
+every `changes behaviour` finding out of the fix phases, and list those in
+the plan for the user to decide. A finding whose fix needs a design choice
+goes under `## Blockers`.
+
+Every fix phase verifies with a typecheck, the tests and a production build.
+A phase that deletes code also passes the dead-code check in its production
+mode.
+
 Sections other than the phases are yours to choose; the ones above are the ones
 we expect.
 

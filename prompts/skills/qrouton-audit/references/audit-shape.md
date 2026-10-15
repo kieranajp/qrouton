@@ -55,9 +55,16 @@ Each finding has:
 3. Can the guarded case occur?
 4. Do the copies agree today?
 
-A candidate that passes is deliberate. It goes under `## Checked and
-deliberate` as one line with its location and the reason, never among
-findings.
+How the steps decide:
+
+- Copies that disagree today are rot, whatever the intent.
+- Otherwise a copy with a tie, or with a reason at the site that still holds,
+  is deliberate. A reason that no longer holds is rot.
+- A guard is rot unless a live producer can bring about the case it guards.
+  A guard on an I/O boundary is never rot.
+
+A deliberate candidate goes under `## Checked and deliberate` as one line
+with its location and the reason, never among findings.
 
 ## Triage
 
