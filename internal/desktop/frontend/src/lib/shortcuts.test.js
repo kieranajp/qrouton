@@ -90,3 +90,14 @@ test("the other platform's modifier, Option, both modifiers and other keys leave
   assert.equal(scaleAction({ key: "=" }, false), "");
   assert.equal(scaleAction(undefined, false), "");
 });
+
+test("switcher requires the exact platform chord and reserves repeats", async () => {
+  const { opensSwitcher } = await import("./shortcuts.js");
+  for (const mac of [true, false]) {
+    const chord = { key: "K", metaKey: mac, ctrlKey: !mac };
+    assert.ok(opensSwitcher(chord, mac));
+    assert.ok(opensSwitcher({ ...chord, repeat: true }, mac));
+    assert.ok(!opensSwitcher(chord, !mac));
+    for (const extra of [{ altKey: true }, { shiftKey: true }, { metaKey: true, ctrlKey: true }, { isComposing: true }, { keyCode: 229 }]) assert.ok(!opensSwitcher({ ...chord, ...extra }, mac));
+  }
+});

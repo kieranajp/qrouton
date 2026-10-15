@@ -89,6 +89,16 @@ var valueNames = []valueName{
 	{desktopPackage, "sessionUnloadLabel"},
 	{desktopPackage, "sessionUnloadFailed"},
 	{desktopPackage, "sessionReorderFailed"},
+	{desktopPackage, "switcherLabel"},
+	{desktopPackage, "switcherSearch"},
+	{desktopPackage, "switcherClose"},
+	{desktopPackage, "switcherEmpty"},
+	{desktopPackage, "switcherNoMatches"},
+	{desktopPackage, "switcherOpening"},
+	{desktopPackage, "switcherFailed"},
+	{desktopPackage, "switcherCurrent"},
+	{desktopPackage, "switcherResults"},
+	{desktopPackage, "switcherHelp"},
 }
 
 // valueList is an ordered list of strings that Go holds as a package-level

@@ -42,3 +42,9 @@ export function scaleAction(event, linux) {
   if (event.key === "0") return UI_SCALE_ACTIONS.RESET;
   return "";
 }
+
+export function opensSwitcher(event, macOS) {
+  if (!event || event.altKey || event.shiftKey || event.isComposing || event.keyCode === 229) return false;
+  return (macOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && event.key?.toLowerCase() === "k";
+}
+export const switcherHint = (macOS) => macOS ? "⌘K" : "Ctrl+K";

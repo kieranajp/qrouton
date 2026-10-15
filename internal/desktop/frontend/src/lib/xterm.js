@@ -4,10 +4,10 @@ import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
-import { linux } from "./platform.js";
+import { linux, macOS } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
-import { opensSettings, position, scaleAction } from "./shortcuts.js";
+import { opensSettings, opensSwitcher, position, scaleAction } from "./shortcuts.js";
 export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
 
 export { Terminal };
@@ -79,7 +79,7 @@ export function mount(host, { write, background = "--surface-app" }) {
     if (event.type !== "keydown") return true;
     // Returning false without preventing the default leaves the keystroke to
     // bubble, which is how the session shortcut reaches the page from in here.
-    if (position(event) || opensSettings(event) || scaleAction(event, linux)) return false;
+    if (opensSwitcher(event, macOS) || position(event) || opensSettings(event) || scaleAction(event, linux)) return false;
     if (event.key === "Enter" && event.shiftKey) {
       // Returning false stops xterm's keydown handling but not the browser's
       // own keypress, which would append a CR and submit.

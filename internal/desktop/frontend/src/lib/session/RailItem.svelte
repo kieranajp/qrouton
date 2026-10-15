@@ -1,10 +1,8 @@
 <script>
   import { uiScale } from "../scale.svelte.js";
-  import Icon from "../core/Icon.svelte";
-  import StageSquare from "../overview/StageSquare.svelte";
-  import { stageTone } from "../workflow.js";
-  import { repositoryLine, rowLabel, summaryFacts } from "./rail.js";
-  import StickerIcon from "./StickerIcon.svelte";
+  import SessionIdentity from "./SessionIdentity.svelte";
+  import SessionSticker from "./SessionSticker.svelte";
+  import { rowLabel, summaryFacts } from "./rail.js";
   import { sticker, stickerControlLabel, stickerCss, stickerTitle } from "./stickers.js";
 
   /** @type {{slug?: string, initials?: string, shortcut?: string, name?: string, repos?: {name: string}[], summary?: import("./rail.js").Summary, unseen?: number, idle?: string, selected?: boolean, dragging?: boolean, over?: boolean, onPointerDown?: (event: PointerEvent) => void, onPointerMove?: (event: PointerEvent) => void, onPointerUp?: (event: PointerEvent) => void, onPointerCancel?: (event: PointerEvent) => void, stickerId?: string, stickers?: import("./stickers.js").Sticker[], stickerBusy?: boolean, feedback?: {sequence: number, text: string, failed: boolean} | null, onSelect?: () => void, onSticker?: (event: MouseEvent) => void, onContextMenu?: (event: MouseEvent) => void}} */
@@ -33,7 +31,6 @@
     onContextMenu,
   } = $props();
 
-  let repository = $derived(repositoryLine(repos));
   let facts = $derived(summaryFacts(summary, unseen, idle));
   let label = $derived(rowLabel(name, repos, facts));
   let running = $derived(Boolean(summary.running));
@@ -94,26 +91,7 @@
     onclick={(event) => {
       if (event.detail === 0) onSelect?.();
     }}>
-    <div class="avatar" class:keyed={shortcut}>
-      {shortcut || initials}
-    </div>
-
-    <div class="text">
-      <div class="name">{name}</div>
-      <div class="repositories" title={[repository.name, repository.extra].filter(Boolean).join(" ")}>
-        {repository.name}{#if repository.extra}<span class="extra">{repository.extra}</span>{/if}
-      </div>
-      <div class="facts">
-        {#each facts as fact (fact.kind)}
-          <span class="fact {fact.kind}" title={fact.title}>
-            {#if fact.kind === "agents" && fact.stage}
-              <span class="stage"><StageSquare tone={stageTone(fact.stage)} done live /></span>
-            {:else if fact.kind === "agents" && fact.active}<Icon name="running" />{/if}
-            {fact.label}
-          </span>
-        {/each}
-      </div>
-    </div>
+    <SessionIdentity {initials} {shortcut} {name} {repos} {summary} {unseen} {idle} {selected} />
   </button>
 
   <button
@@ -126,11 +104,7 @@
     style:color={stickerItem ? stickerCss(stickerItem.colour) : undefined}
     onmousedown={(event) => event.preventDefault()}
     onclick={onSticker}>
-    {#if stickerItem}
-      <StickerIcon symbol={stickerItem.symbol} />
-    {:else}
-      <StickerIcon outline />
-    {/if}
+    <SessionSticker id={stickerId} {stickers} />
   </button>
 
   {#if feedback}
@@ -201,116 +175,8 @@
     outline-offset: -2px;
   }
 
-  .row:hover .name {
+  .row:hover :global(.name) {
     color: var(--text-primary);
-  }
-
-  .avatar {
-    position: relative;
-    width: calc(30px * var(--ui-scale));
-    height: calc(30px * var(--ui-scale));
-    flex: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font: 700 calc(13px * var(--ui-scale)) var(--font-machine);
-    background: transparent;
-    border: 1px solid var(--border-subtle);
-    color: var(--text-faint);
-  }
-
-  .running .avatar {
-    background: var(--surface-raised);
-    border-color: var(--border-default);
-    color: var(--text-secondary);
-  }
-
-  .selected .avatar {
-    background: var(--accent-action);
-    border-color: var(--accent-action);
-    color: var(--text-on-accent);
-  }
-
-  .keyed {
-    font: var(--machine-md);
-    font-size: calc(11px * var(--ui-scale));
-  }
-
-  .text {
-    min-width: 0;
-    flex: 1;
-  }
-
-  .name,
-  .repositories {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .name {
-    font: var(--machine-md);
-    font-size: calc(11px * var(--ui-scale));
-    color: var(--text-muted);
-  }
-
-  .running .name {
-    color: var(--text-secondary);
-  }
-
-  .selected .name {
-    font: var(--machine-bold);
-    font-size: calc(11px * var(--ui-scale));
-    color: var(--text-primary);
-  }
-
-  .repositories,
-  .facts {
-    font: var(--machine-xs);
-    font-size: calc(9.5px * var(--ui-scale));
-    margin-top: 2px;
-    color: var(--text-faint);
-  }
-
-  .selected .repositories,
-  .selected .facts {
-    color: var(--text-muted);
-  }
-
-  .extra {
-    margin-left: 0.5ch;
-    color: var(--text-muted);
-  }
-
-  .facts {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: calc(6px * var(--ui-scale));
-    row-gap: 1px;
-  }
-
-  .fact {
-    flex: none;
-    white-space: nowrap;
-    display: inline-flex;
-    align-items: center;
-    gap: calc(3px * var(--ui-scale));
-  }
-
-  .stage {
-    flex: none;
-    display: grid;
-    place-items: center;
-    width: calc(16px * var(--ui-scale));
-    height: calc(16px * var(--ui-scale));
-  }
-
-  .fact.attention {
-    color: var(--state-waiting);
-  }
-
-  .fact.unseen {
-    color: var(--state-guided);
   }
 
   .sticker {
@@ -364,7 +230,7 @@
     border-color: var(--state-failed);
   }
 
-  .feedback.above {
+  .feedback:global(.above) {
     top: auto;
     bottom: calc(100% + calc(5px * var(--ui-scale)));
   }

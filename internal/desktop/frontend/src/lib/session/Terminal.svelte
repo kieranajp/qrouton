@@ -8,8 +8,8 @@
   import { createTerminalPainter, encode, fontsReady, mount, terminalFontSize, watchSize } from "../xterm.js";
 
   /** @type {{id: string, pty: import("./services.js").PTY, active?: boolean,
-   *   focus?: number, focusPending?: boolean, onFocused?: (generation: number) => void}} */
-  let { id, pty, active = false, focus = 0, focusPending = false, onFocused } = $props();
+   *   focus?: number, focusPending?: boolean, focusEligible?: boolean, onFocused?: (generation: number) => void}} */
+  let { id, pty, active = false, focus = 0, focusPending = false, focusEligible = true, onFocused } = $props();
 
   let host;
   let term = $state();
@@ -29,7 +29,7 @@
   // Activation acknowledges a focus request as delivered, so it must not run
   // before there is a terminal to deliver one to.
   $effect(() => {
-    if (term) activation.update(active, focus, focusPending);
+    if (term) activation.update(active, focus, focusPending, focusEligible);
   });
 
   // An async onMount callback returns a Promise, not a cleanup Svelte would
@@ -82,7 +82,7 @@
 <!-- Hidden rather than unmounted: a surface you switch away from keeps running,
      and tearing down its terminal would lose the scrollback with it. -->
 <TerminalPane style="display: {active ? 'flex' : 'none'}">
-  <div class="host" bind:this={host}></div>
+  <div class="host" data-terminal-id={id} bind:this={host}></div>
 </TerminalPane>
 
 <style>

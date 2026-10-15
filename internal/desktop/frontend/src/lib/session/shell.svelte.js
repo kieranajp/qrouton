@@ -1,3 +1,5 @@
+import { sessionSwitcher } from "./switcher.svelte.js";
+import { macOS } from "../platform.js";
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
@@ -25,8 +27,8 @@ import {
 } from "../layout.js";
 import { present } from "../panes/present.svelte.js";
 import { relative } from "../relative.js";
-import { revealPath } from "../sessions.js";
-import { opensSettings } from "../shortcuts.js";
+import { show, revealPath } from "../sessions.js";
+import { opensSettings, opensSwitcher, position } from "../shortcuts.js";
 import {
   consumeTerminalFocus,
   focusGenerationIn,
@@ -206,6 +208,28 @@ export function shell() {
     fields.welcoming || fields.placing || assembling || picker || settingsOpen || present.active || reviewing,
   );
 
+  let railBlocked = $state(false);
+  let contextBlocked = $state(false);
+  const clearFocus = () => { terminalFocus = {}; };
+  const switcher = sessionSwitcher({ fields: () => fields,
+    blocked: () => covered || railBlocked || contextBlocked || identityOpen || listing,
+    covered: () => covered, show, clearFocus, request });
+  const gate = (event) => {
+    if (opensSwitcher(event, macOS)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) switcher.open();
+      return;
+    }
+    if (switcher.ownsFocus && (position(event) || opensSettings(event) ||
+        ((event.metaKey || event.ctrlKey) && event.key?.toLowerCase() === "f"))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+  window.addEventListener("keydown", gate, true);
+  $effect(() => () => window.removeEventListener("keydown", gate, true));
+
   async function escalate() {
     if (escalating || fields.mode !== MODE_LABELS.ASSISTANT) return;
     escalating = true;
@@ -243,7 +267,7 @@ export function shell() {
     const id = fields.terminal;
     if (id === shown) return;
     shown = id;
-    untrack(() => request(id));
+    untrack(() => { if (!switcher.ownsFocus) request(id); });
   });
 
   // An overlay covering the terminal hands the keyboard back when it goes, the
@@ -254,10 +278,14 @@ export function shell() {
   $effect(() => {
     const back = wasCovered && !covered;
     wasCovered = covered;
-    if (back) untrack(() => request(fields.terminal));
+    if (back) untrack(() => { if (!switcher.ownsFocus) request(fields.terminal); });
   });
 
   return {
+    switcher,
+    get focusEligible() { return !covered && !switcher.ownsFocus; },
+    railOwnership: (value) => { railBlocked = value; },
+    contextOwnership: (value) => { contextBlocked = value; },
     get reviewing() { return reviewing; },
     reviewBugReport: () => { reviewed = reviewKey; },
     dismissBugReport: () => { reviewed = ""; },

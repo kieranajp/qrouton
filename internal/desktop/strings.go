@@ -304,3 +304,16 @@ const (
 )
 
 const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"
+
+const (
+	switcherLabel     = "Switch session"
+	switcherSearch    = "Search sessions"
+	switcherClose     = "Close session picker"
+	switcherEmpty     = "No sessions available"
+	switcherNoMatches = "No matching sessions"
+	switcherOpening   = "Opening…"
+	switcherFailed    = "Session could not be opened. Try again."
+	switcherCurrent   = "Current"
+	switcherResults   = "sessions"
+	switcherHelp      = "Arrow keys choose · Enter open · Esc close"
+)
