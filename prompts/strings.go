@@ -82,6 +82,7 @@ const (
 var (
 	readOnlyAgents = map[string]bool{
 		"audit-checker":       true,
+		"audit-verifier":      true,
 		"code-reviewer":       true,
 		"codebase-researcher": true,
 		"external-researcher": true,

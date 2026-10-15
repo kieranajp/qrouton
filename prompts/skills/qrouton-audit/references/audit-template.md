@@ -8,7 +8,7 @@ target:
 
 ## Summary
 
-> <what was audited, how many findings per tell, and the findings by impact, high first>
+> <what was audited, how many findings per tell, then the findings by impact: one sentence per high and medium finding, high first>
 
 ## Duplicated behaviour or facts
 
@@ -28,4 +28,4 @@ target:
 
 ## Tools
 
-> <each tool or reading pass: name, version, command, mode, candidate count, traps checked, any error; then each job checked and its outcome>
+> <each tool or reading pass: name, version, command, mode, candidate count, traps checked, any error; then the full inventory, one row per import, built-in, global, internal module or kind of shared machinery over the threshold, with its file count and outcome; then each library category and its outcome>

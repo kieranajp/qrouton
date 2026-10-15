@@ -76,6 +76,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	agentNames := []string{
 		"qrouton-research-lead", "qrouton-planning-lead", "qrouton-implementation-lead",
 		"codebase-researcher", "pattern-finder", "thoughts-researcher", "external-researcher", "test-verifier", "code-reviewer",
+		"audit-checker", "audit-verifier",
 	}
 	for _, name := range agentNames {
 		if cb, err := os.ReadFile(filepath.Join(dir, ".codex", "agents", name+".toml")); err != nil {

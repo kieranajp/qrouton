@@ -20,6 +20,7 @@ import (
 // them. Naming them is what makes an addition or a loss legible in the failure.
 var embeddedPromptIDs = []string{
 	"agents/audit-checker",
+	"agents/audit-verifier",
 	"agents/code-reviewer",
 	"agents/codebase-researcher",
 	"agents/external-researcher",
@@ -473,6 +474,7 @@ var (
 
 	evidenceDisciplineHomes = []ID{
 		ID(agentIDPrefix + "audit-checker"),
+		ID(agentIDPrefix + "audit-verifier"),
 		ID(agentIDPrefix + "qrouton-audit-lead"),
 		ID(agentIDPrefix + "code-reviewer"),
 		ID(agentIDPrefix + "codebase-researcher"),

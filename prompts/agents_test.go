@@ -20,6 +20,7 @@ const (
 	leadNameSuffix = "-lead"
 	toolsKey       = "tools"
 	sandboxModeKey = "sandbox_mode"
+	auditVerifier  = "audit-verifier"
 )
 
 // agentAssetPaths are the files one agent prompt renders to, one per runner
@@ -308,6 +309,37 @@ func TestLeadNamesNameAgentPrompts(t *testing.T) {
 	}
 }
 
+// The re-read must come from an agent that cannot edit the draft it checks, so
+// the lead's own fixes are never what it verifies.
+func TestAuditLeadSpawnsReadOnlyVerifier(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	lead, err := loader.Load(context.Background(), ID(agentIDPrefix+AuditLead))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(lead.Content), "`"+auditVerifier+"`") {
+		t.Errorf("audit lead does not spawn %s", auditVerifier)
+	}
+	verifier, err := loader.Load(context.Background(), ID(agentIDPrefix+auditVerifier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tools, _ := frontmatterEntry(string(verifier.Content), toolsKey); tools != "Read, Grep, Glob, LS" {
+		t.Errorf("%s tools = %q, want read-only", auditVerifier, tools)
+	}
+	if !readOnlyAgents[auditVerifier] {
+		t.Errorf("%s is not in readOnlyAgents", auditVerifier)
+	}
+	assets, err := Render(verifier)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf(codexSandboxFormat, strconv.Quote(sandboxReadOnly))
+	if codex := codexAsset(t, assets, auditVerifier); !strings.Contains(codex, want) {
+		t.Errorf("Codex rendering wants %q:\n%s", want, codex)
+	}
+}
+
 // An audit's verdicts come from the code alone. Claude enforces the lead's
 // refusal from its frontmatter; Codex and agy read only the prose.
 func TestAuditPromptsJudgeLiveCode(t *testing.T) {
@@ -330,7 +362,7 @@ func TestAuditPromptsJudgeLiveCode(t *testing.T) {
 		t.Errorf("the Claude rendering drops disallowedTools:\n%s", claude)
 	}
 
-	for _, id := range []ID{ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker"), ID(skillIDPrefix + "qrouton-audit")} {
+	for _, id := range []ID{ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker"), ID(agentIDPrefix + auditVerifier), ID(skillIDPrefix + "qrouton-audit")} {
 		prompt, err := loader.Load(context.Background(), id)
 		if err != nil {
 			t.Fatal(err)
@@ -362,7 +394,7 @@ func TestAuditSkillRanksNoTool(t *testing.T) {
 	tool := regexp.MustCompile(`(?i)\b(tools?|detectors?|knip|jscpd|eslint|deadcode|dupl|staticcheck|vet)\b`)
 	loader := NewEmbeddedLoader()
 	var files []PromptFile
-	for _, id := range []ID{ID(skillIDPrefix + "qrouton-audit"), ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker")} {
+	for _, id := range []ID{ID(skillIDPrefix + "qrouton-audit"), ID(agentIDPrefix + AuditLead), ID(agentIDPrefix + "audit-checker"), ID(agentIDPrefix + auditVerifier)} {
 		prompt, err := loader.Load(context.Background(), id)
 		if err != nil {
 			t.Fatal(err)
@@ -386,15 +418,17 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		skill    = "skill"
 		lead     = "lead"
 		checker  = "checker"
+		verifier = "verifier"
 		shape    = "references/audit-shape.md"
 		template = "references/audit-template.md"
 	)
 	loader := NewEmbeddedLoader()
 	texts := map[string]string{}
 	for name, id := range map[string]ID{
-		skill:   ID(skillIDPrefix + "qrouton-audit"),
-		lead:    ID(agentIDPrefix + AuditLead),
-		checker: ID(agentIDPrefix + "audit-checker"),
+		skill:    ID(skillIDPrefix + "qrouton-audit"),
+		lead:     ID(agentIDPrefix + AuditLead),
+		checker:  ID(agentIDPrefix + "audit-checker"),
+		verifier: ID(agentIDPrefix + auditVerifier),
 	} {
 		prompt, err := loader.Load(context.Background(), id)
 		if err != nil {
@@ -437,6 +471,17 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"impact field", []string{"Impact:", "by impact"}, []string{shape}},
 		{"impact order", []string{"by impact"}, []string{lead, template}},
 		{"cosmetic nits", []string{"one shared root cause"}, []string{lead, shape}},
+		{"full inventory", []string{"full inventory", "stated skip", "routes searched"}, []string{skill, lead, shape}},
+		{"judgement skip", []string{"name what was compared"}, []string{lead, shape}},
+		{"shared machinery", []string{"kinds of shared machinery"}, []string{lead}},
+		{"independent re-read", []string{"independent re-read"}, []string{skill, lead, shape, verifier}},
+		{"what the re-read verifies", []string{"agree or differ", "one route", "proposes to grow", "serve another purpose"}, []string{lead, shape, verifier}},
+		{"category outcomes", []string{"outcome per category", "none hand-rolled"}, []string{lead, checker, shape}},
+		{"platform comments", []string{"platform or runtime claims"}, []string{lead, checker}},
+		{"root-cause rule", []string{"not a shared root cause"}, []string{lead, shape}},
+		{"test-preserving deletions", []string{"serve another purpose"}, []string{checker}},
+		{"impact", []string{"data loss"}, []string{lead, shape}},
+		{"summary", []string{"one sentence per high and medium finding"}, []string{lead, shape, template}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -448,7 +493,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for _, asset := range rendered {
-		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests", "job inventory", "## Tools"} {
+		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests", "job inventory", "## Tools", "full inventory", "stated skip", "routes searched"} {
 			if !strings.Contains(string(asset.Content), phrase) {
 				t.Errorf("%s does not carry %q", asset.Path, phrase)
 			}
@@ -456,7 +501,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for where, text := range texts {
-		for _, gone := range []string{"installed library", "four-step", "the one most files import"} {
+		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern"} {
 			if strings.Contains(text, gone) {
 				t.Errorf("%s still says %q", where, gone)
 			}
