@@ -1,5 +1,7 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
+  import { macOS } from "../platform.js";
+  import { SWITCHER_LABEL } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { dismissible } from "../core/dismiss.js";
@@ -11,15 +13,17 @@
   import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
   import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
-  import { rowAt, shortcut } from "../shortcuts.js";
+  import { rowAt, shortcut, switcherHint } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onSwitchSession?: () => void, onOwnership?: (value: boolean) => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
     stickers = [],
     onNewSession,
+    onSwitchSession,
+    onOwnership,
     onDismissed,
     size = 0,
     // The splitter needs to know how much room the rail leaves the panes, and
@@ -209,6 +213,9 @@
   /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
   let confirming = $state(null);
   let cleaning = $state(false);
+  let inspecting = $state(false);
+  $effect(() => { onOwnership?.(Boolean(menu || confirming || cleaning || inspecting || gesture)); });
+  onDestroy(() => onOwnership?.(false));
 
   // The rail clips and scrolls, so the menu is drawn at the page and placed at
   // the pointer instead of anchored to the row.
@@ -265,6 +272,7 @@
   // The list is advisory — the removal forces regardless — so a check that could
   // not be made says so and leaves the confirm live.
   async function askCleanup(row) {
+    inspecting = true;
     let dirty = [];
     let checked = true;
     try {
@@ -273,6 +281,7 @@
       checked = false;
     }
     confirming = { row, dirty, checked, error: "" };
+    inspecting = false;
   }
 
   // The chrome poll notices the row is gone, so nothing here waits on a refresh.
@@ -332,6 +341,7 @@
   </div>
 
   <div class="footer">
+    <Button variant="ghost" size="sm" wide onclick={onSwitchSession}>{SWITCHER_LABEL} {switcherHint(macOS)}</Button>
     <Button variant="cube" size="sm" icon="new" wide onclick={onNewSession}>New session</Button>
   </div>
 </div>

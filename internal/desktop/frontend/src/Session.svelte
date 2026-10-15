@@ -7,6 +7,7 @@
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
+  import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
@@ -34,7 +35,7 @@
 </script>
 
 <div class="session">
-  <div class="titlebar">
+  <div class="titlebar" inert={view.switcher.visible}>
     <div class="identity">
       <CubeMark size={20} />
       <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
@@ -60,11 +61,13 @@
     </span>
   </div>
 
-  <div class="panels" bind:clientWidth={view.panels}>
+  <div class="panels" inert={view.switcher.visible} bind:clientWidth={view.panels}>
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
       stickers={fields.stickers}
+      onSwitchSession={view.switcher.open}
+      onOwnership={view.railOwnership}
       onNewSession={() => (view.requested = true)}
       onDismissed={view.handBack}
       size={view.sidebarSize}
@@ -120,6 +123,7 @@
           pty={conversationPTY}
           active={row.terminal === fields.terminal}
           focus={view.focusOf(row.terminal)}
+          focusEligible={view.focusEligible}
           focusPending={view.focusPendingOf(row.terminal)}
           onFocused={(generation) => view.focused(row.terminal, generation)} />
       {/each}
@@ -155,7 +159,8 @@
             pty={tabPTY}
             active={i === view.selected}
             focus={view.focusOf(tab.id)}
-            focusPending={view.focusPendingOf(tab.id)}
+            focusEligible={view.focusEligible}
+          focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
           <OverviewPane
@@ -174,7 +179,10 @@
     </div>
   </div>
 
-  <ContextMenu />
+  <ContextMenu onOwnership={view.contextOwnership} />
+  {#if view.switcher.visible}
+    <SessionSwitcher controller={view.switcher} current={fields.slug} stickers={fields.stickers} total={fields.sessions.length} />
+  {/if}
 
   {#if view.reviewing}
     {#key fields.slug + ":" + fields.bugReportID}

@@ -8,6 +8,8 @@ export function createTerminalActivation({
 }) {
   let active = false;
   let generation = 0;
+  let eligible = true;
+  let pending = false;
   let focusFrame;
   let refitFrame;
 
@@ -26,18 +28,24 @@ export function createTerminalActivation({
     if (focusFrame !== undefined) return;
     focusFrame = frame(() => {
       focusFrame = undefined;
-      if (!active) return;
+      if (!active || !eligible || !pending) return;
       focus();
       handled(generation);
     });
   };
 
   return {
-    update(nextActive, nextGeneration, focusPending) {
+    update(nextActive, nextGeneration, focusPending, nextEligible = true) {
       if (nextActive && !active) scheduleRefit();
       active = nextActive;
       generation = nextGeneration;
-      if (active && focusPending) scheduleFocus();
+      eligible = nextEligible;
+      pending = focusPending;
+      if ((!active || !eligible || !pending) && focusFrame !== undefined) {
+        cancelFrame(focusFrame);
+        focusFrame = undefined;
+      }
+      if (active && eligible && pending) scheduleFocus();
     },
     destroy() {
       active = false;

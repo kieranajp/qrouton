@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import Menu from "./Menu.svelte";
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
@@ -9,6 +9,10 @@
   import { clipboardText, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind } from "../panes/markdown.js";
   import { terminalAt } from "../xterm.js";
+
+  let { onOwnership = undefined } = $props();
+  $effect(() => { onOwnership?.(Boolean(open)); });
+  onDestroy(() => onOwnership?.(false));
 
   /** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */
   let open = $state(null);
@@ -136,6 +140,6 @@
     position: fixed;
     width: 0;
     height: 0;
-    z-index: 20;
+    z-index: 26;
   }
 </style>

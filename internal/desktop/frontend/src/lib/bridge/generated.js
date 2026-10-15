@@ -317,6 +317,26 @@ export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
 
 export const SESSION_REORDER_FAILED = "Session could not be moved";
 
+export const SWITCHER_LABEL = "Switch session";
+
+export const SWITCHER_SEARCH = "Search sessions";
+
+export const SWITCHER_CLOSE = "Close session picker";
+
+export const SWITCHER_EMPTY = "No sessions available";
+
+export const SWITCHER_NO_MATCHES = "No matching sessions";
+
+export const SWITCHER_OPENING = "Opening…";
+
+export const SWITCHER_FAILED = "Session could not be opened. Try again.";
+
+export const SWITCHER_CURRENT = "Current";
+
+export const SWITCHER_RESULTS = "sessions";
+
+export const SWITCHER_HELP = "Arrow keys choose · Enter open · Esc close";
+
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
 /** @type {readonly StickerColour[]} */
 export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
