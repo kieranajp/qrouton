@@ -26,6 +26,7 @@ Evidence: <what the code shows, with the lines that show it>
 Verdict: rot. Fails step 1, no tie: nothing fails if one copy drifts
 Proposed fix: <the change, in a sentence or two>
 Behaviour risk: safe
+Impact: medium
 Confidence: high
 Source: llm
 
@@ -44,6 +45,7 @@ Each finding has:
 - `Verdict:` with the step of the five-step check the code fails;
 - `Proposed fix:`;
 - `Behaviour risk:` as `safe`, `needs a test first` or `changes behaviour`;
+- `Impact:` as `high`, `medium` or `low`, by the meanings below;
 - `Confidence:` as `high`, `medium` or `low`;
 - `Source:` as the tool that found the candidate, or `llm`;
 - an empty `Triage:` line, last in the block.
@@ -55,6 +57,29 @@ in `Evidence:`. Never bundle unrelated defects into one finding.
 
 A candidate you cannot settle goes among the findings with `Confidence: low`,
 or nowhere. No other section holds candidates.
+
+Impact says how much fixing the finding is worth:
+
+| Impact | Meaning |
+| --- | --- |
+| `high` | It causes wrong behaviour today, or most changes in its area must work around it. |
+| `medium` | It will cause drift or extra work the next time someone changes that area. |
+| `low` | Cosmetic or local; fixing it saves little. |
+
+`## Summary` lists the findings by impact, high first.
+
+Cosmetic nits that come from one shared root cause become one finding, and
+that root cause is its defect. A nit with no shared root cause is
+not filed. Never pad the audit with nits.
+
+A tell-3 finding's cost line states the library's size and installed status,
+and the install cost when it is not installed. The cost is weighed against the
+whole family: every homegrown piece doing that library's job, including pieces
+filed under other tells. The cost line lists every family location. A case goes
+under `## Checked and deliberate` for its cost only when the cost outweighs the
+whole family. A spare that contradicts another finding is wrong: never spare a
+library while another finding proposes growing or copying the homegrown
+version.
 
 ## The five-step check
 
@@ -79,12 +104,41 @@ How the steps decide:
 A reason counts only when it is written at the site: a comment, a doc, or the
 commit message for those lines. A reason the auditor supplies is not a reason.
 Check each runtime claim in a written reason against the layer that really
-runs the code before it decides anything.
+runs the code before it decides anything, and cite the file or package that
+settles it. Inferring a claim from the target's own code
+is not a runtime check. Verify it or drop it. A verdict that rested on a
+dropped claim makes the candidate a `Confidence: low` finding, or nothing.
 
 `## Checked and deliberate` holds one line per candidate, each with its
-location and the tie or written reason that keeps it. Never dismiss candidates
-as a group. A tool candidate that a known trap explains is not listed here:
+location and the tie or written reason that keeps it. A tell-3 case spared for
+its cost is one line giving the cost and every family location. Never dismiss
+candidates as a group. A tool candidate that a known trap explains is not listed here:
 `## Tools` counts it by trap.
+
+`## Tools` holds the tools, the job inventory and the trap counts. The job
+inventory lists each job: a primitive, built-in or module used from three or
+more files in two or more directories, or a concern handled that widely
+without a shared module. Each job carries its outcome: one route, the finding
+ids it gave, or deliberate with its line in `## Checked and deliberate`. No
+section holds open questions or follow-ups.
+
+## Before returning
+
+The lead runs a conformance pass over its draft and fixes every violation of
+these rules:
+
+- one finding per defect, with no bundled or repeated defects;
+- every field present in order, `Impact:` included, with `Triage:` last;
+- no open questions, follow-ups or loose candidates in any section;
+- one line per candidate under `## Checked and deliberate`, each with its own
+  tie, written reason or weighed install cost;
+- `## Tools` holds tools, the job inventory and trap counts only, and every job
+  has an outcome;
+- each tell-3 cost line states size and installed status and lists the whole
+  family, and no spare contradicts another finding;
+- every runtime claim cites the runtime-layer file or package that settles it;
+- cosmetic nits grouped by one shared root cause, or left out;
+- `## Summary` lists findings by impact, high first.
 
 ## Triage
 

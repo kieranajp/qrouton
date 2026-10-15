@@ -428,6 +428,15 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"unreachable step", []string{"live caller in shipped code"}, []string{checker, shape}},
 		{"tell-1 and tell-2 method", []string{"bypasses a shared", "two sources", "called only from tests"}, []string{lead}},
 		{"low confidence", []string{"Confidence: low", "No other section holds candidates"}, []string{shape}},
+		{"job inventory", []string{"job inventory", "## Tools"}, []string{skill, lead, shape}},
+		{"whole-family cost", []string{"whole family", "size and installed status"}, []string{lead, checker, shape}},
+		{"category sweep", []string{"category the repo hand-rolls"}, []string{lead, checker}},
+		{"no contradicting spare", []string{"contradicts another finding"}, []string{lead, shape}},
+		{"conformance pass", []string{"conformance pass"}, []string{skill, lead, shape}},
+		{"inferred is not checked", []string{"is not a runtime check"}, []string{lead, checker, shape}},
+		{"impact field", []string{"Impact:", "by impact"}, []string{shape}},
+		{"impact order", []string{"by impact"}, []string{lead, template}},
+		{"cosmetic nits", []string{"one shared root cause"}, []string{lead, shape}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -439,7 +448,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for _, asset := range rendered {
-		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests"} {
+		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests", "job inventory", "## Tools"} {
 			if !strings.Contains(string(asset.Content), phrase) {
 				t.Errorf("%s does not carry %q", asset.Path, phrase)
 			}
@@ -447,7 +456,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for where, text := range texts {
-		for _, gone := range []string{"installed library", "four-step"} {
+		for _, gone := range []string{"installed library", "four-step", "the one most files import"} {
 			if strings.Contains(text, gone) {
 				t.Errorf("%s still says %q", where, gone)
 			}

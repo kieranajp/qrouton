@@ -8,7 +8,7 @@ target:
 
 ## Summary
 
-> <what was audited, and the findings in a few sentences: how many per tell, and which matter most>
+> <what was audited, how many findings per tell, and the findings by impact, high first>
 
 ## Duplicated behaviour or facts
 
@@ -24,8 +24,8 @@ target:
 
 ## Checked and deliberate
 
-> <candidates judged deliberate, one line per candidate with its location and the tie or written reason that keeps it>
+> <candidates judged deliberate, one line per candidate with its location and the tie, written reason or weighed install cost that keeps it>
 
 ## Tools
 
-> <each tool or reading pass: name, version, command, mode, candidate count, traps checked, any error>
+> <each tool or reading pass: name, version, command, mode, candidate count, traps checked, any error; then each job checked and its outcome>
