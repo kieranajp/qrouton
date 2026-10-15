@@ -125,6 +125,25 @@ test("the replay guards consume only xterm response requests", () => {
   painter.dispose();
 });
 
+test("a first replay answers queries as if live, a later one does not", () => {
+  const term = pendingTerminal();
+  const painter = createTerminalPainter(term);
+  const cursorReport = () => handler(term, "csi", { final: "n" })([6]);
+
+  painter.paint({ encoded: encode("first"), replay: true, first: true });
+  assert.equal(cursorReport(), false);
+  term.complete();
+  assert.equal(cursorReport(), false);
+  term.complete();
+
+  painter.paint({ encoded: encode("again"), replay: true });
+  assert.equal(cursorReport(), true);
+  term.complete();
+  term.complete();
+  assert.equal(cursorReport(), false);
+  painter.dispose();
+});
+
 test("disposing clears queued output and makes write callbacks inert", () => {
   const term = pendingTerminal();
   const painter = createTerminalPainter(term);

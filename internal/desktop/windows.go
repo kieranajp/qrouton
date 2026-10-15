@@ -63,6 +63,24 @@ func (w *Windows) Select(slug, id string) error { return w.selectBySlug(slug, id
 // room to draw.
 func (w *Windows) Reorder(slug, id string, to int) error { return w.reorder(slug, id, to) }
 
+// openAgentWindow opens a tab for the agent and runs a terminal's command at
+// once, so it does not wait for the session to be on screen.
+func (w *Windows) openAgentWindow(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	id, err := w.openWindow(owner, opts)
+	if err != nil || opts.Kind != workbench.KindTerminal {
+		return id, err
+	}
+	if err := w.terminals.launch(id, unmountedCols, unmountedRows); err != nil {
+		// A later open of the same source may already have replaced this tab.
+		if !w.exists(id) {
+			return id, nil
+		}
+		w.discard(id)
+		return "", err
+	}
+	return id, nil
+}
+
 func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
 
 func (w *Windows) Write(id, encoded string) error { return w.terminals.write(id, encoded) }

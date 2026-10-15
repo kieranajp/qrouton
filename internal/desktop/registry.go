@@ -41,6 +41,8 @@ type terminalContent struct {
 	// page can therefore reset to one replay without racing live output around it.
 	stream  sync.Mutex
 	process *ptyProcess
+	// served is set once a page has shown the output, live or replayed.
+	served bool
 	// exit is nil while the process is still running.
 	exit *int
 }

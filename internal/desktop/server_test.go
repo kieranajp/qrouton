@@ -528,3 +528,25 @@ func TestDispatchRefusesEachOperationWithItsOwnSentinel(t *testing.T) {
 		})
 	}
 }
+
+func TestOpOpenRunsATerminalsCommandWithoutAMountedPage(t *testing.T) {
+	windows, _ := testWindows(t)
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "out")
+	c := &control{windows: windows, owner: windows.shown()}
+	res := c.dispatch(workbench.Request{Op: workbench.OpOpen, Options: &workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "eager", Cwd: dir,
+		Command: []string{"/bin/sh", "-c", "date > " + marker + "; printf ready; sleep 5"},
+	}})
+	if res.Error != "" {
+		t.Fatal(res.Error)
+	}
+	waitFor(t, "the command to write its file", func() bool {
+		_, err := os.Stat(marker)
+		return err == nil
+	})
+	waitFor(t, "the command's output to be readable", func() bool {
+		text, _ := windows.readWindow(res.ID, true)
+		return strings.Contains(text, "ready")
+	})
+}

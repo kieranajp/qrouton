@@ -17,15 +17,32 @@ type terminals struct {
 type terminalChunk struct {
 	Encoded string `json:"encoded"`
 	Replay  bool   `json:"replay,omitempty"`
+	// First marks a running process's first replay, whose queries the page
+	// answers as if live.
+	First bool `json:"first,omitempty"`
 }
 
 func newTerminals(emit emitter, reg *registry) *terminals {
 	return &terminals{emit: emit, registry: reg}
 }
 
-// start launches a terminal window's command once its page has measured itself.
-// The page calls it on load, so a reload must not fork a second process.
+// start serves the page: it launches the command if nothing has, and otherwise
+// attaches the freshly mounted view to the running or finished process.
 func (t *terminals) start(id string, cols, rows int) error {
+	terminal, started, err := t.fork(id, cols, rows, true)
+	if err != nil || started {
+		return err
+	}
+	return t.attach(id, terminal, cols, rows)
+}
+
+// launch forks a terminal window's command unless it already has a process.
+func (t *terminals) launch(id string, cols, rows int) error {
+	_, _, err := t.fork(id, cols, rows, false)
+	return err
+}
+
+func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalContent, bool, error) {
 	var started *ptyProcess
 	var terminal *terminalContent
 	err := t.registry.with(id, func(window *agentWindow) error {
@@ -44,28 +61,12 @@ func (t *terminals) start(id string, cols, rows int) error {
 			return err
 		}
 		content.process = process
+		content.served = served
 		started = process
 		return nil
 	})
-	if err != nil {
-		return err
-	}
-
-	// A session switch unmounts this xterm, not its PTY. Reset the fresh view to
-	// the retained byte stream before any later chunk can pass it. Resize under
-	// the same ordering lock: a shell repainting for SIGWINCH must follow replay.
-	if started == nil {
-		terminal.stream.Lock()
-		if err := terminal.process.resize(cols, rows); err != nil {
-			terminal.stream.Unlock()
-			return err
-		}
-		t.emit(windowDataEvent+id, terminalChunk{
-			Encoded: base64.StdEncoding.EncodeToString(terminal.buffer.bytes()),
-			Replay:  true,
-		})
-		terminal.stream.Unlock()
-		return nil
+	if err != nil || started == nil {
+		return terminal, false, err
 	}
 	go started.pump(
 		func(b []byte) {
@@ -78,6 +79,28 @@ func (t *terminals) start(id string, cols, rows int) error {
 		},
 		func(code int) { t.exited(id, code) },
 	)
+	return terminal, true, nil
+}
+
+// attach resets a freshly mounted view to the retained byte stream before any
+// later chunk can pass it. Resize under the same ordering lock: a shell
+// repainting for SIGWINCH must follow replay. A finished process has no PTY
+// worth resizing, and its output must still replay.
+func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
+	terminal.stream.Lock()
+	defer terminal.stream.Unlock()
+	running := !terminal.process.done()
+	if running {
+		if err := terminal.process.resize(cols, rows); err != nil {
+			return err
+		}
+	}
+	t.emit(windowDataEvent+id, terminalChunk{
+		Encoded: base64.StdEncoding.EncodeToString(terminal.buffer.bytes()),
+		Replay:  true,
+		First:   running && !terminal.served,
+	})
+	terminal.served = true
 	return nil
 }
 

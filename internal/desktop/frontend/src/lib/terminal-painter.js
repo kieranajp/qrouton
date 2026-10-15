@@ -57,7 +57,7 @@ export function createTerminalPainter(term) {
       return;
     }
 
-    replaying = true;
+    replaying = !chunk.first;
     term.write("\x1bc", () => {
       if (!live) return;
       term.write(decode(chunk.encoded), () => {
