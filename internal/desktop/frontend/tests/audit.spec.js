@@ -11,21 +11,27 @@ const why = (page) => page.locator(".send .why");
 
 test("the overview tallies findings by tell, verdict, impact and triage", async ({ page }) => {
   await open(page);
-  await expect(page.locator("[data-tally]")).toHaveText("1 of 3 triaged");
+  await expect(page.locator("[data-tally]")).toHaveText("1 of 4 triaged");
   await expect(page.locator('[data-group="By tell"] li')).toHaveText([
     /Duplicated behaviour or facts\s*1/,
     /Dead or needlessly defensive code\s*2/,
     /Homegrown library or platform behaviour\s*0/,
+    /Tests that cannot fail or pass for the wrong reason\s*1/,
   ]);
-  await expect(page.locator('[data-group="By verdict"] li')).toHaveText([/Step 1 · No tie\s*1/, /Step 3 · The guarded case cannot occur\s*2/]);
-  await expect(page.locator('[data-group="By impact"] li')).toHaveText([/high\s*1/, /medium\s*0/, /low\s*1/, /unrated\s*1/]);
-  await expect(page.locator('[data-group="By triage"] li')).toHaveText([/Accepted\s*0/, /Rejected\s*1/, /Deferred\s*0/, /Note only\s*0/, /Untriaged\s*2/]);
+  await expect(page.locator('[data-group="By verdict"] li')).toHaveText([
+    /Step 1 · No tie\s*1/,
+    /Step 3 · The guarded case cannot occur\s*2/,
+    /Step 7 · The test cannot fail\s*1/,
+  ]);
+  await expect(page.locator('[data-group="By impact"] li')).toHaveText([/high\s*1/, /medium\s*1/, /low\s*1/, /unrated\s*1/]);
+  await expect(page.locator('[data-group="By triage"] li')).toHaveText([/Accepted\s*0/, /Rejected\s*1/, /Deferred\s*0/, /Note only\s*0/, /Untriaged\s*3/]);
+  await expect(page.locator("[data-tells-run]")).toHaveCount(0);
 });
 
 test("cards run from the highest impact to the lowest, confidence breaking ties, and show their fields", async ({ page }) => {
   await open(page);
-  await expect(page.locator(".card")).toHaveCount(3);
-  expect(await page.locator(".card").evaluateAll((cards) => cards.map((el) => el.dataset.finding))).toEqual(["F1", "F2", "F3"]);
+  await expect(page.locator(".card")).toHaveCount(4);
+  expect(await page.locator(".card").evaluateAll((cards) => cards.map((el) => el.dataset.finding))).toEqual(["F1", "F4", "F2", "F3"]);
   await expect(card(page, "F1").locator(".impact")).toHaveText("high impact");
   await expect(card(page, "F3").locator(".impact")).toHaveText("unrated impact");
   await expect(card(page, "F1").locator(".locations code")).toHaveText(["src/api/http.ts:41", "src/sync/queue.ts:88"]);
@@ -44,7 +50,7 @@ test("a triage choice saves into the file through SaveAnswers", async ({ page })
   const audit = await page.evaluate(() => window.AUDIT);
   expect(text).toBe(audit.replace("Source: llm\n\nTriage:\n\n### F3", "Source: llm\n\nTriage: accept\n\n### F3"));
   await expect(card(page, "F2").locator(".state")).toHaveText("Saved");
-  await expect(page.locator("[data-tally]")).toHaveText("2 of 3 triaged");
+  await expect(page.locator("[data-tally]")).toHaveText("2 of 4 triaged");
 });
 
 test("a typed note saves when the field loses focus", async ({ page }) => {
@@ -119,7 +125,7 @@ test("send waits for every save, then makes one bridge call", async ({ page }) =
 test("send waits until something is triaged", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.pushContent(window.AUDIT.replace("Triage: reject\nthe copy in sync/ is kept for the offline build", "Triage:")));
-  await expect(page.locator("[data-tally]")).toHaveText("0 of 3 triaged");
+  await expect(page.locator("[data-tally]")).toHaveText("0 of 4 triaged");
   await expect(sendButton(page)).toBeDisabled();
   await expect(why(page)).toHaveText("Triage at least one finding first.");
 });
@@ -140,14 +146,25 @@ test("cards fit the pane without scrolling sideways", async ({ page }) => {
 
 test("a subset audit tallies and cards only the tells it ran", async ({ page }) => {
   await open(page, "?subset");
-  await expect(page.locator('[data-group="By tell"] li')).toHaveText([/Dead or needlessly defensive code\s*2/]);
-  await expect(page.locator("[data-tells-run]")).toHaveText("Ran 1 of 3 tells: Dead or needlessly defensive code");
+  await expect(page.locator('[data-group="By tell"] li')).toHaveText([
+    /Dead or needlessly defensive code\s*2/,
+    /Tests that cannot fail or pass for the wrong reason\s*1/,
+  ]);
+  await expect(page.locator("[data-tells-run]")).toHaveText(
+    "Ran 2 of 4 tells: Dead or needlessly defensive code, Tests that cannot fail or pass for the wrong reason",
+  );
   await expect(card(page, "F1")).toHaveCount(0);
   await expect(page.locator('[data-section="Duplicated behaviour or facts"]')).toContainText("Two timeout helpers race a promise against a timer");
 });
 
-test("an audit from before the tells key shows its three tells", async ({ page }) => {
+test("an audit from before the tells key shows its three tells and names them", async ({ page }) => {
   await open(page, "?legacy");
-  await expect(page.locator('[data-group="By tell"] li')).toHaveCount(3);
-  await expect(page.locator("[data-tells-run]")).toHaveCount(0);
+  await expect(page.locator('[data-group="By tell"] li')).toHaveText([
+    /Duplicated behaviour or facts\s*1/,
+    /Dead or needlessly defensive code\s*2/,
+    /Homegrown library or platform behaviour\s*0/,
+  ]);
+  await expect(page.locator("[data-tells-run]")).toHaveText(
+    "Ran 3 of 4 tells: Duplicated behaviour or facts, Dead or needlessly defensive code, Homegrown library or platform behaviour",
+  );
 });

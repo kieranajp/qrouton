@@ -2,7 +2,7 @@ import { AUDIT_HEADINGS } from "../bridge/generated.js";
 import { plainText, sliceSections } from "./sections.js";
 import { lastFilled, spliceLabelled } from "./spec.js";
 
-export const TELLS = [AUDIT_HEADINGS.DUPLICATED, AUDIT_HEADINGS.DEAD, AUDIT_HEADINGS.HOMEGROWN];
+export const TELLS = [AUDIT_HEADINGS.DUPLICATED, AUDIT_HEADINGS.DEAD, AUDIT_HEADINGS.HOMEGROWN, AUDIT_HEADINGS.VOLKSWAGEN];
 export const CHOICES = ["accept", "reject", "defer"];
 export const TRIAGED = { accept: "Accepted", reject: "Rejected", defer: "Deferred" };
 export const CONFIDENCES = ["high", "medium", "low"];
@@ -11,7 +11,7 @@ export const IMPACTS = ["high", "medium", "low"];
 const FINDING = /^(F\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Impact|Confidence|Source):[ \t]?(.*)$/;
 const TRIAGE = /^Triage:[ \t]?(.*)$/;
-const STEP = /\bstep\s*([1-5])\b/i;
+const STEP = /\bstep\s*([1-8])\b/i;
 const KEYS = {
   Tell: "tell",
   Locations: "locations",

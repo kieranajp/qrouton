@@ -15,7 +15,10 @@ Check every instance of each of these, in the checks, tells or inventory rows yo
 3. Every cost-spare under `## Checked and deliberate`, against every other finding's proposed fix. A spare fails when another finding proposes to grow, copy or extend the homegrown family it spares.
 4. Every proposed fix that deletes code or tests. Find each test the fix would delete or break, and check whether it would also serve another purpose, such as checking exhaustiveness or a contract. The fix fails when such a test goes and the fix neither keeps it nor names what replaces it.
 5. Every runtime claim, against the layer that really runs the code: the interpreter, compiler or engine, and any runtime, framework or shim layer that runs before the app's own code. A claim that a platform lacks an API holds only if nothing in that chain provides it.
+6. Every claim that a test never runs. Read the runner config, the scripts that start it and the marker or pattern the finding cites, and confirm the test is not collected or is always skipped.
+7. Every claim that a test cannot fail. Read the test and the code it names, and confirm that no assertion would catch a break in that code.
+8. Every claim that shipped code behaves differently under test. Read the branch and its condition, and confirm that tests meet the condition and production does not.
 
-Return only the failures. Each failure gives the claim as the draft states it, the finding id or `## Tools` row it sits in, and the evidence: the `path:line` you read and what it shows. Then give a count of passes for each of the five checks. Do not list passes.
+Return only the failures. Each failure gives the claim as the draft states it, the finding id or `## Tools` row it sits in, and the evidence: the `path:line` you read and what it shows. Then give a count of passes for each check you were given. Do not list passes.
 
 {{evidence-discipline}}

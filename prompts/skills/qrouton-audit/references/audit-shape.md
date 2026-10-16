@@ -21,11 +21,12 @@ list:
 | `duplicated` | `## Duplicated behaviour or facts` |
 | `dead` | `## Dead or needlessly defensive code` |
 | `homegrown` | `## Homegrown library or platform behaviour` |
+| `volkswagen` | `## Tests that cannot fail or pass for the wrong reason` |
 
 The lead deletes the slug and the section of each tell not chosen, so an audit
 of tells 2 and 3 carries `tells: [dead, homegrown]` and neither section of
 tell 1. An audit with no `tells:` key was written before the key existed, and
-it ran `duplicated`, `dead` and `homegrown`.
+it ran the three tells of that time: `duplicated`, `dead` and `homegrown`.
 
 The audit is complete when `## Summary` and each chosen tell section hold
 content.
@@ -33,8 +34,8 @@ content.
 An audit does the work of only the chosen tells. It runs their detectors, hunts
 and checks, and merges findings among them. The job inventory runs
 only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when
-tell 3 is.
-A rule below that belongs to a tell the audit did not run does not apply.
+tell 3 is. A rule below that belongs to a tell the audit did not run does not
+apply.
 
 ## Findings
 
@@ -65,7 +66,8 @@ Each finding has:
 - `Locations:` as one or more `path:line`, comma-separated;
 - `Evidence:` with what the code shows. It may run onto following lines, up to
   the next field;
-- `Verdict:` with the step of the five-step check the code fails;
+- `Verdict:` with the step the code fails: one of the five-step check for
+  tells 1 to 3, or one of steps 6 to 8 of the test check for tell 4;
 - `Proposed fix:`;
 - `Behaviour risk:` as `safe`, `needs a test first` or `changes behaviour`;
 - `Impact:` as `high`, `medium` or `low`, by the meanings below;
@@ -177,6 +179,33 @@ name what was compared. Pure entries that do no I/O and hold no config or
 state may share one stated-skip row that lists them. "Low value" and "out of
 scope" are not reasons. No section holds open questions or follow-ups.
 
+## The test check
+
+Tell 4 uses three more steps in place of the five:
+
+6. Does the runner collect and run the test?
+7. Would the test fail if the code it names were broken?
+8. Does shipped code behave the same under test as in production?
+
+How the steps decide:
+
+- A test that fails step 7 is rot, whatever its reason.
+- A skip, or shipped code that behaves differently under test, is deliberate
+  only when a reason written at the site still holds and no test relies on it
+  to pass. Otherwise it is rot.
+- A test weakened to pass, such as an expected value changed to match the
+  output or an assertion removed, needs commit evidence: the commit and the
+  lines it loosened. A checker cannot read history, so it returns such a
+  candidate as `needs history`, and the lead reads the commits.
+
+The audit never runs the target's tests, and runs no coverage tool. What the
+runner collects comes from reading its config and test-file patterns. Nothing
+runs in a mode that updates snapshots or golden files. Code that only tests
+reach comes from the reachability run that leaves tests out as entry points.
+When tell 2 runs, that code is filed under tell 2, because deleting it removes
+the finding. When only tell 4 runs, it is filed under tell 4, and its verdict
+says it fails step 5.
+
 ## Before returning
 
 The lead checks its finished draft in two passes. First a fresh read-only
@@ -184,11 +213,12 @@ agent gives it an independent re-read against live code. The re-read verifies
 every claim that copies agree or differ today, every one route outcome, every
 cost-spare against the other findings (no spare whose family another finding
 proposes to grow), every fix that deletes code or tests (no deleted test that
-would serve another purpose), and every runtime claim. It skips the one route
-check when no inventory ran, and the cost-spare check when tell 3 did not run.
-The lead fixes or drops
-each failed finding, and corrects a failed inventory row's outcome without
-removing the row.
+would serve another purpose), every runtime claim, every claim that a test
+never runs or cannot fail, and every claim that shipped code behaves
+differently under test. It skips the one route check when no inventory ran,
+the cost-spare check when tell 3 did not run, and the test claims when tell 4
+did not run. The lead fixes or drops each failed finding, and corrects a failed
+inventory row's outcome without removing the row.
 
 Then the lead runs a conformance pass, last, and fixes every violation of these
 rules, skipping those for a tell or an inventory that did not run:
@@ -209,6 +239,9 @@ rules, skipping those for a tell or an inventory that did not run:
 - cosmetic nits grouped by one shared root cause, or left out, and nothing
   grouped only because one detector, tool or trap found it;
 - every deleting fix keeps the tests that serve another purpose;
+- every tell-4 finding names the test and the code it names, and its verdict
+  names the step from 6 to 8 it fails, or step 5 for code only tests reach;
+- every weakened-test finding cites the commit and the lines it loosened;
 - `## Summary` gives one sentence per high and medium finding, high first,
   and no bare list of ids.
 

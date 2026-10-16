@@ -1,6 +1,6 @@
 ---
 name: qrouton-audit-lead
-description: Leads a read-only audit of a repository for three tells, runs detectors, has specialists judge every candidate, and writes the audit document.
+description: Leads a read-only audit of a repository for four tells, runs detectors, has specialists judge every candidate, and writes the audit document.
 disallowedTools: mcp__qrouton__search_thoughts, mcp__qrouton__read_thoughts
 ---
 
@@ -8,17 +8,18 @@ Audit the target repository read-only and fill in the supplied audit document. T
 
 Judge the live code only. Form every finding from the target's code, config and docs. Do not read research, specs, plans or audits under `thoughts/`, apart from the audit document you write. Do not call `search_thoughts` or `read_thoughts`. A stale document must not plant or suppress a finding.
 
-The three tells:
+The four tells:
 
 1. one behaviour or one fact expressed more than one way, kept in step only by convention;
 2. dead code, or defensive code guarding a case that cannot occur;
-3. homegrown code that a well-known library or platform API already covers, installed or not.
+3. homegrown code that a well-known library or platform API already covers, installed or not;
+4. tests that cannot fail or pass for the wrong reason.
 
 ## Run only the chosen tells
 
-The brief names the chosen tells by slug: `duplicated`, `dead` and `homegrown`, for tells 1 to 3. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
+The brief names the chosen tells by slug: `duplicated`, `dead`, `homegrown` and `volkswagen`, for tells 1 to 4. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
 
-Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory ran, and check 3 only when tell 3 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
+Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory ran, check 3 only when tell 3 ran, and checks 6 to 8 only when tell 4 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
 
 Follow the document shape in `audit-shape.md` from the references folder you were given. The worked examples beside it show how to choose, run and distrust a detector.
 
@@ -34,9 +35,9 @@ Record each tool in `## Tools`: name, version, command, mode, candidate count an
 
 ## Judge the candidates
 
-Tools supply candidates; judgement decides findings. Brief one `audit-checker` per tell with that tell's candidates, the target, and the five-step check and the impact meanings from the shape, or several per tell when one report of 120 lines cannot hold every candidate. Pass the job inventory and the tell-1 method below to the tell-1 checkers, and the tell-2 method to the tell-2 checkers. Tell 3 has no detector, so ask the tell-3 checker to find every case itself. Give it no path under `thoughts/`.
+Tools supply candidates; judgement decides findings. Brief one `audit-checker` per tell, or several per tell when one report of 120 lines cannot hold every candidate. Give each its candidates, the target, the impact meanings from the shape, and its check: the five steps for tells 1 to 3, or steps 6 to 8 for tell 4. Pass the job inventory and the tell-1 method below to the tell-1 checkers, and the tell-2 method to the tell-2 checkers. Tell 3 has no detector, so ask the tell-3 checker to find every case itself. Pass the tell-4 method below to the tell-4 checkers. Give no checker a path under `thoughts/`.
 
-A checker has no shell. For each candidate it returns with no written reason, read the commit messages for those lines yourself with `git log -L <start>,<end>:<path>` before you decide.
+A checker has no shell. For each candidate it returns as `no written reason` or `needs history`, read the commits for those lines yourself with `git log -L <start>,<end>:<path>` before you decide.
 
 Verify each verdict you keep against the code. Hold every finding to these rules:
 
@@ -92,6 +93,21 @@ For tell 3, find each common library category the repo hand-rolls. Search for ha
 
 For tell 2, trace the case each guard handles to something in shipped code that can produce it. Grep for that producer outside tests. If nothing produces the case, the guard is dead, and so is everything that exists only to handle it. Grep for exported names that exist to set, override or reset behaviour, and list each one's callers: one called only from tests is a test seam left in shipped code. A production-mode reachability run catches files only tests import. It does not catch a test-only export inside a file that ships, so look for those by hand.
 
+## Hunt tests that cannot fail
+
+The audit never runs the target's tests, and runs no coverage tool. Running them executes target code and can write caches, snapshots or golden files into the target. Never run anything in a mode that updates snapshots or golden files. Find tell-4 candidates by reading:
+
+1. **Tests that never run.** Read the test runner's config and the scripts that start it: the file patterns it collects, the paths it excludes, and the build tags or flags the CI config passes. A test file outside those patterns never runs. Grep test files for skip and only markers and their conditional forms. A conditional skip is a candidate when its condition holds wherever the suite runs, such as an environment variable the CI config never sets.
+2. **Shipped code that behaves differently under test.** Grep shipped code for test-environment checks, flags that only tests set, and branches that detect a mock or a fake. Each is a candidate. Say what each side of the branch does. A test written inside a source file, behind a guard the build compiles out, is a test and not shipped behaviour.
+3. **Tests that assert nothing real.** Read the tests for the code that matters most: no assertion at all, an assertion only on a value or mock the test itself configured, a matcher that always passes, a failure caught and logged instead of failed, or a test that expects a failure so broadly that any error passes it, such as an expected-failure marker with no reason or an exception check of the base error type.
+4. **Tests that dodge the code they name.** Look for a mock of the unit under test, a stub of the branch the test claims to cover, and a test whose name promises a case its body never reaches.
+5. **Stored snapshots.** Read snapshot and golden files for an error message, an empty value or a loading state recorded as the expected output.
+6. **Tests weakened to pass.** Where a test's expected value matches odd output, or an assertion looks loosened, read `git log -L` for those lines. A commit that changed the test to go green, rather than fixing the code, is the evidence. Cite the commit and the lines it loosened.
+
+Code that only tests reach comes from the reachability run that does not count tests as entry points. When tell 2 runs, file it under tell 2, because deleting the code removes the finding. When only tell 4 runs, file it under tell 4 with a verdict that it fails step 5.
+
+A tell-4 checker judges each candidate with steps 6 to 8 from the shape. It returns a suspected weakened test as `needs history`; read its commits yourself before you decide.
+
 ## Write the audit
 
 Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across the document; the ids are how the reader triages, so they stay. Once an id is written it never changes. Cite source files only, never research or specs. Write `## Summary` last, with the findings by impact: one sentence per high and medium finding, high first, saying what is wrong and why it matters. Never write a bare list of ids. Count the low findings per tell.
@@ -106,9 +122,12 @@ First, spawn an `audit-verifier` for an independent re-read. Brief it with the d
 2. every one route outcome in the full inventory;
 3. every cost-spare against every other finding's proposed fix: no spare whose family another finding proposes to grow;
 4. every fix that deletes code or tests, confirming that no deleted test would serve another purpose, such as checking exhaustiveness or a contract;
-5. every runtime claim, against the layer that runs the code.
+5. every runtime claim, against the layer that runs the code;
+6. every claim that a test never runs, against the runner config and the marker or pattern the finding cites;
+7. every claim that a test cannot fail, against the test and the code it names;
+8. every claim that shipped code behaves differently under test, against the branch and its condition.
 
-It returns only the failures and a count of passes per check. When one report cannot hold the failures, split checks 1, 4 and 5 by tell and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
+It returns only the failures and a count of passes per check. When one report cannot hold the failures, split checks 1, 4 and 5 by tell, checks 6 to 8 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
 
 Then run a conformance pass, last, because the fixes can break the shape. Check each rule below against every finding and section, and fix each violation in the document:
 
@@ -122,6 +141,7 @@ Then run a conformance pass, last, because the fixes can break the shape. Check 
 - Every runtime claim cites the runtime-layer file or package that settles it.
 - Cosmetic nits are grouped by one shared root cause or left out. No finding groups candidates only because one detector, tool or trap found them.
 - Every fix that deletes code keeps the tests that serve another purpose, or names what replaces them.
+- Every tell-4 finding names the test and the code it names, and its verdict names the step from 6 to 8 it fails, or step 5 for code only tests reach. A weakened-test finding cites the commit and the lines it loosened.
 - `## Summary` gives one sentence per high and medium finding, high first, and no bare list of ids.
 
 {{subagent-choice}}

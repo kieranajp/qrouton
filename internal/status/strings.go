@@ -32,6 +32,7 @@ const (
 	AuditHeadingDuplicated = "Duplicated behaviour or facts"
 	AuditHeadingDead       = "Dead or needlessly defensive code"
 	AuditHeadingHomegrown  = "Homegrown library or platform behaviour"
+	AuditHeadingVolkswagen = "Tests that cannot fail or pass for the wrong reason"
 )
 
 // The audit frontmatter key that lists the chosen tells, and each tell's slug.
@@ -40,12 +41,14 @@ const (
 	tellDuplicated = "duplicated"
 	tellDead       = "dead"
 	tellHomegrown  = "homegrown"
+	tellVolkswagen = "volkswagen"
 )
 
 var auditTells = []auditTell{
 	{tellDuplicated, AuditHeadingDuplicated},
 	{tellDead, AuditHeadingDead},
 	{tellHomegrown, AuditHeadingHomegrown},
+	{tellVolkswagen, AuditHeadingVolkswagen},
 }
 
 // legacyTells are the tells an audit written before the tells key ran.

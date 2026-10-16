@@ -71,6 +71,22 @@ export const AUDIT = [
   "",
   "None.",
   "",
+  "## Tests that cannot fail or pass for the wrong reason",
+  "",
+  "### F4 — A retry test asserts the stub it configured",
+  "",
+  "Tell: tests that cannot fail or pass for the wrong reason",
+  "Locations: internal/retry/retry_test.go:52",
+  "Evidence: the test sets the stub to return three attempts, then asserts three attempts.",
+  "Verdict: rot. Fails step 7: the test cannot fail",
+  "Proposed fix: assert on the attempts the retry loop makes.",
+  "Behaviour risk: safe",
+  "Impact: medium",
+  "Confidence: high",
+  "Source: llm",
+  "",
+  "Triage:",
+  "",
   "## Checked and deliberate",
   "",
   "- internal/retry/jitter.go:8 — seeded for tests.",
@@ -88,14 +104,19 @@ const hashOf = (text) => {
   return `h${(h >>> 0).toString(16)}`;
 };
 
-// ?subset ran one tell and says so in its frontmatter; ?legacy predates the
+// ?subset ran some tells and says so in its frontmatter; ?legacy predates the
 // key, and Go sends it the legacy set. The default sends no tells at all.
 const params = new URLSearchParams(location.search);
-const SUBSET = [AUDIT_HEADINGS.DEAD];
+const SUBSET = [AUDIT_HEADINGS.DEAD, AUDIT_HEADINGS.VOLKSWAGEN];
 const LEGACY = [AUDIT_HEADINGS.DUPLICATED, AUDIT_HEADINGS.DEAD, AUDIT_HEADINGS.HOMEGROWN];
 const tells = params.has("subset") ? SUBSET : params.has("legacy") ? LEGACY : undefined;
 
-window.file = params.has("subset") ? AUDIT.replace("kind: audit\n", "kind: audit\ntells: [dead]\n") : AUDIT;
+const LEGACY_AUDIT = AUDIT.slice(0, AUDIT.indexOf("## Tests that cannot fail")) + AUDIT.slice(AUDIT.indexOf("## Checked and deliberate"));
+window.file = params.has("subset")
+  ? AUDIT.replace("kind: audit\n", "kind: audit\ntells: [dead, volkswagen]\n")
+  : params.has("legacy")
+    ? LEGACY_AUDIT
+    : AUDIT;
 let stale = null;
 
 const document_ = (fields = {}) => ({

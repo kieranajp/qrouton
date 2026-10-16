@@ -185,6 +185,8 @@ func TestACompleteAuditFillsResearch(t *testing.T) {
 		{"triaged", strings.ReplaceAll(completeAudit, "Triage:\n", "Triage: reject\nkept on purpose\n"), true},
 		{"a subset without its unchosen sections", subsetAudit, true},
 		{"a subset with a chosen section framed", strings.Replace(subsetAudit, "None.", "> findings", 1), false},
+		{"every tell with tell 4 framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\n> findings\n", false},
+		{"every tell with tell 4 filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", true},
 		{"an unknown tell asks for every tell", strings.Replace(subsetAudit, "tells: [dead, homegrown]", "tells: [nonsense]", 1), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -211,7 +213,7 @@ func TestEitherAnsweredResearchOrACompleteAuditFillsResearch(t *testing.T) {
 }
 
 func TestAuditTellsReadsTheTellsKey(t *testing.T) {
-	every := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
+	every := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown, AuditHeadingVolkswagen}
 	legacy := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
 	front := func(lines string) string { return "---\nkind: audit\n" + lines + "---\n\n# Tells\n" }
 	for _, tc := range []struct {
@@ -222,7 +224,7 @@ func TestAuditTellsReadsTheTellsKey(t *testing.T) {
 		{"no key", front("target: repo\n"), legacy},
 		{"empty list", front("tells: []\n"), every},
 		{"empty value", front("tells:\n"), every},
-		{"a subset out of order", front("tells: [homegrown, dead]\n"), []string{AuditHeadingDead, AuditHeadingHomegrown}},
+		{"a subset out of order", front("tells: [volkswagen, homegrown, dead]\n"), []string{AuditHeadingDead, AuditHeadingHomegrown, AuditHeadingVolkswagen}},
 		{"a block list", front("tells:\n  - dead\n"), []string{AuditHeadingDead}},
 		{"a duplicate", front("tells: [dead, dead]\n"), []string{AuditHeadingDead}},
 		{"an unknown slug", front("tells: [dead, nonsense]\n"), every},

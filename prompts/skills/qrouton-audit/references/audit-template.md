@@ -2,7 +2,7 @@
 kind: audit
 title: <title>
 target:
-tells: [duplicated, dead, homegrown]
+tells: [duplicated, dead, homegrown, volkswagen]
 ---
 
 # <title>
@@ -22,6 +22,10 @@ tells: [duplicated, dead, homegrown]
 ## Homegrown library or platform behaviour
 
 > <findings where code redoes what a well-known library or the platform provides, installed or not>
+
+## Tests that cannot fail or pass for the wrong reason
+
+> <findings where a test never runs, cannot fail, dodges the code it names or was weakened to pass, or where shipped code behaves differently under test>
 
 ## Checked and deliberate
 

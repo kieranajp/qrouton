@@ -146,12 +146,13 @@ export const ARTIFACT_KINDS = Object.freeze({
   NOTE: "NOTE",
 });
 
-/** @typedef {"Summary"|"Duplicated behaviour or facts"|"Dead or needlessly defensive code"|"Homegrown library or platform behaviour"} AuditHeading */
+/** @typedef {"Summary"|"Duplicated behaviour or facts"|"Dead or needlessly defensive code"|"Homegrown library or platform behaviour"|"Tests that cannot fail or pass for the wrong reason"} AuditHeading */
 export const AUDIT_HEADINGS = Object.freeze({
   SUMMARY: "Summary",
   DUPLICATED: "Duplicated behaviour or facts",
   DEAD: "Dead or needlessly defensive code",
   HOMEGROWN: "Homegrown library or platform behaviour",
+  VOLKSWAGEN: "Tests that cannot fail or pass for the wrong reason",
 });
 
 /** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */

@@ -421,6 +421,8 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		verifier = "verifier"
 		shape    = "references/audit-shape.md"
 		template = "references/audit-template.md"
+		goNotes  = "references/go.md"
+		tsNotes  = "references/typescript.md"
 	)
 	loader := NewEmbeddedLoader()
 	texts := map[string]string{}
@@ -487,6 +489,15 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"template key", []string{"tells:"}, []string{template}},
 		{"gated inventory", []string{"only when tell 1 or tell 3 is chosen"}, []string{lead, shape}},
 		{"chosen only", []string{"only the chosen tells"}, []string{lead, shape}},
+		{"tell 4 heading", []string{"Tests that cannot fail or pass for the wrong reason"}, []string{template}},
+		{"test check", []string{"Would the test fail if the code it names were broken?"}, []string{checker, shape}},
+		{"weakened tests", []string{"needs history"}, []string{lead, checker, shape}},
+		{"shipped code under test", []string{"behaves differently under test"}, []string{lead, checker, verifier}},
+		{"never runs tests", []string{"never runs the target's tests"}, []string{lead, shape}},
+		{"no snapshot rewrites", []string{"snapshots or golden files"}, []string{lead, tsNotes, goNotes}},
+		{"verifier test checks", []string{"cannot fail", "never runs"}, []string{verifier}},
+		{"go tell-4 notes", []string{"`t.Skip`", "`testing.Testing()`"}, []string{goNotes}},
+		{"typescript tell-4 notes", []string{"`testMatch`", "`.only`"}, []string{tsNotes}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {

@@ -60,3 +60,34 @@ The JavaScript engine alone does not decide which globals and APIs exist. A
 framework can install polyfills before the app's own code runs; Expo, for
 example, ships a runtime polyfill layer. Before anything in the audit says an
 API is missing, read what the framework installs at startup.
+
+## Tests that cannot fail
+
+These are where tell-4 candidates hide in TypeScript and JavaScript. Find them
+by reading; never run the tests, and never pass a flag that rewrites
+snapshots or golden files, such as `-u`, `--update`, `--updateSnapshot` or
+`--update-snapshots`.
+
+- **Markers.** Grep test files for `.skip`, `.only` and `.todo`, the `x` and
+  `f` prefixes (`xit`, `xdescribe`, `fit`, `fdescribe`), and conditional forms
+  such as `it.skipIf(...)`, `describe.runIf(...)` or a ternary that picks
+  `it` or `it.skip`. A committed `.only` stops its siblings from running, and
+  some runners skip every other file as well, unless the CI run sets
+  `forbidOnly` or `--forbid-only`, which fails the run instead.
+- **Test patterns.** Read the runner's config for the files it collects:
+  Jest's `testMatch`, `testRegex`, `roots` and `testPathIgnorePatterns`,
+  Vitest's `include` and `exclude`, and Playwright's `testDir`, `testMatch`
+  and `testIgnore`. A test file outside them never runs, and neither does one
+  the package's `test` script never reaches.
+- **Shipped code under test.** Grep non-test files for
+  `process.env.NODE_ENV === "test"`, `JEST_WORKER_ID`, `VITEST` and globals
+  the test config defines. An in-source test block behind `import.meta.vitest`
+  is a test, not shipped behaviour, when the build defines it away.
+- **Mocking the module under test.** A `jest.mock` or `vi.mock` of the path
+  the test imports its subject from tests the mock.
+- **Snapshots.** Read `__snapshots__` files and inline snapshots for an error
+  message, `null`, an empty array or a loading state recorded as expected.
+- **Test-only code.** Compare knip's default and `--production` runs: code
+  only the default run counts as used is reached only from tests, scripts,
+  configs or stories. When tests are its only callers, file it under tell 2
+  when that tell runs, else under tell 4.

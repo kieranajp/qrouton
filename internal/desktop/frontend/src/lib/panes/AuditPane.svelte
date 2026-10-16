@@ -21,7 +21,17 @@
 
   /** @typedef {{id: string, choice: string, note: string}} Draft */
 
-  const STEPS = ["", "No tie", "No reason that holds", "The guarded case cannot occur", "The copies disagree", "Nothing shipped reaches it"];
+  const STEPS = [
+    "",
+    "No tie",
+    "No reason that holds",
+    "The guarded case cannot occur",
+    "The copies disagree",
+    "Nothing shipped reaches it",
+    "The test never runs",
+    "The test cannot fail",
+    "Shipped code changes under test",
+  ];
 
   const answers = answerable({
     id: () => id,

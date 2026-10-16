@@ -218,3 +218,27 @@ test("no chosen tells means every tell section present", () => {
   ]);
   assert.deepEqual(parseAudit(AUDIT, null), parseAudit(AUDIT));
 });
+
+test("a tell-4 finding parses and names its step", () => {
+  const withTell4 = AUDIT.replace(
+    "## Checked and deliberate",
+    doc(
+      "## Tests that cannot fail or pass for the wrong reason",
+      "",
+      "### F4 — A test asserts the stub it configured",
+      "",
+      "Tell: tests that cannot fail or pass for the wrong reason",
+      "Verdict: rot. Fails step 7: the test cannot fail",
+      "",
+      "Triage:",
+      "",
+      "## Checked and deliberate",
+    ),
+  );
+  const audit = parseAudit(withTell4);
+  const f4 = audit.findings.find((finding) => finding.id === "F4");
+  assert.equal(f4.section, "Tests that cannot fail or pass for the wrong reason");
+  assert.equal(f4.step, 7);
+  const last = audit.tells.at(-1);
+  assert.deepEqual([last.name, last.count], [f4.section, 1]);
+});

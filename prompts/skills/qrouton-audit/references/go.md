@@ -46,3 +46,29 @@ Go has no direct counterpart to `no-unnecessary-condition`. `staticcheck`
 and the `nilness` analyser find part of it:
 `go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...`. Read the rest. A
 guard on an error from I/O, a decoder or another process is never rot.
+
+## Tests that cannot fail
+
+These are where tell-4 candidates hide in Go. Find them by reading; never
+run the tests, and never pass a flag that rewrites snapshots or golden files.
+Such update flags are defined by the target's own tests, so read the flag
+definitions to know which ones to avoid.
+
+- **Skips.** Grep test files for `t.Skip`, `t.Skipf` and `t.SkipNow`, and for
+  skips behind `testing.Short()` or a missing environment variable. Check
+  whether the CI config passes `-short` or sets the variable.
+- **Build constraints.** A `_test.go` file behind a custom `//go:build` tag
+  runs only when `-tags` names it; check the Makefile and CI config for that
+  tag. One behind a GOOS or GOARCH constraint, or a suffix such as
+  `_linux_test.go`, runs only on a matching CI host.
+- **Files the go command ignores.** Directories named `testdata`, or starting
+  with `_` or `.`, are never built, and a function named `Testfoo`, with a
+  lower-case letter after `Test`, is never run.
+- **Shipped code under test.** Grep non-test files for `testing.Testing()`,
+  `flag.Lookup("test.v")` and checks on `os.Args[0]` ending in `.test`.
+- **Assertions that cannot fail.** `t.Log` or `t.Logf` where the test should
+  call `t.Error` or `t.Fatal`, an error assigned to `_`, and a test that only
+  compares a fake's output with the value it was set up to return.
+- **Test-only code.** Compare the two `deadcode` runs: a function only the
+  `-test` run reaches is code only tests use. File it under tell 2 when that
+  tell runs, else under tell 4.
