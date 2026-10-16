@@ -14,6 +14,12 @@ The three tells:
 2. dead code, or defensive code guarding a case that cannot occur;
 3. homegrown code that a well-known library or platform API already covers, installed or not.
 
+## Run only the chosen tells
+
+The brief names the chosen tells by slug: `duplicated`, `dead` and `homegrown`, for tells 1 to 3. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
+
+Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory ran, and check 3 only when tell 3 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
+
 Follow the document shape in `audit-shape.md` from the references folder you were given. The worked examples beside it show how to choose, run and distrust a detector.
 
 ## Run the detectors
@@ -42,7 +48,7 @@ Verify each verdict you keep against the code. Hold every finding to these rules
 - Check each runtime claim in a written reason against the layer that really runs the code before it decides anything: its source, its docs, or the installed packages, and cite the file or package that settles it. Inferring a claim from the target's own code is not a runtime check. Verify it or drop it. A verdict that rested on a dropped claim goes among the findings with `Confidence: low`, or nowhere.
 - A fix that would change behaviour is marked `changes behaviour`.
 - Authorship is not evidence either way.
-- Write one finding per defect. Before you write, compare every finding across all three tells and merge any two that describe the same defect. File the merged finding under the tell whose fix removes it, and name the other tell in `Evidence:`.
+- Write one finding per defect. Before you write, compare every finding across the chosen tells and merge any two that describe the same defect. File the merged finding under the tell whose fix removes it, and name the other tell in `Evidence:`.
 - A candidate you cannot settle goes among the findings with `Confidence: low`, or nowhere. No other section holds candidates.
 - Write one line per candidate under `## Checked and deliberate`, each with its location and the tie, written reason or weighed install cost that keeps it. Never dismiss candidates as a group.
 - Rate each finding's `Impact:` as `high`, `medium` or `low`, using the meanings in the shape. Wrong behaviour or data loss today is `high`. So is a structural split that most changes in its area must work around.

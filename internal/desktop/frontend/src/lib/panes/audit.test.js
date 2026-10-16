@@ -186,3 +186,35 @@ test("ids stay with their findings when the agent inserts one above", () => {
   assert.equal(audit.findings[2].title, "A nil check on a value that is never nil");
   assert.equal(audit.findings[1].triage.raw, "");
 });
+
+test("only the chosen tells yield findings, and an unchosen tell section reads as prose", () => {
+  const audit = parseAudit(AUDIT, ["Dead or needlessly defensive code"]);
+  assert.equal(audit.isAudit, true);
+  assert.deepEqual(audit.findings.map((finding) => finding.id), ["F2", "F3"]);
+  assert.deepEqual(audit.tells.map((tell) => [tell.name, tell.count]), [["Dead or needlessly defensive code", 2]]);
+  assert.deepEqual(audit.sections.map((section) => section.name), [
+    "Summary",
+    "Duplicated behaviour or facts",
+    "Homegrown library or platform behaviour",
+    "Checked and deliberate",
+    "Tools",
+  ]);
+});
+
+test("a chosen tell with no section counts 0, in the chosen order", () => {
+  const without = AUDIT.replace("## Homegrown library or platform behaviour\n\nNone.\n\n", "");
+  const audit = parseAudit(without, ["Dead or needlessly defensive code", "Homegrown library or platform behaviour"]);
+  assert.deepEqual(audit.tells.map((tell) => [tell.name, tell.count]), [
+    ["Dead or needlessly defensive code", 2],
+    ["Homegrown library or platform behaviour", 0],
+  ]);
+});
+
+test("no chosen tells means every tell section present", () => {
+  const without = AUDIT.replace("## Homegrown library or platform behaviour\n\nNone.\n\n", "");
+  assert.deepEqual(parseAudit(without, null).tells.map((tell) => tell.name), [
+    "Duplicated behaviour or facts",
+    "Dead or needlessly defensive code",
+  ]);
+  assert.deepEqual(parseAudit(AUDIT, null), parseAudit(AUDIT));
+});

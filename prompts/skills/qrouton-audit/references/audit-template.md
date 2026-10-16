@@ -2,6 +2,7 @@
 kind: audit
 title: <title>
 target:
+tells: [duplicated, dead, homegrown]
 ---
 
 # <title>

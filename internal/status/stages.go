@@ -3,6 +3,7 @@ package status
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/prompts"
+	"go.yaml.in/yaml/v3"
 )
 
 // stages reads the R, P and I marks from the session's own thoughts. Each mark
@@ -48,7 +50,7 @@ func researched(path string) bool {
 	return markdown.Researched(text)
 }
 
-// audited means the summary and every tell section hold content. Triage
+// audited means the summary and every chosen tell section hold content. Triage
 // changes nothing here.
 func audited(path string) bool {
 	body, err := os.ReadFile(path)
@@ -59,12 +61,51 @@ func audited(path string) bool {
 	for _, section := range markdown.Sections(string(body)) {
 		state[strings.ToLower(section.Name)] = section.State
 	}
-	for _, heading := range auditCompleteHeadings {
+	for _, heading := range append([]string{AuditHeadingSummary}, AuditTells(string(body))...) {
 		if state[strings.ToLower(heading)] != markdown.SectionAnswered {
 			return false
 		}
 	}
 	return true
+}
+
+type auditTell struct{ slug, heading string }
+
+// AuditTells is the headings of the tells an audit chose, in tell order. An
+// audit with no tells key ran the legacy set. A key that is empty, malformed or
+// names an unknown tell counts as every tell, so nothing is judged complete early.
+func AuditTells(text string) []string {
+	matter, _, _ := markdown.Split(text)
+	var front map[string]yaml.Node
+	if err := yaml.Unmarshal([]byte(matter), &front); err != nil {
+		return tellHeadings(nil)
+	}
+	node, ok := front[tellsKey]
+	if !ok {
+		return tellHeadings(legacyTells)
+	}
+	var slugs []string
+	if err := node.Decode(&slugs); err != nil || len(slugs) == 0 {
+		return tellHeadings(nil)
+	}
+	for _, slug := range slugs {
+		if !slices.ContainsFunc(auditTells, func(tell auditTell) bool { return tell.slug == slug }) {
+			return tellHeadings(nil)
+		}
+	}
+	return tellHeadings(slugs)
+}
+
+// tellHeadings is the headings of the named tells in tell order, and of every
+// tell when none is named.
+func tellHeadings(slugs []string) []string {
+	var headings []string
+	for _, tell := range auditTells {
+		if slugs == nil || slices.Contains(slugs, tell.slug) {
+			headings = append(headings, tell.heading)
+		}
+	}
+	return headings
 }
 
 // implemented means the plan has phases, each has Verify items, and every one

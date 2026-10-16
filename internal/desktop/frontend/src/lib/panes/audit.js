@@ -86,19 +86,25 @@ function readFinding(lines, from, to, section, named) {
   return { id: named[1], title: named[2], section, from, to, fields, step, triage };
 }
 
-/** An audit is triageable once it holds one of the tell sections.
- * @param {string} text */
-export function parseAudit(text) {
+/** An audit is triageable once it holds one of the tell sections. Only the chosen tells yield
+ * findings; null chooses every tell section present. An unchosen tell section reads as prose.
+ * @param {string} text @param {string[] | null} [chosen] */
+export function parseAudit(text, chosen = null) {
   const { title, preamble, sections } = sliceSections(text);
   const lines = text.split("\n");
-  const tellOf = (name) => TELLS.find((tell) => tell.toLowerCase() === name.toLowerCase());
+  const same = (a) => (b) => a.toLowerCase() === b.toLowerCase();
+  const tellOf = (name) => TELLS.find(same(name));
+  const picked = chosen ?? [...new Set(sections.map((section) => tellOf(section.name)).filter(Boolean))];
+  const chosenOf = (name) => picked.find(same(name));
 
   /** @type {Finding[]} */
   const findings = [];
-  const tells = [];
+  /** @type {Map<string, {name: string, from: number, to: number, count: number}>} */
+  const found = new Map();
+  const judged = new Set();
   for (const section of sections) {
-    const tell = tellOf(section.name);
-    if (!tell) continue;
+    const tell = chosenOf(section.name);
+    if (!tell || found.has(tell)) continue;
     const heads = section.nodes.filter((node) => node.type === "heading" && node.depth === 3);
     let count = 0;
     heads.forEach((heading, at) => {
@@ -108,17 +114,18 @@ export function parseAudit(text) {
       findings.push(readFinding(lines, line(heading), to, tell, named));
       count++;
     });
-    tells.push({ name: tell, from: section.from, to: section.to, count });
+    found.set(tell, { name: tell, from: section.from, to: section.to, count });
+    judged.add(section);
   }
 
   return {
     title,
     preamble,
-    isAudit: tells.length > 0,
+    isAudit: sections.some((section) => tellOf(section.name)),
     findings,
-    tells,
+    tells: picked.map((name) => found.get(name) ?? { name, from: 0, to: 0, count: 0 }),
     sections: sections
-      .filter((section) => !tellOf(section.name))
+      .filter((section) => !judged.has(section))
       .map(({ name, from, to }) => ({ name, from, to })),
   };
 }

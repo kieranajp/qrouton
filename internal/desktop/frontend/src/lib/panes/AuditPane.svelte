@@ -8,7 +8,7 @@
   import FindingCard from "./FindingCard.svelte";
   import { links, viewport } from "./actions.js";
   import { answerable } from "./answerable.svelte.js";
-  import { CHOICES, IMPACTS, TRIAGED, byImpact, parseAudit, reapply, spliceTriage } from "./audit.js";
+  import { CHOICES, IMPACTS, TELLS, TRIAGED, byImpact, parseAudit, reapply, spliceTriage } from "./audit.js";
   import { clampedSpan, holding, partition } from "./deck.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
@@ -16,7 +16,7 @@
   import { sendAuditTriage } from "./spec-calls.js";
   import "./markdown.css";
 
-  /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
+  /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, tells?: string[], line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
   /** @typedef {{id: string, choice: string, note: string}} Draft */
@@ -40,10 +40,10 @@
   let source = $derived(answers.source);
   let shown = $derived({ ...doc, text: source.text, viewportEpoch: answers.epoch });
   let rendered = $derived(render(source.text));
-  let audit = $derived(parseAudit(source.text));
+  let audit = $derived(parseAudit(source.text, doc.tells ?? null));
   let laid = $derived(reapply(audit, pending));
   let heading = $derived(rendered.title || (doc.source ? doc.source.split("/").pop() : ""));
-  let parts = $derived(partition(rendered.body, [...audit.sections, ...audit.tells]));
+  let parts = $derived(partition(rendered.body, [...audit.sections, ...audit.tells.filter((tell) => tell.from)]));
   let summary = $derived(audit.sections.findIndex((section) => section.name.toLowerCase() === AUDIT_HEADINGS.SUMMARY.toLowerCase()));
 
   /** @type {Map<string, {choice: string, note: string}>} */
@@ -175,6 +175,9 @@
             <div class="tally" data-tally>
               <span class="says">{audit.findings.length === 0 ? "No findings" : `${triaged} of ${audit.findings.length} triaged`}</span>
             </div>
+            {#if audit.tells.length < TELLS.length}
+              <p class="ran" data-tells-run>Ran {audit.tells.length} of {TELLS.length} tells: {audit.tells.map((tell) => tell.name).join(", ")}</p>
+            {/if}
             {#if audit.findings.length > 0}
               <div class="tallies">
                 {#each tallies as tally}
@@ -308,6 +311,13 @@
     font: var(--machine-bold);
     font-size: calc(14px * var(--ui-scale));
     color: var(--text-primary);
+  }
+
+  .ran {
+    margin: calc(8px * var(--ui-scale)) 0 0;
+    padding-left: var(--gutter);
+    font: var(--machine-sm);
+    color: var(--text-muted);
   }
 
   .tallies {
@@ -462,6 +472,7 @@
 
   :global(html[data-narrow]) .cards,
   :global(html[data-narrow]) .tally,
+  :global(html[data-narrow]) .ran,
   :global(html[data-narrow]) .tallies,
   :global(html[data-narrow]) .detached {
     padding-left: 0;

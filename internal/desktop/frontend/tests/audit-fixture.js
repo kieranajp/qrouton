@@ -3,6 +3,7 @@ import "../src/tokens/typography.css";
 import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
+import { AUDIT_HEADINGS } from "../src/lib/bridge/generated.js";
 import AuditFixture from "./AuditFixture.svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
 
@@ -87,7 +88,14 @@ const hashOf = (text) => {
   return `h${(h >>> 0).toString(16)}`;
 };
 
-window.file = AUDIT;
+// ?subset ran one tell and says so in its frontmatter; ?legacy predates the
+// key, and Go sends it the legacy set. The default sends no tells at all.
+const params = new URLSearchParams(location.search);
+const SUBSET = [AUDIT_HEADINGS.DEAD];
+const LEGACY = [AUDIT_HEADINGS.DUPLICATED, AUDIT_HEADINGS.DEAD, AUDIT_HEADINGS.HOMEGROWN];
+const tells = params.has("subset") ? SUBSET : params.has("legacy") ? LEGACY : undefined;
+
+window.file = params.has("subset") ? AUDIT.replace("kind: audit\n", "kind: audit\ntells: [dead]\n") : AUDIT;
 let stale = null;
 
 const document_ = (fields = {}) => ({
@@ -100,6 +108,7 @@ const document_ = (fields = {}) => ({
   line: 0,
   to: 0,
   viewportEpoch: 1,
+  tells,
   ...fields,
 });
 

@@ -3,6 +3,7 @@ package status
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -169,6 +170,8 @@ const (
 		"## Dead or needlessly defensive code\n\n> findings\n\n## Homegrown library or platform behaviour\n\n> findings\n\n## Tools\n\n> tools\n"
 	completeAudit = "# Tells\n\n## Summary\n\nTwo findings.\n\n## Duplicated behaviour or facts\n\n### F1 — Two clocks\n\nTell: duplicated behaviour or facts\n\nTriage:\n\n" +
 		"## Dead or needlessly defensive code\n\nNone.\n\n## Homegrown library or platform behaviour\n\n### F2 — A URL parser\n\nTriage:\n\n## Tools\n\n> tools\n"
+	subsetAudit = "---\nkind: audit\ntells: [dead, homegrown]\n---\n\n# Tells\n\n## Summary\n\nOne finding.\n\n" +
+		"## Dead or needlessly defensive code\n\nNone.\n\n## Homegrown library or platform behaviour\n\n### F2 — A URL parser\n\nTriage:\n\n## Tools\n\n> tools\n"
 )
 
 func TestACompleteAuditFillsResearch(t *testing.T) {
@@ -180,6 +183,9 @@ func TestACompleteAuditFillsResearch(t *testing.T) {
 		{"one tell left framed", strings.Replace(completeAudit, "None.", "> findings", 1), false},
 		{"complete and untriaged", completeAudit, true},
 		{"triaged", strings.ReplaceAll(completeAudit, "Triage:\n", "Triage: reject\nkept on purpose\n"), true},
+		{"a subset without its unchosen sections", subsetAudit, true},
+		{"a subset with a chosen section framed", strings.Replace(subsetAudit, "None.", "> findings", 1), false},
+		{"an unknown tell asks for every tell", strings.Replace(subsetAudit, "tells: [dead, homegrown]", "tells: [nonsense]", 1), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			dir := thoughtsDir(t.TempDir())
@@ -201,5 +207,32 @@ func TestEitherAnsweredResearchOrACompleteAuditFillsResearch(t *testing.T) {
 	dir.write(t, auditsDir, "A2-again.md", emptyAudit)
 	if stagesIn(string(dir)).Research {
 		t.Fatal("an older complete audit filled R while the latest is a skeleton")
+	}
+}
+
+func TestAuditTellsReadsTheTellsKey(t *testing.T) {
+	every := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
+	legacy := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
+	front := func(lines string) string { return "---\nkind: audit\n" + lines + "---\n\n# Tells\n" }
+	for _, tc := range []struct {
+		name, text string
+		want       []string
+	}{
+		{"no frontmatter", "# Tells\n\ntells: [dead]\n", legacy},
+		{"no key", front("target: repo\n"), legacy},
+		{"empty list", front("tells: []\n"), every},
+		{"empty value", front("tells:\n"), every},
+		{"a subset out of order", front("tells: [homegrown, dead]\n"), []string{AuditHeadingDead, AuditHeadingHomegrown}},
+		{"a block list", front("tells:\n  - dead\n"), []string{AuditHeadingDead}},
+		{"a duplicate", front("tells: [dead, dead]\n"), []string{AuditHeadingDead}},
+		{"an unknown slug", front("tells: [dead, nonsense]\n"), every},
+		{"a scalar", front("tells: dead\n"), every},
+		{"malformed frontmatter", front("tells: [dead\n"), every},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AuditTells(tc.text); !slices.Equal(got, tc.want) {
+				t.Fatalf("AuditTells = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

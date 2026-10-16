@@ -4,14 +4,37 @@ The workbench reads an audit as a set of findings the user triages in place.
 It finds them by heading, so keep the headings exactly as below.
 
 `create_artefact` writes the skeleton from `audit-template.md` beside this
-file: the frontmatter with `target:` empty, then `## Summary`, one section per
-tell, `## Checked and deliberate` and `## Tools`. Keep those headings exactly.
-Set `target:` to the repository audited, followed by the path when the audit
-was narrowed to one. Replace each section's blockquote with its content. A tell
-section with no findings says `None.`.
+file: the frontmatter with `target:` empty and `tells:` listing every tell,
+then `## Summary`, one section per tell, `## Checked and deliberate` and
+`## Tools`. Keep those headings exactly. Set `target:` to the repository
+audited, followed by the path when the audit was narrowed to one. Replace each
+section's blockquote with its content. A tell section with no findings says
+`None.`.
 
-The audit is complete when `## Summary` and the three tell sections each hold
+## The chosen tells
+
+`tells:` lists the slugs of the tells the audit runs, in tell order, as a YAML
+list:
+
+| Slug | Section |
+| --- | --- |
+| `duplicated` | `## Duplicated behaviour or facts` |
+| `dead` | `## Dead or needlessly defensive code` |
+| `homegrown` | `## Homegrown library or platform behaviour` |
+
+The lead deletes the slug and the section of each tell not chosen, so an audit
+of tells 2 and 3 carries `tells: [dead, homegrown]` and neither section of
+tell 1. An audit with no `tells:` key was written before the key existed, and
+it ran `duplicated`, `dead` and `homegrown`.
+
+The audit is complete when `## Summary` and each chosen tell section hold
 content.
+
+An audit does the work of only the chosen tells. It runs their detectors, hunts
+and checks, and merges findings among them. The job inventory runs
+only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when
+tell 3 is.
+A rule below that belongs to a tell the audit did not run does not apply.
 
 ## Findings
 
@@ -134,8 +157,8 @@ its cost is one line giving the cost and every family location. Never dismiss
 candidates as a group. A tool candidate that a known trap explains is not listed here:
 `## Tools` counts it by trap.
 
-`## Tools` holds the tools, the job inventory, the tell-3 category outcomes
-and the trap counts. The job inventory is the full inventory: every import,
+`## Tools` holds the tools, the job inventory and the tell-3 category outcomes
+when they ran, and the trap counts. The job inventory is the full inventory: every import,
 built-in, global and internal module used from three or more files in two or
 more directories, and every kind of shared machinery that reaches as many, such
 as lifecycle subscriptions, error types or routing APIs. Count shipped files
@@ -161,12 +184,14 @@ agent gives it an independent re-read against live code. The re-read verifies
 every claim that copies agree or differ today, every one route outcome, every
 cost-spare against the other findings (no spare whose family another finding
 proposes to grow), every fix that deletes code or tests (no deleted test that
-would serve another purpose), and every runtime claim. The lead fixes or drops
+would serve another purpose), and every runtime claim. It skips the one route
+check when no inventory ran, and the cost-spare check when tell 3 did not run.
+The lead fixes or drops
 each failed finding, and corrects a failed inventory row's outcome without
 removing the row.
 
 Then the lead runs a conformance pass, last, and fixes every violation of these
-rules:
+rules, skipping those for a tell or an inventory that did not run:
 
 - one finding per defect, with no bundled or repeated defects;
 - every field present in order, `Impact:` included, with `Triage:` last;

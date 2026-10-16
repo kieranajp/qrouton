@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-const open = async (page) => {
-  await page.goto("/tests/audit.html");
+const open = async (page, query = "") => {
+  await page.goto(`/tests/audit.html${query}`);
   await page.waitForSelector("[data-overview], .markdown", { state: "attached" });
 };
 
@@ -136,4 +136,18 @@ test("cards fit the pane without scrolling sideways", async ({ page }) => {
   await open(page);
   const overflow = await page.locator(".sheet").evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+test("a subset audit tallies and cards only the tells it ran", async ({ page }) => {
+  await open(page, "?subset");
+  await expect(page.locator('[data-group="By tell"] li')).toHaveText([/Dead or needlessly defensive code\s*2/]);
+  await expect(page.locator("[data-tells-run]")).toHaveText("Ran 1 of 3 tells: Dead or needlessly defensive code");
+  await expect(card(page, "F1")).toHaveCount(0);
+  await expect(page.locator('[data-section="Duplicated behaviour or facts"]')).toContainText("Two timeout helpers race a promise against a timer");
+});
+
+test("an audit from before the tells key shows its three tells", async ({ page }) => {
+  await open(page, "?legacy");
+  await expect(page.locator('[data-group="By tell"] li')).toHaveCount(3);
+  await expect(page.locator("[data-tells-run]")).toHaveCount(0);
 });

@@ -482,6 +482,11 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"test-preserving deletions", []string{"serve another purpose"}, []string{checker}},
 		{"impact", []string{"data loss"}, []string{lead, shape}},
 		{"summary", []string{"one sentence per high and medium finding"}, []string{lead, shape, template}},
+		{"scope and tells question", []string{"one structured question", "`AskUserQuestion`", "ask in chat"}, []string{skill}},
+		{"chosen tells key", []string{"`tells:`"}, []string{lead, shape}},
+		{"template key", []string{"tells:"}, []string{template}},
+		{"gated inventory", []string{"only when tell 1 or tell 3 is chosen"}, []string{lead, shape}},
+		{"chosen only", []string{"only the chosen tells"}, []string{lead, shape}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -492,7 +497,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass"} {
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3"} {
 		if strings.Contains(texts[skill], phrase) {
 			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
 		}

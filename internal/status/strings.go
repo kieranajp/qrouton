@@ -26,7 +26,7 @@ var (
 )
 
 // An audit's summary and tell headings. The audit counts as complete once
-// each holds content, and the template carries each of them.
+// the summary and each chosen tell hold content.
 const (
 	AuditHeadingSummary    = "Summary"
 	AuditHeadingDuplicated = "Duplicated behaviour or facts"
@@ -34,7 +34,22 @@ const (
 	AuditHeadingHomegrown  = "Homegrown library or platform behaviour"
 )
 
-var auditCompleteHeadings = []string{AuditHeadingSummary, AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
+// The audit frontmatter key that lists the chosen tells, and each tell's slug.
+const (
+	tellsKey       = "tells"
+	tellDuplicated = "duplicated"
+	tellDead       = "dead"
+	tellHomegrown  = "homegrown"
+)
+
+var auditTells = []auditTell{
+	{tellDuplicated, AuditHeadingDuplicated},
+	{tellDead, AuditHeadingDead},
+	{tellHomegrown, AuditHeadingHomegrown},
+}
+
+// legacyTells are the tells an audit written before the tells key ran.
+var legacyTells = []string{tellDuplicated, tellDead, tellHomegrown}
 
 // Activity is what the workbench observes. Waiting only ever comes from the
 // runner's own hook, so a runner without one never reports it.
