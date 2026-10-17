@@ -181,3 +181,19 @@ func TestOutlivedCheckoutRecognisesEachGitVersionsMessage(t *testing.T) {
 		t.Error("dubious ownership read as an outlived checkout")
 	}
 }
+
+func TestDirtyWorktreesReadsAnAbsoluteWorktreePath(t *testing.T) {
+	requireGit(t)
+	outside := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", outside).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(outside, "work.txt"), []byte("uncommitted\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Slug: "abs", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: outside}}}
+	dirty, err := DirtyWorktrees(t.TempDir(), m)
+	if err != nil || len(dirty) != 1 || dirty[0] != "acme/api" {
+		t.Fatalf("DirtyWorktrees = %v, %v; want acme/api", dirty, err)
+	}
+}
