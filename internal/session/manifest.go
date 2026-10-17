@@ -15,8 +15,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-const manifestName = sessionpaths.ManifestName
-
 const manifestSchemaVersion = 2
 
 type RepoRole string
@@ -230,7 +228,7 @@ func Scan(root string) ([]Manifest, error) {
 		if !e.IsDir() {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, e.Name(), manifestName))
+		b, err := os.ReadFile(sessionpaths.Manifest(filepath.Join(root, e.Name())))
 		if err != nil {
 			continue
 		}

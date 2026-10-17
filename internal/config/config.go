@@ -190,12 +190,17 @@ func clone(c *Config) *Config {
 	return out
 }
 
+// DefaultThoughtsRoot is the thoughts root derived from a sessions root.
+func DefaultThoughtsRoot(root string) string {
+	return filepath.Join(root, sessionpaths.ThoughtsDirName)
+}
+
 // ThoughtsRoots lists the default root first, at <root>/thoughts unless set.
 func (c *Config) ThoughtsRoots() []ThoughtsRoot {
 	snapshot := c.Snapshot()
 	def := snapshot.Thoughts.Default
 	if strings.TrimSpace(def) == "" {
-		def = filepath.Join(snapshot.Root, sessionpaths.ThoughtsDirName)
+		def = DefaultThoughtsRoot(snapshot.Root)
 	}
 	return append([]ThoughtsRoot{{ID: DefaultThoughtsID, Path: def}}, snapshot.Thoughts.Roots...)
 }

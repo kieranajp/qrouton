@@ -62,6 +62,9 @@ func ManifestLock(root string) string {
 // Src is the directory holding a session's repository worktrees.
 func Src(root string) string { return filepath.Join(root, SrcDirName) }
 
+// ThoughtsLink is the session's thoughts symlink.
+func ThoughtsLink(root string) string { return filepath.Join(root, ThoughtsDirName) }
+
 // Thoughts is the shared artifact directory the workflow writes into.
 func Thoughts(root string) string {
 	return filepath.Join(root, ThoughtsDirName, SharedDirName)

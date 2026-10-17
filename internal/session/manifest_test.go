@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func TestManifestRepoJSONFieldOrderIncludesBaseBranch(t *testing.T) {
@@ -112,8 +113,8 @@ func TestWriteManifestConcurrentWritesNeverTearOrLeaveTempFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != manifestName {
-		t.Fatalf("directory holds %v, want only %s", entries, manifestName)
+	if len(entries) != 1 || entries[0].Name() != sessionpaths.ManifestName {
+		t.Fatalf("directory holds %v, want only %s", entries, sessionpaths.ManifestName)
 	}
 }
 
@@ -183,7 +184,7 @@ func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.
 			t.Fatalf("reloaded sticker = %q, want %q", loaded.Sticker, expected)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		t.Fatal(err)
 	}

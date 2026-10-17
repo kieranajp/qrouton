@@ -3,8 +3,6 @@ package workbench
 import (
 	"bufio"
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -151,15 +150,11 @@ type TaskNotification struct {
 // per-uid directory rather than on the session — which also makes the handle
 // valid before onboarding has chosen a session.
 func NewSocketPath() (string, error) {
-	token := make([]byte, socketTokenBytes)
-	if _, err := rand.Read(token); err != nil {
-		return "", err
-	}
 	dir := socketDir()
 	if err := os.MkdirAll(dir, socketDirMode); err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, hex.EncodeToString(token)+socketSuffix), nil
+	return filepath.Join(dir, randomid.Hex(socketTokenBytes)+socketSuffix), nil
 }
 
 func socketDir() string {
@@ -245,24 +240,7 @@ func publish(dir string, descriptor processDescriptor) error {
 		if err != nil {
 			return err
 		}
-		file, err := os.CreateTemp(dir, temporaryPattern)
-		if err != nil {
-			return err
-		}
-		tmp := file.Name()
-		defer os.Remove(tmp)
-		if err := file.Chmod(descriptorMode); err != nil {
-			file.Close()
-			return err
-		}
-		if _, err := file.Write(body); err != nil {
-			file.Close()
-			return err
-		}
-		if err := file.Close(); err != nil {
-			return err
-		}
-		return os.Rename(tmp, filepath.Join(dir, activeName))
+		return atomicfile.Replace(filepath.Join(dir, activeName), body, descriptorMode)
 	})
 }
 

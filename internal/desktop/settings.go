@@ -2,8 +2,6 @@ package desktop
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +18,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/lineartools"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/randomid"
 )
 
 // SettingsView carries the editable config, and what Install would write for Linear.
@@ -198,7 +196,7 @@ func (s *Settings) runnerLegend() []RunnerLegend {
 func thoughtsView(thoughts config.Thoughts, root string) ThoughtsView {
 	view := ThoughtsView{
 		Default: thoughts.Default,
-		Derived: filepath.Join(root, sessionpaths.ThoughtsDirName),
+		Derived: config.DefaultThoughtsRoot(root),
 		Roots:   []ThoughtsRow{},
 	}
 	for _, r := range thoughts.Roots {
@@ -347,11 +345,7 @@ func validateStickers(in []config.Sticker) ([]config.Sticker, error) {
 		}
 		seen[pair] = true
 		if s.ID == "" {
-			id := make([]byte, stickerIDBytes)
-			if _, err := rand.Read(id); err != nil {
-				return nil, err
-			}
-			s.ID = hex.EncodeToString(id)
+			s.ID = randomid.Hex(stickerIDBytes)
 		}
 		out = append(out, s)
 	}

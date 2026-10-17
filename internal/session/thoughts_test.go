@@ -49,7 +49,7 @@ func TestCreateRoutesASessionWhoseReposAllMapToOneRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	link, err := os.Readlink(filepath.Join(dir, sessionpaths.ThoughtsDirName))
+	link, err := os.Readlink(sessionpaths.ThoughtsLink(dir))
 	if err != nil || link != filepath.Join(shared, "routed") {
 		t.Fatalf("thoughts -> %q, %v", link, err)
 	}

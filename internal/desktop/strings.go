@@ -142,6 +142,7 @@ const (
 	stickerFieldFormat    = "%s.%d"
 	stickerDuplicate      = "another sticker already uses this colour and symbol"
 	stickerIDBytes        = 4
+	assetTokenBytes       = 16
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 	unknownUIScaleAction  = "unknown UI scale action"
 )

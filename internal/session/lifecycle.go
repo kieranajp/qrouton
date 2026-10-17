@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
@@ -81,7 +83,7 @@ func Resumable(root, slug string) string {
 		return ""
 	}
 	dir := filepath.Join(root, slug)
-	if _, err := os.Stat(filepath.Join(dir, manifestName)); err != nil {
+	if _, err := os.Stat(sessionpaths.Manifest(dir)); err != nil {
 		return ""
 	}
 	return dir
