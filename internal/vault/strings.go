@@ -39,6 +39,9 @@ const (
 
 	kindNote    = "note"
 	kindDeadEnd = "dead_end"
+
+	kindHint      = "use one of %s"
+	kindSeparator = ", "
 )
 
 const (

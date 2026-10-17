@@ -318,8 +318,14 @@ func TestNewRejectsUnsafeProfileIDs(t *testing.T) {
 
 func TestSearchRejectsUnknownKindsAndCapsTheLimit(t *testing.T) {
 	s := newTestService(t, copyTree(t, corpusDir), &stubEmbedder{})
-	if _, err := s.Search(context.Background(), Query{Text: "x", Kinds: []string{"reseach"}}); !errors.Is(err, ErrUnknownKind) {
+	_, err := s.Search(context.Background(), Query{Text: "x", Kinds: []string{"reseach"}})
+	if !errors.Is(err, ErrUnknownKind) {
 		t.Fatalf("misspelt kind = %v", err)
+	}
+	for _, kind := range Kinds() {
+		if !strings.Contains(err.Error(), kind) {
+			t.Errorf("unknown-kind error %q omits %q", err, kind)
+		}
 	}
 	if res := search(t, s, Query{Text: "the", Limit: 1000}); len(res.Hits) > maxLimit+2*channelTop {
 		t.Fatalf("limit 1000 returned %d hits", len(res.Hits))
