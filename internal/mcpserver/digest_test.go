@@ -106,3 +106,13 @@ func TestDigestSchemaAndDescriptionNameTheLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestStageSkillsStateTheDigestLimit(t *testing.T) {
+	want := "at most " + strconv.Itoa(digestLimit) + " characters"
+	corpus := promptCorpus(t)
+	for _, id := range []string{"skills/qrouton-research", "skills/qrouton-spec", "skills/qrouton-plan", "skills/qrouton-implement"} {
+		if !strings.Contains(corpus[id], want) {
+			t.Errorf("%s does not say %q", id, want)
+		}
+	}
+}
