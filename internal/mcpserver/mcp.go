@@ -135,7 +135,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return textResult(message), out, nil
 		})
 
-	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, ToolOpenFile, descOpenFile, keyMessage, windows.openFile)
 	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
 	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
