@@ -1,5 +1,5 @@
-import { UI_SCALE_EVENT } from "../bridge/generated.js";
-import { call, Events } from "../wails.js";
+import { onScale } from "../scale.svelte.js";
+import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
 import { toInput as stickersInput } from "./stickers.js";
@@ -58,11 +58,7 @@ export function settings(onClose) {
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
   });
 
-  $effect(() =>
-    Events.On(UI_SCALE_EVENT, (event) => {
-      if (typeof event.data === "number") form.uiScale = event.data;
-    }),
-  );
+  $effect(() => onScale((percent) => (form.uiScale = percent)));
 
   function add() {
     form.orgs = addOrg(form.orgs, orgInput);
