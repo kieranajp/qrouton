@@ -435,6 +435,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		template = "references/audit-template.md"
 		goNotes  = "references/go.md"
 		tsNotes  = "references/typescript.md"
+		areas    = "references/areas.md"
 	)
 	loader := NewEmbeddedLoader()
 	texts := map[string]string{}
@@ -536,6 +537,13 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"coarse rows", []string{"call sites searched"}, []string{lead, shape}},
 		{"row sampling", []string{"five of the entry's call sites"}, []string{verifier}},
 		{"conformance home", []string{"`## Before returning`"}, []string{lead}},
+		{"area split", []string{"`areas.md`", "seam pass"}, []string{lead}},
+		{"split threshold", []string{"300 shipped source files", "at most four areas"}, []string{areas}},
+		{"seam pass", []string{"seam pass", "cross areas"}, []string{areas}},
+		{"merge", []string{"areas table", "`Area` column"}, []string{areas, shape}},
+		{"ids after merge", []string{"after the merge"}, []string{lead, areas}},
+		{"verifier once", []string{"once over the merged draft"}, []string{lead, areas}},
+		{"fan-out cap", []string{"20 checker spawns"}, []string{areas}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -546,20 +554,20 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "its own comment", "stays a subset", "five of the entry's call sites"} {
+	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "300 shipped source files", "its own comment", "stays a subset", "five of the entry's call sites"} {
 		if strings.Contains(texts[lead], phrase) {
 			t.Errorf("the lead restates the verifier's check %q; it briefs check numbers instead", phrase)
 		}
 	}
 
-	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first"} {
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first", "seam pass", "`Area` column"} {
 		if strings.Contains(texts[skill], phrase) {
 			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
 		}
 	}
 
 	for _, asset := range rendered {
-		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests", "job inventory", "## Tools", "full inventory", "stated skip", "routes searched"} {
+		for _, phrase := range []string{"bypasses a shared", "two sources", "called only from tests", "job inventory", "## Tools", "full inventory", "stated skip", "routes searched", "seam pass"} {
 			if !strings.Contains(string(asset.Content), phrase) {
 				t.Errorf("%s does not carry %q", asset.Path, phrase)
 			}

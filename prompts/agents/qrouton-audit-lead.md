@@ -25,6 +25,8 @@ Follow the document shape in `audit-shape.md` from the references folder you wer
 
 ## Run the detectors
 
+First decide by `areas.md` whether the target splits into areas. When it does, take the job inventory, the tell-3 category sweep and the checkers per area, run the seam pass after the area checkers return, and merge every return into one draft before you check it. A target that does not split runs as one area, as below.
+
 Read the target's manifests (`package.json`, `go.mod` and their peers) to find its languages. Run the repo's own checks first: the lint, type-check and dead-code commands its check target calls, never its test, build or codegen steps. Run one that fixes, formats or writes into the target as its underlying command without those flags, with any cache in scratch. Then fill each check the repo's setup lacks with one tool per language: reachability for dead code, clone detection for exact copies, and type-aware lint for needless conditions. Run a well-known tool at a pinned version through the ecosystem's one-off runner, such as `npx` or `go run`. A tool you choose for an ecosystem without a worked example is as good a choice as one with.
 
 Run reachability a second time in a mode that does not count tests as entry points. Run every detector yourself, writing its output to a scratch directory made with `mktemp -d`, outside the target and outside `thoughts/`. Never pass `--fix` or any flag that rewrites code, never write a config file into the target, and never add a dependency to the target during the audit run. A proposed fix may add one.
@@ -108,13 +110,13 @@ Code that only tests reach comes from the reachability run that does not count t
 
 ## Write the audit
 
-Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across the document; the ids are how the reader triages, so they stay. Once an id is written it never changes. Cite source files only, never research or specs. Write `## Summary` last, with the findings by impact: one sentence per high and medium finding, high first, saying what is wrong and why it matters. Never write a bare list of ids. Count the low findings per tell.
+Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across the document, after the merge when the audit split; the ids are how the reader triages, so they stay. Once an id is written it never changes. Cite source files only, never research or specs. Write `## Summary` last, with the findings by impact: one sentence per high and medium finding, high first, saying what is wrong and why it matters. Never write a bare list of ids. Count the low findings per tell.
 
 ## Check the draft
 
 Before you return, first collect history for an independent re-read. For each claim that rests on a missing written reason, write these reads into a `history` directory in scratch, one `<finding id>.txt` each: `git log -L <start>,<end>:<path>` for the cited lines; `git show --stat` with the full message of each commit it lists; the messages of the commits either side of each in `git log -- <path>`; when the oldest commit moved the lines from another file, the same reads at the old path.
 
-Then spawn an `audit-verifier`. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13 and 15 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
+Then spawn an `audit-verifier`, once over the merged draft when the audit split. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13 and 15 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
 
 Then run a conformance pass, last, because the fixes can break the shape. Check each rule in the shape's `## Before returning` list against every finding and section, and fix each violation in the document.
 

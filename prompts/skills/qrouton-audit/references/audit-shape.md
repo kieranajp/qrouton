@@ -168,7 +168,9 @@ candidates as a group. A tool candidate that a known trap explains is not listed
 `## Tools` counts it by trap.
 
 `## Tools` holds the tools, the job inventory and the tell-3 category outcomes
-when they ran, and the trap counts. Every file type in scope that no tool
+when they ran, and the trap counts. An audit split into areas by `areas.md`
+opens `## Tools` with the areas table, and its inventory and category tables
+carry an `Area` column, with `seam` for seam rows. Every file type in scope that no tool
 covered gets a stated skip that names the file type and why. The job inventory is the full inventory: every import,
 built-in, global and internal module used from three or more files in two or
 more directories, and every kind of shared machinery that reaches as many, such
@@ -253,6 +255,8 @@ rules, skipping those for a tell or an inventory that did not run:
   against;
 - `## Tools` holds tools, the full inventory, category outcomes and trap
   counts only, and every row has a file count and one outcome;
+- a split audit opens `## Tools` with the areas table, and every inventory and
+  category row carries its `Area`;
 - every one route row lists the routes searched, and every stated skip gives a
   reason the reader can check; a row whose entry is used from ten or more files
   names the call sites searched;
