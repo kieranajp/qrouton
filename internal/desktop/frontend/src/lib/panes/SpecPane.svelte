@@ -1,4 +1,5 @@
 <script>
+  import { artifactTone } from "../artifacts.js";
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
@@ -156,7 +157,7 @@
             : "var(--state-waiting)"
           : slide.kind === "section"
             ? undefined
-            : "var(--artifact-spec)",
+            : artifactTone(ARTIFACT_KINDS.SPEC),
     })),
   ]);
   let counter = $derived(viewing === 0 ? "Overview" : (slides[viewing - 1]?.name ?? ""));
