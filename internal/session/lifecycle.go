@@ -15,7 +15,7 @@ import (
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	var dirty []string
 	for _, repo := range m.Repos {
-		path := filepath.Join(root, m.Slug, repo.WorktreePath)
+		path := repo.Dir(filepath.Join(root, m.Slug))
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
@@ -131,7 +131,7 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	for _, repo := range m.Repos {
 		stat := RepoStat{
 			Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective(),
-			Path: filepath.Join(dir, repo.WorktreePath),
+			Path: repo.Dir(dir),
 		}
 		if stat.Role == RepoRoleEditing && (repo.BaseBranch != "" || repo.DefaultBranch != "") {
 			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch), &stat)

@@ -13,6 +13,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/mcpserver"
+	"github.com/kieranajp/qrouton/internal/session"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\bqrouton-(questions|research|spec|plan|implement)|\b(agent depth|document numbering)\b`)
@@ -540,7 +541,7 @@ func (r manifestRepo) dir(workspace string) string {
 	if r.WorktreePath == "" {
 		return repoDir(workspace, r.Name)
 	}
-	return filepath.Join(workspace, filepath.FromSlash(r.WorktreePath))
+	return session.ManifestRepo{WorktreePath: filepath.FromSlash(r.WorktreePath)}.Dir(workspace)
 }
 
 func repoDir(workspace, name string) string {

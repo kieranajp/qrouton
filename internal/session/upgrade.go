@@ -75,7 +75,7 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 	if r.SSHURL == "" {
 		return r, false, refuseRepo(ErrNoCloneURL, r.Org, r.Name)
 	}
-	wt := filepath.Join(dir, r.WorktreePath)
+	wt := r.Dir(dir)
 	if _, err := os.Stat(wt); err != nil {
 		return r, true, nil
 	}
@@ -112,7 +112,7 @@ func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, 
 		return err
 	}
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-	wt := filepath.Join(dir, r.WorktreePath)
+	wt := r.Dir(dir)
 	return rep.step(ProgressWorktree, func(func(string, int)) error {
 		return branchWorktree(mirror, wt, r, branch)
 	})

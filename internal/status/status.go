@@ -457,11 +457,7 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 		if repo.WorktreePath == "" {
 			continue
 		}
-		worktree := repo.WorktreePath
-		if !filepath.IsAbs(worktree) {
-			worktree = filepath.Join(root, worktree)
-		}
-		worktree = filepath.Clean(worktree)
+		worktree := repo.Dir(root)
 		rel, inside := sessionpaths.Within(src, worktree)
 		if !inside || rel == "." {
 			continue

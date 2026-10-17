@@ -249,11 +249,7 @@ func revisionOf(sessionRoot string, repo session.ManifestRepo) string {
 	if !repo.Role.IsEditing() {
 		return repo.Revision
 	}
-	worktree := repo.WorktreePath
-	if !filepath.IsAbs(worktree) {
-		worktree = filepath.Join(sessionRoot, worktree)
-	}
-	sha, err := session.HeadRevision(worktree)
+	sha, err := session.HeadRevision(repo.Dir(sessionRoot))
 	if err != nil {
 		return ""
 	}

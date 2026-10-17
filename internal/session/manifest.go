@@ -214,6 +214,15 @@ type ManifestRepo struct {
 	SSHURL       string `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
+// Dir is the repository's checkout: an absolute WorktreePath as written, a
+// relative one under the session root.
+func (r ManifestRepo) Dir(root string) string {
+	if filepath.IsAbs(r.WorktreePath) {
+		return filepath.Clean(r.WorktreePath)
+	}
+	return filepath.Join(root, r.WorktreePath)
+}
+
 // Scan: a session is any direct child of root containing a qrouton.json.
 func Scan(root string) ([]Manifest, error) {
 	entries, err := os.ReadDir(root)

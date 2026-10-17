@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -78,6 +79,23 @@ func TestFailingGitCallsCarryTheWrappersShape(t *testing.T) {
 		if err == nil || !strings.HasPrefix(err.Error(), "git [") || !errors.As(err, &exit) {
 			t.Errorf("%s error = %v, want a wrapped git exit error", name, err)
 		}
+	}
+}
+
+func TestDirHonoursAnAbsoluteWorktreePath(t *testing.T) {
+	root := filepath.FromSlash("/sessions/one")
+	for _, tc := range []struct {
+		name, path, want string
+	}{
+		{"relative", "src/api", filepath.FromSlash("/sessions/one/src/api")},
+		{"absolute", filepath.FromSlash("/elsewhere/api"), filepath.FromSlash("/elsewhere/api")},
+		{"absolute with dot dot", filepath.FromSlash("/elsewhere/x/../api"), filepath.FromSlash("/elsewhere/api")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := (ManifestRepo{WorktreePath: tc.path}).Dir(root); got != tc.want {
+				t.Fatalf("Dir = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }
 
