@@ -20,6 +20,10 @@ test("a message with no leading field name answers null", () => {
   assert.equal(fieldError(new Error("disk is full")), null);
 });
 
+test("a lowercase word that is no settings field answers null", () => {
+  assert.equal(fieldError(new Error("unknown: text")), null);
+});
+
 test("a plain string is read the same as an Error", () => {
   assert.deepEqual(fieldError("editor: not installed"), { field: "editor", message: "not installed" });
 });

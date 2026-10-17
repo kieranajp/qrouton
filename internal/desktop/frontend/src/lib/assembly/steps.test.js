@@ -95,6 +95,7 @@ test("a refusal reads as the sentence, without the field Go named it by", () => 
   const unprefixed = 'no session named "billing" under the sessions root';
   assert.equal(refusal(unprefixed), unprefixed);
   assert.equal(refusal(undefined), "");
+  assert.equal(refusal("unknown: text"), "unknown: text");
 });
 
 test("Enter advances, and a newline in the description stays a newline", () => {
