@@ -51,7 +51,7 @@ func (f *FirstRun) Login() string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
 	defer cancel()
-	login, err := github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
+	login, err := github.AuthenticatedLogin(ctx, http.DefaultClient, token)
 	if err != nil {
 		return ""
 	}

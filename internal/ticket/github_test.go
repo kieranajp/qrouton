@@ -106,9 +106,18 @@ func TestFetchGitHubReportsAPrivateOrMissingIssueAsNotFound(t *testing.T) {
 	}
 }
 
+func TestFetchGitHubReportsARejectedToken(t *testing.T) {
+	stubGitHubToken(t, "github-token", nil)
+	_, err := Fetch(context.Background(), failingClient(http.StatusUnauthorized, "401 Unauthorized"),
+		"https://github.com/acme/api/issues/42")
+	if !errors.Is(err, ErrTokenRejected) || errors.Is(err, ErrTicketNotFound) {
+		t.Fatalf("Fetch() = %v, want %v", err, ErrTokenRejected)
+	}
+}
+
 func TestFetchGitHubKeepsTheGenericMessageForEveryOtherStatus(t *testing.T) {
 	stubGitHubToken(t, "github-token", nil)
-	want := "github: loading ticket: request failed: 500 Internal Server Error"
+	want := "github: loading ticket: 500 Internal Server Error"
 	_, err := Fetch(context.Background(), failingClient(http.StatusInternalServerError, "500 Internal Server Error"),
 		"https://github.com/acme/api/issues/42")
 	if err == nil || err.Error() != want {

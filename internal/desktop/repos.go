@@ -24,7 +24,7 @@ func liveGitHub() gh {
 	return gh{
 		token: github.Token,
 		all: func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg {
-			return github.RefreshRepos(ctx, http.DefaultClient, token, orgs, cached)
+			return github.RefreshRepos(ctx, http.DefaultClient, token, orgs, repoRefreshTimeout, cached)
 		},
 		one: func(ctx context.Context, token, owner string) ([]github.Repo, error) {
 			return github.RefreshOwnerRepos(ctx, http.DefaultClient, token, owner)
@@ -227,7 +227,9 @@ func (r *Repositories) run(ctx context.Context, gen int, configured []string, fa
 		if !r.push(gen, github.RefreshMsg{Owner: owner, State: github.RefreshStarted}) {
 			return
 		}
-		repos, err := r.gh.one(ctx, token, owner)
+		ownerCtx, cancel := context.WithTimeout(ctx, repoRefreshTimeout)
+		repos, err := r.gh.one(ownerCtx, token, owner)
+		cancel()
 		if err != nil {
 			if !r.push(gen, github.RefreshMsg{Owner: owner, State: github.RefreshFailed, Err: err}) {
 				return

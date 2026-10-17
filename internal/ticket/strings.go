@@ -51,8 +51,6 @@ const (
 	linearTokenEnvVar = "LINEAR_API_KEY"
 	asanaTokenEnvVar  = "ASANA_ACCESS_TOKEN"
 
-	acceptHeader        = "Accept"
-	acceptGitHubJSON    = "application/vnd.github+json"
 	authorizationHeader = "Authorization"
 	bearerPrefix        = "Bearer "
 	contentTypeHeader   = "Content-Type"
