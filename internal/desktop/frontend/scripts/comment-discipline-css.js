@@ -3,32 +3,22 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import postcss from "postcss";
 import svelteParser from "svelte-eslint-parser";
+import { GUIDANCE, MACHINE_LINE, URL, machineOnly, meaningfulLines, pathPointer } from "../eslint-rules/comment-shape.js";
 import { loadPolicy } from "../eslint-rules/policy.js";
 
 const frontendRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const rule = "comment-discipline";
-const guidance = "See AGENTS.md: comments default to none, state what IS, and stay one line where earned or two for a real trap.";
-const machineLine = /^\s*(?:eslint-(?:disable|enable)(?:\b|$)|eslint-env\b|globals?\s|exported\s|(?:prettier|stylelint)-(?:ignore|disable|enable)\b|(?:istanbul|c8|v8)\s|@(?:ts-|jsx|typedef\b|type\b|param\b|returns?\b|template\b|property\b|arg(?:ument)?\b|return\b|import\b|implements\b|extends\b|satisfies\b)|#!|(?:url|source|component|props)=|svelte-(?:ignore|warning)\b)/i;
-const url = /https?:\/\/[^\s<>()]+/gi;
 
 function normalize(comment) {
-  const value = comment.text ?? comment.textValue ?? comment.data ?? "";
-  return value.replace(/^[\s*]+/gm, " ").split("\n").map((line) => line.trim()).filter(Boolean);
+  return meaningfulLines(comment.text ?? comment.textValue ?? comment.data ?? "");
 }
 
 function isDirective(comment) {
-  const values = normalize(comment);
-  return values.length > 0 && values.every((line) => machineLine.test(line));
+  return machineOnly(normalize(comment));
 }
 
 function prose(comment) {
-  return normalize(comment).filter((line) => !machineLine.test(line)).join(" ");
-}
-
-function pointerPattern(extensions) {
-  const escaped = extensions.map((extension) => extension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-  const suffix = `(?:${escaped.join("|")})`;
-  return new RegExp(`(?:^|[\\s(\`'\"])(?:[\\w.-]+\\/)+[\\w.-]+\\.${suffix}\\b|\\b[\\w.-]+\\.${suffix}:\\d+\\b`, "i");
+  return normalize(comment).filter((line) => !MACHINE_LINE.test(line)).join(" ");
 }
 
 function sourceLines(source) {
@@ -52,14 +42,14 @@ function checkAst(file, source, root, policy) {
     end: node.source.end,
   }));
   comments.sort((left, right) => left.start.offset - right.start.offset);
-  const pointer = pointerPattern(policy.pathExtensions);
+  const pointer = pathPointer(policy.pathExtensions);
   const diagnostics = [];
   let run = [];
   const flush = () => {
     if (run.length === 0) return;
     const height = run.reduce((sum, comment) => sum + comment.end.line - comment.start.line + 1, 0);
     if (height > policy.maxCommentRun) {
-      diagnostics.push(diagnostic(file, run[0], "max-comment-run", `comment runs ${height} lines; the cap is ${policy.maxCommentRun}. Say the one thing code cannot, or delete it. ${guidance}`));
+      diagnostics.push(diagnostic(file, run[0], "max-comment-run", `comment runs ${height} lines; the cap is ${policy.maxCommentRun}. Say the one thing code cannot, or delete it. ${GUIDANCE}`));
     }
     run = [];
   };
@@ -67,9 +57,9 @@ function checkAst(file, source, root, policy) {
     if (!isDirective(comment)) {
       const body = prose(comment).toLowerCase();
       const phrase = policy.narrationPhrases.find((candidate) => body.includes(candidate));
-      if (phrase) diagnostics.push(diagnostic(file, comment, "no-narration", `comment narration contains ${JSON.stringify(phrase)}. State what IS, not how the code got here. ${guidance}`));
-      if (pointer.test(prose(comment).replace(url, ""))) {
-        diagnostics.push(diagnostic(file, comment, "no-path-pointer", `file and line pointers go stale. Name the subject, not its location. ${guidance}`));
+      if (phrase) diagnostics.push(diagnostic(file, comment, "no-narration", `comment narration contains ${JSON.stringify(phrase)}. State what IS, not how the code got here. ${GUIDANCE}`));
+      if (pointer.test(prose(comment).replace(URL, ""))) {
+        diagnostics.push(diagnostic(file, comment, "no-path-pointer", `file and line pointers go stale. Name the subject, not its location. ${GUIDANCE}`));
       }
     }
     if (isDirective(comment) || !ownsLine(source, comment)) {

@@ -1,20 +1,8 @@
-const GUIDANCE = "See AGENTS.md: comments default to none, state what IS, and stay one line where earned or two for a real trap.";
+import { GUIDANCE, MACHINE_LINE, URL, machineOnly, meaningfulLines, pathPointer } from "./comment-shape.js";
 
-const MACHINE_LINE = /^\s*(?:eslint-(?:disable|enable)(?:\b|$)|eslint-env\b|globals?\s|exported\s|(?:prettier|stylelint)-(?:ignore|disable|enable)\b|(?:istanbul|c8|v8)\s|@(?:ts-|jsx|typedef\b|type\b|param\b|returns?\b|template\b|property\b|arg(?:ument)?\b|return\b|import\b|implements\b|extends\b|satisfies\b)|(?:url|source|component|props)=|svelte-(?:ignore|warning)\b)/i;
-const URL = /https?:\/\/[^\s<>()]+/gi;
+const lines = (comment) => meaningfulLines(comment.value ?? comment.data ?? "");
 
-const text = (comment) => {
-  const value = comment.value ?? comment.data ?? "";
-  return value.replace(/^[\s*]+/gm, " ");
-};
-
-const lines = (comment) => text(comment).split("\n").map((line) => line.trim()).filter(Boolean);
-
-const isDirective = (comment) => {
-  if (comment.type === "Shebang") return true;
-  const meaningful = lines(comment);
-  return meaningful.length > 0 && meaningful.every((line) => MACHINE_LINE.test(line));
-};
+const isDirective = (comment) => comment.type === "Shebang" || machineOnly(lines(comment));
 
 const prose = (comment) => lines(comment).filter((line) => !MACHINE_LINE.test(line)).join(" ");
 
@@ -22,11 +10,6 @@ const height = (comment) => comment.loc.end.line - comment.loc.start.line + 1;
 
 const ownsItsLine = (sourceCode, comment) =>
   sourceCode.lines[comment.loc.start.line - 1].slice(0, comment.loc.start.column).trim() === "";
-
-function pathPointer(extensions) {
-  const suffix = extensions.map((extension) => extension.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
-  return new RegExp(`(?:^|[\\s(\`'\"])(?:[\\w.-]+\\/)+[\\w.-]+\\.(?:${suffix})\\b|\\b[\\w.-]+\\.(?:${suffix}):\\d+\\b`, "i");
-}
 
 function commentsFor(sourceCode) {
   const comments = [...sourceCode.getAllComments()];
@@ -173,5 +156,3 @@ export default {
     "no-prose-before-jsdoc": noProseBeforeJSDoc,
   },
 };
-
-export { isDirective, pathPointer };
