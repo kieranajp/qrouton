@@ -16,7 +16,7 @@ test("a settled summary names the lead it was written for and its age", () => {
 });
 
 test("a summary written this minute reads now, without ago", () => {
-  assert.equal(summaryMeta(summary({ at: "2026-10-11T14:59:40Z" }), now).meta, "As of Plan · now");
+  assert.equal(summaryMeta(summary({ at: "2026-10-11T14:59:40Z" }), now).meta, "As of Plan · just now");
 });
 
 test("a summary written before any repository shows only its age", () => {
