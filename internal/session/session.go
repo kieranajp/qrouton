@@ -1,9 +1,9 @@
 package session
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -286,11 +286,11 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 func HeadRevision(worktree string) (string, error) { return resolveRevision(worktree, headRef) }
 
 func resolveRevision(mirror, ref string) (string, error) {
-	out, err := exec.Command(gitBin, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix).CombinedOutput()
+	out, err := gitOutput(context.Background(), dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
 	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w\n%s", ref, err, out)
+		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(out), nil
 }
 
 func addDetachedWorktree(mirror, path, revision string) error {

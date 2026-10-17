@@ -27,7 +27,7 @@ func makeOrigin(t *testing.T, name string) (string, string) {
 func makeOriginWithBranch(t *testing.T, name, branch string) (origin, mainTip, branchTip string) {
 	t.Helper()
 	origin = gittest.Origin(t, name, gittest.WithFile("version", "one"), gittest.WithBranch(branch, "two"))
-	return origin, gittest.Head(t, origin), gitOutput(t, origin, "rev-parse", branch)
+	return origin, gittest.Head(t, origin), gitIn(t, origin, "rev-parse", branch)
 }
 
 func TestCreatePersistsSessionMode(t *testing.T) {

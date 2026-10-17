@@ -41,3 +41,6 @@ func refuseRepo(err error, org, name string) error {
 func mismatchedManifest(dir, slug string) error {
 	return fmt.Errorf("session directory %q holds the manifest of %q, so nothing was removed", dir, slug)
 }
+
+// ErrUnreadableNumstat means git diff --numstat printed a line that is not two counts and a path.
+var ErrUnreadableNumstat = errors.New("unreadable git numstat output")

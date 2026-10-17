@@ -1,6 +1,9 @@
 package session
 
 import (
+	"context"
+	"errors"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -59,5 +62,43 @@ func TestVerbosityFlagAsksForProgressOnlyWhenDrawn(t *testing.T) {
 	}
 	if got := verbosityFlag(nil); got != quietLongFlag {
 		t.Fatalf("verbosityFlag without a consumer = %q, want %q", got, quietLongFlag)
+	}
+}
+
+func TestFailingGitCallsCarryTheWrappersShape(t *testing.T) {
+	requireGit(t)
+	dir := t.TempDir()
+	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v\n%s", err, out)
+	}
+	_, countErr := countRange(context.Background(), dir, "missing..HEAD")
+	_, resolveErr := resolveRevision(dir, "missing")
+	for name, err := range map[string]error{"countRange": countErr, "resolveRevision": resolveErr} {
+		var exit *exec.ExitError
+		if err == nil || !strings.HasPrefix(err.Error(), "git [") || !errors.As(err, &exit) {
+			t.Errorf("%s error = %v, want a wrapped git exit error", name, err)
+		}
+	}
+}
+
+func TestCurrentBranchReadsADetachedHeadAsNoBranch(t *testing.T) {
+	requireGit(t)
+	dir := t.TempDir()
+	for _, args := range [][]string{
+		{"init", "-q", "-b", "main", dir},
+		{"-C", dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "first"},
+	} {
+		if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	if branch, err := currentBranch(dir); err != nil || branch != "main" {
+		t.Fatalf("on main: currentBranch = %q, %v", branch, err)
+	}
+	if out, err := exec.Command("git", "-C", dir, "checkout", "-q", "--detach").CombinedOutput(); err != nil {
+		t.Fatalf("detach: %v\n%s", err, out)
+	}
+	if branch, err := currentBranch(dir); err != nil || branch != "" {
+		t.Fatalf("detached: currentBranch = %q, %v; want no branch", branch, err)
 	}
 }
