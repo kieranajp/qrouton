@@ -220,3 +220,18 @@ test("query context menu is visible above the picker", async ({ page }) => {
   const receivesPointer = await copy.evaluate((node) => { const box = node.getBoundingClientRect(); return node.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)); });
   expect(receivesPointer).toBe(true);
 });
+
+test("a press in the panel released on the scrim keeps the switcher open, a press and release on the scrim closes it", async ({ page }) => {
+  await setup(page);
+  await page.getByRole("button", { name: /Switch session/ }).click();
+  const box = await query(page).boundingBox();
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(4, 4);
+  await page.mouse.up();
+  await expect(query(page)).toBeVisible();
+  await page.mouse.move(4, 4);
+  await page.mouse.down();
+  await page.mouse.up();
+  await expect(query(page)).toHaveCount(0);
+});

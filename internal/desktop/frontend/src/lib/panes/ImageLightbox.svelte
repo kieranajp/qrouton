@@ -1,6 +1,7 @@
 <script>
   import { onMount } from "svelte";
   import Button from "../core/Button.svelte";
+  import { scrim } from "../core/dismiss.js";
   import AssetMenu from "./AssetMenu.svelte";
 
   /** @type {{image: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
@@ -25,7 +26,6 @@
   let hud = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let width = $state(0);
   let height = $state(0);
-  let from = false;
 
   onMount(() => {
     layer?.focus();
@@ -48,16 +48,6 @@
     observer.observe(stage);
     return () => observer.disconnect();
   });
-
-  function down(event) {
-    from = event.target === event.currentTarget;
-  }
-
-  function up(event) {
-    const scrim = from && event.target === event.currentTarget;
-    from = false;
-    if (scrim) onClose();
-  }
 
   function step(by) {
     if (by < 0 ? !first : !last) onStep?.(by);
@@ -92,8 +82,7 @@
   tabindex="-1"
   bind:this={layer}
   onkeydown={key}
-  onpointerdown={down}
-  onpointerup={up}>
+  use:scrim={() => onClose()}>
   <div class="stage" bind:this={stage}>
     <div
       class="card"
