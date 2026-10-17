@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/kljensen/snowball/english"
 )
 
 type Query struct {
@@ -70,26 +72,10 @@ func tokens(s string) []string {
 	var out []string
 	for _, t := range tokenPattern.FindAllString(strings.ToLower(s), -1) {
 		if !stopword[t] {
-			out = append(out, stem(t))
+			out = append(out, english.Stem(t, true))
 		}
 	}
 	return out
-}
-
-func stem(w string) string {
-	switch {
-	case len(w) > 5 && strings.HasSuffix(w, "ies"):
-		return w[:len(w)-3] + "y"
-	case len(w) > 5 && strings.HasSuffix(w, "ing"):
-		return w[:len(w)-3]
-	case len(w) > 4 && strings.HasSuffix(w, "ed"):
-		return w[:len(w)-2]
-	case len(w) > 4 && strings.HasSuffix(w, "es") && !strings.HasSuffix(w, "ses"):
-		return w[:len(w)-1]
-	case len(w) > 3 && strings.HasSuffix(w, "s") && !strings.HasSuffix(w, "ss"):
-		return w[:len(w)-1]
-	}
-	return w
 }
 
 type bm25 struct {
