@@ -48,9 +48,8 @@
 
       term.onBinary((data) => writePTY(pty, id, btoa(data)));
       const offData = Events.On(pty.data + id, (event) => painter.paint(event.data));
-      const offExit = Events.On(pty.exit + id, (event) => {
-        painter.paint(encode("\r\n\x1b[2m[exited with status " + event.data + "]\x1b[0m\r\n"));
-      });
+      const dim = (line) => painter.paint(encode("\r\n\x1b[2m[" + line + "]\x1b[0m\r\n"));
+      const offExit = Events.On(pty.exit + id, (event) => dim("exited with status " + event.data));
       const stopWatch = watchSize(host, fit);
       // xterm re-measures its cell after the option changes, so a fit in the same frame reads the old cell.
       const refitScaled = latestPerFrame(() => fit());
@@ -69,7 +68,8 @@
         dispose();
       };
 
-      await startPTY(pty, id, term.cols, term.rows);
+      const spawned = await startPTY(pty, id, term.cols, term.rows);
+      if (!spawned.ok && live) dim("could not start: " + (spawned.error?.message ?? spawned.error));
     })();
   });
 
