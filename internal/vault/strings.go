@@ -37,12 +37,8 @@ const (
 	AdmittedBM25  = "bm25_top"
 	AdmittedDense = "dense_top"
 
-	KindResearch = "research"
-)
-
-var (
-	kinds    = map[string]bool{KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
-	dirKinds = map[string]string{"research": KindResearch, "specs": "spec", "plans": "plan"}
+	kindNote    = "note"
+	kindDeadEnd = "dead_end"
 )
 
 const (

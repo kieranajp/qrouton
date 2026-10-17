@@ -19,13 +19,21 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
-var Kinds = []string{"research", "spec", "plan"}
+// Kinds are the kinds with a template.
+var Kinds = func() []string {
+	var out []string
+	for _, k := range kinds.Templated() {
+		out = append(out, k.Name)
+	}
+	return out
+}()
 
 // Create writes a new artefact of the given kind into the session and returns
 // its path relative to the session root.

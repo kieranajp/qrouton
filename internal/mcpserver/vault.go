@@ -12,7 +12,7 @@ import (
 
 type searchVaultInput struct {
 	Query string   `json:"query" jsonschema:"What to look for, in plain words"`
-	Kinds []string `json:"kinds,omitempty" jsonschema:"Only these artifact kinds: research, spec, plan, note or dead_end"`
+	Kinds []string `json:"kinds,omitempty" jsonschema:"Only these artifact kinds: research, spec, plan, explainer, note or dead_end"`
 	Limit int      `json:"limit,omitempty" jsonschema:"Documents to take in fused order; defaults to 5"`
 }
 

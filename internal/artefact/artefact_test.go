@@ -212,6 +212,12 @@ func TestCreateRejectsAnUnknownKindNamingTheValidOnes(t *testing.T) {
 	}
 }
 
+func TestCreateRejectsAKindWithoutATemplate(t *testing.T) {
+	if _, err := Create(newSession(t), "explainer", "x", now); !errors.Is(err, ErrUnknownKind) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
 func TestCreateRecordsRevisionsForReferenceAndEditingRepos(t *testing.T) {
 	fixedAuthor(t, "Kieran")
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())

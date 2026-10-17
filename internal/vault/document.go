@@ -2,8 +2,10 @@ package vault
 
 import (
 	"path"
+	"slices"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"go.yaml.in/yaml/v3"
@@ -32,7 +34,7 @@ func parseDocument(name, text string) (doc Document, body string, bodyLine int) 
 		fm = frontmatter{}
 	}
 	doc = Document{ID: strings.TrimSuffix(name, path.Ext(name)), Kind: pathKind(name), Title: fm.Title}
-	if kinds[fm.Kind] {
+	if slices.Contains(Kinds(), fm.Kind) {
 		doc.Kind = fm.Kind
 	}
 	if doc.Title == "" {
@@ -48,8 +50,25 @@ func pathKind(name string) string {
 	parts := strings.Split(path.Dir(name), "/")
 	for i := 1; i < len(parts); i++ {
 		if parts[i-1] == sessionpaths.SharedDirName {
-			return dirKinds[parts[i]]
+			return kindByDir[parts[i]]
 		}
 	}
 	return ""
+}
+
+var kindByDir = func() map[string]string {
+	out := map[string]string{}
+	for _, k := range kinds.All() {
+		out[k.Dir] = k.Name
+	}
+	return out
+}()
+
+// Kinds is every kind a document can carry and a search can filter by.
+func Kinds() []string {
+	var out []string
+	for _, k := range kinds.All() {
+		out = append(out, k.Name)
+	}
+	return append(out, kindNote, kindDeadEnd)
 }

@@ -5,11 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/gittest"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -655,19 +657,24 @@ func noNilSlice(t *testing.T, v reflect.Value, path string) {
 // A kind filed under a directory has to answer to its filename prefix and carry
 // an ID as well, or a new one lands half-wired — and the prefix fails silently.
 func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
-	if len(kindByDir) != len(artifactKinds) || len(kindByLetter) != len(artifactKinds) {
-		t.Fatalf("%d kinds share %d directories and %d letters", len(artifactKinds), len(kindByDir), len(kindByLetter))
+	all := kinds.All()
+	if len(kindByDir) != len(all) || len(kindByLetter) != len(all) {
+		t.Fatalf("%d kinds share %d directories and %d letters", len(all), len(kindByDir), len(kindByLetter))
 	}
-	for _, a := range artifactKinds {
-		dir := "thoughts/shared/" + a.dir + "/notes.md"
-		if got := DocumentKind(dir); got != a.kind {
-			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, a.kind)
+	for _, k := range all {
+		label := strings.ToUpper(k.Name)
+		if !slices.Contains([]string{KindResearch, KindSpec, KindPlan, KindExplainer}, label) {
+			t.Errorf("kind %q has no %s constant for the bridge to read", k.Name, label)
 		}
-		for _, name := range []string{a.letter + "007-shape.md", strings.ToUpper(a.letter) + "007_shape.md"} {
-			if got := DocumentKind(name); got != a.kind {
-				t.Errorf("DocumentKind(%q) = %q, want %q", name, got, a.kind)
+		dir := "thoughts/shared/" + k.Dir + "/notes.md"
+		if got := DocumentKind(dir); got != label {
+			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, label)
+		}
+		for _, name := range []string{k.Letter + "007-shape.md", strings.ToUpper(k.Letter) + "007_shape.md"} {
+			if got := DocumentKind(name); got != label {
+				t.Errorf("DocumentKind(%q) = %q, want %q", name, got, label)
 			}
-			if got, want := ArtifactID(name), strings.ToUpper(a.letter)+"007"; got != want {
+			if got, want := ArtifactID(name), strings.ToUpper(k.Letter)+"007"; got != want {
 				t.Errorf("ArtifactID(%q) = %q, want %q", name, got, want)
 			}
 		}
