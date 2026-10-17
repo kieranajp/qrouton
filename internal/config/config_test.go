@@ -20,6 +20,14 @@ func TestSplitOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
 	}
 }
 
+func TestNormaliseOrgsTrimsDeduplicatesAndDropsEmptyValues(t *testing.T) {
+	got := NormaliseOrgs([]string{" lifesum", "second-org", "", "lifesum ", "  ", "third"})
+	want := []string{"lifesum", "second-org", "third"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("NormaliseOrgs() = %#v, want %#v", got, want)
+	}
+}
+
 // A zero-repo session needs neither a configured root nor GitHub owners, so
 // Load must succeed with no config file at all and without prompting. If this
 // regresses, `qrouton <dir>` stops being a no-configuration entry point.

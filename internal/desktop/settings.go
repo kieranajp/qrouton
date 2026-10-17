@@ -17,6 +17,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/randomid"
 )
@@ -214,7 +215,7 @@ func thoughtsFromInput(in ThoughtsInput) config.Thoughts {
 		out.Roots = append(out.Roots, config.ThoughtsRoot{
 			ID:   strings.TrimSpace(row.ID),
 			Path: strings.TrimSpace(row.Path),
-			Orgs: dedupOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
+			Orgs: config.NormaliseOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
 		})
 	}
 	return out
@@ -234,7 +235,7 @@ func editorCommand(argv []string) string {
 	for i, word := range words {
 		parsed, err := shlex.Split(word)
 		if err != nil || len(parsed) != 1 || parsed[0] != word {
-			words[i] = "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+			words[i] = launch.ShellQuote(word)
 		}
 	}
 	return strings.Join(words, " ")
@@ -244,7 +245,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	var orgs []string
 	var root string
 	var err error
-	if config.OrgsOverridden() && len(dedupOrgs(in.Orgs)) == 0 {
+	if config.OrgsOverridden() && len(config.NormaliseOrgs(in.Orgs)) == 0 {
 		root, _, err = validateRoot(in.Root)
 	} else {
 		orgs, root, _, err = validateOwnersAndRoot(in.Orgs, in.Root)
@@ -593,7 +594,7 @@ func resolvedRoot(root string) string {
 
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.
 func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root, expanded string, err error) {
-	orgs = dedupOrgs(owners)
+	orgs = config.NormaliseOrgs(owners)
 	if len(orgs) == 0 {
 		return nil, "", "", fmt.Errorf(settingsWrappedFormat, settingsFieldOrgs, ErrNoOwners)
 	}
@@ -614,17 +615,4 @@ func validateRoot(raw string) (stored, expanded string, err error) {
 		return "", "", fmt.Errorf(settingsRefusalFormat, settingsFieldRoot, err)
 	}
 	return stored, expanded, nil
-}
-
-func dedupOrgs(orgs []string) []string {
-	var out []string
-	seen := make(map[string]bool)
-	for _, org := range orgs {
-		org = strings.TrimSpace(org)
-		if org != "" && !seen[org] {
-			seen[org] = true
-			out = append(out, org)
-		}
-	}
-	return out
 }

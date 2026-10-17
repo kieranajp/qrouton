@@ -451,10 +451,13 @@ func WithoutOverrides(env []string) []string {
 	return out
 }
 
-func splitOrgs(s string) []string {
+func splitOrgs(s string) []string { return NormaliseOrgs(strings.Split(s, orgSeparator)) }
+
+// NormaliseOrgs trims each org and drops blanks and repeats, keeping order.
+func NormaliseOrgs(orgs []string) []string {
 	var out []string
 	seen := make(map[string]bool)
-	for _, org := range strings.Split(s, orgSeparator) {
+	for _, org := range orgs {
 		org = strings.TrimSpace(org)
 		if org != "" && !seen[org] {
 			seen[org] = true
