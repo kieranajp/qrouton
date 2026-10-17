@@ -50,7 +50,7 @@ const (
 	crumbSeparator = " > "
 	ellipsis       = "…"
 	cacheExtension = ".gob"
-	cacheDirName   = "qrouton/vault"
+	CacheDirName   = "vault"
 	cacheMode      = 0o644
 	cacheDirMode   = 0o755
 
