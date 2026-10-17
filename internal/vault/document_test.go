@@ -7,6 +7,8 @@ func TestDocumentsTakeTheirIdentityFromThePath(t *testing.T) {
 		name, text, kind, title string
 	}{
 		{"notes/a.md", "# Heading title\n\nText\n", "", "Heading title"},
+		{"notes/e.md", "Prose first.\n\n# Later heading\n", "", "e"},
+		{"notes/f.md", "\n---\ntitle: After blanks\n---\n# F\n", "", "After blanks"},
 		{"notes/b.md", "---\nkind: plan\ntitle: From frontmatter\n---\nText\n", "plan", "From frontmatter"},
 		{"notes/c.md", "---\nkind: whatever\n---\nno heading\n", "", "c"},
 		{"notes/d.md", "---\nbroken: [yaml\n---\n# D\n", "", "D"},
