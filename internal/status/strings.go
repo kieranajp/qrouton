@@ -26,7 +26,6 @@ const (
 	researchDir           = "research"
 	plansDir              = "plans"
 	legacyQuestionsSuffix = "-questions.md"
-	summaryHeading        = "Summary"
 )
 
 // Activity is what the workbench observes. Waiting only ever comes from the

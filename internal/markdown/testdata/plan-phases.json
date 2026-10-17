@@ -95,6 +95,18 @@
     ]
   },
   {
+    "name": "a phase heading inside a tilde fence is not a phase",
+    "text": "## Phase 1 — I\n\n### Verify\n- [x] real\n\n~~~md\n## Phase 2 — Quoted\n\n### Verify\n- [ ] quoted\n~~~\n- [ ] after\n",
+    "phases": [
+      {
+        "number": 1,
+        "label": "1",
+        "met": 1,
+        "total": 2
+      }
+    ]
+  },
+  {
     "name": "only the first Verify section counts",
     "text": "## Phase 1 — H\n\n### Verify\n- [x] first\n\n### Notes\n\n### Verify\n- [ ] second\n",
     "phases": [

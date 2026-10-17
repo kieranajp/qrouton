@@ -224,13 +224,11 @@ func researchAnswered(workspace, pattern string) Assertion {
 			relative = match
 		}
 		for _, section := range markdown.Sections(string(content)) {
-			switch {
-			case section.State == markdown.SectionFramed:
+			if section.State == markdown.SectionFramed {
 				framed = append(framed, filepath.ToSlash(relative)+": "+section.Name)
-			case section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summarySection):
-				answered = true
 			}
 		}
+		answered = answered || markdown.Researched(string(content))
 	}
 	if !answered {
 		framed = append(framed, evidenceNothingAnswered)

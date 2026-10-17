@@ -40,20 +40,11 @@ func researched(path string) bool {
 	if err != nil {
 		return false
 	}
-	sections := markdown.Sections(string(body))
-	if len(sections) == 0 {
-		return strings.TrimSpace(markdown.Body(string(body))) != ""
+	text := string(body)
+	if len(markdown.Sections(text)) == 0 {
+		return strings.TrimSpace(markdown.Body(text)) != ""
 	}
-	answered := false
-	for _, section := range sections {
-		switch {
-		case section.State == markdown.SectionFramed:
-			return false
-		case section.State == markdown.SectionAnswered && !strings.EqualFold(section.Name, summaryHeading):
-			answered = true
-		}
-	}
-	return answered
+	return markdown.Researched(text)
 }
 
 // implemented means the plan has phases, each has Verify items, and every one

@@ -135,10 +135,6 @@ const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
 
-	// summarySection is the research document's pinned first section, which
-	// carries the framing before it carries the findings.
-	summarySection = "Summary"
-
 	researchPathSegment = "/research/"
 
 	// Event markers the delegation and brief graders match on.
