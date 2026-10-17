@@ -127,7 +127,8 @@ finding, filed under the tell of the code the claim justifies.
 
 ## The five-step check
 
-1. Is there a tie: a type or a test that fails when the copies drift?
+1. Is there a tie: a type, a test, a generator or a build step that fails or
+   regenerates when the copies drift?
 2. Is there a reason written at the site that still holds?
 3. Can the guarded case occur?
 4. Do the copies agree today?
@@ -145,8 +146,8 @@ How the steps decide:
   fixtures do not count. Exported API that other modules consume counts as
   reached.
 
-A reason counts only when it is written at the site: a comment, a doc, or the
-commit message for those lines. A reason the auditor supplies is not a reason.
+A reason counts only when it is written at the site: a comment, a doc, or a
+commit message for those lines or beside them. A reason the auditor supplies is not a reason.
 Check each runtime claim in a written reason against the layer that really
 runs the code before it decides anything, and cite the file or package that
 settles it. Inferring a claim from the target's own code
@@ -160,7 +161,8 @@ candidates as a group. A tool candidate that a known trap explains is not listed
 `## Tools` counts it by trap.
 
 `## Tools` holds the tools, the job inventory and the tell-3 category outcomes
-when they ran, and the trap counts. The job inventory is the full inventory: every import,
+when they ran, and the trap counts. Every file type in scope that no tool
+covered gets a stated skip that names the file type and why. The job inventory is the full inventory: every import,
 built-in, global and internal module used from three or more files in two or
 more directories, and every kind of shared machinery that reaches as many, such
 as lifecycle subscriptions, error types or routing APIs. Count shipped files
@@ -176,8 +178,10 @@ per row, never only the jobs that were kept. Each row carries one outcome:
 
 A skip because the routes cannot differ in behaviour must
 name what was compared. Pure entries that do no I/O and hold no config or
-state may share one stated-skip row that lists them. "Low value" and "out of
-scope" are not reasons. No section holds open questions or follow-ups.
+state may share one stated-skip row that lists them. A data table is not
+pure: a module holding a display-string table, a vocabulary or constants
+another module mirrors gets its own row. "Low value" and "out of scope" are
+not reasons. No section holds open questions or follow-ups.
 
 ## The test check
 
@@ -215,7 +219,10 @@ cost-spare against the other findings (no spare whose family another finding
 proposes to grow), every fix that deletes code or tests (no deleted test that
 would serve another purpose), every runtime claim, every claim that a test
 never runs or cannot fail, and every claim that shipped code behaves
-differently under test. It skips the one route check when no inventory ran,
+differently under test. It also checks every "no tie" and "no written reason"
+claim, the latter against history the lead collects into a history directory,
+every behaviour-risk label, every fix to persisted data for a migration, and
+every impact rating against behaviour that is wrong today. It skips the one route check when no inventory ran,
 the cost-spare check when tell 3 did not run, and the test claims when tell 4
 did not run. The lead fixes or drops each failed finding, and corrects a failed
 inventory row's outcome without removing the row.
@@ -232,6 +239,8 @@ rules, skipping those for a tell or an inventory that did not run:
   counts only, and every row has a file count and one outcome;
 - every one route row lists the routes searched, and every stated skip gives a
   reason the reader can check;
+- every file type in scope that no tool covered has a stated skip that names
+  the file type;
 - every library category has an outcome;
 - each tell-3 cost line states size and installed status and lists the whole
   family, and no spare contradicts another finding;

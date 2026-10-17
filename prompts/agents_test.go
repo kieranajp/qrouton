@@ -310,7 +310,7 @@ func TestLeadNamesNameAgentPrompts(t *testing.T) {
 }
 
 // The re-read must come from an agent that cannot edit the draft it checks, so
-// the lead's own fixes are never what it verifies.
+// it gets history from the lead's reads and never from a shell of its own.
 func TestAuditLeadSpawnsReadOnlyVerifier(t *testing.T) {
 	loader := NewEmbeddedLoader()
 	lead, err := loader.Load(context.Background(), ID(agentIDPrefix+AuditLead))
@@ -320,9 +320,21 @@ func TestAuditLeadSpawnsReadOnlyVerifier(t *testing.T) {
 	if !strings.Contains(string(lead.Content), "`"+auditVerifier+"`") {
 		t.Errorf("audit lead does not spawn %s", auditVerifier)
 	}
+	checkDraft := markdownSection(string(lead.Content), "## Check the draft")
+	for _, phrase := range []string{"history directory", "`git log -L "} {
+		if !strings.Contains(checkDraft, phrase) {
+			t.Errorf("audit lead's Check the draft does not carry %q", phrase)
+		}
+	}
 	verifier, err := loader.Load(context.Background(), ID(agentIDPrefix+auditVerifier))
 	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(string(verifier.Content), "supplied history") {
+		t.Errorf("%s does not read the supplied history", auditVerifier)
+	}
+	if strings.Contains(string(verifier.Content), "`git") {
+		t.Errorf("%s names a git command it cannot run", auditVerifier)
 	}
 	if tools, _ := frontmatterEntry(string(verifier.Content), toolsKey); tools != "Read, Grep, Glob, LS" {
 		t.Errorf("%s tools = %q, want read-only", auditVerifier, tools)
@@ -477,7 +489,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"judgement skip", []string{"name what was compared"}, []string{lead, shape}},
 		{"shared machinery", []string{"kinds of shared machinery"}, []string{lead}},
 		{"independent re-read", []string{"independent re-read"}, []string{lead, shape, verifier}},
-		{"what the re-read verifies", []string{"agree or differ", "one route", "proposes to grow", "serve another purpose"}, []string{lead, shape, verifier}},
+		{"what the re-read verifies", []string{"agree or differ", "one route", "proposes to grow", "serve another purpose"}, []string{shape, verifier}},
 		{"category outcomes", []string{"outcome per category", "none hand-rolled"}, []string{lead, checker, shape}},
 		{"platform comments", []string{"platform or runtime claims"}, []string{lead, checker}},
 		{"root-cause rule", []string{"not a shared root cause"}, []string{lead, shape}},
@@ -498,6 +510,21 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"verifier test checks", []string{"cannot fail", "never runs"}, []string{verifier}},
 		{"go tell-4 notes", []string{"`t.Skip`", "`testing.Testing()`"}, []string{goNotes}},
 		{"typescript tell-4 notes", []string{"`testMatch`", "`.only`"}, []string{tsNotes}},
+		{"no-tie check", []string{"search for a tie"}, []string{verifier}},
+		{"history check", []string{"supplied history", "unchecked"}, []string{verifier}},
+		{"history handoff", []string{"history directory"}, []string{lead, shape}},
+		{"inventory claims", []string{"none hand-rolled", "stated skip"}, []string{verifier}},
+		{"behaviour risk", []string{"persisted key", "user-visible string"}, []string{verifier}},
+		{"migrations", []string{"states a migration"}, []string{verifier}},
+		{"file references", []string{"allowlists"}, []string{verifier}},
+		{"impact check", []string{"wrong behaviour today"}, []string{verifier}},
+		{"complete family", []string{"family is complete"}, []string{verifier}},
+		{"repo checks first", []string{"the repo's own checks first"}, []string{lead, tsNotes, goNotes}},
+		{"file-type skip", []string{"names the file type"}, []string{lead, shape}},
+		{"no dropped category", []string{"never dropped without a stated skip"}, []string{lead}},
+		{"data tables", []string{"another module mirrors"}, []string{lead, shape}},
+		{"own fixture", []string{"a literal copy of itself"}, []string{lead, checker}},
+		{"dead-code skip", []string{"skipped only because the code it names is dead"}, []string{lead}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -508,7 +535,13 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3"} {
+	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key"} {
+		if strings.Contains(texts[lead], phrase) {
+			t.Errorf("the lead restates the verifier's check %q; it briefs check numbers instead", phrase)
+		}
+	}
+
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first"} {
 		if strings.Contains(texts[skill], phrase) {
 			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
 		}
@@ -529,4 +562,30 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The verifier's prompt is the one home for its checks, and the lead briefs
+// them by number, so neither prompt may grow back the other's text.
+func TestAuditPromptsStayWithinBudget(t *testing.T) {
+	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 800} {
+		raw, err := fs.ReadFile(embedded, agentIDPrefix+name+promptFileExt)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if words := len(strings.Fields(string(raw))); words > limit {
+			t.Errorf("%s has %d words, over its budget of %d", name, words, limit)
+		}
+	}
+}
+
+func markdownSection(text, heading string) string {
+	start := strings.Index(text, heading)
+	if start < 0 {
+		return ""
+	}
+	rest := text[start+len(heading):]
+	if end := strings.Index(rest, "\n## "); end >= 0 {
+		return rest[:end]
+	}
+	return rest
 }

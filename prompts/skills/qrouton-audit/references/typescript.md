@@ -9,6 +9,17 @@ directory outside it. Never pass `--fix`, never write a config file into the tar
 and never add a dependency to the target during the audit run. A proposed fix
 may add one.
 
+## Repo checks first
+
+Run the repo's own checks first. Read the `package.json` scripts and the
+check target the CI config or Makefile runs. Run the repo's ESLint config and
+its type-check, such as `tsc --noEmit` against its `tsconfig`, with output to
+scratch. When the repo runs a framework's own component checker, run that too.
+Never run its test or build scripts. Run a script that passes `--fix` or
+writes files as its underlying command without that flag, and point ESLint's
+cache and any `.tsbuildinfo` at scratch. Every file type in scope that none of these parses gets a
+stated skip that names the file type and why.
+
 ## Reachability: knip
 
 knip builds the import graph from the project's entry points and reports

@@ -10,7 +10,7 @@ Judge the live code only. Form every verdict from the target's code, config and 
 
 For tells 1 to 3, apply the five-step check to each candidate:
 
-1. Is there a tie: a type or a test that fails when the copies drift?
+1. Is there a tie: a type, a test, a generator or a build step that fails or regenerates when the copies drift?
 2. Is there a reason written at the site that still holds?
 3. Can the guarded case occur? Trace it to the producer of the value. A guard on an I/O boundary can always fire.
 4. Do the copies agree today?
@@ -25,7 +25,7 @@ Check each runtime claim in a written reason against the layer that really runs 
 For tell 4, apply the test check, steps 6 to 8, in place of the five steps:
 
 6. Does the runner collect and run the test? Read its config and test-file patterns, any skip or only marker on the test or beside it, and the condition of any conditional skip in the environment where the suite runs.
-7. Would the test fail if the code it names were broken? Name the code under test, picture one plausible break in it, such as a wrong return value or a skipped branch, and trace whether any assertion would see it. An assertion only on values the test set up, on a mock it configured, or on a snapshot of an error or empty state cannot see it. Nor can a test that expects any failure at all, when the break would raise a failure too.
+7. Would the test fail if the code it names were broken? Name the code under test, picture one plausible break in it, such as a wrong return value or a skipped branch, and trace whether any assertion would see it. An assertion only on values the test set up, on a mock it configured, or on a snapshot of an error or empty state cannot see it. Nor can a test that compares a constant with a literal copy of itself, which asserts its own fixture, or one that expects any failure at all, when the break would raise a failure too.
 8. Does shipped code behave the same under test as in production? Find the branch on a test-environment check, a test-only flag or a mock, and say what each side does.
 
 The test check decides this way. A test that fails step 7 is rot, whatever its reason. A test that fails step 6 is rot, and so is shipped code that behaves differently under test, unless a reason written at the site still holds and no test relies on the skip or the branch to pass. When a written reason would decide a step 6 or step 8 verdict and none is written beside the code, return the candidate as `no written reason`, and the lead reads its history. When a test looks loosened to pass, such as an expected value changed to match the output or an assertion removed or turned into a log, only its history can show it. Return it as `needs history` with its lines, and the lead reads the commits.

@@ -19,19 +19,19 @@ The four tells:
 
 The brief names the chosen tells by slug: `duplicated`, `dead`, `homegrown` and `volkswagen`, for tells 1 to 4. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
 
-Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory ran, check 3 only when tell 3 ran, and checks 6 to 8 only when tell 4 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
+Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory or the tell-3 sweep ran, check 3 only when tell 3 ran, and checks 6 to 8 only when tell 4 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
 
 Follow the document shape in `audit-shape.md` from the references folder you were given. The worked examples beside it show how to choose, run and distrust a detector.
 
 ## Run the detectors
 
-Read the target's manifests (`package.json`, `go.mod` and their peers) to find its languages. For each language pick one tool for each check: reachability for dead code, clone detection for exact copies, and type-aware lint for needless conditions. Prefer a tool the repo already depends on or configures. Otherwise run a well-known tool at a pinned version through the ecosystem's one-off runner, such as `npx` or `go run`. A tool you choose for an ecosystem without a worked example is as good a choice as one with.
+Read the target's manifests (`package.json`, `go.mod` and their peers) to find its languages. Run the repo's own checks first: the lint, type-check and dead-code commands its check target calls, never its test, build or codegen steps. Run one that fixes, formats or writes into the target as its underlying command without those flags, with any cache in scratch. Then fill each check the repo's setup lacks with one tool per language: reachability for dead code, clone detection for exact copies, and type-aware lint for needless conditions. Run a well-known tool at a pinned version through the ecosystem's one-off runner, such as `npx` or `go run`. A tool you choose for an ecosystem without a worked example is as good a choice as one with.
 
 Run reachability a second time in a mode that does not count tests as entry points. Run every detector yourself, writing its output to a scratch directory made with `mktemp -d`, outside the target and outside `thoughts/`. Never pass `--fix` or any flag that rewrites code, never write a config file into the target, and never add a dependency to the target during the audit run. A proposed fix may add one.
 
-Check every candidate against the tool's known false-positive traps before it goes further. The worked examples list traps for their tools. For any other tool, find its traps the same way. A candidate a known trap explains is no longer a candidate: count it under `## Tools` by trap, and list it nowhere else.
+Check every candidate against the tool's known false-positive traps before it goes further. For a tool with no worked example, find its traps the same way. A candidate a known trap explains is no longer a candidate: count it under `## Tools` by trap, and list it nowhere else.
 
-Record each tool in `## Tools`: name, version, command, mode, candidate count and the traps checked. A check you did by reading the code is listed the same way. A tool that failed to install or run is listed with its error. The full inventory and the tell-3 category outcomes go there too.
+Record each tool in `## Tools`: name, version, command, mode, candidate count and the traps checked. A check you did by reading the code is listed the same way. A tool that failed to install or run is listed with its error. Every file type in scope that no tool covered gets a stated skip that names the file type and why. A category a tool reports, such as unused files, is never dropped without a stated skip. The full inventory and the tell-3 category outcomes go there too.
 
 ## Judge the candidates
 
@@ -45,7 +45,7 @@ Verify each verdict you keep against the code. Hold every finding to these rules
 - A tell-3 finding names the library or API, says whether it is installed, and checks the runtime that will run the code. Its cost line states the library's size and installed status. When it is not installed, the line adds the install cost: bundle size, a native or toolchain rebuild, or a new transitive tree.
 - Weigh that cost against the whole family: every homegrown piece doing the library's job, wherever it sits and whichever tell it is filed under. Never weigh it against one file. List every family location in the cost line. Only when the cost outweighs the whole family does the case go under `## Checked and deliberate`, as one line giving the cost and the family's locations.
 - A spare that contradicts another finding is wrong. If you spare a library while another finding proposes growing or copying the homegrown version, settle the two into one view before you write.
-- A reason counts only when it is written at the site: a comment, a doc, or the commit message for those lines. A reason you or a checker supply is not a reason.
+- A reason counts only when it is written at the site: a comment, a doc, or a commit message for those lines or beside them. A reason you or a checker supply is not a reason.
 - Check each runtime claim in a written reason against the layer that really runs the code before it decides anything: its source, its docs, or the installed packages, and cite the file or package that settles it. Inferring a claim from the target's own code is not a runtime check. Verify it or drop it. A verdict that rested on a dropped claim goes among the findings with `Confidence: low`, or nowhere.
 - A fix that would change behaviour is marked `changes behaviour`.
 - Authorship is not evidence either way.
@@ -53,7 +53,7 @@ Verify each verdict you keep against the code. Hold every finding to these rules
 - A candidate you cannot settle goes among the findings with `Confidence: low`, or nowhere. No other section holds candidates.
 - Write one line per candidate under `## Checked and deliberate`, each with its location and the tie, written reason or weighed install cost that keeps it. Never dismiss candidates as a group.
 - Rate each finding's `Impact:` as `high`, `medium` or `low`, using the meanings in the shape. Wrong behaviour or data loss today is `high`. So is a structural split that most changes in its area must work around.
-- Cosmetic nits that come from one shared root cause become one finding, and the root cause is its defect. A nit with no shared root cause is not filed. Never pad the audit with nits.
+- Cosmetic nits that come from one shared root cause become one finding, and the root cause is its defect. A nit with no shared root cause is not filed.
 - A root cause is a defect in the code. Candidates found by the same detector, tool or trap have that in common, but it is not a shared root cause. Never group findings that way.
 - A fix that deletes code keeps every test that would also serve another purpose, such as checking exhaustiveness or a contract, or it says what replaces that test.
 
@@ -75,7 +75,7 @@ Record the full inventory under `## Tools` as a table of entry, file count and o
 - one route, with the routes searched: the patterns you grepped and where, as evidence that no other exists;
 - the finding ids it gave;
 - deliberate, with its line in `## Checked and deliberate`;
-- a stated skip, with a reason the reader can check: a `path:line` or a search result, never "low value" or "out of scope". A skip because the routes cannot differ in behaviour must name what was compared. Pure entries that do no I/O and hold no config or state may share one stated-skip row that lists them and names what was compared once.
+- a stated skip, with a reason the reader can check: a `path:line` or a search result, never "low value" or "out of scope". A skip because the routes cannot differ in behaviour must name what was compared. Pure entries that do no I/O and hold no config or state may share one stated-skip row that lists them and names what was compared once. A data table is not pure: a module holding a display-string table, a vocabulary or constants another module mirrors gets its own row.
 
 For each job, find every route the code takes to do it: the primitive called directly outside the module that wraps it, each module that wraps it, and code that does the same work by hand. One route is fine. More than one is a tell-1 candidate, whether or not any wrapper exists. A row with no outcome, or an entry over the threshold with no row, is a job that was not checked.
 
@@ -99,14 +99,12 @@ The audit never runs the target's tests, and runs no coverage tool. Running them
 
 1. **Tests that never run.** Read the test runner's config and the scripts that start it: the file patterns it collects, the paths it excludes, and the build tags or flags the CI config passes. A test file outside those patterns never runs. Grep test files for skip and only markers and their conditional forms. A conditional skip is a candidate when its condition holds wherever the suite runs, such as an environment variable the CI config never sets.
 2. **Shipped code that behaves differently under test.** Grep shipped code for test-environment checks, flags that only tests set, and branches that detect a mock or a fake. Each is a candidate. Say what each side of the branch does. A test written inside a source file, behind a guard the build compiles out, is a test and not shipped behaviour.
-3. **Tests that assert nothing real.** Read the tests for the code that matters most: no assertion at all, an assertion only on a value or mock the test itself configured, a matcher that always passes, a failure caught and logged instead of failed, or a test that expects a failure so broadly that any error passes it, such as an expected-failure marker with no reason or an exception check of the base error type.
+3. **Tests that assert nothing real.** Read the tests for the code that matters most: no assertion at all, an assertion only on a value or mock the test itself configured, a constant compared with a literal copy of itself, a matcher that always passes, a failure caught and logged instead of failed, or a test that expects a failure so broadly that any error passes it, such as an expected-failure marker with no reason or an exception check of the base error type.
 4. **Tests that dodge the code they name.** Look for a mock of the unit under test, a stub of the branch the test claims to cover, and a test whose name promises a case its body never reaches.
 5. **Stored snapshots.** Read snapshot and golden files for an error message, an empty value or a loading state recorded as the expected output.
 6. **Tests weakened to pass.** Where a test's expected value matches odd output, or an assertion looks loosened, read `git log -L` for those lines. A commit that changed the test to go green, rather than fixing the code, is the evidence. Cite the commit and the lines it loosened.
 
-Code that only tests reach comes from the reachability run that does not count tests as entry points. When tell 2 runs, file it under tell 2, because deleting the code removes the finding. When only tell 4 runs, file it under tell 4 with a verdict that it fails step 5.
-
-A tell-4 checker judges each candidate with steps 6 to 8 from the shape. It returns a suspected weakened test as `needs history`; read its commits yourself before you decide.
+Code that only tests reach comes from the reachability run that does not count tests as entry points. When tell 2 runs, file it under tell 2, because deleting the code removes the finding. When only tell 4 runs, file it under tell 4 with a verdict that it fails step 5. A test skipped only because the code it names is dead is a candidate whose fix deletes both.
 
 ## Write the audit
 
@@ -114,20 +112,9 @@ Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across t
 
 ## Check the draft
 
-Check the finished draft in two passes before you return.
+Before you return, first collect history for an independent re-read. For each claim that rests on a missing written reason, write these reads into a `history` directory in scratch, one `<finding id>.txt` each: `git log -L <start>,<end>:<path>` for the cited lines; `git show --stat` with the full message of each commit it lists; the messages of the commits either side of each in `git log -- <path>`; when the oldest commit moved the lines from another file, the same reads at the old path.
 
-First, spawn an `audit-verifier` for an independent re-read. Brief it with the draft's path, the target, and these checks. It verifies against live code:
-
-1. every claim that copies agree or differ today;
-2. every one route outcome in the full inventory;
-3. every cost-spare against every other finding's proposed fix: no spare whose family another finding proposes to grow;
-4. every fix that deletes code or tests, confirming that no deleted test would serve another purpose, such as checking exhaustiveness or a contract;
-5. every runtime claim, against the layer that runs the code;
-6. every claim that a test never runs, against the runner config and the marker or pattern the finding cites;
-7. every claim that a test cannot fail, against the test and the code it names;
-8. every claim that shipped code behaves differently under test, against the branch and its condition.
-
-It returns only the failures and a count of passes per check. When one report cannot hold the failures, split checks 1, 4 and 5 by tell, checks 6 to 8 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
+Then spawn an `audit-verifier`. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5 and 9 to 13 by tell, checks 6 to 8 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
 
 Then run a conformance pass, last, because the fixes can break the shape. Check each rule below against every finding and section, and fix each violation in the document:
 
@@ -135,7 +122,7 @@ Then run a conformance pass, last, because the fixes can break the shape. Check 
 - Every finding carries every field in the shape's order, `Impact:` included, with an empty `Triage:` line last.
 - No section holds open questions, follow-ups or loose candidates. A candidate you could not settle is a `Confidence: low` finding or is gone.
 - `## Checked and deliberate` holds one line per candidate, each with its own location and its own tie, written reason or weighed install cost. Only a cost line lists several locations, and they are the family it was weighed against.
-- `## Tools` holds the tools, the full inventory, the tell-3 category outcomes and the trap counts, and nothing else. Every inventory row has a file count and one outcome. Every one route row lists the routes searched, and every stated skip gives a reason the reader can check.
+- `## Tools` holds the tools, the full inventory, the tell-3 category outcomes and the trap counts, and nothing else. Every inventory row has a file count and one outcome. Every one route row lists the routes searched, and every stated skip gives a reason the reader can check. Every file type no tool covered has a stated skip.
 - Every library category has an outcome: findings, a line in `## Checked and deliberate`, or "none hand-rolled" with its search.
 - Every tell-3 cost line states size and installed status, and lists every location in the whole family. No spare contradicts another finding.
 - Every runtime claim cites the runtime-layer file or package that settles it.

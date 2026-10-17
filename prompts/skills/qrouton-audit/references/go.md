@@ -10,6 +10,15 @@ into the target, and never add a dependency to the target during the audit
 run: `go run pkg@version` fetches into the module cache, not the target's
 `go.mod`. A proposed fix may add one.
 
+## Repo checks first
+
+Run the repo's own checks first. Read the Makefile's check and lint targets
+and the CI config. Run the linter config the repo carries, such as
+`.golangci.yml`, at the version the repo pins, and `go vet ./...`, with output
+to scratch. Run a target that formats or fixes in place as its underlying
+command without those flags. Non-Go file types in scope get their own
+ecosystem's checks, or a stated skip that names the file type and why.
+
 ## Reachability: deadcode
 
 `deadcode` reports functions unreachable from `main` by whole-program
