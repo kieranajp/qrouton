@@ -494,7 +494,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"platform comments", []string{"platform or runtime claims"}, []string{lead, checker}},
 		{"root-cause rule", []string{"not a shared root cause"}, []string{lead, shape}},
 		{"test-preserving deletions", []string{"serve another purpose"}, []string{checker}},
-		{"impact", []string{"data loss"}, []string{lead, shape}},
+		{"impact", []string{"data loss"}, []string{shape}},
 		{"summary", []string{"one sentence per high and medium finding"}, []string{lead, shape, template}},
 		{"scope and tells question", []string{"one structured question", "`AskUserQuestion`", "ask in chat"}, []string{skill}},
 		{"chosen tells key", []string{"`tells:`"}, []string{lead, shape}},
@@ -525,6 +525,17 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"data tables", []string{"another module mirrors"}, []string{lead, shape}},
 		{"own fixture", []string{"a literal copy of itself"}, []string{lead, checker}},
 		{"dead-code skip", []string{"skipped only because the code it names is dead"}, []string{lead}},
+		{"defect is not a spare", []string{"a behaviour defect"}, []string{checker, shape, verifier}},
+		{"stated intent", []string{"its own comment"}, []string{checker, verifier}},
+		{"tell-4 deliberate re-check", []string{"tell-4 line under `## Checked and deliberate`"}, []string{verifier}},
+		{"category outcomes verified", []string{"every category outcome"}, []string{verifier}},
+		{"impact reconciliation", []string{"cosmetic difference"}, []string{shape, verifier}},
+		{"impact reconciliation today", []string{"differ or disagree today"}, []string{verifier}},
+		{"derived-list gate", []string{"keeps every gate"}, []string{checker, shape, verifier}},
+		{"deliberate subset", []string{"stays a subset"}, []string{shape, verifier}},
+		{"coarse rows", []string{"call sites searched"}, []string{lead, shape}},
+		{"row sampling", []string{"five of the entry's call sites"}, []string{verifier}},
+		{"conformance home", []string{"`## Before returning`"}, []string{lead}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -535,7 +546,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key"} {
+	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "its own comment", "stays a subset", "five of the entry's call sites"} {
 		if strings.Contains(texts[lead], phrase) {
 			t.Errorf("the lead restates the verifier's check %q; it briefs check numbers instead", phrase)
 		}
@@ -556,7 +567,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for where, text := range texts {
-		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern"} {
+		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern", "Every library category has an outcome"} {
 			if strings.Contains(text, gone) {
 				t.Errorf("%s still says %q", where, gone)
 			}
@@ -567,7 +578,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 // The verifier's prompt is the one home for its checks, and the lead briefs
 // them by number, so neither prompt may grow back the other's text.
 func TestAuditPromptsStayWithinBudget(t *testing.T) {
-	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 800} {
+	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 1000} {
 		raw, err := fs.ReadFile(embedded, agentIDPrefix+name+promptFileExt)
 		if err != nil {
 			t.Fatal(err)

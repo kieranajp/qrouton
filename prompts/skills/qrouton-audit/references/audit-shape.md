@@ -92,6 +92,8 @@ Impact says how much fixing the finding is worth:
 | `low` | Cosmetic or local; fixing it saves little. |
 
 A structural split that most changes in its area must work around is `high`.
+Copies that differ or disagree today are `high`, unless the finding states a
+cosmetic difference in one clause.
 
 `## Summary` gives the findings by impact: one sentence per high and medium
 finding, high first, saying what is wrong and why it matters. It never gives a
@@ -109,6 +111,10 @@ A proposed fix that deletes code keeps every test that would also serve
 another purpose, such as checking exhaustiveness or a contract, or it says what
 replaces that test.
 
+A fix that derives several lists from one table keeps every gate the current
+lists enforce, and a list that is deliberately a subset stays a subset, for
+example through a filter on the table.
+
 A tell-3 finding's cost line states the library's size and installed status,
 and the install cost when it is not installed. The cost is weighed against the
 whole family: every homegrown piece doing that library's job, including pieces
@@ -116,7 +122,8 @@ filed under other tells. The cost line lists every family location. A case goes
 under `## Checked and deliberate` for its cost only when the cost outweighs the
 whole family. A spare that contradicts another finding is wrong: never spare a
 library while another finding proposes growing or copying the homegrown
-version.
+version. A family member with a behaviour defect is a finding, never part of a
+cost-spare; the spare covers only the defect-free rest.
 
 The tell-3 sweep records an outcome per category for each common library
 category: the finding ids, its line in `## Checked and deliberate` (a
@@ -176,6 +183,9 @@ per row, never only the jobs that were kept. Each row carries one outcome:
 | deliberate | its line in `## Checked and deliberate` |
 | stated skip | a reason the reader can check: a `path:line` or a search result |
 
+A one route or stated-skip row whose entry is used from ten or more files also
+names the call sites searched.
+
 A skip because the routes cannot differ in behaviour must
 name what was compared. Pure entries that do no I/O and hold no config or
 state may share one stated-skip row that lists them. A data table is not
@@ -222,7 +232,11 @@ never runs or cannot fail, and every claim that shipped code behaves
 differently under test. It also checks every "no tie" and "no written reason"
 claim, the latter against history the lead collects into a history directory,
 every behaviour-risk label, every fix to persisted data for a migration, and
-every impact rating against behaviour that is wrong today. It skips the one route check when no inventory ran,
+every impact rating against behaviour that is wrong today. It also reads the
+comments at each copy, samples call sites behind widely used one route and
+stated-skip rows, verifies every category outcome, re-checks every tell-4 line
+under `## Checked and deliberate` and every fix that derives lists from one
+table. It skips the one route check when no inventory ran,
 the cost-spare check when tell 3 did not run, and the test claims when tell 4
 did not run. The lead fixes or drops each failed finding, and corrects a failed
 inventory row's outcome without removing the row.
@@ -234,20 +248,30 @@ rules, skipping those for a tell or an inventory that did not run:
 - every field present in order, `Impact:` included, with `Triage:` last;
 - no open questions, follow-ups or loose candidates in any section;
 - one line per candidate under `## Checked and deliberate`, each with its own
-  tie, written reason or weighed install cost;
+  location and its own tie, written reason or weighed install cost; only a
+  cost line lists several locations, and they are the family it was weighed
+  against;
 - `## Tools` holds tools, the full inventory, category outcomes and trap
   counts only, and every row has a file count and one outcome;
 - every one route row lists the routes searched, and every stated skip gives a
-  reason the reader can check;
+  reason the reader can check; a row whose entry is used from ten or more files
+  names the call sites searched;
 - every file type in scope that no tool covered has a stated skip that names
   the file type;
-- every library category has an outcome;
+- every library category has an outcome: finding ids, a line in
+  `## Checked and deliberate`, or "none hand-rolled" with its search;
 - each tell-3 cost line states size and installed status and lists the whole
-  family, and no spare contradicts another finding;
+  family, no spare contradicts another finding, and no spare covers a
+  behaviour defect;
 - every runtime claim cites the runtime-layer file or package that settles it;
 - cosmetic nits grouped by one shared root cause, or left out, and nothing
   grouped only because one detector, tool or trap found it;
-- every deleting fix keeps the tests that serve another purpose;
+- every deleting fix keeps the tests that serve another purpose, or names what
+  replaces them;
+- every fix that derives lists from one table keeps every gate, and a
+  deliberate subset stays a subset;
+- every finding whose copies differ today is `high` or states a cosmetic
+  difference;
 - every tell-4 finding names the test and the code it names, and its verdict
   names the step from 6 to 8 it fails, or step 5 for code only tests reach;
 - every weakened-test finding cites the commit and the lines it loosened;
