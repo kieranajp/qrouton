@@ -183,6 +183,7 @@ type Phase struct {
 var (
 	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)([a-z])?\s*[—–:-]\s*(\S.*?)\s*$`)
 	otherMarker  = regexp.MustCompile(`^\[[^\]\s]\]\s`)
+	boxedText    = regexp.MustCompile(`^\[.\][ \t]+\S`)
 )
 
 const verifyHeading = "verify"
@@ -228,16 +229,21 @@ func countCriteria(node ast.Node, source []byte, phase *Phase) {
 			return ast.WalkContinue, nil
 		}
 		lead := child.FirstChild()
+		lines := lead.Lines()
+		if lines == nil || lines.Len() == 0 {
+			return ast.WalkContinue, nil
+		}
+		segment := lines.At(0)
+		first := segment.Value(source)
 		if box, ok := lead.FirstChild().(*extast.TaskCheckBox); ok {
-			phase.Total++
-			if box.IsChecked {
-				phase.Met++
-			}
-		} else if lines := lead.Lines(); lines != nil && lines.Len() > 0 {
-			first := lines.At(0)
-			if otherMarker.Match(first.Value(source)) {
+			if boxedText.Match(first) {
 				phase.Total++
+				if box.IsChecked {
+					phase.Met++
+				}
 			}
+		} else if otherMarker.Match(first) {
+			phase.Total++
 		}
 		return ast.WalkContinue, nil
 	})
