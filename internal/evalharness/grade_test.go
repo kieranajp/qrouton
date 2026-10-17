@@ -279,7 +279,7 @@ func TestDelegationTakesTheTargetFromTheSpawnNotTheProse(t *testing.T) {
 	}
 }
 
-// mockOpenFile is a call the mock server served, as ReadMCPEvents returns it.
+// mockOpenFile is an open_file call as the mock server logs it.
 func mockOpenFile(path string) Event {
 	return Event{Kind: "tool_call", Role: roleMockMCP, Name: "open_file", Path: path}
 }

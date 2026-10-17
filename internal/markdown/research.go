@@ -6,9 +6,8 @@ import "strings"
 // time, so it answers no question.
 const summaryHeading = "Summary"
 
-// Researched reports whether a research document has an answered question and
-// none left holding only its framing. An opening Summary answers nothing; one
-// further down is a question like any other.
+// Researched reports whether some question is answered and none holds only its framing.
+// Only an opening Summary is exempt from counting as a question.
 func Researched(text string) bool {
 	answered := false
 	for at, section := range Sections(text) {

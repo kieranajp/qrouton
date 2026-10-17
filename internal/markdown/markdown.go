@@ -58,9 +58,8 @@ func Marp(text string) bool {
 	return false
 }
 
-// Split separates the frontmatter block from what a reader would see, and
-// gives the source line the body starts on. A block that never closes is
-// neither: its contents are not the document, and it declares nothing.
+// Split returns the frontmatter, the body and the body's first source line.
+// An unclosed block yields nothing at all.
 func Split(text string) (front, body string, line int) {
 	lines := strings.Split(text, "\n")
 	for at, raw := range lines {
@@ -220,9 +219,7 @@ func PlanPhases(text string) []Phase {
 	return phases
 }
 
-// countCriteria counts every task item under node, nested ones included. GFM
-// only recognises `[ ]` and `[x]`, so an item struck through with another
-// marker parses as prose; it is still a criterion, and still unmet.
+// An item boxed with a marker other than space or x parses as prose but is still an unmet criterion.
 func countCriteria(node ast.Node, source []byte, phase *Phase) {
 	_ = ast.Walk(node, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering || child.Kind() != ast.KindListItem || child.FirstChild() == nil {

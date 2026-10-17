@@ -35,9 +35,7 @@ func agentAssetPaths(name string) []string {
 // inheriting the default by nobody's decision.
 var defaultSandboxAgents = map[string]bool{}
 
-// Depth stays bounded at three levels: a lead omits tools so it inherits the
-// spawn tool and can delegate, and every specialist declares a tools set
-// without Agent or Task so it cannot spawn a fourth.
+// A lead omits tools so it can spawn; a specialist declares tools without Agent or Task so it cannot.
 func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 	loaded, err := NewEmbeddedLoader().List(context.Background())
 	if err != nil {

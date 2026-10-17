@@ -139,9 +139,7 @@ const sessionEntropyBytes = 2 // 4 hex characters
 
 const missingThoughtsRootNotice = "qrouton: the %q thoughts root at %s is missing, so this session's thoughts are in the default root instead. Tell the user in your first message."
 
-// scaffoldDirs are the artifact folders every session starts with, under
-// thoughts/shared: a symlink into the session's thoughts root, so documents
-// outlive the session directory.
+// scaffoldDirs sit under thoughts/shared, a symlink into the thoughts root, so documents outlive the session.
 var scaffoldDirs = func() []string {
 	var out []string
 	for _, k := range kinds.Templated() {

@@ -20,7 +20,7 @@ func All() []Kind {
 	return []Kind{Research, Spec, Plan, Explainer}
 }
 
-// Templated is the kinds a session scaffolds and create_artefact writes.
+// Templated is the kinds a session scaffolds and the agent can create.
 func Templated() []Kind {
 	var out []Kind
 	for _, k := range All() {
