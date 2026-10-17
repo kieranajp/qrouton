@@ -222,7 +222,7 @@ export function shell() {
       if (!event.repeat) switcher.open();
       return;
     }
-    if (switcher.ownsFocus && (position(event) || opensSettings(event) ||
+    if (switcher.ownsFocus && (position(event) || opensSettings(event, macOS) ||
         findShortcut(event))) {
       event.preventDefault();
       event.stopImmediatePropagation();
@@ -249,7 +249,7 @@ export function shell() {
       })
       .catch(() => {});
     const onKey = (event) => {
-      if (!opensSettings(event)) return;
+      if (!opensSettings(event, macOS)) return;
       event.preventDefault();
       if (!fields.welcoming) settingsOpen = true;
     };

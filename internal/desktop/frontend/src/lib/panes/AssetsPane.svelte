@@ -3,7 +3,7 @@
   import { GALLERY_LABEL, MEDIA_KINDS } from "../bridge/generated.js";
   import Chip from "../core/Chip.svelte";
   import { flash } from "../flash.svelte.js";
-  import { linux } from "../platform.js";
+  import { macOS } from "../platform.js";
   import { focusAsset } from "./calls.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
@@ -138,7 +138,7 @@
       {#if isVideo(shown)}
       <div class="primary-frame player" role="presentation" oncontextmenu={(event) => openMenu(event, shown)}>
         {#if loads[shown.url] === "unsupported"}
-          <p class="load-error">This video's format can't be played here{#if linux}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
+          <p class="load-error">This video's format can't be played here{#if !macOS}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
         {:else if loads[shown.url] === "error"}
           <p class="load-error">Could not play video</p>
         {:else}

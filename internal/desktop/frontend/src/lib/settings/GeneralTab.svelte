@@ -2,7 +2,7 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import SegmentedControl from "../forms/SegmentedControl.svelte";
   import TextField from "../forms/TextField.svelte";
-  import { linux } from "../platform.js";
+  import { macOS } from "../platform.js";
   import Legend from "./Legend.svelte";
   import { EDITOR_PRESETS, matchingPreset } from "./presets.js";
   import TabHeader from "./TabHeader.svelte";
@@ -10,7 +10,7 @@
   /** @type {{panel: ReturnType<typeof import("./settings.svelte.js").settings>, labelledby?: string}} */
   let { panel, labelledby } = $props();
 
-  const modifier = linux ? "Ctrl" : "⌘";
+  const modifier = macOS ? "⌘" : "Ctrl";
   const placeholders = [
     { term: "{path}", meaning: "Absolute file path. Required." },
     { term: "{line}", meaning: "Line to jump to. 1 if there is none." },
