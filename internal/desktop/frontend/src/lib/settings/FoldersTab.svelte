@@ -1,4 +1,5 @@
 <script>
+  import { ROOT_ENV_VAR } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import TextField from "../forms/TextField.svelte";
@@ -15,7 +16,7 @@
   let rootHelp = $derived(
     panel.fields.root ??
       (form.pinned.root
-        ? pinnedNote("QROUTON_ROOT")
+        ? pinnedNote(ROOT_ENV_VAR)
         : "Each session gets a folder here, with one git worktree per repo. Applies after qrouton restarts."),
   );
 </script>

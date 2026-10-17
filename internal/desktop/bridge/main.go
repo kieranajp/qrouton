@@ -34,6 +34,7 @@ const (
 	assemblyPackage  = "../../assembly"
 	configPackage    = "../../config"
 	placementPackage = "../../placement"
+	vaultPackage     = "../../vault"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
 )
@@ -110,6 +111,10 @@ var valueNames = []valueName{
 	{desktopPackage, "switcherCurrent"},
 	{desktopPackage, "switcherResults"},
 	{desktopPackage, "switcherHelp"},
+	{configPackage, "rootEnvVar"},
+	{configPackage, "orgsEnvVar"},
+	{configPackage, "defaultRoot"},
+	{vaultPackage, "OllamaURL"},
 }
 
 // valueList is an ordered list of strings that Go holds as a package-level

@@ -337,6 +337,14 @@ export const SWITCHER_RESULTS = "sessions";
 
 export const SWITCHER_HELP = "Arrow keys choose · Enter open · Esc close";
 
+export const ROOT_ENV_VAR = "QROUTON_ROOT";
+
+export const ORGS_ENV_VAR = "QROUTON_ORGS";
+
+export const DEFAULT_ROOT = "~/work";
+
+export const OLLAMA_URL = "http://127.0.0.1:11434";
+
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
 /** @type {readonly StickerColour[]} */
 export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
