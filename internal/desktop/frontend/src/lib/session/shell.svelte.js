@@ -5,6 +5,7 @@ import { escalate as escalateSession, pending as pendingAssembly } from "../asse
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
 import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, REPO_ROLES, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
+import { findShortcut } from "../find.js";
 import {
   closeWindow,
   openDocument,
@@ -222,7 +223,7 @@ export function shell() {
       return;
     }
     if (switcher.ownsFocus && (position(event) || opensSettings(event) ||
-        ((event.metaKey || event.ctrlKey) && event.key?.toLowerCase() === "f"))) {
+        findShortcut(event))) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
