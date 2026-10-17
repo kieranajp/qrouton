@@ -148,4 +148,9 @@ test("a document link resolves against the document holding it", () => {
   assert.equal(documentPath("./P006.md", from), "thoughts/shared/plans/P006.md");
   assert.equal(documentPath("P006.md#phase-1", from), "thoughts/shared/plans/P006.md");
   assert.equal(documentPath("/AGENTS.md", from), "AGENTS.md");
+  assert.equal(documentPath("my%20file.md", from), "thoughts/shared/plans/my file.md");
+  assert.equal(documentPath("caf%C3%A9.md", from), "thoughts/shared/plans/café.md");
+  assert.equal(documentPath("P006.md?raw=1", from), "thoughts/shared/plans/P006.md");
+  assert.equal(documentPath("../../../../../X.md", from), "X.md");
+  assert.equal(documentPath("P006.md", "thoughts/my notes/P007.md"), "thoughts/my notes/P006.md");
 });
