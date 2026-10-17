@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import Button from "../core/Button.svelte";
   import { scrim } from "../core/dismiss.js";
+  import { flash } from "../flash.svelte.js";
   import AssetMenu from "./AssetMenu.svelte";
 
   /** @type {{image: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
@@ -11,15 +12,10 @@
   let menu = $state(null);
   let first = $derived(index <= 1);
   let last = $derived(index >= total);
-  // The pane's own notice is behind the scrim, so what the menu did is said here.
-  let notice = $state("");
-  let noticeTimer;
-
-  function say(text) {
-    notice = text;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = ""), 1600);
-  }
+  /** The pane's own notice is behind the scrim, so what the menu did is said here.
+   * @type {ReturnType<typeof flash<string>>} */
+  const notice = flash();
+  const say = notice.show;
 
   let layer = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let stage = $state(/** @type {HTMLElement | undefined} */ (undefined));
@@ -29,7 +25,6 @@
 
   onMount(() => {
     layer?.focus();
-    return () => clearTimeout(noticeTimer);
   });
 
   $effect(() => {
@@ -94,7 +89,7 @@
     </div>
   </div>
   <div class="hud" bind:this={hud}>
-    {#if notice}<span class="counter" role="status">{notice}</span>{/if}
+    {#if notice.value}<span class="counter" role="status">{notice.value}</span>{/if}
     <Button
       variant="ghost"
       size="sm"

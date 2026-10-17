@@ -2,6 +2,7 @@
   import { onDestroy, tick } from "svelte";
   import { GALLERY_LABEL, MEDIA_KINDS } from "../bridge/generated.js";
   import Chip from "../core/Chip.svelte";
+  import { flash } from "../flash.svelte.js";
   import { linux } from "../platform.js";
   import { focusAsset } from "./calls.js";
   import ImageLightbox from "./ImageLightbox.svelte";
@@ -24,8 +25,8 @@
   let expanded = $state(false);
   /** @type {{asset: {source: string, path?: string, kind: import("../bridge/generated.js").MediaKind}, x: number, y: number} | null} */
   let menu = $state(null);
-  let notice = $state("");
-  let noticeTimer;
+  /** @type {ReturnType<typeof flash<string>>} */
+  const notice = flash();
   /** @type {HTMLButtonElement} */
   let primary = $state();
   /** @type {HTMLVideoElement | undefined} */
@@ -34,7 +35,7 @@
   let strip = $state();
   let alive = true;
   let request = 0;
-  onDestroy(() => { alive = false; clearTimeout(noticeTimer); });
+  onDestroy(() => { alive = false; });
 
   function openMenu(event, asset) {
     // The webview draws one of its own otherwise, and the workbench's own
@@ -43,11 +44,7 @@
     menu = { asset, x: event.clientX, y: event.clientY };
   }
 
-  function show(text) {
-    notice = text;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = ""), 1600);
-  }
+  const show = notice.show;
 
   function stepImages(by) {
     for (let next = current + by; next >= 1 && next <= assets.length; next += by) {
@@ -175,7 +172,7 @@
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
-  {#if notice}<p class="notice" role="status">{notice}</p>{/if}
+  {#if notice.value}<p class="notice" role="status">{notice.value}</p>{/if}
   <ol bind:this={strip} class="asset-strip" aria-label="Assets in supplied order">
     {#each assets as asset, index (asset.url)}
       <li>

@@ -5,6 +5,7 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { dismissible } from "../core/dismiss.js";
+  import { flash } from "../flash.svelte.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
   import RailItem from "./RailItem.svelte";
@@ -137,10 +138,9 @@
 
   const stickerQueues = new Map();
   let pendingStickers = $state({});
-  /** @type {{slug: string, sequence: number, text: string, failed: boolean} | null} */
-  let rowNotice = $state(null);
+  /** @type {ReturnType<typeof flash<{slug: string, sequence: number, text: string, failed: boolean}>>} */
+  const rowNotice = flash();
   let noticeSequence = 0;
-  let rowNoticeTimer;
   let mounted = true;
 
   onMount(() => {
@@ -162,17 +162,12 @@
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", clearDrag);
       clearDrag();
-      clearTimeout(rowNoticeTimer);
     };
   });
 
   function showRowNotice(slug, text, failed = false) {
     if (!mounted) return;
-    clearTimeout(rowNoticeTimer);
-    rowNotice = { slug, text, failed, sequence: ++noticeSequence };
-    rowNoticeTimer = setTimeout(() => {
-      rowNotice = null;
-    }, 1500);
+    rowNotice.show({ slug, text, failed, sequence: ++noticeSequence });
   }
 
   function changeSticker(event, row) {
@@ -333,7 +328,7 @@
         stickerId={row.sticker}
         {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
-        feedback={rowNotice?.slug === row.slug ? rowNotice : null}
+        feedback={rowNotice.value?.slug === row.slug ? rowNotice.value : null}
         onSelect={() => show(row.slug)}
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
