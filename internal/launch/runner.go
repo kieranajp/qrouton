@@ -14,6 +14,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -542,7 +543,7 @@ func runnerArgv(spec runnerSpec, r Runner, resume bool, mode, provider, prompt s
 // nothing when no provider claims it.
 func openingMessage(mode, provider, initialPrompt string) string {
 	message := openingMessageRPI
-	if mode == modeAssistant {
+	if mode == string(session.ModeAssistant) {
 		message = openingMessageAssistant
 	}
 	prompt := strings.TrimSpace(initialPrompt)
