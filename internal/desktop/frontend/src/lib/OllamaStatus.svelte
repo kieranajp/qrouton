@@ -1,5 +1,4 @@
 <script>
-  import { onMount } from "svelte";
   import { OLLAMA_STATES } from "./bridge/generated.js";
   import Button from "./core/Button.svelte";
   import ProgressBar from "./core/ProgressBar.svelte";
@@ -7,7 +6,6 @@
   import { openURL } from "./wails.js";
 
   const view = ollama();
-  onMount(view.check);
   let status = $derived(view.status);
 </script>
 
