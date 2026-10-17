@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
@@ -54,13 +55,15 @@ type Repositories struct {
 	branchLists map[string]branchList
 	gen         int
 	cancel      context.CancelFunc
+	// ownerTimeout bounds each owner a retry refetches on its own.
+	ownerTimeout time.Duration
 	// done reports a run's end, so a test can wait on one.
 	done func(generation int)
 }
 
 func newRepositories(cfg *config.Config, emit emitter) *Repositories {
 	repos, _, _ := github.CachedRepos(cfg.Snapshot().Orgs)
-	return &Repositories{cfg: cfg, emit: emit, gh: liveGitHub(), repos: repos, errs: map[string]error{}}
+	return &Repositories{cfg: cfg, emit: emit, gh: liveGitHub(), repos: repos, errs: map[string]error{}, ownerTimeout: repoRefreshTimeout}
 }
 
 // Cached answers from the cache without touching the network, so the step draws
@@ -227,7 +230,7 @@ func (r *Repositories) run(ctx context.Context, gen int, configured []string, fa
 		if !r.push(gen, github.RefreshMsg{Owner: owner, State: github.RefreshStarted}) {
 			return
 		}
-		ownerCtx, cancel := context.WithTimeout(ctx, repoRefreshTimeout)
+		ownerCtx, cancel := context.WithTimeout(ctx, r.ownerTimeout)
 		repos, err := r.gh.one(ownerCtx, token, owner)
 		cancel()
 		if err != nil {

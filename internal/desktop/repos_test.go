@@ -117,9 +117,10 @@ func testRepositories(t *testing.T, orgs []string, fake *fakeGitHub) (*Repositor
 			events = append(events, payload.(refreshEvent))
 			mu.Unlock()
 		},
-		gh:   fake.calls(),
-		errs: map[string]error{},
-		done: func(generation int) { finished <- generation },
+		gh:           fake.calls(),
+		errs:         map[string]error{},
+		done:         func(generation int) { finished <- generation },
+		ownerTimeout: repoRefreshTimeout,
 	}
 	return r, finished, &events
 }
@@ -180,6 +181,46 @@ func TestARefreshAfterAFailureRefetchesOnlyTheFailedOwner(t *testing.T) {
 	}
 	if !repos.clean() {
 		t.Fatal("a clean retry left the owner's error behind")
+	}
+}
+
+func TestAStalledRetryFailsThatOwnerAloneAtItsDeadline(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.fails["slow"] = errors.New("unavailable")
+	fake.fails["quick"] = errors.New("unavailable")
+	repos, finished, events := testRepositories(t, []string{"slow", "quick"}, fake)
+	repos.Refresh()
+	<-finished
+
+	repos.ownerTimeout = 20 * time.Millisecond
+	answer := repos.gh.one
+	repos.gh.one = func(ctx context.Context, token, owner string) ([]github.Repo, error) {
+		if owner == "slow" {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		}
+		return answer(ctx, token, owner)
+	}
+	fake.fails = map[string]error{}
+	*events = nil
+	retry := repos.Refresh()
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a stalled owner held the retry past its deadline")
+	}
+
+	outcome := map[string]refreshEvent{}
+	for _, event := range *events {
+		if event.Generation == retry && event.Owner != "" && event.State != string(github.RefreshStarted) {
+			outcome[event.Owner] = event
+		}
+	}
+	if got := outcome["slow"]; got.State != string(github.RefreshFailed) || got.Error != context.DeadlineExceeded.Error() {
+		t.Fatalf("the stalled owner ended %+v, want failed at its deadline", got)
+	}
+	if got := outcome["quick"]; got.State != string(github.RefreshSucceeded) {
+		t.Fatalf("the other owner ended %+v, want succeeded", got)
 	}
 }
 
