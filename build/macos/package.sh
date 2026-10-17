@@ -4,10 +4,10 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 dist="$root/dist"
 app="$dist/qrouton.app"
-version=${VERSION:-0.1.0}
+version=${VERSION:?run through make, or set VERSION}
 version=${version#v}
 build_number=${BUILD_NUMBER:-1}
-deployment_target=${MACOSX_DEPLOYMENT_TARGET:-12.0}
+deployment_target=${MACOSX_DEPLOYMENT_TARGET:?run through make, or set MACOSX_DEPLOYMENT_TARGET}
 sign_identity=${SIGN_IDENTITY:--}
 
 if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$'; then
