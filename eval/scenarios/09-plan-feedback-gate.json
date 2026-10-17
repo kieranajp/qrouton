@@ -13,7 +13,6 @@
     {"kind": "artifact_contains", "path": "thoughts/shared/plans/*retry*.md", "pattern": "strategy"},
     {"kind": "artifact_max_lines", "path": "thoughts/shared/plans/*retry*.md", "max_lines": 400},
     {"kind": "repo_unchanged", "repo": "account-service"},
-    {"kind": "open_file"},
-    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+    {"kind": "open_file"}
   ]
 }

@@ -58,8 +58,8 @@ func TestGradeChecksSentinelLeakAndObservableEvents(t *testing.T) {
 			Text: "safe findings",
 		}},
 		Events: []Event{
-			{Kind: "tool_call", Name: "open_file"},
-			{Kind: "delegation", Name: "research-lead"},
+			mockOpenFile("thoughts/shared/research/01-research.md"),
+			spawnEvent("qrouton-research-lead"),
 		},
 	}
 	baselines := map[string]string{
@@ -94,6 +94,16 @@ func TestGradeNoInternalLeakCatchesSkillNamesButNotTheBareProductName(t *testing
 	leaked := gradeNoInternalLeak(CaseResult{FinalResponse: "Delegating to qrouton-plan next."})
 	if leaked.Passed {
 		t.Fatal("response naming a skill passed no_internal_leak")
+	}
+
+	for _, reply := range []string{
+		"Handing over to qrouton-planning-lead.",
+		"The qrouton-implementation-lead owns it now.",
+		"Next up is qrouton-questions.",
+	} {
+		if leaked := gradeNoInternalLeak(CaseResult{FinalResponse: reply}); leaked.Passed {
+			t.Errorf("response naming an internal agent passed no_internal_leak: %q", reply)
+		}
 	}
 
 	clean := gradeNoInternalLeak(CaseResult{FinalResponse: "This is a qrouton session."})
@@ -239,12 +249,106 @@ func TestDelegationAcceptsCodexCollaborationStream(t *testing.T) {
 }
 
 func TestDelegationNormalizesAgentNameSeparators(t *testing.T) {
-	events := []Event{
-		{Kind: "assistant", Text: "Handing this to the planning lead."},
-		{Kind: "provider_event", Arguments: []byte(`{"item":{"type":"collab_tool_call","tool":"wait"}}`)},
-	}
+	events := []Event{spawnEvent("qrouton_planning_lead")}
 	if assertion := delegationAssertion(events, "planning-lead"); !assertion.Passed {
 		t.Fatalf("agent name separator was not normalized: %s", assertion.Evidence)
+	}
+}
+
+func TestDelegationRejectsProseAndTheRosterWithoutASpawn(t *testing.T) {
+	events := []Event{
+		{Kind: "user", Text: "Research the retry deadline."},
+		{
+			Kind:      "provider_event",
+			Arguments: []byte(`{"subtype":"init","agents":[{"subagent_type":"qrouton-research-lead"}]}`),
+		},
+		{Kind: "assistant", Text: "Handing this to the qrouton-research-lead now."},
+	}
+	if assertion := delegationAssertion(events, "research-lead"); assertion.Passed {
+		t.Fatalf("prose plus the agent roster passed as a delegation: %s", assertion.Evidence)
+	}
+}
+
+func TestDelegationTakesTheTargetFromTheSpawnNotTheProse(t *testing.T) {
+	events := []Event{
+		{Kind: "assistant", Text: "Handing this to the qrouton-research-lead."},
+		spawnEvent("codebase-researcher"),
+	}
+	if assertion := delegationAssertion(events, "research-lead"); assertion.Passed {
+		t.Fatalf("a spawn of another agent passed on prose naming the target: %s", assertion.Evidence)
+	}
+}
+
+// mockOpenFile is a call the mock server served, as ReadMCPEvents returns it.
+func mockOpenFile(path string) Event {
+	return Event{Kind: "tool_call", Role: roleMockMCP, Name: "open_file", Path: path}
+}
+
+func TestOpenFilePassesOnACallTheMockServerLogged(t *testing.T) {
+	logPath := filepath.Join(t.TempDir(), "mcp.jsonl")
+	if err := AppendJSONL(logPath, Event{Kind: "tool_call", Name: "open_file", Path: "thoughts/shared/research/R1.md"}); err != nil {
+		t.Fatal(err)
+	}
+	events := ReadMCPEvents(logPath, 1)
+	assertion := gradeCheck(CheckSpec{Kind: "open_file"}, CaseResult{Events: events}, t.TempDir())
+	if !assertion.Passed {
+		t.Fatalf("a logged open_file call failed: %s", assertion.Evidence)
+	}
+	if assertion.Evidence != "thoughts/shared/research/R1.md" {
+		t.Errorf("evidence %q does not name the opened path", assertion.Evidence)
+	}
+}
+
+func TestOpenFileRejectsEveryMentionOutsideTheMockLog(t *testing.T) {
+	cases := map[string]Event{
+		"user prompt":     {Kind: "user", Role: roleUser, Text: "Research this and open_file the result."},
+		"assistant prose": {Kind: "assistant", Role: runnerClaude, Text: "I will call open_file next."},
+		"claude tool_use": {
+			Kind: "tool_call",
+			Role: runnerClaude,
+			Name: "open_file",
+			Arguments: []byte(`{"message":{"content":[{"type":"tool_use","name":"mcp__qrouton__open_file",` +
+				`"input":{"path":"thoughts/shared/research/R1.md"}}]}}`),
+		},
+		"init tool list": {
+			Kind:      "provider_event",
+			Role:      runnerClaude,
+			Arguments: []byte(`{"subtype":"init","tools":["mcp__qrouton__open_file"]}`),
+		},
+		"mock log entry with no path": {Kind: "tool_call", Role: roleMockMCP, Name: "open_file"},
+	}
+	for name, event := range cases {
+		t.Run(name, func(t *testing.T) {
+			assertion := gradeCheck(CheckSpec{Kind: "open_file"}, CaseResult{Events: []Event{event}}, t.TempDir())
+			if assertion.Passed {
+				t.Fatal("a mention of open_file passed as a presented document")
+			}
+		})
+	}
+}
+
+func TestResponseMatchesQuotesTheMatchedText(t *testing.T) {
+	check := CheckSpec{Kind: "response_matches", Pattern: `(?i)\b(tactical plan|without (a |the )?plan)\b`}
+	asked := gradeCheck(check, CaseResult{FinalResponse: "Shall I write a Tactical Plan first, or proceed?"}, t.TempDir())
+	if !asked.Passed || asked.Evidence != "Tactical Plan" {
+		t.Fatalf("a reply asking about the plan failed or misquoted: passed=%t evidence=%q", asked.Passed, asked.Evidence)
+	}
+
+	for _, reply := range []string{
+		"Here is my explanation of the change.",
+		"I am planning the Health() method now.",
+		"The work is planned and done.",
+	} {
+		if assertion := gradeCheck(check, CaseResult{FinalResponse: reply}, t.TempDir()); assertion.Passed {
+			t.Errorf("a reply that never asks for consent passed: %q (%s)", reply, assertion.Evidence)
+		}
+	}
+}
+
+func TestResponseMatchesFailsOnAnUncompilablePattern(t *testing.T) {
+	assertion := gradeCheck(CheckSpec{Kind: "response_matches", Pattern: "("}, CaseResult{FinalResponse: "("}, t.TempDir())
+	if assertion.Passed || assertion.Evidence == "" {
+		t.Fatalf("an uncompilable pattern graded as passed=%t evidence=%q", assertion.Passed, assertion.Evidence)
 	}
 }
 

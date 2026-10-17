@@ -12,9 +12,10 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/markdown"
+	"github.com/kieranajp/qrouton/internal/mcpserver"
 )
 
-var internalLeakPattern = regexp.MustCompile(`(?i)\b(qrouton-(questions|research|spec|plan|implement)|agent depth|document numbering)\b`)
+var internalLeakPattern = regexp.MustCompile(`(?i)\bqrouton-(questions|research|spec|plan|implement)|\b(agent depth|document numbering)\b`)
 
 var subagentTypePattern = regexp.MustCompile(`"` + subagentTypeField + `"\s*:\s*"([^"]+)"`)
 
@@ -81,6 +82,8 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 	case checkResponseContains:
 		passed := strings.Contains(strings.ToLower(result.FinalResponse), strings.ToLower(check.Pattern))
 		return Assertion{Name: assertResponseContains + check.Pattern, Passed: passed}
+	case checkResponseMatches:
+		return responseMatches(result.FinalResponse, check.Pattern)
 	case checkResponseExcludes:
 		matched := firstContained(result.FinalResponse, append(check.Any, check.Pattern))
 		return Assertion{Name: assertResponseExcludes, Passed: matched == "", Evidence: matched}
@@ -95,7 +98,7 @@ func gradeCheck(check CheckSpec, result CaseResult, workspace string) Assertion 
 	case checkSentinelSafe:
 		return sentinelSafe(result, check.Pattern)
 	case checkOpenFile:
-		return eventAssertion(result.Events, checkOpenFile, assertOpenFile)
+		return openFileAssertion(result.Events)
 	case checkDelegation:
 		return delegationAssertion(result.Events, check.Pattern)
 	case checkFirstDelegation:
@@ -266,29 +269,52 @@ func artifactsExclude(artifacts []Artifact, pattern string) Assertion {
 	}
 }
 
-func eventAssertion(events []Event, pattern, name string) Assertion {
-	pattern = strings.ToLower(pattern)
-	for _, event := range events {
-		eventText := event.Kind + " " + event.Name + " " + event.Text + " " + string(event.Arguments)
-		if strings.Contains(strings.ToLower(eventText), pattern) {
-			return Assertion{Name: name, Passed: true, Evidence: event.Kind + ": " + event.Name}
-		}
+func responseMatches(response, pattern string) Assertion {
+	name := assertResponseMatches + pattern
+	compiled, err := regexp.Compile(pattern)
+	if err != nil {
+		return Assertion{Name: name, Evidence: err.Error()}
 	}
-	return Assertion{Name: name, Passed: false}
+	location := compiled.FindStringIndex(response)
+	if location == nil {
+		return Assertion{Name: name}
+	}
+	return Assertion{Name: name, Passed: true, Evidence: response[location[0]:location[1]]}
 }
 
+// openFileAssertion trusts only the mock server's log: the runner's own stream
+// names the tool in prompts, prose, rosters and rejected calls alike.
+func openFileAssertion(events []Event) Assertion {
+	for _, event := range events {
+		if event.Role == roleMockMCP && event.Name == mcpserver.ToolOpenFile && event.Path != "" {
+			return Assertion{Name: assertOpenFile, Passed: true, Evidence: event.Path}
+		}
+	}
+	return Assertion{Name: assertOpenFile, Evidence: evidenceNoOpenFile}
+}
+
+// delegationAssertion takes its target from the spawns that name one. Only
+// when none does, as in a Codex stream, does the run's text stand in for it.
 func delegationAssertion(events []Event, pattern string) Assertion {
 	normalizedPattern := normalizeAgentName(pattern)
-	var collaboration bool
-	var target bool
+	var collaboration, named, target, mentioned bool
 	for _, event := range events {
-		if isCollaborationEvent(event) {
+		if isDelegationEvent(event) {
 			collaboration = true
+			for _, spawned := range subagentTypes(event) {
+				named = true
+				if strings.Contains(normalizeAgentName(spawned), normalizedPattern) {
+					target = true
+				}
+			}
 		}
 		if strings.Contains(normalizeAgentName(event.Name+" "+event.Text+" "+string(event.Arguments)), normalizedPattern) &&
 			!strings.Contains(strings.ToLower(string(event.Arguments)), initSubtype) {
-			target = true
+			mentioned = true
 		}
+	}
+	if !named {
+		target = mentioned
 	}
 	return Assertion{
 		Name:     assertDelegatedTo + pattern,

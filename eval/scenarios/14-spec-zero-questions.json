@@ -11,7 +11,6 @@
     {"kind": "artifact_contains", "path": "thoughts/shared/specs/*.md", "pattern": "## Decisions"},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "repo_unchanged", "repo": "account-service"},
-    {"kind": "open_file"},
-    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "document numbering"]}
+    {"kind": "open_file"}
   ]
 }
