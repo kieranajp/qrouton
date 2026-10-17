@@ -123,12 +123,13 @@ under `## Checked and deliberate` for its cost only when the cost outweighs the
 whole family. A spare that contradicts another finding is wrong: never spare a
 library while another finding proposes growing or copying the homegrown
 version. A family member with a behaviour defect is a finding, never part of a
-cost-spare; the spare covers only the defect-free rest.
+cost-spare. It still counts in the family the cost is weighed against, and the
+spare covers only the defect-free rest.
 
 The tell-3 sweep records an outcome per category for each common library
 category: the finding ids, its line in `## Checked and deliberate` (a
-cost-spare or a written reason), or "none hand-rolled" with the search that
-shows it. It also checks every comment that makes platform or runtime claims
+cost-spare or a written reason), "uses the library" with where, or "none
+hand-rolled" with the search that shows it. It also checks every comment that makes platform or runtime claims
 against the layer that runs the code. A claim that no longer holds is a
 finding, filed under the tell of the code the claim justifies.
 
@@ -138,12 +139,13 @@ finding, filed under the tell of the code the claim justifies.
    regenerates when the copies drift?
 2. Is there a reason written at the site that still holds?
 3. Can the guarded case occur?
-4. Do the copies agree today?
+4. Do the copies agree today, and does each do what its own comment says?
 5. Does a live caller in shipped code reach it?
 
 How the steps decide:
 
-- Copies that disagree today are rot, whatever the intent.
+- Copies that disagree today are rot, whatever the intent. A copy that
+  contradicts its own comment does not agree.
 - Otherwise a copy with a tie, or with a written reason that still holds, is
   deliberate. A reason that no longer holds is rot.
 - A guard is rot unless a live producer can bring about the case it guards.
@@ -263,7 +265,8 @@ rules, skipping those for a tell or an inventory that did not run:
 - every file type in scope that no tool covered has a stated skip that names
   the file type;
 - every library category has an outcome: finding ids, a line in
-  `## Checked and deliberate`, or "none hand-rolled" with its search;
+  `## Checked and deliberate`, "uses the library", or "none hand-rolled" with
+  its search;
 - each tell-3 cost line states size and installed status and lists the whole
   family, no spare contradicts another finding, and no spare covers a
   behaviour defect;
@@ -274,8 +277,8 @@ rules, skipping those for a tell or an inventory that did not run:
   replaces them;
 - every fix that derives lists from one table keeps every gate, and a
   deliberate subset stays a subset;
-- every finding whose copies differ today is `high` or states a cosmetic
-  difference;
+- every finding whose verdict is that copies differ or disagree today is
+  `high`, or states a cosmetic difference in one clause;
 - every tell-4 finding names the test and the code it names, and its verdict
   names the step from 6 to 8 it fails, or step 5 for code only tests reach;
 - every weakened-test finding cites the commit and the lines it loosened;

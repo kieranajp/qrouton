@@ -20,8 +20,10 @@ generated files or vendored code.
 ## Decide whether to split
 
 Split only when the scope holds two or more areas and more than
-300 shipped source files. Make at most four areas. An area under 30 shipped source files
-joins the area that imports it most.
+300 shipped source files. Make at most four areas: while there are more,
+merge the smallest into the area that imports it most. An area under 30
+shipped source files joins the area that imports it most, or the smallest area
+when none imports it.
 
 Anything smaller, or a scope narrowed to one area, is one area. One area runs
 as an unsplit audit, and nothing in this file applies to it.
@@ -29,12 +31,14 @@ as an unsplit audit, and nothing in this file applies to it.
 ## Per area
 
 Run each detector once over the whole target, never once per area. Route each
-candidate to the area that holds its file. A clone pair whose copies sit in
-two areas goes to the seam pass instead.
+candidate to the area that holds its file, and a test to the area of the code
+it names. A clone pair whose copies sit in two areas, and a candidate in a
+file no area holds, goes to the seam pass instead.
 
 Each area then gets its own:
 
-- job inventory, counting files within the area;
+- job inventory. Count each entry across the whole target, so an entry over
+  the threshold gets a row in every area that uses it;
 - tell-3 category sweep;
 - checkers, one or more for each chosen tell, briefed with that area's paths
   and candidates.
@@ -46,7 +50,8 @@ area checker has returned. It is one tell-1 checker, briefed with five inputs:
 
 1. the areas table;
 2. every inventory row, from every area, that holds a data table, a
-   vocabulary, a constant set, a parser or a format;
+   vocabulary, a constant set, a parser or a format, and every entry used
+   from two or more areas;
 3. the boundaries where one area calls another, such as routes, message or
    event names, generated bindings and the config that generates them;
 4. the clone pairs whose copies cross areas;
@@ -63,11 +68,13 @@ Merge the area and seam returns into one draft:
 
 - One finding per defect holds across areas. A seam finding absorbs the area
   findings that describe the same fact, and lists all their locations.
+- When an area verdict and the seam verdict on one fact differ, re-read the
+  code and keep one.
 - Number findings once, after the merge, across the whole document.
 - `## Tools` opens with an areas table: area, paths, languages and shipped
   source files.
-- The inventory and category tables gain an `Area` column. A seam row carries
-  `seam`.
+- The inventory and category tables gain an `Area` column. A row for an entry
+  the seam pass judged carries `seam`.
 
 Headings, frontmatter and finding fields do not change.
 
@@ -79,7 +86,7 @@ way when one report cannot hold the failures.
 
 ## Fan-out
 
-The checkers number the areas times the chosen tells, plus one seam checker,
-plus any overflow splits when one report cannot hold every candidate. The cap
-is 20 checker spawns. Above it, merge the two smallest areas and count again,
-until the plan fits.
+The checkers number the areas times the chosen tells, plus one seam checker
+when tell 1 is chosen, plus any overflow splits when one report cannot hold
+every candidate. The cap is 20 checker spawns. Above it, merge the two
+smallest areas and count again. One area left runs unsplit.
