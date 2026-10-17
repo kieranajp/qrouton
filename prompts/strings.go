@@ -8,10 +8,6 @@ const (
 	agyAgentsDir     = ".agents/agents/"
 	agyAgentFileName = "agent.md"
 
-	frontmatterKeySep         = ":"
-	frontmatterNameKey        = "name"
-	frontmatterDescriptionKey = "description"
-
 	subagentChoiceFileName    = "subagent-choice.md"
 	subagentChoicePlaceholder = "{{subagent-choice}}"
 

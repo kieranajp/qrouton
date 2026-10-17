@@ -12,17 +12,11 @@ import (
 	"github.com/yuin/goldmark/extension"
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
+	"go.yaml.in/yaml/v3"
 )
 
 // fence opens and closes a frontmatter block.
 const fence = "---"
-
-// marpKey declares a document a deck, and only when set to marpEnabled.
-const (
-	marpKey      = "marp"
-	marpEnabled  = "true"
-	keySeparator = ":"
-)
 
 var parser = goldmark.New(goldmark.WithExtensions(extension.TaskList)).Parser()
 
@@ -48,14 +42,13 @@ func Body(text string) string {
 // frontmatter block counts, so a marp: line in the body is prose.
 func Marp(text string) bool {
 	front, _, _ := Split(text)
-	for _, line := range strings.Split(front, "\n") {
-		key, value, ok := strings.Cut(line, keySeparator)
-		if !ok || strings.TrimSpace(key) != marpKey {
-			continue
-		}
-		return strings.EqualFold(strings.TrimSpace(value), marpEnabled)
+	var declared struct {
+		Marp bool `yaml:"marp"`
 	}
-	return false
+	if yaml.Unmarshal([]byte(front), &declared) != nil {
+		return false
+	}
+	return declared.Marp
 }
 
 // Split returns the frontmatter, the body and the body's first source line.
