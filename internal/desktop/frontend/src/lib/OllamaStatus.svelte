@@ -2,18 +2,13 @@
   import { onMount } from "svelte";
   import { OLLAMA_STATES } from "./bridge/generated.js";
   import Button from "./core/Button.svelte";
-  import { ollama } from "./ollama.svelte.js";
+  import ProgressBar from "./core/ProgressBar.svelte";
+  import { DOWNLOAD_URL, megabytes, ollama, percent } from "./ollama.svelte.js";
   import { openURL } from "./wails.js";
-
-  const DOWNLOAD_URL = "https://ollama.com/download";
 
   const view = ollama();
   onMount(view.check);
   let status = $derived(view.status);
-  let percent = $derived(status.total ? Math.round((status.completed / status.total) * 100) : 0);
-
-  /** @param {number} [bytes] */
-  const mb = (bytes = 0) => `${(bytes / 1e6).toFixed(1)} MB`;
 </script>
 
 <div class="ollama">
@@ -27,11 +22,9 @@
     </div>
   {:else if status.state === OLLAMA_STATES.PULLING}
     <p>{status.detail || "Downloading"} {status.model}</p>
-    <div class="bar" role="progressbar" aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100">
-      <span style:width="{percent}%"></span>
-    </div>
+    <ProgressBar percent={percent(status)} />
     <div class="actions">
-      {#if status.total}<span class="bytes">{mb(status.completed)} of {mb(status.total)}</span>{/if}
+      {#if status.total}<span class="bytes">{megabytes(status.completed)} of {megabytes(status.total)}</span>{/if}
       <Button variant="secondary" onclick={view.cancel}>Cancel</Button>
     </div>
     <p class="quiet">Carries on in the background. If qrouton restarts, resume it in Settings.</p>
@@ -87,16 +80,5 @@
   .bytes {
     font: var(--machine-sm);
     color: var(--text-primary);
-  }
-
-  .bar {
-    height: calc(4px * var(--ui-scale));
-    background: var(--border-subtle);
-  }
-
-  .bar span {
-    display: block;
-    height: 100%;
-    background: var(--accent-action);
   }
 </style>
