@@ -1,6 +1,6 @@
 import { onDestroy } from "svelte";
 
-export const FLASH_MS = 1500;
+const FLASH_MS = 1500;
 
 /** A value shown for a moment. Showing again restarts the moment.
  * Call it while a component initialises; the timer stops with the component.
