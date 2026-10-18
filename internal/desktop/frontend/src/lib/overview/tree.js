@@ -178,9 +178,6 @@ export function typeLabel(type) {
     .join(" ");
 }
 
-/** @param {{tool?: string, target?: string}} node */
-export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(" ");
-
 /** @type {string[]} */
 const STAGE_ORDER = [AGENT_STAGES.RESEARCH, AGENT_STAGES.PLAN, AGENT_STAGES.IMPLEMENT];
 

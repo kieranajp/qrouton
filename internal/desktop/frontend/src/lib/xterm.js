@@ -8,9 +8,7 @@ import { macOS } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
 import { opensSettings, opensSwitcher, position, scaleAction } from "./shortcuts.js";
-export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
-
-export { Terminal };
+export { createTerminalPainter, encode } from "./terminal-painter.js";
 
 const token = (name) =>
   resolveToken((property) => getComputedStyle(document.documentElement).getPropertyValue(property), name);

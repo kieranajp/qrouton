@@ -43,7 +43,6 @@ function* sources(dir) {
 test("no chrome glyph the Mitre set replaced comes back", () => {
   const found = [];
   for (const path of sources(SRC)) {
-    if (path.endsWith("SessionCard.svelte")) continue;
     readFileSync(path, "utf8")
       .split("\n")
       .forEach((line, i) => {
