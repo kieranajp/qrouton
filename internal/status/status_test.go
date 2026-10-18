@@ -658,12 +658,15 @@ func noNilSlice(t *testing.T, v reflect.Value, path string) {
 // an ID as well, or a new one lands half-wired — and the prefix fails silently.
 func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
 	all := kinds.All()
+	labels := []string{KindResearch, KindSpec, KindPlan, KindExplainer}
+	produced := map[string]bool{}
 	if len(kindByDir) != len(all) || len(kindByLetter) != len(all) {
 		t.Fatalf("%d kinds share %d directories and %d letters", len(all), len(kindByDir), len(kindByLetter))
 	}
 	for _, k := range all {
 		label := strings.ToUpper(k.Name)
-		if !slices.Contains([]string{KindResearch, KindSpec, KindPlan, KindExplainer}, label) {
+		produced[label] = true
+		if !slices.Contains(labels, label) {
 			t.Errorf("kind %q has no %s constant for the bridge to read", k.Name, label)
 		}
 		dir := "thoughts/shared/" + k.Dir + "/notes.md"
@@ -677,6 +680,11 @@ func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
 			if got, want := ArtifactID(name), strings.ToUpper(k.Letter)+"007"; got != want {
 				t.Errorf("ArtifactID(%q) = %q, want %q", name, got, want)
 			}
+		}
+	}
+	for _, label := range labels {
+		if !produced[label] {
+			t.Errorf("status label %s names no kind", label)
 		}
 	}
 	if got := DocumentKind("research/P002-shape.md"); got != KindResearch {
