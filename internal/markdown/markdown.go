@@ -43,9 +43,7 @@ func Body(text string) string {
 // frontmatter block counts, so a marp: line in the body is prose.
 func Marp(text string) bool {
 	front, _, _ := Split(text)
-	var declared struct {
-		Marp bool `yaml:"marp"`
-	}
+	var declared marpFlag
 	if err := yaml.Unmarshal([]byte(front), &declared); err != nil {
 		var typeErr *yaml.TypeError
 		return !errors.As(err, &typeErr) && marpLine(front)
@@ -53,11 +51,15 @@ func Marp(text string) bool {
 	return declared.Marp
 }
 
+type marpFlag struct {
+	Marp bool `yaml:"marp"`
+}
+
 func marpLine(front string) bool {
 	for _, line := range strings.Split(front, "\n") {
-		key, value, found := strings.Cut(line, ":")
-		if found && strings.TrimSpace(key) == "marp" && strings.EqualFold(strings.Trim(strings.TrimSpace(value), `"'`), "true") {
-			return true
+		if key, _, found := strings.Cut(line, ":"); found && strings.TrimSpace(key) == "marp" {
+			var declared marpFlag
+			return yaml.Unmarshal([]byte(line), &declared) == nil && declared.Marp
 		}
 	}
 	return false

@@ -129,6 +129,8 @@ func TestMarpIsDeclaredInFrontmatter(t *testing.T) {
 		{"another value", "---\nmarp: maybe\n---\n", false},
 		{"quoted true", "---\nmarp: \"true\"\n---\n", false},
 		{"invalid yaml beside marp true", "---\nmarp: true\ntitle: [unclosed\n---\n", true},
+		{"invalid yaml beside quoted true", "---\nmarp: \"true\"\nfooter: Lifesum: Q3\n---\n", false},
+		{"invalid yaml beside unquoted true", "---\nmarp: true\nfooter: Lifesum: Q3\ntitle: [unclosed\n---\n", true},
 		{"unquoted colon in another key", "---\nmarp: true\nfooter: Lifesum: Q3\n---\n", true},
 		{"invalid yaml without marp", "---\nfooter: Lifesum: Q3\n---\n", false},
 		{"marp false beside invalid yaml", "---\nmarp: false\nfooter: Lifesum: Q3\n---\n", false},
