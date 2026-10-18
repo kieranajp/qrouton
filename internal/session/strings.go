@@ -45,11 +45,14 @@ const (
 	// commitRefSuffix resolves a ref to the commit it points at, so a tag or an
 	// annotated object still pins a revision.
 	commitRefSuffix = "^{commit}"
-
-	// notARepositoryMessage appears in git's output when a checkout has outlived
-	// its worktree metadata.
-	notARepositoryMessage = "not a git repository"
 )
+
+// outlivedCheckoutMessages appear in git's output when a checkout has outlived
+// its worktree metadata. Git 2.56 reports a dangling gitfile with the second.
+var outlivedCheckoutMessages = []string{
+	"not a git repository",
+	"gitfile does not point to a valid repository",
+}
 
 // Git subcommands, in the order the lifecycle uses them.
 const (
