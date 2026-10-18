@@ -37,7 +37,6 @@ func TestReadScratchAssistant(t *testing.T) {
 	got := Read(dir)
 	want := Fields{
 		Mode:                "ASSISTANT",
-		Phase:               "scratch",
 		Root:                dir,
 		Identity:            "lifesum-4f3a",
 		Slug:                "lifesum-4f3a",
@@ -53,7 +52,7 @@ func TestReadScratchAssistant(t *testing.T) {
 	}
 }
 
-func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
+func TestReadEscalatedShowsModeNameBranchAndRepos(t *testing.T) {
 	root := t.TempDir()
 	m := session.Manifest{Slug: "webhook", Name: "webhook retry backoff", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{
@@ -62,9 +61,8 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 		}}
 	dir := sessionDir(t, root, m)
 
-	// No documents yet: freshly escalated means Research.
 	got := Read(dir)
-	if got.Mode != "RPI" || got.Phase != "Research" {
+	if got.Mode != "RPI" {
 		t.Fatalf("fields = %#v", got)
 	}
 	if got.Identity != "webhook retry backoff" || got.Branch != "fix/webhook-retry-backoff" {
@@ -73,30 +71,6 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	if len(got.Repos) != 2 || got.Repos[0] != (RepoStat{Name: "org/consumer", Role: "reference"}) ||
 		got.Repos[1] != (RepoStat{Name: "org/svc", Role: "editing"}) {
 		t.Fatalf("manifest repository rows = %+v", got.Repos)
-	}
-
-	// A research document moves the session into planning.
-	research := filepath.Join(dir, "thoughts", "shared", "research")
-	if err := os.MkdirAll(research, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(research, "r1-findings.md"), []byte("# findings"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := Read(dir); got.Phase != "Plan" {
-		t.Fatalf("phase did not advance to Plan: %q", got.Phase)
-	}
-
-	// A plan document moves it into implementation.
-	plans := filepath.Join(dir, "thoughts", "shared", "plans")
-	if err := os.MkdirAll(plans, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(plans, "p1.md"), []byte("- [ ] step"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := Read(dir); got.Phase != "Implement" {
-		t.Fatalf("phase did not advance to Implement: %q", got.Phase)
 	}
 }
 

@@ -227,15 +227,6 @@ export const PLACEMENT_RESULTS = Object.freeze({
   FAILED: "failed",
 });
 
-/** @typedef {"placed"|"misplaced"|"finished"|"pending"|"skipped"} PlacementState */
-export const PLACEMENT_STATES = Object.freeze({
-  PLACED: "placed",
-  MISPLACED: "misplaced",
-  FINISHED: "finished",
-  PENDING: "pending",
-  SKIPPED: "skipped",
-});
-
 /** @typedef {"started"|"completed"|"failed"|"advanced"} ProgressStatus */
 export const PROGRESS_STATUSES = Object.freeze({
   STARTED: "started",
@@ -305,8 +296,6 @@ export const WINDOW_KINDS = Object.freeze({
   OVERVIEW: "overview",
 });
 
-export const AGENT_ROOT_ID = "root";
-
 export const GALLERY_LABEL = "GALLERY";
 
 export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
@@ -353,13 +342,12 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
   bugReportLabel: "",
   mode: "",
-  phase: "",
   identity: "",
   branch: "",
   slug: "",

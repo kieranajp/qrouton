@@ -6,11 +6,6 @@ const (
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"
 
-	phaseScratch   = "scratch"
-	phaseResearch  = "Research"
-	phasePlan      = "Plan"
-	phaseImplement = "Implement"
-
 	KindNote = "NOTE"
 
 	repoSeparator  = "/"

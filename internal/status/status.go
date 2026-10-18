@@ -25,7 +25,6 @@ type Fields struct {
 	BugReportStatus string `json:"bugReportStatus"`
 	BugReportLabel  string `json:"bugReportLabel"`
 	Mode            string `json:"mode"`
-	Phase           string `json:"phase"`
 	Identity        string `json:"identity"`
 	Branch          string `json:"branch"`
 	// Slug and Terminal name the session on screen and the conversation the page
@@ -251,7 +250,6 @@ func Read(root string) Fields {
 	}
 	fields.Mode = modeLabel(m)
 	fields.Stages = stages(root, m)
-	fields.Phase = phase(fields.Stages, m)
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
@@ -318,22 +316,6 @@ func modeLabel(m session.Manifest) string {
 		return modeRPILabel
 	}
 	return modeAssistantLabel
-}
-
-// phase is the macro-phase only: scratch until repositories exist, then the
-// stage the session's durable documents put it in — a research doc means
-// planning, a plan means implementing.
-func phase(done Stages, m session.Manifest) string {
-	switch {
-	case len(m.Repos) == 0:
-		return phaseScratch
-	case done.Plan:
-		return phaseImplement
-	case done.Research:
-		return phasePlan
-	default:
-		return phaseResearch
-	}
 }
 
 // Sessions lists every session under the sessions root, most recently opened
