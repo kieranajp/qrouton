@@ -306,7 +306,8 @@ func delegationAssertion(events []Event, pattern string) Assertion {
 				}
 			}
 		}
-		if strings.Contains(normalizeAgentName(event.Name+" "+event.Text+" "+string(event.Arguments)), normalizedPattern) &&
+		if isAssistantAuthored(event) &&
+			strings.Contains(normalizeAgentName(event.Name+" "+event.Text+" "+string(event.Arguments)), normalizedPattern) &&
 			!strings.Contains(strings.ToLower(string(event.Arguments)), initSubtype) {
 			mentioned = true
 		}
@@ -453,6 +454,11 @@ func subagentTypes(event Event) []string {
 func isDelegationEvent(event Event) bool {
 	return isCollaborationEvent(event) &&
 		!strings.Contains(strings.ToLower(string(event.Arguments)), initSubtype)
+}
+
+// isAssistantAuthored leaves out the prompt and the tool output a runner echoes back as a user turn.
+func isAssistantAuthored(event Event) bool {
+	return event.Kind != kindUser && event.Role != roleUser && event.RawType != rawTypeUser
 }
 
 func normalizeAgentName(value string) string {

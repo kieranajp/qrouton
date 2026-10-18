@@ -249,6 +249,7 @@ const (
 	kindDuration = "duration"
 	kindUser     = "user"
 	roleUser     = "user"
+	rawTypeUser  = "user"
 
 	// roleMockMCP marks an event read from the mock server's log of calls it
 	// served, the only proof a tool call reached qrouton's surface.

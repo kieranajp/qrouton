@@ -269,6 +269,16 @@ func TestDelegationRejectsProseAndTheRosterWithoutASpawn(t *testing.T) {
 	}
 }
 
+func TestDelegationIgnoresTheUserPromptWhenTheSpawnNamesNoAgent(t *testing.T) {
+	events := []Event{
+		{Kind: kindUser, Role: roleUser, Text: "Ask the qrouton-research-lead about the retry deadline."},
+		{Kind: "tool_call", Name: "Task", Arguments: []byte(`{"tool_name":"Task","task_name":"retry deadline"}`)},
+	}
+	if assertion := delegationAssertion(events, "research-lead"); assertion.Passed {
+		t.Fatalf("the user prompt named the target for a spawn that named none: %s", assertion.Evidence)
+	}
+}
+
 func TestDelegationTakesTheTargetFromTheSpawnNotTheProse(t *testing.T) {
 	events := []Event{
 		{Kind: "assistant", Text: "Handing this to the qrouton-research-lead."},
