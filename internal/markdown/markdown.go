@@ -3,6 +3,7 @@ package markdown
 
 import (
 	"bytes"
+	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -45,10 +46,21 @@ func Marp(text string) bool {
 	var declared struct {
 		Marp bool `yaml:"marp"`
 	}
-	if yaml.Unmarshal([]byte(front), &declared) != nil {
-		return false
+	if err := yaml.Unmarshal([]byte(front), &declared); err != nil {
+		var typeErr *yaml.TypeError
+		return !errors.As(err, &typeErr) && marpLine(front)
 	}
 	return declared.Marp
+}
+
+func marpLine(front string) bool {
+	for _, line := range strings.Split(front, "\n") {
+		key, value, found := strings.Cut(line, ":")
+		if found && strings.TrimSpace(key) == "marp" && strings.EqualFold(strings.Trim(strings.TrimSpace(value), `"'`), "true") {
+			return true
+		}
+	}
+	return false
 }
 
 // Split returns the frontmatter, the body and the body's first source line.
