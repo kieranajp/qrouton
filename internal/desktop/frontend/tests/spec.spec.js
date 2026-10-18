@@ -11,7 +11,7 @@ test("the overview counts the answered questions and lists the decisions", async
   await open(page);
   await expect.poll(() => shown(page)).toEqual(["overview"]);
   await expect(page.locator("[data-tally]")).toContainText("1 of 3 answered");
-  await expect(page.locator(".rows .row")).toHaveText([/Decisions\s*Keep `?Retry`? as a wrapper\s*Cancellation is cooperative/]);
+  await expect(page.locator(".rows:not(.asks) .row")).toHaveText([/Decisions\s*Keep `?Retry`? as a wrapper\s*Cancellation is cooperative/]);
 });
 
 test("the overview lists the open questions before the decisions", async ({ page }) => {
@@ -26,7 +26,7 @@ test("the overview lists the open questions before the decisions", async ({ page
   await expect(asks.nth(1).locator(".ask-state")).toHaveText("Open");
   const order = await page.evaluate(() => {
     const list = document.querySelector("[data-open-list]");
-    const rows = document.querySelector(".rows");
+    const rows = document.querySelector(".rows:not(.asks)");
     return Boolean(list.compareDocumentPosition(rows) & Node.DOCUMENT_POSITION_FOLLOWING);
   });
   expect(order).toBe(true);
@@ -115,13 +115,13 @@ test("topic groups page the decisions by heading", async ({ page }) => {
     "Storage",
   ]);
   await expect(page.locator('[data-screen="overview"] .caps').first()).toHaveText("Spec · 7 decisions");
-  await expect(page.locator(".rows .row")).toHaveText([
+  await expect(page.locator(".rows:not(.asks) .row")).toHaveText([
     /Product · 3 decisions\s*Grams go entirely\s*The bars go\s*A failed estimate shows no dots/,
     /The Clef call · 2 decisions/,
     /Storage · 2 decisions/,
   ]);
 
-  await page.locator(".rows .row").nth(1).click();
+  await page.locator(".rows:not(.asks) .row").nth(1).click();
   await expect.poll(() => shown(page)).toEqual(["The Clef call"]);
   const group = page.locator('[data-screen="The Clef call"]');
   await expect(group).toContainText("nutrition-intelligence owns the call.");
@@ -132,7 +132,7 @@ test("topic groups page the decisions by heading", async ({ page }) => {
 test("a Decisions section of plain bullets is one page that shows them", async ({ page }) => {
   await open(page, "?bullets=1");
   expect(await page.evaluate(() => window.pips())).toEqual(["Overview", "Decisions"]);
-  await page.locator(".rows .row").click();
+  await page.locator(".rows:not(.asks) .row").click();
   await expect.poll(() => shown(page)).toEqual(["Decisions"]);
   const decisions = page.locator('[data-screen="Decisions"]');
   await expect(decisions).toContainText("Retries stop after three attempts");

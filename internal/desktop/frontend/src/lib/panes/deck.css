@@ -1,0 +1,112 @@
+/* Plan and spec decks share this sheet. Every rule sits under .artifact-deck,
+   so other panes that call their scroller .deck or .reading are untouched. */
+
+.artifact-deck.deck,
+.artifact-deck.reading {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
+}
+
+.artifact-deck .display-lg,
+.artifact-deck .display-md {
+  margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
+  padding-left: var(--gutter);
+  letter-spacing: var(--display-tracking);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.artifact-deck .display-lg {
+  font: var(--display-lg);
+}
+
+.artifact-deck .display-md {
+  font: var(--display-md);
+}
+
+.artifact-deck.reading .display-lg {
+  margin-top: calc(4px * var(--ui-scale));
+}
+
+.artifact-deck .hero {
+  padding-top: calc(18px * var(--ui-scale));
+}
+
+.artifact-deck .hero .display-lg {
+  margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
+  max-width: 26ch;
+}
+
+.artifact-deck .hero .lead p {
+  font: var(--machine-lg);
+  font-size: calc(15px * var(--ui-scale));
+  line-height: 1.7;
+  color: var(--text-secondary);
+  max-width: 68ch;
+}
+
+.artifact-deck .rows {
+  list-style: none;
+  margin: calc(26px * var(--ui-scale)) 0 0;
+  padding: 0;
+  border: var(--border-width) solid var(--border-subtle);
+  box-shadow: var(--shadow-offset) var(--border-subtle);
+}
+
+.artifact-deck .rows > li + li > .row {
+  border-top: var(--border-width) solid var(--border-subtle);
+}
+
+.artifact-deck .row {
+  display: flex;
+  align-items: center;
+  gap: calc(14px * var(--ui-scale));
+  width: 100%;
+  padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
+  border: 0;
+  background: transparent;
+  font: var(--machine-md);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.artifact-deck .row:hover {
+  background: var(--wash-selected);
+}
+
+.artifact-deck .row .index {
+  min-width: 3ch;
+  font: var(--machine-bold);
+  color: var(--accent-action);
+}
+
+.artifact-deck .row .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-primary);
+}
+
+/* Narrow steps the type down and gives the hero's room to the list. */
+html[data-narrow] .artifact-deck .hero {
+  padding-top: calc(6px * var(--ui-scale));
+}
+
+html[data-narrow] .artifact-deck .hero .display-lg {
+  margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
+}
+
+html[data-narrow] .artifact-deck .hero .lead p {
+  font: var(--machine-md);
+}
+
+html[data-narrow] .artifact-deck .display-lg {
+  font: var(--display-md);
+}
+
+html[data-narrow] .artifact-deck .display-md {
+  font: var(--display-sm);
+}
