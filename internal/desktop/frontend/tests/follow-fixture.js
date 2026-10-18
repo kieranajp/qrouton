@@ -10,10 +10,12 @@ window.followFixture = {
     applied = [];
     const snapshot = () => new Promise((resolve) => (answer = resolve));
     const accepts = options.only ? (data) => data?.only === options.only : undefined;
-    window.following = follow(EVENT, snapshot, (value) => applied.push(value ?? null), { accepts });
+    const settle = options.settle ? (answer, live) => applied.push({ settled: answer.value, live }) : undefined;
+    window.following = follow(EVENT, snapshot, (value) => applied.push(value ?? null), { accepts, settle });
   },
   emit: (data) => emitWailsEvent(EVENT, data),
   answer: (value) => answer(value),
   stop: () => window.following.stop(),
+  refresh: () => window.following.refresh(),
   applied: () => applied,
 };

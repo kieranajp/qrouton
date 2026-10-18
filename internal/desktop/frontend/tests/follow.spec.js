@@ -46,3 +46,21 @@ test("nothing applies after stop", async ({ page }) => {
   await page.evaluate(() => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(await applied(page)).toEqual([]);
 });
+
+test("settle hears whether an event beat each snapshot", async ({ page }) => {
+  await page.evaluate(() => {
+    window.followFixture.start({ settle: true });
+    window.followFixture.answer({ ok: true, value: "first" });
+  });
+  await expect.poll(() => applied(page)).toEqual([{ settled: "first", live: false }]);
+  await page.evaluate(() => {
+    window.followFixture.refresh();
+    window.followFixture.emit("event");
+    window.followFixture.answer({ ok: true, value: "second" });
+  });
+  await expect.poll(() => applied(page)).toEqual([
+    { settled: "first", live: false },
+    "event",
+    { settled: "second", live: true },
+  ]);
+});

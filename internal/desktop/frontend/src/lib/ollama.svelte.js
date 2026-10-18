@@ -20,7 +20,7 @@ export const percent = (status) => (status.total ? Math.round(((status.completed
 export const megabytes = (bytes = 0) => `${(bytes / 1e6).toFixed(1)} MB`;
 
 /** ollama is the last known state of semantic search, shared by every view of it.
- * Each view checks again when it mounts, so an old answer does not linger. */
+ * Asking for it again checks again, so a view that mounts sees no old answer. */
 export function ollama() {
   if (shared) shared.check();
   else shared = observing();
