@@ -12,7 +12,8 @@
   const STEPS = { ArrowRight: 1, PageDown: 1, " ": 1, ArrowLeft: -1, PageUp: -1 };
 
   let layer = $state(/** @type {HTMLElement | undefined} */ (undefined));
-  let stage = $state(/** @type {HTMLElement | undefined} */ (undefined));
+  /** @type {DOMRectReadOnly | undefined} */
+  let room = $state();
   let scale = $state(1);
   let notes = $state(false);
   let card = $derived(present.cards[present.current]);
@@ -33,18 +34,10 @@
     };
   });
 
-  // Both dimensions of the inset box enter the sum: a slide fitted to width
-  // alone runs off the bottom of a tall window.
+  // Fitted to both dimensions, or a tall window runs the slide off its bottom.
+  // A hidden stage measures zero and keeps the last scale.
   $effect(() => {
-    if (!stage) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      if (width > 0 && height > 0) {
-        scale = Math.min(width / SLIDE_WIDTH, height / SLIDE_HEIGHT);
-      }
-    });
-    observer.observe(stage);
-    return () => observer.disconnect();
+    if (room && room.width > 0 && room.height > 0) scale = Math.min(room.width / SLIDE_WIDTH, room.height / SLIDE_HEIGHT);
   });
 
   // Unconditional: the workbench retains the note whether or not the second
@@ -108,7 +101,7 @@
   bind:this={layer}
   onkeydown={key}
   use:scrim={() => present.leave()}>
-  <div class="present-stage" bind:this={stage}>
+  <div class="present-stage" bind:contentRect={room}>
     <div class="present-card" style="--present-scale: {scale}">
       <div class="present-slide">
         <div class="marpit">{@html card?.html ?? ""}</div>

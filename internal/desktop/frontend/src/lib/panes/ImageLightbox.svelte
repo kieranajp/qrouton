@@ -18,30 +18,19 @@
   const say = notice.show;
 
   let layer = $state(/** @type {HTMLElement | undefined} */ (undefined));
-  let stage = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let hud = $state(/** @type {HTMLElement | undefined} */ (undefined));
-  let width = $state(0);
-  let height = $state(0);
+  /** @type {DOMRectReadOnly | undefined} */
+  let room = $state();
+  let fit = $derived.by(() => {
+    if (!room) return { width: 0, height: 0 };
+    if (room.width / room.height > aspect) return { width: room.height * aspect, height: room.height };
+    return { width: room.width, height: room.width / aspect };
+  });
+  let width = $derived(fit.width);
+  let height = $derived(fit.height);
 
   onMount(() => {
     layer?.focus();
-  });
-
-  $effect(() => {
-    if (!stage) return;
-    const ratio = aspect;
-    const observer = new ResizeObserver(([entry]) => {
-      const room = entry.contentRect;
-      if (room.width / room.height > ratio) {
-        height = room.height;
-        width = height * ratio;
-      } else {
-        width = room.width;
-        height = width / ratio;
-      }
-    });
-    observer.observe(stage);
-    return () => observer.disconnect();
   });
 
   function step(by) {
@@ -78,7 +67,7 @@
   bind:this={layer}
   onkeydown={key}
   use:scrim={() => onClose()}>
-  <div class="stage" bind:this={stage}>
+  <div class="stage" bind:contentRect={room}>
     <div
       class="card"
       style:width={`${width}px`}

@@ -41,18 +41,13 @@
     onMeasure: () => deck.measure(),
   });
 
-  // A slide is laid out in Marp's fixed pixel box, so the stack measures itself
-  // and hands the cards the factor that brings that box to pane width.
-  let stack = $state();
+  /** A slide is laid out in Marp's fixed pixel box, so the stack measures itself
+   * and hands the cards the factor that brings that box to pane width.
+   * @type {DOMRectReadOnly | undefined} */
+  let room = $state();
   let scale = $state(1);
   $effect(() => {
-    if (!stack) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const width = entry.contentRect.width;
-      if (width > 0) scale = width / SLIDE_WIDTH;
-    });
-    observer.observe(stack);
-    return () => observer.disconnect();
+    if (room && room.width > 0) scale = room.width / SLIDE_WIDTH;
   });
 
   $effect(() => {
@@ -80,7 +75,7 @@
   <div class="preview" bind:this={preview} tabindex="-1">
     <div
       class="stack"
-      bind:this={stack}
+      bind:contentRect={room}
       style="--slide-scale: {scale}"
       use:links={doc.source}
       use:diagrams={{ id, text: doc.text, fit: true }}
