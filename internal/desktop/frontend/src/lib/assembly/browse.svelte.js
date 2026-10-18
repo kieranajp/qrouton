@@ -68,7 +68,7 @@ export function browsing(branch, report = () => {}) {
 
   $effect(() =>
     Events.On(REPOS_REFRESH_EVENT, (event) => {
-      const updated = apply(refresh, event.data ?? {});
+      const updated = apply(refresh, event.data);
       refresh = updated;
       selection = reconcile(selection, updated.repos.map(repoID));
     }),

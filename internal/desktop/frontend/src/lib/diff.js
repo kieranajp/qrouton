@@ -110,7 +110,9 @@ function scanHunks(lines, visit) {
           oldUsed: 0,
           newUsed: 0,
           context: 0,
-          rows: [{ line, kind: "hunk", oldOffset: null, newOffset: null }],
+          rows: /** @type {{line: typeof line, kind: DiffKind, oldOffset: number | null, newOffset: number | null}[]} */ ([
+            { line, kind: "hunk", oldOffset: null, newOffset: null },
+          ]),
         };
       } else {
         visit(line, outsideKind(line.text), { valid: null, oldLine: null, newLine: null });
@@ -154,8 +156,9 @@ function readQuotedToken(source, start) {
     }
     const escapeStart = index++;
     if (index >= source.length) return null;
-    if (named.has(source[index])) {
-      bytes.push(named.get(source[index]));
+    const code = named.get(source[index]);
+    if (code !== undefined) {
+      bytes.push(code);
       visible += source.slice(escapeStart, index + 1);
       index++;
       continue;
@@ -363,8 +366,9 @@ export function parsePatch(raw) {
   let repositoryIndex = -1;
   const frameLines = new Map(frames.map((frame, index) => [frame.lineIndex, index]));
   for (let index = 0; index < lines.length; index++) {
-    if (frameLines.has(index)) {
-      repositoryIndex = frameLines.get(index);
+    const frame = frameLines.get(index);
+    if (frame !== undefined) {
+      repositoryIndex = frame;
       repository = repositories[repositoryIndex];
       continue;
     }

@@ -51,7 +51,7 @@ export const isLocked = (selection, id) => selection.locked.includes(id);
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
 
 /** baseOf is the branch a row's work is cut from, empty for the default one. */
-export const baseOf = (selection, id) => selection.bases?.[id] ?? "";
+export const baseOf = (selection, id) => selection.bases[id] ?? "";
 
 /** Held editing repositories cannot be dropped or demoted from the picker.
  * @returns {Role[]} */
@@ -129,7 +129,7 @@ export function reconcile(selection, ids) {
   }
   /** @type {Record<string, string>} */
   const bases = {};
-  for (const [id, base] of Object.entries(selection.bases ?? {})) {
+  for (const [id, base] of Object.entries(selection.bases)) {
     if (kept(id)) bases[id] = base;
   }
   return { ...selection, roles, bases, order: selection.order.filter((id) => available.has(id)) };

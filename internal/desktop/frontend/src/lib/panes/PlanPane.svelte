@@ -95,7 +95,7 @@
     // bottom, which no later section can ever scroll up past.
     const ended =
       scrollRoot && scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
-    const line = ended ? state.intervals.at(-1).to : state.intervals[0].line;
+    const line = ended ? state.intervals[state.intervals.length - 1].to : state.intervals[0].line;
     scrolled = screenFor(plan.slides, line);
   }
 
@@ -216,7 +216,7 @@
       {/if}
     {/snippet}
     {#snippet bar()}
-      {#if live}
+      {#if live && metered}
         <div class="bar">
           <span class="dot" style:background={allMet ? DOT.met : DOT.working}></span>
           <span class="says">

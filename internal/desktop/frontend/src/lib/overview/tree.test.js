@@ -26,6 +26,7 @@ test("nodes nest to depth four under the root", () => {
     root(),
   ];
   const [run] = buildRuns(nodes);
+  assert.ok(run.root);
   assert.equal(run.root.id, "root");
   const a = run.children[0];
   const b = a.children[0];

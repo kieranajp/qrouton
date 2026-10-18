@@ -8,7 +8,7 @@
   let { slug, requestID, status, label, onClose } = $props();
   const owner = untrack(() => slug);
   const id = untrack(() => requestID);
-  let preview = $state(null);
+  let preview = $state(/** @type {import("./calls.js").BugReportPreview | null} */ (null));
   let error = $state("");
   let submitting = $state(false);
   let closing = $state(false);
@@ -48,9 +48,9 @@
     const sequence = ++epoch;
     try {
       const outcome = await confirmReport(owner, id);
-      if (live && sequence === epoch && outcome.id === id) preview = { ...preview, report: outcome };
+      if (live && sequence === epoch && outcome.id === id && preview) preview = { ...preview, report: outcome };
     } catch (reason) {
-      if (live && sequence === epoch) {
+      if (live && sequence === epoch && preview) {
         preview = { ...preview, report: { ...preview.report, status: BUG_REPORT_STATUSES.UNKNOWN, message: preview.unknownMessage } };
       }
     }
@@ -100,7 +100,8 @@
       </div>
       <p role="status">{preview.report.message}</p>
       {#if preview.report.url}
-        <a href={preview.report.url} onclick={(event) => { event.preventDefault(); openURL(preview.report.url); }}>{preview.report.url}</a>
+        {@const url = preview.report.url}
+        <a href={url} onclick={(event) => { event.preventDefault(); openURL(url); }}>{url}</a>
       {/if}
     {/if}
     {#if error}<p role="alert">{error}</p>{/if}

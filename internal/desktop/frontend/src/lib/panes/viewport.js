@@ -88,13 +88,10 @@ export function createViewportController(options) {
   const targetGeometry = () => {
     const viewport = root.getBoundingClientRect();
     const rect = target?.getBoundingClientRect();
-    const available = Boolean(
-      viewport && viewport.width > 0 && viewport.height > 0 && rect && rect.width > 0 && rect.height > 0,
-    );
-    return {
-      available,
-      visible: Boolean(available && rect.bottom > viewport.top && rect.top < viewport.bottom),
-    };
+    if (!rect || viewport.width <= 0 || viewport.height <= 0 || rect.width <= 0 || rect.height <= 0) {
+      return { available: false, visible: false };
+    }
+    return { available: true, visible: rect.bottom > viewport.top && rect.top < viewport.bottom };
   };
   const measure = () => {
     const state = measureViewport(root, blocks(), selected);
@@ -117,7 +114,7 @@ export function createViewportController(options) {
       geometry.available &&
       ((work === "activate" && !achievedTarget) ||
         (work === "layout" && (!achievedTarget || (targetVisible && !geometry.visible))));
-    if (shouldReveal) target.scrollIntoView({ block: "center" });
+    if (shouldReveal) target?.scrollIntoView({ block: "center" });
     measure();
   };
   const queue = (work) => {

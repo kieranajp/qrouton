@@ -9,7 +9,7 @@ export const NUMBERED = 9;
 /** Numbered rail shortcuts require Command alone to avoid terminal bindings.
  * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event */
 export function position(event) {
-  if (!event?.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return 0;
+  if (!event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return 0;
   const digit = Number(event.key);
   if (!Number.isInteger(digit) || digit < 1 || digit > NUMBERED) return 0;
   return digit;
@@ -29,14 +29,14 @@ const primaryHeld = (event, macOS) => (macOS ? event.metaKey && !event.ctrlKey :
 /** @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
  * @param {boolean} macOS */
 export function opensSettings(event, macOS) {
-  if (!event || event.altKey || event.shiftKey) return false;
+  if (event.altKey || event.shiftKey) return false;
   return Boolean(primaryHeld(event, macOS)) && event.key === ",";
 }
 
 /** @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
  * @param {boolean} macOS */
 export function scaleAction(event, macOS) {
-  if (!event || event.altKey || !primaryHeld(event, macOS)) return "";
+  if (event.altKey || !primaryHeld(event, macOS)) return "";
   if (event.key === "=" || event.key === "+") return UI_SCALE_ACTIONS.IN;
   if (event.key === "-") return UI_SCALE_ACTIONS.OUT;
   if (event.key === "0") return UI_SCALE_ACTIONS.RESET;
@@ -45,7 +45,7 @@ export function scaleAction(event, macOS) {
 
 /** @param {boolean} macOS */
 export function opensSwitcher(event, macOS) {
-  if (!event || event.altKey || event.shiftKey || event.isComposing || event.keyCode === 229) return false;
+  if (event.altKey || event.shiftKey || event.isComposing || event.keyCode === 229) return false;
   return Boolean(primaryHeld(event, macOS)) && event.key?.toLowerCase() === "k";
 }
 export const switcherHint = (macOS) => macOS ? "⌘K" : "Ctrl+K";

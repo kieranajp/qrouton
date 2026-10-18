@@ -34,12 +34,12 @@ test("intervals sort and merge overlaps and adjacent blocks", () => {
 });
 
 test("intervals reject missing, non-integral, and descending bounds", () => {
-  for (const interval of [
+  for (const interval of /** @type {{line: number, to: number}[]} */ ([
     { line: 0, to: 1 },
     { line: 2, to: 1 },
     { line: 1.5, to: 2 },
     { line: 1, to: undefined },
-  ]) {
+  ])) {
     assert.throws(() => normalizeIntervals([interval]), /invalid source interval/);
   }
 });

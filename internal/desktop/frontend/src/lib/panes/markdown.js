@@ -124,7 +124,7 @@ export function render(markdown) {
  * @param {{line: number, to: number}} span
  * @returns {{marked: number[], at: number}} at is -1 when the span reaches nothing. */
 export function marks(blocks, span) {
-  const first = span?.line ?? 0;
+  const first = span.line;
   if (first < 1) return { marked: [], at: -1 };
   const last = span.to >= first ? span.to : first;
   const marked = [];

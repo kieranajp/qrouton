@@ -8,8 +8,7 @@
   import { folderName } from "./folders.js";
   import { reasonLabel } from "./reasons.js";
 
-  /** @type {import("./calls.js").PlacementView | null} */
-  let view = $state(null);
+  let view = $state(/** @type {import("./calls.js").PlacementView | null} */ (null));
   let ticked = $state(/** @type {Record<string, boolean>} */ ({}));
   let outcomes = $state(/** @type {Record<string, import("./calls.js").PlacementOutcome>} */ ({}));
   let busy = $state(false);

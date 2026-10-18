@@ -45,7 +45,7 @@ test("nothing behind it says nothing, in either style", () => {
   for (const style of /** @type {const} */ (["compact", "prose"])) {
     assert.equal(relative("", style, NOW), "");
     assert.equal(relative("0001-01-01T00:00:00Z", style, NOW), "");
-    assert.equal(relative(undefined, style, NOW), "");
+    assert.equal(relative(/** @type {string} */ (/** @type {unknown} */ (undefined)), style, NOW), "");
   }
 });
 

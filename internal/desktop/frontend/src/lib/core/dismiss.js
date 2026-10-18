@@ -5,10 +5,10 @@
 export function dismissible(node, close) {
   let onClose = close;
   const outside = (/** @type {PointerEvent} */ event) => {
-    if (!node.contains(/** @type {Node} */ (event.target))) onClose?.();
+    if (!node.contains(/** @type {Node} */ (event.target))) onClose();
   };
   const key = (/** @type {KeyboardEvent} */ event) => {
-    if (event.key === "Escape") onClose?.();
+    if (event.key === "Escape") onClose();
   };
   window.addEventListener("pointerdown", outside);
   window.addEventListener("keydown", key);
@@ -34,7 +34,7 @@ export function scrim(node, close) {
   const up = (/** @type {PointerEvent} */ event) => {
     const released = pressed && event.target === node;
     pressed = false;
-    if (released) onClose?.();
+    if (released) onClose();
   };
   node.addEventListener("pointerdown", down);
   node.addEventListener("pointerup", up);

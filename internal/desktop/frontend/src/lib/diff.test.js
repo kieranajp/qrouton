@@ -318,6 +318,7 @@ test("repository framing preserves blank separators, unchanged repositories and 
 test("the exact no-change sentinel is explicit zero-change structure", () => {
   for (const raw of ["No changes in app.", "No changes in all session repos."]) {
     const parsed = parsePatch(raw);
+    assert.ok(parsed.noChange);
     assert.equal(parsed.noChange.scope, raw.slice("No changes in ".length, -1));
     assert.equal(parsed.available, true);
     assert.equal(parsed.confidence, "full");

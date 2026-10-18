@@ -42,6 +42,7 @@ function sortBranch(branch) {
 /** @param {AgentNode[]} nodes @param {string} run @returns {Run} */
 function buildRun(nodes, run) {
   const root = nodes.find((node) => node.root);
+  /** @type {Map<string, Branch>} */
   const branches = new Map(nodes.map((node) => [node.id, { node, children: [] }]));
   const rootBranch = root && branches.get(root.id);
   /** @type {Map<string, string>} */

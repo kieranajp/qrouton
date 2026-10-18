@@ -25,10 +25,6 @@ test("a digit with any other modifier is the terminal's", () => {
   assert.equal(position({ key: "1", ctrlKey: true }), 0);
 });
 
-test("position tolerates being handed nothing", () => {
-  assert.equal(position(undefined), 0);
-});
-
 test("the first nine rows wear their shortcut and the rest wear none", () => {
   assert.equal(shortcut(0), "⌘1");
   assert.equal(shortcut(NUMBERED - 1), "⌘" + NUMBERED);
@@ -66,7 +62,6 @@ test("a comma the settings panel has no claim on", () => {
   assert.equal(opensSettings(cmd(",", { shiftKey: true }), true), false);
   assert.equal(opensSettings(cmd(",", { altKey: true }), true), false);
   assert.equal(opensSettings(cmd("."), true), false);
-  assert.equal(opensSettings(undefined, true), false);
 });
 
 test("Command with =, +, - and 0 steps and resets the scale on macOS", () => {
@@ -93,7 +88,6 @@ test("the other platform's modifier, Option, both modifiers and other keys leave
   assert.equal(scaleAction({ key: "=", ctrlKey: true, metaKey: true }, false), "");
   assert.equal(scaleAction(cmd("1"), true), "");
   assert.equal(scaleAction({ key: "=" }, true), "");
-  assert.equal(scaleAction(undefined, true), "");
 });
 
 test("switcher requires the exact platform chord and reserves repeats", async () => {
