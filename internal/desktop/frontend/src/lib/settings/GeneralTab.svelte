@@ -1,5 +1,6 @@
 <script>
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Checkbox from "../core/Checkbox.svelte";
   import SegmentedControl from "../forms/SegmentedControl.svelte";
   import TextField from "../forms/TextField.svelte";
   import { macOS } from "../platform.js";
@@ -62,10 +63,7 @@
 </div>
 
 <div class="chime">
-  <label>
-    <input type="checkbox" bind:checked={form.chime} />
-    Chime when an agent is waiting for you
-  </label>
+  <Checkbox bind:checked={form.chime}>Chime when an agent is waiting for you</Checkbox>
   <span class="hint">Stays quiet for the session you're looking at.</span>
 </div>
 
@@ -145,37 +143,12 @@
     gap: calc(6px * var(--ui-scale));
   }
 
-  .chime .hint {
-    padding-left: calc(21px * var(--ui-scale));
-  }
-
-  label {
-    display: inline-flex;
-    align-items: center;
-    gap: calc(8px * var(--ui-scale));
+  .chime > :global(.check) {
     font: var(--machine-md);
     color: var(--text-primary);
-    cursor: pointer;
   }
 
-  input {
-    appearance: none;
-    width: calc(13px * var(--ui-scale));
-    height: calc(13px * var(--ui-scale));
-    margin: 0;
-    flex: none;
-    border: var(--border-width) solid var(--border-default);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  input:checked {
-    border: none;
-    background: var(--accent-action);
-  }
-
-  input:focus-visible {
-    outline: none;
-    box-shadow: var(--shadow-focus);
+  .chime .hint {
+    padding-left: calc(24px * var(--ui-scale));
   }
 </style>

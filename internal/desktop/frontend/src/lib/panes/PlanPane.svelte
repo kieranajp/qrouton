@@ -2,6 +2,7 @@
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Checkbox from "../core/Checkbox.svelte";
   import Chip from "../core/Chip.svelte";
   import { untrack } from "svelte";
   import ArtifactPane from "./ArtifactPane.svelte";
@@ -229,13 +230,9 @@
           </span>
           <!-- Every phase met leaves nothing to follow, so nothing is offered. -->
           {#if !allMet}
-            <label class="follow">
-              <input
-                type="checkbox"
-                checked={at.following}
-                onchange={(event) => at.track(event.currentTarget.checked)} />
-              Follow
-            </label>
+            <span class="follow">
+              <Checkbox checked={at.following} onchange={(event) => at.track(event.currentTarget.checked)}>Follow</Checkbox>
+            </span>
           {/if}
         </div>
       {/if}
@@ -289,28 +286,7 @@
   }
 
   .follow {
-    display: inline-flex;
-    align-items: center;
-    gap: calc(8px * var(--ui-scale));
     margin-left: auto;
-    cursor: pointer;
-  }
-
-  /* The acceptance criteria's box, in the colour of something the reader
-     operates rather than the colour of a check the document has met. */
-  .follow input {
-    appearance: none;
-    width: calc(13px * var(--ui-scale));
-    height: calc(13px * var(--ui-scale));
-    margin: 0;
-    border: var(--border-width) solid var(--border-default);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .follow input:checked {
-    border: none;
-    background: var(--accent-action);
   }
 
   .screen > :global(.caps),
