@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -970,11 +971,41 @@ func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
 	}
 }
 
-func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
-	m, host, dir := newTestManager(t)
-	if err := os.MkdirAll(filepath.Join(dir, "src", "app"), 0o755); err != nil {
+func gitIn(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func commitFile(t *testing.T, dir, name, content string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	gitIn(t, dir, "add", name)
+	gitIn(t, dir, "commit", "-qm", name)
+}
+
+func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
+	m, host, dir := newTestManager(t)
+	app := filepath.Join(dir, "src", "app")
+	clean := filepath.Join(dir, "src", "clean")
+	for _, repo := range []string{app, clean} {
+		if err := os.MkdirAll(repo, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		gitIn(t, repo, "init", "-q", "-b", "main")
+		commitFile(t, repo, "base.txt", "base\n")
+	}
+	gitIn(t, app, "checkout", "-qb", "feature")
+	commitFile(t, app, "feature.txt", "feature-commit-line\n")
+	if err := os.WriteFile(filepath.Join(app, "staged.txt"), []byte("staged-change-line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	gitIn(t, app, "add", "staged.txt")
 	ctx := context.Background()
 
 	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
@@ -984,8 +1015,8 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	if single.Kind != workbench.KindDocument {
 		t.Fatalf("diff window kind = %q, want %q", single.Kind, workbench.KindDocument)
 	}
-	if strings.TrimSpace(single.Content) == "" {
-		t.Fatal("diff window opened with no captured diff")
+	if !strings.Contains(single.Content, "+feature-commit-line") || !strings.Contains(single.Content, "+staged-change-line") {
+		t.Fatalf("diff against main missed the branch commit or the staged change:\n%s", single.Content)
 	}
 	if want := diffWindowName + diffWindowSeparator + "app"; single.Label != want || single.Icon != workbench.IconDocument {
 		t.Fatalf("diff tab reads %q with icon %q, want %q and the document icon", single.Label, single.Icon, want)
@@ -997,15 +1028,25 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 		t.Fatalf("registry = %v, want [diff:app]", got)
 	}
 
-	if _, err := m.showDiff(ctx, showDiffInput{}); err != nil {
+	if _, err := m.showDiff(ctx, showDiffInput{Staged: true}); err != nil {
 		t.Fatal(err)
 	}
 	all := host.opens[1]
-	if all.Kind != workbench.KindDocument || all.Format != workbench.FormatDiff || strings.TrimSpace(all.Content) == "" {
+	if all.Kind != workbench.KindDocument || all.Format != workbench.FormatDiff {
 		t.Fatalf("all-repos diff window = %+v", all)
+	}
+	if !strings.Contains(all.Content, "+staged-change-line") || strings.Contains(all.Content, "+feature-commit-line") {
+		t.Fatalf("all-repos staged diff should hold the staged change alone:\n%s", all.Content)
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{diffWindowName, "diff:app"}) {
 		t.Fatalf("registry = %v, want [%s diff:app]", got, diffWindowName)
+	}
+
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/clean", Base: "main", Staged: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := host.opens[2].Content, fmt.Sprintf(emptyDiffFormat, "src/clean"); got != want {
+		t.Fatalf("clean repo diff = %q, want %q", got, want)
 	}
 
 	if _, err := m.showDiff(ctx, showDiffInput{Repo: "../outside"}); err == nil {
