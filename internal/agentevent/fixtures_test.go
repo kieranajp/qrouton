@@ -16,7 +16,7 @@ import (
 
 const claudeFixtures = "testdata/claude-2.1.286"
 
-// reduced replays one recorded spike through Reduce, in recorded order.
+// reduced replays one recorded spike through ReduceIn as Claude with no root, a line at a time in recorded order.
 func reduced(t *testing.T, name string) []workbench.AgentEventRequest {
 	t.Helper()
 	file, err := os.Open(filepath.Join(claudeFixtures, name+".jsonl"))
