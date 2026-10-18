@@ -302,16 +302,12 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("echo\n"))); err != nil {
 		t.Fatal(err)
 	}
-	var windowPayload any
-	waitFor(t, "the tab terminal's data event", func() bool {
+	waitFor(t, "the tab terminal's live output", func() bool {
 		renderer.mu.Lock()
 		defer renderer.mu.Unlock()
-		windowPayload = renderer.events[windowDataEvent+id]
-		return windowPayload != nil
+		chunk, ok := renderer.events[windowDataEvent+id].(terminalChunk)
+		return ok && !chunk.Replay
 	})
-	if _, ok := windowPayload.(terminalChunk); !ok {
-		t.Fatalf("tab terminal emitted %T, want terminalChunk", windowPayload)
-	}
 
 	agentErr := term.Write(state.terminal, "not base64!")
 	windowErr := w.Write(id, "not base64!")
