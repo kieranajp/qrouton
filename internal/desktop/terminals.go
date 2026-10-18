@@ -22,6 +22,16 @@ type terminalChunk struct {
 	First bool `json:"first,omitempty"`
 }
 
+// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and JSON
+// marshalling corrupts it.
+func encodeChunk(b []byte) terminalChunk {
+	return terminalChunk{Encoded: base64.StdEncoding.EncodeToString(b)}
+}
+
+func decodeInput(encoded string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(encoded)
+}
+
 func newTerminals(emit emitter, reg *registry) *terminals {
 	return &terminals{emit: emit, registry: reg}
 }
@@ -72,9 +82,7 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 		func(b []byte) {
 			terminal.stream.Lock()
 			terminal.buffer.write(b)
-			t.emit(windowDataEvent+id, terminalChunk{
-				Encoded: base64.StdEncoding.EncodeToString(b),
-			})
+			t.emit(windowDataEvent+id, encodeChunk(b))
 			terminal.stream.Unlock()
 		},
 		func(code int) { t.exited(id, code) },
@@ -95,17 +103,16 @@ func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int)
 			return err
 		}
 	}
-	t.emit(windowDataEvent+id, terminalChunk{
-		Encoded: base64.StdEncoding.EncodeToString(terminal.buffer.bytes()),
-		Replay:  true,
-		First:   running && !terminal.served,
-	})
+	chunk := encodeChunk(terminal.buffer.bytes())
+	chunk.Replay = true
+	chunk.First = running && !terminal.served
+	t.emit(windowDataEvent+id, chunk)
 	terminal.served = true
 	return nil
 }
 
 func (t *terminals) write(id, encoded string) error {
-	data, err := base64.StdEncoding.DecodeString(encoded)
+	data, err := decodeInput(encoded)
 	if err != nil {
 		return err
 	}
