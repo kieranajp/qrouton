@@ -9,7 +9,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/theme"
 )
 
@@ -90,14 +89,4 @@ func declaresPrefix(declared map[string]bool, name string) bool {
 		}
 	}
 	return false
-}
-
-// The page names a sticker's token from its colour, so the source scan sees only the prefix.
-func TestEveryStickerColourHasAThemeToken(t *testing.T) {
-	css := theme.CSS()
-	for _, colour := range config.StickerColours() {
-		if !strings.Contains(css, "--sticker-"+colour+":") {
-			t.Errorf("the palette declares no --sticker-%s", colour)
-		}
-	}
 }

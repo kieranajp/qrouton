@@ -28,7 +28,7 @@ func reduced(t *testing.T, name string) []workbench.AgentEventRequest {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1<<20)
 	var out []workbench.AgentEventRequest
 	for scanner.Scan() {
-		event, err := Reduce("claude", bytes.NewReader(scanner.Bytes()))
+		event, err := ReduceIn("claude", "", bytes.NewReader(scanner.Bytes()))
 		if err != nil {
 			t.Fatalf("%s: %v", name, err)
 		}
@@ -162,7 +162,7 @@ func TestReduceTruncatesLongText(t *testing.T) {
 		"hook_event_name": "PreToolUse", "tool_name": "Bash",
 		"tool_input": map[string]string{"command": long},
 	})
-	event, err := Reduce("claude", bytes.NewReader(payload))
+	event, err := ReduceIn("claude", "", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestReduceTruncatesLongText(t *testing.T) {
 		t.Fatalf("target is %d runes, want %d", n, TargetLimit)
 	}
 	payload, _ = json.Marshal(map[string]any{"hook_event_name": "Stop", "last_assistant_message": long})
-	if event, _ = Reduce("claude", bytes.NewReader(payload)); len([]rune(event.Message)) != MessageLimit {
+	if event, _ = ReduceIn("claude", "", bytes.NewReader(payload)); len([]rune(event.Message)) != MessageLimit {
 		t.Fatalf("message is %d runes", len([]rune(event.Message)))
 	}
 }
@@ -180,7 +180,7 @@ func TestReduceKeepsFailureText(t *testing.T) {
 		`{"hook_event_name":"StopFailure","error":"rate_limit","error_details":"429 from the API"}`,
 		`{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_use_id":"t1","error":"rate_limit: 429 from the API"}`,
 	} {
-		event, err := Reduce("claude", strings.NewReader(payload))
+		event, err := ReduceIn("claude", "", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +226,7 @@ func TestTaskNotificationKeepsFieldsWhenTheResultQuotesTags(t *testing.T) {
 func TestReduceKeepsOnlySubagentBackgroundTasks(t *testing.T) {
 	payload := `{"hook_event_name":"Stop","background_tasks":[` +
 		`{"id":"a1","type":"subagent"},{"id":"b1","type":"shell"},{"id":"c1"}]}`
-	event, err := Reduce("claude", strings.NewReader(payload))
+	event, err := ReduceIn("claude", "", strings.NewReader(payload))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestReduceBoundsIdsAndLists(t *testing.T) {
 	stop := fmt.Sprintf(`{"hook_event_name":"Stop","agent_id":%q,"background_tasks":[%s]}`, long, strings.Join(tasks, ","))
 	prompt, _ := json.Marshal(map[string]string{"hook_event_name": "UserPromptSubmit", "prompt": strings.Join(notes, "\n")})
 	for _, payload := range []string{stop, string(prompt)} {
-		event, err := Reduce("claude", strings.NewReader(payload))
+		event, err := ReduceIn("claude", "", strings.NewReader(payload))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -263,7 +263,7 @@ func TestReduceBoundsIdsAndLists(t *testing.T) {
 }
 
 func TestReduceCarriesAnInterrupt(t *testing.T) {
-	event, err := Reduce("claude", strings.NewReader(`{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_use_id":"t1","error":"interrupted","is_interrupt":true}`))
+	event, err := ReduceIn("claude", "", strings.NewReader(`{"hook_event_name":"PostToolUseFailure","tool_name":"Bash","tool_use_id":"t1","error":"interrupted","is_interrupt":true}`))
 	if err != nil {
 		t.Fatal(err)
 	}

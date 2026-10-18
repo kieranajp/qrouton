@@ -272,16 +272,6 @@ func SetMode(dir string, mode SessionMode) error {
 	})
 }
 
-func CycleSticker(dir string, order []Sticker) (Sticker, error) {
-	var committed Sticker
-	err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-		m.Sticker = m.Sticker.Next(order)
-		committed = m.Sticker
-		return m, nil
-	})
-	return committed, err
-}
-
 // Load reads one session directory's manifest.
 func Load(dir string) (Manifest, error) {
 	b, err := os.ReadFile(sessionpaths.Manifest(dir))

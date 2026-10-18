@@ -285,9 +285,6 @@ func (c *Config) EffectiveStickers() []Sticker {
 	}
 }
 
-// StickerColours is the palette a sticker may take its colour from.
-func StickerColours() []string { return slices.Clone(stickerColours) }
-
 // CheckSticker refuses a colour or symbol outside the palette.
 func CheckSticker(s Sticker) error {
 	if !slices.Contains(stickerColours, s.Colour) {

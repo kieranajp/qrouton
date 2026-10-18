@@ -15,9 +15,6 @@ const (
 	// openCodeConfigEnvVar is how OpenCode accepts inline configuration.
 	openCodeConfigEnvVar = "OPENCODE_CONFIG_CONTENT"
 
-	// shellBin runs the generated support scripts.
-	shellBin = "sh"
-
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
 

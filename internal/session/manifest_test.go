@@ -161,7 +161,20 @@ func TestUpdateManifestConcurrentMutationsBothSurvive(t *testing.T) {
 	}
 }
 
-func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.T) {
+func cycleSticker(t *testing.T, dir string, order []Sticker) Sticker {
+	t.Helper()
+	var committed Sticker
+	if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
+		m.Sticker = m.Sticker.Next(order)
+		committed = m.Sticker
+		return m, nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return committed
+}
+
+func TestCycledStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.T) {
 	dir := t.TempDir()
 	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "stickers"}); err != nil {
 		t.Fatal(err)
@@ -169,12 +182,8 @@ func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.
 	order := []Sticker{"star", "bookmark", "question", "exclamation"}
 	want := append(slices.Clone(order), "")
 	for _, expected := range want {
-		got, err := CycleSticker(dir, order)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != expected {
-			t.Fatalf("CycleSticker() = %q, want %q", got, expected)
+		if got := cycleSticker(t, dir, order); got != expected {
+			t.Fatalf("cycled sticker = %q, want %q", got, expected)
 		}
 		loaded, err := Load(dir)
 		if err != nil {
@@ -212,16 +221,12 @@ func TestNextWalksTheConfiguredOrder(t *testing.T) {
 	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "legacy", Sticker: "retired"}); err != nil {
 		t.Fatal(err)
 	}
-	got, err := CycleSticker(dir, order)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != "a1" {
-		t.Fatalf("CycleSticker() from unknown = %q, want a1", got)
+	if got := cycleSticker(t, dir, order); got != "a1" {
+		t.Fatalf("cycled sticker from unknown = %q, want a1", got)
 	}
 }
 
-func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
+func TestStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 	dir := t.TempDir()
 	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "concurrent"}); err != nil {
 		t.Fatal(err)
@@ -231,8 +236,11 @@ func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()
-		if _, err := CycleSticker(dir, []Sticker{"star"}); err != nil {
-			t.Errorf("CycleSticker: %v", err)
+		if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
+			m.Sticker = m.Sticker.Next([]Sticker{"star"})
+			return m, nil
+		}); err != nil {
+			t.Errorf("UpdateManifest sticker: %v", err)
 		}
 	}()
 	go func() {

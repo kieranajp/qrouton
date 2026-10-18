@@ -54,15 +54,8 @@ type spawnResponse struct {
 	} `json:"content"`
 }
 
-// Reduce decodes one Claude Code hook payload into the event the workbench is
-// sent. It keeps ids, the tool and its target, the spawn and its outcome, and
-// one truncated message; tool inputs and responses go no further.
-func Reduce(provider string, input io.Reader) (workbench.AgentEventRequest, error) {
-	return ReduceIn(provider, "", input)
-}
-
-// ReduceIn is Reduce for a session rooted at root, so a Bash target can be
-// written relative to the session.
+// ReduceIn decodes one Claude Code hook payload into the event the workbench is
+// sent. A Bash target is written relative to root; tool inputs and responses go no further.
 func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventRequest, error) {
 	at := time.Now().UTC()
 	var p claudePayload
