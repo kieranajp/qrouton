@@ -154,3 +154,9 @@ test("a document link resolves against the document holding it", () => {
   assert.equal(documentPath("../../../../../X.md", from), "X.md");
   assert.equal(documentPath("P006.md", "thoughts/my notes/P007.md"), "thoughts/my notes/P006.md");
 });
+
+test("a bad escape in a link leaves only the link's own text raw", () => {
+  const from = "thoughts/my notes/P7.md";
+  assert.equal(documentPath("100%.md", from), "thoughts/my notes/100%.md");
+  assert.equal(documentPath("my%20file.md", from), "thoughts/my notes/my file.md");
+});

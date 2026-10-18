@@ -164,11 +164,12 @@ export function linkKind(href) {
  * @returns {string}
  */
 export function documentPath(href, source) {
-  const base = "file:///" + source.split("/").map(encodeURIComponent).join("/");
-  const { pathname } = new URL(href, base);
+  const encode = (/** @type {string} */ path) => path.split("/").map(encodeURIComponent).join("/");
+  const target = href.replace(/[?#].*/s, "");
+  let decoded = target;
   try {
-    return decodeURIComponent(pathname).slice(1);
-  } catch {
-    return pathname.slice(1);
-  }
+    decoded = decodeURIComponent(target);
+  } catch {}
+  const { pathname } = new URL(encode(decoded), "file:///" + encode(source));
+  return decodeURIComponent(pathname).slice(1);
 }
