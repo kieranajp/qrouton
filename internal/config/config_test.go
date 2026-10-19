@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -251,8 +252,8 @@ func TestCheckStickerRefusesValuesOutsideThePalette(t *testing.T) {
 	if err := CheckSticker(Sticker{Colour: "blue", Symbol: "moon"}); !errors.Is(err, ErrStickerSymbol) {
 		t.Fatalf("unknown symbol = %v", err)
 	}
-	if len(stickerColours) != 12 || len(stickerSymbols) != 14 {
-		t.Fatalf("palette = %d colours, %d symbols", len(stickerColours), len(stickerSymbols))
+	if len(theme.StickerColours()) != 12 || len(stickerSymbols) != 14 {
+		t.Fatalf("palette = %d colours, %d symbols", len(theme.StickerColours()), len(stickerSymbols))
 	}
 }
 

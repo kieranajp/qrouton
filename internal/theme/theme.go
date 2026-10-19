@@ -142,6 +142,18 @@ var aliases = []token{
 	{"sticker-grey", ref("ctp-subtext-0")},
 }
 
+// StickerColours are the colours a session sticker may take, in the order the
+// palette declares them.
+func StickerColours() []string {
+	var out []string
+	for _, t := range aliases {
+		if colour, ok := strings.CutPrefix(t.name, stickerPrefix); ok {
+			out = append(out, colour)
+		}
+	}
+	return out
+}
+
 // CSS renders the palette as custom properties on :root. The workbench serves
 // this, so no colours file exists for the frontend to drift from.
 func CSS() string {

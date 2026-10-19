@@ -11,6 +11,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -287,7 +288,7 @@ func (c *Config) EffectiveStickers() []Sticker {
 
 // CheckSticker refuses a colour or symbol outside the palette.
 func CheckSticker(s Sticker) error {
-	if !slices.Contains(stickerColours, s.Colour) {
+	if !slices.Contains(theme.StickerColours(), s.Colour) {
 		return fmt.Errorf("%w: %q", ErrStickerColour, s.Colour)
 	}
 	if !slices.Contains(stickerSymbols, s.Symbol) {

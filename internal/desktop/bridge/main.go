@@ -119,13 +119,14 @@ var valueNames = []valueName{
 }
 
 // valueList is an ordered list of strings that Go holds as a package-level
-// slice literal rather than as constants.
+// slice literal rather than as constants, or derives.
 type valueList struct {
 	name, typedef, dir, goName string
+	derived                    []string
 }
 
 var valueLists = []valueList{
-	{name: "STICKER_COLOURS", typedef: "StickerColour", dir: configPackage, goName: "stickerColours"},
+	{name: "STICKER_COLOURS", typedef: "StickerColour", derived: theme.StickerColours()},
 	{name: "STICKER_SYMBOLS", typedef: "StickerSymbol", dir: configPackage, goName: "stickerSymbols"},
 }
 
@@ -395,13 +396,17 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 
 func writeLists(js *bytes.Buffer, lists []valueList) error {
 	for _, list := range lists {
-		files, err := parsePackage(list.dir)
-		if err != nil {
-			return err
-		}
-		values, ok := stringList(files, list.goName)
-		if !ok || len(values) == 0 {
-			return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+		values := list.derived
+		if values == nil {
+			files, err := parsePackage(list.dir)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			values, ok = stringList(files, list.goName)
+			if !ok || len(values) == 0 {
+				return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+			}
 		}
 		quoted := make([]string, len(values))
 		for i, v := range values {
