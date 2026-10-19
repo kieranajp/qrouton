@@ -2,6 +2,8 @@
 // in thoughts/shared, its name, and the letter its filenames are numbered from.
 package kinds
 
+import "strings"
+
 type Kind struct {
 	Dir      string
 	Name     string
@@ -18,6 +20,11 @@ var (
 
 func All() []Kind {
 	return []Kind{Research, Spec, Plan, Explainer}
+}
+
+// Label is the kind as the chrome and the page spell it.
+func (k Kind) Label() string {
+	return strings.ToUpper(k.Name)
 }
 
 // Templated is the kinds a session scaffolds and the agent can create.

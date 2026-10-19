@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -263,8 +262,8 @@ func TestReadListsThoughtsFromEachRepositoryInManifestOrder(t *testing.T) {
 		t.Fatalf("repository documents = %#v, want non-empty repositories in manifest order", got)
 	}
 	want := []struct{ name, path, kind string }{
-		{"plans/P2-api.md", filepath.Join("src", "api", "thoughts", "plans", "P2-api.md"), KindPlan},
-		{"research/R1-api.md", filepath.Join("src", "api", "thoughts", "research", "R1-api.md"), KindResearch},
+		{"plans/P2-api.md", filepath.Join("src", "api", "thoughts", "plans", "P2-api.md"), kinds.Plan.Label()},
+		{"research/R1-api.md", filepath.Join("src", "api", "thoughts", "research", "R1-api.md"), kinds.Research.Label()},
 	}
 	if len(got[0].Documents) != len(want) {
 		t.Fatalf("api documents = %#v, want %#v", got[0].Documents, want)
@@ -274,7 +273,7 @@ func TestReadListsThoughtsFromEachRepositoryInManifestOrder(t *testing.T) {
 			t.Errorf("api document %d = %#v, want name %q, path %q, kind %q", i, document, want[i].name, want[i].path, want[i].kind)
 		}
 	}
-	if documents := got[1].Documents; len(documents) != 1 || documents[0].Name != "specs/S3-navigation.md" || documents[0].Kind != KindSpec {
+	if documents := got[1].Documents; len(documents) != 1 || documents[0].Name != "specs/S3-navigation.md" || documents[0].Kind != kinds.Spec.Label() {
 		t.Fatalf("web documents = %#v", documents)
 	}
 }
@@ -658,17 +657,11 @@ func noNilSlice(t *testing.T, v reflect.Value, path string) {
 // an ID as well, or a new one lands half-wired — and the prefix fails silently.
 func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
 	all := kinds.All()
-	labels := []string{KindResearch, KindSpec, KindPlan, KindExplainer}
-	produced := map[string]bool{}
 	if len(kindByDir) != len(all) || len(kindByLetter) != len(all) {
 		t.Fatalf("%d kinds share %d directories and %d letters", len(all), len(kindByDir), len(kindByLetter))
 	}
 	for _, k := range all {
-		label := strings.ToUpper(k.Name)
-		produced[label] = true
-		if !slices.Contains(labels, label) {
-			t.Errorf("kind %q has no %s constant for the bridge to read", k.Name, label)
-		}
+		label := k.Label()
 		dir := "thoughts/shared/" + k.Dir + "/notes.md"
 		if got := DocumentKind(dir); got != label {
 			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, label)
@@ -682,12 +675,7 @@ func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
 			}
 		}
 	}
-	for _, label := range labels {
-		if !produced[label] {
-			t.Errorf("status label %s names no kind", label)
-		}
-	}
-	if got := DocumentKind("research/P002-shape.md"); got != KindResearch {
+	if got := DocumentKind("research/P002-shape.md"); got != kinds.Research.Label() {
 		t.Errorf("the filename prefix beat the directory: got %q", got)
 	}
 	if got := DocumentKind("thoughts/shared/escalation-notes.md"); got != KindNote {

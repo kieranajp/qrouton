@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/agentevent"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -266,7 +267,7 @@ func TestTheTreeNamesALeadsStageAndTheDocumentsItWrote(t *testing.T) {
 		}
 	}
 	if node.Stage != status.StageResearch || len(node.Documents) != 1 ||
-		node.Documents[0].ID != "R3" || node.Documents[0].Kind != status.KindResearch ||
+		node.Documents[0].ID != "R3" || node.Documents[0].Kind != kinds.Research.Label() ||
 		node.Documents[0].Path != "thoughts/shared/research/R3-2026-10-11-retry.md" {
 		t.Fatalf("lead node = stage %q documents %+v", node.Stage, node.Documents)
 	}

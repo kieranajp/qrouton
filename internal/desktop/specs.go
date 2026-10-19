@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
@@ -12,7 +13,7 @@ import (
 func specWindow(window *agentWindow) (*documentContent, string, error) {
 	rendered, ok := window.document()
 	path := window.sourcePath()
-	if !ok || path == "" || status.DocumentKind(window.opts.Source) != status.KindSpec {
+	if !ok || path == "" || status.DocumentKind(window.opts.Source) != kinds.Spec.Label() {
 		return nil, "", ErrNotASpec
 	}
 	return rendered, path, nil

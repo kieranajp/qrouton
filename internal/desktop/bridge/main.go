@@ -17,6 +17,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/kieranajp/qrouton/internal/kinds"
 )
 
 //go:generate go run .
@@ -45,9 +47,10 @@ const (
 
 // valueSet selects a closed set of string constants from one package, by Go
 // type when it has one and by name otherwise; prefix and suffix are trimmed to
-// make each key.
+// make each key. Derived values lead the set and are their own keys.
 type valueSet struct {
 	name, typedef, dir, goType, prefix, suffix string
+	derived                                    []string
 }
 
 var valueSets = []valueSet{
@@ -56,7 +59,7 @@ var valueSets = []valueSet{
 	{name: "AGENT_COVERAGE", typedef: "AgentCoverage", dir: statusPackage, prefix: "AgentCoverage"},
 	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
 	{name: "AGENT_STAGES", typedef: "AgentStage", dir: statusPackage, prefix: "Stage"},
-	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind"},
+	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind", derived: kindLabels()},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
@@ -77,6 +80,14 @@ var valueSets = []valueSet{
 	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_ICONS", typedef: "WindowIcon", dir: workbenchPackage, goType: "WindowIcon", prefix: "Icon"},
 	{name: "WINDOW_KINDS", typedef: "WindowKind", dir: workbenchPackage, goType: "WindowKind", prefix: "Kind"},
+}
+
+func kindLabels() []string {
+	var out []string
+	for _, k := range kinds.All() {
+		out = append(out, k.Label())
+	}
+	return out
 }
 
 // valueNames are single values the page compares against.
@@ -334,6 +345,10 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 			return err
 		}
 		var keys, values []string
+		for _, value := range set.derived {
+			keys = append(keys, value)
+			values = append(values, strconv.Quote(value))
+		}
 		for _, c := range found {
 			if set.goType != "" && c.goType != set.goType {
 				continue

@@ -528,7 +528,7 @@ func indexArtifacts() (map[string]string, map[string]string, *regexp.Regexp) {
 	letters := make(map[string]string, len(all))
 	class := strings.Builder{}
 	for _, k := range all {
-		label := strings.ToUpper(k.Name)
+		label := k.Label()
 		dirs[k.Dir] = label
 		letters[k.Letter] = label
 		class.WriteString(k.Letter)
