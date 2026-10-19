@@ -1,6 +1,7 @@
 // Command bridge writes the page's copy of the names the workbench binds: one
 // constant per bound method, one per event, the defaults the chrome payload is
-// read through, and every closed set of values the payloads carry.
+// read through, and every closed set of values the payloads carry. It also
+// writes the palette for the test fixture pages, which no workbench serves.
 package main
 
 import (
@@ -19,6 +20,7 @@ import (
 	"unicode"
 
 	"github.com/kieranajp/qrouton/internal/kinds"
+	"github.com/kieranajp/qrouton/internal/theme"
 )
 
 //go:generate go run .
@@ -37,6 +39,7 @@ const (
 	vaultPackage     = "../../vault"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
+	fixturePalette   = "../frontend/tests/theme.css"
 )
 
 const (
@@ -137,6 +140,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := os.WriteFile(generatedPage, body, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(fixturePalette, []byte(theme.CSS()), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
