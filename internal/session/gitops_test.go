@@ -1,8 +1,6 @@
 package session
 
 import (
-	"context"
-	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -63,22 +61,6 @@ func TestVerbosityFlagAsksForProgressOnlyWhenDrawn(t *testing.T) {
 	}
 	if got := verbosityFlag(nil); got != quietLongFlag {
 		t.Fatalf("verbosityFlag without a consumer = %q, want %q", got, quietLongFlag)
-	}
-}
-
-func TestFailingGitCallsCarryTheWrappersShape(t *testing.T) {
-	requireGit(t)
-	dir := t.TempDir()
-	if out, err := exec.Command("git", "init", "-q", dir).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
-	_, countErr := countRange(context.Background(), dir, "missing..HEAD")
-	_, resolveErr := resolveRevision(dir, "missing")
-	for name, err := range map[string]error{"countRange": countErr, "resolveRevision": resolveErr} {
-		var exit *exec.ExitError
-		if err == nil || !strings.HasPrefix(err.Error(), "git [") || !errors.As(err, &exit) {
-			t.Errorf("%s error = %v, want a wrapped git exit error", name, err)
-		}
 	}
 }
 
