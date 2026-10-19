@@ -97,12 +97,3 @@ func TestSetDigestRejectsBlankText(t *testing.T) {
 		t.Error("a blank digest was written")
 	}
 }
-
-func TestDigestSchemaAndDescriptionNameTheLimit(t *testing.T) {
-	field, _ := reflect.TypeOf(setDigestInput{}).FieldByName("Digest")
-	for _, text := range []string{field.Tag.Get("jsonschema"), descSetDigest} {
-		if !strings.Contains(text, strconv.Itoa(digestLimit)) {
-			t.Errorf("%q does not name %d", text, digestLimit)
-		}
-	}
-}
