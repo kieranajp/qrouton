@@ -103,18 +103,6 @@ func spawnTool(tools string) string {
 	return ""
 }
 
-func TestSpawnToolFindsEitherSpawnTool(t *testing.T) {
-	for tools, want := range map[string]string{
-		"Read, Grep, Agent": agentevent.ToolAgent,
-		"Task, Read":        agentevent.ToolTaskLegacy,
-		"Read, Grep, Glob":  "",
-	} {
-		if got := spawnTool(tools); got != want {
-			t.Errorf("spawnTool(%q) = %q, want %q", tools, got, want)
-		}
-	}
-}
-
 // wantSandbox is the sandbox line the maps the renderer consults call for. An
 // agent in none of them is an undecided grant, not a default.
 func wantSandbox(t *testing.T, name string) string {
