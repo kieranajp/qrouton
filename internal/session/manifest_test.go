@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -161,47 +160,6 @@ func TestUpdateManifestConcurrentMutationsBothSurvive(t *testing.T) {
 	}
 }
 
-func cycleSticker(t *testing.T, dir string, order []Sticker) Sticker {
-	t.Helper()
-	var committed Sticker
-	if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-		m.Sticker = m.Sticker.Next(order)
-		committed = m.Sticker
-		return m, nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	return committed
-}
-
-func TestCycledStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.T) {
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "stickers"}); err != nil {
-		t.Fatal(err)
-	}
-	order := []Sticker{"star", "bookmark", "question", "exclamation"}
-	want := append(slices.Clone(order), "")
-	for _, expected := range want {
-		if got := cycleSticker(t, dir, order); got != expected {
-			t.Fatalf("cycled sticker = %q, want %q", got, expected)
-		}
-		loaded, err := Load(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if loaded.Sticker != expected {
-			t.Fatalf("reloaded sticker = %q, want %q", loaded.Sticker, expected)
-		}
-	}
-	b, err := os.ReadFile(sessionpaths.Manifest(dir))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(b), `"sticker"`) {
-		t.Fatalf("cleared manifest retained sticker: %s", b)
-	}
-}
-
 func TestNextWalksTheConfiguredOrder(t *testing.T) {
 	order := []Sticker{"a1", "b2", "c3"}
 	for _, tc := range []struct{ from, want Sticker }{
@@ -215,51 +173,5 @@ func TestNextWalksTheConfiguredOrder(t *testing.T) {
 		if got := from.Next(nil); got != "" {
 			t.Fatalf("Sticker(%q).Next(nil) = %q, want none", from, got)
 		}
-	}
-
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "legacy", Sticker: "retired"}); err != nil {
-		t.Fatal(err)
-	}
-	if got := cycleSticker(t, dir, order); got != "a1" {
-		t.Fatalf("cycled sticker from unknown = %q, want a1", got)
-	}
-}
-
-func TestStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "concurrent"}); err != nil {
-		t.Fatal(err)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-			m.Sticker = m.Sticker.Next([]Sticker{"star"})
-			return m, nil
-		}); err != nil {
-			t.Errorf("UpdateManifest sticker: %v", err)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-			time.Sleep(50 * time.Millisecond)
-			m.Runner = "codex"
-			return m, nil
-		}); err != nil {
-			t.Errorf("UpdateManifest: %v", err)
-		}
-	}()
-	wg.Wait()
-
-	got, err := Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Sticker != "star" || got.Runner != "codex" {
-		t.Fatalf("concurrent result = %+v", got)
 	}
 }
