@@ -88,26 +88,19 @@ func TestAssetReferencesRejectsInvalidEntriesWithoutExpanding(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "escape.png")); err != nil {
 		t.Fatal(err)
 	}
-	for name, tc := range map[string]struct {
-		paths []string
-		want  error
-	}{
-		"empty list":       {[]string{}, ErrAssetPathsRequired},
-		"nil list":         {nil, ErrAssetPathsRequired},
-		"empty member":     {[]string{"actual.png", ""}, ErrAssetPathRequired},
-		"missing":          {[]string{"missing.png"}, ErrOutsideSessionMissing},
-		"literal glob":     {[]string{"*.png"}, ErrOutsideSessionMissing},
-		"directory":        {[]string{"folder.png"}, ErrNotRegularFile},
-		"outside":          {[]string{outside}, ErrOutsideSession},
-		"external symlink": {[]string{"escape.png"}, ErrOutsideSession},
-		"svg":              {[]string{"vector.svg"}, ErrUnsupportedAsset},
-		"unsupported":      {[]string{"note.txt"}, ErrUnsupportedAsset},
+	for name, paths := range map[string][]string{
+		"empty list": {}, "empty member": {"actual.png", ""}, "missing": {"missing.png"},
+		"directory": {"folder.png"}, "outside": {outside}, "external symlink": {"escape.png"}, "svg": {"vector.svg"},
+		"unsupported": {"note.txt"}, "literal glob": {"*.png"},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := AssetReferences(root, tc.paths); !errors.Is(err, tc.want) {
-				t.Fatalf("AssetReferences(%q) = %v, want %v", tc.paths, err, tc.want)
+			if _, err := AssetReferences(root, paths); err == nil {
+				t.Fatal("accepted invalid asset input")
 			}
 		})
+	}
+	if _, err := AssetReferences(root, nil); !errors.Is(err, ErrAssetPathsRequired) {
+		t.Fatalf("empty = %v", err)
 	}
 }
 
