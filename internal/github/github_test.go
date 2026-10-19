@@ -657,10 +657,21 @@ func TestRefreshReposFailsAStalledOwnerAloneAndStillCaches(t *testing.T) {
 	orgs := []string{"good", "stalled"}
 	states := map[string]RefreshState{}
 	var complete RefreshMsg
-	for msg := range RefreshRepos(context.Background(), client, "token", orgs, 50*time.Millisecond, nil) {
-		states[msg.Owner] = msg.State
-		if msg.State == RefreshComplete {
-			complete = msg
+	msgs := RefreshRepos(context.Background(), client, "token", orgs, 50*time.Millisecond, nil)
+	deadline := time.After(5 * time.Second)
+	for done := false; !done; {
+		select {
+		case msg, ok := <-msgs:
+			if !ok {
+				done = true
+				break
+			}
+			states[msg.Owner] = msg.State
+			if msg.State == RefreshComplete {
+				complete = msg
+			}
+		case <-deadline:
+			t.Fatal("a stalled owner held the refresh past its deadline")
 		}
 	}
 	if states["good"] != RefreshSucceeded || states["stalled"] != RefreshFailed {
