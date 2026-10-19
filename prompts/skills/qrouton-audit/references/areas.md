@@ -14,15 +14,24 @@ Derive the areas from the repo itself. An area is one of:
 - a workspace package or module with its own manifest.
 
 There is no fixed list. Pick the cut that gives each area one build and one
-set of conventions. Count only shipped source files, never tests, fixtures,
-generated files or vendored code.
+set of conventions.
+
+Count shipped and contract files. Contract files are the docs, prompts,
+fixtures, scenario and config files that shipped code reads, or that restate
+facts the code holds. Never count tests, generated files or vendored code. A
+contract file read at runtime belongs to the area whose code reads it, and
+gets an inventory row there.
+
+A test, script or lint-rule folder outside every area joins the area whose
+code it exercises, or the seam pass when it spans areas. It never stays in
+neither.
 
 ## Decide whether to split
 
 Split only when the scope holds two or more areas and more than
-300 shipped source files. Make at most four areas: while there are more,
+300 shipped and contract files. Make at most four areas: while there are more,
 merge the smallest into the area that imports it most. An area under 30
-shipped source files joins the area that imports it most, or the smallest area
+shipped and contract files joins the area that imports it most, or the smallest area
 when none imports it.
 
 Anything smaller, or a scope narrowed to one area, is one area. One area runs
@@ -46,7 +55,7 @@ Each area then gets its own:
 ## The seam pass
 
 The seam pass runs when the audit splits and tell 1 is chosen, after every
-area checker has returned. It is one tell-1 checker, briefed with five inputs:
+area checker has returned. It is one tell-1 checker, briefed with six inputs:
 
 1. the areas table;
 2. every inventory row, from every area, that holds a data table, a
@@ -57,6 +66,9 @@ area checker has returned. It is one tell-1 checker, briefed with five inputs:
 4. the clone pairs whose copies cross areas;
 5. the files outside the code in scope, such as docs, prompts, fixtures and
    config, that state facts the code holds.
+6. the area returns: every area checker's verdicts.
+
+The seam pass's row in `## Tools` names the area returns its brief held.
 
 Ask it to find each fact or behaviour kept on both sides of a boundary, such
 as a constant set kept in two languages, and to judge each with the five-step
@@ -72,7 +84,7 @@ Merge the area and seam returns into one draft:
   code and keep one.
 - Number findings once, after the merge, across the whole document.
 - `## Tools` opens with an areas table: area, paths, languages and shipped
-  source files.
+  and contract files.
 - The inventory and category tables gain an `Area` column. A row for an entry
   the seam pass judged carries `seam`.
 

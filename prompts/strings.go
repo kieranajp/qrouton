@@ -36,6 +36,12 @@ const (
 
 	digestLimitPlaceholder = "{{digest-limit}}"
 
+	scratchCopyFileName    = "scratch-copy.md"
+	scratchCopyPlaceholder = "{{scratch-copy}}"
+
+	fixDisciplineFileName    = "fix-discipline.md"
+	fixDisciplinePlaceholder = "{{fix-discipline}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -63,6 +69,8 @@ var partials = map[string]string{
 	returnContractPlaceholder:     returnContractFileName,
 	sessionSummaryPlaceholder:     sessionSummaryFileName,
 	sessionDigestPlaceholder:      sessionDigestFileName,
+	scratchCopyPlaceholder:        scratchCopyFileName,
+	fixDisciplinePlaceholder:      fixDisciplineFileName,
 }
 
 // figures are numbers Go enforces, keyed by the placeholder a prompt states

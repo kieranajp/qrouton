@@ -1,6 +1,6 @@
 ---
 name: qrouton-audit
-description: Internally run an audit of a repository for four tells (one behaviour or fact expressed more than one way, dead or needlessly defensive code, homegrown code that a well-known library or platform API covers, installed or not, and tests that cannot fail or pass for the wrong reason) through a delegated audit lead. Use when the user asks to audit a repository for these tells.
+description: Internally run an audit of a repository for four tells (one behaviour or fact expressed more than one way, dead or needlessly defensive code, homegrown code that a well-known library or platform API covers, installed or not, and tests that pass or fail for the wrong reason) through a delegated audit lead. Use when the user asks to audit a repository for these tells.
 ---
 
 # Run an audit
@@ -11,7 +11,7 @@ Judge the live code only. The audit forms every finding from the target's code, 
 
 1. Settle the target and the tells with the user before starting, even when the request names a repository. Ask one structured question with two parts:
    - the target: one repository from `qrouton.json`, and optionally paths inside it to include or leave out. Offer the whole repository as the default, because the tells are cross-file, and name its main top-level areas so the user can narrow it in one reply;
-   - the tells to run, all of them by default, as a multi-select: `duplicated` for one behaviour or fact expressed more than one way, `dead` for dead or needlessly defensive code, `homegrown` for homegrown code a library or the platform covers, and `volkswagen` for tests that cannot fail or pass for the wrong reason.
+   - the tells to run, all of them by default, as a multi-select: `duplicated` for one behaviour or fact expressed more than one way, `dead` for dead or needlessly defensive code, `homegrown` for homegrown code a library or the platform covers, and `volkswagen` for tests that pass or fail for the wrong reason.
 
    Use the runner's structured question tool when it has one, such as `AskUserQuestion` in Claude Code. Otherwise ask in chat.
 2. Call `create_artefact` with `kind: audit` and a short title naming the target. Do not name or write an audit path by hand.

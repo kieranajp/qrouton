@@ -13,19 +13,19 @@ The four tells:
 1. one behaviour or one fact expressed more than one way, kept in step only by convention;
 2. dead code, or defensive code guarding a case that cannot occur;
 3. homegrown code that a well-known library or platform API already covers, installed or not;
-4. tests that cannot fail or pass for the wrong reason.
+4. tests that pass or fail for the wrong reason.
 
 ## Run only the chosen tells
 
 The brief names the chosen tells by slug: `duplicated`, `dead`, `homegrown` and `volkswagen`, for tells 1 to 4. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
 
-Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory or the tell-3 sweep ran, check 3 only when tell 3 ran, and checks 6 to 8 and 14 only when tell 4 ran. In the conformance pass, skip each rule for a tell or an inventory that did not run.
+Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory or the tell-3 sweep ran, check 3 only when tell 3 ran, checks 6 to 8 and 14 only when tell 4 ran, and check 16 only when the audit split and tell 1 ran. Check 17 always applies. In the conformance pass, skip each rule for a tell or an inventory that did not run.
 
 Follow the document shape in `audit-shape.md` from the references folder you were given. The worked examples beside it show how to choose, run and distrust a detector.
 
 ## Run the detectors
 
-First decide by `areas.md` in the references folder whether the target splits into areas. When it does, take the job inventory, the tell-3 category sweep and the checkers per area, run the seam pass after the area checkers return, and merge every return into one draft before you check it. A target that does not split runs as one area, as below.
+First decide by `areas.md` in the references folder whether the target splits into areas. When it does, take the job inventory, the tell-3 category sweep and the checkers per area, run the seam pass only after every area checker has returned, with the area returns in its brief, and merge every return into one draft before you check it. A target that does not split runs as one area, as below.
 
 Read the target's manifests (`package.json`, `go.mod` and their peers) to find its languages. Run the repo's own checks first: the lint, type-check and dead-code commands its check target calls, never its test, build or codegen steps. Run one that fixes, formats or writes into the target as its underlying command without those flags, with any cache in scratch. Then fill each check the repo's setup lacks with one tool per language: reachability for dead code, clone detection for exact copies, and type-aware lint for needless conditions. Run a well-known tool at a pinned version through the ecosystem's one-off runner, such as `npx` or `go run`. A tool you choose for an ecosystem without a worked example is as good a choice as one with.
 
@@ -37,7 +37,7 @@ Record each tool in `## Tools`: name, version, command, mode, candidate count an
 
 ## Judge the candidates
 
-Tools supply candidates; judgement decides findings. Brief one `audit-checker` per tell, or several per tell when one report of 120 lines cannot hold every candidate. Give each its candidates, the target, the impact meanings and rules from the shape, and its check: the five steps for tells 1 to 3, or steps 6 to 8 for tell 4. Pass the job inventory and the tell-1 method below to the tell-1 checkers, and the tell-2 method to the tell-2 checkers. Tell 3 has no detector, so ask the tell-3 checker to find every case itself. Pass the tell-4 method below to the tell-4 checkers. Give no checker a path under `thoughts/`.
+Tools supply candidates; judgement decides findings. Brief one `audit-checker` per tell, or several per tell when one report of 120 lines cannot hold every candidate. Give each its candidates, the target, the impact meanings and rules from the shape, and its check: the five steps for tells 1 to 3, or steps 6 to 10 for tell 4. Pass the job inventory and the tell-1 method below to the tell-1 checkers, and the tell-2 method to the tell-2 checkers. Tell 3 has no detector, so ask the tell-3 checker to find every case itself. Pass the tell-4 method below to the tell-4 checkers. Give no checker a path under `thoughts/`.
 
 A checker has no shell. For each candidate it returns as `no written reason` or `needs history`, read the commits for those lines yourself with `git log -L <start>,<end>:<path>` before you decide.
 
@@ -58,8 +58,6 @@ Verify each verdict you keep against the code. Hold every finding to these rules
 - Cosmetic nits that come from one shared root cause become one finding, and the root cause is its defect. A nit with no shared root cause is not filed.
 - A root cause is a defect in the code. Candidates found by the same detector, tool or trap have that in common, but it is not a shared root cause. Never group findings that way.
 - A fix that deletes code keeps every test that would also serve another purpose, such as checking exhaustiveness or a contract, or it says what replaces that test.
-
-The five steps decide this way. Copies that disagree today are rot, whatever the intent. Otherwise a copy with a tie, or with a written reason that still holds, is deliberate; a reason that no longer holds is rot. Code that no live caller in shipped code reaches, once the tool's traps are ruled out, is rot whatever the other steps say. Exported API that other modules consume counts as reached.
 
 ## Hunt what tools miss
 
@@ -97,9 +95,13 @@ For tell 3, find each common library category the repo hand-rolls. Search for ha
 
 For tell 2, trace the case each guard handles to something in shipped code that can produce it. Grep for that producer outside tests. If nothing produces the case, the guard is dead, and so is everything that exists only to handle it. Grep for exported names that exist to set, override or reset behaviour, and list each one's callers: one called only from tests is a test seam left in shipped code. A production-mode reachability run catches files only tests import. It does not catch a test-only export inside a file that ships, so look for those by hand.
 
-## Hunt tests that cannot fail
+## Hunt tests that pass or fail for the wrong reason
 
-The audit never runs the target's tests, and runs no coverage tool. Running them executes target code and can write caches, snapshots or golden files into the target. Never run anything in a mode that updates snapshots or golden files. Find tell-4 candidates by reading:
+Find tell-4 candidates by reading. The audit runs no whole suite and runs no coverage tool: they execute all target code and can write caches, snapshots or golden files. Confirm a step 7 or step 9 verdict you keep only by a targeted run under `test-runs.md` in the references folder, in a scratch copy, and record it as that file says.
+
+{{scratch-copy}}
+
+Hunt these:
 
 1. **Tests that never run.** Read the test runner's config and the scripts that start it: the file patterns it collects, the paths it excludes, and the build tags or flags the CI config passes. A test file outside those patterns never runs. Grep test files for skip and only markers and their conditional forms. A conditional skip is a candidate when its condition holds wherever the suite runs, such as an environment variable the CI config never sets.
 2. **Shipped code that behaves differently under test.** Grep shipped code for test-environment checks, flags that only tests set, and branches that detect a mock or a fake. Each is a candidate. Say what each side of the branch does. A test written inside a source file, behind a guard the build compiles out, is a test and not shipped behaviour.
@@ -107,6 +109,10 @@ The audit never runs the target's tests, and runs no coverage tool. Running them
 4. **Tests that dodge the code they name.** Look for a mock of the unit under test, a stub of the branch the test claims to cover, and a test whose name promises a case its body never reaches.
 5. **Stored snapshots.** Read snapshot and golden files for an error message, an empty value or a loading state recorded as the expected output.
 6. **Tests weakened to pass.** Where a test's expected value matches odd output, or an assertion looks loosened, read `git log -L` for those lines. A commit that changed the test to go green, rather than fixing the code, is the evidence. Cite the commit and the lines it loosened.
+7. **Tests of the wrong code.** A test that exercises a helper defined in the test file, or a copy of shipped code, instead of the shipped code it names.
+8. **Tests that pin a detail.** A test that asserts an implementation detail, such as exact error text, a literal list or an error value no shipped code checks, so a harmless change breaks it.
+9. **Tests that repeat another.** A test whose every assertion another test of the same code already makes.
+10. **Tests that tie two copies.** A test that keeps two copies of a fact in step where one could be derived from the other. It is a tell-1 candidate; when tell 1 does not run, file it under tell 4 with a verdict that it fails step 1.
 
 Code that only tests reach comes from the reachability run that does not count tests as entry points. When tell 2 runs, file it under tell 2, because deleting the code removes the finding. When only tell 4 runs, file it under tell 4 with a verdict that it fails step 5. A test skipped only because the code it names is dead is a candidate whose fix deletes both.
 
@@ -118,7 +124,7 @@ Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across t
 
 Before you return, first collect history for an independent re-read. For each claim that rests on a missing written reason, write these reads into a `history` directory in scratch, one `<finding id>.txt` each: `git log -L <start>,<end>:<path>` for the cited lines; `git show --stat` with the full message of each commit it lists; the messages of the commits either side of each in `git log -- <path>`; when the oldest commit moved the lines from another file, the same reads at the old path.
 
-Then spawn an `audit-verifier`, once over the merged draft when the audit split, never per area. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13 and 15 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give check 3 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
+Then spawn an `audit-verifier`, once over the merged draft when the audit split, never per area. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13, 15 and 17 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give checks 3 and 16 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
 
 Then run a conformance pass, last, because the fixes can break the shape. Check each rule in the shape's `## Before returning` list against every finding and section, and fix each violation in the document.
 

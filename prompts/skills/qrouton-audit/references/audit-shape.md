@@ -67,7 +67,7 @@ Each finding has:
 - `Evidence:` with what the code shows. It may run onto following lines, up to
   the next field;
 - `Verdict:` with the step the code fails: one of the five-step check for
-  tells 1 to 3, or one of steps 6 to 8 of the test check for tell 4;
+  tells 1 to 3, or one of steps 6 to 10 of the test check for tell 4;
 - `Proposed fix:`;
 - `Behaviour risk:` as `safe`, `needs a test first` or `changes behaviour`;
 - `Impact:` as `high`, `medium` or `low`, by the meanings below;
@@ -78,7 +78,8 @@ Each finding has:
 Write one finding per defect. When two candidates describe the same defect,
 even under different tells, merge them into one finding that lists every
 location. File it under the tell whose fix removes it, and name the other tell
-in `Evidence:`. Never bundle unrelated defects into one finding.
+in `Evidence:`. Never bundle unrelated defects into one finding, and never tie
+them together with an invented shared root cause.
 
 A candidate you cannot settle goes among the findings with `Confidence: low`,
 or nowhere. No other section holds candidates.
@@ -114,6 +115,8 @@ replaces that test.
 A fix that derives several lists from one table keeps every gate the current
 lists enforce, and a list that is deliberately a subset stays a subset, for
 example through a filter on the table.
+
+{{fix-discipline}}
 
 A tell-3 finding's cost line states the library's size and installed status,
 and the install cost when it is not installed. The cost is weighed against the
@@ -170,9 +173,10 @@ candidates as a group. A tool candidate that a known trap explains is not listed
 `## Tools` counts it by trap.
 
 `## Tools` holds the tools, the job inventory and the tell-3 category outcomes
-when they ran, and the trap counts. An audit split into areas by `areas.md`
+when they ran, the run table when a targeted run ran, and the trap counts. An audit split into areas by `areas.md`
 opens `## Tools` with the areas table, and its inventory and category tables
-carry an `Area` column, with `seam` for seam rows. Every file type in scope that no tool
+carry an `Area` column, with `seam` for seam rows. The seam pass's row names
+the area returns its brief held. Every file type in scope that no tool
 covered gets a stated skip that names the file type and why. The job inventory is the full inventory: every import,
 built-in, global and internal module used from three or more files in two or
 more directories, and every kind of shared machinery that reaches as many, such
@@ -187,6 +191,9 @@ per row, never only the jobs that were kept. Each row carries one outcome:
 | deliberate | its line in `## Checked and deliberate` |
 | stated skip | a reason the reader can check: a `path:line` or a search result |
 
+The contract files read at runtime by shipped code, such as data, scenario,
+fixture and config files, each get an inventory row, never one blanket skip.
+
 A one route or stated-skip row whose entry is used from ten or more files also
 names the call sites searched.
 
@@ -199,15 +206,25 @@ not reasons. No section holds open questions or follow-ups.
 
 ## The test check
 
-Tell 4 uses three more steps in place of the five:
+Tell 4 uses its own steps, 6 to 10, in place of the five:
 
 6. Does the runner collect and run the test?
 7. Would the test fail if the code it names were broken?
 8. Does shipped code behave the same under test as in production?
+9. Would the test still pass after a harmless change to the code it names?
+10. Does the test catch a break that no other test catches?
 
 How the steps decide:
 
-- A test that fails step 7 is rot, whatever its reason.
+- A test that fails step 7 or step 9 is rot, whatever its reason. The code a
+  test names is shipped code: a test that exercises a helper
+  defined in the test file, or a copy of shipped code, fails step 7.
+- A test that fails step 10 is rot unless a reason written at the site still
+  holds.
+- A test that ties two copies of a fact is a tell-1 case. A tie that is only a
+  test is deliberate only behind a named boundary that rules out deriving one
+  copy from the other. When tell 1 does not run, the test is filed under tell 4
+  with a verdict that it fails step 1.
 - A skip, or shipped code that behaves differently under test, is deliberate
   only when a reason written at the site still holds and no test relies on it
   to pass. Otherwise it is rot.
@@ -216,9 +233,12 @@ How the steps decide:
   lines it loosened. A checker cannot read history, so it returns such a
   candidate as `needs history`, and the lead reads the commits.
 
-The audit never runs the target's tests, and runs no coverage tool. What the
-runner collects comes from reading its config and test-file patterns. Nothing
-runs in a mode that updates snapshots or golden files. Code that only tests
+The audit runs no whole suite and runs no coverage tool. What the runner
+collects comes from reading its config and test-file patterns. A step 7 or
+step 9 verdict is confirmed only by a targeted run under `test-runs.md`, and
+each run is a run row in the run table in `## Tools`, with its result:
+`killed`, `survived` or `did not run`. Nothing runs in a mode that updates
+snapshots or golden files. Code that only tests
 reach comes from the reachability run that leaves tests out as entry points.
 When tell 2 runs, that code is filed under tell 2, because deleting it removes
 the finding. When only tell 4 runs, it is filed under tell 4, and its verdict
@@ -232,15 +252,18 @@ every claim that copies agree or differ today, every one route outcome, every
 cost-spare against the other findings (no spare whose family another finding
 proposes to grow), every fix that deletes code or tests (no deleted test that
 would serve another purpose), every runtime claim, every claim that a test
-never runs or cannot fail, and every claim that shipped code behaves
-differently under test. It also checks every "no tie" and "no written reason"
+never runs, cannot fail, breaks under a harmless change or repeats another
+test, each against its run row when it cites a run, and every claim that
+shipped code behaves differently under test. It also checks every "no tie" and "no written reason"
 claim, the latter against history the lead collects into a history directory,
 every behaviour-risk label, every fix to persisted data for a migration, and
 every impact rating against behaviour that is wrong today. It also reads the
 comments at each copy, samples call sites behind widely used one route and
 stated-skip rows, verifies every category outcome, re-checks every tell-4 line
 under `## Checked and deliberate` and every fix that derives lists from one
-table. It skips the one route check when no inventory ran,
+table, checks each pinning test a fix adds for its named boundary, checks a
+split audit's seam row against the areas table, and fails any finding tied
+together by an invented shared root cause. It skips the one route check when no inventory ran,
 the cost-spare check when tell 3 did not run, and the test claims when tell 4
 did not run. The lead fixes or drops each failed finding, and corrects a failed
 inventory row's outcome without removing the row.
@@ -255,10 +278,15 @@ rules, skipping those for a tell or an inventory that did not run:
   location and its own tie, written reason or weighed install cost; only a
   cost line lists several locations, and they are the family it was weighed
   against;
-- `## Tools` holds tools, the full inventory, category outcomes and trap
-  counts only, and every row has a file count and one outcome;
+- `## Tools` holds tools, the full inventory, category outcomes, the run table
+  and trap counts only, and every inventory row has a file count and one
+  outcome;
+- every contract file read at runtime has its own inventory row;
+- every targeted run has a run row giving the test, the change, the command
+  and the result, and the checkout's status comparison sits under the table;
 - a split audit opens `## Tools` with the areas table, and every inventory and
-  category row carries its `Area`;
+  category row carries its `Area`, and the seam pass's row names every
+  area's returns;
 - every one route row lists the routes searched, and every stated skip gives a
   reason the reader can check; a row whose entry is used from ten or more files
   names the call sites searched;
@@ -280,7 +308,8 @@ rules, skipping those for a tell or an inventory that did not run:
 - every finding whose verdict is that copies differ or disagree today is
   `high`, or states a cosmetic difference in one clause;
 - every tell-4 finding names the test and the code it names, and its verdict
-  names the step from 6 to 8 it fails, or step 5 for code only tests reach;
+  names the step from 6 to 10 it fails, step 1 for a test that ties two
+  copies, or step 5 for code only tests reach;
 - every weakened-test finding cites the commit and the lines it loosened;
 - `## Summary` gives one sentence per high and medium finding, high first,
   and no bare list of ids.

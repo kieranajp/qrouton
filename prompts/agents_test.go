@@ -436,6 +436,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		goNotes  = "references/go.md"
 		tsNotes  = "references/typescript.md"
 		areas    = "references/areas.md"
+		runs     = "references/test-runs.md"
 	)
 	loader := NewEmbeddedLoader()
 	texts := map[string]string{}
@@ -506,9 +507,10 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"test check", []string{"Would the test fail if the code it names were broken?"}, []string{checker, shape}},
 		{"weakened tests", []string{"needs history"}, []string{lead, checker, shape}},
 		{"shipped code under test", []string{"behaves differently under test"}, []string{lead, checker, verifier}},
-		{"never runs tests", []string{"never runs the target's tests"}, []string{lead, shape}},
+		{"old rule kept", []string{"runs no coverage tool"}, []string{lead, shape}},
+		{"detector rule kept", []string{"never its test, build or codegen steps"}, []string{lead}},
 		{"no snapshot rewrites", []string{"snapshots or golden files"}, []string{lead, tsNotes, goNotes}},
-		{"verifier test checks", []string{"cannot fail", "never runs"}, []string{verifier}},
+		{"verifier test checks", []string{"cannot fail", "harmless change", "never runs"}, []string{verifier}},
 		{"go tell-4 notes", []string{"`t.Skip`", "`testing.Testing()`"}, []string{goNotes}},
 		{"typescript tell-4 notes", []string{"`testMatch`", "`.only`"}, []string{tsNotes}},
 		{"no-tie check", []string{"search for a tie"}, []string{verifier}},
@@ -538,12 +540,25 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"row sampling", []string{"five of the entry's call sites"}, []string{verifier}},
 		{"conformance home", []string{"`## Before returning`"}, []string{lead}},
 		{"area split", []string{"`areas.md`", "seam pass"}, []string{lead}},
-		{"split threshold", []string{"300 shipped source files", "at most four areas"}, []string{areas}},
+		{"split threshold", []string{"300 shipped and contract files", "at most four areas"}, []string{areas}},
 		{"seam pass", []string{"seam pass", "cross areas"}, []string{areas}},
 		{"merge", []string{"areas table", "`Area` column"}, []string{areas, shape}},
 		{"ids after merge", []string{"after the merge"}, []string{lead, areas}},
 		{"verifier once", []string{"once over the merged draft"}, []string{lead, areas}},
 		{"fan-out cap", []string{"20 checker spawns"}, []string{areas}},
+		{"contract files", []string{"contract files", "read at runtime"}, []string{areas, shape}},
+		{"unowned folders", []string{"outside every area"}, []string{areas}},
+		{"seam waits", []string{"area returns"}, []string{lead, areas, shape, verifier}},
+		{"bundling", []string{"invented shared root cause"}, []string{shape, verifier}},
+		{"wider tell 4", []string{"pass or fail for the wrong reason"}, []string{lead, skill}},
+		{"local helpers", []string{"defined in the test file"}, []string{lead, checker, shape}},
+		{"step 9", []string{"Would the test still pass after a harmless change"}, []string{checker, shape}},
+		{"step 10", []string{"no other test catches"}, []string{checker, shape, verifier}},
+		{"test-only ties", []string{"named boundary"}, []string{checker, shape, verifier}},
+		{"targeted runs", []string{"`test-runs.md`"}, []string{lead, shape}},
+		{"run bounds", []string{"whole suite", "20 runs", "120 seconds", "stated skip"}, []string{runs}},
+		{"run results", []string{"killed", "survived"}, []string{runs, shape, verifier}},
+		{"run records", []string{"run row"}, []string{shape, verifier}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -554,15 +569,25 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "300 shipped source files", "its own comment", "stays a subset", "five of the entry's call sites"} {
+	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "300 shipped and contract files", "its own comment", "stays a subset", "five of the entry's call sites", "invented shared root cause", "no other test catches", "20 runs", "run row"} {
 		if strings.Contains(texts[lead], phrase) {
 			t.Errorf("the lead restates the verifier's check %q; it briefs check numbers instead", phrase)
 		}
 	}
 
-	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first", "seam pass", "`Area` column"} {
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first", "seam pass", "`Area` column", "scratch copy", "`test-runs.md`", "harmless change"} {
 		if strings.Contains(texts[skill], phrase) {
 			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
+		}
+	}
+
+	// The read-only checker and verifier cannot run code, so a copy rule there
+	// would tell them to do what their sandbox forbids.
+	for _, where := range []string{checker, verifier} {
+		for _, phrase := range []string{"scratch copy", "`mktemp -d`"} {
+			if strings.Contains(texts[where], phrase) {
+				t.Errorf("the %s carries %q, but it cannot run code", where, phrase)
+			}
 		}
 	}
 
@@ -575,7 +600,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for where, text := range texts {
-		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern", "Every library category has an outcome"} {
+		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern", "Every library category has an outcome", "never runs the target's tests", "never run the tests"} {
 			if strings.Contains(text, gone) {
 				t.Errorf("%s still says %q", where, gone)
 			}
@@ -586,7 +611,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 // The verifier's prompt is the one home for its checks, and the lead briefs
 // them by number, so neither prompt may grow back the other's text.
 func TestAuditPromptsStayWithinBudget(t *testing.T) {
-	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 1000} {
+	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 1200} {
 		raw, err := fs.ReadFile(embedded, agentIDPrefix+name+promptFileExt)
 		if err != nil {
 			t.Fatal(err)

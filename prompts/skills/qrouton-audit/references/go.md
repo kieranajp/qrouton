@@ -56,10 +56,10 @@ and the `nilness` analyser find part of it:
 `go run honnef.co/go/tools/cmd/staticcheck@2026.2.2 ./...`. Read the rest. A
 guard on an error from I/O, a decoder or another process is never rot.
 
-## Tests that cannot fail
+## Tests that pass or fail for the wrong reason
 
 These are where tell-4 candidates hide in Go. Find them by reading; never
-run the tests, and never pass a flag that rewrites snapshots or golden files.
+run a whole suite, and never pass a flag that rewrites snapshots or golden files.
 Such update flags are defined by the target's own tests, so read the flag
 definitions to know which ones to avoid.
 
@@ -81,3 +81,7 @@ definitions to know which ones to avoid.
 - **Test-only code.** Compare the two `deadcode` runs: a function only the
   `-test` run reaches is code only tests use. File it under tell 2 when that
   tell runs, else under tell 4.
+- **One test alone.** For a targeted run under `test-runs.md`, run one test in
+  one package from the copy: `go test -run '^TestName$' -count=1 -timeout 120s
+  ./path/to/pkg`. Anchor the name so no sibling test runs, add `/SubName` for
+  one subtest, and pass any build tag the CI config passes for that file.

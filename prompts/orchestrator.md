@@ -23,7 +23,7 @@ The clarification above comes first. When the request is clear enough to act on,
 | What the workstream looks like | Next |
 | --- | --- |
 | The user explicitly asks you to build, fix, finish, or resume code, including a plan's unchecked work | `qrouton-implement` |
-| The user asks to audit a repository for duplicated behaviour, dead or needlessly defensive code, homegrown code a library already covers, or tests that cannot fail | `qrouton-audit` |
+| The user asks to audit a repository for duplicated behaviour, dead or needlessly defensive code, homegrown code a library already covers, or tests that pass or fail for the wrong reason | `qrouton-audit` |
 | An audit has accepted findings, and the user asks to plan | `qrouton-plan`, with the audit's path |
 | An audit holds findings not yet triaged | No skill: open the audit and ask the user to triage it |
 | An audit is triaged and accepts no finding | No skill: tell the user the audit leaves nothing to plan |

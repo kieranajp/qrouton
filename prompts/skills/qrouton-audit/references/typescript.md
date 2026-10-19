@@ -72,10 +72,10 @@ framework can install polyfills before the app's own code runs; Expo, for
 example, ships a runtime polyfill layer. Before anything in the audit says an
 API is missing, read what the framework installs at startup.
 
-## Tests that cannot fail
+## Tests that pass or fail for the wrong reason
 
 These are where tell-4 candidates hide in TypeScript and JavaScript. Find them
-by reading; never run the tests, and never pass a flag that rewrites
+by reading; never run a whole suite, and never pass a flag that rewrites
 snapshots or golden files, such as `-u`, `--update`, `--updateSnapshot` or
 `--update-snapshots`.
 
@@ -102,3 +102,9 @@ snapshots or golden files, such as `-u`, `--update`, `--updateSnapshot` or
   only the default run counts as used is reached only from tests, scripts,
   configs or stories. When tests are its only callers, file it under tell 2
   when that tell runs, else under tell 4.
+- **One test alone.** For a targeted run under `test-runs.md`, use the
+  runner's file and name filter from the copy, through the copy's own
+  installed runner: `npx vitest run <file> -t '<name>'`, or
+  `npx jest <file> -t '<name>' --watchAll=false`. Vitest without `run` starts
+  a watch mode. A test that needs a browser, such as a Playwright test, is not
+  run.

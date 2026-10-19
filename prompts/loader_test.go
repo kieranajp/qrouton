@@ -509,7 +509,25 @@ var (
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
+
+	scratchCopyHomes = []ID{
+		ID(agentIDPrefix + "qrouton-audit-lead"),
+	}
+
+	fixDisciplineHomes = []ID{
+		ID(agentIDPrefix + "audit-checker"),
+	}
+
+	fixDisciplineReferenceHomes = []referenceHome{
+		{ID(skillIDPrefix + "qrouton-audit"), "references/audit-shape.md"},
+	}
 )
+
+// A reference home is one file a skill ships beside its entry file.
+type referenceHome struct {
+	skill ID
+	path  string
+}
 
 // A partial is one text with several homes. Each home has to carry it word for
 // word: a prompt that grows its own paraphrase drifts from the others silently,
@@ -521,6 +539,11 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		returnContractFileName:     returnContractHomes,
 		sessionSummaryFileName:     sessionSummaryHomes,
 		sessionDigestFileName:      sessionDigestHomes,
+		scratchCopyFileName:        scratchCopyHomes,
+		fixDisciplineFileName:      fixDisciplineHomes,
+	}
+	referenceHomes := map[string][]referenceHome{
+		fixDisciplineFileName: fixDisciplineReferenceHomes,
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {
@@ -536,6 +559,38 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 			if !strings.Contains(string(prompt.Content), string(partial)) {
 				t.Errorf("prompt %q does not carry %s verbatim", id, name)
 			}
+		}
+	}
+	for name, refs := range referenceHomes {
+		partial, err := fs.ReadFile(embedded, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ref := range refs {
+			prompt, err := loader.Load(context.Background(), ref.skill)
+			if err != nil {
+				t.Fatal(err)
+			}
+			i := slices.IndexFunc(prompt.Files, func(file PromptFile) bool { return file.Path == ref.path })
+			if i < 0 {
+				t.Errorf("skill %q ships no %s", ref.skill, ref.path)
+			} else if !strings.Contains(string(prompt.Files[i].Content), string(partial)) {
+				t.Errorf("%s in %q does not carry %s verbatim", ref.path, ref.skill, name)
+			}
+		}
+	}
+}
+
+// Catches a copy rule that loses the part keeping a run out of the checkout:
+// the temporary copy, the ban on hard links, or the before-and-after status check.
+func TestTheScratchCopyKeepsRunsOutOfTheCheckout(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, scratchCopyFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"`mktemp -d`", "hard links", "`git status --porcelain`", "the checkout you were given"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", scratchCopyFileName, phrase)
 		}
 	}
 }
