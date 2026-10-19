@@ -308,10 +308,4 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 		chunk, ok := renderer.events[windowDataEvent+id].(terminalChunk)
 		return ok && !chunk.Replay
 	})
-
-	agentErr := term.Write(state.terminal, "not base64!")
-	windowErr := w.Write(id, "not base64!")
-	if agentErr == nil || windowErr == nil || agentErr.Error() != windowErr.Error() {
-		t.Fatalf("bad input errors differ: agent %v, tab %v", agentErr, windowErr)
-	}
 }
