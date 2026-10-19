@@ -17,17 +17,16 @@ run everything in it. Every edit below is to a file in the copy.
 1. Find the ecosystem's command that runs one test alone. The worked examples
    give one for each of theirs.
 2. Run the test alone, unbroken, with a timeout of 120 seconds. When it
-   fails, or does not finish, the baseline is broken: record a stated skip with the
-   output, and judge by reading instead.
+   fails, or does not finish, the baseline is broken: record the run as
+   `did not run`, make no change, and judge by reading instead.
 3. Make one change in the shipped code the test names. For step 7, make one
    break, such as a wrong return value, a skipped branch or a dropped call. For
    step 9, make one harmless change that keeps behaviour, such as rewording a
    message no shipped code checks or reordering a list whose order nothing
    reads.
 4. Run the test alone again, with the same timeout.
-5. Before the next run, restore the changed file in the copy from the
-   checkout you were given: `cp <checkout>/<path> <copy>/<path>`. The
-   checkout is only ever read.
+5. Before the next run, restore the changed file in the copy from the saved
+   original, as the scratch-copy rules say.
 
 ## Results
 
@@ -52,12 +51,12 @@ nothing: judge by reading instead, and say so in the finding.
 - Never run a test that needs a network service, a database, a browser or a
   device.
 - With no runnable single-test command, or dependencies the copy lacks, run
-  nothing for that test: record a stated skip that names the reason, and judge
-  by reading instead.
+  nothing for that test: record a stated skip that names the reason, as a line
+  under the run table, and judge by reading instead.
 
 ## The run table
 
-`## Tools` holds a run table, one row per run: the test, the change, the
-command and the result. A finding whose verdict rests on a run names the row's
+`## Tools` holds a run table, one row per attempted run, baselines included:
+the test, the change, the command and the result. A finding whose verdict rests on a run names the row's
 result in `Evidence:`. Record the checkout's status comparison as one more line
 under the table.

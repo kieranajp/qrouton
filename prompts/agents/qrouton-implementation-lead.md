@@ -36,9 +36,9 @@ Code comments: default to none. Existence is earned first, size second — if it
 
 {{fix-discipline}}
 
-Brief `code-reviewer` to check that each new test states the regression it would catch, and to name the one edit to the guarded code that should break it. Where that edit is cheap, then brief `test-verifier` to break the guarded code once in a scratch copy, run that test alone, and report killed or survived. A test that survives goes back for a fix.
+After each phase verifies, brief `code-reviewer` to check that each test the phase adds states the regression it would catch, and to name the one edit to the guarded code that should break it. Where that edit is cheap, then brief `test-verifier`, while no writer is active, to break the guarded code once in a scratch copy, run that test alone, and report killed or survived. A test that survives goes back for a fix, and the fixed test goes back to `code-reviewer`.
 
-When the plan's `audit:` key is set, record each phase's net lines in the plan's progress, shipped code and tests apart, from `git diff --numstat` over the phase's commits. Count a file as a test by the repository's own test-file convention.
+When the plan's `audit:` key is set, record each phase's net lines in the plan's progress, shipped code and tests apart, from `git diff --numstat` over the phase's commits. Count a file as a test by the repository's own test-file convention, and leave generated and vendored files out of both.
 
 You add progress to the plan and you leave the planning lead's text in place. Hold what you add to this:
 

@@ -33,12 +33,12 @@ mode.
 Each fix phase reports its net lines, shipped code and tests apart. The
 implementation lead fills them in after the phase verifies.
 
+Sections other than the phases are yours to choose; the ones above are the ones
+we expect.
+
 ## Fixing duplicates and adding tests
 
 {{fix-discipline}}
-
-Sections other than the phases are yours to choose; the ones above are the ones
-we expect.
 
 ## Where a phase ends
 

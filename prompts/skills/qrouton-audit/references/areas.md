@@ -22,9 +22,9 @@ facts the code holds. Never count tests, generated files or vendored code. A
 contract file read at runtime belongs to the area whose code reads it, and
 gets an inventory row there.
 
-A test, script or lint-rule folder outside every area joins the area whose
-code it exercises, or the seam pass when it spans areas. It never stays in
-neither.
+A test, script or tooling folder outside every area joins the area whose
+code it exercises most, never neither. A tell-1 candidate in it that spans
+areas still goes to the seam pass.
 
 ## Decide whether to split
 

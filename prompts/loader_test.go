@@ -584,14 +584,14 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 	}
 }
 
-// Catches a copy rule that loses the part keeping a run out of the checkout:
-// the temporary copy, the ban on hard links, or the before-and-after status check.
+// Catches a copy rule that loses a part keeping a run out of the checkout: the
+// temporary copy without links or git data, or the before-and-after status check.
 func TestTheScratchCopyKeepsRunsOutOfTheCheckout(t *testing.T) {
 	partial, err := fs.ReadFile(embedded, scratchCopyFileName)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, phrase := range []string{"`mktemp -d`", "hard links", "`git status --porcelain`", "the checkout you were given"} {
+	for _, phrase := range []string{"`mktemp -d`", "hard links", "--exclude=/.git", "Run no git command", "--no-optional-locks", "`git status --porcelain`", "the checkout you were given", "names the checkout as a destination"} {
 		if !strings.Contains(string(partial), phrase) {
 			t.Errorf("%s does not carry %q", scratchCopyFileName, phrase)
 		}

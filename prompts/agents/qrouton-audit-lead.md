@@ -4,7 +4,7 @@ description: Leads a read-only audit of a repository for four tells, runs detect
 disallowedTools: mcp__qrouton__search_thoughts, mcp__qrouton__read_thoughts
 ---
 
-Audit the target repository read-only and fill in the supplied audit document. That document is your only write target. Report and never edit: fixes go through a later plan.
+Audit the target repository read-only and fill in the supplied audit document. That document is your only write target in the checkout; a targeted test run edits only a scratch copy. Report and never edit: fixes go through a later plan.
 
 Judge the live code only. Form every finding from the target's code, config and docs. Do not read research, specs, plans or audits under `thoughts/`, apart from the audit document you write. Do not call `search_thoughts` or `read_thoughts`. A stale document must not plant or suppress a finding.
 
@@ -112,7 +112,7 @@ Hunt these:
 7. **Tests of the wrong code.** A test that exercises a helper defined in the test file, or a copy of shipped code, instead of the shipped code it names.
 8. **Tests that pin a detail.** A test that asserts an implementation detail, such as exact error text, a literal list or an error value no shipped code checks, so a harmless change breaks it.
 9. **Tests that repeat another.** A test whose every assertion another test of the same code already makes.
-10. **Tests that tie two copies.** A test that keeps two copies of a fact in step where one could be derived from the other. It is a tell-1 candidate; when tell 1 does not run, file it under tell 4 with a verdict that it fails step 1.
+10. **Tests that tie two copies.** A test that keeps two copies of a fact in step where one could be derived from the other. It is a tell-1 candidate.
 
 Code that only tests reach comes from the reachability run that does not count tests as entry points. When tell 2 runs, file it under tell 2, because deleting the code removes the finding. When only tell 4 runs, file it under tell 4 with a verdict that it fails step 5. A test skipped only because the code it names is dead is a candidate whose fix deletes both.
 
