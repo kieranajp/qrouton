@@ -23,9 +23,9 @@ tells: [duplicated, dead, homegrown, volkswagen]
 
 > <findings where code redoes what a well-known library or the platform provides, installed or not>
 
-## Tests that cannot fail or pass for the wrong reason
+## Tests that pass or fail for the wrong reason
 
-> <findings where a test never runs, cannot fail, dodges the code it names or was weakened to pass, or where shipped code behaves differently under test>
+> <findings where a test never runs, cannot fail, dodges the code it names, was weakened to pass, pins a detail a harmless change breaks or repeats another test, or where shipped code behaves differently under test>
 
 ## Checked and deliberate
 

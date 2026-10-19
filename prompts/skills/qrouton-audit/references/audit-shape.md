@@ -21,7 +21,7 @@ list:
 | `duplicated` | `## Duplicated behaviour or facts` |
 | `dead` | `## Dead or needlessly defensive code` |
 | `homegrown` | `## Homegrown library or platform behaviour` |
-| `volkswagen` | `## Tests that cannot fail or pass for the wrong reason` |
+| `volkswagen` | `## Tests that pass or fail for the wrong reason`; an older audit's `## Tests that cannot fail or pass for the wrong reason` still reads as this tell |
 
 The lead deletes the slug and the section of each tell not chosen, so an audit
 of tells 2 and 3 carries `tells: [dead, homegrown]` and neither section of

@@ -502,7 +502,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"template key", []string{"tells:"}, []string{template}},
 		{"gated inventory", []string{"only when tell 1 or tell 3 is chosen"}, []string{lead, shape}},
 		{"chosen only", []string{"only the chosen tells"}, []string{lead, shape}},
-		{"tell 4 heading", []string{"Tests that cannot fail or pass for the wrong reason"}, []string{template}},
+		{"tell 4 heading", []string{"Tests that pass or fail for the wrong reason"}, []string{template}},
 		{"test check", []string{"Would the test fail if the code it names were broken?"}, []string{checker, shape}},
 		{"weakened tests", []string{"needs history"}, []string{lead, checker, shape}},
 		{"shipped code under test", []string{"behaves differently under test"}, []string{lead, checker, verifier}},

@@ -31,6 +31,8 @@
     "The test never runs",
     "The test cannot fail",
     "Shipped code changes under test",
+    "A harmless change breaks it",
+    "Another test covers it",
   ];
 
   const answers = answerable({

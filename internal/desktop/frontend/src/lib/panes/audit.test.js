@@ -223,7 +223,7 @@ test("a tell-4 finding parses and names its step", () => {
   const withTell4 = AUDIT.replace(
     "## Checked and deliberate",
     doc(
-      "## Tests that cannot fail or pass for the wrong reason",
+      "## Tests that pass or fail for the wrong reason",
       "",
       "### F4 — A test asserts the stub it configured",
       "",
@@ -237,8 +237,36 @@ test("a tell-4 finding parses and names its step", () => {
   );
   const audit = parseAudit(withTell4);
   const f4 = audit.findings.find((finding) => finding.id === "F4");
-  assert.equal(f4.section, "Tests that cannot fail or pass for the wrong reason");
+  assert.equal(f4.section, "Tests that pass or fail for the wrong reason");
   assert.equal(f4.step, 7);
   const last = audit.tells.at(-1);
   assert.deepEqual([last.name, last.count], [f4.section, 1]);
+});
+
+test("a step-10 verdict names step 10, not step 1", () => {
+  const audit = parseAudit(AUDIT.replace("Fails step 1, no tie", "Fails step 10, no tie"));
+  assert.equal(audit.findings[0].step, 10);
+});
+
+test("an old tell-4-only audit is an audit when Go chooses its old heading", () => {
+  const old = "Tests that cannot fail or pass for the wrong reason";
+  const text = doc(
+    "# Old audit",
+    "",
+    "## Summary",
+    "",
+    "One finding.",
+    "",
+    `## ${old}`,
+    "",
+    "### F1 — A skipped test",
+    "",
+    "Verdict: rot. Fails step 6",
+    "",
+    "Triage:",
+  );
+  assert.equal(parseAudit(text).isAudit, false);
+  const audit = parseAudit(text, [old]);
+  assert.equal(audit.isAudit, true);
+  assert.deepEqual(audit.findings.map((finding) => [finding.id, finding.section, finding.step]), [["F1", old, 6]]);
 });

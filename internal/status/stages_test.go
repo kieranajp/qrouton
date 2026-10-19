@@ -185,8 +185,10 @@ func TestACompleteAuditFillsResearch(t *testing.T) {
 		{"triaged", strings.ReplaceAll(completeAudit, "Triage:\n", "Triage: reject\nkept on purpose\n"), true},
 		{"a subset without its unchosen sections", subsetAudit, true},
 		{"a subset with a chosen section framed", strings.Replace(subsetAudit, "None.", "> findings", 1), false},
-		{"every tell with tell 4 framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\n> findings\n", false},
-		{"every tell with tell 4 filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", true},
+		{"every tell with tell 4 framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that pass or fail for the wrong reason\n\n> findings\n", false},
+		{"every tell with tell 4 filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that pass or fail for the wrong reason\n\nNone.\n", true},
+		{"an old tell-4 heading framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\n> findings\n", false},
+		{"an old tell-4 heading filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", true},
 		{"an unknown tell asks for every tell", strings.Replace(subsetAudit, "tells: [dead, homegrown]", "tells: [nonsense]", 1), false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -230,6 +232,8 @@ func TestAuditTellsReadsTheTellsKey(t *testing.T) {
 		{"an unknown slug", front("tells: [dead, nonsense]\n"), every},
 		{"a scalar", front("tells: dead\n"), every},
 		{"malformed frontmatter", front("tells: [dead\n"), every},
+		{"an old tell-4 heading", front("tells: [volkswagen]\n") + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", []string{legacyVolkswagenHeading}},
+		{"both tell-4 headings", front("tells: [volkswagen]\n") + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n\n## Tests that pass or fail for the wrong reason\n\nNone.\n", []string{AuditHeadingVolkswagen}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := AuditTells(tc.text); !slices.Equal(got, tc.want) {

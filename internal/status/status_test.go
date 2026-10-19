@@ -693,10 +693,14 @@ func TestTheAuditTemplateChoosesAndCarriesEveryTell(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := AuditTells(string(template)), tellHeadings(nil); !slices.Equal(got, want) {
+	var every []string
+	for _, tell := range auditTells {
+		every = append(every, tell.heading)
+	}
+	if got, want := AuditTells(string(template)), every; !slices.Equal(got, want) {
 		t.Errorf("the audit template chooses %q, want every tell %q", got, want)
 	}
-	for _, heading := range append([]string{AuditHeadingSummary}, tellHeadings(nil)...) {
+	for _, heading := range append([]string{AuditHeadingSummary}, every...) {
 		if !strings.Contains(string(template), "\n## "+heading+"\n") {
 			t.Errorf("the audit template has no ## %s", heading)
 		}

@@ -11,7 +11,7 @@ export const IMPACTS = ["high", "medium", "low"];
 const FINDING = /^(F\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Impact|Confidence|Source):[ \t]?(.*)$/;
 const TRIAGE = /^Triage:[ \t]?(.*)$/;
-const STEP = /\bstep\s*([1-8])\b/i;
+const STEP = /\bstep\s*(10|[1-9])\b/i;
 const KEYS = {
   Tell: "tell",
   Locations: "locations",
@@ -86,7 +86,7 @@ function readFinding(lines, from, to, section, named) {
   return { id: named[1], title: named[2], section, from, to, fields, step, triage };
 }
 
-/** An audit is triageable once it holds one of the tell sections. Only the chosen tells yield
+/** An audit is triageable once it holds a tell section or a chosen heading. Only the chosen tells yield
  * findings; null chooses every tell section present. An unchosen tell section reads as prose.
  * @param {string} text @param {string[] | null} [chosen] */
 export function parseAudit(text, chosen = null) {
@@ -121,7 +121,7 @@ export function parseAudit(text, chosen = null) {
   return {
     title,
     preamble,
-    isAudit: sections.some((section) => tellOf(section.name)),
+    isAudit: sections.some((section) => tellOf(section.name) || chosenOf(section.name)),
     findings,
     tells: picked.map((name) => found.get(name) ?? { name, from: 0, to: 0, count: 0 }),
     sections: sections

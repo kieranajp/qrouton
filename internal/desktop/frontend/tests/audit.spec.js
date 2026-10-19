@@ -16,7 +16,7 @@ test("the overview tallies findings by tell, verdict, impact and triage", async 
     /Duplicated behaviour or facts\s*1/,
     /Dead or needlessly defensive code\s*2/,
     /Homegrown library or platform behaviour\s*0/,
-    /Tests that cannot fail or pass for the wrong reason\s*1/,
+    /Tests that pass or fail for the wrong reason\s*1/,
   ]);
   await expect(page.locator('[data-group="By verdict"] li')).toHaveText([
     /Step 1 · No tie\s*1/,
@@ -148,10 +148,10 @@ test("a subset audit tallies and cards only the tells it ran", async ({ page }) 
   await open(page, "?subset");
   await expect(page.locator('[data-group="By tell"] li')).toHaveText([
     /Dead or needlessly defensive code\s*2/,
-    /Tests that cannot fail or pass for the wrong reason\s*1/,
+    /Tests that pass or fail for the wrong reason\s*1/,
   ]);
   await expect(page.locator("[data-tells-run]")).toHaveText(
-    "Ran 2 of 4 tells: Dead or needlessly defensive code, Tests that cannot fail or pass for the wrong reason",
+    "Ran 2 of 4 tells: Dead or needlessly defensive code, Tests that pass or fail for the wrong reason",
   );
   await expect(card(page, "F1")).toHaveCount(0);
   await expect(page.locator('[data-section="Duplicated behaviour or facts"]')).toContainText("Two timeout helpers race a promise against a timer");
@@ -167,4 +167,13 @@ test("an audit from before the tells key shows its three tells and names them", 
   await expect(page.locator("[data-tells-run]")).toHaveText(
     "Ran 3 of 4 tells: Duplicated behaviour or facts, Dead or needlessly defensive code, Homegrown library or platform behaviour",
   );
+});
+
+test("an audit that spells tell 4 the old way still cards its findings", async ({ page }) => {
+  await open(page, "?oldheading");
+  await expect(page.locator('[data-group="By tell"] li')).toHaveText([
+    /Dead or needlessly defensive code\s*2/,
+    /Tests that cannot fail or pass for the wrong reason\s*1/,
+  ]);
+  await expect(card(page, "F4")).toHaveCount(1);
 });

@@ -69,43 +69,61 @@ func audited(path string) bool {
 	return true
 }
 
-type auditTell struct{ slug, heading string }
+type auditTell struct{ slug, heading, legacy string }
 
-// AuditTells is the headings of the tells an audit chose, in tell order. An
-// audit with no tells key ran the legacy set. A key that is empty, malformed or
-// names an unknown tell counts as every tell, so nothing is judged complete early.
+// AuditTells is the headings of the tells an audit chose, in tell order, each as
+// the document spells it: a renamed tell keeps its old heading in an audit that
+// still uses it.
 func AuditTells(text string) []string {
+	present := map[string]bool{}
+	for _, section := range markdown.Sections(text) {
+		present[strings.ToLower(section.Name)] = true
+	}
+	var headings []string
+	for _, tell := range chosenTells(text) {
+		heading := tell.heading
+		if tell.legacy != "" && present[strings.ToLower(tell.legacy)] && !present[strings.ToLower(tell.heading)] {
+			heading = tell.legacy
+		}
+		headings = append(headings, heading)
+	}
+	return headings
+}
+
+// chosenTells is the tells an audit chose. An audit with no tells key ran the
+// legacy set. A key that is empty, malformed or names an unknown tell counts as
+// every tell, so nothing is judged complete early.
+func chosenTells(text string) []auditTell {
 	matter, _, _ := markdown.Split(text)
 	var front map[string]yaml.Node
 	if err := yaml.Unmarshal([]byte(matter), &front); err != nil {
-		return tellHeadings(nil)
+		return tellsNamed(nil)
 	}
 	node, ok := front[tellsKey]
 	if !ok {
-		return tellHeadings(legacyTells)
+		return tellsNamed(legacyTells)
 	}
 	var slugs []string
 	if err := node.Decode(&slugs); err != nil || len(slugs) == 0 {
-		return tellHeadings(nil)
+		return tellsNamed(nil)
 	}
 	for _, slug := range slugs {
 		if !slices.ContainsFunc(auditTells, func(tell auditTell) bool { return tell.slug == slug }) {
-			return tellHeadings(nil)
+			return tellsNamed(nil)
 		}
 	}
-	return tellHeadings(slugs)
+	return tellsNamed(slugs)
 }
 
-// tellHeadings is the headings of the named tells in tell order, and of every
-// tell when none is named.
-func tellHeadings(slugs []string) []string {
-	var headings []string
+// tellsNamed is the named tells in tell order, and every tell when none is named.
+func tellsNamed(slugs []string) []auditTell {
+	var tells []auditTell
 	for _, tell := range auditTells {
 		if slugs == nil || slices.Contains(slugs, tell.slug) {
-			headings = append(headings, tell.heading)
+			tells = append(tells, tell)
 		}
 	}
-	return headings
+	return tells
 }
 
 // implemented means the plan has phases, each has Verify items, and every one
