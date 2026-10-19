@@ -63,6 +63,7 @@ const (
 
 const (
 	toolSearchThoughts = "search_thoughts"
+	descSearchKinds    = "Only these artifact kinds: "
 	toolReadThoughts   = "read_thoughts"
 	toolOpenThoughts   = "open_thoughts"
 

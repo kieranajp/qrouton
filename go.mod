@@ -6,6 +6,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.4
 	github.com/creack/pty v1.1.24
 	github.com/d2lang/d2 v0.8.2
+	github.com/google/jsonschema-go v0.4.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/kljensen/snowball v0.10.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
@@ -34,7 +35,6 @@ require (
 	github.com/dlclark/regexp2/v2 v2.6.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect

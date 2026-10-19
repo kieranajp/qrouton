@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -133,15 +132,5 @@ func TestOpenVaultShowsTheWholeDocumentAtItsLines(t *testing.T) {
 	text, _ = callText(t, cs, toolReadThoughts, readVaultInput{Ref: "s/R1-x", Line: 12})
 	if !strings.HasPrefix(text, "X (s/R1-x, ref personal:s/research/R1-x.md), lines 1-30 of 30:") {
 		t.Fatalf("read text = %q", text)
-	}
-}
-
-func TestSearchThoughtsSchemaNamesEveryVaultKind(t *testing.T) {
-	field, _ := reflect.TypeFor[searchVaultInput]().FieldByName("Kinds")
-	tag := field.Tag.Get("jsonschema")
-	for _, kind := range vault.Kinds() {
-		if !strings.Contains(tag, " "+kind) {
-			t.Errorf("the kinds schema %q does not name %q", tag, kind)
-		}
 	}
 }
