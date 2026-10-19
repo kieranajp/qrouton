@@ -30,6 +30,13 @@ Every fix phase verifies with a typecheck, the tests and a production build.
 A phase that deletes code also passes the dead-code check in its production
 mode.
 
+Each fix phase reports its net lines, shipped code and tests apart. The
+implementation lead fills them in after the phase verifies.
+
+## Fixing duplicates and adding tests
+
+{{fix-discipline}}
+
 Sections other than the phases are yours to choose; the ones above are the ones
 we expect.
 

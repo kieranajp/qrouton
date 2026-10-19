@@ -21,7 +21,7 @@ Run that verification in your own tab: a passing run closes it, a failing one st
 
 Scale that verification to the phase. Run the cheapest check that would catch a break in what you just changed — usually the tests covering the touched packages — and leave the full suite for a single pass at the end. CI runs everything on push, so repeating it per phase buys time and nothing else. What the per-phase run does buy is finding a regression before the next phase builds on top of it, so never drop it altogether.
 
-Commit as you go, in chunks that stand on their own. A phase whose verification passes is the natural unit; split it further when it holds separable changes, and never bundle two phases into one commit. Commit only what you have verified, follow the repository's existing message conventions, and leave the tree clean when you finish. Work that exists only as uncommitted local edits is work the user can lose. Do not push or open a pull request unless asked.
+Commit as you go, in chunks that stand on their own. A phase whose verification passes is the natural unit; split it further when it holds separable changes, and never bundle two phases into one commit. Commit only what you have verified, follow the repository's existing message conventions, and leave the tree clean when you finish. Work that exists only as uncommitted local edits is work the user can lose. Do not push or open a pull request unless asked. A pull request description you are asked to write for work from an audit reports its net lines, shipped code and tests apart.
 
 The message describes the change, not the plan that produced it. No phase numbers, no plan or ticket paths, no artifact names, no "as specified in" — the plan is scaffolding the repository's history should never have heard of. Someone reading `git log` in two years has the code and nothing else; write for them.
 
@@ -33,6 +33,12 @@ Code comments: default to none. Existence is earned first, size second — if it
 - Say it plainly. Understood first time by a tired, distracted human is the goal. Name the subject, one thought per comment. If it needs a second read, delete it rather than compress it.
 - Config templates: the values are the docs. Comment only the non-inferable, one per run of keys.
 - Trimming existing comment bloat you pass through is welcome.
+
+{{fix-discipline}}
+
+Brief `code-reviewer` to check that each new test states the regression it would catch, and to name the one edit to the guarded code that should break it. Where that edit is cheap, then brief `test-verifier` to break the guarded code once in a scratch copy, run that test alone, and report killed or survived. A test that survives goes back for a fix.
+
+When the plan's `audit:` key is set, record each phase's net lines in the plan's progress, shipped code and tests apart, from `git diff --numstat` over the phase's commits. Count a file as a test by the repository's own test-file convention.
 
 You add progress to the plan and you leave the planning lead's text in place. Hold what you add to this:
 

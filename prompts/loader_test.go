@@ -512,14 +512,17 @@ var (
 
 	scratchCopyHomes = []ID{
 		ID(agentIDPrefix + "qrouton-audit-lead"),
+		ID(agentIDPrefix + "test-verifier"),
 	}
 
 	fixDisciplineHomes = []ID{
 		ID(agentIDPrefix + "audit-checker"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
 	}
 
 	fixDisciplineReferenceHomes = []referenceHome{
 		{ID(skillIDPrefix + "qrouton-audit"), "references/audit-shape.md"},
+		{ID(skillIDPrefix + "qrouton-plan"), "references/plan-shape.md"},
 	}
 )
 
@@ -921,5 +924,73 @@ func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
 	}
 	if handBuilt.MatchString(string(research.Content)) {
 		t.Error("qrouton-research still builds an artefact path by hand")
+	}
+}
+
+// Catches a fix-stage rule that drops out of its home, or one that leaks into a
+// prompt that defers to that home and would then restate it.
+func TestFixStagePromptsCarryPrevention(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	text := func(id ID, path string) string {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if path == "" {
+			return string(prompt.Content)
+		}
+		for _, file := range prompt.Files {
+			if file.Path == path {
+				return string(file.Content)
+			}
+		}
+		t.Fatalf("%s ships no %s", id, path)
+		return ""
+	}
+	partial, err := fs.ReadFile(embedded, fixDisciplineFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lead := text(ID(agentIDPrefix+ImplementationLead), "")
+	reviewer := text(ID(agentIDPrefix+"code-reviewer"), "")
+	verifier := text(ID(agentIDPrefix+"test-verifier"), "")
+	planShape := text(ID(skillIDPrefix+"qrouton-plan"), "references/plan-shape.md")
+	for _, rule := range []struct {
+		name    string
+		phrases []string
+		in      map[string]string
+	}{
+		{"fix order", []string{"named boundary"}, map[string]string{"fix-discipline": string(partial)}},
+		{"test claims", []string{"the regression it would catch"}, map[string]string{"fix-discipline": string(partial), "code-reviewer": reviewer}},
+		{"break once", []string{"break the guarded code once", "run that test alone"}, map[string]string{"implementation lead": lead, "test-verifier": verifier}},
+		{"net lines", []string{"net lines", "shipped code and tests"}, map[string]string{"plan-shape": planShape, "implementation lead": lead}},
+		{"pull requests", []string{"pull request description"}, map[string]string{"implementation lead": lead}},
+	} {
+		for where, content := range rule.in {
+			for _, phrase := range rule.phrases {
+				if !strings.Contains(content, phrase) {
+					t.Errorf("%s: %s does not carry %q", rule.name, where, phrase)
+				}
+			}
+		}
+	}
+
+	for _, id := range []ID{ID(agentIDPrefix + PlanningLead), ID(skillIDPrefix + "qrouton-plan"), ID(skillIDPrefix + "qrouton-implement")} {
+		for _, phrase := range []string{"net lines", "named boundary", "break the guarded code once"} {
+			if strings.Contains(text(id, ""), phrase) {
+				t.Errorf("%s restates %q, which its lead or shape owns", id, phrase)
+			}
+		}
+	}
+	for _, phrase := range []string{"scratch copy", "`mktemp -d`"} {
+		if strings.Contains(reviewer, phrase) {
+			t.Errorf("code-reviewer carries %q, but its sandbox is read-only", phrase)
+		}
+	}
+	if !readOnlyAgents["code-reviewer"] {
+		t.Error("code-reviewer is no longer read-only")
+	}
+	if !workspaceWriteAgents["test-verifier"] {
+		t.Error("test-verifier can no longer write the scratch copy")
 	}
 }

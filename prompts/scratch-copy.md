@@ -1,4 +1,4 @@
-Any run that edits files or runs tests happens only in a scratch copy, never in the checkout you were given. A crash, a timeout or an interrupted run must leave that checkout exactly as it was.
+Work that calls for a scratch copy edits and runs only in the copy, never in the checkout you were given. A crash, a timeout or an interrupted run must leave that checkout exactly as it was.
 
 1. Before the first run, record `git status --porcelain` for the checkout you were given. Run it as `git -C <checkout> --no-optional-locks status --porcelain`, so the read itself writes nothing.
 2. Make the copy: an empty directory from `mktemp -d`, filled by a plain recursive copy with no hard links, `cp -R <checkout>/. <copy>`. Never use `cp -l`, `cp -al`, `rsync --link-dest`, `git worktree add`, `git stash`, `git checkout` or anything else that writes into the checkout or its `.git`.
