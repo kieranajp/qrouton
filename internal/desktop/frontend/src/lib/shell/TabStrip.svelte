@@ -98,7 +98,7 @@
         size="sm"
         onclick={() => (listing = !listing)}
         aria-label="{drawn.hidden.length} more tabs{hiddenStatus ? `, ${hiddenStatus}` : ''}">
-        {#if hiddenStatus}<Icon name={hiddenStatus} />{/if}
+        {#if hiddenStatus && hiddenStatus !== "idle"}<Icon name={hiddenStatus} />{/if}
         {drawn.hidden.length}
         <Icon name="overflow" />
       </Button>

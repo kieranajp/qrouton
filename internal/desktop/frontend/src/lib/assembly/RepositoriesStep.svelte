@@ -9,7 +9,7 @@
 
   /** @typedef {{id: string, meta: string, role: "off" | import("../bridge/generated.js").RepoRole, offers: ("off" | import("../bridge/generated.js").RepoRole)[], rebasable: boolean, base: string, branches: {state: 'idle'|'loading'|'ready'|'failed', branches: string[], default: string}}} Row */
 
-  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: Row[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: string, branch: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void, onBase?: (id: string, branch: string) => void, onBaseOpen?: (id: string) => void}} */
+  /** @type {{query?: string, orgs?: string[], owners?: string[], failed?: string[], rows?: Row[], shown?: number, total?: number, tally?: {editing: number, reference: number}, picks?: {id: string, role: import("../bridge/generated.js").RepoRole, branch: string, meta: string}[], refreshing?: boolean, onOwner?: (org: string) => void, onRefresh?: () => void, onRole?: (id: string, role: string) => void, onBase?: (id: string, branch: string) => void, onBaseOpen?: (id: string) => void}} */
   let {
     query = $bindable(""),
     orgs = [],

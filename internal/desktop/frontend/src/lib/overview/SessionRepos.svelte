@@ -5,7 +5,7 @@
   import { READ_ONLY } from "../roles.js";
   import Tier from "./Tier.svelte";
 
-  /** @type {{repos?: any[], onAddRepos?: () => void}} */
+  /** @type {{repos?: {name: string, role: import("../bridge/generated.js").RepoRole, measured?: boolean, commits?: number, insertions?: number, deletions?: number}[], onAddRepos?: () => void}} */
   let { repos = [], onAddRepos } = $props();
 </script>
 

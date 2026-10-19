@@ -131,6 +131,7 @@ export function shell() {
     })),
   );
 
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   let documentMenu = $derived([
     ...fields.documents.map((doc) => ({
       tag: doc.kind,
@@ -147,14 +148,21 @@ export function shell() {
   // now behind the session's name, where the things you do with it also live.
   let identityOpen = $state(false);
   let editing = $derived(fields.repos.filter((repo) => repo.role === REPO_ROLES.EDITING && repo.path));
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   let identityMenu = $derived([
-    ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : []),
+    ...branchItems(),
     { label: "Copy branch name", icon: "copy", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
     ...worktreeItems(),
   ]);
 
-  // One editing repository is one worktree and one item. Several are several, and
-  // naming them beats picking one and calling it the worktree.
+  /** @returns {import("../shell/menu.js").MenuItem[]} */
+  function branchItems() {
+    return fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : [];
+  }
+
+  /** One editing repository is one worktree and one item. Several are several, and
+   * naming them beats picking one and calling it the worktree.
+   * @returns {import("../shell/menu.js").MenuItem[]} */
   function worktreeItems() {
     if (!editing.length) return [];
     if (editing.length === 1) {

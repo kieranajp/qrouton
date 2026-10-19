@@ -101,7 +101,7 @@ export function stateWords(node, tools = true) {
   return WORDS[node.state] ?? node.state;
 }
 
-/** @param {string} state @returns {string} the state icon, or "" for none */
+/** @param {string} state @returns {import("../core/icons.js").IconName | ""} the state icon, or "" for none */
 export function stateIcon(state) {
   switch (state) {
     case AGENT_STATES.WORKING:

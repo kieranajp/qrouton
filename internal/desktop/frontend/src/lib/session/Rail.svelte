@@ -194,6 +194,7 @@
   }
 
   let menu = $state(/** @type {{row: any, x: number, y: number} | null} */ (null));
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   const rowMenu = $derived([
     { label: "Reload", icon: "refresh", act: reloadRow },
     {
