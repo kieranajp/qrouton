@@ -6,6 +6,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/vault"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 // The mode prompt already describes the workbench and when a window is worth
@@ -36,7 +37,7 @@ const (
 
 const (
 	summaryLimit = 140
-	digestLimit  = 600
+	digestLimit  = prompts.DigestLimit
 )
 
 const (

@@ -1,5 +1,10 @@
 package prompts
 
+import "strconv"
+
+// DigestLimit is the most characters a session digest may hold.
+const DigestLimit = 600
+
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
@@ -29,6 +34,8 @@ const (
 	sessionDigestFileName    = "session-digest.md"
 	sessionDigestPlaceholder = "{{session-digest}}"
 
+	digestLimitPlaceholder = "{{digest-limit}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -56,6 +63,12 @@ var partials = map[string]string{
 	returnContractPlaceholder:     returnContractFileName,
 	sessionSummaryPlaceholder:     sessionSummaryFileName,
 	sessionDigestPlaceholder:      sessionDigestFileName,
+}
+
+// figures are numbers Go enforces, keyed by the placeholder a prompt states
+// each through. They expand after the partials, so a partial may name one.
+var figures = map[string]string{
+	digestLimitPlaceholder: strconv.Itoa(DigestLimit),
 }
 
 // The leads, by the agent type the runner reports them as.
