@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -182,18 +183,20 @@ func TestOutlivedCheckoutRecognisesEachGitVersionsMessage(t *testing.T) {
 	}
 }
 
-func TestDirtyWorktreesReadsAnAbsoluteWorktreePath(t *testing.T) {
-	requireGit(t)
-	outside := t.TempDir()
-	if out, err := exec.Command("git", "init", "-q", outside).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v\n%s", err, out)
-	}
-	if err := os.WriteFile(filepath.Join(outside, "work.txt"), []byte("uncommitted\n"), 0o644); err != nil {
+func TestDeleteLeavesADirectoryOutsideTheSessionAlone(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	if err := os.MkdirAll(filepath.Join(root, "s"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	m := Manifest{Slug: "abs", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: outside}}}
-	dirty, err := DirtyWorktrees(t.TempDir(), m)
-	if err != nil || len(dirty) != 1 || dirty[0] != "acme/api" {
-		t.Fatalf("DirtyWorktrees = %v, %v; want acme/api", dirty, err)
+	if err := os.MkdirAll(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Slug: "s", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: "../victim"}}}
+	if err := Delete(root, m); !errors.Is(err, ErrCheckoutOutsideSrc) {
+		t.Fatalf("Delete = %v, want ErrCheckoutOutsideSrc", err)
+	}
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("a directory outside the session was removed: %v", err)
 	}
 }
