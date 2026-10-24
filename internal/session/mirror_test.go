@@ -64,8 +64,8 @@ func TestFetchAdvancesTheBareClonesLocalDefaultBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	mp := mirrorPath(root, "org", "repo")
-	local := gitOutput(t, mp, "rev-parse", "refs/heads/main")
-	remote := gitOutput(t, mp, "rev-parse", "refs/remotes/origin/main")
+	local := gitIn(t, mp, "rev-parse", "refs/heads/main")
+	remote := gitIn(t, mp, "rev-parse", "refs/remotes/origin/main")
 	if local != remote {
 		t.Fatalf("local default branch = %s, want fetched tip %s", local, remote)
 	}

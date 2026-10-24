@@ -1,11 +1,9 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/hex"
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,6 +11,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -24,7 +23,7 @@ const assemblingMarker = ".qrouton-assembling"
 // Abandoned reports whether dir is a half-assembled session directory left
 // behind by an interrupted run: it carries the assembly marker but no manifest.
 func Abandoned(dir string) bool {
-	if _, err := os.Stat(filepath.Join(dir, manifestName)); err == nil {
+	if _, err := os.Stat(sessionpaths.Manifest(dir)); err == nil {
 		return false
 	}
 	_, err := os.Stat(filepath.Join(dir, assemblingMarker))
@@ -46,11 +45,7 @@ func SessionSlug(name, entropy string) string {
 	return base + slugSeparator + suffix
 }
 
-func NewEntropy() string {
-	b := make([]byte, sessionEntropyBytes)
-	_, _ = rand.Read(b) // crypto/rand never fails
-	return hex.EncodeToString(b)
-}
+func NewEntropy() string { return randomid.Hex(sessionEntropyBytes) }
 
 // CreateRequest is the work a session is being assembled for. Only Name is
 // required: a scratch session has no repositories, no ticket and no prefix.
@@ -137,7 +132,7 @@ func Create(cfg *config.Config, req CreateRequest, progress ProgressFunc) (strin
 				return err
 			}
 		}
-		return os.Symlink(ThoughtsLink(cfg.Root, dir, home), filepath.Join(dir, sessionpaths.ThoughtsDirName))
+		return os.Symlink(ThoughtsLink(cfg.Root, dir, home), sessionpaths.ThoughtsLink(dir))
 	}); err != nil {
 		return "", err
 	}
@@ -291,11 +286,11 @@ func hasRepo(repos []ManifestRepo, org, name string) bool {
 func HeadRevision(worktree string) (string, error) { return resolveRevision(worktree, headRef) }
 
 func resolveRevision(mirror, ref string) (string, error) {
-	out, err := exec.Command(gitBin, dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix).CombinedOutput()
+	out, err := gitOutput(context.Background(), dirFlag, mirror, revParseCmd, verifyFlag, ref+commitRefSuffix)
 	if err != nil {
-		return "", fmt.Errorf("resolve %s: %w\n%s", ref, err, out)
+		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(out), nil
 }
 
 func addDetachedWorktree(mirror, path, revision string) error {

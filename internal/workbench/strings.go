@@ -59,7 +59,6 @@ const (
 	activeName         = "active-workbench.json"
 	descriptorLockName = "active-workbench.lock"
 	launchLockName     = "launch.lock"
-	temporaryPattern   = ".workbench-*"
 	socketTokenBytes   = 6
 	socketDirMode      = 0o700
 	descriptorMode     = 0o600

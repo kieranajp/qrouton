@@ -105,6 +105,9 @@ func (l *FSLoader) read(path string) ([]byte, error) {
 		}
 		content = bytes.ReplaceAll(content, []byte(placeholder), partial)
 	}
+	for placeholder, figure := range figures {
+		content = bytes.ReplaceAll(content, []byte(placeholder), []byte(figure))
+	}
 	return content, nil
 }
 

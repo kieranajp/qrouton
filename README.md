@@ -24,8 +24,8 @@ architecture notes. Your agent sees one of those, and forgets the lot when the
 conversation dies.
 
 qrouton is a desktop workbench that wraps the agent you already use - Claude
-Code, Codex CLI or OpenCode - and hands it the whole picture. It does three
-things today, with a fourth on the way.
+Code, Codex CLI, OpenCode or Antigravity CLI - and hands it the whole picture.
+It does three things today, with a fourth on the way.
 
 ![The qrouton workbench with a session rail, Codex conversation, shell, and rendered plan](docs/images/workbench.png)
 
@@ -160,7 +160,9 @@ with the command below. Replace `<version>` with the downloaded version:
 sudo apt install ./qrouton_<version>_amd64.deb
 ```
 
-Building, testing, configuring and releasing this thing are documented in
-[`AGENTS.md`](./AGENTS.md), for the agent. Prompt sources live in
+Building, testing and configuring this thing are documented in
+[`AGENTS.md`](./AGENTS.md), for the agent. A release is cut by creating a
+GitHub release: [`release.yml`](./.github/workflows/release.yml) builds and
+uploads the packages and bumps the Homebrew cask. Prompt sources live in
 [`prompts/`](./prompts) and the design history in
 [`thoughts/shared/`](./thoughts/shared/).

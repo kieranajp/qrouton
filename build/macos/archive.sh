@@ -4,7 +4,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 dist="$root/dist"
 app="$dist/qrouton.app"
-version=${VERSION:-0.1.0}
+version=${VERSION:?run through make, or set VERSION}
 version=${version#v}
 
 if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$'; then

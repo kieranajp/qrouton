@@ -123,7 +123,7 @@ func wantSandbox(t *testing.T, name string) string {
 func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	t.Helper()
 	agy := renderedAsset(t, assets, agyAgentsDir+name+"/"+agyAgentFileName)
-	for _, key := range []string{frontmatterNameKey, frontmatterDescriptionKey} {
+	for _, key := range []string{"name", "description"} {
 		rendered, declared := frontmatterEntry(agy, key)
 		if !declared {
 			t.Errorf("agy rendering declares no %s", key)
@@ -179,11 +179,53 @@ func frontmatterEntry(text, key string) (string, bool) {
 		return "", false
 	}
 	for _, line := range strings.Split(text[len(frontmatterFence):len(frontmatterFence)+end], "\n") {
-		if name, value, ok := strings.Cut(line, frontmatterKeySep); ok && strings.TrimSpace(name) == key {
+		if name, value, ok := strings.Cut(line, ":"); ok && strings.TrimSpace(name) == key {
 			return strings.TrimSpace(value), true
 		}
 	}
 	return "", false
+}
+
+func TestEveryAgentPromptParsesToItsFileNameAndAPlainDescription(t *testing.T) {
+	loaded, err := NewEmbeddedLoader().List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range loaded {
+		id := string(prompt.ID)
+		if !strings.HasPrefix(id, agentIDPrefix) {
+			continue
+		}
+		t.Run(path.Base(id), func(t *testing.T) {
+			agent, err := parseAgentPrompt(prompt.Content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if agent.name != path.Base(id) {
+				t.Errorf("name = %q, want %q", agent.name, path.Base(id))
+			}
+			if agent.description == "" || strings.ContainsAny(agent.description[:1], `"'>`) {
+				t.Errorf("description = %q, want plain text", agent.description)
+			}
+		})
+	}
+}
+
+func TestQuotedAndFoldedDescriptionsDecodeToPlainText(t *testing.T) {
+	for name, source := range map[string]string{
+		"quoted": "---\nname: probe\ndescription: \"Probes: things.\"\n---\n\nBody.\n",
+		"folded": "---\nname: probe\ndescription: >\n  Probes:\n  things.\n---\n\nBody.\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			agent, err := parseAgentPrompt([]byte(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if agent.description != "Probes: things." {
+				t.Fatalf("description = %q, want %q", agent.description, "Probes: things.")
+			}
+		})
+	}
 }
 
 // Render is the only guard on a malformed agent source, and a source that
@@ -198,6 +240,7 @@ func TestRenderRejectsMalformedAgentPrompts(t *testing.T) {
 		"no name":           {"---\ndescription: Probes.\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
 		"no description":    {"---\nname: probe\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
 		"empty description": {"---\nname: probe\ndescription:\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"invalid yaml":      {"---\nname: probe\ndescription: [Probes.\n---\n\nBody.\n", ErrInvalidAgentFrontmatter},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Render(Prompt{ID: ID(agentIDPrefix + "probe"), Content: []byte(probe.source)})

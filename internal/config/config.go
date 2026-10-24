@@ -190,12 +190,17 @@ func clone(c *Config) *Config {
 	return out
 }
 
+// DefaultThoughtsRoot is the thoughts root derived from a sessions root.
+func DefaultThoughtsRoot(root string) string {
+	return filepath.Join(root, sessionpaths.ThoughtsDirName)
+}
+
 // ThoughtsRoots lists the default root first, at <root>/thoughts unless set.
 func (c *Config) ThoughtsRoots() []ThoughtsRoot {
 	snapshot := c.Snapshot()
 	def := snapshot.Thoughts.Default
 	if strings.TrimSpace(def) == "" {
-		def = filepath.Join(snapshot.Root, sessionpaths.ThoughtsDirName)
+		def = DefaultThoughtsRoot(snapshot.Root)
 	}
 	return append([]ThoughtsRoot{{ID: DefaultThoughtsID, Path: def}}, snapshot.Thoughts.Roots...)
 }
@@ -446,10 +451,13 @@ func WithoutOverrides(env []string) []string {
 	return out
 }
 
-func splitOrgs(s string) []string {
+func splitOrgs(s string) []string { return NormaliseOrgs(strings.Split(s, orgSeparator)) }
+
+// NormaliseOrgs trims each org and drops blanks and repeats, keeping order.
+func NormaliseOrgs(orgs []string) []string {
 	var out []string
 	seen := make(map[string]bool)
-	for _, org := range strings.Split(s, orgSeparator) {
+	for _, org := range orgs {
 		org = strings.TrimSpace(org)
 		if org != "" && !seen[org] {
 			seen[org] = true

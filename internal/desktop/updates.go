@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -130,8 +131,5 @@ func newer(latest, current string) bool {
 	if !ok {
 		return true
 	}
-	return latestVersion != currentVersion &&
-		(latestVersion[0] > currentVersion[0] ||
-			latestVersion[0] == currentVersion[0] && latestVersion[1] > currentVersion[1] ||
-			latestVersion[0] == currentVersion[0] && latestVersion[1] == currentVersion[1] && latestVersion[2] > currentVersion[2])
+	return slices.Compare(latestVersion[:], currentVersion[:]) > 0
 }

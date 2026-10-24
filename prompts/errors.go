@@ -12,6 +12,7 @@ var (
 	ErrNoFrontmatter           = errors.New("agent prompt has no frontmatter")
 	ErrUnterminatedFrontmatter = errors.New("agent prompt has unterminated frontmatter")
 	ErrIncompleteAgentPrompt   = errors.New("agent prompt requires name and description")
+	ErrInvalidAgentFrontmatter = errors.New("agent prompt frontmatter is not valid YAML")
 
 	// ErrUserOwnedAsset means a discovery file at the session root is not one
 	// qrouton stamped, so overwriting it would destroy the user's own work.

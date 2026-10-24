@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -179,5 +180,23 @@ func TestOutlivedCheckoutRecognisesEachGitVersionsMessage(t *testing.T) {
 	}
 	if outlivedCheckout("fatal: detected dubious ownership in repository at '/tmp/checkout/src/api'\n") {
 		t.Error("dubious ownership read as an outlived checkout")
+	}
+}
+
+func TestDeleteLeavesADirectoryOutsideTheSessionAlone(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	if err := os.MkdirAll(filepath.Join(root, "s"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Slug: "s", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: "../victim"}}}
+	if err := Delete(root, m); !errors.Is(err, ErrCheckoutOutsideSrc) {
+		t.Fatalf("Delete = %v, want ErrCheckoutOutsideSrc", err)
+	}
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("a directory outside the session was removed: %v", err)
 	}
 }

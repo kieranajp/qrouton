@@ -2,71 +2,40 @@ package launch
 
 import (
 	"context"
-	"encoding/json"
-	"os"
 
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
-// Runner modes mirror session.SessionMode; launch stays a leaf and reads the
-// value straight from the manifest rather than importing the session package.
-const (
-	modeRPI       = "rpi"
-	modeAssistant = "assistant"
-)
-
-type launchManifest struct {
-	Mode   string `json:"mode"`
-	Name   string `json:"name"`
-	Slug   string `json:"slug"`
-	Ticket string `json:"ticketUrl"`
-}
-
 func sessionMode(dir string) string {
-	manifest, ok := sessionManifest(dir)
-	if ok && manifest.Mode == modeAssistant {
-		return modeAssistant
+	m, err := session.Load(dir)
+	if err != nil {
+		return string(session.ModeRPI)
 	}
-	return modeRPI
+	return string(m.EffectiveMode())
 }
 
 func sessionName(dir string) string {
-	manifest, ok := sessionManifest(dir)
-	if !ok {
+	m, err := session.Load(dir)
+	if err != nil {
 		return ""
 	}
-	if manifest.Name != "" {
-		return manifest.Name
-	}
-	return manifest.Slug
+	return m.DisplayName()
 }
 
 // sessionTicket is the provider a session's ticket belongs to, as a person
 // writes it, and empty for a session assembled without one.
 func sessionTicket(dir string) string {
-	manifest, ok := sessionManifest(dir)
-	if !ok {
+	m, err := session.Load(dir)
+	if err != nil {
 		return ""
 	}
-	return ticket.ProviderLabel(manifest.Ticket)
-}
-
-func sessionManifest(dir string) (launchManifest, bool) {
-	content, err := os.ReadFile(sessionpaths.Manifest(dir))
-	if err != nil {
-		return launchManifest{}, false
-	}
-	var manifest launchManifest
-	if json.Unmarshal(content, &manifest) != nil {
-		return manifest, false
-	}
-	return manifest, true
+	return ticket.ProviderLabel(m.TicketURL)
 }
 
 func primaryDiscovery(mode string) string {
-	if mode == modeAssistant {
+	if mode == string(session.ModeAssistant) {
 		return prompts.AssistantAsset
 	}
 	return prompts.OrchestratorAsset

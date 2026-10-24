@@ -17,13 +17,6 @@ import (
 // fence opens and closes a frontmatter block.
 const fence = "---"
 
-// marpKey declares a document a deck, and only when set to marpEnabled.
-const (
-	marpKey      = "marp"
-	marpEnabled  = "true"
-	keySeparator = ":"
-)
-
 var parser = goldmark.New(goldmark.WithExtensions(extension.TaskList)).Parser()
 
 // Title accepts only the first visible element after frontmatter as the document title.
@@ -48,15 +41,15 @@ func Body(text string) string {
 // frontmatter block counts, so a marp: line in the body is prose.
 func Marp(text string) bool {
 	front, _, _ := Split(text)
-	for _, line := range strings.Split(front, "\n") {
-		key, value, ok := strings.Cut(line, keySeparator)
-		if !ok || strings.TrimSpace(key) != marpKey {
-			continue
-		}
-		return strings.EqualFold(strings.TrimSpace(value), marpEnabled)
-	}
-	return false
+	directive := marpDirective.FindStringSubmatch(front)
+	return directive != nil && strings.TrimRight(directive[1], " \t\r") == marpEnabled
 }
+
+// marpDirective is Marp's own deck test, so qrouton and Marp agree on what a
+// deck is: the first unindented marp line, its value compared as text.
+var marpDirective = regexp.MustCompile(`(?m)^marp\s*: +(.*)$`)
+
+const marpEnabled = "true"
 
 // Split returns the frontmatter, the body and the body's first source line.
 // An unclosed block yields nothing at all.

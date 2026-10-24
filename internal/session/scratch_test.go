@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 var entropySuffix = regexp.MustCompile(`^[0-9a-f]{4}$`)
@@ -89,7 +90,7 @@ func TestDeleteKeepsDocumentsWrittenThroughTheThoughtsLink(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		t.Fatal(err)
 	}

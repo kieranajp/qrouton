@@ -5,6 +5,8 @@ import (
 	"path"
 	"strconv"
 	"strings"
+
+	"go.yaml.in/yaml/v3"
 )
 
 type Rendered struct {
@@ -59,16 +61,16 @@ func parseAgentPrompt(content []byte) (agentPrompt, error) {
 		return agentPrompt{}, ErrUnterminatedFrontmatter
 	}
 	end += len(frontmatterFence)
-	metadata := make(map[string]string)
-	for _, line := range strings.Split(text[len(frontmatterFence):end], "\n") {
-		key, value, ok := strings.Cut(line, frontmatterKeySep)
-		if ok {
-			metadata[strings.TrimSpace(key)] = strings.TrimSpace(value)
-		}
+	var metadata struct {
+		Name        string `yaml:"name"`
+		Description string `yaml:"description"`
+	}
+	if err := yaml.Unmarshal([]byte(text[len(frontmatterFence):end]), &metadata); err != nil {
+		return agentPrompt{}, fmt.Errorf("%w: %w", ErrInvalidAgentFrontmatter, err)
 	}
 	agent := agentPrompt{
-		name:        metadata[frontmatterNameKey],
-		description: metadata[frontmatterDescriptionKey],
+		name:        strings.TrimSpace(metadata.Name),
+		description: strings.TrimSpace(metadata.Description),
 		body:        strings.TrimSpace(text[end+len(frontmatterClose):]),
 	}
 	if agent.name == "" || agent.description == "" {

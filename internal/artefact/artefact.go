@@ -94,7 +94,7 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 // thoughtsBoundary is the real folder the session's thoughts link points at.
 // Nothing created for an artefact may resolve outside it.
 func thoughtsBoundary(sessionRoot string) (string, error) {
-	link := filepath.Join(sessionRoot, sessionpaths.ThoughtsDirName)
+	link := sessionpaths.ThoughtsLink(sessionRoot)
 	if _, err := os.Lstat(link); errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("%w: %s", ErrNoThoughtsLink, link)
 	} else if err != nil {
@@ -249,11 +249,7 @@ func revisionOf(sessionRoot string, repo session.ManifestRepo) string {
 	if !repo.Role.IsEditing() {
 		return repo.Revision
 	}
-	worktree := repo.WorktreePath
-	if !filepath.IsAbs(worktree) {
-		worktree = filepath.Join(sessionRoot, worktree)
-	}
-	sha, err := session.HeadRevision(worktree)
+	sha, err := session.HeadRevision(repo.Dir(sessionRoot))
 	if err != nil {
 		return ""
 	}

@@ -136,7 +136,7 @@ func resolveWithinSession(root, name string) (string, error) {
 		return real, nil
 	}
 	// session.Create parks documents outside the session dir so Delete keeps them.
-	if home, err := filepath.EvalSymlinks(filepath.Join(root, sessionpaths.ThoughtsDirName)); err == nil {
+	if home, err := filepath.EvalSymlinks(sessionpaths.ThoughtsLink(root)); err == nil {
 		if _, ok := sessionpaths.Within(home, real); ok {
 			return real, nil
 		}

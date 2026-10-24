@@ -370,7 +370,7 @@ func TestOpenFileForegroundDefaultsToCanonicalThoughtsSource(t *testing.T) {
 	if err := os.WriteFile(thought, []byte("# Plan\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(parked, filepath.Join(root, sessionpaths.ThoughtsDirName)); err != nil {
+	if err := os.Symlink(parked, sessionpaths.ThoughtsLink(root)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, "thoughts-old"), 0o755); err != nil {
