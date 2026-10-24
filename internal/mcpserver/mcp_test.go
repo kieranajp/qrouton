@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -16,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -971,41 +971,19 @@ func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
 	}
 }
 
-func gitIn(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	cmd := exec.Command("git", append([]string{"-c", "user.name=t", "-c", "user.email=t@t"}, args...)...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, out)
-	}
-}
-
-func commitFile(t *testing.T, dir, name, content string) {
-	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gitIn(t, dir, "add", name)
-	gitIn(t, dir, "commit", "-qm", name)
-}
-
 func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	m, host, dir := newTestManager(t)
 	app := filepath.Join(dir, "src", "app")
 	clean := filepath.Join(dir, "src", "clean")
 	for _, repo := range []string{app, clean} {
-		if err := os.MkdirAll(repo, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		gitIn(t, repo, "init", "-q", "-b", "main")
-		commitFile(t, repo, "base.txt", "base\n")
+		gittest.Worktree(t, repo)
 	}
-	gitIn(t, app, "checkout", "-qb", "feature")
-	commitFile(t, app, "feature.txt", "feature-commit-line\n")
-	if err := os.WriteFile(filepath.Join(app, "staged.txt"), []byte("staged-change-line\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	gitIn(t, app, "add", "staged.txt")
+	gittest.Run(t, app, "checkout", "-qb", "feature")
+	gittest.WriteFile(t, app, "feature.txt", "feature-commit-line")
+	gittest.Run(t, app, "add", "feature.txt")
+	gittest.Run(t, app, "commit", "-qm", "feature")
+	gittest.WriteFile(t, app, "staged.txt", "staged-change-line")
+	gittest.Run(t, app, "add", "staged.txt")
 	ctx := context.Background()
 
 	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
