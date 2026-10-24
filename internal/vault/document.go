@@ -29,6 +29,10 @@ type frontmatter struct {
 func parseDocument(name, text string) (doc Document, body string, bodyLine int) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
 	front, body, bodyLine := markdown.Split(text)
+	if bodyLine == 0 {
+		// An opener that never closes is a rule, and the note is still searchable.
+		body, bodyLine = text, 1
+	}
 	var fm frontmatter
 	if yaml.Unmarshal([]byte(front), &fm) != nil {
 		fm = frontmatter{}

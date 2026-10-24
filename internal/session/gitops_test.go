@@ -3,7 +3,6 @@ package session
 import (
 	"io"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -78,23 +77,6 @@ func TestVerbosityFlagAsksForProgressOnlyWhenDrawn(t *testing.T) {
 	}
 	if got := verbosityFlag(nil); got != quietLongFlag {
 		t.Fatalf("verbosityFlag without a consumer = %q, want %q", got, quietLongFlag)
-	}
-}
-
-func TestDirHonoursAnAbsoluteWorktreePath(t *testing.T) {
-	root := filepath.FromSlash("/sessions/one")
-	for _, tc := range []struct {
-		name, path, want string
-	}{
-		{"relative", "src/api", filepath.FromSlash("/sessions/one/src/api")},
-		{"absolute", filepath.FromSlash("/elsewhere/api"), filepath.FromSlash("/elsewhere/api")},
-		{"absolute with dot dot", filepath.FromSlash("/elsewhere/x/../api"), filepath.FromSlash("/elsewhere/api")},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			if got := (ManifestRepo{WorktreePath: tc.path}).Dir(root); got != tc.want {
-				t.Fatalf("Dir = %q, want %q", got, tc.want)
-			}
-		})
 	}
 }
 

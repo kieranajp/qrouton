@@ -3,7 +3,6 @@ package markdown
 
 import (
 	"bytes"
-	"errors"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,7 +12,6 @@ import (
 	"github.com/yuin/goldmark/extension"
 	extast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
-	"go.yaml.in/yaml/v3"
 )
 
 // fence opens and closes a frontmatter block.
@@ -43,27 +41,15 @@ func Body(text string) string {
 // frontmatter block counts, so a marp: line in the body is prose.
 func Marp(text string) bool {
 	front, _, _ := Split(text)
-	var declared marpFlag
-	if err := yaml.Unmarshal([]byte(front), &declared); err != nil {
-		var typeErr *yaml.TypeError
-		return !errors.As(err, &typeErr) && marpLine(front)
-	}
-	return declared.Marp
+	directive := marpDirective.FindStringSubmatch(front)
+	return directive != nil && strings.TrimRight(directive[1], " \t\r") == marpEnabled
 }
 
-type marpFlag struct {
-	Marp bool `yaml:"marp"`
-}
+// marpDirective is Marp's own deck test, so qrouton and Marp agree on what a
+// deck is: the first unindented marp line, its value compared as text.
+var marpDirective = regexp.MustCompile(`(?m)^marp\s*: +(.*)$`)
 
-func marpLine(front string) bool {
-	for _, line := range strings.Split(front, "\n") {
-		if key, _, found := strings.Cut(line, ":"); found && strings.TrimSpace(key) == "marp" {
-			var declared marpFlag
-			return yaml.Unmarshal([]byte(line), &declared) == nil && declared.Marp
-		}
-	}
-	return false
-}
+const marpEnabled = "true"
 
 // Split returns the frontmatter, the body and the body's first source line.
 // An unclosed block yields nothing at all.

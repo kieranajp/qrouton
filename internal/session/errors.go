@@ -9,6 +9,8 @@ var ErrInvalidRole = errors.New("invalid repository role")
 
 var ErrInvalidMode = errors.New("invalid session mode")
 
+var ErrCheckoutOutsideSrc = errors.New("repository checkout is outside the session's src directory")
+
 var ErrNoPinnedRevision = errors.New("reference repository has no pinned revision")
 
 // ErrNoCloneURL means a manifest cannot be resumed: Create always records a
@@ -32,6 +34,10 @@ var ErrNoBaseBranch = errors.New("repository has no branch to work from")
 
 func invalidRole(role RepoRole, org, name string) error {
 	return fmt.Errorf("%w %q for %s/%s", ErrInvalidRole, role, org, name)
+}
+
+func outsideSrc(path, org, name string) error {
+	return fmt.Errorf("%w: %s/%s at %q", ErrCheckoutOutsideSrc, org, name, path)
 }
 
 func refuseRepo(err error, org, name string) error {
