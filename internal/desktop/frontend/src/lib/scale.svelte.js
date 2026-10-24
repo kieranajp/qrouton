@@ -1,5 +1,5 @@
 import { UI_SCALE_EVENT } from "./bridge/generated.js";
-import { linux } from "./platform.js";
+import { macOS } from "./platform.js";
 import { isNarrow } from "./scale.js";
 import { adjustUIScale } from "./settings/calls.js";
 import { scaleAction } from "./shortcuts.js";
@@ -20,7 +20,7 @@ export function onScale(listener) {
 
 /** The workbench saves the step and announces it back; the page applies only the announcement. */
 function onKey(event) {
-  const action = scaleAction(event, linux);
+  const action = scaleAction(event, macOS);
   if (!action) return;
   event.preventDefault();
   call(adjustUIScale(action));

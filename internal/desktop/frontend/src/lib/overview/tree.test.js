@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentName, buildRuns, elapsed, stateIcon, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
+import { agentName, buildRuns, elapsed, stateIcon, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, wroteLine } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -129,8 +129,6 @@ test("the overview lists leads in stage order, then by start, across runs", () =
   assert.deepEqual(leads.map((branch) => branch.node.id), ["r1", "r2", "p1", "i1", "x1"]);
   assert.equal(rootWords(root, leads), "waiting on Implementation");
   assert.equal(stageName("plan"), "Plan");
-  assert.equal(stageTone("implement"), "IMPLEMENT");
-  assert.equal(stageTone(""), undefined);
 });
 
 test("paths inside the session read from the repository down", () => {

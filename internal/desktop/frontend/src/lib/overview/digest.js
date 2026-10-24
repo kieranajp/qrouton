@@ -1,4 +1,4 @@
-import { age } from "../relative.js";
+import { relative } from "../relative.js";
 
 /** @typedef {(typeof import("../bridge/generated.js").CHROME_DEFAULTS)["sessionDigest"]} SessionDigest */
 
@@ -7,7 +7,6 @@ import { age } from "../relative.js";
 export function digestMeta(digest, now = Date.now()) {
   const text = digest?.text?.trim() ?? "";
   if (!text) return null;
-  const when = age(digest?.at ?? "", now);
-  const meta = when && when !== "now" ? `${when} ago` : when;
+  const meta = relative(digest?.at ?? "", "ago", now);
   return { text, meta };
 }

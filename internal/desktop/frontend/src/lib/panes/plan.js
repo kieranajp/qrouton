@@ -1,4 +1,5 @@
-import { flatten, sliceSections, walk } from "./sections.js";
+import { visit } from "unist-util-visit";
+import { plainText, sliceSections } from "./sections.js";
 
 /** Phase headings are the sole source of slide numbering.
  * @param {string} name A slide's heading text.
@@ -18,7 +19,7 @@ const OTHER_MARKER = /^\[[^\]\s]\]\s+/;
 function itemText(item) {
   return (item.children ?? [])
     .filter((child) => child.type !== "list")
-    .map(flatten)
+    .map(plainText)
     .join(" ")
     .trim();
 }
@@ -30,7 +31,7 @@ function headingAt(node, depth) {
 /** The nodes under the phase's criteria heading, up to the next heading of equal or lower depth. */
 function criteriaSection(nodes) {
   const at = nodes.findIndex(
-    (node) => node.type === "heading" && node.depth === 3 && flatten(node).trim().toLowerCase() === CRITERIA_HEADING,
+    (node) => node.type === "heading" && node.depth === 3 && plainText(node).trim().toLowerCase() === CRITERIA_HEADING,
   );
   if (at < 0) return { heading: null, nodes: [] };
   const rest = nodes.slice(at + 1);
@@ -44,7 +45,7 @@ function readCriteria(section) {
   let group = -1;
   let end = 0;
   for (const node of section) {
-    walk(node, (child) => {
+    visit(node, (child) => {
       if (child.type === "list") {
         if (child !== last) group++;
         last = child;

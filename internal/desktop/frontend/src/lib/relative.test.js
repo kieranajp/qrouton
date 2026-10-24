@@ -54,3 +54,11 @@ test("a time still ahead of now reads as just now", () => {
   assert.equal(relative(ago(-5 * MINUTE), "compact", NOW), "just now");
   assert.equal(relative(ago(-5 * MINUTE), "prose", NOW), "just now");
 });
+
+test("an ago age says just now, then counts minutes up to weeks and months", () => {
+  assert.equal(relative(ago(30000), "ago", NOW), "just now");
+  assert.equal(relative(ago(4 * MINUTE), "ago", NOW), "4m ago");
+  assert.equal(relative(ago(7 * DAY), "ago", NOW), "1w ago");
+  assert.equal(relative(ago(61 * DAY), "ago", NOW), "2mo ago");
+  assert.equal(relative("", "ago", NOW), "");
+});

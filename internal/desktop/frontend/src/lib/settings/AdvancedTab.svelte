@@ -2,6 +2,7 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import TextField from "../forms/TextField.svelte";
+  import { flash } from "../flash.svelte.js";
   import { copyText } from "../wails.js";
   import Legend from "./Legend.svelte";
   import TabHeader from "./TabHeader.svelte";
@@ -12,15 +13,15 @@
   let form = $derived(panel.form);
   let linear = $derived(panel.linear);
   let runners = $derived(form.runners.map((runner) => ({ term: runner.id, meaning: runner.label })));
-  let copied = $state(false);
+  /** @type {ReturnType<typeof flash<boolean>>} */
+  const copied = flash();
 
   async function copySnippet() {
     try {
       await copyText(linear.snippet);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
+      copied.show(true);
     } catch {
-      copied = false;
+      copied.clear();
     }
   }
 </script>
@@ -71,7 +72,7 @@
     <p>Or add this entry to <code>{linear.path}</code> yourself, keeping any other keys in it.</p>
     <div class="snippet">
       <button type="button" class="copy" aria-label="Copy the Linear entry" onclick={copySnippet}>
-        {copied ? "Copied" : "Copy"}
+        {copied.value ? "Copied" : "Copy"}
       </button>
       <pre aria-label="Linear entry">{linear.snippet}</pre>
     </div>

@@ -376,3 +376,35 @@ for (const room of [
     expect(filled).toBeGreaterThan(0.99);
   });
 }
+
+test("resizing the window rescales the presented slide", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
+  const before = await page.evaluate(() => window.slideBox().scale);
+  const room = page.viewportSize();
+  await page.setViewportSize({ width: Math.round(room.width / 2), height: Math.round(room.height / 2) });
+  await page.waitForFunction((was) => window.slideBox().scale < was, before);
+});
+
+test("a stage hidden to nothing keeps the last scale", async ({ page }) => {
+  await open(page);
+  await start(page);
+  await page.waitForFunction(() => window.slideBox().scale !== 1);
+  const before = await page.evaluate(() => window.slideBox().scale);
+  const slides = await page.evaluate(() => window.slideScale());
+  await page.evaluate(() => {
+    document.querySelector(".present-stage").style.display = "none";
+    document.querySelector(".stack").style.display = "none";
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => Number(document.querySelector(".present-card").style.getPropertyValue("--present-scale")))).toBe(before);
+  expect(await page.evaluate(() => window.slideScale())).toBe(slides);
+  await page.evaluate(() => {
+    document.querySelector(".present-stage").style.display = "";
+    document.querySelector(".stack").style.display = "";
+  });
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  expect(await page.evaluate(() => window.slideBox().scale)).toBe(before);
+  expect(await page.evaluate(() => window.slideScale())).toBe(slides);
+});

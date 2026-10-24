@@ -1,4 +1,5 @@
 <script>
+  import { DEFAULT_ROOT } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import TextField from "../forms/TextField.svelte";
 
@@ -23,7 +24,7 @@
   <p class="help failed">{error}</p>
 {:else}
   <p class="help">
-    Default is <span class="path">~/work</span>. This folder will be created if it does not exist.
+    Default is <span class="path">{DEFAULT_ROOT}</span>. This folder will be created if it does not exist.
   </p>
 {/if}
 

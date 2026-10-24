@@ -34,6 +34,12 @@ test("directives terminate runs and URLs are removed span by span", () => {
   assert.match(diagnostics[0], /styles\.css:4:1: comment-discipline\/no-path-pointer/);
 });
 
+test("a #! line in CSS is prose, not a shebang", () => {
+  const diagnostics = checkTreeWithFiles({ "styles.css": "/* #! The problem was the stale ref. */" }, policy);
+  assert.equal(diagnostics.length, 1);
+  assert.match(diagnostics[0], /styles\.css:1:1: comment-discipline\/no-narration/);
+});
+
 test("CSS traversal covers authored dot directories and skips node_modules", () => {
   const source = "/* The problem was the stale ref. */";
   const diagnostics = checkTreeWithFiles({ ".fixtures/authored.css": source, "node_modules/local.css": source }, policy);

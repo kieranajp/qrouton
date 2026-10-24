@@ -4,13 +4,14 @@ BINDIR   ?= $(HOME)/.local/bin
 FRONTEND := internal/desktop/frontend
 PAGES    := internal/desktop/assets/index.html internal/desktop/assets/notes/index.html
 BRIDGE   := internal/desktop/frontend/src/lib/bridge/generated.js
+PALETTE  := internal/desktop/frontend/tests/theme.css
 SHARE    := internal/share/assets/share.js
 VERSION  ?= 0.1.0
 BUILD_NUMBER ?= 1
 SIGN_IDENTITY ?= -
 MACOSX_DEPLOYMENT_TARGET ?= 12.0
 export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
-BOUND    := $(wildcard internal/config/*.go internal/desktop/*.go internal/status/*.go internal/kinds/*.go internal/workbench/*.go internal/session/*.go internal/github/*.go internal/assembly/*.go internal/placement/*.go internal/desktop/bridge/*.go)
+BOUND    := $(wildcard internal/config/*.go internal/desktop/*.go internal/status/*.go internal/kinds/*.go internal/theme/*.go internal/workbench/*.go internal/session/*.go internal/github/*.go internal/assembly/*.go internal/placement/*.go internal/vault/*.go internal/desktop/bridge/*.go)
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
@@ -23,6 +24,10 @@ front: $(PAGES) $(SHARE)
 # The page calls the workbench by name, and the names are Go's. Generated before
 # the pages that import them, so a rename cannot reach a build.
 $(BRIDGE): $(BOUND) go.mod
+	go generate ./internal/desktop/bridge/
+
+# The fixture pages run under Vite, where no workbench serves the palette.
+$(PALETTE): $(BOUND) go.mod
 	go generate ./internal/desktop/bridge/
 
 $(FRONTEND)/node_modules: $(FRONTEND)/package-lock.json
@@ -74,7 +79,7 @@ fmt:
 
 # A component's props are a contract with the screen that draws it, and a
 # bundler will happily ship a page that passes the wrong ones.
-front-check: $(FRONTEND)/node_modules
+front-check: $(FRONTEND)/node_modules $(PALETTE)
 	cd $(FRONTEND) && npm run check && npm run test:unit && npm run test:browser
 
 comment-check: $(FRONTEND)/node_modules

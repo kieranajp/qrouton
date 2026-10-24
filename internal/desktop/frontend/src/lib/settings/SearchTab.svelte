@@ -1,8 +1,8 @@
 <script>
-  import { onMount } from "svelte";
   import { OLLAMA_STATES } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
-  import { ollama } from "../ollama.svelte.js";
+  import ProgressBar from "../core/ProgressBar.svelte";
+  import { DOWNLOAD_URL, host, megabytes, ollama, percent } from "../ollama.svelte.js";
   import { openURL } from "../wails.js";
   import CommandRow from "./CommandRow.svelte";
   import StatusLine from "./StatusLine.svelte";
@@ -11,15 +11,8 @@
   /** @type {{labelledby?: string}} */
   let { labelledby } = $props();
 
-  const DOWNLOAD_URL = "https://ollama.com/download";
-
   const view = ollama();
-  onMount(view.check);
   let status = $derived(view.status);
-  let percent = $derived(status.total ? Math.round((status.completed / status.total) * 100) : 0);
-
-  /** @param {number} [bytes] */
-  const mb = (bytes = 0) => `${(bytes / 1e6).toFixed(1)} MB`;
 </script>
 
 <TabHeader title="Search" id={labelledby}>Find past research, specs and plans by meaning, not exact words.</TabHeader>
@@ -44,17 +37,15 @@
   <StatusLine tone="waiting" detail="Carries on in the background. If qrouton restarts, resume it here.">
     {status.detail || "Downloading"} {status.model}
     {#snippet body()}
-      <div class="bar" role="progressbar" aria-valuenow={percent} aria-valuemin="0" aria-valuemax="100">
-        <span style:width="{percent}%"></span>
-      </div>
+      <ProgressBar percent={percent(status)} />
     {/snippet}
     {#snippet actions()}
-      {#if status.total}<span class="bytes">{mb(status.completed)} of {mb(status.total)}</span>{/if}
+      {#if status.total}<span class="bytes">{megabytes(status.completed)} of {megabytes(status.total)}</span>{/if}
       <Button variant="secondary" onclick={view.cancel}>Cancel</Button>
     {/snippet}
   </StatusLine>
 {:else if status.state === OLLAMA_STATES.UNREACHABLE && status.installed}
-  <StatusLine tone="waiting" boxed detail="Nothing answering on localhost:11434">
+  <StatusLine tone="waiting" boxed detail="Nothing answering on {host}">
     Ollama is installed but not running
     {#snippet body()}
       <p class="body">
@@ -67,7 +58,7 @@
     {/snippet}
   </StatusLine>
 {:else if status.state === OLLAMA_STATES.UNREACHABLE}
-  <StatusLine tone="faint" boxed detail="Found no ollama on PATH and nothing on localhost:11434">
+  <StatusLine tone="faint" boxed detail="Found no ollama on PATH and nothing on {host}">
     Ollama isn't installed
     {#snippet body()}
       <p class="body">
@@ -113,17 +104,6 @@
   .bytes {
     font: var(--machine-sm);
     color: var(--text-primary);
-  }
-
-  .bar {
-    height: calc(4px * var(--ui-scale));
-    background: var(--border-subtle);
-  }
-
-  .bar span {
-    display: block;
-    height: 100%;
-    background: var(--accent-action);
   }
 
   .commands {

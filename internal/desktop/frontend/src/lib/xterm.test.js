@@ -56,9 +56,9 @@ test("the painter serializes live and replay chunks by write completion", () => 
   const painter = createTerminalPainter(term);
   const decrqss = handler(term, "dcs", { intermediates: "$", final: "q" });
 
-  painter.paint(encode("live-1"));
+  painter.paint({ encoded: encode("live-1") });
   painter.paint({ encoded: encode("replay-1"), replay: true });
-  painter.paint(encode("live-2"));
+  painter.paint({ encoded: encode("live-2") });
   painter.paint({ encoded: encode("replay-2"), replay: true });
 
   assert.deepEqual(term.writes.map(({ data }) => text(data)), ["live-1"]);
@@ -149,10 +149,10 @@ test("disposing clears queued output and makes write callbacks inert", () => {
   const painter = createTerminalPainter(term);
 
   painter.paint({ encoded: encode("retained"), replay: true });
-  painter.paint(encode("queued"));
+  painter.paint({ encoded: encode("queued") });
   painter.dispose();
   term.complete();
-  painter.paint(encode("ignored"));
+  painter.paint({ encoded: encode("ignored") });
 
   assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc"]);
   assert.equal(term.handlers.size, 0);

@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 // recorder collects what the Go side would have pushed at the page.
@@ -24,7 +26,11 @@ func (r *recorder) emit(event string, payload any) {
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
 	if strings.HasPrefix(event, ptyDataEvent) {
-		decoded, err := base64.StdEncoding.DecodeString(payload.(string))
+		chunk, ok := payload.(terminalChunk)
+		if !ok {
+			return
+		}
+		decoded, err := base64.StdEncoding.DecodeString(chunk.Encoded)
 		if err != nil {
 			return
 		}
@@ -255,5 +261,51 @@ func TestStopKillsTheWholeProcessTree(t *testing.T) {
 
 	waitFor(t, "the grandchild to die", func() bool {
 		return syscall.Kill(grandchild, 0) != nil
+	})
+}
+
+func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
+	var mu sync.Mutex
+	var agentPayload any
+	term, state := testTerm(t, func(event string, payload any) {
+		if strings.HasPrefix(event, ptyDataEvent) {
+			mu.Lock()
+			agentPayload = payload
+			mu.Unlock()
+		}
+	}, t.TempDir(), []string{"/bin/sh", "-c", "printf 'chunk\\n'; sleep 5"}, os.Environ())
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the agent terminal's data event", func() bool {
+		mu.Lock()
+		defer mu.Unlock()
+		return agentPayload != nil
+	})
+	mu.Lock()
+	_, agentChunk := agentPayload.(terminalChunk)
+	mu.Unlock()
+	if !agentChunk {
+		t.Fatalf("agent terminal emitted %T, want terminalChunk", agentPayload)
+	}
+
+	w, renderer := testWindows(t)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("echo\n"))); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the tab terminal's live output", func() bool {
+		renderer.mu.Lock()
+		defer renderer.mu.Unlock()
+		chunk, ok := renderer.events[windowDataEvent+id].(terminalChunk)
+		return ok && !chunk.Replay
 	})
 }

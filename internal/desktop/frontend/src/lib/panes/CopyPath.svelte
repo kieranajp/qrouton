@@ -1,19 +1,22 @@
 <script>
   import Button from "../core/Button.svelte";
+  import { flash } from "../flash.svelte.js";
   import { copyText } from "../wails.js";
 
   /** @type {{path?: string}} */
   let { path } = $props();
 
-  let copied = $state(false);
+  /** @type {ReturnType<typeof flash<boolean>>} */
+  const copied = flash();
 
   async function copy() {
     if (!path) return;
     try {
       await copyText(path);
-      copied = true;
-      setTimeout(() => (copied = false), 1200);
-    } catch {}
+      copied.show(true);
+    } catch {
+      copied.clear();
+    }
   }
 </script>
 
@@ -24,5 +27,5 @@
     aria-label="Copy absolute path"
     title={path}
     icon="copy"
-    onclick={copy}>{copied ? "Copied" : "Copy"}</Button>
+    onclick={copy}>{copied.value ? "Copied" : "Copy"}</Button>
 {/if}

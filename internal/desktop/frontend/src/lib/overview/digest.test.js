@@ -12,7 +12,7 @@ test("a digest keeps its lines and says how old it is", () => {
 });
 
 test("a digest written this minute reads now, without ago", () => {
-  assert.equal(digestMeta({ text: "Plan written.", at: "2026-10-11T14:59:40Z" }, now)?.meta, "now");
+  assert.equal(digestMeta({ text: "Plan written.", at: "2026-10-11T14:59:40Z" }, now)?.meta, "just now");
 });
 
 test("no digest, or a blank one, shows nothing", () => {

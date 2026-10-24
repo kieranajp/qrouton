@@ -33,7 +33,7 @@
     cursor: inherit;
   }
 
-  input:hover:not(:disabled) {
+  input:hover:not(:disabled, :checked) {
     background: var(--wash-selected);
   }
 

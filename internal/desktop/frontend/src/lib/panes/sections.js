@@ -1,3 +1,4 @@
+import { toString } from "mdast-util-to-string";
 import remarkFrontmatter from "remark-frontmatter";
 import remarkGfm from "remark-gfm";
 import remarkParse from "remark-parse";
@@ -7,27 +8,15 @@ const parser = unified().use([remarkParse, remarkFrontmatter, remarkGfm]);
 
 const FRONTMATTER = new Set(["yaml", "toml"]);
 
-/**
- * @param {any} node
- * @param {(node: any) => void} visit In document order.
- */
-export function walk(node, visit) {
-  visit(node);
-  for (const child of node?.children ?? []) walk(child, visit);
-}
-
 /** @param {any} node */
-export function flatten(node) {
-  if (typeof node?.value === "string") return node.value;
-  return (node?.children ?? []).map(flatten).join("");
-}
+export const plainText = (node) => toString(node, { includeImageAlt: false });
 
 /** Every second-level heading bounds a section, including headings a reader ignores.
  * @param {any} node An mdast node.
  * @returns {{name: string} | null} */
 function opensSection(node) {
   if (node?.type !== "heading" || node.depth !== 2) return null;
-  const name = flatten(node).trim();
+  const name = plainText(node).trim();
   return name ? { name } : null;
 }
 
@@ -44,7 +33,7 @@ export function sliceSections(text) {
   const matter = children.find((node) => FRONTMATTER.has(node.type));
   const start = matter ? (matter.position?.end?.line ?? 0) + 1 : 1;
   const first = children.find((node) => !FRONTMATTER.has(node.type));
-  const title = first?.type === "heading" && first.depth === 1 ? flatten(first).trim() : "";
+  const title = first?.type === "heading" && first.depth === 1 ? plainText(first).trim() : "";
 
   const openings = [];
   /** @type {any[][]} */

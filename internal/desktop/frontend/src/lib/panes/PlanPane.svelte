@@ -2,17 +2,19 @@
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
+  import Checkbox from "../core/Checkbox.svelte";
   import Chip from "../core/Chip.svelte";
   import { untrack } from "svelte";
   import ArtifactPane from "./ArtifactPane.svelte";
   import ReaderPips from "./ReaderPips.svelte";
   import { diagrams, links, viewport } from "./actions.js";
-  import { clampedSpan, counterFor, holding, partition, screenFor } from "./deck.js";
+  import { clampedSpan, counterFor, holding, partition, reach, screenFor } from "./deck.js";
   import { deck } from "./deck.svelte.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { criteriaSpans, parsePlan } from "./plan.js";
   import { reader, scrolls } from "./reader.svelte.js";
+  import "./deck.css";
   import "./markdown.css";
 
   const DOT = {
@@ -97,20 +99,14 @@
     scrolled = screenFor(plan.slides, line);
   }
 
-  // One strip, two jobs: it selects a screen in the deck and scrolls to a
-  // section in the document.
-  function reach(screen) {
-    if (!view.reading) {
-      at.show(screen);
-      return;
-    }
-    const from = screen === 0 ? plan.preamble.from : plan.slides[screen - 1].from;
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (reading?.querySelectorAll("[data-line]") ?? []),
-    ];
-    const target = blocks.find((block) => Number(block.dataset.line) >= from) ?? blocks[0];
-    target?.scrollIntoView({ block: "start" });
-  }
+  /** @param {number} screen */
+  const jump = (screen) =>
+    reach(screen, {
+      reading: view.reading,
+      root: reading,
+      show: at.show,
+      starts: [plan.preamble.from, ...plan.slides.map((slide) => slide.from)],
+    });
 
   /** @param {KeyboardEvent} event */
   function onKey(event) {
@@ -152,7 +148,7 @@
     {/snippet}
     {#snippet body()}
       {#if view.reading}
-        <div class="reading" bind:this={reading}>
+        <div class="reading artifact-deck" bind:this={reading}>
           <!-- The renderer lifts the opening heading out of the body, so the
                document view states the plan's name itself. -->
           <h1 class="display-lg">{plan.title || heading}</h1>
@@ -160,7 +156,7 @@
         </div>
       {:else}
         <div
-          class="deck"
+          class="deck artifact-deck"
           bind:this={sheet}
           data-document-source={doc.source}
           use:links={doc.source}
@@ -234,19 +230,15 @@
           </span>
           <!-- Every phase met leaves nothing to follow, so nothing is offered. -->
           {#if !allMet}
-            <label class="follow">
-              <input
-                type="checkbox"
-                checked={at.following}
-                onchange={(event) => at.track(event.currentTarget.checked)} />
-              Follow
-            </label>
+            <span class="follow">
+              <Checkbox checked={at.following} onchange={(event) => at.track(event.currentTarget.checked)}>Follow</Checkbox>
+            </span>
           {/if}
         </div>
       {/if}
     {/snippet}
     {#snippet controls()}
-      <ReaderPips entries={pips} current={viewing} onSelect={reach} />
+      <ReaderPips entries={pips} current={viewing} onSelect={jump} />
     {/snippet}
     {#snippet counter()}
       <!-- A truncated section name is unidentifiable, so the whole of it
@@ -275,41 +267,6 @@
 {/if}
 
 <style>
-  /* The footer spans the pane, so the padding belongs to what it frames. */
-  .deck,
-  .reading {
-    padding-left: var(--pane-pad);
-    padding-right: var(--pane-pad);
-  }
-
-  .deck,
-  .reading {
-    padding-bottom: calc(26px * var(--ui-scale));
-  }
-
-  .reading .display-lg {
-    margin-top: calc(4px * var(--ui-scale));
-  }
-
-  /* The opening screen is the one everybody sees first, so it is given room:
-     label, title, lead, then the list with air around it. */
-  .hero {
-    padding-top: calc(18px * var(--ui-scale));
-  }
-
-  .hero .display-lg {
-    margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
-    max-width: 26ch;
-  }
-
-  .hero .lead :global(p) {
-    font: var(--machine-lg);
-    font-size: calc(15px * var(--ui-scale));
-    line-height: 1.7;
-    color: var(--text-secondary);
-    max-width: 68ch;
-  }
-
   .hero .lead :global(p:first-of-type) {
     color: var(--text-primary);
   }
@@ -329,28 +286,7 @@
   }
 
   .follow {
-    display: inline-flex;
-    align-items: center;
-    gap: calc(8px * var(--ui-scale));
     margin-left: auto;
-    cursor: pointer;
-  }
-
-  /* The acceptance criteria's box, in the colour of something the reader
-     operates rather than the colour of a check the document has met. */
-  .follow input {
-    appearance: none;
-    width: calc(13px * var(--ui-scale));
-    height: calc(13px * var(--ui-scale));
-    margin: 0;
-    border: var(--border-width) solid var(--border-default);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .follow input:checked {
-    border: none;
-    background: var(--accent-action);
   }
 
   .screen > :global(.caps),
@@ -379,74 +315,9 @@
     height: calc(9px * var(--ui-scale));
   }
 
-  .display-lg,
-  .display-md {
-    margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
-    padding-left: var(--gutter);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-  }
-
-  .display-lg {
-    font: var(--display-lg);
-  }
-
-  .display-md {
-    font: var(--display-md);
-  }
-
-  /* The scroller ends where the footer begins, so its bar stops there too rather
-     than running the pane's full height with the footer floating over it. */
-  .deck,
-  .reading {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-  }
-
-  .rows {
-    list-style: none;
-    margin: calc(26px * var(--ui-scale)) 0 0;
-    padding: 0;
-    border: var(--border-width) solid var(--border-subtle);
-    box-shadow: var(--shadow-offset) var(--border-subtle);
-  }
-
-  .rows li + li .row {
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: calc(14px * var(--ui-scale));
-    width: 100%;
-    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
-    border: 0;
-    background: transparent;
-    font: var(--machine-md);
-    color: var(--text-secondary);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .row:hover {
-    background: var(--wash-selected);
-  }
-
-  .row .index {
-    min-width: 2ch;
-    font: var(--machine-bold);
-    color: var(--accent-action);
-  }
-
   .row .name {
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--text-primary);
   }
 
   .count {
@@ -485,30 +356,8 @@
     color: var(--text-muted);
   }
 
-  /* Narrow steps the type down. Nothing goes away. */
-  :global(html[data-narrow]) .hero {
-    padding-top: calc(6px * var(--ui-scale));
-  }
-
-  /* The list is what the screen is for; the hero gives way to it. */
-  :global(html[data-narrow]) .hero .display-lg {
-    margin: calc(8px * var(--ui-scale)) 0 calc(12px * var(--ui-scale));
-  }
-
   :global(html[data-narrow]) .hero .rows {
     margin-top: calc(18px * var(--ui-scale));
-  }
-
-  :global(html[data-narrow]) .hero .lead :global(p) {
-    font: var(--machine-md);
-  }
-
-  :global(html[data-narrow]) .display-lg {
-    font: var(--display-md);
-  }
-
-  :global(html[data-narrow]) .display-md {
-    font: var(--display-sm);
   }
 
   :global(html[data-narrow]) .criteria .markdown :global(li) {

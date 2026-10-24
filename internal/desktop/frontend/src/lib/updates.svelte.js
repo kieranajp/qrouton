@@ -1,5 +1,5 @@
 import { UPDATE_EVENT, UPDATES_STATUS } from "./bridge/generated.js";
-import { call, Call, Events } from "./wails.js";
+import { call, Call, follow } from "./wails.js";
 
 const NOTHING = { available: false, current: "", latest: "", command: "", url: "" };
 
@@ -12,18 +12,10 @@ let shared;
 
 function observing() {
   let status = $state(NOTHING);
-  let live = false;
-  const apply = (value) => {
-    status = value ?? NOTHING;
-  };
-  Events.On(UPDATE_EVENT, (event) => {
-    live = true;
-    apply(event.data);
-  });
   // A failed snapshot reads as not available, same as a check Go itself
   // could not complete.
-  call(Call.ByName(UPDATES_STATUS)).then((answer) => {
-    if (!live) apply(answer.ok ? answer.value : undefined);
+  follow(UPDATE_EVENT, () => call(Call.ByName(UPDATES_STATUS)), (value) => {
+    status = value ?? NOTHING;
   });
   return {
     get status() {

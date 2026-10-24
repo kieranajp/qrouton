@@ -21,30 +21,31 @@ export const rowAt = (rows, event) => rows?.[position(event) - 1];
 /** shortcut is the glyph a rail row wears in place of its initials. */
 export const shortcut = (index) => (index < NUMBERED ? "⌘" + (index + 1) : "");
 
-/**
- * opensSettings is Command on macOS and Control elsewhere, with a comma.
- * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
- */
-export function opensSettings(event) {
+/** Command on macOS and Control elsewhere, alone. Control on macOS stays terminal input.
+ * @param {{metaKey?: boolean, ctrlKey?: boolean}} event
+ * @param {boolean} macOS */
+const primaryHeld = (event, macOS) => (macOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey);
+
+/** @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
+ * @param {boolean} macOS */
+export function opensSettings(event, macOS) {
   if (!event || event.altKey || event.shiftKey) return false;
-  return Boolean(event.metaKey) !== Boolean(event.ctrlKey) && event.key === ",";
+  return Boolean(primaryHeld(event, macOS)) && event.key === ",";
 }
 
-/** Command on macOS and Control on Linux; Control on macOS stays terminal input.
- * @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
- * @param {boolean} linux */
-export function scaleAction(event, linux) {
-  if (!event || event.altKey) return "";
-  const held = linux ? event.ctrlKey && !event.metaKey : event.metaKey && !event.ctrlKey;
-  if (!held) return "";
+/** @param {{key?: string, metaKey?: boolean, ctrlKey?: boolean, altKey?: boolean, shiftKey?: boolean}} event
+ * @param {boolean} macOS */
+export function scaleAction(event, macOS) {
+  if (!event || event.altKey || !primaryHeld(event, macOS)) return "";
   if (event.key === "=" || event.key === "+") return UI_SCALE_ACTIONS.IN;
   if (event.key === "-") return UI_SCALE_ACTIONS.OUT;
   if (event.key === "0") return UI_SCALE_ACTIONS.RESET;
   return "";
 }
 
+/** @param {boolean} macOS */
 export function opensSwitcher(event, macOS) {
   if (!event || event.altKey || event.shiftKey || event.isComposing || event.keyCode === 229) return false;
-  return (macOS ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey) && event.key?.toLowerCase() === "k";
+  return Boolean(primaryHeld(event, macOS)) && event.key?.toLowerCase() === "k";
 }
 export const switcherHint = (macOS) => macOS ? "⌘K" : "Ctrl+K";

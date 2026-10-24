@@ -1,6 +1,6 @@
 <script>
   import { onMount } from "svelte";
-  import { GITHUB_CREDENTIALS, GITHUB_TOKEN_CHECKS } from "../bridge/generated.js";
+  import { GITHUB_CREDENTIALS, GITHUB_TOKEN_CHECKS, ORGS_ENV_VAR } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { openURL } from "../wails.js";
@@ -15,7 +15,7 @@
   let { panel, labelledby } = $props();
 
   let form = $derived(panel.form);
-  let help = $derived(panel.fields.orgs ?? (form.pinned.orgs ? pinnedNote("QROUTON_ORGS") : ""));
+  let help = $derived(panel.fields.orgs ?? (form.pinned.orgs ? pinnedNote(ORGS_ENV_VAR) : ""));
   let gh = $derived(panel.github);
   let cli = $derived(gh?.state === GITHUB_CREDENTIALS.CLI);
   let source = $derived(cli ? "the GitHub CLI" : gh?.variable);

@@ -16,8 +16,8 @@ import { repoID } from "./filter.js";
 
 const IN_SESSION = "in session";
 const CUT_FROM = "from ";
-const READING = "in session, read-only";
-const TAKING_UP = "in session, taking it up to edit";
+const READING = `${IN_SESSION}, ${READ_ONLY}`;
+const TAKING_UP = `${IN_SESSION}, taking it up to edit`;
 
 /** @type {Role[]} */
 const OFFERS = ["off", REPO_ROLES.EDITING, REPO_ROLES.REFERENCE];

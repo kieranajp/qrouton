@@ -13,3 +13,9 @@ test("an agent stage value resolves to its workflow tone", () => {
   assert.equal(stageTone("plan"), workflowTone("PLAN"));
   assert.equal(stageTone("implement"), workflowTone("IMPLEMENT"));
 });
+
+test("an unknown or empty stage has no workflow tone", () => {
+  assert.equal(stageTone("triage"), undefined);
+  assert.equal(stageTone(""), undefined);
+  assert.equal(stageTone(undefined), undefined);
+});

@@ -190,18 +190,8 @@ export const STAGE_NAMES = {
   [AGENT_STAGES.IMPLEMENT]: "Implementation",
 };
 
-const STAGE_TONES = {
-  [AGENT_STAGES.RESEARCH]: "RESEARCH",
-  [AGENT_STAGES.PLAN]: "PLAN",
-  [AGENT_STAGES.IMPLEMENT]: "IMPLEMENT",
-};
-
 /** @param {string | undefined} stage */
 export const stageName = (stage) => STAGE_NAMES[stage ?? ""] ?? "";
-
-/** The workflow stage a lead's square wears the tone of, for workflowTone.
- * @param {string | undefined} stage @returns {"RESEARCH" | "PLAN" | "IMPLEMENT" | undefined} */
-export const stageTone = (stage) => STAGE_TONES[stage ?? ""];
 
 /** @param {Branch} branch */
 const rank = (branch) => {

@@ -1,4 +1,4 @@
-import { flatten, sliceSections } from "./sections.js";
+import { plainText, sliceSections } from "./sections.js";
 
 const OPEN = "open questions";
 const DECISIONS = "decisions";
@@ -83,7 +83,7 @@ function readQuestions(lines, section) {
   /** @type {Question[]} */
   const questions = [];
   heads.forEach((heading, at) => {
-    const named = QUESTION.exec(flatten(heading).trim());
+    const named = QUESTION.exec(plainText(heading).trim());
     if (!named) return;
     const to = heads[at + 1] ? line(heads[at + 1]) - 1 : section.to;
     questions.push(readQuestion(lines, heading, to, named));
@@ -99,7 +99,7 @@ function readDecisions(section) {
   let page = null;
   for (const node of section.nodes) {
     if (isHeading(node, 3)) {
-      const name = flatten(node).trim();
+      const name = plainText(node).trim();
       const named = QUESTION.exec(name);
       page = {
         kind: named ? "question" : "group",
@@ -118,7 +118,7 @@ function readDecisions(section) {
       pages.push(page);
     }
     const lead = node.type === "paragraph" ? node.children?.[0] : null;
-    if (lead?.type === "strong" && page.kind !== "question") page.leads.push(flatten(lead).trim().replace(/[.:]$/, ""));
+    if (lead?.type === "strong" && page.kind !== "question") page.leads.push(plainText(lead).trim().replace(/[.:]$/, ""));
   }
   pages.forEach((decision, at) => {
     decision.count = decision.kind === "question" ? 1 : decision.leads.length;
@@ -130,7 +130,7 @@ function readDecisions(section) {
 /** @param {{nodes: any[]}} section */
 function isNone(section) {
   const [only, ...rest] = section.nodes;
-  return rest.length === 0 && only?.type === "paragraph" && /^none\.$/i.test(flatten(only).trim());
+  return rest.length === 0 && only?.type === "paragraph" && /^none\.$/i.test(plainText(only).trim());
 }
 
 /** A spec is answerable once Open questions holds questions or "None.", or Decisions holds a resolved question.

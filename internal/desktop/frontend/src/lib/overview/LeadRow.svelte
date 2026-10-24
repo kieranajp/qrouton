@@ -1,10 +1,11 @@
 <script>
+  import { AGENT_STATES } from "../bridge/generated.js";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import Icon from "../core/Icon.svelte";
-  import { workflowTone } from "../workflow.js";
+  import { stageTone } from "../workflow.js";
   import AgentRow from "./AgentRow.svelte";
   import StageSquare from "./StageSquare.svelte";
-  import { agentName, elapsed, isFinished, nowLine, stageName, stageTone, stateTone, stateWords } from "./tree.js";
+  import { agentName, elapsed, isFinished, nowLine, stageName, stateTone, stateWords } from "./tree.js";
 
   /** One lead: its stage square and name, its document, and its subagents
    * while open. Only a live lead opens on its own.
@@ -18,8 +19,7 @@
   let open = $derived(chosen ?? !finished);
   let name = $derived(stageName(node.stage) || agentName(node));
   let taskName = $derived(node.taskName || "");
-  let stage = $derived(stageTone(node.stage));
-  let tone = $derived(stage ? workflowTone(stage) : `var(${stateTone(node.state)})`);
+  let tone = $derived(stageTone(node.stage) ?? `var(${stateTone(node.state)})`);
   let document = $derived(node.documents?.at(-1));
   let count = $derived(branch.children.length);
   let doing = $derived(nowLine(node, root) || stateWords(node, tools));
@@ -38,7 +38,7 @@
       aria-label="{name}{taskName ? ` · ${taskName}` : ""} · {finished ? stateWords(node, tools) : doing}"
       aria-expanded={count ? open : undefined}
       onclick={toggle}>
-      <StageSquare {tone} done={finished && node.state !== "failed" && node.state !== "ended"} live={!finished} />
+      <StageSquare {tone} done={finished && node.state !== AGENT_STATES.FAILED && node.state !== AGENT_STATES.ENDED} live={!finished} />
       <span class="name">{name}</span>
       {#if taskName}<span class="task-name" title={taskName}>· {taskName}</span>{/if}
       {#if !finished}<span class="doing">{doing}</span>{/if}
