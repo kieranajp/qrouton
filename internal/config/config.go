@@ -348,8 +348,12 @@ func Path() string {
 	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), configFileName)
 }
 
+func CacheDir() string {
+	return xdgDir(cacheHomeEnvVar, cacheHomeFallback)
+}
+
 func CachePath() string {
-	return filepath.Join(xdgDir(cacheHomeEnvVar, cacheHomeFallback), cacheFileName)
+	return filepath.Join(CacheDir(), cacheFileName)
 }
 
 // Load reads config.json if it exists, and otherwise starts from defaults —

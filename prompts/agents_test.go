@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/agentevent"
 )
 
 const (
-	taskTool       = "Task"
 	leadNamePrefix = "qrouton-"
 	leadNameSuffix = "-lead"
 	toolsKey       = "tools"
@@ -34,9 +35,7 @@ func agentAssetPaths(name string) []string {
 // inheriting the default by nobody's decision.
 var defaultSandboxAgents = map[string]bool{}
 
-// Depth stays bounded at three levels: a lead omits tools so it inherits Task
-// and can delegate, and every specialist declares a tools set without Task so
-// it cannot spawn a fourth.
+// A lead omits tools so it can spawn; a specialist declares tools without Agent or Task so it cannot.
 func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 	loaded, err := NewEmbeddedLoader().List(context.Background())
 	if err != nil {
@@ -57,12 +56,10 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 			case lead && declared:
 				t.Errorf("a lead declares tools %q, so it can no longer delegate", tools)
 			case !lead && !declared:
-				t.Error("a specialist declares no tools, so it inherits Task and can spawn")
+				t.Error("a specialist declares no tools, so it inherits the spawn tool")
 			}
-			for _, tool := range strings.Split(tools, ",") {
-				if strings.TrimSpace(tool) == taskTool {
-					t.Errorf("a specialist holds %s, so the tree can grow a fourth level", taskTool)
-				}
+			if tool := spawnTool(tools); tool != "" {
+				t.Errorf("a specialist holds %s, so the tree can grow a fourth level", tool)
 			}
 
 			assets, err := Render(prompt)
@@ -94,6 +91,16 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 	if agents == 0 {
 		t.Fatal("no agent prompts are embedded")
 	}
+}
+
+// spawnTool returns the first tool in a tools: list that can start a subagent.
+func spawnTool(tools string) string {
+	for _, tool := range strings.Split(tools, ",") {
+		if tool = strings.TrimSpace(tool); tool == agentevent.ToolAgent || tool == agentevent.ToolTaskLegacy {
+			return tool
+		}
+	}
+	return ""
 }
 
 // wantSandbox is the sandbox line the maps the renderer consults call for. An

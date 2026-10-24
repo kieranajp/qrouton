@@ -508,3 +508,17 @@ func TestThoughtsPlacementSurvivesSnapshotAndReplace(t *testing.T) {
 		t.Fatal("Replace kept stale placement fields")
 	}
 }
+
+func TestCacheDirFollowsXDGCacheHomeOnEveryPlatform(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", "")
+	if got, want := CacheDir(), filepath.Join(home, ".cache", "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
+	}
+	cache := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cache)
+	if got, want := CacheDir(), filepath.Join(cache, "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
+	}
+}

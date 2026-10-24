@@ -63,7 +63,7 @@ func TestSearchReportsRawChannelEvidence(t *testing.T) {
 		t.Fatalf("status = %+v", res.Status)
 	}
 	top := res.Hits[0]
-	if top.ID != "pantry-sync/research/R1-2026-01-10-barcode-decoder-latency" || top.Kind != KindResearch || top.Profile != "test" {
+	if top.ID != "pantry-sync/research/R1-2026-01-10-barcode-decoder-latency" || top.Kind != "research" || top.Profile != "test" {
 		t.Fatalf("top hit = %+v", top)
 	}
 	if top.BM25 == nil || top.BM25.Rank != 1 || top.Dense == nil || top.FusedRank != 1 || top.AdmittedBy != AdmittedRRF {
@@ -76,12 +76,12 @@ func TestSearchReportsRawChannelEvidence(t *testing.T) {
 
 func TestKindsNarrowBothChannels(t *testing.T) {
 	s := newTestService(t, copyTree(t, corpusDir), &stubEmbedder{})
-	res := search(t, s, Query{Text: "release rollout checklist calendar", Kinds: []string{KindResearch}})
+	res := search(t, s, Query{Text: "release rollout checklist calendar", Kinds: []string{"research"}})
 	if len(res.Hits) == 0 {
 		t.Fatal("no research hits")
 	}
 	for _, h := range res.Hits {
-		if h.Kind != KindResearch {
+		if h.Kind != "research" {
 			t.Errorf("research-only search returned %s (%q)", h.ID, h.Kind)
 		}
 	}
@@ -318,8 +318,14 @@ func TestNewRejectsUnsafeProfileIDs(t *testing.T) {
 
 func TestSearchRejectsUnknownKindsAndCapsTheLimit(t *testing.T) {
 	s := newTestService(t, copyTree(t, corpusDir), &stubEmbedder{})
-	if _, err := s.Search(context.Background(), Query{Text: "x", Kinds: []string{"reseach"}}); !errors.Is(err, ErrUnknownKind) {
+	_, err := s.Search(context.Background(), Query{Text: "x", Kinds: []string{"reseach"}})
+	if !errors.Is(err, ErrUnknownKind) {
 		t.Fatalf("misspelt kind = %v", err)
+	}
+	for _, kind := range Kinds() {
+		if !strings.Contains(err.Error(), kind) {
+			t.Errorf("unknown-kind error %q omits %q", err, kind)
+		}
 	}
 	if res := search(t, s, Query{Text: "the", Limit: 1000}); len(res.Hits) > maxLimit+2*channelTop {
 		t.Fatalf("limit 1000 returned %d hits", len(res.Hits))

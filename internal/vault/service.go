@@ -113,8 +113,8 @@ func (s *Service) Search(ctx context.Context, q Query) (Result, error) {
 	}
 	q.Limit = min(q.Limit, maxLimit)
 	for _, kind := range q.Kinds {
-		if !kinds[kind] {
-			return Result{}, fmt.Errorf("%w: %q", ErrUnknownKind, kind)
+		if !slices.Contains(Kinds(), kind) {
+			return Result{}, fmt.Errorf("%w %q: "+kindHint, ErrUnknownKind, kind, strings.Join(Kinds(), kindSeparator))
 		}
 	}
 	s.mu.Lock()

@@ -9,13 +9,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
-// openVault answers nil only when there is nowhere to cache vectors.
 func openVault(cfg *config.Config) *vault.Set {
-	cacheDir, err := vault.DefaultCacheDir()
-	if err != nil {
-		return nil
-	}
-	set := vault.NewSet(vault.NewOllama(), cacheDir)
+	set := vault.NewSet(vault.NewOllama(), filepath.Join(config.CacheDir(), vault.CacheDirName))
 	_ = set.Configure(thoughtsProfiles(cfg))
 	return set
 }

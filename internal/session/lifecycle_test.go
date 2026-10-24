@@ -167,3 +167,17 @@ func runGitTest(t *testing.T, args ...string) {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
 	}
 }
+
+func TestOutlivedCheckoutRecognisesEachGitVersionsMessage(t *testing.T) {
+	for _, output := range []string{
+		"fatal: not a git repository: /tmp/checkout/src/api/../.mirrors/acme/api.git/worktrees/api\n",
+		"fatal: gitfile does not point to a valid repository: /tmp/checkout/src/api/.git\n",
+	} {
+		if !outlivedCheckout(output) {
+			t.Errorf("outlivedCheckout(%q) = false", output)
+		}
+	}
+	if outlivedCheckout("fatal: detected dubious ownership in repository at '/tmp/checkout/src/api'\n") {
+		t.Error("dubious ownership read as an outlived checkout")
+	}
+}

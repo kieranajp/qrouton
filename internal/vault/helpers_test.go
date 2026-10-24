@@ -20,13 +20,22 @@ const stubDimension = 512
 // concepts lets the stub embedder see through the synthetic corpus's
 // paraphrases, the way a real model would, while BM25 cannot.
 var concepts = map[string]string{
-	"kick": "logout", "logg": "logout", "renew": "refresh", "credential": "token",
+	"kick": "logout", "logged": "logout", "renew": "refresh", "credential": "token",
 	"call": "request", "once": "concurrent", "parallel": "concurrent",
 	"ship": "release", "build": "version", "slice": "percentage", "customer": "user",
 	"phone": "device", "handset": "device", "signal": "offline",
-	"use": "expiry", "best": "expiry", "stamp": "date", "packag": "label",
+	"use": "expiry", "best": "expiry", "stamp": "date", "packaging": "label",
 	"healthy": "crash",
 }
+
+// stemmedConcepts is concepts in the form tokens hands the stub.
+var stemmedConcepts = func() map[string]string {
+	out := make(map[string]string, len(concepts))
+	for word, concept := range concepts {
+		out[tokens(word)[0]] = tokens(concept)[0]
+	}
+	return out
+}()
 
 var errStubDown = errors.New("stub embedder is down")
 var errPoisoned = fmt.Errorf("%w: stub embedder rejects this input", ErrRejected)
@@ -102,7 +111,7 @@ func (e *stubEmbedder) count() (calls, inputs int) {
 func conceptVector(text string) []float32 {
 	v := make([]float32, stubDimension)
 	for _, t := range tokens(text) {
-		if c, ok := concepts[t]; ok {
+		if c, ok := stemmedConcepts[t]; ok {
 			t = c
 		}
 		h := fnv.New32a()

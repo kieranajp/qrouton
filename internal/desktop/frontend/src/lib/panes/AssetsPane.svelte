@@ -1,9 +1,9 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { GALLERY_LABEL, MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { GALLERY_LABEL, MEDIA_KINDS } from "../bridge/generated.js";
   import Chip from "../core/Chip.svelte";
   import { linux } from "../platform.js";
-  import { Call } from "../wails.js";
+  import { focusAsset } from "./calls.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
   import ArtifactHeader from "./ArtifactHeader.svelte";
@@ -84,12 +84,9 @@
     const attempt = ++request;
     const revision = doc.revision;
     selectionError = "";
-    try {
-      await Call.ByName(WINDOWS_FOCUS_ASSET, slug, id, index);
-    } catch {
-      if (alive && attempt === request && doc.revision === revision) {
-        selectionError = "Could not select asset. Try again.";
-      }
+    const answer = await focusAsset(slug, id, index);
+    if (!answer.ok && alive && attempt === request && doc.revision === revision) {
+      selectionError = "Could not select asset. Try again.";
     }
   }
 

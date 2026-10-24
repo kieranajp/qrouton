@@ -80,3 +80,11 @@ func TestHalvesPreferALineBoundary(t *testing.T) {
 		t.Fatalf("rune halves = %q %q", a, b)
 	}
 }
+
+func TestTildeAndLongerFencesHideHeadings(t *testing.T) {
+	body := "# T\n\n## A\n\n~~~\n# not a heading\n~~~\n\n````md\n```\n## nor this\n```\n````\n\n## B\n\nText.\n"
+	chunks := chunkDocument("T", body, 1)
+	if len(chunks) != 2 || chunks[0].breadcrumb != "T > A" || chunks[0].start != 3 || chunks[1].breadcrumb != "T > B" || chunks[1].start != 15 {
+		t.Fatalf("chunks = %+v", chunks)
+	}
+}

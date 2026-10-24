@@ -1,22 +1,16 @@
 // What a Save refusal means for the panel's fields.
 
 import { SETTINGS_FIELDS } from "../bridge/generated.js";
+import { fieldError as parse } from "../fields.js";
 
 const msgLoadFailed = "Settings could not be read:";
 
-const SCOPED = new RegExp(
-  `^(${SETTINGS_FIELDS.STICKERS}\\.\\d+|[a-z]+|${Object.values(SETTINGS_FIELDS).join("|")}): (.*)$`,
-  "s",
-);
+const STICKER_ROW = `${SETTINGS_FIELDS.STICKERS}\\.\\d+`;
 
 /** Unscoped failures return null instead of guessing a field.
  * @param {any} err
  * @returns {{field: string, message: string} | null} */
-export function fieldError(err) {
-  const text = String(err?.message ?? err ?? "");
-  const found = text.match(SCOPED);
-  return found ? { field: /** @type {any} */ (found[1]), message: found[2] } : null;
-}
+export const fieldError = (err) => parse(err, SETTINGS_FIELDS, [STICKER_ROW]);
 
 /** @param {any} err */
 export function loadFailure(err) {

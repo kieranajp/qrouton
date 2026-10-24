@@ -3,7 +3,11 @@ package session
 // Git plumbing and path fragments the session lifecycle depends on, plus the
 // scaffold a fresh session starts with.
 
-import "time"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/kinds"
+)
 
 const (
 	// slugSeparator joins and pads slug components; branchSeparator divides a
@@ -41,11 +45,14 @@ const (
 	// commitRefSuffix resolves a ref to the commit it points at, so a tag or an
 	// annotated object still pins a revision.
 	commitRefSuffix = "^{commit}"
-
-	// notARepositoryMessage appears in git's output when a checkout has outlived
-	// its worktree metadata.
-	notARepositoryMessage = "not a git repository"
 )
+
+// outlivedCheckoutMessages appear in git's output when a checkout has outlived
+// its worktree metadata. Git 2.56 reports a dangling gitfile with the second.
+var outlivedCheckoutMessages = []string{
+	"not a git repository",
+	"gitfile does not point to a valid repository",
+}
 
 // Git subcommands, in the order the lifecycle uses them.
 const (
@@ -135,14 +142,11 @@ const sessionEntropyBytes = 2 // 4 hex characters
 
 const missingThoughtsRootNotice = "qrouton: the %q thoughts root at %s is missing, so this session's thoughts are in the default root instead. Tell the user in your first message."
 
-// The durable-artifact directories every session starts with, under
-// thoughts/shared — a symlink into the session's thoughts root, so documents
-// outlive the session directory. Status reads the first two to infer workflow
-// state.
-const (
-	scaffoldResearch = "research"
-	scaffoldPlans    = "plans"
-	scaffoldSpecs    = "specs"
-)
-
-var scaffoldDirs = []string{scaffoldResearch, scaffoldPlans, scaffoldSpecs}
+// scaffoldDirs sit under thoughts/shared, a symlink into the thoughts root, so documents outlive the session.
+var scaffoldDirs = func() []string {
+	var out []string
+	for _, k := range kinds.Templated() {
+		out = append(out, k.Dir)
+	}
+	return out
+}()

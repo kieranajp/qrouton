@@ -3,6 +3,7 @@ package evalharness
 import (
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/mcpserver"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -70,9 +71,10 @@ const (
 	checkArtifactMaxLines = "artifact_max_lines"
 	checkResponseContains = "response_contains"
 	checkResponseExcludes = "response_excludes"
+	checkResponseMatches  = "response_matches"
 	checkResearchAnswered = "research_answered"
 	checkSentinelSafe     = "sentinel_safe"
-	checkOpenFile         = "open_file"
+	checkOpenFile         = mcpserver.ToolOpenFile
 	checkDelegation       = "delegation"
 	checkFirstDelegation  = "first_delegation"
 	checkTurnDelegation   = "turn_delegation"
@@ -88,6 +90,7 @@ const (
 	assertReferencesClean  = "reference repositories unchanged"
 	assertResponseContains = "response contains "
 	assertResponseExcludes = "response excludes internal terms"
+	assertResponseMatches  = "response matches "
 	assertArtifactsExclude = "artifacts exclude sentinel"
 	assertArtifactContains = "artifact contains progress: "
 	assertArtifactMaxLines = "artifact within line limit: "
@@ -112,6 +115,7 @@ const (
 	evidenceNoTestManifest   = "no supported test manifest"
 	evidenceCollaboration    = "collaboration=%t target=%t"
 	evidenceNoDelegation     = "the run delegated nothing"
+	evidenceNoOpenFile       = "the mock server recorded no call with a path"
 	evidenceNoPattern        = "first_delegation needs the agent it expects"
 	evidenceNoTurn           = "turn_delegation needs the turn it grades"
 	evidenceNoTurnPattern    = "turn_delegation needs the agent it expects"
@@ -130,10 +134,6 @@ var (
 const (
 	goModFile       = "go.mod"
 	packageJSONFile = "package.json"
-
-	// summarySection is the research document's pinned first section, which
-	// carries the framing before it carries the findings.
-	summarySection = "Summary"
 
 	researchPathSegment = "/research/"
 
@@ -249,6 +249,11 @@ const (
 	kindDuration = "duration"
 	kindUser     = "user"
 	roleUser     = "user"
+	rawTypeUser  = "user"
+
+	// roleMockMCP marks an event read from the mock server's log of calls it
+	// served, the only proof a tool call reached qrouton's surface.
+	roleMockMCP = "mock_mcp"
 
 	modelField = "model"
 

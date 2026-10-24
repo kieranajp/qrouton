@@ -13,7 +13,7 @@ const calls = [];
 
 window.wailsCall = async (name, ...args) => {
   calls.push({ name, args });
-  if (failing && name.endsWith("." + failing)) throw new Error("assembly: no agent command");
+  if (failing && name.endsWith("." + failing)) throw new Error("no agent command");
   if (name.endsWith(".Begin")) return { ticket: "", entropy: "4f3a", generation: 3 };
   if (name.endsWith(".Prefixes")) return ["feat"];
   if (name.endsWith(".Runners")) return agents;

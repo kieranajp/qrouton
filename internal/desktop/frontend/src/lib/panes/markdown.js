@@ -164,13 +164,12 @@ export function linkKind(href) {
  * @returns {string}
  */
 export function documentPath(href, source) {
-  const target = href.replace(/[?#].*$/, "");
-  if (target.startsWith("/")) return target.slice(1);
-  const parts = source.split("/").slice(0, -1);
-  for (const part of target.split("/")) {
-    if (part === "." || part === "") continue;
-    if (part === "..") parts.pop();
-    else parts.push(part);
-  }
-  return parts.join("/");
+  const encode = (/** @type {string} */ path) => path.split("/").map(encodeURIComponent).join("/");
+  const target = href.replace(/[?#].*/s, "");
+  let decoded = target;
+  try {
+    decoded = decodeURIComponent(target);
+  } catch {}
+  const { pathname } = new URL(encode(decoded), "file:///" + encode(source));
+  return decodeURIComponent(pathname).slice(1);
 }

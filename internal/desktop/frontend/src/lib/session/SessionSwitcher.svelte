@@ -1,5 +1,6 @@
 <script>
   import Icon from "../core/Icon.svelte";
+  import { scrim } from "../core/dismiss.js";
   import { onMount, tick } from "svelte";
   import SessionIdentity from "./SessionIdentity.svelte";
   import SessionSticker from "./SessionSticker.svelte";
@@ -32,7 +33,7 @@
   }
 </script>
 
-<div class="scrim" role="presentation" onclick={(event) => { if (event.target === event.currentTarget) controller.cancel(); }}>
+<div class="scrim" role="presentation" use:scrim={() => controller.cancel()}>
   <div class="switcher" role="dialog" aria-modal="true" aria-labelledby="session-switcher-title" aria-busy={controller.busy} bind:this={panel} onkeydown={keydown} tabindex="-1">
     <header><h2 id="session-switcher-title">{SWITCHER_LABEL}</h2><button type="button" aria-label={SWITCHER_CLOSE} disabled={controller.busy} onclick={controller.cancel}><Icon name="close" /></button></header>
     <label for="session-switcher-query">{SWITCHER_SEARCH}</label>
@@ -53,7 +54,7 @@
   </div>
 </div>
 <style>
-.scrim { position:fixed; inset:0; z-index:25; background:rgb(0 0 0 / .45); display:flex; align-items:flex-start; justify-content:center; padding: min(12vh, calc(70px * var(--ui-scale))) calc(12px * var(--ui-scale)); box-sizing:border-box; }
+.scrim { position:fixed; inset:0; z-index:25; background:var(--scrim); display:flex; align-items:flex-start; justify-content:center; padding: min(12vh, calc(70px * var(--ui-scale))) calc(12px * var(--ui-scale)); box-sizing:border-box; }
 .switcher { display:flex; flex-direction:column; gap:calc(10px * var(--ui-scale)); width:min(100%, calc(600px * var(--ui-scale))); max-height:100%; box-sizing:border-box; padding:calc(16px * var(--ui-scale)); background:var(--surface-chrome); border:1px solid var(--border-default); box-shadow:var(--shadow-focus); color:var(--text-primary); font:var(--machine-sm); }
 header { display:flex; align-items:center; justify-content:space-between; }
 h2 { margin:0; font:var(--display-xs); }

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -35,12 +36,18 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 func worktreeDirty(path string) (bool, error) {
 	out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
 	if err != nil {
-		if strings.Contains(string(out), notARepositoryMessage) {
+		if outlivedCheckout(string(out)) {
 			return false, nil
 		}
 		return false, fmt.Errorf("%w\n%s", err, out)
 	}
 	return len(bytes.TrimSpace(out)) > 0, nil
+}
+
+func outlivedCheckout(output string) bool {
+	return slices.ContainsFunc(outlivedCheckoutMessages, func(message string) bool {
+		return strings.Contains(output, message)
+	})
 }
 
 func Delete(root string, m Manifest) error {

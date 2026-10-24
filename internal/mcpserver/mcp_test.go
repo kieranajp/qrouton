@@ -1308,7 +1308,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 // the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
-		toolOpenFile, toolOpenAssets, toolFocusAsset, toolRunCommand, toolReadWindow, toolShowDiff,
+		ToolOpenFile, toolOpenAssets, toolFocusAsset, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage, toolSetSummary, toolSetDigest, toolCreateArtefact, toolReportBug,
 	}
 	for _, tc := range []struct {
@@ -1370,7 +1370,7 @@ func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
 
 func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
 	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
-	want := map[string]bool{toolOpenFile: true, toolOpenAssets: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
+	want := map[string]bool{ToolOpenFile: true, toolOpenAssets: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
 	for name, tool := range tools {
 		schema := structuredOutput(t, tool.InputSchema)
 		properties, _ := schema["properties"].(map[string]any)
@@ -1452,7 +1452,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 	defer cs.Close()
 
 	opened, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name: toolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)},
+		Name: ToolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)},
 	})
 	if err != nil || opened.IsError {
 		t.Fatalf("open_file = %+v, %v", opened, err)

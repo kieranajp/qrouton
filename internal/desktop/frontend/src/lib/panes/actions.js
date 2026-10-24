@@ -1,12 +1,8 @@
-import {
-  MEDIA_KINDS,
-  WINDOW_DIAGRAM_EVENT,
-  WINDOWS_RENDER_DIAGRAMS,
-  WINDOWS_REPORT_VIEWPORT,
-} from "../bridge/generated.js";
+import { MEDIA_KINDS, WINDOW_DIAGRAM_EVENT } from "../bridge/generated.js";
 import { mount, unmount } from "svelte";
 import { openDocument } from "../docked.svelte.js";
-import { Call, Events, openURL } from "../wails.js";
+import { Events, openURL } from "../wails.js";
+import { renderDiagrams, reportViewport } from "./calls.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
 import { createViewportController, nextViewportSequence } from "./viewport.js";
@@ -43,7 +39,10 @@ export function links(body, source) {
  * @param {{id: string, text: string, fit?: boolean}} params */
 export function diagrams(body, { id, fit }) {
   const stream = createDiagramStream(
-    (request) => Call.ByName(WINDOWS_RENDER_DIAGRAMS, id, request),
+    async (request) => {
+      const answer = await renderDiagrams(id, request);
+      return answer.ok ? answer.value : [];
+    },
     (found) => applyDiagrams(body, found, { fit }),
   );
   const off = Events.On(WINDOW_DIAGRAM_EVENT + id, (event) =>
@@ -120,11 +119,7 @@ export function viewport({ span, epoch, marking, onMeasure }) {
         selected: params.active,
         nextSequence: () => nextViewportSequence(params.id),
         onMeasure,
-        report: (report) =>
-          Call.ByName(WINDOWS_REPORT_VIEWPORT, params.id, {
-            epoch: epoch(),
-            ...report,
-          }).catch(() => {}),
+        report: (report) => reportViewport(params.id, { epoch: epoch(), ...report }),
       });
     };
     const apply = (params) => {

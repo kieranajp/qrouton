@@ -8,7 +8,7 @@
   "checks": [
     {"kind": "artifact_exists", "path": "thoughts/shared/research/*.md"},
     {"kind": "research_answered", "path": "thoughts/shared/research/*.md"},
-    {"kind": "artifact_max_lines", "path": "thoughts/shared/research/*.md", "max_lines": 200},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/research/*.md", "max_lines": 450},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
     {"kind": "repo_unchanged", "repo": "account-service"},

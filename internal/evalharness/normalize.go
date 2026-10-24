@@ -177,6 +177,7 @@ func ReadMCPEvents(path string, turn int) []Event {
 			continue
 		}
 		event.Turn = turn
+		event.Role = roleMockMCP
 		events = append(events, event)
 	}
 	return events

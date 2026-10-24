@@ -37,6 +37,8 @@ func TestResearchFillsOnlyOnceEveryQuestionIsAnswered(t *testing.T) {
 		{"one question left framed", partAnswered, false},
 		{"every question answered", answeredResearch, true},
 		{"summary alone answered", "# R\n\n## Summary\n\nSo far.\n", false},
+		{"a late summary is a question", "# R\n\n## How?\n\n## Summary\n\nFindings.\n", true},
+		{"a tilde-fenced heading is not a question", "# R\n\n## How?\n\nLike this.\n\n~~~md\n## Example\n\n> framing\n~~~\n", true},
 		{"legacy prose findings", "# Retry\n\nThe service bounds attempts.\n", true},
 		{"empty", "", false},
 	} {

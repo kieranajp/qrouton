@@ -95,6 +95,18 @@
     ]
   },
   {
+    "name": "a phase heading inside a tilde fence is not a phase",
+    "text": "## Phase 1 — I\n\n### Verify\n- [x] real\n\n~~~md\n## Phase 2 — Quoted\n\n### Verify\n- [ ] quoted\n~~~\n- [ ] after\n",
+    "phases": [
+      {
+        "number": 1,
+        "label": "1",
+        "met": 1,
+        "total": 2
+      }
+    ]
+  },
+  {
     "name": "only the first Verify section counts",
     "text": "## Phase 1 — H\n\n### Verify\n- [x] first\n\n### Notes\n\n### Verify\n- [ ] second\n",
     "phases": [
@@ -134,5 +146,17 @@
     "name": "an uppercase, doubled or spaced suffix is not a phase",
     "text": "## Phase 5B — Upper\n\n### Verify\n- [ ] a\n\n## Phase 5bb — Doubled\n\n### Verify\n- [ ] b\n\n## Phase 5 b — Spaced\n\n### Verify\n- [ ] c\n",
     "phases": []
+  },
+  {
+    "name": "a box needs a space and text after it",
+    "text": "## Phase 1 — F\n\n### Verify\n- [x]foo\n- [ ]\n- [ ] ok\n",
+    "phases": [
+      {
+        "number": 1,
+        "label": "1",
+        "met": 0,
+        "total": 1
+      }
+    ]
   }
 ]

@@ -133,7 +133,7 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 		openText:   openText,
 		runners:    runners,
 		checkToken: func(ctx context.Context, token string) (github.TokenCheck, string) {
-			return github.CheckToken(ctx, &http.Client{Timeout: githubCheckTimeout}, token)
+			return github.CheckToken(ctx, http.DefaultClient, token)
 		},
 		reconfigure:    reconfigure,
 		cfg:            cfg,
