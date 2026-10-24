@@ -31,3 +31,11 @@ func TestFrontmatterBodyKeepsItsSourceLine(t *testing.T) {
 		t.Fatalf("body %q starts at line %d", body, line)
 	}
 }
+
+func TestAnUnclosedOpenerKeepsTheWholeNote(t *testing.T) {
+	text := "---\n# Unclosed opener\n\nSearchable retry deadline text.\n"
+	doc, body, line := parseDocument("notes/u.md", text)
+	if body != text || line != 1 || doc.Title != "u" {
+		t.Fatalf("doc %+v, body %q at line %d", doc, body, line)
+	}
+}

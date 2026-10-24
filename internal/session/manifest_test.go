@@ -3,7 +3,9 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -253,5 +255,36 @@ func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
 	}
 	if got.Sticker != "star" || got.Runner != "codex" {
 		t.Fatalf("concurrent result = %+v", got)
+	}
+}
+
+func TestAManifestNamingACheckoutOutsideSrcFailsToLoad(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		ok   bool
+	}{
+		{"src/api", true},
+		{"src/acme-api", true},
+		{"", true},
+		{"../../victim", false},
+		{"src/../../victim", false},
+		{"/elsewhere/api", false},
+		{"thoughts/api", false},
+		{"src", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			dir := t.TempDir()
+			m := Manifest{Slug: filepath.Base(dir), Repos: []ManifestRepo{{Org: "acme", Name: "api", Role: RepoRoleEditing, WorktreePath: tc.path}}}
+			if err := WriteManifest(dir, m); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(dir)
+			if tc.ok && err != nil {
+				t.Fatalf("Load = %v", err)
+			}
+			if !tc.ok && !errors.Is(err, ErrCheckoutOutsideSrc) {
+				t.Fatalf("Load = %v, want ErrCheckoutOutsideSrc", err)
+			}
+		})
 	}
 }

@@ -214,13 +214,19 @@ type ManifestRepo struct {
 	SSHURL       string `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
-// Dir is the repository's checkout: an absolute WorktreePath as written, a
-// relative one under the session root.
+// Dir is the repository's checkout under the session root.
 func (r ManifestRepo) Dir(root string) string {
-	if filepath.IsAbs(r.WorktreePath) {
-		return filepath.Clean(r.WorktreePath)
-	}
 	return filepath.Join(root, r.WorktreePath)
+}
+
+// inSrc holds a checkout to the session's src directory. The agent can write
+// the manifest, and removing a session removes every checkout it names.
+func (r ManifestRepo) inSrc() bool {
+	if r.WorktreePath == "" {
+		return true
+	}
+	rel, inside := sessionpaths.Within(sessionpaths.SrcDirName, r.WorktreePath)
+	return inside && rel != "."
 }
 
 // Scan: a session is any direct child of root containing a qrouton.json.
@@ -255,12 +261,22 @@ func decode(b []byte) (Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Manifest{}, err
 	}
-	for _, r := range m.Repos {
-		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
-			return Manifest{}, invalidRole(r.Role, r.Org, r.Name)
-		}
+	if err := m.validate(); err != nil {
+		return Manifest{}, err
 	}
 	return m, nil
+}
+
+func (m Manifest) validate() error {
+	for _, r := range m.Repos {
+		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
+			return invalidRole(r.Role, r.Org, r.Name)
+		}
+		if !r.inSrc() {
+			return outsideSrc(r.WorktreePath, r.Org, r.Name)
+		}
+	}
+	return nil
 }
 
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation

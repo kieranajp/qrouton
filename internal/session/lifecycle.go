@@ -51,9 +51,12 @@ func outlivedCheckout(output string) bool {
 }
 
 func Delete(root string, m Manifest) error {
+	if err := m.validate(); err != nil {
+		return err
+	}
 	dir := filepath.Join(root, m.Slug)
 	for _, repo := range m.Repos {
-		path := filepath.Join(dir, repo.WorktreePath)
+		path := repo.Dir(dir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
