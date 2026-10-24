@@ -10,8 +10,8 @@ const trimmed = (text) => (text ?? "").trim();
  * @param {Result} result
  */
 export const applies = (draft, result) => {
-  const url = trimmed(result?.url);
-  return !!url && url === trimmed(draft?.ticket);
+  const url = trimmed(result.url);
+  return !!url && url === trimmed(draft.ticket);
 };
 
 export const claimSeed = (current, external, claimed = "") => {

@@ -66,7 +66,7 @@ test("settled folds a failed answer into a failed entry, keeping Go's fallback b
 });
 
 test("settled tolerates a missing or partial answer", () => {
-  assert.deepEqual(settled(unasked(), "acme/api", undefined), {
+  assert.deepEqual(settled(unasked(), "acme/api", /** @type {{}} */ (/** @type {unknown} */ (undefined))), {
     "acme/api": { state: "ready", branches: [], default: "", error: undefined },
   });
   assert.deepEqual(settled(unasked(), "acme/api", { branches: ["main"] }), {

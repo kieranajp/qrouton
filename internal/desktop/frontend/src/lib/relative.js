@@ -44,7 +44,7 @@ export function relative(at, style, now = Date.now()) {
     const short = age(at, now);
     return short === "now" ? "just now" : short && `${short} ago`;
   }
-  const voice = STYLES[style] ?? STYLES.compact;
+  const voice = STYLES[style];
   const then = new Date(at).getTime();
   if (!Number.isFinite(then) || then <= 0) return "";
   const since = now - then;

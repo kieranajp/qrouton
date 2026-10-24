@@ -31,8 +31,7 @@
   </div>
   <a id="orphan-link" href="child.md">A relative document with no pane</a>
   <div id="chrome">Inert chrome</div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div id="claimed" oncontextmenu={(event) => event.preventDefault()}>Claims its own click</div>
+  <a id="claimed" href="https://example.com/claimed" oncontextmenu={(event) => event.preventDefault()}>Claims its own click</a>
   <div id="terminal" bind:this={host}></div>
 </div>
 

@@ -4,7 +4,8 @@ import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import Session from "../src/Session.svelte";
-import { decode, encode, terminalAt } from "../src/lib/xterm.js";
+import { decode } from "../src/lib/terminal-painter.js";
+import { encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
 import { CHROME_DEFAULTS, CHROME_EVENT, SESSIONS_SHOW, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";

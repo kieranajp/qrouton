@@ -168,7 +168,7 @@
     if (state.intervals.length === 0) return;
     const ended =
       scrollRoot && scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
-    const line = ended ? state.intervals.at(-1).to : state.intervals[0].line;
+    const line = ended ? state.intervals[state.intervals.length - 1].to : state.intervals[0].line;
     scrolled = screenFor(slides, line);
   }
 

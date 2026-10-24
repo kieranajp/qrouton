@@ -27,11 +27,11 @@
   let menu = $state(null);
   /** @type {ReturnType<typeof flash<string>>} */
   const notice = flash();
-  /** @type {HTMLButtonElement} */
+  /** @type {HTMLButtonElement | undefined} */
   let primary = $state();
   /** @type {HTMLVideoElement | undefined} */
   let player = $state();
-  /** @type {HTMLOListElement} */
+  /** @type {HTMLOListElement | undefined} */
   let strip = $state();
   let alive = true;
   let request = 0;
@@ -97,7 +97,7 @@
       if (cancelled || !alive || revision !== doc.revision) return;
       if (scrollRoot) scrollRoot.scrollTop = 0;
       const item = strip?.children[index - 1];
-      if (item) {
+      if (strip && item) {
         const box = item.getBoundingClientRect();
         const port = strip.getBoundingClientRect();
         if (box.left < port.left) strip.scrollLeft -= port.left - box.left;

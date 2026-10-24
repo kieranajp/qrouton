@@ -7,8 +7,9 @@ import { dealt } from "./sections.js";
 export function partition(html, sections, how = {}) {
   const { criteria, deal = dealt } = how;
   const preamble = [];
-  // A section's opening heading stays apart from its body: the pane states the
-  // name itself, and the heading's own line still has to be findable.
+  /** A section's opening heading stays apart from its body: the pane states the
+   * name itself, and the heading's own line still has to be findable.
+   * @type {{opening: string[], body: string[], criteria: string[]}[]} */
   const parts = sections.map(() => ({ opening: [], body: [], criteria: [] }));
   for (const block of deal(html)) {
     const at = sections.findIndex(

@@ -9,6 +9,11 @@ import {
 } from "./bridge/generated.js";
 import { Call, call, follow } from "./wails.js";
 
+/** @typedef {import("./bridge/generated.js").WindowIcon} WindowIcon */
+/** @typedef {import("./bridge/generated.js").TabStatus} TabStatus */
+/** @typedef {{id: string, label: string, badge?: string, icon?: WindowIcon, kind: string, status?: TabStatus, pinned?: boolean, artifact?: string}} DockedTab */
+
+/** @type {{tabs: DockedTab[], selected: string}} */
 const NONE = { tabs: [], selected: "" };
 
 /** @param {() => string} slug */

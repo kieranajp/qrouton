@@ -31,6 +31,7 @@ export const caps = (step = 0) => screen(step).caps;
 
 export const primary = (step = 0) => screen(step).primary;
 
+/** @type {{primary: import("../core/icons.js").IconName, back: import("../core/icons.js").IconName}} */
 export const icons = { primary: "forward", back: "back" };
 
 /** back is the secondary label, or "" where there is nothing to go back to. */

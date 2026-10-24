@@ -207,7 +207,10 @@ func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 		got[3] != (status.Sticker{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"}) {
 		t.Fatalf("default stickers = %#v", got)
 	}
-	if _, err := session.CycleSticker(dir, []session.Sticker{"a1b2c3d4"}); err != nil {
+	if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.Sticker = "a1b2c3d4"
+		return m, nil
+	}); err != nil {
 		t.Fatal(err)
 	}
 	custom := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}

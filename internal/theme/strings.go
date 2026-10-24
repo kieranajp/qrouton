@@ -26,6 +26,8 @@ const (
 	Path      = "/tokens/colors.css"
 	MediaType = "text/css; charset=utf-8"
 
+	stickerPrefix = "sticker-"
+
 	cssHeader = "/* Catppuccin Macchiato, rendered from internal/theme. The neutral ramp is\n" +
 		"   the palette verbatim; each accent carries one job and must not be reused.\n" +
 		"   No copy is checked in: the workbench serves this, and a shared page\n" +

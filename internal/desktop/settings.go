@@ -181,9 +181,6 @@ func (s *Settings) Load() SettingsView {
 
 func (s *Settings) runnerLegend() []RunnerLegend {
 	legend := []RunnerLegend{}
-	if s.runners == nil {
-		return legend
-	}
 	runners, err := s.runners()
 	if err != nil {
 		return legend
@@ -417,7 +414,7 @@ func (s *Settings) GitHubStatus() GitHubStatus {
 	defer cancel()
 	state, token := github.ResolveCredential(ctx)
 	status := GitHubStatus{State: state, Variable: github.TokenEnvVar()}
-	if token == "" || s.checkToken == nil {
+	if token == "" {
 		return status
 	}
 	status.Check, status.Login = s.checkToken(ctx, token)
@@ -441,10 +438,7 @@ func (s *Settings) Relaunch() error {
 // OpenConfig writes config.json first when it does not exist yet, so the editor
 // has a file to open.
 func (s *Settings) OpenConfig() error {
-	var argv []string
-	if s.openText != nil {
-		argv = s.openText(config.Path())
-	}
+	argv := s.openText(config.Path())
 	if len(argv) == 0 {
 		return ErrNoOpenTextCommand
 	}

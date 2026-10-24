@@ -26,7 +26,9 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 	s := newSettings(cfg, func(string, any) {}, validateEditor, validateLaunch, []string{
 		"/Applications/qrouton.app/Contents/MacOS/qrouton",
 		"--linear-issue",
-	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil, nil, nil)
+	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil,
+		func() ([]assembly.Runner, error) { return nil, nil },
+		func(string) []string { return nil })
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }

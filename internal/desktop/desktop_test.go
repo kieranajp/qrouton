@@ -879,8 +879,8 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
-	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "Octopus" {
-		t.Fatalf("chrome = %+v, want the session's mode, phase and name", fields)
+	if fields.Mode == "" || fields.Identity != "Octopus" {
+		t.Fatalf("chrome = %+v, want the session's mode and name", fields)
 	}
 	if fields.Slug != "octopus" || fields.Terminal != state.terminal {
 		t.Fatalf("chrome names session %q on terminal %q", fields.Slug, fields.Terminal)

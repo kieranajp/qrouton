@@ -1,7 +1,7 @@
 <script>
   import Icon from "../core/Icon.svelte";
 
-  /** @type {{segments?: {key: string, label: string, icon?: string, accent?: string, ink?: string, disabled?: boolean}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
+  /** @type {{segments?: {key: string, label: string, icon?: import("../core/icons.js").IconName, accent?: string, ink?: string, disabled?: boolean}[], value?: string|string[], multiple?: boolean, size?: 'sm'|'md', disabled?: boolean, onSelect?: (key: string) => void, [attribute: string]: any}} */
   let {
     segments = [],
     value,

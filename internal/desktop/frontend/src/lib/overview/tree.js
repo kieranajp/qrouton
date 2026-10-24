@@ -42,6 +42,7 @@ function sortBranch(branch) {
 /** @param {AgentNode[]} nodes @param {string} run @returns {Run} */
 function buildRun(nodes, run) {
   const root = nodes.find((node) => node.root);
+  /** @type {Map<string, Branch>} */
   const branches = new Map(nodes.map((node) => [node.id, { node, children: [] }]));
   const rootBranch = root && branches.get(root.id);
   /** @type {Map<string, string>} */
@@ -100,7 +101,7 @@ export function stateWords(node, tools = true) {
   return WORDS[node.state] ?? node.state;
 }
 
-/** @param {string} state @returns {string} the state icon, or "" for none */
+/** @param {string} state @returns {import("../core/icons.js").IconName | ""} the state icon, or "" for none */
 export function stateIcon(state) {
   switch (state) {
     case AGENT_STATES.WORKING:
@@ -177,9 +178,6 @@ export function typeLabel(type) {
     .map((word) => word[0].toUpperCase() + word.slice(1))
     .join(" ");
 }
-
-/** @param {{tool?: string, target?: string}} node */
-export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(" ");
 
 /** @type {string[]} */
 const STAGE_ORDER = [AGENT_STAGES.RESEARCH, AGENT_STAGES.PLAN, AGENT_STAGES.IMPLEMENT];

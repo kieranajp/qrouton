@@ -5,7 +5,7 @@
   import Stepper from "../forms/Stepper.svelte";
   import { intent } from "./steps.js";
 
-  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: string, primary: string, primaryIcon?: string, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, compact?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
+  /** @type {{steps?: string[], pips?: number, active?: number, secondary?: string, secondaryIcon?: import("../core/icons.js").IconName, primary: string, primaryIcon?: import("../core/icons.js").IconName, status?: string, busy?: boolean, canAdvance?: boolean, onSecondary?: () => void, onPrimary: () => void, onEscape?: () => void, height?: boolean, compact?: boolean, flush?: boolean, footer?: import("svelte").Snippet, children: import("svelte").Snippet}} */
   let {
     steps = [],
     pips = 0,
