@@ -6,10 +6,13 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.4
 	github.com/creack/pty v1.1.24
 	github.com/d2lang/d2 v0.8.2
+	github.com/google/jsonschema-go v0.4.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/kljensen/snowball v0.10.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/urfave/cli/v2 v2.27.7
 	github.com/wailsapp/wails/v3 v3.0.0-beta.13
+	github.com/yuin/goldmark v1.8.5
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sys v0.47.0
 )
@@ -32,7 +35,6 @@ require (
 	github.com/dlclark/regexp2/v2 v2.6.0 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect
-	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/jchv/go-winloader v0.0.0-20250406163304-c1995be93bd1 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
@@ -45,7 +47,6 @@ require (
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/xrash/smetrics v0.0.0-20240521201337-686a1a2994c1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
-	github.com/yuin/goldmark v1.8.5 // indirect
 	golang.org/x/exp v0.0.0-20260727155853-b88d891fe743 // indirect
 	golang.org/x/image v0.44.0 // indirect
 	golang.org/x/net v0.57.0 // indirect

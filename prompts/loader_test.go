@@ -511,7 +511,7 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {
-		partial, err := fs.ReadFile(embedded, name)
+		partial, err := NewFSLoader(embedded).read(name)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -552,8 +552,12 @@ func TestPartialsHoldNoPlaceholderOfTheirOwn(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if i := strings.Index(string(content), "{{"); i >= 0 {
-			t.Errorf("%s (%s) names a partial of its own: %.32q", name, placeholder, string(content)[i:])
+		text := string(content)
+		for figure := range figures {
+			text = strings.ReplaceAll(text, figure, "")
+		}
+		if i := strings.Index(text, "{{"); i >= 0 {
+			t.Errorf("%s (%s) names a partial of its own: %.32q", name, placeholder, text[i:])
 		}
 	}
 }

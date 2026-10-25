@@ -37,24 +37,21 @@ const (
 	AdmittedBM25  = "bm25_top"
 	AdmittedDense = "dense_top"
 
-	KindResearch = "research"
-)
+	kindNote    = "note"
+	kindDeadEnd = "dead_end"
 
-var (
-	kinds    = map[string]bool{KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
-	dirKinds = map[string]string{"research": KindResearch, "specs": "spec", "plans": "plan"}
+	kindHint      = "use one of %s"
+	kindSeparator = ", "
 )
 
 const (
-	frontmatterOpen  = "---\n"
-	frontmatterClose = "\n---"
-	refSeparator     = ":"
-	crumbSeparator   = " > "
-	ellipsis         = "…"
-	cacheExtension   = ".gob"
-	cacheDirName     = "qrouton/vault"
-	cacheMode        = 0o644
-	cacheDirMode     = 0o755
+	refSeparator   = ":"
+	crumbSeparator = " > "
+	ellipsis       = "…"
+	cacheExtension = ".gob"
+	CacheDirName   = "vault"
+	cacheMode      = 0o644
+	cacheDirMode   = 0o755
 
 	ollamaTags        = "/api/tags"
 	ollamaEmbed       = "/api/embed"

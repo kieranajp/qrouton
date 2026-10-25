@@ -19,13 +19,21 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/prompts"
 )
 
-var Kinds = []string{"research", "spec", "plan"}
+// Kinds are the kinds with a template.
+var Kinds = func() []string {
+	var out []string
+	for _, k := range kinds.Templated() {
+		out = append(out, k.Name)
+	}
+	return out
+}()
 
 // Create writes a new artefact of the given kind into the session and returns
 // its path relative to the session root.
@@ -86,7 +94,7 @@ func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
 // thoughtsBoundary is the real folder the session's thoughts link points at.
 // Nothing created for an artefact may resolve outside it.
 func thoughtsBoundary(sessionRoot string) (string, error) {
-	link := filepath.Join(sessionRoot, sessionpaths.ThoughtsDirName)
+	link := sessionpaths.ThoughtsLink(sessionRoot)
 	if _, err := os.Lstat(link); errors.Is(err, fs.ErrNotExist) {
 		return "", fmt.Errorf("%w: %s", ErrNoThoughtsLink, link)
 	} else if err != nil {
@@ -241,11 +249,7 @@ func revisionOf(sessionRoot string, repo session.ManifestRepo) string {
 	if !repo.Role.IsEditing() {
 		return repo.Revision
 	}
-	worktree := repo.WorktreePath
-	if !filepath.IsAbs(worktree) {
-		worktree = filepath.Join(sessionRoot, worktree)
-	}
-	sha, err := session.HeadRevision(worktree)
+	sha, err := session.HeadRevision(repo.Dir(sessionRoot))
 	if err != nil {
 		return ""
 	}

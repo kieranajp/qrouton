@@ -70,9 +70,9 @@ export function createTerminalPainter(term) {
   };
 
   return {
-    paint(payload) {
+    paint(chunk) {
       if (!live) return;
-      queue.push(typeof payload === "string" ? { encoded: payload } : payload);
+      queue.push(chunk);
       next();
     },
     dispose() {

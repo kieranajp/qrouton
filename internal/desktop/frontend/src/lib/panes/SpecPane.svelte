@@ -1,4 +1,5 @@
 <script>
+  import { artifactTone } from "../artifacts.js";
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
@@ -10,13 +11,14 @@
   import QuestionCard from "./QuestionCard.svelte";
   import ReaderPips from "./ReaderPips.svelte";
   import { diagrams, links, viewport } from "./actions.js";
-  import { clampedSpan, partition, screenFor } from "./deck.js";
+  import { clampedSpan, partition, reach, screenFor } from "./deck.js";
   import { deck } from "./deck.svelte.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
   import { freshContent, saveSpec, sendSpecAnswers } from "./spec-calls.js";
   import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
+  import "./deck.css";
   import "./markdown.css";
 
   /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
@@ -156,7 +158,7 @@
             : "var(--state-waiting)"
           : slide.kind === "section"
             ? undefined
-            : "var(--artifact-spec)",
+            : artifactTone(ARTIFACT_KINDS.SPEC),
     })),
   ]);
   let counter = $derived(viewing === 0 ? "Overview" : (slides[viewing - 1]?.name ?? ""));
@@ -166,22 +168,18 @@
     if (state.intervals.length === 0) return;
     const ended =
       scrollRoot && scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
-    const line = ended ? state.intervals.at(-1).to : state.intervals[0].line;
+    const line = ended ? state.intervals[state.intervals.length - 1].to : state.intervals[0].line;
     scrolled = screenFor(slides, line);
   }
 
-  function reach(screen) {
-    if (!view.reading) {
-      at.show(screen);
-      return;
-    }
-    const from = screen === 0 ? spec.preamble.from : slides[screen - 1].from;
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (reading?.querySelectorAll("[data-line]") ?? []),
-    ];
-    const target = blocks.find((block) => Number(block.dataset.line) >= from) ?? blocks[0];
-    target?.scrollIntoView({ block: "start" });
-  }
+  /** @param {number} screen */
+  const jump = (screen) =>
+    reach(screen, {
+      reading: view.reading,
+      root: reading,
+      show: at.show,
+      starts: [spec.preamble.from, ...slides.map((slide) => slide.from)],
+    });
 
   /** @param {number} index */
   async function focusCard(index) {
@@ -325,13 +323,13 @@
     {/snippet}
     {#snippet body()}
       {#if view.reading}
-        <div class="reading" bind:this={reading}>
+        <div class="reading artifact-deck" bind:this={reading}>
           <h1 class="display-lg">{spec.title || heading}</h1>
           <MarkdownPane doc={shown} {id} {active} {scrollRoot} bare onMeasure={spy} />
         </div>
       {:else}
         <div
-          class="deck"
+          class="deck artifact-deck"
           bind:this={sheet}
           data-document-source={doc.source}
           use:links={doc.source}
@@ -357,7 +355,7 @@
             </div>
             {#if spec.open.length > 0}
               <CapsLabel data-list>Open questions</CapsLabel>
-              <ol class="asks" data-open-list>
+              <ol class="rows asks" data-open-list>
                 {#each spec.open as question, index (draftKey(question))}
                   <li>
                     <button
@@ -468,7 +466,7 @@
       {/if}
     {/snippet}
     {#snippet controls()}
-      <ReaderPips entries={pips} current={viewing} onSelect={reach} />
+      <ReaderPips entries={pips} current={viewing} onSelect={jump} />
     {/snippet}
     {#snippet counter()}
       <span class="counter" title={counter}>{counter}</span>
@@ -495,35 +493,6 @@
 {/if}
 
 <style>
-  .deck,
-  .reading {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
-  }
-
-  .reading .display-lg {
-    margin-top: calc(4px * var(--ui-scale));
-  }
-
-  .hero {
-    padding-top: calc(18px * var(--ui-scale));
-  }
-
-  .hero .display-lg {
-    margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
-    max-width: 26ch;
-  }
-
-  .hero .lead :global(p) {
-    font: var(--machine-lg);
-    font-size: calc(15px * var(--ui-scale));
-    line-height: 1.7;
-    color: var(--text-secondary);
-    max-width: 68ch;
-  }
-
   .tally {
     display: flex;
     flex-wrap: wrap;
@@ -556,37 +525,11 @@
     color: var(--text-muted);
   }
 
-  .display-lg,
-  .display-md {
-    margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
-    padding-left: var(--gutter);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-    overflow-wrap: anywhere;
-  }
-
-  .display-lg {
-    font: var(--display-lg);
-  }
-
-  .display-md {
-    font: var(--display-md);
-  }
-
   .cards {
     display: flex;
     flex-direction: column;
     gap: calc(22px * var(--ui-scale));
     padding-left: var(--gutter);
-  }
-
-  .rows,
-  .asks {
-    list-style: none;
-    margin: calc(26px * var(--ui-scale)) 0 0;
-    padding: 0;
-    border: var(--border-width) solid var(--border-subtle);
-    box-shadow: var(--shadow-offset) var(--border-subtle);
   }
 
   .hero > :global(.caps[data-list]) {
@@ -595,37 +538,8 @@
   }
 
   .rows.titled,
-  .asks {
+  .rows.asks {
     margin-top: calc(8px * var(--ui-scale));
-  }
-
-  .rows li + li .row,
-  .asks li + li .row {
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: calc(14px * var(--ui-scale));
-    width: 100%;
-    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
-    border: 0;
-    background: transparent;
-    font: var(--machine-md);
-    color: var(--text-secondary);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .row:hover {
-    background: var(--wash-selected);
-  }
-
-  .row .index {
-    min-width: 3ch;
-    font: var(--machine-bold);
-    color: var(--accent-action);
   }
 
   .row .text {
@@ -662,15 +576,10 @@
     color: var(--state-failed);
   }
 
-  .row .name,
   .row .lead-line {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .row .name {
-    color: var(--text-primary);
   }
 
   .asks .row > .name {
@@ -750,18 +659,6 @@
 
   :global(html[data-narrow]) .detached {
     padding-left: 0;
-  }
-
-  :global(html[data-narrow]) .hero {
-    padding-top: calc(6px * var(--ui-scale));
-  }
-
-  :global(html[data-narrow]) .display-lg {
-    font: var(--display-md);
-  }
-
-  :global(html[data-narrow]) .display-md {
-    font: var(--display-sm);
   }
 
   :global(html[data-narrow]) .cards,

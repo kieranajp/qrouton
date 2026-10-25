@@ -14,6 +14,8 @@ var (
 
 	ErrScenarioIncomplete = errors.New("id, fixture, and turns are required")
 
+	ErrCheckUngradable = errors.New("check can never grade what it names")
+
 	// ErrNoEvents means a runner produced no parseable output, which is an
 	// infrastructure failure rather than a graded result.
 	ErrNoEvents = errors.New("runner produced no JSON events")

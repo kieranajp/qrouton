@@ -9,6 +9,8 @@ var ErrInvalidRole = errors.New("invalid repository role")
 
 var ErrInvalidMode = errors.New("invalid session mode")
 
+var ErrCheckoutOutsideSrc = errors.New("repository checkout is outside the session's src directory")
+
 var ErrNoPinnedRevision = errors.New("reference repository has no pinned revision")
 
 // ErrNoCloneURL means a manifest cannot be resumed: Create always records a
@@ -34,6 +36,10 @@ func invalidRole(role RepoRole, org, name string) error {
 	return fmt.Errorf("%w %q for %s/%s", ErrInvalidRole, role, org, name)
 }
 
+func outsideSrc(path, org, name string) error {
+	return fmt.Errorf("%w: %s/%s at %q", ErrCheckoutOutsideSrc, org, name, path)
+}
+
 func refuseRepo(err error, org, name string) error {
 	return fmt.Errorf("%s/%s: %w", org, name, err)
 }
@@ -41,3 +47,6 @@ func refuseRepo(err error, org, name string) error {
 func mismatchedManifest(dir, slug string) error {
 	return fmt.Errorf("session directory %q holds the manifest of %q, so nothing was removed", dir, slug)
 }
+
+// ErrUnreadableNumstat means git diff --numstat printed a line that is not two counts and a path.
+var ErrUnreadableNumstat = errors.New("unreadable git numstat output")

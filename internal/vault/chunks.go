@@ -5,6 +5,8 @@ import (
 	"encoding/hex"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 // chunk is one heading section. BM25 scores it whole; dense scores its windows.
@@ -28,16 +30,14 @@ type piece struct {
 	start, end int
 }
 
-// chunkDocument splits body at Markdown headings outside fences. Each chunk's
-// breadcrumb leads with the document title, as the embedded inputs do.
+// chunkDocument splits body at its Markdown headings. Each chunk's breadcrumb
+// leads with the document title, as the embedded inputs do.
 func chunkDocument(title, body string, firstLine int) []chunk {
 	var chunks []chunk
 	var headings [6]string
 	crumb := title
 	var section strings.Builder
 	sectionLine, line := firstLine, firstLine
-	var fence byte
-	fenceSize := 0
 	headed := false
 	flush := func() {
 		text, content := section.String(), section.String()
@@ -49,65 +49,34 @@ func chunkDocument(title, body string, firstLine int) []chunk {
 		}
 		section.Reset()
 	}
+	next := markdown.Headings(body)
 	for _, raw := range strings.SplitAfter(body, "\n") {
 		if raw == "" {
 			continue
 		}
-		trimmed := strings.TrimLeft(raw, " ")
-		if len(raw)-len(trimmed) <= 3 {
-			mark, n := byte(0), 0
-			if trimmed != "" && (trimmed[0] == '`' || trimmed[0] == '~') {
-				mark = trimmed[0]
-				for n < len(trimmed) && trimmed[n] == mark {
-					n++
+		if len(next) > 0 && next[0].Line == line-firstLine+1 {
+			heading := next[0]
+			next = next[1:]
+			flush()
+			headings[heading.Level-1] = heading.Text
+			for i := heading.Level; i < len(headings); i++ {
+				headings[i] = ""
+			}
+			parts := []string{title}
+			for _, h := range headings {
+				if h != "" && h != title {
+					parts = append(parts, h)
 				}
 			}
-			switch {
-			case fence != 0:
-				if mark == fence && n >= fenceSize && strings.TrimSpace(trimmed[n:]) == "" {
-					fence = 0
-				}
-			case n >= 3 && (mark != '`' || !strings.Contains(trimmed[n:], "`")):
-				fence, fenceSize = mark, n
-			default:
-				if level, heading, ok := atxHeading(trimmed); ok {
-					flush()
-					headings[level-1] = heading
-					for i := level; i < len(headings); i++ {
-						headings[i] = ""
-					}
-					parts := []string{title}
-					for _, h := range headings {
-						if h != "" && h != title {
-							parts = append(parts, h)
-						}
-					}
-					crumb = strings.Join(parts, crumbSeparator)
-					sectionLine = line
-					headed = true
-				}
-			}
+			crumb = strings.Join(parts, crumbSeparator)
+			sectionLine = line
+			headed = true
 		}
 		section.WriteString(raw)
 		line++
 	}
 	flush()
 	return chunks
-}
-
-func atxHeading(line string) (int, string, bool) {
-	level := 0
-	for level < len(line) && line[level] == '#' {
-		level++
-	}
-	if level == 0 || level > 6 || (level < len(line) && !strings.ContainsRune(" \t\r\n", rune(line[level]))) {
-		return 0, "", false
-	}
-	title := strings.TrimSpace(line[level:])
-	if closing := strings.TrimRight(title, "#"); len(closing) < len(title) && (closing == "" || strings.HasSuffix(closing, " ") || strings.HasSuffix(closing, "\t")) {
-		title = strings.TrimSpace(closing)
-	}
-	return level, title, true
 }
 
 func newChunk(crumb, text string, start int) chunk {

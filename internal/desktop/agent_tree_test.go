@@ -34,7 +34,7 @@ func spikeEvents(t *testing.T, name string) []workbench.AgentEventRequest {
 	start := time.Date(2026, 10, 11, 9, 0, 0, 0, time.UTC)
 	var out []workbench.AgentEventRequest
 	for scanner.Scan() {
-		event, err := agentevent.Reduce(agentProviderClaude, bytes.NewReader(scanner.Bytes()))
+		event, err := agentevent.ReduceIn(agentProviderClaude, "", bytes.NewReader(scanner.Bytes()))
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -1,8 +1,6 @@
 package desktop
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"path"
 	"slices"
@@ -10,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -304,13 +303,7 @@ func (r *registry) deckDirectory(token string) (root, dir string, ok bool) {
 	return root, dir, ok
 }
 
-func assetToken() string {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(raw[:])
-}
+func assetToken() string { return randomid.Hex(assetTokenBytes) }
 
 func (r *registry) readWindow(id string, full bool) (string, error) {
 	var text string

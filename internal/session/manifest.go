@@ -15,8 +15,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-const manifestName = sessionpaths.ManifestName
-
 const manifestSchemaVersion = 2
 
 type RepoRole string
@@ -216,6 +214,21 @@ type ManifestRepo struct {
 	SSHURL       string `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
+// Dir is the repository's checkout under the session root.
+func (r ManifestRepo) Dir(root string) string {
+	return filepath.Join(root, r.WorktreePath)
+}
+
+// inSrc holds a checkout to the session's src directory. The agent can write
+// the manifest, and removing a session removes every checkout it names.
+func (r ManifestRepo) inSrc() bool {
+	if r.WorktreePath == "" {
+		return true
+	}
+	rel, inside := sessionpaths.Within(sessionpaths.SrcDirName, r.WorktreePath)
+	return inside && rel != "."
+}
+
 // Scan: a session is any direct child of root containing a qrouton.json.
 func Scan(root string) ([]Manifest, error) {
 	entries, err := os.ReadDir(root)
@@ -230,7 +243,7 @@ func Scan(root string) ([]Manifest, error) {
 		if !e.IsDir() {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, e.Name(), manifestName))
+		b, err := os.ReadFile(sessionpaths.Manifest(filepath.Join(root, e.Name())))
 		if err != nil {
 			continue
 		}
@@ -248,12 +261,22 @@ func decode(b []byte) (Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Manifest{}, err
 	}
-	for _, r := range m.Repos {
-		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
-			return Manifest{}, invalidRole(r.Role, r.Org, r.Name)
-		}
+	if err := m.validate(); err != nil {
+		return Manifest{}, err
 	}
 	return m, nil
+}
+
+func (m Manifest) validate() error {
+	for _, r := range m.Repos {
+		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
+			return invalidRole(r.Role, r.Org, r.Name)
+		}
+		if !r.inSrc() {
+			return outsideSrc(r.WorktreePath, r.Org, r.Name)
+		}
+	}
+	return nil
 }
 
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
@@ -263,16 +286,6 @@ func SetMode(dir string, mode SessionMode) error {
 		m.Mode = mode.effective()
 		return m, nil
 	})
-}
-
-func CycleSticker(dir string, order []Sticker) (Sticker, error) {
-	var committed Sticker
-	err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-		m.Sticker = m.Sticker.Next(order)
-		committed = m.Sticker
-		return m, nil
-	})
-	return committed, err
 }
 
 // Load reads one session directory's manifest.

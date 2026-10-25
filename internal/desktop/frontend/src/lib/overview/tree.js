@@ -42,6 +42,7 @@ function sortBranch(branch) {
 /** @param {AgentNode[]} nodes @param {string} run @returns {Run} */
 function buildRun(nodes, run) {
   const root = nodes.find((node) => node.root);
+  /** @type {Map<string, Branch>} */
   const branches = new Map(nodes.map((node) => [node.id, { node, children: [] }]));
   const rootBranch = root && branches.get(root.id);
   /** @type {Map<string, string>} */
@@ -100,7 +101,7 @@ export function stateWords(node, tools = true) {
   return WORDS[node.state] ?? node.state;
 }
 
-/** @param {string} state @returns {string} the state icon, or "" for none */
+/** @param {string} state @returns {import("../core/icons.js").IconName | ""} the state icon, or "" for none */
 export function stateIcon(state) {
   switch (state) {
     case AGENT_STATES.WORKING:
@@ -178,9 +179,6 @@ export function typeLabel(type) {
     .join(" ");
 }
 
-/** @param {{tool?: string, target?: string}} node */
-export const toolLine = (node) => [node.tool, node.target].filter(Boolean).join(" ");
-
 /** @type {string[]} */
 const STAGE_ORDER = [AGENT_STAGES.RESEARCH, AGENT_STAGES.PLAN, AGENT_STAGES.IMPLEMENT];
 
@@ -190,18 +188,8 @@ export const STAGE_NAMES = {
   [AGENT_STAGES.IMPLEMENT]: "Implementation",
 };
 
-const STAGE_TONES = {
-  [AGENT_STAGES.RESEARCH]: "RESEARCH",
-  [AGENT_STAGES.PLAN]: "PLAN",
-  [AGENT_STAGES.IMPLEMENT]: "IMPLEMENT",
-};
-
 /** @param {string | undefined} stage */
 export const stageName = (stage) => STAGE_NAMES[stage ?? ""] ?? "";
-
-/** The workflow stage a lead's square wears the tone of, for workflowTone.
- * @param {string | undefined} stage @returns {"RESEARCH" | "PLAN" | "IMPLEMENT" | undefined} */
-export const stageTone = (stage) => STAGE_TONES[stage ?? ""];
 
 /** @param {Branch} branch */
 const rank = (branch) => {

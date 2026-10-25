@@ -97,7 +97,7 @@ test("a chosen non-default base branch reaches the create payload", async ({ pag
   await expect.poll(() => page.evaluate(() =>
     window.assembly.calls().some(
       ({ name, args }) =>
-        (name.endsWith("Assembly.Create") || name.endsWith("Assembly.Check")) &&
+        name.endsWith("Assembly.Create") &&
         args[0]?.repos?.some(
           (repo) => repo.id === "acme/api" && repo.role === "editing" && repo.base === "develop",
         ),

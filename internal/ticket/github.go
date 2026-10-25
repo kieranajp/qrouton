@@ -65,22 +65,18 @@ func (g github) Fetch(ctx context.Context, client *http.Client, ref Reference) (
 	if err != nil {
 		return Ticket{}, err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, githubAPI+ref.ID, nil)
-	if err != nil {
-		return Ticket{}, err
-	}
-	req.Header.Set(authorizationHeader, bearerPrefix+token)
-	req.Header.Set(acceptHeader, acceptGitHubJSON)
 	var response struct {
 		Title string `json:"title"`
 		Body  string `json:"body"`
 	}
-	if err := doJSON(client, req, &response); err != nil {
-		// GitHub 404s a private issue rather than admitting it exists, so "not
-		// found" is the truthful answer to both.
-		var status statusError
-		if errors.As(err, &status) && status.code == http.StatusNotFound {
+	if _, _, err := gh.GetJSON(ctx, client, githubAPI+ref.ID, token, nil, &response); err != nil {
+		switch {
+		case errors.Is(err, gh.ErrNotFound):
+			// GitHub 404s a private issue rather than admitting it exists, so "not
+			// found" is the truthful answer to both.
 			return Ticket{}, notFound(g.Name())
+		case errors.Is(err, gh.ErrTokenRejected):
+			return Ticket{}, fmt.Errorf("%s: %w", g.Name(), ErrTokenRejected)
 		}
 		return Ticket{}, providerError(g.Name(), err)
 	}

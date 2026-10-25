@@ -34,3 +34,5 @@ export const ICONS = Object.freeze({
   waiting: icon(null, "M3.5 2h9L3.5 14h9z"),
   worktree: icon("M2 3h4l1.5 2H14v8H2z", null),
 });
+
+/** @typedef {keyof typeof ICONS} IconName */

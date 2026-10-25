@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/atomicfile"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -165,20 +167,14 @@ func writePID(dir string) error {
 	if err := os.MkdirAll(sessionpaths.Dir(dir), 0o755); err != nil {
 		return err
 	}
-	return os.WriteFile(sessionpaths.AgentPID(dir), []byte(strconv.Itoa(os.Getpid())), 0o644)
+	return atomicfile.Replace(sessionpaths.AgentPID(dir), []byte(strconv.Itoa(os.Getpid())), 0o644)
 }
 
 // SignalSupervisor pokes a session's agent supervisor to relaunch its runner
 // from the fresh manifest. Best-effort: with no pid file or no live
 // supervisor, the mode change still takes effect on the next launch.
 func SignalSupervisor(dir string) {
-	b, err := os.ReadFile(sessionpaths.AgentPID(dir))
-	if err != nil {
-		return
+	if pid, ok := session.ReadAgentPID(dir); ok {
+		_ = syscall.Kill(pid, syscall.SIGUSR1)
 	}
-	pid, err := strconv.Atoi(strings.TrimSpace(string(b)))
-	if err != nil || pid <= 0 {
-		return
-	}
-	_ = syscall.Kill(pid, syscall.SIGUSR1)
 }

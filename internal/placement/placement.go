@@ -213,7 +213,7 @@ func (p placer) inspect(dir string, m session.Manifest) (Item, func() error) {
 	home := filepath.Join(routed.Path, slug)
 	to := resolve(home)
 
-	link := filepath.Join(dir, sessionpaths.ThoughtsDirName)
+	link := sessionpaths.ThoughtsLink(dir)
 	info, err := os.Lstat(link)
 	if errors.Is(err, os.ErrNotExist) {
 		item.Reason, item.Detail = ReasonNoLink, fmt.Sprintf(detailNoLinkFormat, link)
@@ -325,7 +325,7 @@ func (p placer) sourceRoot(slug, target string) (Root, bool) {
 // relink swaps the link before recording, so a crash in between leaves a
 // session the next scan finishes.
 func (p placer) relink(dir, home, id string) error {
-	link := filepath.Join(dir, sessionpaths.ThoughtsDirName)
+	link := sessionpaths.ThoughtsLink(dir)
 	staged := link + linkStaging
 	_ = os.Remove(staged)
 	if err := os.Symlink(session.ThoughtsLink(p.cfg.Root, dir, home), staged); err != nil {

@@ -9,7 +9,6 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type FirstRunInput struct {
@@ -51,7 +50,7 @@ func (f *FirstRun) Login() string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
 	defer cancel()
-	login, err := github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
+	login, err := github.AuthenticatedLogin(ctx, http.DefaultClient, token)
 	if err != nil {
 		return ""
 	}
@@ -77,7 +76,7 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 		return FirstRunResult{}, err
 	}
 	thoughts := strings.TrimSpace(in.Thoughts)
-	if filepath.Clean(config.ExpandHome(thoughts)) == filepath.Join(expanded, sessionpaths.ThoughtsDirName) {
+	if filepath.Clean(config.ExpandHome(thoughts)) == config.DefaultThoughtsRoot(expanded) {
 		thoughts = ""
 	}
 	changed := false

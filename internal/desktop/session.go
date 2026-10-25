@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -127,15 +126,13 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 		return err
 	}
 	s.process = process
-	// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and
-	// JSON marshalling corrupts it.
 	go process.pump(
 		func(b []byte) {
 			s.agents.output()
 			if s.tail != nil {
 				s.tail.write(b)
 			}
-			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
+			emit(ptyDataEvent+s.terminal, encodeChunk(b))
 		},
 		func(code int) { s.childExited(emit, exited, code) },
 	)

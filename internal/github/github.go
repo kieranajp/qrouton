@@ -114,8 +114,9 @@ func CachedOwnerRepos(orgs []string) (map[string]OwnerRepos, bool) {
 
 // RefreshRepos fetches configured owners concurrently. Successful results are
 // merged immediately; failures retain that owner's cached repositories. Calling
-// it again (or RefreshOwnerRepos directly) provides owner-level retry.
-func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, cached []Repo) <-chan RefreshMsg {
+// it again (or RefreshOwnerRepos directly) provides owner-level retry. Each
+// owner's fetch has its own ownerTimeout, so a stalled owner fails alone.
+func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, ownerTimeout time.Duration, cached []Repo) <-chan RefreshMsg {
 	// This is the maximum possible event count. A full buffer lets the
 	// coordinator and workers terminate even if the consumer stops reading.
 	out := make(chan RefreshMsg, 2*len(orgs)+1)
@@ -130,7 +131,9 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		for _, owner := range orgs {
 			out <- RefreshMsg{Owner: owner, State: RefreshStarted}
 			go func() {
-				repos, err := RefreshOwnerRepos(ctx, client, token, owner)
+				ownerCtx, cancel := context.WithTimeout(ctx, ownerTimeout)
+				defer cancel()
+				repos, err := RefreshOwnerRepos(ownerCtx, client, token, owner)
 				results <- result{owner: owner, repos: repos, err: err}
 			}()
 		}
@@ -404,13 +407,13 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 }
 
 func githubJSON(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
-	_, _, err := githubConditionalJSON(ctx, client, token, requestURL, nil, dst)
+	_, _, err := GetJSON(ctx, client, requestURL, token, nil, dst)
 	return err
 }
 
-// githubConditionalJSON is githubJSON with request headers and the response's
-// status and headers. A 304 succeeds and leaves dst untouched.
-func githubConditionalJSON(ctx context.Context, client *http.Client, token, requestURL string, headers http.Header, dst any) (int, http.Header, error) {
+// GetJSON GETs a GitHub URL and decodes the answer into out. The token is sent
+// only when non-empty. A 304 succeeds and leaves out untouched.
+func GetJSON(ctx context.Context, client *http.Client, requestURL, token string, headers http.Header, out any) (int, http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, getMethod, requestURL, nil)
 	if err != nil {
 		return 0, nil, err
@@ -420,7 +423,9 @@ func githubConditionalJSON(ctx context.Context, client *http.Client, token, requ
 			req.Header.Add(name, value)
 		}
 	}
-	req.Header.Set(authorizationHeader, bearerPrefix+token)
+	if token != "" {
+		req.Header.Set(authorizationHeader, bearerPrefix+token)
+	}
 	req.Header.Set(acceptHeader, acceptGitHubJSON)
 	resp, err := client.Do(req)
 	if err != nil {
@@ -429,7 +434,7 @@ func githubConditionalJSON(ctx context.Context, client *http.Client, token, requ
 	defer resp.Body.Close()
 	switch resp.StatusCode {
 	case http.StatusOK:
-		return resp.StatusCode, resp.Header, json.NewDecoder(resp.Body).Decode(dst)
+		return resp.StatusCode, resp.Header, json.NewDecoder(resp.Body).Decode(out)
 	case http.StatusNotModified:
 		return resp.StatusCode, resp.Header, nil
 	case http.StatusUnauthorized:

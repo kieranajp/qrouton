@@ -1,6 +1,8 @@
 <script>
   import { onMount } from "svelte";
   import Button from "../core/Button.svelte";
+  import { scrim } from "../core/dismiss.js";
+  import { flash } from "../flash.svelte.js";
   import AssetMenu from "./AssetMenu.svelte";
 
   /** @type {{image: {source: string, path?: string, url: string, kind: import("../bridge/generated.js").MediaKind}, aspect: number, index?: number, total?: number, slug?: string, onStep?: (by: number) => void, onClose: () => void}} */
@@ -10,54 +12,26 @@
   let menu = $state(null);
   let first = $derived(index <= 1);
   let last = $derived(index >= total);
-  // The pane's own notice is behind the scrim, so what the menu did is said here.
-  let notice = $state("");
-  let noticeTimer;
-
-  function say(text) {
-    notice = text;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = ""), 1600);
-  }
+  /** The pane's own notice is behind the scrim, so what the menu did is said here.
+   * @type {ReturnType<typeof flash<string>>} */
+  const notice = flash();
+  const say = notice.show;
 
   let layer = $state(/** @type {HTMLElement | undefined} */ (undefined));
-  let stage = $state(/** @type {HTMLElement | undefined} */ (undefined));
   let hud = $state(/** @type {HTMLElement | undefined} */ (undefined));
-  let width = $state(0);
-  let height = $state(0);
-  let from = false;
+  /** @type {DOMRectReadOnly | undefined} */
+  let room = $state();
+  let fit = $derived.by(() => {
+    if (!room) return { width: 0, height: 0 };
+    if (room.width / room.height > aspect) return { width: room.height * aspect, height: room.height };
+    return { width: room.width, height: room.width / aspect };
+  });
+  let width = $derived(fit.width);
+  let height = $derived(fit.height);
 
   onMount(() => {
     layer?.focus();
-    return () => clearTimeout(noticeTimer);
   });
-
-  $effect(() => {
-    if (!stage) return;
-    const ratio = aspect;
-    const observer = new ResizeObserver(([entry]) => {
-      const room = entry.contentRect;
-      if (room.width / room.height > ratio) {
-        height = room.height;
-        width = height * ratio;
-      } else {
-        width = room.width;
-        height = width / ratio;
-      }
-    });
-    observer.observe(stage);
-    return () => observer.disconnect();
-  });
-
-  function down(event) {
-    from = event.target === event.currentTarget;
-  }
-
-  function up(event) {
-    const scrim = from && event.target === event.currentTarget;
-    from = false;
-    if (scrim) onClose();
-  }
 
   function step(by) {
     if (by < 0 ? !first : !last) onStep?.(by);
@@ -92,9 +66,8 @@
   tabindex="-1"
   bind:this={layer}
   onkeydown={key}
-  onpointerdown={down}
-  onpointerup={up}>
-  <div class="stage" bind:this={stage}>
+  use:scrim={() => onClose()}>
+  <div class="stage" bind:contentRect={room}>
     <div
       class="card"
       style:width={`${width}px`}
@@ -105,7 +78,7 @@
     </div>
   </div>
   <div class="hud" bind:this={hud}>
-    {#if notice}<span class="counter" role="status">{notice}</span>{/if}
+    {#if notice.value}<span class="counter" role="status">{notice.value}</span>{/if}
     <Button
       variant="ghost"
       size="sm"

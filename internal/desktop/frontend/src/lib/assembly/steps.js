@@ -2,6 +2,7 @@
 // it, and what a keypress in the dialog means.
 
 import { DRAFT_FIELDS } from "../bridge/generated.js";
+import { fieldError } from "../fields.js";
 
 /** @typedef {{field: import("../bridge/generated.js").DraftField, message: string}} Problem */
 
@@ -58,13 +59,11 @@ export const assemblyOpen = (requested, settled, slug) => !!settled && (!!reques
  * @param {string} added the session add-repos was pressed on */
 export const pickerOpen = (shown, pending, added) => !!shown && (!!pending || added === shown);
 
-const NAMED = new RegExp(`^(?:[a-z]+|${Object.values(DRAFT_FIELDS).join("|")}): `);
-
 /**
  * refusal is how the footer says what Go refused, which names the field before
  * the sentence.
  */
-export const refusal = (err) => String(err?.message ?? err ?? "").replace(NAMED, "");
+export const refusal = (err) => fieldError(err, DRAFT_FIELDS)?.message ?? String(err?.message ?? err ?? "");
 
 /**
  * @param {{key?: string, target?: any}} [event]

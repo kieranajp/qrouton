@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/gittest"
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 )
 
@@ -36,7 +37,6 @@ func TestReadScratchAssistant(t *testing.T) {
 	got := Read(dir)
 	want := Fields{
 		Mode:                "ASSISTANT",
-		Phase:               "scratch",
 		Root:                dir,
 		Identity:            "lifesum-4f3a",
 		Slug:                "lifesum-4f3a",
@@ -52,7 +52,7 @@ func TestReadScratchAssistant(t *testing.T) {
 	}
 }
 
-func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
+func TestReadEscalatedShowsModeNameBranchAndRepos(t *testing.T) {
 	root := t.TempDir()
 	m := session.Manifest{Slug: "webhook", Name: "webhook retry backoff", Mode: session.ModeRPI,
 		Repos: []session.ManifestRepo{
@@ -61,9 +61,8 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 		}}
 	dir := sessionDir(t, root, m)
 
-	// No documents yet: freshly escalated means Research.
 	got := Read(dir)
-	if got.Mode != "RPI" || got.Phase != "Research" {
+	if got.Mode != "RPI" {
 		t.Fatalf("fields = %#v", got)
 	}
 	if got.Identity != "webhook retry backoff" || got.Branch != "fix/webhook-retry-backoff" {
@@ -72,30 +71,6 @@ func TestReadEscalatedShowsPhaseNameAndBranch(t *testing.T) {
 	if len(got.Repos) != 2 || got.Repos[0] != (RepoStat{Name: "org/consumer", Role: "reference"}) ||
 		got.Repos[1] != (RepoStat{Name: "org/svc", Role: "editing"}) {
 		t.Fatalf("manifest repository rows = %+v", got.Repos)
-	}
-
-	// A research document moves the session into planning.
-	research := filepath.Join(dir, "thoughts", "shared", "research")
-	if err := os.MkdirAll(research, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(research, "r1-findings.md"), []byte("# findings"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := Read(dir); got.Phase != "Plan" {
-		t.Fatalf("phase did not advance to Plan: %q", got.Phase)
-	}
-
-	// A plan document moves it into implementation.
-	plans := filepath.Join(dir, "thoughts", "shared", "plans")
-	if err := os.MkdirAll(plans, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(plans, "p1.md"), []byte("- [ ] step"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if got := Read(dir); got.Phase != "Implement" {
-		t.Fatalf("phase did not advance to Implement: %q", got.Phase)
 	}
 }
 
@@ -261,8 +236,8 @@ func TestReadListsThoughtsFromEachRepositoryInManifestOrder(t *testing.T) {
 		t.Fatalf("repository documents = %#v, want non-empty repositories in manifest order", got)
 	}
 	want := []struct{ name, path, kind string }{
-		{"plans/P2-api.md", filepath.Join("src", "api", "thoughts", "plans", "P2-api.md"), KindPlan},
-		{"research/R1-api.md", filepath.Join("src", "api", "thoughts", "research", "R1-api.md"), KindResearch},
+		{"plans/P2-api.md", filepath.Join("src", "api", "thoughts", "plans", "P2-api.md"), kinds.Plan.Label()},
+		{"research/R1-api.md", filepath.Join("src", "api", "thoughts", "research", "R1-api.md"), kinds.Research.Label()},
 	}
 	if len(got[0].Documents) != len(want) {
 		t.Fatalf("api documents = %#v, want %#v", got[0].Documents, want)
@@ -272,7 +247,7 @@ func TestReadListsThoughtsFromEachRepositoryInManifestOrder(t *testing.T) {
 			t.Errorf("api document %d = %#v, want name %q, path %q, kind %q", i, document, want[i].name, want[i].path, want[i].kind)
 		}
 	}
-	if documents := got[1].Documents; len(documents) != 1 || documents[0].Name != "specs/S3-navigation.md" || documents[0].Kind != KindSpec {
+	if documents := got[1].Documents; len(documents) != 1 || documents[0].Name != "specs/S3-navigation.md" || documents[0].Kind != kinds.Spec.Label() {
 		t.Fatalf("web documents = %#v", documents)
 	}
 }
@@ -655,24 +630,26 @@ func noNilSlice(t *testing.T, v reflect.Value, path string) {
 // A kind filed under a directory has to answer to its filename prefix and carry
 // an ID as well, or a new one lands half-wired — and the prefix fails silently.
 func TestEveryArtifactKindAnswersToItsDirectoryAndItsFilename(t *testing.T) {
-	if len(kindByDir) != len(artifactKinds) || len(kindByLetter) != len(artifactKinds) {
-		t.Fatalf("%d kinds share %d directories and %d letters", len(artifactKinds), len(kindByDir), len(kindByLetter))
+	all := kinds.All()
+	if len(kindByDir) != len(all) || len(kindByLetter) != len(all) {
+		t.Fatalf("%d kinds share %d directories and %d letters", len(all), len(kindByDir), len(kindByLetter))
 	}
-	for _, a := range artifactKinds {
-		dir := "thoughts/shared/" + a.dir + "/notes.md"
-		if got := DocumentKind(dir); got != a.kind {
-			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, a.kind)
+	for _, k := range all {
+		label := k.Label()
+		dir := "thoughts/shared/" + k.Dir + "/notes.md"
+		if got := DocumentKind(dir); got != label {
+			t.Errorf("DocumentKind(%q) = %q, want %q", dir, got, label)
 		}
-		for _, name := range []string{a.letter + "007-shape.md", strings.ToUpper(a.letter) + "007_shape.md"} {
-			if got := DocumentKind(name); got != a.kind {
-				t.Errorf("DocumentKind(%q) = %q, want %q", name, got, a.kind)
+		for _, name := range []string{k.Letter + "007-shape.md", strings.ToUpper(k.Letter) + "007_shape.md"} {
+			if got := DocumentKind(name); got != label {
+				t.Errorf("DocumentKind(%q) = %q, want %q", name, got, label)
 			}
-			if got, want := ArtifactID(name), strings.ToUpper(a.letter)+"007"; got != want {
+			if got, want := ArtifactID(name), strings.ToUpper(k.Letter)+"007"; got != want {
 				t.Errorf("ArtifactID(%q) = %q, want %q", name, got, want)
 			}
 		}
 	}
-	if got := DocumentKind("research/P002-shape.md"); got != KindResearch {
+	if got := DocumentKind("research/P002-shape.md"); got != kinds.Research.Label() {
 		t.Errorf("the filename prefix beat the directory: got %q", got)
 	}
 	if got := DocumentKind("thoughts/shared/escalation-notes.md"); got != KindNote {

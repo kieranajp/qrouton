@@ -1,19 +1,12 @@
 package status
 
+import "github.com/kieranajp/qrouton/internal/kinds"
+
 const (
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"
 
-	phaseScratch   = "scratch"
-	phaseResearch  = "Research"
-	phasePlan      = "Plan"
-	phaseImplement = "Implement"
-
-	KindPlan      = "PLAN"
-	KindSpec      = "SPEC"
-	KindResearch  = "RESEARCH"
-	KindNote      = "NOTE"
-	KindExplainer = "EXPLAINER"
+	KindNote = "NOTE"
 
 	repoSeparator  = "/"
 	fieldSeparator = " "
@@ -23,10 +16,12 @@ const (
 	StagePlan      = "plan"
 	StageImplement = "implement"
 
-	researchDir           = "research"
-	plansDir              = "plans"
 	legacyQuestionsSuffix = "-questions.md"
-	summaryHeading        = "Summary"
+)
+
+var (
+	researchDir = kinds.Research.Dir
+	plansDir    = kinds.Plan.Dir
 )
 
 // Activity is what the workbench observes. Waiting only ever comes from the

@@ -14,8 +14,7 @@
   $effect(() => { onOwnership?.(Boolean(open)); });
   onDestroy(() => onOwnership?.(false));
 
-  /** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */
-  let open = $state(null);
+  let open = $state(/** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */ (null));
 
   let anchor = $derived(
     open
@@ -96,6 +95,7 @@
 
   async function act(item) {
     const at = open;
+    if (!at) return;
     open = null;
     restore(at);
     switch (item.act) {
@@ -124,7 +124,7 @@
   }
 </script>
 
-{#if open}
+{#if open && anchor}
   <div
     class="anchor"
     style:left="{anchor.left}px"

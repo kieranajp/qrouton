@@ -1,7 +1,8 @@
 package session
 
 import (
-	"fmt"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -74,7 +75,7 @@ func upgradable(m Manifest, dir string, ref RepoRef, branch string) (ManifestRep
 	if r.SSHURL == "" {
 		return r, false, refuseRepo(ErrNoCloneURL, r.Org, r.Name)
 	}
-	wt := filepath.Join(dir, r.WorktreePath)
+	wt := r.Dir(dir)
 	if _, err := os.Stat(wt); err != nil {
 		return r, true, nil
 	}
@@ -111,7 +112,7 @@ func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, 
 		return err
 	}
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
-	wt := filepath.Join(dir, r.WorktreePath)
+	wt := r.Dir(dir)
 	return rep.step(ProgressWorktree, func(func(string, int)) error {
 		return branchWorktree(mirror, wt, r, branch)
 	})
@@ -145,14 +146,15 @@ func branchWorktree(mirror, wt string, r ManifestRepo, branch string) error {
 // currentBranch is the branch a worktree is on, empty when detached — which
 // symbolic-ref reports by exiting non-zero and saying nothing.
 func currentBranch(wt string) (string, error) {
-	out, err := exec.Command(gitBin, dirFlag, wt, symbolicRefCmd, shortFlag, quietFlag, headRef).CombinedOutput()
+	out, err := gitOutput(context.Background(), dirFlag, wt, symbolicRefCmd, shortFlag, quietFlag, headRef)
 	if err != nil {
-		if len(strings.TrimSpace(string(out))) == 0 {
+		var exit *exec.ExitError
+		if errors.As(err, &exit) && strings.TrimSpace(string(exit.Stderr)) == "" {
 			return "", nil
 		}
-		return "", fmt.Errorf("read %s HEAD: %w\n%s", wt, err, out)
+		return "", err
 	}
-	return strings.TrimSpace(string(out)), nil
+	return strings.TrimSpace(out), nil
 }
 
 func indexOfRepo(repos []ManifestRepo, org, name string) int {

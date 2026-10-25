@@ -142,6 +142,7 @@ const (
 	stickerFieldFormat    = "%s.%d"
 	stickerDuplicate      = "another sticker already uses this colour and symbol"
 	stickerIDBytes        = 4
+	assetTokenBytes       = 16
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 	unknownUIScaleAction  = "unknown UI scale action"
 )
@@ -236,6 +237,9 @@ const (
 	// base menu opens without waiting for.
 	branchListTimeout = 5 * time.Second
 
+	// repoRefreshTimeout bounds each owner's repository listing.
+	repoRefreshTimeout = 30 * time.Second
+
 	// updateInterval paces the release check; updateCheckTimeout bounds each one.
 	updateInterval     = 6 * time.Hour
 	updateCheckTimeout = 10 * time.Second
@@ -247,9 +251,6 @@ const (
 	updateBrewCommand     = "brew upgrade --cask qrouton"
 	updateUserAgentHeader = "User-Agent"
 	updateUserAgentPrefix = "qrouton/"
-	updateAcceptHeader    = "Accept"
-	updateAcceptValue     = "application/vnd.github+json"
-	updateResponseLimit   = 1 << 20
 )
 
 const (

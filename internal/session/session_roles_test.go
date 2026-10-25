@@ -27,7 +27,7 @@ func makeOrigin(t *testing.T, name string) (string, string) {
 func makeOriginWithBranch(t *testing.T, name, branch string) (origin, mainTip, branchTip string) {
 	t.Helper()
 	origin = gittest.Origin(t, name, gittest.WithFile("version", "one"), gittest.WithBranch(branch, "two"))
-	return origin, gittest.Head(t, origin), gitOutput(t, origin, "rev-parse", branch)
+	return origin, gittest.Head(t, origin), gitIn(t, origin, "rev-parse", branch)
 }
 
 func TestCreatePersistsSessionMode(t *testing.T) {
@@ -44,7 +44,7 @@ func TestCreatePersistsSessionMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	var m Manifest
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +78,7 @@ func TestCreateSessionWithEditingAndPinnedReference(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +281,7 @@ func TestCreateReclaimsAbandonedAssemblyDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatal("abandoned directory blocked its session name:", err)
 	}
-	if _, err := os.Stat(filepath.Join(created, manifestName)); err != nil {
+	if _, err := os.Stat(sessionpaths.Manifest(created)); err != nil {
 		t.Fatal("reclaimed session has no manifest:", err)
 	}
 	if _, err := os.Stat(filepath.Join(created, assemblingMarker)); !os.IsNotExist(err) {
@@ -332,7 +332,7 @@ func TestCreateRecordsTheCloneURLItAssembledFrom(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	b, err := os.ReadFile(sessionpaths.Manifest(dir))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,7 @@
 // Command bridge writes the page's copy of the names the workbench binds: one
 // constant per bound method, one per event, the defaults the chrome payload is
-// read through, and every closed set of values the payloads carry.
+// read through, and every closed set of values the payloads carry. It also
+// writes the palette for the test fixture pages, which no workbench serves.
 package main
 
 import (
@@ -17,6 +18,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/kieranajp/qrouton/internal/kinds"
+	"github.com/kieranajp/qrouton/internal/theme"
 )
 
 //go:generate go run .
@@ -32,8 +36,10 @@ const (
 	assemblyPackage  = "../../assembly"
 	configPackage    = "../../config"
 	placementPackage = "../../placement"
+	vaultPackage     = "../../vault"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
+	fixturePalette   = "../frontend/tests/theme.css"
 )
 
 const (
@@ -45,9 +51,10 @@ const (
 
 // valueSet selects a closed set of string constants from one package, by Go
 // type when it has one and by name otherwise; prefix and suffix are trimmed to
-// make each key.
+// make each key. Derived values lead the set and are their own keys.
 type valueSet struct {
 	name, typedef, dir, goType, prefix, suffix string
+	derived                                    []string
 }
 
 var valueSets = []valueSet{
@@ -56,7 +63,7 @@ var valueSets = []valueSet{
 	{name: "AGENT_COVERAGE", typedef: "AgentCoverage", dir: statusPackage, prefix: "AgentCoverage"},
 	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
 	{name: "AGENT_STAGES", typedef: "AgentStage", dir: statusPackage, prefix: "Stage"},
-	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind"},
+	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind", derived: kindLabels()},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
@@ -67,7 +74,6 @@ var valueSets = []valueSet{
 	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},
 	{name: "PLACEMENT_REASONS", typedef: "PlacementReason", dir: placementPackage, goType: "Reason", prefix: "Reason"},
 	{name: "PLACEMENT_RESULTS", typedef: "PlacementResult", dir: placementPackage, goType: "Result", prefix: "Result"},
-	{name: "PLACEMENT_STATES", typedef: "PlacementState", dir: placementPackage, goType: "State", prefix: "State"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
@@ -79,11 +85,18 @@ var valueSets = []valueSet{
 	{name: "WINDOW_KINDS", typedef: "WindowKind", dir: workbenchPackage, goType: "WindowKind", prefix: "Kind"},
 }
 
+func kindLabels() []string {
+	var out []string
+	for _, k := range kinds.All() {
+		out = append(out, k.Label())
+	}
+	return out
+}
+
 // valueNames are single values the page compares against.
 type valueName struct{ dir, goName string }
 
 var valueNames = []valueName{
-	{desktopPackage, "agentRootID"},
 	{desktopPackage, "galleryLabel"},
 	{desktopPackage, "stickerDuplicate"},
 	{desktopPackage, "sessionUnloadLabel"},
@@ -99,16 +112,21 @@ var valueNames = []valueName{
 	{desktopPackage, "switcherCurrent"},
 	{desktopPackage, "switcherResults"},
 	{desktopPackage, "switcherHelp"},
+	{configPackage, "rootEnvVar"},
+	{configPackage, "orgsEnvVar"},
+	{configPackage, "defaultRoot"},
+	{vaultPackage, "OllamaURL"},
 }
 
 // valueList is an ordered list of strings that Go holds as a package-level
-// slice literal rather than as constants.
+// slice literal rather than as constants, or derives.
 type valueList struct {
 	name, typedef, dir, goName string
+	derived                    []string
 }
 
 var valueLists = []valueList{
-	{name: "STICKER_COLOURS", typedef: "StickerColour", dir: configPackage, goName: "stickerColours"},
+	{name: "STICKER_COLOURS", typedef: "StickerColour", derived: theme.StickerColours()},
 	{name: "STICKER_SYMBOLS", typedef: "StickerSymbol", dir: configPackage, goName: "stickerSymbols"},
 }
 
@@ -121,6 +139,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := os.WriteFile(generatedPage, body, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(fixturePalette, []byte(theme.CSS()), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -334,6 +355,10 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 			return err
 		}
 		var keys, values []string
+		for _, value := range set.derived {
+			keys = append(keys, value)
+			values = append(values, strconv.Quote(value))
+		}
 		for _, c := range found {
 			if set.goType != "" && c.goType != set.goType {
 				continue
@@ -371,13 +396,17 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 
 func writeLists(js *bytes.Buffer, lists []valueList) error {
 	for _, list := range lists {
-		files, err := parsePackage(list.dir)
-		if err != nil {
-			return err
-		}
-		values, ok := stringList(files, list.goName)
-		if !ok || len(values) == 0 {
-			return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+		values := list.derived
+		if values == nil {
+			files, err := parsePackage(list.dir)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			values, ok = stringList(files, list.goName)
+			if !ok || len(values) == 0 {
+				return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+			}
 		}
 		quoted := make([]string, len(values))
 		for i, v := range values {

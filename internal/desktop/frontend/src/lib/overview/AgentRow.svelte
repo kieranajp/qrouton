@@ -13,6 +13,7 @@
   let finished = $derived(isFinished(node.state));
   let title = $derived(agentName(node));
   let taskName = $derived(node.taskName || "");
+  let icon = $derived(stateIcon(node.state));
   let words = $derived(stateWords(node, tools));
   let doing = $derived(nowLine(node, root));
   let wrote = $derived(wroteLine(node.files));
@@ -33,8 +34,8 @@
     aria-label="{title}{taskName ? ` · ${taskName}` : ""} · {words}"
     aria-expanded={expanded}
     onclick={() => (expanded = !expanded)}>
-    {#if stateIcon(node.state)}
-      <Icon name={stateIcon(node.state)} />
+    {#if icon}
+      <Icon name={icon} />
     {:else}
       <span class="slot"></span>
     {/if}

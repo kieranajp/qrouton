@@ -19,7 +19,7 @@
 
   const CHASE_SECONDS = 1.2;
 
-  /** @type {{name: string, inherit?: boolean}} */
+  /** @type {{name: import("./icons.js").IconName, inherit?: boolean}} */
   let { name, inherit = false } = $props();
 
   let paths = $derived(ICONS[name]);

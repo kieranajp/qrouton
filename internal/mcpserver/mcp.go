@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -67,7 +68,7 @@ type setSummaryInput struct {
 }
 
 type setDigestInput struct {
-	Digest string `json:"digest" jsonschema:"The whole digest, rewritten: a few plain past-tense lines, at most 600 characters, on what is done, in progress and waiting on the user"`
+	Digest string `json:"digest"`
 }
 
 type notifyInput struct {
@@ -96,7 +97,17 @@ type answer[In any] func(context.Context, In) (string, *workbench.DocumentViewpo
 // viewport. key names that string in the structured payload — every tool says
 // "message" except read_window, which is returning output rather than talking.
 func addTool[In any](server *mcp.Server, name, description, key string, fn answer[In]) {
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description},
+	addToolWithSchema(server, name, description, key, nil, fn)
+}
+
+// addToolWithSchema takes an input schema whose descriptions Go computes; nil
+// leaves the SDK to infer it from the struct tags.
+func addToolWithSchema[In any](server *mcp.Server, name, description, key string, schema *jsonschema.Schema, fn answer[In]) {
+	tool := &mcp.Tool{Name: name, Description: description}
+	if schema != nil {
+		tool.InputSchema = schema
+	}
+	mcp.AddTool(server, tool,
 		func(ctx context.Context, _ *mcp.CallToolRequest, input In) (*mcp.CallToolResult, any, error) {
 			text, viewport, err := fn(ctx, input)
 			if err != nil {
@@ -108,6 +119,15 @@ func addTool[In any](server *mcp.Server, name, description, key string, fn answe
 			}
 			return textResult(text), output, nil
 		})
+}
+
+func setDigestSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[setDigestInput](nil)
+	if err != nil {
+		panic(err)
+	}
+	schema.Properties["digest"].Description = fmt.Sprintf(descDigestField, digestLimit)
+	return schema
 }
 
 func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
@@ -135,7 +155,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return textResult(message), out, nil
 		})
 
-	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, ToolOpenFile, descOpenFile, keyMessage, windows.openFile)
 	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
 	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
@@ -150,7 +170,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
 			return createArtefact(root, input)
 		}))
-	addTool(server, toolSetDigest, descSetDigest, keyMessage,
+	addToolWithSchema(server, toolSetDigest, descSetDigest, keyMessage, setDigestSchema(),
 		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
 			return setDigest(root, input)
 		}))

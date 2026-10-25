@@ -1,20 +1,21 @@
 package session
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 	var dirty []string
 	for _, repo := range m.Repos {
-		path := filepath.Join(root, m.Slug, repo.WorktreePath)
+		path := repo.Dir(filepath.Join(root, m.Slug))
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
@@ -33,20 +34,29 @@ func DirtyWorktrees(root string, m Manifest) ([]string, error) {
 // removed or corrupted; there is no dirty state left to read then, and a
 // session carrying one must still be deletable.
 func worktreeDirty(path string) (bool, error) {
-	out, err := exec.Command(gitBin, dirFlag, path, statusCmd, porcelainArg).CombinedOutput()
+	out, err := gitOutput(context.Background(), dirFlag, path, statusCmd, porcelainArg)
 	if err != nil {
-		if strings.Contains(string(out), notARepositoryMessage) {
+		if outlivedCheckout(err.Error()) {
 			return false, nil
 		}
-		return false, fmt.Errorf("%w\n%s", err, out)
+		return false, err
 	}
-	return len(bytes.TrimSpace(out)) > 0, nil
+	return strings.TrimSpace(out) != "", nil
+}
+
+func outlivedCheckout(output string) bool {
+	return slices.ContainsFunc(outlivedCheckoutMessages, func(message string) bool {
+		return strings.Contains(output, message)
+	})
 }
 
 func Delete(root string, m Manifest) error {
+	if err := m.validate(); err != nil {
+		return err
+	}
 	dir := filepath.Join(root, m.Slug)
 	for _, repo := range m.Repos {
-		path := filepath.Join(dir, repo.WorktreePath)
+		path := repo.Dir(dir)
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			continue
 		}
@@ -74,7 +84,7 @@ func Resumable(root, slug string) string {
 		return ""
 	}
 	dir := filepath.Join(root, slug)
-	if _, err := os.Stat(filepath.Join(dir, manifestName)); err != nil {
+	if _, err := os.Stat(sessionpaths.Manifest(dir)); err != nil {
 		return ""
 	}
 	return dir
@@ -124,7 +134,7 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 	for _, repo := range m.Repos {
 		stat := RepoStat{
 			Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective(),
-			Path: filepath.Join(dir, repo.WorktreePath),
+			Path: repo.Dir(dir),
 		}
 		if stat.Role == RepoRoleEditing && (repo.BaseBranch != "" || repo.DefaultBranch != "") {
 			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch), &stat)
@@ -135,42 +145,45 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 }
 
 func measure(ctx context.Context, path, base string, stat *RepoStat) {
-	commits, ok := countCommits(ctx, path, base)
-	if !ok {
+	commits, err := countCommits(ctx, path, base)
+	if err != nil {
 		return
 	}
-	insertions, deletions, ok := countLines(ctx, path, base)
-	if !ok {
+	insertions, deletions, err := countLines(ctx, path, base)
+	if err != nil {
 		return
 	}
 	stat.Commits, stat.Insertions, stat.Deletions, stat.Measured = commits, insertions, deletions, true
 }
 
-func countCommits(ctx context.Context, path, base string) (int, bool) {
+func countCommits(ctx context.Context, path, base string) (int, error) {
 	return countRange(ctx, path, base+rangeSeparator+headRef)
 }
 
-func countRange(ctx context.Context, path, revisionRange string) (int, bool) {
+func countRange(ctx context.Context, path, revisionRange string) (int, error) {
 	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, revListCmd, countFlag, revisionRange).Output()
+	out, err := gitOutput(ctx, dirFlag, path, revListCmd, countFlag, revisionRange)
 	if err != nil {
-		return 0, false
+		return 0, err
 	}
-	count, err := strconv.Atoi(strings.TrimSpace(string(out)))
-	return count, err == nil
+	return strconv.Atoi(strings.TrimSpace(out))
 }
 
 // countLines totals the diff since the merge base, so a base branch that has
 // moved on does not count as the session's own work.
-func countLines(ctx context.Context, path, base string) (int, int, bool) {
+func countLines(ctx context.Context, path, base string) (int, int, error) {
 	ctx, cancel := context.WithTimeout(ctx, repoStatTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, gitBin, dirFlag, path, diffCmd, numstatFlag, base+mergeBaseSeparator+headRef).Output()
+	out, err := gitOutput(ctx, dirFlag, path, diffCmd, numstatFlag, base+mergeBaseSeparator+headRef)
 	if err != nil {
-		return 0, 0, false
+		return 0, 0, err
 	}
-	return sumNumstat(string(out))
+	insertions, deletions, ok := sumNumstat(out)
+	if !ok {
+		return 0, 0, ErrUnreadableNumstat
+	}
+	return insertions, deletions, nil
 }
 
 // sumNumstat totals --numstat's tab-separated columns; binaryMarker replaces

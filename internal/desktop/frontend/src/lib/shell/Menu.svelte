@@ -4,7 +4,7 @@
 
   /** maxHeight caps a menu whose items are not a fixed vocabulary, which then
    * scrolls rather than running off the screen.
-   * @type {{label?: string, items?: any[], width?: number, maxHeight?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
+   * @type {{label?: string, items?: import("./menu.js").MenuItem[], width?: number, maxHeight?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
   let {
     label,
     items = [],
@@ -16,7 +16,7 @@
     ...rest
   } = $props();
 
-  let marked = $derived(items.some((item) => item?.icon || (item?.status && item.status !== "idle")));
+  let marked = $derived(items.some((item) => item !== "-" && (item.icon || (item.status && item.status !== "idle"))));
 </script>
 
 <div

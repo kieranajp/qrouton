@@ -6,6 +6,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/vault"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 // The mode prompt already describes the workbench and when a window is worth
@@ -18,7 +19,7 @@ const serverInstructions = "Drive the user's qrouton workbench: window tools ope
 const (
 	toolReportBug      = "report_bug"
 	descReportBug      = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
-	toolOpenFile       = "open_file"
+	ToolOpenFile       = "open_file"
 	toolFocusAsset     = "focus_asset"
 	toolOpenAssets     = "open_assets"
 	toolRunCommand     = "run_command"
@@ -36,7 +37,7 @@ const (
 
 const (
 	summaryLimit = 140
-	digestLimit  = 600
+	digestLimit  = prompts.DigestLimit
 )
 
 const (
@@ -52,7 +53,7 @@ const (
 
 	descNotify = "Get the user's attention with an on-screen message and a sound. The message becomes a tab marked as wanting the user, and stays until they dismiss it; it does not take the keyboard. It begins in the background, ordinarily relying on sound and its waiting marker; foreground selects it without taking the keyboard. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs."
 
-	descCloseWindow = "Close a window you opened — " + toolRunCommand + ", " + toolOpenFile + ", " + toolOpenAssets + ", " + toolShowDiff + " or " + toolNotify + " — by name."
+	descCloseWindow = "Close a window you opened — " + toolRunCommand + ", " + ToolOpenFile + ", " + toolOpenAssets + ", " + toolShowDiff + " or " + toolNotify + " — by name."
 
 	descListWindows = "List the tabs qrouton is holding for you, by name."
 
@@ -63,6 +64,7 @@ const (
 
 const (
 	toolSearchThoughts = "search_thoughts"
+	descSearchKinds    = "Only these artifact kinds: "
 	toolReadThoughts   = "read_thoughts"
 	toolOpenThoughts   = "open_thoughts"
 
@@ -73,6 +75,8 @@ const (
 var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)
 
 var descCreateArtefact = fmt.Sprintf("Create a new research, spec or plan document in this session's thoughts folder. qrouton picks the number and filename, stamps who made it, when, in which session and against which repository revisions, and writes the template's skeleton. kind must be one of %s. Returns the session-relative path of the new file. Fill that file in place; never name or write a new artefact by hand, and leave its author, created, session and revisions fields alone.", strings.Join(artefact.Kinds, ", "))
+
+const descDigestField = "The whole digest, rewritten: a few plain past-tense lines, at most %d characters, on what is done, in progress and waiting on the user"
 
 var descSetDigest = fmt.Sprintf("Write the So far digest the user sees under the summary in the Overview tab: where this session stands. Call it after each lead returns and after the user settles a decision. Each call replaces the whole digest, so pass all of it, rewritten. Give a few plain past-tense lines, at most %d characters, on what is done, what is in progress and what waits on the user. Line breaks are kept. Longer text is rejected, never truncated: shorten it and call again.", digestLimit)
 

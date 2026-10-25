@@ -4,6 +4,12 @@ import { draftKey, parseSpec, readAnswer, reapply, spliceAnswer } from "./spec.j
 
 const doc = (...lines) => lines.join("\n");
 
+/** @param {import("./spec.js").Question} question */
+const answerOf = (question) => {
+  assert.ok(question.answer);
+  return question.answer;
+};
+
 const OPEN = doc(
   "---",
   "kind: spec",
@@ -108,17 +114,17 @@ test("a recommended option keeps its reason and loses the marker", () => {
 
 test("a bare letter, prose that opens with one, free text and nothing are told apart", () => {
   const [one, two, three, four] = parseSpec(OPEN).open;
-  assert.deepEqual([one.answer.letter, one.answer.note], ["B", ""]);
-  assert.deepEqual([two.answer.letter, two.answer.note], ["", "A, because the callers have one"]);
-  assert.equal(three.answer.raw, "");
-  assert.deepEqual([four.answer.letter, four.answer.note], ["", "Neither: log it and carry on."]);
+  assert.deepEqual([answerOf(one).letter, answerOf(one).note], ["B", ""]);
+  assert.deepEqual([answerOf(two).letter, answerOf(two).note], ["", "A, because the callers have one"]);
+  assert.equal(answerOf(three).raw, "");
+  assert.deepEqual([answerOf(four).letter, answerOf(four).note], ["", "Neither: log it and carry on."]);
 });
 
 test("an answer block spans its own lines only", () => {
   const [one, , three, four] = parseSpec(OPEN).open;
-  assert.deepEqual([one.answer.from, one.answer.to], [20, 20]);
-  assert.deepEqual([three.answer.from, three.answer.to], [34, 34]);
-  assert.deepEqual([four.answer.from, four.answer.to], [41, 43]);
+  assert.deepEqual([answerOf(one).from, answerOf(one).to], [20, 20]);
+  assert.deepEqual([answerOf(three).from, answerOf(three).to], [34, 34]);
+  assert.deepEqual([answerOf(four).from, answerOf(four).to], [41, 43]);
 });
 
 test("bold decisions before the first heading share one Decisions page, and each resolved question has its own", () => {
@@ -483,7 +489,7 @@ test("splicing a letter into an empty answer touches that line only", () => {
   const after = spliceAnswer(OPEN, question, { letter: "B", note: "" });
   outside(OPEN, after, question);
   assert.equal(after.split("\n").length, OPEN.split("\n").length);
-  assert.equal(parseSpec(after).open[2].answer.letter, "B");
+  assert.equal(answerOf(parseSpec(after).open[2]).letter, "B");
 });
 
 test("splicing replaces a whole multi-line answer and reads back the same", () => {
@@ -491,26 +497,26 @@ test("splicing replaces a whole multi-line answer and reads back the same", () =
   const after = spliceAnswer(OPEN, question, { letter: "A", note: "Log it first.\r\nThen carry on." });
   outside(OPEN, after, question);
   assert.ok(!after.includes("\r"));
-  const read = parseSpec(after).open[3].answer;
+  const read = answerOf(parseSpec(after).open[3]);
   assert.deepEqual([read.letter, read.note], ["A", "Log it first.\nThen carry on."]);
-  assert.deepEqual(parseSpec(after).open.map((q) => q.answer.raw), parseSpec(OPEN).open.map((q, at) => (at === 3 ? read.raw : q.answer.raw)));
+  assert.deepEqual(parseSpec(after).open.map((q) => answerOf(q).raw), parseSpec(OPEN).open.map((q, at) => (at === 3 ? read.raw : answerOf(q).raw)));
 });
 
 test("a free-text answer splices without a letter", () => {
   const question = parseSpec(OPEN).open[0];
   const after = spliceAnswer(OPEN, question, { letter: "", note: "Neither, honestly" });
   outside(OPEN, after, question);
-  const read = parseSpec(after).open[0].answer;
+  const read = answerOf(parseSpec(after).open[0]);
   assert.deepEqual([read.letter, read.note], ["", "Neither, honestly"]);
 });
 
 test("clearing the letter keeps the note as a free-text answer", () => {
   const question = parseSpec(OPEN).open[0];
-  assert.equal(question.answer.letter, "B");
+  assert.equal(answerOf(question).letter, "B");
   const note = "Neither: use an absolute caller deadline instead.";
   const withBoth = spliceAnswer(OPEN, question, { letter: "B", note });
   const cleared = spliceAnswer(withBoth, parseSpec(withBoth).open[0], { letter: "", note });
-  const read = parseSpec(cleared).open[0].answer;
+  const read = answerOf(parseSpec(cleared).open[0]);
   assert.deepEqual([read.letter, read.note], ["", note]);
   assert.match(cleared, new RegExp(`\\nAnswer: ${note}\\n`));
   outside(OPEN, cleared, question);
@@ -520,7 +526,7 @@ test("clearing the letter of an empty note leaves the question unanswered", () =
   const question = parseSpec(OPEN).open[0];
   const after = spliceAnswer(OPEN, question, { letter: "", note: "" });
   const read = parseSpec(after).open[0];
-  assert.equal(read.answer.raw, "");
+  assert.equal(answerOf(read).raw, "");
   assert.equal(parseSpec(after).answered, parseSpec(OPEN).answered - 1);
 });
 
@@ -539,6 +545,7 @@ test("drafts go back on the question with the same id and heading", () => {
   ]);
   const renamed = OPEN.replace("### Q3 - What happens on expiry?", "### Q3 - What happens when time runs out?");
   const { questions, detached } = reapply(parseSpec(renamed), drafts);
+  assert.ok(questions[1].draft);
   assert.equal(questions[1].draft.note, "kept");
   assert.equal(questions[2].draft, null);
   assert.deepEqual(detached.map((draft) => draft.note), ["renamed", "removed"]);
@@ -564,7 +571,7 @@ test("anything else on the Answer line is free text with no letter", () => {
   for (const first of ["B, but caveat", "B, because the callers have one", "B (I think so)", "B. Overall", "B - overall", "yes", "Z", "b"]) {
     const { question } = answered(`Answer: ${first}`);
     assert.deepEqual(reads(question), ["", first]);
-    assert.equal(question.answer.raw, first);
+    assert.equal(answerOf(question).raw, first);
   }
   assert.deepEqual(reads(answered("Answer: B, but", "only per caller").question), ["", "B, but\nonly per caller"]);
   assert.deepEqual(reads(answered("Answer:", "B").question), ["", "B"]);
@@ -592,7 +599,7 @@ test("every form written by spliceAnswer reads back as it was given", () => {
     for (const start of ["Answer:", "Answer: A", "Answer: A, old\nmore"]) {
       const { text, question } = answered(start);
       const after = spliceAnswer(text, question, form);
-      const read = parseSpec(after).open[0].answer;
+      const read = answerOf(parseSpec(after).open[0]);
       assert.deepEqual([read.letter, read.note], [form.letter, form.note], JSON.stringify(form));
       const again = spliceAnswer(after, parseSpec(after).open[0], { letter: read.letter, note: read.note });
       assert.equal(again, after);
@@ -611,7 +618,7 @@ test("a missing answer line goes after the block's last line, not inside its pro
   const text = doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Some trailing context.", "", "## Decisions", "");
   const after = spliceAnswer(text, parseSpec(text).open[0], { letter: "B", note: "" });
   assert.equal(after, doc("## Open questions", "", "### Q1 — Pick", "", "- A. One", "- B. Two", "", "Some trailing context.", "", "Answer: B", "", "## Decisions", ""));
-  assert.equal(parseSpec(after).open[0].answer.note, "");
+  assert.equal(answerOf(parseSpec(after).open[0]).note, "");
 });
 
 test("a question's context knows the file line it starts on", () => {

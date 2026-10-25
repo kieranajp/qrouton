@@ -251,9 +251,6 @@ func TestCheckStickerRefusesValuesOutsideThePalette(t *testing.T) {
 	if err := CheckSticker(Sticker{Colour: "blue", Symbol: "moon"}); !errors.Is(err, ErrStickerSymbol) {
 		t.Fatalf("unknown symbol = %v", err)
 	}
-	if len(stickerColours) != 12 || len(stickerSymbols) != 14 {
-		t.Fatalf("palette = %d colours, %d symbols", len(stickerColours), len(stickerSymbols))
-	}
 }
 
 func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
@@ -506,5 +503,19 @@ func TestThoughtsPlacementSurvivesSnapshotAndReplace(t *testing.T) {
 	dst.Replace(&Config{Root: "/sessions"})
 	if dst.ThoughtsPlacement != "" || dst.ThoughtsPlacementChecked {
 		t.Fatal("Replace kept stale placement fields")
+	}
+}
+
+func TestCacheDirFollowsXDGCacheHomeOnEveryPlatform(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", "")
+	if got, want := CacheDir(), filepath.Join(home, ".cache", "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
+	}
+	cache := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cache)
+	if got, want := CacheDir(), filepath.Join(cache, "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
 }

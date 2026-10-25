@@ -33,7 +33,7 @@ export function matchSessions(rows = [], query = "") {
       if (best.index === 1 || best.index > 2) context.add(best.value);
     }
     return { row, quality, priority, order, context: [...context].filter(Boolean).join(" · ") };
-  }).filter(Boolean).sort((a, b) => b.quality - a.quality || a.priority - b.priority || a.order - b.order);
+  }).filter((match) => match !== null).sort((a, b) => b.quality - a.quality || a.priority - b.priority || a.order - b.order);
 }
 
 export const initialSelection = (matches, current) => (matches.find(({ row }) => row.slug !== current) ?? matches[0])?.row.slug ?? "";

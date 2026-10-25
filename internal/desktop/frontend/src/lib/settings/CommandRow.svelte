@@ -1,18 +1,19 @@
 <script>
+  import { flash } from "../flash.svelte.js";
   import { copyText } from "../wails.js";
 
   /** @type {{command: string}} */
   let { command } = $props();
 
-  let copied = $state(false);
+  /** @type {ReturnType<typeof flash<boolean>>} */
+  const copied = flash();
 
   async function copy() {
     try {
       await copyText(command);
-      copied = true;
-      setTimeout(() => (copied = false), 1500);
+      copied.show(true);
     } catch {
-      copied = false;
+      copied.clear();
     }
   }
 </script>
@@ -20,7 +21,7 @@
 <div class="command-row">
   <span class="prompt" aria-hidden="true">$</span>
   <code>{command}</code>
-  <button type="button" class="copy" aria-label="Copy {command}" onclick={copy}>{copied ? "Copied" : "Copy"}</button>
+  <button type="button" class="copy" aria-label="Copy {command}" onclick={copy}>{copied.value ? "Copied" : "Copy"}</button>
 </div>
 
 <style>

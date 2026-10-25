@@ -68,6 +68,13 @@ func TestSectionsSeparatesFramingFromWhatWasWritten(t *testing.T) {
 			"## How?\n\n```go\n## not a heading\n```\n",
 			[]Section{{"How?", SectionAnswered}},
 		},
+		{"a tilde fence hides its heading", "## How?\n\n~~~\n## not a heading\n~~~\n", []Section{{"How?", SectionAnswered}}},
+		{
+			"a shorter fence does not close a longer one",
+			"## How?\n\n````md\n```\n## not a heading\n```\n````\n",
+			[]Section{{"How?", SectionAnswered}},
+		},
+		{"an indented heading still opens a section", "   ## How?\n\n> Start here.\n", []Section{{"How?", SectionFramed}}},
 		{
 			"frontmatter naming a section opens nothing",
 			"---\n## not a section\n---\n\n## Real\n\nBody.\n",
@@ -116,10 +123,22 @@ func TestMarpIsDeclaredInFrontmatter(t *testing.T) {
 		{"no frontmatter", "# Deck\n\nmarp: true\n", false},
 		{"declared", "---\nmarp: true\ntheme: qrouton\n---\n\n# Deck\n", true},
 		{"declared after other keys", "---\ntitle: x\nmarp: true\n---\n", true},
-		{"declared uppercase", "---\nmarp: True\n---\n", true},
-		{"padded", "---\n  marp :  true  \n---\n", true},
+		{"spaced before the colon", "---\nmarp :  true\n---\n", true},
+		{"trailing whitespace", "---\nmarp: true  \r\n---\n", true},
+		{"no space after the colon", "---\nmarp:true\n---\n", false},
+		{"uppercase", "---\nmarp: True\n---\n", false},
+		{"YAML 1.1 yes", "---\nmarp: yes\n---\n", false},
+		{"YAML 1.1 on", "---\nmarp: on\n---\n", false},
+		{"quoted true", "---\nmarp: \"true\"\n---\n", false},
+		{"quoted key", "---\n\"marp\": true\n---\n", false},
+		{"nested under another key", "---\nstyle:\n  marp: true\n---\n", false},
+		{"inside a block scalar", "---\nnotes: |\n  marp: true\n---\n", false},
+		{"the first marp line decides", "---\nmarp: false\nmarp: true\n---\n", false},
 		{"declined", "---\nmarp: false\n---\n", false},
 		{"another value", "---\nmarp: maybe\n---\n", false},
+		{"beside invalid YAML", "---\nmarp: true\nfooter: Lifesum: Q3\ntitle: [unclosed\n---\n", true},
+		{"quoted true beside invalid YAML", "---\nmarp: \"true\"\nfooter: Lifesum: Q3\n---\n", false},
+		{"beside a quoted colon", "---\ntitle: \"Deck: one\"\nmarp: true\n---\n", true},
 		{"absent", "---\ntheme: qrouton\n---\n", false},
 		{"in the body, not the frontmatter", "---\na: 1\n---\n\nmarp: true\n", false},
 		{"unclosed frontmatter", "---\nmarp: true\n", false},
@@ -164,5 +183,52 @@ func TestPlanPhasesMatchesTheSharedCases(t *testing.T) {
 				t.Errorf("%s: phase %d = %+v, want %+v", tc.Name, i, got[i], want)
 			}
 		}
+	}
+}
+
+func TestResearchedSkipsOnlyAnOpeningSummary(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		text string
+		want bool
+	}{
+		{"an answered question", "## Summary\n\nFraming.\n\n## How?\n\nLike this.\n", true},
+		{"only the opening summary answered", "## Summary\n\nFraming.\n\n## How?\n", false},
+		{"a late summary is a question like any other", "## How?\n\n## Summary\n\nFindings.\n", true},
+		{"a framed question is outstanding", "## Summary\n\nFraming.\n\n## How?\n\n> Look here.\n\n## Why?\n\nBecause.\n", false},
+		{"no sections", "Just prose.\n", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Researched(tc.text); got != tc.want {
+				t.Fatalf("Researched(%q) = %v; want %v", tc.text, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestHeadingsKeepTheirSourceLines(t *testing.T) {
+	body := "# Guide\n\nIntro.\n\n## Setup ##\n\n~~~sh\n# not a heading\n~~~\n\n> # quoted\n\n### Linux\n"
+	want := []Heading{{1, 1, "Guide"}, {5, 2, "Setup"}, {13, 3, "Linux"}}
+	if got := Headings(body); !slices.Equal(got, want) {
+		t.Fatalf("Headings = %+v; want %+v", got, want)
+	}
+}
+
+func TestSplitGivesTheLineTheBodyStartsOn(t *testing.T) {
+	for _, tc := range []struct {
+		name, text, front, body string
+		line                    int
+	}{
+		{"no frontmatter", "\n# T\n", "", "\n# T\n", 1},
+		{"frontmatter", "---\nkind: note\n---\n\n# T\n", "kind: note", "\n# T\n", 4},
+		{"after blank lines", "\n---\na: 1\n---\n# T\n", "a: 1", "# T\n", 5},
+		{"unclosed", "---\na: 1\n# T\n", "", "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			front, body, line := Split(tc.text)
+			if front != tc.front || body != tc.body || line != tc.line {
+				t.Fatalf("Split(%q) = %q, %q, %d", tc.text, front, body, line)
+			}
+		})
 	}
 }

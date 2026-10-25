@@ -9,7 +9,7 @@
     failed: "var(--state-failed)",
   };
 
-  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpLiteral?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', icon?: string, multiline?: boolean, valueVoice?: 'prose'|'literal', trailing?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpLiteral?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', icon?: import("../core/icons.js").IconName, multiline?: boolean, valueVoice?: 'prose'|'literal', trailing?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
     label,
     value = $bindable(""),

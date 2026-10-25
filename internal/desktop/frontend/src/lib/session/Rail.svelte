@@ -5,6 +5,7 @@
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { dismissible } from "../core/dismiss.js";
+  import { flash } from "../flash.svelte.js";
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
   import RailItem from "./RailItem.svelte";
@@ -37,12 +38,14 @@
   let targetSlug = $state("");
   /** @type {HTMLDivElement} */
   let sessionList;
-  /** @type {{pointerId: number, source: string, button: HTMLElement, startX: number, startY: number, x: number, y: number, moved: boolean} | null} */
-  let gesture = $state(null);
+  let gesture = $state(
+    /** @type {{pointerId: number, source: string, button: HTMLElement, startX: number, startY: number, x: number, y: number, moved: boolean} | null} */ (null),
+  );
   let scrollFrame = 0;
 
   $effect(() => {
-    if ((gesture && !sessions.some((row) => row.slug === gesture.source)) ||
+    const source = gesture?.source;
+    if ((source && !sessions.some((row) => row.slug === source)) ||
         (targetSlug && !sessions.some((row) => row.slug === targetSlug))) {
       clearDrag();
     }
@@ -137,10 +140,9 @@
 
   const stickerQueues = new Map();
   let pendingStickers = $state({});
-  /** @type {{slug: string, sequence: number, text: string, failed: boolean} | null} */
-  let rowNotice = $state(null);
+  /** @type {ReturnType<typeof flash<{slug: string, sequence: number, text: string, failed: boolean}>>} */
+  const rowNotice = flash();
   let noticeSequence = 0;
-  let rowNoticeTimer;
   let mounted = true;
 
   onMount(() => {
@@ -162,17 +164,12 @@
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("blur", clearDrag);
       clearDrag();
-      clearTimeout(rowNoticeTimer);
     };
   });
 
   function showRowNotice(slug, text, failed = false) {
     if (!mounted) return;
-    clearTimeout(rowNoticeTimer);
-    rowNotice = { slug, text, failed, sequence: ++noticeSequence };
-    rowNoticeTimer = setTimeout(() => {
-      rowNotice = null;
-    }, 1500);
+    rowNotice.show({ slug, text, failed, sequence: ++noticeSequence });
   }
 
   function changeSticker(event, row) {
@@ -196,8 +193,8 @@
     stickerQueues.set(slug, queued);
   }
 
-  /** @type {{row: any, x: number, y: number} | null} */
-  let menu = $state(null);
+  let menu = $state(/** @type {{row: any, x: number, y: number} | null} */ (null));
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   const rowMenu = $derived([
     { label: "Reload", icon: "refresh", act: reloadRow },
     {
@@ -210,8 +207,7 @@
     "-",
     { label: "Clean up…", icon: "bin", tone: "destructive", act: askCleanup },
   ]);
-  /** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */
-  let confirming = $state(null);
+  let confirming = $state(/** @type {{row: any, dirty: string[], checked: boolean, error: string} | null} */ (null));
   let cleaning = $state(false);
   let inspecting = $state(false);
   $effect(() => { onOwnership?.(Boolean(menu || confirming || cleaning || inspecting || gesture)); });
@@ -286,13 +282,14 @@
 
   // The chrome poll notices the row is gone, so nothing here waits on a refresh.
   async function cleanUp() {
-    if (cleaning) return;
+    const current = confirming;
+    if (cleaning || !current) return;
     cleaning = true;
     try {
-      await cleanup(confirming.row.slug);
+      await cleanup(current.row.slug);
       dismissConfirm();
     } catch (err) {
-      confirming = { ...confirming, error: String(err?.message ?? err) };
+      confirming = { ...current, error: String(err?.message ?? err) };
     } finally {
       cleaning = false;
     }
@@ -333,7 +330,7 @@
         stickerId={row.sticker}
         {stickers}
         stickerBusy={(pendingStickers[row.slug] ?? 0) > 0}
-        feedback={rowNotice?.slug === row.slug ? rowNotice : null}
+        feedback={rowNotice.value?.slug === row.slug ? rowNotice.value : null}
         onSelect={() => show(row.slug)}
         onSticker={(event) => changeSticker(event, row)}
         onContextMenu={(event) => openMenu(event, row)} />
@@ -346,7 +343,8 @@
   </div>
 </div>
 
-{#if menu}
+{#if menu && anchor}
+  {@const row = menu.row}
   <div
     class="anchor"
     style:left="{anchor.left}px"
@@ -357,9 +355,9 @@
       width={ROW_MENU_WIDTH}
       offsetY={0}
       onSelect={(item) => {
-        const row = menu.row;
+        const picked = row;
         menu = null;
-        item.act(row);
+        item.act(picked);
       }} />
   </div>
 {/if}

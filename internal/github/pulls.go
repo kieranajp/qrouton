@@ -24,7 +24,7 @@ func ListPullRequests(ctx context.Context, client *http.Client, token, owner, re
 		headers.Set(ifNoneMatchHeader, etag)
 	}
 	prs = []PullRequest{}
-	status, answer, err := githubConditionalJSON(ctx, client, token, requestURL, headers, &prs)
+	status, answer, err := GetJSON(ctx, client, requestURL, token, headers, &prs)
 	if err != nil {
 		return nil, "", false, fmt.Errorf("github: listing %s/%s pull requests from %s: %w", owner, repo, branch, err)
 	}

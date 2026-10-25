@@ -135,13 +135,13 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"} ArtifactKind */
+/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"NOTE"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
-  PLAN: "PLAN",
-  SPEC: "SPEC",
   RESEARCH: "RESEARCH",
-  NOTE: "NOTE",
+  SPEC: "SPEC",
+  PLAN: "PLAN",
   EXPLAINER: "EXPLAINER",
+  NOTE: "NOTE",
 });
 
 /** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */
@@ -227,15 +227,6 @@ export const PLACEMENT_RESULTS = Object.freeze({
   FAILED: "failed",
 });
 
-/** @typedef {"placed"|"misplaced"|"finished"|"pending"|"skipped"} PlacementState */
-export const PLACEMENT_STATES = Object.freeze({
-  PLACED: "placed",
-  MISPLACED: "misplaced",
-  FINISHED: "finished",
-  PENDING: "pending",
-  SKIPPED: "skipped",
-});
-
 /** @typedef {"started"|"completed"|"failed"|"advanced"} ProgressStatus */
 export const PROGRESS_STATUSES = Object.freeze({
   STARTED: "started",
@@ -305,8 +296,6 @@ export const WINDOW_KINDS = Object.freeze({
   OVERVIEW: "overview",
 });
 
-export const AGENT_ROOT_ID = "root";
-
 export const GALLERY_LABEL = "GALLERY";
 
 export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
@@ -337,6 +326,14 @@ export const SWITCHER_RESULTS = "sessions";
 
 export const SWITCHER_HELP = "Arrow keys choose · Enter open · Esc close";
 
+export const ROOT_ENV_VAR = "QROUTON_ROOT";
+
+export const ORGS_ENV_VAR = "QROUTON_ORGS";
+
+export const DEFAULT_ROOT = "~/work";
+
+export const OLLAMA_URL = "http://127.0.0.1:11434";
+
 /** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
 /** @type {readonly StickerColour[]} */
 export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
@@ -345,13 +342,12 @@ export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green
 /** @type {readonly StickerSymbol[]} */
 export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
   bugReportLabel: "",
   mode: "",
-  phase: "",
   identity: "",
   branch: "",
   slug: "",

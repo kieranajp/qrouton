@@ -1,7 +1,8 @@
 <script>
-  import { AGENT_TREE_EVENT, CHROME_AGENT_TREE } from "../bridge/generated.js";
+  import { AGENT_TREE_EVENT } from "../bridge/generated.js";
   import { openDocument } from "../docked.svelte.js";
-  import { Call, Events, call } from "../wails.js";
+  import { follow } from "../wails.js";
+  import { agentTree } from "./calls.js";
   import LeadRow from "./LeadRow.svelte";
   import SessionDigest from "./SessionDigest.svelte";
   import SessionPullRequests from "./SessionPullRequests.svelte";
@@ -29,20 +30,8 @@
 
   $effect(() => {
     const current = session;
-    let live = false;
-    let gone = false;
     tree = undefined;
-    const off = Events.On(AGENT_TREE_EVENT + current, (event) => {
-      live = true;
-      tree = event.data;
-    });
-    call(Call.ByName(CHROME_AGENT_TREE, current)).then((answer) => {
-      if (answer.ok && !live && !gone && answer.value) tree = answer.value;
-    });
-    return () => {
-      gone = true;
-      off();
-    };
+    return follow(AGENT_TREE_EVENT + current, () => agentTree(current), (value) => (tree = value)).stop;
   });
 
   $effect(() => {

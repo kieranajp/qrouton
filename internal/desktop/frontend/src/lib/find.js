@@ -61,15 +61,11 @@ export function createFindAdapter(provider) {
  */
 export function findShortcut(event) {
   return Boolean(
-    event &&
-      (event.metaKey || event.ctrlKey) &&
-      !event.altKey &&
-      !event.shiftKey &&
-      event.key?.toLowerCase() === "f",
+    (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key?.toLowerCase() === "f",
   );
 }
 
-/** @param {HTMLElement} root */
+/** @param {HTMLElement | null | undefined} root */
 export function clearMatches(root) {
   if (!root) return;
   const parents = new Set();
@@ -81,7 +77,7 @@ export function clearMatches(root) {
 }
 
 /** A search unit preserves inline markup and never crosses block boundaries.
- * @param {HTMLElement} root
+ * @param {HTMLElement | null | undefined} root
  * @param {string} query
  * @returns {HTMLElement[][]} */
 export function markMatches(root, query) {
@@ -114,7 +110,7 @@ export function markMatches(root, query) {
     }
   }
 
-  const wrapped = matches.map(() => []);
+  const wrapped = matches.map(() => /** @type {HTMLElement[]} */ ([]));
   const byNode = new Map();
   matches.forEach((segments, match) => {
     for (const segment of segments) {

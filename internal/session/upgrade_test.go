@@ -39,7 +39,7 @@ func referenceSession(t *testing.T, names ...string) (*config.Config, string, []
 	return cfg, dir, origins
 }
 
-func gitOutput(t *testing.T, dir string, args ...string) string {
+func gitIn(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).Output()
 	if err != nil {
@@ -72,15 +72,15 @@ func TestUpgradeReposMovesAReferenceCheckoutOntoTheSessionBranch(t *testing.T) {
 	os.WriteFile(filepath.Join(origins[0], "version"), []byte("two"), 0o644)
 	gittest.Run(t, origins[0], "add", ".")
 	gittest.Run(t, origins[0], "commit", "-m", "advance")
-	tip := gitOutput(t, origins[0], "rev-parse", "HEAD")
+	tip := gitIn(t, origins[0], "rev-parse", "HEAD")
 
 	if err := UpgradeRepos(cfg, m, []RepoRef{{Org: "ORG", Name: "DOCS"}}, "feat/docs", nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/docs" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/docs" {
 		t.Fatalf("checkout is on %q, not the session branch", got)
 	}
-	if got := gitOutput(t, wt, "rev-parse", "HEAD"); got != tip {
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != tip {
 		t.Fatalf("checkout at %s, want the default branch tip %s (pinned was %s)", got, tip, pinned)
 	}
 
@@ -134,10 +134,10 @@ func TestUpgradeReposCutsFromTheRecordedBaseBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
-	if got := gitOutput(t, wt, "rev-parse", "HEAD"); got != branchTip {
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != branchTip {
 		t.Fatalf("session branch cut at %s, want the release tip %s", got, branchTip)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/based" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/based" {
 		t.Fatalf("checkout is on %q", got)
 	}
 }
@@ -198,7 +198,7 @@ func TestUpgradeReposKeepsWhatGitDoesNotTrack(t *testing.T) {
 			t.Fatalf("%s = %q, want %q", name, body, want)
 		}
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/built" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/built" {
 		t.Fatalf("checkout is on %q", got)
 	}
 }
@@ -213,7 +213,7 @@ func TestUpgradeReposRefusesACheckoutThatHasMovedOffItsPin(t *testing.T) {
 	os.WriteFile(filepath.Join(wt, "note"), []byte("mine"), 0o644)
 	gittest.Run(t, wt, "add", ".")
 	gittest.Run(t, wt, "commit", "-m", "local work")
-	local := gitOutput(t, wt, "rev-parse", "HEAD")
+	local := gitIn(t, wt, "rev-parse", "HEAD")
 
 	err = UpgradeRepos(cfg, m, refs("moved"), "feat/moved", nil)
 	if !errors.Is(err, ErrReferenceMoved) {
@@ -222,7 +222,7 @@ func TestUpgradeReposRefusesACheckoutThatHasMovedOffItsPin(t *testing.T) {
 	if !strings.Contains(err.Error(), "org/moved") {
 		t.Fatalf("refusal does not name the repository: %v", err)
 	}
-	if got := gitOutput(t, wt, "rev-parse", "HEAD"); got != local {
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got != local {
 		t.Fatalf("the refused checkout moved to %s", got)
 	}
 }
@@ -273,7 +273,7 @@ func TestUpgradeReposTouchesNothingWhenOneOfTheBatchIsRefused(t *testing.T) {
 		t.Fatalf("batch with one refusal = %v", err)
 	}
 	alpha := filepath.Join(dir, m.Repos[0].WorktreePath)
-	if got := gitOutput(t, alpha, "branch", "--show-current"); got != "" {
+	if got := gitIn(t, alpha, "branch", "--show-current"); got != "" {
 		t.Fatalf("alpha was switched to %q before bravo was refused", got)
 	}
 }
@@ -295,14 +295,14 @@ func TestUpgradeReposCompletesATakeUpWhoseWriteNeverLanded(t *testing.T) {
 		t.Fatal(err)
 	}
 	wt := filepath.Join(dir, m.Repos[0].WorktreePath)
-	if got := gitOutput(t, wt, "rev-parse", "HEAD"); got == m.Repos[0].Revision {
+	if got := gitIn(t, wt, "rev-parse", "HEAD"); got == m.Repos[0].Revision {
 		t.Fatal("the checkout did not move off its pin, so the retry proves nothing")
 	}
 
 	if err := UpgradeRepos(cfg, m, refs("again"), "feat/again", nil); err != nil {
 		t.Fatal("a take-up already on disk was not completable:", err)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/again" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/again" {
 		t.Fatalf("checkout is on %q", got)
 	}
 }
@@ -321,7 +321,7 @@ func TestUpgradeReposMaterialisesAPrunedCheckoutStraightOntoTheBranch(t *testing
 	if err := UpgradeRepos(cfg, m, refs("pruned"), "feat/pruned", nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/pruned" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/pruned" {
 		t.Fatalf("re-materialised checkout is on %q", got)
 	}
 }
@@ -397,7 +397,7 @@ func TestUpgradeReposRefusesToOverwriteUncommittedWork(t *testing.T) {
 	if err != nil || string(body) != "mine" {
 		t.Fatalf("the edit was overwritten: %q (%v)", body, err)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "" {
 		t.Fatalf("the refused checkout moved onto %q", got)
 	}
 }
@@ -417,7 +417,7 @@ func TestUpgradeReposCarriesWorkGitCanKeep(t *testing.T) {
 	if err := UpgradeRepos(cfg, m, refs("carried"), "feat/carried", nil); err != nil {
 		t.Fatal(err)
 	}
-	if got := gitOutput(t, wt, "branch", "--show-current"); got != "feat/carried" {
+	if got := gitIn(t, wt, "branch", "--show-current"); got != "feat/carried" {
 		t.Fatalf("checkout is on %q", got)
 	}
 	body, err := os.ReadFile(filepath.Join(wt, "version"))

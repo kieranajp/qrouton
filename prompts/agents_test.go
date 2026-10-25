@@ -10,10 +10,11 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/kieranajp/qrouton/internal/agentevent"
 )
 
 const (
-	taskTool       = "Task"
 	leadNamePrefix = "qrouton-"
 	leadNameSuffix = "-lead"
 	toolsKey       = "tools"
@@ -34,9 +35,7 @@ func agentAssetPaths(name string) []string {
 // inheriting the default by nobody's decision.
 var defaultSandboxAgents = map[string]bool{}
 
-// Depth stays bounded at three levels: a lead omits tools so it inherits Task
-// and can delegate, and every specialist declares a tools set without Task so
-// it cannot spawn a fourth.
+// A lead omits tools so it can spawn; a specialist declares tools without Agent or Task so it cannot.
 func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 	loaded, err := NewEmbeddedLoader().List(context.Background())
 	if err != nil {
@@ -57,12 +56,10 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 			case lead && declared:
 				t.Errorf("a lead declares tools %q, so it can no longer delegate", tools)
 			case !lead && !declared:
-				t.Error("a specialist declares no tools, so it inherits Task and can spawn")
+				t.Error("a specialist declares no tools, so it inherits the spawn tool")
 			}
-			for _, tool := range strings.Split(tools, ",") {
-				if strings.TrimSpace(tool) == taskTool {
-					t.Errorf("a specialist holds %s, so the tree can grow a fourth level", taskTool)
-				}
+			if tool := spawnTool(tools); tool != "" {
+				t.Errorf("a specialist holds %s, so the tree can grow a fourth level", tool)
 			}
 
 			assets, err := Render(prompt)
@@ -96,6 +93,16 @@ func TestAgentDepthAndSandboxAreDeclared(t *testing.T) {
 	}
 }
 
+// spawnTool returns the first tool in a tools: list that can start a subagent.
+func spawnTool(tools string) string {
+	for _, tool := range strings.Split(tools, ",") {
+		if tool = strings.TrimSpace(tool); tool == agentevent.ToolAgent || tool == agentevent.ToolTaskLegacy {
+			return tool
+		}
+	}
+	return ""
+}
+
 // wantSandbox is the sandbox line the maps the renderer consults call for. An
 // agent in none of them is an undecided grant, not a default.
 func wantSandbox(t *testing.T, name string) string {
@@ -116,7 +123,7 @@ func wantSandbox(t *testing.T, name string) string {
 func assertAgyAgent(t *testing.T, assets []Rendered, name, source string) {
 	t.Helper()
 	agy := renderedAsset(t, assets, agyAgentsDir+name+"/"+agyAgentFileName)
-	for _, key := range []string{frontmatterNameKey, frontmatterDescriptionKey} {
+	for _, key := range []string{"name", "description"} {
 		rendered, declared := frontmatterEntry(agy, key)
 		if !declared {
 			t.Errorf("agy rendering declares no %s", key)
@@ -172,11 +179,53 @@ func frontmatterEntry(text, key string) (string, bool) {
 		return "", false
 	}
 	for _, line := range strings.Split(text[len(frontmatterFence):len(frontmatterFence)+end], "\n") {
-		if name, value, ok := strings.Cut(line, frontmatterKeySep); ok && strings.TrimSpace(name) == key {
+		if name, value, ok := strings.Cut(line, ":"); ok && strings.TrimSpace(name) == key {
 			return strings.TrimSpace(value), true
 		}
 	}
 	return "", false
+}
+
+func TestEveryAgentPromptParsesToItsFileNameAndAPlainDescription(t *testing.T) {
+	loaded, err := NewEmbeddedLoader().List(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, prompt := range loaded {
+		id := string(prompt.ID)
+		if !strings.HasPrefix(id, agentIDPrefix) {
+			continue
+		}
+		t.Run(path.Base(id), func(t *testing.T) {
+			agent, err := parseAgentPrompt(prompt.Content)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if agent.name != path.Base(id) {
+				t.Errorf("name = %q, want %q", agent.name, path.Base(id))
+			}
+			if agent.description == "" || strings.ContainsAny(agent.description[:1], `"'>`) {
+				t.Errorf("description = %q, want plain text", agent.description)
+			}
+		})
+	}
+}
+
+func TestQuotedAndFoldedDescriptionsDecodeToPlainText(t *testing.T) {
+	for name, source := range map[string]string{
+		"quoted": "---\nname: probe\ndescription: \"Probes: things.\"\n---\n\nBody.\n",
+		"folded": "---\nname: probe\ndescription: >\n  Probes:\n  things.\n---\n\nBody.\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			agent, err := parseAgentPrompt([]byte(source))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if agent.description != "Probes: things." {
+				t.Fatalf("description = %q, want %q", agent.description, "Probes: things.")
+			}
+		})
+	}
 }
 
 // Render is the only guard on a malformed agent source, and a source that
@@ -191,6 +240,7 @@ func TestRenderRejectsMalformedAgentPrompts(t *testing.T) {
 		"no name":           {"---\ndescription: Probes.\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
 		"no description":    {"---\nname: probe\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
 		"empty description": {"---\nname: probe\ndescription:\n---\n\nBody.\n", ErrIncompleteAgentPrompt},
+		"invalid yaml":      {"---\nname: probe\ndescription: [Probes.\n---\n\nBody.\n", ErrInvalidAgentFrontmatter},
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := Render(Prompt{ID: ID(agentIDPrefix + "probe"), Content: []byte(probe.source)})

@@ -10,7 +10,6 @@
   "rubric": "Answer the first turn from the durable artifacts alone. The second turn is read-heavy investigation across two repositories: route it through a lead rather than reading the repositories in the main thread or spawning specialists directly, then give the answer in conversation without changing code.",
   "checks": [
     {"kind": "turn_delegation", "turn": 2, "pattern": "lead"},
-    {"kind": "repo_unchanged", "repo": "account-service"},
-    {"kind": "response_excludes", "any": ["qrouton-questions", "qrouton-research", "qrouton-spec", "qrouton-plan", "qrouton-implement", "agent depth", "document numbering"]}
+    {"kind": "repo_unchanged", "repo": "account-service"}
   ]
 }

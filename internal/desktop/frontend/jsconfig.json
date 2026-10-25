@@ -6,6 +6,7 @@
     "checkJs": true,
     "allowJs": true,
     "strict": false,
+    "strictNullChecks": true,
     "types": [
       "vite/client",
       "node"

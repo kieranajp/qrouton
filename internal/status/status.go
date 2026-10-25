@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -24,7 +25,6 @@ type Fields struct {
 	BugReportStatus string `json:"bugReportStatus"`
 	BugReportLabel  string `json:"bugReportLabel"`
 	Mode            string `json:"mode"`
-	Phase           string `json:"phase"`
 	Identity        string `json:"identity"`
 	Branch          string `json:"branch"`
 	// Slug and Terminal name the session on screen and the conversation the page
@@ -250,7 +250,6 @@ func Read(root string) Fields {
 	}
 	fields.Mode = modeLabel(m)
 	fields.Stages = stages(root, m)
-	fields.Phase = phase(fields.Stages, m)
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
@@ -317,22 +316,6 @@ func modeLabel(m session.Manifest) string {
 		return modeRPILabel
 	}
 	return modeAssistantLabel
-}
-
-// phase is the macro-phase only: scratch until repositories exist, then the
-// stage the session's durable documents put it in — a research doc means
-// planning, a plan means implementing.
-func phase(done Stages, m session.Manifest) string {
-	switch {
-	case len(m.Repos) == 0:
-		return phaseScratch
-	case done.Plan:
-		return phaseImplement
-	case done.Research:
-		return phasePlan
-	default:
-		return phaseResearch
-	}
 }
 
 // Sessions lists every session under the sessions root, most recently opened
@@ -456,11 +439,7 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 		if repo.WorktreePath == "" {
 			continue
 		}
-		worktree := repo.WorktreePath
-		if !filepath.IsAbs(worktree) {
-			worktree = filepath.Join(root, worktree)
-		}
-		worktree = filepath.Clean(worktree)
+		worktree := repo.Dir(root)
 		rel, inside := sessionpaths.Within(src, worktree)
 		if !inside || rel == "." {
 			continue
@@ -508,22 +487,12 @@ func documentsUnder(root, dir string, name func(string) string) []Document {
 	return out
 }
 
-// artifactKinds is the whole artifact taxonomy: the directory a kind is filed
-// under, the label it carries, and the letter its filenames are numbered from.
-// A new kind is this one entry; the lookups and the filename pattern derive.
-var artifactKinds = []struct{ dir, kind, letter string }{
-	{dir: "plans", kind: KindPlan, letter: "p"},
-	{dir: "specs", kind: KindSpec, letter: "s"},
-	{dir: "research", kind: KindResearch, letter: "r"},
-	{dir: "explainers", kind: KindExplainer, letter: "e"},
-}
-
 // KindFiling is the directory a kind is filed under and the letter its
 // filenames open with, for a kind label in any case.
 func KindFiling(kind string) (dir, letter string, ok bool) {
-	for _, a := range artifactKinds {
-		if strings.EqualFold(a.kind, kind) {
-			return a.dir, strings.ToUpper(a.letter), true
+	for _, k := range kinds.All() {
+		if strings.EqualFold(k.Name, kind) {
+			return k.Dir, strings.ToUpper(k.Letter), true
 		}
 	}
 	return "", "", false
@@ -532,13 +501,15 @@ func KindFiling(kind string) (dir, letter string, ok bool) {
 var kindByDir, kindByLetter, artifactPrefix = indexArtifacts()
 
 func indexArtifacts() (map[string]string, map[string]string, *regexp.Regexp) {
-	dirs := make(map[string]string, len(artifactKinds))
-	letters := make(map[string]string, len(artifactKinds))
+	all := kinds.All()
+	dirs := make(map[string]string, len(all))
+	letters := make(map[string]string, len(all))
 	class := strings.Builder{}
-	for _, a := range artifactKinds {
-		dirs[a.dir] = a.kind
-		letters[a.letter] = a.kind
-		class.WriteString(a.letter)
+	for _, k := range all {
+		label := k.Label()
+		dirs[k.Dir] = label
+		letters[k.Letter] = label
+		class.WriteString(k.Letter)
 	}
 	return dirs, letters, regexp.MustCompile(`(?i)^(([` + class.String() + `])\d+)[-_.]`)
 }

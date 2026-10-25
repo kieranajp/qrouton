@@ -1,6 +1,7 @@
 <script>
   import Icon from "../core/Icon.svelte";
 
+  /** @type {Record<"pending"|"running"|"done"|"failed", import("../core/icons.js").IconName>} */
   const ICONS = { done: "succeeded", running: "running", failed: "failed", pending: "pending" };
 
   /** @type {{state?: 'pending'|'running'|'done'|'failed', label?: string, detail?: string, percent?: number, [attribute: string]: any}} */

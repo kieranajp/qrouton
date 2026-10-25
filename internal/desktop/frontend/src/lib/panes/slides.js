@@ -56,7 +56,7 @@ function sectionsOf(html) {
   const container = parse(html).querySelector("div.marpit");
   return [...(container?.children ?? [])].map((section) => ({
     html: section.outerHTML,
-    title: section.querySelector("h1, h2, h3")?.textContent?.trim() ?? "",
+    title: section.querySelector("h1, h2, h3")?.textContent.trim() ?? "",
   }));
 }
 

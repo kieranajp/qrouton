@@ -549,7 +549,7 @@ test("the footer holds the pane's floor and spans its width", async ({ page }) =
   expect(long).toEqual({ gap: 0, left: 0, width: long.pane, pane: long.pane });
 });
 
-test("following moves the view when the meter moves, and a pin holds it", async ({ page }) => {
+test("following moves the view when the meter moves", async ({ page }) => {
   await open(page);
   await page.evaluate(() => window.emitChrome({ activity: "working" }));
   await expect.poll(() => shown(page)).toEqual(["overview"]);

@@ -2,98 +2,123 @@
 package markdown
 
 import (
+	"bytes"
 	"regexp"
 	"strconv"
 	"strings"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	extast "github.com/yuin/goldmark/extension/ast"
+	"github.com/yuin/goldmark/text"
 )
 
 // fence opens and closes a frontmatter block.
 const fence = "---"
 
-// heading names the document and subheading opens a section; a code fence
-// suspends subheading, and a blockquote under one is framing rather than an
-// answer.
-const (
-	heading    = "# "
-	subheading = "## "
-	codeFence  = "```"
-	quote      = ">"
-)
-
-// marpKey declares a document a deck, and only when set to marpEnabled.
-const (
-	marpKey      = "marp"
-	marpEnabled  = "true"
-	keySeparator = ":"
-)
+var parser = goldmark.New(goldmark.WithExtensions(extension.TaskList)).Parser()
 
 // Title accepts only the first visible element after frontmatter as the document title.
 func Title(text string) (string, bool) {
-	for _, line := range body(text) {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "" {
-			continue
-		}
-		if title, ok := strings.CutPrefix(trimmed, heading); ok {
-			return strings.TrimSpace(title), true
-		}
+	source := []byte(Body(text))
+	heading, ok := parse(source).FirstChild().(*ast.Heading)
+	if !ok || heading.Level != 1 {
 		return "", false
 	}
-	return "", false
+	title := headingText(heading, source)
+	return title, title != ""
 }
 
 // Body is the document with any frontmatter dropped: what a reader would see.
 // Empty for a document that is nothing but frontmatter, closed or not.
 func Body(text string) string {
-	return strings.Join(body(text), "\n")
+	_, body, _ := Split(text)
+	return body
 }
 
 // Marp reports whether a document declares itself a deck. Only the leading
 // frontmatter block counts, so a marp: line in the body is prose.
 func Marp(text string) bool {
-	for _, line := range frontmatter(text) {
-		key, value, ok := strings.Cut(line, keySeparator)
-		if !ok || strings.TrimSpace(key) != marpKey {
-			continue
-		}
-		return strings.EqualFold(strings.TrimSpace(value), marpEnabled)
-	}
-	return false
+	front, _, _ := Split(text)
+	directive := marpDirective.FindStringSubmatch(front)
+	return directive != nil && strings.TrimRight(directive[1], " \t\r") == marpEnabled
 }
 
-// body is text's lines with any frontmatter block dropped, which is parsed but
-// never shown.
-func body(text string) []string {
-	_, rest := split(text)
-	return rest
-}
+// marpDirective is Marp's own deck test, so qrouton and Marp agree on what a
+// deck is: the first unindented marp line, its value compared as text.
+var marpDirective = regexp.MustCompile(`(?m)^marp\s*: +(.*)$`)
 
-func frontmatter(text string) []string {
-	front, _ := split(text)
-	return front
-}
+const marpEnabled = "true"
 
-// split separates the frontmatter block from what a reader would see. A block
-// that never closes is neither: its contents are not the document, and a block
-// with no end declares nothing either.
-func split(text string) (front, rest []string) {
+// Split returns the frontmatter, the body and the body's first source line.
+// An unclosed block yields nothing at all.
+func Split(text string) (front, body string, line int) {
 	lines := strings.Split(text, "\n")
-	for at, line := range lines {
-		trimmed := strings.TrimSpace(line)
+	for at, raw := range lines {
+		trimmed := strings.TrimSpace(raw)
 		if trimmed == "" {
 			continue
 		}
 		if trimmed != fence {
-			return nil, lines[at:]
+			break
 		}
 		for closing := at + 1; closing < len(lines); closing++ {
 			if strings.TrimSpace(lines[closing]) == fence {
-				return lines[at+1 : closing], lines[closing+1:]
+				return strings.Join(lines[at+1:closing], "\n"), strings.Join(lines[closing+1:], "\n"), closing + 2
 			}
 		}
-		return nil, nil
+		return "", "", 0
 	}
-	return nil, nil
+	return "", text, 1
+}
+
+// Heading is one top-level heading of a body. Line counts from the body's
+// first line.
+type Heading struct {
+	Line  int
+	Level int
+	Text  string
+}
+
+// Headings reads a body's headings in order, leaving out any inside a fence,
+// a quote or a list. The body must already be clear of frontmatter.
+func Headings(body string) []Heading {
+	source := []byte(body)
+	var headings []Heading
+	for node := parse(source).FirstChild(); node != nil; node = node.NextSibling() {
+		if heading, ok := node.(*ast.Heading); ok {
+			line := bytes.Count(source[:max(heading.Pos(), 0)], []byte("\n")) + 1
+			headings = append(headings, Heading{Line: line, Level: heading.Level, Text: headingText(heading, source)})
+		}
+	}
+	return headings
+}
+
+func parse(source []byte) ast.Node {
+	return parser.Parse(text.NewReader(source))
+}
+
+func headingText(heading *ast.Heading, source []byte) string {
+	lines := heading.Lines()
+	parts := make([]string, 0, lines.Len())
+	for i := range lines.Len() {
+		segment := lines.At(i)
+		parts = append(parts, strings.TrimSpace(string(segment.Value(source))))
+
+	}
+	return strings.TrimSpace(strings.Join(parts, " "))
+}
+
+// section opens at a named second-level heading and holds the blocks up to the
+// next one.
+func section(node ast.Node, source []byte) (string, bool) {
+	heading, ok := node.(*ast.Heading)
+	if !ok || heading.Level != 2 {
+		return "", false
+	}
+	name := headingText(heading, source)
+	return name, name != ""
 }
 
 // SectionState is how far a section has been taken. A research document is
@@ -113,33 +138,25 @@ type Section struct {
 	State SectionState
 }
 
-// Sections reads a document's second-level headings in order. A heading inside
-// a fenced block opens nothing, and text above the first heading belongs to no
-// section.
+// Sections reads a document's second-level headings in order. Text above the
+// first heading belongs to no section.
 func Sections(text string) []Section {
+	source := []byte(Body(text))
 	var sections []Section
-	fenced := false
-	for _, line := range body(text) {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, codeFence) {
-			fenced = !fenced
-		} else if !fenced {
-			if name, ok := strings.CutPrefix(line, subheading); ok {
-				sections = append(sections, Section{Name: strings.TrimSpace(name)})
-				continue
-			}
-		}
-		if len(sections) == 0 || trimmed == "" {
+	for node := parse(source).FirstChild(); node != nil; node = node.NextSibling() {
+		if name, ok := section(node, source); ok {
+			sections = append(sections, Section{Name: name})
 			continue
 		}
-		section := &sections[len(sections)-1]
-		if strings.HasPrefix(trimmed, quote) {
-			if section.State == SectionEmpty {
-				section.State = SectionFramed
-			}
+		if len(sections) == 0 {
 			continue
 		}
-		section.State = SectionAnswered
+		current := &sections[len(sections)-1]
+		if node.Kind() != ast.KindBlockquote {
+			current.State = SectionAnswered
+		} else if current.State == SectionEmpty {
+			current.State = SectionFramed
+		}
 	}
 	return sections
 }
@@ -157,71 +174,67 @@ type Phase struct {
 
 var (
 	phaseHeading = regexp.MustCompile(`^Phase\s+(\d+)([a-z])?\s*[—–:-]\s*(\S.*?)\s*$`)
-	taskItem     = regexp.MustCompile(`^\s*(?:[-*+]|\d+[.)])\s+\[([^\]])\]\s`)
-	atxHeading   = regexp.MustCompile(`^ {0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
+	otherMarker  = regexp.MustCompile(`^\[[^\]\s]\]\s`)
+	boxedText    = regexp.MustCompile(`^\[.\][ \t]+\S`)
 )
 
 const verifyHeading = "verify"
 
-// PlanPhases reads a plan's phases the way the plan pane does. A task item
-// with any marker but x counts as unmet, and items under any other heading,
-// `### See` included, count for nothing.
+// PlanPhases reads a plan's phases the way the plan pane does. Only the first
+// `### Verify` of a phase counts, up to the next heading at its depth or above.
 func PlanPhases(text string) []Phase {
+	source := []byte(Body(text))
 	var phases []Phase
 	var phase *Phase
-	verifying, verified, fenced := false, false, ""
-	for _, line := range body(text) {
-		trimmed := strings.TrimSpace(line)
-		if marker := fenceMarker(trimmed); marker != "" {
-			switch {
-			case fenced == "":
-				fenced = marker
-				continue
-			case marker[0] == fenced[0] && len(marker) >= len(fenced) && strings.TrimLeft(trimmed, marker[:1]) == "":
-				fenced = ""
-				continue
+	verifying, verified := false, false
+	for node := parse(source).FirstChild(); node != nil; node = node.NextSibling() {
+		if name, ok := section(node, source); ok {
+			phase, verifying, verified = nil, false, false
+			if found := phaseHeading.FindStringSubmatch(name); found != nil {
+				number, _ := strconv.Atoi(found[1])
+				phases = append(phases, Phase{Number: number, Label: found[1] + found[2], Name: found[3]})
+				phase = &phases[len(phases)-1]
 			}
-		}
-		if fenced != "" {
 			continue
 		}
-		if match := atxHeading.FindStringSubmatch(line); match != nil {
-			depth, name := len(match[1]), strings.TrimSpace(match[2])
-			if verifying && depth <= 3 {
+		if heading, ok := node.(*ast.Heading); ok {
+			if verifying && heading.Level <= 3 {
 				verifying, verified = false, true
-			}
-			if depth <= 2 {
-				phase, verified = nil, false
-				if found := phaseHeading.FindStringSubmatch(name); depth == 2 && found != nil {
-					number, _ := strconv.Atoi(found[1])
-					phases = append(phases, Phase{Number: number, Label: found[1] + found[2], Name: found[3]})
-					phase = &phases[len(phases)-1]
-				}
-			} else if depth == 3 && !verified {
-				verifying = phase != nil && strings.EqualFold(name, verifyHeading)
+			} else if phase != nil && !verifying && !verified && heading.Level == 3 {
+				verifying = strings.EqualFold(headingText(heading, source), verifyHeading)
 			}
 			continue
 		}
-		if !verifying {
-			continue
-		}
-		if match := taskItem.FindStringSubmatch(line); match != nil {
-			phase.Total++
-			if match[1] == "x" || match[1] == "X" {
-				phase.Met++
-			}
+		if verifying {
+			countCriteria(node, source, phase)
 		}
 	}
 	return phases
 }
 
-// fenceMarker is the run of backticks or tildes a fence line opens with.
-func fenceMarker(trimmed string) string {
-	for _, char := range []string{"`", "~"} {
-		run := len(trimmed) - len(strings.TrimLeft(trimmed, char))
-		if run >= 3 {
-			return trimmed[:run]
+// An item boxed with a marker other than space or x parses as prose but is still an unmet criterion.
+func countCriteria(node ast.Node, source []byte, phase *Phase) {
+	_ = ast.Walk(node, func(child ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering || child.Kind() != ast.KindListItem || child.FirstChild() == nil {
+			return ast.WalkContinue, nil
 		}
-	}
-	return ""
+		lead := child.FirstChild()
+		lines := lead.Lines()
+		if lines == nil || lines.Len() == 0 {
+			return ast.WalkContinue, nil
+		}
+		segment := lines.At(0)
+		first := segment.Value(source)
+		if box, ok := lead.FirstChild().(*extast.TaskCheckBox); ok {
+			if boxedText.Match(first) {
+				phase.Total++
+				if box.IsChecked {
+					phase.Met++
+				}
+			}
+		} else if otherMarker.Match(first) {
+			phase.Total++
+		}
+		return ast.WalkContinue, nil
+	})
 }

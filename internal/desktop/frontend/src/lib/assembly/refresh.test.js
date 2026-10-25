@@ -43,7 +43,7 @@ test("a retry carrying a stale generation is dropped", () => {
 
 test("complete closes the run out and keeps the owners it reported on", () => {
   let refresh = live(1);
-  refresh = apply(refresh, { generation: 1, state: "complete", repos: FETCHED });
+  refresh = apply(refresh, { generation: 1, owner: "", state: "complete", repos: FETCHED });
   assert.equal(refresh.active, false);
   assert.deepEqual(refresh.repos, FETCHED);
   assert.equal(refresh.owners.lifesum.status, "fetching");

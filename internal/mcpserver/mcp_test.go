@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -370,7 +371,7 @@ func TestOpenFileForegroundDefaultsToCanonicalThoughtsSource(t *testing.T) {
 	if err := os.WriteFile(thought, []byte("# Plan\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Symlink(parked, filepath.Join(root, sessionpaths.ThoughtsDirName)); err != nil {
+	if err := os.Symlink(parked, sessionpaths.ThoughtsLink(root)); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, "thoughts-old"), 0o755); err != nil {
@@ -972,9 +973,17 @@ func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
 
 func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	m, host, dir := newTestManager(t)
-	if err := os.MkdirAll(filepath.Join(dir, "src", "app"), 0o755); err != nil {
-		t.Fatal(err)
+	app := filepath.Join(dir, "src", "app")
+	clean := filepath.Join(dir, "src", "clean")
+	for _, repo := range []string{app, clean} {
+		gittest.Worktree(t, repo)
 	}
+	gittest.Run(t, app, "checkout", "-qb", "feature")
+	gittest.WriteFile(t, app, "feature.txt", "feature-commit-line")
+	gittest.Run(t, app, "add", "feature.txt")
+	gittest.Run(t, app, "commit", "-qm", "feature")
+	gittest.WriteFile(t, app, "staged.txt", "staged-change-line")
+	gittest.Run(t, app, "add", "staged.txt")
 	ctx := context.Background()
 
 	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/app", Base: "main", Staged: true}); err != nil {
@@ -984,8 +993,8 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	if single.Kind != workbench.KindDocument {
 		t.Fatalf("diff window kind = %q, want %q", single.Kind, workbench.KindDocument)
 	}
-	if strings.TrimSpace(single.Content) == "" {
-		t.Fatal("diff window opened with no captured diff")
+	if !strings.Contains(single.Content, "+feature-commit-line") || !strings.Contains(single.Content, "+staged-change-line") {
+		t.Fatalf("diff against main missed the branch commit or the staged change:\n%s", single.Content)
 	}
 	if want := diffWindowName + diffWindowSeparator + "app"; single.Label != want || single.Icon != workbench.IconDocument {
 		t.Fatalf("diff tab reads %q with icon %q, want %q and the document icon", single.Label, single.Icon, want)
@@ -997,15 +1006,25 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 		t.Fatalf("registry = %v, want [diff:app]", got)
 	}
 
-	if _, err := m.showDiff(ctx, showDiffInput{}); err != nil {
+	if _, err := m.showDiff(ctx, showDiffInput{Staged: true}); err != nil {
 		t.Fatal(err)
 	}
 	all := host.opens[1]
-	if all.Kind != workbench.KindDocument || all.Format != workbench.FormatDiff || strings.TrimSpace(all.Content) == "" {
+	if all.Kind != workbench.KindDocument || all.Format != workbench.FormatDiff {
 		t.Fatalf("all-repos diff window = %+v", all)
+	}
+	if !strings.Contains(all.Content, "+staged-change-line") || strings.Contains(all.Content, "+feature-commit-line") {
+		t.Fatalf("all-repos staged diff should hold the staged change alone:\n%s", all.Content)
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{diffWindowName, "diff:app"}) {
 		t.Fatalf("registry = %v, want [%s diff:app]", got, diffWindowName)
+	}
+
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/clean", Base: "main", Staged: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := host.opens[2].Content, fmt.Sprintf(emptyDiffFormat, "src/clean"); got != want {
+		t.Fatalf("clean repo diff = %q, want %q", got, want)
 	}
 
 	if _, err := m.showDiff(ctx, showDiffInput{Repo: "../outside"}); err == nil {
@@ -1308,7 +1327,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 // the workflow it would escalate into is the one it is already running.
 func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
-		toolOpenFile, toolOpenAssets, toolFocusAsset, toolRunCommand, toolReadWindow, toolShowDiff,
+		ToolOpenFile, toolOpenAssets, toolFocusAsset, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage, toolSetSummary, toolSetDigest, toolCreateArtefact, toolReportBug,
 	}
 	for _, tc := range []struct {
@@ -1370,7 +1389,7 @@ func listedTools(t *testing.T, server *mcp.Server) map[string]*mcp.Tool {
 
 func TestOpeningToolSchemasExposeOptionalForeground(t *testing.T) {
 	tools := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))
-	want := map[string]bool{toolOpenFile: true, toolOpenAssets: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
+	want := map[string]bool{ToolOpenFile: true, toolOpenAssets: true, toolRunCommand: true, toolShowDiff: true, toolNotify: true}
 	for name, tool := range tools {
 		schema := structuredOutput(t, tool.InputSchema)
 		properties, _ := schema["properties"].(map[string]any)
@@ -1452,7 +1471,7 @@ func TestMCPHandlersReturnStructuredMarkdownViewports(t *testing.T) {
 	defer cs.Close()
 
 	opened, err := cs.CallTool(ctx, &mcp.CallToolParams{
-		Name: toolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)},
+		Name: ToolOpenFile, Arguments: openFileInput{Path: "P007.md", Line: 3, Foreground: boolPtr(true)},
 	})
 	if err != nil || opened.IsError {
 		t.Fatalf("open_file = %+v, %v", opened, err)

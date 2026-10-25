@@ -43,7 +43,7 @@ test("an unclosed frontmatter block leaves nothing to slice", () => {
 
 test("an empty deck has no slides", () => {
   assert.deepEqual(slideSpans(""), []);
-  assert.deepEqual(slideSpans(undefined), []);
+  assert.deepEqual(slideSpans(/** @type {string} */ (/** @type {unknown} */ (undefined))), []);
 });
 
 test("relative media is addressed at the deck's asset route", () => {

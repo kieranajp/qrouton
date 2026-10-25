@@ -183,6 +183,7 @@ test("a trailing section is its own slide rather than the last phase's body", ()
   const { slides } = parsePlan(AROUND);
   const phase = slides.find((slide) => slide.number === 1);
   const blockers = slides.at(-1);
+  assert.ok(phase && blockers);
   assert.equal(phase.to, blockers.from - 1);
   assert.ok(!blockers.name.startsWith("Phase"));
 });

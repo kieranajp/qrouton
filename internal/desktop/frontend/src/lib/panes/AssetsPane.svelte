@@ -1,9 +1,10 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { GALLERY_LABEL, MEDIA_KINDS, WINDOWS_FOCUS_ASSET } from "../bridge/generated.js";
+  import { GALLERY_LABEL, MEDIA_KINDS } from "../bridge/generated.js";
   import Chip from "../core/Chip.svelte";
-  import { linux } from "../platform.js";
-  import { Call } from "../wails.js";
+  import { flash } from "../flash.svelte.js";
+  import { macOS } from "../platform.js";
+  import { focusAsset } from "./calls.js";
   import ImageLightbox from "./ImageLightbox.svelte";
   import AssetMenu from "./AssetMenu.svelte";
   import ArtifactHeader from "./ArtifactHeader.svelte";
@@ -24,17 +25,17 @@
   let expanded = $state(false);
   /** @type {{asset: {source: string, path?: string, kind: import("../bridge/generated.js").MediaKind}, x: number, y: number} | null} */
   let menu = $state(null);
-  let notice = $state("");
-  let noticeTimer;
-  /** @type {HTMLButtonElement} */
+  /** @type {ReturnType<typeof flash<string>>} */
+  const notice = flash();
+  /** @type {HTMLButtonElement | undefined} */
   let primary = $state();
   /** @type {HTMLVideoElement | undefined} */
   let player = $state();
-  /** @type {HTMLOListElement} */
+  /** @type {HTMLOListElement | undefined} */
   let strip = $state();
   let alive = true;
   let request = 0;
-  onDestroy(() => { alive = false; clearTimeout(noticeTimer); });
+  onDestroy(() => { alive = false; });
 
   function openMenu(event, asset) {
     // The webview draws one of its own otherwise, and the workbench's own
@@ -43,11 +44,7 @@
     menu = { asset, x: event.clientX, y: event.clientY };
   }
 
-  function show(text) {
-    notice = text;
-    clearTimeout(noticeTimer);
-    noticeTimer = setTimeout(() => (notice = ""), 1600);
-  }
+  const show = notice.show;
 
   function stepImages(by) {
     for (let next = current + by; next >= 1 && next <= assets.length; next += by) {
@@ -84,12 +81,9 @@
     const attempt = ++request;
     const revision = doc.revision;
     selectionError = "";
-    try {
-      await Call.ByName(WINDOWS_FOCUS_ASSET, slug, id, index);
-    } catch {
-      if (alive && attempt === request && doc.revision === revision) {
-        selectionError = "Could not select asset. Try again.";
-      }
+    const answer = await focusAsset(slug, id, index);
+    if (!answer.ok && alive && attempt === request && doc.revision === revision) {
+      selectionError = "Could not select asset. Try again.";
     }
   }
 
@@ -103,7 +97,7 @@
       if (cancelled || !alive || revision !== doc.revision) return;
       if (scrollRoot) scrollRoot.scrollTop = 0;
       const item = strip?.children[index - 1];
-      if (item) {
+      if (strip && item) {
         const box = item.getBoundingClientRect();
         const port = strip.getBoundingClientRect();
         if (box.left < port.left) strip.scrollLeft -= port.left - box.left;
@@ -144,7 +138,7 @@
       {#if isVideo(shown)}
       <div class="primary-frame player" role="presentation" oncontextmenu={(event) => openMenu(event, shown)}>
         {#if loads[shown.url] === "unsupported"}
-          <p class="load-error">This video's format can't be played here{#if linux}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
+          <p class="load-error">This video's format can't be played here{#if !macOS}<br />Install gstreamer1.0-plugins-good and gstreamer1.0-libav.{/if}</p>
         {:else if loads[shown.url] === "error"}
           <p class="load-error">Could not play video</p>
         {:else}
@@ -178,7 +172,7 @@
     </figure>
   {/if}
   {#if selectionError}<p class="selection-error" role="alert">{selectionError}</p>{/if}
-  {#if notice}<p class="notice" role="status">{notice}</p>{/if}
+  {#if notice.value}<p class="notice" role="status">{notice.value}</p>{/if}
   <ol bind:this={strip} class="asset-strip" aria-label="Assets in supplied order">
     {#each assets as asset, index (asset.url)}
       <li>

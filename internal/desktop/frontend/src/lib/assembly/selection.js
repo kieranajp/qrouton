@@ -4,11 +4,12 @@ import { REPO_ROLES } from "../bridge/generated.js";
 import { READ_ONLY } from "../roles.js";
 import { repoID } from "./filter.js";
 
-/** @typedef {"off" | import("../bridge/generated.js").RepoRole} Role */
+/** @typedef {import("../bridge/generated.js").RepoRole} RepoRole */
+/** @typedef {"off" | RepoRole} Role */
 /**
  * @typedef {object} Selection
  * @property {string[]} order the ids in the order they were picked, which is the ranking
- * @property {Record<string, Role>} roles for a held row, the role the session holds it in
+ * @property {Record<string, RepoRole>} roles for a held row, the role the session holds it in
  * @property {Record<string, string>} bases for a row cut from something other than the default branch, that branch
  * @property {string[]} locked the ids the session already holds
  * @property {string[]} upgrades the held ids to take up for editing
@@ -16,8 +17,8 @@ import { repoID } from "./filter.js";
 
 const IN_SESSION = "in session";
 const CUT_FROM = "from ";
-const READING = "in session, read-only";
-const TAKING_UP = "in session, taking it up to edit";
+const READING = `${IN_SESSION}, ${READ_ONLY}`;
+const TAKING_UP = `${IN_SESSION}, taking it up to edit`;
 
 /** @type {Role[]} */
 const OFFERS = ["off", REPO_ROLES.EDITING, REPO_ROLES.REFERENCE];
@@ -28,10 +29,10 @@ const NO_OFFERS = [];
 
 /** Held rows retain their roles and the branch they were cut from, but stay out
  * of the new-selection order.
- * @param {{id: string, role: Role, base?: string}[]} [held]
+ * @param {{id: string, role: RepoRole, base?: string}[]} [held]
  * @returns {Selection} */
 export function seed(held = []) {
-  /** @type {Record<string, Role>} */
+  /** @type {Record<string, RepoRole>} */
   const roles = {};
   /** @type {Record<string, string>} */
   const bases = {};
@@ -51,7 +52,7 @@ export const isLocked = (selection, id) => selection.locked.includes(id);
 export const isUpgrading = (selection, id) => selection.upgrades.includes(id);
 
 /** baseOf is the branch a row's work is cut from, empty for the default one. */
-export const baseOf = (selection, id) => selection.bases?.[id] ?? "";
+export const baseOf = (selection, id) => selection.bases[id] ?? "";
 
 /** Held editing repositories cannot be dropped or demoted from the picker.
  * @returns {Role[]} */
@@ -122,14 +123,14 @@ function takeUp(selection, id, role) {
 export function reconcile(selection, ids) {
   const available = new Set(ids);
   const kept = (id) => available.has(id) || isLocked(selection, id);
-  /** @type {Record<string, Role>} */
+  /** @type {Record<string, RepoRole>} */
   const roles = {};
   for (const [id, role] of Object.entries(selection.roles)) {
     if (kept(id)) roles[id] = role;
   }
   /** @type {Record<string, string>} */
   const bases = {};
-  for (const [id, base] of Object.entries(selection.bases ?? {})) {
+  for (const [id, base] of Object.entries(selection.bases)) {
     if (kept(id)) bases[id] = base;
   }
   return { ...selection, roles, bases, order: selection.order.filter((id) => available.has(id)) };
@@ -149,7 +150,7 @@ export function counts(selection) {
 
 /**
  * ordered is what Go composes, in rank order.
- * @returns {{id: string, role: Role, base: string}[]}
+ * @returns {{id: string, role: RepoRole, base: string}[]}
  */
 export const ordered = (selection) =>
   selection.order.map((id) => ({ id, role: selection.roles[id], base: baseOf(selection, id) }));
@@ -160,10 +161,10 @@ export const upgrading = (selection) => [...selection.upgrades];
 /** Pending upgrades lead because their held rows may be filtered out.
  * @param {Selection} selection
  * @param {{org: string, name: string, default_branch?: string}[]} repos
- * @param {string} branch @returns {{id: string, role: Role, branch: string, meta: string}[]} */
+ * @param {string} branch @returns {{id: string, role: RepoRole, branch: string, meta: string}[]} */
 export function summary(selection, repos, branch) {
   const pinned = new Map(repos.map((repo) => [repoID(repo), repo.default_branch]));
-  const taken = selection.upgrades.map((id) => ({ id, role: roleOf(selection, id) }));
+  const taken = selection.upgrades.map((id) => ({ id, role: REPO_ROLES.EDITING }));
   return [...taken, ...ordered(selection)].map(({ id, role }) => {
     const shown = role === REPO_ROLES.EDITING ? branch : baseOf(selection, id) || pinned.get(id);
     return {

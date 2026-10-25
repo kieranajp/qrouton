@@ -35,11 +35,11 @@ window.fixture = {
     terminals.push(entry);
     return terminals.length - 1;
   },
-  send(id, text, replay = false, structured = true) {
-    terminals[id].painter.paint(structured ? { encoded: encode(text), replay } : encode(text));
+  send(id, text, replay = false) {
+    terminals[id].painter.paint({ encoded: encode(text), replay });
   },
   bytes(id, bytes) {
-    terminals[id].painter.paint(btoa(String.fromCharCode(...bytes)));
+    terminals[id].painter.paint({ encoded: btoa(String.fromCharCode(...bytes)) });
   },
   done(id) { this.send(id, "\x1b]777;done\x07"); },
   hold(id) {

@@ -1,5 +1,5 @@
 import { CHROME_DEFAULTS, CHROME_EVENT, CHROME_SNAPSHOT, ACTIVITIES } from "./bridge/generated.js";
-import { call, Call, Events } from "./wails.js";
+import { call, Call, follow } from "./wails.js";
 
 // Idle rather than the payload's zero value: a page that has heard nothing is
 // not a page reporting an agent at work.
@@ -27,19 +27,11 @@ let shared;
 function observing() {
   let fields = $state(NOTHING);
   let settled = $state(false);
-  let live = false;
-  const apply = (value) => {
-    fields = observed(value);
-    settled = true;
-  };
-  Events.On(CHROME_EVENT, (event) => {
-    live = true;
-    apply(event.data);
-  });
   // A workbench that cannot say what it holds reads as one holding no session,
   // which is a window with something on it rather than a permanently blank one.
-  call(Call.ByName(CHROME_SNAPSHOT)).then((answer) => {
-    if (!live) apply(answer.ok ? answer.value : undefined);
+  follow(CHROME_EVENT, () => call(Call.ByName(CHROME_SNAPSHOT)), (value) => {
+    fields = observed(value);
+    settled = true;
   });
   return {
     get fields() {

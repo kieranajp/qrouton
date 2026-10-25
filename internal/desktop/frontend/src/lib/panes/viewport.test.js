@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createViewportController, nextViewportSequence, normalizeIntervals } from "./viewport.js";
 
+class FakeObserver {
+  observe() {}
+  disconnect() {}
+}
+
+const platformFakes = () => {
+  const events = { addEventListener: () => {}, removeEventListener: () => {} };
+  return {
+    view: /** @type {Window} */ (/** @type {unknown} */ (events)),
+    fonts: /** @type {FontFaceSet} */ (/** @type {unknown} */ ({ ...events, ready: Promise.resolve() })),
+    resizeObserver: /** @type {typeof ResizeObserver} */ (/** @type {unknown} */ (FakeObserver)),
+  };
+};
+
 test("intervals sort and merge overlaps and adjacent blocks", () => {
   assert.deepEqual(
     normalizeIntervals([
@@ -20,12 +34,12 @@ test("intervals sort and merge overlaps and adjacent blocks", () => {
 });
 
 test("intervals reject missing, non-integral, and descending bounds", () => {
-  for (const interval of [
+  for (const interval of /** @type {{line: number, to: number}[]} */ ([
     { line: 0, to: 1 },
     { line: 2, to: 1 },
     { line: 1.5, to: 2 },
     { line: 1, to: undefined },
-  ]) {
+  ])) {
     assert.throws(() => normalizeIntervals([interval]), /invalid source interval/);
   }
 });
@@ -61,9 +75,7 @@ test("controller coalesces frames and suppresses unchanged reports", () => {
     report: (value) => reports.push(value),
     requestFrame: (call) => (frames.push(call), frames.length),
     cancelFrame: () => {},
-    resizeObserver: undefined,
-    view: undefined,
-    fonts: undefined,
+    ...platformFakes(),
   });
   controller.schedule();
   assert.equal(frames.length, 1);
@@ -106,13 +118,11 @@ function controllerHarness(selected = true) {
     removeEventListener: () => {},
     querySelectorAll: () => [target],
   };
-  class Observer {
+  class Observer extends FakeObserver {
     constructor(call) {
+      super();
       resize = call;
     }
-    observe() {}
-    unobserve() {}
-    disconnect() {}
   }
   const controller = createViewportController({
     root: /** @type {HTMLElement} */ (/** @type {unknown} */ (root)),
@@ -128,9 +138,8 @@ function controllerHarness(selected = true) {
       return id;
     },
     cancelFrame: (id) => frames.delete(id),
-    resizeObserver: /** @type {typeof ResizeObserver} */ (Observer),
-    view: undefined,
-    fonts: undefined,
+    ...platformFakes(),
+    resizeObserver: /** @type {typeof ResizeObserver} */ (/** @type {unknown} */ (Observer)),
   });
   return {
     controller,

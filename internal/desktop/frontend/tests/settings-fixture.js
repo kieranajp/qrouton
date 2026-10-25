@@ -2,6 +2,7 @@ import "../src/tokens/scale.css";
 import { mount } from "svelte";
 import { emitWailsEvent } from "./wails-runtime.js";
 import { STICKER_DUPLICATE, UI_SCALE_EVENT } from "../src/lib/bridge/generated.js";
+import { startScale } from "../src/lib/scale.svelte.js";
 import SettingsOverlay from "../src/lib/settings/SettingsOverlay.svelte";
 
 // ?fail=<method> makes that one bridge call reject, which is how a workbench
@@ -89,4 +90,5 @@ window.wailsCall = async (name, input) => {
   return undefined;
 };
 
+startScale();
 mount(SettingsOverlay, { target: document.querySelector("#fixture"), props: { onClose: () => closes++ } });
