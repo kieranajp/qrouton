@@ -164,9 +164,8 @@ test("ctrl and the wheel zoom about the pointer, and Fit goes back", async ({ pa
 
   await page.evaluate(() => window.press("Fit the whole diagram"));
   await expect.poll(() => page.evaluate(() => window.view().scale)).toBeCloseTo(fitted.scale, 3);
-  const back = await page.evaluate(() => window.view());
-  expect(back.tx).toBeCloseTo(0, 3);
-  expect(back.ty).toBeCloseTo(0, 3);
+  await expect.poll(() => page.evaluate(() => window.view().tx)).toBeCloseTo(0, 3);
+  await expect.poll(() => page.evaluate(() => window.view().ty)).toBeCloseTo(0, 3);
 });
 
 test("an unmodified wheel over a diagram scrolls the document past it", async ({ page }) => {
