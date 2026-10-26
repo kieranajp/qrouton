@@ -185,9 +185,6 @@ func (t *terminals) watchForeground(ctx context.Context) {
 	}
 }
 
-// pollForeground reads each live user shell's terminal and announces the
-// sessions whose shells changed. The read happens outside the registry lock,
-// because a write blocked on a full PTY holds the process lock.
 func (t *terminals) pollForeground() {
 	shells := map[string]*ptyProcess{}
 	t.registry.each(func(id string, window *agentWindow) {

@@ -39,7 +39,7 @@ func newShellBench(t *testing.T) *shellBench {
 func (b *shellBench) launch(t *testing.T, shell bool, argv ...string) string {
 	t.Helper()
 	opts := workbench.WindowOptions{Kind: workbench.KindTerminal, Label: "tab", Cwd: t.TempDir(), Command: argv}
-	open := b.tabs.openStructural
+	open := b.tabs.openWindow
 	if shell {
 		open = b.tabs.openShell
 	}
@@ -73,7 +73,16 @@ func (b *shellBench) announcements() int {
 // Catches the + shell opening as a plain terminal, which spins before the shell
 // has even started.
 func TestAShellOpensIdle(t *testing.T) {
-	w, _ := testWindows(t)
+	var mu sync.Mutex
+	var first *surfaces
+	w := newWindows(func(event string, payload any) {
+		mu.Lock()
+		defer mu.Unlock()
+		if drawn, ok := payload.(surfaces); ok && event == windowsEvent && first == nil {
+			first = &drawn
+		}
+	}, testRegistry(t, t.TempDir()))
+	t.Cleanup(w.stopAll)
 	boot := newStubBoot()
 	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }
 	shells := &shellWindow{windows: w, launcher: boot}
@@ -82,9 +91,10 @@ func TestAShellOpensIdle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	tabs := w.surfaces(w.shown()).Tabs
-	if len(tabs) != 1 || tabs[0].ID != id || tabs[0].Status != tabStatusIdle {
-		t.Fatalf("tabs after + = %+v, want one idle shell", tabs)
+	mu.Lock()
+	defer mu.Unlock()
+	if first == nil || len(first.Tabs) != 1 || first.Tabs[0].ID != id || first.Tabs[0].Status != tabStatusIdle {
+		t.Fatalf("first announcement after + = %+v, want one idle shell", first)
 	}
 }
 

@@ -45,7 +45,7 @@ type terminalContent struct {
 	// exit is nil while the process is still running.
 	exit *int
 	// foreground marks a user shell, which is busy only while a job holds its
-	// terminal. busy is that job's last read.
+	// terminal. busy is the last read of its terminal.
 	foreground bool
 	busy       bool
 }
