@@ -524,6 +524,14 @@ var (
 		{ID(skillIDPrefix + "qrouton-audit"), "references/audit-shape.md"},
 		{ID(skillIDPrefix + "qrouton-plan"), "references/plan-shape.md"},
 	}
+
+	runTableHomes = []ID{
+		ID(agentIDPrefix + "audit-verifier"),
+	}
+
+	runTableReferenceHomes = []referenceHome{
+		{ID(skillIDPrefix + "qrouton-audit"), "references/test-runs.md"},
+	}
 )
 
 // A reference home is one file a skill ships beside its entry file.
@@ -544,9 +552,11 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		sessionDigestFileName:      sessionDigestHomes,
 		scratchCopyFileName:        scratchCopyHomes,
 		fixDisciplineFileName:      fixDisciplineHomes,
+		runTableFileName:           runTableHomes,
 	}
 	referenceHomes := map[string][]referenceHome{
 		fixDisciplineFileName: fixDisciplineReferenceHomes,
+		runTableFileName:      runTableReferenceHomes,
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {
@@ -594,6 +604,20 @@ func TestTheScratchCopyKeepsRunsOutOfTheCheckout(t *testing.T) {
 	for _, phrase := range []string{"`mktemp -d`", "hard links", "--exclude=/.git", "Run no git command", "--no-optional-locks", "`git status --porcelain`", "the checkout you were given", "names the checkout as a destination"} {
 		if !strings.Contains(string(partial), phrase) {
 			t.Errorf("%s does not carry %q", scratchCopyFileName, phrase)
+		}
+	}
+}
+
+// Catches a run rule dropped from the one text the lead writes the run table
+// by and the verifier checks it against.
+func TestRunTablePartialCarriesItsRules(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, runTableFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"one row per attempted run", "failed to start", "A baseline's change is `none`", "anchored", "exactly 120 seconds", "and no other word", "exactly one test ran", "`run-<n>.txt`", "`Checkout status: unchanged`"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", runTableFileName, phrase)
 		}
 	}
 }

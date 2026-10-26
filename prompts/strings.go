@@ -42,6 +42,9 @@ const (
 	fixDisciplineFileName    = "fix-discipline.md"
 	fixDisciplinePlaceholder = "{{fix-discipline}}"
 
+	runTableFileName    = "run-table.md"
+	runTablePlaceholder = "{{run-table}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -71,6 +74,7 @@ var partials = map[string]string{
 	sessionDigestPlaceholder:      sessionDigestFileName,
 	scratchCopyPlaceholder:        scratchCopyFileName,
 	fixDisciplinePlaceholder:      fixDisciplineFileName,
+	runTablePlaceholder:           runTableFileName,
 }
 
 // figures are numbers Go enforces, keyed by the placeholder a prompt states

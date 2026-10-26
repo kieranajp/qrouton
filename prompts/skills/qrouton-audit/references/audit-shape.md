@@ -93,16 +93,23 @@ Impact says how much fixing the finding is worth:
 | `low` | Cosmetic or local; fixing it saves little. |
 
 A structural split that most changes in its area must work around is `high`.
-Copies that differ or disagree today are `high`, unless the finding states a
-cosmetic difference in one clause.
+Under tells 1 to 3, copies that differ or disagree today are `high`, unless the
+finding states a cosmetic difference in one clause.
+
+A tell-4 finding is rated by what its blind spot exposes. It is `high` only
+when the untested path is wrong behaviour today or guards against data loss. It
+is `medium` when a break in shipped code users reach would pass unnoticed, or
+when a harmless change breaks the test. Otherwise it is `low`, such as a test
+that repeats another.
 
 `## Summary` gives the findings by impact: one sentence per high and medium
 finding, high first, saying what is wrong and why it matters. It never gives a
 bare list of ids. Low findings are counted per tell.
 
 Cosmetic nits that come from one shared root cause become one finding, and
-that root cause is its defect. A nit with no shared root cause is
-not filed. Never pad the audit with nits.
+that root cause is its defect. A nit with no shared root cause is a lone nit
+and is not filed. A stale comment over correct code is a lone nit. Never pad
+the audit with nits.
 
 A root cause is a defect in the code. Candidates found by the same detector,
 tool or trap have that in common, but it is not a shared root cause, and they
@@ -148,7 +155,8 @@ finding, filed under the tell of the code the claim justifies.
 How the steps decide:
 
 - Copies that disagree today are rot, whatever the intent. A copy that
-  contradicts its own comment does not agree.
+  contradicts its own comment is rot only when the code is wrong or when
+  a reader acting on the comment would break something.
 - Otherwise a copy with a tie, or with a written reason that still holds, is
   deliberate. A reason that no longer holds is rot.
 - A guard is rot unless a live producer can bring about the case it guards.
@@ -173,7 +181,7 @@ candidates as a group. A tool candidate that a known trap explains is not listed
 `## Tools` counts it by trap.
 
 `## Tools` holds the tools, the job inventory and the tell-3 category outcomes
-when they ran, the run table when a targeted run ran, and the trap counts. An audit split into areas by `areas.md`
+when they ran, the run table when a targeted run was attempted, and the trap counts. An audit split into areas by `areas.md`
 opens `## Tools` with the areas table, and its inventory and category tables
 carry an `Area` column, with `seam` for seam rows. The seam pass's row names
 the area returns its brief held. Every file type in scope that no tool
@@ -256,8 +264,9 @@ never runs, cannot fail, breaks under a harmless change or repeats another
 test, each against its run row when it cites a run, and every claim that
 shipped code behaves differently under test. It also checks every "no tie" and "no written reason"
 claim, the latter against history the lead collects into a history directory,
-every behaviour-risk label, every fix to persisted data for a migration, and
-every impact rating against behaviour that is wrong today. It also reads the
+every behaviour-risk label, every fix to persisted data for a migration,
+every impact rating against behaviour that is wrong today, and the run table
+against each run's saved output. It also reads the
 comments at each copy, samples call sites behind widely used one route and
 stated-skip rows, verifies every category outcome, re-checks every tell-4 line
 under `## Checked and deliberate` and every fix that derives lists from one
@@ -282,8 +291,8 @@ rules, skipping those for a tell or an inventory that did not run:
   and trap counts only, and every inventory row has a file count and one
   outcome;
 - every contract file read at runtime has its own inventory row;
-- every targeted run has a run row giving the test, the change, the command
-  and the result, and the checkout's status comparison sits under the table;
+- the run table follows the run-table rules in `test-runs.md`, with every
+  attempted run a row and the status line present;
 - a split audit opens `## Tools` with the areas table, and every inventory and
   category row carries its `Area`, and the seam pass's row names every
   area's returns;
@@ -301,12 +310,15 @@ rules, skipping those for a tell or an inventory that did not run:
 - every runtime claim cites the runtime-layer file or package that settles it;
 - cosmetic nits grouped by one shared root cause, or left out, and nothing
   grouped only because one detector, tool or trap found it;
+- no lone nit is filed: every comment-only or one-line finding shows wrong
+  code, a reader acting on the comment breaking something, or the shared root
+  cause it groups;
 - every deleting fix keeps the tests that serve another purpose, or names what
   replaces them;
 - every fix that derives lists from one table keeps every gate, and a
   deliberate subset stays a subset;
-- every finding whose verdict is that copies differ or disagree today is
-  `high`, or states a cosmetic difference in one clause;
+- under tells 1 to 3, every finding whose verdict is that copies differ or
+  disagree today is `high`, or states a cosmetic difference in one clause;
 - every tell-4 finding names the test and the code it names, and its verdict
   names the step from 6 to 10 it fails, step 1 for a test that ties two
   copies, or step 5 for code only tests reach;

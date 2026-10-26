@@ -82,6 +82,6 @@ definitions to know which ones to avoid.
   `-test` run reaches is code only tests use. File it under tell 2 when that
   tell runs, else under tell 4.
 - **One test alone.** For a targeted run under `test-runs.md`, run one test in
-  one package from the copy: `go test -run '^TestName$' -count=1 -timeout 120s
-  ./path/to/pkg`. Anchor the name so no sibling test runs, add `/SubName` for
+  one package from the copy: `go test -v -run '^TestName$' -count=1 -timeout
+  120s ./path/to/pkg`. Anchor the name so no sibling test runs, add `/SubName` for
   one subtest, and pass any build tag the CI config passes for that file.

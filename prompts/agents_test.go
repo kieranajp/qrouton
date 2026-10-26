@@ -556,9 +556,15 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		{"step 10", []string{"no other test catches"}, []string{checker, shape, verifier}},
 		{"test-only ties", []string{"named boundary"}, []string{checker, shape, verifier}},
 		{"targeted runs", []string{"`test-runs.md`"}, []string{lead, shape}},
-		{"run bounds", []string{"whole suite", "20 runs", "120 seconds", "stated skip"}, []string{runs}},
+		{"run bounds", []string{"whole suite", "20 runs", "stated skip"}, []string{runs}},
 		{"run results", []string{"killed", "survived"}, []string{runs, shape, verifier}},
 		{"run records", []string{"run row"}, []string{shape, verifier}},
+		{"comment matters", []string{"a reader acting on the comment"}, []string{checker, shape, verifier}},
+		{"lone nits", []string{"lone nit"}, []string{lead, checker, shape}},
+		{"lone nits caught", []string{"no lone nit is filed"}, []string{shape}},
+		{"tell-4 impact", []string{"the untested path"}, []string{shape, verifier}},
+		{"run checks gated", []string{"check 18 only when", "checks 3, 16 and 18 to one verifier"}, []string{lead}},
+		{"run outputs read", []string{"`run-<n>.txt` per run row"}, []string{verifier}},
 	} {
 		for _, where := range rule.in {
 			for _, phrase := range rule.phrases {
@@ -569,13 +575,13 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 		}
 	}
 
-	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "300 shipped and contract files", "its own comment", "stays a subset", "five of the entry's call sites", "invented shared root cause", "no other test catches", "20 runs", "run row"} {
+	for _, phrase := range []string{"agree or differ", "search for a tie", "persisted key", "300 shipped and contract files", "its own comment", "stays a subset", "five of the entry's call sites", "invented shared root cause", "no other test catches", "20 runs", "run row", "a reader acting on the comment", "the untested path", "`run-<n>.txt`", "exactly one test ran"} {
 		if strings.Contains(texts[lead], phrase) {
 			t.Errorf("the lead restates the verifier's check %q; it briefs check numbers instead", phrase)
 		}
 	}
 
-	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first", "seam pass", "`Area` column", "scratch copy", "`test-runs.md`", "harmless change"} {
+	for _, phrase := range []string{"job inventory", "independent re-read", "conformance pass", "only when tell 1 or tell 3", "supplied history", "the repo's own checks first", "seam pass", "`Area` column", "scratch copy", "`test-runs.md`", "harmless change", "lone nit", "Checkout status"} {
 		if strings.Contains(texts[skill], phrase) {
 			t.Errorf("the skill restates the lead's rule %q; its fallback reads the lead's definition instead", phrase)
 		}
@@ -600,7 +606,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 	}
 
 	for where, text := range texts {
-		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern", "Every library category has an outcome", "never runs the target's tests", "never run the tests"} {
+		for _, gone := range []string{"installed library", "four-step", "the one most files import", "Add any concern", "Every library category has an outcome", "never runs the target's tests", "never run the tests", "contradicts its own comment does not agree"} {
 			if strings.Contains(text, gone) {
 				t.Errorf("%s still says %q", where, gone)
 			}
@@ -611,7 +617,7 @@ func TestAuditPromptsCarryMethod(t *testing.T) {
 // The verifier's prompt is the one home for its checks, and the lead briefs
 // them by number, so neither prompt may grow back the other's text.
 func TestAuditPromptsStayWithinBudget(t *testing.T) {
-	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 1200} {
+	for name, limit := range map[string]int{AuditLead: 3450, auditVerifier: 1250} {
 		raw, err := fs.ReadFile(embedded, agentIDPrefix+name+promptFileExt)
 		if err != nil {
 			t.Fatal(err)
@@ -619,6 +625,50 @@ func TestAuditPromptsStayWithinBudget(t *testing.T) {
 		if words := len(strings.Fields(string(raw))); words > limit {
 			t.Errorf("%s has %d words, over its budget of %d", name, words, limit)
 		}
+	}
+}
+
+// Catches check 13 or the shape's copy rule forcing tell-4 findings to high
+// again: a test with a blind spot is not wrong behaviour today.
+func TestImpactCopyRuleSparesTellFour(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	verifier, err := loader.Load(context.Background(), ID(agentIDPrefix+auditVerifier))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, after, ok := strings.Cut(string(verifier.Content), "\n13. ")
+	if !ok {
+		t.Fatalf("%s has no check 13", auditVerifier)
+	}
+	check, _, _ := strings.Cut(after, "\n")
+	if !strings.Contains(check, "tells 1 to 3") {
+		t.Errorf("%s check 13 does not scope its copy rule to tells 1 to 3: %s", auditVerifier, check)
+	}
+
+	skill, err := loader.Load(context.Background(), ID(skillIDPrefix+"qrouton-audit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := slices.IndexFunc(skill.Files, func(file PromptFile) bool { return file.Path == "references/audit-shape.md" })
+	if i < 0 {
+		t.Fatal("the audit skill ships no audit-shape.md")
+	}
+	shape := string(skill.Files[i].Content)
+	found := 0
+	for _, block := range strings.Split(shape, "\n\n") {
+		for _, item := range strings.Split(block, "\n- ") {
+			flat := strings.Join(strings.Fields(item), " ")
+			if !strings.Contains(flat, "differ or disagree today") {
+				continue
+			}
+			found++
+			if !strings.Contains(flat, "tells 1 to 3") {
+				t.Errorf("the shape rates copies that differ today high for every tell: %s", flat)
+			}
+		}
+	}
+	if found == 0 {
+		t.Error("the shape carries no copy rule for impact")
 	}
 }
 

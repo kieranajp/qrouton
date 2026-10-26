@@ -104,8 +104,10 @@ snapshots or golden files, such as `-u`, `--update`, `--updateSnapshot` or
   when that tell runs, else under tell 4.
 - **One test alone.** For a targeted run under `test-runs.md`, use the
   runner's file and name filter from the copy, through the copy's own
-  installed runner: `CI=1 npx --no-install vitest run <file> -t '<name>'`, or
-  `npx --no-install jest <file> -t '<name>' --ci --watchAll=false`. Vitest
+  installed runner: `CI=1 npx --no-install vitest run <file> -t '^<name>$'
+  --reporter=verbose`, or `npx --no-install jest <file> -t '^<name>$' --ci
+  --watchAll=false --verbose`. `-t` matches the full name, describe blocks
+  included, so anchor it so no sibling test runs. Vitest
   without `run` starts a watch mode, `--no-install` stops `npx` downloading a
   runner the copy lacks, and CI mode stops either runner writing new
   snapshots. A test that needs a browser, such as a Playwright test, is not

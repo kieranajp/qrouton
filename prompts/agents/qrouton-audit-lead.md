@@ -19,7 +19,7 @@ The four tells:
 
 The brief names the chosen tells by slug: `duplicated`, `dead`, `homegrown` and `volkswagen`, for tells 1 to 4. A brief that names none chose them all. Set the frontmatter `tells:` key to the chosen slugs in tell order, such as `tells: [dead, homegrown]`, and delete the section of each tell not chosen.
 
-Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory or the tell-3 sweep ran, check 3 only when tell 3 ran, checks 6 to 8 and 14 only when tell 4 ran, and check 16 only when the audit split and tell 1 ran. Check 17 always applies. In the conformance pass, skip each rule for a tell or an inventory that did not run.
+Do the work of only the chosen tells. Run a detector only for a tell it serves: clone detection for tell 1, reachability and type-aware lint for tell 2, and reachability for tell 4. Hunt and brief checkers only for chosen tells. Take the job inventory only when tell 1 or tell 3 is chosen, and the tell-3 category sweep only when tell 3 is. Merge findings among the chosen tells only. Brief the verifier only the checks that apply: check 2 only when the inventory or the tell-3 sweep ran, check 3 only when tell 3 ran, checks 6 to 8 and 14 only when tell 4 ran, check 18 only when a targeted run was attempted, and check 16 only when the audit split and tell 1 ran. Check 17 always applies. In the conformance pass, skip each rule for a tell or an inventory that did not run.
 
 Follow the document shape in `audit-shape.md` from the references folder you were given. The worked examples beside it show how to choose, run and distrust a detector.
 
@@ -55,7 +55,7 @@ Verify each verdict you keep against the code. Hold every finding to these rules
 - A candidate you cannot settle goes among the findings with `Confidence: low`, or nowhere. No other section holds candidates.
 - Write one line per candidate under `## Checked and deliberate`, each with its location and the tie, written reason or weighed install cost that keeps it. Never dismiss candidates as a group.
 - Rate each finding's `Impact:` as `high`, `medium` or `low`, by the meanings in the shape.
-- Cosmetic nits that come from one shared root cause become one finding, and the root cause is its defect. A nit with no shared root cause is not filed.
+- Cosmetic nits that come from one shared root cause become one finding, and the root cause is its defect. A nit with no shared root cause is a lone nit and is not filed, and so is a stale comment over correct code.
 - A root cause is a defect in the code. Candidates found by the same detector, tool or trap have that in common, but it is not a shared root cause. Never group findings that way.
 - A fix that deletes code keeps every test that would also serve another purpose, such as checking exhaustiveness or a contract, or it says what replaces that test.
 
@@ -122,9 +122,9 @@ Fill `target:` in the frontmatter. Number findings `F1`, `F2` and so on across t
 
 ## Check the draft
 
-Before you return, first collect history for an independent re-read. For each claim that rests on a missing written reason, write these reads into a `history` directory in scratch, one `<finding id>.txt` each: `git log -L <start>,<end>:<path>` for the cited lines; `git show --stat` with the full message of each commit it lists; the messages of the commits either side of each in `git log -- <path>`; when the oldest commit moved the lines from another file, the same reads at the old path.
+Before you return, first collect history for an independent re-read. For each claim that rests on a missing written reason, write these reads into the `history` directory in scratch, made before the first targeted run when one was attempted, one `<finding id>.txt` each: `git log -L <start>,<end>:<path>` for the cited lines; `git show --stat` with the full message of each commit it lists; the messages of the commits either side of each in `git log -- <path>`; when the oldest commit moved the lines from another file, the same reads at the old path.
 
-Then spawn an `audit-verifier`, once over the merged draft when the audit split, never per area. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13, 15 and 17 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give checks 3 and 16 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
+Then spawn an `audit-verifier`, once over the merged draft when the audit split, never per area. Brief it with the draft's path, the target, that history directory, and the numbers of the checks that apply. When one report cannot hold the failures, split checks 1, 4, 5, 9 to 13, 15 and 17 by tell, checks 6 to 8 and 14 by test file or shipped branch and check 2 by ranges of inventory rows, and give checks 3, 16 and 18 to one verifier over the whole draft. Fix or drop each failed finding. A failed inventory row gets a corrected outcome; never remove the row. There is no second re-read: check any verdict you changed against the code yourself.
 
 Then run a conformance pass, last, because the fixes can break the shape. Check each rule in the shape's `## Before returning` list against every finding and section, and fix each violation in the document.
 
