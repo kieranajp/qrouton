@@ -107,6 +107,7 @@ test("a document with no tell section is not an audit", () => {
 
 test("a lone choice on the Triage line is a choice, and the lines below are its note", () => {
   const [f1, f2] = parseAudit(AUDIT).findings;
+  assert.ok(f1.triage && f2.triage);
   assert.deepEqual([f1.triage.choice, f1.triage.note], ["reject", "the copy in sync/ is kept for the offline build"]);
   assert.deepEqual([f2.triage.choice, f2.triage.note], ["", "accept, but after the release"]);
   assert.deepEqual(readTriage("maybe", ""), { choice: "", note: "maybe" });
@@ -121,6 +122,7 @@ test("a finding with no Triage line has none, and splicing adds it last in the b
   const after = spliceTriage(AUDIT, f3, { choice: "defer", note: "" });
   assert.match(after, /Source: llm\n\nTriage: defer\n\n## Homegrown/);
   const read = parseAudit(after).findings[2].triage;
+  assert.ok(read);
   assert.deepEqual([read.choice, read.note], ["defer", ""]);
 });
 
@@ -129,10 +131,13 @@ test("splicing triage touches only that finding's triage block", () => {
   const after = spliceTriage(AUDIT, audit.findings[0], { choice: "accept", note: "line one\nline two" });
   const before = AUDIT.split("\n");
   const lines = after.split("\n");
-  const { from, to } = audit.findings[0].triage;
+  const triage = audit.findings[0].triage;
+  assert.ok(triage);
+  const { from, to } = triage;
   assert.deepEqual(lines.slice(0, from - 1), before.slice(0, from - 1));
   assert.deepEqual(lines.slice(from - 1 + 3), before.slice(to));
   const read = parseAudit(after).findings[0].triage;
+  assert.ok(read);
   assert.deepEqual([read.choice, read.note], ["accept", "line one\nline two"]);
 });
 
@@ -150,6 +155,7 @@ test("every triage form reads back as it was written", () => {
     const finding = parseAudit(AUDIT).findings[1];
     const after = spliceTriage(AUDIT, finding, form);
     const read = parseAudit(after).findings[1].triage;
+    assert.ok(read);
     assert.deepEqual([read.choice, read.note], [form.choice, form.note], JSON.stringify(form));
     assert.equal(spliceTriage(after, parseAudit(after).findings[1], { choice: read.choice, note: read.note }), after);
   }
@@ -171,7 +177,7 @@ test("a retitled finding keeps its unsaved triage, and a removed one detaches", 
   const retitled = AUDIT.replace("### F1 — Two timeout helpers race a promise against a timer", "### F1 — One timeout helper too many");
   const { findings, detached } = reapply(parseAudit(retitled), drafts);
   assert.equal(findings[0].finding.title, "One timeout helper too many");
-  assert.equal(findings[0].draft.choice, "accept");
+  assert.equal(findings[0].draft?.choice, "accept");
   assert.equal(findings[1].draft, null);
   assert.deepEqual(detached.map((draft) => draft.id), ["F9"]);
 });
@@ -184,7 +190,7 @@ test("ids stay with their findings when the agent inserts one above", () => {
   const audit = parseAudit(inserted);
   assert.deepEqual(audit.findings.map((finding) => finding.id), ["F1", "F4", "F2", "F3"]);
   assert.equal(audit.findings[2].title, "A nil check on a value that is never nil");
-  assert.equal(audit.findings[1].triage.raw, "");
+  assert.equal(audit.findings[1].triage?.raw, "");
 });
 
 test("only the chosen tells yield findings, and an unchosen tell section reads as prose", () => {
@@ -237,9 +243,11 @@ test("a tell-4 finding parses and names its step", () => {
   );
   const audit = parseAudit(withTell4);
   const f4 = audit.findings.find((finding) => finding.id === "F4");
+  assert.ok(f4);
   assert.equal(f4.section, "Tests that pass or fail for the wrong reason");
   assert.equal(f4.step, 7);
   const last = audit.tells.at(-1);
+  assert.ok(last);
   assert.deepEqual([last.name, last.count], [f4.section, 1]);
 });
 

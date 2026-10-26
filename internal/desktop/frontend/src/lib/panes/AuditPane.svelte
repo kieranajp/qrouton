@@ -62,6 +62,8 @@
   let drafts = $derived(
     new Map(laid.findings.map(({ finding, draft }) => [finding.id, draft ?? { choice: finding.triage?.choice ?? "", note: finding.triage?.note ?? "" }])),
   );
+  /** @param {string} findingID */
+  const draftOf = (findingID) => drafts.get(findingID) ?? { choice: "", note: "" };
   let sorted = $derived(byImpact(audit.findings));
   let triaged = $derived([...drafts.values()].filter((draft) => draft.choice || draft.note.trim()).length);
 
@@ -100,14 +102,14 @@
   /** @param {string} findingID @param {Partial<{choice: string, note: string}>} change */
   function edit(findingID, change, typed = false) {
     sent = null;
-    const draft = { id: findingID, ...drafts.get(findingID), ...change };
+    const draft = { id: findingID, ...draftOf(findingID), ...change };
     if (typed) answers.type(findingID, draft);
     else answers.put(findingID, draft);
   }
 
   /** @param {string} findingID @param {string} choice */
   function choose(findingID, choice) {
-    edit(findingID, { choice: drafts.get(findingID)?.choice === choice ? "" : choice });
+    edit(findingID, { choice: draftOf(findingID).choice === choice ? "" : choice });
     answers.commit(findingID);
   }
 
@@ -215,7 +217,7 @@
               {#each sorted as finding (finding.id)}
                 <FindingCard
                   {finding}
-                  draft={drafts.get(finding.id)}
+                  draft={draftOf(finding.id)}
                   state={saves.get(finding.id)?.state}
                   message={saves.get(finding.id)?.message}
                   onChoose={(choice) => choose(finding.id, choice)}
