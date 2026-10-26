@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -26,6 +27,7 @@ type document struct {
 	Path          string          `json:"path,omitempty"`
 	Kind          string          `json:"kind,omitempty"`
 	Deck          bool            `json:"deck,omitempty"`
+	Tells         []string        `json:"tells,omitempty"`
 	AssetToken    string          `json:"assetToken,omitempty"`
 	Line          int             `json:"line"`
 	To            int             `json:"to"`
@@ -129,6 +131,9 @@ func documentFor(window *agentWindow) document {
 		Line:          first,
 		To:            last,
 		ViewportEpoch: viewportEpoch,
+	}
+	if kind == kinds.Audit.Label() {
+		doc.Tells = status.AuditTells(window.opts.Content)
 	}
 	if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatAssets {
 		var root string

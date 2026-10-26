@@ -6,6 +6,7 @@ test("each artifact kind resolves to its design token", () => {
   assert.equal(artifactTone("PLAN"), "var(--artifact-plan)");
   assert.equal(artifactTone("SPEC"), "var(--artifact-spec)");
   assert.equal(artifactTone("RESEARCH"), "var(--artifact-research)");
+  assert.equal(artifactTone("AUDIT"), "var(--artifact-audit)");
   assert.equal(artifactTone("NOTE"), "var(--artifact-note)");
   assert.equal(artifactTone("EXPLAINER"), "var(--artifact-explainer)");
 });
@@ -25,4 +26,6 @@ test("the short label is the document's identity where it has one", () => {
   assert.equal(artifactLabel("RESEARCH", { id: "R1" }), "R1");
   assert.equal(artifactLabel("RESEARCH"), "RSCH");
   assert.equal(artifactLabel("RESEARCH", { id: "R1", long: true }), "RESEARCH");
+  assert.equal(artifactLabel("AUDIT"), "AUDT");
+  assert.equal(artifactLabel("AUDIT", { long: true }), "AUDIT");
 });

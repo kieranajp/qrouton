@@ -36,6 +36,15 @@ const (
 
 	digestLimitPlaceholder = "{{digest-limit}}"
 
+	scratchCopyFileName    = "scratch-copy.md"
+	scratchCopyPlaceholder = "{{scratch-copy}}"
+
+	fixDisciplineFileName    = "fix-discipline.md"
+	fixDisciplinePlaceholder = "{{fix-discipline}}"
+
+	runTableFileName    = "run-table.md"
+	runTablePlaceholder = "{{run-table}}"
+
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
 	agySubagentLine = agySubagentKey + ": true\n"
@@ -63,6 +72,9 @@ var partials = map[string]string{
 	returnContractPlaceholder:     returnContractFileName,
 	sessionSummaryPlaceholder:     sessionSummaryFileName,
 	sessionDigestPlaceholder:      sessionDigestFileName,
+	scratchCopyPlaceholder:        scratchCopyFileName,
+	fixDisciplinePlaceholder:      fixDisciplineFileName,
+	runTablePlaceholder:           runTableFileName,
 }
 
 // figures are numbers Go enforces, keyed by the placeholder a prompt states
@@ -74,12 +86,15 @@ var figures = map[string]string{
 // The leads, by the agent type the runner reports them as.
 const (
 	ResearchLead       = "qrouton-research-lead"
+	AuditLead          = "qrouton-audit-lead"
 	PlanningLead       = "qrouton-planning-lead"
 	ImplementationLead = "qrouton-implementation-lead"
 )
 
 var (
 	readOnlyAgents = map[string]bool{
+		"audit-checker":       true,
+		"audit-verifier":      true,
 		"code-reviewer":       true,
 		"codebase-researcher": true,
 		"external-researcher": true,
@@ -89,6 +104,7 @@ var (
 
 	workspaceWriteAgents = map[string]bool{
 		ResearchLead:       true,
+		AuditLead:          true,
 		PlanningLead:       true,
 		ImplementationLead: true,
 		"test-verifier":    true,

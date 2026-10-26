@@ -9,7 +9,7 @@ Delegate plan construction to a `qrouton-planning-lead` when available.
 
 {{session-summary}} Pass `stage` as `plan`.
 
-Give the lead the relevant research/spec paths, user decisions, `editing`/`reference` repo roles, and the required output path. The lead should inspect the live code and may spawn bounded specialists for unfamiliar areas.
+Give the lead the relevant research/spec or audit paths, user decisions, `editing`/`reference` repo roles, and the required output path. The lead should inspect the live code and may spawn bounded specialists for unfamiliar areas.
 
 The plan must:
 

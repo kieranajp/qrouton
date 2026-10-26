@@ -3,6 +3,7 @@ package status
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/prompts"
+	"go.yaml.in/yaml/v3"
 )
 
 // stages reads the R, P and I marks from the session's own thoughts. Each mark
@@ -24,9 +26,10 @@ func stages(root string, m session.Manifest) Stages {
 
 func stagesIn(thoughts string) Stages {
 	research := latest(artifacts(filepath.Join(thoughts, researchDir), legacyQuestionsSuffix))
+	audit := latest(artifacts(filepath.Join(thoughts, auditsDir), ""))
 	plan := latest(artifacts(filepath.Join(thoughts, plansDir), ""))
 	return Stages{
-		Research:  research != "" && researched(research),
+		Research:  (research != "" && researched(research)) || (audit != "" && audited(audit)),
 		Plan:      plan != "",
 		Implement: plan != "" && implemented(plan),
 	}
@@ -45,6 +48,82 @@ func researched(path string) bool {
 		return strings.TrimSpace(markdown.Body(text)) != ""
 	}
 	return markdown.Researched(text)
+}
+
+// audited means the summary and every chosen tell section hold content. Triage
+// changes nothing here.
+func audited(path string) bool {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	state := map[string]markdown.SectionState{}
+	for _, section := range markdown.Sections(string(body)) {
+		state[strings.ToLower(section.Name)] = section.State
+	}
+	for _, heading := range append([]string{AuditHeadingSummary}, AuditTells(string(body))...) {
+		if state[strings.ToLower(heading)] != markdown.SectionAnswered {
+			return false
+		}
+	}
+	return true
+}
+
+type auditTell struct{ slug, heading, legacy string }
+
+// AuditTells is the headings of the tells an audit chose, in tell order, each as
+// the document spells it: a renamed tell keeps its old heading in an audit that
+// still uses it.
+func AuditTells(text string) []string {
+	present := map[string]bool{}
+	for _, section := range markdown.Sections(text) {
+		present[strings.ToLower(section.Name)] = true
+	}
+	var headings []string
+	for _, tell := range chosenTells(text) {
+		heading := tell.heading
+		if tell.legacy != "" && present[strings.ToLower(tell.legacy)] && !present[strings.ToLower(tell.heading)] {
+			heading = tell.legacy
+		}
+		headings = append(headings, heading)
+	}
+	return headings
+}
+
+// chosenTells is the tells an audit chose. An audit with no tells key ran the
+// legacy set. A key that is empty, malformed or names an unknown tell counts as
+// every tell, so nothing is judged complete early.
+func chosenTells(text string) []auditTell {
+	matter, _, _ := markdown.Split(text)
+	var front map[string]yaml.Node
+	if err := yaml.Unmarshal([]byte(matter), &front); err != nil {
+		return tellsNamed(nil)
+	}
+	node, ok := front[tellsKey]
+	if !ok {
+		return tellsNamed(legacyTells)
+	}
+	var slugs []string
+	if err := node.Decode(&slugs); err != nil || len(slugs) == 0 {
+		return tellsNamed(nil)
+	}
+	for _, slug := range slugs {
+		if !slices.ContainsFunc(auditTells, func(tell auditTell) bool { return tell.slug == slug }) {
+			return tellsNamed(nil)
+		}
+	}
+	return tellsNamed(slugs)
+}
+
+// tellsNamed is the named tells in tell order, and every tell when none is named.
+func tellsNamed(slugs []string) []auditTell {
+	var tells []auditTell
+	for _, tell := range auditTells {
+		if slugs == nil || slices.Contains(slugs, tell.slug) {
+			tells = append(tells, tell)
+		}
+	}
+	return tells
 }
 
 // implemented means the plan has phases, each has Verify items, and every one
@@ -118,6 +197,7 @@ func latest(found []artifact) string {
 // stageLeads names the stage each lead works on.
 var stageLeads = map[string]string{
 	prompts.ResearchLead:       StageResearch,
+	prompts.AuditLead:          StageResearch,
 	prompts.PlanningLead:       StagePlan,
 	prompts.ImplementationLead: StageImplement,
 }

@@ -5,7 +5,6 @@
   import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import { tick, untrack } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
   import { copyText } from "../wails.js";
   import ArtifactPane from "./ArtifactPane.svelte";
   import QuestionCard from "./QuestionCard.svelte";
@@ -16,7 +15,8 @@
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
-  import { freshContent, saveSpec, sendSpecAnswers } from "./spec-calls.js";
+  import { answerable } from "./answerable.svelte.js";
+  import { sendSpecAnswers } from "./spec-calls.js";
   import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
   import "./deck.css";
   import "./markdown.css";
@@ -24,29 +24,23 @@
   /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
-  // The text the pane splices into: the last push, or the pane's own save, or
-  // what it fetched after a refused one, whichever came last.
-  let source = $state(untrack(() => ({ text: doc.text, hash: doc.hash ?? "" })));
-  let epoch = $state(untrack(() => doc.viewportEpoch ?? 0));
-  let pushed = untrack(() => doc.hash ?? doc.text);
-  $effect(() => {
-    const text = doc.text;
-    const hash = doc.hash ?? "";
-    const at = doc.viewportEpoch ?? 0;
-    untrack(() => {
-      if (at > epoch) epoch = at;
-      if ((hash || text) === pushed) return;
-      pushed = hash || text;
-      source = { text, hash };
-    });
+  const answers = answerable({
+    id: () => id,
+    doc: () => doc,
+    splice,
+    reloaded: "The spec changed on disk, so it reloaded. Your answer is kept here: pick again or press ⌘↵ to save it.",
   });
-  let shown = $derived({ ...doc, text: source.text, viewportEpoch: epoch });
+  const { pending, saves } = answers;
 
-  /** @type {SvelteMap<string, {id: string, heading: string, letter: string, note: string}>} */
-  const pending = new SvelteMap();
-  /** @type {SvelteMap<string, {state: string, message?: string}>} */
-  const saves = new SvelteMap();
-  let queue = Promise.resolve();
+  /** @param {string} text @param {string} key @param {{id: string, heading: string, letter: string, note: string}} draft
+   * @returns {string | null} */
+  function splice(text, key, draft) {
+    const question = spec.open.find((open) => draftKey(open) === key);
+    return question ? spliceAnswer(text, question, draft) : null;
+  }
+  let source = $derived(answers.source);
+  let epoch = $derived(answers.epoch);
+  let shown = $derived({ ...doc, text: source.text, viewportEpoch: epoch });
 
   let rendered = $derived(render(source.text));
   let spec = $derived(parseSpec(source.text));
@@ -197,12 +191,14 @@
   }
 
   /** @param {number} index @param {Partial<{letter: string, note: string}>} change */
-  function edit(index, change) {
+  function edit(index, change, typed = false) {
     const question = spec.open[index];
     if (!question) return "";
     const key = draftKey(question);
     sent = null;
-    pending.set(key, { id: question.id, heading: question.heading, ...drafts[index], ...change });
+    const draft = { id: question.id, heading: question.heading, ...drafts[index], ...change };
+    if (typed) answers.type(key, draft);
+    else answers.put(key, draft);
     return key;
   }
 
@@ -213,55 +209,17 @@
 
   /** @param {number} index @param {string} note */
   function note(index, note) {
-    saves.set(edit(index, { note }), { state: "unsaved" });
+    edit(index, { note }, true);
   }
 
-  /** Saves run one at a time, so each splices into the text the last one left. */
-  function commit(key) {
-    if (!key || !pending.has(key)) return;
-    queue = queue.then(() => save(key));
-  }
-
-  async function save(key) {
-    const draft = pending.get(key);
-    const question = spec.open.find((open) => draftKey(open) === key);
-    if (!draft || !question) return;
-    const text = spliceAnswer(source.text, question, draft);
-    if (text === source.text) {
-      pending.delete(key);
-      saves.delete(key);
-      return;
-    }
-    const hash = source.hash;
-    saves.set(key, { state: "saving" });
-    const saved = await saveSpec(id, hash, text);
-    if (saved.ok) {
-      source = { text, hash: saved.value };
-      if (pending.get(key) === draft) pending.delete(key);
-      saves.set(key, { state: pending.has(key) ? "unsaved" : "saved" });
-      return;
-    }
-    // Go refuses a stale hash; a fresh read tells that apart from a real failure.
-    const fresh = await freshContent(id);
-    if (fresh.ok && fresh.value.hash !== hash) {
-      source = { text: fresh.value.text, hash: fresh.value.hash };
-      epoch = Math.max(epoch, fresh.value.viewportEpoch ?? 0);
-      saves.set(key, {
-        state: "reloaded",
-        message: "The spec changed on disk, so it reloaded. Your answer is kept here: pick again or press ⌘↵ to save it.",
-      });
-      return;
-    }
-    saves.set(key, { state: "failed", message: `Could not save: ${saved.error?.message ?? saved.error}` });
-  }
+  const commit = answers.commit;
 
   let blocked = $derived.by(() => {
-    const states = [...saves.values()].map((save) => save.state);
-    if (states.includes("saving")) return "Wait for the save to finish.";
-    if (states.includes("failed") || states.includes("reloaded"))
-      return "An answer did not save. Save it again first.";
+    const waiting = answers.waiting;
+    if (waiting === "saving") return "Wait for the save to finish.";
+    if (waiting === "failed") return "An answer did not save. Save it again first.";
     if (laid.detached.length > 0) return "Copy or discard the detached answers first.";
-    if (pending.size > 0) return "Save your typed answer first: click outside the field or press ⌘↵.";
+    if (waiting === "typed") return "Save your typed answer first: click outside the field or press ⌘↵.";
     if (answered === 0) return "Answer at least one question first.";
     return "";
   });
@@ -277,8 +235,7 @@
 
   /** @param {{id: string, heading: string}} draft */
   function discard(draft) {
-    pending.delete(draftKey(draft));
-    saves.delete(draftKey(draft));
+    answers.discard(draftKey(draft));
   }
 
   /** @param {KeyboardEvent} event */

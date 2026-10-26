@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 // sessionDir writes a session directory with the given manifest under a fake
@@ -683,5 +685,24 @@ func TestDocumentsAndUnseenSkipSyncCopiesAndDotNames(t *testing.T) {
 	docs := Read(dir).Documents
 	if len(docs) != 1 || docs[0].Name != "R1-findings.md" {
 		t.Fatalf("documents = %#v, want only R1-findings.md", docs)
+	}
+}
+
+func TestTheAuditTemplateChoosesAndCarriesEveryTell(t *testing.T) {
+	template, err := prompts.Template("audit")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var every []string
+	for _, tell := range auditTells {
+		every = append(every, tell.heading)
+	}
+	if got, want := AuditTells(string(template)), every; !slices.Equal(got, want) {
+		t.Errorf("the audit template chooses %q, want every tell %q", got, want)
+	}
+	for _, heading := range append([]string{AuditHeadingSummary}, every...) {
+		if !strings.Contains(string(template), "\n## "+heading+"\n") {
+			t.Errorf("the audit template has no ## %s", heading)
+		}
 	}
 }

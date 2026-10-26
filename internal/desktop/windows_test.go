@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -248,6 +249,34 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	wantPath := filepath.Join(w.shown().root(), source)
 	if page.Path != wantPath || page.Kind != "PLAN" {
 		t.Fatalf("Content path/kind = %q/%q, want %q/PLAN", page.Path, page.Kind, wantPath)
+	}
+}
+
+func TestContentCarriesAnAuditsChosenTells(t *testing.T) {
+	w, _ := testWindows(t)
+	for _, tc := range []struct {
+		name, source, content string
+		want                  []string
+	}{
+		{"chosen", "thoughts/shared/audits/A1-tells.md", "---\ntells: [homegrown, dead]\n---\n# Tells\n", []string{status.AuditHeadingDead, status.AuditHeadingHomegrown}},
+		{"no key", "thoughts/shared/audits/A2-tells.md", "# Tells\n", []string{status.AuditHeadingDuplicated, status.AuditHeadingDead, status.AuditHeadingHomegrown}},
+		{"not an audit", "thoughts/shared/specs/S1-tells.md", "---\ntells: [dead]\n---\n# Tells\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindDocument, Label: "tells", Source: tc.source, Content: tc.content,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			page, err := w.Content(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(page.Tells, tc.want) {
+				t.Fatalf("Content tells = %q, want %q", page.Tells, tc.want)
+			}
+		})
 	}
 }
 

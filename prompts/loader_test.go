@@ -19,10 +19,13 @@ import (
 // embeddedPromptIDs is every prompt the binary carries, in the order List sorts
 // them. Naming them is what makes an addition or a loss legible in the failure.
 var embeddedPromptIDs = []string{
+	"agents/audit-checker",
+	"agents/audit-verifier",
 	"agents/code-reviewer",
 	"agents/codebase-researcher",
 	"agents/external-researcher",
 	"agents/pattern-finder",
+	"agents/qrouton-audit-lead",
 	"agents/qrouton-implementation-lead",
 	"agents/qrouton-planning-lead",
 	"agents/qrouton-research-lead",
@@ -30,6 +33,7 @@ var embeddedPromptIDs = []string{
 	"agents/thoughts-researcher",
 	"assistant",
 	"orchestrator",
+	"skills/qrouton-audit",
 	"skills/qrouton-development",
 	"skills/qrouton-evals",
 	"skills/qrouton-implement",
@@ -329,6 +333,7 @@ func TestSubagentChoiceExpandedForDelegatingPrompts(t *testing.T) {
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 	}
 	for _, id := range ids {
 		prompt, err := loader.Load(context.Background(), id)
@@ -457,6 +462,8 @@ func TestNoEmbeddedPromptShipsAnUnexpandedPartial(t *testing.T) {
 var (
 	artifactDisciplineHomes = []ID{
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(skillIDPrefix + "qrouton-questions"),
@@ -466,6 +473,9 @@ var (
 	}
 
 	evidenceDisciplineHomes = []ID{
+		ID(agentIDPrefix + "audit-checker"),
+		ID(agentIDPrefix + "audit-verifier"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 		ID(agentIDPrefix + "code-reviewer"),
 		ID(agentIDPrefix + "codebase-researcher"),
 		ID(agentIDPrefix + "external-researcher"),
@@ -478,6 +488,7 @@ var (
 
 	returnContractHomes = []ID{
 		ID(agentIDPrefix + "qrouton-research-lead"),
+		ID(agentIDPrefix + "qrouton-audit-lead"),
 		ID(agentIDPrefix + "qrouton-planning-lead"),
 		ID(agentIDPrefix + "qrouton-implementation-lead"),
 		ID(skillIDPrefix + "qrouton-plan"),
@@ -485,18 +496,49 @@ var (
 	}
 
 	sessionSummaryHomes = []ID{
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(skillIDPrefix + "qrouton-research"),
 		ID(skillIDPrefix + "qrouton-spec"),
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
 	sessionDigestHomes = []ID{
+		ID(skillIDPrefix + "qrouton-audit"),
 		ID(skillIDPrefix + "qrouton-research"),
 		ID(skillIDPrefix + "qrouton-spec"),
 		ID(skillIDPrefix + "qrouton-plan"),
 		ID(skillIDPrefix + "qrouton-implement"),
 	}
+
+	scratchCopyHomes = []ID{
+		ID(agentIDPrefix + "qrouton-audit-lead"),
+		ID(agentIDPrefix + "test-verifier"),
+	}
+
+	fixDisciplineHomes = []ID{
+		ID(agentIDPrefix + "audit-checker"),
+		ID(agentIDPrefix + "qrouton-implementation-lead"),
+	}
+
+	fixDisciplineReferenceHomes = []referenceHome{
+		{ID(skillIDPrefix + "qrouton-audit"), "references/audit-shape.md"},
+		{ID(skillIDPrefix + "qrouton-plan"), "references/plan-shape.md"},
+	}
+
+	runTableHomes = []ID{
+		ID(agentIDPrefix + "audit-verifier"),
+	}
+
+	runTableReferenceHomes = []referenceHome{
+		{ID(skillIDPrefix + "qrouton-audit"), "references/test-runs.md"},
+	}
 )
+
+// A reference home is one file a skill ships beside its entry file.
+type referenceHome struct {
+	skill ID
+	path  string
+}
 
 // A partial is one text with several homes. Each home has to carry it word for
 // word: a prompt that grows its own paraphrase drifts from the others silently,
@@ -508,6 +550,13 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 		returnContractFileName:     returnContractHomes,
 		sessionSummaryFileName:     sessionSummaryHomes,
 		sessionDigestFileName:      sessionDigestHomes,
+		scratchCopyFileName:        scratchCopyHomes,
+		fixDisciplineFileName:      fixDisciplineHomes,
+		runTableFileName:           runTableHomes,
+	}
+	referenceHomes := map[string][]referenceHome{
+		fixDisciplineFileName: fixDisciplineReferenceHomes,
+		runTableFileName:      runTableReferenceHomes,
 	}
 	loader := NewEmbeddedLoader()
 	for name, ids := range homes {
@@ -525,13 +574,59 @@ func TestPartialsReachEveryHomeVerbatim(t *testing.T) {
 			}
 		}
 	}
+	for name, refs := range referenceHomes {
+		partial, err := fs.ReadFile(embedded, name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, ref := range refs {
+			prompt, err := loader.Load(context.Background(), ref.skill)
+			if err != nil {
+				t.Fatal(err)
+			}
+			i := slices.IndexFunc(prompt.Files, func(file PromptFile) bool { return file.Path == ref.path })
+			if i < 0 {
+				t.Errorf("skill %q ships no %s", ref.skill, ref.path)
+			} else if !strings.Contains(string(prompt.Files[i].Content), string(partial)) {
+				t.Errorf("%s in %q does not carry %s verbatim", ref.path, ref.skill, name)
+			}
+		}
+	}
+}
+
+// Catches a copy rule that loses a part keeping a run out of the checkout: the
+// temporary copy without links or git data, or the before-and-after status check.
+func TestTheScratchCopyKeepsRunsOutOfTheCheckout(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, scratchCopyFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"`mktemp -d`", "hard links", "--exclude=/.git", "Run no git command", "--no-optional-locks", "`git status --porcelain`", "the checkout you were given", "names the checkout as a destination"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", scratchCopyFileName, phrase)
+		}
+	}
+}
+
+// Catches a run rule dropped from the one text the lead writes the run table
+// by and the verifier checks it against.
+func TestRunTablePartialCarriesItsRules(t *testing.T) {
+	partial, err := fs.ReadFile(embedded, runTableFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, phrase := range []string{"one row per attempted run", "failed to start", "A baseline's change is `none`", "anchored", "exactly 120 seconds", "and no other word", "exactly one test ran", "`run-<n>.txt`", "`Checkout status: unchanged`"} {
+		if !strings.Contains(string(partial), phrase) {
+			t.Errorf("%s does not carry %q", runTableFileName, phrase)
+		}
+	}
 }
 
 // The digest is replaced whole, so a second writer would overwrite the
 // orchestrator's; no lead may be told to write it.
 func TestNoLeadWritesTheDigest(t *testing.T) {
 	loader := NewEmbeddedLoader()
-	for _, lead := range []string{ResearchLead, PlanningLead, ImplementationLead} {
+	for _, lead := range []string{ResearchLead, AuditLead, PlanningLead, ImplementationLead} {
 		prompt, err := loader.Load(context.Background(), ID(agentIDPrefix+lead))
 		if err != nil {
 			t.Fatal(err)
@@ -831,9 +926,9 @@ func TestTheResearchTemplateReadsAsAFramedDocument(t *testing.T) {
 }
 
 func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
-	handBuilt := regexp.MustCompile(`[RSP]<n>-`)
+	handBuilt := regexp.MustCompile(`[RSPA]<n>-`)
 	for skill, kind := range map[string]string{
-		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan",
+		"qrouton-questions": "research", "qrouton-spec": "spec", "qrouton-plan": "plan", "qrouton-audit": "audit",
 	} {
 		prompt, err := NewEmbeddedLoader().Load(context.Background(), ID(skillIDPrefix+skill))
 		if err != nil {
@@ -853,5 +948,73 @@ func TestSkillsSendAgentsToCreateArtefactAndNameNoHandBuiltPath(t *testing.T) {
 	}
 	if handBuilt.MatchString(string(research.Content)) {
 		t.Error("qrouton-research still builds an artefact path by hand")
+	}
+}
+
+// Catches a fix-stage rule that drops out of its home, or one that leaks into a
+// prompt that defers to that home and would then restate it.
+func TestFixStagePromptsCarryPrevention(t *testing.T) {
+	loader := NewEmbeddedLoader()
+	text := func(id ID, path string) string {
+		prompt, err := loader.Load(context.Background(), id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if path == "" {
+			return string(prompt.Content)
+		}
+		for _, file := range prompt.Files {
+			if file.Path == path {
+				return string(file.Content)
+			}
+		}
+		t.Fatalf("%s ships no %s", id, path)
+		return ""
+	}
+	partial, err := fs.ReadFile(embedded, fixDisciplineFileName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lead := text(ID(agentIDPrefix+ImplementationLead), "")
+	reviewer := text(ID(agentIDPrefix+"code-reviewer"), "")
+	verifier := text(ID(agentIDPrefix+"test-verifier"), "")
+	planShape := text(ID(skillIDPrefix+"qrouton-plan"), "references/plan-shape.md")
+	for _, rule := range []struct {
+		name    string
+		phrases []string
+		in      map[string]string
+	}{
+		{"fix order", []string{"named boundary"}, map[string]string{"fix-discipline": string(partial)}},
+		{"test claims", []string{"the regression it would catch"}, map[string]string{"fix-discipline": string(partial), "code-reviewer": reviewer}},
+		{"break once", []string{"break the guarded code once", "run that test alone"}, map[string]string{"implementation lead": lead, "test-verifier": verifier}},
+		{"net lines", []string{"net lines", "shipped code and tests"}, map[string]string{"plan-shape": planShape, "implementation lead": lead}},
+		{"pull requests", []string{"pull request description"}, map[string]string{"implementation lead": lead}},
+	} {
+		for where, content := range rule.in {
+			for _, phrase := range rule.phrases {
+				if !strings.Contains(content, phrase) {
+					t.Errorf("%s: %s does not carry %q", rule.name, where, phrase)
+				}
+			}
+		}
+	}
+
+	for _, id := range []ID{ID(agentIDPrefix + PlanningLead), ID(skillIDPrefix + "qrouton-plan"), ID(skillIDPrefix + "qrouton-implement")} {
+		for _, phrase := range []string{"net lines", "named boundary", "break the guarded code once"} {
+			if strings.Contains(text(id, ""), phrase) {
+				t.Errorf("%s restates %q, which its lead or shape owns", id, phrase)
+			}
+		}
+	}
+	for _, phrase := range []string{"scratch copy", "`mktemp -d`"} {
+		if strings.Contains(reviewer, phrase) {
+			t.Errorf("code-reviewer carries %q, but its sandbox is read-only", phrase)
+		}
+	}
+	if !readOnlyAgents["code-reviewer"] {
+		t.Error("code-reviewer is no longer read-only")
+	}
+	if !workspaceWriteAgents["test-verifier"] {
+		t.Error("test-verifier can no longer write the scratch copy")
 	}
 }

@@ -1,6 +1,7 @@
 ---
 kind: plan
 title: <title>
+audit:
 ---
 
 # <title>

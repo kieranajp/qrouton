@@ -37,7 +37,7 @@ type Fields struct {
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
 	// Stages is the durable progress the window draws as three marks, read
-	// from the latest research document and plan.
+	// from the latest research document, audit and plan.
 	Stages Stages `json:"stages"`
 	// StagesLive marks the stages whose lead is running now. Workbench-side
 	// knowledge, so a file read never sets it.
@@ -134,8 +134,9 @@ type Sticker struct {
 }
 
 // Stages is the R, P and I of a session's workflow. Research means the latest
-// research document is answered, Plan means a plan exists, and Implement means
-// every Verify item in every phase of the latest plan is ticked.
+// research document is answered or the latest audit is complete, Plan means a
+// plan exists, and Implement means every Verify item in every phase of the
+// latest plan is ticked.
 type Stages struct {
 	Research  bool `json:"research"`
 	Plan      bool `json:"plan"`

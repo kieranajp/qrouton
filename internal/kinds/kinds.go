@@ -16,10 +16,11 @@ var (
 	Spec      = Kind{Dir: "specs", Name: "spec", Letter: "s", Template: true}
 	Plan      = Kind{Dir: "plans", Name: "plan", Letter: "p", Template: true}
 	Explainer = Kind{Dir: "explainers", Name: "explainer", Letter: "e"}
+	Audit     = Kind{Dir: "audits", Name: "audit", Letter: "a", Template: true}
 )
 
 func All() []Kind {
-	return []Kind{Research, Spec, Plan, Explainer}
+	return []Kind{Research, Spec, Plan, Explainer, Audit}
 }
 
 // Label is the kind as the chrome and the page spell it.

@@ -15,7 +15,7 @@ const line = (node) => node.position?.start?.line ?? 0;
 const isHeading = (node, depth) => node.type === "heading" && node.depth === depth;
 
 /** @param {string[]} lines @param {number} from @param {number} to 1-based, inclusive. */
-function lastFilled(lines, from, to) {
+export function lastFilled(lines, from, to) {
   let at = to;
   while (at > from && !lines[at - 1]?.trim()) at--;
   return at;
@@ -169,29 +169,39 @@ export function parseSpec(text) {
  * @param {{id: string, heading: string}} question */
 export const draftKey = (question) => `${question.id}\u0000${question.heading}`;
 
-/** @param {{letter: string, note: string}} answer */
-function answerLines({ letter, note }) {
+/** @param {string} label @param {string} choice @param {string} note @param {(line: string) => boolean} isChoice */
+function labelledLines(label, choice, note, isChoice) {
   const text = note.replace(/\r\n?/g, "\n").trim();
-  if (!text) return [letter ? `Answer: ${letter}` : "Answer:"];
+  if (!text) return [choice ? `${label}: ${choice}` : `${label}:`];
   const body = text.split("\n");
-  if (letter) return [`Answer: ${letter}`, ...body];
-  return LONE_LETTER.test(body[0].trim()) ? ["Answer:", ...body] : [`Answer: ${body[0]}`, ...body.slice(1)];
+  if (choice) return [`${label}: ${choice}`, ...body];
+  return isChoice(body[0].trim()) ? [`${label}:`, ...body] : [`${label}: ${body[0]}`, ...body.slice(1)];
 }
 
-/** Rewrites one question's answer block and leaves every other line as it was.
- * @param {string} text @param {Question} question @param {{letter: string, note: string}} answer */
-export function spliceAnswer(text, question, answer) {
+/** A note that would read back as a choice starts on the line below the label.
+ * @param {string} text
+ * @param {{label: string, isChoice: (line: string) => boolean, block: {from: number, to: number}, written: {from: number, to: number} | null}} at
+ * @param {{choice: string, note: string}} value */
+export function spliceLabelled(text, { label, isChoice, block, written }, { choice, note }) {
   const lines = text.split("\n");
-  const next = answerLines(answer);
-  if (question.answer) {
-    lines.splice(question.answer.from - 1, question.answer.to - question.answer.from + 1, ...next);
+  const next = labelledLines(label, choice, note, isChoice);
+  if (written) {
+    lines.splice(written.from - 1, written.to - written.from + 1, ...next);
     return lines.join("\n");
   }
-  const after = lastFilled(lines, question.from, question.to);
+  const after = lastFilled(lines, block.from, block.to);
   const blankAfter = lines[after] !== undefined && !lines[after].trim();
   lines.splice(after, 0, "", ...next, ...(blankAfter ? [] : [""]));
   return lines.join("\n");
 }
+
+/** @param {string} text @param {Question} question @param {{letter: string, note: string}} answer */
+export const spliceAnswer = (text, question, answer) =>
+  spliceLabelled(
+    text,
+    { label: "Answer", isChoice: (line) => LONE_LETTER.test(line), block: question, written: question.answer },
+    { choice: answer.letter, note: answer.note },
+  );
 
 /** Lays unsaved drafts back over a freshly parsed spec. A draft whose question
  * is gone, or now has another heading, is detached rather than dropped.

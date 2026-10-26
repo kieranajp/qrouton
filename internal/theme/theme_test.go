@@ -36,7 +36,7 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 	want := map[string]string{
 		RoleArtifactPlan: Lavender, RoleArtifactSpec: Pink,
 		RoleArtifactResearch: Sky, RoleArtifactNote: Flamingo,
-		RoleArtifactExplainer: Maroon,
+		RoleArtifactExplainer: Maroon, RoleArtifactAudit: Rosewater,
 	}
 	seen := map[string]string{}
 	for role, colour := range want {
@@ -47,6 +47,11 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 			t.Errorf("%s and %s share %s", role, other, colour)
 		}
 		seen[colour] = role
+	}
+	for role, colour := range Roles {
+		if colour == Rosewater && role != RoleArtifactAudit {
+			t.Errorf("%s borrows the audit's %s", role, colour)
+		}
 	}
 }
 
