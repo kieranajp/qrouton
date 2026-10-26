@@ -73,7 +73,7 @@ func TestShellReplacesItselfWithTheLoginShell(t *testing.T) {
 	if !errors.As(err, &exit) || exit.ExitCode() != 3 {
 		t.Fatalf("helper ended with %v, want exit status 3; output %q", err, out)
 	}
-	if want := "pid=" + strconv.Itoa(cmd.Process.Pid); !strings.Contains(string(out), want) {
+	if want := "pid=" + strconv.Itoa(cmd.Process.Pid) + "\n"; !strings.Contains(string(out), want) {
 		t.Fatalf("output %q does not contain %q", out, want)
 	}
 }
