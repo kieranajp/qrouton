@@ -1,10 +1,11 @@
 <script>
   import Icon from "../core/Icon.svelte";
+  import { TAB_STATUSES } from "../bridge/generated.js";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import { tabLabel } from "./tabs.js";
 
   /** Status stays visible on unfocused tabs so failed runs remain apparent.
-   * @type {{label?: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus | "idle", selected?: boolean, closable?: boolean, pinned?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
+   * @type {{label?: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus, selected?: boolean, closable?: boolean, pinned?: boolean, dragging?: boolean, over?: boolean, onSelect?: () => void, onClose?: () => void, onDragStart?: () => void, onDragOver?: () => void, onDragLeave?: () => void, onDrop?: () => void, onDragEnd?: () => void, [attribute: string]: any}} */
   let {
     label,
     badge,
@@ -76,7 +77,7 @@
   onauxclick={auxiliary}
   {...rest}>
   <button type="button" class="select" onclick={onSelect}>
-    {#if status && status !== "idle"}<Icon name={status} />{/if}
+    {#if status && status !== TAB_STATUSES.IDLE}<Icon name={status} />{/if}
     {#if badge}<ArtifactTag kind={artifact} id={badge} />{/if}
     {#if icon}<Icon name={icon} />{/if}
     <span class="label">{label}</span>

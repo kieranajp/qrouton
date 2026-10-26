@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { TAB_STATUSES } from "../bridge/generated.js";
 import { dominantStatus, dropIndex, fits, need, split } from "./tabs.js";
 
 const strip = ["shell", "plan", "shell 2", "shell 3", "research"];
@@ -134,7 +135,7 @@ test("a tab the strip never drew cannot be dragged anywhere", () => {
 
 test("a tab needs room for its marks and a readable label", () => {
   const bare = need({});
-  assert.equal(need({ status: "idle" }), bare);
+  assert.equal(need({ status: TAB_STATUSES.IDLE }), bare);
   assert.equal(need({ status: "running", icon: "command" }), bare + 48);
   assert.ok(need({ badge: "P002" }) > bare);
 });

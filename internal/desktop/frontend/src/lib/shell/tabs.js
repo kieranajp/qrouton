@@ -13,7 +13,7 @@ export function split(tabs, selected, capacity) {
   return { shown, hidden: all.filter((entry) => !drawn.has(entry.index)) };
 }
 
-/** @typedef {import("../bridge/generated.js").TabStatus | "idle"} TabStatus */
+/** @typedef {import("../bridge/generated.js").TabStatus} TabStatus */
 
 /** @type {TabStatus[]} */
 const STATUS_PRIORITY = [
@@ -21,7 +21,7 @@ const STATUS_PRIORITY = [
   TAB_STATUSES.FAILED,
   TAB_STATUSES.RUNNING,
   TAB_STATUSES.SUCCEEDED,
-  "idle",
+  TAB_STATUSES.IDLE,
 ];
 
 /** @param {{status?: TabStatus}[]} tabs @returns {TabStatus | ""} */
@@ -39,7 +39,7 @@ const MIN_LABEL = 40;
 /** need is the width a closable tab takes before its label is too short to read.
  * @param {{status?: TabStatus, icon?: string, badge?: string}} tab @returns {number} */
 export function need(tab) {
-  const marks = Number(Boolean(tab.status && tab.status !== "idle")) + Number(Boolean(tab.icon));
+  const marks = Number(Boolean(tab.status && tab.status !== TAB_STATUSES.IDLE)) + Number(Boolean(tab.icon));
   return TAB_CHROME + marks * MARK + (tab.badge ? BADGE : 0) + MIN_LABEL;
 }
 
