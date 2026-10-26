@@ -162,6 +162,7 @@ const (
 	tabStatusSucceeded = "succeeded"
 	tabStatusFailed    = "failed"
 	tabStatusWaiting   = "waiting"
+	tabStatusIdle      = "idle"
 )
 
 const (
@@ -209,6 +210,9 @@ const (
 	// chromeInterval bounds how stale the window chrome can be after an
 	// escalation.
 	chromeInterval = 2 * time.Second
+
+	// foregroundInterval paces the read of each user shell's foreground job.
+	foregroundInterval = 500 * time.Millisecond
 
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second

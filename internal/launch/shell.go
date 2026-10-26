@@ -1,22 +1,36 @@
 package launch
 
 import (
-	"context"
+	"fmt"
 	"os"
 	"os/exec"
+	"syscall"
 )
 
-// The seams below keep the interactive shell testable without starting a real
-// login shell or printing a directory tree into the test process.
 var (
 	showShellTree = printShellTree
-	runLoginShell = startLoginShell
+	execve        = syscall.Exec
 )
 
-// Shell runs the session's user shell; the tab ends when it exits.
-func Shell(ctx context.Context, dir string) error {
+// Shell prints the session's tree, then replaces this process with the user's
+// login shell, so the tab's pid is the shell's pid. It returns only on failure.
+func Shell(dir string) error {
 	showShellTree(dir)
-	return runLoginShell(ctx, dir)
+	shell := os.Getenv(shellEnvVar)
+	if shell == "" {
+		shell = defaultShell
+	}
+	path, err := exec.LookPath(shell)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrLoginShell, err)
+	}
+	if err := os.Chdir(dir); err != nil {
+		return fmt.Errorf("%w: %w", ErrLoginShell, err)
+	}
+	if err := execve(path, []string{shell, loginShellFlag}, os.Environ()); err != nil {
+		return fmt.Errorf("%w: %w", ErrLoginShell, err)
+	}
+	return nil
 }
 
 func printShellTree(dir string) {
@@ -29,15 +43,4 @@ func printShellTree(dir string) {
 	cmd.Dir = dir
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	_ = cmd.Run()
-}
-
-func startLoginShell(ctx context.Context, dir string) error {
-	shell := os.Getenv(shellEnvVar)
-	if shell == "" {
-		shell = defaultShell
-	}
-	cmd := exec.CommandContext(ctx, shell, loginShellFlag)
-	cmd.Dir = dir
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
 }

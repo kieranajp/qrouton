@@ -447,7 +447,7 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 		return "", ErrNoShellCommand
 	}
 	owner.shells++
-	return s.windows.openStructural(owner, workbench.WindowOptions{
+	return s.windows.openShell(owner, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
 		Label:       shellLabel(owner.shells),
 		Icon:        workbench.IconShell,

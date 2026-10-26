@@ -15,6 +15,6 @@ var Command = &cli.Command{
 		&cli.StringFlag{Name: sessionRootFlag, Usage: sessionRootUsage, Required: true},
 	},
 	Action: func(c *cli.Context) error {
-		return launch.Shell(c.Context, c.String(sessionRootFlag))
+		return launch.Shell(c.String(sessionRootFlag))
 	},
 }

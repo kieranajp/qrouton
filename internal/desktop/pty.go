@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"golang.org/x/sys/unix"
 )
 
 type ptyProcess struct {
@@ -78,6 +79,25 @@ func (p *ptyProcess) write(data []byte) error {
 	}
 	_, err := p.file.Write(data)
 	return err
+}
+
+// foreground reports whether a job other than the PTY child holds the terminal.
+// ok is false when the terminal could not be read.
+func (p *ptyProcess) foreground() (busy, ok bool) {
+	// A write blocked on a full terminal holds the lock; skip this read rather
+	// than stall every other shell's.
+	if !p.mu.TryLock() {
+		return false, false
+	}
+	defer p.mu.Unlock()
+	if p.file == nil || p.cmd == nil || p.cmd.Process == nil {
+		return false, false
+	}
+	pgid, err := unix.IoctlGetInt(int(p.file.Fd()), unix.TIOCGPGRP)
+	if err != nil || pgid == 0 {
+		return false, false
+	}
+	return pgid != p.cmd.Process.Pid, true
 }
 
 func (p *ptyProcess) resize(cols, rows int) error {

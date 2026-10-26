@@ -1,6 +1,7 @@
 <script>
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import Icon from "../core/Icon.svelte";
+  import { TAB_STATUSES } from "../bridge/generated.js";
 
   /** maxHeight caps a menu whose items are not a fixed vocabulary, which then
    * scrolls rather than running off the screen.
@@ -16,7 +17,7 @@
     ...rest
   } = $props();
 
-  let marked = $derived(items.some((item) => item !== "-" && (item.icon || (item.status && item.status !== "idle"))));
+  let marked = $derived(items.some((item) => item !== "-" && (item.icon || (item.status && item.status !== TAB_STATUSES.IDLE))));
 </script>
 
 <div
@@ -45,7 +46,7 @@
           onclick={item.items?.length ? undefined : () => onSelect?.(item, i)}>
           {#if item.icon}
             <Icon name={item.icon} />
-          {:else if item.status && item.status !== "idle"}
+          {:else if item.status && item.status !== TAB_STATUSES.IDLE}
             <Icon name={item.status} />
           {:else if marked}
             <span class="slot"></span>

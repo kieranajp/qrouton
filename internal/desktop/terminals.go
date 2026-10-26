@@ -1,10 +1,12 @@
 package desktop
 
 import (
+	"context"
 	"encoding/base64"
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 )
@@ -12,6 +14,7 @@ import (
 type terminals struct {
 	emit     emitter
 	registry *registry
+	sample   func(*ptyProcess) (busy, ok bool)
 }
 
 type terminalChunk struct {
@@ -33,7 +36,7 @@ func decodeInput(encoded string) ([]byte, error) {
 }
 
 func newTerminals(emit emitter, reg *registry) *terminals {
-	return &terminals{emit: emit, registry: reg}
+	return &terminals{emit: emit, registry: reg, sample: (*ptyProcess).foreground}
 }
 
 // start serves the page: it launches the command if nothing has, and otherwise
@@ -167,6 +170,45 @@ func (t *terminals) exited(id string, code int) {
 		return
 	}
 	t.registry.announce(owner)
+}
+
+func (t *terminals) watchForeground(ctx context.Context) {
+	ticker := time.NewTicker(foregroundInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			t.pollForeground()
+		}
+	}
+}
+
+func (t *terminals) pollForeground() {
+	shells := map[string]*ptyProcess{}
+	t.registry.each(func(id string, window *agentWindow) {
+		if terminal, ok := window.terminal(); ok && terminal.foreground && terminal.process != nil && terminal.exit == nil {
+			shells[id] = terminal.process
+		}
+	})
+	changed := map[*sessionState]bool{}
+	for id, process := range shells {
+		busy, ok := t.sample(process)
+		if !ok {
+			continue
+		}
+		_ = t.registry.with(id, func(window *agentWindow) error {
+			if terminal, ok := window.terminal(); ok && terminal.exit == nil && terminal.busy != busy {
+				terminal.busy = busy
+				changed[window.session] = true
+			}
+			return nil
+		})
+	}
+	for owner := range changed {
+		t.registry.announce(owner)
+	}
 }
 
 func terminalEnv() []string { return withTerminalEnv(os.Environ()) }

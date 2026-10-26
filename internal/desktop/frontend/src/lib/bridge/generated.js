@@ -266,12 +266,13 @@ export const SETTINGS_FIELDS = Object.freeze({
   THOUGHTS: "thoughts",
 });
 
-/** @typedef {"running"|"succeeded"|"failed"|"waiting"} TabStatus */
+/** @typedef {"running"|"succeeded"|"failed"|"waiting"|"idle"} TabStatus */
 export const TAB_STATUSES = Object.freeze({
   RUNNING: "running",
   SUCCEEDED: "succeeded",
   FAILED: "failed",
   WAITING: "waiting",
+  IDLE: "idle",
 });
 
 /** @typedef {"in"|"out"|"reset"} UIScaleAction */

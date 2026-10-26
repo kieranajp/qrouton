@@ -44,6 +44,10 @@ type terminalContent struct {
 	served bool
 	// exit is nil while the process is still running.
 	exit *int
+	// foreground marks a user shell, which is busy only while a job holds its
+	// terminal. busy is the last read of its terminal.
+	foreground bool
+	busy       bool
 }
 
 // documentContent holds a rendered tab's measurements. viewport is nil for a
@@ -65,6 +69,8 @@ type documentContent struct {
 
 func (t *terminalContent) tabStatus() string {
 	switch {
+	case t.exit == nil && t.foreground && !t.busy:
+		return tabStatusIdle
 	case t.exit == nil:
 		return tabStatusRunning
 	case *t.exit == 0:
@@ -149,7 +155,7 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 			r.discard(id)
 		}
 	}
-	return r.spawn(owner, opts, opts.Select)
+	return r.spawn(owner, opts, opts.Select, false)
 }
 
 // openStructural opens a tab the workbench owns rather than the agent. It
@@ -157,12 +163,22 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 // it has the id, or is the Overview tab, which has nothing to steal
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	return r.openOwned(owner, opts, false)
+}
+
+// openShell opens a user shell, whose tab reports the terminal's foreground job
+// rather than spinning for the shell's whole life.
+func (r *registry) openShell(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	return r.openOwned(owner, opts, true)
+}
+
+func (r *registry) openOwned(owner *sessionState, opts workbench.WindowOptions, foreground bool) (string, error) {
 	var err error
 	opts, err = admittedWindowOptions(owner, opts)
 	if err != nil {
 		return "", err
 	}
-	return r.spawn(owner, opts, false)
+	return r.spawn(owner, opts, false, foreground)
 }
 
 func (r *registry) showOrOpen(owner *sessionState, source string, open func() (string, error)) (string, error) {
@@ -249,7 +265,7 @@ func (r *registry) showing(owner *sessionState, source string) (string, bool) {
 	return "", false
 }
 
-func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, selects bool) (string, error) {
+func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, selects, foreground bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
@@ -272,6 +288,9 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 	id := fmt.Sprintf(windowIDFormat, r.seq)
 	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq, content: contentFor(opts)}
 	window.asset = asset
+	if terminal, ok := window.terminal(); ok {
+		terminal.foreground = foreground
+	}
 	beginDocument(window)
 	r.open[id] = window
 	if selects {

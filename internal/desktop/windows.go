@@ -30,6 +30,7 @@ func newWindows(emit emitter, sessions *Sessions) *Windows {
 		stopFollow: stop,
 	}
 	go w.documents.follow(ctx)
+	go w.terminals.watchForeground(ctx)
 	return w
 }
 
