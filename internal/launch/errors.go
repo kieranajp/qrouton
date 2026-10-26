@@ -13,6 +13,8 @@ var (
 
 	ErrRunnerUnavailable = errors.New("runner is unavailable")
 
+	ErrLoginShell = errors.New("login shell could not start")
+
 	// ErrUnsupportedRunner means a Runner reached the launch path with an id no
 	// spec claims, so there is no MCP and hook wiring to launch it with.
 	ErrUnsupportedRunner = errors.New("unsupported runner")
