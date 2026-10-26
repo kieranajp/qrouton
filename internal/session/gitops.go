@@ -151,14 +151,6 @@ func ensureMirror(root, org, repo, url, defaultBranch string, onProgress func(ph
 	return git(dirFlag, mp, updateRefCmd, localBranchRef+defaultBranch, remoteRefPrefix+defaultBranch)
 }
 
-// baseRef addresses the branch a session's work is cut from, as the mirror sees it.
-func baseRef(base, defaultBranch string) string {
-	if base != "" {
-		return remoteRefPrefix + base
-	}
-	return remoteRefPrefix + defaultBranch
-}
-
 func addWorktree(mirror, path, branch, startRef string) error {
 	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err

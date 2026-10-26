@@ -1032,6 +1032,242 @@ func TestShowDiffOpensADocumentWindowForOneRepoAndForAllRepos(t *testing.T) {
 	}
 }
 
+// sessionRepo is src/<name> on a session branch cut from main, holding one
+// commit and one uncommitted edit of its own. It returns the branch point.
+func sessionRepo(t *testing.T, root, name string) (string, string) {
+	t.Helper()
+	dir := gittest.Worktree(t, filepath.Join(root, sessionpaths.SrcDirName, name))
+	base := gittest.Head(t, dir)
+	gittest.Run(t, dir, "checkout", "-qb", "session")
+	commitLine(t, dir, name+"-commit.txt", name+"-commit-line")
+	gittest.WriteFile(t, dir, "README.md", name+"-uncommitted-line")
+	return dir, base
+}
+
+func commitLine(t *testing.T, dir, file, line string) {
+	t.Helper()
+	gittest.WriteFile(t, dir, file, line)
+	gittest.Run(t, dir, "add", file)
+	gittest.Run(t, dir, "commit", "-qm", line)
+}
+
+func listedRepo(name string, role session.RepoRole, defaultBranch, baseBranch string) session.ManifestRepo {
+	return session.ManifestRepo{Name: name, Org: "org", Role: role, Branch: "session",
+		DefaultBranch: defaultBranch, BaseBranch: baseBranch,
+		WorktreePath: filepath.Join(sessionpaths.SrcDirName, name)}
+}
+
+func writeRepos(t *testing.T, root string, repos ...session.ManifestRepo) {
+	t.Helper()
+	if err := session.WriteManifest(root, session.Manifest{Slug: "s", Repos: repos}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func requireDiffLines(t *testing.T, content string, present, absent []string) {
+	t.Helper()
+	for _, line := range present {
+		if !strings.Contains(content, "+"+line) {
+			t.Errorf("diff is missing +%s:\n%s", line, content)
+		}
+	}
+	for _, line := range absent {
+		if strings.Contains(content, line) {
+			t.Errorf("diff holds %s:\n%s", line, content)
+		}
+	}
+}
+
+// Catches the default comparing the working tree with the index, which shows
+// "No changes" once the branch's work is committed.
+func TestShowDiffDefaultShowsCommittedAndUncommittedBranchWork(t *testing.T) {
+	m, host, root := newTestManager(t)
+	_, base := sessionRepo(t, root, "app")
+	writeRepos(t, root, listedRepo("app", session.RepoRoleEditing, "main", ""))
+	ctx := context.Background()
+
+	for i, input := range []showDiffInput{{}, {Repo: "src/app"}} {
+		message, err := m.showDiff(ctx, input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		requireDiffLines(t, host.opens[i].Content, []string{"app-commit-line", "app-uncommitted-line"}, nil)
+		if want := "src/app vs merge base with origin/main (" + base[:7] + ")"; !strings.Contains(message, want) {
+			t.Errorf("message %q does not name %q", message, want)
+		}
+	}
+}
+
+// Catches resolving a non-default base as a local branch, which a worktree
+// lacks, or measuring from the default branch instead.
+func TestShowDiffMeasuresANonDefaultBaseFromItsOwnMergeBase(t *testing.T) {
+	m, host, root := newTestManager(t)
+	app := gittest.Worktree(t, filepath.Join(root, sessionpaths.SrcDirName, "app"))
+	commitLine(t, app, "release.txt", "release-before-branch-point")
+	gittest.Run(t, app, "update-ref", "refs/remotes/origin/release", "HEAD")
+	gittest.Run(t, app, "update-ref", "-d", "refs/remotes/origin/main")
+	gittest.Run(t, app, "checkout", "-qb", "session")
+	commitLine(t, app, "session.txt", "session-commit-line")
+	writeRepos(t, root, listedRepo("app", session.RepoRoleEditing, "main", "release"))
+
+	message, err := m.showDiff(context.Background(), showDiffInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireDiffLines(t, host.opens[0].Content, []string{"session-commit-line"}, []string{"release-before-branch-point"})
+	if !strings.Contains(message, "merge base with origin/release") {
+		t.Errorf("message does not name origin/release: %s", message)
+	}
+}
+
+// Catches one repo's base applied to every repo in the all-repos form.
+func TestShowDiffGivesEachRepoItsOwnMergeBase(t *testing.T) {
+	m, host, root := newTestManager(t)
+	sessionRepo(t, root, "app")
+	tool := gittest.Worktree(t, filepath.Join(root, sessionpaths.SrcDirName, "tool"))
+	commitLine(t, tool, "trunk.txt", "trunk-before-branch-point")
+	gittest.Run(t, tool, "update-ref", "refs/remotes/origin/trunk", "HEAD")
+	gittest.Run(t, tool, "checkout", "-qb", "session")
+	commitLine(t, tool, "tool.txt", "tool-commit-line")
+	writeRepos(t, root,
+		listedRepo("app", session.RepoRoleEditing, "main", ""),
+		listedRepo("tool", session.RepoRoleEditing, "trunk", ""))
+
+	if _, err := m.showDiff(context.Background(), showDiffInput{}); err != nil {
+		t.Fatal(err)
+	}
+	content := host.opens[0].Content
+	requireDiffLines(t, content, []string{"app-commit-line", "tool-commit-line"}, []string{"trunk-before-branch-point"})
+	for _, header := range []string{"=== src/app/ ===", "=== src/tool/ ==="} {
+		if !strings.Contains(content, header) {
+			t.Errorf("diff is missing header %q:\n%s", header, content)
+		}
+	}
+}
+
+// Catches the all-repos form diffing pinned reference checkouts. Named
+// explicitly, a reference repo is still diffed.
+func TestShowDiffLeavesReferenceReposOutOfAllRepos(t *testing.T) {
+	m, host, root := newTestManager(t)
+	sessionRepo(t, root, "app")
+	docs := gittest.Worktree(t, filepath.Join(root, sessionpaths.SrcDirName, "docs"))
+	gittest.WriteFile(t, docs, "README.md", "reference-edit-line")
+	writeRepos(t, root,
+		listedRepo("app", session.RepoRoleEditing, "main", ""),
+		listedRepo("docs", session.RepoRoleReference, "main", ""))
+	ctx := context.Background()
+
+	if _, err := m.showDiff(ctx, showDiffInput{}); err != nil {
+		t.Fatal(err)
+	}
+	requireDiffLines(t, host.opens[0].Content, []string{"app-commit-line"}, []string{"src/docs", "reference-edit-line"})
+
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/docs"}); err != nil {
+		t.Fatal(err)
+	}
+	requireDiffLines(t, host.opens[1].Content, []string{"reference-edit-line"}, nil)
+}
+
+// Catches a header printed for every repo, which kept the all-repos text from
+// ever reading as empty.
+func TestShowDiffReportsNoChangesWhenEveryRepoSitsAtItsMergeBase(t *testing.T) {
+	m, host, root := newTestManager(t)
+	for _, name := range []string{"app", "tool"} {
+		gittest.Worktree(t, filepath.Join(root, sessionpaths.SrcDirName, name))
+	}
+	writeRepos(t, root,
+		listedRepo("app", session.RepoRoleEditing, "main", ""),
+		listedRepo("tool", session.RepoRoleEditing, "main", ""))
+
+	if _, err := m.showDiff(context.Background(), showDiffInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := host.opens[0].Content, "No changes in all session repos."; got != want {
+		t.Fatalf("clean session diff = %q, want %q", got, want)
+	}
+}
+
+// Catches unstaged drifting from the working tree against the index, or
+// silently accepting a second comparison.
+func TestShowDiffUnstagedComparesTheWorkingTreeWithTheIndex(t *testing.T) {
+	m, host, root := newTestManager(t)
+	app, _ := sessionRepo(t, root, "app")
+	gittest.WriteFile(t, app, "staged.txt", "staged-change-line")
+	gittest.Run(t, app, "add", "staged.txt")
+	writeRepos(t, root, listedRepo("app", session.RepoRoleEditing, "main", ""))
+	ctx := context.Background()
+
+	if _, err := m.showDiff(ctx, showDiffInput{Repo: "src/app", Unstaged: true}); err != nil {
+		t.Fatal(err)
+	}
+	requireDiffLines(t, host.opens[0].Content, []string{"app-uncommitted-line"}, []string{"app-commit-line", "staged-change-line"})
+
+	for _, input := range []showDiffInput{{Unstaged: true, Staged: true}, {Unstaged: true, Base: "main"}} {
+		if _, err := m.showDiff(ctx, input); !errors.Is(err, ErrDiffUnstagedMixed) {
+			t.Errorf("showDiff(%+v) err = %v, want %v", input, err, ErrDiffUnstagedMixed)
+		}
+	}
+	if len(host.opens) != 1 {
+		t.Fatalf("a rejected call opened a window: %d opens", len(host.opens))
+	}
+}
+
+// Catches a base reaching git as an option: --output would make git write a file.
+func TestShowDiffRejectsADashPrefixedBase(t *testing.T) {
+	m, host, root := newTestManager(t)
+	sessionRepo(t, root, "app")
+	written := filepath.Join(t.TempDir(), "written")
+	for _, base := range []string{"-p", " --output=" + written} {
+		for _, input := range []showDiffInput{{Base: base}, {Repo: "src/app", Base: base}} {
+			if _, err := m.showDiff(context.Background(), input); !errors.Is(err, ErrDiffBaseOption) {
+				t.Errorf("showDiff(%+v) err = %v, want %v", input, err, ErrDiffBaseOption)
+			}
+		}
+	}
+	if len(host.opens) != 0 {
+		t.Fatalf("a rejected base opened a window: %d opens", len(host.opens))
+	}
+	if _, err := os.Stat(written); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("git wrote %s: %v", written, err)
+	}
+}
+
+// Catches an unlisted worktree vanishing, falling back to the index instead of
+// HEAD, or falling back without saying so.
+func TestShowDiffFallsBackToHeadForAnUnlistedRepo(t *testing.T) {
+	m, host, root := newTestManager(t)
+	sessionRepo(t, root, "app")
+	stray, _ := sessionRepo(t, root, "stray")
+	gittest.WriteFile(t, stray, "staged.txt", "stray-staged-line")
+	gittest.Run(t, stray, "add", "staged.txt")
+	writeRepos(t, root, listedRepo("app", session.RepoRoleEditing, "main", ""))
+
+	message, err := m.showDiff(context.Background(), showDiffInput{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireDiffLines(t, host.opens[0].Content,
+		[]string{"app-commit-line", "stray-uncommitted-line", "stray-staged-line"}, []string{"stray-commit-line"})
+	if want := "src/stray vs HEAD, because the manifest does not list it"; !strings.Contains(message, want) {
+		t.Errorf("message %q does not name the fallback %q", message, want)
+	}
+}
+
+// Catches the unstaged option dropping out of the advertised schema, or
+// becoming required.
+func TestShowDiffSchemaOffersOptionalUnstaged(t *testing.T) {
+	tool := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))[toolShowDiff]
+	schema := structuredOutput(t, tool.InputSchema)
+	properties, _ := schema["properties"].(map[string]any)
+	if _, ok := properties["unstaged"]; !ok {
+		t.Fatalf("show_diff schema lacks unstaged: %v", properties)
+	}
+	required, _ := schema["required"].([]any)
+	if slices.Contains(required, any("unstaged")) {
+		t.Fatal("show_diff makes unstaged required")
+	}
+}
+
 func TestNotifyOpensADurableAttentionTab(t *testing.T) {
 	m, host, _ := newTestManager(t)
 	ctx := context.Background()

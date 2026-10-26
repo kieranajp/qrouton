@@ -214,7 +214,7 @@ func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, work
 	}
 	mr := ManifestRepo{Name: r.Name, Org: r.Org, Role: role, DefaultBranch: r.DefaultBranch,
 		BaseBranch: sel.Base, WorktreePath: worktreePath, SSHURL: url}
-	from := baseRef(sel.Base, r.DefaultBranch)
+	from := mr.BaseRef()
 	mirror := mirrorPath(cfg.Root, r.Org, r.Name)
 	err := rep.step(ProgressWorktree, func(func(string, int)) error {
 		if role != RepoRoleReference {

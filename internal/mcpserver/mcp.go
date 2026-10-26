@@ -47,9 +47,10 @@ type windowNameInput struct {
 }
 
 type showDiffInput struct {
-	Repo       string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every session repo"`
-	Staged     bool   `json:"staged,omitempty" jsonschema:"Show staged (index) changes instead of the working tree"`
-	Base       string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
+	Repo       string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every editing repo in the session"`
+	Staged     bool   `json:"staged,omitempty" jsonschema:"Compare the index with HEAD, or with base when it is given"`
+	Base       string `json:"base,omitempty" jsonschema:"Compare the working tree with this ref in every repo (e.g. main), or give an A..B or A...B range"`
+	Unstaged   bool   `json:"unstaged,omitempty" jsonschema:"Compare the working tree with the index, leaving out commits and staged changes. Not combinable with staged or base"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 

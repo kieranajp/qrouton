@@ -3,7 +3,6 @@ package mcpserver
 import (
 	"context"
 	"fmt"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -348,15 +347,23 @@ func (m *windowManager) forget(name, id string) {
 }
 
 func (m *windowManager) showDiff(ctx context.Context, input showDiffInput) (string, error) {
-	repoAbs, scope, label := "", allReposScope, diffWindowName
+	req, err := newDiffRequest(input)
+	if err != nil {
+		return "", err
+	}
+	scope, label := allReposScope, diffWindowName
+	var result diffResult
 	if repo := strings.TrimSpace(input.Repo); repo != "" {
 		dir, err := launch.ResolveSessionDir(m.root, repo)
 		if err != nil {
 			return "", err
 		}
-		repoAbs, scope, label = dir, repo, diffWindowName+diffWindowSeparator+filepath.Base(dir)
+		scope, label = repo, diffWindowName+diffWindowSeparator+filepath.Base(dir)
+		result = req.run(ctx, oneRepo(m.root, dir, repo), false)
+	} else {
+		result = req.run(ctx, sessionRepos(ctx, m.root), true)
 	}
-	text := shellOutput(ctx, m.root, diffCommand(repoAbs, strings.TrimSpace(input.Base), input.Staged))
+	text := result.text
 	if strings.TrimSpace(text) == "" {
 		text = fmt.Sprintf(emptyDiffFormat, scope)
 	}
@@ -370,7 +377,7 @@ func (m *windowManager) showDiff(ctx context.Context, input showDiffInput) (stri
 	}); err != nil {
 		return "", fmt.Errorf("show diff: %w", err)
 	}
-	return fmt.Sprintf(showingDiffFormat, scope, label), nil
+	return strings.TrimSpace(fmt.Sprintf(showingDiffFormat, scope, label, compared(result.notes))), nil
 }
 
 func (m *windowManager) notify(ctx context.Context, input notifyInput) (string, error) {
@@ -474,31 +481,6 @@ func (m *windowManager) list(ctx context.Context) []string {
 	}
 	sort.Strings(names)
 	return names
-}
-
-// diffCommand builds the diff show_diff renders into a document window. Git's
-// pager stays off; the all-repos form walks the src/* worktrees.
-func diffCommand(repoAbs, base string, staged bool) string {
-	flags := ""
-	if staged {
-		flags += stagedFlag
-	}
-	if base != "" {
-		flags += " " + launch.ShellQuote(base)
-	}
-	if repoAbs == "" {
-		return fmt.Sprintf(allReposDiffFormat, sessionpaths.SrcDirName, flags)
-	}
-	return fmt.Sprintf(singleRepoDiffFormat, launch.ShellQuote(repoAbs), flags)
-}
-
-// shellOutput runs a non-interactive command and returns everything it printed,
-// stderr included: a failed git invocation is the diff window's content.
-func shellOutput(ctx context.Context, dir, command string) string {
-	cmd := exec.CommandContext(ctx, shellBin, shellLoginFlag, command)
-	cmd.Dir = dir
-	out, _ := cmd.CombinedOutput()
-	return string(out)
 }
 
 func (m *windowManager) focusAsset(ctx context.Context, input focusAssetInput) (string, error) {
