@@ -122,7 +122,7 @@ func upgradeRepo(cfg *config.Config, dir string, r ManifestRepo, branch string, 
 // which keeps whatever the directory holds that git does not track — an .env, a
 // node_modules — and refuses rather than clobbering uncommitted work.
 func branchWorktree(mirror, wt string, r ManifestRepo, branch string) error {
-	startRef := baseRef(r.BaseBranch, r.DefaultBranch)
+	startRef := r.BaseRef()
 	if _, err := os.Stat(wt); err != nil {
 		return addWorktree(mirror, wt, branch, startRef)
 	}

@@ -16,6 +16,8 @@ var (
 	ErrSummaryRequired      = errors.New("summary is required")
 	ErrSummaryStage         = errors.New("stage must be research, plan or implement")
 	ErrDigestRequired       = errors.New("digest is required")
+	ErrDiffBaseOption       = errors.New("base must be a ref or range, not a git option")
+	ErrDiffUnstagedMixed    = errors.New("unstaged cannot be combined with staged or base")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )

@@ -9,7 +9,7 @@ Reach for a window rather than describing what one would have shown. Anything th
 - `focus_asset(name, index)` — select a gallery and bring its 1-based numbered asset forward without taking keyboard focus. Human thumbnail selection updates the same state.
 - `run_command` — run work the user would want to watch (test suites, builds, servers, watchers, logs) in a tab instead of your own shell, whenever the output is the point.
 - `read_window` — read back what a window has produced. For a gallery, read its numbered paths and current index/count before choosing an entry.
-- `show_diff` — display a repo's changes for review, or every repo's at once.
+- `show_diff` — display a repo's changes for review, or every editing repo's at once. By default it shows the branch's committed and uncommitted work since it left its base branch; `base` takes a ref or an `A..B` / `A...B` range.
 - `open_thoughts` — when the thoughts tools are offered, show the user a thoughts document in a pane, marked at the lines a hit points to.
 - `notify` — get the user's attention when you finish, need a decision, or are blocked. Use it sparingly.
 - `share_page` — render a session document as a self-contained page for somebody outside this session. Publishing it, verbatim, and handing over the link are yours to do; qrouton sends nothing anywhere.

@@ -219,6 +219,18 @@ func (r ManifestRepo) Dir(root string) string {
 	return filepath.Join(root, r.WorktreePath)
 }
 
+// BaseRef addresses the branch this repository's work is cut from, as the
+// mirror sees it, or is empty when the manifest names no branch at all.
+func (r ManifestRepo) BaseRef() string {
+	switch {
+	case r.BaseBranch != "":
+		return remoteRefPrefix + r.BaseBranch
+	case r.DefaultBranch != "":
+		return remoteRefPrefix + r.DefaultBranch
+	}
+	return ""
+}
+
 // inSrc holds a checkout to the session's src directory. The agent can write
 // the manifest, and removing a session removes every checkout it names.
 func (r ManifestRepo) inSrc() bool {

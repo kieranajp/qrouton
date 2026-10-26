@@ -136,8 +136,8 @@ func RepoStats(ctx context.Context, root string, m Manifest) []RepoStat {
 			Org: repo.Org, Name: repo.Name, Role: repo.Role.Effective(),
 			Path: repo.Dir(dir),
 		}
-		if stat.Role == RepoRoleEditing && (repo.BaseBranch != "" || repo.DefaultBranch != "") {
-			measure(ctx, stat.Path, baseRef(repo.BaseBranch, repo.DefaultBranch), &stat)
+		if base := repo.BaseRef(); stat.Role == RepoRoleEditing && base != "" {
+			measure(ctx, stat.Path, base, &stat)
 		}
 		stats = append(stats, stat)
 	}
