@@ -214,6 +214,7 @@ func workbenchProcess(marshalled string) error {
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
 		Socket:       spec.Socket,
+		Inspect:      os.Getenv(inspectEnvVar) == "1",
 		Ticket:       spec.Ticket,
 		TicketPrompt: spec.TicketPrompt,
 		LinearCommand: []string{

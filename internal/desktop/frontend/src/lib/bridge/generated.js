@@ -338,6 +338,8 @@ export const SWITCHER_RESULTS = "sessions";
 
 export const SWITCHER_HELP = "Arrow keys choose · Enter open · Esc close";
 
+export const INSPECT_QUERY = "inspect";
+
 export const ROOT_ENV_VAR = "QROUTON_ROOT";
 
 export const ORGS_ENV_VAR = "QROUTON_ORGS";

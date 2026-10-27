@@ -113,6 +113,7 @@ var valueNames = []valueName{
 	{desktopPackage, "switcherCurrent"},
 	{desktopPackage, "switcherResults"},
 	{desktopPackage, "switcherHelp"},
+	{desktopPackage, "inspectQuery"},
 	{configPackage, "rootEnvVar"},
 	{configPackage, "orgsEnvVar"},
 	{configPackage, "defaultRoot"},

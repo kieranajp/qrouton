@@ -56,6 +56,8 @@ const (
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"
 
+	inspectQuery = "inspect"
+
 	// A directory too, for the redirect frontendRoot dodges.
 	notesRoot = "/notes/"
 

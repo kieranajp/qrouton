@@ -9,6 +9,7 @@
   import { clipboardText, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind } from "../panes/markdown.js";
   import { terminalAt } from "../xterm.js";
+  import { INSPECT_QUERY } from "../bridge/generated.js";
 
   let { onOwnership = undefined } = $props();
   $effect(() => { onOwnership?.(Boolean(open)); });
@@ -70,7 +71,10 @@
     open = items.length ? { ...at, items, x: event.clientX, y: event.clientY } : null;
   }
 
+  const inspecting = new URLSearchParams(window.location.search).has(INSPECT_QUERY);
+
   onMount(() => {
+    if (inspecting) return;
     window.addEventListener("contextmenu", onContextMenu);
     return () => window.removeEventListener("contextmenu", onContextMenu);
   });

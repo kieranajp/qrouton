@@ -69,6 +69,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - New user-facing text goes in the package's `strings.go`; new failure modes get a sentinel in its `errors.go`, wrapped with `%w` at the call site.
 - `gofmt` changed Go files.
 - Add focused tests for behavior changes.
+- `QROUTON_INSPECT=1 qrouton` leaves right clicks to the webview, so Inspect Element opens the Web Inspector. Only a build without the `production` tag, such as `make install`'s, has one.
 - Before handoff run:
 
 ```sh

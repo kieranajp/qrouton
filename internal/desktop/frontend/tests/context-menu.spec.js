@@ -19,6 +19,17 @@ test("every right click is the workbench's, never the webview's", async ({ page 
   expect(await defaults(page)).toEqual({ prevented: 5, allowed: 0 });
 });
 
+// Breaks if the inspect switch stops handing the click back to the webview.
+test("the inspect switch leaves every right click to the webview", async ({ page }) => {
+  await page.goto("/tests/context-menu.html?inspect");
+  await page.waitForFunction(() => Boolean(window.defaults));
+  for (const id of ["#field", "#prose", "#terminal"]) {
+    await page.locator(id).click({ button: "right" });
+  }
+  await expect(menu(page)).toHaveCount(0);
+  expect(await defaults(page)).toEqual({ prevented: 0, allowed: 3 });
+});
+
 test("inert chrome opens no menu, and still draws none from the webview", async ({ page }) => {
   await page.locator("#chrome").click({ button: "right" });
   await expect(menu(page)).toHaveCount(0);
