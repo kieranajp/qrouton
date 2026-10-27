@@ -69,7 +69,7 @@ The shared leaves import nothing of qrouton's own, so anything may depend on the
 - New user-facing text goes in the package's `strings.go`; new failure modes get a sentinel in its `errors.go`, wrapped with `%w` at the call site.
 - `gofmt` changed Go files.
 - Add focused tests for behavior changes.
-- `QROUTON_INSPECT=1 qrouton` leaves right clicks to the webview, so Inspect Element opens the Web Inspector. Only a build without the `production` tag, such as `make install`'s, has one.
+- `QROUTON_INSPECT=1 qrouton` leaves right clicks to the webview, so Inspect Element opens the Web Inspector. Only a build without the `production` tag, such as `make install`'s, has one. It also appends each terminal's WebGL renderer creation, context loss, restoration and disposal, with the page's live count, to `~/.cache/qrouton/webgl.jsonl` (under `$XDG_CACHE_HOME` when set).
 - Before handoff run:
 
 ```sh

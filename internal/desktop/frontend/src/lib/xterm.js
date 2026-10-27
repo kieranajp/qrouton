@@ -2,12 +2,15 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { WEB_GL_LOG_RECORD } from "./bridge/generated.js";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
 import { macOS } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
 import { opensSettings, opensSwitcher, position, scaleAction } from "./shortcuts.js";
+import { Call, call } from "./wails.js";
+import { webglWatcher } from "./webgl-log.js";
 export { createTerminalPainter, encode } from "./terminal-painter.js";
 
 const token = (name) =>
@@ -31,6 +34,8 @@ const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
 
 const mounted = new WeakMap();
 
+const watchWebGL = webglWatcher(window.location.search, (...record) => call(Call.ByName(WEB_GL_LOG_RECORD, new Date().toISOString(), ...record)));
+
 /** terminalAt is the terminal a node sits inside, and undefined outside one. */
 export function terminalAt(node) {
   for (let element = node; element; element = element.parentElement) {
@@ -42,9 +47,9 @@ export function terminalAt(node) {
 
 /**
  * @param {HTMLElement} host
- * @param {{write: (text: string) => void, background?: string}} options
+ * @param {{write: (text: string) => void, background?: string, terminal?: string, pane?: string}} options
  */
-export function mount(host, { write, background = "--surface-app" }) {
+export function mount(host, { write, background = "--surface-app", terminal = "", pane = "" }) {
   const term = new Terminal({
     fontFamily: token("--font-terminal"),
     fontSize: terminalFontSize(uiScale()),
@@ -60,13 +65,16 @@ export function mount(host, { write, background = "--surface-app" }) {
   term.loadAddon(fit);
   term.open(host);
   mounted.set(host, term);
+  let unwatchWebGL = () => {};
   // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
   // the layer, so on Linux a keystroke stays unpainted until the next event
   // arrives and nothing repaints an idle terminal. The DOM renderer gives up
   // GPU throughput but paints when it is told to.
   if (macOS) {
     try {
-      term.loadAddon(new WebglAddon());
+      const webgl = new WebglAddon();
+      term.loadAddon(webgl);
+      unwatchWebGL = watchWebGL({ host, addon: webgl, terminal, pane });
     } catch (e) {
       console.warn("webgl", e);
     }
@@ -102,6 +110,7 @@ export function mount(host, { write, background = "--surface-app" }) {
   const dispose = () => {
     mounted.delete(host);
     term.dispose();
+    unwatchWebGL();
   };
   return { term, fit, refit, dispose };
 }

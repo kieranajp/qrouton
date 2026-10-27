@@ -21,7 +21,7 @@ func recordAgentExit(root, provider string, code int, tail string) {
 		return
 	}
 	path := sessionpaths.AgentLog(root)
-	rotateAgentLog(path)
+	rotateLog(path)
 	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return
@@ -34,12 +34,12 @@ func recordAgentExit(root, provider string, code int, tail string) {
 	_, _ = file.WriteString(entry)
 }
 
-// rotateAgentLog keeps one previous log beside the current one, so a session
-// whose supervisor dies over and over cannot grow a file without end.
-func rotateAgentLog(path string) {
+// rotateLog keeps one previous log beside the current one, so a log written
+// over and over cannot grow without end.
+func rotateLog(path string) {
 	info, err := os.Stat(path)
-	if err != nil || info.Size() < agentLogLimit {
+	if err != nil || info.Size() < logLimit {
 		return
 	}
-	_ = os.Rename(path, path+agentLogPreviousSuffix)
+	_ = os.Rename(path, path+logPreviousSuffix)
 }

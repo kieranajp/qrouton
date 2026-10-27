@@ -4,8 +4,9 @@ const (
 	// appDirName is the directory qrouton owns inside each XDG base directory.
 	appDirName = "qrouton"
 
-	configFileName = "config.json"
-	cacheFileName  = "repos.json"
+	configFileName   = "config.json"
+	cacheFileName    = "repos.json"
+	webglLogFileName = "webgl.jsonl"
 
 	// XDG bases, with the fallbacks the design pinned. Not os.UserConfigDir: on
 	// darwin that is ~/Library/Application Support, and qrouton follows XDG on

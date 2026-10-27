@@ -11,10 +11,11 @@ import {
   WINDOWS_WRITE,
 } from "../bridge/generated.js";
 
-/** @typedef {{start: string, write: string, resize: string, data: string, exit: string}} PTY */
+/** @typedef {{pane: string, start: string, write: string, resize: string, data: string, exit: string}} PTY */
 
 /** @type {PTY} */
 export const conversationPTY = {
+  pane: "conversation",
   start: TERM_START,
   write: TERM_WRITE,
   resize: TERM_RESIZE,
@@ -24,6 +25,7 @@ export const conversationPTY = {
 
 /** @type {PTY} */
 export const tabPTY = {
+  pane: "tab",
   start: WINDOWS_START,
   write: WINDOWS_WRITE,
   resize: WINDOWS_RESIZE,
