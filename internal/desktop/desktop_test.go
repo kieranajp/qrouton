@@ -403,6 +403,22 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	}
 }
 
+// Breaks if QROUTON_INSPECT no longer reaches the page the window loads.
+func TestRunAsksThePageToLeaveRightClicksToTheWebviewWhenInspecting(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	opts.Inspect = true
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+
+	spec := <-r.opened
+	shownSession(t, reg)
+	if want := frontendRoot + "?" + inspectQuery; spec.URL != want {
+		t.Fatalf("window URL is %q, want %q", spec.URL, want)
+	}
+}
+
 // Closing the conversation window ends the session: no detached server, and
 // nothing surviving in the background.
 func TestClosingTheConversationWindowQuits(t *testing.T) {

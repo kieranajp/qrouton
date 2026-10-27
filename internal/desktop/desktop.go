@@ -38,6 +38,8 @@ type Options struct {
 	Root string
 	// Socket answers the launcher's readiness poll.
 	Socket string
+	// Inspect leaves the webview its own right-click menu, for Inspect Element.
+	Inspect bool
 	// Ticket is a canonical ticket offered after session boot is wired and
 	// before the page can claim a blank draft. TicketPrompt is the full prompt
 	// the external tool generated for the eventual runner's first turn.
@@ -376,7 +378,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	if err := r.Open(windowSpec{
 		Name:    mainWindowName,
 		Title:   windowTitle(titleRoot),
-		URL:     frontendRoot,
+		URL:     pageURL(opts.Inspect),
 		Width:   mainWindowWidth,
 		Height:  mainWindowHeight,
 		Focus:   true,
@@ -518,4 +520,11 @@ func frontend() (fs.FS, error) {
 		return nil, err
 	}
 	return assets, nil
+}
+
+func pageURL(inspect bool) string {
+	if inspect {
+		return frontendRoot + "?" + inspectQuery
+	}
+	return frontendRoot
 }
