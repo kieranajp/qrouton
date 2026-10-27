@@ -64,11 +64,10 @@ export function roleOffers(selection, id) {
 /**
  * @param {Selection} selection
  * @param {string} id
- * @param {string} pushed
  * @param {string} [defaultBranch]
  */
-export function rowMeta(selection, id, pushed, defaultBranch = "") {
-  return [pushed, heldNote(selection, id), baseNote(selection, id, defaultBranch)]
+export function rowMeta(selection, id, defaultBranch = "") {
+  return [heldNote(selection, id), baseNote(selection, id, defaultBranch)]
     .filter(Boolean)
     .join(" · ");
 }

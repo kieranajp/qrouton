@@ -107,9 +107,8 @@ test("a held reference row cannot be turned off", () => {
 
 test("a held row says what the session does with it, and says it once taken up", () => {
   const editing = seed([{ id: "acme/api", role: "editing" }]);
-  assert.equal(rowMeta(editing, "acme/api", "pushed 2h ago"), "pushed 2h ago · in session");
   assert.equal(rowMeta(editing, "acme/api", ""), "in session");
-  assert.equal(rowMeta(editing, "other/web", "pushed 2h ago"), "pushed 2h ago");
+  assert.equal(rowMeta(editing, "other/web"), "");
 
   const reading = seed([{ id: "acme/docs", role: "reference" }]);
   assert.equal(rowMeta(reading, "acme/docs", ""), "in session, read-only");
@@ -225,19 +224,15 @@ test("reconcile prunes a vanished id's base but keeps a locked row's", () => {
 
 test("a locked row's rowMeta names the branch it was cut from", () => {
   const held = seed([{ id: "acme/api", role: "editing", base: "feat/cut" }]);
-  assert.equal(rowMeta(held, "acme/api", "", "main"), "in session · from feat/cut");
-  assert.equal(
-    rowMeta(held, "acme/api", "pushed 2h ago", "main"),
-    "pushed 2h ago · in session · from feat/cut",
-  );
+  assert.equal(rowMeta(held, "acme/api", "main"), "in session · from feat/cut");
 });
 
 test("rowMeta names no base when it matches the default branch or the row is not locked", () => {
   const held = seed([{ id: "acme/api", role: "editing", base: "main" }]);
-  assert.equal(rowMeta(held, "acme/api", "", "main"), "in session");
+  assert.equal(rowMeta(held, "acme/api", "main"), "in session");
 
   const selection = setBase(seed(), "acme/api", "feat/cut");
-  assert.equal(rowMeta(selection, "acme/api", "", "main"), "");
+  assert.equal(rowMeta(selection, "acme/api", "main"), "");
 });
 
 test("seed reads a held row's recorded base", () => {

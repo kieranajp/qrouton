@@ -37,10 +37,7 @@
   );
 </script>
 
-<StepHeading title="Which repositories?">
-  <span class="editing">Editing</span> means the agent may change it, on a new branch.
-  <span class="reference">Reference</span> is checked out read-only, for context.
-</StepHeading>
+<StepHeading title="Which repositories?" />
 
 <div class="controls">
   <div class="search">
@@ -83,14 +80,6 @@
 </div>
 
 <style>
-  .editing {
-    color: var(--role-editing);
-  }
-
-  .reference {
-    color: var(--role-reference);
-  }
-
   .controls {
     display: flex;
     gap: calc(8px * var(--ui-scale));
