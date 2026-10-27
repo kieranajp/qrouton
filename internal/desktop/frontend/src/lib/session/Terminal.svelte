@@ -40,7 +40,7 @@
       await fontsReady();
       if (!live) return;
       const write = (text) => writePTY(pty, id, encode(text));
-      const started = mount(host, { write, background: "--surface-terminal" });
+      const started = mount(host, { write, background: "--surface-terminal", terminal: id, pane: pty.pane });
       const { refit, dispose } = started;
       term = started.term;
       const painter = createTerminalPainter(term);

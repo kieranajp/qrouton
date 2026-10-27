@@ -59,6 +59,7 @@ export const TERM_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Term.R
 export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.Start";
 export const TERM_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Term.Write";
 export const UPDATES_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Updates.Status";
+export const WEB_GL_LOG_RECORD = "github.com/kieranajp/qrouton/internal/desktop.WebGLLog.Record";
 export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Close";
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
 export const WINDOWS_FOCUS_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusAsset";

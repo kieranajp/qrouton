@@ -73,7 +73,7 @@ func TestAFailedAgentExitKeepsTheTailWithoutItsEscapes(t *testing.T) {
 func TestAnOversizeAgentLogIsRotatedRatherThanGrown(t *testing.T) {
 	root := sessionRoot(t)
 	path := sessionpaths.AgentLog(root)
-	if err := os.WriteFile(path, []byte(strings.Repeat("x", agentLogLimit)), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", logLimit)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,11 +83,11 @@ func TestAnOversizeAgentLogIsRotatedRatherThanGrown(t *testing.T) {
 	if strings.Contains(logged, "xxx") {
 		t.Fatalf("the oversize log was appended to rather than rotated: %d bytes", len(logged))
 	}
-	previous, err := os.Stat(path + agentLogPreviousSuffix)
+	previous, err := os.Stat(path + logPreviousSuffix)
 	if err != nil {
 		t.Fatalf("the previous log was discarded rather than kept: %v", err)
 	}
-	if previous.Size() != agentLogLimit {
+	if previous.Size() != logLimit {
 		t.Fatalf("the previous log holds %d bytes, want the file that was rotated", previous.Size())
 	}
 }

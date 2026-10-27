@@ -359,6 +359,11 @@ func CachePath() string {
 	return filepath.Join(CacheDir(), cacheFileName)
 }
 
+// WebGLLogPath records the page's WebGL renderers coming and going, under QROUTON_INSPECT.
+func WebGLLogPath() string {
+	return filepath.Join(CacheDir(), webglLogFileName)
+}
+
 // Load reads config.json if it exists, and otherwise starts from defaults —
 // deliberately without prompting. A zero-repo session needs neither a root nor
 // owners, so nothing may block a launch here, and an empty owner list is simply

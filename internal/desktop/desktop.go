@@ -38,7 +38,8 @@ type Options struct {
 	Root string
 	// Socket answers the launcher's readiness poll.
 	Socket string
-	// Inspect leaves the webview its own right-click menu, for Inspect Element.
+	// Inspect leaves the webview its own right-click menu, for Inspect Element,
+	// and logs the page's WebGL renderers coming and going.
 	Inspect bool
 	// Ticket is a canonical ticket offered after session boot is wired and
 	// before the page can claim a blank draft. TicketPrompt is the full prompt
@@ -144,6 +145,7 @@ func Run(opts Options) error {
 	opts.placement = newPlacement(opts.Config, reg)
 	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
 	r.register(application.NewService(opts.placement))
+	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), terminalSession(reg, windows))))
 	return run(r, term, windows, opts, quit)
 }
 

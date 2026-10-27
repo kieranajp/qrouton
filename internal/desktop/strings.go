@@ -191,13 +191,13 @@ const (
 	windowScreenLines = 50
 
 	// agentTailBytes is how much of a conversation is kept back for the log its
-	// supervisor's exit writes; agentLogLimit is when that log is rotated.
+	// supervisor's exit writes; logLimit is when a log is rotated.
 	agentTailBytes = 8 * 1024
-	agentLogLimit  = 256 * 1024
+	logLimit       = 256 * 1024
 )
 
 const (
-	agentLogPreviousSuffix = ".1"
+	logPreviousSuffix = ".1"
 
 	agentExitLogFormat  = "%s agent exited: provider=%s status=%d\n"
 	agentExitTailFormat = "--- last output ---\n%s\n--- end output ---\n"
