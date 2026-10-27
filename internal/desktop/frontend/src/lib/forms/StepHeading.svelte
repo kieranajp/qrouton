@@ -5,7 +5,7 @@
 
 <div class="heading">
   <span class="title">{title}</span>
-  <span class="helper">{@render children?.()}</span>
+  {#if children}<span class="helper">{@render children()}</span>{/if}
 </div>
 
 <style>
