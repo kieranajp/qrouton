@@ -127,7 +127,10 @@
 
 <style>
   .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     align-items: center;
     gap: calc(14px * var(--ui-scale));
     padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
@@ -140,7 +143,9 @@
   }
 
   .name {
-    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font: var(--machine-md);
     color: var(--text-secondary);
   }
