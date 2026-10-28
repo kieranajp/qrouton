@@ -118,6 +118,7 @@
   .rows {
     height: calc(224px * var(--ui-scale));
     overflow: hidden auto;
+    scrollbar-gutter: stable;
   }
 
   .selected {
