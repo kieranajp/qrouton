@@ -16,6 +16,7 @@
   let term = $state();
   let teardown;
   let fit;
+  let renderer;
   let live = true;
 
   const activation = createTerminalActivation({
@@ -33,6 +34,12 @@
     if (term) activation.update(active, focus, focusPending, focusEligible);
   });
 
+  $effect(() => {
+    if (!term) return;
+    if (active) renderer.show();
+    else renderer.hide();
+  });
+
   // An async onMount callback returns a Promise, not a cleanup Svelte would
   // call, so teardown is set here and onDestroy reads it instead.
   onMount(() => {
@@ -41,7 +48,8 @@
       if (!live) return;
       const write = (text) => writePTY(pty, id, encode(text));
       const started = mount(host, { write, background: "--surface-terminal", terminal: id, pane: pty.pane });
-      const { refit, dispose } = started;
+      const { refit, dispose, show, hide } = started;
+      renderer = { show, hide };
       term = started.term;
       const painter = createTerminalPainter(term);
       fit = () => refit((cols, rows) => resizePTY(pty, id, cols, rows));
