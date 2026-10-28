@@ -1,7 +1,5 @@
 <script>
   import { onMount, onDestroy } from "svelte";
-  import { macOS } from "../platform.js";
-  import { SWITCHER_LABEL } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { dismissible } from "../core/dismiss.js";
@@ -14,16 +12,15 @@
   import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
   import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
-  import { rowAt, shortcut, switcherHint } from "../shortcuts.js";
+  import { rowAt, shortcut } from "../shortcuts.js";
   import { stickerFeedback } from "./stickers.js";
 
-  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onSwitchSession?: () => void, onOwnership?: (value: boolean) => void, onDismissed: () => void, size: number, width: number}} */
+  /** @type {{sessions: any[], slug: string, stickers: import("./stickers.js").Sticker[], onNewSession: () => void, onOwnership?: (value: boolean) => void, onDismissed: () => void, size: number, width: number}} */
   let {
     sessions,
     slug,
     stickers = [],
     onNewSession,
-    onSwitchSession,
     onOwnership,
     onDismissed,
     size = 0,
@@ -338,7 +335,6 @@
   </div>
 
   <div class="footer">
-    <Button variant="ghost" size="sm" wide onclick={onSwitchSession}>{SWITCHER_LABEL} {switcherHint(macOS)}</Button>
     <Button variant="cube" size="sm" icon="new" wide onclick={onNewSession}>New session</Button>
   </div>
 </div>

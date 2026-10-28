@@ -41,7 +41,7 @@ for (const mac of [true, false]) {
 
 test("accessible search, wrapping, live removal, no results, current no-op and tab containment", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await expect(page.getByRole("dialog")).toHaveAttribute("aria-modal", "true");
   await expect(query(page)).toBeFocused();
   await expect(page.getByRole("option", { selected: true })).toContainText("switcher");
@@ -50,7 +50,7 @@ test("accessible search, wrapping, live removal, no results, current no-op and t
   await page.keyboard.press("Enter");
   await expect(query(page)).toHaveCount(0);
   expect(await page.evaluate(() => window.shell.shows())).toEqual([]);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await query(page).fill("swch bcknd");
   await expect(page.getByRole("option")).toHaveCount(1);
   await expect(page.getByRole("option")).toContainText("backend");
@@ -72,7 +72,7 @@ test("accessible search, wrapping, live removal, no results, current no-op and t
 
 for (const chromeFirst of [true, false]) test(`successful Show with ${chromeFirst ? "chrome" : "reply"} first waits for destination terminal`, async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await query(page).fill("backend");
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
@@ -94,7 +94,7 @@ for (const chromeFirst of [true, false]) test(`successful Show with ${chromeFirs
 
 test("failure retains query, announces and retries; external navigation ignores stale completion", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await query(page).fill("backend");
   await page.keyboard.press("Enter");
   await page.evaluate(() => window.shell.finishShow(false));
@@ -110,7 +110,7 @@ test("failure retains query, announces and retries; external navigation ignores 
 
 test("background chords are blocked, scale works, covering overlay takes ownership", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await page.keyboard.press("Meta+2");
   await page.keyboard.press("Control+,");
   await page.keyboard.press("Control+f");
@@ -124,7 +124,7 @@ test("background chords are blocked, scale works, covering overlay takes ownersh
 
 test("destination chrome before rejected Show focuses the authoritative fallback", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await page.keyboard.press("Enter");
   await page.evaluate(() => window.shell.snapshot({ slug: "switcher", terminal: "term-2" }));
   await expect(query(page)).toBeFocused();
@@ -134,7 +134,7 @@ test("destination chrome before rejected Show focuses the authoritative fallback
 
 test("overlay retains a failure arriving while covered, but closes an idle failed search", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   await query(page).fill("backend");
   await page.keyboard.press("Enter");
   await page.evaluate(() => window.shell.snapshot({ placing: true }));
@@ -223,7 +223,7 @@ test("query context menu is visible above the picker", async ({ page }) => {
 
 test("a press in the panel released on the scrim keeps the switcher open, a press and release on the scrim closes it", async ({ page }) => {
   await setup(page);
-  await page.getByRole("button", { name: /Switch session/ }).click();
+  await page.keyboard.press("Control+k");
   const box = await query(page).boundingBox();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
