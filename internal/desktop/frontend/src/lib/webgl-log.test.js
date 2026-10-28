@@ -33,17 +33,17 @@ test("each renderer reports its lifecycle with the page's live count", () => {
   first.host.dispatchEvent(new Event("webglcontextlost"));
   first.host.dispatchEvent(new Event("webglcontextrestored"));
   second.addon.listener?.();
-  unwatchFirst();
-  unwatchSecond();
+  unwatchFirst("disposed");
+  unwatchSecond("disposed");
 
   assert.deepEqual(sent, [
-    ["created", "term-1", "conversation", 1],
-    ["created", "win-2", "tab", 2],
-    ["lost", "term-1", "conversation", 2],
-    ["restored", "term-1", "conversation", 2],
-    ["unrestored", "win-2", "tab", 2],
-    ["disposed", "term-1", "conversation", 1],
-    ["disposed", "win-2", "tab", 0],
+    ["created", "term-1", "conversation", 1, 1],
+    ["created", "win-2", "tab", 2, 2],
+    ["lost", "term-1", "conversation", 2, 2],
+    ["restored", "term-1", "conversation", 2, 2],
+    ["unrestored", "win-2", "tab", 2, 2],
+    ["disposed", "term-1", "conversation", 1, 2],
+    ["disposed", "win-2", "tab", 0, 2],
   ]);
 });
 
@@ -52,7 +52,7 @@ test("each renderer reports its lifecycle with the page's live count", () => {
 test("a disposed renderer stops reporting", () => {
   const { sent, watch } = recorder("?" + INSPECT_QUERY);
   const renderer = { host: new EventTarget(), addon: addonDouble() };
-  watch({ ...renderer, terminal: "term-1", pane: "conversation" })();
+  watch({ ...renderer, terminal: "term-1", pane: "conversation" })("disposed");
   renderer.host.dispatchEvent(new Event("webglcontextlost"));
 
   assert.equal(sent.length, 2);
@@ -65,7 +65,7 @@ test("nothing is recorded when the page is not inspecting", () => {
   const renderer = { host: new EventTarget(), addon: addonDouble() };
   const unwatch = watch({ ...renderer, terminal: "term-1", pane: "conversation" });
   renderer.host.dispatchEvent(new Event("webglcontextlost"));
-  unwatch();
+  unwatch("disposed");
 
   assert.deepEqual(sent, []);
   assert.equal(renderer.addon.listener, undefined);
@@ -85,4 +85,23 @@ test("the host listens for context events while capturing", () => {
   watch({ host: new Host(), addon: addonDouble(), terminal: "term-1", pane: "conversation" });
 
   assert.deepEqual(captured, [["webglcontextlost", true], ["webglcontextrestored", true]]);
+});
+
+// Breaks if a release or a fallback goes unrecorded, or if the created total
+// falls when a renderer goes and stops counting every context the page made.
+test("releases and fallbacks are recorded beside a created total that only rises", () => {
+  const { sent, watch } = recorder("?" + INSPECT_QUERY);
+  const renderer = () => ({ host: new EventTarget(), addon: addonDouble(), terminal: "term-1", pane: "conversation" });
+
+  watch(renderer())("released");
+  watch(renderer())("fallback");
+  watch(renderer());
+
+  assert.deepEqual(sent, [
+    ["created", "term-1", "conversation", 1, 1],
+    ["released", "term-1", "conversation", 0, 1],
+    ["created", "term-1", "conversation", 1, 2],
+    ["fallback", "term-1", "conversation", 0, 2],
+    ["created", "term-1", "conversation", 1, 3],
+  ]);
 });

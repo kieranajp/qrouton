@@ -9,6 +9,7 @@ import { macOS } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
 import { opensSettings, opensSwitcher, position, scaleAction } from "./shortcuts.js";
+import { terminalRenderer } from "./terminal-renderer.js";
 import { Call, call } from "./wails.js";
 import { webglWatcher } from "./webgl-log.js";
 export { createTerminalPainter, encode } from "./terminal-painter.js";
@@ -65,20 +66,16 @@ export function mount(host, { write, background = "--surface-app", terminal = ""
   term.loadAddon(fit);
   term.open(host);
   mounted.set(host, term);
-  let unwatchWebGL = () => {};
-  // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
-  // the layer, so on Linux a keystroke stays unpainted until the next event
-  // arrives and nothing repaints an idle terminal. The DOM renderer gives up
-  // GPU throughput but paints when it is told to.
-  if (macOS) {
-    try {
-      const webgl = new WebglAddon();
-      term.loadAddon(webgl);
-      unwatchWebGL = watchWebGL({ host, addon: webgl, terminal, pane });
-    } catch (e) {
-      console.warn("webgl", e);
-    }
-  }
+  const renderer = terminalRenderer({
+    term,
+    // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
+    // the layer, so on Linux a keystroke stays unpainted until the next event
+    // arrives and nothing repaints an idle terminal. The DOM renderer gives up
+    // GPU throughput but paints when it is told to.
+    enabled: macOS,
+    create: () => new WebglAddon(),
+    watch: (addon) => watchWebGL({ host, addon, terminal, pane }),
+  });
   fit.fit();
 
   term.attachCustomKeyEventHandler((event) => {
@@ -109,10 +106,10 @@ export function mount(host, { write, background = "--surface-app", terminal = ""
   };
   const dispose = () => {
     mounted.delete(host);
+    renderer.dispose();
     term.dispose();
-    unwatchWebGL();
   };
-  return { term, fit, refit, dispose };
+  return { term, fit, refit, dispose, show: renderer.show, hide: renderer.hide };
 }
 
 export function watchSize(host, resize) {

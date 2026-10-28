@@ -23,6 +23,7 @@ type webglEntry struct {
 	Terminal string `json:"terminal"`
 	Pane     string `json:"pane"`
 	Live     int    `json:"live"`
+	Created  int    `json:"created"`
 }
 
 // webglLogPath is empty unless the workbench runs under QROUTON_INSPECT.
@@ -50,12 +51,12 @@ func terminalSession(sessions *Sessions, windows *Windows) func(string) string {
 	}
 }
 
-func (l *WebGLLog) Record(at, event, terminal, pane string, live int) {
+func (l *WebGLLog) Record(at, event, terminal, pane string, live, created int) {
 	if l.path == "" {
 		return
 	}
 	line, err := json.Marshal(webglEntry{
-		Time: at, Event: event, Session: l.session(terminal), Terminal: terminal, Pane: pane, Live: live,
+		Time: at, Event: event, Session: l.session(terminal), Terminal: terminal, Pane: pane, Live: live, Created: created,
 	})
 	if err != nil {
 		return
