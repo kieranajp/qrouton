@@ -66,7 +66,6 @@
       sessions={fields.sessions}
       slug={fields.slug}
       stickers={fields.stickers}
-      onSwitchSession={view.switcher.open}
       onOwnership={view.railOwnership}
       onNewSession={() => (view.requested = true)}
       onDismissed={view.handBack}

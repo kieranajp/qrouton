@@ -48,4 +48,3 @@ export function opensSwitcher(event, macOS) {
   if (event.altKey || event.shiftKey || event.isComposing || event.keyCode === 229) return false;
   return Boolean(primaryHeld(event, macOS)) && event.key?.toLowerCase() === "k";
 }
-export const switcherHint = (macOS) => macOS ? "⌘K" : "Ctrl+K";
