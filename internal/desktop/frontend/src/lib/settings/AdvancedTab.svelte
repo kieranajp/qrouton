@@ -13,6 +13,13 @@
   let form = $derived(panel.form);
   let linear = $derived(panel.linear);
   let runners = $derived(form.runners.map((runner) => ({ term: runner.id, meaning: runner.label })));
+  let reviewerRunner = $derived(panel.reviewerRunners.find((runner) => runner.id === form.reviewer?.harness));
+  let reasoningValues = $derived(reviewerRunner?.reviewer?.reasoningValues ?? []);
+  let unsupportedReasoning = $derived(
+    !!form.reviewer?.reasoning &&
+      !reviewerRunner?.reviewer?.reasoningEditable &&
+      !reasoningValues.includes(form.reviewer.reasoning),
+  );
   /** @type {ReturnType<typeof flash<boolean>>} */
   const copied = flash();
 
@@ -51,6 +58,56 @@
     helpTone={panel.fields.launch ? "failed" : "muted"} />
   {#if runners.length}<Legend title="Runner ids" rows={runners} />{/if}
 </div>
+
+<section class="reviewer" aria-labelledby="reviewer-label">
+  <CapsLabel id="reviewer-label">Independent code review</CapsLabel>
+  <label>
+    <CapsLabel>Reviewer harness</CapsLabel>
+    <select
+      value={form.reviewer ? form.reviewer.harness || "__choose__" : ""}
+      onchange={(event) => panel.selectReviewer(event.currentTarget.value)}>
+      <option value="">None</option>
+      {#if form.reviewer && !form.reviewer.harness}<option value="__choose__" disabled>Choose an installed harness</option>{/if}
+      {#if form.reviewer?.harness && !reviewerRunner}
+        <option value={form.reviewer.harness} disabled>{form.reviewer.harness} (unavailable)</option>
+      {/if}
+      {#each panel.reviewerRunners as runner (runner.id)}
+        <option value={runner.id}>{runner.label}</option>
+      {/each}
+    </select>
+  </label>
+  {#if !form.reviewer}
+    <p>None uses standard non-adversarial review in the orchestrator’s current harness, without a second reviewer.</p>
+    <Button disabled={!panel.runnersReady} onclick={panel.configureReviewer}>Configure reviewer</Button>
+  {:else}
+    <TextField
+      label="Reviewer model"
+      aria-label="Reviewer model"
+      bind:value={form.reviewer.model}
+      valueVoice="literal"
+      help={reviewerRunner?.reviewer?.modelHelp} />
+    {#if reviewerRunner?.reviewer?.reasoningEditable}
+      <TextField
+        label="Reviewer reasoning"
+        aria-label="Reviewer reasoning"
+        bind:value={form.reviewer.reasoning}
+        valueVoice="literal"
+        help={reviewerRunner.reviewer.reasoningHelp} />
+    {:else}
+      <label>
+        <CapsLabel>Reviewer reasoning</CapsLabel>
+        <select bind:value={form.reviewer.reasoning}>
+          <option value="">Provider default</option>
+          {#if unsupportedReasoning}<option value={form.reviewer.reasoning} disabled>{form.reviewer.reasoning} (unsupported)</option>{/if}
+          {#each reasoningValues as value (value)}<option {value}>{value}</option>{/each}
+        </select>
+        <span class:failed={unsupportedReasoning}>{reviewerRunner?.reviewer?.reasoningHelp}</span>
+      </label>
+    {/if}
+    <p>Saving enables independent adversarial review availability. It does not start a review.</p>
+  {/if}
+  {#if panel.reviewerError}<p class="failed">{panel.reviewerError}</p>{/if}
+</section>
 
 <section class="linear" aria-labelledby="linear-label">
   <CapsLabel id="linear-label">Linear</CapsLabel>
@@ -104,6 +161,35 @@
     gap: calc(10px * var(--ui-scale));
     border-top: 1px solid var(--border-subtle);
     padding-top: calc(18px * var(--ui-scale));
+  }
+
+  .reviewer {
+    display: flex;
+    flex-direction: column;
+    gap: calc(10px * var(--ui-scale));
+    border-top: 1px solid var(--border-subtle);
+    padding-top: calc(18px * var(--ui-scale));
+  }
+
+  .reviewer label {
+    display: flex;
+    flex-direction: column;
+    gap: calc(7px * var(--ui-scale));
+  }
+
+  .reviewer select {
+    width: 100%;
+  }
+
+  .reviewer p,
+  .reviewer span {
+    margin: 0;
+    font: var(--machine-sm);
+    color: var(--text-muted);
+  }
+
+  .reviewer .failed {
+    color: var(--state-failed);
   }
 
   p {

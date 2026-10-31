@@ -41,6 +41,9 @@ func TestLoadWithoutConfigFileDefaultsInsteadOfPrompting(t *testing.T) {
 	if cfg.Welcomed {
 		t.Fatal("a config nobody has written claims first run has been through")
 	}
+	if cfg.Reviewer != nil {
+		t.Fatalf("missing configuration enabled a reviewer: %+v", cfg.Reviewer)
+	}
 	if _, err := os.Stat(Path()); !os.IsNotExist(err) {
 		t.Fatal("Load wrote a config file; nothing was configured yet")
 	}
@@ -259,6 +262,7 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	cfg := &Config{
 		Orgs: []string{"acme"}, Launch: map[string][]string{"codex": {"codex", "--search"}},
 		Editor: []string{"code", "--wait"}, StickerLabels: &labels, Stickers: &stickers,
+		Reviewer: &Reviewer{Harness: "codex", Model: "gpt-6.1-sol", Reasoning: "medium"},
 	}
 
 	snapshot := cfg.Snapshot()
@@ -266,9 +270,11 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	cfg.Launch["codex"][0] = "changed"
 	cfg.Editor[0] = "changed"
 	cfg.StickerLabels.Star = "changed"
+	cfg.Reviewer.Model = "changed"
 	(*cfg.Stickers)[0].Label = "changed"
 	if snapshot.Orgs[0] != "acme" || snapshot.Launch["codex"][0] != "codex" ||
-		snapshot.Editor[0] != "code" || snapshot.StickerLabels.Star != "one" || (*snapshot.Stickers)[0].Label != "one" {
+		snapshot.Editor[0] != "code" || snapshot.StickerLabels.Star != "one" ||
+		snapshot.Reviewer.Model != "gpt-6.1-sol" || (*snapshot.Stickers)[0].Label != "one" {
 		t.Fatalf("snapshot shares nested values: %+v", snapshot)
 	}
 
@@ -277,10 +283,12 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	snapshot.Launch["codex"][0] = "mutated snapshot"
 	snapshot.Editor[0] = "mutated snapshot"
 	snapshot.StickerLabels.Star = "mutated snapshot"
+	snapshot.Reviewer.Model = "mutated snapshot"
 	(*snapshot.Stickers)[0].Label = "mutated snapshot"
 	got := cfg.Snapshot()
 	if got.Orgs[0] != "acme" || got.Launch["codex"][0] != "codex" ||
-		got.Editor[0] != "code" || got.StickerLabels.Star != "one" || (*got.Stickers)[0].Label != "one" {
+		got.Editor[0] != "code" || got.StickerLabels.Star != "one" ||
+		got.Reviewer.Model != "gpt-6.1-sol" || (*got.Stickers)[0].Label != "one" {
 		t.Fatalf("replacement shares nested values: %+v", got)
 	}
 }
@@ -296,6 +304,53 @@ func writeConfig(t *testing.T, body string) {
 	}
 	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReviewerDefaultsToNoneAndRoundTripsExplicitSettings(t *testing.T) {
+	for _, body := range []string{`{}`, `{"reviewer":null}`} {
+		writeConfig(t, body)
+		t.Setenv("QROUTON_ROOT", t.TempDir())
+		cfg, err := Load()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.Reviewer != nil {
+			t.Fatalf("%s enabled a reviewer: %+v", body, cfg.Reviewer)
+		}
+	}
+
+	writeConfig(t, `{}`)
+	want := Reviewer{Harness: "codex", Model: "custom-model", Reasoning: "custom-effort"}
+	launch := map[string][]string{"codex": {"custom-codex", "--search"}}
+	cfg := &Config{Root: t.TempDir(), Reviewer: &want, Launch: launch}
+	if err := Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Reviewer == nil || *loaded.Reviewer != want || !reflect.DeepEqual(loaded.Launch, launch) {
+		t.Fatalf("explicit settings lost on reload: %+v", loaded)
+	}
+	loaded.Reviewer = nil
+	if err := Save(loaded); err != nil {
+		t.Fatal(err)
+	}
+	reloaded, err := Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reloaded.Reviewer != nil || !reflect.DeepEqual(reloaded.Launch, launch) {
+		t.Fatalf("disabling changed the launch override: %+v", reloaded)
+	}
+	raw, err := os.ReadFile(Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"reviewer"`) {
+		t.Fatalf("disabled preference was retained: %s", raw)
 	}
 }
 

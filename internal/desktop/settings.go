@@ -24,18 +24,20 @@ import (
 
 // SettingsView carries the editable config, and what Install would write for Linear.
 type SettingsView struct {
-	Orgs         []string         `json:"orgs"`
-	Root         string           `json:"root"`
-	Editor       string           `json:"editor"`
-	Launch       string           `json:"launch"`
-	Linear       LinearView       `json:"linear"`
-	Stickers     []config.Sticker `json:"stickers"`
-	Chime        bool             `json:"chime"`
-	UIScale      int              `json:"uiScale"`
-	UIScaleSteps []int            `json:"uiScaleSteps"`
-	Thoughts     ThoughtsView     `json:"thoughts"`
-	Pinned       SettingsPinned   `json:"pinned"`
-	Runners      []RunnerLegend   `json:"runners"`
+	Reviewer      *config.Reviewer `json:"reviewer"`
+	ReviewerError string           `json:"reviewerError,omitempty"`
+	Orgs          []string         `json:"orgs"`
+	Root          string           `json:"root"`
+	Editor        string           `json:"editor"`
+	Launch        string           `json:"launch"`
+	Linear        LinearView       `json:"linear"`
+	Stickers      []config.Sticker `json:"stickers"`
+	Chime         bool             `json:"chime"`
+	UIScale       int              `json:"uiScale"`
+	UIScaleSteps  []int            `json:"uiScaleSteps"`
+	Thoughts      ThoughtsView     `json:"thoughts"`
+	Pinned        SettingsPinned   `json:"pinned"`
+	Runners       []RunnerLegend   `json:"runners"`
 }
 
 // LinearView is the coding-tools.json entry Install writes. Replaces means the
@@ -89,6 +91,7 @@ type GitHubStatus struct {
 }
 
 type SettingsInput struct {
+	Reviewer *config.Reviewer `json:"reviewer"`
 	Orgs     []string         `json:"orgs"`
 	Root     string           `json:"root"`
 	Editor   string           `json:"editor"`
@@ -107,19 +110,21 @@ type SaveResult struct {
 }
 
 type Settings struct {
-	cfg            *config.Config
-	emit           emitter
-	validateEditor func([]string) error
-	validateLaunch func(map[string][]string) error
-	relaunch       func() error
-	quit           func()
-	pinnedRoot     string
-	openText       func(path string) []string
-	wakeChrome     func()
-	reconfigure    func(*config.Config) error
-	runners        func() ([]assembly.Runner, error)
-	checkToken     func(ctx context.Context, token string) (github.TokenCheck, string)
-	linear         lineartools.Tools
+	cfg              *config.Config
+	emit             emitter
+	validateEditor   func([]string) error
+	validateLaunch   func(map[string][]string) error
+	validateReviewer func(*config.Reviewer, map[string][]string) error
+	quit             func()
+	wakeChrome       func()
+	reconfigure      func(*config.Config) error
+	reviewerRunners  func(map[string][]string) ([]assembly.Runner, error)
+	runners          func() ([]assembly.Runner, error)
+	relaunch         func() error
+	pinnedRoot       string
+	openText         func(path string) []string
+	checkToken       func(ctx context.Context, token string) (github.TokenCheck, string)
+	linear           lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
@@ -163,7 +168,12 @@ func (s *Settings) Load() SettingsView {
 			launch = string(b)
 		}
 	}
+	var reviewerErr error
+	if cfg.Reviewer != nil && s.validateReviewer != nil {
+		reviewerErr = s.validateReviewer(cfg.Reviewer, cfg.Launch)
+	}
 	return SettingsView{
+		Reviewer: cfg.Reviewer, ReviewerError: errorText(reviewerErr),
 		Orgs:         file.Orgs,
 		Root:         root,
 		Editor:       editorCommand(cfg.Editor),
@@ -177,6 +187,31 @@ func (s *Settings) Load() SettingsView {
 		Pinned:       SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
 		Runners:      s.runnerLegend(),
 	}
+}
+
+func (s *Settings) Runners(launch string) ([]assembly.Runner, error) {
+	var overrides map[string][]string
+	if strings.TrimSpace(launch) != "" {
+		if err := json.Unmarshal([]byte(launch), &overrides); err != nil {
+			return nil, fmt.Errorf(settingsWrappedFormat, settingsFieldLaunch, err)
+		}
+	}
+	if s.reviewerRunners == nil {
+		return nil, ErrNoAgentCommand
+	}
+	all, err := s.reviewerRunners(overrides)
+	if err != nil {
+		return nil, err
+	}
+	return assembly.Installed(all), nil
+}
+
+func reviewerFromInput(in *config.Reviewer) *config.Reviewer {
+	if in == nil {
+		return nil
+	}
+	return &config.Reviewer{Harness: strings.TrimSpace(in.Harness),
+		Model: strings.TrimSpace(in.Model), Reasoning: strings.TrimSpace(in.Reasoning)}
 }
 
 func (s *Settings) runnerLegend() []RunnerLegend {
@@ -288,6 +323,14 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 	}
 	result := SaveResult{}
+	reviewer := reviewerFromInput(in.Reviewer)
+	current := s.cfg.Snapshot()
+	if reviewer != nil && (current.Reviewer == nil || *current.Reviewer != *reviewer ||
+		!slices.Equal(current.Launch[reviewer.Harness], launch[reviewer.Harness])) && s.validateReviewer != nil {
+		if err := s.validateReviewer(reviewer, launch); err != nil {
+			return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldReviewer, err)
+		}
+	}
 	err = saveConfig(s.cfg, s.pinnedRoot, func(next, live *config.Config) {
 		if next.Root != "" || root != config.DefaultRoot() {
 			next.Root = root
@@ -298,6 +341,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		}
 		live.Thoughts = expandThoughts(thoughts)
 		for _, c := range []*config.Config{next, live} {
+			c.Reviewer = reviewer
 			c.Editor, c.Launch = editor, launch
 			c.Stickers, c.StickerLabels = &stickers, nil
 			c.Quiet = !in.Chime

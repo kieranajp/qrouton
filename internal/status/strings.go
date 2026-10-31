@@ -6,7 +6,17 @@ const (
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"
 
-	KindNote = "NOTE"
+	phaseScratch   = "scratch"
+	phaseResearch  = "Research"
+	phasePlan      = "Plan"
+	phaseImplement = "Implement"
+
+	KindPlan      = "PLAN"
+	KindSpec      = "SPEC"
+	KindResearch  = "RESEARCH"
+	KindNote      = "NOTE"
+	KindExplainer = "EXPLAINER"
+	KindReview    = "REVIEW"
 
 	repoSeparator  = "/"
 	fieldSeparator = " "

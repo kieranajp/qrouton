@@ -1565,6 +1565,7 @@ func TestMCPServerAdvertisesExactlyTheWindowTools(t *testing.T) {
 	window := []string{
 		ToolOpenFile, toolOpenAssets, toolFocusAsset, toolRunCommand, toolReadWindow, toolShowDiff,
 		toolNotify, toolCloseWindow, toolListWindows, toolSharePage, toolSetSummary, toolSetDigest, toolCreateArtefact, toolReportBug,
+		toolReviewerSettings, toolStartReview,
 	}
 	for _, tc := range []struct {
 		mode session.SessionMode

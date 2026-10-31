@@ -37,6 +37,9 @@ const (
 	AdmittedBM25  = "bm25_top"
 	AdmittedDense = "dense_top"
 
+	KindResearch = "research"
+	KindReview   = "review"
+
 	kindNote    = "note"
 	kindDeadEnd = "dead_end"
 

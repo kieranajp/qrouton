@@ -5,6 +5,7 @@ import { ARTIFACT_KINDS } from "./bridge/generated.js";
 // taxonomy claims is the neutral sixth case, not an absence.
 
 const KINDS = {
+ [ARTIFACT_KINDS.REVIEW]: { tone: "var(--artifact-review)", short: "REVIEW", long: "REVIEW" },
   [ARTIFACT_KINDS.PLAN]: { tone: "var(--artifact-plan)", short: "PLAN", long: "PLAN" },
   [ARTIFACT_KINDS.SPEC]: { tone: "var(--artifact-spec)", short: "SPEC", long: "SPEC" },
   [ARTIFACT_KINDS.RESEARCH]: { tone: "var(--artifact-research)", short: "RSCH", long: "RESEARCH" },

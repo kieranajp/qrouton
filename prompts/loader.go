@@ -51,7 +51,7 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md artifact-discipline.md evidence-discipline.md return-contract.md session-summary.md session-digest.md scratch-copy.md fix-discipline.md run-table.md agents/*.md all:skills
+//go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md artifact-discipline.md evidence-discipline.md return-contract.md session-summary.md review-rubric.md session-digest.md scratch-copy.md fix-discipline.md run-table.md agents/*.md all:skills
 var embedded embed.FS
 
 // Template is the skeleton a new artefact of the given kind starts from.
@@ -205,4 +205,16 @@ func idForPath(path string) (ID, bool) {
 	default:
 		return "", false
 	}
+}
+
+func ImplementationReviewer(ctx context.Context) (string, error) {
+	prompt, err := NewEmbeddedLoader().Load(ctx, ID(agentIDPrefix+"implementation-reviewer"))
+	if err != nil {
+		return "", err
+	}
+	role, err := parseAgentPrompt(prompt.Content)
+	if err != nil {
+		return "", err
+	}
+	return role.body, nil
 }

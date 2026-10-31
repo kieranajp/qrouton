@@ -358,6 +358,16 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 		}
 		var keys, values []string
 		for _, value := range set.derived {
+			alreadyNamed := slices.ContainsFunc(found, func(c constant) bool {
+				if set.goType != "" && c.goType != set.goType {
+					return false
+				}
+				key, ok := strings.CutPrefix(c.name, set.prefix)
+				return ok && strings.HasSuffix(key, set.suffix) && key != set.suffix && c.value == value
+			})
+			if alreadyNamed {
+				continue
+			}
 			keys = append(keys, value)
 			values = append(values, strconv.Quote(value))
 		}

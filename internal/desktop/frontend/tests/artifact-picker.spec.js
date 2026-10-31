@@ -16,6 +16,7 @@ test("every tag is a filled block of its kind's own hue", async ({ page }) => {
     { label: "S1", colour: "rgb(245, 189, 230)", ink: CRUST },
     { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
     { label: "NOTE", colour: "rgb(240, 198, 198)", ink: CRUST },
+    { label: "REVIEW", colour: "rgb(198, 160, 246)", ink: CRUST },
     { label: "P1", colour: "rgb(183, 189, 248)", ink: CRUST },
     { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
   ]);
@@ -44,4 +45,10 @@ test("repository thoughts remain available before the session writes anything", 
   await expect(page.getByRole("button", { name: /Documents 0/ })).toBeVisible();
   await expect(page.locator(".heading")).toHaveText(["Written this session", "In-repo"]);
   await expect(page.getByRole("button", { name: "qrouton" })).toBeVisible();
+});
+
+test("a review tag opens its durable report path", async ({ page }) => {
+  await page.goto("/tests/artifact-picker.html");
+  await page.getByRole("button", { name: /reviews\/review-x\.md/ }).click();
+  await expect.poll(() => page.evaluate(() => window.selectedArtifact)).toBe("thoughts/shared/reviews/review-x.md");
 });

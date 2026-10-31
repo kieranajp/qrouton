@@ -54,6 +54,7 @@ export const SETTINGS_INSTALL_LINEAR = "github.com/kieranajp/qrouton/internal/de
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
 export const SETTINGS_OPEN_CONFIG = "github.com/kieranajp/qrouton/internal/desktop.Settings.OpenConfig";
 export const SETTINGS_RELAUNCH = "github.com/kieranajp/qrouton/internal/desktop.Settings.Relaunch";
+export const SETTINGS_RUNNERS = "github.com/kieranajp/qrouton/internal/desktop.Settings.Runners";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
 export const TERM_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Term.Resize";
 export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.Start";
@@ -137,14 +138,15 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"RESEARCH"|"SPEC"|"PLAN"|"EXPLAINER"|"AUDIT"|"NOTE"} ArtifactKind */
+/** @typedef {"AUDIT"|"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"|"REVIEW"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
-  RESEARCH: "RESEARCH",
-  SPEC: "SPEC",
-  PLAN: "PLAN",
-  EXPLAINER: "EXPLAINER",
   AUDIT: "AUDIT",
+  PLAN: "PLAN",
+  SPEC: "SPEC",
+  RESEARCH: "RESEARCH",
   NOTE: "NOTE",
+  EXPLAINER: "EXPLAINER",
+  REVIEW: "REVIEW",
 });
 
 /** @typedef {"Summary"|"Duplicated behaviour or facts"|"Dead or needlessly defensive code"|"Homegrown library or platform behaviour"|"Tests that pass or fail for the wrong reason"} AuditHeading */
@@ -267,7 +269,7 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"stickers"|"uiScale"|"thoughts"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"stickers"|"uiScale"|"thoughts"|"reviewer"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
@@ -276,6 +278,7 @@ export const SETTINGS_FIELDS = Object.freeze({
   STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
+  REVIEWER: "reviewer",
 });
 
 /** @typedef {"running"|"succeeded"|"failed"|"waiting"|"idle"} TabStatus */

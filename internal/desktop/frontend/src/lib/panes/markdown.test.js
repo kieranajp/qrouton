@@ -160,3 +160,12 @@ test("a bad escape in a link leaves only the link's own text raw", () => {
   assert.equal(documentPath("100%.md", from), "thoughts/my notes/100%.md");
   assert.equal(documentPath("my%20file.md", from), "thoughts/my notes/my file.md");
 });
+
+test("review metadata stays hidden and its body links to the binding plan", () => {
+  const source = "thoughts/shared/reviews/review-x.md";
+  const { body } = render("---\nkind: review\ntitle: Result\nplan: ../plans/P1.md\n---\n\n# Result\n\nNo completed review has been recorded.\n\n[Plan](../plans/P1.md)\n");
+  assert.ok(!body.includes("kind: review"));
+  assert.ok(!body.includes("plan:"));
+  assert.ok(body.includes('href="../plans/P1.md"'));
+  assert.equal(documentPath("../plans/P1.md", source), "thoughts/shared/plans/P1.md");
+});

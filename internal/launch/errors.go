@@ -11,7 +11,14 @@ var (
 	// otherwise report the runner as not installed rather than misconfigured.
 	ErrEmptyOverride = errors.New("launch override has no command")
 
-	ErrRunnerUnavailable = errors.New("runner is unavailable")
+	ErrRunnerUnavailable        = errors.New("runner is unavailable")
+	ErrReviewerDisabled         = errors.New("configure an independent reviewer in Settings before starting a review")
+	ErrReviewScope              = errors.New("review target could not be resolved; supply an explicit base for each editing repository")
+	ErrReviewRequest            = errors.New("invalid review request")
+	ErrReviewLaunch             = errors.New("reviewer launch failed")
+	ErrReviewAllocation         = errors.New("could not allocate review artifacts")
+	ErrInvalidReviewer          = errors.New("reviewer options are invalid")
+	ErrReviewerOverrideConflict = errors.New("launch override conflicts with reviewer settings")
 
 	ErrLoginShell = errors.New("login shell could not start")
 

@@ -159,3 +159,16 @@ const (
 	vaultOpenedFormat     = "Showing %s (%s) rendered in a pane (the conversation keeps focus)."
 	vaultOpenedSpanFormat = "Showing %s (%s) rendered in a pane, marking %s (the conversation keeps focus)."
 )
+
+const (
+	reviewCloseTimeout       = 2 * time.Second
+	toolReviewerSettings     = "reviewer_settings"
+	toolStartReview          = "start_review"
+	descReviewerSettings     = "Read review mode and optional independent reviewer configuration and availability. None selects standard non-adversarial review in the orchestrator current harness, with no independent settings. A configured reviewer selects adversarial mode; saved unavailable selections remain explicit. Enabled/available refer only to independent launch. This does not authorize or start review."
+	descStartReview          = "Request a fresh interactive independent reviewer for explicitly authorized committed scope. Requires enabled Settings; None returns guidance for standard non-adversarial orchestrator review without allocating anything. Returns stable tab/report references, never a completed verdict; do not retry uncertain opens."
+	reviewerDisabledMessage  = "None selects standard non-adversarial review by the orchestrator in its current harness. Follow the bundled implementation review instructions with explicit review authority; do not call start_review or spawn a second reviewer for that path. For an independent-only request, explain the limitation and offer standard review or reviewer configuration in Settings. No harness, report, run directory, or terminal was created."
+	reviewerAvailableMessage = "The configured independent adversarial reviewer is available. Configuration does not authorize a launch."
+	reviewRequestedFormat    = "Review requested in background tab %q. Read %s for the durable report; the placeholder is incomplete and this acknowledgement is not a verdict."
+	reviewUncertainFormat    = "Opening review tab %q failed or had an uncertain outcome. Inspect that tab and %s; no automatic retry was made and no completed review is recorded."
+	reviewInterruptedFormat  = "Review request interrupted after opening tab %q. Only that review tab was requested to close; inspect %s and any retained tab. No completed review is recorded."
+)

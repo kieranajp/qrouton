@@ -1454,6 +1454,143 @@ func TestSessionThoughtsRefusesAFolderWithNoIndexInsideAWiderOne(t *testing.T) {
 	}
 }
 
+func reviewerInput(cfg *config.Config, reviewer *config.Reviewer) SettingsInput {
+	return SettingsInput{Orgs: cfg.Orgs, Root: cfg.Root, Reviewer: reviewer,
+		Stickers: cfg.EffectiveStickers(), Chime: true}
+}
+
+func TestSettingsReviewerDefaultsAndRoundTrip(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"},
+		Launch: map[string][]string{"codex": {"custom-codex"}}}
+	s := testSettings(t, cfg, nil, nil, nil)
+	if s.Load().Reviewer != nil {
+		t.Fatal("new settings enabled a reviewer")
+	}
+	calls := 0
+	s.validateReviewer = func(reviewer *config.Reviewer, overrides map[string][]string) error {
+		calls++
+		if reviewer.Harness != "codex" || !reflect.DeepEqual(overrides, cfg.Snapshot().Launch) {
+			t.Fatalf("validation candidate = %+v, %#v", reviewer, overrides)
+		}
+		return nil
+	}
+	in := reviewerInput(cfg, &config.Reviewer{Harness: " codex ", Model: " gpt-6.1-sol ", Reasoning: " medium "})
+	in.Launch = `{"codex":["custom-codex"]}`
+	if result, err := s.Save(in); err != nil || result.RestartRequired {
+		t.Fatalf("enable = %+v, %v", result, err)
+	}
+	want := &config.Reviewer{Harness: "codex", Model: "gpt-6.1-sol", Reasoning: "medium"}
+	disk, err := config.ReadFile()
+	if err != nil || !reflect.DeepEqual(disk.Reviewer, want) || !reflect.DeepEqual(cfg.Snapshot().Reviewer, want) {
+		t.Fatalf("enabled disk/live = %+v / %+v, %v", disk, cfg.Snapshot(), err)
+	}
+	view := s.Load()
+	view.Reviewer.Model = "mutated"
+	if cfg.Snapshot().Reviewer.Model != want.Model {
+		t.Fatal("view mutated live reviewer")
+	}
+	in.Reviewer = nil
+	if _, err := s.Save(in); err != nil {
+		t.Fatal(err)
+	}
+	disk, err = config.ReadFile()
+	if err != nil || disk.Reviewer != nil || cfg.Snapshot().Reviewer != nil {
+		t.Fatalf("disable disk/live = %+v / %+v, %v", disk, cfg.Snapshot(), err)
+	}
+	if calls != 2 {
+		t.Fatalf("validation calls = %d, want enable and Load only", calls)
+	}
+	if !reflect.DeepEqual(disk.Launch, map[string][]string{"codex": {"custom-codex"}}) {
+		t.Fatalf("reviewer changed conversation override: %#v", disk.Launch)
+	}
+}
+
+func TestSettingsReviewerFailureUsesCandidateOverridesBeforeAnyWrites(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"},
+		Launch: map[string][]string{"codex": {"old-codex"}}}
+	s := testSettings(t, cfg, nil, nil, nil)
+	refusal := errors.New("configured harness is unavailable")
+	s.validateReviewer = func(reviewer *config.Reviewer, overrides map[string][]string) error {
+		if !reflect.DeepEqual(overrides["codex"], []string{"missing-codex"}) {
+			t.Fatalf("validator saw old overrides: %#v", overrides)
+		}
+		return refusal
+	}
+	in := reviewerInput(cfg, &config.Reviewer{Harness: "codex", Model: "custom", Reasoning: "medium"})
+	in.Launch = `{"codex":["missing-codex"]}`
+	if _, err := s.Save(in); !errors.Is(err, refusal) || !strings.HasPrefix(err.Error(), "reviewer: ") {
+		t.Fatalf("Save = %v", err)
+	}
+	for _, path := range []string{config.Path(), s.linear.File} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("invalid reviewer wrote %s", path)
+		}
+	}
+	if cfg.Snapshot().Reviewer != nil || cfg.Snapshot().Launch["codex"][0] != "old-codex" {
+		t.Fatalf("refusal changed live config: %+v", cfg.Snapshot())
+	}
+}
+
+func TestSettingsPreservesUnavailableReviewerForUnrelatedEdits(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"},
+		Reviewer: &config.Reviewer{Harness: "codex", Model: "custom", Reasoning: "medium"}}
+	s := testSettings(t, cfg, nil, nil, nil)
+	refusal := errors.New("codex is unavailable")
+	s.validateReviewer = func(*config.Reviewer, map[string][]string) error { return refusal }
+	view := s.Load()
+	if view.ReviewerError != refusal.Error() || view.Reviewer.Harness != "codex" {
+		t.Fatalf("unavailable view = %+v", view)
+	}
+	in := reviewerInput(cfg, view.Reviewer)
+	in.Chime = false
+	in.Launch = `{"claude":["custom-claude"]}`
+	if _, err := s.Save(in); err != nil {
+		t.Fatalf("unrelated edit rejected: %v", err)
+	}
+	if !cfg.Snapshot().Quiet || !reflect.DeepEqual(cfg.Snapshot().Reviewer, view.Reviewer) {
+		t.Fatalf("unrelated save changed preference: %+v", cfg.Snapshot())
+	}
+	in.Reviewer.Model = "changed"
+	if _, err := s.Save(in); !errors.Is(err, refusal) {
+		t.Fatalf("changed unavailable reviewer = %v", err)
+	}
+	in.Reviewer = cfg.Snapshot().Reviewer
+	in.Launch = `{"codex":["missing"]}`
+	if _, err := s.Save(in); !errors.Is(err, refusal) {
+		t.Fatalf("changed selected override = %v", err)
+	}
+	in.Reviewer = nil
+	if _, err := s.Save(in); err != nil || cfg.Snapshot().Reviewer != nil {
+		t.Fatalf("explicit None = %v", err)
+	}
+}
+
+func TestSettingsRunnersSharesInstalledDiscoveryAndCandidateOverrides(t *testing.T) {
+	rows := []assembly.Runner{{ID: "codex", Installed: true}, {ID: "claude", Installed: false}}
+	a := &Assembly{runners: func() ([]assembly.Runner, error) { return rows, nil }}
+	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	var candidate map[string][]string
+	s.reviewerRunners = func(overrides map[string][]string) ([]assembly.Runner, error) {
+		candidate = overrides
+		return rows, nil
+	}
+	got, err := s.Runners(`{"codex":["custom-codex"]}`)
+	want, assemblyErr := a.Runners()
+	if err != nil || assemblyErr != nil || !reflect.DeepEqual(got, want) ||
+		!reflect.DeepEqual(candidate, map[string][]string{"codex": {"custom-codex"}}) {
+		t.Fatalf("settings/assembly = %+v / %+v, errors %v / %v, candidate %#v", got, want, err, assemblyErr, candidate)
+	}
+	if _, err := s.Runners("{"); err == nil {
+		t.Fatal("invalid candidate overrides accepted")
+	}
+	if _, err := (&Settings{}).Runners(""); !errors.Is(err, ErrNoAgentCommand) {
+		t.Fatalf("missing discovery = %v", err)
+	}
+}
+
 func fakeGitHubCLI(t *testing.T, script string) {
 	t.Helper()
 	dir := t.TempDir()

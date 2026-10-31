@@ -74,6 +74,7 @@ test("sticker meanings load and save together without asking for a restart", asy
 
   await expect.poll(() => saves(page)).toEqual([
     {
+      reviewer: null,
       orgs: ["acme"],
       root: "/sessions",
       editor: "",
@@ -233,6 +234,109 @@ test("a thoughts refusal switches to Folders and shows under the section", async
   await expect(page.locator(".note.failed")).toHaveText("an org maps to two thoughts roots");
   await expect(status(page)).toHaveText("an org maps to two thoughts roots");
   await expect(page.locator(".dialog")).toBeVisible();
+});
+
+const harness = (page) => page.getByRole("combobox", { name: "Reviewer harness" });
+const configure = (page) => page.getByRole("button", { name: "Configure reviewer" });
+const model = (page) => page.getByRole("textbox", { name: "Reviewer model" });
+
+test("reviewer starts at None and unrelated settings saves keep it disabled", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await expect(harness(page)).toHaveValue("");
+  await expect(page.getByText("None uses standard non-adversarial review in the orchestrator’s current harness, without a second reviewer.")).toBeVisible();
+  await expect(model(page)).toHaveCount(0);
+  await expect(harness(page).locator("option")).toHaveText(["None", "Codex CLI", "Claude Code", "OpenCode"]);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.reviewer))).toEqual([null]);
+});
+
+test("explicit configuration drafts preferred Codex values and cancel never saves them", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await configure(page).click();
+  await expect(harness(page)).toHaveValue("codex");
+  await expect(model(page)).toHaveValue("gpt-6.1-sol");
+  await expect(page.getByText("Saving enables independent adversarial review availability. It does not start a review.")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Reviewer reasoning" })).toHaveValue("medium");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  expect(await page.evaluate(() => window.settingsFixture.saves())).toEqual([]);
+  expect(await page.evaluate(() => window.settingsFixture.closed())).toBe(1);
+  expect(await page.evaluate(() => window.settingsFixture.bridgeCalls().filter((name) => /review|launch|open/i.test(name)))).toEqual([]);
+});
+
+test("enabling saves editable reviewer values without changing conversation overrides", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await configure(page).click();
+  await model(page).fill("my-model");
+  await page.getByRole("textbox", { name: "Reviewer reasoning" }).fill("high");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().map(({ reviewer, launch }) => ({ reviewer, launch })))).toEqual([
+    { reviewer: { harness: "codex", model: "my-model", reasoning: "high" }, launch: "" },
+  ]);
+  expect(await page.evaluate(() => window.settingsFixture.bridgeCalls().filter((name) => /review|launch|open/i.test(name)))).toEqual([]);
+});
+
+test("an enabled reviewer loads its saved values and selecting None disables it", async ({ page }) => {
+  await page.goto("/tests/settings.html?enabled");
+  await open(page, "Advanced");
+  await expect(model(page)).toHaveValue("saved-model");
+  await harness(page).selectOption("");
+  await expect(model(page)).toHaveCount(0);
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.reviewer))).toEqual([null]);
+});
+
+test("configuration without Codex requires an explicit installed harness", async ({ page }) => {
+  await page.goto("/tests/settings.html?noCodex");
+  await open(page, "Advanced");
+  await configure(page).click();
+  await expect(harness(page)).toHaveValue("__choose__");
+  await expect(model(page)).toHaveValue("");
+  await harness(page).selectOption("claude");
+  await expect(page.getByRole("combobox", { name: "Reviewer reasoning" }).locator("option")).toHaveText(["Provider default", "low", "medium", "high", "xhigh", "max"]);
+});
+
+test("switching harness exposes incompatible reasoning until the user corrects it", async ({ page }) => {
+  await page.goto("/tests/settings.html?enabled");
+  await open(page, "Advanced");
+  await expect(model(page)).toHaveValue("saved-model");
+  await harness(page).selectOption("opencode");
+  await expect(model(page)).toHaveValue("saved-model");
+  const effort = page.getByRole("combobox", { name: "Reviewer reasoning" });
+  await expect(effort).toHaveValue("medium");
+  await expect(effort.locator("option:checked")).toHaveText("medium (unsupported)");
+  await expect(page.getByText("Use provider/model.")).toBeVisible();
+  await model(page).fill("provider/model");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect(status(page)).toContainText("only provider default");
+  await expect(page.locator(".dialog")).toBeVisible();
+  await effort.selectOption("");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().at(-1).reviewer)).toEqual({ harness: "opencode", model: "provider/model", reasoning: "" });
+});
+
+test("a saved unavailable harness remains selected with an availability error", async ({ page }) => {
+  await page.goto("/tests/settings.html?unavailable");
+  await open(page, "Advanced");
+  await expect(harness(page)).toHaveValue("codex");
+  await expect(harness(page).locator("option:checked")).toHaveText("codex (unavailable)");
+  await expect(page.getByText("codex is unavailable.", { exact: false })).toBeVisible();
+  await expect(model(page)).toHaveValue("saved-model");
+  await harness(page).selectOption("");
+  await page.getByRole("button", { name: "Save" }).click();
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.saves().map((save) => save.reviewer))).toEqual([null]);
+});
+
+test("candidate launch overrides refresh installed reviewer choices before saving", async ({ page }) => {
+  await page.goto("/tests/settings.html");
+  await open(page, "Advanced");
+  await expect(harness(page).locator("option")).toHaveText(["None", "Codex CLI", "Claude Code", "OpenCode"]);
+  await page.locator("textarea").first().fill('{"codex":["missing"]}');
+  await expect(harness(page).locator("option")).toHaveText(["None", "Claude Code", "OpenCode"]);
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.runnerCalls().some(({ name, input }) => name.includes("Settings.Runners") && input === '{"codex":["missing"]}'))).toBe(true);
+  await expect.poll(() => page.evaluate(() => window.settingsFixture.runnerCalls().some(({ name }) => name.includes("Assembly.Runners")))).toBe(true);
 });
 
 test("a root pinned by QROUTON_ROOT says the file's value is what Save writes", async ({ page }) => {

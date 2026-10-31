@@ -25,7 +25,8 @@ type Config struct {
 	// Keyed by runner id rather than a bare argv list: with the runner buried in
 	// argv[0], an override that dropped a flag looked like one that merely named
 	// a runner.
-	Launch map[string][]string `json:"launch,omitempty"`
+	Launch   map[string][]string `json:"launch,omitempty"`
+	Reviewer *Reviewer           `json:"reviewer,omitempty"`
 
 	Editor []string `json:"editor,omitempty"`
 
@@ -59,6 +60,12 @@ type Config struct {
 	UIScale int `json:"uiScale,omitempty"`
 
 	warnings []string
+}
+
+type Reviewer struct {
+	Harness   string `json:"harness"`
+	Model     string `json:"model"`
+	Reasoning string `json:"reasoning"`
 }
 
 // Warnings lists the non-fatal problems Load found. They describe that load, so
@@ -141,6 +148,7 @@ func (c *Config) Replace(next *Config) {
 	c.Orgs = replacement.Orgs
 	c.Root = replacement.Root
 	c.Launch = replacement.Launch
+	c.Reviewer = replacement.Reviewer
 	c.Editor = replacement.Editor
 	c.Author = replacement.Author
 	c.ThoughtsPlacement = replacement.ThoughtsPlacement
@@ -183,6 +191,10 @@ func clone(c *Config) *Config {
 	if c.StickerLabels != nil {
 		labels := *c.StickerLabels
 		out.StickerLabels = &labels
+	}
+	if c.Reviewer != nil {
+		reviewer := *c.Reviewer
+		out.Reviewer = &reviewer
 	}
 	out.Thoughts = Thoughts{Default: c.Thoughts.Default}
 	for _, r := range c.Thoughts.Roots {

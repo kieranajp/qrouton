@@ -1,4 +1,5 @@
 import {
+  ASSEMBLY_RUNNERS,
   PLACEMENT_CHECK,
   SETTINGS_ADJUST_UI_SCALE,
   SETTINGS_GIT_HUB_STATUS,
@@ -6,6 +7,7 @@ import {
   SETTINGS_LOAD,
   SETTINGS_OPEN_CONFIG,
   SETTINGS_RELAUNCH,
+  SETTINGS_RUNNERS,
   SETTINGS_SAVE,
 } from "../bridge/generated.js";
 import { Call } from "../wails.js";
@@ -14,6 +16,7 @@ import { Call } from "../wails.js";
 
 /**
  * @typedef {object} SettingsInput
+ * @property {{harness: string, model: string, reasoning: string} | null} reviewer
  * @property {string[]} orgs
  * @property {string} root
  * @property {string} editor
@@ -38,6 +41,8 @@ import { Call } from "../wails.js";
  * @property {LinearView} [linear]
  * @property {{root: boolean, orgs: boolean}} [pinned]
  * @property {{id: string, label: string}[]} [runners]
+ * @property {{harness: string, model: string, reasoning: string} | null} [reviewer]
+ * @property {string} [reviewerError]
  */
 
 /** @returns {Promise<SettingsView>} */
@@ -64,5 +69,14 @@ export const gitHubStatus = () => Call.ByName(SETTINGS_GIT_HUB_STATUS);
  * @returns {Promise<number>}
  */
 export const adjustUIScale = (action) => Call.ByName(SETTINGS_ADJUST_UI_SCALE, action);
+
+/** @typedef {{id: string, label: string, reviewer: {reasoningValues?: string[], reasoningEditable?: boolean, reasoningHelp?: string, modelHelp?: string}}} ReviewerRunner */
+
+/** @returns {Promise<ReviewerRunner[]>} */
+export const runners = () => Call.ByName(ASSEMBLY_RUNNERS);
+
+/** @param {string} launch
+ * @returns {Promise<ReviewerRunner[]>} */
+export const candidateRunners = (launch) => Call.ByName(SETTINGS_RUNNERS, launch);
 
 export const checkPlacement = () => Call.ByName(PLACEMENT_CHECK);

@@ -135,6 +135,7 @@ const (
 	settingsFieldStickers = "stickers"
 	settingsFieldUIScale  = "uiScale"
 	settingsFieldThoughts = "thoughts"
+	settingsFieldReviewer = "reviewer"
 
 	thoughtsOrgJoin  = ", "
 	thoughtsOrgSplit = ","

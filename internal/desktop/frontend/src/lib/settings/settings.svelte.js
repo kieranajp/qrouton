@@ -11,6 +11,7 @@ import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
  * @param {() => void} onClose */
 export function settings(onClose) {
   const form = $state({
+    reviewer: /** @type {{harness: string, model: string, reasoning: string} | null} */ (null),
     orgs: /** @type {string[]} */ ([]),
     root: "",
     editor: "",
@@ -23,6 +24,13 @@ export function settings(onClose) {
     pinned: { root: false, orgs: false },
     runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
+  let reviewerRunners = $state(/** @type {import("./calls.js").ReviewerRunner[]} */ ([]));
+  let runnerError = $state("");
+  let runnersReady = $state(false);
+  let loadedLaunch = $state(/** @type {string | undefined} */ (undefined));
+  let loadedReviewer = $state("");
+  let loadedReviewerError = $state("");
+  let discoveryGeneration = 0;
   let tab = $state("general");
   let linear = $state(/** @type {import("./calls.js").LinearView} */ ({ path: "", snippet: "", replaces: false }));
   let installed = $state(false);
@@ -47,6 +55,10 @@ export function settings(onClose) {
     form.root = loaded?.root ?? "";
     form.editor = loaded?.editor ?? "";
     form.launch = loaded?.launch ?? "";
+    loadedLaunch = form.launch;
+    form.reviewer = loaded?.reviewer ? { ...loaded.reviewer } : null;
+    loadedReviewer = JSON.stringify(form.reviewer);
+    loadedReviewerError = loaded?.reviewerError ?? "";
     linear = loaded?.linear ?? linear;
     form.stickers = (loaded?.stickers ?? []).map((item) => ({ ...item }));
     form.chime = loaded?.chime ?? true;
@@ -57,6 +69,43 @@ export function settings(onClose) {
     form.runners = loaded?.runners ?? [];
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
   });
+
+  $effect(() => {
+    const launch = form.launch;
+    if (loadedLaunch === undefined) return;
+    const generation = ++discoveryGeneration;
+    call(launch === loadedLaunch ? go.runners() : go.candidateRunners(launch)).then((answer) => {
+      if (generation !== discoveryGeneration) return;
+      runnersReady = true;
+      if (!answer.ok) {
+        runnerError = String(answer.error?.message ?? answer.error);
+        return;
+      }
+      runnerError = "";
+      reviewerRunners = answer.value ?? [];
+    });
+  });
+
+  function configureReviewer() {
+    if (!runnersReady) return;
+    selectReviewer(reviewerRunners.some((runner) => runner.id === "codex") ? "codex" : "__choose__");
+  }
+
+  /** @param {string} harness */
+  function selectReviewer(harness) {
+    if (!harness) {
+      form.reviewer = null;
+    } else if (form.reviewer) {
+      form.reviewer = { ...form.reviewer, harness: harness === "__choose__" ? "" : harness };
+    } else {
+      form.reviewer = {
+        harness: harness === "__choose__" ? "" : harness,
+        model: harness === "codex" ? "gpt-6.1-sol" : "",
+        reasoning: harness === "codex" ? "medium" : "",
+      };
+    }
+    fields = { ...fields, reviewer: "" };
+  }
 
   $effect(() => onScale((percent) => (form.uiScale = percent)));
 
@@ -84,6 +133,7 @@ export function settings(onClose) {
     let result, err;
     try {
       result = await go.save({
+        reviewer: form.reviewer ? { ...form.reviewer } : null,
         orgs: form.orgs,
         root: form.root,
         editor: form.editor,
@@ -104,6 +154,9 @@ export function settings(onClose) {
     if (outcome.restartRequired !== undefined) restartRequired = outcome.restartRequired;
     tab = firstErroredTab(fields) ?? tab;
     if (!err) {
+      loadedLaunch = form.launch;
+      loadedReviewer = JSON.stringify(form.reviewer);
+      loadedReviewerError = "";
       form.thoughts = fromView(toInput(form.thoughts));
       loadedThoughts = { ...fromView(toInput(form.thoughts)), derived: loadedThoughts.derived };
     }
@@ -163,6 +216,18 @@ export function settings(onClose) {
 
   return {
     form,
+    get reviewerRunners() { return reviewerRunners; },
+    get runnersReady() { return runnersReady; },
+    get reviewerError() {
+      if (fields.reviewer) return fields.reviewer;
+      if (runnerError) return runnerError;
+      if (form.reviewer?.harness && runnersReady && !reviewerRunners.some((runner) => runner.id === form.reviewer?.harness)) {
+        return `${form.reviewer.harness} is unavailable. Install it, choose an installed harness, or select None.`;
+      }
+      return JSON.stringify(form.reviewer) === loadedReviewer ? loadedReviewerError : "";
+    },
+    configureReviewer,
+    selectReviewer,
     get linear() {
       return linear;
     },

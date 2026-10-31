@@ -57,6 +57,7 @@ var Roles = map[string]string{
 	RoleArtifactResearch:  Sky,
 	RoleArtifactNote:      Flamingo,
 	RoleArtifactExplainer: Maroon,
+	RoleArtifactReview:    Mauve,
 	RoleArtifactAudit:     Rosewater,
 }
 
@@ -66,8 +67,8 @@ var roleOrder = []string{
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,
-	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote, RoleArtifactExplainer,
-	RoleArtifactAudit,
+	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote,
+	RoleArtifactExplainer, RoleArtifactReview, RoleArtifactAudit,
 }
 
 type token struct{ name, value string }

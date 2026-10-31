@@ -10,7 +10,7 @@ const registry = readFileSync(new URL("./index.js", import.meta.url), "utf8");
 const paneKinds = new Set(
   [...registry.matchAll(/\[ARTIFACT_KINDS\.(\w+)\]:/g)].map((match) => match[1]),
 );
-const WITHOUT_PANE = new Set(["NOTE", "EXPLAINER"]);
+const WITHOUT_PANE = new Set(["NOTE", "EXPLAINER", "REVIEW"]);
 
 test("every artifact kind has a label", () => {
   for (const kind of Object.values(ARTIFACT_KINDS)) {
@@ -18,7 +18,7 @@ test("every artifact kind has a label", () => {
   }
 });
 
-test("every artifact kind but a note and an explainer has a pane", () => {
+test("every artifact kind but a note, explainer, or review has a pane", () => {
   for (const [key, kind] of Object.entries(ARTIFACT_KINDS)) {
     assert.equal(paneKinds.has(key), !WITHOUT_PANE.has(kind), kind);
   }

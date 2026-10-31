@@ -4,9 +4,17 @@ package assembly
 // launch resolved a path for it; main.go maps launch's own rows onto these so
 // nothing here imports launch.
 type Runner struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	Installed bool   `json:"installed"`
+	ID        string               `json:"id"`
+	Label     string               `json:"label"`
+	Installed bool                 `json:"installed"`
+	Reviewer  ReviewerCapabilities `json:"reviewer"`
+}
+
+type ReviewerCapabilities struct {
+	ReasoningValues   []string `json:"reasoningValues"`
+	ReasoningHelp     string   `json:"reasoningHelp"`
+	ModelHelp         string   `json:"modelHelp"`
+	ReasoningEditable bool     `json:"reasoningEditable"`
 }
 
 // Installed keeps only the runners that can actually be started, which is what
