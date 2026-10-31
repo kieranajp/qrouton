@@ -2,7 +2,7 @@
   import { REPO_ROLES } from "../bridge/generated.js";
   import SegmentedControl from "./SegmentedControl.svelte";
 
-  /** @type {{key: "off" | import("../bridge/generated.js").RepoRole, label: string, icon: string, accent: string, ink?: string}[]} */
+  /** @type {{key: "off" | import("../bridge/generated.js").RepoRole, label: string, icon: import("../core/icons.js").IconName, accent: string, ink?: string}[]} */
   const ROLES = [
     { key: "off", label: "Off", icon: "excluded", accent: "var(--surface-raised)", ink: "var(--text-primary)" },
     { key: REPO_ROLES.EDITING, label: "Editing", icon: "editing", accent: "var(--role-editing)" },

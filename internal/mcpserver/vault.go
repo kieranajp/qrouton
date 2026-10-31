@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -32,8 +33,23 @@ type openVaultInput struct {
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
+func searchVaultSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[searchVaultInput](nil)
+	if err != nil {
+		panic(err)
+	}
+	schema.Properties["kinds"].Description = descSearchKinds + orList(vault.Kinds())
+	return schema
+}
+
+// orList joins names as prose: "a, b or c".
+func orList(names []string) string {
+	last := len(names) - 1
+	return strings.Join(names[:last], ", ") + " or " + names[last]
+}
+
 func addVaultTools(server *mcp.Server, windows *windowManager, host workbench.VaultHost) {
-	mcp.AddTool(server, &mcp.Tool{Name: toolSearchThoughts, Description: descSearchThoughts},
+	mcp.AddTool(server, &mcp.Tool{Name: toolSearchThoughts, Description: descSearchThoughts, InputSchema: searchVaultSchema()},
 		func(ctx context.Context, _ *mcp.CallToolRequest, input searchVaultInput) (*mcp.CallToolResult, any, error) {
 			res, err := host.SearchVault(ctx, vault.Query{Text: input.Query, Kinds: input.Kinds, Limit: input.Limit})
 			if err != nil {

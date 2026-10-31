@@ -1,10 +1,6 @@
 package desktop
 
-import (
-	"encoding/base64"
-
-	"github.com/kieranajp/qrouton/internal/workbench"
-)
+import "github.com/kieranajp/qrouton/internal/workbench"
 
 type emitter func(event string, payload any)
 
@@ -35,7 +31,7 @@ func (t *Term) Start(id string, cols, rows int) error {
 }
 
 func (t *Term) Write(id, encoded string) error {
-	data, err := base64.StdEncoding.DecodeString(encoded)
+	data, err := decodeInput(encoded)
 	if err != nil {
 		return err
 	}

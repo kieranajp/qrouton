@@ -3,7 +3,6 @@ import { call, Events } from "../wails.js";
 import { entry, requested, settled, unasked, wanted } from "./branches.js";
 import * as go from "./calls.js";
 import { filter, repoID } from "./filter.js";
-import { pushed } from "./pushed.js";
 import { apply, failedOwners, idle } from "./refresh.js";
 import {
   baseOf,
@@ -55,7 +54,7 @@ export function browsing(branch, report = () => {}) {
   let rows = $derived(
     listed.rows.map((row) => ({
       id: row.id,
-      meta: rowMeta(selection, row.id, pushed(row.pushed_at), row.default_branch),
+      meta: rowMeta(selection, row.id, row.default_branch),
       role: roleOf(selection, row.id),
       offers: roleOffers(selection, row.id),
       // A held row is not re-based: the picker adds repositories, it does not
@@ -68,7 +67,7 @@ export function browsing(branch, report = () => {}) {
 
   $effect(() =>
     Events.On(REPOS_REFRESH_EVENT, (event) => {
-      const updated = apply(refresh, event.data ?? {});
+      const updated = apply(refresh, event.data);
       refresh = updated;
       selection = reconcile(selection, updated.repos.map(repoID));
     }),

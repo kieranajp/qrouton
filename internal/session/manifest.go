@@ -7,14 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
-
-const manifestName = sessionpaths.ManifestName
 
 const manifestSchemaVersion = 2
 
@@ -36,37 +35,20 @@ func (r RepoRole) Effective() RepoRole {
 
 func (r RepoRole) IsEditing() bool { return r.Effective() == RepoRoleEditing }
 
+// Sticker is the id of one of the user's configured stickers. An id the list no
+// longer holds reads as no sticker.
 type Sticker string
 
-const (
-	StickerStar        Sticker = "star"
-	StickerBookmark    Sticker = "bookmark"
-	StickerQuestion    Sticker = "question"
-	StickerExclamation Sticker = "exclamation"
-)
-
-func (s Sticker) Effective() Sticker {
-	switch s {
-	case StickerStar, StickerBookmark, StickerQuestion, StickerExclamation:
-		return s
-	default:
+// Next walks order: none or an unlisted id gives the first entry, and the last gives none.
+func (s Sticker) Next(order []Sticker) Sticker {
+	i := slices.Index(order, s)
+	if i+1 >= len(order) {
+		if i < 0 && len(order) > 0 {
+			return order[0]
+		}
 		return ""
 	}
-}
-
-func (s Sticker) Next() Sticker {
-	switch s.Effective() {
-	case "":
-		return StickerStar
-	case StickerStar:
-		return StickerBookmark
-	case StickerBookmark:
-		return StickerQuestion
-	case StickerQuestion:
-		return StickerExclamation
-	default:
-		return ""
-	}
+	return order[i+1]
 }
 
 // SessionMode selects the system prompt (and opening message) the runner starts
@@ -160,6 +142,7 @@ type Manifest struct {
 	// wins when the two disagree.
 	ThoughtsRoot string  `json:"thoughtsRoot,omitempty"`
 	Summary      Summary `json:"summary,omitzero"`
+	Digest       Digest  `json:"digest,omitzero"`
 }
 
 // Summary is the orchestrator's own line on what the session is building.
@@ -168,6 +151,13 @@ type Summary struct {
 	Text  string    `json:"text"`
 	Stage string    `json:"stage,omitempty"`
 	At    time.Time `json:"at"`
+}
+
+// Digest is the orchestrator's prose on where the session stands, replaced whole
+// on every write.
+type Digest struct {
+	Text string    `json:"text"`
+	At   time.Time `json:"at"`
 }
 
 // EscalationStatus is how a picker-driven escalation attempt ended.
@@ -224,6 +214,33 @@ type ManifestRepo struct {
 	SSHURL       string `json:"sshUrl,omitempty"` // clone URL for mirror re-creation on resume
 }
 
+// Dir is the repository's checkout under the session root.
+func (r ManifestRepo) Dir(root string) string {
+	return filepath.Join(root, r.WorktreePath)
+}
+
+// BaseRef addresses the branch this repository's work is cut from, as the
+// mirror sees it, or is empty when the manifest names no branch at all.
+func (r ManifestRepo) BaseRef() string {
+	switch {
+	case r.BaseBranch != "":
+		return remoteRefPrefix + r.BaseBranch
+	case r.DefaultBranch != "":
+		return remoteRefPrefix + r.DefaultBranch
+	}
+	return ""
+}
+
+// inSrc holds a checkout to the session's src directory. The agent can write
+// the manifest, and removing a session removes every checkout it names.
+func (r ManifestRepo) inSrc() bool {
+	if r.WorktreePath == "" {
+		return true
+	}
+	rel, inside := sessionpaths.Within(sessionpaths.SrcDirName, r.WorktreePath)
+	return inside && rel != "."
+}
+
 // Scan: a session is any direct child of root containing a qrouton.json.
 func Scan(root string) ([]Manifest, error) {
 	entries, err := os.ReadDir(root)
@@ -238,7 +255,7 @@ func Scan(root string) ([]Manifest, error) {
 		if !e.IsDir() {
 			continue
 		}
-		b, err := os.ReadFile(filepath.Join(root, e.Name(), manifestName))
+		b, err := os.ReadFile(sessionpaths.Manifest(filepath.Join(root, e.Name())))
 		if err != nil {
 			continue
 		}
@@ -256,12 +273,22 @@ func decode(b []byte) (Manifest, error) {
 	if err := json.Unmarshal(b, &m); err != nil {
 		return Manifest{}, err
 	}
-	for _, r := range m.Repos {
-		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
-			return Manifest{}, invalidRole(r.Role, r.Org, r.Name)
-		}
+	if err := m.validate(); err != nil {
+		return Manifest{}, err
 	}
 	return m, nil
+}
+
+func (m Manifest) validate() error {
+	for _, r := range m.Repos {
+		if role := r.Role.Effective(); role != RepoRoleEditing && role != RepoRoleReference {
+			return invalidRole(r.Role, r.Org, r.Name)
+		}
+		if !r.inSrc() {
+			return outsideSrc(r.WorktreePath, r.Org, r.Name)
+		}
+	}
+	return nil
 }
 
 // SetMode rewrites the manifest's mode — escalation writes rpi, de-escalation
@@ -271,16 +298,6 @@ func SetMode(dir string, mode SessionMode) error {
 		m.Mode = mode.effective()
 		return m, nil
 	})
-}
-
-func CycleSticker(dir string) (Sticker, error) {
-	var committed Sticker
-	err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-		m.Sticker = m.Sticker.Next()
-		committed = m.Sticker
-		return m, nil
-	})
-	return committed, err
 }
 
 // Load reads one session directory's manifest.

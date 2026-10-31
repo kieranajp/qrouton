@@ -1,50 +1,46 @@
 <script>
+  import { artifactTone } from "../artifacts.js";
   import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import Chip from "../core/Chip.svelte";
   import { tick, untrack } from "svelte";
-  import { SvelteMap } from "svelte/reactivity";
   import { copyText } from "../wails.js";
   import ArtifactPane from "./ArtifactPane.svelte";
   import QuestionCard from "./QuestionCard.svelte";
   import ReaderPips from "./ReaderPips.svelte";
   import { diagrams, links, viewport } from "./actions.js";
-  import { clampedSpan, partition, screenFor } from "./deck.js";
+  import { clampedSpan, partition, reach, screenFor } from "./deck.js";
   import { deck } from "./deck.svelte.js";
   import MarkdownPane from "./MarkdownPane.svelte";
   import { render } from "./markdown.js";
   import { reader, scrolls } from "./reader.svelte.js";
-  import { freshContent, saveSpec, sendSpecAnswers } from "./spec-calls.js";
+  import { answerable } from "./answerable.svelte.js";
+  import { sendSpecAnswers } from "./spec-calls.js";
   import { draftKey, parseSpec, reapply, spliceAnswer } from "./spec.js";
+  import "./deck.css";
   import "./markdown.css";
 
   /** @type {{doc: {text: string, hash?: string, format: string, source: string, path?: string, kind?: string, line?: number, to?: number, viewportEpoch?: number}, id: string, active?: boolean, scrollRoot?: HTMLElement, onScroller?: (element: HTMLElement | null) => void}} */
   let { doc, id, active = false, scrollRoot, onScroller } = $props();
 
-  // The text the pane splices into: the last push, or the pane's own save, or
-  // what it fetched after a refused one, whichever came last.
-  let source = $state(untrack(() => ({ text: doc.text, hash: doc.hash ?? "" })));
-  let epoch = $state(untrack(() => doc.viewportEpoch ?? 0));
-  let pushed = untrack(() => doc.hash ?? doc.text);
-  $effect(() => {
-    const text = doc.text;
-    const hash = doc.hash ?? "";
-    const at = doc.viewportEpoch ?? 0;
-    untrack(() => {
-      if (at > epoch) epoch = at;
-      if ((hash || text) === pushed) return;
-      pushed = hash || text;
-      source = { text, hash };
-    });
+  const answers = answerable({
+    id: () => id,
+    doc: () => doc,
+    splice,
+    reloaded: "The spec changed on disk, so it reloaded. Your answer is kept here: pick again or press ⌘↵ to save it.",
   });
-  let shown = $derived({ ...doc, text: source.text, viewportEpoch: epoch });
+  const { pending, saves } = answers;
 
-  /** @type {SvelteMap<string, {id: string, heading: string, letter: string, note: string}>} */
-  const pending = new SvelteMap();
-  /** @type {SvelteMap<string, {state: string, message?: string}>} */
-  const saves = new SvelteMap();
-  let queue = Promise.resolve();
+  /** @param {string} text @param {string} key @param {{id: string, heading: string, letter: string, note: string}} draft
+   * @returns {string | null} */
+  function splice(text, key, draft) {
+    const question = spec.open.find((open) => draftKey(open) === key);
+    return question ? spliceAnswer(text, question, draft) : null;
+  }
+  let source = $derived(answers.source);
+  let epoch = $derived(answers.epoch);
+  let shown = $derived({ ...doc, text: source.text, viewportEpoch: epoch });
 
   let rendered = $derived(render(source.text));
   let spec = $derived(parseSpec(source.text));
@@ -156,7 +152,7 @@
             : "var(--state-waiting)"
           : slide.kind === "section"
             ? undefined
-            : "var(--artifact-spec)",
+            : artifactTone(ARTIFACT_KINDS.SPEC),
     })),
   ]);
   let counter = $derived(viewing === 0 ? "Overview" : (slides[viewing - 1]?.name ?? ""));
@@ -166,22 +162,18 @@
     if (state.intervals.length === 0) return;
     const ended =
       scrollRoot && scrollRoot.scrollTop + scrollRoot.clientHeight >= scrollRoot.scrollHeight - 2;
-    const line = ended ? state.intervals.at(-1).to : state.intervals[0].line;
+    const line = ended ? state.intervals[state.intervals.length - 1].to : state.intervals[0].line;
     scrolled = screenFor(slides, line);
   }
 
-  function reach(screen) {
-    if (!view.reading) {
-      at.show(screen);
-      return;
-    }
-    const from = screen === 0 ? spec.preamble.from : slides[screen - 1].from;
-    const blocks = [
-      .../** @type {NodeListOf<HTMLElement>} */ (reading?.querySelectorAll("[data-line]") ?? []),
-    ];
-    const target = blocks.find((block) => Number(block.dataset.line) >= from) ?? blocks[0];
-    target?.scrollIntoView({ block: "start" });
-  }
+  /** @param {number} screen */
+  const jump = (screen) =>
+    reach(screen, {
+      reading: view.reading,
+      root: reading,
+      show: at.show,
+      starts: [spec.preamble.from, ...slides.map((slide) => slide.from)],
+    });
 
   /** @param {number} index */
   async function focusCard(index) {
@@ -199,12 +191,14 @@
   }
 
   /** @param {number} index @param {Partial<{letter: string, note: string}>} change */
-  function edit(index, change) {
+  function edit(index, change, typed = false) {
     const question = spec.open[index];
     if (!question) return "";
     const key = draftKey(question);
     sent = null;
-    pending.set(key, { id: question.id, heading: question.heading, ...drafts[index], ...change });
+    const draft = { id: question.id, heading: question.heading, ...drafts[index], ...change };
+    if (typed) answers.type(key, draft);
+    else answers.put(key, draft);
     return key;
   }
 
@@ -215,55 +209,17 @@
 
   /** @param {number} index @param {string} note */
   function note(index, note) {
-    saves.set(edit(index, { note }), { state: "unsaved" });
+    edit(index, { note }, true);
   }
 
-  /** Saves run one at a time, so each splices into the text the last one left. */
-  function commit(key) {
-    if (!key || !pending.has(key)) return;
-    queue = queue.then(() => save(key));
-  }
-
-  async function save(key) {
-    const draft = pending.get(key);
-    const question = spec.open.find((open) => draftKey(open) === key);
-    if (!draft || !question) return;
-    const text = spliceAnswer(source.text, question, draft);
-    if (text === source.text) {
-      pending.delete(key);
-      saves.delete(key);
-      return;
-    }
-    const hash = source.hash;
-    saves.set(key, { state: "saving" });
-    const saved = await saveSpec(id, hash, text);
-    if (saved.ok) {
-      source = { text, hash: saved.value };
-      if (pending.get(key) === draft) pending.delete(key);
-      saves.set(key, { state: pending.has(key) ? "unsaved" : "saved" });
-      return;
-    }
-    // Go refuses a stale hash; a fresh read tells that apart from a real failure.
-    const fresh = await freshContent(id);
-    if (fresh.ok && fresh.value.hash !== hash) {
-      source = { text: fresh.value.text, hash: fresh.value.hash };
-      epoch = Math.max(epoch, fresh.value.viewportEpoch ?? 0);
-      saves.set(key, {
-        state: "reloaded",
-        message: "The spec changed on disk, so it reloaded. Your answer is kept here: pick again or press ⌘↵ to save it.",
-      });
-      return;
-    }
-    saves.set(key, { state: "failed", message: `Could not save: ${saved.error?.message ?? saved.error}` });
-  }
+  const commit = answers.commit;
 
   let blocked = $derived.by(() => {
-    const states = [...saves.values()].map((save) => save.state);
-    if (states.includes("saving")) return "Wait for the save to finish.";
-    if (states.includes("failed") || states.includes("reloaded"))
-      return "An answer did not save. Save it again first.";
+    const waiting = answers.waiting;
+    if (waiting === "saving") return "Wait for the save to finish.";
+    if (waiting === "failed") return "An answer did not save. Save it again first.";
     if (laid.detached.length > 0) return "Copy or discard the detached answers first.";
-    if (pending.size > 0) return "Save your typed answer first: click outside the field or press ⌘↵.";
+    if (waiting === "typed") return "Save your typed answer first: click outside the field or press ⌘↵.";
     if (answered === 0) return "Answer at least one question first.";
     return "";
   });
@@ -279,8 +235,7 @@
 
   /** @param {{id: string, heading: string}} draft */
   function discard(draft) {
-    pending.delete(draftKey(draft));
-    saves.delete(draftKey(draft));
+    answers.discard(draftKey(draft));
   }
 
   /** @param {KeyboardEvent} event */
@@ -325,13 +280,13 @@
     {/snippet}
     {#snippet body()}
       {#if view.reading}
-        <div class="reading" bind:this={reading}>
+        <div class="reading artifact-deck" bind:this={reading}>
           <h1 class="display-lg">{spec.title || heading}</h1>
           <MarkdownPane doc={shown} {id} {active} {scrollRoot} bare onMeasure={spy} />
         </div>
       {:else}
         <div
-          class="deck"
+          class="deck artifact-deck"
           bind:this={sheet}
           data-document-source={doc.source}
           use:links={doc.source}
@@ -357,7 +312,7 @@
             </div>
             {#if spec.open.length > 0}
               <CapsLabel data-list>Open questions</CapsLabel>
-              <ol class="asks" data-open-list>
+              <ol class="rows asks" data-open-list>
                 {#each spec.open as question, index (draftKey(question))}
                   <li>
                     <button
@@ -468,7 +423,7 @@
       {/if}
     {/snippet}
     {#snippet controls()}
-      <ReaderPips entries={pips} current={viewing} onSelect={reach} />
+      <ReaderPips entries={pips} current={viewing} onSelect={jump} />
     {/snippet}
     {#snippet counter()}
       <span class="counter" title={counter}>{counter}</span>
@@ -495,35 +450,6 @@
 {/if}
 
 <style>
-  .deck,
-  .reading {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));
-  }
-
-  .reading .display-lg {
-    margin-top: calc(4px * var(--ui-scale));
-  }
-
-  .hero {
-    padding-top: calc(18px * var(--ui-scale));
-  }
-
-  .hero .display-lg {
-    margin: calc(14px * var(--ui-scale)) 0 calc(20px * var(--ui-scale));
-    max-width: 26ch;
-  }
-
-  .hero .lead :global(p) {
-    font: var(--machine-lg);
-    font-size: calc(15px * var(--ui-scale));
-    line-height: 1.7;
-    color: var(--text-secondary);
-    max-width: 68ch;
-  }
-
   .tally {
     display: flex;
     flex-wrap: wrap;
@@ -556,37 +482,11 @@
     color: var(--text-muted);
   }
 
-  .display-lg,
-  .display-md {
-    margin: calc(12px * var(--ui-scale)) 0 calc(18px * var(--ui-scale));
-    padding-left: var(--gutter);
-    letter-spacing: var(--display-tracking);
-    color: var(--text-primary);
-    overflow-wrap: anywhere;
-  }
-
-  .display-lg {
-    font: var(--display-lg);
-  }
-
-  .display-md {
-    font: var(--display-md);
-  }
-
   .cards {
     display: flex;
     flex-direction: column;
     gap: calc(22px * var(--ui-scale));
     padding-left: var(--gutter);
-  }
-
-  .rows,
-  .asks {
-    list-style: none;
-    margin: calc(26px * var(--ui-scale)) 0 0;
-    padding: 0;
-    border: var(--border-width) solid var(--border-subtle);
-    box-shadow: var(--shadow-offset) var(--border-subtle);
   }
 
   .hero > :global(.caps[data-list]) {
@@ -595,37 +495,8 @@
   }
 
   .rows.titled,
-  .asks {
+  .rows.asks {
     margin-top: calc(8px * var(--ui-scale));
-  }
-
-  .rows li + li .row,
-  .asks li + li .row {
-    border-top: var(--border-width) solid var(--border-subtle);
-  }
-
-  .row {
-    display: flex;
-    align-items: center;
-    gap: calc(14px * var(--ui-scale));
-    width: 100%;
-    padding: calc(11px * var(--ui-scale)) calc(14px * var(--ui-scale));
-    border: 0;
-    background: transparent;
-    font: var(--machine-md);
-    color: var(--text-secondary);
-    text-align: left;
-    cursor: pointer;
-  }
-
-  .row:hover {
-    background: var(--wash-selected);
-  }
-
-  .row .index {
-    min-width: 3ch;
-    font: var(--machine-bold);
-    color: var(--accent-action);
   }
 
   .row .text {
@@ -662,15 +533,10 @@
     color: var(--state-failed);
   }
 
-  .row .name,
   .row .lead-line {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  .row .name {
-    color: var(--text-primary);
   }
 
   .asks .row > .name {
@@ -750,18 +616,6 @@
 
   :global(html[data-narrow]) .detached {
     padding-left: 0;
-  }
-
-  :global(html[data-narrow]) .hero {
-    padding-top: calc(6px * var(--ui-scale));
-  }
-
-  :global(html[data-narrow]) .display-lg {
-    font: var(--display-md);
-  }
-
-  :global(html[data-narrow]) .display-md {
-    font: var(--display-sm);
   }
 
   :global(html[data-narrow]) .cards,

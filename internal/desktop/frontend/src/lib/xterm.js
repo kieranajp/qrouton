@@ -2,15 +2,17 @@ import { Terminal } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
+import { WEB_GL_LOG_RECORD } from "./bridge/generated.js";
 import { resolveToken } from "./css-token.js";
 import { latestPerFrame } from "./frame.js";
-import { linux } from "./platform.js";
+import { macOS } from "./platform.js";
 import { terminalSize } from "./scale.js";
 import { uiScale } from "./scale.svelte.js";
-import { opensSettings, position, scaleAction } from "./shortcuts.js";
-export { createTerminalPainter, decode, encode } from "./terminal-painter.js";
-
-export { Terminal };
+import { opensSettings, opensSwitcher, position, scaleAction } from "./shortcuts.js";
+import { terminalRenderer } from "./terminal-renderer.js";
+import { Call, call } from "./wails.js";
+import { webglWatcher } from "./webgl-log.js";
+export { createTerminalPainter, encode } from "./terminal-painter.js";
 
 const token = (name) =>
   resolveToken((property) => getComputedStyle(document.documentElement).getPropertyValue(property), name);
@@ -33,6 +35,8 @@ const SHIFT_ENTER = "\x1b[200~\n\x1b[201~";
 
 const mounted = new WeakMap();
 
+const watchWebGL = webglWatcher(window.location.search, (...record) => call(Call.ByName(WEB_GL_LOG_RECORD, new Date().toISOString(), ...record)));
+
 /** terminalAt is the terminal a node sits inside, and undefined outside one. */
 export function terminalAt(node) {
   for (let element = node; element; element = element.parentElement) {
@@ -44,9 +48,9 @@ export function terminalAt(node) {
 
 /**
  * @param {HTMLElement} host
- * @param {{write: (text: string) => void, background?: string}} options
+ * @param {{write: (text: string) => void, background?: string, terminal?: string, pane?: string}} options
  */
-export function mount(host, { write, background = "--surface-app" }) {
+export function mount(host, { write, background = "--surface-app", terminal = "", pane = "" }) {
   const term = new Terminal({
     fontFamily: token("--font-terminal"),
     fontSize: terminalFontSize(uiScale()),
@@ -62,24 +66,23 @@ export function mount(host, { write, background = "--surface-app" }) {
   term.loadAddon(fit);
   term.open(host);
   mounted.set(host, term);
-  // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
-  // the layer, so on Linux a keystroke stays unpainted until the next event
-  // arrives and nothing repaints an idle terminal. The DOM renderer gives up
-  // GPU throughput but paints when it is told to.
-  if (!linux) {
-    try {
-      term.loadAddon(new WebglAddon());
-    } catch (e) {
-      console.warn("webgl", e);
-    }
-  }
+  const renderer = terminalRenderer({
+    term,
+    // WebKitGTK leaves the WebGL canvas unpresented until something else dirties
+    // the layer, so on Linux a keystroke stays unpainted until the next event
+    // arrives and nothing repaints an idle terminal. The DOM renderer gives up
+    // GPU throughput but paints when it is told to.
+    enabled: macOS,
+    create: () => new WebglAddon(),
+    watch: (addon) => watchWebGL({ host, addon, terminal, pane }),
+  });
   fit.fit();
 
   term.attachCustomKeyEventHandler((event) => {
     if (event.type !== "keydown") return true;
     // Returning false without preventing the default leaves the keystroke to
     // bubble, which is how the session shortcut reaches the page from in here.
-    if (position(event) || opensSettings(event) || scaleAction(event, linux)) return false;
+    if (opensSwitcher(event, macOS) || position(event) || opensSettings(event, macOS) || scaleAction(event, macOS)) return false;
     if (event.key === "Enter" && event.shiftKey) {
       // Returning false stops xterm's keydown handling but not the browser's
       // own keypress, which would append a CR and submit.
@@ -103,9 +106,10 @@ export function mount(host, { write, background = "--surface-app" }) {
   };
   const dispose = () => {
     mounted.delete(host);
+    renderer.dispose();
     term.dispose();
   };
-  return { term, fit, refit, dispose };
+  return { term, fit, refit, dispose, show: renderer.show, hide: renderer.hide };
 }
 
 export function watchSize(host, resize) {

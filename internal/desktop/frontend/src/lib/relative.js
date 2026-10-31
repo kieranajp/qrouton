@@ -6,7 +6,7 @@ const DAY = 24 * HOUR;
 // Past a quarter, a count of days stops telling you anything a date would not.
 const DATED = 90 * DAY;
 
-/** @typedef {'compact'|'prose'} Style */
+/** @typedef {'compact'|'prose'|'ago'} Style */
 
 const STYLES = {
   compact: { minutes: true, dated: false, days: (count) => `${count}d ago` },
@@ -36,12 +36,15 @@ export function age(at, now = Date.now()) {
   return `${Math.floor(since / MONTH)}mo`;
 }
 
-/** Compact ages remain numeric; prose ages switch to dates beyond useful day counts.
- * @param {string|number|Date} at
- * @param {Style} style
+/** Compact ages stay numeric, prose ages turn into dates, and ago ages count weeks and months.
+ * @param {string|number|Date} at @param {Style} style
  * @param {number} [now] */
 export function relative(at, style, now = Date.now()) {
-  const voice = STYLES[style] ?? STYLES.compact;
+  if (style === "ago") {
+    const short = age(at, now);
+    return short === "now" ? "just now" : short && `${short} ago`;
+  }
+  const voice = STYLES[style];
   const then = new Date(at).getTime();
   if (!Number.isFinite(then) || then <= 0) return "";
   const since = now - then;

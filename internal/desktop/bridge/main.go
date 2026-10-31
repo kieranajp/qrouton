@@ -1,6 +1,7 @@
 // Command bridge writes the page's copy of the names the workbench binds: one
 // constant per bound method, one per event, the defaults the chrome payload is
-// read through, and every closed set of values the payloads carry.
+// read through, and every closed set of values the payloads carry. It also
+// writes the palette for the test fixture pages, which no workbench serves.
 package main
 
 import (
@@ -17,6 +18,9 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/kieranajp/qrouton/internal/kinds"
+	"github.com/kieranajp/qrouton/internal/theme"
 )
 
 //go:generate go run .
@@ -30,8 +34,12 @@ const (
 	sessionPackage   = "../../session"
 	githubPackage    = "../../github"
 	assemblyPackage  = "../../assembly"
+	configPackage    = "../../config"
+	placementPackage = "../../placement"
+	vaultPackage     = "../../vault"
 	moduleFile       = "../../../go.mod"
 	generatedPage    = "../frontend/src/lib/bridge/generated.js"
+	fixturePalette   = "../frontend/tests/theme.css"
 )
 
 const (
@@ -43,9 +51,10 @@ const (
 
 // valueSet selects a closed set of string constants from one package, by Go
 // type when it has one and by name otherwise; prefix and suffix are trimmed to
-// make each key.
+// make each key. Derived values lead the set and are their own keys.
 type valueSet struct {
 	name, typedef, dir, goType, prefix, suffix string
+	derived                                    []string
 }
 
 var valueSets = []valueSet{
@@ -54,30 +63,73 @@ var valueSets = []valueSet{
 	{name: "AGENT_COVERAGE", typedef: "AgentCoverage", dir: statusPackage, prefix: "AgentCoverage"},
 	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
 	{name: "AGENT_STAGES", typedef: "AgentStage", dir: statusPackage, prefix: "Stage"},
-	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind"},
+	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind", derived: kindLabels()},
+	{name: "AUDIT_HEADINGS", typedef: "AuditHeading", dir: statusPackage, prefix: "AuditHeading"},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
+	{name: "GITHUB_CREDENTIALS", typedef: "GitHubCredential", dir: githubPackage, goType: "Credential", prefix: "Credential"},
+	{name: "GITHUB_TOKEN_CHECKS", typedef: "GitHubTokenCheck", dir: githubPackage, goType: "TokenCheck", prefix: "Token"},
 	{name: "MEDIA_KINDS", typedef: "MediaKind", dir: workbenchPackage, goType: "MediaKind", prefix: "Media"},
 	{name: "MODE_LABELS", typedef: "ModeLabel", dir: statusPackage, prefix: "mode", suffix: "Label"},
 	{name: "OLLAMA_STATES", typedef: "OllamaState", dir: desktopPackage, prefix: "ollamaState"},
+	{name: "PLACEMENT_REASONS", typedef: "PlacementReason", dir: placementPackage, goType: "Reason", prefix: "Reason"},
+	{name: "PLACEMENT_RESULTS", typedef: "PlacementResult", dir: placementPackage, goType: "Result", prefix: "Result"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
 	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},
 	{name: "SETTINGS_FIELDS", typedef: "SettingsField", dir: desktopPackage, prefix: "settingsField"},
-	{name: "STICKER_IDS", typedef: "Sticker", dir: sessionPackage, goType: "Sticker", prefix: "Sticker"},
 	{name: "TAB_STATUSES", typedef: "TabStatus", dir: desktopPackage, prefix: "tabStatus"},
 	{name: "UI_SCALE_ACTIONS", typedef: "UIScaleAction", dir: desktopPackage, prefix: "uiScaleAction"},
 	{name: "WINDOW_ICONS", typedef: "WindowIcon", dir: workbenchPackage, goType: "WindowIcon", prefix: "Icon"},
 	{name: "WINDOW_KINDS", typedef: "WindowKind", dir: workbenchPackage, goType: "WindowKind", prefix: "Kind"},
 }
 
+func kindLabels() []string {
+	var out []string
+	for _, k := range kinds.All() {
+		out = append(out, k.Label())
+	}
+	return out
+}
+
 // valueNames are single values the page compares against.
 type valueName struct{ dir, goName string }
 
 var valueNames = []valueName{
-	{desktopPackage, "agentRootID"},
+	{desktopPackage, "galleryLabel"},
+	{desktopPackage, "stickerDuplicate"},
+	{desktopPackage, "sessionUnloadLabel"},
+	{desktopPackage, "sessionUnloadFailed"},
+	{desktopPackage, "sessionReorderFailed"},
+	{desktopPackage, "switcherLabel"},
+	{desktopPackage, "switcherSearch"},
+	{desktopPackage, "switcherClose"},
+	{desktopPackage, "switcherEmpty"},
+	{desktopPackage, "switcherNoMatches"},
+	{desktopPackage, "switcherOpening"},
+	{desktopPackage, "switcherFailed"},
+	{desktopPackage, "switcherCurrent"},
+	{desktopPackage, "switcherResults"},
+	{desktopPackage, "switcherHelp"},
+	{desktopPackage, "inspectQuery"},
+	{configPackage, "rootEnvVar"},
+	{configPackage, "orgsEnvVar"},
+	{configPackage, "defaultRoot"},
+	{vaultPackage, "OllamaURL"},
+}
+
+// valueList is an ordered list of strings that Go holds as a package-level
+// slice literal rather than as constants, or derives.
+type valueList struct {
+	name, typedef, dir, goName string
+	derived                    []string
+}
+
+var valueLists = []valueList{
+	{name: "STICKER_COLOURS", typedef: "StickerColour", derived: theme.StickerColours()},
+	{name: "STICKER_SYMBOLS", typedef: "StickerSymbol", dir: configPackage, goName: "stickerSymbols"},
 }
 
 func main() {
@@ -89,6 +141,9 @@ func main() {
 		log.Fatal(err)
 	}
 	if err := os.WriteFile(generatedPage, body, 0o644); err != nil {
+		log.Fatal(err)
+	}
+	if err := os.WriteFile(fixturePalette, []byte(theme.CSS()), 0o644); err != nil {
 		log.Fatal(err)
 	}
 }
@@ -130,6 +185,9 @@ func render(desktopDir, statusDir, modPath string) ([]byte, error) {
 	}
 	js.WriteString("\n")
 	if err := writeValues(&js, valueSets, valueNames); err != nil {
+		return nil, err
+	}
+	if err := writeLists(&js, valueLists); err != nil {
 		return nil, err
 	}
 	fmt.Fprintf(&js, "/** @type {%s} */\n", defaults.typing(0))
@@ -299,6 +357,20 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 			return err
 		}
 		var keys, values []string
+		for _, value := range set.derived {
+			alreadyNamed := slices.ContainsFunc(found, func(c constant) bool {
+				if set.goType != "" && c.goType != set.goType {
+					return false
+				}
+				key, ok := strings.CutPrefix(c.name, set.prefix)
+				return ok && strings.HasSuffix(key, set.suffix) && key != set.suffix && c.value == value
+			})
+			if alreadyNamed {
+				continue
+			}
+			keys = append(keys, value)
+			values = append(values, strconv.Quote(value))
+		}
 		for _, c := range found {
 			if set.goType != "" && c.goType != set.goType {
 				continue
@@ -332,6 +404,68 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 		fmt.Fprintf(js, "export const %s = %q;\n\n", screaming(single.goName), found[i].value)
 	}
 	return nil
+}
+
+func writeLists(js *bytes.Buffer, lists []valueList) error {
+	for _, list := range lists {
+		values := list.derived
+		if values == nil {
+			files, err := parsePackage(list.dir)
+			if err != nil {
+				return err
+			}
+			var ok bool
+			values, ok = stringList(files, list.goName)
+			if !ok || len(values) == 0 {
+				return fmt.Errorf("%s: no string slice literal %s in %s", list.name, list.goName, list.dir)
+			}
+		}
+		quoted := make([]string, len(values))
+		for i, v := range values {
+			quoted[i] = strconv.Quote(v)
+		}
+		fmt.Fprintf(js, "/** @typedef {%s} %s */\n", strings.Join(quoted, "|"), list.typedef)
+		fmt.Fprintf(js, "/** @type {readonly %s[]} */\n", list.typedef)
+		fmt.Fprintf(js, "export const %s = Object.freeze([%s]);\n\n", list.name, strings.Join(quoted, ", "))
+	}
+	return nil
+}
+
+// stringList reads a package-level var whose value is a []string literal of
+// string literals only.
+func stringList(files []*ast.File, name string) ([]string, bool) {
+	for _, file := range files {
+		for _, decl := range file.Decls {
+			decl, ok := decl.(*ast.GenDecl)
+			if !ok || decl.Tok != token.VAR {
+				continue
+			}
+			for _, spec := range decl.Specs {
+				spec, ok := spec.(*ast.ValueSpec)
+				if !ok || len(spec.Names) != 1 || spec.Names[0].Name != name || len(spec.Values) != 1 {
+					continue
+				}
+				lit, ok := spec.Values[0].(*ast.CompositeLit)
+				if !ok {
+					return nil, false
+				}
+				var out []string
+				for _, elt := range lit.Elts {
+					text, ok := elt.(*ast.BasicLit)
+					if !ok || text.Kind != token.STRING {
+						return nil, false
+					}
+					value, err := strconv.Unquote(text.Value)
+					if err != nil {
+						return nil, false
+					}
+					out = append(out, value)
+				}
+				return out, true
+			}
+		}
+	}
+	return nil, false
 }
 
 // stringConstants are a package's string-literal constants in source order,

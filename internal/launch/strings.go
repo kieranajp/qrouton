@@ -15,9 +15,6 @@ const (
 	// openCodeConfigEnvVar is how OpenCode accepts inline configuration.
 	openCodeConfigEnvVar = "OPENCODE_CONFIG_CONTENT"
 
-	// shellBin runs the generated support scripts.
-	shellBin = "sh"
-
 	shellQuoteChar   = "'"
 	shellQuoteEscape = `'\''`
 
@@ -80,6 +77,9 @@ const (
 
 	openCommand    = "open"
 	openRevealFlag = "-R"
+	openTextFlag   = "-t"
+	xdgOpenCommand = "xdg-open"
+	darwinOS       = "darwin"
 
 	shellCommandFlag = "-c"
 	// sh -c takes the script's own name before its arguments; $1 is the path.

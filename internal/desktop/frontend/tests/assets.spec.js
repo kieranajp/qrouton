@@ -8,6 +8,38 @@ test.use({ userAgent: MAC_UA });
 const primary = (page) => page.locator(".primary-frame img");
 const decoded = (locator) => locator.evaluate((img) => img.complete && img.naturalWidth > 0);
 
+test("gallery header follows the selected asset and copies its absolute path", async ({ page }) => {
+  await page.goto("/tests/assets.html");
+  const header = page.locator(".assets-pane .head");
+  await expect(header.locator(".mark")).toBeVisible();
+  await expect(header.locator(".chip")).toHaveText("GALLERY");
+  const source = header.locator(".caps");
+  await expect(source).toHaveText("thoughts/assets/z/screen.png");
+  expect(await source.evaluate((element) => getComputedStyle(element).textTransform)).toBe("uppercase");
+  const copy = header.getByRole("button", { name: "Copy absolute path" });
+  await copy.click();
+  await expect(copy).toHaveText("Copied");
+  expect(await page.evaluate(() => window.clipboardText)).toBe("/sessions/fixture/thoughts/assets/z/screen.png");
+
+  await page.locator(".asset-strip button").nth(1).click();
+  await expect(source).toHaveText("thoughts/assets/a/screen.png");
+  await copy.click();
+  expect(await page.evaluate(() => window.clipboardText)).toBe("/sessions/fixture/thoughts/assets/a/screen.png");
+});
+
+test("a long gallery path leaves Copy visible in a narrow pane", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.goto("/tests/assets.html");
+  await page.locator(".asset-strip button").nth(3).click();
+  const header = page.locator(".assets-pane .head");
+  await expect(header.locator(".caps")).toContainText("long-caption-");
+  const copy = header.getByRole("button", { name: "Copy absolute path" });
+  await expect(copy).toBeInViewport();
+  await copy.click();
+  expect(await page.evaluate(() => window.clipboardText)).toContain("/sessions/fixture/thoughts/assets/日本語 and spaces/");
+  expect(await header.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+});
+
 test("ordered gallery decodes the raster formats and preserves duplicates and captions", async ({ page }) => {
   await page.goto("/tests/assets.html");
   await expect(page.locator(".position")).toHaveText("Image 1 of 9");
@@ -134,7 +166,7 @@ test("late initial response after replacement cannot restore the old gallery", a
   await expect(page.locator(".position")).toHaveText("Image 1 of 9");
   await page.evaluate(() => { window.releaseInitial(); window.pushOldAssets(); });
   await expect(primary(page)).toHaveAttribute("src", /replacement=0/);
-  await expect(page.locator(".primary .path")).toHaveText("thoughts/assets/sample.avif");
+  await expect(page.locator(".assets-pane .head .caps")).toHaveText("thoughts/assets/sample.avif");
 });
 
 test("corrupt and missing images can be current while other entries remain selectable", async ({ page }) => {

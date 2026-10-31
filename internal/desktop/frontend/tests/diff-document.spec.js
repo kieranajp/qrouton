@@ -116,3 +116,30 @@ test("large diff Find remains focused and collapse cancels batched expansion", a
   await expect(page.locator(".diff-item[open]")).toHaveCount(0);
   await expect(page.locator(".diff-line")).toHaveCount(0);
 });
+
+test("keeps disclosure arrows inside the row and centered on the first path line", async ({ page }) => {
+  await page.goto("/tests/diff-document.html");
+  await setDiff(page, file("internal/sessionpaths/sessionpaths"));
+  for (const width of [800, 400]) {
+    await page.setViewportSize({ width, height: 700 });
+    const summary = page.locator(".diff-item summary").first();
+    for (const open of [false, true]) {
+      if (open) await summary.click();
+      const bounds = await summary.evaluate((row) => {
+        const path = row.querySelector(".diff-path");
+        const icon = row.querySelector(".diff-disclosure svg").getBoundingClientRect();
+        const text = path.getBoundingClientRect();
+        return {
+          left: row.getBoundingClientRect().left,
+          icon: icon.toJSON(),
+          text: text.toJSON(),
+          lineHeight: parseFloat(getComputedStyle(path).lineHeight),
+        };
+      });
+      expect(bounds.icon.left).toBeGreaterThanOrEqual(bounds.left);
+      expect(bounds.icon.right).toBeLessThan(bounds.text.left);
+      expect(Math.abs(bounds.icon.y + bounds.icon.height / 2 - bounds.text.y - bounds.lineHeight / 2)).toBeLessThan(1);
+    }
+    await summary.click();
+  }
+});

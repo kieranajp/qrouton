@@ -3,6 +3,7 @@ package github
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -113,8 +114,9 @@ func CachedOwnerRepos(orgs []string) (map[string]OwnerRepos, bool) {
 
 // RefreshRepos fetches configured owners concurrently. Successful results are
 // merged immediately; failures retain that owner's cached repositories. Calling
-// it again (or RefreshOwnerRepos directly) provides owner-level retry.
-func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, cached []Repo) <-chan RefreshMsg {
+// it again (or RefreshOwnerRepos directly) provides owner-level retry. Each
+// owner's fetch has its own ownerTimeout, so a stalled owner fails alone.
+func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs []string, ownerTimeout time.Duration, cached []Repo) <-chan RefreshMsg {
 	// This is the maximum possible event count. A full buffer lets the
 	// coordinator and workers terminate even if the consumer stops reading.
 	out := make(chan RefreshMsg, 2*len(orgs)+1)
@@ -129,7 +131,9 @@ func RefreshRepos(ctx context.Context, client *http.Client, token string, orgs [
 		for _, owner := range orgs {
 			out <- RefreshMsg{Owner: owner, State: RefreshStarted}
 			go func() {
-				repos, err := RefreshOwnerRepos(ctx, client, token, owner)
+				ownerCtx, cancel := context.WithTimeout(ctx, ownerTimeout)
+				defer cancel()
+				repos, err := RefreshOwnerRepos(ownerCtx, client, token, owner)
 				results <- result{owner: owner, repos: repos, err: err}
 			}()
 		}
@@ -229,16 +233,63 @@ func Token() (string, error) {
 }
 
 func TokenContext(ctx context.Context) (string, error) {
-	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
-		if t := strings.TrimSpace(string(out)); t != "" {
-			return t, nil
-		}
-	}
-	if t := os.Getenv(tokenEnvVar); t != "" {
+	if _, t := ResolveCredential(ctx); t != "" {
 		return t, nil
 	}
 	return "", ErrNoToken
 }
+
+// Credential says where the token Token would use comes from, or why there is none.
+type Credential string
+
+const (
+	CredentialCLI       Credential = "cli"
+	CredentialEnv       Credential = "env"
+	CredentialMissing   Credential = "missing"
+	CredentialSignedOut Credential = "signed-out"
+)
+
+// ResolveCredential answers where the token TokenContext would use comes from,
+// and the token itself, running gh once.
+func ResolveCredential(ctx context.Context) (Credential, string) {
+	if out, err := exec.CommandContext(ctx, ghBin, ghAuthCmd, ghTokenCmd).Output(); err == nil {
+		if t := strings.TrimSpace(string(out)); t != "" {
+			return CredentialCLI, t
+		}
+	}
+	if t := os.Getenv(tokenEnvVar); t != "" {
+		return CredentialEnv, t
+	}
+	if _, err := exec.LookPath(ghBin); err != nil {
+		return CredentialMissing, ""
+	}
+	return CredentialSignedOut, ""
+}
+
+// TokenCheck is what GitHub said about a token.
+type TokenCheck string
+
+const (
+	TokenValid       TokenCheck = "valid"
+	TokenRejected    TokenCheck = "rejected"
+	TokenUnreachable TokenCheck = "unreachable"
+)
+
+// CheckToken asks GitHub who the token belongs to. Only a 401 counts as
+// rejected; any other failure says nothing about the token.
+func CheckToken(ctx context.Context, client *http.Client, token string) (TokenCheck, string) {
+	login, err := AuthenticatedLogin(ctx, client, token)
+	switch {
+	case err == nil:
+		return TokenValid, login
+	case errors.Is(err, ErrTokenRejected):
+		return TokenRejected, ""
+	default:
+		return TokenUnreachable, ""
+	}
+}
+
+func TokenEnvVar() string { return tokenEnvVar }
 
 // AuthenticatedLogin is the account the token belongs to, which is how a screen
 // naming the signed-in user says whose repositories it can see.
@@ -356,21 +407,43 @@ func fetchOwnerRepos(ctx context.Context, client *http.Client, token, owner stri
 }
 
 func githubJSON(ctx context.Context, client *http.Client, token, requestURL string, dst any) error {
+	_, _, err := GetJSON(ctx, client, requestURL, token, nil, dst)
+	return err
+}
+
+// GetJSON GETs a GitHub URL and decodes the answer into out. The token is sent
+// only when non-empty. A 304 succeeds and leaves out untouched.
+func GetJSON(ctx context.Context, client *http.Client, requestURL, token string, headers http.Header, out any) (int, http.Header, error) {
 	req, err := http.NewRequestWithContext(ctx, getMethod, requestURL, nil)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
-	req.Header.Set(authorizationHeader, bearerPrefix+token)
+	for name, values := range headers {
+		for _, value := range values {
+			req.Header.Add(name, value)
+		}
+	}
+	if token != "" {
+		req.Header.Set(authorizationHeader, bearerPrefix+token)
+	}
 	req.Header.Set(acceptHeader, acceptGitHubJSON)
 	resp, err := client.Do(req)
 	if err != nil {
-		return err
+		return 0, nil, err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("%s", resp.Status)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return resp.StatusCode, resp.Header, json.NewDecoder(resp.Body).Decode(out)
+	case http.StatusNotModified:
+		return resp.StatusCode, resp.Header, nil
+	case http.StatusUnauthorized:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%w: %s", ErrTokenRejected, resp.Status)
+	case http.StatusNotFound:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%w: %s", ErrNotFound, resp.Status)
+	default:
+		return resp.StatusCode, resp.Header, fmt.Errorf("%s", resp.Status)
 	}
-	return json.NewDecoder(resp.Body).Decode(dst)
 }
 
 func (r Repo) ID() string { return r.Org + repoIDSeparator + r.Name }

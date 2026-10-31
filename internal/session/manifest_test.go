@@ -3,12 +3,15 @@ package session
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 func TestManifestRepoJSONFieldOrderIncludesBaseBranch(t *testing.T) {
@@ -111,8 +114,8 @@ func TestWriteManifestConcurrentWritesNeverTearOrLeaveTempFiles(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(entries) != 1 || entries[0].Name() != manifestName {
-		t.Fatalf("directory holds %v, want only %s", entries, manifestName)
+	if len(entries) != 1 || entries[0].Name() != sessionpaths.ManifestName {
+		t.Fatalf("directory holds %v, want only %s", entries, sessionpaths.ManifestName)
 	}
 }
 
@@ -159,91 +162,49 @@ func TestUpdateManifestConcurrentMutationsBothSurvive(t *testing.T) {
 	}
 }
 
-func TestCycleStickerPersistsTheCompleteCycleAndClearsTheManifestKey(t *testing.T) {
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "stickers"}); err != nil {
-		t.Fatal(err)
-	}
-	want := []Sticker{StickerStar, StickerBookmark, StickerQuestion, StickerExclamation, ""}
-	for _, expected := range want {
-		got, err := CycleSticker(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != expected {
-			t.Fatalf("CycleSticker() = %q, want %q", got, expected)
-		}
-		loaded, err := Load(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if loaded.Sticker != expected {
-			t.Fatalf("reloaded sticker = %q, want %q", loaded.Sticker, expected)
+func TestNextWalksTheConfiguredOrder(t *testing.T) {
+	order := []Sticker{"a1", "b2", "c3"}
+	for _, tc := range []struct{ from, want Sticker }{
+		{"", "a1"}, {"retired", "a1"}, {"a1", "b2"}, {"b2", "c3"}, {"c3", ""},
+	} {
+		if got := tc.from.Next(order); got != tc.want {
+			t.Fatalf("Sticker(%q).Next() = %q, want %q", tc.from, got, tc.want)
 		}
 	}
-	b, err := os.ReadFile(filepath.Join(dir, manifestName))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(b), `"sticker"`) {
-		t.Fatalf("cleared manifest retained sticker: %s", b)
+	for _, from := range []Sticker{"", "a1"} {
+		if got := from.Next(nil); got != "" {
+			t.Fatalf("Sticker(%q).Next(nil) = %q, want none", from, got)
+		}
 	}
 }
 
-func TestStickerTreatsAbsentAndUnknownValuesAsNone(t *testing.T) {
-	for _, initial := range []Sticker{"", "retired"} {
-		if got := initial.Effective(); got != "" {
-			t.Fatalf("Sticker(%q).Effective() = %q, want none", initial, got)
-		}
-		if got := initial.Next(); got != StickerStar {
-			t.Fatalf("Sticker(%q).Next() = %q, want %q", initial, got, StickerStar)
-		}
-	}
-
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "legacy", Sticker: "retired"}); err != nil {
-		t.Fatal(err)
-	}
-	got, err := CycleSticker(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got != StickerStar {
-		t.Fatalf("CycleSticker() from unknown = %q, want %q", got, StickerStar)
-	}
-}
-
-func TestCycleStickerAndAnotherManifestMutationBothSurvive(t *testing.T) {
-	dir := t.TempDir()
-	if err := WriteManifest(dir, Manifest{SchemaVersion: manifestSchemaVersion, Slug: "concurrent"}); err != nil {
-		t.Fatal(err)
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		if _, err := CycleSticker(dir); err != nil {
-			t.Errorf("CycleSticker: %v", err)
-		}
-	}()
-	go func() {
-		defer wg.Done()
-		if err := UpdateManifest(dir, func(m Manifest) (Manifest, error) {
-			time.Sleep(50 * time.Millisecond)
-			m.Runner = "codex"
-			return m, nil
-		}); err != nil {
-			t.Errorf("UpdateManifest: %v", err)
-		}
-	}()
-	wg.Wait()
-
-	got, err := Load(dir)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.Sticker != StickerStar || got.Runner != "codex" {
-		t.Fatalf("concurrent result = %+v", got)
+func TestAManifestNamingACheckoutOutsideSrcFailsToLoad(t *testing.T) {
+	for _, tc := range []struct {
+		path string
+		ok   bool
+	}{
+		{"src/api", true},
+		{"src/acme-api", true},
+		{"", true},
+		{"../../victim", false},
+		{"src/../../victim", false},
+		{"/elsewhere/api", false},
+		{"thoughts/api", false},
+		{"src", false},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			dir := t.TempDir()
+			m := Manifest{Slug: filepath.Base(dir), Repos: []ManifestRepo{{Org: "acme", Name: "api", Role: RepoRoleEditing, WorktreePath: tc.path}}}
+			if err := WriteManifest(dir, m); err != nil {
+				t.Fatal(err)
+			}
+			_, err := Load(dir)
+			if tc.ok && err != nil {
+				t.Fatalf("Load = %v", err)
+			}
+			if !tc.ok && !errors.Is(err, ErrCheckoutOutsideSrc) {
+				t.Fatalf("Load = %v, want ErrCheckoutOutsideSrc", err)
+			}
+		})
 	}
 }

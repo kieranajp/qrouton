@@ -1,19 +1,16 @@
 // What a Save refusal means for the panel's fields.
 
 import { SETTINGS_FIELDS } from "../bridge/generated.js";
+import { fieldError as parse } from "../fields.js";
 
 const msgLoadFailed = "Settings could not be read:";
 
-const SCOPED = new RegExp(`^([a-z]+|${Object.values(SETTINGS_FIELDS).join("|")}): (.*)$`, "s");
+const STICKER_ROW = `${SETTINGS_FIELDS.STICKERS}\\.\\d+`;
 
 /** Unscoped failures return null instead of guessing a field.
  * @param {any} err
- * @returns {{field: import("../bridge/generated.js").SettingsField, message: string} | null} */
-export function fieldError(err) {
-  const text = String(err?.message ?? err ?? "");
-  const found = text.match(SCOPED);
-  return found ? { field: /** @type {any} */ (found[1]), message: found[2] } : null;
-}
+ * @returns {{field: string, message: string} | null} */
+export const fieldError = (err) => parse(err, SETTINGS_FIELDS, [STICKER_ROW]);
 
 /** @param {any} err */
 export function loadFailure(err) {
@@ -24,7 +21,7 @@ export function loadFailure(err) {
 /** Failures omit restartRequired so an existing restart banner remains unchanged.
  * @param {{restartRequired?: boolean} | undefined} result
  * @param {any} err
- * @returns {{close: boolean, restartRequired?: boolean, fields: Partial<Record<import("../bridge/generated.js").SettingsField, string>>, status: string}} */
+ * @returns {{close: boolean, restartRequired?: boolean, fields: Record<string, string>, status: string}} */
 export function saveOutcome(result, err) {
   if (err) {
     const found = fieldError(err);

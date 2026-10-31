@@ -24,21 +24,11 @@ func builtBundle(t *testing.T) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var all strings.Builder
-	if err := fs.WalkDir(assets, ".", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		b, err := fs.ReadFile(assets, path)
-		if err != nil {
-			return err
-		}
-		all.Write(b)
-		return nil
-	}); err != nil {
+	bundle, err := bundleText(assets)
+	if err != nil {
 		t.Fatal(err)
 	}
-	return all.String()
+	return bundle
 }
 
 // A page names its Go service by the fully qualified name Wails derives from
@@ -49,12 +39,11 @@ func TestTheBuiltPagesNameTheirServicesExactly(t *testing.T) {
 	bundle := builtBundle(t)
 	for _, service := range frontendServices {
 		typ := reflect.TypeOf(service)
-		qualified := typ.PkgPath() + "." + typ.Name()
 		methods := reflect.PointerTo(typ)
 		for i := 0; i < methods.NumMethod(); i++ {
 			method := methods.Method(i).Name
 			t.Run(typ.Name()+"."+method, func(t *testing.T) {
-				if !strings.Contains(bundle, qualified+"."+method) {
+				if !strings.Contains(bundle, bindingName(typ, method)) {
 					t.Fatalf("the built pages no longer call %s.%s", typ.Name(), method)
 				}
 			})

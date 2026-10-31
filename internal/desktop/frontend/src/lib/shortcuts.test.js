@@ -25,10 +25,6 @@ test("a digit with any other modifier is the terminal's", () => {
   assert.equal(position({ key: "1", ctrlKey: true }), 0);
 });
 
-test("position tolerates being handed nothing", () => {
-  assert.equal(position(undefined), 0);
-});
-
 test("the first nine rows wear their shortcut and the rest wear none", () => {
   assert.equal(shortcut(0), "⌘1");
   assert.equal(shortcut(NUMBERED - 1), "⌘" + NUMBERED);
@@ -51,42 +47,56 @@ test("a shortcut past the last row, or no shortcut at all, names nothing", () =>
 });
 
 test("comma with the platform's own modifier asks for settings", () => {
-  assert.equal(opensSettings(cmd(",")), true);
-  assert.equal(opensSettings({ key: ",", ctrlKey: true }), true);
+  assert.equal(opensSettings(cmd(","), true), true);
+  assert.equal(opensSettings({ key: ",", ctrlKey: true }, false), true);
+});
+
+test("comma with the other platform's modifier stays with the terminal", () => {
+  assert.equal(opensSettings({ key: ",", ctrlKey: true }, true), false);
+  assert.equal(opensSettings(cmd(","), false), false);
 });
 
 test("a comma the settings panel has no claim on", () => {
-  assert.equal(opensSettings({ key: "," }), false);
-  assert.equal(opensSettings(cmd(",", { ctrlKey: true })), false);
-  assert.equal(opensSettings(cmd(",", { shiftKey: true })), false);
-  assert.equal(opensSettings(cmd(",", { altKey: true })), false);
-  assert.equal(opensSettings(cmd(".")), false);
-  assert.equal(opensSettings(undefined), false);
+  assert.equal(opensSettings({ key: "," }, true), false);
+  assert.equal(opensSettings(cmd(",", { ctrlKey: true }), true), false);
+  assert.equal(opensSettings(cmd(",", { shiftKey: true }), true), false);
+  assert.equal(opensSettings(cmd(",", { altKey: true }), true), false);
+  assert.equal(opensSettings(cmd("."), true), false);
 });
 
 test("Command with =, +, - and 0 steps and resets the scale on macOS", () => {
-  assert.equal(scaleAction(cmd("="), false), "in");
-  assert.equal(scaleAction(cmd("+", { shiftKey: true }), false), "in");
-  assert.equal(scaleAction(cmd("-"), false), "out");
-  assert.equal(scaleAction(cmd("0"), false), "reset");
+  assert.equal(scaleAction(cmd("="), true), "in");
+  assert.equal(scaleAction(cmd("+", { shiftKey: true }), true), "in");
+  assert.equal(scaleAction(cmd("-"), true), "out");
+  assert.equal(scaleAction(cmd("0"), true), "reset");
 });
 
 test("Control steps and resets the scale on Linux", () => {
-  assert.equal(scaleAction({ key: "=", ctrlKey: true }, true), "in");
-  assert.equal(scaleAction({ key: "+", ctrlKey: true, shiftKey: true }, true), "in");
-  assert.equal(scaleAction({ key: "-", ctrlKey: true }, true), "out");
-  assert.equal(scaleAction({ key: "0", ctrlKey: true }, true), "reset");
+  assert.equal(scaleAction({ key: "=", ctrlKey: true }, false), "in");
+  assert.equal(scaleAction({ key: "+", ctrlKey: true, shiftKey: true }, false), "in");
+  assert.equal(scaleAction({ key: "-", ctrlKey: true }, false), "out");
+  assert.equal(scaleAction({ key: "0", ctrlKey: true }, false), "reset");
 });
 
 // Control-minus is readline's undo on macOS, so only Command scales there.
 test("the other platform's modifier, Option, both modifiers and other keys leave the scale alone", () => {
-  assert.equal(scaleAction({ key: "-", ctrlKey: true }, false), "");
-  assert.equal(scaleAction(cmd("="), true), "");
-  assert.equal(scaleAction(cmd("=", { altKey: true }), false), "");
-  assert.equal(scaleAction({ key: "=", ctrlKey: true, altKey: true }, true), "");
-  assert.equal(scaleAction(cmd("=", { ctrlKey: true }), false), "");
-  assert.equal(scaleAction({ key: "=", ctrlKey: true, metaKey: true }, true), "");
-  assert.equal(scaleAction(cmd("1"), false), "");
-  assert.equal(scaleAction({ key: "=" }, false), "");
-  assert.equal(scaleAction(undefined, false), "");
+  assert.equal(scaleAction({ key: "-", ctrlKey: true }, true), "");
+  assert.equal(scaleAction(cmd("="), false), "");
+  assert.equal(scaleAction(cmd("=", { altKey: true }), true), "");
+  assert.equal(scaleAction({ key: "=", ctrlKey: true, altKey: true }, false), "");
+  assert.equal(scaleAction(cmd("=", { ctrlKey: true }), true), "");
+  assert.equal(scaleAction({ key: "=", ctrlKey: true, metaKey: true }, false), "");
+  assert.equal(scaleAction(cmd("1"), true), "");
+  assert.equal(scaleAction({ key: "=" }, true), "");
+});
+
+test("switcher requires the exact platform chord and reserves repeats", async () => {
+  const { opensSwitcher } = await import("./shortcuts.js");
+  for (const mac of [true, false]) {
+    const chord = { key: "K", metaKey: mac, ctrlKey: !mac };
+    assert.ok(opensSwitcher(chord, mac));
+    assert.ok(opensSwitcher({ ...chord, repeat: true }, mac));
+    assert.ok(!opensSwitcher(chord, !mac));
+    for (const extra of [{ altKey: true }, { shiftKey: true }, { metaKey: true, ctrlKey: true }, { isComposing: true }, { keyCode: 229 }]) assert.ok(!opensSwitcher({ ...chord, ...extra }, mac));
+  }
 });

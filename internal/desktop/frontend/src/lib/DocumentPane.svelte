@@ -1,8 +1,9 @@
 <script>
   import { onDestroy, tick } from "svelte";
-  import { WINDOW_CONTENT_EVENT, WINDOWS_CONTENT, DOCUMENT_FORMATS } from "./bridge/generated.js";
+  import { WINDOW_CONTENT_EVENT, DOCUMENT_FORMATS } from "./bridge/generated.js";
   import { paneFor } from "./panes/index.js";
-  import { Call, Events } from "./wails.js";
+  import { freshContent } from "./panes/spec-calls.js";
+  import { follow } from "./wails.js";
 
   /** @type {{id: string, slug?: string, active?: boolean, scrollRoot?: HTMLElement, agentWorking?: boolean, onReady?: () => void, onScroller?: (element: HTMLElement | null) => void, onFindAdapter?: (adapter: import("./find.js").FindAdapter | null) => void}} */
   let {
@@ -18,46 +19,54 @@
 
   /** @type {{text: string, hash?: string, format: string, source: string, path?: string, kind?: string, deck?: boolean, assetToken?: string, line: number, to: number, viewportEpoch?: number, assets?: {source: string, path?: string, url: string, kind: import("./bridge/generated.js").MediaKind}[], currentIndex?: number, revision?: number} | undefined} */
   let doc = $state();
+  let failure = $state("");
   let windowID = "";
-  let dispose = () => {};
+  let stop = () => {};
 
   $effect(() => {
     const nextID = id;
     if (nextID === windowID) return;
-    dispose();
+    stop();
     windowID = nextID;
-    let disposed = false;
-    let live = false;
+    let stopped = false;
     doc = undefined;
+    failure = "";
     const accept = (incoming) => {
-      if (disposed || !incoming) return;
+      if (!incoming) return;
       if (incoming.format === DOCUMENT_FORMATS.ASSETS && doc?.format === DOCUMENT_FORMATS.ASSETS &&
           (incoming.revision ?? 0) <= (doc.revision ?? 0)) return;
       doc = incoming;
     };
-    const off = Events.On(WINDOW_CONTENT_EVENT + windowID, (event) => {
-      if (!event?.data || disposed) return;
-      live = true;
-      accept(event.data);
+    const following = follow(WINDOW_CONTENT_EVENT + nextID, () => freshContent(nextID), accept, {
+      accepts: (data) => Boolean(data),
+      settle: async (answer, live) => {
+        if (!answer.ok) failure = doc ? "" : String(answer.error?.message ?? answer.error);
+        else if (answer.value?.format === DOCUMENT_FORMATS.ASSETS) accept(answer.value);
+        else doc = live && doc ? { ...answer.value, text: doc.text, hash: doc.hash } : answer.value;
+        await tick();
+        if (!stopped) onReady?.();
+      },
     });
-    (async () => {
-      const content = await Call.ByName(WINDOWS_CONTENT, nextID);
-      if (disposed) return;
-      if (content?.format === DOCUMENT_FORMATS.ASSETS) accept(content);
-      else doc = live && doc ? { ...content, text: doc.text, hash: doc.hash } : content;
-      await tick();
-      if (!disposed) onReady?.();
-    })();
-    dispose = () => {
-      disposed = true;
-      off();
+    stop = () => {
+      stopped = true;
+      following.stop();
     };
   });
 
-  onDestroy(() => dispose());
+  onDestroy(() => stop());
 </script>
 
 {#if doc}
   {@const Pane = paneFor(doc)}
   <Pane {...{slug}} {doc} {id} {active} {scrollRoot} {agentWorking} {onScroller} {onFindAdapter} />
+{:else if failure}
+  <p class="failed" role="alert">Could not read this document: {failure}</p>
 {/if}
+
+<style>
+  .failed {
+    margin: var(--space-12);
+    color: var(--state-failed);
+    font: var(--machine-sm);
+  }
+</style>

@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -24,7 +25,6 @@ type Fields struct {
 	BugReportStatus string `json:"bugReportStatus"`
 	BugReportLabel  string `json:"bugReportLabel"`
 	Mode            string `json:"mode"`
-	Phase           string `json:"phase"`
 	Identity        string `json:"identity"`
 	Branch          string `json:"branch"`
 	// Slug and Terminal name the session on screen and the conversation the page
@@ -37,7 +37,7 @@ type Fields struct {
 	Repos               []RepoStat            `json:"repos"`
 	Activity            string                `json:"activity"`
 	// Stages is the durable progress the window draws as three marks, read
-	// from the latest research document and plan.
+	// from the latest research document, audit and plan.
 	Stages Stages `json:"stages"`
 	// StagesLive marks the stages whose lead is running now. Workbench-side
 	// knowledge, so a file read never sets it.
@@ -51,9 +51,16 @@ type Fields struct {
 	// Welcoming means this window is asking the first-run questions, which only a
 	// window holding no session does. Workbench-side knowledge too, so a file read
 	// never sets it.
-	Welcoming      bool           `json:"welcoming"`
-	StickerLabels  StickerLabels  `json:"stickerLabels"`
+	Welcoming bool `json:"welcoming"`
+	// Placing means the placement check has misplaced or skipped sessions to
+	// show, or the user ran it. Never set while Welcoming.
+	Placing        bool           `json:"placing"`
+	Stickers       []Sticker      `json:"stickers"`
 	SessionSummary SessionSummary `json:"sessionSummary"`
+	// PullRequests is workbench-side knowledge fetched from GitHub, so a file
+	// read never sets it.
+	PullRequests  PullRequestList `json:"pullRequests"`
+	SessionDigest SessionDigest   `json:"sessionDigest"`
 }
 
 // SessionSummary is the manifest's summary as the page reads it. At is RFC 3339,
@@ -62,6 +69,28 @@ type SessionSummary struct {
 	Text  string `json:"text"`
 	Stage string `json:"stage"`
 	At    string `json:"at"`
+}
+
+// SessionDigest is the manifest's digest as the page reads it. At is RFC 3339,
+// or empty when no digest was written.
+type SessionDigest struct {
+	Text string `json:"text"`
+	At   string `json:"at"`
+}
+
+// PullRequestList is the shown session's pull requests. SignedOut means GitHub
+// has no working credential, so Items says nothing.
+type PullRequestList struct {
+	Items     []PullRequest `json:"items"`
+	SignedOut bool          `json:"signedOut"`
+}
+
+// PullRequest is one row. Repo is org/name.
+type PullRequest struct {
+	Repo   string `json:"repo"`
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	URL    string `json:"url"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the
@@ -74,6 +103,8 @@ func EmptyFields() Fields {
 		Documents:           []Document{},
 		RepositoryDocuments: []RepositoryDocuments{},
 		Repos:               []RepoStat{},
+		Stickers:            []Sticker{},
+		PullRequests:        PullRequestList{Items: []PullRequest{}},
 	}
 }
 
@@ -94,16 +125,18 @@ type SessionRow struct {
 	Sticker  string        `json:"sticker"`
 }
 
-type StickerLabels struct {
-	Star        string `json:"star"`
-	Bookmark    string `json:"bookmark"`
-	Question    string `json:"question"`
-	Exclamation string `json:"exclamation"`
+// Sticker is one of the user's configured stickers, in rail cycle order.
+type Sticker struct {
+	ID     string `json:"id"`
+	Colour string `json:"colour"`
+	Symbol string `json:"symbol"`
+	Label  string `json:"label"`
 }
 
 // Stages is the R, P and I of a session's workflow. Research means the latest
-// research document is answered, Plan means a plan exists, and Implement means
-// every Verify item in every phase of the latest plan is ticked.
+// research document is answered or the latest audit is complete, Plan means a
+// plan exists, and Implement means every Verify item in every phase of the
+// latest plan is ticked.
 type Stages struct {
 	Research  bool `json:"research"`
 	Plan      bool `json:"plan"`
@@ -130,8 +163,7 @@ type AgentSummary struct {
 type AgentTree struct {
 	Provider      string `json:"provider"`
 	ProviderLabel string `json:"providerLabel"`
-	// Coverage says what the runner cannot report, and is empty when it reports
-	// the whole tree.
+	// Coverage is an optional note about what the runner can report.
 	Coverage string `json:"coverage"`
 	// Tools means the runner reports its tool calls, so an agent between
 	// them can be told apart from one at work.
@@ -149,6 +181,7 @@ type AgentNode struct {
 	// Stage is the R, P or I a lead works on, and empty for any other agent.
 	Stage       string `json:"stage"`
 	Description string `json:"description"`
+	TaskName    string `json:"taskName,omitempty"`
 	State       string `json:"state"`
 	// Reason is the harness's own words for a needs-you or failed state.
 	Reason      string    `json:"reason"`
@@ -218,7 +251,6 @@ func Read(root string) Fields {
 	}
 	fields.Mode = modeLabel(m)
 	fields.Stages = stages(root, m)
-	fields.Phase = phase(fields.Stages, m)
 	fields.Identity = m.DisplayName()
 	fields.Branch = m.Branch()
 	fields.Slug = m.Slug
@@ -227,7 +259,16 @@ func Read(root string) Fields {
 	fields.RepositoryDocuments = repositoryDocuments(root, m.Repos)
 	fields.Root = root
 	fields.SessionSummary = sessionSummary(m.Summary)
+	fields.SessionDigest = sessionDigest(m.Digest)
 	return fields
+}
+
+func sessionDigest(d session.Digest) SessionDigest {
+	out := SessionDigest{Text: d.Text}
+	if !d.At.IsZero() {
+		out.At = d.At.Format(time.RFC3339)
+	}
+	return out
 }
 
 func sessionSummary(s session.Summary) SessionSummary {
@@ -278,22 +319,6 @@ func modeLabel(m session.Manifest) string {
 	return modeAssistantLabel
 }
 
-// phase is the macro-phase only: scratch until repositories exist, then the
-// stage the session's durable documents put it in — a research doc means
-// planning, a plan means implementing.
-func phase(done Stages, m session.Manifest) string {
-	switch {
-	case len(m.Repos) == 0:
-		return phaseScratch
-	case done.Plan:
-		return phaseImplement
-	case done.Research:
-		return phasePlan
-	default:
-		return phaseResearch
-	}
-}
-
 // Sessions lists every session under the sessions root, most recently opened
 // first and never-opened ones last by name. That order seeds the rail once; what
 // the rail then draws is the caller's, because a row's position addresses it.
@@ -309,7 +334,7 @@ func Sessions(root string) []SessionRow {
 		rows = append(rows, SessionRow{
 			Name: name, Slug: m.Slug, Initials: initials(name), Mode: modeLabel(m),
 			Repos: sessionRepos(m), Opened: opened,
-			Sticker: string(m.Sticker.Effective()),
+			Sticker: string(m.Sticker),
 			Summary: AgentSummary{Attention: AgentAttentionNone, Coverage: AgentCoverageNone},
 		})
 	}
@@ -351,8 +376,15 @@ func UnseenIn(sessionRoot string) (int, bool) {
 
 func writtenSince(root string, since time.Time) int {
 	count := 0
-	_ = filepath.WalkDir(sessionpaths.Thoughts(root), func(_ string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+	thoughts := sessionpaths.Thoughts(root)
+	_ = filepath.WalkDir(thoughts, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if path != thoughts && ignoredName(entry.Name()) {
+			return skipEntry(entry)
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
 			return nil
 		}
 		if info, err := entry.Info(); err == nil && info.ModTime().After(since) {
@@ -408,11 +440,7 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 		if repo.WorktreePath == "" {
 			continue
 		}
-		worktree := repo.WorktreePath
-		if !filepath.IsAbs(worktree) {
-			worktree = filepath.Join(root, worktree)
-		}
-		worktree = filepath.Clean(worktree)
+		worktree := repo.Dir(root)
 		rel, inside := sessionpaths.Within(src, worktree)
 		if !inside || rel == "." {
 			continue
@@ -434,7 +462,13 @@ func repositoryDocuments(root string, repos []session.ManifestRepo) []Repository
 func documentsUnder(root, dir string, name func(string) string) []Document {
 	out := []Document{}
 	_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+		if err != nil {
+			return nil
+		}
+		if path != dir && ignoredName(entry.Name()) {
+			return skipEntry(entry)
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
 			return nil
 		}
 		info, err := entry.Info()
@@ -454,27 +488,29 @@ func documentsUnder(root, dir string, name func(string) string) []Document {
 	return out
 }
 
-// artifactKinds is the whole artifact taxonomy: the directory a kind is filed
-// under, the label it carries, and the letter its filenames are numbered from.
-// A new kind is this one entry; the lookups and the filename pattern derive.
-var artifactKinds = []struct{ dir, kind, letter string }{
-	{dir: "plans", kind: KindPlan, letter: "p"},
-	{dir: "specs", kind: KindSpec, letter: "s"},
-	{dir: "research", kind: KindResearch, letter: "r"},
-	{dir: "explainers", kind: KindExplainer, letter: "e"},
-	{dir: "reviews", kind: KindReview, letter: "v"},
+// KindFiling is the directory a kind is filed under and the letter its
+// filenames open with, for a kind label in any case.
+func KindFiling(kind string) (dir, letter string, ok bool) {
+	for _, k := range kinds.All() {
+		if strings.EqualFold(k.Name, kind) {
+			return k.Dir, strings.ToUpper(k.Letter), true
+		}
+	}
+	return "", "", false
 }
 
 var kindByDir, kindByLetter, artifactPrefix = indexArtifacts()
 
 func indexArtifacts() (map[string]string, map[string]string, *regexp.Regexp) {
-	dirs := make(map[string]string, len(artifactKinds))
-	letters := make(map[string]string, len(artifactKinds))
+	all := kinds.All()
+	dirs := make(map[string]string, len(all))
+	letters := make(map[string]string, len(all))
 	class := strings.Builder{}
-	for _, a := range artifactKinds {
-		dirs[a.dir] = a.kind
-		letters[a.letter] = a.kind
-		class.WriteString(a.letter)
+	for _, k := range all {
+		label := k.Label()
+		dirs[k.Dir] = label
+		letters[k.Letter] = label
+		class.WriteString(k.Letter)
 	}
 	return dirs, letters, regexp.MustCompile(`(?i)^(([` + class.String() + `])\d+)[-_.]`)
 }
@@ -502,4 +538,17 @@ func ArtifactID(path string) string {
 		return ""
 	}
 	return strings.ToUpper(match[1])
+}
+
+// ignoredName is a dot-prefixed name or a copy a sync tool made, which the
+// thoughts index skips as well.
+func ignoredName(name string) bool {
+	return strings.HasPrefix(name, ".") || sessionpaths.SyncCopy(name)
+}
+
+func skipEntry(entry fs.DirEntry) error {
+	if entry.IsDir() {
+		return fs.SkipDir
+	}
+	return nil
 }

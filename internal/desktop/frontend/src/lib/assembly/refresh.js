@@ -20,7 +20,7 @@ const STATES = {
  * @typedef {object} Event
  * @property {number} generation
  * @property {string} state
- * @property {string} [owner]
+ * @property {string} owner
  * @property {{org: string, name: string}[]} [repos]
  * @property {string} [error]
  */
@@ -33,7 +33,7 @@ export const idle = (repos = []) => ({ generation: 0, active: false, owners: {},
  * @param {Event} event
  * @returns {Refresh} */
 export function apply(refresh, event) {
-  const generation = event?.generation ?? 0;
+  const generation = event.generation;
   if (generation < refresh.generation) return refresh;
   const next = {
     ...refresh,

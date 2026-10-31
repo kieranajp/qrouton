@@ -1,10 +1,6 @@
 <script>
-  import { ARTIFACT_KINDS } from "../bridge/generated.js";
   import Button from "../core/Button.svelte";
-  import CapsLabel from "../core/CapsLabel.svelte";
-  import CubeMark from "../core/CubeMark.svelte";
-  import { artifactTone } from "../artifacts.js";
-  import CopyPath from "./CopyPath.svelte";
+  import ArtifactHeader from "./ArtifactHeader.svelte";
   import ReaderFooter from "./ReaderFooter.svelte";
 
   /** @type {{doc: {source: string, path?: string, kind?: string}, structured: string,
@@ -14,14 +10,7 @@
 </script>
 
 <article class="document">
-  <div class="head">
-    <CubeMark size={18} face={artifactTone(doc.kind)} data-artifact-kind={doc.kind ?? ARTIFACT_KINDS.NOTE} />
-    {@render tag()}
-    {#if doc.source}
-      <CapsLabel tone="dim">{doc.source}</CapsLabel>
-    {/if}
-    <CopyPath path={doc.path} />
-  </div>
+  <ArtifactHeader source={doc.source} path={doc.path} kind={doc.kind} {tag} />
   {@render body()}
   <ReaderFooter {bar} navigation={controls} {counter} {pips}>
     {#snippet actions()}
@@ -46,22 +35,6 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
-  }
-
-  /* Aligned with the body's text column rather than the pane edge, so the
-     mark, the chip and the path sit over the body's own left margin. */
-  .head {
-    display: flex;
-    align-items: center;
-    gap: calc(12px * var(--ui-scale));
-    padding: calc(26px * var(--ui-scale)) var(--pane-pad) calc(20px * var(--ui-scale)) calc(var(--pane-pad) + var(--gutter));
-  }
-
-  .head :global(.caps) {
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
 </style>

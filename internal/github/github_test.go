@@ -8,6 +8,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -35,7 +36,7 @@ func TestRefreshReposMergesPartialResultsAndRetainsFailedOwnerCache(t *testing.T
 	}
 	var complete RefreshMsg
 	states := map[string][]RefreshState{}
-	for msg := range RefreshRepos(context.Background(), client, "token", []string{"good", "bad"}, cached) {
+	for msg := range RefreshRepos(context.Background(), client, "token", []string{"good", "bad"}, time.Minute, cached) {
 		states[msg.Owner] = append(states[msg.Owner], msg.State)
 		if msg.State == RefreshComplete {
 			complete = msg
@@ -345,7 +346,7 @@ func TestRefreshReposDropsOwnersNoLongerConfigured(t *testing.T) {
 
 	cached := []Repo{{Org: "gone", Name: "orphan", PushedAt: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}
 	var complete RefreshMsg
-	for msg := range RefreshRepos(context.Background(), client, "token", []string{"kept"}, cached) {
+	for msg := range RefreshRepos(context.Background(), client, "token", []string{"kept"}, time.Minute, cached) {
 		if msg.State == RefreshComplete {
 			complete = msg
 		}
@@ -397,7 +398,7 @@ func TestRefreshReposLeavesEveryTimestampAloneWhenEveryOwnerFails(t *testing.T) 
 		"globex": {FetchedAt: fetched, Repos: []Repo{{Org: "globex", Name: "web"}}},
 	})
 	cached, _, _ := CachedRepos(orgs)
-	for range RefreshRepos(context.Background(), client, "token", orgs, cached) {
+	for range RefreshRepos(context.Background(), client, "token", orgs, time.Minute, cached) {
 	}
 
 	owners, ok := CachedOwnerRepos(orgs)
@@ -434,7 +435,7 @@ func TestRefreshReposAdvancesOnlyTheOwnersThatFetched(t *testing.T) {
 	})
 	cached, _, _ := CachedRepos(orgs)
 	started := time.Now()
-	for range RefreshRepos(context.Background(), client, "token", orgs, cached) {
+	for range RefreshRepos(context.Background(), client, "token", orgs, time.Minute, cached) {
 	}
 
 	owners, ok := CachedOwnerRepos(orgs)
@@ -509,5 +510,178 @@ func TestTokenFallsBackToTheEnvironmentWhenGhCannotAnswer(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "")
 	if got, err := Token(); !errors.Is(err, ErrNoToken) {
 		t.Fatalf("Token() = %q, %v; want %v", got, err, ErrNoToken)
+	}
+}
+
+func fakeGH(t *testing.T, script string) {
+	t.Helper()
+	dir := t.TempDir()
+	if script != "" {
+		if err := os.WriteFile(filepath.Join(dir, ghBin), []byte("#!/bin/sh\n"+script+"\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("PATH", dir)
+}
+
+func TestResolveCredentialFollowsTheOrderTokenReads(t *testing.T) {
+	cases := []struct {
+		name, script, env string
+		want              Credential
+		token             string
+	}{
+		{"cli answers", "echo gho_cli", "env-token", CredentialCLI, "gho_cli"},
+		{"cli signed out, env token", "exit 1", "env-token", CredentialEnv, "env-token"},
+		{"no gh, env token", "", "env-token", CredentialEnv, "env-token"},
+		{"no gh, no token", "", "", CredentialMissing, ""},
+		{"gh signed out, no token", "exit 1", "", CredentialSignedOut, ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fakeGH(t, tc.script)
+			t.Setenv(tokenEnvVar, tc.env)
+			if got, token := ResolveCredential(context.Background()); got != tc.want || token != tc.token {
+				t.Fatalf("ResolveCredential() = %q, %q, want %q, %q", got, token, tc.want, tc.token)
+			}
+		})
+	}
+}
+
+func TestResolveCredentialAsksGHOnce(t *testing.T) {
+	calls := filepath.Join(t.TempDir(), "calls")
+	fakeGH(t, "echo run >> "+calls+"\necho gho_cli")
+	ResolveCredential(context.Background())
+	got, err := os.ReadFile(calls)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := strings.Count(string(got), "run"); n != 1 {
+		t.Fatalf("gh ran %d times", n)
+	}
+}
+
+func TestCheckTokenTellsARejectedTokenFromAnUnreachableGitHub(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Header.Get(authorizationHeader) {
+		case bearerPrefix + "good":
+			fmt.Fprint(w, `{"login":"octocat"}`)
+		case bearerPrefix + "busy":
+			w.WriteHeader(http.StatusServiceUnavailable)
+		default:
+			w.WriteHeader(http.StatusUnauthorized)
+		}
+	}))
+	oldBase := githubAPIBase
+	githubAPIBase = server.URL
+	t.Cleanup(func() { githubAPIBase = oldBase })
+	client := &http.Client{Timeout: time.Second}
+
+	for _, tc := range []struct {
+		token, login string
+		want         TokenCheck
+	}{
+		{"good", "octocat", TokenValid},
+		{"bad", "", TokenRejected},
+		{"busy", "", TokenUnreachable},
+	} {
+		if got, login := CheckToken(context.Background(), client, tc.token); got != tc.want || login != tc.login {
+			t.Errorf("CheckToken(%q) = %q, %q, want %q, %q", tc.token, got, login, tc.want, tc.login)
+		}
+	}
+
+	server.Close()
+	if got, _ := CheckToken(context.Background(), client, "good"); got != TokenUnreachable {
+		t.Fatalf("a closed server answered %q, want %q", got, TokenUnreachable)
+	}
+}
+
+func TestGetJSONSendsTheTokenOnlyWhenOneIsGiven(t *testing.T) {
+	var auth []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = append(auth, r.Header.Get(authorizationHeader))
+		if r.Header.Get(acceptHeader) != acceptGitHubJSON || r.Header.Get("X-Extra") != "1" {
+			t.Errorf("headers = %v", r.Header)
+		}
+		fmt.Fprint(w, `{"login":"octocat"}`)
+	}))
+	defer server.Close()
+	for _, token := range []string{"", "secret"} {
+		var out struct{ Login string }
+		extra := http.Header{"X-Extra": {"1"}}
+		if _, _, err := GetJSON(context.Background(), server.Client(), server.URL, token, extra, &out); err != nil || out.Login != "octocat" {
+			t.Fatalf("GetJSON(%q) = %+v, %v", token, out, err)
+		}
+	}
+	if len(auth) != 2 || auth[0] != "" || auth[1] != bearerPrefix+"secret" {
+		t.Fatalf("Authorization headers = %q", auth)
+	}
+}
+
+func TestGetJSONMapsRejectionAndAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		want   error
+	}{
+		{http.StatusUnauthorized, ErrTokenRejected},
+		{http.StatusNotFound, ErrNotFound},
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+		}))
+		var out any
+		_, _, err := GetJSON(context.Background(), server.Client(), server.URL, "t", nil, &out)
+		server.Close()
+		if !errors.Is(err, tc.want) {
+			t.Errorf("status %d: err = %v, want %v", tc.status, err, tc.want)
+		}
+	}
+}
+
+func TestRefreshReposFailsAStalledOwnerAloneAndStillCaches(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		if strings.Contains(r.URL.Path, "stalled") {
+			<-r.Context().Done()
+			return nil, r.Context().Err()
+		}
+		body := `{"login":"good","type":"Organization"}`
+		if strings.HasPrefix(r.URL.Path, "/orgs/good/repos") {
+			body = `[{"name":"fresh","pushed_at":"2026-02-01T00:00:00Z"}]`
+		}
+		return &http.Response{StatusCode: http.StatusOK, Status: "200 OK", Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+	})}
+	oldBase := githubAPIBase
+	githubAPIBase = "https://api.test"
+	t.Cleanup(func() { githubAPIBase = oldBase })
+
+	orgs := []string{"good", "stalled"}
+	states := map[string]RefreshState{}
+	var complete RefreshMsg
+	msgs := RefreshRepos(context.Background(), client, "token", orgs, 50*time.Millisecond, nil)
+	deadline := time.After(5 * time.Second)
+	for done := false; !done; {
+		select {
+		case msg, ok := <-msgs:
+			if !ok {
+				done = true
+				break
+			}
+			states[msg.Owner] = msg.State
+			if msg.State == RefreshComplete {
+				complete = msg
+			}
+		case <-deadline:
+			t.Fatal("a stalled owner held the refresh past its deadline")
+		}
+	}
+	if states["good"] != RefreshSucceeded || states["stalled"] != RefreshFailed {
+		t.Fatalf("states = %#v", states)
+	}
+	if complete.Err != nil || len(complete.Repos) != 1 || complete.Repos[0].ID() != "good/fresh" {
+		t.Fatalf("complete = %#v", complete)
+	}
+	cached, _, _ := CachedRepos(orgs)
+	if len(cached) != 1 || cached[0].ID() != "good/fresh" {
+		t.Fatalf("cached = %#v", cached)
 	}
 }

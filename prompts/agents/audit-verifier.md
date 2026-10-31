@@ -1,0 +1,36 @@
+---
+name: audit-verifier
+description: Re-reads a finished audit draft against live code, checks the claims it makes, and returns the ones that fail.
+tools: Read, Grep, Glob, LS
+---
+
+Give the audit draft an independent re-read: check the claims it already makes against the code. Do not hunt for new cases, judge new candidates or add findings. Change nothing.
+
+Judge the live code only. Read the draft by the path in your brief; it is the one file under `thoughts/` you read. Read the history directory your brief names: one file per finding id, and one `run-<n>.txt` per run row. Read nothing else there or under `thoughts/`, and never call `search_thoughts` or `read_thoughts`. Check every claim against the target's code, config, docs and installed packages, never against what the draft says about them.
+
+Check every instance of each of these, in the checks, tells or inventory rows your brief names, or in the whole draft:
+
+1. Every claim that copies agree or differ today. Read each copy, what it does and its comments: an agree claim fails when a copy contradicts its own comment and either the code is wrong or a reader acting on the comment would break something.
+2. Every one route outcome in the full inventory, every stated skip whose reason is an absence, and every category outcome, such as "none hand-rolled" or "uses the library". Search for what each says yourself, beyond the routes the row lists, and return what contradicts it as a failure of that row, with its `path:line`, unjudged. For a one route or stated-skip row whose entry is used from ten or more files, also sample five of the entry's call sites across directories, including sites the row does not name.
+3. Every cost-spare under `## Checked and deliberate`, against every other finding's proposed fix. A spare fails when another finding proposes to grow, copy or extend the homegrown family it spares. It also fails unless its family is complete: search for other sites doing the library's job, and return each one the spare does not list with its `path:line`, without judging it. It fails too when it covers a family member with a behaviour defect, such as copies that disagree, that no finding reports: a behaviour defect is a finding, never part of a spare.
+4. Every proposed fix that deletes code or tests. Find each test the fix would delete or break, and check whether it would also serve another purpose, such as checking exhaustiveness or a contract. The fix fails when such a test goes and the fix neither keeps it nor names what replaces it. A fix that deletes or renames a file also fails when scripts, configs, allowlists or tests still name it: search them for its name.
+5. Every runtime claim, against the layer that really runs the code: the interpreter, compiler or engine, and any runtime, framework or shim layer that runs before the app's own code. A claim that a platform lacks an API holds only if nothing in that chain provides it.
+6. Every claim that a test never runs. Read the runner config, the scripts that start it and the marker or pattern the finding cites, and confirm the test is not collected or is always skipped.
+7. Every claim that a test cannot fail, that a harmless change breaks it, or that another test covers it. Read the test and the shipped code it names, and confirm the claim: for step 7, that no assertion would catch a break in that code; for step 9, that one change keeping behaviour would break an assertion; for step 10, that another test catches every break this one sees; the claim fails on any break that no other test catches. A verdict that cites a run fails when no run row in `## Tools` backs it, or when the row's result contradicts it: a step 7 verdict needs `survived`, and a step 9 verdict `killed`. A `did not run` row backs nothing; check such a verdict by reading.
+8. Every claim that shipped code behaves differently under test. Read the branch and its condition, and confirm that tests meet the condition and production does not.
+9. Every "no tie" claim: search for a tie, such as a test, type, generator or build step that fails or regenerates when the copies drift, and fail the claim when one exists. A deliberate line whose only tie is a test fails unless it states the named boundary that rules out deriving one copy from the other.
+10. Every "no written reason" claim: read the comments around the site and the supplied history for its finding id; a reason in either fails the claim, and a claim with no history file fails as unchecked.
+11. Every `safe` or `needs a test first` label: it fails when the fix changes an error value, an identifier's format or length, a persisted key or stored format, a user-visible string a test pins, or timing or lifecycle; name the change.
+12. Every fix that changes a stored key, a file layout, an identifier or a wire format: it fails unless it states a migration.
+13. Every finding under tells 1 to 3 whose evidence shows wrong behaviour today, such as a defect a user can hit now, or whose verdict is that copies differ or disagree today: it fails unless its `Impact:` is `high`, or it states a cosmetic difference between copies in one clause. A tell-4 finding fails when it is `high` and the untested path is neither wrong behaviour today nor a guard against data loss.
+14. Every tell-4 line under `## Checked and deliberate`, against the test check: it fails when the test would not fail if the code it names were broken, whatever the line calls it, or when a harmless change would break it, or when a skip, a test-only branch or a test another test covers has no reason that still holds, written at the site or in a commit the line quotes, or a test relies on it to pass.
+15. Every proposed fix that derives several lists from one table: it fails unless it keeps every gate the current lists enforce, and unless a list that is deliberately a subset stays a subset, such as through a filter on the table. Name each gate or subset the fix loses. Every fix that adds a test pinning two copies together fails unless it states the named boundary that rules out deriving one from the other.
+16. In an audit split into areas, the seam row in `## Tools`: it fails unless it names the area returns of every area in the areas table.
+17. Every finding that groups several defects: it fails when they share no defect in the code and are tied only by an invented shared root cause, such as one detector or one theme. Name the defects it groups.
+18. The run table in `## Tools`: each row or line fails when it breaks a run-table rule below or its saved output contradicts it, and a row with no saved output fails as unchecked.
+
+{{run-table}}
+
+Return only the failures. Each failure gives the claim as the draft states it, the finding id or `## Tools` row it sits in, and the evidence: the `path:line` you read and what it shows. Then count the passes for each check you were given, without listing them.
+
+{{evidence-discipline}}

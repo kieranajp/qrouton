@@ -1,6 +1,8 @@
 package session
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -18,6 +20,21 @@ func git(args ...string) error {
 		return fmt.Errorf("git %v: %w\n%s", args, err, out)
 	}
 	return nil
+}
+
+// gitOutput returns stdout. On failure the error wraps the *exec.ExitError and
+// carries git's stderr.
+func gitOutput(ctx context.Context, args ...string) (string, error) {
+	out, err := exec.CommandContext(ctx, gitBin, args...).Output()
+	if err != nil {
+		var stderr []byte
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			stderr = exit.Stderr
+		}
+		return "", fmt.Errorf("git %v: %w\n%s", args, err, stderr)
+	}
+	return string(out), nil
 }
 
 func gitOK(args ...string) bool { return exec.Command(gitBin, args...).Run() == nil }
@@ -132,14 +149,6 @@ func ensureMirror(root, org, repo, url, defaultBranch string, onProgress func(ph
 		return nil
 	}
 	return git(dirFlag, mp, updateRefCmd, localBranchRef+defaultBranch, remoteRefPrefix+defaultBranch)
-}
-
-// baseRef addresses the branch a session's work is cut from, as the mirror sees it.
-func baseRef(base, defaultBranch string) string {
-	if base != "" {
-		return remoteRefPrefix + base
-	}
-	return remoteRefPrefix + defaultBranch
 }
 
 func addWorktree(mirror, path, branch, startRef string) error {

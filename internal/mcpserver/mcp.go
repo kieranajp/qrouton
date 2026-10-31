@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/jsonschema-go/jsonschema"
+	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -46,9 +48,10 @@ type windowNameInput struct {
 }
 
 type showDiffInput struct {
-	Repo       string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every session repo"`
-	Staged     bool   `json:"staged,omitempty" jsonschema:"Show staged (index) changes instead of the working tree"`
-	Base       string `json:"base,omitempty" jsonschema:"Diff against this git ref (e.g. main) instead of the working tree"`
+	Repo       string `json:"repo,omitempty" jsonschema:"Repo worktree path within the session (e.g. src/app). Omit to diff every editing repo in the session"`
+	Staged     bool   `json:"staged,omitempty" jsonschema:"Compare the index with HEAD, or with base when it is given"`
+	Base       string `json:"base,omitempty" jsonschema:"Compare the working tree with this ref in every repo (e.g. main), or give an A..B or A...B range"`
+	Unstaged   bool   `json:"unstaged,omitempty" jsonschema:"Compare the working tree with the index, leaving out commits and staged changes. Not combinable with staged or base"`
 	Foreground *bool  `json:"foreground,omitempty" jsonschema:"Sparse logical-selection override: true selects this tab, false keeps it in the background, and omitted uses the tool default"`
 }
 
@@ -56,9 +59,18 @@ type sharePageInput struct {
 	Path string `json:"path" jsonschema:"Path to a markdown document in the qrouton session, relative to its root"`
 }
 
+type createArtefactInput struct {
+	Kind  string `json:"kind"`
+	Title string `json:"title" jsonschema:"The document's title, a few plain words"`
+}
+
 type setSummaryInput struct {
-	Stage   string `json:"stage" jsonschema:"The stage whose lead you are about to spawn: research, plan or implement. Spec work is plan"`
+	Stage   string `json:"stage" jsonschema:"The stage whose lead you are about to spawn: research, plan or implement. Spec work is plan, and audit work is research"`
 	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
+}
+
+type setDigestInput struct {
+	Digest string `json:"digest"`
 }
 
 type notifyInput struct {
@@ -87,7 +99,17 @@ type answer[In any] func(context.Context, In) (string, *workbench.DocumentViewpo
 // viewport. key names that string in the structured payload — every tool says
 // "message" except read_window, which is returning output rather than talking.
 func addTool[In any](server *mcp.Server, name, description, key string, fn answer[In]) {
-	mcp.AddTool(server, &mcp.Tool{Name: name, Description: description},
+	addToolWithSchema(server, name, description, key, nil, fn)
+}
+
+// addToolWithSchema takes an input schema whose descriptions Go computes; nil
+// leaves the SDK to infer it from the struct tags.
+func addToolWithSchema[In any](server *mcp.Server, name, description, key string, schema *jsonschema.Schema, fn answer[In]) {
+	tool := &mcp.Tool{Name: name, Description: description}
+	if schema != nil {
+		tool.InputSchema = schema
+	}
+	mcp.AddTool(server, tool,
 		func(ctx context.Context, _ *mcp.CallToolRequest, input In) (*mcp.CallToolResult, any, error) {
 			text, viewport, err := fn(ctx, input)
 			if err != nil {
@@ -99,6 +121,24 @@ func addTool[In any](server *mcp.Server, name, description, key string, fn answe
 			}
 			return textResult(text), output, nil
 		})
+}
+
+func setDigestSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[setDigestInput](nil)
+	if err != nil {
+		panic(err)
+	}
+	schema.Properties["digest"].Description = fmt.Sprintf(descDigestField, digestLimit)
+	return schema
+}
+
+func createArtefactSchema() *jsonschema.Schema {
+	schema, err := jsonschema.For[createArtefactInput](nil)
+	if err != nil {
+		panic(err)
+	}
+	schema.Properties["kind"].Description = descArtefactKind + orList(artefact.Kinds)
+	return schema
 }
 
 func messageOnly[In any](fn func(context.Context, In) (string, error)) answer[In] {
@@ -131,7 +171,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return textResult(message), out, nil
 		})
 
-	addTool(server, toolOpenFile, descOpenFile, keyMessage, windows.openFile)
+	addTool(server, ToolOpenFile, descOpenFile, keyMessage, windows.openFile)
 	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
 	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
@@ -141,6 +181,14 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	addTool(server, toolSetSummary, descSetSummary, keyMessage,
 		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
 			return setSummary(root, input)
+		}))
+	addToolWithSchema(server, toolCreateArtefact, descCreateArtefact, keyMessage, createArtefactSchema(),
+		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
+			return createArtefact(root, input)
+		}))
+	addToolWithSchema(server, toolSetDigest, descSetDigest, keyMessage, setDigestSchema(),
+		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
+			return setDigest(root, input)
 		}))
 	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
 	addTool(server, toolReadWindow, descReadWindow, keyOutput, windows.read)

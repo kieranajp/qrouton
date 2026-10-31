@@ -1,6 +1,8 @@
 <script>
   import { onMount } from "svelte";
   import Dialog from "../assembly/Dialog.svelte";
+  import Button from "../core/Button.svelte";
+  import Icon from "../core/Icon.svelte";
   import Settings from "./Settings.svelte";
   import { settings } from "./settings.svelte.js";
 
@@ -21,34 +23,26 @@
   primary="Save"
   status={panel.status}
   busy={panel.saving}
+  height
+  flush
   onSecondary={panel.cancel}
   onPrimary={panel.save}
   onEscape={panel.cancel}>
-  <Settings
-    bind:reviewer={panel.form.reviewer}
-    reviewerRunners={panel.reviewerRunners}
-    reviewerError={panel.reviewerError}
-    runnersReady={panel.runnersReady}
-    onConfigureReviewer={panel.configureReviewer}
-    onSelectReviewer={panel.selectReviewer}
-    orgs={panel.form.orgs}
-    bind:orgInput={panel.orgInput}
-    bind:root={panel.form.root}
-    bind:editor={panel.form.editor}
-    bind:launch={panel.form.launch}
-    bind:linear={panel.form.linear}
-    bind:stickerLabels={panel.form.stickerLabels}
-    bind:chime={panel.form.chime}
-    bind:uiScale={panel.form.uiScale}
-    uiScaleSteps={panel.form.uiScaleSteps}
-    bind:thoughts={panel.form.thoughts}
-    loadedThoughts={panel.loadedThoughts}
-    onAddFolder={panel.addFolder}
-    onRemoveFolder={panel.removeFolder}
-    linearPath={panel.form.linearPath}
-    fields={panel.fields}
-    restartRequired={panel.restartRequired}
-    onAddOrg={panel.add}
-    onRemoveOrg={panel.remove}
-    onQuit={panel.quitAndRelaunch} />
+  <Settings {panel} />
+  {#snippet footer()}
+    {#if panel.restartRequired}
+      <span class="restart"><Icon name="refresh" />Saved. Quit and restart to use the new folders.</span>
+      <Button variant="cube" onclick={panel.relaunch}>Quit and restart</Button>
+    {/if}
+  {/snippet}
 </Dialog>
+
+<style>
+  .restart {
+    display: inline-flex;
+    align-items: center;
+    gap: calc(6px * var(--ui-scale));
+    font: var(--machine-sm);
+    color: var(--state-waiting);
+  }
+</style>

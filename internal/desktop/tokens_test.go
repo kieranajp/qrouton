@@ -68,7 +68,7 @@ func TestEveryTokenThePageReadsIsDeclared(t *testing.T) {
 	}
 	var missing []string
 	for name, paths := range used {
-		if !declared[name] {
+		if !declared[name] && !declaresPrefix(declared, name) {
 			missing = append(missing, name+" in "+strings.Join(paths, ", "))
 		}
 	}
@@ -76,4 +76,17 @@ func TestEveryTokenThePageReadsIsDeclared(t *testing.T) {
 	for _, name := range missing {
 		t.Errorf("the page reads %s, which nothing declares", name)
 	}
+}
+
+// A name ending in a dash is completed at runtime, so any token under it counts.
+func declaresPrefix(declared map[string]bool, name string) bool {
+	if !strings.HasSuffix(name, "-") {
+		return false
+	}
+	for token := range declared {
+		if strings.HasPrefix(token, name) {
+			return true
+		}
+	}
+	return false
 }

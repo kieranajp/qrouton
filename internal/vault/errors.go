@@ -7,7 +7,7 @@ var (
 	ErrDuplicateProfile = errors.New("two thoughts roots share an id")
 	ErrOverlappingRoots = errors.New("thoughts roots must not share, nest in, or link into each other")
 	ErrQueryRequired    = errors.New("query is required")
-	ErrUnknownKind      = errors.New("unknown artifact kind; use research, spec, plan, review, note or dead_end")
+	ErrUnknownKind      = errors.New("unknown artifact kind")
 	ErrModelChanged     = errors.New("embedding model changed while embedding")
 	ErrRefRequired      = errors.New("ref is required")
 	ErrUnknownDocument  = errors.New("no indexed thoughts document has that reference or id")

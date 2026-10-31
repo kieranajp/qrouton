@@ -2,12 +2,13 @@
   import { onMount } from "svelte";
   import Rail from "../src/lib/session/Rail.svelte";
   import { CHROME_EVENT } from "../src/lib/bridge/generated.js";
-  import { DEFAULT_STICKER_LABELS } from "../src/lib/session/stickers.js";
+  import { labelled } from "./session-rail-stickers.js";
   import { Events } from "../src/lib/wails.js";
 
   const first = {
     name: "Checkout migration",
     slug: "checkout",
+    terminal: "conversation-checkout",
     initials: "CM",
     repos: [
       { name: "acme/web", role: "editing" },
@@ -32,11 +33,14 @@
     })),
   ]);
   let selected = $state("checkout");
-  let stickerLabels = $state({ ...DEFAULT_STICKER_LABELS });
+  let history = ["checkout"];
+  /** @type {HTMLButtonElement | undefined} */
+  let focusProbe;
+  let stickers = $state(labelled({}));
 
   onMount(() =>
     Events.On(CHROME_EVENT, (event) => {
-      stickerLabels = { ...event.data.stickerLabels };
+      stickers = event.data.stickers;
     }),
   );
 
@@ -54,10 +58,48 @@
     );
   }
 
+  function load(slug) {
+    sessions = sessions.map((session) =>
+      session.slug === slug
+        ? { ...session, terminal: `conversation-${slug}`, summary: { ...session.summary, running: true } }
+        : session,
+    );
+  }
+
   window.sessionRail = {
     stateless,
     headline,
-    shown: (slug) => (selected = slug),
+    shown: (slug) => {
+      selected = slug;
+      history = [slug, ...history.filter((item) => item !== slug)];
+      load(slug);
+    },
+    load,
+    order: () => sessions.map((row) => row.slug),
+    remove: (slug) => (sessions = sessions.filter((row) => row.slug !== slug)),
+    reordered: (slug, targetSlug) => {
+      const source = sessions.findIndex((row) => row.slug === slug);
+      const target = sessions.findIndex((row) => row.slug === targetSlug);
+      if (source < 0 || target < 0) return;
+      const next = [...sessions];
+      const [row] = next.splice(source, 1);
+      next.splice(target, 0, row);
+      sessions = next;
+    },
+    unloaded: (slug) => {
+      sessions = sessions.map((session) =>
+        session.slug === slug
+          ? {
+              ...session,
+              terminal: "",
+              summary: { attention: "none", active: 0, coverage: "none", running: false },
+            }
+          : session,
+      );
+      if (selected === slug) {
+        selected = history.find((item) => sessions.some((row) => row.slug === item && row.terminal)) ?? "";
+      }
+    },
     rename: (slug, name) => {
       sessions = sessions.map((session) => (session.slug === slug ? { ...session, name } : session));
     },
@@ -66,24 +108,38 @@
         session.slug === slug ? { ...session, sticker } : session,
       );
     },
-    setStickerLabels: (labels) => (stickerLabels = { ...stickerLabels, ...labels }),
+    setStickerLabels: (labels) =>
+      (stickers = stickers.map((item) => ({ ...item, label: labels[item.id] ?? item.label }))),
   };
 </script>
 
-<button class="focus-probe" aria-label="Conversation focus">Conversation focus</button>
+<button class="focus-probe" aria-label="Conversation focus" bind:this={focusProbe}>Conversation focus</button>
 <div class="frame">
   <Rail
     {sessions}
     slug={selected}
-    {stickerLabels}
+    {stickers}
     onNewSession={() => {}}
-    onDismissed={() => {}} />
+    onDismissed={() => focusProbe?.focus()} />
+  <div class="editor-probes">
+    <input aria-label="Input drop probe" value="Input unchanged" />
+    <textarea aria-label="Textarea drop probe">Textarea unchanged</textarea>
+    <div contenteditable="true" role="textbox" aria-label="Editable drop probe">Editable unchanged</div>
+  </div>
 </div>
 
 <style>
   .frame {
     height: 100%;
     display: flex;
+  }
+
+  .editor-probes {
+    margin: 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 240px;
   }
 
   .focus-probe {

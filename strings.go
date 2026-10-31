@@ -21,6 +21,7 @@ const (
 	ticketFlagUsage      = "open a Linear, Asana or GitHub ticket in the New session flow"
 	linearPromptEnvVar   = "LINEAR_PROMPT"
 	pathEnvVar           = "PATH"
+	inspectEnvVar        = "QROUTON_INSPECT"
 
 	// workbenchSpecFlag is the marker the detached workbench process is started
 	// with. Hidden: it is qrouton talking to itself, and the spec behind it is

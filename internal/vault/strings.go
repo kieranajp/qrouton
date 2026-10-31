@@ -39,23 +39,22 @@ const (
 
 	KindResearch = "research"
 	KindReview   = "review"
-)
 
-var (
-	kinds    = map[string]bool{KindReview: true, KindResearch: true, "spec": true, "plan": true, "note": true, "dead_end": true}
-	dirKinds = map[string]string{"reviews": KindReview, "research": KindResearch, "specs": "spec", "plans": "plan"}
+	kindNote    = "note"
+	kindDeadEnd = "dead_end"
+
+	kindHint      = "use one of %s"
+	kindSeparator = ", "
 )
 
 const (
-	frontmatterOpen  = "---\n"
-	frontmatterClose = "\n---"
-	refSeparator     = ":"
-	crumbSeparator   = " > "
-	ellipsis         = "…"
-	cacheExtension   = ".gob"
-	cacheDirName     = "qrouton/vault"
-	cacheMode        = 0o644
-	cacheDirMode     = 0o755
+	refSeparator   = ":"
+	crumbSeparator = " > "
+	ellipsis       = "…"
+	cacheExtension = ".gob"
+	CacheDirName   = "vault"
+	cacheMode      = 0o644
+	cacheDirMode   = 0o755
 
 	ollamaTags        = "/api/tags"
 	ollamaEmbed       = "/api/embed"

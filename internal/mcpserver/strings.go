@@ -72,12 +72,14 @@ const (
 
 	closedFormat = "Closed window %q."
 
-	showingDiffFormat = "Showing the diff for %s in window %q."
+	showingDiffFormat = "Showing the diff for %s in window %q. %s"
 	emptyDiffFormat   = "No changes in %s."
 	allReposScope     = "all session repos"
 	sessionRootScope  = "the session root"
 
-	summarySetFormat = "Session summary set (%d of %d characters)."
+	artefactCreatedFormat = "Created %s. Fill it in place."
+	summarySetFormat      = "Session summary set (%d of %d characters)."
+	digestSetFormat       = "Session digest set (%d of %d characters)."
 
 	notifiedFormat     = "Notified the user: %s"
 	openedAssetsFormat = "Showing %d assets in gallery %q. Current asset: 1 of %d."
@@ -98,12 +100,33 @@ const (
 )
 
 const (
-	allReposDiffFormat = `for d in %s/*/; do git -C "$d" rev-parse --git-dir >/dev/null 2>&1 || continue; ` +
-		`printf '\n=== %%s ===\n' "$d"; git -C "$d" --no-pager diff%s; done`
+	gitBin          = "git"
+	gitDirFlag      = "-C"
+	gitNoPager      = "--no-pager"
+	gitDiffCmd      = "diff"
+	gitStagedFlag   = "--staged"
+	gitEndOfOptions = "--"
+	gitMergeBaseCmd = "merge-base"
+	gitRevParseCmd  = "rev-parse"
+	gitGitDirFlag   = "--git-dir"
+	gitHead         = "HEAD"
+	gitOptionPrefix = "-"
+	shortRevision   = 7
+	hiddenPrefix    = "."
 
-	singleRepoDiffFormat = `git -C %s --no-pager diff%s`
+	diffRepoHeaderFormat = "\n=== %s/ ===\n"
 
-	stagedFlag = " --staged"
+	comparedFormat        = "Compared %s."
+	comparedJoiner        = "; "
+	mergeBaseNoteFormat   = "%s vs merge base with %s (%s)"
+	headFallbackFormat    = "%s vs HEAD, because %s"
+	noManifestEntryReason = "the manifest does not list it"
+	noBaseBranchReason    = "the manifest names no base branch for it"
+	noMergeBaseFormat     = "it has no merge base with %s"
+	unstagedComparison    = "the working tree with the index"
+	stagedComparison      = "the index with HEAD"
+	stagedBaseFormat      = "the index with %s"
+	baseComparisonFormat  = "the working tree with %s"
 )
 
 const (

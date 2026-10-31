@@ -80,7 +80,7 @@ func lifecycle(ctx context.Context, handle workbench.Handle, generation uint64, 
 			at, _ := time.Parse(time.RFC3339Nano, event.Timestamp)
 			_ = handle.DelegatedLifecycle(ctx, workbench.DelegatedLifecycleRequest{
 				Provider: event.Provider, Generation: generation, Kind: kind,
-				ID: event.AgentID, Type: event.AgentType, ParentID: event.ParentID, Timestamp: at,
+				ID: event.AgentID, Type: event.AgentType, TaskName: event.TaskName, ParentID: event.ParentID, Timestamp: at,
 			})
 		}
 	}

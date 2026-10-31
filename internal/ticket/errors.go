@@ -23,6 +23,10 @@ var (
 // ErrTicketNotFound means the provider answered, but with no such ticket.
 var ErrTicketNotFound = errors.New("ticket not found")
 
+// ErrTokenRejected means the provider refused the credential, so the fix is a
+// new token rather than a different link.
+var ErrTokenRejected = errors.New("token rejected: replace it and try again")
+
 func providerError(provider string, err error) error {
 	return fmt.Errorf("%s: loading ticket: %w", provider, err)
 }

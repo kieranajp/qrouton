@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { agentName, buildRuns, elapsed, stateIcon, stateTone, stateWords, tokenLabel, toolLine, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, stageTone, wroteLine } from "./tree.js";
+import { agentName, buildRuns, elapsed, stateIcon, stateTone, stateWords, tokenLabel, typeLabel, nowLine, overview, rootWords, sessionPath, stageName, wroteLine } from "./tree.js";
 
 /** @returns {any} */
 const node = (id, parent, extra = {}) => ({
@@ -26,6 +26,7 @@ test("nodes nest to depth four under the root", () => {
     root(),
   ];
   const [run] = buildRuns(nodes);
+  assert.ok(run.root);
   assert.equal(run.root.id, "root");
   const a = run.children[0];
   const b = a.children[0];
@@ -100,9 +101,9 @@ test("labels", () => {
 });
 
 test("a tool and its target read as two words", () => {
-  assert.equal(toolLine({ tool: "Bash", target: "sleep 20" }), "Bash sleep 20");
-  assert.equal(toolLine({ tool: "Bash", target: "" }), "Bash");
-  assert.equal(toolLine({}), "");
+  assert.equal(nowLine({ tool: "Bash", target: "sleep 20" }), "Bash sleep 20");
+  assert.equal(nowLine({ tool: "Bash", target: "" }), "Bash");
+  assert.equal(nowLine({}), "");
 });
 
 test("only a runner reporting its tool calls can be thinking", () => {
@@ -129,8 +130,6 @@ test("the overview lists leads in stage order, then by start, across runs", () =
   assert.deepEqual(leads.map((branch) => branch.node.id), ["r1", "r2", "p1", "i1", "x1"]);
   assert.equal(rootWords(root, leads), "waiting on Implementation");
   assert.equal(stageName("plan"), "Plan");
-  assert.equal(stageTone("implement"), "IMPLEMENT");
-  assert.equal(stageTone(""), undefined);
 });
 
 test("paths inside the session read from the repository down", () => {

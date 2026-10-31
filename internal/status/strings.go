@@ -1,5 +1,7 @@
 package status
 
+import "github.com/kieranajp/qrouton/internal/kinds"
+
 const (
 	modeAssistantLabel = "ASSISTANT"
 	modeRPILabel       = "RPI"
@@ -24,11 +26,47 @@ const (
 	StagePlan      = "plan"
 	StageImplement = "implement"
 
-	researchDir           = "research"
-	plansDir              = "plans"
 	legacyQuestionsSuffix = "-questions.md"
-	summaryHeading        = "Summary"
 )
+
+var (
+	researchDir = kinds.Research.Dir
+	plansDir    = kinds.Plan.Dir
+	auditsDir   = kinds.Audit.Dir
+)
+
+// An audit's summary and tell headings. The audit counts as complete once
+// the summary and each chosen tell hold content.
+const (
+	AuditHeadingSummary    = "Summary"
+	AuditHeadingDuplicated = "Duplicated behaviour or facts"
+	AuditHeadingDead       = "Dead or needlessly defensive code"
+	AuditHeadingHomegrown  = "Homegrown library or platform behaviour"
+	AuditHeadingVolkswagen = "Tests that pass or fail for the wrong reason"
+)
+
+// legacyVolkswagenHeading is tell 4's heading in audits written before its rename.
+// It stays outside the AuditHeading names so the page is never sent it as a tell.
+const legacyVolkswagenHeading = "Tests that cannot fail or pass for the wrong reason"
+
+// The audit frontmatter key that lists the chosen tells, and each tell's slug.
+const (
+	tellsKey       = "tells"
+	tellDuplicated = "duplicated"
+	tellDead       = "dead"
+	tellHomegrown  = "homegrown"
+	tellVolkswagen = "volkswagen"
+)
+
+var auditTells = []auditTell{
+	{tellDuplicated, AuditHeadingDuplicated, ""},
+	{tellDead, AuditHeadingDead, ""},
+	{tellHomegrown, AuditHeadingHomegrown, ""},
+	{tellVolkswagen, AuditHeadingVolkswagen, legacyVolkswagenHeading},
+}
+
+// legacyTells are the tells an audit written before the tells key ran.
+var legacyTells = []string{tellDuplicated, tellDead, tellHomegrown}
 
 // Activity is what the workbench observes. Waiting only ever comes from the
 // runner's own hook, so a runner without one never reports it.

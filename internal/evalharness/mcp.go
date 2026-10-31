@@ -3,10 +3,11 @@ package evalharness
 import (
 	"context"
 	"fmt"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"os"
 	"path/filepath"
 
+	"github.com/kieranajp/qrouton/internal/mcpserver"
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -19,13 +20,13 @@ func RunMockMCP(ctx context.Context, root, logPath string) error {
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "qrouton-eval", Version: "1"},
 		&mcp.ServerOptions{
-			Instructions: "Record open_file calls during prompt evaluation.",
+			Instructions: "Record " + mcpserver.ToolOpenFile + " calls during prompt evaluation.",
 		},
 	)
 	mcp.AddTool(
 		server,
 		&mcp.Tool{
-			Name:        "open_file",
+			Name:        mcpserver.ToolOpenFile,
 			Description: "Open a completed document for the user.",
 		},
 		func(
@@ -45,14 +46,14 @@ func RunMockMCP(ctx context.Context, root, logPath string) error {
 				return nil, nil, err
 			}
 			event := Event{
-				Kind: "tool_call",
-				Name: "open_file",
+				Kind: kindToolCall,
+				Name: mcpserver.ToolOpenFile,
 				Path: filepath.ToSlash(rel),
 			}
 			if err := AppendJSONL(logPath, event); err != nil {
 				return nil, nil, err
 			}
-			message := fmt.Sprintf("Recorded open_file for %s", filepath.ToSlash(rel))
+			message := fmt.Sprintf("Recorded %s for %s", mcpserver.ToolOpenFile, filepath.ToSlash(rel))
 			return &mcp.CallToolResult{
 				Content: []mcp.Content{&mcp.TextContent{Text: message}},
 			}, map[string]any{"message": message}, nil

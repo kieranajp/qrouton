@@ -1,6 +1,7 @@
 package session
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -165,5 +166,37 @@ func runGitTest(t *testing.T, args ...string) {
 	t.Helper()
 	if out, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+func TestOutlivedCheckoutRecognisesEachGitVersionsMessage(t *testing.T) {
+	for _, output := range []string{
+		"fatal: not a git repository: /tmp/checkout/src/api/../.mirrors/acme/api.git/worktrees/api\n",
+		"fatal: gitfile does not point to a valid repository: /tmp/checkout/src/api/.git\n",
+	} {
+		if !outlivedCheckout(output) {
+			t.Errorf("outlivedCheckout(%q) = false", output)
+		}
+	}
+	if outlivedCheckout("fatal: detected dubious ownership in repository at '/tmp/checkout/src/api'\n") {
+		t.Error("dubious ownership read as an outlived checkout")
+	}
+}
+
+func TestDeleteLeavesADirectoryOutsideTheSessionAlone(t *testing.T) {
+	root := t.TempDir()
+	victim := filepath.Join(root, "victim")
+	if err := os.MkdirAll(filepath.Join(root, "s"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(victim, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m := Manifest{Slug: "s", Repos: []ManifestRepo{{Org: "acme", Name: "api", WorktreePath: "../victim"}}}
+	if err := Delete(root, m); !errors.Is(err, ErrCheckoutOutsideSrc) {
+		t.Fatalf("Delete = %v, want ErrCheckoutOutsideSrc", err)
+	}
+	if _, err := os.Stat(victim); err != nil {
+		t.Fatalf("a directory outside the session was removed: %v", err)
 	}
 }

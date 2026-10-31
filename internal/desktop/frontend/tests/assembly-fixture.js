@@ -6,6 +6,7 @@ import { emitWailsEvent } from "./wails-runtime.js";
 const calls = [];
 let resolveBegin;
 let resolveBranches;
+let closeRequests = 0;
 
 window.wailsCall = (name, ...args) => {
   calls.push({ name, args });
@@ -13,7 +14,13 @@ window.wailsCall = (name, ...args) => {
   if (name.endsWith("Orgs.List")) return [...window.orgList];
   if (name.endsWith(".Cached")) return [...window.repoList];
   if (name.endsWith("Repositories.Branches")) return new Promise((resolve) => (resolveBranches = resolve));
-  if (name.endsWith(".Prefixes") || name.endsWith(".Runners") || name.endsWith(".List") || name.endsWith(".Check")) return [];
+  if (name.endsWith(".Runners")) return [
+    { id: "claude", label: "Claude Code" },
+    { id: "codex", label: "Codex" },
+    { id: "opencode", label: "OpenCode" },
+    { id: "agy", label: "Antigravity" },
+  ];
+  if (name.endsWith(".Prefixes") || name.endsWith(".List") || name.endsWith(".Check")) return [];
   if (name.endsWith(".Preview")) return "";
   return undefined;
 };
@@ -23,7 +30,7 @@ window.repoList = [{ org: "acme", name: "api", default_branch: "main", pushed_at
 
 const component = mount(Overlay, {
   target: document.querySelector("#fixture"),
-  props: { onClose: () => {} },
+  props: { onClose: () => closeRequests++ },
 });
 
 window.assembly = {
@@ -31,6 +38,7 @@ window.assembly = {
   resolveBegin: (seed) => resolveBegin(seed),
   resolveBranches: (answer) => resolveBranches(answer),
   calls: () => [...calls],
+  closeRequests: () => closeRequests,
   emit: (name, data) => emitWailsEvent(name, data),
   close: () => unmount(component),
 };

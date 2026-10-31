@@ -1,9 +1,12 @@
 package evalharness
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -43,6 +46,20 @@ func TestLoadScenariosRejectsIncompleteDefinition(t *testing.T) {
 	}
 }
 
+func TestLoadScenariosRejectsAnUngradableCheck(t *testing.T) {
+	dir := t.TempDir()
+	writeTestFile(t, filepath.Join(dir, "bad.json"), `{
+  "id": "bad",
+  "fixture": "fixture-bad",
+  "turns": ["hello"],
+  "checks": [{"kind": "turn_delegation", "pattern": "lead", "turn": 2}]
+}`)
+
+	if _, err := LoadScenarios(dir, "all"); !errors.Is(err, ErrCheckUngradable) {
+		t.Fatalf("err = %v, want %v", err, ErrCheckUngradable)
+	}
+}
+
 // An unknown check kind is inert rather than loud: it grades as one failed
 // assertion whose name nobody wrote, so a typo in a scenario reads as a prompt
 // regression. Every declared kind is dispatched here against an empty run.
@@ -61,27 +78,8 @@ func TestShippedScenarioCheckKindsAreDispatched(t *testing.T) {
 			if strings.HasPrefix(assertion.Name, assertUnknownCheck) {
 				t.Errorf("%s: no grader for check kind %q", scenario.ID, check.Kind)
 			}
-			if problem := checkSpecProblem(scenario, check); problem != "" {
-				t.Errorf("%s: %s", scenario.ID, problem)
-			}
 		}
 	}
-}
-
-// checkSpecProblem reports why a check could never grade what its name claims.
-// A delegation check with no pattern matches every agent there is, and a
-// turn-scoped one aimed past the turns a scenario sends grades an empty stream.
-func checkSpecProblem(scenario Scenario, check CheckSpec) string {
-	switch check.Kind {
-	case checkDelegation, checkFirstDelegation, checkTurnDelegation:
-		if check.Pattern == "" {
-			return fmt.Sprintf("%s names no agent", check.Kind)
-		}
-	}
-	if check.Kind == checkTurnDelegation && (check.Turn < 1 || check.Turn > len(scenario.Turns)) {
-		return fmt.Sprintf("%s grades turn %d of %d", check.Kind, check.Turn, len(scenario.Turns))
-	}
-	return ""
 }
 
 func TestCheckSpecProblemRejectsAnUngradableSpec(t *testing.T) {
@@ -109,6 +107,41 @@ func TestCheckSpecProblemRejectsAnUngradableSpec(t *testing.T) {
 		"usable turn-scoped check": {
 			check: CheckSpec{Kind: checkTurnDelegation, Pattern: "lead", Turn: 2},
 		},
+		"response_contains with an empty pattern": {
+			check:   CheckSpec{Kind: checkResponseContains},
+			problem: "response_contains has an empty pattern",
+		},
+		"artifact_contains with an empty pattern": {
+			check:   CheckSpec{Kind: checkArtifactContains, Path: "thoughts/shared/plans/*.md"},
+			problem: "artifact_contains has an empty pattern",
+		},
+		"artifact_excludes with an empty pattern": {
+			check:   CheckSpec{Kind: checkArtifactExcludes},
+			problem: "artifact_excludes has an empty pattern",
+		},
+		"sentinel_safe with an empty pattern": {
+			check:   CheckSpec{Kind: checkSentinelSafe},
+			problem: "sentinel_safe has an empty pattern",
+		},
+		"response_matches with an empty pattern": {
+			check:   CheckSpec{Kind: checkResponseMatches},
+			problem: "response_matches has an empty pattern",
+		},
+		"response_matches that does not compile": {
+			check:   CheckSpec{Kind: checkResponseMatches, Pattern: "("},
+			problem: "response_matches pattern does not compile: error parsing regexp: missing closing ): `(`",
+		},
+		"response_excludes with nothing to exclude": {
+			check:   CheckSpec{Kind: checkResponseExcludes},
+			problem: "response_excludes has an empty pattern",
+		},
+		"response_excludes holding an empty entry": {
+			check:   CheckSpec{Kind: checkResponseExcludes, Any: []string{"legacy cache plan", ""}},
+			problem: "response_excludes has an empty pattern",
+		},
+		"usable response_excludes": {
+			check: CheckSpec{Kind: checkResponseExcludes, Any: []string{"legacy cache plan"}},
+		},
 		"check with no turn to grade": {
 			check: CheckSpec{Kind: checkRepoUnchanged, Repo: "account-service"},
 		},
@@ -129,5 +162,43 @@ func writeTestFile(t *testing.T, path, content string) {
 	}
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
+	}
+}
+
+var researchBudgetPattern = regexp.MustCompile(`about (\d+) lines for research`)
+
+// researchCapsBelow names every research line cap tighter than the length the
+// prompts ask research to run to, which fails a document the prompt allows.
+func researchCapsBelow(scenarios []Scenario, budget int) []string {
+	var tight []string
+	for _, scenario := range scenarios {
+		for _, check := range scenario.Checks {
+			if check.Kind == checkArtifactMaxLines && strings.Contains(check.Path, researchPathSegment) && check.MaxLines < budget {
+				tight = append(tight, fmt.Sprintf("%s: %s caps at %d", scenario.ID, check.Path, check.MaxLines))
+			}
+		}
+	}
+	return tight
+}
+
+func TestResearchLineCapsHonourThePromptBudget(t *testing.T) {
+	discipline, err := os.ReadFile(filepath.Join("..", "..", "prompts", "artifact-discipline.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	match := researchBudgetPattern.FindSubmatch(discipline)
+	if match == nil {
+		t.Fatal("the artifact discipline prompt states no research length budget")
+	}
+	budget, err := strconv.Atoi(string(match[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	scenarios, err := LoadScenarios(filepath.Join("..", "..", "eval", "scenarios"), scenarioAll)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, problem := range researchCapsBelow(scenarios, budget) {
+		t.Errorf("%s, below the %d-line research budget", problem, budget)
 	}
 }

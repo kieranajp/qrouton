@@ -1,0 +1,1 @@
+After each lead returns, and after the user settles a decision, call `set_digest` with the whole digest rewritten: it replaces the last one. Write a few plain past-tense lines on what is done, what is in progress and what waits on the user, at most {{digest-limit}} characters, with no Markdown. If the call is rejected for length, shorten the text and call again.

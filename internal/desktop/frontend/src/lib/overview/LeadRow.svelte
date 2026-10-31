@@ -1,10 +1,11 @@
 <script>
+  import { AGENT_STATES } from "../bridge/generated.js";
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import Icon from "../core/Icon.svelte";
-  import { workflowTone } from "../workflow.js";
+  import { stageTone } from "../workflow.js";
   import AgentRow from "./AgentRow.svelte";
   import StageSquare from "./StageSquare.svelte";
-  import { agentName, elapsed, isFinished, nowLine, stageName, stageTone, stateTone, stateWords } from "./tree.js";
+  import { agentName, elapsed, isFinished, nowLine, stageName, stateTone, stateWords } from "./tree.js";
 
   /** One lead: its stage square and name, its document, and its subagents
    * while open. Only a live lead opens on its own.
@@ -17,23 +18,29 @@
   let chosen = $state();
   let open = $derived(chosen ?? !finished);
   let name = $derived(stageName(node.stage) || agentName(node));
-  let stage = $derived(stageTone(node.stage));
-  let tone = $derived(stage ? workflowTone(stage) : `var(${stateTone(node.state)})`);
+  let taskName = $derived(node.taskName || "");
+  let tone = $derived(stageTone(node.stage) ?? `var(${stateTone(node.state)})`);
   let document = $derived(node.documents?.at(-1));
   let count = $derived(branch.children.length);
   let doing = $derived(nowLine(node, root) || stateWords(node, tools));
+
+  function toggle() {
+    if (count) chosen = !open;
+  }
 </script>
 
-<div class="lead" class:live={!finished}>
+<div class="lead" class:live={!finished} data-agent-id={node.id}>
   <div class="row">
     <button
       type="button"
       class="toggle"
-      aria-label="{name} · {finished ? stateWords(node, tools) : doing}"
-      aria-expanded={open}
-      onclick={() => (chosen = !open)}>
-      <StageSquare {tone} done={finished && node.state !== "failed" && node.state !== "ended"} live={!finished} />
+      class:leaf={!count}
+      aria-label="{name}{taskName ? ` · ${taskName}` : ""} · {finished ? stateWords(node, tools) : doing}"
+      aria-expanded={count ? open : undefined}
+      onclick={toggle}>
+      <StageSquare {tone} done={finished && node.state !== AGENT_STATES.FAILED && node.state !== AGENT_STATES.ENDED} live={!finished} />
       <span class="name">{name}</span>
+      {#if taskName}<span class="task-name" title={taskName}>· {taskName}</span>{/if}
       {#if !finished}<span class="doing">{doing}</span>{/if}
     </button>
     {#if document}
@@ -47,10 +54,16 @@
       {#if finished && count}<span class="count">{count} {count === 1 ? "subagent" : "subagents"} ·</span>{/if}
       {elapsed(node.started, node.finished, now)}
     </span>
-    <Icon name={open ? "disclosure-open" : "disclosure-closed"} />
+    {#if count}
+      <button type="button" class="disclosure" tabindex="-1" aria-hidden="true" onclick={toggle}>
+        <Icon name={open ? "disclosure-open" : "disclosure-closed"} />
+      </button>
+    {:else}
+      <span class="no-disclosure"></span>
+    {/if}
   </div>
 
-  {#if open && branch.children.length}
+  {#if open && count}
     <div class="subagents">
       {#each branch.children as child (child.node.id)}
         <AgentRow branch={child} {now} {root} {tools} />
@@ -91,10 +104,23 @@
     color: var(--text-muted);
   }
 
+  .toggle.leaf {
+    cursor: default;
+  }
+
   .name {
     flex: none;
     font: var(--machine-sm);
     color: var(--text-secondary);
+  }
+
+  .task-name {
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text-muted);
   }
 
   .live .name {
@@ -110,13 +136,23 @@
     text-overflow: ellipsis;
   }
 
-  .document {
+  .document,
+  .disclosure {
     flex: none;
     display: flex;
     padding: 0;
     border: 0;
     background: none;
     cursor: pointer;
+  }
+
+  .disclosure {
+    color: inherit;
+  }
+
+  .no-disclosure {
+    flex: none;
+    width: calc(16px * var(--ui-scale));
   }
 
   .facts {

@@ -57,7 +57,8 @@ var Roles = map[string]string{
 	RoleArtifactResearch:  Sky,
 	RoleArtifactNote:      Flamingo,
 	RoleArtifactExplainer: Maroon,
-	RoleArtifactReview:    Rosewater,
+	RoleArtifactReview:    Mauve,
+	RoleArtifactAudit:     Rosewater,
 }
 
 // roleOrder fixes the render order; ranging Roles would reshuffle it each time.
@@ -66,7 +67,8 @@ var roleOrder = []string{
 	RoleStateSelected, RoleStateSuccess, RoleStateRunning,
 	RoleStateFailed, RoleStateWaiting, RoleStateGuided,
 	RoleRepoEditing, RoleRepoReference, RoleRepoOff,
-	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote, RoleArtifactExplainer, RoleArtifactReview,
+	RoleArtifactPlan, RoleArtifactSpec, RoleArtifactResearch, RoleArtifactNote,
+	RoleArtifactExplainer, RoleArtifactReview, RoleArtifactAudit,
 }
 
 type token struct{ name, value string }
@@ -130,9 +132,29 @@ var aliases = []token{
 	{"mac-zoom", ref("ctp-green")},
 
 	{"sticker-blue", ref("ctp-blue")},
+	{"sticker-sapphire", ref("ctp-sapphire")},
+	{"sticker-teal", ref("ctp-teal")},
 	{"sticker-green", ref("ctp-green")},
+	{"sticker-yellow", ref("ctp-yellow")},
 	{"sticker-orange", ref("ctp-peach")},
 	{"sticker-red", ref("ctp-red")},
+	{"sticker-maroon", ref("ctp-maroon")},
+	{"sticker-pink", ref("ctp-pink")},
+	{"sticker-mauve", ref("ctp-mauve")},
+	{"sticker-lavender", ref("ctp-lavender")},
+	{"sticker-grey", ref("ctp-subtext-0")},
+}
+
+// StickerColours are the colours a session sticker may take, in the order the
+// palette declares them.
+func StickerColours() []string {
+	var out []string
+	for _, t := range aliases {
+		if colour, ok := strings.CutPrefix(t.name, stickerPrefix); ok {
+			out = append(out, colour)
+		}
+	}
+	return out
 }
 
 // CSS renders the palette as custom properties on :root. The workbench serves

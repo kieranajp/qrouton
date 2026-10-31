@@ -22,7 +22,7 @@ export const ICONS = Object.freeze({
   pending: icon("M5 8h6", null),
   reference: icon("M3.75 3.75h8.5v8.5h-8.5z", "M8 3.75h4.25v8.5H8z"),
   refresh: icon("M13 9v4H3V3h7M10 1l2.5 2L10 5", null),
-  running: icon("M3 3h1M7.5 3h1M12 3h1M3 13h1M7.5 13h1M12 13h1M3 7.5v1M13 7.5v1", null),
+  running: icon("M3 3h1M7.5 3h1M12 3h1M13 7.5v1M12 13h1M7.5 13h1M3 13h1M3 7.5v1", null),
   search: icon("M3 3h7v7H3zM10 10l3.5 3.5", null),
   session: icon("M2.5 2.5h8v8h-8zM13 5v8H5", null),
   settings: icon("M2 5h12M2 11h12M5 3v4M11 9v4", null),
@@ -34,3 +34,5 @@ export const ICONS = Object.freeze({
   waiting: icon(null, "M3.5 2h9L3.5 14h9z"),
   worktree: icon("M2 3h4l1.5 2H14v8H2z", null),
 });
+
+/** @typedef {keyof typeof ICONS} IconName */

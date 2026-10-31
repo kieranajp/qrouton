@@ -199,51 +199,69 @@ func TestExpandHomeResolvesTildeAndLeavesAnAbsolutePathAlone(t *testing.T) {
 	}
 }
 
-func TestEffectiveStickerLabelsDefaultAbsentAndPartialValues(t *testing.T) {
-	defaults := StickerLabels{
-		Star: "Important", Bookmark: "Read later", Question: "Needs follow-up", Exclamation: "Has bugs",
+func TestEffectiveStickersDeriveTheLegacyFourFromLabelsOrDefaults(t *testing.T) {
+	want := []Sticker{
+		{ID: "star", Colour: "blue", Symbol: "star", Label: "Important"},
+		{ID: "bookmark", Colour: "green", Symbol: "bookmark", Label: "Read later"},
+		{ID: "question", Colour: "orange", Symbol: "question", Label: "Needs follow-up"},
+		{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"},
 	}
-	if got := (&Config{}).EffectiveStickerLabels(); got != defaults {
-		t.Fatalf("absent labels = %#v, want %#v", got, defaults)
+	if got := (&Config{}).EffectiveStickers(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("no config = %#v", got)
 	}
 	partial := Config{StickerLabels: &StickerLabels{Star: "Pin this", Question: "Ask someone"}}
-	if got, want := partial.EffectiveStickerLabels(), (StickerLabels{
-		Star: "Pin this", Bookmark: "Read later", Question: "Ask someone", Exclamation: "Has bugs",
-	}); got != want {
-		t.Fatalf("partial labels = %#v, want %#v", got, want)
+	want[0].Label, want[2].Label = "Pin this", "Ask someone"
+	if got := partial.EffectiveStickers(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("from labels = %#v", got)
+	}
+	listed := []Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
+	withList := Config{Stickers: &listed, StickerLabels: &StickerLabels{Star: "ignored"}}
+	if got := withList.EffectiveStickers(); !reflect.DeepEqual(got, listed) {
+		t.Fatalf("listed = %#v", got)
 	}
 }
 
-func TestStickerLabelsLoadSaveAndReload(t *testing.T) {
-	configHome := t.TempDir()
-	t.Setenv("XDG_CONFIG_HOME", configHome)
+func TestAnEmptyStickerListSurvivesASaveAndReload(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("QROUTON_ROOT", t.TempDir())
-
-	custom := StickerLabels{Star: "Priority", Bookmark: "Later", Question: "Clarify", Exclamation: "Broken"}
-	if err := Save(&Config{Root: "/unused", StickerLabels: &custom}); err != nil {
+	empty := []Sticker{}
+	if err := Save(&Config{Root: "/unused", Stickers: &empty}); err != nil {
 		t.Fatal(err)
 	}
 	b, err := os.ReadFile(Path())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(b), `"stickerLabels"`) {
-		t.Fatalf("saved config has no sticker labels: %s", b)
+	if !strings.Contains(string(b), `"stickers": []`) {
+		t.Fatalf("saved config lost the empty list: %s", b)
 	}
 	loaded, err := Load()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.StickerLabels == nil || *loaded.StickerLabels != custom || loaded.EffectiveStickerLabels() != custom {
-		t.Fatalf("reloaded labels = %#v, want %#v", loaded.StickerLabels, custom)
+	if got := loaded.EffectiveStickers(); len(got) != 0 {
+		t.Fatalf("reloaded stickers = %#v, want none", got)
+	}
+}
+
+func TestCheckStickerRefusesValuesOutsideThePalette(t *testing.T) {
+	if err := CheckSticker(Sticker{Colour: "teal", Symbol: "check"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckSticker(Sticker{Colour: "beige", Symbol: "star"}); !errors.Is(err, ErrStickerColour) {
+		t.Fatalf("unknown colour = %v", err)
+	}
+	if err := CheckSticker(Sticker{Colour: "blue", Symbol: "moon"}); !errors.Is(err, ErrStickerSymbol) {
+		t.Fatalf("unknown symbol = %v", err)
 	}
 }
 
 func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	labels := StickerLabels{Star: "one", Bookmark: "two", Question: "three", Exclamation: "four"}
+	stickers := []Sticker{{ID: "one", Colour: "blue", Symbol: "star", Label: "one"}}
 	cfg := &Config{
 		Orgs: []string{"acme"}, Launch: map[string][]string{"codex": {"codex", "--search"}},
-		Editor: []string{"code", "--wait"}, StickerLabels: &labels,
+		Editor: []string{"code", "--wait"}, StickerLabels: &labels, Stickers: &stickers,
 		Reviewer: &Reviewer{Harness: "codex", Model: "gpt-6.1-sol", Reasoning: "medium"},
 	}
 
@@ -253,8 +271,10 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	cfg.Editor[0] = "changed"
 	cfg.StickerLabels.Star = "changed"
 	cfg.Reviewer.Model = "changed"
+	(*cfg.Stickers)[0].Label = "changed"
 	if snapshot.Orgs[0] != "acme" || snapshot.Launch["codex"][0] != "codex" ||
-		snapshot.Editor[0] != "code" || snapshot.StickerLabels.Star != "one" || snapshot.Reviewer.Model != "gpt-6.1-sol" {
+		snapshot.Editor[0] != "code" || snapshot.StickerLabels.Star != "one" ||
+		snapshot.Reviewer.Model != "gpt-6.1-sol" || (*snapshot.Stickers)[0].Label != "one" {
 		t.Fatalf("snapshot shares nested values: %+v", snapshot)
 	}
 
@@ -264,9 +284,11 @@ func TestSnapshotAndReplaceOwnNestedValues(t *testing.T) {
 	snapshot.Editor[0] = "mutated snapshot"
 	snapshot.StickerLabels.Star = "mutated snapshot"
 	snapshot.Reviewer.Model = "mutated snapshot"
+	(*snapshot.Stickers)[0].Label = "mutated snapshot"
 	got := cfg.Snapshot()
 	if got.Orgs[0] != "acme" || got.Launch["codex"][0] != "codex" ||
-		got.Editor[0] != "code" || got.StickerLabels.Star != "one" || got.Reviewer.Model != "gpt-6.1-sol" {
+		got.Editor[0] != "code" || got.StickerLabels.Star != "one" ||
+		got.Reviewer.Model != "gpt-6.1-sol" || (*got.Stickers)[0].Label != "one" {
 		t.Fatalf("replacement shares nested values: %+v", got)
 	}
 }
@@ -507,5 +529,48 @@ func TestThoughtsRootsMayNotHoldTheSessionsRoot(t *testing.T) {
 	}
 	if w := loaded.Warnings(); len(w) != 0 {
 		t.Fatalf("<root>/thoughts warned: %q", w)
+	}
+}
+
+func TestAuthorSurvivesSnapshotAndReplace(t *testing.T) {
+	src := &Config{Root: "/sessions", Author: "Kieran"}
+	if got := src.Snapshot().Author; got != "Kieran" {
+		t.Fatalf("snapshot author = %q", got)
+	}
+	dst := &Config{}
+	dst.Replace(src)
+	if dst.Author != "Kieran" {
+		t.Fatalf("replaced author = %q", dst.Author)
+	}
+}
+
+func TestThoughtsPlacementSurvivesSnapshotAndReplace(t *testing.T) {
+	src := &Config{Root: "/sessions", ThoughtsPlacement: "abc", ThoughtsPlacementChecked: true}
+	snap := src.Snapshot()
+	if snap.ThoughtsPlacement != "abc" || !snap.ThoughtsPlacementChecked {
+		t.Fatal("snapshot dropped a placement field")
+	}
+	dst := &Config{}
+	dst.Replace(src)
+	if dst.ThoughtsPlacement != "abc" || !dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace dropped a placement field")
+	}
+	dst.Replace(&Config{Root: "/sessions"})
+	if dst.ThoughtsPlacement != "" || dst.ThoughtsPlacementChecked {
+		t.Fatal("Replace kept stale placement fields")
+	}
+}
+
+func TestCacheDirFollowsXDGCacheHomeOnEveryPlatform(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("XDG_CACHE_HOME", "")
+	if got, want := CacheDir(), filepath.Join(home, ".cache", "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
+	}
+	cache := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", cache)
+	if got, want := CacheDir(), filepath.Join(cache, "qrouton"); got != want {
+		t.Fatalf("CacheDir() = %q, want %q", got, want)
 	}
 }

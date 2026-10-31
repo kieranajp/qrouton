@@ -1,12 +1,14 @@
 import { defineConfig } from "@playwright/test";
 
+const port = process.env.QROUTON_TEST_PORT || "4178";
+
 export default defineConfig({
   testDir: "./tests",
   outputDir: "./node_modules/.cache/playwright-results",
-  use: { baseURL: "http://127.0.0.1:4178" },
+  use: { baseURL: `http://127.0.0.1:${port}` },
   webServer: {
-    command: "npx vite --config playwright.vite.config.js --host 127.0.0.1 --port 4178",
-    url: "http://127.0.0.1:4178/tests/viewport.html",
+    command: `npx vite --config playwright.vite.config.js --host 127.0.0.1 --port ${port}`,
+    url: `http://127.0.0.1:${port}/tests/viewport.html`,
     reuseExistingServer: !process.env.CI,
   },
 });

@@ -17,6 +17,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/agentevent"
 	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -73,7 +74,7 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		byID[r.ID] = r
 	}
 
-	argv := argvFor(t, byID["codex"], false, modeRPI, "")
+	argv := argvFor(t, byID["codex"], false, string(session.ModeRPI), "")
 	if len(argv) != 3 || argv[0] != "codex" || argv[1] != "--dangerously-bypass-approvals-and-sandbox" {
 		t.Fatalf("unexpected Codex argv: %#v", argv)
 	}
@@ -83,7 +84,7 @@ func TestRequestedRunnerInitialPromptPresentsRPI(t *testing.T) {
 		strings.Contains(argv[2], "qrouton-implement") {
 		t.Fatalf("initial prompt does not present the RPI workflow: %q", argv[2])
 	}
-	if argv := argvFor(t, byID["opencode"], false, modeRPI, ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
+	if argv := argvFor(t, byID["opencode"], false, string(session.ModeRPI), ""); len(argv) != len(byID["opencode"].Command)+2 || argv[len(argv)-2] != openCodePromptFlag ||
 		!strings.Contains(argv[len(argv)-1], "Research, Plan, or Implement") {
 		t.Fatalf("OpenCode should receive the opening through --prompt: %#v", argv)
 	}
@@ -95,7 +96,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 		byID[r.ID] = r
 	}
 
-	argv := argvFor(t, byID["claude"], false, modeAssistant, "")
+	argv := argvFor(t, byID["claude"], false, string(session.ModeAssistant), "")
 	msg := argv[len(argv)-1]
 	if strings.Contains(msg, "Present the work as Research, Plan, or Implement") {
 		t.Fatalf("assistant opening should not mandate the RPI presentation: %q", msg)
@@ -107,7 +108,7 @@ func TestAssistantModeInitialPromptStaysOpenEndedAndOffersEscalation(t *testing.
 
 func TestAnExternalPromptIsLayeredUnderQroutonOpeningMessage(t *testing.T) {
 	for _, runner := range builtinRunners {
-		argv := argvFor(t, runner, false, modeAssistant, "  Fix the login regression.  ")
+		argv := argvFor(t, runner, false, string(session.ModeAssistant), "  Fix the login regression.  ")
 		message := argv[len(argv)-1]
 		if !strings.HasPrefix(message, openingMessageAssistant) ||
 			!strings.HasSuffix(message, requestSeparator+"Fix the login regression.") {
@@ -124,7 +125,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 		"agy":      {"--continue"},
 	}
 	for _, runner := range builtinRunners {
-		argv := argvFor(t, runner, true, modeRPI, "")
+		argv := argvFor(t, runner, true, string(session.ModeRPI), "")
 		if !reflect.DeepEqual(argv[len(argv)-len(wants[runner.ID]):], wants[runner.ID]) {
 			t.Errorf("%s resume argv = %#v, want suffix %#v", runner.ID, argv, wants[runner.ID])
 		}
@@ -137,7 +138,7 @@ func TestRunnerResumeArgvContinuesPreviousConversation(t *testing.T) {
 func TestRunnerResumeArgvCarriesARepositoryNoticeWithoutAFreshOpening(t *testing.T) {
 	const notice = "qrouton: session repositories changed"
 	for _, runner := range builtinRunners {
-		argv := argvFor(t, runner, true, modeRPI, notice)
+		argv := argvFor(t, runner, true, string(session.ModeRPI), notice)
 		joined := strings.Join(argv, " ")
 		if !strings.Contains(joined, notice) {
 			t.Errorf("%s resume argv lost the notice: %#v", runner.ID, argv)

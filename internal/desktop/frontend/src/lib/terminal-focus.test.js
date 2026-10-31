@@ -126,3 +126,16 @@ test("focus requested before a terminal mounts stays pending and does not replay
   assert.equal(focusPendingIn(generations, "window-3"), false);
   assert.equal(consumeTerminalFocus(generations, "window-3", 0), generations);
 });
+
+test("focus eligibility revokes a queued frame and retains its request", () => {
+  const queue = frames();
+  const calls = [];
+  const activation = createTerminalActivation({ ...queue, refit() { calls.push("refit"); }, focus() { calls.push("focus"); }, handled(generation) { calls.push(generation); } });
+  activation.update(true, 4, true);
+  activation.update(true, 4, true, false);
+  queue.flush();
+  assert.deepEqual(calls, ["refit"]);
+  activation.update(true, 4, true, true);
+  queue.flush();
+  assert.deepEqual(calls, ["refit", "focus", 4]);
+});

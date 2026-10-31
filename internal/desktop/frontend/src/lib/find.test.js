@@ -12,7 +12,6 @@ test("document find leaves modified chords and other keys alone", () => {
   assert.equal(findShortcut({ key: "f", metaKey: true, shiftKey: true }), false);
   assert.equal(findShortcut({ key: "f", ctrlKey: true, altKey: true }), false);
   assert.equal(findShortcut({ key: "g", metaKey: true }), false);
-  assert.equal(findShortcut(undefined), false);
 });
 
 test("find adapters refresh at the first match and wrap navigation", async () => {

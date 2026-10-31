@@ -21,7 +21,11 @@ const (
 	GenerationEnvVar = "QROUTON_AGENT_EVENT_GENERATION"
 	ProviderEnvVar   = "QROUTON_AGENT_EVENT_PROVIDER"
 
-	providerCodex = codex.Binary
+	providerCodex      = codex.Binary
+	codexIdentityLimit = 64 * 1024
+	codexTaskNameLimit = 512
+	codexIdentityKind  = "session_meta"
+	codexTaskPrefix    = "/root/"
 )
 
 const (

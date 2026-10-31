@@ -3,6 +3,7 @@ package launch
 import (
 	_ "embed"
 	"os"
+	"runtime"
 
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -34,10 +35,26 @@ func ShellArgv(qroutonBin, dir string) []string {
 	return []string{qroutonBin, ShellSubcommand, sessionRootFlag, dir}
 }
 
-// RevealArgv shows a directory in Finder. Revealing rather than opening leaves
-// Finder on the sessions root with the session itself selected.
-func RevealArgv(dir string) []string {
-	return []string{openCommand, openRevealFlag, dir}
+// RevealArgv shows a directory in the file manager. On macOS, revealing rather
+// than opening leaves Finder on the sessions root with the session selected.
+func RevealArgv(dir string) []string { return revealArgv(runtime.GOOS, dir) }
+
+func revealArgv(goos, dir string) []string {
+	if goos == darwinOS {
+		return []string{openCommand, openRevealFlag, dir}
+	}
+	return []string{xdgOpenCommand, dir}
+}
+
+// OpenTextArgv opens a file in the desktop's default text editor. xdg-open has
+// no text-editor mode, so on Linux the file's own type picks the application.
+func OpenTextArgv(path string) []string { return openTextArgv(runtime.GOOS, path) }
+
+func openTextArgv(goos, path string) []string {
+	if goos == darwinOS {
+		return []string{openCommand, openTextFlag, path}
+	}
+	return []string{xdgOpenCommand, path}
 }
 
 // Launch stamps the session's support files and returns what the workbench runs

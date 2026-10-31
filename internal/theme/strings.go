@@ -21,11 +21,14 @@ const (
 	RoleArtifactNote      = "artifact-note"
 	RoleArtifactExplainer = "artifact-explainer"
 	RoleArtifactReview    = "artifact-review"
+	RoleArtifactAudit     = "artifact-audit"
 )
 
 const (
 	Path      = "/tokens/colors.css"
 	MediaType = "text/css; charset=utf-8"
+
+	stickerPrefix = "sticker-"
 
 	cssHeader = "/* Catppuccin Macchiato, rendered from internal/theme. The neutral ramp is\n" +
 		"   the palette verbatim; each accent carries one job and must not be reused.\n" +

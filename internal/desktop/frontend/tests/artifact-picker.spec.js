@@ -16,7 +16,7 @@ test("every tag is a filled block of its kind's own hue", async ({ page }) => {
     { label: "S1", colour: "rgb(245, 189, 230)", ink: CRUST },
     { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
     { label: "NOTE", colour: "rgb(240, 198, 198)", ink: CRUST },
- { label: "REVIEW", colour: "rgb(244, 219, 214)", ink: CRUST },
+    { label: "REVIEW", colour: "rgb(198, 160, 246)", ink: CRUST },
     { label: "P1", colour: "rgb(183, 189, 248)", ink: CRUST },
     { label: "R1", colour: "rgb(145, 215, 227)", ink: CRUST },
   ]);

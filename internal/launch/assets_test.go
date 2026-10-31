@@ -76,6 +76,7 @@ func TestStampAssetsWritesOverwritesAndRespectsOwnership(t *testing.T) {
 	agentNames := []string{
 		"qrouton-research-lead", "qrouton-planning-lead", "qrouton-implementation-lead",
 		"codebase-researcher", "pattern-finder", "thoughts-researcher", "external-researcher", "test-verifier", "code-reviewer",
+		"audit-checker", "audit-verifier",
 	}
 	for _, name := range agentNames {
 		if cb, err := os.ReadFile(filepath.Join(dir, ".codex", "agents", name+".toml")); err != nil {
@@ -225,5 +226,22 @@ func TestStampAssetsRefusesUserOwnedSymlink(t *testing.T) {
 	}
 	if b, err := os.ReadFile(mine); err != nil || string(b) != "user instructions" {
 		t.Fatalf("user-linked content damaged: %q %v", b, err)
+	}
+}
+
+func TestAManifestWithAnInvalidRoleLaunchesAsRPIWithNoNameOrTicket(t *testing.T) {
+	dir := t.TempDir()
+	manifest := `{"mode":"assistant","name":"Broken","ticketUrl":"https://linear.app/acme/issue/ABC-1","repos":[{"org":"acme","name":"api","role":"owner"}]}`
+	if err := os.WriteFile(filepath.Join(dir, "qrouton.json"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionMode(dir); got != string(session.ModeRPI) {
+		t.Errorf("sessionMode = %q, want %q", got, session.ModeRPI)
+	}
+	if got := sessionName(dir); got != "" {
+		t.Errorf("sessionName = %q, want empty", got)
+	}
+	if got := sessionTicket(dir); got != "" {
+		t.Errorf("sessionTicket = %q, want empty", got)
 	}
 }

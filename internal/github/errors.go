@@ -7,6 +7,8 @@ import (
 
 var ErrNoToken = errors.New("no GitHub token: run `gh auth login` or set " + tokenEnvVar)
 
+var ErrTokenRejected = errors.New("GitHub rejected the token")
+
 var (
 	ErrIssueInvalid  = errors.New("a bug report needs a nonblank title and body")
 	ErrIssueRejected = errors.New("GitHub rejected the bug report")
@@ -20,3 +22,5 @@ var ErrUnsupportedOwnerType = errors.New("unsupported owner type")
 func unsupportedOwnerType(ownerType, owner string) error {
 	return fmt.Errorf("github: %w %q for %s", ErrUnsupportedOwnerType, ownerType, owner)
 }
+
+var ErrNotFound = errors.New("not found on GitHub")

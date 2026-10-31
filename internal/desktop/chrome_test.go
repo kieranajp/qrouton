@@ -3,8 +3,9 @@ package desktop
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -36,7 +37,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	shown.agents.begin(agentProviderCodex, 2)
 
 	renderer := newFakeRenderer()
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{"background": 3}, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{"background": 3}, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	rows := map[string]status.SessionRow{}
 	for _, row := range fields.Sessions {
@@ -55,7 +56,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	if cold := rows["cold"].Summary; cold.Running || cold.Coverage != status.AgentCoverageNone || cold.Attention != status.AgentAttentionNone {
 		t.Fatalf("cold row summary = %+v", cold)
 	}
-	if tree := agentTree(shown.agents.snapshot(), "", ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage == "" {
+	if tree := agentTree(shown.agents.snapshot(), "", ""); tree.Provider != agentProviderCodex || len(tree.Nodes) != 1 || tree.Coverage != "" {
 		t.Fatalf("selected tree = %+v", tree)
 	}
 }
@@ -74,16 +75,111 @@ func TestSelectedRepoStatsFollowTheSelectedSlug(t *testing.T) {
 	reference := status.RepoStat{Name: "lifesum/contracts", Role: "reference"}
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, nil, renderer.Emit)
 	fields := pushedChrome(t, renderer)
 	if len(fields.Repos) != 1 || fields.Repos[0] != reference {
 		t.Fatalf("selected reference stats = %+v", fields.Repos)
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, nil, renderer.Emit)
 	if fields = pushedChrome(t, renderer); len(fields.Repos) != 0 {
 		t.Fatalf("beta inherited alpha's stats: %+v", fields.Repos)
+	}
+}
+
+func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
+	root := t.TempDir()
+	alphaRoot := sessionDir(t, root, "alpha")
+	betaRoot := sessionDir(t, root, "beta")
+	reg := newSessions()
+	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
+	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
+	renderer := newFakeRenderer()
+	row := status.PullRequest{Repo: "acme/web", Number: 7, Title: "Add pulls", URL: "https://github.com/acme/web/pull/7"}
+	pulls := map[string]sessionPulls{alphaRoot: {
+		order: []string{"acme/web"},
+		repos: map[string]repoPulls{"acme/web": {rows: []status.PullRequest{row}}},
+	}}
+
+	reg.reveal(alpha)
+	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	if got := pushedChrome(t, renderer).PullRequests; len(got.Items) != 1 || got.Items[0] != row {
+		t.Fatalf("alpha pull requests = %+v", got)
+	}
+
+	reg.reveal(beta)
+	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 || got.SignedOut {
+		t.Fatalf("beta inherited alpha's pull requests: %+v", got)
+	}
+}
+
+func TestPullRequestsFetchOnArrivalAndFollowASwitchMadeMidFetch(t *testing.T) {
+	root := t.TempDir()
+	alphaRoot := sessionDir(t, root, "alpha")
+	betaRoot := sessionDir(t, root, "beta")
+	reg := newSessions()
+	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
+	beta := reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
+	reg.reveal(alpha)
+
+	asked := make(chan string, 4)
+	release := make(chan struct{})
+	fetch := func(_ context.Context, root string, _ sessionPulls) sessionPulls {
+		asked <- root
+		<-release
+		row := status.PullRequest{Repo: "acme/web", Number: 1, Title: filepath.Base(root)}
+		return sessionPulls{order: []string{"acme/web"}, repos: map[string]repoPulls{"acme/web": {rows: []status.PullRequest{row}}}}
+	}
+	updates := make(chan status.Fields, 64)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	defer close(release)
+	go watch(ctx, reg, root, nil, func(event string, payload any) {
+		if event == chromeEvent {
+			select {
+			case updates <- payload.(status.Fields):
+			default:
+			}
+		}
+	}, time.Hour, time.Hour, time.Hour, unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, false },
+	}, fetch)
+
+	waitAsked := func(want string) {
+		t.Helper()
+		select {
+		case got := <-asked:
+			if got != want {
+				t.Fatalf("fetched %s, want %s", got, want)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("no fetch for %s", want)
+		}
+	}
+	waitAsked(alphaRoot)
+	reg.reveal(beta)
+	select {
+	case got := <-asked:
+		t.Fatalf("fetched %s while another fetch was pending", got)
+	case <-time.After(50 * time.Millisecond):
+	}
+	release <- struct{}{}
+	waitAsked(betaRoot)
+	release <- struct{}{}
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case fields := <-updates:
+			if items := fields.PullRequests.Items; fields.Slug == "beta" && len(items) == 1 && items[0].Title == "beta" {
+				return
+			}
+		case <-deadline:
+			t.Fatal("beta's pull requests never reached the page")
+		}
 	}
 }
 
@@ -94,33 +190,36 @@ func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 		t.Fatal(err)
 	}
 	tree := agentTree(agentActivitySnapshot{}, manifestRunner(dir), "")
-	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != fmt.Sprintf(agentCoverageNoTools, tree.ProviderLabel) {
+	if tree.Provider != agentProviderCodex || len(tree.Nodes) != 0 || tree.Coverage != "" {
 		t.Fatalf("cold tree = %+v", tree)
 	}
 }
 
-func TestChromePublishesDefaultAndCustomStickerLabelsAndRefreshedRows(t *testing.T) {
+func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, "octopus")
 	reg := testRegistry(t, dir)
 	renderer := newFakeRenderer()
 
-	pushChrome(reg, root, nil, nil, nil, renderer.Emit)
-	if got, want := pushedChrome(t, renderer).StickerLabels, (status.StickerLabels{
-		Star: "Important", Bookmark: "Read later", Question: "Needs follow-up", Exclamation: "Has bugs",
-	}); got != want {
-		t.Fatalf("default labels = %#v, want %#v", got, want)
+	pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
+	got := pushedChrome(t, renderer).Stickers
+	if len(got) != 4 || got[0] != (status.Sticker{ID: "star", Colour: "blue", Symbol: "star", Label: "Important"}) ||
+		got[3] != (status.Sticker{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"}) {
+		t.Fatalf("default stickers = %#v", got)
 	}
-	if _, err := session.CycleSticker(dir); err != nil {
+	if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
+		m.Sticker = "a1b2c3d4"
+		return m, nil
+	}); err != nil {
 		t.Fatal(err)
 	}
-	custom := &config.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}
-	pushChrome(reg, root, &config.Config{StickerLabels: custom}, nil, nil, renderer.Emit)
+	custom := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
+	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, nil, renderer.Emit)
 	fields := pushedChrome(t, renderer)
-	if got := fields.StickerLabels; got != (status.StickerLabels{Star: "Pin", Bookmark: "Save", Question: "Ask", Exclamation: "Fix"}) {
-		t.Fatalf("custom labels = %#v", got)
+	if want := []status.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}; !reflect.DeepEqual(fields.Stickers, want) {
+		t.Fatalf("custom stickers = %#v", fields.Stickers)
 	}
-	if len(fields.Sessions) != 1 || fields.Sessions[0].Sticker != string(session.StickerStar) {
+	if len(fields.Sessions) != 1 || fields.Sessions[0].Sticker != "a1b2c3d4" {
 		t.Fatalf("refreshed row = %#v", fields.Sessions)
 	}
 }
@@ -146,9 +245,9 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 	}()
 	close(start)
 	for range 1000 {
-		pushChrome(newSessions(), root, cfg, nil, nil, func(_ string, payload any) {
+		pushChrome(newSessions(), root, cfg, nil, nil, nil, func(_ string, payload any) {
 			fields := payload.(status.Fields)
-			switch fields.StickerLabels.Star {
+			switch fields.Stickers[0].Label {
 			case "first":
 				if !fields.Welcoming {
 					t.Error("chrome mixed first labels with the second welcome state")
@@ -158,7 +257,7 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 					t.Error("chrome mixed second labels with the first welcome state")
 				}
 			default:
-				t.Errorf("chrome published unknown labels: %+v", fields.StickerLabels)
+				t.Errorf("chrome published unknown labels: %+v", fields.Stickers)
 			}
 		})
 	}
@@ -217,16 +316,16 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 		if event == chromeEvent {
 			updates <- payload.(status.Fields)
 		}
-	}, time.Hour, time.Hour, unseenCounts{
+	}, time.Hour, time.Hour, time.Hour, unseenCounts{
 		all: func(string) map[string]int { return map[string]int{} },
 		in:  func(string) (int, bool) { return 0, false },
-	})
+	}, noPulls)
 
-	for pushes := 0; pushes < 2; pushes++ {
+	for pushes := 0; pushes < 3; pushes++ {
 		select {
 		case <-updates:
 		case <-time.After(5 * time.Second):
-			t.Fatal("initial repository measurement did not settle")
+			t.Fatal("initial repository measurement and pull request fetch did not settle")
 		}
 	}
 	updated := initial
@@ -304,7 +403,7 @@ func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 	} {
 		step.poke()
 		renderer := newFakeRenderer()
-		pushChrome(reg, root, nil, nil, nil, renderer.Emit)
+		pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
 		fields := pushedChrome(t, renderer)
 		if fields.Activity != step.rail {
 			t.Fatalf("%s: chrome activity = %q, want %q", step.name, fields.Activity, step.rail)
@@ -339,7 +438,7 @@ func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
 	reg.reveal(shown)
 	live := func() status.Stages {
 		renderer := newFakeRenderer()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
 		return pushedChrome(t, renderer).StagesLive
 	}
 	lead := func(hook string) workbench.AgentEventRequest {
@@ -380,7 +479,7 @@ func TestChromeRowStageFollowsABackgroundSessionsLead(t *testing.T) {
 	reg.reveal(shown)
 	stage := func() string {
 		renderer := newFakeRenderer()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary.Stage
@@ -416,7 +515,7 @@ func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
 	reg.reveal(shown)
 	row := func() status.AgentSummary {
 		renderer := newFakeRenderer()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary

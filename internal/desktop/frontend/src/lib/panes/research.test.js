@@ -35,6 +35,7 @@ const RESEARCH = doc(
 test("the opening Summary is pinned and left out of the items", () => {
   const { title, summary, items } = parseResearch(RESEARCH);
   assert.equal(title, "The question set");
+  assert.ok(summary);
   assert.deepEqual([summary.index, summary.name], [0, "Summary"]);
   assert.deepEqual(
     items.map((item) => [item.index, item.name]),
@@ -49,6 +50,7 @@ test("the opening Summary is pinned and left out of the items", () => {
 test("item spans run to the line before the next opens", () => {
   const { preamble, summary, items } = parseResearch(RESEARCH);
   assert.deepEqual(preamble, { from: 5, to: 9 });
+  assert.ok(summary);
   assert.deepEqual([summary.from, summary.to], [10, 13]);
   assert.deepEqual(
     items.map((item) => [item.from, item.to]),
@@ -62,6 +64,7 @@ test("item spans run to the line before the next opens", () => {
 
 test("the heading text is matched case-insensitively and exactly", () => {
   const { summary } = parseResearch(doc("# Notes", "", "## summary", "", "Lower case.", ""));
+  assert.ok(summary);
   assert.equal(summary.name, "summary");
   assert.equal(parseResearch(doc("## Summary of findings", "", "Prose.", "")).summary, null);
 });

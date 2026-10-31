@@ -2,12 +2,14 @@
   import Button from "./core/Button.svelte";
   import { dismissible } from "./core/dismiss.js";
   import { updates } from "./updates.svelte.js";
+  import { flash } from "./flash.svelte.js";
   import { copyText, openURL } from "./wails.js";
 
   const view = updates();
   let status = $derived(view.status);
   let open = $state(false);
-  let copied = $state(false);
+  /** @type {ReturnType<typeof flash<boolean>>} */
+  const copied = flash();
 
   function click() {
     if (status.command) {
@@ -20,9 +22,10 @@
   async function copy() {
     try {
       await copyText(status.command);
-      copied = true;
-      setTimeout(() => (copied = false), 1200);
-    } catch {}
+      copied.show(true);
+    } catch {
+      copied.clear();
+    }
   }
 </script>
 
@@ -40,7 +43,7 @@
           terminal:
         </p>
         <code>{status.command}</code>
-        <Button variant="ghost" size="sm" onclick={copy}>{copied ? "Copied" : "Copy"}</Button>
+        <Button variant="ghost" size="sm" onclick={copy}>{copied.value ? "Copied" : "Copy"}</Button>
         {#if status.url}
           <p>
             Downloaded it directly? <a
@@ -59,6 +62,7 @@
 <style>
   .anchored {
     position: relative;
+    display: flex;
   }
 
   .panel {

@@ -183,6 +183,7 @@ test("a trailing section is its own slide rather than the last phase's body", ()
   const { slides } = parsePlan(AROUND);
   const phase = slides.find((slide) => slide.number === 1);
   const blockers = slides.at(-1);
+  assert.ok(phase && blockers);
   assert.equal(phase.to, blockers.from - 1);
   assert.ok(!blockers.name.startsWith("Phase"));
 });
@@ -205,7 +206,7 @@ test("the shared plan-phase cases parse as Go parses them", () => {
   const cases = JSON.parse(readFileSync(url, "utf8"));
   for (const { name, text, phases } of cases) {
     assert.deepEqual(
-      parsePlan(text).phases.map(({ number, met, total }) => ({ number, met, total })),
+      parsePlan(text).phases.map(({ number, label, met, total }) => ({ number, label, met, total })),
       phases,
       name,
     );

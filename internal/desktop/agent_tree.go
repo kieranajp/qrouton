@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/codex"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -47,8 +48,8 @@ func agentTree(snapshot agentActivitySnapshot, fallback, root string) status.Age
 		node := status.AgentNode{
 			ID: record.ID, Run: record.RunID, Parent: record.ParentID, Root: record.Root,
 			Placed: record.ParentKnown, Type: record.Type, Stage: status.StageOf(record.Type),
-			Description: record.Description,
-			State:       record.State, Reason: record.Reason, Tool: record.Tool, Target: record.Target,
+			Description: record.Description, TaskName: record.TaskName,
+			State: record.State, Reason: record.Reason, Tool: record.Tool, Target: record.Target,
 			Started: record.StartedAt, Finished: record.FinishedAt,
 			ToolCount: record.ToolCount, Tokens: record.Tokens, LastMessage: record.LastMessage,
 			Files: append([]string{}, record.Files...), Documents: writtenDocuments(root, record.Files),
@@ -90,7 +91,7 @@ func writtenDocuments(root string, files []string) []status.Document {
 func coverageNote(provider string, caps agentCapabilities) string {
 	label := launch.RunnerLabel(provider)
 	switch {
-	case provider == "" || caps.Parents:
+	case provider == "" || provider == codex.Binary || caps.Parents:
 		return ""
 	case !caps.Children:
 		return fmt.Sprintf(agentCoverageRootOnly, label)

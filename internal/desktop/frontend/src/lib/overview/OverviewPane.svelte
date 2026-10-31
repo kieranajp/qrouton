@@ -1,18 +1,24 @@
 <script>
-  import { AGENT_TREE_EVENT, CHROME_AGENT_TREE } from "../bridge/generated.js";
+  import { AGENT_TREE_EVENT } from "../bridge/generated.js";
   import { openDocument } from "../docked.svelte.js";
-  import { Call, Events, call } from "../wails.js";
+  import { follow } from "../wails.js";
+  import { agentTree } from "./calls.js";
   import LeadRow from "./LeadRow.svelte";
+  import SessionDigest from "./SessionDigest.svelte";
+  import SessionPullRequests from "./SessionPullRequests.svelte";
   import SessionRepos from "./SessionRepos.svelte";
   import SessionSummary from "./SessionSummary.svelte";
   import Tier from "./Tier.svelte";
   import { elapsed, nowLine, overview, rootWords } from "./tree.js";
 
-  /** The session's Overview: its summary, the orchestrator, its leads in stage
-   * order, and the session's repositories.
+  /** @typedef {import("./pulls.js").PullRequestList} PullRequestList */
+  /** @typedef {import("./digest.js").SessionDigest} Digest */
+
+  /** The session's Overview: its summary, its pull requests, its digest, the
+   * orchestrator, its leads in stage order, and the session's repositories.
    * @type {{slug: string, active?: boolean, root?: string, summary?: import("./summary.js").SessionSummary,
-   * repos?: any[], onAddRepos?: () => void}} */
-  let { slug, active = false, root = "", summary, repos = [], onAddRepos } = $props();
+   * pullRequests?: PullRequestList, digest?: Digest, repos?: any[], onAddRepos?: () => void}} */
+  let { slug, active = false, root = "", summary, pullRequests, digest, repos = [], onAddRepos } = $props();
 
   /** @type {import("./tree.js").AgentTree | undefined} */
   let tree = $state();
@@ -24,20 +30,8 @@
 
   $effect(() => {
     const current = session;
-    let live = false;
-    let gone = false;
     tree = undefined;
-    const off = Events.On(AGENT_TREE_EVENT + current, (event) => {
-      live = true;
-      tree = event.data;
-    });
-    call(Call.ByName(CHROME_AGENT_TREE, current)).then((answer) => {
-      if (answer.ok && !live && !gone && answer.value) tree = answer.value;
-    });
-    return () => {
-      gone = true;
-      off();
-    };
+    return follow(AGENT_TREE_EVENT + current, () => agentTree(current), (value) => (tree = value)).stop;
   });
 
   $effect(() => {
@@ -56,12 +50,16 @@
   async function read(path) {
     try {
       await openDocument(path);
-    } catch {}
+    } catch (error) {
+      console.error("open document", path, error);
+    }
   }
 </script>
 
 <div class="overview" style:display={active ? "flex" : "none"}>
   <SessionSummary {summary} {now} />
+  <SessionPullRequests {pullRequests} />
+  <SessionDigest {digest} {now} />
   <Tier label="Orchestrator" name="orchestrator">
     <div class="line">
       <span class="provider">{tree?.providerLabel ?? ""}</span>

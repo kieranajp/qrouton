@@ -21,14 +21,6 @@ type cacheFile struct {
 	Vectors   map[string][][]float32
 }
 
-func DefaultCacheDir() (string, error) {
-	dir, err := os.UserCacheDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, filepath.FromSlash(cacheDirName)), nil
-}
-
 // loadCache answers the vectors cached for header. Anything unreadable, built
 // for another model or preprocessing, or of mixed dimension is a miss.
 func loadCache(path string, header cacheHeader) map[string][][]float32 {

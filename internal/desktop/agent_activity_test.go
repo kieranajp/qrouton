@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -34,12 +35,14 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 	start := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStart,
-		ID: "agent-1", Type: "qrouton-research-lead", Timestamp: clock.now(),
+		ID: "agent-1", Type: "qrouton-research-lead", TaskName: "/root/research", Timestamp: clock.now(),
 	}
 	if !tracker.lifecycle(start) || tracker.snapshot().Active != 2 {
 		t.Fatalf("start left %d active records, want root and child", tracker.snapshot().Active)
 	}
-	if tracker.lifecycle(start) {
+	duplicate := start
+	duplicate.TaskName = "/root/conflict"
+	if tracker.lifecycle(duplicate) {
 		t.Fatal("duplicate start changed the tracker")
 	}
 	if record := delegatedRecord(t, tracker.snapshot(), "agent-1"); !record.ParentKnown || record.ParentID != agentRootID {
@@ -47,11 +50,15 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 	}
 	clock.at = clock.at.Add(time.Second)
 	stop := start
-	stop.Kind = workbench.LifecycleStop
+	stop.Kind, stop.TaskName = workbench.LifecycleStop, ""
 	if !tracker.lifecycle(stop) || tracker.snapshot().Active != 1 {
 		t.Fatalf("stop left %d active records, want only root", tracker.snapshot().Active)
 	}
-	finishedAt := delegatedRecord(t, tracker.snapshot(), "agent-1").FinishedAt
+	finished := delegatedRecord(t, tracker.snapshot(), "agent-1")
+	if finished.TaskName != start.TaskName {
+		t.Fatalf("finished name = %q, want %q", finished.TaskName, start.TaskName)
+	}
+	finishedAt := finished.FinishedAt
 	clock.at = clock.at.Add(time.Second)
 	if tracker.lifecycle(stop) {
 		t.Fatal("duplicate stop changed the tracker")
@@ -65,18 +72,21 @@ func TestDelegatedLifecycleIsTerminalAndOutOfOrderStopsMakeTombstones(t *testing
 
 	tombstone := workbench.DelegatedLifecycleRequest{
 		Provider: agentProviderClaude, Generation: 1, Kind: workbench.LifecycleStop,
-		ID: "agent-2", Type: "Explore",
+		ID: "agent-2", Type: "Explore", TaskName: "/root/stop_only",
 	}
 	if !tracker.lifecycle(tombstone) {
 		t.Fatal("unmatched stop did not create a tombstone")
 	}
 	record := delegatedRecord(t, tracker.snapshot(), "agent-2")
-	if record.State != agentStateDone || !record.StartedAt.IsZero() {
+	if record.State != agentStateDone || !record.StartedAt.IsZero() || record.TaskName != "" {
 		t.Fatalf("tombstone = %+v", record)
 	}
-	tombstone.Kind = workbench.LifecycleStart
+	tombstone.Kind, tombstone.TaskName = workbench.LifecycleStart, "/root/late"
 	if tracker.lifecycle(tombstone) {
 		t.Fatal("late start resurrected an unmatched stop")
+	}
+	if name := delegatedRecord(t, tracker.snapshot(), "agent-2").TaskName; name != "" {
+		t.Fatalf("late start named a tombstone: %q", name)
 	}
 }
 
@@ -85,7 +95,7 @@ func TestFinishedAgentsStayForTheRunAndTheOneAfter(t *testing.T) {
 	tracker := newAgentActivity(clock.now)
 	tracker.begin(agentProviderCodex, 1)
 	event := workbench.DelegatedLifecycleRequest{
-		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "agent-1", Type: "explorer",
+		Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "agent-1", Type: "explorer", TaskName: "/root/retained",
 	}
 	tracker.lifecycle(event)
 	event.Kind = workbench.LifecycleStop
@@ -95,7 +105,7 @@ func TestFinishedAgentsStayForTheRunAndTheOneAfter(t *testing.T) {
 		t.Fatal("a finished agent left the tree within its run")
 	}
 	tracker.begin(agentProviderCodex, 2)
-	if _, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok {
+	if record, ok := findRecord(tracker.snapshot(), "agent-1", 1); !ok || record.TaskName != "/root/retained" {
 		t.Fatal("the previous run's tree went at the first relaunch")
 	}
 	tracker.begin(agentProviderCodex, 3)
@@ -707,5 +717,46 @@ func TestAFocusReportLeavesTheChimeClaimed(t *testing.T) {
 	hook(status.ActivityWaiting, 1)
 	if len(chimed.rung) != 2 {
 		t.Fatalf("a keystroke did not re-arm the chime: rang %d times", len(chimed.rung))
+	}
+}
+
+func TestLifecycleNamesRejectStaleAndUnknownEvents(t *testing.T) {
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderCodex, 1)
+	event := workbench.DelegatedLifecycleRequest{Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: "a"}
+	tracker.lifecycle(event)
+	for _, change := range []func(*workbench.DelegatedLifecycleRequest){
+		func(e *workbench.DelegatedLifecycleRequest) { e.Generation = 2 },
+		func(e *workbench.DelegatedLifecycleRequest) { e.Provider = agentProviderClaude },
+		func(e *workbench.DelegatedLifecycleRequest) { e.Kind = "unknown" },
+	} {
+		stale := event
+		stale.TaskName = "/root/stale"
+		change(&stale)
+		if tracker.lifecycle(stale) || delegatedRecord(t, tracker.snapshot(), "a").TaskName != "" {
+			t.Fatal("stale or unknown event assigned a name")
+		}
+	}
+	tracker.begin(agentProviderCodex, 2)
+	event.TaskName = "/root/old"
+	if tracker.lifecycle(event) || recordForRun(t, tracker.snapshot(), "a", 1).TaskName != "" {
+		t.Fatal("old run assigned a retained name")
+	}
+}
+
+func TestConcurrentSameTypeLifecycleNamesStayWithTheirIDs(t *testing.T) {
+	tracker := newAgentActivity(time.Now)
+	tracker.begin(agentProviderCodex, 1)
+	var group sync.WaitGroup
+	for _, id := range []string{"a", "b", "c"} {
+		group.Go(func() {
+			tracker.lifecycle(workbench.DelegatedLifecycleRequest{Provider: agentProviderCodex, Generation: 1, Kind: workbench.LifecycleStart, ID: id, Type: "codebase-researcher", TaskName: "/root/" + id})
+		})
+	}
+	group.Wait()
+	for _, id := range []string{"a", "b", "c"} {
+		if record := delegatedRecord(t, tracker.snapshot(), id); record.TaskName != "/root/"+id || record.Type != "codebase-researcher" {
+			t.Fatalf("record = %+v", record)
+		}
 	}
 }

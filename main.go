@@ -215,6 +215,7 @@ func workbenchProcess(marshalled string) error {
 		Resume:       spec.Resume,
 		Root:         cfg.Root,
 		Socket:       spec.Socket,
+		Inspect:      os.Getenv(inspectEnvVar) == "1",
 		Ticket:       spec.Ticket,
 		TicketPrompt: spec.TicketPrompt,
 		LinearCommand: []string{
@@ -267,6 +268,8 @@ func (p workbenchPorts) Shell(sessionRoot string) []string {
 }
 
 func (p workbenchPorts) Reveal(sessionRoot string) []string { return launch.RevealArgv(sessionRoot) }
+
+func (p workbenchPorts) OpenText(path string) []string { return launch.OpenTextArgv(path) }
 
 func (p workbenchPorts) CopyImage(path string) []string { return launch.CopyImageArgv(path) }
 

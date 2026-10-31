@@ -1,5 +1,6 @@
 import { ARTIFACT_KINDS, DOCUMENT_FORMATS } from "../bridge/generated.js";
 import AssetsPane from "./AssetsPane.svelte";
+import AuditPane from "./AuditPane.svelte";
 import DiffPane from "./DiffPane.svelte";
 import MarkdownPane from "./MarkdownPane.svelte";
 import PlainPane from "./PlainPane.svelte";
@@ -19,6 +20,7 @@ const PANES = {
 // Some markdown is more than markdown. The kind is the workbench's own reading
 // of where the file lives, so it refines the format rather than replacing it.
 const KINDS = {
+  [ARTIFACT_KINDS.AUDIT]: AuditPane,
   [ARTIFACT_KINDS.PLAN]: PlanPane,
   [ARTIFACT_KINDS.RESEARCH]: ResearchPane,
   [ARTIFACT_KINDS.SPEC]: SpecPane,

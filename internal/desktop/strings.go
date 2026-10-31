@@ -9,6 +9,9 @@ import (
 )
 
 const (
+	placementLeavingNote  = "Moving a session out of a shared folder stops sharing it. Your sync tool will usually delete the folder on your teammates' machines, but versioned copies may remain."
+	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
+
 	bugReportReviewLabel      = "Review bug report"
 	bugReportCreateLabel      = "Create issue"
 	bugReportCancelLabel      = "Cancel"
@@ -22,6 +25,7 @@ const (
 	bugReportPostTimeout      = 30 * time.Second
 
 	specAnswersInFormat = "I've answered the design questions in %s. Please fold them into Decisions."
+	auditTriageInFormat = "I've triaged the findings in %s. Please plan the accepted findings."
 	conversationSubmit  = "\r"
 	pasteStart          = "\x1b[200~"
 	pasteEnd            = "\x1b[201~"
@@ -44,9 +48,15 @@ const (
 	shellWindowLabel        = "shell"
 	shellWindowLabelNumbers = "shell %d"
 
+	sessionUnloadLabel   = "Unload"
+	sessionUnloadFailed  = "Session could not be unloaded"
+	sessionReorderFailed = "Session could not be moved"
+
 	// The page URL is a directory: http.FileServer 301-redirects
 	// /index.html to /, and the webview does not follow the redirect.
 	frontendRoot = "/"
+
+	inspectQuery = "inspect"
 
 	// A directory too, for the redirect frontendRoot dodges.
 	notesRoot = "/notes/"
@@ -118,18 +128,14 @@ const (
 
 // A Save refusal names the settings field it belongs under before the sentence.
 const (
-	settingsFieldOrgs        = "orgs"
-	settingsFieldRoot        = "root"
-	settingsFieldEditor      = "editor"
-	settingsFieldLaunch      = "launch"
-	settingsFieldLinear      = "linear"
-	settingsFieldStar        = "star"
-	settingsFieldBookmark    = "bookmark"
-	settingsFieldQuestion    = "question"
-	settingsFieldExclamation = "exclamation"
-	settingsFieldUIScale     = "uiScale"
-	settingsFieldThoughts    = "thoughts"
-	settingsFieldReviewer    = "reviewer"
+	settingsFieldOrgs     = "orgs"
+	settingsFieldRoot     = "root"
+	settingsFieldEditor   = "editor"
+	settingsFieldLaunch   = "launch"
+	settingsFieldStickers = "stickers"
+	settingsFieldUIScale  = "uiScale"
+	settingsFieldThoughts = "thoughts"
+	settingsFieldReviewer = "reviewer"
 
 	thoughtsOrgJoin  = ", "
 	thoughtsOrgSplit = ","
@@ -137,6 +143,10 @@ const (
 	settingsRefusalFormat = "%s: %s"
 	settingsWrappedFormat = "%s: %w"
 	settingsEmpty         = "cannot be empty"
+	stickerFieldFormat    = "%s.%d"
+	stickerDuplicate      = "another sticker already uses this colour and symbol"
+	stickerIDBytes        = 4
+	assetTokenBytes       = 16
 	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
 	unknownUIScaleAction  = "unknown UI scale action"
 )
@@ -156,6 +166,7 @@ const (
 	tabStatusSucceeded = "succeeded"
 	tabStatusFailed    = "failed"
 	tabStatusWaiting   = "waiting"
+	tabStatusIdle      = "idle"
 )
 
 const (
@@ -171,19 +182,23 @@ const (
 	// frame produces well under this, so a repaint arrives as one event.
 	ptyReadBuffer = 32 * 1024
 
+	// An agent's terminal starts at this size when no page has measured it yet.
+	unmountedCols = 80
+	unmountedRows = 24
+
 	windowScrollback = 256 * 1024
 
 	// windowScreenLines is what a read without full returns.
 	windowScreenLines = 50
 
 	// agentTailBytes is how much of a conversation is kept back for the log its
-	// supervisor's exit writes; agentLogLimit is when that log is rotated.
+	// supervisor's exit writes; logLimit is when a log is rotated.
 	agentTailBytes = 8 * 1024
-	agentLogLimit  = 256 * 1024
+	logLimit       = 256 * 1024
 )
 
 const (
-	agentLogPreviousSuffix = ".1"
+	logPreviousSuffix = ".1"
 
 	agentExitLogFormat  = "%s agent exited: provider=%s status=%d\n"
 	agentExitTailFormat = "--- last output ---\n%s\n--- end output ---\n"
@@ -200,8 +215,16 @@ const (
 	// escalation.
 	chromeInterval = 2 * time.Second
 
+	// foregroundInterval paces the read of each user shell's foreground job.
+	foregroundInterval = 500 * time.Millisecond
+
 	// repoStatInterval paces the git stats: three subprocesses per active repo.
 	repoStatInterval = 15 * time.Second
+
+	// pullRequestInterval paces the shown session's GitHub pull request fetch.
+	pullRequestInterval  = 60 * time.Second
+	pullRequestTimeout   = 10 * time.Second
+	pullRequestLogFormat = "pull requests: %s: %v"
 
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.
@@ -215,11 +238,15 @@ const (
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
+	githubCheckTimeout = 4 * time.Second
 	ticketFetchTimeout = 15 * time.Second
 
 	// branchListTimeout bounds the branch listing GitHub is asked for, which the
 	// base menu opens without waiting for.
 	branchListTimeout = 5 * time.Second
+
+	// repoRefreshTimeout bounds each owner's repository listing.
+	repoRefreshTimeout = 30 * time.Second
 
 	// updateInterval paces the release check; updateCheckTimeout bounds each one.
 	updateInterval     = 6 * time.Hour
@@ -232,9 +259,6 @@ const (
 	updateBrewCommand     = "brew upgrade --cask qrouton"
 	updateUserAgentHeader = "User-Agent"
 	updateUserAgentPrefix = "qrouton/"
-	updateAcceptHeader    = "Accept"
-	updateAcceptValue     = "application/vnd.github+json"
-	updateResponseLimit   = 1 << 20
 )
 
 const (
@@ -278,6 +302,7 @@ var deckExtraMediaTypes = map[string]string{
 }
 
 const (
+	galleryLabel             = "GALLERY"
 	galleryAssetPath         = "/gallery/"
 	galleryAssetURLFormat    = "/gallery/%s/%d"
 	cacheControlHeader       = "Cache-Control"
@@ -288,3 +313,16 @@ const (
 )
 
 const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"
+
+const (
+	switcherLabel     = "Switch session"
+	switcherSearch    = "Search sessions"
+	switcherClose     = "Close session picker"
+	switcherEmpty     = "No sessions available"
+	switcherNoMatches = "No matching sessions"
+	switcherOpening   = "Opening…"
+	switcherFailed    = "Session could not be opened. Try again."
+	switcherCurrent   = "Current"
+	switcherResults   = "sessions"
+	switcherHelp      = "Arrow keys choose · Enter open · Esc close"
+)

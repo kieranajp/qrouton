@@ -1,13 +1,14 @@
 package desktop
 
 import (
-	"encoding/base64"
 	"fmt"
 	"io"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/launch"
@@ -36,6 +37,7 @@ type sessionState struct {
 
 	mu              sync.Mutex
 	stopped         bool
+	windowsClosed   atomic.Bool
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
 	process         *ptyProcess
@@ -104,6 +106,13 @@ func (s *sessionState) alive() bool {
 	return !s.stopped && (s.process == nil || !s.process.done())
 }
 
+func (s *sessionState) admissionClosed() bool {
+	if s == nil {
+		return false
+	}
+	return s.windowsClosed.Load()
+}
+
 // start launches the supervisor under a PTY sized to the terminal displaying it.
 // The page calls it on load, so a reload must not fork a second agent.
 func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols, rows int) error {
@@ -117,25 +126,31 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 		return err
 	}
 	s.process = process
-	// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and
-	// JSON marshalling corrupts it.
 	go process.pump(
 		func(b []byte) {
 			s.agents.output()
 			if s.tail != nil {
 				s.tail.write(b)
 			}
-			emit(ptyDataEvent+s.terminal, base64.StdEncoding.EncodeToString(b))
+			emit(ptyDataEvent+s.terminal, encodeChunk(b))
 		},
-		func(code int) {
-			s.recordExit(code)
-			emit(ptyExitEvent+s.terminal, code)
-			if exited != nil {
-				exited(s, code)
-			}
-		},
+		func(code int) { s.childExited(emit, exited, code) },
 	)
 	return nil
+}
+
+func (s *sessionState) childExited(emit emitter, exited func(*sessionState, int), code int) {
+	s.mu.Lock()
+	stopped := s.stopped
+	s.mu.Unlock()
+	if stopped {
+		return
+	}
+	s.recordExit(code)
+	emit(ptyExitEvent+s.terminal, code)
+	if exited != nil {
+		exited(s, code)
+	}
 }
 
 // recordExit logs a death the workbench did not cause. A supervisor it stopped
@@ -222,6 +237,7 @@ type booting struct {
 	reveal      func(sessionRoot string) error
 	copyImage   func(path string) error
 	copyFile    func(path string) error
+	stickers    func() []session.Sticker
 }
 
 type Sessions struct {
@@ -241,9 +257,7 @@ type Sessions struct {
 	// history is the order sessions were shown in, most recent last, so a
 	// supervisor exiting can hand the window back to the one before it.
 	history []*sessionState
-	// rail is the order the rail draws in, fixed by the first poll and only ever
-	// appended to. A row's position addresses it from the keyboard, so a position
-	// that moved would rename every shortcut under the user's fingers.
+	// rail retains user moves and missing slugs; new sessions prepend on polling.
 	rail []string
 
 	now    func() time.Time
@@ -251,6 +265,8 @@ type Sessions struct {
 	// trees pushes the shown session's agent tree; nil until the workbench runs.
 	trees       *agentTrees
 	repoChanges map[string]struct{}
+
+	placementShown atomic.Bool
 }
 
 func newSessions() *Sessions {
@@ -311,6 +327,80 @@ func (s *Sessions) Reload(slug string) error {
 	return s.replace(root, fallback, emptied)
 }
 
+func (s *Sessions) Unload(slug string) error {
+	s.showMu.Lock()
+	defer s.showMu.Unlock()
+	root, err := s.validatedRoot(slug)
+	if err != nil {
+		return err
+	}
+	manifest, err := session.Load(root)
+	if err != nil || manifest.Slug != slug {
+		return unknownSession(slug)
+	}
+	state := s.bySlug(slug)
+	if state == nil {
+		return nil
+	}
+	fallback, wasShown := s.recycle(state)
+	s.dropAgentActivity(slug)
+	if wasShown {
+		s.reveal(fallback)
+	} else {
+		s.touch()
+	}
+	return nil
+}
+
+func validateSessionSlug(slug string) error {
+	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\`) {
+		return unknownSession(slug)
+	}
+	return nil
+}
+
+func (s *Sessions) validatedRoot(slug string) (string, error) {
+	if err := validateSessionSlug(slug); err != nil {
+		return "", err
+	}
+	root := s.boot.root(slug)
+	if root == "" || !directSessionRoot(root, slug) {
+		return "", unknownSession(slug)
+	}
+	return root, nil
+}
+
+func (s *Sessions) Reorder(slug, targetSlug string) error {
+	if err := validateSessionSlug(slug); err != nil {
+		return err
+	}
+	if err := validateSessionSlug(targetSlug); err != nil {
+		return err
+	}
+	s.mu.Lock()
+	from, to := slices.Index(s.rail, slug), slices.Index(s.rail, targetSlug)
+	if from < 0 || to < 0 {
+		s.mu.Unlock()
+		if from < 0 {
+			return unknownSession(slug)
+		}
+		return unknownSession(targetSlug)
+	}
+	if from == to {
+		s.mu.Unlock()
+		return nil
+	}
+	if from < to {
+		copy(s.rail[from:to], s.rail[from+1:to+1])
+	} else {
+		copy(s.rail[to+1:from+1], s.rail[to:from])
+	}
+	s.rail[to] = slug
+	s.mu.Unlock()
+	s.touch()
+	return nil
+}
+
 // replace boots a session and puts it on screen. A boot that fails after
 // recycling had emptied the window hands the window back rather than leaving it
 // on nothing.
@@ -327,19 +417,20 @@ func (s *Sessions) replace(root string, fallback *sessionState, emptied bool) er
 }
 
 func (s *Sessions) CycleSticker(slug string) (session.Sticker, error) {
-	if slug == "" || slug == "." || slug == ".." || strings.ContainsAny(slug, `/\\`) {
-		return "", unknownSession(slug)
+	root, err := s.validatedRoot(slug)
+	if err != nil {
+		return "", err
 	}
-	root := s.boot.root(slug)
-	if root == "" || !directSessionRoot(root, slug) {
-		return "", unknownSession(slug)
+	var order []session.Sticker
+	if s.boot.stickers != nil {
+		order = s.boot.stickers()
 	}
 	var sticker session.Sticker
-	err := session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
+	err = session.UpdateManifest(root, func(m session.Manifest) (session.Manifest, error) {
 		if m.Slug != slug {
 			return m, unknownSession(slug)
 		}
-		m.Sticker = m.Sticker.Next()
+		m.Sticker = m.Sticker.Next(order)
 		sticker = m.Sticker
 		return m, nil
 	})
@@ -522,6 +613,12 @@ func (s *Sessions) recycle(state *sessionState) (fallback *sessionState, wasShow
 func (s *Sessions) retire(state *sessionState) {
 	s.showMu.Lock()
 	defer s.showMu.Unlock()
+	state.mu.Lock()
+	stopped := state.stopped
+	state.mu.Unlock()
+	if stopped || s.bySlug(state.slug()) != state {
+		return
+	}
 	s.retireLocked(state)
 }
 
@@ -633,8 +730,11 @@ func (s *Sessions) forget(state *sessionState) (fallback *sessionState, wasShown
 		return nil, false
 	}
 	s.showing = nil
-	if len(kept) > 0 {
-		return kept[len(kept)-1], true
+	for i := len(kept) - 1; i >= 0; i-- {
+		seen := kept[i]
+		if s.slugs[seen.slug()] == seen && seen.alive() {
+			return seen, true
+		}
 	}
 	return nil, true
 }
@@ -688,6 +788,13 @@ func (s *Sessions) all() []*sessionState {
 	return out
 }
 
+func (s *Sessions) placing() bool { return s.placementShown.Load() }
+
+func (s *Sessions) setPlacing(shown bool) {
+	s.placementShown.Store(shown)
+	s.touch()
+}
+
 func (s *Sessions) touch() {
 	select {
 	case s.touched <- struct{}{}:
@@ -721,12 +828,11 @@ func without(history []*sessionState, state *sessionState) []*sessionState {
 			kept = append(kept, seen)
 		}
 	}
+	clear(history[len(kept):])
 	return kept
 }
 
-// railOrder puts a poll's rows in the order the rail was first drawn in. A session
-// assembled since then goes to the front, because it is the most recent and that
-// is the rule the rest of the list follows; nothing else moves a row.
+// railOrder preserves user moves and prepends newly discovered sessions.
 func (s *Sessions) railOrder(rows []status.SessionRow) []status.SessionRow {
 	found := make(map[string]status.SessionRow, len(rows))
 	for _, row := range rows {

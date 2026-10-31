@@ -1,8 +1,6 @@
 package desktop
 
 import (
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"path"
 	"slices"
@@ -10,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -41,8 +40,14 @@ type terminalContent struct {
 	// page can therefore reset to one replay without racing live output around it.
 	stream  sync.Mutex
 	process *ptyProcess
+	// served is set once a page has shown the output, live or replayed.
+	served bool
 	// exit is nil while the process is still running.
 	exit *int
+	// foreground marks a user shell, which is busy only while a job holds its
+	// terminal. busy is the last read of its terminal.
+	foreground bool
+	busy       bool
 }
 
 // documentContent holds a rendered tab's measurements. viewport is nil for a
@@ -64,6 +69,8 @@ type documentContent struct {
 
 func (t *terminalContent) tabStatus() string {
 	switch {
+	case t.exit == nil && t.foreground && !t.busy:
+		return tabStatusIdle
 	case t.exit == nil:
 		return tabStatusRunning
 	case *t.exit == 0:
@@ -95,20 +102,18 @@ type registry struct {
 	sourceMu     sync.Mutex
 	assetFocusMu sync.Mutex
 
-	mu                sync.Mutex
-	seq               int
-	open              map[string]*agentWindow
-	selected          map[*sessionState]string
-	assetOwnersClosed map[*sessionState]bool
-	assetsClosed      bool
+	mu       sync.Mutex
+	seq      int
+	open     map[string]*agentWindow
+	selected map[*sessionState]string
+	closed   bool
 }
 
 func newRegistry(emit emitter, sessions *Sessions) *registry {
 	return &registry{
 		emit: emit, sessions: sessions,
-		open:              map[string]*agentWindow{},
-		selected:          map[*sessionState]string{},
-		assetOwnersClosed: map[*sessionState]bool{},
+		open:     map[string]*agentWindow{},
+		selected: map[*sessionState]string{},
 	}
 }
 
@@ -150,7 +155,7 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 			r.discard(id)
 		}
 	}
-	return r.spawn(owner, opts, opts.Select)
+	return r.spawn(owner, opts, opts.Select, false)
 }
 
 // openStructural opens a tab the workbench owns rather than the agent. It
@@ -158,12 +163,22 @@ func (r *registry) openWindow(owner *sessionState, opts workbench.WindowOptions)
 // it has the id, or is the Overview tab, which has nothing to steal
 // the selection from.
 func (r *registry) openStructural(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	return r.openOwned(owner, opts, false)
+}
+
+// openShell opens a user shell, whose tab reports the terminal's foreground job
+// rather than spinning for the shell's whole life.
+func (r *registry) openShell(owner *sessionState, opts workbench.WindowOptions) (string, error) {
+	return r.openOwned(owner, opts, true)
+}
+
+func (r *registry) openOwned(owner *sessionState, opts workbench.WindowOptions, foreground bool) (string, error) {
 	var err error
 	opts, err = admittedWindowOptions(owner, opts)
 	if err != nil {
 		return "", err
 	}
-	return r.spawn(owner, opts, false)
+	return r.spawn(owner, opts, false, foreground)
 }
 
 func (r *registry) showOrOpen(owner *sessionState, source string, open func() (string, error)) (string, error) {
@@ -250,7 +265,7 @@ func (r *registry) showing(owner *sessionState, source string) (string, bool) {
 	return "", false
 }
 
-func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, selects bool) (string, error) {
+func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, selects, foreground bool) (string, error) {
 	if opts.Kind == workbench.KindTerminal && len(opts.Command) == 0 {
 		return "", ErrNoWindowCommand
 	}
@@ -262,14 +277,20 @@ func (r *registry) spawn(owner *sessionState, opts workbench.WindowOptions, sele
 		}
 	}
 	r.mu.Lock()
-	if opts.Format == workbench.FormatAssets && (r.assetsClosed || r.assetOwnersClosed[owner]) {
+	if r.closed || owner.admissionClosed() {
 		r.mu.Unlock()
-		return "", ErrAssetGalleryClosed
+		if opts.Format == workbench.FormatAssets {
+			return "", ErrAssetGalleryClosed
+		}
+		return "", ErrSessionUnloaded
 	}
 	r.seq++
 	id := fmt.Sprintf(windowIDFormat, r.seq)
 	window := &agentWindow{opts: opts, session: owner, seq: r.seq, order: r.seq, content: contentFor(opts)}
 	window.asset = asset
+	if terminal, ok := window.terminal(); ok {
+		terminal.foreground = foreground
+	}
 	beginDocument(window)
 	r.open[id] = window
 	if selects {
@@ -301,13 +322,7 @@ func (r *registry) deckDirectory(token string) (root, dir string, ok bool) {
 	return root, dir, ok
 }
 
-func assetToken() string {
-	var raw [16]byte
-	if _, err := rand.Read(raw[:]); err != nil {
-		return ""
-	}
-	return hex.EncodeToString(raw[:])
-}
+func assetToken() string { return randomid.Hex(assetTokenBytes) }
 
 func (r *registry) readWindow(id string, full bool) (string, error) {
 	var text string
@@ -403,7 +418,9 @@ func (r *registry) ordered(owner *sessionState) []*agentWindow {
 
 func (r *registry) stop(owner *sessionState) {
 	r.mu.Lock()
-	r.assetOwnersClosed[owner] = true
+	if owner != nil {
+		owner.windowsClosed.Store(true)
+	}
 	r.mu.Unlock()
 	for _, id := range r.list() {
 		if window, ok := r.window(id); ok && window.session == owner {
@@ -414,7 +431,7 @@ func (r *registry) stop(owner *sessionState) {
 
 func (r *registry) stopAll() {
 	r.mu.Lock()
-	r.assetsClosed = true
+	r.closed = true
 	r.mu.Unlock()
 	for _, id := range r.list() {
 		r.discard(id)

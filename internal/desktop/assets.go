@@ -26,11 +26,30 @@ var assetFS embed.FS
 
 // Lifecycle services are guarded because missing bindings can strand the user
 // outside a session or leave a backend-owned draft open.
-var frontendServices = []any{Term{}, Sessions{}, Windows{}, FirstRun{}, Assembly{}, Chrome{}, BugReports{}, Ollama{}}
+var frontendServices = []any{Term{}, Sessions{}, Windows{}, FirstRun{}, Placement{}, Assembly{}, Chrome{}, BugReports{}, Ollama{}}
 
 func validateFrontend(assets fs.FS) error {
+	bundle, err := bundleText(assets)
+	if err != nil {
+		return err
+	}
+	for _, service := range frontendServices {
+		typ := reflect.TypeOf(service)
+		methods := reflect.PointerTo(typ)
+		for i := 0; i < methods.NumMethod(); i++ {
+			binding := bindingName(typ, methods.Method(i).Name)
+			if !strings.Contains(bundle, binding) {
+				return fmt.Errorf(staleFrontendBindingFormat, ErrStaleFrontend, binding)
+			}
+		}
+	}
+	return nil
+}
+
+// bundleText concatenates every file in the asset tree.
+func bundleText(assets fs.FS) (string, error) {
 	var bundle strings.Builder
-	if err := fs.WalkDir(assets, ".", func(path string, entry fs.DirEntry, err error) error {
+	err := fs.WalkDir(assets, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err
 		}
@@ -40,20 +59,13 @@ func validateFrontend(assets fs.FS) error {
 		}
 		bundle.Write(body)
 		return nil
-	}); err != nil {
-		return err
-	}
-	for _, service := range frontendServices {
-		typ := reflect.TypeOf(service)
-		methods := reflect.PointerTo(typ)
-		for i := 0; i < methods.NumMethod(); i++ {
-			binding := typ.PkgPath() + "." + typ.Name() + "." + methods.Method(i).Name
-			if !strings.Contains(bundle.String(), binding) {
-				return fmt.Errorf(staleFrontendBindingFormat, ErrStaleFrontend, binding)
-			}
-		}
-	}
-	return nil
+	})
+	return bundle.String(), err
+}
+
+// bindingName is the fully qualified name Wails binds a service method under.
+func bindingName(typ reflect.Type, method string) string {
+	return typ.PkgPath() + "." + typ.Name() + "." + method
 }
 
 // deckLookup answers a deck's asset token with the session root its window

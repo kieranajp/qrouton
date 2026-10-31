@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import Menu from "./Menu.svelte";
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
@@ -9,9 +9,13 @@
   import { clipboardText, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind } from "../panes/markdown.js";
   import { terminalAt } from "../xterm.js";
+  import { INSPECT_QUERY } from "../bridge/generated.js";
 
-  /** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */
-  let open = $state(null);
+  let { onOwnership = undefined } = $props();
+  $effect(() => { onOwnership?.(Boolean(open)); });
+  onDestroy(() => onOwnership?.(false));
+
+  let open = $state(/** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */ (null));
 
   let anchor = $derived(
     open
@@ -67,7 +71,10 @@
     open = items.length ? { ...at, items, x: event.clientX, y: event.clientY } : null;
   }
 
+  const inspecting = new URLSearchParams(window.location.search).has(INSPECT_QUERY);
+
   onMount(() => {
+    if (inspecting) return;
     window.addEventListener("contextmenu", onContextMenu);
     return () => window.removeEventListener("contextmenu", onContextMenu);
   });
@@ -92,6 +99,7 @@
 
   async function act(item) {
     const at = open;
+    if (!at) return;
     open = null;
     restore(at);
     switch (item.act) {
@@ -120,7 +128,7 @@
   }
 </script>
 
-{#if open}
+{#if open && anchor}
   <div
     class="anchor"
     style:left="{anchor.left}px"
@@ -136,6 +144,6 @@
     position: fixed;
     width: 0;
     height: 0;
-    z-index: 20;
+    z-index: 26;
   }
 </style>

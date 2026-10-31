@@ -26,8 +26,8 @@ export function normalizeIntervals(intervals) {
  */
 export function measureViewport(root, blocks, selected) {
   if (!selected) return { available: false, selected: false, intervals: [] };
-  const viewport = root?.getBoundingClientRect();
-  if (!viewport || viewport.width <= 0 || viewport.height <= 0) {
+  const viewport = root.getBoundingClientRect();
+  if (viewport.width <= 0 || viewport.height <= 0) {
     return { available: false, selected: true, intervals: [] };
   }
   const intervals = [];
@@ -86,15 +86,12 @@ export function createViewportController(options) {
     report({ seq: nextSequence(), ...normalized });
   };
   const targetGeometry = () => {
-    const viewport = root?.getBoundingClientRect();
+    const viewport = root.getBoundingClientRect();
     const rect = target?.getBoundingClientRect();
-    const available = Boolean(
-      viewport && viewport.width > 0 && viewport.height > 0 && rect && rect.width > 0 && rect.height > 0,
-    );
-    return {
-      available,
-      visible: Boolean(available && rect.bottom > viewport.top && rect.top < viewport.bottom),
-    };
+    if (!rect || viewport.width <= 0 || viewport.height <= 0 || rect.width <= 0 || rect.height <= 0) {
+      return { available: false, visible: false };
+    }
+    return { available: true, visible: rect.bottom > viewport.top && rect.top < viewport.bottom };
   };
   const measure = () => {
     const state = measureViewport(root, blocks(), selected);
@@ -117,7 +114,7 @@ export function createViewportController(options) {
       geometry.available &&
       ((work === "activate" && !achievedTarget) ||
         (work === "layout" && (!achievedTarget || (targetVisible && !geometry.visible))));
-    if (shouldReveal) target.scrollIntoView({ block: "center" });
+    if (shouldReveal) target?.scrollIntoView({ block: "center" });
     measure();
   };
   const queue = (work) => {
@@ -144,12 +141,12 @@ export function createViewportController(options) {
   root.addEventListener("scroll", scroll, { passive: true, capture: true });
   content.addEventListener("load", invalidate, true);
   content.addEventListener("error", invalidate, true);
-  view?.addEventListener("resize", invalidate);
-  fonts?.addEventListener?.("loadingdone", invalidate);
-  fonts?.ready?.then(invalidate);
-  const observer = resizeObserver ? new resizeObserver(invalidate) : undefined;
-  observer?.observe(root);
-  observer?.observe(content);
+  view.addEventListener("resize", invalidate);
+  fonts.addEventListener("loadingdone", invalidate);
+  fonts.ready.then(invalidate);
+  const observer = new resizeObserver(invalidate);
+  observer.observe(root);
+  observer.observe(content);
 
   const setSelected = (next) => {
     const active = Boolean(next);
@@ -169,9 +166,9 @@ export function createViewportController(options) {
     root.removeEventListener("scroll", scroll, { capture: true });
     content.removeEventListener("load", invalidate, true);
     content.removeEventListener("error", invalidate, true);
-    view?.removeEventListener("resize", invalidate);
-    fonts?.removeEventListener?.("loadingdone", invalidate);
-    observer?.disconnect();
+    view.removeEventListener("resize", invalidate);
+    fonts.removeEventListener("loadingdone", invalidate);
+    observer.disconnect();
   };
 
   setSelected(options.selected);

@@ -2,8 +2,11 @@ package mcpserver
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/kieranajp/qrouton/internal/artefact"
 	"github.com/kieranajp/qrouton/internal/vault"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 // The mode prompt already describes the workbench and when a window is worth
@@ -14,23 +17,28 @@ import (
 const serverInstructions = "Drive the user's qrouton workbench: window tools open or read tabs beside the conversation without taking the keyboard. All paths and working directories must belong to this session. " + toolReportBug + " proposes qrouton defects for the user's explicit desktop confirmation before GitHub issue creation."
 
 const (
-	toolReportBug   = "report_bug"
-	descReportBug   = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
-	toolOpenFile    = "open_file"
-	toolFocusAsset  = "focus_asset"
-	toolOpenAssets  = "open_assets"
-	toolRunCommand  = "run_command"
-	toolReadWindow  = "read_window"
-	toolShowDiff    = "show_diff"
-	toolNotify      = "notify"
-	toolCloseWindow = "close_window"
-	toolListWindows = "list_windows"
-	toolEscalate    = "escalate"
-	toolSharePage   = "share_page"
-	toolSetSummary  = "set_summary"
+	toolReportBug      = "report_bug"
+	descReportBug      = "Propose a qrouton defect report for the user to review in qrouton. Include observed behavior, expected behavior, reproduction steps, and relevant evidence in the body. The destination is fixed by qrouton. No files, logs, metadata, or attachments are collected automatically. Waits for explicit Create issue in the desktop app and returns the outcome and issue link on success. Opening or reading the preview does not approve it. A cancelled review must never be bypassed; corrections need a new proposal and confirmation. If creation is uncertain, inspect GitHub before retrying."
+	ToolOpenFile       = "open_file"
+	toolFocusAsset     = "focus_asset"
+	toolOpenAssets     = "open_assets"
+	toolRunCommand     = "run_command"
+	toolReadWindow     = "read_window"
+	toolShowDiff       = "show_diff"
+	toolNotify         = "notify"
+	toolCloseWindow    = "close_window"
+	toolListWindows    = "list_windows"
+	toolEscalate       = "escalate"
+	toolSharePage      = "share_page"
+	toolSetSummary     = "set_summary"
+	toolCreateArtefact = "create_artefact"
+	toolSetDigest      = "set_digest"
 )
 
-const summaryLimit = 140
+const (
+	summaryLimit = 140
+	digestLimit  = prompts.DigestLimit
+)
 
 const (
 	descOpenFile   = "Show the user an existing session file. A markdown file is rendered as a formatted pane — headings, task lists, highlighted code, and its source line numbers down the left — and anything else opens in their configured terminal editor at the given line. The keyboard stays with the conversation. A rendered document stays open for reference; an editor's tab closes when the user quits it. Set line (and through, for a range) to mark a passage. The result reports measured visible source-block intervals and only claims scrolling when one intersects the request. Use " + toolReadWindow + " on " + editorWindowName + " to verify the current viewport later. Tabs begin in the background except thoughts/ artifacts, which select by default; foreground overrides either default without taking the keyboard."
@@ -41,11 +49,11 @@ const (
 
 	descReadWindow = "Capture the current output of a named window. Asset galleries return their numbered paths and current 1-based index/count, including human selections; full has no additional asset meaning. Markdown results also include the current measured viewport as one-based inclusive source-block intervals, merged in source order; unavailable differs from a measured empty interval list. Set full to include terminal scrollback."
 
-	descShowDiff = "Show a repo's git diff for the user to review, rendered as a formatted pane that stays open until they close it. The pane holds the diff as it was at this call and never refreshes itself, so call again after further edits. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every session repo. Use base to compare against a ref (e.g. the default branch) or staged for index changes. Tabs begin in the background; foreground selects one without taking the keyboard."
+	descShowDiff = "Show a repo's git diff for the user to review, rendered as a formatted pane that stays open until they close it. The pane holds the diff as it was at this call and never refreshes itself, so call again after further edits. Give repo as a worktree path within the session (e.g. src/app), or omit it to diff every editing repo. By default each repo's working tree is compared with its merge base with the branch it was cut from, so the branch's committed and uncommitted work both show. unstaged compares the working tree with the index; staged compares the index with HEAD; base compares with a ref or an A..B or A...B range instead. Tabs begin in the background; foreground selects one without taking the keyboard."
 
 	descNotify = "Get the user's attention with an on-screen message and a sound. The message becomes a tab marked as wanting the user, and stays until they dismiss it; it does not take the keyboard. It begins in the background, ordinarily relying on sound and its waiting marker; foreground selects it without taking the keyboard. Use this sparingly — when you finish a long task, need a decision, or are blocked — since the user may have stepped away while work runs."
 
-	descCloseWindow = "Close a window you opened — " + toolRunCommand + ", " + toolOpenFile + ", " + toolOpenAssets + ", " + toolShowDiff + " or " + toolNotify + " — by name."
+	descCloseWindow = "Close a window you opened — " + toolRunCommand + ", " + ToolOpenFile + ", " + toolOpenAssets + ", " + toolShowDiff + " or " + toolNotify + " — by name."
 
 	descListWindows = "List the tabs qrouton is holding for you, by name."
 
@@ -56,6 +64,7 @@ const (
 
 const (
 	toolSearchThoughts = "search_thoughts"
+	descSearchKinds    = "Only these artifact kinds: "
 	toolReadThoughts   = "read_thoughts"
 	toolOpenThoughts   = "open_thoughts"
 
@@ -65,4 +74,12 @@ const (
 
 var descReadThoughts = fmt.Sprintf("Read a thoughts document by the ref or artifact id a %s hit gave. Give line, and optionally through, to read a range; a long document is cut at %d characters unless you read a range of it.", toolSearchThoughts, vault.ReadLimit)
 
-var descSetSummary = fmt.Sprintf("Write the session summary the user sees at the top of the Overview tab. Call it when you start a stage's lead, passing stage as research, plan or implement for the lead you are about to spawn (spec work is plan). Give one or two plain sentences, at most %d characters, on what this session is building and where. Use no marketing words, no progress report and no stage name; qrouton adds the stage itself. An unknown stage is rejected. Longer text is rejected, never truncated: shorten it and call again. The session description is left alone.", summaryLimit)
+const descArtefactKind = "The kind of document to create: "
+
+var descCreateArtefact = fmt.Sprintf("Create a new %s document in this session's thoughts folder. qrouton picks the number and filename, stamps who made it, when, in which session and against which repository revisions, and writes the template's skeleton. kind must be one of %s. Returns the session-relative path of the new file. Fill that file in place; never name or write a new artefact by hand, and leave its author, created, session and revisions fields alone.", orList(artefact.Kinds), strings.Join(artefact.Kinds, ", "))
+
+const descDigestField = "The whole digest, rewritten: a few plain past-tense lines, at most %d characters, on what is done, in progress and waiting on the user"
+
+var descSetDigest = fmt.Sprintf("Write the So far digest the user sees under the summary in the Overview tab: where this session stands. Call it after each lead returns and after the user settles a decision. Each call replaces the whole digest, so pass all of it, rewritten. Give a few plain past-tense lines, at most %d characters, on what is done, what is in progress and what waits on the user. Line breaks are kept. Longer text is rejected, never truncated: shorten it and call again.", digestLimit)
+
+var descSetSummary = fmt.Sprintf("Write the session summary the user sees at the top of the Overview tab. Call it when you start a stage's lead, passing stage as research, plan or implement for the lead you are about to spawn (spec work is plan, and audit work is research). Give one or two plain sentences, at most %d characters, on what this session is building and where. Use no marketing words, no progress report and no stage name; qrouton adds the stage itself. An unknown stage is rejected. Longer text is rejected, never truncated: shorten it and call again. The session description is left alone.", summaryLimit)

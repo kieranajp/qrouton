@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { counterFor, partition, screenFor } from "./deck.js";
+import { counterFor, partition, reach, screenFor } from "./deck.js";
 import { criteriaSpans } from "./plan.js";
 import { parsePlan } from "./plan.js";
 
@@ -118,10 +118,11 @@ test("the criteria of one phase claim nothing in the next", () => {
         from: 9,
         to: 16,
         number: 1,
+        label: "1",
         name: "Groundwork",
         verify: { from: 13, to: 19 },
       },
-      { from: 17, to: 20, number: 2, name: "The middle", verify: null },
+      { from: 17, to: 20, number: 2, label: "2", name: "The middle", verify: null },
     ],
   });
   const after = block(19);
@@ -149,4 +150,28 @@ test("a phase counts in phases and a section answers with its name", () => {
   assert.equal(counterFor(plan, 1), "1 / 2");
   assert.equal(counterFor(plan, 2), "2 / 2");
   assert.equal(counterFor(plan, 3), "Blockers");
+});
+
+const fakeRoot = (...lines) => {
+  const scrolled = [];
+  const blocks = lines.map((line) => ({ dataset: { line: String(line) }, scrollIntoView: () => scrolled.push(line) }));
+  const root = /** @type {ParentNode} */ (/** @type {unknown} */ ({ querySelectorAll: () => blocks }));
+  return { root, scrolled };
+};
+
+test("reach shows the screen in the deck and leaves the document alone", () => {
+  const { root, scrolled } = fakeRoot(1, 10);
+  const shown = [];
+  reach(2, { reading: false, root, show: (screen) => shown.push(screen), starts: [1, 5, 10] });
+  assert.deepEqual(shown, [2]);
+  assert.deepEqual(scrolled, []);
+});
+
+test("reach scrolls the document to the first block at or past the screen's start", () => {
+  const { root, scrolled } = fakeRoot(1, 4, 12, 20);
+  const show = () => assert.fail("the document does not change screens");
+  reach(1, { reading: true, root, show, starts: [1, 5, 12] });
+  reach(2, { reading: true, root, show, starts: [1, 5, 12] });
+  reach(1, { reading: true, root, show, starts: [1, 99, 12] });
+  assert.deepEqual(scrolled, [12, 12, 1]);
 });

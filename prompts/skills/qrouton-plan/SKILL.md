@@ -9,13 +9,13 @@ Delegate plan construction to a `qrouton-planning-lead` when available.
 
 {{session-summary}} Pass `stage` as `plan`.
 
-Give the lead the relevant research/spec paths, user decisions, `editing`/`reference` repo roles, and the required output path. The lead should inspect the live code and may spawn bounded specialists for unfamiliar areas.
+Give the lead the relevant research/spec or audit paths, user decisions, `editing`/`reference` repo roles, and the required output path. The lead should inspect the live code and may spawn bounded specialists for unfamiliar areas.
 
 The plan must:
 
 - link to its binding research/spec artifacts and identify the workstream;
 - state current and desired end states, scope exclusions, and approach;
-- use vertical phases that each deliver a coherent increment;
+- use vertical phases that end at natural stops, as the plan shape defines;
 - name concrete files and commands without pretending uncertain line numbers are stable;
 - give every phase its own runnable verification;
 - follow the plan document shape, so progress is readable from the file itself;
@@ -23,7 +23,7 @@ The plan must:
 
 The shape is in `references/plan-shape.md` beside this file: the heading convention the workbench reads progress from, and the template to write to. Read it and pass it, or its absolute path, to the lead — the lead starts in a fresh context and cannot resolve a path relative to this file.
 
-Write `thoughts/shared/plans/P<n>-<date>-<slug>.md`.
+Call `create_artefact` with `kind: plan` and a short title, then fill the file it returns. Do not name or write a plan path by hand.
 
 Pass this to the lead, and hold the returned plan to it:
 
@@ -37,6 +37,8 @@ Require this of the lead's return:
 - where the work lives: the plan artifact path;
 - how you checked it: the verification each phase carries;
 - what stays unresolved: the blockers the lead could not resolve.
+
+{{session-digest}}
 
 Present the phase outline for review when sequencing or scope is consequential; otherwise offer to Implement. Plan feedback authorizes revisions to the plan, not implementation. Positive wording such as “looks good” does not change that when the same request asks for a revision. After revising the plan, wait for an explicit implementation request.
 

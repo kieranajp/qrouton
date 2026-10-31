@@ -11,7 +11,7 @@ const completed = (page, count = 1) => expect.poll(() => page.evaluate(() => fix
 test("covered queries reply live and stay silent across ordered replays", async ({ page }) => {
   await setup(page);
   await page.evaluate((queries) => {
-    fixture.send(0, "before" + queries, false, false);
+    fixture.send(0, "before" + queries);
     fixture.send(0, queries, true);
     fixture.send(0, "", true);
     fixture.send(0, "old", true);

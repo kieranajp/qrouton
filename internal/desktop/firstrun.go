@@ -9,7 +9,6 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/github"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 type FirstRunInput struct {
@@ -29,13 +28,16 @@ type FirstRun struct {
 	reg         *Sessions
 	relaunch    func() error
 	quit        func()
+	pinnedRoot  string
 	choose      func() (string, error)
 	reconfigure func(*config.Config) error
+	onWelcomed  func()
 }
 
 func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
 	choose func() (string, error), reconfigure func(*config.Config) error) *FirstRun {
-	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, choose: choose, reconfigure: reconfigure}
+	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, pinnedRoot: pinnedFileRoot(),
+		choose: choose, reconfigure: reconfigure}
 }
 
 // Login is the GitHub account the owners screen names. No account is an answer
@@ -48,7 +50,7 @@ func (f *FirstRun) Login() string {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
 	defer cancel()
-	login, err := github.AuthenticatedLogin(ctx, &http.Client{Timeout: loginTimeout}, token)
+	login, err := github.AuthenticatedLogin(ctx, http.DefaultClient, token)
 	if err != nil {
 		return ""
 	}
@@ -74,23 +76,32 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 		return FirstRunResult{}, err
 	}
 	thoughts := strings.TrimSpace(in.Thoughts)
-	if filepath.Clean(config.ExpandHome(thoughts)) == filepath.Join(expanded, sessionpaths.ThoughtsDirName) {
+	if filepath.Clean(config.ExpandHome(thoughts)) == config.DefaultThoughtsRoot(expanded) {
 		thoughts = ""
 	}
 	changed := false
 	err = f.cfg.Transact(func(current *config.Config) error {
-		changed = expanded != filepath.Clean(current.Root)
-		next := current.Snapshot()
-		next.Orgs, next.Root, next.Welcomed = orgs, root, true
-		next.Thoughts.Default = thoughts
+		next, live, restart, err := stageConfig(current, f.pinnedRoot, false, func(next, live *config.Config) {
+			next.Orgs, next.Root, next.Welcomed = orgs, root, true
+			next.Thoughts.Default = thoughts
+			if !config.OrgsOverridden() {
+				live.Orgs = orgs
+			}
+			live.Welcomed = true
+			live.Thoughts.Default = config.ExpandHome(thoughts)
+		})
+		if err != nil {
+			return err
+		}
+		changed = restart
 		if err := config.CheckThoughts(next); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
 		if !changed {
-			live := next.Snapshot()
-			live.Root = current.Root
-			live.Thoughts.Default = config.ExpandHome(thoughts)
-			return commitLive(f.cfg, current, next, live, f.reconfigure, nil)
+			if err := checkLiveThoughts(live); err != nil {
+				return err
+			}
+			return commitLive(f.cfg, current, next, live, f.reconfigure)
 		}
 		if err := config.Save(next); err != nil {
 			return err
@@ -107,6 +118,9 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 	if !changed {
 		// Without the touch the overlay stays up until the next chrome tick.
 		f.reg.touch()
+		if f.onWelcomed != nil {
+			f.onWelcomed()
+		}
 		return FirstRunResult{}, nil
 	}
 

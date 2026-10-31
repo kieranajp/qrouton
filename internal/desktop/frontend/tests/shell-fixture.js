@@ -4,10 +4,17 @@ import "../src/tokens/spacing.css";
 import "../src/tokens/effects.css";
 import { mount } from "svelte";
 import Session from "../src/Session.svelte";
-import { decode, encode, terminalAt } from "../src/lib/xterm.js";
+import { decode } from "../src/lib/terminal-painter.js";
+import { encode, terminalAt } from "../src/lib/xterm.js";
 import { emitWailsEvent } from "./wails-runtime.js";
 
+import { CHROME_DEFAULTS, CHROME_EVENT, SESSIONS_SHOW, SESSIONS_UNCOMMITTED, TERM_WRITE, WINDOWS_WRITE } from "../src/lib/bridge/generated.js";
 const calls = [];
+let snapshot = { ...CHROME_DEFAULTS, slug: "octopus" };
+let showPending = [];
+let cleanupPending;
+let controlShow = false;
+let controlCleanup = false;
 let refuseSelect = false;
 let currentTabs = [];
 let updateStatus = { available: false, current: "", latest: "", command: "", url: "" };
@@ -24,6 +31,8 @@ const DOCUMENT = {
 
 window.wailsCall = (name, ...args) => {
   calls.push({ name, args });
+  if (name === SESSIONS_SHOW && controlShow) return new Promise((resolve, reject) => showPending.push({ resolve, reject }));
+  if (name === SESSIONS_UNCOMMITTED) return controlCleanup ? new Promise((resolve) => cleanupPending = resolve) : [];
   if (name.endsWith("Windows.Select") && refuseSelect) {
     return Promise.reject(new Error("no such window"));
   }
@@ -53,6 +62,15 @@ window.overlapOwner = () => {
 };
 
 window.shell = {
+  snapshot: (patch) => { snapshot = { ...snapshot, ...patch }; emitWailsEvent(CHROME_EVENT, snapshot); },
+  controlShow: () => { controlShow = true; },
+  finishShow: (success = true) => { const pending = showPending.shift(); if (success) pending.resolve(); else pending.reject(new Error("refused")); },
+  shows: () => calls.filter(({ name }) => name === SESSIONS_SHOW).map(({ args }) => args),
+  allWrites: () => calls.filter(({ name }) => name === TERM_WRITE || name === WINDOWS_WRITE).map(({ name, args }) => [name, args[0], new TextDecoder().decode(decode(args[1]))]),
+  focus: (id) => terminalAt(document.querySelector(`[data-terminal-id="${id}"]`))?.focus(),
+  focused: () => document.activeElement?.closest("[data-terminal-id]")?.getAttribute("data-terminal-id"),
+  inspectCleanup: () => { controlCleanup = true; },
+  finishCleanup: () => cleanupPending?.([]),
   chrome: (fields) => emitWailsEvent("chrome:update", { slug: "octopus", ...fields }),
   agentTree: (tree) => emitWailsEvent("agents:tree:octopus", tree),
   windows: (selected, tabs) => {

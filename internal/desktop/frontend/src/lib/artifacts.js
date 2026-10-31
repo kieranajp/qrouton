@@ -9,6 +9,7 @@ const KINDS = {
   [ARTIFACT_KINDS.PLAN]: { tone: "var(--artifact-plan)", short: "PLAN", long: "PLAN" },
   [ARTIFACT_KINDS.SPEC]: { tone: "var(--artifact-spec)", short: "SPEC", long: "SPEC" },
   [ARTIFACT_KINDS.RESEARCH]: { tone: "var(--artifact-research)", short: "RSCH", long: "RESEARCH" },
+  [ARTIFACT_KINDS.AUDIT]: { tone: "var(--artifact-audit)", short: "AUDT", long: "AUDIT" },
   [ARTIFACT_KINDS.NOTE]: { tone: "var(--artifact-note)", short: "NOTE", long: "NOTE" },
   [ARTIFACT_KINDS.EXPLAINER]: { tone: "var(--artifact-explainer)", short: "EXPL", long: "EXPLAINER" },
 };

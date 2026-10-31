@@ -72,25 +72,42 @@ func TestAssetReferencesAcceptsRasterFormatsThoughtsAndLargeFiles(t *testing.T) 
 func TestAssetReferencesRejectsInvalidEntriesWithoutExpanding(t *testing.T) {
 	root := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.png")
-	_ = os.WriteFile(outside, []byte("asset"), 0o644)
-	_ = os.WriteFile(filepath.Join(root, "vector.svg"), []byte("svg"), 0o644)
-	_ = os.WriteFile(filepath.Join(root, "note.txt"), []byte("text"), 0o644)
-	_ = os.WriteFile(filepath.Join(root, "actual.png"), []byte("asset"), 0o644)
-	_ = os.Mkdir(filepath.Join(root, "folder.png"), 0o755)
-	_ = os.Symlink(outside, filepath.Join(root, "escape.png"))
-	for name, paths := range map[string][]string{
-		"empty list": {}, "empty member": {"actual.png", ""}, "missing": {"missing.png"},
-		"directory": {"folder.png"}, "outside": {outside}, "external symlink": {"escape.png"}, "svg": {"vector.svg"},
-		"unsupported": {"note.txt"}, "literal glob": {"*.png"},
+	for path, content := range map[string]string{
+		outside:                           "asset",
+		filepath.Join(root, "vector.svg"): "svg",
+		filepath.Join(root, "note.txt"):   "text",
+		filepath.Join(root, "actual.png"): "asset",
+	} {
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.Mkdir(filepath.Join(root, "folder.png"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "escape.png")); err != nil {
+		t.Fatal(err)
+	}
+	for name, tc := range map[string]struct {
+		paths []string
+		want  error
+	}{
+		"empty list":       {[]string{}, ErrAssetPathsRequired},
+		"nil list":         {nil, ErrAssetPathsRequired},
+		"empty member":     {[]string{"actual.png", ""}, ErrAssetPathRequired},
+		"missing":          {[]string{"missing.png"}, ErrOutsideSessionMissing},
+		"literal glob":     {[]string{"*.png"}, ErrOutsideSessionMissing},
+		"directory":        {[]string{"folder.png"}, ErrNotRegularFile},
+		"outside":          {[]string{outside}, ErrOutsideSession},
+		"external symlink": {[]string{"escape.png"}, ErrOutsideSession},
+		"svg":              {[]string{"vector.svg"}, ErrUnsupportedAsset},
+		"unsupported":      {[]string{"note.txt"}, ErrUnsupportedAsset},
 	} {
 		t.Run(name, func(t *testing.T) {
-			if _, err := AssetReferences(root, paths); err == nil {
-				t.Fatal("accepted invalid asset input")
+			if _, err := AssetReferences(root, tc.paths); !errors.Is(err, tc.want) {
+				t.Fatalf("AssetReferences(%q) = %v, want %v", tc.paths, err, tc.want)
 			}
 		})
-	}
-	if _, err := AssetReferences(root, nil); !errors.Is(err, ErrAssetPathsRequired) {
-		t.Fatalf("empty = %v", err)
 	}
 }
 

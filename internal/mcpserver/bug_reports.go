@@ -2,13 +2,12 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -41,11 +40,7 @@ func (m *windowManager) reportBug(ctx context.Context, input reportBugInput) (re
 	if !ok {
 		return reportBugOutput{}, ErrBugReportUnsupported
 	}
-	token := make([]byte, bugReportIDBytes)
-	if _, err := rand.Read(token); err != nil {
-		return reportBugOutput{}, err
-	}
-	id := hex.EncodeToString(token)
+	id := randomid.Hex(bugReportIDBytes)
 	deadline := time.Now().Add(workbench.BugReportReviewTimeout)
 	if earlier, ok := ctx.Deadline(); ok && earlier.Before(deadline) {
 		deadline = earlier

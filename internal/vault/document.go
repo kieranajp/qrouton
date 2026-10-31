@@ -2,8 +2,11 @@ package vault
 
 import (
 	"path"
+	"slices"
 	"strings"
 
+	"github.com/kieranajp/qrouton/internal/kinds"
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"go.yaml.in/yaml/v3"
 )
@@ -25,24 +28,21 @@ type frontmatter struct {
 // body starts on.
 func parseDocument(name, text string) (doc Document, body string, bodyLine int) {
 	text = strings.ReplaceAll(text, "\r\n", "\n")
-	body, bodyLine = text, 1
+	front, body, bodyLine := markdown.Split(text)
+	if bodyLine == 0 {
+		// An opener that never closes is a rule, and the note is still searchable.
+		body, bodyLine = text, 1
+	}
 	var fm frontmatter
-	if strings.HasPrefix(text, frontmatterOpen) {
-		rest := text[len(frontmatterOpen):]
-		if end := closingFence(rest); end >= 0 {
-			if yaml.Unmarshal([]byte(rest[:end]), &fm) != nil {
-				fm = frontmatter{}
-			}
-			body = strings.TrimPrefix(rest[end+len(frontmatterClose):], "\n")
-			bodyLine = strings.Count(text[:len(text)-len(body)], "\n") + 1
-		}
+	if yaml.Unmarshal([]byte(front), &fm) != nil {
+		fm = frontmatter{}
 	}
 	doc = Document{ID: strings.TrimSuffix(name, path.Ext(name)), Kind: pathKind(name), Title: fm.Title}
-	if kinds[fm.Kind] {
+	if slices.Contains(Kinds(), fm.Kind) {
 		doc.Kind = fm.Kind
 	}
 	if doc.Title == "" {
-		doc.Title = firstHeading(body)
+		doc.Title, _ = markdown.Title(text)
 	}
 	if doc.Title == "" {
 		doc.Title = path.Base(doc.ID)
@@ -54,32 +54,25 @@ func pathKind(name string) string {
 	parts := strings.Split(path.Dir(name), "/")
 	for i := 1; i < len(parts); i++ {
 		if parts[i-1] == sessionpaths.SharedDirName {
-			return dirKinds[parts[i]]
+			return kindByDir[parts[i]]
 		}
 	}
 	return ""
 }
 
-func closingFence(rest string) int {
-	for at := 0; ; {
-		i := strings.Index(rest[at:], frontmatterClose)
-		if i < 0 {
-			return -1
-		}
-		end := at + i
-		after := rest[end+len(frontmatterClose):]
-		if after == "" || after[0] == '\n' {
-			return end
-		}
-		at = end + len(frontmatterClose)
+var kindByDir = func() map[string]string {
+	out := map[string]string{}
+	for _, k := range kinds.All() {
+		out[k.Dir] = k.Name
 	}
-}
+	return out
+}()
 
-func firstHeading(body string) string {
-	for _, line := range strings.Split(body, "\n") {
-		if title, ok := strings.CutPrefix(line, "# "); ok {
-			return strings.TrimSpace(title)
-		}
+// Kinds is every kind a document can carry and a search can filter by.
+func Kinds() []string {
+	var out []string
+	for _, k := range kinds.All() {
+		out = append(out, k.Name)
 	}
-	return ""
+	return append(out, kindNote, kindDeadEnd)
 }

@@ -9,11 +9,15 @@ import (
 var (
 	ErrBugReportInput       = errors.New("report_bug requires a nonblank title and body")
 	ErrBugReportUnsupported = errors.New("this workbench does not support bug report review")
+	ErrArtefactTitle        = errors.New("title is required")
 	ErrCommandRequired      = errors.New("command is required")
 	ErrMessageRequired      = errors.New("message is required")
 	ErrNameRequired         = errors.New("name is required")
 	ErrSummaryRequired      = errors.New("summary is required")
 	ErrSummaryStage         = errors.New("stage must be research, plan or implement")
+	ErrDigestRequired       = errors.New("digest is required")
+	ErrDiffBaseOption       = errors.New("base must be a ref or range, not a git option")
+	ErrDiffUnstagedMixed    = errors.New("unstaged cannot be combined with staged or base")
 
 	ErrReservedWindowName = fmt.Errorf("%q is reserved for the editor window; pick another name", editorWindowName)
 )
@@ -30,4 +34,8 @@ func windowGone(name string) error {
 
 func summaryTooLong(count int) error {
 	return fmt.Errorf("summary is %d characters; the limit is %d, so shorten it and call again", count, summaryLimit)
+}
+
+func digestTooLong(count int) error {
+	return fmt.Errorf("digest is %d characters; the limit is %d, so shorten it and call again", count, digestLimit)
 }

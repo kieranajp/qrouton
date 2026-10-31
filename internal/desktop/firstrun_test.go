@@ -196,8 +196,8 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 	}, nil, nil)
 	go func() {
 		_, err := settings.Save(SettingsInput{
-			Orgs: []string{"second"}, Root: oldRoot, Editor: "code", Linear: `{}`,
-			StickerLabels: config.DefaultStickerLabels,
+			Orgs: []string{"second"}, Root: oldRoot, Editor: "code",
+			Stickers: defaultStickers(),
 		})
 		secondDone <- err
 	}()
@@ -219,7 +219,7 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 	if !reflect.DeepEqual(live.Orgs, []string{"second"}) || !reflect.DeepEqual(disk.Orgs, live.Orgs) {
 		t.Fatalf("final disk/live orgs = %#v / %#v", disk.Orgs, live.Orgs)
 	}
-	if disk.Root != oldRoot || live.Root != oldRoot || disk.Welcomed != live.Welcomed {
+	if disk.Root != oldRoot || live.Root != oldRoot || !disk.Welcomed {
 		t.Fatalf("final disk = %+v, live = %+v", disk, live)
 	}
 }
@@ -248,7 +248,7 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 	}
 
 	r := newFakeRenderer()
-	pushChrome(reg, cfg.Root, cfg, nil, nil, r.Emit)
+	pushChrome(reg, cfg.Root, cfg, nil, nil, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if fields, ok := r.events[chromeEvent].(status.Fields); !ok || !fields.Welcoming {
@@ -397,5 +397,65 @@ func TestFirstRunRefusesAThoughtsFolderHoldingTheRootAndWritesNothing(t *testing
 	}
 	if cfg.Welcomed {
 		t.Fatal("a refused save marked the config welcomed")
+	}
+}
+
+func TestFirstRunSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(t *testing.T) {
+	_, cfg, override := overriddenSettings(t)
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+
+	result, err := f.Save(FirstRunInput{Orgs: []string{"acme", "typed-org"}, Root: "~/work"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Relaunching {
+		t.Fatal("an unchanged root relaunched under QROUTON_ROOT")
+	}
+	onDisk := savedConfig(t)
+	if onDisk.Root != "~/work" || onDisk.Thoughts.Roots[0].Path != "~/shared" || !onDisk.Welcomed {
+		t.Fatalf("on disk = root %q, thoughts %+v, welcomed %v", onDisk.Root, onDisk.Thoughts, onDisk.Welcomed)
+	}
+	if !reflect.DeepEqual(onDisk.Orgs, []string{"acme", "typed-org"}) {
+		t.Fatalf("on disk orgs = %v, want the typed ones", onDisk.Orgs)
+	}
+	live := cfg.Snapshot()
+	if live.Root != override || !reflect.DeepEqual(live.Orgs, []string{"pinned-org"}) || !live.Welcomed {
+		t.Fatalf("live = root %q, orgs %v, welcomed %v", live.Root, live.Orgs, live.Welcomed)
+	}
+}
+
+func TestFirstRunSaveUnderOverridesRefusesAThoughtsFolderHoldingTheOverrideRoot(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	vault := t.TempDir()
+	override := filepath.Join(vault, "sessions")
+	t.Setenv("QROUTON_ROOT", override)
+	fileRoot := filepath.Join(t.TempDir(), "work")
+	if err := os.MkdirAll(filepath.Dir(config.Path()), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	file := `{"orgs": ["acme"], "root": "` + fileRoot + `"}`
+	if err := os.WriteFile(config.Path(), []byte(file), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := cfg.Snapshot()
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+
+	_, err = f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: fileRoot, Thoughts: vault})
+	if !errors.Is(err, config.ErrThoughtsHoldsRoot) || !strings.HasPrefix(err.Error(), "thoughts: ") {
+		t.Fatalf("Save = %v, want a thoughts field refusal", err)
+	}
+	disk, readErr := os.ReadFile(config.Path())
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(disk) != file || savedConfig(t).Welcomed {
+		t.Fatalf("a refused save changed config.json: %s", disk)
+	}
+	if !reflect.DeepEqual(cfg.Snapshot(), before) {
+		t.Fatalf("a refused save changed the live config: %+v", cfg.Snapshot())
 	}
 }

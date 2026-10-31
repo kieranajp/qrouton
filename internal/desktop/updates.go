@@ -2,15 +2,16 @@ package desktop
 
 import (
 	"context"
-	"encoding/json"
-	"io"
 	"net/http"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/github"
 )
 
 // UpdateStatus is what the page draws the button from. Command is set on
@@ -69,25 +70,12 @@ func (u *Updates) watch(ctx context.Context, interval time.Duration) {
 func (u *Updates) check(ctx context.Context) {
 	reqCtx, cancel := context.WithTimeout(ctx, updateCheckTimeout)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, u.endpoint, nil)
-	if err != nil {
-		return
-	}
-	req.Header.Set(updateAcceptHeader, updateAcceptValue)
-	req.Header.Set(updateUserAgentHeader, updateUserAgentPrefix+u.version)
-	resp, err := u.client.Do(req)
-	if err != nil {
-		return
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return
-	}
+	headers := http.Header{updateUserAgentHeader: {updateUserAgentPrefix + u.version}}
 	var release struct {
 		TagName string `json:"tag_name"`
 		URL     string `json:"html_url"`
 	}
-	if json.NewDecoder(io.LimitReader(resp.Body, updateResponseLimit)).Decode(&release) != nil {
+	if _, _, err := github.GetJSON(reqCtx, u.client, u.endpoint, "", headers, &release); err != nil {
 		return
 	}
 	if !newer(release.TagName, u.version) {
@@ -143,8 +131,5 @@ func newer(latest, current string) bool {
 	if !ok {
 		return true
 	}
-	return latestVersion != currentVersion &&
-		(latestVersion[0] > currentVersion[0] ||
-			latestVersion[0] == currentVersion[0] && latestVersion[1] > currentVersion[1] ||
-			latestVersion[0] == currentVersion[0] && latestVersion[1] == currentVersion[1] && latestVersion[2] > currentVersion[2])
+	return slices.Compare(latestVersion[:], currentVersion[:]) > 0
 }

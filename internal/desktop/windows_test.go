@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/creack/pty"
+	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -248,6 +249,34 @@ func TestContentReportsTheSessionFileTheDocumentCameFrom(t *testing.T) {
 	wantPath := filepath.Join(w.shown().root(), source)
 	if page.Path != wantPath || page.Kind != "PLAN" {
 		t.Fatalf("Content path/kind = %q/%q, want %q/PLAN", page.Path, page.Kind, wantPath)
+	}
+}
+
+func TestContentCarriesAnAuditsChosenTells(t *testing.T) {
+	w, _ := testWindows(t)
+	for _, tc := range []struct {
+		name, source, content string
+		want                  []string
+	}{
+		{"chosen", "thoughts/shared/audits/A1-tells.md", "---\ntells: [homegrown, dead]\n---\n# Tells\n", []string{status.AuditHeadingDead, status.AuditHeadingHomegrown}},
+		{"no key", "thoughts/shared/audits/A2-tells.md", "# Tells\n", []string{status.AuditHeadingDuplicated, status.AuditHeadingDead, status.AuditHeadingHomegrown}},
+		{"not an audit", "thoughts/shared/specs/S1-tells.md", "---\ntells: [dead]\n---\n# Tells\n", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindDocument, Label: "tells", Source: tc.source, Content: tc.content,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			page, err := w.Content(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !slices.Equal(page.Tells, tc.want) {
+				t.Fatalf("Content tells = %q, want %q", page.Tells, tc.want)
+			}
+		})
 	}
 }
 
@@ -496,8 +525,8 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	renderer.mu.Lock()
 	replay, ok := renderer.events[windowDataEvent+id].(terminalChunk)
 	renderer.mu.Unlock()
-	if !ok || !replay.Replay {
-		t.Fatalf("remount event = %#v, want a retained replay", replay)
+	if !ok || !replay.Replay || replay.First {
+		t.Fatalf("remount event = %#v, want a retained replay not marked first", replay)
 	}
 	decoded, err := base64.StdEncoding.DecodeString(replay.Encoded)
 	if err != nil || !strings.Contains(string(decoded), "two-line prompt") {
@@ -1318,5 +1347,142 @@ func TestReviewTerminalRetainsExitAndClosesIndependently(t *testing.T) {
 	}
 	if !w.exists(conversation) || w.exists(review) {
 		t.Fatal("closing review affected conversation")
+	}
+}
+
+func lastReplay(t *testing.T, r *fakeRenderer, id string) (string, bool) {
+	t.Helper()
+	r.mu.Lock()
+	chunk, ok := r.events[windowDataEvent+id].(terminalChunk)
+	r.mu.Unlock()
+	if !ok || !chunk.Replay {
+		return "", false
+	}
+	decoded, err := base64.StdEncoding.DecodeString(chunk.Encoded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(decoded), true
+}
+
+func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
+	w, renderer := testWindows(t)
+	id, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	window, _ := w.window(id)
+	terminal, _ := window.terminal()
+	pid := terminal.process.cmd.Process.Pid
+	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("before mount\n"))); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the line to reach retained output", func() bool {
+		text, _ := w.readWindow(id, true)
+		return strings.Contains(text, "before mount")
+	})
+
+	if err := w.Start(id, 120, 36); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.process.cmd.Process.Pid != pid {
+		t.Fatal("mounting a launched terminal forked another process")
+	}
+	size, err := pty.GetsizeFull(terminal.process.file)
+	if err != nil || size.Cols != 120 || size.Rows != 36 {
+		t.Fatalf("mounted PTY size = %+v, %v, want 120x36", size, err)
+	}
+	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "before mount") {
+		t.Fatalf("mount replay = %q, %v, want the retained line", replay, ok)
+	}
+	if chunk := lastChunk(renderer, id); !chunk.First {
+		t.Fatalf("first mount replay = %#v, want it marked first", chunk)
+	}
+
+	if err := w.Start(id, 120, 36); err != nil {
+		t.Fatal(err)
+	}
+	if chunk := lastChunk(renderer, id); !chunk.Replay || chunk.First {
+		t.Fatalf("remount replay = %#v, want a replay not marked first", chunk)
+	}
+}
+
+func lastChunk(r *fakeRenderer, id string) terminalChunk {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	chunk, _ := r.events[windowDataEvent+id].(terminalChunk)
+	return chunk
+}
+
+func TestLaunchingAMountedTerminalChangesNothing(t *testing.T) {
+	w, renderer := testWindows(t)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "shell", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(id, 120, 36); err != nil {
+		t.Fatal(err)
+	}
+	window, _ := w.window(id)
+	terminal, _ := window.terminal()
+	pid := terminal.process.cmd.Process.Pid
+
+	if err := w.terminals.launch(id, unmountedCols, unmountedRows); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.process.cmd.Process.Pid != pid {
+		t.Fatal("launching a mounted terminal forked another process")
+	}
+	size, err := pty.GetsizeFull(terminal.process.file)
+	if err != nil || size.Cols != 120 || size.Rows != 36 {
+		t.Fatalf("PTY size after launch = %+v, %v, want 120x36", size, err)
+	}
+	if replay, ok := lastReplay(t, renderer, id); ok {
+		t.Fatalf("launch sent the mounted page a replay: %q", replay)
+	}
+}
+
+func TestMountingAFailedTerminalReplaysItsOutput(t *testing.T) {
+	w, renderer := testWindows(t)
+	id, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "failing", Cwd: t.TempDir(), CloseOnExit: true,
+		Command: []string{"/bin/sh", "-c", "printf boom; exit 3"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the exit to be reported", func() bool {
+		renderer.mu.Lock()
+		defer renderer.mu.Unlock()
+		_, reported := renderer.events[windowExitEvent+id]
+		return reported
+	})
+
+	if err := w.Start(id, 80, 24); err != nil {
+		t.Fatalf("mounting a failed terminal = %v, want its output replayed", err)
+	}
+	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "boom") {
+		t.Fatalf("mount replay = %q, %v, want the failed output", replay, ok)
+	}
+	if chunk := lastChunk(renderer, id); chunk.First {
+		t.Fatalf("a finished process's replay = %#v, want it not marked first", chunk)
+	}
+}
+
+func TestAFailedLaunchLeavesNoTab(t *testing.T) {
+	w, _ := testWindows(t)
+	_, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "nowhere", Cwd: filepath.Join(t.TempDir(), "missing"),
+		Command: []string{"/bin/cat"},
+	})
+	if err == nil {
+		t.Fatal("launching in a missing directory succeeded")
+	}
+	if ids := w.list(); len(ids) != 0 {
+		t.Fatalf("a failed launch left tabs open: %v", ids)
 	}
 }

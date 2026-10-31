@@ -9,8 +9,13 @@ import (
 )
 
 func TestRunRequiresExplicitPaths(t *testing.T) {
-	if err := run(nil, &bytes.Buffer{}, &bytes.Buffer{}); err == nil {
-		t.Fatal("run() succeeded")
+	policy := filepath.Join(t.TempDir(), "policy.json")
+	writeFile(t, policy, `{"schemaVersion":1,"maxCommentRun":1,"narrationPhrases":["turns out"],"pathExtensions":["go"]}`)
+	for _, args := range [][]string{nil, {"-policy", policy}} {
+		err := run(args, &bytes.Buffer{}, &bytes.Buffer{})
+		if err == nil || !strings.Contains(err.Error(), "-root") || !strings.Contains(err.Error(), "-policy") {
+			t.Fatalf("run(%q) = %v, want an error naming -root and -policy", args, err)
+		}
 	}
 }
 

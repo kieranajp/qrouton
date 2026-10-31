@@ -2,8 +2,9 @@
   import { REPO_ROLES } from "../bridge/generated.js";
   import { dismissible } from "../core/dismiss.js";
   import Icon from "../core/Icon.svelte";
+  import TextField from "../forms/TextField.svelte";
   import RoleToggle from "../forms/RoleToggle.svelte";
-  import { menuHeight, place } from "../menu.js";
+  import { place } from "../menu.js";
   import { uiScale } from "../scale.svelte.js";
   import Menu from "../shell/Menu.svelte";
 
@@ -29,34 +30,63 @@
   } = $props();
 
   let chosen = $derived(role !== "off");
-  /** @type {{left: number, top: number} | null} */
+  let query = $state("");
+  let trigger = $state(/** @type {HTMLButtonElement | undefined} */ (undefined));
+  /** @type {{left: number, top: number, maxHeight: number} | null} */
   let menu = $state(null);
 
-  // The base a listing has not reached yet is the one the row already shows, so
-  // the menu opens on a real answer rather than an empty list.
+  // The current base stays available before its listing arrives.
   let offered = $derived(branches.branches.length ? branches.branches : [base].filter(Boolean));
+  let matches = $derived(offered.filter((branch) => branch.toLowerCase().includes(query.toLowerCase())));
   let items = $derived([
     { heading: BASE_HEADING },
-    ...offered.map((branch) => ({ label: branch, active: branch === base, branch })),
+    ...matches.map((branch) => ({ label: branch, active: branch === base, branch })),
+    ...(branches.state === "ready" && !matches.length ? [{ label: "No matching branches", disabled: true }] : []),
     ...(branches.state === "loading" ? [{ label: LISTING, disabled: true }] : []),
     ...(branches.state === "failed" ? [{ label: UNLISTABLE, disabled: true }] : []),
   ]);
 
-  // The list scrolls, so the menu is drawn at the viewport rather than inside
-  // the row it would be clipped in. Placed once on opening: a menu that moved
-  // when its branches arrived would shift what the pointer is already over.
+  function closeMenu() {
+    menu = null;
+    trigger?.focus();
+  }
+
+  $effect(() => {
+    if (!menu) return;
+    const escape = (event) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      closeMenu();
+    };
+    window.addEventListener("keydown", escape, true);
+    return () => window.removeEventListener("keydown", escape, true);
+  });
+
+  function menuKey(event) {
+    if (menu && event.key === "Enter") event.stopPropagation();
+  }
+
+  function focusSearch(node) {
+    node.querySelector("input")?.focus();
+  }
+
   function toggleMenu(event) {
     if (menu) {
       menu = null;
       return;
     }
+    query = "";
     const box = event.currentTarget.getBoundingClientRect();
-    menu = place(
+    const scale = uiScale() / 100;
+    const maxHeight = Math.min(BASE_MENU_MAX_HEIGHT, (window.innerHeight - 16) / scale);
+    // Reserve the capped height so arriving results cannot move or overflow the popup.
+    menu = { ...place(
       { x: box.left, y: box.bottom + (4 * uiScale()) / 100 },
-      { width: BASE_MENU_WIDTH, height: Math.min(menuHeight(items), BASE_MENU_MAX_HEIGHT) },
+      { width: BASE_MENU_WIDTH, height: maxHeight },
       { width: window.innerWidth, height: window.innerHeight },
-      uiScale() / 100,
-    );
+      scale,
+    ), maxHeight };
     onBaseOpen?.();
   }
 </script>
@@ -65,8 +95,8 @@
   <span class="name" class:on={chosen}>{name}</span>
   {#if meta}<span class="meta">{meta}</span>{/if}
   {#if rebasable && chosen && base}
-    <span class="base-control" use:dismissible={() => (menu = null)}>
-      <button class="base" onclick={toggleMenu} aria-haspopup="menu" aria-expanded={!!menu}>
+    <span class="base-control" role="presentation" onkeydown={menuKey} use:dismissible={() => (menu = null)}>
+      <button class="base" bind:this={trigger} onclick={toggleMenu} aria-haspopup="menu" aria-expanded={!!menu}>
         <Icon name="branch" />
         <span class="branch">{base}</span>
         <Icon name="menu" />
@@ -76,12 +106,18 @@
           <Menu
             {items}
             width={BASE_MENU_WIDTH}
-            maxHeight={BASE_MENU_MAX_HEIGHT}
+            maxHeight={menu.maxHeight}
             offsetY={0}
             onSelect={(item) => {
-              menu = null;
+              closeMenu();
               if (item.branch) onBaseChange?.(item.branch);
-            }} />
+            }}>
+            {#snippet header()}
+              <div use:focusSearch>
+                <TextField aria-label="Search branches" placeholder="Search branches" icon="search" valueVoice="literal" bind:value={query} />
+              </div>
+            {/snippet}
+          </Menu>
         </span>
       {/if}
     </span>
@@ -91,7 +127,10 @@
 
 <style>
   .row {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: max-content;
     align-items: center;
     gap: calc(14px * var(--ui-scale));
     padding: calc(9px * var(--ui-scale)) calc(12px * var(--ui-scale));
@@ -104,7 +143,9 @@
   }
 
   .name {
-    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font: var(--machine-md);
     color: var(--text-secondary);
   }

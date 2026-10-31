@@ -1,7 +1,8 @@
 <script>
   import { onMount } from "svelte";
-  import { PRESENTER_NOTE, PRESENTER_NOTES_EVENT } from "../lib/bridge/generated.js";
-  import { call, Call, Events } from "../lib/wails.js";
+  import { PRESENTER_NOTES_EVENT } from "../lib/bridge/generated.js";
+  import { Events } from "../lib/wails.js";
+  import { presenterNote } from "./calls.js";
   import "../lib/panes/markdown.css";
 
   const NOTHING = { index: 0, total: 0, title: "", html: "" };
@@ -18,7 +19,7 @@
       live = true;
       note = taken(event.data);
     });
-    call(Call.ByName(PRESENTER_NOTE)).then((answer) => {
+    presenterNote().then((answer) => {
       if (!live && answer.ok) note = taken(answer.value);
     });
     return off;

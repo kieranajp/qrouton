@@ -36,7 +36,8 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 	want := map[string]string{
 		RoleArtifactPlan: Lavender, RoleArtifactSpec: Pink,
 		RoleArtifactResearch: Sky, RoleArtifactNote: Flamingo,
-		RoleArtifactExplainer: Maroon, RoleArtifactReview: Rosewater,
+		RoleArtifactExplainer: Maroon, RoleArtifactReview: Mauve,
+		RoleArtifactAudit: Rosewater,
 	}
 	seen := map[string]string{}
 	for role, colour := range want {
@@ -48,12 +49,19 @@ func TestArtifactKindsHaveDedicatedColours(t *testing.T) {
 		}
 		seen[colour] = role
 	}
+	for role, colour := range Roles {
+		if colour == Rosewater && role != RoleArtifactAudit {
+			t.Errorf("%s borrows the audit's %s", role, colour)
+		}
+	}
 }
 
 func TestStickersHaveFixedDedicatedColours(t *testing.T) {
 	want := map[string]string{
-		"sticker-blue": "ctp-blue", "sticker-green": "ctp-green",
-		"sticker-orange": "ctp-peach", "sticker-red": "ctp-red",
+		"sticker-blue": "ctp-blue", "sticker-sapphire": "ctp-sapphire", "sticker-teal": "ctp-teal",
+		"sticker-green": "ctp-green", "sticker-yellow": "ctp-yellow", "sticker-orange": "ctp-peach",
+		"sticker-red": "ctp-red", "sticker-maroon": "ctp-maroon", "sticker-pink": "ctp-pink",
+		"sticker-mauve": "ctp-mauve", "sticker-lavender": "ctp-lavender", "sticker-grey": "ctp-subtext-0",
 	}
 	css := CSS()
 	for alias, palette := range want {

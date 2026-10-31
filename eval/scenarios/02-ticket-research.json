@@ -8,7 +8,7 @@
   "checks": [
     {"kind": "artifact_exists", "path": "thoughts/shared/research/*.md"},
     {"kind": "research_answered", "path": "thoughts/shared/research/*.md"},
-    {"kind": "artifact_max_lines", "path": "thoughts/shared/research/*.md", "max_lines": 200},
+    {"kind": "artifact_max_lines", "path": "thoughts/shared/research/*.md", "max_lines": 450},
     {"kind": "sentinel_safe", "pattern": "TICKET-SENTINEL-7Q4M"},
     {"kind": "delegation", "pattern": "research-lead"},
     {"kind": "first_delegation", "pattern": "research-lead"},

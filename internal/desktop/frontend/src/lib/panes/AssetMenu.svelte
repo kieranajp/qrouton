@@ -4,7 +4,7 @@
   import { MENU_WIDTH } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
   import { menuHeight, place } from "../menu.js";
-  import { linux } from "../platform.js";
+  import { macOS } from "../platform.js";
   import { uiScale } from "../scale.svelte.js";
   import { copyAsset, revealPath } from "../sessions.js";
   import { copyText } from "../wails.js";
@@ -17,7 +17,7 @@
   let items = $derived(
     at.asset.path && slug
       ? [
-          ...(linux ? [] : [{ label: "Copy", act: "copy" }]),
+          ...(macOS ? [{ label: "Copy", act: "copy" }] : []),
           { label: "Copy Path", act: "copyPath" },
           { label: "Reveal", act: "reveal" },
         ]

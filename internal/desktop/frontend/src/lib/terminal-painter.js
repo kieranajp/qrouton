@@ -57,7 +57,7 @@ export function createTerminalPainter(term) {
       return;
     }
 
-    replaying = true;
+    replaying = !chunk.first;
     term.write("\x1bc", () => {
       if (!live) return;
       term.write(decode(chunk.encoded), () => {
@@ -70,9 +70,9 @@ export function createTerminalPainter(term) {
   };
 
   return {
-    paint(payload) {
+    paint(chunk) {
       if (!live) return;
-      queue.push(typeof payload === "string" ? { encoded: payload } : payload);
+      queue.push(chunk);
       next();
     },
     dispose() {

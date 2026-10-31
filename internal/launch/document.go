@@ -104,7 +104,7 @@ func SessionRelative(root, path, name string) string {
 	// thoughts/ is a symlink out of the session, so every document resolves
 	// outside root. Name it the way the session refers to it anyway, rather than
 	// falling back to whatever absolute path the caller happened to pass.
-	thoughts := filepath.Join(root, sessionpaths.ThoughtsDirName)
+	thoughts := sessionpaths.ThoughtsLink(root)
 	if real, err := filepath.EvalSymlinks(thoughts); err == nil {
 		if rel, ok := sessionpaths.Within(real, path); ok {
 			return filepath.Join(sessionpaths.ThoughtsDirName, rel)

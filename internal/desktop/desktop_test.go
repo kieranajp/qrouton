@@ -3,8 +3,10 @@ package desktop
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -165,6 +168,8 @@ func (b *stubBoot) Reveal(sessionRoot string) []string {
 	}
 	return b.reveal(sessionRoot)
 }
+
+func (b *stubBoot) OpenText(string) []string { return nil }
 
 func (b *stubBoot) CopyImage(path string) []string {
 	if b.copyPic == nil {
@@ -395,6 +400,22 @@ func TestRunOpensOneConversationWindowAtTheFrontendRoot(t *testing.T) {
 	}
 	if len(r.opened) != 0 {
 		t.Fatalf("%d further windows opened; the workbench opens one", len(r.opened))
+	}
+}
+
+// Breaks if QROUTON_INSPECT no longer reaches the page the window loads.
+func TestRunAsksThePageToLeaveRightClicksToTheWebviewWhenInspecting(t *testing.T) {
+	r := newFakeRenderer()
+	opts, _ := testOptions(t)
+	opts.Inspect = true
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+
+	spec := <-r.opened
+	shownSession(t, reg)
+	if want := frontendRoot + "?" + inspectQuery; spec.URL != want {
+		t.Fatalf("window URL is %q, want %q", spec.URL, want)
 	}
 }
 
@@ -674,6 +695,48 @@ func TestTheDocumentChipOpensADocumentOnceAndSelectsItAfter(t *testing.T) {
 	}
 }
 
+// The session's thoughts is a symlink out of the session root.
+func TestALeadBadgePathOpensItsDocument(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	vault := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(vault, "shared", "research"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(vault, "shared", "research", "R1-x.md"), []byte("# R1\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(vault, filepath.Join(opts.SessionRoot, sessionpaths.ThoughtsDirName)); err != nil {
+		t.Fatal(err)
+	}
+	boot.document = func(root, name string) (workbench.WindowOptions, error) {
+		return launch.DocumentWindow(root, name, launch.EditorCommand{}, workbench.LineSpan{})
+	}
+	reg, term, windows := testWorkbench(t, r, r.Emit)
+
+	startWorkbench(t, r, term, windows, opts)
+	<-r.opened
+	owner := shownSession(t, reg)
+	waitFor(t, "the Overview tab", func() bool { return len(windows.surfaces(owner).Tabs) == 1 })
+
+	written := filepath.Join(owner.root(), "thoughts", "shared", "research", "R1-x.md")
+	documents := writtenDocuments(owner.root(), []string{written})
+	if len(documents) != 1 || documents[0].Path != "thoughts/shared/research/R1-x.md" {
+		t.Fatalf("the badge's documents = %+v", documents)
+	}
+	id, err := windows.OpenDocument(documents[0].Path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tabs := windows.surfaces(owner).Tabs
+	if len(tabs) != 2 || tabs[1].ID != id || tabs[1].Kind != string(workbench.KindDocument) {
+		t.Fatalf("the badge did not open a document tab: %+v", tabs)
+	}
+	if selected := windows.Surfaces(owner.slug()).Selected; selected != id {
+		t.Fatalf("the badge selected %q, want %q", selected, id)
+	}
+}
+
 // The agent opens documents too, through its file tool. The chip has to find
 // that window rather than stack a second copy beside it.
 func TestTheDocumentChipSelectsTheWindowTheAgentOpened(t *testing.T) {
@@ -824,7 +887,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 
 	reg := testRegistry(t, dir)
 	state := reg.current()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -832,8 +895,8 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 	if !ok {
 		t.Fatalf("no chrome pushed at the window: %v", r.events)
 	}
-	if fields.Mode == "" || fields.Phase == "" || fields.Identity != "Octopus" {
-		t.Fatalf("chrome = %+v, want the session's mode, phase and name", fields)
+	if fields.Mode == "" || fields.Identity != "Octopus" {
+		t.Fatalf("chrome = %+v, want the session's mode and name", fields)
 	}
 	if fields.Slug != "octopus" || fields.Terminal != state.terminal {
 		t.Fatalf("chrome names session %q on terminal %q", fields.Slug, fields.Terminal)
@@ -845,7 +908,7 @@ func TestChromePushesTheManifestsModePhaseAndName(t *testing.T) {
 func welcomingFor(t *testing.T, reg *Sessions, root string, cfg *config.Config) bool {
 	t.Helper()
 	r := newFakeRenderer()
-	pushChrome(reg, root, cfg, nil, nil, r.Emit)
+	pushChrome(reg, root, cfg, nil, nil, nil, r.Emit)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	fields, ok := r.events[chromeEvent].(status.Fields)
@@ -917,7 +980,7 @@ func TestChromeNamesTheTerminalOfEveryBootedSessionAndTheSlugOnScreen(t *testing
 	}
 
 	reg := testRegistry(t, filepath.Join(root, "octopus"))
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -964,7 +1027,7 @@ func TestAttentionOnABackgroundSessionsListenerMarksOnlyItsRow(t *testing.T) {
 	if err := handle.Attention(context.Background(), status.ActivityWaiting, 1); err != nil {
 		t.Fatal(err)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1000,7 +1063,7 @@ func TestOnlyTheSessionOnScreenCarriesMeasuredRepos(t *testing.T) {
 	}
 
 	measured := status.RepoStat{Name: "lifesum/svc", Role: "editing", Commits: 3, Measured: true}
-	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, r.Emit)
+	pushChrome(testRegistry(t, shown), root, nil, map[string][]status.RepoStat{shown: {measured}}, nil, nil, r.Emit)
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -1073,13 +1136,13 @@ func TestSwitchingSessionsDropsThePreviousSessionsRepos(t *testing.T) {
 	}
 
 	reg := testRegistry(t, first)
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 1 || repos[0].Name != "lifesum/svc" {
 		t.Fatalf("chrome repos = %+v, want what was measured for the session on screen", repos)
 	}
 
 	reg.reveal(reg.add(second, []string{"/bin/cat"}, os.Environ()))
-	pushChrome(reg, root, nil, measured, nil, r.Emit)
+	pushChrome(reg, root, nil, measured, nil, nil, r.Emit)
 	if repos := pushedChrome(t, r).Repos; len(repos) != 0 {
 		t.Fatalf("chrome repos = %+v after the switch, want none of the previous session's", repos)
 	}
@@ -1113,7 +1176,7 @@ func TestUnseenIsRecountedForTheArrivedSessionAndOtherwiseOnlySlowly(t *testing.
 	<-reg.touched
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, counts)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, time.Hour, time.Hour, counts, noPulls)
 
 	waitFor(t, "the fast ticker to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := all.Load(); got != 1 {
@@ -1290,7 +1353,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
 
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	crashed := pushedChrome(t, r)
 	if crashed.Terminal != "" {
 		t.Fatalf("the session on screen still names terminal %q after its supervisor died", crashed.Terminal)
@@ -1315,7 +1378,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 	if tabs := windows.surfaces(dead).Tabs; len(tabs) != 0 {
 		t.Fatalf("the reboot left the dead session's tabs open: %+v", tabs)
 	}
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	if got := rowTerminal(t, pushedChrome(t, r), "octopus"); got != booted.terminal {
 		t.Fatalf("the row names terminal %q, want the session just booted %q", got, booted.terminal)
 	}
@@ -1387,6 +1450,454 @@ func TestARebootThatCannotStartFallsBackToThePreviousSession(t *testing.T) {
 	}
 }
 
+func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, windows, r := testSessions(t, root, boot)
+	dir := sessionDir(t, root, "octopus")
+	marker := filepath.Join(dir, "conversation.txt")
+	if err := os.WriteFile(marker, []byte("retained"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	state := reg.current()
+	term := newTerm(reg, r.Emit)
+	if err := term.Start(state.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	pid := state.process.cmd.Process.Pid
+	socket := boot.socket(t, dir)
+	tab, err := windows.openStructural(state, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Cwd: dir, Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := windows.Start(tab, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	shell, err := windows.terminals.process(tab)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shellPID := shell.cmd.Process.Pid
+	state.agents.output()
+	reg.railOrder(polled("octopus"))
+	for len(reg.touched) > 0 {
+		<-reg.touched
+	}
+	if err := reg.Unload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != nil || reg.bySlug("octopus") != nil {
+		t.Fatal("the unloaded conversation is still selected or registered")
+	}
+	if _, ok := reg.byTerminal(state.terminal); ok {
+		t.Fatal("the unloaded terminal is still registered")
+	}
+	if _, ok := reg.agentActivitySnapshots()["octopus"]; ok {
+		t.Fatal("the unloaded row retained its live activity")
+	}
+	if len(reg.touched) == 0 {
+		t.Fatal("Unload did not wake chrome")
+	}
+	waitFor(t, "the conversation and shell to end", func() bool {
+		return syscall.Kill(pid, 0) != nil && syscall.Kill(shellPID, 0) != nil
+	})
+	if workbench.Answered(socket) || len(windows.Surfaces("octopus").Tabs) != 0 {
+		t.Fatal("the unloaded session retained its listener or tabs")
+	}
+	if _, err := os.Stat(sessionpaths.Manifest(dir)); err != nil {
+		t.Fatal(err)
+	}
+	if content, err := os.ReadFile(marker); err != nil || string(content) != "retained" {
+		t.Fatalf("Unload changed session files: %q, %v", content, err)
+	}
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
+	fields := pushedChrome(t, r)
+	if len(fields.Sessions) != 1 || fields.Slug != "" || fields.Terminal != "" ||
+		rowTerminal(t, fields, "octopus") != "" || fields.Sessions[0].Activity != "" {
+		t.Fatalf("Unload did not leave a dimmed row and empty state: %+v", fields)
+	}
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() == state || !boot.resumed(t, dir) {
+		t.Fatal("Show did not resume a replacement conversation")
+	}
+	if got := railSlugs(reg, polled("octopus")); !reflect.DeepEqual(got, []string{"octopus"}) {
+		t.Fatalf("Unload changed the rail: %v", got)
+	}
+}
+
+func TestAcceptedWindowOpenCannotOutliveSessionUnload(t *testing.T) {
+	for _, kind := range []workbench.WindowKind{workbench.KindTerminal, workbench.KindDocument} {
+		t.Run(string(kind), func(t *testing.T) {
+			root := t.TempDir()
+			reg, windows, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+			dir := sessionDir(t, root, "octopus")
+			if err := reg.Show("octopus"); err != nil {
+				t.Fatal(err)
+			}
+			owner := reg.current()
+			accepted, client := net.Pipe()
+			defer client.Close()
+			if err := client.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
+				t.Fatal(err)
+			}
+			control := &control{windows: windows, owner: owner}
+			go control.handle(accepted)
+			if err := reg.Unload("octopus"); err != nil {
+				t.Fatal(err)
+			}
+			options := workbench.WindowOptions{Kind: kind, Cwd: dir, Content: "retained"}
+			if kind == workbench.KindTerminal {
+				options.Command = []string{"/bin/cat"}
+			}
+			if err := json.NewEncoder(client).Encode(workbench.Request{Op: workbench.OpOpen, Options: &options}); err != nil {
+				t.Fatal(err)
+			}
+			var response workbench.Response
+			if err := json.NewDecoder(client).Decode(&response); err != nil {
+				t.Fatal(err)
+			}
+			if response.Error != ErrSessionUnloaded.Error() || response.ID != "" || len(windows.list()) != 0 {
+				t.Fatalf("open after unload = %+v, tabs %v", response, windows.list())
+			}
+			if id, err := windows.openStructural(owner, options); !errors.Is(err, ErrSessionUnloaded) || id != "" {
+				t.Fatalf("structural open for unloaded owner = %q, %v", id, err)
+			}
+			if err := reg.Show("octopus"); err != nil {
+				t.Fatal(err)
+			}
+			replacement := reg.current()
+			if replacement == owner {
+				t.Fatal("Show reused the unloaded owner")
+			}
+			if id, err := windows.openStructural(replacement, options); err != nil || id == "" {
+				t.Fatalf("structural open for replacement = %q, %v", id, err)
+			}
+			if len(windows.list()) != 1 || len(windows.surfaces(owner).Tabs) != 0 {
+				t.Fatal("a delayed open left tabs owned by the unloaded session")
+			}
+		})
+	}
+}
+
+func TestRegistryShutdownRefusesOrdinaryAndStructuralAdmissions(t *testing.T) {
+	root := t.TempDir()
+	reg, windows, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	sessionDir(t, root, "octopus")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	owner := reg.current()
+	windows.stopAll()
+	for _, kind := range []workbench.WindowKind{workbench.KindTerminal, workbench.KindDocument, workbench.KindOverview} {
+		options := workbench.WindowOptions{Kind: kind, Cwd: owner.root()}
+		if kind == workbench.KindTerminal {
+			options.Command = []string{"/bin/cat"}
+		}
+		if kind != workbench.KindOverview {
+			if id, err := windows.openWindow(owner, options); !errors.Is(err, ErrSessionUnloaded) || id != "" {
+				t.Fatalf("%s open after shutdown = %q, %v", kind, id, err)
+			}
+		}
+		if id, err := windows.openStructural(owner, options); !errors.Is(err, ErrSessionUnloaded) || id != "" {
+			t.Fatalf("%s structural open after shutdown = %q, %v", kind, id, err)
+		}
+	}
+	if len(windows.list()) != 0 {
+		t.Fatalf("shutdown admitted tabs: %v", windows.list())
+	}
+}
+
+func TestRepeatedSessionTeardownRefusesLateAdmissionsWithoutRetainingOwners(t *testing.T) {
+	root := t.TempDir()
+	reg, windows, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	dir := sessionDir(t, root, "octopus")
+	options := workbench.WindowOptions{Kind: workbench.KindTerminal, Cwd: dir, Command: []string{"/bin/cat"}, Select: true}
+	for i := 0; i < 20; i++ {
+		if err := reg.Show("octopus"); err != nil {
+			t.Fatal(err)
+		}
+		owner := reg.current()
+		if id, err := windows.openWindow(owner, options); err != nil || id == "" {
+			t.Fatalf("fresh owner admission = %q, %v", id, err)
+		}
+		retainedHistory := reg.history
+		if err := reg.Unload("octopus"); err != nil {
+			t.Fatal(err)
+		}
+		for _, entry := range retainedHistory {
+			if entry != nil {
+				t.Fatal("history retained the unloaded owner beyond its length")
+			}
+		}
+		windows.stop(owner)
+		if id, err := windows.openStructural(owner, options); !errors.Is(err, ErrSessionUnloaded) || id != "" {
+			t.Fatalf("late admission = %q, %v", id, err)
+		}
+		if !owner.admissionClosed() || len(windows.list()) != 0 || len(windows.selected) != 0 || len(reg.all()) != 0 {
+			t.Fatal("teardown left registrations behind")
+		}
+	}
+}
+
+func TestSessionRemovalSkipsDeadAndObsoleteHistoryFallbacks(t *testing.T) {
+	for _, action := range []string{"unload", "reload-failure", "retire"} {
+		for _, loadedFallback := range []bool{false, true} {
+			t.Run(action+"/"+strconv.FormatBool(loadedFallback), func(t *testing.T) {
+				root := t.TempDir()
+				reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+				for _, slug := range []string{"live", "dead", "obsolete", "shown"} {
+					sessionDir(t, root, slug)
+				}
+				if loadedFallback {
+					if err := reg.Show("live"); err != nil {
+						t.Fatal(err)
+					}
+				}
+				if err := reg.Show("dead"); err != nil {
+					t.Fatal(err)
+				}
+				dead := reg.current()
+				exited := make(chan struct{})
+				close(exited)
+				dead.mu.Lock()
+				dead.process = &ptyProcess{exited: exited}
+				dead.mu.Unlock()
+				if err := reg.Show("obsolete"); err != nil {
+					t.Fatal(err)
+				}
+				obsolete := reg.current()
+				t.Cleanup(obsolete.stop)
+				reg.mu.Lock()
+				delete(reg.slugs, obsolete.slug())
+				delete(reg.terms, obsolete.terminal)
+				reg.mu.Unlock()
+				if err := reg.Show("shown"); err != nil {
+					t.Fatal(err)
+				}
+				switch action {
+				case "unload":
+					if err := reg.Unload("shown"); err != nil {
+						t.Fatal(err)
+					}
+				case "reload-failure":
+					reg.boot.agent = func(AgentRequest) (AgentCommand, error) { return AgentCommand{}, ErrNoAgentCommand }
+					if err := reg.Reload("shown"); !errors.Is(err, ErrNoAgentCommand) {
+						t.Fatalf("reload failure = %v", err)
+					}
+				case "retire":
+					reg.retire(reg.current())
+				}
+				if reg.current() != reg.bySlug("live") {
+					t.Fatalf("%s selected %q, want the alive registered fallback or none", action, reg.current().slug())
+				}
+			})
+		}
+	}
+}
+
+func TestUnloadBackgroundPreservesSelectionAndHistory(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"octopus", "kraken", "webhook"} {
+		sessionDir(t, root, slug)
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shown := reg.current()
+	previous := reg.bySlug("octopus")
+	if err := reg.Unload("kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != shown || !reflect.DeepEqual(reg.history, []*sessionState{previous, shown}) {
+		t.Fatal("unloading a background session changed selection or remaining history")
+	}
+	if err := reg.Unload("webhook"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != previous {
+		t.Fatal("Unload did not return to the most recently shown loaded session")
+	}
+}
+
+func TestUnloadSkipsDeadFallbacksAndNeverBootsInactiveRows(t *testing.T) {
+	for _, loadedFallback := range []bool{false, true} {
+		t.Run(strconv.FormatBool(loadedFallback), func(t *testing.T) {
+			root := t.TempDir()
+			boot := newStubBoot("/bin/sh", "-c", "exit 3")
+			reg, _, r := testSessions(t, root, boot)
+			for _, slug := range []string{"live", "dead", "shown", "inactive"} {
+				sessionDir(t, root, slug)
+			}
+			if loadedFallback {
+				if err := reg.Show("live"); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := reg.Show("dead"); err != nil {
+				t.Fatal(err)
+			}
+			dead := reg.current()
+			if err := newTerm(reg, r.Emit).Start(dead.terminal, 80, 24); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the fallback supervisor to fail", func() bool { return !dead.alive() })
+			if err := reg.Show("shown"); err != nil {
+				t.Fatal(err)
+			}
+			reg.railOrder(polled("shown", "inactive", "dead", "live"))
+			agents, serves := boot.counts()
+			if err := reg.Unload("shown"); err != nil {
+				t.Fatal(err)
+			}
+			if reg.current() != reg.bySlug("live") {
+				t.Fatalf("Unload selected %q, want the alive loaded fallback or none", reg.current().slug())
+			}
+			if afterAgents, afterServes := boot.counts(); afterAgents != agents || afterServes != serves {
+				t.Fatal("Unload booted a fallback")
+			}
+		})
+	}
+}
+
+func TestUnloadInactiveIsANoopAndUnknownSlugsAreRefused(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	sessionDir(t, root, "shown")
+	sessionDir(t, root, "inactive")
+	if err := reg.Show("shown"); err != nil {
+		t.Fatal(err)
+	}
+	shown := reg.current()
+	for len(reg.touched) > 0 {
+		<-reg.touched
+	}
+	if err := reg.Unload("inactive"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != shown || len(reg.touched) != 0 {
+		t.Fatal("unloading an inactive session changed live state")
+	}
+	for _, slug := range []string{"unknown", "", ".", "..", "../shown", "shown/../inactive"} {
+		if err := reg.Unload(slug); err == nil {
+			t.Fatalf("Unload accepted unknown or unsafe slug %q", slug)
+		}
+	}
+	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
+		t.Fatal("an inactive or unknown Unload booted a session")
+	}
+}
+
+func TestDelayedRetirementCannotRemoveAReopenedSession(t *testing.T) {
+	root := t.TempDir()
+	reg, windows, r := testSessions(t, root, newStubBoot("/bin/sh", "-c", "exit 0"))
+	sessionDir(t, root, "octopus")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	old := reg.current()
+	arrived, release, finished := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	var once sync.Once
+	t.Cleanup(func() { once.Do(func() { close(release) }) })
+	term := newTerm(reg, r.Emit)
+	term.whenChildExits(func(state *sessionState, code int) {
+		close(arrived)
+		<-release
+		reg.retire(state)
+		close(finished)
+	})
+	if err := term.Start(old.terminal, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-arrived:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the supervisor exit callback did not arrive")
+	}
+	if err := reg.Unload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := reg.current()
+	tab, err := windows.openStructural(replacement, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Cwd: replacement.root(), Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	once.Do(func() { close(release) })
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the delayed retirement did not finish")
+	}
+	if reg.current() != replacement || reg.bySlug("octopus") != replacement || !replacement.alive() {
+		t.Fatal("a delayed retirement removed or stopped the replacement")
+	}
+	if _, ok := reg.byTerminal(replacement.terminal); !ok {
+		t.Fatal("a delayed retirement lost the replacement's terminal or tabs")
+	}
+	if tabs := windows.Surfaces("octopus").Tabs; len(tabs) != 1 || tabs[0].ID != tab {
+		t.Fatalf("replacement tabs = %+v, want %q", tabs, tab)
+	}
+}
+
+func TestRetirementOfAnObsoleteStateLeavesItsReplacementRegistered(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	dir := sessionDir(t, root, "octopus")
+	old := reg.add(dir, []string{"/bin/cat"}, os.Environ())
+	reg.forget(old)
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := reg.current()
+	reg.retire(old)
+	if reg.current() != replacement || reg.bySlug("octopus") != replacement || !replacement.alive() {
+		t.Fatal("retirement of an obsolete state changed its replacement")
+	}
+	if !workbench.Answered(boot.socket(t, dir)) {
+		t.Fatal("retirement closed the replacement's listener")
+	}
+}
+
+func TestAnIntentionallyStoppedChildDoesNotReportItsExit(t *testing.T) {
+	root := t.TempDir()
+	reg, _, r := testSessions(t, root, newStubBoot("/bin/cat"))
+	sessionDir(t, root, "octopus")
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	old := reg.current()
+	if err := reg.Unload("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if err := reg.Show("octopus"); err != nil {
+		t.Fatal(err)
+	}
+	replacement := reg.current()
+	old.childExited(r.Emit, func(*sessionState, int) {
+		t.Fatal("an intentional stop invoked the child-exit handler")
+	}, 0)
+	r.mu.Lock()
+	_, emitted := r.events[ptyExitEvent+old.terminal]
+	r.mu.Unlock()
+	if emitted || reg.current() != replacement {
+		t.Fatal("an intentional stop emitted an exit or changed selection")
+	}
+}
+
 func TestReloadRefusesASlugItCannotResolve(t *testing.T) {
 	reg, _, _ := testSessions(t, "", newStubBoot("/bin/cat"))
 	err := reg.Reload("octopus")
@@ -1414,8 +1925,9 @@ func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	boot := newStubBoot("/bin/cat")
 	reg, _, _ := testSessions(t, root, boot)
 	dir := sessionDir(t, root, "octopus-0192")
+	reg.boot.stickers = func() []session.Sticker { return []session.Sticker{"a1b2c3d4", "star"} }
 
-	if got, err := reg.CycleSticker("octopus-0192"); err != nil || got != session.StickerStar {
+	if got, err := reg.CycleSticker("octopus-0192"); err != nil || got != "a1b2c3d4" {
 		t.Fatalf("CycleSticker() = %q, %v", got, err)
 	}
 	select {
@@ -1427,7 +1939,7 @@ func TestCycleStickerPersistsAndTouchesChromeOnlyAfterSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.Sticker != session.StickerStar {
+	if loaded.Sticker != "a1b2c3d4" {
 		t.Fatalf("persisted sticker = %q", loaded.Sticker)
 	}
 
@@ -1495,19 +2007,20 @@ func TestCycleStickerAcceptsExistingDirectChildSessionIdentifiers(t *testing.T) 
 			root := t.TempDir()
 			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
 			dir := sessionDir(t, root, slug)
+			reg.boot.stickers = func() []session.Sticker { return []session.Sticker{"star"} }
 
 			got, err := reg.CycleSticker(slug)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != session.StickerStar {
-				t.Fatalf("CycleSticker(%q) = %q, want %q", slug, got, session.StickerStar)
+			if got != session.Sticker("star") {
+				t.Fatalf("CycleSticker(%q) = %q, want %q", slug, got, session.Sticker("star"))
 			}
 			manifest, err := session.Load(dir)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if manifest.Slug != slug || manifest.Sticker != session.StickerStar {
+			if manifest.Slug != slug || manifest.Sticker != session.Sticker("star") {
 				t.Fatalf("manifest = slug %q, sticker %q", manifest.Slug, manifest.Sticker)
 			}
 		})
@@ -2051,6 +2564,193 @@ func TestTheShownSessionIsNamedIndependentlyOfRailPosition(t *testing.T) {
 	}
 }
 
+func TestReorderMovesSessionsToTheTargetsFormerPosition(t *testing.T) {
+	for _, test := range []struct {
+		name, source, target string
+		want                 []string
+	}{
+		{"upward", "webhook", "kraken", []string{"webhook", "kraken", "octopus", "clam"}},
+		{"downward", "kraken", "webhook", []string{"octopus", "webhook", "kraken", "clam"}},
+		{"first-to-last", "kraken", "clam", []string{"octopus", "webhook", "clam", "kraken"}},
+		{"last-to-first", "clam", "kraken", []string{"clam", "kraken", "octopus", "webhook"}},
+		{"same-row", "octopus", "octopus", []string{"kraken", "octopus", "webhook", "clam"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+			rows := polled("kraken", "octopus", "webhook", "clam")
+			for _, row := range rows {
+				sessionDir(t, root, row.Slug)
+			}
+			reg.railOrder(rows)
+			if err := reg.Reorder(test.source, test.target); err != nil {
+				t.Fatal(err)
+			}
+			if got := railSlugs(reg, rows); !reflect.DeepEqual(got, test.want) {
+				t.Fatalf("reordered rail = %v, want %v", got, test.want)
+			}
+			if touched := len(reg.touched) != 0; touched != (test.source != test.target) {
+				t.Fatalf("chrome wakeup = %v for %s", touched, test.name)
+			}
+		})
+	}
+}
+
+func TestReorderRefusesUnknownAndUnsafeRowsWithoutChangingOrder(t *testing.T) {
+	reg := newSessions()
+	initial := []string{"kraken", "gone", "octopus"}
+	reg.railOrder(polled(initial...))
+	for _, bad := range []string{"unknown", "unpolled", "", ".", "..", "kraken/../octopus", "../octopus", `kraken\octopus`} {
+		for _, pair := range [][2]string{{bad, "kraken"}, {"kraken", bad}, {bad, bad}} {
+			if err := reg.Reorder(pair[0], pair[1]); err == nil {
+				t.Fatalf("Reorder accepted %q onto %q", pair[0], pair[1])
+			}
+			if !reflect.DeepEqual(reg.rail, initial) || len(reg.touched) != 0 {
+				t.Fatalf("refused reorder changed state: rail %v, wakeups %d", reg.rail, len(reg.touched))
+			}
+		}
+	}
+}
+
+func TestReorderUsesKnownRowsWhileManifestsAreBeingWritten(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	source := sessionDir(t, root, "kraken")
+	target := sessionDir(t, root, "octopus")
+	reg.railOrder(polled("kraken", "octopus"))
+	if err := os.Remove(sessionpaths.Manifest(source)); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sessionpaths.Manifest(target), []byte("{"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	reg.boot.root = func(string) string {
+		t.Fatal("Reorder read session files")
+		return ""
+	}
+	if err := reg.Reorder("kraken", "octopus"); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(reg.rail, []string{"octopus", "kraken"}) {
+		t.Fatalf("manifest writes blocked reordering: %v", reg.rail)
+	}
+}
+
+func TestReorderRetainsMissingEntriesAndSurvivesPollsAndFreshSessions(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"kraken", "octopus", "webhook", "fresh"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "missing", "octopus", "webhook"))
+	if err := reg.Reorder("kraken", "webhook"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"missing", "octopus", "webhook", "kraken"}
+	if !reflect.DeepEqual(reg.rail, want) {
+		t.Fatalf("reorder changed missing entries: %v, want %v", reg.rail, want)
+	}
+	for _, rows := range [][]status.SessionRow{
+		polled("kraken", "octopus", "webhook"),
+		polled("webhook", "kraken", "octopus"),
+	} {
+		if got := railSlugs(reg, rows); !reflect.DeepEqual(got, []string{"octopus", "webhook", "kraken"}) {
+			t.Fatalf("poll lost the reordered sequence: %v", got)
+		}
+	}
+	if got := railSlugs(reg, polled("fresh", "kraken", "webhook", "octopus")); !reflect.DeepEqual(got, []string{"fresh", "octopus", "webhook", "kraken"}) {
+		t.Fatalf("fresh session did not prepend to the user order: %v", got)
+	}
+	sessionDir(t, root, "missing")
+	if got := railSlugs(reg, polled("missing", "fresh", "kraken", "webhook", "octopus")); !reflect.DeepEqual(got, []string{"fresh", "missing", "octopus", "webhook", "kraken"}) {
+		t.Fatalf("returning session lost its retained place: %v", got)
+	}
+}
+
+func TestReorderPreservesSelectionHistoryAndSessionLifecycleOrder(t *testing.T) {
+	root := t.TempDir()
+	boot := newStubBoot("/bin/cat")
+	reg, _, _ := testSessions(t, root, boot)
+	for _, slug := range []string{"kraken", "octopus", "inactive"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "octopus", "inactive"))
+	for _, slug := range []string{"kraken", "octopus"} {
+		if err := reg.Show(slug); err != nil {
+			t.Fatal(err)
+		}
+	}
+	shown := reg.current()
+	history := append([]*sessionState(nil), reg.history...)
+	agents, serves := boot.counts()
+	if err := reg.Reorder("inactive", "kraken"); err != nil {
+		t.Fatal(err)
+	}
+	if reg.current() != shown || !reflect.DeepEqual(reg.history, history) || reg.bySlug("inactive") != nil {
+		t.Fatal("reordering an inactive row changed selection, history or loaded it")
+	}
+	if afterAgents, afterServes := boot.counts(); afterAgents != agents || afterServes != serves {
+		t.Fatal("Reorder booted a session")
+	}
+	for _, action := range []func(string) error{reg.Show, reg.Unload, reg.Reload} {
+		if err := action("kraken"); err != nil {
+			t.Fatal(err)
+		}
+		if got := railSlugs(reg, polled("kraken", "octopus", "inactive")); !reflect.DeepEqual(got, []string{"inactive", "kraken", "octopus"}) {
+			t.Fatalf("session lifecycle changed user order: %v", got)
+		}
+	}
+}
+
+func TestConcurrentRailPollingAndReorderingPreserveEveryEntry(t *testing.T) {
+	root := t.TempDir()
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	for _, slug := range []string{"kraken", "octopus", "webhook", "fresh"} {
+		sessionDir(t, root, slug)
+	}
+	reg.railOrder(polled("kraken", "missing", "octopus", "webhook"))
+	var wg sync.WaitGroup
+	failures := make(chan error, 2)
+	for _, pair := range [][2]string{{"kraken", "webhook"}, {"webhook", "octopus"}} {
+		wg.Add(1)
+		go func(pair [2]string) {
+			defer wg.Done()
+			for i := 0; i < 40; i++ {
+				if err := reg.Reorder(pair[0], pair[1]); err != nil {
+					failures <- err
+					return
+				}
+			}
+		}(pair)
+	}
+	for _, rows := range [][]status.SessionRow{polled("fresh", "kraken", "octopus", "webhook"), polled("webhook", "octopus", "kraken")} {
+		wg.Add(1)
+		go func(rows []status.SessionRow) {
+			defer wg.Done()
+			for i := 0; i < 40; i++ {
+				reg.railOrder(rows)
+			}
+		}(rows)
+	}
+	wg.Wait()
+	close(failures)
+	for err := range failures {
+		t.Error(err)
+	}
+	if len(reg.rail) != 5 || reg.rail[0] != "fresh" {
+		t.Fatalf("concurrent operations lost entries or fresh placement: %v", reg.rail)
+	}
+	seen := make(map[string]int)
+	for _, slug := range reg.rail {
+		seen[slug]++
+	}
+	for _, slug := range []string{"kraken", "missing", "octopus", "webhook", "fresh"} {
+		if seen[slug] != 1 {
+			t.Fatalf("entry %q appears %d times in %v", slug, seen[slug], reg.rail)
+		}
+	}
+}
+
 func TestRetiringTheLastActiveSessionStartsTheNextInactiveRailRow(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
@@ -2282,7 +2982,7 @@ func TestUncommittedAnswersAClickAndNeverATicker(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, counts)
+	go watch(ctx, reg, root, nil, emit, time.Millisecond, 2*time.Millisecond, time.Hour, counts, noPulls)
 	waitFor(t, "both tickers to push repeatedly", func() bool { return pushes.Load() > 20 })
 	if got := checks.Load(); got != 0 {
 		t.Fatalf("the dirty check ran %d times over %d pushes, want none of them", got, pushes.Load())
@@ -2483,7 +3183,7 @@ func TestCleanupRefusesADirectoryHoldingAnotherSessionsManifest(t *testing.T) {
 // does not race the background poller's own tick.
 func polledRail(t *testing.T, r *fakeRenderer, reg *Sessions, root string) []string {
 	t.Helper()
-	pushChrome(reg, root, nil, nil, nil, r.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, r.Emit)
 	var slugs []string
 	for _, row := range lastChrome(t, r).Sessions {
 		slugs = append(slugs, row.Slug)

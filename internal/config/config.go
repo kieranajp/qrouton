@@ -11,6 +11,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/atomicfile"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -29,12 +30,28 @@ type Config struct {
 
 	Editor []string `json:"editor,omitempty"`
 
+	// ThoughtsPlacement is the fingerprint of the thoughts folders the last
+	// automatic placement check ran against. A different fingerprint at launch
+	// runs the check again.
+	ThoughtsPlacement string `json:"thoughtsPlacement,omitempty"`
+
+	// ThoughtsPlacementChecked is read only to migrate a config written before
+	// the fingerprint existed. Only the placement check's own save clears it.
+	ThoughtsPlacementChecked bool `json:"thoughtsPlacementChecked,omitempty"`
+
+	// Stamped on new artefacts. Absent falls back to git's user.name, then the login name.
+	Author string `json:"author,omitempty"`
+
 	// Absent reads false, so a hand-written config sees the first-run flow once.
 	Welcomed bool `json:"welcomed,omitempty"`
 
 	// Absent reads false, so the chime stays on until someone turns it off.
 	Quiet bool `json:"quiet,omitempty"`
 
+	// Absent derives today's four stickers; an empty list means no stickers.
+	Stickers *[]Sticker `json:"stickers,omitempty"`
+
+	// Read only to derive Stickers from a config written before the list existed.
 	StickerLabels *StickerLabels `json:"stickerLabels,omitempty"`
 
 	Thoughts Thoughts `json:"thoughts,omitzero"`
@@ -65,6 +82,14 @@ type ThoughtsRoot struct {
 	ID   string   `json:"id"`
 	Path string   `json:"path"`
 	Orgs []string `json:"orgs,omitempty"`
+}
+
+// Sticker is one entry in the user's sticker list. List order is rail cycle order.
+type Sticker struct {
+	ID     string `json:"id"`
+	Colour string `json:"colour"`
+	Symbol string `json:"symbol"`
+	Label  string `json:"label"`
 }
 
 type StickerLabels struct {
@@ -125,8 +150,12 @@ func (c *Config) Replace(next *Config) {
 	c.Launch = replacement.Launch
 	c.Reviewer = replacement.Reviewer
 	c.Editor = replacement.Editor
+	c.Author = replacement.Author
+	c.ThoughtsPlacement = replacement.ThoughtsPlacement
+	c.ThoughtsPlacementChecked = replacement.ThoughtsPlacementChecked
 	c.Welcomed = replacement.Welcomed
 	c.Quiet = replacement.Quiet
+	c.Stickers = replacement.Stickers
 	c.StickerLabels = replacement.StickerLabels
 	c.Thoughts = replacement.Thoughts
 	c.UIScale = replacement.UIScale
@@ -134,20 +163,30 @@ func (c *Config) Replace(next *Config) {
 
 func clone(c *Config) *Config {
 	out := &Config{
-		mu:       &sync.RWMutex{},
-		writeMu:  &sync.Mutex{},
-		Orgs:     append([]string(nil), c.Orgs...),
-		Root:     c.Root,
-		Editor:   append([]string(nil), c.Editor...),
-		Welcomed: c.Welcomed,
-		Quiet:    c.Quiet,
-		UIScale:  c.UIScale,
+		mu:                       &sync.RWMutex{},
+		writeMu:                  &sync.Mutex{},
+		Orgs:                     append([]string(nil), c.Orgs...),
+		Root:                     c.Root,
+		Editor:                   append([]string(nil), c.Editor...),
+		Author:                   c.Author,
+		ThoughtsPlacement:        c.ThoughtsPlacement,
+		ThoughtsPlacementChecked: c.ThoughtsPlacementChecked,
+		Welcomed:                 c.Welcomed,
+		Quiet:                    c.Quiet,
+		UIScale:                  c.UIScale,
 	}
 	if c.Launch != nil {
 		out.Launch = make(map[string][]string, len(c.Launch))
 		for runner, argv := range c.Launch {
 			out.Launch[runner] = append([]string(nil), argv...)
 		}
+	}
+	if c.Stickers != nil {
+		stickers := slices.Clone(*c.Stickers)
+		if stickers == nil {
+			stickers = []Sticker{}
+		}
+		out.Stickers = &stickers
 	}
 	if c.StickerLabels != nil {
 		labels := *c.StickerLabels
@@ -164,12 +203,17 @@ func clone(c *Config) *Config {
 	return out
 }
 
+// DefaultThoughtsRoot is the thoughts root derived from a sessions root.
+func DefaultThoughtsRoot(root string) string {
+	return filepath.Join(root, sessionpaths.ThoughtsDirName)
+}
+
 // ThoughtsRoots lists the default root first, at <root>/thoughts unless set.
 func (c *Config) ThoughtsRoots() []ThoughtsRoot {
 	snapshot := c.Snapshot()
 	def := snapshot.Thoughts.Default
 	if strings.TrimSpace(def) == "" {
-		def = filepath.Join(snapshot.Root, sessionpaths.ThoughtsDirName)
+		def = DefaultThoughtsRoot(snapshot.Root)
 	}
 	return append([]ThoughtsRoot{{ID: DefaultThoughtsID, Path: def}}, snapshot.Thoughts.Roots...)
 }
@@ -235,8 +279,34 @@ func validateThoughts(roots []ThoughtsRoot) error {
 	return vault.Validate(profiles)
 }
 
-func (c *Config) EffectiveStickerLabels() StickerLabels {
-	return effectiveStickerLabels(c.Snapshot())
+// EffectiveStickers answers the sticker list, or the four legacy stickers
+// labelled from stickerLabels when config.json has no list yet.
+func (c *Config) EffectiveStickers() []Sticker {
+	snapshot := c.Snapshot()
+	if snapshot == nil {
+		snapshot = &Config{}
+	}
+	if snapshot.Stickers != nil {
+		return slices.Clone(*snapshot.Stickers)
+	}
+	labels := effectiveStickerLabels(snapshot)
+	return []Sticker{
+		{ID: LegacyStickerStar, Colour: "blue", Symbol: "star", Label: labels.Star},
+		{ID: LegacyStickerBookmark, Colour: "green", Symbol: "bookmark", Label: labels.Bookmark},
+		{ID: LegacyStickerQuestion, Colour: "orange", Symbol: "question", Label: labels.Question},
+		{ID: LegacyStickerExclamation, Colour: "red", Symbol: "exclamation", Label: labels.Exclamation},
+	}
+}
+
+// CheckSticker refuses a colour or symbol outside the palette.
+func CheckSticker(s Sticker) error {
+	if !slices.Contains(theme.StickerColours(), s.Colour) {
+		return fmt.Errorf("%w: %q", ErrStickerColour, s.Colour)
+	}
+	if !slices.Contains(stickerSymbols, s.Symbol) {
+		return fmt.Errorf("%w: %q", ErrStickerSymbol, s.Symbol)
+	}
+	return nil
 }
 
 func effectiveStickerLabels(c *Config) StickerLabels {
@@ -293,8 +363,17 @@ func Path() string {
 	return filepath.Join(xdgDir(configHomeEnvVar, configHomeFallback), configFileName)
 }
 
+func CacheDir() string {
+	return xdgDir(cacheHomeEnvVar, cacheHomeFallback)
+}
+
 func CachePath() string {
-	return filepath.Join(xdgDir(cacheHomeEnvVar, cacheHomeFallback), cacheFileName)
+	return filepath.Join(CacheDir(), cacheFileName)
+}
+
+// WebGLLogPath records the page's WebGL renderers coming and going, under QROUTON_INSPECT.
+func WebGLLogPath() string {
+	return filepath.Join(CacheDir(), webglLogFileName)
 }
 
 // Load reads config.json if it exists, and otherwise starts from defaults —
@@ -366,6 +445,13 @@ func Save(cfg *Config) error {
 	return atomicfile.Replace(Path(), b, fileMode)
 }
 
+func RootOverridden() bool { return os.Getenv(rootEnvVar) != "" }
+
+func OrgsOverridden() bool { return os.Getenv(orgsEnvVar) != "" }
+
+// DefaultRoot is the root an empty config.json resolves to, before ~ expansion.
+func DefaultRoot() string { return defaultRoot }
+
 // WithoutOverrides drops the runtime overrides from an environment, so a process
 // inheriting it reads the config file's answer rather than this one's.
 func WithoutOverrides(env []string) []string {
@@ -380,10 +466,13 @@ func WithoutOverrides(env []string) []string {
 	return out
 }
 
-func splitOrgs(s string) []string {
+func splitOrgs(s string) []string { return NormaliseOrgs(strings.Split(s, orgSeparator)) }
+
+// NormaliseOrgs trims each org and drops blanks and repeats, keeping order.
+func NormaliseOrgs(orgs []string) []string {
 	var out []string
 	seen := make(map[string]bool)
-	for _, org := range strings.Split(s, orgSeparator) {
+	for _, org := range orgs {
 		org = strings.TrimSpace(org)
 		if org != "" && !seen[org] {
 			seen[org] = true

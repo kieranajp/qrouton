@@ -13,13 +13,13 @@ const EMITTED_SCALE = 0.65;
  */
 
 /**
- * @param {{dataset?: DOMStringMap}[]} blocks In document order.
+ * @param {{dataset: DOMStringMap}[]} blocks In document order.
  * @param {Rendered[]} results
  */
 export function place(blocks, results) {
   const byLine = new Map();
-  for (const block of blocks ?? []) {
-    const line = Number(block?.dataset?.line);
+  for (const block of blocks) {
+    const line = Number(block.dataset.line);
     if (Number.isInteger(line) && !byLine.has(line)) byLine.set(line, block);
   }
   const placed = [];

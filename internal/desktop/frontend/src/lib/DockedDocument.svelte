@@ -13,14 +13,14 @@
 
   const session = chrome();
 
-  /** @type {HTMLElement} */
+  /** @type {HTMLElement | undefined} */
   let body = $state();
   /** A pane with a footer scrolls inside itself; every other pane scrolls here. */
   let owned = $state(/** @type {HTMLElement | null} */ (null));
   let scrollRoot = $derived(owned ?? body);
-  /** @type {HTMLElement} */
+  /** @type {HTMLElement | undefined} */
   let content = $state();
-  /** @type {HTMLInputElement} */
+  /** @type {HTMLInputElement | undefined} */
   let findField = $state();
   let finding = $state(false);
   let query = $state("");

@@ -4,8 +4,9 @@ const (
 	// appDirName is the directory qrouton owns inside each XDG base directory.
 	appDirName = "qrouton"
 
-	configFileName = "config.json"
-	cacheFileName  = "repos.json"
+	configFileName   = "config.json"
+	cacheFileName    = "repos.json"
+	webglLogFileName = "webgl.jsonl"
 
 	// XDG bases, with the fallbacks the design pinned. Not os.UserConfigDir: on
 	// darwin that is ~/Library/Application Support, and qrouton follows XDG on
@@ -40,4 +41,22 @@ const (
 	UIScaleMax     = 150
 	UIScaleStep    = 10
 	UIScaleDefault = 100
+)
+
+// Session manifests written before stickers were user-defined carry these ids,
+// so the derived list keeps them.
+const (
+	LegacyStickerStar        = "star"
+	LegacyStickerBookmark    = "bookmark"
+	LegacyStickerQuestion    = "question"
+	LegacyStickerExclamation = "exclamation"
+)
+
+var stickerSymbols = []string{"star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"}
+
+const (
+	fingerprintFieldJoin = "\x00"
+	fingerprintOrgJoin   = ","
+	fingerprintEntryJoin = "\n"
+	fingerprintBytes     = 8
 )

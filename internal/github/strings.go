@@ -29,6 +29,9 @@ const (
 	// own, so pagination opens one.
 	branchesPath = "/repos/%s/%s/branches"
 
+	// The head filter names the repository's own owner, so a fork's pull request never matches.
+	pullsQuery = "/repos/%s/%s/pulls?head=%s:%s&state=all&per_page=%d"
+
 	// pageSize is GitHub's maximum; a short page means the last one.
 	pageSize        = 100
 	paginationQuery = "%s%sper_page=%d&page=%d"
@@ -54,6 +57,8 @@ const (
 	bearerPrefix        = "Bearer "
 	acceptHeader        = "Accept"
 	acceptGitHubJSON    = "application/vnd.github+json"
+	ifNoneMatchHeader   = "If-None-Match"
+	etagHeader          = "ETag"
 
 	getMethod = "GET"
 

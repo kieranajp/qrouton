@@ -39,6 +39,9 @@ type Options struct {
 	Root string
 	// Socket answers the launcher's readiness poll.
 	Socket string
+	// Inspect leaves the webview its own right-click menu, for Inspect Element,
+	// and logs the page's WebGL renderers coming and going.
+	Inspect bool
 	// Ticket is a canonical ticket offered after session boot is wired and
 	// before the page can claim a blank draft. TicketPrompt is the full prompt
 	// the external tool generated for the eventual runner's first turn.
@@ -63,6 +66,7 @@ type Options struct {
 	updates    *Updates
 	vault      *vault.Set
 	ollama     *Ollama
+	placement  *Placement
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -132,14 +136,20 @@ func Run(opts Options) error {
 	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch, validateReviewer, reviewerRunners := validators(opts.Validator)
 	settingsService := newSettings(
-		opts.Config, r.Emit, validateEditor, validateLaunch,
-		opts.LinearCommand, opts.LinearEnvironment, quit, reg.touch, reconfigureVault(opts.vault),
+		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
+		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, reconfigureVault(opts.vault),
+		opts.Launcher.Runners, opts.Launcher.OpenText,
 	)
 	settingsService.validateReviewer = validateReviewer
-	settingsService.runners = reviewerRunners
+	settingsService.reviewerRunners = reviewerRunners
 	r.register(application.NewService(settingsService))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	r.register(application.NewService(newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))))
+	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))
+	r.register(application.NewService(firstRun))
+	opts.placement = newPlacement(opts.Config, reg)
+	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
+	r.register(application.NewService(opts.placement))
+	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), terminalSession(reg, windows))))
 	return run(r, term, windows, opts, quit)
 }
 
@@ -148,6 +158,14 @@ func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Ass
 		return nil
 	}
 	return func() error { return relaunch(assembly.pendingTicket) }
+}
+
+// withoutTicket relaunches carrying no pending ticket, as a settings restart has none.
+func withoutTicket(relaunch func(func() (string, string)) error) func() error {
+	if relaunch == nil {
+		return nil
+	}
+	return func() error { return relaunch(nil) }
 }
 
 func validators(v Validator) (func([]string) error, func(map[string][]string) error,
@@ -237,7 +255,14 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	overviewTab := &overviewWindow{windows: windows}
 
 	reg.boot = booting{
-		root:  func(slug string) string { return session.Resumable(opts.Root, slug) },
+		root: func(slug string) string { return session.Resumable(opts.Root, slug) },
+		stickers: func() []session.Sticker {
+			var ids []session.Sticker
+			for _, s := range opts.Config.EffectiveStickers() {
+				ids = append(ids, session.Sticker(s.ID))
+			}
+			return ids
+		},
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
 			ring := ringer(opts.Config, state, func(s *sessionState) bool {
@@ -311,6 +336,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	if opts.ollama != nil {
 		opts.ollama.bind(ctx)
 	}
+	if opts.placement != nil {
+		go opts.placement.checkOnce()
+	}
 
 	// Closing the conversation window ends the app; a supervisor exiting ends
 	// only its own session, and a failed one keeps its terminal readable.
@@ -357,7 +385,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	if err := r.Open(windowSpec{
 		Name:    mainWindowName,
 		Title:   windowTitle(titleRoot),
-		URL:     frontendRoot,
+		URL:     pageURL(opts.Inspect),
 		Width:   mainWindowWidth,
 		Height:  mainWindowHeight,
 		Focus:   true,
@@ -428,7 +456,7 @@ func (s *shellWindow) spawn(owner *sessionState) (string, error) {
 		return "", ErrNoShellCommand
 	}
 	owner.shells++
-	return s.windows.openStructural(owner, workbench.WindowOptions{
+	return s.windows.openShell(owner, workbench.WindowOptions{
 		Kind:        workbench.KindTerminal,
 		Label:       shellLabel(owner.shells),
 		Icon:        workbench.IconShell,
@@ -499,4 +527,11 @@ func frontend() (fs.FS, error) {
 		return nil, err
 	}
 	return assets, nil
+}
+
+func pageURL(inspect bool) string {
+	if inspect {
+		return frontendRoot + "?" + inspectQuery
+	}
+	return frontendRoot
 }

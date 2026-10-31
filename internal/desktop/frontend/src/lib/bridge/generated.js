@@ -26,6 +26,10 @@ export const PICKER_CANCEL = "github.com/kieranajp/qrouton/internal/desktop.Pick
 export const PICKER_CONFIRM = "github.com/kieranajp/qrouton/internal/desktop.Picker.Confirm";
 export const PICKER_ESCALATE = "github.com/kieranajp/qrouton/internal/desktop.Picker.Escalate";
 export const PICKER_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Picker.Load";
+export const PLACEMENT_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Placement.Check";
+export const PLACEMENT_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Close";
+export const PLACEMENT_MOVE = "github.com/kieranajp/qrouton/internal/desktop.Placement.Move";
+export const PLACEMENT_REPORT = "github.com/kieranajp/qrouton/internal/desktop.Placement.Report";
 export const PRESENTER_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Close";
 export const PRESENTER_NOTE = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Note";
 export const PRESENTER_OPEN = "github.com/kieranajp/qrouton/internal/desktop.Presenter.Open";
@@ -38,19 +42,25 @@ export const SESSIONS_CLEANUP = "github.com/kieranajp/qrouton/internal/desktop.S
 export const SESSIONS_COPY_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CopyAsset";
 export const SESSIONS_CYCLE_STICKER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.CycleSticker";
 export const SESSIONS_RELOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reload";
+export const SESSIONS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reorder";
 export const SESSIONS_REVEAL = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Reveal";
 export const SESSIONS_REVEAL_PATH = "github.com/kieranajp/qrouton/internal/desktop.Sessions.RevealPath";
 export const SESSIONS_SHOW = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Show";
 export const SESSIONS_UNCOMMITTED = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Uncommitted";
+export const SESSIONS_UNLOAD = "github.com/kieranajp/qrouton/internal/desktop.Sessions.Unload";
 export const SETTINGS_ADJUST_UI_SCALE = "github.com/kieranajp/qrouton/internal/desktop.Settings.AdjustUIScale";
+export const SETTINGS_GIT_HUB_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Settings.GitHubStatus";
+export const SETTINGS_INSTALL_LINEAR = "github.com/kieranajp/qrouton/internal/desktop.Settings.InstallLinear";
 export const SETTINGS_LOAD = "github.com/kieranajp/qrouton/internal/desktop.Settings.Load";
-export const SETTINGS_QUIT = "github.com/kieranajp/qrouton/internal/desktop.Settings.Quit";
+export const SETTINGS_OPEN_CONFIG = "github.com/kieranajp/qrouton/internal/desktop.Settings.OpenConfig";
+export const SETTINGS_RELAUNCH = "github.com/kieranajp/qrouton/internal/desktop.Settings.Relaunch";
 export const SETTINGS_RUNNERS = "github.com/kieranajp/qrouton/internal/desktop.Settings.Runners";
 export const SETTINGS_SAVE = "github.com/kieranajp/qrouton/internal/desktop.Settings.Save";
 export const TERM_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Term.Resize";
 export const TERM_START = "github.com/kieranajp/qrouton/internal/desktop.Term.Start";
 export const TERM_WRITE = "github.com/kieranajp/qrouton/internal/desktop.Term.Write";
 export const UPDATES_STATUS = "github.com/kieranajp/qrouton/internal/desktop.Updates.Status";
+export const WEB_GL_LOG_RECORD = "github.com/kieranajp/qrouton/internal/desktop.WebGLLog.Record";
 export const WINDOWS_CLOSE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Close";
 export const WINDOWS_CONTENT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Content";
 export const WINDOWS_FOCUS_ASSET = "github.com/kieranajp/qrouton/internal/desktop.Windows.FocusAsset";
@@ -60,8 +70,9 @@ export const WINDOWS_RENDER_DIAGRAMS = "github.com/kieranajp/qrouton/internal/de
 export const WINDOWS_REORDER = "github.com/kieranajp/qrouton/internal/desktop.Windows.Reorder";
 export const WINDOWS_REPORT_VIEWPORT = "github.com/kieranajp/qrouton/internal/desktop.Windows.ReportViewport";
 export const WINDOWS_RESIZE = "github.com/kieranajp/qrouton/internal/desktop.Windows.Resize";
-export const WINDOWS_SAVE_SPEC = "github.com/kieranajp/qrouton/internal/desktop.Windows.SaveSpec";
+export const WINDOWS_SAVE_ANSWERS = "github.com/kieranajp/qrouton/internal/desktop.Windows.SaveAnswers";
 export const WINDOWS_SELECT = "github.com/kieranajp/qrouton/internal/desktop.Windows.Select";
+export const WINDOWS_SEND_AUDIT_TRIAGE = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendAuditTriage";
 export const WINDOWS_SEND_SPEC_ANSWERS = "github.com/kieranajp/qrouton/internal/desktop.Windows.SendSpecAnswers";
 export const WINDOWS_START = "github.com/kieranajp/qrouton/internal/desktop.Windows.Start";
 export const WINDOWS_SURFACES = "github.com/kieranajp/qrouton/internal/desktop.Windows.Surfaces";
@@ -127,14 +138,24 @@ export const AGENT_STAGES = Object.freeze({
   IMPLEMENT: "implement",
 });
 
-/** @typedef {"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"|"REVIEW"} ArtifactKind */
+/** @typedef {"AUDIT"|"PLAN"|"SPEC"|"RESEARCH"|"NOTE"|"EXPLAINER"|"REVIEW"} ArtifactKind */
 export const ARTIFACT_KINDS = Object.freeze({
+  AUDIT: "AUDIT",
   PLAN: "PLAN",
   SPEC: "SPEC",
   RESEARCH: "RESEARCH",
   NOTE: "NOTE",
   EXPLAINER: "EXPLAINER",
   REVIEW: "REVIEW",
+});
+
+/** @typedef {"Summary"|"Duplicated behaviour or facts"|"Dead or needlessly defensive code"|"Homegrown library or platform behaviour"|"Tests that pass or fail for the wrong reason"} AuditHeading */
+export const AUDIT_HEADINGS = Object.freeze({
+  SUMMARY: "Summary",
+  DUPLICATED: "Duplicated behaviour or facts",
+  DEAD: "Dead or needlessly defensive code",
+  HOMEGROWN: "Homegrown library or platform behaviour",
+  VOLKSWAGEN: "Tests that pass or fail for the wrong reason",
 });
 
 /** @typedef {"pending"|"posting"|"created"|"cancelled"|"expired"|"failed"|"unknown"} BugReportStatus */
@@ -163,6 +184,21 @@ export const DRAFT_FIELDS = Object.freeze({
   REPOS: "repos",
 });
 
+/** @typedef {"cli"|"env"|"missing"|"signed-out"} GitHubCredential */
+export const GITHUB_CREDENTIALS = Object.freeze({
+  CLI: "cli",
+  ENV: "env",
+  MISSING: "missing",
+  SIGNED_OUT: "signed-out",
+});
+
+/** @typedef {"valid"|"rejected"|"unreachable"} GitHubTokenCheck */
+export const GITHUB_TOKEN_CHECKS = Object.freeze({
+  VALID: "valid",
+  REJECTED: "rejected",
+  UNREACHABLE: "unreachable",
+});
+
 /** @typedef {"image"|"video"} MediaKind */
 export const MEDIA_KINDS = Object.freeze({
   IMAGE: "image",
@@ -181,6 +217,27 @@ export const OLLAMA_STATES = Object.freeze({
   MISSING: "missing",
   PULLING: "pulling",
   UNREACHABLE: "unreachable",
+  FAILED: "failed",
+});
+
+/** @typedef {"agent-running"|"destination-missing"|"cross-device"|"link-broken"|"conflict"|"outside-roots"|"unreadable"|"marker-unsafe"|"no-thoughts-link"} PlacementReason */
+export const PLACEMENT_REASONS = Object.freeze({
+  AGENT_RUNNING: "agent-running",
+  DESTINATION_MISSING: "destination-missing",
+  CROSS_DEVICE: "cross-device",
+  LINK_BROKEN: "link-broken",
+  CONFLICT: "conflict",
+  OUTSIDE_ROOTS: "outside-roots",
+  UNREADABLE: "unreadable",
+  MARKER_UNSAFE: "marker-unsafe",
+  NO_LINK: "no-thoughts-link",
+});
+
+/** @typedef {"moved"|"conflict"|"refused"|"failed"} PlacementResult */
+export const PLACEMENT_RESULTS = Object.freeze({
+  MOVED: "moved",
+  CONFLICT: "conflict",
+  REFUSED: "refused",
   FAILED: "failed",
 });
 
@@ -212,36 +269,25 @@ export const SESSION_MODES = Object.freeze({
   ASSISTANT: "assistant",
 });
 
-/** @typedef {"orgs"|"root"|"editor"|"launch"|"linear"|"star"|"bookmark"|"question"|"exclamation"|"uiScale"|"thoughts"|"reviewer"} SettingsField */
+/** @typedef {"orgs"|"root"|"editor"|"launch"|"stickers"|"uiScale"|"thoughts"|"reviewer"} SettingsField */
 export const SETTINGS_FIELDS = Object.freeze({
   ORGS: "orgs",
   ROOT: "root",
   EDITOR: "editor",
   LAUNCH: "launch",
-  LINEAR: "linear",
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
+  STICKERS: "stickers",
   UI_SCALE: "uiScale",
   THOUGHTS: "thoughts",
   REVIEWER: "reviewer",
 });
 
-/** @typedef {"star"|"bookmark"|"question"|"exclamation"} Sticker */
-export const STICKER_IDS = Object.freeze({
-  STAR: "star",
-  BOOKMARK: "bookmark",
-  QUESTION: "question",
-  EXCLAMATION: "exclamation",
-});
-
-/** @typedef {"running"|"succeeded"|"failed"|"waiting"} TabStatus */
+/** @typedef {"running"|"succeeded"|"failed"|"waiting"|"idle"} TabStatus */
 export const TAB_STATUSES = Object.freeze({
   RUNNING: "running",
   SUCCEEDED: "succeeded",
   FAILED: "failed",
   WAITING: "waiting",
+  IDLE: "idle",
 });
 
 /** @typedef {"in"|"out"|"reset"} UIScaleAction */
@@ -266,15 +312,60 @@ export const WINDOW_KINDS = Object.freeze({
   OVERVIEW: "overview",
 });
 
-export const AGENT_ROOT_ID = "root";
+export const GALLERY_LABEL = "GALLERY";
 
-/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, phase: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, stickerLabels: {star: string, bookmark: string, question: string, exclamation: string}, sessionSummary: {text: string, stage: string, at: string}}} */
+export const STICKER_DUPLICATE = "another sticker already uses this colour and symbol";
+
+export const SESSION_UNLOAD_LABEL = "Unload";
+
+export const SESSION_UNLOAD_FAILED = "Session could not be unloaded";
+
+export const SESSION_REORDER_FAILED = "Session could not be moved";
+
+export const SWITCHER_LABEL = "Switch session";
+
+export const SWITCHER_SEARCH = "Search sessions";
+
+export const SWITCHER_CLOSE = "Close session picker";
+
+export const SWITCHER_EMPTY = "No sessions available";
+
+export const SWITCHER_NO_MATCHES = "No matching sessions";
+
+export const SWITCHER_OPENING = "Opening…";
+
+export const SWITCHER_FAILED = "Session could not be opened. Try again.";
+
+export const SWITCHER_CURRENT = "Current";
+
+export const SWITCHER_RESULTS = "sessions";
+
+export const SWITCHER_HELP = "Arrow keys choose · Enter open · Esc close";
+
+export const INSPECT_QUERY = "inspect";
+
+export const ROOT_ENV_VAR = "QROUTON_ROOT";
+
+export const ORGS_ENV_VAR = "QROUTON_ORGS";
+
+export const DEFAULT_ROOT = "~/work";
+
+export const OLLAMA_URL = "http://127.0.0.1:11434";
+
+/** @typedef {"blue"|"sapphire"|"teal"|"green"|"yellow"|"orange"|"red"|"maroon"|"pink"|"mauve"|"lavender"|"grey"} StickerColour */
+/** @type {readonly StickerColour[]} */
+export const STICKER_COLOURS = Object.freeze(["blue", "sapphire", "teal", "green", "yellow", "orange", "red", "maroon", "pink", "mauve", "lavender", "grey"]);
+
+/** @typedef {"star"|"bookmark"|"question"|"exclamation"|"dot"|"square"|"diamond"|"triangle"|"heart"|"bolt"|"flag"|"check"|"cross"|"pause"} StickerSymbol */
+/** @type {readonly StickerSymbol[]} */
+export const STICKER_SYMBOLS = Object.freeze(["star", "bookmark", "question", "exclamation", "dot", "square", "diamond", "triangle", "heart", "bolt", "flag", "check", "cross", "pause"]);
+
+/** @type {{bugReportID: string, bugReportStatus: string, bugReportLabel: string, mode: string, identity: string, branch: string, slug: string, terminal: string, sessions: any[], documents: any[], repositoryDocuments: any[], repos: any[], activity: string, stages: {research: boolean, plan: boolean, implement: boolean}, stagesLive: {research: boolean, plan: boolean, implement: boolean}, root: string, picker: boolean, welcoming: boolean, placing: boolean, stickers: any[], sessionSummary: {text: string, stage: string, at: string}, pullRequests: {items: any[], signedOut: boolean}, sessionDigest: {text: string, at: string}}} */
 export const CHROME_DEFAULTS = {
   bugReportID: "",
   bugReportStatus: "",
   bugReportLabel: "",
   mode: "",
-  phase: "",
   identity: "",
   branch: "",
   slug: "",
@@ -297,15 +388,19 @@ export const CHROME_DEFAULTS = {
   root: "",
   picker: false,
   welcoming: false,
-  stickerLabels: {
-    star: "",
-    bookmark: "",
-    question: "",
-    exclamation: "",
-  },
+  placing: false,
+  stickers: [],
   sessionSummary: {
     text: "",
     stage: "",
+    at: "",
+  },
+  pullRequests: {
+    items: [],
+    signedOut: false,
+  },
+  sessionDigest: {
+    text: "",
     at: "",
   },
 };

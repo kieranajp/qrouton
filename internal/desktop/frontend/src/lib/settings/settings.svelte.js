@@ -1,7 +1,9 @@
-import { SETTINGS_FIELDS, UI_SCALE_EVENT } from "../bridge/generated.js";
-import { call, Events } from "../wails.js";
+import { onScale } from "../scale.svelte.js";
+import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { loadFailure, saveOutcome } from "./errors.js";
+import { toInput as stickersInput } from "./stickers.js";
+import { firstErroredTab } from "./tabs.js";
 import { addOrg, removeOrg } from "./orgs.js";
 import { addRow, fromView, removeRow, toInput } from "./thoughts.js";
 
@@ -14,18 +16,13 @@ export function settings(onClose) {
     root: "",
     editor: "",
     launch: "",
-    linear: "",
-    linearPath: "",
-    stickerLabels: {
-      star: "",
-      bookmark: "",
-      question: "",
-      exclamation: "",
-    },
+    stickers: /** @type {import("../session/stickers.js").Sticker[]} */ ([]),
     chime: true,
     uiScale: 100,
     uiScaleSteps: /** @type {number[]} */ ([]),
     thoughts: fromView(undefined),
+    pinned: { root: false, orgs: false },
+    runners: /** @type {{id: string, label: string}[]} */ ([]),
   });
   let reviewerRunners = $state(/** @type {import("./calls.js").ReviewerRunner[]} */ ([]));
   let runnerError = $state("");
@@ -34,9 +31,16 @@ export function settings(onClose) {
   let loadedReviewer = $state("");
   let loadedReviewerError = $state("");
   let discoveryGeneration = 0;
+  let tab = $state("general");
+  let linear = $state(/** @type {import("./calls.js").LinearView} */ ({ path: "", snippet: "", replaces: false }));
+  let installed = $state(false);
+  let installing = $state(false);
+  let actionError = $state("");
+  let github = $state(/** @type {{state: string, check: string, login: string, variable: string} | null} */ (null));
+  let checkingGitHub = $state(false);
   let loadedThoughts = $state({ ...fromView(undefined), derived: "" });
   let orgInput = $state("");
-  let fields = $state(/** @type {Partial<Record<import("../bridge/generated.js").SettingsField, string>>} */ ({}));
+  let fields = $state(/** @type {Record<string, string>} */ ({}));
   let status = $state("");
   let saving = $state(false);
   let restartRequired = $state(false);
@@ -55,20 +59,15 @@ export function settings(onClose) {
     form.reviewer = loaded?.reviewer ? { ...loaded.reviewer } : null;
     loadedReviewer = JSON.stringify(form.reviewer);
     loadedReviewerError = loaded?.reviewerError ?? "";
-    form.linear = loaded?.linear ?? "";
-    form.linearPath = loaded?.linearPath ?? "";
-    form.stickerLabels = {
-      star: loaded?.stickerLabels?.star ?? "",
-      bookmark: loaded?.stickerLabels?.bookmark ?? "",
-      question: loaded?.stickerLabels?.question ?? "",
-      exclamation: loaded?.stickerLabels?.exclamation ?? "",
-    };
+    linear = loaded?.linear ?? linear;
+    form.stickers = (loaded?.stickers ?? []).map((item) => ({ ...item }));
     form.chime = loaded?.chime ?? true;
     form.uiScale = loaded?.uiScale ?? 100;
     form.uiScaleSteps = loaded?.uiScaleSteps ?? [];
     form.thoughts = fromView(loaded?.thoughts);
+    form.pinned = { root: !!loaded?.pinned?.root, orgs: !!loaded?.pinned?.orgs };
+    form.runners = loaded?.runners ?? [];
     loadedThoughts = { ...fromView(loaded?.thoughts), derived: loaded?.thoughts?.derived ?? "" };
-    if (loaded?.linearError) fields = { ...fields, [SETTINGS_FIELDS.LINEAR]: loaded.linearError };
   });
 
   $effect(() => {
@@ -108,11 +107,7 @@ export function settings(onClose) {
     fields = { ...fields, reviewer: "" };
   }
 
-  $effect(() =>
-    Events.On(UI_SCALE_EVENT, (event) => {
-      if (typeof event.data === "number") form.uiScale = event.data;
-    }),
-  );
+  $effect(() => onScale((percent) => (form.uiScale = percent)));
 
   function add() {
     form.orgs = addOrg(form.orgs, orgInput);
@@ -143,8 +138,7 @@ export function settings(onClose) {
         root: form.root,
         editor: form.editor,
         launch: form.launch,
-        linear: form.linear,
-        stickerLabels: { ...form.stickerLabels },
+        stickers: stickersInput(form.stickers),
         chime: form.chime,
         uiScale: form.uiScale,
         thoughts: toInput(form.thoughts),
@@ -158,6 +152,7 @@ export function settings(onClose) {
     fields = outcome.fields;
     status = outcome.status;
     if (outcome.restartRequired !== undefined) restartRequired = outcome.restartRequired;
+    tab = firstErroredTab(fields) ?? tab;
     if (!err) {
       loadedLaunch = form.launch;
       loadedReviewer = JSON.stringify(form.reviewer);
@@ -168,13 +163,55 @@ export function settings(onClose) {
     if (outcome.close) onClose();
   }
 
+  async function checkGitHub() {
+    if (checkingGitHub) return;
+    checkingGitHub = true;
+    const answer = await call(go.gitHubStatus());
+    checkingGitHub = false;
+    if (answer.ok) github = answer.value ?? null;
+  }
+
+  function clearStickerErrors() {
+    fields = Object.fromEntries(Object.entries(fields).filter(([field]) => !field.startsWith("stickers.")));
+  }
+
   function cancel() {
     onClose();
   }
 
-  // Quitting ends the process; there is nothing here to await.
-  function quitAndRelaunch() {
-    go.quit();
+  // A relaunch that works ends this process, so only a failure answers.
+  async function relaunch() {
+    const answer = await call(go.relaunch());
+    if (!answer.ok) status = String(answer.error?.message ?? answer.error);
+  }
+
+  async function openConfig() {
+    actionError = "";
+    const answer = await call(go.openConfig());
+    if (!answer.ok) actionError = String(answer.error?.message ?? answer.error);
+  }
+
+  async function checkPlacement() {
+    actionError = "";
+    const answer = await call(go.checkPlacement());
+    if (!answer.ok) {
+      actionError = String(answer.error?.message ?? answer.error);
+      return;
+    }
+    onClose();
+  }
+
+  async function installLinear() {
+    if (installing) return;
+    installing = true;
+    const answer = await call(go.installLinear());
+    installing = false;
+    if (answer.ok) {
+      linear = answer.value ?? linear;
+      installed = true;
+    } else {
+      linear = { ...linear, error: String(answer.error?.message ?? answer.error) };
+    }
   }
 
   return {
@@ -191,6 +228,30 @@ export function settings(onClose) {
     },
     configureReviewer,
     selectReviewer,
+    get linear() {
+      return linear;
+    },
+    get installed() {
+      return installed;
+    },
+    get installing() {
+      return installing;
+    },
+    get actionError() {
+      return actionError;
+    },
+    get github() {
+      return github;
+    },
+    get checkingGitHub() {
+      return checkingGitHub;
+    },
+    get tab() {
+      return tab;
+    },
+    set tab(value) {
+      tab = value;
+    },
     get orgInput() {
       return orgInput;
     },
@@ -218,6 +279,11 @@ export function settings(onClose) {
     removeFolder,
     save,
     cancel,
-    quitAndRelaunch,
+    clearStickerErrors,
+    checkGitHub,
+    relaunch,
+    openConfig,
+    checkPlacement,
+    installLinear,
   };
 }

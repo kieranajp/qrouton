@@ -6,6 +6,7 @@
  * @property {string} path
  * @property {string} orgs
  * @property {boolean} [saved]
+ * @property {boolean} [missing]
  */
 
 /**
@@ -21,7 +22,7 @@ const same = (a = "", b = "") => a.trim().replace(/\/+$/, "") === b.trim().repla
  * @returns {ThoughtsForm} */
 export const fromView = (view) => ({
   default: view?.default ?? "",
-  roots: (view?.roots ?? []).map(({ id, path, orgs }) => ({ id, path, orgs, saved: true })),
+  roots: (view?.roots ?? []).map(({ id, path, orgs, missing }) => ({ id, path, orgs, saved: true, missing: !!missing })),
 });
 
 /** @param {ThoughtsForm} form */

@@ -1,13 +1,14 @@
 <script>
   import Button from "../core/Button.svelte";
   import Icon from "../core/Icon.svelte";
+  import { TAB_STATUSES } from "../bridge/generated.js";
   import { dismissible } from "../core/dismiss.js";
   import Menu from "./Menu.svelte";
   import Tab from "./Tab.svelte";
   import { uiScale } from "../scale.svelte.js";
   import { dominantStatus, dropIndex, fits, need, split, tabLabel } from "./tabs.js";
 
-  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus | "idle", closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
+  /** @type {{tabs?: {id?: string, label: string, badge?: string, artifact?: string, icon?: import("../bridge/generated.js").WindowIcon, status?: import("../bridge/generated.js").TabStatus, closable?: boolean, pinned?: boolean}[], selected?: number, onSelect?: (index: number) => void, onClose?: (index: number) => void, onReorder?: (from: number, to: number) => void, onNew?: () => void, newLabel?: string, [attribute: string]: any}} */
   let {
     tabs = [],
     selected = 0,
@@ -98,7 +99,7 @@
         size="sm"
         onclick={() => (listing = !listing)}
         aria-label="{drawn.hidden.length} more tabs{hiddenStatus ? `, ${hiddenStatus}` : ''}">
-        {#if hiddenStatus}<Icon name={hiddenStatus} />{/if}
+        {#if hiddenStatus && hiddenStatus !== TAB_STATUSES.IDLE}<Icon name={hiddenStatus} />{/if}
         {drawn.hidden.length}
         <Icon name="overflow" />
       </Button>

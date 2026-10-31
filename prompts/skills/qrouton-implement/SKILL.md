@@ -34,6 +34,8 @@ Require this of the lead's return:
 - how you checked it: the verification commands and their results;
 - what stays unresolved: the remaining risks, failures, or decisions.
 
+{{session-digest}}
+
 Do not repeat the lead's investigation or ingest its raw logs. Resolve blockers, communicate the concise result, and delegate follow-up verification if warranted. The lead runs mandatory automated verification and focused fixes, but no buried final model review.
 
 Review is a visible orchestrator-owned step inside Implement in **Research → Plan → Implement**. Say whether one phase or the whole plan completed and report any remaining phases. After a phase-only or partial completion, stop without a whole-plan review offer. Do not resume the lead until the user authorizes more work.

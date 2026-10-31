@@ -4,33 +4,31 @@
   import OptionCard from "../forms/OptionCard.svelte";
   import StepHeading from "../forms/StepHeading.svelte";
 
-  // qrouton wires MCP and hooks per runner, so the set is closed and so is the
-  // copy for it.
-  const ABOUT = {
-    claude: "Subagents, skills and the window tools. What guided mode is tuned against.",
-    codex: "Works in both modes. Needs depth ≥ 2 to nest subagents when guided.",
-    opencode: "Open-ended sessions. No subagents, so guided mode runs flat.",
-    agy: "Subagents and skills, but qrouton can't watch them: no activity tree, no chime.",
-  };
+  import claude from "../assets/agents/claude.png";
+  import codex from "../assets/agents/codex.svg";
+  import opencode from "../assets/agents/opencode.svg";
+  import agy from "../assets/agents/antigravity.svg";
+
+  const LOGOS = { claude, codex, opencode, agy };
 
   /** @type {{runners?: {id: string, label: string}[], runner?: string, mode?: import("../bridge/generated.js").SessionMode}} */
   let { runners = [], runner = $bindable(""), mode = $bindable(SESSION_MODES.RPI) } = $props();
 </script>
 
-<StepHeading title="Who runs it, and how?">
-  Only agents found on your PATH are listed. Both choices can be changed later.
-</StepHeading>
+<StepHeading title="Who runs it, and how?" />
 
 <div class="group">
   <CapsLabel>Agent</CapsLabel>
   {#each runners as option (option.id)}
     <OptionCard
       title={option.label}
-      description={ABOUT[option.id]}
-      meta={option.id}
       selected={option.id === runner}
       elevated
-      onclick={() => (runner = option.id)} />
+      onclick={() => (runner = option.id)}>
+      {#snippet trailing()}
+        <img class="logo" class:monochrome={option.id === "opencode"} src={LOGOS[option.id]} alt="" />
+      {/snippet}
+    </OptionCard>
   {/each}
 </div>
 
@@ -55,6 +53,17 @@
 </div>
 
 <style>
+  .logo {
+    width: calc(28px * var(--ui-scale));
+    height: calc(28px * var(--ui-scale));
+    object-fit: contain;
+    flex: none;
+  }
+
+  .monochrome {
+    filter: brightness(0) invert(1);
+  }
+
   .group {
     display: flex;
     flex-direction: column;

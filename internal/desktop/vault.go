@@ -9,13 +9,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
-// openVault answers nil only when there is nowhere to cache vectors.
 func openVault(cfg *config.Config) *vault.Set {
-	cacheDir, err := vault.DefaultCacheDir()
-	if err != nil {
-		return nil
-	}
-	set := vault.NewSet(vault.NewOllama(), cacheDir)
+	set := vault.NewSet(vault.NewOllama(), filepath.Join(config.CacheDir(), vault.CacheDirName))
 	_ = set.Configure(thoughtsProfiles(cfg))
 	return set
 }
@@ -42,7 +37,7 @@ func reconfigureVault(set *vault.Set) func(*config.Config) error {
 // narrowest configured root decides, so an unindexed folder is refused rather
 // than read through a wider one.
 func sessionThoughts(set *vault.Set, roots []config.ThoughtsRoot, sessionRoot string) (*vault.Service, error) {
-	real, err := filepath.EvalSymlinks(filepath.Join(sessionRoot, sessionpaths.ThoughtsDirName))
+	real, err := filepath.EvalSymlinks(sessionpaths.ThoughtsLink(sessionRoot))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNoThoughtsRoot, err)
 	}

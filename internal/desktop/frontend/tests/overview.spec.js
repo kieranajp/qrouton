@@ -98,6 +98,76 @@ test("only the live lead opens; finished leads keep their document and count", a
   await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/research/R3-retry.md"]);
 });
 
+test("a finished lead's chevron opens and closes its subagents", async ({ page }) => {
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const research = page.locator('[data-agent-id="research"]');
+    const researcher = page.getByRole("button", { name: /^Codebase Researcher/ });
+    await research.locator(".disclosure").click();
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "true");
+    await expect(researcher).toBeVisible();
+    await research.locator(".disclosure").click();
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
+    await expect(researcher).toHaveCount(0);
+  }
+});
+
+test("a lead with no subagents has no chevron and claims no expansion", async ({ page }) => {
+  await open(page);
+  const plan = page.locator('[data-agent-id="plan"]');
+  await expect(plan.locator(".disclosure")).toHaveCount(0);
+  await expect(lead(page, "Plan")).not.toHaveAttribute("aria-expanded");
+  const [planTime, researchTime] = await Promise.all([
+    box(plan.locator(".facts")),
+    box(page.locator('[data-agent-id="research"] .facts')),
+  ]);
+  expect(Math.abs(planTime.right - researchTime.right)).toBeLessThanOrEqual(1);
+});
+
+test("a click on a lead's badge lands on the badge and opens its document", async ({ page }) => {
+  for (const query of ["", "?narrow"]) {
+    await open(page, query);
+    const badge = page.getByRole("button", { name: "Open R3-retry.md" });
+    const at = await box(badge);
+    const x = at.left + at.width / 2;
+    const y = at.top + at.height / 2;
+    expect(await page.evaluate(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".document"), [x, y])).toBe(true);
+    await page.mouse.click(x, y);
+    await expect.poll(() => page.evaluate(() => window.opened)).toEqual(["thoughts/shared/research/R3-retry.md"]);
+    await expect(lead(page, "Research")).toHaveAttribute("aria-expanded", "false");
+  }
+});
+
+test("same-type direct children keep their own assigned names and fallback labels", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator('[data-agent-id="codex-direct-a"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/review_security · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-b"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/a_very_long_assigned_name_for_security_research_that_should_truncate_in_the_row · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-unnamed"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-finished"] .toggle')).toHaveAttribute(
+    "aria-label", "Codebase Researcher · /root/finished_research · done",
+  );
+  await expect(page.locator('[data-agent-id="codex-direct-a"] .toggle .task-name')).toHaveAttribute("title", "/root/review_security");
+});
+
+test("nested names stay with their UUIDs, including finished rows", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator('[data-agent-id="codex-nested-named"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · /root/review_security/child_work/check_authentication_and_authorization_for_every_privileged_request_and_token_refresh_case · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-nested-unnamed"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · working",
+  );
+  await expect(page.locator('[data-agent-id="codex-nested-finished"] .head')).toHaveAttribute(
+    "aria-label", "Code Reviewer · /root/review_security/child_work/write_tests · done",
+  );
+});
+
 test("a lead's square fills once done and rings while live", async ({ page }) => {
   await open(page);
   const square = (name) =>
@@ -227,6 +297,44 @@ test("a provider that reports only the root shows its note and says working", as
   await expect(page.locator(".leads")).toHaveCount(0);
 });
 
+test("Codex has no coverage sentence", async ({ page }) => {
+  await open(page, "?tree=codex");
+  await expect(page.locator(".coverage")).toHaveCount(0);
+  await expect(page.locator("body")).not.toContainText("Codex CLI reports its agents starting and stopping");
+});
+
+test("narrow long names truncate while state and disclosure controls remain usable", async ({ page }) => {
+  for (const query of ["?tree=codex", "?tree=codex&narrow"]) {
+    await open(page, query);
+    const direct = page.locator('[data-agent-id="codex-direct-b"]');
+    const directName = direct.locator(".task-name");
+    await expect(directName).toBeVisible();
+    expect(await directName.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    const [nameBox, factsBox] = await Promise.all([box(directName), box(direct.locator(".facts"))]);
+    expect(nameBox.right).toBeLessThanOrEqual(factsBox.left);
+    await expect(direct.locator(".square")).toBeVisible();
+    await expect(direct.locator(".facts")).toBeVisible();
+    await expect(direct.locator(".toggle")).not.toHaveAttribute("aria-expanded");
+    await expect(direct.locator(".disclosure")).toHaveCount(0);
+
+    const nested = page.locator('[data-agent-id="codex-nested-named"]');
+    const nestedName = nested.locator(".task-name");
+    expect(await nestedName.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+    const [nestedNameBox, timeBox] = await Promise.all([box(nestedName), box(nested.locator(".time"))]);
+    expect(nestedNameBox.right).toBeLessThanOrEqual(timeBox.left);
+    await expect(nested.locator(".time")).toBeVisible();
+    await expect(nested.locator(".head")).toHaveAttribute("aria-expanded", "false");
+    await nested.locator(".head").click();
+    await expect(nested.locator(".head")).toHaveAttribute("aria-expanded", "true");
+
+    const overflow = await page.evaluate(() => ({
+      body: document.body.scrollWidth > document.body.clientWidth,
+      document: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    }));
+    expect(overflow).toEqual({ body: false, document: false });
+  }
+});
+
 test("a pushed tree replaces the drawn one", async ({ page }) => {
   await open(page);
   await expect(lead(page, "Implementation")).toBeVisible();
@@ -242,4 +350,54 @@ test("reduced motion keeps the live lead's ring steady", async ({ page }) => {
     .locator(".square")
     .evaluate((el) => getComputedStyle(el).animationName);
   expect(animated).toBe("none");
+});
+
+test("pull requests sit between the summary and the orchestrator, in arrival order", async ({ page }) => {
+  await open(page, "?pulls=rows");
+  await expect(page.locator(".tier .label")).toHaveText(["Pull requests", "Orchestrator", "Leads", "This session"]);
+  expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("pulls"))).toBe(true);
+  await expect(page.locator(".pulls .title")).toHaveText(["Swap PaymentIntent for the v2 client", "Partial-capture refunds"]);
+  await expect(page.locator(".pulls .number")).toHaveText(["#41", "#7"]);
+});
+
+test("clicking a pull request opens it on GitHub", async ({ page }) => {
+  await open(page, "?pulls=rows");
+  await page.getByRole("link", { name: /Partial-capture refunds/ }).click();
+  await expect.poll(() => page.evaluate(() => window.openedURL)).toBe("https://github.com/acme/payments/pull/7");
+  expect(page.url()).toContain("/tests/overview.html");
+});
+
+test("a session with no pull requests has no Pull requests tier", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".pulls")).toHaveCount(0);
+});
+
+test("without a working GitHub credential the tier says so in one faint line", async ({ page }) => {
+  await open(page, "?pulls=signedout");
+  await expect(page.locator(".pulls .note")).toHaveText("GitHub is not signed in");
+  await expect(page.locator(".pulls .pull")).toHaveCount(0);
+  const ink = (selector) => page.locator(selector).evaluate((el) => getComputedStyle(el).color);
+  expect(await ink(".pulls .note")).toBe(await ink(".summary .meta"));
+});
+
+test("the digest sits under the pull requests and above the orchestrator", async ({ page }) => {
+  await open(page, "?pulls=rows&digest=lines");
+  await expect(page.locator(".tier .label")).toHaveText(["Pull requests", "So far", "Orchestrator", "Leads", "This session"]);
+  expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("pulls"))).toBe(true);
+  expect(await page.locator(".pulls").evaluate((el) => el.nextElementSibling?.classList.contains("digest"))).toBe(true);
+  expect(await page.locator(".digest").evaluate((el) => el.nextElementSibling?.classList.contains("orchestrator"))).toBe(true);
+});
+
+test("the digest keeps its line breaks and says how old it is", async ({ page }) => {
+  await open(page, "?digest=lines");
+  const text = page.locator(".digest .text");
+  await expect(text).toHaveText(/^Research answered how refunds settle\.\nPlan written in two phases\.\nWaiting on the user to approve it\.$/);
+  const lineHeight = parseFloat(await text.evaluate((el) => getComputedStyle(el).lineHeight));
+  expect((await box(text)).height).toBeGreaterThanOrEqual(lineHeight * 3 - 1);
+  await expect(page.locator(".digest .meta")).toHaveText(/^\d+m ago$/);
+});
+
+test("a session with no digest has no So far tier", async ({ page }) => {
+  await open(page);
+  await expect(page.locator(".digest")).toHaveCount(0);
 });

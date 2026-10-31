@@ -1,10 +1,14 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
+	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -12,26 +16,49 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/randomid"
 )
 
-// SettingsView carries the editable config and Linear document on the wire.
+// SettingsView carries the editable config, and what Install would write for Linear.
 type SettingsView struct {
-	Reviewer      *config.Reviewer     `json:"reviewer"`
-	ReviewerError string               `json:"reviewerError,omitempty"`
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	LinearPath    string               `json:"linearPath"`
-	LinearError   string               `json:"linearError,omitempty"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
-	Chime         bool                 `json:"chime"`
-	UIScale       int                  `json:"uiScale"`
-	UIScaleSteps  []int                `json:"uiScaleSteps"`
-	Thoughts      ThoughtsView         `json:"thoughts"`
+	Reviewer      *config.Reviewer `json:"reviewer"`
+	ReviewerError string           `json:"reviewerError,omitempty"`
+	Orgs          []string         `json:"orgs"`
+	Root          string           `json:"root"`
+	Editor        string           `json:"editor"`
+	Launch        string           `json:"launch"`
+	Linear        LinearView       `json:"linear"`
+	Stickers      []config.Sticker `json:"stickers"`
+	Chime         bool             `json:"chime"`
+	UIScale       int              `json:"uiScale"`
+	UIScaleSteps  []int            `json:"uiScaleSteps"`
+	Thoughts      ThoughtsView     `json:"thoughts"`
+	Pinned        SettingsPinned   `json:"pinned"`
+	Runners       []RunnerLegend   `json:"runners"`
+}
+
+// LinearView is the coding-tools.json entry Install writes. Replaces means the
+// file already holds a different one; Error says why neither could be read.
+type LinearView struct {
+	Path     string `json:"path"`
+	Snippet  string `json:"snippet"`
+	Replaces bool   `json:"replaces"`
+	Error    string `json:"error,omitempty"`
+}
+
+// RunnerLegend names a runner id the launch overrides may key on.
+type RunnerLegend struct {
+	ID    string `json:"id"`
+	Label string `json:"label"`
+}
+
+// SettingsPinned names the fields an environment variable overrides for this run.
+type SettingsPinned struct {
+	Root bool `json:"root"`
+	Orgs bool `json:"orgs"`
 }
 
 type ThoughtsView struct {
@@ -45,28 +72,39 @@ type ThoughtsInput struct {
 	Roots   []ThoughtsRow `json:"roots"`
 }
 
-// ThoughtsRow carries a shared folder's orgs as the comma-separated text the panel edits.
+// ThoughtsRow carries a shared folder's orgs as the comma-separated text the
+// panel edits. Missing reports on Load only, and Save ignores it.
 type ThoughtsRow struct {
-	ID   string `json:"id"`
-	Path string `json:"path"`
-	Orgs string `json:"orgs"`
+	ID      string `json:"id"`
+	Path    string `json:"path"`
+	Orgs    string `json:"orgs"`
+	Missing bool   `json:"missing,omitempty"`
+}
+
+// GitHubStatus is the credential the app would use and what GitHub said about
+// it. Check is empty when there is no token to ask about.
+type GitHubStatus struct {
+	State    github.Credential `json:"state"`
+	Check    github.TokenCheck `json:"check"`
+	Login    string            `json:"login"`
+	Variable string            `json:"variable"`
 }
 
 type SettingsInput struct {
-	Reviewer      *config.Reviewer     `json:"reviewer"`
-	Orgs          []string             `json:"orgs"`
-	Root          string               `json:"root"`
-	Editor        string               `json:"editor"`
-	Launch        string               `json:"launch"`
-	Linear        string               `json:"linear"`
-	StickerLabels config.StickerLabels `json:"stickerLabels"`
-	Chime         bool                 `json:"chime"`
-	UIScale       int                  `json:"uiScale"`
-	Thoughts      ThoughtsInput        `json:"thoughts"`
+	Reviewer *config.Reviewer `json:"reviewer"`
+	Orgs     []string         `json:"orgs"`
+	Root     string           `json:"root"`
+	Editor   string           `json:"editor"`
+	Launch   string           `json:"launch"`
+	Stickers []config.Sticker `json:"stickers"`
+	Chime    bool             `json:"chime"`
+	UIScale  int              `json:"uiScale"`
+	Thoughts ThoughtsInput    `json:"thoughts"`
 }
 
-// SaveResult reports whether the process needs to end for a changed Root to
-// take effect. Nothing else Settings saves needs a restart.
+// SaveResult reports whether the process needs to end for a changed Root or
+// changed thoughts folders to take effect. Nothing else Settings saves needs a
+// restart.
 type SaveResult struct {
 	RestartRequired bool `json:"restartRequired"`
 }
@@ -77,17 +115,30 @@ type Settings struct {
 	validateEditor   func([]string) error
 	validateLaunch   func(map[string][]string) error
 	validateReviewer func(*config.Reviewer, map[string][]string) error
-	runners          func(map[string][]string) ([]assembly.Runner, error)
 	quit             func()
 	wakeChrome       func()
 	reconfigure      func(*config.Config) error
+	reviewerRunners  func(map[string][]string) ([]assembly.Runner, error)
+	runners          func() ([]assembly.Runner, error)
+	relaunch         func() error
+	pinnedRoot       string
+	openText         func(path string) []string
+	checkToken       func(ctx context.Context, token string) (github.TokenCheck, string)
 	linear           lineartools.Tools
 }
 
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
-	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, quit, wakeChrome func(),
-	reconfigure func(*config.Config) error) *Settings {
+	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, relaunch func() error,
+	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
+	openText func(path string) []string) *Settings {
 	return &Settings{
+		pinnedRoot: pinnedFileRoot(),
+		relaunch:   relaunch,
+		openText:   openText,
+		runners:    runners,
+		checkToken: func(ctx context.Context, token string) (github.TokenCheck, string) {
+			return github.CheckToken(ctx, http.DefaultClient, token)
+		},
 		reconfigure:    reconfigure,
 		cfg:            cfg,
 		emit:           emit,
@@ -99,33 +150,42 @@ func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string)
 	}
 }
 
+// Load shows root, orgs and thoughts as config.json holds them, so a Save
+// never writes back an environment override or an expanded ~.
 func (s *Settings) Load() SettingsView {
 	cfg := s.cfg.Snapshot()
+	file, err := config.ReadFile()
+	if err != nil {
+		file = cfg
+	}
+	root := file.Root
+	if strings.TrimSpace(root) == "" {
+		root = config.DefaultRoot()
+	}
 	launch := ""
 	if len(cfg.Launch) > 0 {
 		if b, err := json.MarshalIndent(cfg.Launch, "", "  "); err == nil {
 			launch = string(b)
 		}
 	}
-	linear, linearErr := s.linear.Load()
 	var reviewerErr error
 	if cfg.Reviewer != nil && s.validateReviewer != nil {
 		reviewerErr = s.validateReviewer(cfg.Reviewer, cfg.Launch)
 	}
 	return SettingsView{
 		Reviewer: cfg.Reviewer, ReviewerError: errorText(reviewerErr),
-		Orgs:          cfg.Orgs,
-		Root:          cfg.Root,
-		Editor:        editorCommand(cfg.Editor),
-		Launch:        launch,
-		Linear:        linear,
-		LinearPath:    lineartools.ConfigPath,
-		LinearError:   errorText(linearErr),
-		StickerLabels: cfg.EffectiveStickerLabels(),
-		Chime:         !cfg.Quiet,
-		UIScale:       cfg.EffectiveUIScale(),
-		UIScaleSteps:  config.UIScaleSteps(),
-		Thoughts:      thoughtsView(cfg),
+		Orgs:         file.Orgs,
+		Root:         root,
+		Editor:       editorCommand(cfg.Editor),
+		Launch:       launch,
+		Linear:       s.linearView(),
+		Stickers:     cfg.EffectiveStickers(),
+		Chime:        !cfg.Quiet,
+		UIScale:      cfg.EffectiveUIScale(),
+		UIScaleSteps: config.UIScaleSteps(),
+		Thoughts:     thoughtsView(file.Thoughts, root),
+		Pinned:       SettingsPinned{Root: config.RootOverridden(), Orgs: config.OrgsOverridden()},
+		Runners:      s.runnerLegend(),
 	}
 }
 
@@ -136,10 +196,10 @@ func (s *Settings) Runners(launch string) ([]assembly.Runner, error) {
 			return nil, fmt.Errorf(settingsWrappedFormat, settingsFieldLaunch, err)
 		}
 	}
-	if s.runners == nil {
+	if s.reviewerRunners == nil {
 		return nil, ErrNoAgentCommand
 	}
-	all, err := s.runners(overrides)
+	all, err := s.reviewerRunners(overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -154,27 +214,50 @@ func reviewerFromInput(in *config.Reviewer) *config.Reviewer {
 		Model: strings.TrimSpace(in.Model), Reasoning: strings.TrimSpace(in.Reasoning)}
 }
 
-func thoughtsView(cfg *config.Config) ThoughtsView {
+func (s *Settings) runnerLegend() []RunnerLegend {
+	legend := []RunnerLegend{}
+	runners, err := s.runners()
+	if err != nil {
+		return legend
+	}
+	for _, r := range runners {
+		legend = append(legend, RunnerLegend{ID: r.ID, Label: r.Label})
+	}
+	return legend
+}
+
+func thoughtsView(thoughts config.Thoughts, root string) ThoughtsView {
 	view := ThoughtsView{
-		Default: cfg.Thoughts.Default,
-		Derived: filepath.Join(cfg.Root, sessionpaths.ThoughtsDirName),
+		Default: thoughts.Default,
+		Derived: config.DefaultThoughtsRoot(root),
 		Roots:   []ThoughtsRow{},
 	}
-	for _, r := range cfg.Thoughts.Roots {
-		view.Roots = append(view.Roots, ThoughtsRow{ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin)})
+	for _, r := range thoughts.Roots {
+		_, err := os.Stat(config.ExpandHome(r.Path))
+		view.Roots = append(view.Roots, ThoughtsRow{
+			ID: r.ID, Path: r.Path, Orgs: strings.Join(r.Orgs, thoughtsOrgJoin), Missing: errors.Is(err, fs.ErrNotExist),
+		})
 	}
 	return view
 }
 
-// The live config routes new sessions from these paths, so ~ is expanded here.
 func thoughtsFromInput(in ThoughtsInput) config.Thoughts {
-	out := config.Thoughts{Default: config.ExpandHome(strings.TrimSpace(in.Default))}
+	out := config.Thoughts{Default: strings.TrimSpace(in.Default)}
 	for _, row := range in.Roots {
 		out.Roots = append(out.Roots, config.ThoughtsRoot{
 			ID:   strings.TrimSpace(row.ID),
-			Path: config.ExpandHome(strings.TrimSpace(row.Path)),
-			Orgs: dedupOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
+			Path: strings.TrimSpace(row.Path),
+			Orgs: config.NormaliseOrgs(strings.Split(row.Orgs, thoughtsOrgSplit)),
 		})
+	}
+	return out
+}
+
+// expandThoughts resolves ~ for the live config, which routes new sessions by these paths.
+func expandThoughts(in config.Thoughts) config.Thoughts {
+	out := config.Thoughts{Default: config.ExpandHome(in.Default)}
+	for _, r := range in.Roots {
+		out.Roots = append(out.Roots, config.ThoughtsRoot{ID: r.ID, Path: config.ExpandHome(r.Path), Orgs: slices.Clone(r.Orgs)})
 	}
 	return out
 }
@@ -184,14 +267,21 @@ func editorCommand(argv []string) string {
 	for i, word := range words {
 		parsed, err := shlex.Split(word)
 		if err != nil || len(parsed) != 1 || parsed[0] != word {
-			words[i] = "'" + strings.ReplaceAll(word, "'", `'\''`) + "'"
+			words[i] = launch.ShellQuote(word)
 		}
 	}
 	return strings.Join(words, " ")
 }
 
 func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
-	orgs, root, expandedRoot, err := validateOwnersAndRoot(in.Orgs, in.Root)
+	var orgs []string
+	var root string
+	var err error
+	if config.OrgsOverridden() && len(config.NormaliseOrgs(in.Orgs)) == 0 {
+		root, _, err = validateRoot(in.Root)
+	} else {
+		orgs, root, _, err = validateOwnersAndRoot(in.Orgs, in.Root)
+	}
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -217,7 +307,7 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 			}
 		}
 	}
-	stickerLabels, err := validateStickerLabels(in.StickerLabels)
+	stickers, err := validateStickers(in.Stickers)
 	if err != nil {
 		return SaveResult{}, err
 	}
@@ -226,10 +316,6 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 		return SaveResult{}, err
 	}
 
-	linear, err := lineartools.Validate(in.Linear)
-	if err != nil {
-		return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
-	}
 	thoughts := thoughtsFromInput(in.Thoughts)
 	candidate := s.cfg.Snapshot()
 	candidate.Root, candidate.Thoughts = root, thoughts
@@ -238,31 +324,35 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	}
 	result := SaveResult{}
 	reviewer := reviewerFromInput(in.Reviewer)
-	err = saveConfig(s.cfg, func(next *config.Config) error {
-		if reviewer != nil && (next.Reviewer == nil || *next.Reviewer != *reviewer ||
-			!slices.Equal(next.Launch[reviewer.Harness], launch[reviewer.Harness])) && s.validateReviewer != nil {
-			if err := s.validateReviewer(reviewer, launch); err != nil {
-				return fmt.Errorf(settingsWrappedFormat, settingsFieldReviewer, err)
-			}
+	current := s.cfg.Snapshot()
+	if reviewer != nil && (current.Reviewer == nil || *current.Reviewer != *reviewer ||
+		!slices.Equal(current.Launch[reviewer.Harness], launch[reviewer.Harness])) && s.validateReviewer != nil {
+		if err := s.validateReviewer(reviewer, launch); err != nil {
+			return SaveResult{}, fmt.Errorf(settingsWrappedFormat, settingsFieldReviewer, err)
 		}
-		next.Reviewer = reviewer
-		next.Orgs, next.Root, next.Editor, next.Launch = orgs, root, editor, launch
-		next.StickerLabels = &stickerLabels
-		next.Quiet = !in.Chime
-		next.UIScale = storedUIScale(uiScale)
-		next.Thoughts = thoughts
-		return nil
-	}, func() error {
-		if err := s.linear.Save(linear); err != nil {
-			return fmt.Errorf(settingsWrappedFormat, settingsFieldLinear, err)
+	}
+	err = saveConfig(s.cfg, s.pinnedRoot, func(next, live *config.Config) {
+		if next.Root != "" || root != config.DefaultRoot() {
+			next.Root = root
 		}
-		return nil
-	}, s.reconfigure, func(current, live *config.Config) {
-		changed := !slices.Equal(current.Orgs, orgs)
-		labelsChanged := current.EffectiveStickerLabels() != stickerLabels
-		result.RestartRequired = expandedRoot != filepath.Clean(current.Root)
+		next.Orgs, next.Thoughts = orgs, thoughts
+		if !config.OrgsOverridden() {
+			live.Orgs = orgs
+		}
+		live.Thoughts = expandThoughts(thoughts)
+		for _, c := range []*config.Config{next, live} {
+			c.Reviewer = reviewer
+			c.Editor, c.Launch = editor, launch
+			c.Stickers, c.StickerLabels = &stickers, nil
+			c.Quiet = !in.Chime
+			c.UIScale = storedUIScale(uiScale)
+		}
+	}, s.reconfigure, func(current, live *config.Config, restart bool) {
+		changed := !slices.Equal(current.Orgs, live.Orgs)
+		labelsChanged := !slices.Equal(current.EffectiveStickers(), stickers)
+		result.RestartRequired = restart
 		if changed {
-			s.emit(orgsChangedEvent, orgs)
+			s.emit(orgsChangedEvent, live.Orgs)
 		}
 		if labelsChanged && s.wakeChrome != nil {
 			s.wakeChrome()
@@ -277,25 +367,31 @@ func (s *Settings) Save(in SettingsInput) (SaveResult, error) {
 	return result, nil
 }
 
-func validateStickerLabels(labels config.StickerLabels) (config.StickerLabels, error) {
-	labels.Star = strings.TrimSpace(labels.Star)
-	labels.Bookmark = strings.TrimSpace(labels.Bookmark)
-	labels.Question = strings.TrimSpace(labels.Question)
-	labels.Exclamation = strings.TrimSpace(labels.Exclamation)
-	for _, field := range []struct {
-		name  string
-		value string
-	}{
-		{name: settingsFieldStar, value: labels.Star},
-		{name: settingsFieldBookmark, value: labels.Bookmark},
-		{name: settingsFieldQuestion, value: labels.Question},
-		{name: settingsFieldExclamation, value: labels.Exclamation},
-	} {
-		if field.value == "" {
-			return config.StickerLabels{}, fmt.Errorf(settingsRefusalFormat, field.name, settingsEmpty)
+// validateStickers trims labels and gives each new sticker an id. Ids are
+// random so a removed sticker's id never comes back onto a session.
+func validateStickers(in []config.Sticker) ([]config.Sticker, error) {
+	out := make([]config.Sticker, 0, len(in))
+	seen := map[[2]string]bool{}
+	for i, s := range in {
+		field := fmt.Sprintf(stickerFieldFormat, settingsFieldStickers, i)
+		s.Label = strings.TrimSpace(s.Label)
+		if s.Label == "" {
+			return nil, fmt.Errorf(settingsRefusalFormat, field, settingsEmpty)
 		}
+		if err := config.CheckSticker(s); err != nil {
+			return nil, fmt.Errorf(settingsWrappedFormat, field, err)
+		}
+		pair := [2]string{s.Colour, s.Symbol}
+		if seen[pair] {
+			return nil, fmt.Errorf(settingsWrappedFormat, field, ErrStickerDuplicate)
+		}
+		seen[pair] = true
+		if s.ID == "" {
+			s.ID = randomid.Hex(stickerIDBytes)
+		}
+		out = append(out, s)
 	}
-	return labels, nil
+	return out, nil
 }
 
 // validateUIScale reads an unset scale as the default.
@@ -355,54 +451,140 @@ func (s *Settings) AdjustUIScale(action string) (int, error) {
 	return scale, nil
 }
 
-// Quit tears down every session supervisor and PTY before exiting.
-func (s *Settings) Quit() { s.quit() }
+// GitHubStatus checks the credential each time it is asked, so Check again sees
+// a gh install or sign-in that happened since.
+func (s *Settings) GitHubStatus() GitHubStatus {
+	ctx, cancel := context.WithTimeout(context.Background(), githubCheckTimeout)
+	defer cancel()
+	state, token := github.ResolveCredential(ctx)
+	status := GitHubStatus{State: state, Variable: github.TokenEnvVar()}
+	if token == "" {
+		return status
+	}
+	status.Check, status.Login = s.checkToken(ctx, token)
+	return status
+}
 
-// saveConfig persists Root but keeps the live boot value used by the rail
-// scanner. A changed Root holds back the thoughts too, since the live default
-// still derives from the old one.
-func saveConfig(cfg *config.Config, mutate func(*config.Config) error, persist func() error,
-	reconfigure func(*config.Config) error, publish func(current, live *config.Config)) error {
-	return cfg.Transact(func(snapshot *config.Config) error {
-		next := snapshot.Snapshot()
-		if err := mutate(next); err != nil {
+// Relaunch starts a successor that reads config.json afresh, on no session, then
+// tears this workbench down. Holding the config writer keeps a save from
+// landing between the successor's read and this process's exit.
+func (s *Settings) Relaunch() error {
+	if s.relaunch == nil || s.quit == nil {
+		return ErrNoRelaunch
+	}
+	if err := s.cfg.Transact(func(*config.Config) error { return s.relaunch() }); err != nil {
+		return err
+	}
+	s.quit()
+	return nil
+}
+
+// OpenConfig writes config.json first when it does not exist yet, so the editor
+// has a file to open.
+func (s *Settings) OpenConfig() error {
+	argv := s.openText(config.Path())
+	if len(argv) == 0 {
+		return ErrNoOpenTextCommand
+	}
+	if _, err := os.Stat(config.Path()); errors.Is(err, fs.ErrNotExist) {
+		if err := s.cfg.Transact(func(*config.Config) error {
+			onDisk, err := config.ReadFile()
+			if err != nil {
+				return err
+			}
+			return config.Save(onDisk)
+		}); err != nil {
 			return err
 		}
-		live := next.Snapshot()
-		live.Root = snapshot.Root
-		if filepath.Clean(config.ExpandHome(next.Root)) != filepath.Clean(snapshot.Root) {
-			live.Thoughts = snapshot.Thoughts
+	}
+	if out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
+		return fmt.Errorf("%w: %s", ErrOpenConfig, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+// InstallLinear writes qrouton's openIssue entry at once; Cancel does not undo it.
+func (s *Settings) InstallLinear() (LinearView, error) {
+	if err := s.linear.Install(); err != nil {
+		return s.linearView(), err
+	}
+	return s.linearView(), nil
+}
+
+func (s *Settings) linearView() LinearView {
+	view := LinearView{Path: lineartools.ConfigPath}
+	snippet, err := s.linear.Snippet()
+	if err != nil {
+		view.Error = err.Error()
+		return view
+	}
+	view.Snippet = snippet
+	replaces, err := s.linear.Replaces()
+	if err != nil {
+		view.Error = err.Error()
+	}
+	view.Replaces = replaces
+	return view
+}
+
+// saveConfig writes next over config.json as written and publishes live over
+// the running config. Live keeps the boot Root used by the rail scanner, and a
+// Root that needs a restart holds back the thoughts too, since the live default
+// still derives from the old one.
+func saveConfig(cfg *config.Config, pinnedRoot string, mutate func(next, live *config.Config),
+	reconfigure func(*config.Config) error, publish func(current, live *config.Config, restart bool)) error {
+	return cfg.Transact(func(snapshot *config.Config) error {
+		next, live, restart, err := stageConfig(snapshot, pinnedRoot, true, mutate)
+		if err != nil {
+			return err
 		}
-		if err := config.CheckThoughts(live); err != nil {
-			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+		if err := checkLiveThoughts(live); err != nil {
+			return err
 		}
-		if err := commitLive(cfg, snapshot, next, live, reconfigure, persist); err != nil {
+		if err := commitLive(cfg, snapshot, next, live, reconfigure); err != nil {
 			return err
 		}
 		if publish != nil {
-			publish(snapshot, live)
+			publish(snapshot, live, restart)
 		}
 		return nil
 	})
 }
 
+func checkLiveThoughts(live *config.Config) error {
+	if err := config.CheckThoughts(live); err != nil {
+		return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
+	}
+	return nil
+}
+
+// stageConfig builds the file copy from config.json as written and the live copy
+// from the running config. Until a restart, live keeps the root and thoughts it booted with.
+func stageConfig(snapshot *config.Config, pinnedRoot string, holdThoughts bool, mutate func(next, live *config.Config)) (next, live *config.Config, restart bool, err error) {
+	onDisk, err := config.ReadFile()
+	if err != nil {
+		return nil, nil, false, err
+	}
+	next, live = onDisk.Snapshot(), snapshot.Snapshot()
+	mutate(next, live)
+	live.Root = snapshot.Root
+	restart = restartRequired(snapshot, pinnedRoot, next) || (holdThoughts && thoughtsRoutingChanged(snapshot, next))
+	if restart {
+		live.Thoughts = snapshot.Thoughts
+	}
+	return next, live, restart, nil
+}
+
 // commitLive reindexes before it writes or publishes anything, so routing and
 // search never disagree. A failed write puts the old index back.
-func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error, persist func() error) error {
+func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error) error {
 	reindex := reconfigure != nil && !slices.Equal(thoughtsProfiles(current), thoughtsProfiles(live))
 	if reindex {
 		if err := reconfigure(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
 		}
 	}
-	var err error
-	if persist != nil {
-		err = persist()
-	}
-	if err == nil {
-		err = config.Save(next)
-	}
-	if err != nil {
+	if err := config.Save(next); err != nil {
 		if reindex {
 			err = errors.Join(err, reconfigure(current))
 		}
@@ -412,9 +594,45 @@ func commitLive(cfg, current, next, live *config.Config, reconfigure func(*confi
 	return nil
 }
 
+// restartRequired compares the saved root with the one this process runs on.
+// While QROUTON_ROOT pins the live root, that is the file's root at boot.
+func restartRequired(live *config.Config, pinnedRoot string, next *config.Config) bool {
+	saved := resolvedRoot(next.Root)
+	if pinnedRoot != "" {
+		return saved != pinnedRoot
+	}
+	return saved != filepath.Clean(live.Root)
+}
+
+// thoughtsRoutingChanged compares the saved thoughts folders with the ones the
+// running process routes by. Routing changes apply at the next launch.
+func thoughtsRoutingChanged(live, next *config.Config) bool {
+	saved := next.Snapshot()
+	saved.Root = live.Root
+	return saved.ThoughtsFingerprint() != live.ThoughtsFingerprint()
+}
+
+func pinnedFileRoot() string {
+	if !config.RootOverridden() {
+		return ""
+	}
+	file, err := config.ReadFile()
+	if err != nil {
+		return ""
+	}
+	return resolvedRoot(file.Root)
+}
+
+func resolvedRoot(root string) string {
+	if strings.TrimSpace(root) == "" {
+		root = config.DefaultRoot()
+	}
+	return filepath.Clean(config.ExpandHome(strings.TrimSpace(root)))
+}
+
 // validateOwnersAndRoot refuses empty owners before validateRoot can create a directory.
 func validateOwnersAndRoot(owners []string, rawRoot string) (orgs []string, root, expanded string, err error) {
-	orgs = dedupOrgs(owners)
+	orgs = config.NormaliseOrgs(owners)
 	if len(orgs) == 0 {
 		return nil, "", "", fmt.Errorf(settingsWrappedFormat, settingsFieldOrgs, ErrNoOwners)
 	}
@@ -435,17 +653,4 @@ func validateRoot(raw string) (stored, expanded string, err error) {
 		return "", "", fmt.Errorf(settingsRefusalFormat, settingsFieldRoot, err)
 	}
 	return stored, expanded, nil
-}
-
-func dedupOrgs(orgs []string) []string {
-	var out []string
-	seen := make(map[string]bool)
-	for _, org := range orgs {
-		org = strings.TrimSpace(org)
-		if org != "" && !seen[org] {
-			seen[org] = true
-			out = append(out, org)
-		}
-	}
-	return out
 }

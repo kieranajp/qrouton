@@ -1,7 +1,7 @@
 <script>
   import Icon from "./Icon.svelte";
 
-  /** @type {{variant?: string, size?: string, disabled?: boolean, icon?: string, iconEnd?: string, wide?: boolean, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** @type {{variant?: string, size?: string, disabled?: boolean, icon?: import("../core/icons.js").IconName, iconEnd?: import("../core/icons.js").IconName, wide?: boolean, children?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
     variant = "primary",
     size = "md",

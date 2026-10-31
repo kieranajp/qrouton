@@ -14,7 +14,7 @@
     failed: "var(--state-failed)",
   };
 
-  /** @type {{tone?: string, selected?: boolean, icon?: string, meta?: string, metaIcon?: string, children?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** @type {{tone?: string, selected?: boolean, icon?: import("../core/icons.js").IconName, meta?: string, metaIcon?: import("../core/icons.js").IconName, children?: import('svelte').Snippet, [attribute: string]: any}} */
   let { tone = "neutral", selected = false, icon, meta, metaIcon, children, ...rest } = $props();
 </script>
 

@@ -7,8 +7,9 @@ import { dealt } from "./sections.js";
 export function partition(html, sections, how = {}) {
   const { criteria, deal = dealt } = how;
   const preamble = [];
-  // A section's opening heading stays apart from its body: the pane states the
-  // name itself, and the heading's own line still has to be findable.
+  /** A section's opening heading stays apart from its body: the pane states the
+   * name itself, and the heading's own line still has to be findable.
+   * @type {{opening: string[], body: string[], criteria: string[]}[]} */
   const parts = sections.map(() => ({ opening: [], body: [], criteria: [] }));
   for (const block of deal(html)) {
     const at = sections.findIndex(
@@ -65,12 +66,26 @@ export function screenFor(slides, line) {
 }
 
 /** Non-phase slides use their names because they have no defined sequence position.
- * @param {{slides: {name: string, number: number | null}[], phases: unknown[]}} parsed
+ * @param {{slides: {name: string, number: number | null, label: string | null}[], phases: unknown[]}} parsed
  * @param {number} screen */
 export function counterFor(parsed, screen) {
   if (screen === 0) return "Overview";
   const slide = parsed.slides[screen - 1];
   return slide.number === null
     ? slide.name
-    : `${slide.number} / ${parsed.phases.length}`;
+    : `${slide.label} / ${parsed.phases.length}`;
+}
+
+/** One strip, two jobs: in the deck it shows a screen, in the document it
+ * scrolls to the first block at or past where that screen starts.
+ * @param {number} screen @param {{reading: boolean, root: ParentNode | undefined, show: (screen: number) => void, starts: number[]}} how */
+export function reach(screen, { reading, root, show, starts }) {
+  if (!reading) {
+    show(screen);
+    return;
+  }
+  const from = starts[screen];
+  const blocks = [.../** @type {NodeListOf<HTMLElement>} */ (root?.querySelectorAll("[data-line]") ?? [])];
+  const target = blocks.find((block) => Number(block.dataset.line) >= from) ?? blocks[0];
+  target?.scrollIntoView({ block: "start" });
 }

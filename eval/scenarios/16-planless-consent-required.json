@@ -11,6 +11,6 @@
     {"kind": "artifact_absent", "path": "thoughts/shared/specs/*.md"},
     {"kind": "artifact_absent", "path": "thoughts/shared/plans/*.md"},
     {"kind": "delegation_absent"},
-    {"kind": "response_contains", "pattern": "plan"}
+    {"kind": "response_matches", "pattern": "(?i)\\b(tactical plan|without (a |the )?plan)\\b"}
   ]
 }

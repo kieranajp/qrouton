@@ -1,11 +1,13 @@
 <script>
   import ArtifactTag from "../core/ArtifactTag.svelte";
   import Icon from "../core/Icon.svelte";
+  import { TAB_STATUSES } from "../bridge/generated.js";
 
   /** maxHeight caps a menu whose items are not a fixed vocabulary, which then
    * scrolls rather than running off the screen.
-   * @type {{label?: string, items?: any[], width?: number, maxHeight?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
+   * @type {{header?: import('svelte').Snippet, label?: string, items?: import("./menu.js").MenuItem[], width?: number, maxHeight?: number, align?: 'left'|'right', offsetY?: number, onSelect?: (item: any, index: number) => void, [attribute: string]: any}} */
   let {
+    header,
     label,
     items = [],
     width = 212,
@@ -16,7 +18,7 @@
     ...rest
   } = $props();
 
-  let marked = $derived(items.some((item) => item?.icon || (item?.status && item.status !== "idle")));
+  let marked = $derived(items.some((item) => item !== "-" && (item.icon || (item.status && item.status !== TAB_STATUSES.IDLE))));
 </script>
 
 <div
@@ -28,6 +30,7 @@
   style:left={align === "left" ? "0" : "auto"}
   style:right={align === "right" ? "0" : "auto"}
   {...rest}>
+  {#if header}<div class="header">{@render header()}</div>{/if}
   {#if label}<div class="heading">{label}</div>{/if}
   {#each items as item, i (i)}
     {#if item === "-"}
@@ -45,7 +48,7 @@
           onclick={item.items?.length ? undefined : () => onSelect?.(item, i)}>
           {#if item.icon}
             <Icon name={item.icon} />
-          {:else if item.status && item.status !== "idle"}
+          {:else if item.status && item.status !== TAB_STATUSES.IDLE}
             <Icon name={item.status} />
           {:else if marked}
             <span class="slot"></span>
@@ -88,7 +91,17 @@
   }
 
   .capped {
+    box-sizing: border-box;
     overflow: hidden auto;
+  }
+
+  .header {
+    position: sticky;
+    top: calc(-5px * var(--ui-scale));
+    z-index: 1;
+    flex: none;
+    padding: calc(7px * var(--ui-scale)) calc(12px * var(--ui-scale));
+    background: var(--surface-chrome);
   }
 
   .heading {

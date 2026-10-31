@@ -6,10 +6,13 @@
     { name: "acme/payments", role: "editing", measured: true, commits: 0, insertions: 12, deletions: 4 },
     { name: "acme/docs", role: "reference", measured: true, commits: 0 },
   ];
-  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary}} */
-  let { summary } = $props();
+  /** @typedef {import("../src/lib/overview/pulls.js").PullRequestList} PullRequestList */
+  /** @typedef {import("../src/lib/overview/digest.js").SessionDigest} Digest */
+  /** @type {{summary: import("../src/lib/overview/summary.js").SessionSummary, pullRequests: PullRequestList,
+   * digest: Digest}} */
+  let { summary, pullRequests, digest } = $props();
   let added = $state(0);
   window.overviewAdded = () => added;
 </script>
 
-<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {repos} onAddRepos={() => added++} />
+<OverviewPane slug="fixture" active={true} root="/s/checkout" {summary} {pullRequests} {digest} {repos} onAddRepos={() => added++} />

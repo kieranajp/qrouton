@@ -7,6 +7,7 @@
   import CubeMark from "./lib/core/CubeMark.svelte";
   import { dismissible } from "./lib/core/dismiss.js";
   import OverviewPane from "./lib/overview/OverviewPane.svelte";
+  import SessionSwitcher from "./lib/session/SessionSwitcher.svelte";
   import Rail from "./lib/session/Rail.svelte";
   import Terminal from "./lib/session/Terminal.svelte";
   import ContextMenu from "./lib/shell/ContextMenu.svelte";
@@ -21,6 +22,7 @@
   import Overlay from "./lib/assembly/Overlay.svelte";
   import PickerOverlay from "./lib/assembly/PickerOverlay.svelte";
   import FirstRunOverlay from "./lib/firstrun/FirstRunOverlay.svelte";
+  import PlacementOverlay from "./lib/placement/PlacementOverlay.svelte";
   import SettingsOverlay from "./lib/settings/SettingsOverlay.svelte";
   import PresentOverlay from "./lib/panes/PresentOverlay.svelte";
   import { present } from "./lib/panes/present.svelte.js";
@@ -33,7 +35,7 @@
 </script>
 
 <div class="session">
-  <div class="titlebar">
+  <div class="titlebar" inert={view.switcher.visible}>
     <div class="identity">
       <CubeMark size={20} />
       <div class="anchored" use:dismissible={() => (view.identityOpen = false)}>
@@ -59,11 +61,12 @@
     </span>
   </div>
 
-  <div class="panels" bind:clientWidth={view.panels}>
+  <div class="panels" inert={view.switcher.visible} bind:clientWidth={view.panels}>
     <Rail
       sessions={fields.sessions}
       slug={fields.slug}
-      stickerLabels={fields.stickerLabels}
+      stickers={fields.stickers}
+      onOwnership={view.railOwnership}
       onNewSession={() => (view.requested = true)}
       onDismissed={view.handBack}
       size={view.sidebarSize}
@@ -119,6 +122,7 @@
           pty={conversationPTY}
           active={row.terminal === fields.terminal}
           focus={view.focusOf(row.terminal)}
+          focusEligible={view.focusEligible}
           focusPending={view.focusPendingOf(row.terminal)}
           onFocused={(generation) => view.focused(row.terminal, generation)} />
       {/each}
@@ -154,7 +158,8 @@
             pty={tabPTY}
             active={i === view.selected}
             focus={view.focusOf(tab.id)}
-            focusPending={view.focusPendingOf(tab.id)}
+            focusEligible={view.focusEligible}
+          focusPending={view.focusPendingOf(tab.id)}
             onFocused={(generation) => view.focused(tab.id, generation)} />
         {:else if tab.kind === WINDOW_KINDS.OVERVIEW}
           <OverviewPane
@@ -162,6 +167,8 @@
             active={i === view.selected}
             root={fields.root}
             summary={fields.sessionSummary}
+            pullRequests={fields.pullRequests}
+            digest={fields.sessionDigest}
             repos={fields.repos}
             onAddRepos={() => (view.added = fields.slug)} />
         {:else}
@@ -171,7 +178,10 @@
     </div>
   </div>
 
-  <ContextMenu />
+  <ContextMenu onOwnership={view.contextOwnership} />
+  {#if view.switcher.visible}
+    <SessionSwitcher controller={view.switcher} current={fields.slug} stickers={fields.stickers} total={fields.sessions.length} />
+  {/if}
 
   {#if view.reviewing}
     {#key fields.slug + ":" + fields.bugReportID}
@@ -181,6 +191,8 @@
 
   {#if fields.welcoming}
     <FirstRunOverlay />
+  {:else if fields.placing}
+    <PlacementOverlay />
   {:else if view.assembling}
     <Overlay gated={!fields.slug} onClose={() => (view.requested = false)} />
   {:else if view.picker}

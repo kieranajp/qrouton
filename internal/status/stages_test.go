@@ -3,6 +3,8 @@ package status
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +39,8 @@ func TestResearchFillsOnlyOnceEveryQuestionIsAnswered(t *testing.T) {
 		{"one question left framed", partAnswered, false},
 		{"every question answered", answeredResearch, true},
 		{"summary alone answered", "# R\n\n## Summary\n\nSo far.\n", false},
+		{"a late summary is a question", "# R\n\n## How?\n\n## Summary\n\nFindings.\n", true},
+		{"a tilde-fenced heading is not a question", "# R\n\n## How?\n\nLike this.\n\n~~~md\n## Example\n\n> framing\n~~~\n", true},
 		{"legacy prose findings", "# Retry\n\nThe service bounds attempts.\n", true},
 		{"empty", "", false},
 	} {
@@ -117,6 +121,7 @@ func TestStagesForMapsEachLeadToItsMark(t *testing.T) {
 		want  Stages
 	}{
 		{[]string{prompts.ResearchLead}, Stages{Research: true}},
+		{[]string{prompts.AuditLead}, Stages{Research: true}},
 		{[]string{prompts.PlanningLead}, Stages{Plan: true}},
 		{[]string{prompts.ImplementationLead}, Stages{Implement: true}},
 		{[]string{"code-reviewer", "default"}, Stages{}},
@@ -147,5 +152,93 @@ func TestStagesLatestPicksTheFurthestLiveStage(t *testing.T) {
 		if got := tc.live.Latest(); got != tc.want {
 			t.Errorf("%s: Latest() = %q, want %q", tc.name, got, tc.want)
 		}
+	}
+}
+
+func TestSyncCopiesAndDotFilesNeverBecomeTheLatestResearch(t *testing.T) {
+	dir := thoughtsDir(t.TempDir())
+	dir.write(t, researchDir, "R1-retry.md", answeredResearch)
+	dir.write(t, researchDir, "R9-retry.sync-conflict-20261012-120000-ABCDEFG.md", framedResearch)
+	dir.write(t, researchDir, ".R10-hidden.md", framedResearch)
+	if !stagesIn(string(dir)).Research {
+		t.Fatal("a conflict copy numbered above R1 displaced it as the latest research")
+	}
+}
+
+const (
+	emptyAudit = "# Tells\n\n## Summary\n\n> what was audited\n\n## Duplicated behaviour or facts\n\n> findings\n\n" +
+		"## Dead or needlessly defensive code\n\n> findings\n\n## Homegrown library or platform behaviour\n\n> findings\n\n## Tools\n\n> tools\n"
+	completeAudit = "# Tells\n\n## Summary\n\nTwo findings.\n\n## Duplicated behaviour or facts\n\n### F1 — Two clocks\n\nTell: duplicated behaviour or facts\n\nTriage:\n\n" +
+		"## Dead or needlessly defensive code\n\nNone.\n\n## Homegrown library or platform behaviour\n\n### F2 — A URL parser\n\nTriage:\n\n## Tools\n\n> tools\n"
+	subsetAudit = "---\nkind: audit\ntells: [dead, homegrown]\n---\n\n# Tells\n\n## Summary\n\nOne finding.\n\n" +
+		"## Dead or needlessly defensive code\n\nNone.\n\n## Homegrown library or platform behaviour\n\n### F2 — A URL parser\n\nTriage:\n\n## Tools\n\n> tools\n"
+)
+
+func TestACompleteAuditFillsResearch(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"skeleton only", emptyAudit, false},
+		{"one tell left framed", strings.Replace(completeAudit, "None.", "> findings", 1), false},
+		{"complete and untriaged", completeAudit, true},
+		{"triaged", strings.ReplaceAll(completeAudit, "Triage:\n", "Triage: reject\nkept on purpose\n"), true},
+		{"a subset without its unchosen sections", subsetAudit, true},
+		{"a subset with a chosen section framed", strings.Replace(subsetAudit, "None.", "> findings", 1), false},
+		{"every tell with tell 4 framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that pass or fail for the wrong reason\n\n> findings\n", false},
+		{"every tell with tell 4 filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that pass or fail for the wrong reason\n\nNone.\n", true},
+		{"an old tell-4 heading framed", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\n> findings\n", false},
+		{"an old tell-4 heading filled", "---\ntells: [duplicated, dead, homegrown, volkswagen]\n---\n" + completeAudit + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", true},
+		{"an unknown tell asks for every tell", strings.Replace(subsetAudit, "tells: [dead, homegrown]", "tells: [nonsense]", 1), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := thoughtsDir(t.TempDir())
+			dir.write(t, auditsDir, "A1-tells.md", tc.body)
+			if got := stagesIn(string(dir)).Research; got != tc.want {
+				t.Fatalf("Research = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestEitherAnsweredResearchOrACompleteAuditFillsResearch(t *testing.T) {
+	dir := thoughtsDir(t.TempDir())
+	dir.write(t, researchDir, "R1-retry.md", framedResearch)
+	dir.write(t, auditsDir, "A1-tells.md", completeAudit)
+	if !stagesIn(string(dir)).Research {
+		t.Fatal("a complete audit left R empty beside framed research")
+	}
+	dir.write(t, auditsDir, "A2-again.md", emptyAudit)
+	if stagesIn(string(dir)).Research {
+		t.Fatal("an older complete audit filled R while the latest is a skeleton")
+	}
+}
+
+func TestAuditTellsReadsTheTellsKey(t *testing.T) {
+	every := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown, AuditHeadingVolkswagen}
+	legacy := []string{AuditHeadingDuplicated, AuditHeadingDead, AuditHeadingHomegrown}
+	front := func(lines string) string { return "---\nkind: audit\n" + lines + "---\n\n# Tells\n" }
+	for _, tc := range []struct {
+		name, text string
+		want       []string
+	}{
+		{"no frontmatter", "# Tells\n\ntells: [dead]\n", legacy},
+		{"no key", front("target: repo\n"), legacy},
+		{"empty list", front("tells: []\n"), every},
+		{"empty value", front("tells:\n"), every},
+		{"a subset out of order", front("tells: [volkswagen, homegrown, dead]\n"), []string{AuditHeadingDead, AuditHeadingHomegrown, AuditHeadingVolkswagen}},
+		{"a block list", front("tells:\n  - dead\n"), []string{AuditHeadingDead}},
+		{"a duplicate", front("tells: [dead, dead]\n"), []string{AuditHeadingDead}},
+		{"an unknown slug", front("tells: [dead, nonsense]\n"), every},
+		{"a scalar", front("tells: dead\n"), every},
+		{"malformed frontmatter", front("tells: [dead\n"), every},
+		{"an old tell-4 heading", front("tells: [volkswagen]\n") + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n", []string{legacyVolkswagenHeading}},
+		{"both tell-4 headings", front("tells: [volkswagen]\n") + "\n## Tests that cannot fail or pass for the wrong reason\n\nNone.\n\n## Tests that pass or fail for the wrong reason\n\nNone.\n", []string{AuditHeadingVolkswagen}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := AuditTells(tc.text); !slices.Equal(got, tc.want) {
+				t.Fatalf("AuditTells = %q, want %q", got, tc.want)
+			}
+		})
 	}
 }

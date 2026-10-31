@@ -62,6 +62,9 @@ func ManifestLock(root string) string {
 // Src is the directory holding a session's repository worktrees.
 func Src(root string) string { return filepath.Join(root, SrcDirName) }
 
+// ThoughtsLink is the session's thoughts symlink.
+func ThoughtsLink(root string) string { return filepath.Join(root, ThoughtsDirName) }
+
 // Thoughts is the shared artifact directory the workflow writes into.
 func Thoughts(root string) string {
 	return filepath.Join(root, ThoughtsDirName, SharedDirName)
@@ -162,3 +165,9 @@ func ReviewOpenCodeDatabase(root, id string) string {
 }
 func Reviews(root string) string          { return filepath.Join(Thoughts(root), "reviews") }
 func ReviewReport(root, id string) string { return filepath.Join(Reviews(root), "review-"+id+".md") }
+
+// SyncCopy reports a copy a sync tool made beside a real file.
+func SyncCopy(base string) bool {
+	return strings.Contains(base, syncConflictInfix) || strings.HasPrefix(base, syncthingTempPrefix) ||
+		strings.Contains(base, conflictedCopyInfix) || strings.Contains(base, conflictInfix)
+}

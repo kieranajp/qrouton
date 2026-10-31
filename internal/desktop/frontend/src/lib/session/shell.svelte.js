@@ -1,8 +1,11 @@
+import { sessionSwitcher } from "./switcher.svelte.js";
+import { macOS } from "../platform.js";
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
 import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, REPO_ROLES, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
+import { findShortcut } from "../find.js";
 import {
   closeWindow,
   openDocument,
@@ -25,8 +28,8 @@ import {
 } from "../layout.js";
 import { present } from "../panes/present.svelte.js";
 import { relative } from "../relative.js";
-import { revealPath } from "../sessions.js";
-import { opensSettings } from "../shortcuts.js";
+import { show, revealPath } from "../sessions.js";
+import { opensSettings, opensSwitcher, position } from "../shortcuts.js";
 import {
   consumeTerminalFocus,
   focusGenerationIn,
@@ -128,6 +131,7 @@ export function shell() {
     })),
   );
 
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   let documentMenu = $derived([
     ...fields.documents.map((doc) => ({
       tag: doc.kind,
@@ -144,14 +148,21 @@ export function shell() {
   // now behind the session's name, where the things you do with it also live.
   let identityOpen = $state(false);
   let editing = $derived(fields.repos.filter((repo) => repo.role === REPO_ROLES.EDITING && repo.path));
+  /** @type {import("../shell/menu.js").MenuItem[]} */
   let identityMenu = $derived([
-    ...(fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : []),
+    ...branchItems(),
     { label: "Copy branch name", icon: "copy", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
     ...worktreeItems(),
   ]);
 
-  // One editing repository is one worktree and one item. Several are several, and
-  // naming them beats picking one and calling it the worktree.
+  /** @returns {import("../shell/menu.js").MenuItem[]} */
+  function branchItems() {
+    return fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : [];
+  }
+
+  /** One editing repository is one worktree and one item. Several are several, and
+   * naming them beats picking one and calling it the worktree.
+   * @returns {import("../shell/menu.js").MenuItem[]} */
   function worktreeItems() {
     if (!editing.length) return [];
     if (editing.length === 1) {
@@ -203,8 +214,30 @@ export function shell() {
   let assembling = $derived(assemblyOpen(requested, session.settled, fields.slug));
   let picker = $derived(pickerOpen(fields.slug, fields.picker, added));
   let covered = $derived(
-    fields.welcoming || assembling || picker || settingsOpen || present.active || reviewing,
+    fields.welcoming || fields.placing || assembling || picker || settingsOpen || present.active || reviewing,
   );
+
+  let railBlocked = $state(false);
+  let contextBlocked = $state(false);
+  const clearFocus = () => { terminalFocus = {}; };
+  const switcher = sessionSwitcher({ fields: () => fields,
+    blocked: () => covered || railBlocked || contextBlocked || identityOpen || listing,
+    covered: () => covered, show, clearFocus, request });
+  const gate = (event) => {
+    if (opensSwitcher(event, macOS)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (!event.repeat) switcher.open();
+      return;
+    }
+    if (switcher.ownsFocus && (position(event) || opensSettings(event, macOS) ||
+        findShortcut(event))) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  };
+  window.addEventListener("keydown", gate, true);
+  $effect(() => () => window.removeEventListener("keydown", gate, true));
 
   async function escalate() {
     if (escalating || fields.mode !== MODE_LABELS.ASSISTANT) return;
@@ -224,7 +257,7 @@ export function shell() {
       })
       .catch(() => {});
     const onKey = (event) => {
-      if (!opensSettings(event)) return;
+      if (!opensSettings(event, macOS)) return;
       event.preventDefault();
       if (!fields.welcoming) settingsOpen = true;
     };
@@ -243,7 +276,7 @@ export function shell() {
     const id = fields.terminal;
     if (id === shown) return;
     shown = id;
-    untrack(() => request(id));
+    untrack(() => { if (!switcher.ownsFocus) request(id); });
   });
 
   // An overlay covering the terminal hands the keyboard back when it goes, the
@@ -254,10 +287,14 @@ export function shell() {
   $effect(() => {
     const back = wasCovered && !covered;
     wasCovered = covered;
-    if (back) untrack(() => request(fields.terminal));
+    if (back) untrack(() => { if (!switcher.ownsFocus) request(fields.terminal); });
   });
 
   return {
+    switcher,
+    get focusEligible() { return !covered && !switcher.ownsFocus; },
+    railOwnership: (value) => { railBlocked = value; },
+    contextOwnership: (value) => { contextBlocked = value; },
     get reviewing() { return reviewing; },
     reviewBugReport: () => { reviewed = reviewKey; },
     dismissBugReport: () => { reviewed = ""; },

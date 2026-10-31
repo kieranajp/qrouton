@@ -1,5 +1,10 @@
 package prompts
 
+import "strconv"
+
+// DigestLimit is the most characters a session digest may hold.
+const DigestLimit = 600
+
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
@@ -7,10 +12,6 @@ const (
 	// path segment rather than a file stem.
 	agyAgentsDir     = ".agents/agents/"
 	agyAgentFileName = "agent.md"
-
-	frontmatterKeySep         = ":"
-	frontmatterNameKey        = "name"
-	frontmatterDescriptionKey = "description"
 
 	subagentChoiceFileName    = "subagent-choice.md"
 	subagentChoicePlaceholder = "{{subagent-choice}}"
@@ -32,6 +33,20 @@ const (
 
 	sessionSummaryFileName    = "session-summary.md"
 	sessionSummaryPlaceholder = "{{session-summary}}"
+
+	sessionDigestFileName    = "session-digest.md"
+	sessionDigestPlaceholder = "{{session-digest}}"
+
+	digestLimitPlaceholder = "{{digest-limit}}"
+
+	scratchCopyFileName    = "scratch-copy.md"
+	scratchCopyPlaceholder = "{{scratch-copy}}"
+
+	fixDisciplineFileName    = "fix-discipline.md"
+	fixDisciplinePlaceholder = "{{fix-discipline}}"
+
+	runTableFileName    = "run-table.md"
+	runTablePlaceholder = "{{run-table}}"
 
 	agyNameFormat   = "name: %s\ndescription: %s\n"
 	agySubagentKey  = "subagent"
@@ -60,17 +75,30 @@ var partials = map[string]string{
 	returnContractPlaceholder:     returnContractFileName,
 	sessionSummaryPlaceholder:     sessionSummaryFileName,
 	reviewRubricPlaceholder:       reviewRubricFileName,
+	sessionDigestPlaceholder:      sessionDigestFileName,
+	scratchCopyPlaceholder:        scratchCopyFileName,
+	fixDisciplinePlaceholder:      fixDisciplineFileName,
+	runTablePlaceholder:           runTableFileName,
+}
+
+// figures are numbers Go enforces, keyed by the placeholder a prompt states
+// each through. They expand after the partials, so a partial may name one.
+var figures = map[string]string{
+	digestLimitPlaceholder: strconv.Itoa(DigestLimit),
 }
 
 // The leads, by the agent type the runner reports them as.
 const (
 	ResearchLead       = "qrouton-research-lead"
+	AuditLead          = "qrouton-audit-lead"
 	PlanningLead       = "qrouton-planning-lead"
 	ImplementationLead = "qrouton-implementation-lead"
 )
 
 var (
 	readOnlyAgents = map[string]bool{
+		"audit-checker":       true,
+		"audit-verifier":      true,
 		"code-reviewer":       true,
 		"codebase-researcher": true,
 		"external-researcher": true,
@@ -84,5 +112,6 @@ var (
 		ImplementationLead:        true,
 		"test-verifier":           true,
 		"implementation-reviewer": true,
+		AuditLead:                 true,
 	}
 )
