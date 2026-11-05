@@ -78,6 +78,11 @@ definitions to know which ones to avoid.
 - **Assertions that cannot fail.** `t.Log` or `t.Logf` where the test should
   call `t.Error` or `t.Fatal`, an error assigned to `_`, and a test that only
   compares a fake's output with the value it was set up to return.
+- **Tests that restate the code.** A `want` that is a whole struct, slice or
+  map literal copied from a shipped table, a `reflect.DeepEqual` or `cmp.Diff`
+  against a full fixture when the test names one field, a full error string
+  where `errors.Is` would do, and one fixture literal pasted into many tests in
+  place of a shared builder.
 - **Test-only code.** Compare the two `deadcode` runs: a function only the
   `-test` run reaches is code only tests use. File it under tell 2 when that
   tell runs, else under tell 4.

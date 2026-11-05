@@ -98,6 +98,10 @@ snapshots or golden files, such as `-u`, `--update`, `--updateSnapshot` or
   the test imports its subject from tests the mock.
 - **Snapshots.** Read `__snapshots__` files and inline snapshots for an error
   message, `null`, an empty array or a loading state recorded as expected.
+- **Tests that restate the code.** A `toEqual` or `toStrictEqual` on a whole
+  list or object copied from source when the test names one entry, an inline
+  snapshot of plain data, `toThrow` with the full message text, and one fixture
+  object pasted into many test files in place of a shared factory.
 - **Test-only code.** Compare knip's default and `--production` runs: code
   only the default run counts as used is reached only from tests, scripts,
   configs or stories. When tests are its only callers, file it under tell 2

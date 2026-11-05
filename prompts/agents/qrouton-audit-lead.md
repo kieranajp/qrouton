@@ -110,7 +110,7 @@ Hunt these:
 5. **Stored snapshots.** Read snapshot and golden files for an error message, an empty value or a loading state recorded as the expected output.
 6. **Tests weakened to pass.** Where a test's expected value matches odd output, or an assertion looks loosened, read `git log -L` for those lines. A commit that changed the test to go green, rather than fixing the code, is the evidence. Cite the commit and the lines it loosened.
 7. **Tests of the wrong code.** A test that exercises a helper defined in the test file, or a copy of shipped code, instead of the shipped code it names.
-8. **Tests that pin a detail.** A test that asserts an implementation detail, such as exact error text, a literal list or an error value no shipped code checks, so a harmless change breaks it.
+8. **Tests that restate the code.** A test that pins an implementation detail instead of behaviour, so a harmless change breaks it: exact error text or an error value no shipped code checks, an exact-match allowlist or literal list that copies a shipped list when the behaviour needs only some entries, or sample data copied wholesale into many tests, so one changed field breaks them all. Find copied data by grepping a distinctive literal from one test's fixture across the test files. A list copied from shipped code is also hunt 10's case; the merge rule files it once.
 9. **Tests that repeat another.** A test whose every assertion another test of the same code already makes.
 10. **Tests that tie two copies.** A test that keeps two copies of a fact in step where one could be derived from the other. It is a tell-1 candidate.
 
