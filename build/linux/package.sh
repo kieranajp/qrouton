@@ -6,7 +6,7 @@ root=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 version=${VERSION:?run through make, or set VERSION}
 version=${version#v}
 
-if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$'; then
+if ! printf '%s\n' "$version" | grep -Eqf "$root/internal/versionformat/grammar.txt"; then
 	printf 'VERSION must be numeric, such as 1.2.3 (got %s)\n' "$version" >&2
 	exit 1
 fi
