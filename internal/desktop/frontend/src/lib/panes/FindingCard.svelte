@@ -1,4 +1,5 @@
 <script>
+  import NoteEditor from "./NoteEditor.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { CHOICES, TRIAGED } from "./audit.js";
   import { render } from "./markdown.js";
@@ -63,20 +64,7 @@
         onclick={() => onChoose?.(choice)}>{LABELS[choice]}</button>
     {/each}
   </div>
-  <label class="note">
-    <CapsLabel tone="dim">Note</CapsLabel>
-    <textarea
-      rows="2"
-      value={draft.note}
-      oninput={(event) => onNote?.(event.currentTarget.value)}
-      onblur={() => onCommit?.()}
-      onkeydown={(event) => {
-        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
-          event.preventDefault();
-          onCommit?.();
-        }
-      }}></textarea>
-  </label>
+  <NoteEditor text={draft.note} label="Note" {onNote} {onCommit} />
   {#if message}
     <p class="message" class:failed={state === "failed"} role="status">{message}</p>
   {/if}
@@ -214,28 +202,6 @@
     background: color-mix(in srgb, var(--accent-action) 14%, transparent);
   }
 
-  .note {
-    display: flex;
-    flex-direction: column;
-    gap: calc(6px * var(--ui-scale));
-  }
-
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    min-height: calc(52px * var(--ui-scale));
-    padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
-    border: var(--border-width) solid var(--border-default);
-    background: var(--surface-terminal);
-    color: var(--text-primary);
-    font: var(--machine-md);
-    resize: vertical;
-  }
-
-  textarea:focus {
-    outline: none;
-    border-color: var(--accent-action);
-  }
 
   :global(html[data-narrow]) .fields {
     grid-template-columns: minmax(0, 1fr);
