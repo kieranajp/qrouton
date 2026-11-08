@@ -695,7 +695,7 @@ func TestTheAuditTemplateChoosesAndCarriesEveryTell(t *testing.T) {
 	}
 	var every []string
 	for _, tell := range auditTells {
-		every = append(every, tell.heading)
+		every = append(every, tell.Heading)
 	}
 	if got, want := AuditTells(string(template)), every; !slices.Equal(got, want) {
 		t.Errorf("the audit template chooses %q, want every tell %q", got, want)
@@ -704,5 +704,20 @@ func TestTheAuditTemplateChoosesAndCarriesEveryTell(t *testing.T) {
 		if !strings.Contains(string(template), "\n## "+heading+"\n") {
 			t.Errorf("the audit template has no ## %s", heading)
 		}
+	}
+}
+
+func TestMarkdownVariantsAppearInDocumentMenuAndWrittenCount(t *testing.T) {
+	root := t.TempDir()
+	dir := sessionDir(t, root, session.Manifest{Slug: "markdown"})
+	stamp := time.Now().Add(-time.Hour)
+	for _, name := range []string{"note.MD", "long.markdown"} {
+		sessionDoc(t, dir, name, stamp.Add(time.Minute))
+	}
+	if got := Read(dir).Documents; len(got) != 2 {
+		t.Fatalf("supported Markdown omitted from menu: %+v", got)
+	}
+	if got := writtenSince(dir, stamp); got != 2 {
+		t.Fatalf("supported Markdown omitted from written count: %d", got)
 	}
 }
