@@ -4,7 +4,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/mcpserver"
-	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -37,8 +36,6 @@ const (
 
 	gitUserEmailKey = "user.email"
 	gitUserNameKey  = "user.name"
-
-	roleReference = string(session.RepoRoleReference)
 
 	// Runner names, as scenarios and the --runner flag spell them.
 	runnerClaude = "claude"

@@ -64,20 +64,26 @@ func copyFile(src, dst string) error {
 // MaterializeAssets stamps a hashed prompt snapshot with the production launch path.
 // Evals always give the orchestrator prompt ownership of discovery files.
 func MaterializeAssets(assetsDir, workspace, snapshot string) (string, error) {
-	if err := CopyTree(assetsDir, snapshot); err != nil {
-		return "", err
-	}
-
-	hash, err := HashTree(snapshot)
+	loader, hash, err := snapshotPrompts(assetsDir, snapshot)
 	if err != nil {
 		return "", err
 	}
-
-	loader := prompts.NewFSLoader(os.DirFS(assetsDir))
 	if err := prompts.Stamp(context.Background(), workspace, loader, prompts.OrchestratorAsset); err != nil {
 		return "", err
 	}
 	return hash, nil
+}
+
+func snapshotPrompts(assetsDir, snapshot string) (*prompts.FSLoader, string, error) {
+	if err := CopyTree(assetsDir, snapshot); err != nil {
+		return nil, "", err
+	}
+
+	hash, err := HashTree(snapshot)
+	if err != nil {
+		return nil, "", err
+	}
+	return prompts.NewFSLoader(os.DirFS(snapshot)), hash, nil
 }
 
 func HashTree(root string) (string, error) {

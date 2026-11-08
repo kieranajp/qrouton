@@ -4,7 +4,10 @@ import "errors"
 
 // Configuration and input errors the harness refuses to start on.
 var (
-	ErrSamplesTooFew = errors.New("samples must be at least 1")
+	ErrCheckoutMissing   = errors.New("repository is absent from the manifest")
+	ErrCheckoutAmbiguous = errors.New("repository name is ambiguous in the manifest")
+	ErrCheckoutOutside   = errors.New("repository checkout must be inside src")
+	ErrSamplesTooFew     = errors.New("samples must be at least 1")
 
 	ErrUnknownRunner = errors.New("runner must be " + runnerClaude + ", " + runnerCodex + ", or " + runnerAll)
 
