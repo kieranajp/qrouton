@@ -71,6 +71,20 @@ test("clicking the selected image opens a fitted lightbox and Escape closes it",
   await expect(page.locator(".primary-frame")).toBeFocused();
 });
 
+const scrimImage = async (page) => {
+  await page.goto("/tests/assets.html");
+  await expect.poll(() => decoded(primary(page))).toBe(true);
+  await primary(page).click();
+  const lightbox = page.locator(".lightbox");
+  await expect(lightbox).toHaveCount(1);
+  return lightbox.evaluate((element) => getComputedStyle(element).backgroundImage);
+};
+
+// Fails if macOS loses the hatch
+test("the modal scrim keeps its hatch on macOS", async ({ page }) => {
+  expect(await scrimImage(page)).toContain("repeating-linear-gradient");
+});
+
 test("the lightbox stays open over the image and closes from the scrim or control", async ({ page }) => {
   await page.goto("/tests/assets.html");
   await expect.poll(() => decoded(primary(page))).toBe(true);
@@ -359,6 +373,11 @@ test("the main view keeps loading while only the thumbnail has loaded", async ({
 
 test.describe("on Linux", () => {
   test.use({ userAgent: LINUX_UA });
+
+  // Fails if the patterned fill returns on Linux
+  test("the modal scrim is a flat fill on Linux", async ({ page }) => {
+    expect(await scrimImage(page)).toBe("none");
+  });
 
   test("the menu leaves out Copy", async ({ page }) => {
     await page.goto("/tests/assets.html");

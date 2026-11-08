@@ -3,7 +3,10 @@ import { mount, unmount } from "svelte";
 import DockedDocument from "../src/lib/DockedDocument.svelte";
 import { MEDIA_KINDS } from "../src/lib/bridge/generated.js";
 import { emitWailsEvent } from "./wails-runtime.js";
+import { markPlatform } from "../src/lib/platform.js";
 import { reactiveProps } from "./reactive-props.svelte.js";
+
+markPlatform();
 
 const asset = (file) => `/tests/fixtures/assets/${file}`;
 const image = MEDIA_KINDS.IMAGE;

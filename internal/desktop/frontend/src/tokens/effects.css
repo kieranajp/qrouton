@@ -34,6 +34,8 @@
     )
     color-mix(in srgb, var(--ctp-crust) 94%, transparent);
 
+  --scrim-linux-opacity: 85%;
+
   /* selection wash behind an active tab */
   --wash-selected: color-mix(in srgb, var(--ctp-blue) 7%, transparent);
   --wash-guided: color-mix(in srgb, var(--ctp-mauve) 9%, transparent);
@@ -41,3 +43,9 @@
   /* no easing curves are defined on purpose — the content that moves here is
      terminal output, and animated chrome around it reads as lag */
 }
+
+/* WebKitGTK repaints a patterned fill under a modal on every keystroke; a flat one stays responsive */
+html[data-platform="linux"] {
+  --scrim: color-mix(in srgb, var(--ctp-crust) var(--scrim-linux-opacity), transparent);
+}
+
