@@ -167,3 +167,50 @@ func TestTheGalleryRouteAnswersRangeRequestsForVideo(t *testing.T) {
 		t.Fatalf("range = %d, %v, %q", response.Code, response.Header(), response.Body.String())
 	}
 }
+
+func TestMediaRoutesKeepTheirDistinctAdmissionAndHeaders(t *testing.T) {
+	root, _ := deckSession(t)
+	gallery := galleryAsset(func(_ string, index int) (galleryAssetRef, bool) {
+		name := "shot.png"
+		if index == 2 {
+			name = "clip.webm"
+		}
+		return galleryAssetRef{root: root, source: filepath.Join("thoughts", "decks", name)}, true
+	})
+	for _, tc := range []struct {
+		name    string
+		handler http.Handler
+		path    string
+		status  int
+		private bool
+	}{
+		{"gallery image", gallery, "/gallery/token/1", http.StatusOK, true},
+		{"deck image", deckHandler(root), "/deck/goodtoken/shot.png", http.StatusOK, false},
+		{"gallery excludes deck-only media", gallery, "/gallery/token/2", http.StatusNotFound, false},
+		{"deck includes extra media", deckHandler(root), "/deck/goodtoken/clip.webm", http.StatusOK, false},
+		{"gallery requires canonical index", gallery, "/gallery/token/01", http.StatusNotFound, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := httptest.NewRecorder()
+			tc.handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if response.Code != tc.status {
+				t.Fatalf("status = %d, want %d", response.Code, tc.status)
+			}
+			if tc.status == http.StatusOK {
+				if got := response.Header().Get(cacheControlHeader); (got == cacheControlNoStore) != tc.private {
+					t.Fatalf("Cache-Control = %q, private = %v", got, tc.private)
+				}
+				if got := response.Header().Get(contentTypeOptionsHeader); (got == contentTypeNoSniff) != tc.private {
+					t.Fatalf("X-Content-Type-Options = %q, private = %v", got, tc.private)
+				}
+			}
+		})
+	}
+	request := httptest.NewRequest(http.MethodGet, "/deck/goodtoken/clip.mp4", nil)
+	request.Header.Set("Range", "bytes=1-3")
+	response := httptest.NewRecorder()
+	deckHandler(root).ServeHTTP(response, request)
+	if response.Code != http.StatusPartialContent || response.Body.String() != "ide" {
+		t.Fatalf("deck range = %d %q", response.Code, response.Body.String())
+	}
+}

@@ -105,14 +105,18 @@ func (b *BugReports) queue(s *sessionState, req workbench.BugReportRequest) (wor
 	return r.outcome, nil
 }
 
+func (s *sessionState) bugReportLocked(id string, now time.Time) *bugReportRecord {
+	s.pruneBugReports(now)
+	return s.bugReports[id]
+}
+
 func (b *BugReports) status(s *sessionState, id string) (workbench.BugReport, error) {
 	if s == nil {
 		return workbench.BugReport{}, ErrNoSession
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pruneBugReports(b.now())
-	r := s.bugReports[id]
+	r := s.bugReportLocked(id, b.now())
 	if r == nil {
 		return workbench.BugReport{}, ErrBugReportStale
 	}
@@ -125,8 +129,7 @@ func (b *BugReports) cancel(s *sessionState, id string) (workbench.BugReport, er
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pruneBugReports(b.now())
-	r := s.bugReports[id]
+	r := s.bugReportLocked(id, b.now())
 	if r == nil {
 		return workbench.BugReport{}, ErrBugReportStale
 	}
@@ -144,8 +147,7 @@ func (b *BugReports) Load(slug, requestID string) (BugReportPreview, error) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.pruneBugReports(b.now())
-	r := s.bugReports[requestID]
+	r := s.bugReportLocked(requestID, b.now())
 	if r == nil || s.latestBugReport != requestID {
 		return BugReportPreview{}, ErrBugReportStale
 	}
@@ -163,8 +165,7 @@ func (b *BugReports) Confirm(slug, requestID string) (workbench.BugReport, error
 		return workbench.BugReport{}, ErrNoSession
 	}
 	s.mu.Lock()
-	s.pruneBugReports(b.now())
-	r := s.bugReports[requestID]
+	r := s.bugReportLocked(requestID, b.now())
 	if s.stopped || r == nil || s.latestBugReport != requestID {
 		s.mu.Unlock()
 		return workbench.BugReport{}, ErrBugReportStale

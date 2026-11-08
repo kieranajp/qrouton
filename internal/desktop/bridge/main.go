@@ -309,30 +309,9 @@ type constant struct {
 
 func events(files []*ast.File) []constant {
 	var out []constant
-	for _, file := range files {
-		for _, decl := range file.Decls {
-			decl, ok := decl.(*ast.GenDecl)
-			if !ok || decl.Tok != token.CONST {
-				continue
-			}
-			for _, spec := range decl.Specs {
-				spec, ok := spec.(*ast.ValueSpec)
-				if !ok || len(spec.Names) != 1 || len(spec.Values) != 1 {
-					continue
-				}
-				if !strings.HasSuffix(spec.Names[0].Name, eventSuffix) {
-					continue
-				}
-				text, ok := spec.Values[0].(*ast.BasicLit)
-				if !ok || text.Kind != token.STRING {
-					continue
-				}
-				value, err := strconv.Unquote(text.Value)
-				if err != nil {
-					continue
-				}
-				out = append(out, constant{name: spec.Names[0].Name, value: value})
-			}
+	for _, value := range stringConstants(files) {
+		if strings.HasSuffix(value.name, eventSuffix) {
+			out = append(out, constant{name: value.name, value: value.value})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })

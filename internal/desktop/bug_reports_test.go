@@ -180,6 +180,33 @@ func TestBugReportConfirmCancelRace(t *testing.T) {
 	}
 }
 
+func TestEveryBugReportLookupPrunesExpiredPendingRecords(t *testing.T) {
+	for _, operation := range []string{"status", "cancel", "load", "confirm"} {
+		t.Run(operation, func(t *testing.T) {
+			b, s, clock := bugReportSetup(t)
+			req := queueTestBugReport(t, b, s, "expiring")
+			clock.advance(time.Minute)
+			var report workbench.BugReport
+			var err error
+			switch operation {
+			case "status":
+				report, err = b.status(s, req.ID)
+			case "cancel":
+				report, err = b.Cancel(s.slug(), req.ID)
+			case "load":
+				var preview BugReportPreview
+				preview, err = b.Load(s.slug(), req.ID)
+				report = preview.Report
+			case "confirm":
+				report, err = b.Confirm(s.slug(), req.ID)
+			}
+			if err != nil || report.Status != workbench.BugReportExpired {
+				t.Fatalf("expired lookup = %+v, %v", report, err)
+			}
+		})
+	}
+}
+
 func TestBugReportWriterOutcomes(t *testing.T) {
 	for _, tt := range []struct {
 		err  error
