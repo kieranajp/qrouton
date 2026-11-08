@@ -1776,21 +1776,17 @@ func assertStructuredViewport(t *testing.T, value any, available, selected bool,
 	}
 }
 
-// A struct tag cannot interpolate a slice, so the escalate tool's prefix
-// vocabulary is written out by hand. This is what holds it to the one list the
-// picker actually offers.
 func TestEscalatePrefixSchemaEnumeratesTheAssemblyPrefixes(t *testing.T) {
-	field, ok := reflect.TypeFor[escalateInput]().FieldByName("BranchPrefix")
-	if !ok {
-		t.Fatal("escalateInput has no BranchPrefix field")
-	}
-	description := field.Tag.Get("jsonschema")
+	tool := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeAssistant))[toolEscalate]
+	schema := structuredOutput(t, tool.InputSchema)
+	properties := schema["properties"].(map[string]any)
+	description := properties["branch_prefix"].(map[string]any)["description"]
 	prefixes := assembly.Prefixes()
 	if want := "one of " + strings.Join(prefixes, ", "); description != want {
 		t.Fatalf("branch_prefix description = %q, want %q", description, want)
 	}
-	if want := "(one of " + strings.Join(prefixes, ", ") + ")"; !strings.Contains(descEscalate, want) {
-		t.Fatalf("escalate description does not list the prefixes as %q", want)
+	if want := "(one of " + strings.Join(prefixes, ", ") + ")"; !strings.Contains(tool.Description, want) {
+		t.Fatalf("escalate description does not list %q", want)
 	}
 }
 

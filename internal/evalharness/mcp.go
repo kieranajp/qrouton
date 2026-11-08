@@ -8,58 +8,35 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/mcpserver"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
+	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type openFileInput struct {
-	Path string `json:"path" jsonschema:"Path to a file inside the evaluation workspace"`
-	Line int    `json:"line,omitempty" jsonschema:"One-based line number"`
+func RunMockMCP(ctx context.Context, root, logPath string) error {
+	return newMockMCP(root, logPath).Run(ctx, &mcp.StdioTransport{})
 }
 
-func RunMockMCP(ctx context.Context, root, logPath string) error {
-	server := mcp.NewServer(
-		&mcp.Implementation{Name: "qrouton-eval", Version: "1"},
-		&mcp.ServerOptions{
-			Instructions: "Record " + mcpserver.ToolOpenFile + " calls during prompt evaluation.",
-		},
-	)
-	mcp.AddTool(
-		server,
-		&mcp.Tool{
-			Name:        mcpserver.ToolOpenFile,
-			Description: "Open a completed document for the user.",
-		},
-		func(
-			_ context.Context,
-			_ *mcp.CallToolRequest,
-			input openFileInput,
-		) (*mcp.CallToolResult, any, error) {
-			path, err := resolveWorkspacePath(root, input.Path)
-			if err != nil {
-				return nil, nil, err
-			}
-			if _, err := os.Stat(path); err != nil {
-				return nil, nil, err
-			}
-			rel, err := filepath.Rel(root, path)
-			if err != nil {
-				return nil, nil, err
-			}
-			event := Event{
-				Kind: kindToolCall,
-				Name: mcpserver.ToolOpenFile,
-				Path: filepath.ToSlash(rel),
-			}
-			if err := AppendJSONL(logPath, event); err != nil {
-				return nil, nil, err
-			}
-			message := fmt.Sprintf("Recorded %s for %s", mcpserver.ToolOpenFile, filepath.ToSlash(rel))
-			return &mcp.CallToolResult{
-				Content: []mcp.Content{&mcp.TextContent{Text: message}},
-			}, map[string]any{"message": message}, nil
-		},
-	)
-	return server.Run(ctx, &mcp.StdioTransport{})
+func newMockMCP(root, logPath string) *mcp.Server {
+	server := mcp.NewServer(&mcp.Implementation{Name: mockMCPName, Version: "1"}, &mcp.ServerOptions{Instructions: mockMCPInstructions})
+	mcpserver.AddWorkflowTools(server, root, func(_ context.Context, input mcpserver.OpenFileInput) (string, *workbench.DocumentViewport, error) {
+		path, err := resolveWorkspacePath(root, input.Path)
+		if err != nil {
+			return "", nil, err
+		}
+		if _, err := os.Stat(path); err != nil {
+			return "", nil, err
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return "", nil, err
+		}
+		event := Event{Kind: kindToolCall, Name: mcpserver.ToolOpenFile, Path: filepath.ToSlash(rel)}
+		if err := AppendJSONL(logPath, event); err != nil {
+			return "", nil, err
+		}
+		return fmt.Sprintf(mockOpenFileFormat, mcpserver.ToolOpenFile, filepath.ToSlash(rel)), nil, nil
+	})
+	return server
 }
 
 func resolveWorkspacePath(root, requested string) (string, error) {

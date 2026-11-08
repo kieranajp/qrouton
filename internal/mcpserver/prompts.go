@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/artefact"
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/prompts"
 )
@@ -36,7 +37,7 @@ const (
 )
 
 const (
-	summaryLimit = 140
+	summaryLimit = prompts.SummaryLimit
 	digestLimit  = prompts.DigestLimit
 )
 
@@ -59,7 +60,7 @@ const (
 
 	descSharePage = "Render a session document as a self-contained page carrying qrouton's own styling — its palette, its fonts and the same prose renderer the workbench draws with — so it can be handed to somebody outside this session. Give path, relative to the session root (e.g. thoughts/shared/plans/thing.md). This writes the page and returns its path; it does not send it anywhere. Publish that file yourself, verbatim, with whatever tool you have for it, and give the user the link. The page fetches nothing at runtime, so it survives a strict content-security policy, and it carries no html, head or body tag of its own."
 
-	descEscalate = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of feat, fix, chore, refactor, docs, test). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
+	descEscalateFormat = "Hand this piece of work off to the full Research → Plan → Implement workflow. Before calling this, write .qrouton/handoff.md with a short brief (what the work is, what's established, what's ruled out, what's still open) — it becomes the system prompt of the fresh orchestrator that replaces you. Give name for the piece of work and, optionally, branch_prefix (one of %s). This opens the repository picker; the user chooses repositories and confirms or cancels there. On confirm, your process is replaced and this call never returns. On cancel, it returns and you continue as the assistant."
 )
 
 const (
@@ -83,3 +84,8 @@ const descDigestField = "The whole digest, rewritten: a few plain past-tense lin
 var descSetDigest = fmt.Sprintf("Write the So far digest the user sees under the summary in the Overview tab: where this session stands. Call it after each lead returns and after the user settles a decision. Each call replaces the whole digest, so pass all of it, rewritten. Give a few plain past-tense lines, at most %d characters, on what is done, what is in progress and what waits on the user. Line breaks are kept. Longer text is rejected, never truncated: shorten it and call again.", digestLimit)
 
 var descSetSummary = fmt.Sprintf("Write the session summary the user sees at the top of the Overview tab. Call it when you start a stage's lead, passing stage as research, plan or implement for the lead you are about to spawn (spec work is plan, and audit work is research). Give one or two plain sentences, at most %d characters, on what this session is building and where. Use no marketing words, no progress report and no stage name; qrouton adds the stage itself. An unknown stage is rejected. Longer text is rejected, never truncated: shorten it and call again. The session description is left alone.", summaryLimit)
+
+const descBranchPrefix = "one of %s"
+const descSummaryField = "One or two plain sentences, at most %d characters, on what this session is building and where"
+
+var descEscalate = fmt.Sprintf(descEscalateFormat, strings.Join(assembly.Prefixes(), ", "))

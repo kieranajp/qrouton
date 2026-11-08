@@ -264,3 +264,7 @@ const (
 	outcomeTie   = "tie"
 	outcomeError = "error"
 )
+
+const mockMCPName = "qrouton-eval"
+const mockMCPInstructions = "Record " + mcpserver.ToolOpenFile + " calls and execute fixture-local workflow tools during prompt evaluation."
+const mockOpenFileFormat = "Recorded %s for %s"

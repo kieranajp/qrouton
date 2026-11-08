@@ -5,6 +5,8 @@ import "strconv"
 // DigestLimit is the most characters a session digest may hold.
 const DigestLimit = 600
 
+const SummaryLimit = 140
+
 const (
 	claudeAgentsDir = ".claude/agents/"
 	codexAgentsDir  = ".codex/agents/"
@@ -34,7 +36,8 @@ const (
 	sessionDigestFileName    = "session-digest.md"
 	sessionDigestPlaceholder = "{{session-digest}}"
 
-	digestLimitPlaceholder = "{{digest-limit}}"
+	digestLimitPlaceholder  = "{{digest-limit}}"
+	summaryLimitPlaceholder = "{{summary-limit}}"
 
 	scratchCopyFileName    = "scratch-copy.md"
 	scratchCopyPlaceholder = "{{scratch-copy}}"
@@ -80,7 +83,8 @@ var partials = map[string]string{
 // figures are numbers Go enforces, keyed by the placeholder a prompt states
 // each through. They expand after the partials, so a partial may name one.
 var figures = map[string]string{
-	digestLimitPlaceholder: strconv.Itoa(DigestLimit),
+	digestLimitPlaceholder:  strconv.Itoa(DigestLimit),
+	summaryLimitPlaceholder: strconv.Itoa(SummaryLimit),
 }
 
 // The leads, by the agent type the runner reports them as.
