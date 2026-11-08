@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/session"
@@ -18,6 +19,19 @@ func TestEvalWorkflowToolsExecuteRequiredStampedCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	log := filepath.Join(t.TempDir(), "mcp.jsonl")
+	source := t.TempDir()
+	template := filepath.Join(source, "skills", "qrouton-research", "references", "research-template.md")
+	writeTestFile(t, filepath.Join(source, "orchestrator.md"), "# Evaluation instructions\n")
+	writeTestFile(t, filepath.Join(source, "skills", "qrouton-research", "SKILL.md"), "# Research\n")
+	writeTestFile(t, template, "---\nkind: research\ntitle: <title>\n---\n# <title>\n\nRecorded template {{summary-limit}}\n")
+	snapshot := filepath.Join(filepath.Dir(log), promptSnapshotDirName)
+	if _, err := MaterializeAssets(source, root, snapshot); err != nil {
+		t.Fatal(err)
+	}
+	if err := makeTreeReadOnly(snapshot); err != nil {
+		t.Fatal(err)
+	}
+	writeTestFile(t, template, "Concurrent source edit\n")
 	ctx := context.Background()
 	server := newMockMCP(root, log)
 	st, ct := mcp.NewInMemoryTransports()
@@ -55,6 +69,14 @@ func TestEvalWorkflowToolsExecuteRequiredStampedCalls(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(root, "thoughts", "shared", "research", "*.md"))
 	if err != nil || len(paths) != 1 {
 		t.Fatalf("created artifacts = %v, %v", paths, err)
+	}
+	content, err := os.ReadFile(paths[0])
+	if err != nil || !strings.Contains(string(content), "Recorded template 140") || strings.Contains(string(content), "Concurrent source edit") {
+		t.Fatalf("artefact did not use the expanded snapshot template: %q, %v", content, err)
+	}
+	result, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "create_artefact", Arguments: map[string]any{"kind": "plan", "title": "Missing snapshot template"}})
+	if err != nil || !result.IsError {
+		t.Fatalf("missing snapshot template fell back to embedded template: %+v, %v", result, err)
 	}
 	rel, err := filepath.Rel(root, paths[0])
 	if err != nil {

@@ -9,6 +9,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/mcpserver"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/workbench"
+	"github.com/kieranajp/qrouton/prompts"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -18,7 +19,8 @@ func RunMockMCP(ctx context.Context, root, logPath string) error {
 
 func newMockMCP(root, logPath string) *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{Name: mockMCPName, Version: "1"}, &mcp.ServerOptions{Instructions: mockMCPInstructions})
-	mcpserver.AddWorkflowTools(server, root, func(_ context.Context, input mcpserver.OpenFileInput) (string, *workbench.DocumentViewport, error) {
+	templates := prompts.NewFSLoader(os.DirFS(filepath.Join(filepath.Dir(logPath), promptSnapshotDirName)))
+	mcpserver.AddWorkflowTools(server, root, templates.Template, func(_ context.Context, input mcpserver.OpenFileInput) (string, *workbench.DocumentViewport, error) {
 		path, err := resolveWorkspacePath(root, input.Path)
 		if err != nil {
 			return "", nil, err

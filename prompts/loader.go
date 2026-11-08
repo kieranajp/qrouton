@@ -56,7 +56,11 @@ var embedded embed.FS
 
 // Template is the skeleton a new artefact of the given kind starts from.
 func Template(kind string) ([]byte, error) {
-	data, err := NewFSLoader(embedded).read(fmt.Sprintf(templatePathFormat, kind, kind))
+	return NewFSLoader(embedded).Template(kind)
+}
+
+func (l *FSLoader) Template(kind string) ([]byte, error) {
+	data, err := l.read(fmt.Sprintf(templatePathFormat, kind, kind))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q", ErrNoTemplate, kind)
 	}

@@ -11,6 +11,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
+	"github.com/kieranajp/qrouton/prompts"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -126,7 +127,7 @@ func addToolWithSchema[In any](server *mcp.Server, name, description, key string
 		})
 }
 
-func AddWorkflowTools(server *mcp.Server, root string, openFile func(context.Context, OpenFileInput) (string, *workbench.DocumentViewport, error)) {
+func AddWorkflowTools(server *mcp.Server, root string, templateFor func(string) ([]byte, error), openFile func(context.Context, OpenFileInput) (string, *workbench.DocumentViewport, error)) {
 	addTool(server, ToolOpenFile, descOpenFile, keyMessage, openFile)
 	addToolWithSchema(server, toolSetSummary, descSetSummary, keyMessage, setSummarySchema(),
 		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
@@ -134,7 +135,7 @@ func AddWorkflowTools(server *mcp.Server, root string, openFile func(context.Con
 		}))
 	addToolWithSchema(server, toolCreateArtefact, descCreateArtefact, keyMessage, createArtefactSchema(),
 		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
-			return createArtefact(root, input)
+			return createArtefact(root, input, templateFor)
 		}))
 	addToolWithSchema(server, toolSetDigest, descSetDigest, keyMessage, setDigestSchema(),
 		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
@@ -203,7 +204,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return textResult(message), out, nil
 		})
 
-	AddWorkflowTools(server, root, windows.openFile)
+	AddWorkflowTools(server, root, prompts.Template, windows.openFile)
 	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
 	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
