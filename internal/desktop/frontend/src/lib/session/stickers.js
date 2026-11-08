@@ -1,9 +1,9 @@
 import { STICKER_COLOURS } from "../bridge/generated.js";
 
-/** @typedef {{name: string, fill?: string, stroke?: string, width?: number}} StickerSymbol */
+/** @typedef {{name: string, fill?: string, stroke?: string, width?: number}} StickerDrawing */
 
 /** Drawing data only: Go owns which symbols exist.
- * @type {Readonly<Record<string, StickerSymbol>>} */
+ * @type {Readonly<Record<import("../bridge/generated.js").StickerSymbol, StickerDrawing>>} */
 export const STICKER_GLYPHS = Object.freeze({
   star: Object.freeze({ name: "star", fill: "m8 1.5 1.9 3.85 4.25.62-3.08 3 0.73 4.23L8 11.2l-3.8 2 .73-4.23-3.08-3 4.25-.62L8 1.5Z" }),
   bookmark: Object.freeze({ name: "bookmark", fill: "M4 2.25h8v11.5L8 11.2l-4 2.55V2.25Z" }),

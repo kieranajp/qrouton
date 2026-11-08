@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { STICKER_COLOURS, STICKER_SYMBOLS } from "../bridge/generated.js";
+import { STICKER_COLOURS } from "../bridge/generated.js";
 import {
   STICKER_GLYPHS,
   sticker,
@@ -41,8 +41,7 @@ test("a listed id reads its colour, symbol and label from the list", () => {
   assert.equal(stickerCss("lavender"), "var(--sticker-lavender)");
 });
 
-test("every symbol Go accepts has a glyph, and no glyph is left over", () => {
-  assert.deepEqual(Object.keys(STICKER_GLYPHS), [...STICKER_SYMBOLS]);
+test("each authored glyph carries a drawing", () => {
   for (const glyph of Object.values(STICKER_GLYPHS)) assert.ok(glyph.fill || glyph.stroke);
 });
 
