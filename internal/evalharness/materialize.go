@@ -15,6 +15,10 @@ import (
 )
 
 func CopyTree(src, dst string) error {
+	return copyTree(src, dst, true)
+}
+
+func copyTree(src, dst string, preserveLinks bool) error {
 	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -30,11 +34,20 @@ func CopyTree(src, dst string) error {
 			return os.MkdirAll(destination, 0o755)
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			target, err := os.Readlink(path)
-			if err != nil {
-				return err
+			if preserveLinks {
+				target, err := os.Readlink(path)
+				if err != nil {
+					return err
+				}
+				return os.Symlink(target, destination)
 			}
-			return os.Symlink(target, destination)
+			info, err := os.Stat(path)
+			if err != nil {
+				return fmt.Errorf("%w: %s: %w", ErrPromptLink, path, err)
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("%w: %s", ErrPromptLink, path)
+			}
 		}
 
 		return copyFile(path, destination)
@@ -75,7 +88,7 @@ func MaterializeAssets(assetsDir, workspace, snapshot string) (string, error) {
 }
 
 func snapshotPrompts(assetsDir, snapshot string) (*prompts.FSLoader, string, error) {
-	if err := CopyTree(assetsDir, snapshot); err != nil {
+	if err := copyTree(assetsDir, snapshot, false); err != nil {
 		return nil, "", err
 	}
 
