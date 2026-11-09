@@ -1,21 +1,18 @@
-// Package desktop is qrouton's workbench: one Wails conversation window, its
-// tab registry and PTYs, and the control socket the agent's tools reach through.
+// Package desktop is qrouton's workbench: one Wails conversation window, the
+// services its page binds, and the local client the core reaches the machine
+// through.
 package desktop
 
 import (
 	"context"
-	"fmt"
-	"io"
 	"io/fs"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
-	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -60,13 +57,9 @@ type Options struct {
 	Validator  Validator
 	Relauncher Relauncher
 
-	assembly   *Assembly
-	chrome     *Chrome
-	bugReports *BugReports
-	updates    *Updates
-	vault      *vault.Set
-	ollama     *core.Ollama
-	placement  *Placement
+	assembly  *Assembly
+	updates   *Updates
+	placement *Placement
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -87,50 +80,48 @@ func Run(opts Options) error {
 	if err != nil {
 		return err
 	}
-	// The asset route is built into the renderer, which is built before the
-	// windows it asks: it holds the variable rather than the registry.
-	var windows *Windows
-	r := newWailsRenderer(assets, opts.Icon, opts.Config.EffectiveUIScale, func(token string) (string, string, bool) {
-		if windows == nil {
-			return "", "", false
+	// The asset routes are built into the renderer, which is built before the
+	// core they read through: they hold the variable rather than the core.
+	var kernel *core.Core
+	r := newWailsRenderer(assets, opts.Icon, opts.Config.EffectiveUIScale, func(token, rel string) (*os.File, error) {
+		if kernel == nil {
+			return nil, core.ErrNoSuchAsset
 		}
-		return windows.registry.deckDirectory(token)
-	}, func(token string, index int) (galleryAssetRef, bool) {
-		if windows == nil {
-			return galleryAssetRef{}, false
+		return kernel.Windows.OpenDeckAsset(token, rel)
+	}, func(token string, index int) (*os.File, string, error) {
+		if kernel == nil {
+			return nil, "", core.ErrNoSuchAsset
 		}
-		return windows.registry.lookupGalleryAsset(token, index)
+		return kernel.Windows.OpenGalleryAsset(token, index)
 	})
 	client := newLocalClient(r, opts.Launcher, r.chooseDirectory)
-	reg := newSessions()
-	opts.bugReports = newBugReports(reg)
-	opts.vault = core.OpenVault(opts.Config)
-	r.register(application.NewService(opts.bugReports))
-	term := newTerm(reg, r.Emit)
-	windows = newWindows(r.Emit, reg)
+	var assemblyService *Assembly
+	kernel = core.New(core.Options{
+		Root:     opts.Root,
+		Config:   opts.Config,
+		Launcher: opts.Launcher,
+		Vault:    core.OpenVault(opts.Config),
+		Ollama:   vault.NewOllama(),
+		OpenTicket: func(url, prompt string) (string, error) {
+			return assemblyService.offer(url, prompt)
+		},
+	}, client)
+	reg := kernel.Sessions
+	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
 	repos := newRepositories(opts.Config, r.Emit)
 	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)
-	// The same teardown the main window's OnClose runs, shared with Settings.Quit
-	// so quitting from the panel is no worse than closing the window.
-	quit := sync.OnceFunc(func() {
-		windows.stopAll()
-		reg.stopAll()
-		r.Quit()
-	})
-	r.register(application.NewService(term))
-	r.register(application.NewService(windows))
-	r.register(application.NewService(reg))
+	quit := quitter(kernel, r)
+	r.register(application.NewService(&Term{term: kernel.Term}))
+	r.register(application.NewService(&Windows{windows: kernel.Windows}))
+	r.register(application.NewService(&Sessions{sessions: reg}))
 	r.register(application.NewService(repos))
 	r.register(application.NewService(&Orgs{cfg: opts.Config}))
-	chrome := newChrome(r.Emit)
-	opts.chrome = chrome
-	r.register(application.NewService(chrome))
+	r.register(application.NewService(&Chrome{chrome: kernel.Chrome}))
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
-	opts.ollama = core.NewOllama(vault.NewOllama(), r.Emit)
-	r.register(application.NewService(&Ollama{ollama: opts.ollama}))
-	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
+	r.register(application.NewService(&Ollama{ollama: kernel.Ollama}))
+	assemblyService = newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
 	r.register(application.NewService(picker))
@@ -138,17 +129,26 @@ func Run(opts Options) error {
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
-		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, core.ReconfigureVault(opts.vault),
+		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.Touch, core.ReconfigureVault(kernel.Vault),
 		opts.Launcher.Runners, client,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, client.ChooseDirectory, core.ReconfigureVault(opts.vault))
+	firstRun := newFirstRun(opts.Config, reg.Touch, relaunch, quit, client.ChooseDirectory, core.ReconfigureVault(kernel.Vault))
 	r.register(application.NewService(firstRun))
 	opts.placement = newPlacement(opts.Config, reg)
 	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
 	r.register(application.NewService(opts.placement))
-	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), terminalSession(reg, windows))))
-	return run(r, client, term, windows, opts, quit)
+	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), kernel.TerminalSession)))
+	return run(r, kernel, opts, quit)
+}
+
+// quitter is the teardown the main window's OnClose runs, shared with
+// Settings.Quit so quitting from the panel is no worse than closing the window.
+func quitter(kernel *core.Core, r renderer) func() {
+	return sync.OnceFunc(func() {
+		kernel.Shutdown()
+		r.Quit()
+	})
 }
 
 func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Assembly) func() error {
@@ -180,180 +180,23 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 	return r.Relaunch
 }
 
-// ringer is the one place a session's chime is rung from, so the setting, the
-// session in front of the user, and the once-until-you-type rule cannot be
-// skipped by any caller.
-func ringer(cfg *config.Config, client core.Client, state *sessionState, watched func(*sessionState) bool) func() {
-	return func() {
-		if (cfg != nil && cfg.Snapshot().Quiet) || watched(state) || !state.agents.ring() {
-			return
-		}
-		client.Chime(state.root())
-	}
-}
-
-// attend is the one path a session's attention change takes: mark it seen if
-// it is on screen, push the chrome, and ring when the change asks for it.
-func attend(state *sessionState, shown func() *sessionState, touch, ring func()) func(changed, alert bool) {
-	return func(changed, alert bool) {
-		if !changed {
-			return
-		}
-		if shown() == state {
-			state.agents.seen()
-		}
-		touch()
-		if alert {
-			ring()
-		}
-	}
-}
-
-func sessionTree(state *sessionState) status.AgentTree {
-	snapshot := state.agents.snapshot()
-	fallback := ""
-	if snapshot.Provider == "" {
-		fallback = manifestRunner(state.root())
-	}
-	return agentTree(snapshot, fallback, state.root())
-}
-
-func manifestRunner(root string) string {
-	if root == "" {
-		return ""
-	}
-	m, err := session.Load(root)
-	if err != nil {
-		return ""
-	}
-	return m.Runner
-}
-
-// run is Run with the renderer already built, so the window lifecycle and the
-// control socket are exercised against a double instead of a display.
-func run(r renderer, client core.Client, term *Term, windows *Windows, opts Options, quit func()) error {
+// run is Run with the renderer and the core already built, so the window
+// lifecycle and the control socket are exercised against a double instead of a
+// display.
+func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	reg := term.sessions
-	if opts.bugReports == nil {
-		opts.bugReports = newBugReports(reg)
-	}
-	launcher := opts.Launcher
-	shell := &shellWindow{windows: windows, launcher: launcher}
-	overviewTab := &overviewWindow{windows: windows}
-
-	reg.boot = booting{
-		root: func(slug string) string { return session.Resumable(opts.Root, slug) },
-		stickers: func() []session.Sticker {
-			var ids []session.Sticker
-			for _, s := range opts.Config.EffectiveStickers() {
-				ids = append(ids, session.Sticker(s.ID))
-			}
-			return ids
-		},
-		agent: launcher.Agent,
-		serve: func(state *sessionState, socket string) (io.Closer, error) {
-			ring := ringer(opts.Config, client, state, func(s *sessionState) bool {
-				return reg.current() == s && client.Focused()
-			})
-			notify := attend(state, reg.current, reg.touch, ring)
-			return serveControl(socket, windows, state, controlHooks{
-				bugReports: opts.bugReports,
-				vault:      opts.vault,
-				thoughts:   opts.Config.ThoughtsRoots,
-				attention: func(value string, generation uint64) {
-					notify(state.agents.attention(generation, value))
-				},
-				ring: ring,
-				generation: func(req workbench.RunnerGenerationRequest) {
-					if req.Provider != state.provider {
-						return
-					}
-					if state.agents.begin(req.Provider, req.Generation) {
-						reg.touch()
-					}
-				},
-				lifecycle: func(req workbench.DelegatedLifecycleRequest) {
-					if state.agents.lifecycle(req) {
-						reg.touch()
-					}
-				},
-				agentEvent: func(req workbench.AgentEventRequest) {
-					notify(state.agents.apply(req))
-				},
-				picker: reg.queuePicker,
-			})
-		},
-		shown: func(state *sessionState) {
-			client.SessionShown(state.root())
-			if state == nil {
-				return
-			}
-			if root := state.root(); root != "" {
-				_ = session.MarkOpened(root, time.Now())
-			}
-			overviewTab.open(state)
-		},
-		teardown: windows.stop,
-		// The destructive paths address a session by the sessions root and the
-		// manifest's slug, so opts.Root is what they take and not the session's own.
-		uncommitted: func(root string) ([]string, error) { return session.Uncommitted(opts.Root, root) },
-		cleanup:     func(root string) error { return session.Remove(opts.Root, root) },
-		reveal:      client.Reveal,
-		copyImage:   client.CopyImage,
-		copyFile:    client.CopyFile,
-	}
-	chromeEmit := r.Emit
-	reg.trees = newAgentTrees(r.Emit, agentTreeInterval, reg.current, sessionTree)
-	if opts.chrome != nil {
-		chromeEmit = opts.chrome.publish
-		opts.chrome.answerTrees(func(slug string) status.AgentTree {
-			if state := reg.bySlug(slug); state != nil {
-				return sessionTree(state)
-			}
-			return agentTree(agentActivitySnapshot{}, manifestRunner(session.Resumable(opts.Root, slug)), "")
-		})
-	}
-	go watchChrome(ctx, reg, opts.Root, opts.Config, chromeEmit)
 	if opts.updates != nil {
 		go opts.updates.watch(ctx, updateInterval)
-	}
-	if opts.vault != nil {
-		go opts.vault.Warm(ctx)
-	}
-	if opts.ollama != nil {
-		opts.ollama.Bind(ctx)
 	}
 	if opts.placement != nil {
 		go opts.placement.checkOnce()
 	}
-
-	// Closing the conversation window ends the app; a supervisor exiting ends
-	// only its own session, and a failed one keeps its terminal readable.
-	term.whenChildExits(func(state *sessionState, code int) {
-		if state.agents.exitWithProvider(state.provider, code) {
-			reg.touch()
-		}
-		if code == 0 {
-			reg.retire(state)
-		}
-	})
-
-	windows.newShell = func() (string, error) { return shell.another(reg.current()) }
-	windows.newDocument = func(name string) (string, error) {
-		return openDocument(windows, reg.current(), launcher, name)
-	}
-	processHooks := controlHooks{picker: reg.queuePicker}
-	if opts.assembly != nil {
-		processHooks.openTicket = opts.assembly.offer
-		processHooks.focus = client.Raise
-	}
-	server, err := serveControl(opts.Socket, windows, nil, processHooks)
-	if err != nil {
+	if err := kernel.Start(opts.Socket); err != nil {
 		return err
 	}
-	defer server.Close()
+	defer kernel.Shutdown()
 	if opts.Ticket != "" {
 		if opts.assembly == nil {
 			return ErrNoConfig
@@ -367,10 +210,11 @@ func run(r renderer, client core.Client, term *Term, windows *Windows, opts Opti
 	}
 	defer workbench.Unpublish(opts.Socket)
 	titleRoot := opts.SessionRoot
-	if shown := reg.current(); shown != nil {
-		titleRoot = shown.root()
+	if shown := kernel.Sessions.Current(); shown != nil {
+		titleRoot = shown.Root()
 	}
 
+	// Closing the conversation window ends the app.
 	if err := r.Open(windowSpec{
 		Name:    mainWindowName,
 		Title:   windowTitle(titleRoot),
@@ -383,94 +227,11 @@ func run(r renderer, client core.Client, term *Term, windows *Windows, opts Opti
 		return err
 	}
 	if opts.Ticket == "" && opts.SessionRoot != "" {
-		opened, err := reg.start(opts.SessionRoot, "", opts.Resume)
-		if err != nil {
+		if err := kernel.OpenSession(opts.SessionRoot, opts.Resume); err != nil {
 			return err
 		}
-		reg.reveal(opened)
 	}
 	return r.Run()
-}
-
-// overviewWindow opens the session's Overview tab. Adoption may call it again once
-// the session is known, which must not leave two.
-type overviewWindow struct {
-	windows *Windows
-}
-
-func (a *overviewWindow) open(owner *sessionState) {
-	if owner == nil {
-		return
-	}
-	owner.mu.Lock()
-	defer owner.mu.Unlock()
-	if owner.overviewWindow != "" && a.windows.exists(owner.overviewWindow) {
-		return
-	}
-	id, err := a.windows.openStructural(owner, workbench.WindowOptions{
-		Kind: workbench.KindOverview, Label: overviewWindowLabel, Icon: workbench.IconTree,
-	})
-	if err != nil {
-		return
-	}
-	owner.overviewWindow = id
-}
-
-// shellWindow opens the user shells the session asks for. The numbering is the
-// session's, so a second one restarts it.
-type shellWindow struct {
-	windows  *Windows
-	launcher Launcher
-}
-
-// another is the tab strip's + button.
-func (s *shellWindow) another(owner *sessionState) (string, error) {
-	if owner == nil {
-		return "", ErrNoShellCommand
-	}
-	owner.mu.Lock()
-	defer owner.mu.Unlock()
-	return s.spawn(owner)
-}
-
-// spawn is called with the session's lock held, so the numbering matches the
-// order the tabs open in.
-func (s *shellWindow) spawn(owner *sessionState) (string, error) {
-	root := owner.root()
-	if root == "" || s.launcher == nil {
-		return "", ErrNoShellCommand
-	}
-	argv := s.launcher.Shell(root)
-	if len(argv) == 0 {
-		return "", ErrNoShellCommand
-	}
-	owner.shells++
-	return s.windows.openShell(owner, workbench.WindowOptions{
-		Kind:        workbench.KindTerminal,
-		Label:       shellLabel(owner.shells),
-		Icon:        workbench.IconShell,
-		Cwd:         root,
-		Command:     argv,
-		CloseOnExit: true,
-	})
-}
-
-func openDocument(windows *Windows, owner *sessionState, launcher Launcher, name string) (string, error) {
-	if owner == nil || launcher == nil {
-		return "", ErrNoEditorCommand
-	}
-	opts, err := launcher.Document(owner.root(), name)
-	if err != nil {
-		return "", err
-	}
-	return windows.openStructural(owner, opts)
-}
-
-func shellLabel(n int) string {
-	if n <= 1 {
-		return shellWindowLabel
-	}
-	return fmt.Sprintf(shellWindowLabelNumbers, n)
 }
 
 func windowTitle(root string) string {

@@ -14,6 +14,7 @@ import (
 	shellcmd "github.com/kieranajp/qrouton/cmd/shell"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/desktop"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
@@ -244,20 +245,20 @@ type workbenchPorts struct {
 // the socket it is served on and the manifest it reads are the current ones. A
 // session assembled in the overlay names its own agent; anything else takes the
 // workbench's.
-func (p workbenchPorts) Agent(req desktop.AgentRequest) (desktop.AgentCommand, error) {
+func (p workbenchPorts) Agent(req core.AgentRequest) (core.AgentCommand, error) {
 	id := req.RunnerID
 	if id == "" {
 		id = p.spec.Runner
 	}
 	runner, err := pickRunner(p.cfg.Snapshot(), id)
 	if err != nil {
-		return desktop.AgentCommand{}, err
+		return core.AgentCommand{}, err
 	}
 	argv, env, err := launch.Launch(req.SessionRoot, runner, p.bin, req.Socket, p.spec.Editor, req.Resume)
 	if err != nil {
-		return desktop.AgentCommand{}, err
+		return core.AgentCommand{}, err
 	}
-	return desktop.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID}, nil
+	return core.AgentCommand{Argv: argv, Env: env, RunnerID: runner.ID}, nil
 }
 
 // Shell and Reveal are built per session, because the landing-list path does not

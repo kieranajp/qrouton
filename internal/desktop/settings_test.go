@@ -723,14 +723,11 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 // own Quit is reached only after that teardown completes.
 func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	r := newFakeRenderer()
-	opts, _ := testOptions(t)
-	reg, term, windows := testWorkbench(t, r, r.Emit)
+	opts, boot := testOptions(t)
+	kernel := testWorkbench(t, r, &opts)
+	reg := kernel.Sessions
 
-	quit := sync.OnceFunc(func() {
-		windows.stopAll()
-		reg.stopAll()
-		r.Quit()
-	})
+	quit := quitter(kernel, r)
 	settings := testSettings(t, &config.Config{}, nil, nil, quit)
 	relaunched := false
 	settings.relaunch = func() error { relaunched = true; return nil }
@@ -739,7 +736,7 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- run(r, newLocalClient(r, opts.Launcher, nil), term, windows, opts, quit)
+		done <- run(r, kernel, opts, quit)
 	}()
 	t.Cleanup(func() {
 		r.Quit()
@@ -747,7 +744,8 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	})
 
 	<-r.opened
-	state := shownSession(t, reg)
+	shownSession(t, reg)
+	waitFor(t, "the session's listener", func() bool { _, serves := boot.counts(); return serves == 1 })
 
 	if err := settings.Relaunch(); err != nil {
 		t.Fatal(err)
@@ -765,10 +763,7 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	if !quitReached {
 		t.Fatal("Settings.Relaunch did not reach the renderer's own Quit")
 	}
-	state.mu.Lock()
-	stoppedSession := state.stopped
-	state.mu.Unlock()
-	if !stoppedSession {
+	if _, serves := boot.counts(); serves != 0 {
 		t.Fatal("Settings.Relaunch did not stop the session registry")
 	}
 }

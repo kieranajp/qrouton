@@ -15,10 +15,10 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/status"
 )
 
 // Neither domain type is emittable as written: an error marshals to {} and an
@@ -122,7 +122,7 @@ func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 
 func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 	root := t.TempDir()
-	a := newAssembly(&config.Config{Root: root}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: root}, nil, newSessions(t), nil, nil, nil)
 	got, err := a.offer("lif-2841", "Fix the regression")
 	if err != nil || got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
@@ -146,7 +146,7 @@ func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 }
 
 func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	manual := a.Begin()
 	if manual.Ticket != "" {
 		t.Fatalf("manual Begin = %+v", manual)
@@ -161,7 +161,7 @@ func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
 }
 
 func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	if _, err := a.offer("LIF-2841", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +181,7 @@ func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
 }
 
 func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	if _, err := a.offer("LIF-2841", "Linear prompt"); err != nil {
 		t.Fatal(err)
 	}
@@ -202,7 +202,7 @@ func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
 }
 
 func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	var carried string
 	relaunch := pendingRelaunch(func(request func() (string, string)) error {
 		if _, err := a.offer("LIF-2841", "Late prompt"); err != nil {
@@ -222,7 +222,7 @@ func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
 func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
+	reg := testSessions(t, root, boot)
 	created := time.Now()
 	for i, slug := range []string{"older", "shown", "newest"} {
 		dir := sessionDir(t, root, slug)
@@ -241,7 +241,7 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 			t.Fatalf("matching offer = %q, %v", got, err)
 		}
 	}
-	if current := reg.current(); current == nil || current.slug() != "shown" {
+	if current := reg.Current(); current == nil || current.Slug() != "shown" {
 		t.Fatalf("shown session = %v, want preferred match", current)
 	}
 	if agents, serves := boot.counts(); agents != 1 || serves != 1 {
@@ -250,7 +250,7 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 }
 
 func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	start := make(chan struct{})
 	type answer struct {
 		issue string
@@ -297,7 +297,7 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
+	reg := testSessions(t, root, boot)
 	dir := sessionDir(t, root, "shown")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
 		TicketURL: "https://linear.app/acme/issue/LIF-2841/title", Mode: session.ModeAssistant,
@@ -307,7 +307,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 
 	during := make(chan error, 1)
-	reg.boot.agent = func(req AgentRequest) (AgentCommand, error) {
+	boot.booting = func(req core.AgentRequest) {
 		offered := make(chan error, 1)
 		go func() {
 			outcome, err := a.offer("LIF-2842", "")
@@ -322,7 +322,6 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 		case <-time.After(2 * time.Second):
 			during <- errors.New("an offer could not proceed while a matching session booted")
 		}
-		return boot.Agent(req)
 	}
 
 	if got, err := a.offer("LIF-2841", ""); err != nil || got != assembly.OutcomeExisting {
@@ -342,7 +341,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
+	reg := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
@@ -387,13 +386,13 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	}
 
 	// Adopted with boot: the session came up here rather than being handed a PTY.
-	if reg.current().root() != dir {
-		t.Fatalf("the created session is not on screen: %q", reg.current().root())
+	if reg.Current().Root() != dir {
+		t.Fatalf("the created session is not on screen: %q", reg.Current().Root())
 	}
 	if boot.sockets[dir] == "" {
 		t.Fatal("the adopted session did not boot its own supervisor")
 	}
-	if boot.resumes[dir] {
+	if boot.resumed(dir) {
 		t.Fatal("a session assembled from nothing was told to resume a conversation")
 	}
 	if boot.runners[dir] != "codex" {
@@ -428,28 +427,13 @@ func TestCreateRefusesADraftItsOwnRulesReject(t *testing.T) {
 	}
 }
 
-// The rail freezes its order at the first poll and prepends anything it has not
-// seen, so a session created mid-lifetime takes the front and the first shortcut.
-func TestASessionCreatedMidLifetimeTakesTheFrontOfTheRail(t *testing.T) {
-	reg := newSessions()
-	first := reg.railOrder([]status.SessionRow{{Slug: "older"}})
-	if len(first) != 1 || first[0].Slug != "older" {
-		t.Fatalf("rail = %+v", first)
-	}
-
-	after := reg.railOrder([]status.SessionRow{{Slug: "fresh"}, {Slug: "older"}})
-	if len(after) != 2 || after[0].Slug != "fresh" || after[1].Slug != "older" {
-		t.Fatalf("a session created mid-lifetime landed at %+v", after)
-	}
-}
-
 // A control whose effect expires after the first boot is worse than no control,
 // so the session records the agent it was assembled with and every later boot
 // reads it back.
 func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg, _, _ := testSessions(t, root, boot)
+	reg := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
@@ -472,7 +456,9 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 
 	// The rail booting it later names no runner, so the manifest's is what reaches
 	// the agent command.
-	reg.retire(reg.bySlug("api-cleanup-4f3a"))
+	if err := reg.Unload("api-cleanup-4f3a"); err != nil {
+		t.Fatal(err)
+	}
 	if err := reg.Show("api-cleanup-4f3a"); err != nil {
 		t.Fatal(err)
 	}
@@ -483,7 +469,7 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 
 func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 	root := t.TempDir()
-	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
+	reg := testSessions(t, root, newStubBoot("/bin/cat"))
 	dir := sessionDir(t, root, "shown")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
 		TicketURL: "https://github.com/Acme/API/issues/42", Mode: session.ModeAssistant,
@@ -495,13 +481,13 @@ func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 		got != assembly.OutcomeExisting {
 		t.Fatalf("matching offer = %q, %v", got, err)
 	}
-	if current := reg.current(); current == nil || current.slug() != "shown" {
+	if current := reg.Current(); current == nil || current.Slug() != "shown" {
 		t.Fatalf("shown session = %v, want the matching session", current)
 	}
 }
 
 func TestAssemblyOfferQueuesAnUnmatchedGitHubIssue(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
 	if got, err := a.offer("https://github.com/Acme/API/issues/42", ""); err != nil ||
 		got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)

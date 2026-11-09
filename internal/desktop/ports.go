@@ -1,39 +1,16 @@
 package desktop
 
-import (
-	"github.com/kieranajp/qrouton/internal/assembly"
-	"github.com/kieranajp/qrouton/internal/workbench"
-)
+import "github.com/kieranajp/qrouton/internal/core"
 
-// AgentRequest asks for one session's supervisor. An empty RunnerID means the
-// workbench's own agent.
-type AgentRequest struct {
-	SessionRoot string
-	Socket      string
-	RunnerID    string
-	Resume      bool
-}
-
-// AgentCommand is that supervisor. RunnerID is the agent actually selected,
-// which an empty request resolves to.
-type AgentCommand struct {
-	Argv     []string
-	Env      []string
-	RunnerID string
-}
-
-// Launcher keeps launch out of the desktop dependency graph.
-// Empty Shell or Reveal commands report their matching unsupported-operation error.
+// Launcher keeps launch out of the desktop dependency graph. The argv builders
+// beside the core's are the local client's; an empty one reports its matching
+// unsupported-operation error.
 type Launcher interface {
-	Agent(AgentRequest) (AgentCommand, error)
-	Shell(sessionRoot string) []string
+	core.Launcher
 	Reveal(sessionRoot string) []string
 	OpenText(path string) []string
 	CopyImage(path string) []string
 	CopyFile(path string) []string
-	Document(sessionRoot, name string) (workbench.WindowOptions, error)
-	Runners() ([]assembly.Runner, error)
-	Signal(sessionRoot string)
 }
 
 // Validator answers the settings panel, which saves neither an editor nothing

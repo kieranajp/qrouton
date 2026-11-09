@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/placement"
 )
 
@@ -26,7 +27,7 @@ type PlacementView struct {
 // in the wrong root.
 type Placement struct {
 	cfg        *config.Config
-	reg        *Sessions
+	reg        *core.Sessions
 	pinnedRoot string
 
 	// op keeps the automatic check, the Settings check, Move and Close from overlapping.
@@ -38,7 +39,7 @@ type Placement struct {
 	move   func(*config.Config, []string) []placement.Outcome
 }
 
-func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
+func newPlacement(cfg *config.Config, reg *core.Sessions) *Placement {
 	return &Placement{cfg: cfg, reg: reg, pinnedRoot: pinnedFileRoot(), scan: placement.Scan, move: placement.Move}
 }
 
@@ -88,7 +89,7 @@ func (p *Placement) show(report placement.Report, manual bool) {
 	p.mu.Lock()
 	p.report, p.manual = report, manual
 	p.mu.Unlock()
-	p.reg.setPlacing(true)
+	p.reg.SetPlacing(true)
 }
 
 func (p *Placement) Report() PlacementView {
@@ -126,7 +127,7 @@ func (p *Placement) Move(slugs []string) []placement.Outcome {
 func (p *Placement) Close() error {
 	p.op.Lock()
 	defer p.op.Unlock()
-	p.reg.setPlacing(false)
+	p.reg.SetPlacing(false)
 	p.mu.Lock()
 	manual := p.manual
 	p.mu.Unlock()

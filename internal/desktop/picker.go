@@ -5,6 +5,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -41,12 +42,12 @@ type pickerInput struct {
 // escalation actions as well as the add-repos button.
 type Picker struct {
 	cfg       *config.Config
-	sessions  *Sessions
+	sessions  *core.Sessions
 	repos     *Repositories
 	assembler assembly.Assembler
 }
 
-func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
+func newPicker(cfg *config.Config, reg *core.Sessions, repos *Repositories, signal func(string)) *Picker {
 	return &Picker{cfg: cfg, sessions: reg, repos: repos,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
 }
@@ -65,8 +66,8 @@ func (p *Picker) Escalate(slug string) error {
 	if m.EffectiveMode() != session.ModeAssistant {
 		return nil
 	}
-	state.requestPicker(workbench.PickerRequest{SessionRoot: root})
-	p.sessions.touch()
+	state.RequestPicker(workbench.PickerRequest{SessionRoot: root})
+	p.sessions.Touch()
 	return nil
 }
 
@@ -96,7 +97,7 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if err != nil {
 		return err
 	}
-	escalation := state.pendingPicker()
+	escalation := state.PendingPicker()
 	m, err := session.Load(root)
 	if err != nil {
 		return err
@@ -110,8 +111,8 @@ func (p *Picker) Confirm(slug string, in pickerInput) error {
 	if err := assembler.Confirm(root, draft, escalation != nil, nil); err != nil {
 		return err
 	}
-	state.clearPicker()
-	p.sessions.repositoriesChanged(root)
+	state.ClearPicker()
+	p.sessions.RepositoriesChanged(root)
 	return nil
 }
 
@@ -120,11 +121,11 @@ func (p *Picker) Cancel(slug string) error {
 	if err != nil {
 		return err
 	}
-	if err := assembly.Cancel(root, state.pendingPicker() != nil); err != nil {
+	if err := assembly.Cancel(root, state.PendingPicker() != nil); err != nil {
 		return err
 	}
-	state.clearPicker()
-	p.sessions.touch()
+	state.ClearPicker()
+	p.sessions.Touch()
 	return nil
 }
 
@@ -169,25 +170,11 @@ func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
 	return refs
 }
 
-func (p *Picker) root(slug string) (*sessionState, string, error) {
-	state := p.sessions.bySlug(slug)
-	root := state.root()
+func (p *Picker) root(slug string) (*core.SessionState, string, error) {
+	state := p.sessions.BySlug(slug)
+	root := state.Root()
 	if root == "" {
-		return nil, "", unknownSession(slug)
+		return nil, "", core.UnknownSession(slug)
 	}
 	return state, root, nil
-}
-
-// queuePicker records an agent escalation on the session it names and raises
-// nothing. The overlay opens when the user next arrives there, so a request they
-// never arrive at expires unseen rather than taking the screen.
-func (s *Sessions) queuePicker(req workbench.PickerRequest) error {
-	slug := slugFor(req.SessionRoot)
-	state := s.bySlug(slug)
-	if state == nil {
-		return unknownSession(slug)
-	}
-	state.requestPicker(req)
-	s.touch()
-	return nil
 }

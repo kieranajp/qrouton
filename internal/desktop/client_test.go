@@ -1,77 +1,23 @@
 package desktop
 
 import (
-	"context"
 	"errors"
 	"os"
 	"path/filepath"
-	"sync"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
-	"github.com/kieranajp/qrouton/internal/workbench"
 )
-
-// recordingClient is a client whose chime is recorded rather than rung.
-type recordingClient struct {
-	core.Client
-	mu   sync.Mutex
-	rung []string
-}
-
-func (c *recordingClient) Chime(sessionRoot string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.rung = append(c.rung, sessionRoot)
-}
-
-func (c *recordingClient) chimes() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.rung...)
-}
-
-// The page names the path, so a reveal outside the session would hand the file
-// manager any directory on the machine.
-func TestRevealPathRevealsOnlyAPathInsideItsSession(t *testing.T) {
-	root := t.TempDir()
-	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
-	var revealed []string
-	reg.boot.reveal = func(path string) error {
-		revealed = append(revealed, path)
-		return nil
-	}
-	kraken := sessionDir(t, root, "kraken")
-	inside := filepath.Join(kraken, "thoughts")
-	if err := os.MkdirAll(inside, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := reg.RevealPath("kraken", inside); err != nil {
-		t.Fatal(err)
-	}
-	if len(revealed) != 1 || revealed[0] != inside {
-		t.Fatalf("revealed %v, want [%q]", revealed, inside)
-	}
-	if err := reg.RevealPath("kraken", root); !errors.Is(err, ErrPathOutsideSession) {
-		t.Fatalf("a path outside the session = %v, want ErrPathOutsideSession", err)
-	}
-	if err := reg.RevealPath("ghost", inside); err == nil {
-		t.Fatal("a slug with no session was revealed anyway")
-	}
-	if len(revealed) != 1 {
-		t.Fatalf("a refused path reached the file manager: %v", revealed)
-	}
-}
 
 // A workbench with no clipboard command answers the page with the sentinel for
 // the copy it was asked for, rather than an empty argv reaching exec.
 func TestCopyAssetWithNoClipboardCommandReturnsTheSentinel(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
-	reg, term, windows := testWorkbench(t, r, r.Emit)
+	kernel := testWorkbench(t, r, &opts)
+	reg := kernel.Sessions
 	assets := filepath.Join(opts.SessionRoot, "thoughts", "assets")
 	if err := os.MkdirAll(assets, 0o755); err != nil {
 		t.Fatal(err)
@@ -82,7 +28,7 @@ func TestCopyAssetWithNoClipboardCommandReturnsTheSentinel(t *testing.T) {
 		}
 	}
 
-	startWorkbench(t, r, term, windows, opts)
+	startWorkbench(t, r, kernel, opts)
 	<-r.opened
 	shownSession(t, reg)
 
@@ -95,58 +41,14 @@ func TestCopyAssetWithNoClipboardCommandReturnsTheSentinel(t *testing.T) {
 	}
 }
 
-// The chime is for a wait the user is not looking at: the session on screen in
-// a focused window stays silent, and it rings once the window is unfocused or
-// shows another session.
-func TestTheWorkbenchChimesOnlyWhenTheWindowIsNotFocusedOnTheSession(t *testing.T) {
-	r := newFakeRenderer()
-	opts, boot := testOptions(t)
-	opts.Config = &config.Config{}
-	sessionDir(t, opts.Root, "kraken")
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-	client := &recordingClient{Client: newLocalClient(r, opts.Launcher, nil)}
-	startWorkbenchWith(t, r, client, term, windows, opts)
-	<-r.opened
-	octopus := shownSession(t, reg)
-	handle := workbench.Handle{Socket: boot.socket(t, opts.SessionRoot), SessionRoot: opts.SessionRoot}
-	attention := func() {
-		t.Helper()
-		if _, err := handle.WindowHost().Open(context.Background(), workbench.WindowOptions{
-			Kind: workbench.KindDocument, Label: "qrouton", Content: "done", Attention: true,
-		}); err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	r.inFront.Store(true)
-	attention()
-	if got := client.chimes(); len(got) != 0 {
-		t.Fatalf("the watched session chimed %v", got)
-	}
-	r.inFront.Store(false)
-	attention()
-	if got, want := client.chimes(), opts.SessionRoot; len(got) != 1 || got[0] != want {
-		t.Fatalf("chimed %v, want %s once", got, want)
-	}
-
-	_ = octopus.write([]byte("y"))
-	if err := reg.Show("kraken"); err != nil {
-		t.Fatal(err)
-	}
-	r.inFront.Store(true)
-	attention()
-	if got := client.chimes(); len(got) != 2 || got[1] != opts.SessionRoot {
-		t.Fatalf("a focused window showing another session chimed %v, want %s a second time", got, opts.SessionRoot)
-	}
-}
-
 // A window left titled for the previous session names the wrong work.
 func TestShowingASessionRetitlesTheWindow(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
 	kraken := sessionDir(t, opts.Root, "kraken")
-	reg, term, windows := testWorkbench(t, r, r.Emit)
-	startWorkbench(t, r, term, windows, opts)
+	kernel := testWorkbench(t, r, &opts)
+	reg := kernel.Sessions
+	startWorkbench(t, r, kernel, opts)
 	<-r.opened
 	shownSession(t, reg)
 	title := func() string {

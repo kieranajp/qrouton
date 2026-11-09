@@ -65,9 +65,9 @@ func TestFirstRunSaveWithAnUnchangedRootPersistsBothAnswersAndDropsTheGate(t *te
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	root := t.TempDir()
 	cfg := &config.Config{Root: root}
-	reg := newSessions()
+	touched := make(chan struct{}, 1)
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() { touched <- struct{}{} }, stubs.relaunch, stubs.quit, nil, nil)
 
 	result, err := f.Save(FirstRunInput{Orgs: []string{" acme ", "acme", "", "second-org"}, Root: root})
 	if err != nil {
@@ -92,7 +92,7 @@ func TestFirstRunSaveWithAnUnchangedRootPersistsBothAnswersAndDropsTheGate(t *te
 		t.Fatalf("live root = %q, want the boot value %q", cfg.Root, root)
 	}
 	select {
-	case <-reg.touched:
+	case <-touched:
 	default:
 		t.Fatal("the chrome poller was not woken, so the overlay stays up for a tick")
 	}
@@ -105,7 +105,7 @@ func TestFirstRunSaveStoresTheRootWithoutSurroundingSpace(t *testing.T) {
 	root := t.TempDir()
 	cfg := &config.Config{Root: root}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: "  " + root + "  "}); err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestFirstRunSaveWithAChangedRootRelaunchesThenQuits(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 
 	next := filepath.Join(t.TempDir(), "elsewhere")
 	result, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next})
@@ -150,7 +150,7 @@ func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("QROUTON_ROOT", "")
 	stubs := &firstRunStubs{}
-	f := newFirstRun(&config.Config{Root: t.TempDir()}, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(&config.Config{Root: t.TempDir()}, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 	next := filepath.Join(t.TempDir(), "elsewhere")
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: next}); err != nil {
 		t.Fatal(err)
@@ -188,7 +188,7 @@ func TestChangedRootHoldsTheConfigWriterUntilTheSuccessorIsReady(t *testing.T) {
 	relaunchEntered := make(chan struct{})
 	successorReady := make(chan struct{})
 	firstDone := make(chan error, 1)
-	f := newFirstRun(cfg, newSessions(), func() error {
+	f := newFirstRun(cfg, func() {}, func() error {
 		close(relaunchEntered)
 		<-successorReady
 		return nil
@@ -244,8 +244,7 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{fail: errors.New("workbench never answered")}
-	reg := newSessions()
-	f := newFirstRun(cfg, reg, stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 
 	_, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: filepath.Join(t.TempDir(), "elsewhere")})
 	if err == nil {
@@ -261,11 +260,8 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 		t.Fatal("the live marker was set, so the gate drops with no successor up")
 	}
 
-	r := newFakeRenderer()
-	pushChrome(reg, cfg.Root, cfg, nil, nil, nil, r.Emit)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if fields, ok := r.events[chromeEvent].(status.Fields); !ok || !fields.Welcoming {
+	kernel := startedCore(t, &Options{Root: cfg.Root, Config: cfg})
+	if fields := chromeOf(t, kernel, func(f status.Fields) bool { return f.Welcoming }); !fields.Welcoming {
 		t.Fatalf("chrome = %+v, want first run still raised", fields)
 	}
 }
@@ -280,7 +276,7 @@ func TestFirstRunSaveRefusesAnUnusableRootAndTouchesNothing(t *testing.T) {
 	}
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 
 	owned := []string{"acme"}
 	for _, in := range []FirstRunInput{
@@ -309,7 +305,7 @@ func TestFirstRunSaveRefusesAnEmptyOwnerListAndTouchesNothing(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: t.TempDir()}
 	stubs := &firstRunStubs{}
-	f := newFirstRun(cfg, newSessions(), stubs.relaunch, stubs.quit, nil, nil)
+	f := newFirstRun(cfg, func() {}, stubs.relaunch, stubs.quit, nil, nil)
 
 	root := filepath.Join(t.TempDir(), "sessions")
 	for _, orgs := range [][]string{nil, {}, {"", "   "}} {
@@ -341,7 +337,7 @@ func TestFirstRunSaveRefusesAnEmptyOwnerListAndTouchesNothing(t *testing.T) {
 func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("GITHUB_TOKEN", "")
-	f := newFirstRun(&config.Config{}, newSessions(), nil, nil, nil, nil)
+	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
 
 	if login := f.Login(); login != "" {
 		t.Fatalf("Login() = %q, want no account named", login)
@@ -350,7 +346,7 @@ func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 
 func TestFirstRunChooseRootAnswersThePickerAndNothingOnACancel(t *testing.T) {
 	chosen := "/sessions/elsewhere"
-	f := newFirstRun(&config.Config{}, newSessions(), nil, nil,
+	f := newFirstRun(&config.Config{}, func() {}, nil, nil,
 		func() (string, error) { return chosen, nil }, nil)
 	if got, err := f.ChooseRoot(); err != nil || got != chosen {
 		t.Fatalf("ChooseRoot() = %q, %v, want %q", got, err, chosen)
@@ -367,7 +363,7 @@ func TestFirstRunStoresTheThoughtsFolderOnlyWhenItDiffersFromTheDerivedOne(t *te
 	t.Setenv("HOME", home)
 	for _, answer := range []string{"", "  ", filepath.Join(root, "thoughts"), filepath.Join(root, "thoughts") + "/"} {
 		t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-		f := newFirstRun(&config.Config{Root: root}, newSessions(), nil, nil, nil, nil)
+		f := newFirstRun(&config.Config{Root: root}, func() {}, nil, nil, nil, nil)
 		if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: answer}); err != nil {
 			t.Fatal(err)
 		}
@@ -379,7 +375,7 @@ func TestFirstRunStoresTheThoughtsFolderOnlyWhenItDiffersFromTheDerivedOne(t *te
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := &config.Config{Root: root}
 	var reconfigured []config.ThoughtsRoot
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, func(c *config.Config) error { reconfigured = c.ThoughtsRoots(); return nil })
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, func(c *config.Config) error { reconfigured = c.ThoughtsRoots(); return nil })
 	if _, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: " ~/Vault "}); err != nil {
 		t.Fatal(err)
 	}
@@ -400,7 +396,7 @@ func TestFirstRunRefusesAThoughtsFolderHoldingTheRootAndWritesNothing(t *testing
 	parent := t.TempDir()
 	root := filepath.Join(parent, "sessions")
 	cfg := &config.Config{Root: root}
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, nil)
 
 	_, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: parent})
 	if !errors.Is(err, config.ErrThoughtsHoldsRoot) || !strings.HasPrefix(err.Error(), "thoughts: ") {
@@ -416,7 +412,7 @@ func TestFirstRunRefusesAThoughtsFolderHoldingTheRootAndWritesNothing(t *testing
 
 func TestFirstRunSaveUnderOverridesWritesTheFileAsTypedAndKeepsTheOverridesLive(t *testing.T) {
 	_, cfg, override := overriddenSettings(t)
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, nil)
 
 	result, err := f.Save(FirstRunInput{Orgs: []string{"acme", "typed-org"}, Root: "~/work"})
 	if err != nil {
@@ -456,7 +452,7 @@ func TestFirstRunSaveUnderOverridesRefusesAThoughtsFolderHoldingTheOverrideRoot(
 		t.Fatal(err)
 	}
 	before := cfg.Snapshot()
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, nil)
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, nil)
 
 	_, err = f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: fileRoot, Thoughts: vault})
 	if !errors.Is(err, config.ErrThoughtsHoldsRoot) || !strings.HasPrefix(err.Error(), "thoughts: ") {
@@ -495,7 +491,7 @@ func TestFirstRunThatMovesTheThoughtsFolderReindexesSoASessionSearchesTheNewOne(
 	if err := set.Configure(core.ThoughtsProfiles(cfg)); err != nil {
 		t.Fatal(err)
 	}
-	f := newFirstRun(cfg, newSessions(), nil, nil, nil, core.ReconfigureVault(set))
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, core.ReconfigureVault(set))
 	if res, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: moved}); err != nil || res.Relaunching {
 		t.Fatalf("Save = %+v, %v", res, err)
 	}

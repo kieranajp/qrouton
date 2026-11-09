@@ -6,6 +6,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
@@ -51,14 +52,14 @@ type AssemblySeed struct {
 type Assembly struct {
 	cfg       *config.Config
 	repos     *Repositories
-	sessions  *Sessions
+	sessions  *core.Sessions
 	emit      emitter
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
 	offers    assembly.Offers
 }
 
-func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit emitter,
+func newAssembly(cfg *config.Config, repos *Repositories, reg *core.Sessions, emit emitter,
 	signal func(string), runners func() ([]assembly.Runner, error)) *Assembly {
 	return &Assembly{cfg: cfg, repos: repos, sessions: reg, emit: emit,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}, runners: runners}
@@ -178,7 +179,7 @@ func (a *Assembly) Create(in draftInput) error {
 	if err != nil {
 		return err
 	}
-	return a.sessions.adopt(root, in.Runner)
+	return a.sessions.Adopt(root, in.Runner)
 }
 
 func (a *Assembly) draft(in draftInput) assembly.Draft {

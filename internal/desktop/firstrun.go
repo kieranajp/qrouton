@@ -25,7 +25,7 @@ type FirstRunResult struct {
 
 type FirstRun struct {
 	cfg         *config.Config
-	reg         *Sessions
+	touch       func()
 	relaunch    func() error
 	quit        func()
 	pinnedRoot  string
@@ -34,9 +34,9 @@ type FirstRun struct {
 	onWelcomed  func()
 }
 
-func newFirstRun(cfg *config.Config, reg *Sessions, relaunch func() error, quit func(),
+func newFirstRun(cfg *config.Config, touch func(), relaunch func() error, quit func(),
 	choose func() (string, error), reconfigure func(*config.Config) error) *FirstRun {
-	return &FirstRun{cfg: cfg, reg: reg, relaunch: relaunch, quit: quit, pinnedRoot: pinnedFileRoot(),
+	return &FirstRun{cfg: cfg, touch: touch, relaunch: relaunch, quit: quit, pinnedRoot: pinnedFileRoot(),
 		choose: choose, reconfigure: reconfigure}
 }
 
@@ -125,7 +125,7 @@ func (f *FirstRun) Save(in FirstRunInput) (FirstRunResult, error) {
 
 	if !changed {
 		// Without the touch the overlay stays up until the next chrome tick.
-		f.reg.touch()
+		f.touch()
 		if f.onWelcomed != nil {
 			f.onWelcomed()
 		}

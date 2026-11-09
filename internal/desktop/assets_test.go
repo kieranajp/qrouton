@@ -4,11 +4,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
 	"testing/fstest"
 
+	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -42,14 +45,56 @@ func deckSession(t *testing.T) (root, outside string) {
 	return root, outside
 }
 
-func deckHandler(root string) http.Handler {
-	lookup := func(token string) (string, string, bool) {
-		if token != "goodtoken" {
-			return "", "", false
-		}
-		return root, "thoughts/decks", true
+// sessionFile stands in for the core's opener: the file at source inside root,
+// or nothing when it resolves outside or is a directory.
+func sessionFile(root, source string) (*os.File, error) {
+	name, err := launch.ResolveSessionFile(root, source)
+	if err != nil {
+		return nil, err
 	}
-	return assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, lookup)
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	if info, err := file.Stat(); err != nil || !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, core.ErrNoSuchAsset
+	}
+	return file, nil
+}
+
+// deckOpenerAt opens files beside the deck in root's thoughts for goodtoken.
+func deckOpenerAt(root string) deckOpener {
+	return func(token, rel string) (*os.File, error) {
+		if token != "goodtoken" {
+			return nil, core.ErrNoSuchAsset
+		}
+		return sessionFile(root, path.Join("thoughts/decks", rel))
+	}
+}
+
+// galleryOpenerOf opens the index'th of sources inside root, refusing what is
+// not gallery media.
+func galleryOpenerOf(root string, sources ...string) galleryOpener {
+	return func(_ string, index int) (*os.File, string, error) {
+		if index < 1 || index > len(sources) {
+			return nil, "", core.ErrNoSuchAsset
+		}
+		file, err := sessionFile(root, sources[index-1])
+		if err != nil {
+			return nil, "", err
+		}
+		media, known := workbench.AssetMedia(file.Name())
+		if !known {
+			_ = file.Close()
+			return nil, "", core.ErrNoSuchAsset
+		}
+		return file, media.Type, nil
+	}
+}
+
+func deckHandler(root string) http.Handler {
+	return assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, deckOpenerAt(root))
 }
 
 func TestTheDeckRouteServesItsOwnMediaAndNothingElse(t *testing.T) {
@@ -85,11 +130,11 @@ func TestTheDeckRouteServesItsOwnMediaAndNothingElse(t *testing.T) {
 // asserted against the handler itself as well as through the route.
 func TestTheDeckRouteRefusesToClimbOutOfTheSession(t *testing.T) {
 	root, outside := deckSession(t)
-	lookup := func(string) (string, string, bool) { return root, "thoughts/decks", true }
+	open := deckOpenerAt(root)
 	climb := "/deck/goodtoken/../../../" + filepath.Base(outside)
 
 	recorder := httptest.NewRecorder()
-	deckAsset(lookup).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, climb, nil))
+	deckAsset(open).ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, climb, nil))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("the handler answered %d for a path outside the session", recorder.Code)
 	}
@@ -109,7 +154,7 @@ func TestADeckAddressesItsOwnWindowAndNoOther(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	// A handler whose lookup answers nothing is every window that is not an open
 	// deck: another session's tab, a terminal, a plain markdown document.
-	assetHandler(fstest.MapFS{}, nil, func(string) (string, string, bool) { return "", "", false }).
+	assetHandler(fstest.MapFS{}, nil, func(string, string) (*os.File, error) { return nil, core.ErrNoSuchAsset }).
 		ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/deck/goodtoken/shot.png", nil))
 	if recorder.Code != http.StatusNotFound {
 		t.Fatalf("a window that is no deck served its neighbours: %d", recorder.Code)
@@ -143,22 +188,12 @@ func TestTheScaleRouteAnswersTheStoredScaleUncached(t *testing.T) {
 }
 
 func TestTheGalleryRouteAnswersRangeRequestsForVideo(t *testing.T) {
-	w, _ := testWindows(t)
-	root := w.shown().root()
+	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "sim.mov"), []byte("0123456789abcdefghij"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	id, err := w.openWindow(w.shown(), workbench.WindowOptions{Kind: workbench.KindDocument, Format: workbench.FormatAssets,
-		Assets: []workbench.AssetRef{{Source: "sim.mov"}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	page, err := w.Content(id)
-	if err != nil || len(page.Assets) != 1 {
-		t.Fatalf("content = %+v, %v", page, err)
-	}
-	handler := assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, nil, w.lookupGalleryAsset)
-	request := httptest.NewRequest(http.MethodGet, page.Assets[0].URL, nil)
+	handler := assetHandler(fstest.MapFS{"index.html": {Data: []byte("page")}}, nil, nil, galleryOpenerOf(root, "sim.mov"))
+	request := httptest.NewRequest(http.MethodGet, "/gallery/token/1", nil)
 	request.Header.Set("Range", "bytes=0-9")
 	response := httptest.NewRecorder()
 	handler.ServeHTTP(response, request)
@@ -170,13 +205,7 @@ func TestTheGalleryRouteAnswersRangeRequestsForVideo(t *testing.T) {
 
 func TestMediaRoutesKeepTheirDistinctAdmissionAndHeaders(t *testing.T) {
 	root, _ := deckSession(t)
-	gallery := galleryAsset(func(_ string, index int) (galleryAssetRef, bool) {
-		name := "shot.png"
-		if index == 2 {
-			name = "clip.webm"
-		}
-		return galleryAssetRef{root: root, source: filepath.Join("thoughts", "decks", name)}, true
-	})
+	gallery := galleryAsset(galleryOpenerOf(root, filepath.Join("thoughts", "decks", "shot.png"), filepath.Join("thoughts", "decks", "clip.webm")))
 	for _, tc := range []struct {
 		name    string
 		handler http.Handler
