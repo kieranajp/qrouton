@@ -533,7 +533,7 @@ func stageConfig(snapshot *config.Config, pinnedRoot string, holdThoughts bool, 
 // commitLive reindexes before it writes or publishes anything, so routing and
 // search never disagree. A failed write puts the old index back.
 func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error) error {
-	reindex := reconfigure != nil && !slices.Equal(thoughtsProfiles(current), thoughtsProfiles(live))
+	reindex := reconfigure != nil && !slices.Equal(core.ThoughtsProfiles(current), core.ThoughtsProfiles(live))
 	if reindex {
 		if err := reconfigure(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)

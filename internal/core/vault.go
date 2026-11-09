@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"fmt"
@@ -9,13 +9,13 @@ import (
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
-func openVault(cfg *config.Config) *vault.Set {
+func OpenVault(cfg *config.Config) *vault.Set {
 	set := vault.NewSet(vault.NewOllama(), filepath.Join(config.CacheDir(), vault.CacheDirName))
-	_ = set.Configure(thoughtsProfiles(cfg))
+	_ = set.Configure(ThoughtsProfiles(cfg))
 	return set
 }
 
-func thoughtsProfiles(cfg *config.Config) []vault.Profile {
+func ThoughtsProfiles(cfg *config.Config) []vault.Profile {
 	var profiles []vault.Profile
 	for _, root := range cfg.ThoughtsRoots() {
 		profiles = append(profiles, vault.Profile{ID: root.ID, Root: root.Path})
@@ -23,20 +23,20 @@ func thoughtsProfiles(cfg *config.Config) []vault.Profile {
 	return profiles
 }
 
-func reconfigureVault(set *vault.Set) func(*config.Config) error {
+func ReconfigureVault(set *vault.Set) func(*config.Config) error {
 	return func(cfg *config.Config) error {
 		if set == nil {
 			return nil
 		}
-		return set.Configure(thoughtsProfiles(cfg))
+		return set.Configure(ThoughtsProfiles(cfg))
 	}
 }
 
-// sessionThoughts follows the session's thoughts link, so search reads the
+// SessionThoughts follows the session's thoughts link, so search reads the
 // root the session writes to and nothing in its manifest can widen it. The
 // narrowest configured root decides, so an unindexed folder is refused rather
 // than read through a wider one.
-func sessionThoughts(set *vault.Set, roots []config.ThoughtsRoot, sessionRoot string) (*vault.Service, error) {
+func SessionThoughts(set *vault.Set, roots []config.ThoughtsRoot, sessionRoot string) (*vault.Service, error) {
 	real, err := filepath.EvalSymlinks(sessionpaths.ThoughtsLink(sessionRoot))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNoThoughtsRoot, err)

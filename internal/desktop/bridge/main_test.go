@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -118,26 +119,26 @@ func TestCoreOnlyEventsAndValueSetsReachThePage(t *testing.T) {
 	dir := t.TempDir()
 	source := "package core\n\nconst fixtureOnlyEvent = \"fixture:only\"\n\nconst (\n" +
 		"\tfixtureModeCalm = \"calm\"\n\tfixtureModeLoud = \"loud\"\n)\n"
-	if err := os.WriteFile(filepath.Join(dir, "core.go"), []byte(source), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "fixture_core.go"), []byte(source), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	original := corePackage
-	corePackage = dir
-	t.Cleanup(func() { corePackage = original })
+	original := corePackages
+	corePackages = append(slices.Clone(original), dir)
+	t.Cleanup(func() { corePackages = original })
 
-	page, err := render(desktopPackage, statusPackage, moduleFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(page), "export const FIXTURE_ONLY_EVENT = \"fixture:only\";\n") {
-		t.Fatal("an event defined only in the core is missing from the page")
-	}
 	var js bytes.Buffer
 	sets := []valueSet{{name: "FIXTURE_MODES", typedef: "FixtureMode", dir: desktopPackage, prefix: "fixtureMode"}}
 	if err := writeValues(&js, sets, nil); err != nil {
-		t.Fatal(err)
+		t.Fatalf("a desktop value set lost its core constants: %v", err)
 	}
 	if !strings.Contains(js.String(), "  CALM: \"calm\",\n  LOUD: \"loud\",\n") {
 		t.Fatalf("a desktop value set lost its core constants:\n%s", js.String())
+	}
+	page, err := render(desktopPackage, statusPackage, moduleFile)
+	if err != nil {
+		t.Fatalf("the page did not render beside a fixture core: %v", err)
+	}
+	if !strings.Contains(string(page), "export const FIXTURE_ONLY_EVENT = \"fixture:only\";\n") {
+		t.Fatal("an event defined only in the core is missing from the page")
 	}
 }

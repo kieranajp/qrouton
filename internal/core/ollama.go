@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -23,7 +23,7 @@ type OllamaStatus struct {
 	Installed bool   `json:"installed,omitempty"`
 }
 
-type ollamaClient interface {
+type OllamaClient interface {
 	Model(ctx context.Context) (vault.Model, error)
 	Pull(ctx context.Context, onProgress func(vault.PullProgress)) error
 }
@@ -31,9 +31,9 @@ type ollamaClient interface {
 // Ollama probes for the embedding model and pulls it. The pull runs on its own
 // goroutine, so a stalled stream never holds the lock.
 type Ollama struct {
-	client    ollamaClient
+	client    OllamaClient
 	model     string
-	emit      emitter
+	emit      Emitter
 	installed func() bool
 
 	mu         sync.Mutex
@@ -50,7 +50,11 @@ type ollamaPull struct {
 	completed, total int64
 }
 
-func newOllama(client ollamaClient, model string, emit emitter, installed func() bool) *Ollama {
+func NewOllama(client OllamaClient, emit Emitter) *Ollama {
+	return newOllama(client, vault.OllamaModel, emit, ollamaInstalled)
+}
+
+func newOllama(client OllamaClient, model string, emit Emitter, installed func() bool) *Ollama {
 	return &Ollama{client: client, model: model, emit: emit, installed: installed,
 		parent: context.Background(), status: OllamaStatus{Model: model}}
 }
@@ -66,8 +70,8 @@ func ollamaInstalled() bool {
 	return err == nil
 }
 
-// bind makes ctx the parent of every later pull, so quitting ends one.
-func (o *Ollama) bind(ctx context.Context) {
+// Bind makes ctx the parent of every later pull, so quitting ends one.
+func (o *Ollama) Bind(ctx context.Context) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 	o.parent = ctx

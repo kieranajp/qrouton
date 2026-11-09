@@ -35,3 +35,17 @@ const (
 // before it is killed outright. launch has its own for the runner the
 // supervisor signals; the two bound different processes and need not agree.
 const terminateGrace = 3 * time.Second
+
+const ollamaEvent = "ollama:status"
+
+const (
+	ollamaStateReady       = "ready"
+	ollamaStateMissing     = "missing"
+	ollamaStatePulling     = "pulling"
+	ollamaStateUnreachable = "unreachable"
+	ollamaStateFailed      = "failed"
+
+	ollamaBinary       = "ollama"
+	ollamaMacApp       = "/Applications/Ollama.app"
+	ollamaProbeTimeout = 2 * time.Second
+)

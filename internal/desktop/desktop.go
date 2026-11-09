@@ -65,7 +65,7 @@ type Options struct {
 	bugReports *BugReports
 	updates    *Updates
 	vault      *vault.Set
-	ollama     *Ollama
+	ollama     *core.Ollama
 	placement  *Placement
 }
 
@@ -104,7 +104,7 @@ func Run(opts Options) error {
 	client := newLocalClient(r, opts.Launcher, r.chooseDirectory)
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
-	opts.vault = openVault(opts.Config)
+	opts.vault = core.OpenVault(opts.Config)
 	r.register(application.NewService(opts.bugReports))
 	term := newTerm(reg, r.Emit)
 	windows = newWindows(r.Emit, reg)
@@ -128,8 +128,8 @@ func Run(opts Options) error {
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
-	opts.ollama = newOllama(vault.NewOllama(), vault.OllamaModel, r.Emit, ollamaInstalled)
-	r.register(application.NewService(opts.ollama))
+	opts.ollama = core.NewOllama(vault.NewOllama(), r.Emit)
+	r.register(application.NewService(&Ollama{ollama: opts.ollama}))
 	assemblyService := newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
 	opts.assembly = assemblyService
 	r.register(application.NewService(assemblyService))
@@ -138,11 +138,11 @@ func Run(opts Options) error {
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
-		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, reconfigureVault(opts.vault),
+		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, core.ReconfigureVault(opts.vault),
 		opts.Launcher.Runners, client,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, client.ChooseDirectory, reconfigureVault(opts.vault))
+	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, client.ChooseDirectory, core.ReconfigureVault(opts.vault))
 	r.register(application.NewService(firstRun))
 	opts.placement = newPlacement(opts.Config, reg)
 	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
@@ -323,7 +323,7 @@ func run(r renderer, client core.Client, term *Term, windows *Windows, opts Opti
 		go opts.vault.Warm(ctx)
 	}
 	if opts.ollama != nil {
-		opts.ollama.bind(ctx)
+		opts.ollama.Bind(ctx)
 	}
 	if opts.placement != nil {
 		go opts.placement.checkOnce()

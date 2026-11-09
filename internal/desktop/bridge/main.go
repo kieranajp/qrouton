@@ -27,8 +27,8 @@ import (
 
 // Paths are the generator's own, relative to the package directory go generate
 // runs it in.
-// corePackage is a variable so a test can stand a fixture core beside the desktop.
-var corePackage = "../../core"
+// corePackages is a variable so a test can add a fixture core beside the real one.
+var corePackages = []string{"../../core"}
 
 const (
 	desktopPackage   = ".."
@@ -234,11 +234,14 @@ func constantFiles(dir string) ([]*ast.File, error) {
 	if err != nil || dir != desktopPackage {
 		return files, err
 	}
-	core, err := parsePackage(corePackage)
-	if err != nil {
-		return nil, err
+	for _, coreDir := range corePackages {
+		core, err := parsePackage(coreDir)
+		if err != nil {
+			return nil, err
+		}
+		files = append(files, core...)
 	}
-	return append(files, core...), nil
+	return files, nil
 }
 
 func importPath(modPath, dir string) (string, error) {

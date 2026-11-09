@@ -10,6 +10,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -234,7 +235,7 @@ var handlers = map[string]handler{
 			if req.VaultSearch == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
-			thoughts, err := sessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
+			thoughts, err := core.SessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
 			if err != nil {
 				return workbench.Response{}, err
 			}
@@ -250,7 +251,7 @@ var handlers = map[string]handler{
 			if req.VaultRead == nil {
 				return workbench.Response{}, ErrNoVaultRequest
 			}
-			thoughts, err := sessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
+			thoughts, err := core.SessionThoughts(c.hooks.vault, c.hooks.thoughts(), c.owner.root())
 			if err != nil {
 				return workbench.Response{}, err
 			}

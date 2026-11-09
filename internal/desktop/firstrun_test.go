@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"os"
@@ -10,8 +11,10 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/vault"
 )
 
 func TestFirstRunProspectiveThoughtsDefaultUsesCanonicalPathRules(t *testing.T) {
@@ -172,7 +175,7 @@ func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.
 	if real != want {
 		t.Fatalf("thoughts resolve to %s, want %s", real, want)
 	}
-	if _, err := sessionThoughts(openVault(cfg), cfg.ThoughtsRoots(), dir); err != nil {
+	if _, err := core.SessionThoughts(core.OpenVault(cfg), cfg.ThoughtsRoots(), dir); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -468,5 +471,45 @@ func TestFirstRunSaveUnderOverridesRefusesAThoughtsFolderHoldingTheOverrideRoot(
 	}
 	if !reflect.DeepEqual(cfg.Snapshot(), before) {
 		t.Fatalf("a refused save changed the live config: %+v", cfg.Snapshot())
+	}
+}
+
+// Catches a welcome that moves the thoughts folder but leaves search on the old index.
+func TestFirstRunThatMovesTheThoughtsFolderReindexesSoASessionSearchesTheNewOne(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("QROUTON_ROOT", "")
+	root, moved := t.TempDir(), t.TempDir()
+	for path, text := range map[string]string{
+		filepath.Join(root, "thoughts", "s1", "old.md"): "# Old\n\nNothing here.\n",
+		filepath.Join(moved, "s1", "note.md"):           "# Wombats\n\nWombats dig burrows.\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := &config.Config{Root: root}
+	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
+	if err := set.Configure(core.ThoughtsProfiles(cfg)); err != nil {
+		t.Fatal(err)
+	}
+	f := newFirstRun(cfg, newSessions(), nil, nil, nil, core.ReconfigureVault(set))
+	if res, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: moved}); err != nil || res.Relaunching {
+		t.Fatalf("Save = %+v, %v", res, err)
+	}
+
+	sessionDir := t.TempDir()
+	if err := os.Symlink(filepath.Join(moved, "s1"), filepath.Join(sessionDir, "thoughts")); err != nil {
+		t.Fatal(err)
+	}
+	thoughts, err := core.SessionThoughts(set, cfg.ThoughtsRoots(), sessionDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	res, err := thoughts.Search(context.Background(), vault.Query{Text: "wombat burrows"})
+	if err != nil || len(res.Hits) != 1 || res.Hits[0].Ref != config.DefaultThoughtsID+":s1/note.md" {
+		t.Fatalf("search = %+v, %v", res, err)
 	}
 }

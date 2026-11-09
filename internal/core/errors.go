@@ -17,3 +17,5 @@ func (u *unavailable) Error() string { return u.text }
 func (u *unavailable) Is(target error) bool { return target == ErrUnavailable }
 
 var ErrTerminalNotStarted = errors.New("terminal is not started")
+
+var ErrNoThoughtsRoot = errors.New("this session's thoughts are in no thoughts root")

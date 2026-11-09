@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -83,7 +84,7 @@ func TestTheControlSocketSearchesOnlyTheSessionsThoughtsRoot(t *testing.T) {
 
 func TestAThoughtsLinkOutsideEveryRootFindsNoThoughtsRoot(t *testing.T) {
 	host := thoughtsHost(t, t.TempDir(), t.TempDir(), t.TempDir())
-	if _, err := host.SearchVault(context.Background(), vault.Query{Text: "wombat"}); err == nil || !strings.Contains(err.Error(), ErrNoThoughtsRoot.Error()) {
+	if _, err := host.SearchVault(context.Background(), vault.Query{Text: "wombat"}); err == nil || !strings.Contains(err.Error(), core.ErrNoThoughtsRoot.Error()) {
 		t.Fatalf("search = %v", err)
 	}
 }
