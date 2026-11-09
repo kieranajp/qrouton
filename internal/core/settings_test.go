@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/lineartools"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -29,7 +28,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 		"--linear-issue",
 	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil,
 		func() ([]assembly.Runner, error) { return nil, nil },
-		newLocalClient(nil, newStubBoot(), nil))
+		newFakeClient())
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
@@ -203,26 +202,27 @@ func TestSettingsRelaunchNeedsARelauncher(t *testing.T) {
 	}
 }
 
-func TestSettingsOpenConfigRunsTheOpenTextArgvOnConfigPath(t *testing.T) {
+func TestSettingsOpenConfigAsksTheClientToOpenConfigPath(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	s := testSettings(t, &config.Config{}, nil, nil, nil)
 	if err := s.OpenConfig(); !errors.Is(err, ErrNoOpenTextCommand) {
 		t.Fatalf("OpenConfig without a command = %v", err)
 	}
-	record := filepath.Join(t.TempDir(), "opened")
 	var asked string
-	s.client = newLocalClient(nil, &stubBoot{openText: func(path string) []string {
+	client := newFakeClient()
+	client.openText = func(path string) error {
+		if _, err := os.Stat(path); err != nil {
+			t.Errorf("opened %q before writing it: %v", path, err)
+		}
 		asked = path
-		return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", path, record}
-	}}, nil)
+		return nil
+	}
+	s.client = client
 	if err := s.OpenConfig(); err != nil {
 		t.Fatal(err)
 	}
 	if asked != config.Path() {
 		t.Fatalf("opened %q, want %q", asked, config.Path())
-	}
-	if b, _ := os.ReadFile(record); string(b) != config.Path() {
-		t.Fatalf("the command saw %q", b)
 	}
 }
 
@@ -715,56 +715,6 @@ func TestSettingsSaveRestartRequiredComparesNormalisedRootsAndClearsOnRevert(t *
 	}
 	if result.RestartRequired {
 		t.Fatal("typing the live root back did not clear the restart flag")
-	}
-}
-
-// Settings.Relaunch must run the exact teardown closing the conversation window
-// runs, not a bare renderer Quit: every open session ends and the renderer's
-// own Quit is reached only after that teardown completes.
-func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
-	r := newFakeRenderer()
-	opts, boot := testOptions(t)
-	kernel := testWorkbench(t, r, &opts)
-	reg := kernel.Sessions
-
-	quit := quitter(kernel, r)
-	settings := testSettings(t, &config.Config{}, nil, nil, quit)
-	relaunched := false
-	settings.relaunch = func() error { relaunched = true; return nil }
-
-	done := make(chan error, 1)
-	stopped := make(chan struct{})
-	go func() {
-		defer close(stopped)
-		done <- run(r, kernel, opts, quit)
-	}()
-	t.Cleanup(func() {
-		r.Quit()
-		<-stopped
-	})
-
-	<-r.opened
-	shownSession(t, reg)
-	waitFor(t, "the session's listener", func() bool { _, serves := boot.counts(); return serves == 1 })
-
-	if err := settings.Relaunch(); err != nil {
-		t.Fatal(err)
-	}
-	if !relaunched {
-		t.Fatal("Settings.Relaunch quit without starting a successor")
-	}
-
-	if err := <-done; err != nil {
-		t.Fatal(err)
-	}
-	r.mu.Lock()
-	quitReached := r.quit
-	r.mu.Unlock()
-	if !quitReached {
-		t.Fatal("Settings.Relaunch did not reach the renderer's own Quit")
-	}
-	if _, serves := boot.counts(); serves != 0 {
-		t.Fatal("Settings.Relaunch did not stop the session registry")
 	}
 }
 
@@ -1393,12 +1343,12 @@ func TestSettingsSaveThatChangesTheRootHoldsBackItsThoughtsFoldersUntilTheRelaun
 	}
 	cfg := &config.Config{Root: oldRoot}
 	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
-	if err := set.Configure(core.ThoughtsProfiles(cfg)); err != nil {
+	if err := set.Configure(ThoughtsProfiles(cfg)); err != nil {
 		t.Fatal(err)
 	}
 	reconfigures := 0
 	s := testSettings(t, cfg, nil, nil, nil)
-	s.reconfigure = func(c *config.Config) error { reconfigures++; return core.ReconfigureVault(set)(c) }
+	s.reconfigure = func(c *config.Config) error { reconfigures++; return ReconfigureVault(set)(c) }
 
 	in := thoughtsInput(ThoughtsRow{ID: "work", Path: shared, Orgs: "acme"})
 	in.Root = newRoot
@@ -1421,7 +1371,7 @@ func TestSettingsSaveThatChangesTheRootHoldsBackItsThoughtsFoldersUntilTheRelaun
 	if err := os.Symlink(filepath.Join(shared, "s1"), filepath.Join(sessionDir, "thoughts")); err != nil {
 		t.Fatal(err)
 	}
-	thoughts, err := core.SessionThoughts(core.OpenVault(relaunched), relaunched.ThoughtsRoots(), sessionDir)
+	thoughts, err := SessionThoughts(OpenVault(relaunched), relaunched.ThoughtsRoots(), sessionDir)
 	if err != nil {
 		t.Fatal(err)
 	}

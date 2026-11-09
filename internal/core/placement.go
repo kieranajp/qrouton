@@ -1,10 +1,9 @@
-package desktop
+package core
 
 import (
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/placement"
 )
 
@@ -27,7 +26,7 @@ type PlacementView struct {
 // in the wrong root.
 type Placement struct {
 	cfg        *config.Config
-	reg        *core.Sessions
+	reg        *Sessions
 	pinnedRoot string
 
 	// op keeps the automatic check, the Settings check, Move and Close from overlapping.
@@ -39,15 +38,15 @@ type Placement struct {
 	move   func(*config.Config, []string) []placement.Outcome
 }
 
-func newPlacement(cfg *config.Config, reg *core.Sessions) *Placement {
+func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
 	return &Placement{cfg: cfg, reg: reg, pinnedRoot: pinnedFileRoot(), scan: placement.Scan, move: placement.Move}
 }
 
-// checkOnce runs at every launch to recover interrupted moves. The popup is
+// CheckOnce runs at every launch to recover interrupted moves. The popup is
 // automatic after first run whenever the thoughts folders differ from the ones
 // last checked, if any session is misplaced, skipped or pending; a recovery
 // that fails raises it on any launch.
-func (p *Placement) checkOnce() {
+func (p *Placement) CheckOnce() {
 	p.op.Lock()
 	defer p.op.Unlock()
 	snapshot := p.cfg.Snapshot()

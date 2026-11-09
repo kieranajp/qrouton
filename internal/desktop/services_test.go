@@ -20,6 +20,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/lineartools"
+	"github.com/kieranajp/qrouton/internal/placement"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/ticket"
@@ -75,7 +77,7 @@ func TestEachAdapterMethodReachesItsOwnCoreMethod(t *testing.T) {
 
 func adapterRows() [][]adapterRow {
 	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
-		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows()}
+		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows(), settingsRows(), firstRunRows(), placementRows()}
 }
 
 func ollamaRows() []adapterRow {
@@ -827,6 +829,157 @@ func pickerRows() []adapterRow {
 			}
 			if a.kernel.Sessions.Current().PendingPicker() != nil {
 				t.Fatal("Cancel left the picker pending")
+			}
+		}},
+	}
+}
+
+// settingsCore is a core over a config.json of its own, on a machine whose gh is
+// signed out and appends to the returned marker each time it runs.
+func settingsCore(t *testing.T, opts Options) (*core.Core, *config.Config, string) {
+	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GITHUB_TOKEN", "")
+	bin, marker := t.TempDir(), filepath.Join(t.TempDir(), "gh")
+	if err := os.WriteFile(filepath.Join(bin, "gh"), []byte("#!/bin/sh\necho ran >> "+marker+"\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin)
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}, Editor: []string{"code", "--wait"}}
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	opts.Root, opts.Config = cfg.Root, cfg
+	if opts.Launcher == nil {
+		opts.Launcher = newStubBoot()
+	}
+	return testWorkbench(t, newFakeRenderer(), &opts), cfg, marker
+}
+
+func settingsRows() []adapterRow {
+	return []adapterRow{
+		{"Settings.Load", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			if got := (&Settings{settings: kernel.Settings}).Load(); got.Editor != "code --wait" || len(got.UIScaleSteps) == 0 {
+				t.Fatalf("Load = %+v", got)
+			}
+		}},
+		{"Settings.Save", func(t *testing.T) {
+			kernel, cfg, _ := settingsCore(t, Options{})
+			_, err := (&Settings{settings: kernel.Settings}).Save(core.SettingsInput{Orgs: []string{"acme"}, Root: cfg.Root, Editor: "vim"})
+			file, readErr := config.ReadFile()
+			if err != nil || readErr != nil || !slices.Equal(file.Editor, []string{"vim"}) {
+				t.Fatalf("Save = %v, config.json editor %q (%v)", err, file.Editor, readErr)
+			}
+		}},
+		{"Settings.AdjustUIScale", func(t *testing.T) {
+			kernel, cfg, _ := settingsCore(t, Options{})
+			if got, err := (&Settings{settings: kernel.Settings}).AdjustUIScale("in"); err != nil || got != 110 || cfg.EffectiveUIScale() != 110 {
+				t.Fatalf("AdjustUIScale(in) = %d, %v; live scale %d", got, err, cfg.EffectiveUIScale())
+			}
+		}},
+		{"Settings.GitHubStatus", func(t *testing.T) {
+			kernel, _, marker := settingsCore(t, Options{})
+			got := (&Settings{settings: kernel.Settings}).GitHubStatus()
+			if got.State != github.CredentialSignedOut || got.Variable != github.TokenEnvVar() {
+				t.Fatalf("GitHubStatus with gh signed out = %+v", got)
+			}
+			markedFile(t, marker, "ran")
+		}},
+		{"Settings.Relaunch", func(t *testing.T) {
+			relauncher := &recordingRelauncher{}
+			kernel, _, _ := settingsCore(t, Options{Relauncher: relauncher})
+			if err := (&Settings{settings: kernel.Settings}).Relaunch(); err != nil || relauncher.calls != 1 {
+				t.Fatalf("Relaunch = %v after %d relaunches", err, relauncher.calls)
+			}
+		}},
+		{"Settings.OpenConfig", func(t *testing.T) {
+			boot := newStubBoot()
+			opened := filepath.Join(t.TempDir(), "opened")
+			boot.openText = func(path string) []string {
+				return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", path, opened}
+			}
+			kernel, _, _ := settingsCore(t, Options{Launcher: boot})
+			if err := (&Settings{settings: kernel.Settings}).OpenConfig(); err != nil {
+				t.Fatal(err)
+			}
+			markedFile(t, opened, config.Path())
+		}},
+		{"Settings.InstallLinear", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{LinearCommand: []string{"/bin/qrouton", "--linear-issue"}})
+			view, err := (&Settings{settings: kernel.Settings}).InstallLinear()
+			if err != nil || view.Snippet == "" || view.Replaces {
+				t.Fatalf("InstallLinear = %+v, %v", view, err)
+			}
+			markedFile(t, config.ExpandHome(lineartools.ConfigPath), "--linear-issue")
+		}},
+	}
+}
+
+func firstRunRows() []adapterRow {
+	return []adapterRow{
+		{"FirstRun.Login", func(t *testing.T) {
+			kernel, _, marker := settingsCore(t, Options{})
+			if got := (&FirstRun{firstRun: kernel.FirstRun}).Login(); got != "" {
+				t.Fatalf("Login with gh signed out = %q", got)
+			}
+			markedFile(t, marker, "ran")
+		}},
+		{"FirstRun.ChooseRoot", func(t *testing.T) {
+			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
+				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+			t.Cleanup(kernel.Shutdown)
+			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
+				t.Fatalf("ChooseRoot = %q, %v", got, err)
+			}
+		}},
+		{"FirstRun.ThoughtsDefault", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			want := config.DefaultThoughtsRoot("/srv/sessions")
+			if got := (&FirstRun{firstRun: kernel.FirstRun}).ThoughtsDefault("/srv/sessions"); got != want {
+				t.Fatalf("ThoughtsDefault = %q, want %q", got, want)
+			}
+		}},
+		{"FirstRun.Save", func(t *testing.T) {
+			kernel, cfg, _ := settingsCore(t, Options{})
+			result, err := (&FirstRun{firstRun: kernel.FirstRun}).Save(core.FirstRunInput{Orgs: []string{"acme"}, Root: cfg.Root})
+			if err != nil || result.Relaunching || !cfg.Snapshot().Welcomed {
+				t.Fatalf("Save = %+v, %v; welcomed %v", result, err, cfg.Snapshot().Welcomed)
+			}
+		}},
+	}
+}
+
+func placementRows() []adapterRow {
+	return []adapterRow{
+		{"Placement.Check", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			if err := (&Placement{placement: kernel.Placement}).Check(); err != nil || !kernel.Sessions.Placing() {
+				t.Fatalf("Check = %v, placing %v", err, kernel.Sessions.Placing())
+			}
+		}},
+		{"Placement.Report", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			if got := (&Placement{placement: kernel.Placement}).Report(); got.Misplaced == nil || got.Skipped == nil || got.Pending == nil {
+				t.Fatalf("Report = %+v, want empty lists the page can range over", got)
+			}
+		}},
+		{"Placement.Move", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			got := (&Placement{placement: kernel.Placement}).Move([]string{"ghost"})
+			if len(got) != 1 || got[0].Slug != "ghost" || got[0].Result != placement.ResultRefused {
+				t.Fatalf("Move of no session = %+v", got)
+			}
+		}},
+		{"Placement.Close", func(t *testing.T) {
+			kernel, _, _ := settingsCore(t, Options{})
+			if err := kernel.Placement.Check(); err != nil {
+				t.Fatal(err)
+			}
+			if err := (&Placement{placement: kernel.Placement}).Close(); err != nil || kernel.Sessions.Placing() {
+				t.Fatalf("Close = %v, placing %v", err, kernel.Sessions.Placing())
 			}
 		}},
 	}

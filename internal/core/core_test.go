@@ -32,13 +32,14 @@ import (
 // core asked of it. Its local actions are unset until a test sets one, which is
 // the client that cannot do that thing.
 type fakeClient struct {
-	mu      sync.Mutex
-	events  map[string]any
-	shown   []string
-	raised  int
-	inFront atomic.Bool
-	reveal  func(path string) error
-	rung    []string
+	mu       sync.Mutex
+	events   map[string]any
+	shown    []string
+	raised   int
+	inFront  atomic.Bool
+	reveal   func(path string) error
+	openText func(path string) error
+	rung     []string
 }
 
 func newFakeClient() *fakeClient {
@@ -65,7 +66,7 @@ func (f *fakeClient) SessionShown(root string) {
 	f.shown = append(f.shown, root)
 }
 
-func (f *fakeClient) Supports(Capability) bool { return false }
+func (f *fakeClient) Supports(c Capability) bool { return c == CapabilityOpenText && f.openText != nil }
 
 func (f *fakeClient) Reveal(path string) error {
 	if f.reveal == nil {
@@ -74,7 +75,12 @@ func (f *fakeClient) Reveal(path string) error {
 	return f.reveal(path)
 }
 
-func (f *fakeClient) OpenText(string) error { return ErrUnavailable }
+func (f *fakeClient) OpenText(path string) error {
+	if f.openText == nil {
+		return ErrUnavailable
+	}
+	return f.openText(path)
+}
 
 func (f *fakeClient) CopyImage(string) error { return ErrUnavailable }
 

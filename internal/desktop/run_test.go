@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -241,11 +242,9 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 // testWorkbench builds the core as Run does, over a local client on r.
 func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	t.Helper()
-	kernel := core.New(core.Options{
-		Root:     opts.Root,
-		Config:   opts.Config,
-		Launcher: opts.Launcher,
-	}, newLocalClient(r, opts.Launcher, nil))
+	var quit func()
+	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil))
+	quit = quitter(kernel, r)
 	t.Cleanup(kernel.Shutdown)
 	return kernel
 }
@@ -641,41 +640,117 @@ func chromeOf(t *testing.T, kernel *core.Core, want func(status.Fields) bool) st
 	return fields
 }
 
-func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
-	kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{Root: t.TempDir()}})
-	if _, err := kernel.Offer("LIF-2841", "Linear prompt"); err != nil {
+// recordingRelauncher keeps what each relaunch was handed to carry.
+type recordingRelauncher struct {
+	calls   int
+	pending func() (string, string)
+}
+
+func (r *recordingRelauncher) Relaunch(pending func() (string, string)) error {
+	r.calls++
+	r.pending = pending
+	return nil
+}
+
+// Catches the Relauncher not reaching Settings, or a settings restart carrying
+// the pending ticket into the successor, which would open it a second time there.
+func TestTheRelauncherReachesASettingsRestartWithoutATicket(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := &config.Config{Root: t.TempDir()}
+	kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: cfg})
+	if err := (&Settings{settings: kernel.Settings}).Relaunch(); !errors.Is(err, core.ErrNoRelaunch) {
+		t.Fatalf("Relaunch with no Relauncher = %v, want ErrNoRelaunch", err)
+	}
+
+	relauncher := &recordingRelauncher{}
+	kernel = testWorkbench(t, newFakeRenderer(), &Options{Config: cfg, Relauncher: relauncher})
+	if _, err := kernel.Offer("LIF-2841", ""); err != nil {
 		t.Fatal(err)
 	}
-	var carried, carriedPrompt string
-	relaunch := pendingRelaunch(func(request func() (string, string)) error {
-		carried, carriedPrompt = request()
-		return nil
-	}, kernel.PendingTicket)
-	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
-		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	if err := (&Settings{settings: kernel.Settings}).Relaunch(); err != nil {
+		t.Fatal(err)
 	}
-	kernel.Assembly.Begin()
-	carried = "not called"
-	carriedPrompt = "not called"
-	if err := relaunch(); err != nil || carried != "" {
-		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	if relauncher.calls != 1 || relauncher.pending != nil {
+		t.Fatalf("relaunched %d times, carrying a ticket %v; want once with none", relauncher.calls, relauncher.pending != nil)
 	}
 }
 
-func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
-	kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{Root: t.TempDir()}})
-	var carried string
-	relaunch := pendingRelaunch(func(request func() (string, string)) error {
-		if _, err := kernel.Offer("LIF-2841", "Late prompt"); err != nil {
-			return err
+type refusingValidator struct{}
+
+var errRefused = errors.New("refused")
+
+func (refusingValidator) ValidateEditor([]string) error            { return errRefused }
+func (refusingValidator) ValidateLaunch(map[string][]string) error { return errRefused }
+
+// Catches a nil Validator refusing every editor and launch table, and a
+// non-nil one never being asked.
+func TestANilValidatorAcceptsTheEditorAndTheLaunchTable(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	in := core.SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: "vim",
+		Launch: `{"claude": ["claude", "--verbose"]}`}
+	for _, tc := range []struct {
+		validator Validator
+		refused   bool
+	}{{nil, false}, {refusingValidator{}, true}} {
+		cfg := &config.Config{Root: in.Root}
+		kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: cfg, Validator: tc.validator})
+		_, err := (&Settings{settings: kernel.Settings}).Save(in)
+		if refused := err != nil && strings.HasSuffix(err.Error(), errRefused.Error()); refused != tc.refused || (!tc.refused && err != nil) {
+			t.Fatalf("Save with Validator %T = %v, want refused %v", tc.validator, err, tc.refused)
 		}
-		carried, _ = request()
-		return nil
-	}, kernel.PendingTicket)
-	if err := relaunch(); err != nil {
+		if !tc.refused && (!slices.Equal(cfg.Snapshot().Editor, []string{"vim"}) || len(cfg.Snapshot().Launch) != 1) {
+			t.Fatalf("an accepted Save left editor %q, launch %v", cfg.Snapshot().Editor, cfg.Snapshot().Launch)
+		}
+	}
+}
+
+// Settings.Relaunch must run the exact teardown closing the conversation window
+// runs, not a bare renderer Quit: every open session ends and the renderer's
+// own Quit is reached only after that teardown completes.
+func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	relauncher := &recordingRelauncher{}
+	opts.Relauncher = relauncher
+	opts.Config = &config.Config{}
+	kernel := testWorkbench(t, r, &opts)
+	reg := kernel.Sessions
+
+	quit := quitter(kernel, r)
+	settings := &Settings{settings: kernel.Settings}
+
+	done := make(chan error, 1)
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		done <- run(r, kernel, opts, quit)
+	}()
+	t.Cleanup(func() {
+		r.Quit()
+		<-stopped
+	})
+
+	<-r.opened
+	shownSession(t, reg)
+	waitFor(t, "the session's listener", func() bool { _, serves := boot.counts(); return serves == 1 })
+
+	if err := settings.Relaunch(); err != nil {
 		t.Fatal(err)
 	}
-	if carried != "https://linear.app/issue/LIF-2841" {
-		t.Fatalf("late pending seed = %q", carried)
+	if relauncher.calls != 1 {
+		t.Fatal("Settings.Relaunch quit without starting a successor")
+	}
+
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	r.mu.Lock()
+	quitReached := r.quit
+	r.mu.Unlock()
+	if !quitReached {
+		t.Fatal("Settings.Relaunch did not reach the renderer's own Quit")
+	}
+	if _, serves := boot.counts(); serves != 0 {
+		t.Fatal("Settings.Relaunch did not stop the session registry")
 	}
 }

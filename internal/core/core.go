@@ -25,6 +25,18 @@ type Options struct {
 	Vault *vault.Set
 	// Ollama is the embedding server Settings reports on; nil leaves Core.Ollama unset.
 	Ollama OllamaClient
+
+	// ValidateEditor and ValidateLaunch answer the settings panel; nil accepts.
+	ValidateEditor func([]string) error
+	ValidateLaunch func(map[string][]string) error
+	// Relaunch replaces the workbench with one reading config.json afresh, carrying
+	// the ticket pending supplies. Nil leaves settings and first run unable to.
+	Relaunch func(pending func() (url, prompt string)) error
+	// Quit tears the workbench down once a relaunch has a successor.
+	Quit func()
+	// LinearCommand and LinearEnvironment are what Settings installs for Linear.
+	LinearCommand     []string
+	LinearEnvironment []string
 }
 
 type Core struct {
@@ -40,6 +52,10 @@ type Core struct {
 	Repositories *Repositories
 	Orgs         *Orgs
 	Picker       *Picker
+
+	Settings  *Settings
+	FirstRun  *FirstRun
+	Placement *Placement
 
 	opts   Options
 	client Client
@@ -77,6 +93,12 @@ func New(opts Options, client Client) *Core {
 	c.Orgs = &Orgs{cfg: opts.Config}
 	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, client.Emit, signal, runners)
 	c.Picker = newPicker(opts.Config, reg, c.Repositories, signal)
+	c.Settings = newSettings(opts.Config, client.Emit, opts.ValidateEditor, opts.ValidateLaunch, opts.LinearCommand,
+		opts.LinearEnvironment, withoutTicket(opts.Relaunch), opts.Quit, reg.Touch, ReconfigureVault(c.Vault), runners, client)
+	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
+		client.ChooseDirectory, ReconfigureVault(c.Vault))
+	c.Placement = newPlacement(opts.Config, reg)
+	c.FirstRun.onWelcomed = func() { go c.Placement.CheckOnce() }
 	c.wire()
 	return c
 }
@@ -372,4 +394,19 @@ func agentCommand(launcher Launcher) func(AgentRequest) (AgentCommand, error) {
 		return nil
 	}
 	return launcher.Agent
+}
+
+func pendingRelaunch(relaunch func(func() (string, string)) error, pending func() (string, string)) func() error {
+	if relaunch == nil {
+		return nil
+	}
+	return func() error { return relaunch(pending) }
+}
+
+// withoutTicket relaunches carrying no pending ticket, as a settings restart has none.
+func withoutTicket(relaunch func(func() (string, string)) error) func() error {
+	if relaunch == nil {
+		return nil
+	}
+	return func() error { return relaunch(nil) }
 }

@@ -4,6 +4,7 @@ import (
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
+	"github.com/kieranajp/qrouton/internal/placement"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -160,3 +161,41 @@ func (p *Picker) Load(slug string) (core.PickerFields, error) { return p.picker.
 func (p *Picker) Confirm(slug string, in core.PickerInput) error { return p.picker.Confirm(slug, in) }
 
 func (p *Picker) Cancel(slug string) error { return p.picker.Cancel(slug) }
+
+type Settings struct{ settings *core.Settings }
+
+func (s *Settings) Load() core.SettingsView { return s.settings.Load() }
+
+func (s *Settings) Save(in core.SettingsInput) (core.SaveResult, error) { return s.settings.Save(in) }
+
+func (s *Settings) AdjustUIScale(action string) (int, error) { return s.settings.AdjustUIScale(action) }
+
+func (s *Settings) GitHubStatus() core.GitHubStatus { return s.settings.GitHubStatus() }
+
+func (s *Settings) Relaunch() error { return s.settings.Relaunch() }
+
+func (s *Settings) OpenConfig() error { return s.settings.OpenConfig() }
+
+func (s *Settings) InstallLinear() (core.LinearView, error) { return s.settings.InstallLinear() }
+
+type FirstRun struct{ firstRun *core.FirstRun }
+
+func (f *FirstRun) Login() string { return f.firstRun.Login() }
+
+func (f *FirstRun) ChooseRoot() (string, error) { return f.firstRun.ChooseRoot() }
+
+func (f *FirstRun) ThoughtsDefault(root string) string { return f.firstRun.ThoughtsDefault(root) }
+
+func (f *FirstRun) Save(in core.FirstRunInput) (core.FirstRunResult, error) {
+	return f.firstRun.Save(in)
+}
+
+type Placement struct{ placement *core.Placement }
+
+func (p *Placement) Check() error { return p.placement.Check() }
+
+func (p *Placement) Report() core.PlacementView { return p.placement.Report() }
+
+func (p *Placement) Move(slugs []string) []placement.Outcome { return p.placement.Move(slugs) }
+
+func (p *Placement) Close() error { return p.placement.Close() }

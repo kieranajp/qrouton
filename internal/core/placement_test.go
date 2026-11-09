@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"os"
@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/placement"
 	"github.com/kieranajp/qrouton/internal/session"
 )
@@ -20,13 +19,13 @@ type placementStubs struct {
 	moved  [][]string
 }
 
-func newTestPlacement(t *testing.T, cfg *config.Config, report placement.Report) (*Placement, *core.Sessions, *placementStubs) {
+func newTestPlacement(t *testing.T, cfg *config.Config, report placement.Report) (*Placement, *Sessions, *placementStubs) {
 	t.Helper()
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	if err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	reg := newSessions(t)
+	reg := newSessions()
 	stubs := &placementStubs{report: report}
 	p := newPlacement(cfg, reg)
 	p.scan = func(*config.Config) (placement.Report, error) { stubs.scans++; return stubs.report, nil }
@@ -48,12 +47,12 @@ func misplacedReport() placement.Report {
 func TestAPlacementCheckWaitsForFirstRunAndThenRaisesThePopup(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if reg.Placing() || checkedLive(cfg) {
 		t.Fatalf("before first run: placing %v, checked %v", reg.Placing(), checkedLive(cfg))
 	}
 	cfg.Replace(&config.Config{Root: cfg.Root, Welcomed: true})
-	p.checkOnce()
+	p.CheckOnce()
 	if !reg.Placing() {
 		t.Fatal("the check did not raise the popup once first run was done")
 	}
@@ -64,7 +63,7 @@ func TestFinishingFirstRunRunsThePlacementCheckWithoutARelaunch(t *testing.T) {
 	cfg := &config.Config{Root: root}
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
 	f := newFirstRun(cfg, reg.Touch, nil, nil, nil, nil)
-	f.onWelcomed = p.checkOnce
+	f.onWelcomed = p.CheckOnce
 	result, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root})
 	if err != nil || result.Relaunching {
 		t.Fatalf("Save = %+v, %v", result, err)
@@ -77,7 +76,7 @@ func TestFinishingFirstRunRunsThePlacementCheckWithoutARelaunch(t *testing.T) {
 func TestNothingMisplacedSetsTheFlagWithoutAnOverlay(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
 	p, reg, _ := newTestPlacement(t, cfg, placement.Report{})
-	p.checkOnce()
+	p.CheckOnce()
 	if reg.Placing() {
 		t.Fatal("overlay raised with nothing misplaced")
 	}
@@ -93,7 +92,7 @@ func TestOnlySkippedSessionsStillRaiseTheOverlay(t *testing.T) {
 		{Slug: "taken", State: placement.StateSkipped, Reason: placement.ReasonConflict},
 	}}
 	p, reg, _ := newTestPlacement(t, cfg, skipped)
-	p.checkOnce()
+	p.CheckOnce()
 	if !reg.Placing() {
 		t.Fatal("overlay not raised for sessions that are misplaced but cannot move")
 	}
@@ -108,7 +107,7 @@ func TestOnlySkippedSessionsStillRaiseTheOverlay(t *testing.T) {
 func TestAMisplacedSessionRaisesTheOverlayAndLeavesTheFlagUnset(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if !reg.Placing() {
 		t.Fatal("overlay not raised")
 	}
@@ -181,7 +180,7 @@ func TestAManualCheckOffersWhatTheAutomaticRunSkipped(t *testing.T) {
 	cfg := checkedConfig(t.TempDir())
 	skipped := placement.Report{Items: []placement.Item{{Slug: "kraken", State: placement.StateSkipped, Reason: placement.ReasonAgentRunning}}}
 	p, reg, stubs := newTestPlacement(t, cfg, skipped)
-	p.checkOnce()
+	p.CheckOnce()
 	if reg.Placing() {
 		t.Fatal("the automatic run ran again")
 	}
@@ -228,7 +227,7 @@ func TestPlacementOperationsNeverOverlap(t *testing.T) {
 	var wg sync.WaitGroup
 	for range 4 {
 		wg.Add(4)
-		go func() { defer wg.Done(); p.checkOnce() }()
+		go func() { defer wg.Done(); p.CheckOnce() }()
 		go func() { defer wg.Done(); _ = p.Check() }()
 		go func() { defer wg.Done(); p.Move([]string{"a"}) }()
 		go func() { defer wg.Done(); _ = p.Close() }()
@@ -242,7 +241,7 @@ func TestPlacementOperationsNeverOverlap(t *testing.T) {
 func TestRecoveryScansEveryLaunchEvenAfterTheFlagIsSet(t *testing.T) {
 	cfg := checkedConfig(t.TempDir())
 	p, reg, stubs := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if stubs.scans != 1 {
 		t.Fatalf("scans = %d, want the recovery scan to run", stubs.scans)
 	}
@@ -259,7 +258,7 @@ func TestAPendingRecoveryRaisesThePopupOnAnyLaunch(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			p, reg, _ := newTestPlacement(t, cfg, pending)
-			p.checkOnce()
+			p.CheckOnce()
 			if !reg.Placing() {
 				t.Fatal("popup not raised")
 			}
@@ -311,8 +310,8 @@ func TestACrashedManualMoveIsRepairedOnTheNextLaunchWithTheFlagSet(t *testing.T)
 	if err := config.Save(cfg); err != nil {
 		t.Fatal(err)
 	}
-	reg := newSessions(t)
-	newPlacement(cfg, reg).checkOnce()
+	reg := newSessions()
+	newPlacement(cfg, reg).CheckOnce()
 
 	if target, err := os.Readlink(filepath.Join(dir, "thoughts")); err != nil || target != moved {
 		t.Fatalf("link = %q, %v, want %q", target, err, moved)
@@ -346,7 +345,7 @@ func TestAChangedThoughtsFingerprintRaisesThePopupAgain(t *testing.T) {
 	cfg := checkedConfig(t.TempDir())
 	cfg.ThoughtsPlacement = "from-an-older-config"
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if !reg.Placing() {
 		t.Fatal("a changed set of folders did not raise the popup")
 	}
@@ -364,7 +363,7 @@ func TestAChangedThoughtsFingerprintRaisesThePopupAgain(t *testing.T) {
 func TestAnUnchangedThoughtsFingerprintStaysQuiet(t *testing.T) {
 	cfg := checkedConfig(t.TempDir())
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if reg.Placing() {
 		t.Fatal("an unchanged set of folders raised the popup")
 	}
@@ -373,7 +372,7 @@ func TestAnUnchangedThoughtsFingerprintStaysQuiet(t *testing.T) {
 func TestTheLegacyCheckedFlagMigratesSilently(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir(), Welcomed: true, ThoughtsPlacementChecked: true}
 	p, reg, _ := newTestPlacement(t, cfg, misplacedReport())
-	p.checkOnce()
+	p.CheckOnce()
 	if reg.Placing() {
 		t.Fatal("the legacy flag raised the popup")
 	}

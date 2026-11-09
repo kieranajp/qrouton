@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -11,9 +11,8 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
 
@@ -175,7 +174,7 @@ func TestFirstRunConfigLoadsAndRoutesSessionsToTheDerivedDefaultRoot(t *testing.
 	if real != want {
 		t.Fatalf("thoughts resolve to %s, want %s", real, want)
 	}
-	if _, err := core.SessionThoughts(core.OpenVault(cfg), cfg.ThoughtsRoots(), dir); err != nil {
+	if _, err := SessionThoughts(OpenVault(cfg), cfg.ThoughtsRoots(), dir); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -260,10 +259,12 @@ func TestFirstRunSaveKeepsTheGateUpWhenTheRelaunchFails(t *testing.T) {
 		t.Fatal("the live marker was set, so the gate drops with no successor up")
 	}
 
-	kernel := startedCore(t, &Options{Root: cfg.Root, Config: cfg})
-	if fields := chromeOf(t, kernel, func(f status.Fields) bool { return f.Welcoming }); !fields.Welcoming {
-		t.Fatalf("chrome = %+v, want first run still raised", fields)
-	}
+	opts, _ := testOptions(t)
+	opts.Options = Options{Root: cfg.Root, Config: cfg}
+	opts.SessionRoot = ""
+	kernel := testWorkbench(t, newFakeClient(), opts)
+	startWorkbench(t, kernel, opts)
+	waitFor(t, "the chrome to keep first run raised", func() bool { return kernel.Chrome.Snapshot().Welcoming })
 }
 
 // The spawn is unreachable without a completed write, which is what makes a
@@ -341,6 +342,34 @@ func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 
 	if login := f.Login(); login != "" {
 		t.Fatalf("Login() = %q, want no account named", login)
+	}
+}
+
+// Catches a failed lookup surfacing as a login, or a resolved token not reaching it.
+func TestFirstRunLoginNamesTheTokensAccountAndNothingWhenTheLookupFails(t *testing.T) {
+	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
+	f.token = func() (string, error) { return "tok", nil }
+	var asked string
+	f.login = func(_ context.Context, token string) (string, error) { asked = token; return "octocat", nil }
+	if got := f.Login(); got != "octocat" || asked != "tok" {
+		t.Fatalf("Login() = %q after asking with %q, want octocat for tok", got, asked)
+	}
+	f.login = func(context.Context, string) (string, error) { return "octocat", errors.New("401 Bad credentials") }
+	if got := f.Login(); got != "" {
+		t.Fatalf("Login() after a failed lookup = %q, want no account named", got)
+	}
+}
+
+// Catches Login asking GitHub about an empty token when none resolves.
+func TestFirstRunLoginAsksNothingWhenNoTokenResolves(t *testing.T) {
+	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
+	f.token = func() (string, error) { return "", github.ErrNoToken }
+	f.login = func(context.Context, string) (string, error) {
+		t.Fatal("Login looked up an account with no token")
+		return "", nil
+	}
+	if got := f.Login(); got != "" {
+		t.Fatalf("Login() with no token = %q", got)
 	}
 }
 
@@ -488,10 +517,10 @@ func TestFirstRunThatMovesTheThoughtsFolderReindexesSoASessionSearchesTheNewOne(
 	}
 	cfg := &config.Config{Root: root}
 	set := vault.NewSet(offlineEmbedder{}, t.TempDir())
-	if err := set.Configure(core.ThoughtsProfiles(cfg)); err != nil {
+	if err := set.Configure(ThoughtsProfiles(cfg)); err != nil {
 		t.Fatal(err)
 	}
-	f := newFirstRun(cfg, func() {}, nil, nil, nil, core.ReconfigureVault(set))
+	f := newFirstRun(cfg, func() {}, nil, nil, nil, ReconfigureVault(set))
 	if res, err := f.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root, Thoughts: moved}); err != nil || res.Relaunching {
 		t.Fatalf("Save = %+v, %v", res, err)
 	}
@@ -500,12 +529,95 @@ func TestFirstRunThatMovesTheThoughtsFolderReindexesSoASessionSearchesTheNewOne(
 	if err := os.Symlink(filepath.Join(moved, "s1"), filepath.Join(sessionDir, "thoughts")); err != nil {
 		t.Fatal(err)
 	}
-	thoughts, err := core.SessionThoughts(set, cfg.ThoughtsRoots(), sessionDir)
+	thoughts, err := SessionThoughts(set, cfg.ThoughtsRoots(), sessionDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	res, err := thoughts.Search(context.Background(), vault.Query{Text: "wombat burrows"})
 	if err != nil || len(res.Hits) != 1 || res.Hits[0].Ref != config.DefaultThoughtsID+":s1/note.md" {
 		t.Fatalf("search = %+v, %v", res, err)
+	}
+}
+
+func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
+	kernel := testWorkbench(t, newFakeClient(), workbenchOptions{Options: Options{Config: &config.Config{Root: t.TempDir()}}})
+	if _, err := kernel.Offer("LIF-2841", "Linear prompt"); err != nil {
+		t.Fatal(err)
+	}
+	var carried, carriedPrompt string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		carried, carriedPrompt = request()
+		return nil
+	}, kernel.PendingTicket)
+	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
+		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+	kernel.Assembly.Begin()
+	carried = "not called"
+	carriedPrompt = "not called"
+	if err := relaunch(); err != nil || carried != "" {
+		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+}
+
+func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
+	kernel := testWorkbench(t, newFakeClient(), workbenchOptions{Options: Options{Config: &config.Config{Root: t.TempDir()}}})
+	var carried string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		if _, err := kernel.Offer("LIF-2841", "Late prompt"); err != nil {
+			return err
+		}
+		carried, _ = request()
+		return nil
+	}, kernel.PendingTicket)
+	if err := relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if carried != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("late pending seed = %q", carried)
+	}
+}
+
+// Catches a settings restart carrying the pending ticket into the successor,
+// which would open it a second time there, or first run dropping it.
+func TestASettingsRestartRelaunchesWithoutATicket(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	var carried []string
+	kernel := testWorkbench(t, newFakeClient(), workbenchOptions{Options: Options{
+		Config: &config.Config{Root: t.TempDir()},
+		Relaunch: func(pending func() (string, string)) error {
+			if pending == nil {
+				carried = append(carried, "")
+				return nil
+			}
+			url, _ := pending()
+			carried = append(carried, url)
+			return nil
+		},
+		Quit: func() {},
+	}})
+	if _, err := kernel.Offer("LIF-2841", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := kernel.Settings.Relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if err := kernel.FirstRun.relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"", "https://linear.app/issue/LIF-2841"}; !reflect.DeepEqual(carried, want) {
+		t.Fatalf("settings then first run carried %q, want %q", carried, want)
+	}
+}
+
+// Catches a core with no relaunch handing settings or first run one that panics.
+func TestACoreWithNoRelaunchRefusesToRestart(t *testing.T) {
+	kernel := testWorkbench(t, newFakeClient(), workbenchOptions{Options: Options{
+		Config: &config.Config{Root: t.TempDir()}, Quit: func() { t.Fatal("quit with no successor") }}})
+	if err := kernel.Settings.Relaunch(); !errors.Is(err, ErrNoRelaunch) {
+		t.Fatalf("Settings.Relaunch = %v, want ErrNoRelaunch", err)
+	}
+	if kernel.FirstRun.relaunch != nil {
+		t.Fatal("first run was given a relaunch with none to give")
 	}
 }

@@ -18,8 +18,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-type emitter = core.Emitter
-
 type Options struct {
 	Icon []byte
 	// Version is the packaged release the binary was built as. Empty in a dev
@@ -58,7 +56,7 @@ type Options struct {
 	Relauncher Relauncher
 
 	updates   *Updates
-	placement *Placement
+	placement *core.Placement
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -94,19 +92,15 @@ func Run(opts Options) error {
 		return kernel.Windows.OpenGalleryAsset(token, index)
 	})
 	client := newLocalClient(r, opts.Launcher, r.chooseDirectory)
-	kernel = core.New(core.Options{
-		Root:     opts.Root,
-		Config:   opts.Config,
-		Launcher: opts.Launcher,
-		Vault:    core.OpenVault(opts.Config),
-		Ollama:   vault.NewOllama(),
-	}, client)
-	reg := kernel.Sessions
+	var quit func()
+	options := coreOptions(opts, func() { quit() })
+	options.Vault, options.Ollama = core.OpenVault(opts.Config), vault.NewOllama()
+	kernel = core.New(options, client)
+	quit = quitter(kernel, r)
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
-	quit := quitter(kernel, r)
 	r.register(application.NewService(&Term{term: kernel.Term}))
 	r.register(application.NewService(&Windows{windows: kernel.Windows}))
-	r.register(application.NewService(&Sessions{sessions: reg}))
+	r.register(application.NewService(&Sessions{sessions: kernel.Sessions}))
 	r.register(application.NewService(&Repositories{repos: kernel.Repositories}))
 	r.register(application.NewService(&Orgs{orgs: kernel.Orgs}))
 	r.register(application.NewService(&Chrome{chrome: kernel.Chrome}))
@@ -117,18 +111,10 @@ func Run(opts Options) error {
 	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
-	validateEditor, validateLaunch := validators(opts.Validator)
-	r.register(application.NewService(newSettings(
-		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
-		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.Touch, core.ReconfigureVault(kernel.Vault),
-		opts.Launcher.Runners, client,
-	)))
-	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), kernel.PendingTicket)
-	firstRun := newFirstRun(opts.Config, reg.Touch, relaunch, quit, client.ChooseDirectory, core.ReconfigureVault(kernel.Vault))
-	r.register(application.NewService(firstRun))
-	opts.placement = newPlacement(opts.Config, reg)
-	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
-	r.register(application.NewService(opts.placement))
+	r.register(application.NewService(&Settings{settings: kernel.Settings}))
+	r.register(application.NewService(&FirstRun{firstRun: kernel.FirstRun}))
+	opts.placement = kernel.Placement
+	r.register(application.NewService(&Placement{placement: kernel.Placement}))
 	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), kernel.TerminalSession)))
 	return run(r, kernel, opts, quit)
 }
@@ -142,19 +128,20 @@ func quitter(kernel *core.Core, r renderer) func() {
 	})
 }
 
-func pendingRelaunch(relaunch func(func() (string, string)) error, pending func() (string, string)) func() error {
-	if relaunch == nil {
-		return nil
+// coreOptions is the core's share of opts. quit is the workbench's teardown.
+func coreOptions(opts Options, quit func()) core.Options {
+	validateEditor, validateLaunch := validators(opts.Validator)
+	return core.Options{
+		Root:              opts.Root,
+		Config:            opts.Config,
+		Launcher:          opts.Launcher,
+		ValidateEditor:    validateEditor,
+		ValidateLaunch:    validateLaunch,
+		Relaunch:          relaunchWith(opts.Relauncher),
+		Quit:              quit,
+		LinearCommand:     opts.LinearCommand,
+		LinearEnvironment: opts.LinearEnvironment,
 	}
-	return func() error { return relaunch(pending) }
-}
-
-// withoutTicket relaunches carrying no pending ticket, as a settings restart has none.
-func withoutTicket(relaunch func(func() (string, string)) error) func() error {
-	if relaunch == nil {
-		return nil
-	}
-	return func() error { return relaunch(nil) }
 }
 
 func validators(v Validator) (func([]string) error, func(map[string][]string) error) {
@@ -182,7 +169,7 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 		go opts.updates.watch(ctx, updateInterval)
 	}
 	if opts.placement != nil {
-		go opts.placement.checkOnce()
+		go opts.placement.CheckOnce()
 	}
 	if err := kernel.Start(opts.Socket); err != nil {
 		return err

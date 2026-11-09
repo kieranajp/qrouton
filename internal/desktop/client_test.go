@@ -68,7 +68,7 @@ func TestShowingASessionRetitlesTheWindow(t *testing.T) {
 // that did nothing.
 func TestOpenConfigWithNoOpenTextCommandWritesNothing(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	s := testSettings(t, &config.Config{}, nil, nil, nil)
+	s := &Settings{settings: testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{}, Launcher: newStubBoot()}).Settings}
 	if err := s.OpenConfig(); !errors.Is(err, ErrNoOpenTextCommand) {
 		t.Fatalf("OpenConfig without a command = %v, want ErrNoOpenTextCommand", err)
 	}
@@ -134,13 +134,14 @@ func TestEveryCapabilitySentinelKeepsItsTextAndIsUnavailable(t *testing.T) {
 // The tool's own words are the only account of a failed open the page gets.
 func TestAFailedOpenConfigCarriesWhatTheToolSaid(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	s := testSettings(t, &config.Config{}, nil, nil, nil)
-	s.client = newLocalClient(nil, &stubBoot{openText: func(string) []string {
+	boot := newStubBoot()
+	boot.openText = func(string) []string {
 		return []string{"/bin/sh", "-c", "echo no application knows .json >&2; exit 4"}
-	}}, nil)
+	}
+	s := &Settings{settings: testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{}, Launcher: boot}).Settings}
 
 	err := s.OpenConfig()
-	if !errors.Is(err, ErrOpenConfig) || err.Error() != "config.json could not be opened: no application knows .json" {
+	if !errors.Is(err, core.ErrOpenConfig) || err.Error() != "config.json could not be opened: no application knows .json" {
 		t.Fatalf("OpenConfig = %v", err)
 	}
 }

@@ -1,6 +1,10 @@
 package desktop
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/kieranajp/qrouton/internal/core"
+)
 
 // notesRenderer is the slice of the toolkit a presentation needs: a second
 // window, a way to reach that window alone, and a way to end it. Quit is
@@ -15,7 +19,7 @@ type notesRenderer interface {
 // drag to a second display, so the notes stay out of a screen share.
 type Presenter struct {
 	renderer notesRenderer
-	emit     emitter
+	emit     core.Emitter
 
 	mu    sync.Mutex
 	open  bool
@@ -23,7 +27,7 @@ type Presenter struct {
 	note  noteView
 }
 
-func newPresenter(r notesRenderer, emit emitter) *Presenter {
+func newPresenter(r notesRenderer, emit core.Emitter) *Presenter {
 	return &Presenter{renderer: r, emit: emit}
 }
 

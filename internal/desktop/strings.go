@@ -7,9 +7,6 @@ import (
 )
 
 const (
-	placementLeavingNote  = "Moving a session out of a shared folder stops sharing it. Your sync tool will usually delete the folder on your teammates' machines, but versioned copies may remain."
-	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
-
 	applicationName        = "qrouton"
 	applicationDescription = "qrouton workbench"
 
@@ -42,8 +39,6 @@ const (
 	staleFrontendError         = "workbench frontend is stale; run make front before building qrouton"
 	staleFrontendBindingFormat = "%w: built pages do not call %s"
 
-	noOwnersError = "add at least one organisation or username to search"
-
 	// frontendSource is where the pages are written, not where they are built.
 	frontendSource = "frontend/src/"
 
@@ -65,49 +60,12 @@ const (
 	presenterNotesEvent  = "presenter:notes"
 	presenterClosedEvent = "presenter:closed"
 
-	orgsChangedEvent = "orgs:changed"
-	uiScaleEvent     = "ui:scale"
-	updateEvent      = "update:status"
-)
-
-// A Save refusal names the settings field it belongs under before the sentence.
-const (
-	settingsFieldOrgs     = "orgs"
-	settingsFieldRoot     = "root"
-	settingsFieldEditor   = "editor"
-	settingsFieldLaunch   = "launch"
-	settingsFieldStickers = "stickers"
-	settingsFieldUIScale  = "uiScale"
-	settingsFieldThoughts = "thoughts"
-
-	thoughtsOrgJoin  = ", "
-	thoughtsOrgSplit = ","
-
-	settingsRefusalFormat = "%s: %s"
-	settingsWrappedFormat = "%s: %w"
-	settingsEmpty         = "cannot be empty"
-	stickerFieldFormat    = "%s.%d"
-	stickerDuplicate      = "another sticker already uses this colour and symbol"
-	stickerIDBytes        = 4
-	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
-	unknownUIScaleAction  = "unknown UI scale action"
-)
-
-// What a scale shortcut asks the workbench to do.
-const (
-	uiScaleActionIn    = "in"
-	uiScaleActionOut   = "out"
-	uiScaleActionReset = "reset"
+	updateEvent = "update:status"
 )
 
 const viewMenuLabel = "View"
 
 const (
-	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
-	// which fills in after the screen has already drawn.
-	loginTimeout       = 5 * time.Second
-	githubCheckTimeout = 4 * time.Second
-
 	// updateInterval paces the release check; updateCheckTimeout bounds each one.
 	updateInterval     = 6 * time.Hour
 	updateCheckTimeout = 10 * time.Second

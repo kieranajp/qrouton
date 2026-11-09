@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -32,25 +32,30 @@ type FirstRun struct {
 	choose      func() (string, error)
 	reconfigure func(*config.Config) error
 	onWelcomed  func()
+	token       func() (string, error)
+	login       func(ctx context.Context, token string) (string, error)
 }
 
 func newFirstRun(cfg *config.Config, touch func(), relaunch func() error, quit func(),
 	choose func() (string, error), reconfigure func(*config.Config) error) *FirstRun {
 	return &FirstRun{cfg: cfg, touch: touch, relaunch: relaunch, quit: quit, pinnedRoot: pinnedFileRoot(),
-		choose: choose, reconfigure: reconfigure}
+		choose: choose, reconfigure: reconfigure, token: github.Token,
+		login: func(ctx context.Context, token string) (string, error) {
+			return github.AuthenticatedLogin(ctx, http.DefaultClient, token)
+		}}
 }
 
 // Login is the GitHub account the owners screen names. No account is an answer
 // rather than an error: the screen has a sentence for it, and a wrong or absent
 // account is exactly how the owners silently fail to resolve.
 func (f *FirstRun) Login() string {
-	token, err := github.Token()
+	token, err := f.token()
 	if err != nil {
 		return ""
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
 	defer cancel()
-	login, err := github.AuthenticatedLogin(ctx, http.DefaultClient, token)
+	login, err := f.login(ctx, token)
 	if err != nil {
 		return ""
 	}

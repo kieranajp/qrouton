@@ -200,3 +200,50 @@ const (
 	// repoRefreshTimeout bounds each owner's repository listing.
 	repoRefreshTimeout = 30 * time.Second
 )
+
+const (
+	placementLeavingNote  = "Moving a session out of a shared folder stops sharing it. Your sync tool will usually delete the folder on your teammates' machines, but versioned copies may remain."
+	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
+
+	noOwnersError = "add at least one organisation or username to search"
+
+	orgsChangedEvent = "orgs:changed"
+	uiScaleEvent     = "ui:scale"
+)
+
+// A Save refusal names the settings field it belongs under before the sentence.
+const (
+	settingsFieldOrgs     = "orgs"
+	settingsFieldRoot     = "root"
+	settingsFieldEditor   = "editor"
+	settingsFieldLaunch   = "launch"
+	settingsFieldStickers = "stickers"
+	settingsFieldUIScale  = "uiScale"
+	settingsFieldThoughts = "thoughts"
+
+	thoughtsOrgJoin  = ", "
+	thoughtsOrgSplit = ","
+
+	settingsRefusalFormat = "%s: %s"
+	settingsWrappedFormat = "%s: %w"
+	settingsEmpty         = "cannot be empty"
+	stickerFieldFormat    = "%s.%d"
+	stickerDuplicate      = "another sticker already uses this colour and symbol"
+	stickerIDBytes        = 4
+	uiScaleRefusal        = "choose a scale from 80% to 150% in steps of 10%"
+	unknownUIScaleAction  = "unknown UI scale action"
+)
+
+// What a scale shortcut asks the workbench to do.
+const (
+	uiScaleActionIn    = "in"
+	uiScaleActionOut   = "out"
+	uiScaleActionReset = "reset"
+)
+
+const (
+	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
+	// which fills in after the screen has already drawn.
+	loginTimeout       = 5 * time.Second
+	githubCheckTimeout = 4 * time.Second
+)

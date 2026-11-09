@@ -65,6 +65,18 @@ var (
 	ErrNoConfig               = errors.New("workbench has no configuration to assemble sessions against")
 )
 
+var (
+	ErrNoOwners         = errors.New(noOwnersError)
+	ErrUIScale          = errors.New(uiScaleRefusal)
+	ErrUIScaleAction    = errors.New(unknownUIScaleAction)
+	ErrStickerDuplicate = errors.New(stickerDuplicate)
+	ErrOpenConfig       = errors.New("config.json could not be opened")
+	ErrNoRelaunch       = errors.New("workbench has no way to relaunch itself into a new sessions root")
+
+	ErrNoOpenTextCommand = Unavailable("workbench has no command to open a file in a text editor")
+	ErrNoDirectoryPicker = Unavailable("workbench has no directory picker to choose a sessions root with")
+)
+
 func noSuchWindow(id string) error {
 	return fmt.Errorf("no open window with id %q", id)
 }

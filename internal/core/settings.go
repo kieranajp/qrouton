@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -15,7 +15,6 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
@@ -108,13 +107,13 @@ type SaveResult struct {
 
 type Settings struct {
 	cfg            *config.Config
-	emit           emitter
+	emit           Emitter
 	validateEditor func([]string) error
 	validateLaunch func(map[string][]string) error
 	relaunch       func() error
 	quit           func()
 	pinnedRoot     string
-	client         core.Client
+	client         Client
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
 	runners        func() ([]assembly.Runner, error)
@@ -122,10 +121,10 @@ type Settings struct {
 	linear         lineartools.Tools
 }
 
-func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
+func newSettings(cfg *config.Config, emit Emitter, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, relaunch func() error,
 	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
-	client core.Client) *Settings {
+	client Client) *Settings {
 	return &Settings{
 		pinnedRoot: pinnedFileRoot(),
 		relaunch:   relaunch,
@@ -181,6 +180,9 @@ func (s *Settings) Load() SettingsView {
 
 func (s *Settings) runnerLegend() []RunnerLegend {
 	legend := []RunnerLegend{}
+	if s.runners == nil {
+		return legend
+	}
 	runners, err := s.runners()
 	if err != nil {
 		return legend
@@ -438,7 +440,7 @@ func (s *Settings) Relaunch() error {
 // OpenConfig writes config.json first when it does not exist yet, so the editor
 // has a file to open.
 func (s *Settings) OpenConfig() error {
-	if !s.client.Supports(core.CapabilityOpenText) {
+	if !s.client.Supports(CapabilityOpenText) {
 		return ErrNoOpenTextCommand
 	}
 	if _, err := os.Stat(config.Path()); errors.Is(err, fs.ErrNotExist) {
@@ -533,7 +535,7 @@ func stageConfig(snapshot *config.Config, pinnedRoot string, holdThoughts bool, 
 // commitLive reindexes before it writes or publishes anything, so routing and
 // search never disagree. A failed write puts the old index back.
 func commitLive(cfg, current, next, live *config.Config, reconfigure func(*config.Config) error) error {
-	reindex := reconfigure != nil && !slices.Equal(core.ThoughtsProfiles(current), core.ThoughtsProfiles(live))
+	reindex := reconfigure != nil && !slices.Equal(ThoughtsProfiles(current), ThoughtsProfiles(live))
 	if reindex {
 		if err := reconfigure(live); err != nil {
 			return fmt.Errorf(settingsWrappedFormat, settingsFieldThoughts, err)
