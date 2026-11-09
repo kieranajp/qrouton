@@ -17,6 +17,7 @@
             name === "pre" ? ` data-line${end ?? ""}="${Number(at) + first - 1}"` : "")}>`
         : tag);
   const inline = (text) => unnumbered(text).replace(/^<p>|<\/p>\s*$/g, "");
+  const isParagraph = (html) => /^<p>/.test(html) && html.indexOf("<p>", 1) === -1 && /<\/p>\s*$/.test(html);
 
   let context = $derived(question.context ? anchored(question.context, question.contextFrom) : "");
   let answered = $derived(Boolean(draft.letter || draft.note.trim()));
@@ -49,7 +50,11 @@
         onclick={() => onPick?.(option.letter)}>
         <span class="letter">{option.letter}</span>
         <span class="text">
-          <span class="label">{@html inline(option.text)}</span>
+          {#if isParagraph(unnumbered(option.text))}
+            <span class="label">{@html inline(option.text)}</span>
+          {:else}
+            <span class="label markdown blocks">{@html unnumbered(option.text)}</span>
+          {/if}
           {#if option.recommended}
             <span class="recommended">
               <span class="badge">Recommended</span>
@@ -197,6 +202,21 @@
     gap: calc(6px * var(--ui-scale));
     min-width: 0;
     overflow-wrap: anywhere;
+  }
+
+  .blocks {
+    display: block;
+    padding-left: 0;
+    font: var(--machine-md);
+    color: inherit;
+  }
+
+  .blocks :global(:is(p, ul, ol)) {
+    margin: 0;
+  }
+
+  .blocks :global(* + :is(p, ul, ol)) {
+    margin-top: calc(6px * var(--ui-scale));
   }
 
   .recommended {
