@@ -21,6 +21,7 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -39,6 +40,7 @@ type fakeRenderer struct {
 	closed  []string
 	sent    []delivery
 	quits   atomic.Int32
+	inFront atomic.Bool
 	quit    bool
 	block   chan struct{}
 	once    sync.Once
@@ -71,7 +73,7 @@ func (f *fakeRenderer) Focus(name string) {
 	f.focused[name]++
 }
 
-func (f *fakeRenderer) Focused(string) bool { return false }
+func (f *fakeRenderer) Focused(string) bool { return f.inFront.Load() }
 
 func (f *fakeRenderer) Close(name string) {
 	f.mu.Lock()
@@ -126,6 +128,7 @@ type stubBoot struct {
 	reveal   func(sessionRoot string) []string
 	copyPic  func(path string) []string
 	copyDoc  func(path string) []string
+	openText func(path string) []string
 	document func(sessionRoot, name string) (workbench.WindowOptions, error)
 
 	mu      sync.Mutex
@@ -169,7 +172,12 @@ func (b *stubBoot) Reveal(sessionRoot string) []string {
 	return b.reveal(sessionRoot)
 }
 
-func (b *stubBoot) OpenText(string) []string { return nil }
+func (b *stubBoot) OpenText(path string) []string {
+	if b.openText == nil {
+		return nil
+	}
+	return b.openText(path)
+}
 
 func (b *stubBoot) CopyImage(path string) []string {
 	if b.copyPic == nil {
@@ -267,6 +275,11 @@ func testWorkbench(t *testing.T, r *fakeRenderer, emit emitter) (*Sessions, *Ter
 // test's cleanup is already removing. The channel carries run's result.
 func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows, opts Options) <-chan error {
 	t.Helper()
+	return startWorkbenchWith(t, r, newLocalClient(r, opts.Launcher, nil), term, windows, opts)
+}
+
+func startWorkbenchWith(t *testing.T, r *fakeRenderer, client core.Client, term *Term, windows *Windows, opts Options) <-chan error {
+	t.Helper()
 	reg := term.sessions
 	// The same teardown Run builds for Settings.Quit and the window's own
 	// OnClose, so a test closing the conversation window exercises the real
@@ -280,7 +293,7 @@ func startWorkbench(t *testing.T, r *fakeRenderer, term *Term, windows *Windows,
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- run(r, term, windows, opts, quit)
+		done <- run(r, client, term, windows, opts, quit)
 	}()
 	t.Cleanup(func() {
 		r.Quit()

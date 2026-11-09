@@ -111,3 +111,33 @@ func TestAValueListKeepsSourceOrderAndStopsTheGeneratorWhenMissing(t *testing.T)
 		t.Fatal("a missing list generated anyway")
 	}
 }
+
+// A constant that moves to the core with its code must still reach the page, or
+// every event and value set it names vanishes from the module.
+func TestCoreOnlyEventsAndValueSetsReachThePage(t *testing.T) {
+	dir := t.TempDir()
+	source := "package core\n\nconst fixtureOnlyEvent = \"fixture:only\"\n\nconst (\n" +
+		"\tfixtureModeCalm = \"calm\"\n\tfixtureModeLoud = \"loud\"\n)\n"
+	if err := os.WriteFile(filepath.Join(dir, "core.go"), []byte(source), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	original := corePackage
+	corePackage = dir
+	t.Cleanup(func() { corePackage = original })
+
+	page, err := render(desktopPackage, statusPackage, moduleFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(page), "export const FIXTURE_ONLY_EVENT = \"fixture:only\";\n") {
+		t.Fatal("an event defined only in the core is missing from the page")
+	}
+	var js bytes.Buffer
+	sets := []valueSet{{name: "FIXTURE_MODES", typedef: "FixtureMode", dir: desktopPackage, prefix: "fixtureMode"}}
+	if err := writeValues(&js, sets, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(js.String(), "  CALM: \"calm\",\n  LOUD: \"loud\",\n") {
+		t.Fatalf("a desktop value set lost its core constants:\n%s", js.String())
+	}
+}

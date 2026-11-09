@@ -28,7 +28,7 @@ func testSettings(t *testing.T, cfg *config.Config, validateEditor func([]string
 		"--linear-issue",
 	}, []string{"LINEAR_PROMPT"}, nil, quit, nil, nil,
 		func() ([]assembly.Runner, error) { return nil, nil },
-		func(string) []string { return nil })
+		newLocalClient(nil, newStubBoot(), nil))
 	s.linear.File = filepath.Join(t.TempDir(), "coding-tools.json")
 	return s
 }
@@ -210,10 +210,10 @@ func TestSettingsOpenConfigRunsTheOpenTextArgvOnConfigPath(t *testing.T) {
 	}
 	record := filepath.Join(t.TempDir(), "opened")
 	var asked string
-	s.openText = func(path string) []string {
+	s.client = newLocalClient(nil, &stubBoot{openText: func(path string) []string {
 		asked = path
 		return []string{"/bin/sh", "-c", `printf %s "$1" > "$2"`, "sh", path, record}
-	}
+	}}, nil)
 	if err := s.OpenConfig(); err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +738,7 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- run(r, term, windows, opts, quit)
+		done <- run(r, newLocalClient(r, opts.Launcher, nil), term, windows, opts, quit)
 	}()
 	t.Cleanup(func() {
 		r.Quit()

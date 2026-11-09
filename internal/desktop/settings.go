@@ -8,7 +8,6 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -16,6 +15,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/lineartools"
@@ -114,7 +114,7 @@ type Settings struct {
 	relaunch       func() error
 	quit           func()
 	pinnedRoot     string
-	openText       func(path string) []string
+	client         core.Client
 	wakeChrome     func()
 	reconfigure    func(*config.Config) error
 	runners        func() ([]assembly.Runner, error)
@@ -125,11 +125,11 @@ type Settings struct {
 func newSettings(cfg *config.Config, emit emitter, validateEditor func([]string) error,
 	validateLaunch func(map[string][]string) error, linearCommand, linearEnv []string, relaunch func() error,
 	quit, wakeChrome func(), reconfigure func(*config.Config) error, runners func() ([]assembly.Runner, error),
-	openText func(path string) []string) *Settings {
+	client core.Client) *Settings {
 	return &Settings{
 		pinnedRoot: pinnedFileRoot(),
 		relaunch:   relaunch,
-		openText:   openText,
+		client:     client,
 		runners:    runners,
 		checkToken: func(ctx context.Context, token string) (github.TokenCheck, string) {
 			return github.CheckToken(ctx, http.DefaultClient, token)
@@ -438,8 +438,7 @@ func (s *Settings) Relaunch() error {
 // OpenConfig writes config.json first when it does not exist yet, so the editor
 // has a file to open.
 func (s *Settings) OpenConfig() error {
-	argv := s.openText(config.Path())
-	if len(argv) == 0 {
+	if !s.client.Supports(core.CapabilityOpenText) {
 		return ErrNoOpenTextCommand
 	}
 	if _, err := os.Stat(config.Path()); errors.Is(err, fs.ErrNotExist) {
@@ -453,8 +452,8 @@ func (s *Settings) OpenConfig() error {
 			return err
 		}
 	}
-	if out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
-		return fmt.Errorf("%w: %s", ErrOpenConfig, strings.TrimSpace(string(out)))
+	if err := s.client.OpenText(config.Path()); err != nil {
+		return fmt.Errorf("%w: %w", ErrOpenConfig, err)
 	}
 	return nil
 }

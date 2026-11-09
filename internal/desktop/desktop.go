@@ -8,19 +8,20 @@ import (
 	"io"
 	"io/fs"
 	"net/http"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
+
+type emitter = core.Emitter
 
 type Options struct {
 	Icon []byte
@@ -100,6 +101,7 @@ func Run(opts Options) error {
 		}
 		return windows.registry.lookupGalleryAsset(token, index)
 	})
+	client := newLocalClient(r, opts.Launcher, r.chooseDirectory)
 	reg := newSessions()
 	opts.bugReports = newBugReports(reg)
 	opts.vault = openVault(opts.Config)
@@ -137,16 +139,16 @@ func Run(opts Options) error {
 	r.register(application.NewService(newSettings(
 		opts.Config, r.Emit, validateEditor, validateLaunch, opts.LinearCommand, opts.LinearEnvironment,
 		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.touch, reconfigureVault(opts.vault),
-		opts.Launcher.Runners, opts.Launcher.OpenText,
+		opts.Launcher.Runners, client,
 	)))
 	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
-	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, r.chooseDirectory, reconfigureVault(opts.vault))
+	firstRun := newFirstRun(opts.Config, reg, relaunch, quit, client.ChooseDirectory, reconfigureVault(opts.vault))
 	r.register(application.NewService(firstRun))
 	opts.placement = newPlacement(opts.Config, reg)
 	firstRun.onWelcomed = func() { go opts.placement.checkOnce() }
 	r.register(application.NewService(opts.placement))
 	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), terminalSession(reg, windows))))
-	return run(r, term, windows, opts, quit)
+	return run(r, client, term, windows, opts, quit)
 }
 
 func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Assembly) func() error {
@@ -178,23 +180,15 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 	return r.Relaunch
 }
 
-var chime = func(script string) {
-	cmd := exec.Command(script)
-	if err := cmd.Start(); err != nil {
-		return
-	}
-	go func() { _ = cmd.Wait() }()
-}
-
 // ringer is the one place a session's chime is rung from, so the setting, the
 // session in front of the user, and the once-until-you-type rule cannot be
 // skipped by any caller.
-func ringer(cfg *config.Config, state *sessionState, watched func(*sessionState) bool) func() {
+func ringer(cfg *config.Config, client core.Client, state *sessionState, watched func(*sessionState) bool) func() {
 	return func() {
 		if (cfg != nil && cfg.Snapshot().Quiet) || watched(state) || !state.agents.ring() {
 			return
 		}
-		chime(sessionpaths.NotifyScript(state.root()))
+		client.Chime(state.root())
 	}
 }
 
@@ -237,7 +231,7 @@ func manifestRunner(root string) string {
 
 // run is Run with the renderer already built, so the window lifecycle and the
 // control socket are exercised against a double instead of a display.
-func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) error {
+func run(r renderer, client core.Client, term *Term, windows *Windows, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -260,8 +254,8 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		},
 		agent: launcher.Agent,
 		serve: func(state *sessionState, socket string) (io.Closer, error) {
-			ring := ringer(opts.Config, state, func(s *sessionState) bool {
-				return reg.current() == s && r.Focused(mainWindowName)
+			ring := ringer(opts.Config, client, state, func(s *sessionState) bool {
+				return reg.current() == s && client.Focused()
 			})
 			notify := attend(state, reg.current, reg.touch, ring)
 			return serveControl(socket, windows, state, controlHooks{
@@ -292,7 +286,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 			})
 		},
 		shown: func(state *sessionState) {
-			r.Retitle(mainWindowName, windowTitle(state.root()))
+			client.SessionShown(state.root())
 			if state == nil {
 				return
 			}
@@ -306,9 +300,9 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 		// manifest's slug, so opts.Root is what they take and not the session's own.
 		uncommitted: func(root string) ([]string, error) { return session.Uncommitted(opts.Root, root) },
 		cleanup:     func(root string) error { return session.Remove(opts.Root, root) },
-		reveal:      func(root string) error { return reveal(launcher.Reveal(root)) },
-		copyImage:   func(path string) error { return copyImage(launcher.CopyImage(path)) },
-		copyFile:    func(path string) error { return copyFile(launcher.CopyFile(path)) },
+		reveal:      client.Reveal,
+		copyImage:   client.CopyImage,
+		copyFile:    client.CopyFile,
 	}
 	chromeEmit := r.Emit
 	reg.trees = newAgentTrees(r.Emit, agentTreeInterval, reg.current, sessionTree)
@@ -353,7 +347,7 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 	processHooks := controlHooks{picker: reg.queuePicker}
 	if opts.assembly != nil {
 		processHooks.openTicket = opts.assembly.offer
-		processHooks.focus = func() { r.Focus(mainWindowName) }
+		processHooks.focus = client.Raise
 	}
 	server, err := serveControl(opts.Socket, windows, nil, processHooks)
 	if err != nil {
@@ -470,33 +464,6 @@ func openDocument(windows *Windows, owner *sessionState, launcher Launcher, name
 		return "", err
 	}
 	return windows.openStructural(owner, opts)
-}
-
-// reveal shows a session's directory in the file manager. open(1) hands the
-// request to the desktop and exits, so waiting on it costs nothing and turns a
-// bad path into an error the page can show.
-func reveal(argv []string) error {
-	if len(argv) == 0 {
-		return ErrNoRevealCommand
-	}
-	return exec.Command(argv[0], argv[1:]...).Run()
-}
-
-// copyImage puts a picture on the clipboard. The conversion runs while the
-// command does, so waiting on it is what says the clipboard now holds the
-// image.
-func copyImage(argv []string) error {
-	if len(argv) == 0 {
-		return ErrNoCopyImageCommand
-	}
-	return exec.Command(argv[0], argv[1:]...).Run()
-}
-
-func copyFile(argv []string) error {
-	if len(argv) == 0 {
-		return ErrNoCopyFileCommand
-	}
-	return exec.Command(argv[0], argv[1:]...).Run()
 }
 
 func shellLabel(n int) string {

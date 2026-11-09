@@ -27,6 +27,9 @@ import (
 
 // Paths are the generator's own, relative to the package directory go generate
 // runs it in.
+// corePackage is a variable so a test can stand a fixture core beside the desktop.
+var corePackage = "../../core"
+
 const (
 	desktopPackage   = ".."
 	statusPackage    = "../../status"
@@ -154,6 +157,10 @@ func render(desktopDir, statusDir, modPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	bound, err := constantFiles(desktopDir)
+	if err != nil {
+		return nil, err
+	}
 	status, err := parsePackage(statusDir)
 	if err != nil {
 		return nil, err
@@ -181,7 +188,7 @@ func render(desktopDir, statusDir, modPath string) ([]byte, error) {
 		}
 	}
 	js.WriteString("\n")
-	for _, event := range events(desktop) {
+	for _, event := range events(bound) {
 		fmt.Fprintf(&js, "export const %s = %q;\n", screaming(event.name), event.value)
 	}
 	js.WriteString("\n")
@@ -218,6 +225,20 @@ func parsePackage(dir string) ([]*ast.File, error) {
 		files = append(files, file)
 	}
 	return files, nil
+}
+
+// constantFiles reads the desktop's constants from the core as well, since the
+// services bound in the desktop serve what the core defines.
+func constantFiles(dir string) ([]*ast.File, error) {
+	files, err := parsePackage(dir)
+	if err != nil || dir != desktopPackage {
+		return files, err
+	}
+	core, err := parsePackage(corePackage)
+	if err != nil {
+		return nil, err
+	}
+	return append(files, core...), nil
 }
 
 func importPath(modPath, dir string) (string, error) {
@@ -324,7 +345,7 @@ func writeValues(js *bytes.Buffer, sets []valueSet, names []valueName) error {
 		if found, ok := parsed[dir]; ok {
 			return found, nil
 		}
-		files, err := parsePackage(dir)
+		files, err := constantFiles(dir)
 		if err != nil {
 			return nil, err
 		}

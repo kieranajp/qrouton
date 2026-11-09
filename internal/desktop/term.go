@@ -2,8 +2,6 @@ package desktop
 
 import "github.com/kieranajp/qrouton/internal/workbench"
 
-type emitter func(event string, payload any)
-
 // Term is the conversation terminals' Go half; a page calls these methods over
 // the Wails bridge, naming the terminal it draws. A terminal's child is a
 // session's agent supervisor, so its stdio is the PTY that runner inherits.
