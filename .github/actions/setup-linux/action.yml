@@ -1,0 +1,7 @@
+name: Set up Linux build dependencies
+description: Install native dependencies for Ubuntu checks and packaging.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev dpkg-dev desktop-file-utils

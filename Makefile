@@ -11,7 +11,7 @@ BUILD_NUMBER ?= 1
 SIGN_IDENTITY ?= -
 MACOSX_DEPLOYMENT_TARGET ?= 12.0
 export VERSION BUILD_NUMBER SIGN_IDENTITY MACOSX_DEPLOYMENT_TARGET
-BOUND    := $(wildcard internal/config/*.go internal/desktop/*.go internal/status/*.go internal/kinds/*.go internal/theme/*.go internal/workbench/*.go internal/session/*.go internal/github/*.go internal/assembly/*.go internal/placement/*.go internal/vault/*.go internal/desktop/bridge/*.go)
+BOUND    := $(wildcard internal/config/*.go internal/desktop/*.go internal/status/*.go internal/kinds/*.go internal/theme/*.go internal/workbench/*.go internal/session/*.go internal/github/*.go internal/assembly/*.go internal/placement/*.go internal/vault/*.go internal/desktop/bridge/*.go prompts/*.go)
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 

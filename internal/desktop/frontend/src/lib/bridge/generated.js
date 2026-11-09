@@ -18,6 +18,7 @@ export const CHROME_SNAPSHOT = "github.com/kieranajp/qrouton/internal/desktop.Ch
 export const FIRST_RUN_CHOOSE_ROOT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ChooseRoot";
 export const FIRST_RUN_LOGIN = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Login";
 export const FIRST_RUN_SAVE = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.Save";
+export const FIRST_RUN_THOUGHTS_DEFAULT = "github.com/kieranajp/qrouton/internal/desktop.FirstRun.ThoughtsDefault";
 export const OLLAMA_CANCEL_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.CancelPull";
 export const OLLAMA_CHECK = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Check";
 export const OLLAMA_PULL = "github.com/kieranajp/qrouton/internal/desktop.Ollama.Pull";

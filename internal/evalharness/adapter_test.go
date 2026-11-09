@@ -3,6 +3,7 @@ package evalharness
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,5 +248,36 @@ func TestAdapterHonorsContextTimeout(t *testing.T) {
 	}
 	if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		t.Fatalf("context error = %v", ctx.Err())
+	}
+}
+
+func TestBoundedCaptureAndVersionDoNotWaitForInheritedOutputPipes(t *testing.T) {
+	for _, version := range []bool{false, true} {
+		t.Run(fmt.Sprint(version), func(t *testing.T) {
+			script := filepath.Join(t.TempDir(), "capture")
+			writeTestFile(t, script, "#!/bin/sh\nprintf 'started\\n'\nsleep 10 &\nwait\n")
+			if err := os.Chmod(script, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancel()
+			started := time.Now()
+			if version {
+				if got := (Adapter{Bin: script}).Version(ctx); got == "started" {
+					t.Fatal("cancelled version returned success")
+				}
+			} else {
+				out, err := boundedCommand(ctx, script).CombinedOutput()
+				if err == nil || !strings.Contains(string(out), "started") {
+					t.Fatalf("capture = %q, %v", out, err)
+				}
+			}
+			if elapsed := time.Since(started); elapsed > time.Second {
+				t.Fatalf("inherited pipe delayed cancellation: %s", elapsed)
+			}
+			if !errors.Is(ctx.Err(), context.DeadlineExceeded) {
+				t.Fatalf("capture did not reach its deadline: %v", ctx.Err())
+			}
+		})
 	}
 }

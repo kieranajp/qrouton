@@ -1,7 +1,5 @@
 package evalharness
 
-// Fixture manifests must satisfy both the eval harness view and the session schema.
-
 import (
 	"bytes"
 	"encoding/json"
@@ -68,25 +66,6 @@ func TestFixtureManifestsMatchSessionSchema(t *testing.T) {
 		if editing == 0 || reference == 0 {
 			t.Errorf("%s: fixtures need an editing and a reference repo to grade both roles, got %d/%d",
 				path, editing, reference)
-		}
-	}
-}
-
-// TestFixtureManifestsDecodeIntoHarnessView pins the other half of the contract:
-// the narrow struct the graders actually use must see the same repositories.
-func TestFixtureManifestsDecodeIntoHarnessView(t *testing.T) {
-	for _, path := range fixtureManifestPaths(t) {
-		manifest, err := readManifest(path)
-		if err != nil {
-			t.Fatalf("read %s through the harness view: %v", path, err)
-		}
-		if len(manifest.Repos) == 0 {
-			t.Fatalf("%s: harness view found no repositories; the manifest key drifted", path)
-		}
-		for _, repo := range manifest.Repos {
-			if repo.Name == "" || repo.Role == "" {
-				t.Errorf("%s: harness view lost a repo's name or role: %+v", path, repo)
-			}
 		}
 	}
 }

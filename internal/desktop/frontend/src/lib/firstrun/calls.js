@@ -1,4 +1,4 @@
-import { FIRST_RUN_CHOOSE_ROOT, FIRST_RUN_LOGIN, FIRST_RUN_SAVE } from "../bridge/generated.js";
+import { FIRST_RUN_CHOOSE_ROOT, FIRST_RUN_LOGIN, FIRST_RUN_SAVE, FIRST_RUN_THOUGHTS_DEFAULT } from "../bridge/generated.js";
 import { Call } from "../wails.js";
 
 /**
@@ -12,3 +12,6 @@ export const login = () => Call.ByName(FIRST_RUN_LOGIN);
 
 /** chooseRoot prompts for a directory, answering "" on a cancel. @returns {Promise<string>} */
 export const chooseRoot = () => Call.ByName(FIRST_RUN_CHOOSE_ROOT);
+
+/** @param {string} root @returns {Promise<string>} */
+export const thoughtsDefault = (root) => Call.ByName(FIRST_RUN_THOUGHTS_DEFAULT, root);

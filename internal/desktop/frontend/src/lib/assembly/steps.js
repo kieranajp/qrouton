@@ -6,22 +6,19 @@ import { fieldError } from "../fields.js";
 
 /** @typedef {{field: import("../bridge/generated.js").DraftField, message: string}} Problem */
 
-const STEPS = [
-  { label: "Describe the work", primary: "Choose repositories" },
-  { label: "Choose repositories", primary: "Choose an agent" },
-  { label: "Agent and mode", primary: "Create session" },
-];
+const DESCRIBED = [DRAFT_FIELDS.NAME, DRAFT_FIELDS.BRANCH_DESCRIPTION, DRAFT_FIELDS.TICKET];
+
+/** @typedef {(typeof STEPS)[number]["key"]} Step */
+const STEPS = /** @type {const} */ ([
+  { key: "describe", label: "Describe the work", primary: "Choose repositories", owned: DESCRIBED },
+  { key: "repositories", label: "Choose repositories", primary: "Choose an agent", owned: [DRAFT_FIELDS.REPOS] },
+  { key: "agent", label: "Agent and mode", primary: "Create session", owned: [...DESCRIBED, DRAFT_FIELDS.REPOS] },
+]);
 
 export const labels = STEPS.map((step) => step.label);
-
 export const last = STEPS.length - 1;
-
+export const stepKey = (step = 0) => (STEPS[step] ?? STEPS[0]).key;
 export const primary = (step = 0) => (STEPS[step] ?? STEPS[0]).primary;
-
-// The fields a step is in a position to fix. A missing repository must not stop
-// step 1, where there is nothing on screen to pick one with.
-const DESCRIBED = [DRAFT_FIELDS.NAME, DRAFT_FIELDS.BRANCH_DESCRIPTION, DRAFT_FIELDS.TICKET];
-const OWNED = [DESCRIBED, [DRAFT_FIELDS.REPOS], [...DESCRIBED, DRAFT_FIELDS.REPOS]];
 
 /**
  * @param {Problem[]} [problems]
@@ -29,7 +26,7 @@ const OWNED = [DESCRIBED, [DRAFT_FIELDS.REPOS], [...DESCRIBED, DRAFT_FIELDS.REPO
  * @returns {Problem | undefined}
  */
 export const blocks = (problems = [], step = 0) =>
-  problems.find((problem) => (OWNED[step] ?? []).includes(problem.field));
+  problems.find((problem) => (/** @type {readonly import("../bridge/generated.js").DraftField[]} */ (STEPS[step]?.owned ?? [])).includes(problem.field));
 
 /** folder is the directory a branch names, which is the session's own slug. */
 export const folder = (branch) => (branch ?? "").split("/").slice(1).join("/");

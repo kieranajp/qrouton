@@ -4,6 +4,7 @@ import { SETTINGS_FIELDS } from "../bridge/generated.js";
 import { TABS, erroredTabs, firstErroredTab, stepTab, tabOf } from "./tabs.js";
 
 test("every settings field Go names lives on a tab", () => {
+  /** @type {Set<string>} */
   const keys = new Set(TABS.map((tab) => tab.key));
   for (const field of Object.values(SETTINGS_FIELDS)) {
     assert.ok(keys.has(tabOf(field) ?? ""), `${field} is on no tab`);
@@ -15,6 +16,7 @@ test("every settings field Go names lives on a tab", () => {
 test("ArrowDown visits every tab once before it returns", () => {
   /** @type {string[]} */
   const visited = [];
+  /** @type {string} */
   let at = TABS[0].key;
   do {
     assert.ok(!visited.includes(at) && visited.length < TABS.length, `ArrowDown revisits ${at}`);

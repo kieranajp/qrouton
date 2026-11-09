@@ -40,7 +40,7 @@ func runCase(
 		return result
 	}
 
-	snapshot := filepath.Join(caseDir, "prompt-snapshot")
+	snapshot := filepath.Join(caseDir, promptSnapshotDirName)
 	assetHash, err := MaterializeAssets(config.AssetsDir, workspace, snapshot)
 	if err != nil {
 		result.InfrastructureError = fmt.Sprintf("materialize assets: %v", err)

@@ -7,9 +7,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/markdown"
 )
 
 // WindowKind is what a tab holds: a running command, text a process has
@@ -47,15 +48,11 @@ const (
 // holding one stops following it.
 const DocumentLimit = 1 << 20
 
-// panes name the pane a file opens in. A file with no pane opens in the editor.
-var panes = map[string]DocumentFormat{
-	".md":       FormatMarkdown,
-	".markdown": FormatMarkdown,
-}
-
 func FormatFor(name string) (DocumentFormat, bool) {
-	format, ok := panes[strings.ToLower(filepath.Ext(name))]
-	return format, ok
+	if markdown.IsFilename(name) {
+		return FormatMarkdown, true
+	}
+	return "", false
 }
 
 // WindowOptions describes an agent-opened terminal or document.

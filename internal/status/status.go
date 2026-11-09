@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/kinds"
+	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
@@ -384,7 +385,7 @@ func writtenSince(root string, since time.Time) int {
 		if path != thoughts && ignoredName(entry.Name()) {
 			return skipEntry(entry)
 		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+		if entry.IsDir() || !markdown.IsFilename(entry.Name()) {
 			return nil
 		}
 		if info, err := entry.Info(); err == nil && info.ModTime().After(since) {
@@ -468,7 +469,7 @@ func documentsUnder(root, dir string, name func(string) string) []Document {
 		if path != dir && ignoredName(entry.Name()) {
 			return skipEntry(entry)
 		}
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), markdownSuffix) {
+		if entry.IsDir() || !markdown.IsFilename(entry.Name()) {
 			return nil
 		}
 		info, err := entry.Info()

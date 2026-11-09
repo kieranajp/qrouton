@@ -47,7 +47,7 @@ test("an answered question advances on the same key", async ({ page }) => {
 
   await advance(page);
   await expect.poll(() => page.evaluate(() => window.saves)).toEqual([
-    { orgs: ["acme"], root: "/sessions", thoughts: "/sessions/thoughts" },
+    { orgs: ["acme"], root: "/sessions", thoughts: "" },
   ]);
 });
 
@@ -62,6 +62,24 @@ const toRoot = async (page, query = "") => {
 
 const field = (page) => page.locator(".dialog input").first();
 const forward = (page, name) => page.getByRole("button", { name }).click();
+
+test("prospective thoughts use the latest backend answer and save as following the default", async ({ page }) => {
+  await toRoot(page, "?manual-defaults=1");
+  await field(page).fill("/first");
+  await expect.poll(() => page.evaluate(() => window.defaultRequests.includes("/first"))).toBe(true);
+  await field(page).fill("/second");
+  await expect.poll(() => page.evaluate(() => window.defaultRequests.includes("/second"))).toBe(true);
+  await forward(page, "Next");
+  await page.evaluate(() => window.answerDefault("/second", "/backend/second"));
+  await expect(field(page)).toHaveValue("/backend/second");
+  await page.evaluate(() => window.answerDefault("/first", "/obsolete"));
+  await expect(field(page)).toHaveValue("/backend/second");
+  await forward(page, "Next");
+  await forward(page, "Find my repositories");
+  await expect.poll(() => page.evaluate(() => window.saves)).toEqual([
+    { orgs: ["acme"], root: "/second", thoughts: "" },
+  ]);
+});
 
 test("the thoughts folder follows the root until the user types one", async ({ page }) => {
   await toRoot(page);

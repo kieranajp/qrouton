@@ -30,6 +30,7 @@ import (
 const (
 	desktopPackage   = ".."
 	statusPackage    = "../../status"
+	promptsPackage   = "../../../prompts"
 	workbenchPackage = "../../workbench"
 	sessionPackage   = "../../session"
 	githubPackage    = "../../github"
@@ -64,7 +65,7 @@ var valueSets = []valueSet{
 	{name: "AGENT_STATES", typedef: "AgentState", dir: statusPackage, prefix: "AgentState"},
 	{name: "AGENT_STAGES", typedef: "AgentStage", dir: statusPackage, prefix: "Stage"},
 	{name: "ARTIFACT_KINDS", typedef: "ArtifactKind", dir: statusPackage, prefix: "Kind", derived: kindLabels()},
-	{name: "AUDIT_HEADINGS", typedef: "AuditHeading", dir: statusPackage, prefix: "AuditHeading"},
+	{name: "AUDIT_HEADINGS", typedef: "AuditHeading", dir: promptsPackage, prefix: "AuditHeading"},
 	{name: "BUG_REPORT_STATUSES", typedef: "BugReportStatus", dir: workbenchPackage, prefix: "BugReport"},
 	{name: "DOCUMENT_FORMATS", typedef: "DocumentFormat", dir: workbenchPackage, goType: "DocumentFormat", prefix: "Format"},
 	{name: "DRAFT_FIELDS", typedef: "DraftField", dir: assemblyPackage, goType: "Field", prefix: "Field"},
@@ -308,30 +309,9 @@ type constant struct {
 
 func events(files []*ast.File) []constant {
 	var out []constant
-	for _, file := range files {
-		for _, decl := range file.Decls {
-			decl, ok := decl.(*ast.GenDecl)
-			if !ok || decl.Tok != token.CONST {
-				continue
-			}
-			for _, spec := range decl.Specs {
-				spec, ok := spec.(*ast.ValueSpec)
-				if !ok || len(spec.Names) != 1 || len(spec.Values) != 1 {
-					continue
-				}
-				if !strings.HasSuffix(spec.Names[0].Name, eventSuffix) {
-					continue
-				}
-				text, ok := spec.Values[0].(*ast.BasicLit)
-				if !ok || text.Kind != token.STRING {
-					continue
-				}
-				value, err := strconv.Unquote(text.Value)
-				if err != nil {
-					continue
-				}
-				out = append(out, constant{name: spec.Names[0].Name, value: value})
-			}
+	for _, value := range stringConstants(files) {
+		if strings.HasSuffix(value.name, eventSuffix) {
+			out = append(out, constant{name: value.name, value: value.value})
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })

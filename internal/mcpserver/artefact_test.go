@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/artefact"
+	"github.com/kieranajp/qrouton/prompts"
 )
 
 func TestCreateArtefactReturnsTheNewPath(t *testing.T) {
@@ -16,7 +17,7 @@ func TestCreateArtefactReturnsTheNewPath(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "thoughts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	message, err := createArtefact(dir, createArtefactInput{Kind: " Research ", Title: "Team sync"})
+	message, err := createArtefact(dir, createArtefactInput{Kind: " Research ", Title: "Team sync"}, prompts.Template)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -34,10 +35,10 @@ func TestCreateArtefactRejectsABlankTitleAndAnUnknownKind(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(dir, "thoughts"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := createArtefact(dir, createArtefactInput{Kind: "plan", Title: "  "}); !errors.Is(err, ErrArtefactTitle) {
+	if _, err := createArtefact(dir, createArtefactInput{Kind: "plan", Title: "  "}, prompts.Template); !errors.Is(err, ErrArtefactTitle) {
 		t.Fatalf("blank title err = %v", err)
 	}
-	if _, err := createArtefact(dir, createArtefactInput{Kind: "notes", Title: "x"}); !errors.Is(err, artefact.ErrUnknownKind) {
+	if _, err := createArtefact(dir, createArtefactInput{Kind: "notes", Title: "x"}, prompts.Template); !errors.Is(err, artefact.ErrUnknownKind) {
 		t.Fatalf("unknown kind err = %v", err)
 	}
 }
