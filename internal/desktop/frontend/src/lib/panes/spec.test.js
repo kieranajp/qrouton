@@ -695,3 +695,17 @@ test("the unanswered repro spec yields three options with full bodies", () => {
     ],
   );
 });
+
+// Options were once read from any line, so a list introduced by a plain item still has to yield them.
+test("options nested under a plain intro item are still options", () => {
+  const question = optionsOf("- Options:", "  - A. One", "  - B. Two", "", "Answer: A", "");
+  assert.deepEqual(question.options.map((option) => [option.letter, option.text]), [["A", "One"], ["B", "Two"]]);
+  assert.equal(answerOf(question).letter, "A");
+});
+
+// The marker's leading whitespace once swallowed a blank line, merging two paragraphs.
+test("a marker opening a paragraph keeps the paragraph break before it", () => {
+  const [a] = optionsOf("- A. One", "", "  **(recommended: x)** Because", "- B. Two", "").options;
+  assert.equal(a.text, "One\n\nBecause");
+  assert.equal(a.reason, "x");
+});

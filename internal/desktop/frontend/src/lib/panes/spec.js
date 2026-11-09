@@ -4,7 +4,7 @@ const OPEN = "open questions";
 const DECISIONS = "decisions";
 const QUESTION = /^(Q\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const OPTION = /^\s*[-*+]\s+([A-Z])\.\s+(.*)$/;
-const RECOMMENDED = /\s*\*\*\(\s*recommended\b:?\s*([\s\S]*?)\s*\)\*\*[ \t]*/i;
+const RECOMMENDED = /[ \t]*\*\*\(\s*recommended\b:?\s*([\s\S]*?)\s*\)\*\*[ \t]*/i;
 const ANSWER = /^Answer(?:\s*\([^)]*\))?:[ \t]?(.*)$/;
 const LONE_LETTER = /^[A-Z]$/;
 
@@ -60,21 +60,32 @@ function readOption(lines, item, last) {
     at: from,
     option: {
       letter: opening[1],
-      text: (reason ? body.replace(RECOMMENDED, " ") : body).replace(/[ \t]+$/gm, "").trim(),
+      text: body
+        .replace(RECOMMENDED, (_, _reason, at) => (at === 0 || body[at - 1] === "\n" ? "" : " "))
+        .replace(/[ \t]+$/gm, "")
+        .trim(),
       recommended: Boolean(reason),
       reason: reason ? reason[1].replace(/\s+/g, " ") : "",
     },
   };
 }
 
+/** Options are top-level items, or the items of a list under a non-option intro such as "- Options:".
+ * @param {string[]} lines @param {any[]} lists @returns {any[]} */
+const candidates = (lines, lists) =>
+  lists.flatMap((list) => list.children).flatMap((item) => [
+    item,
+    ...(OPTION.test(lines[line(item) - 1] ?? "")
+      ? []
+      : candidates(lines, item.children.filter((child) => child.type === "list"))),
+  ]);
+
 /** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named @param {any[]} nodes */
 function readQuestion(lines, heading, to, named, nodes) {
   const from = line(heading);
   const answerAt = findAnswer(lines, from, to);
   const last = answerAt ? answerAt - 1 : to;
-  const read = nodes
-    .filter((node) => node.type === "list")
-    .flatMap((list) => list.children)
+  const read = candidates(lines, nodes.filter((node) => node.type === "list"))
     .filter((item) => line(item) <= last)
     .map((item) => readOption(lines, item, last))
     .filter(/** @returns {found is {at: number, option: Option}} */ (found) => found !== null);
