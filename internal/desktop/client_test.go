@@ -33,10 +33,10 @@ func TestCopyAssetWithNoClipboardCommandReturnsTheSentinel(t *testing.T) {
 	shownSession(t, reg)
 
 	slug := filepath.Base(opts.SessionRoot)
-	if err := reg.CopyAsset(slug, filepath.Join(assets, "shot.png")); !errors.Is(err, ErrNoCopyImageCommand) {
+	if err := reg.CopyAsset(slug, filepath.Join(assets, "shot.png")); !errors.Is(err, core.ErrNoCopyImageCommand) {
 		t.Fatalf("copying an image with nothing to run = %v, want ErrNoCopyImageCommand", err)
 	}
-	if err := reg.CopyAsset(slug, filepath.Join(assets, "sim.mov")); !errors.Is(err, ErrNoCopyFileCommand) {
+	if err := reg.CopyAsset(slug, filepath.Join(assets, "sim.mov")); !errors.Is(err, core.ErrNoCopyFileCommand) {
 		t.Fatalf("copying a video with nothing to run = %v, want ErrNoCopyFileCommand", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestShowingASessionRetitlesTheWindow(t *testing.T) {
 func TestOpenConfigWithNoOpenTextCommandWritesNothing(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	s := &Settings{settings: testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{}, Launcher: newStubBoot()}).Settings}
-	if err := s.OpenConfig(); !errors.Is(err, ErrNoOpenTextCommand) {
+	if err := s.OpenConfig(); !errors.Is(err, core.ErrNoOpenTextCommand) {
 		t.Fatalf("OpenConfig without a command = %v, want ErrNoOpenTextCommand", err)
 	}
 	if _, err := os.Stat(config.Path()); !errors.Is(err, os.ErrNotExist) {
@@ -101,11 +101,11 @@ func TestTheLocalChimeRunsTheSessionsNotifyScript(t *testing.T) {
 // so each capability sentinel must keep its words and gain the match.
 func TestEveryCapabilitySentinelKeepsItsTextAndIsUnavailable(t *testing.T) {
 	for err, text := range map[error]string{
-		ErrNoRevealCommand:    "workbench has no command to reveal a session's directory with",
-		ErrNoOpenTextCommand:  "workbench has no command to open a file in a text editor",
-		ErrNoCopyImageCommand: "workbench has no command to copy an image to the clipboard with",
-		ErrNoCopyFileCommand:  "workbench has no command to copy a file to the clipboard with",
-		ErrNoDirectoryPicker:  "workbench has no directory picker to choose a sessions root with",
+		core.ErrNoRevealCommand:    "workbench has no command to reveal a session's directory with",
+		core.ErrNoOpenTextCommand:  "workbench has no command to open a file in a text editor",
+		core.ErrNoCopyImageCommand: "workbench has no command to copy an image to the clipboard with",
+		core.ErrNoCopyFileCommand:  "workbench has no command to copy a file to the clipboard with",
+		core.ErrNoDirectoryPicker:  "workbench has no directory picker to choose a sessions root with",
 	} {
 		if err.Error() != text || !errors.Is(err, core.ErrUnavailable) {
 			t.Errorf("%q: text %q, unavailable %v", text, err.Error(), errors.Is(err, core.ErrUnavailable))

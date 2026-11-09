@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/vault"
 )
@@ -345,31 +348,64 @@ func TestFirstRunLoginAnswersNothingWithoutCredentials(t *testing.T) {
 	}
 }
 
-// Catches a failed lookup surfacing as a login, or a resolved token not reaching it.
-func TestFirstRunLoginNamesTheTokensAccountAndNothingWhenTheLookupFails(t *testing.T) {
-	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
-	f.token = func() (string, error) { return "tok", nil }
-	var asked string
-	f.login = func(_ context.Context, token string) (string, error) { asked = token; return "octocat", nil }
-	if got := f.Login(); got != "octocat" || asked != "tok" {
-		t.Fatalf("Login() = %q after asking with %q, want octocat for tok", got, asked)
+// toServer sends every request to server, whatever host it names, so GitHub
+// lookups reach a test double and never the network.
+type toServer struct{ server *httptest.Server }
+
+func (s toServer) RoundTrip(req *http.Request) (*http.Response, error) {
+	target, err := url.Parse(s.server.URL)
+	if err != nil {
+		return nil, err
 	}
-	f.login = func(context.Context, string) (string, error) { return "octocat", errors.New("401 Bad credentials") }
-	if got := f.Login(); got != "" {
-		t.Fatalf("Login() after a failed lookup = %q, want no account named", got)
+	req = req.Clone(req.Context())
+	req.URL.Scheme, req.URL.Host = target.Scheme, target.Host
+	return s.server.Client().Transport.RoundTrip(req)
+}
+
+// gitHubLogins is a GitHub double that names octocat for good-token and refuses
+// every other token, counting the lookups.
+func gitHubLogins(t *testing.T) (*http.Client, *atomic.Int32) {
+	t.Helper()
+	var lookups atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		lookups.Add(1)
+		if r.Header.Get("Authorization") != "Bearer good-token" {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"login":"octocat"}`))
+	}))
+	t.Cleanup(server.Close)
+	return &http.Client{Transport: toServer{server}}, &lookups
+}
+
+// Catches Login answering anything but the account GitHub names for the
+// resolved token, or naming one after GitHub refused the token.
+func TestFirstRunLoginNamesTheTokensAccountAndNothingWhenTheLookupFails(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	client, lookups := gitHubLogins(t)
+	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
+	f.githubAPI = client
+
+	t.Setenv("GITHUB_TOKEN", "good-token")
+	if got := f.Login(); got != "octocat" {
+		t.Fatalf("Login() = %q, want octocat", got)
+	}
+	t.Setenv("GITHUB_TOKEN", "revoked-token")
+	if got := f.Login(); got != "" || lookups.Load() != 2 {
+		t.Fatalf("Login() after a refused lookup = %q after %d lookups, want no account named", got, lookups.Load())
 	}
 }
 
 // Catches Login asking GitHub about an empty token when none resolves.
 func TestFirstRunLoginAsksNothingWhenNoTokenResolves(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("GITHUB_TOKEN", "")
+	client, lookups := gitHubLogins(t)
 	f := newFirstRun(&config.Config{}, func() {}, nil, nil, nil, nil)
-	f.token = func() (string, error) { return "", github.ErrNoToken }
-	f.login = func(context.Context, string) (string, error) {
-		t.Fatal("Login looked up an account with no token")
-		return "", nil
-	}
-	if got := f.Login(); got != "" {
-		t.Fatalf("Login() with no token = %q", got)
+	f.githubAPI = client
+	if got := f.Login(); got != "" || lookups.Load() != 0 {
+		t.Fatalf("Login() with no token = %q after %d lookups", got, lookups.Load())
 	}
 }
 

@@ -73,8 +73,11 @@ var (
 	ErrOpenConfig       = errors.New("config.json could not be opened")
 	ErrNoRelaunch       = errors.New("workbench has no way to relaunch itself into a new sessions root")
 
-	ErrNoOpenTextCommand = Unavailable("workbench has no command to open a file in a text editor")
-	ErrNoDirectoryPicker = Unavailable("workbench has no directory picker to choose a sessions root with")
+	ErrNoRevealCommand    = Unavailable("workbench has no command to reveal a session's directory with")
+	ErrNoOpenTextCommand  = Unavailable("workbench has no command to open a file in a text editor")
+	ErrNoCopyImageCommand = Unavailable("workbench has no command to copy an image to the clipboard with")
+	ErrNoCopyFileCommand  = Unavailable("workbench has no command to copy a file to the clipboard with")
+	ErrNoDirectoryPicker  = Unavailable("workbench has no directory picker to choose a sessions root with")
 )
 
 func noSuchWindow(id string) error {

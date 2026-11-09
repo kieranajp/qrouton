@@ -651,7 +651,7 @@ func assemblyRows() []adapterRow {
 		}},
 		{"Assembly.Runners", func(t *testing.T) {
 			kernel, _ := assemblyCore(t)
-			if _, err := (&Assembly{assembly: kernel.Assembly}).Runners(); !errors.Is(err, ErrNoAgentCommand) {
+			if _, err := (&Assembly{assembly: kernel.Assembly}).Runners(); !errors.Is(err, core.ErrNoAgentCommand) {
 				t.Fatalf("Runners with no launcher = %v, want ErrNoAgentCommand", err)
 			}
 		}},

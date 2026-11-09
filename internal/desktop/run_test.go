@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -42,6 +43,8 @@ type fakeRenderer struct {
 	atQuit func()
 	// atEmit runs before each broadcast is recorded, outside the lock.
 	atEmit func(event string)
+	// openErr is what every Open answers, once set.
+	openErr error
 }
 
 func newFakeRenderer() *fakeRenderer {
@@ -61,6 +64,9 @@ func (f *fakeRenderer) Retitle(name, title string) {
 }
 
 func (f *fakeRenderer) Open(spec windowSpec) error {
+	if f.openErr != nil {
+		return f.openErr
+	}
 	f.opened <- spec
 	return nil
 }
@@ -446,13 +452,13 @@ func TestQuittingWithTheNotesWindowOpenEndsTheApplicationOnce(t *testing.T) {
 
 func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
 	launcher := newStubBoot("/bin/cat")
-	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock"}); err != ErrNoAgentCommand {
+	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock"}); err != core.ErrNoAgentCommand {
 		t.Fatalf("Run with no way to build an agent command returned %v, want ErrNoAgentCommand", err)
 	}
 	if err := Run(Options{SessionRoot: t.TempDir(), Launcher: launcher}); err != ErrNoControlSocket {
 		t.Fatalf("Run with no socket returned %v, want ErrNoControlSocket", err)
 	}
-	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock", Launcher: launcher}); err != ErrNoConfig {
+	if err := Run(Options{SessionRoot: t.TempDir(), Socket: "/tmp/x.sock", Launcher: launcher}); err != core.ErrNoConfig {
 		t.Fatalf("Run with nothing to assemble against returned %v, want ErrNoConfig", err)
 	}
 }
@@ -569,7 +575,7 @@ func TestAWorkbenchWithNoRevealCommandRefuses(t *testing.T) {
 	<-r.opened
 	shownSession(t, reg)
 
-	if err := reg.Reveal(filepath.Base(opts.SessionRoot)); !errors.Is(err, ErrNoRevealCommand) {
+	if err := reg.Reveal(filepath.Base(opts.SessionRoot)); !errors.Is(err, core.ErrNoRevealCommand) {
 		t.Fatalf("reveal with nothing to run = %v, want ErrNoRevealCommand", err)
 	}
 }
@@ -675,30 +681,47 @@ func TestTheRelauncherReachesASettingsRestartWithoutATicket(t *testing.T) {
 	}
 }
 
-type refusingValidator struct{}
+// refusingValidator refuses only the field it names, so a refusal shows which
+// of the two answers reached the settings panel.
+type refusingValidator struct{ field string }
 
 var errRefused = errors.New("refused")
 
-func (refusingValidator) ValidateEditor([]string) error            { return errRefused }
-func (refusingValidator) ValidateLaunch(map[string][]string) error { return errRefused }
+func (v refusingValidator) ValidateEditor([]string) error {
+	if v.field == "editor" {
+		return errRefused
+	}
+	return nil
+}
 
-// Catches a nil Validator refusing every editor and launch table, and a
-// non-nil one never being asked.
+func (v refusingValidator) ValidateLaunch(map[string][]string) error {
+	if v.field == "launch" {
+		return errRefused
+	}
+	return nil
+}
+
+// Catches a nil Validator refusing every editor and launch table, and either
+// half of a non-nil one never reaching the settings panel.
 func TestANilValidatorAcceptsTheEditorAndTheLaunchTable(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	in := core.SettingsInput{Orgs: []string{"acme"}, Root: t.TempDir(), Editor: "vim",
 		Launch: `{"claude": ["claude", "--verbose"]}`}
 	for _, tc := range []struct {
 		validator Validator
-		refused   bool
-	}{{nil, false}, {refusingValidator{}, true}} {
+		refusal   string
+	}{
+		{nil, ""},
+		{refusingValidator{field: "editor"}, "editor: refused"},
+		{refusingValidator{field: "launch"}, "launch: refused"},
+	} {
 		cfg := &config.Config{Root: in.Root}
 		kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: cfg, Validator: tc.validator})
 		_, err := (&Settings{settings: kernel.Settings}).Save(in)
-		if refused := err != nil && strings.HasSuffix(err.Error(), errRefused.Error()); refused != tc.refused || (!tc.refused && err != nil) {
-			t.Fatalf("Save with Validator %T = %v, want refused %v", tc.validator, err, tc.refused)
+		if got := fmt.Sprint(err); (tc.refusal == "" && err != nil) || (tc.refusal != "" && got != tc.refusal) {
+			t.Fatalf("Save with Validator %+v = %v, want refusal %q", tc.validator, err, tc.refusal)
 		}
-		if !tc.refused && (!slices.Equal(cfg.Snapshot().Editor, []string{"vim"}) || len(cfg.Snapshot().Launch) != 1) {
+		if tc.refusal == "" && (!slices.Equal(cfg.Snapshot().Editor, []string{"vim"}) || len(cfg.Snapshot().Launch) != 1) {
 			t.Fatalf("an accepted Save left editor %q, launch %v", cfg.Snapshot().Editor, cfg.Snapshot().Launch)
 		}
 	}
@@ -752,5 +775,20 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	}
 	if _, serves := boot.counts(); serves != 0 {
 		t.Fatal("Settings.Relaunch did not stop the session registry")
+	}
+}
+
+// Catches a run that fails after Start leaving the process socket serving, a
+// workbench nothing can quit since its window never opened.
+func TestARunWhoseWindowFailsToOpenStopsTheCore(t *testing.T) {
+	r := newFakeRenderer()
+	r.openErr = errors.New("no display")
+	opts, _ := testOptions(t)
+	kernel := testWorkbench(t, r, &opts)
+	if err := run(r, kernel, opts, quitter(kernel, r)); !errors.Is(err, r.openErr) {
+		t.Fatalf("run = %v, want the window's own error", err)
+	}
+	if workbench.Answered(opts.Socket) {
+		t.Fatal("the process socket still answers after run failed")
 	}
 }

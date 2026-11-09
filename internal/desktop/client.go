@@ -52,7 +52,7 @@ func (c *localClient) Supports(capability core.Capability) bool {
 // the desktop and exits, so waiting on it costs nothing and turns a bad path
 // into an error the page can show.
 func (c *localClient) Reveal(path string) error {
-	return runLocal(c.launcher.Reveal(path), ErrNoRevealCommand)
+	return runLocal(c.launcher.Reveal(path), core.ErrNoRevealCommand)
 }
 
 // OpenText answers a failure with what the tool printed, which is the only
@@ -60,7 +60,7 @@ func (c *localClient) Reveal(path string) error {
 func (c *localClient) OpenText(path string) error {
 	argv := c.launcher.OpenText(path)
 	if len(argv) == 0 {
-		return ErrNoOpenTextCommand
+		return core.ErrNoOpenTextCommand
 	}
 	if out, err := exec.Command(argv[0], argv[1:]...).CombinedOutput(); err != nil {
 		return &toolFailed{output: strings.TrimSpace(string(out)), err: err}
@@ -72,17 +72,17 @@ func (c *localClient) OpenText(path string) error {
 // command does, so waiting on it is what says the clipboard now holds the
 // image.
 func (c *localClient) CopyImage(path string) error {
-	return runLocal(c.launcher.CopyImage(path), ErrNoCopyImageCommand)
+	return runLocal(c.launcher.CopyImage(path), core.ErrNoCopyImageCommand)
 }
 
 func (c *localClient) CopyFile(path string) error {
-	return runLocal(c.launcher.CopyFile(path), ErrNoCopyFileCommand)
+	return runLocal(c.launcher.CopyFile(path), core.ErrNoCopyFileCommand)
 }
 
 // ChooseDirectory answers "" on a cancel.
 func (c *localClient) ChooseDirectory() (string, error) {
 	if c.choose == nil {
-		return "", ErrNoDirectoryPicker
+		return "", core.ErrNoDirectoryPicker
 	}
 	return c.choose()
 }

@@ -65,13 +65,13 @@ func Run(opts Options) error {
 	// A workbench with no way to build an agent command is an error; a workbench
 	// with no session is the ordinary case.
 	if opts.Launcher == nil {
-		return ErrNoAgentCommand
+		return core.ErrNoAgentCommand
 	}
 	if opts.Socket == "" {
 		return ErrNoControlSocket
 	}
 	if opts.Config == nil {
-		return ErrNoConfig
+		return core.ErrNoConfig
 	}
 	assets, err := frontend()
 	if err != nil {

@@ -73,6 +73,23 @@ func TestFinishingFirstRunRunsThePlacementCheckWithoutARelaunch(t *testing.T) {
 	}
 }
 
+// Catches New leaving first run unwired from the placement check, so finishing
+// onboarding without a relaunch never offers to move a misplaced session.
+func TestACoresFirstRunRunsItsPlacementCheck(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	if err := config.Save(cfg); err != nil {
+		t.Fatal(err)
+	}
+	kernel := testWorkbench(t, newFakeClient(), workbenchOptions{Options: Options{Root: root, Config: cfg}})
+	kernel.Placement.scan = func(*config.Config) (placement.Report, error) { return misplacedReport(), nil }
+	if result, err := kernel.FirstRun.Save(FirstRunInput{Orgs: []string{"acme"}, Root: root}); err != nil || result.Relaunching {
+		t.Fatalf("Save = %+v, %v", result, err)
+	}
+	waitFor(t, "the placement popup", kernel.Sessions.Placing)
+}
+
 func TestNothingMisplacedSetsTheFlagWithoutAnOverlay(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir(), Welcomed: true}
 	p, reg, _ := newTestPlacement(t, cfg, placement.Report{})
