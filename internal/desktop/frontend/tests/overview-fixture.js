@@ -136,11 +136,16 @@ const summaries = {
   empty: { text: "", stage: "", at: "" },
 };
 const summary = summaries[params.get("summary") ?? "long"];
-const pr = (repo, number, title) => ({ repo, number, title, url: `https://github.com/${repo}/pull/${number}` });
+const pr = (repo, number, title, state = "open") => ({ repo, number, title, state, url: `https://github.com/${repo}/pull/${number}` });
 const pulls = {
   none: { items: [], signedOut: false },
   rows: {
-    items: [pr("acme/web", 41, "Swap PaymentIntent for the v2 client"), pr("acme/payments", 7, "Partial-capture refunds")],
+    items: [
+      pr("acme/web", 41, "Swap PaymentIntent for the v2 client"),
+      pr("acme/payments", 7, "Partial-capture refunds"),
+      pr("acme/web", 39, "Retire the v1 client", "merged"),
+      pr("acme/api", 12, "Draft the refund endpoint", "draft"),
+    ],
     signedOut: false,
   },
   signedout: { items: [], signedOut: true },

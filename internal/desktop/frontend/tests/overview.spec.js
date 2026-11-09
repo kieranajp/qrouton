@@ -356,8 +356,27 @@ test("pull requests sit between the summary and the orchestrator, in arrival ord
   await open(page, "?pulls=rows");
   await expect(page.locator(".tier .label")).toHaveText(["Pull requests", "Orchestrator", "Leads", "This session"]);
   expect(await page.locator(".summary").evaluate((el) => el.nextElementSibling?.classList.contains("pulls"))).toBe(true);
-  await expect(page.locator(".pulls .title")).toHaveText(["Swap PaymentIntent for the v2 client", "Partial-capture refunds"]);
-  await expect(page.locator(".pulls .number")).toHaveText(["#41", "#7"]);
+  await expect(page.locator(".pulls .title")).toHaveText([
+    "Swap PaymentIntent for the v2 client",
+    "Partial-capture refunds",
+    "Retire the v1 client",
+    "Draft the refund endpoint",
+  ]);
+  await expect(page.locator(".pulls .number")).toHaveText(["#41", "#7", "#39", "#12"]);
+});
+
+// The repo and state were missing, so two repos' rows and a merged pull request looked alike.
+test("a pull request row reads icon, number, title, then repo, coloured by state", async ({ page }) => {
+  await open(page, "?pulls=rows");
+  const order = await page.locator(".pulls .pull").first().evaluate((row) => [...row.children].map((child) => child.getAttribute("class")?.split(" ")[0]));
+  expect(order).toEqual(["icon", "number", "title", "repo"]);
+  await expect(page.locator(".pulls .repo")).toHaveText(["web", "payments", "web", "api"]);
+  await expect(page.locator(".pulls .pull").first()).toHaveAttribute("title", "acme/web");
+
+  const ink = (state) => page.locator(`.pulls .pull[data-state="${state}"] .icon`).evaluate((svg) => getComputedStyle(svg).color);
+  expect(await ink("open")).toBe("rgb(166, 218, 149)");
+  expect(await ink("merged")).toBe("rgb(198, 160, 246)");
+  expect(await ink("draft")).toBe("rgb(128, 135, 162)");
 });
 
 test("clicking a pull request opens it on GitHub", async ({ page }) => {

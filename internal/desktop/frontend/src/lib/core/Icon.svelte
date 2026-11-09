@@ -13,6 +13,10 @@
     waiting: "var(--state-waiting)",
     editing: "var(--role-editing)",
     reference: "var(--role-reference)",
+    "pull-open": "var(--pr-open)",
+    "pull-draft": "var(--pr-draft)",
+    "pull-merged": "var(--pr-merged)",
+    "pull-closed": "var(--pr-closed)",
   };
 
   const FILLS = { tree: "var(--ctp-teal)" };
