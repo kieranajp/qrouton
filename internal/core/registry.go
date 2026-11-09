@@ -68,9 +68,14 @@ type documentContent struct {
 }
 
 func (t *terminalContent) tabStatus() string {
-	switch {
-	case t.exit == nil && t.foreground && !t.busy:
+	if t.exit == nil && t.foreground && !t.busy {
 		return tabStatusIdle
+	}
+	return t.lifecycleStatus()
+}
+
+func (t *terminalContent) lifecycleStatus() string {
+	switch {
 	case t.exit == nil:
 		return tabStatusRunning
 	case *t.exit == 0:
@@ -324,26 +329,51 @@ func (r *registry) deckDirectory(token string) (root, dir string, ok bool) {
 
 func assetToken() string { return randomid.Hex(assetTokenBytes) }
 
-func (r *registry) readWindow(id string, full bool) (string, error) {
-	var text string
-	var buffer *Ring
+func (r *registry) readWindow(id string, full bool) (workbench.WindowRead, error) {
+	var result workbench.WindowRead
+	var terminal *terminalContent
 	if err := r.with(id, func(window *agentWindow) error {
-		if terminal, ok := window.terminal(); ok {
-			buffer = terminal.buffer
+		if content, ok := window.terminal(); ok {
+			terminal = content
 			return nil
 		}
-		text = window.opts.Content
+		result.Text = window.opts.Content
 		if rendered, ok := window.document(); ok && window.opts.Format == workbench.FormatAssets {
-			text = assetManifest(rendered.assets, rendered.currentAsset)
+			result.Text = assetManifest(rendered.assets, rendered.currentAsset)
 		}
 		return nil
 	}); err != nil {
-		return "", err
+		return workbench.WindowRead{}, err
 	}
-	if buffer == nil {
-		return text, nil
+	if terminal == nil {
+		return result, nil
 	}
-	return buffer.Text(full), nil
+	terminal.stream.Lock()
+	err := r.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); !ok || content != terminal {
+			return noSuchWindow(id)
+		}
+		result.Terminal = terminal.state()
+		return nil
+	})
+	if err != nil {
+		terminal.stream.Unlock()
+		return workbench.WindowRead{}, err
+	}
+	raw := terminal.buffer.Bytes()
+	terminal.stream.Unlock()
+	result.Text = terminalText(raw, full)
+	return result, nil
+}
+
+// state copies lifecycle metadata while the registry lock is held.
+func (t *terminalContent) state() *workbench.TerminalState {
+	state := &workbench.TerminalState{Status: t.lifecycleStatus()}
+	if t.exit != nil {
+		code := *t.exit
+		state.ExitCode = &code
+	}
+	return state
 }
 
 func (r *registry) window(id string) (*agentWindow, bool) {

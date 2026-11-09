@@ -146,6 +146,10 @@ func (c *Core) wire() {
 					}
 				},
 				agentEvent: func(req workbench.AgentEventRequest) {
+					// Before apply, which drops helper and stale events: the pull request exists either way.
+					if req.PullRequestCreated {
+						reg.pullRequestsChanged(state.Root())
+					}
 					notify(state.agents.apply(req))
 				},
 				picker: reg.QueuePicker,

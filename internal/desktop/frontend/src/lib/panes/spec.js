@@ -4,7 +4,7 @@ const OPEN = "open questions";
 const DECISIONS = "decisions";
 const QUESTION = /^(Q\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
 const OPTION = /^\s*[-*+]\s+([A-Z])\.\s+(.*)$/;
-const RECOMMENDED = /\s*\*\*\(\s*recommended\b:?\s*(.*?)\s*\)\*\*\s*/i;
+const RECOMMENDED = /[ \t]*\*\*\(\s*recommended\b:?\s*([\s\S]*?)\s*\)\*\*[ \t]*/i;
 const ANSWER = /^Answer(?:\s*\([^)]*\))?:[ \t]?(.*)$/;
 const LONE_LETTER = /^[A-Z]$/;
 
@@ -36,29 +36,62 @@ export function readAnswer(first, rest, options) {
   return { letter: "", note: [first, rest].join("\n").trim() };
 }
 
-/** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named */
-function readQuestion(lines, heading, to, named) {
+/** The first line matching Answer: ends the options, even inside an option Markdown reads as continuing.
+ * @param {string[]} lines @param {number} from @param {number} to */
+function findAnswer(lines, from, to) {
+  for (let at = from + 1; at <= to; at++) if (ANSWER.test(lines[at - 1])) return at;
+  return 0;
+}
+
+/** An option is a top-level list item opening with a letter; its body is every source line the item spans.
+ * @param {string[]} lines @param {any} item @param {number} last */
+function readOption(lines, item, last) {
+  const from = line(item);
+  const opening = OPTION.exec(lines[from - 1] ?? "");
+  if (!opening) return null;
+  const indent = lines[from - 1].search(/[A-Z]\./);
+  const to = Math.min(item.position?.end?.line ?? from, last);
+  const body = [
+    opening[2],
+    ...lines.slice(from, to).map((source) => source.replace(new RegExp(`^ {0,${indent}}`), "")),
+  ].join("\n");
+  const reason = RECOMMENDED.exec(body);
+  return {
+    at: from,
+    option: {
+      letter: opening[1],
+      text: body
+        .replace(RECOMMENDED, (_, _reason, at) => (at === 0 || body[at - 1] === "\n" ? "" : " "))
+        .replace(/[ \t]+$/gm, "")
+        .trim(),
+      recommended: Boolean(reason),
+      reason: reason ? reason[1].replace(/\s+/g, " ") : "",
+    },
+  };
+}
+
+/** Options are top-level items, or the items of a list under a non-option intro such as "- Options:".
+ * @param {string[]} lines @param {any[]} lists @returns {any[]} */
+const candidates = (lines, lists) =>
+  lists.flatMap((list) => list.children).flatMap((item) => [
+    item,
+    ...(OPTION.test(lines[line(item) - 1] ?? "")
+      ? []
+      : candidates(lines, item.children.filter((child) => child.type === "list"))),
+  ]);
+
+/** @param {string[]} lines @param {any} heading @param {number} to @param {RegExpExecArray} named @param {any[]} nodes */
+function readQuestion(lines, heading, to, named, nodes) {
   const from = line(heading);
+  const answerAt = findAnswer(lines, from, to);
+  const last = answerAt ? answerAt - 1 : to;
+  const read = candidates(lines, nodes.filter((node) => node.type === "list"))
+    .filter((item) => line(item) <= last)
+    .map((item) => readOption(lines, item, last))
+    .filter(/** @returns {found is {at: number, option: Option}} */ (found) => found !== null);
   /** @type {Option[]} */
-  const options = [];
-  let firstOption = 0;
-  let answerAt = 0;
-  for (let at = from + 1; at <= to; at++) {
-    const source = lines[at - 1];
-    const option = OPTION.exec(source);
-    if (option && !answerAt) {
-      firstOption ||= at;
-      const reason = RECOMMENDED.exec(option[2]);
-      options.push({
-        letter: option[1],
-        text: (reason ? option[2].replace(RECOMMENDED, " ") : option[2]).trim(),
-        recommended: Boolean(reason),
-        reason: reason ? reason[1] : "",
-      });
-      continue;
-    }
-    if (!answerAt && ANSWER.test(source)) answerAt = at;
-  }
+  const options = read.map((found) => found.option);
+  const firstOption = read[0]?.at ?? 0;
 
   const contextEnd = (firstOption || answerAt || to + 1) - 1;
   const raw = lines.slice(from, contextEnd).join("\n");
@@ -86,7 +119,8 @@ function readQuestions(lines, section) {
     const named = QUESTION.exec(plainText(heading).trim());
     if (!named) return;
     const to = heads[at + 1] ? line(heads[at + 1]) - 1 : section.to;
-    questions.push(readQuestion(lines, heading, to, named));
+    const nodes = section.nodes.filter((node) => line(node) > line(heading) && line(node) <= to);
+    questions.push(readQuestion(lines, heading, to, named, nodes));
   });
   return questions;
 }

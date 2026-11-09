@@ -1,4 +1,5 @@
 <script>
+  import Icon from "../core/Icon.svelte";
   import { openURL } from "../wails.js";
   import { pullRows } from "./pulls.js";
   import Tier from "./Tier.svelte";
@@ -15,9 +16,16 @@
       <span class="note">{shown.note}</span>
     {/if}
     {#each shown.rows as row (row.key)}
-      <a class="pull" href={row.url} onclick={(event) => (event.preventDefault(), openURL(row.url))}>
-        <span class="title">{row.title}</span>
+      <a
+        class="pull"
+        href={row.url}
+        title={row.fullRepo}
+        data-state={row.state}
+        onclick={(event) => (event.preventDefault(), openURL(row.url))}>
+        <Icon name={row.icon} />
         <span class="number">{row.number}</span>
+        <span class="title">{row.title}</span>
+        <span class="repo">{row.repo}</span>
       </a>
     {/each}
   </Tier>
@@ -27,8 +35,8 @@
   .pull {
     display: flex;
     min-width: 0;
-    align-items: baseline;
-    gap: calc(10px * var(--ui-scale));
+    align-items: center;
+    gap: calc(8px * var(--ui-scale));
     font: var(--machine-xs);
     color: var(--text-primary);
     text-decoration: none;
@@ -38,16 +46,21 @@
     text-decoration: underline;
   }
 
+  .number {
+    flex: none;
+    color: var(--text-secondary);
+  }
+
   .title {
+    flex: 1;
     min-width: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
 
-  .number {
+  .repo {
     flex: none;
-    margin-left: auto;
     color: var(--text-faint);
   }
 

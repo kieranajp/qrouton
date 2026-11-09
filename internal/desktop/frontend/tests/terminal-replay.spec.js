@@ -65,9 +65,45 @@ test("replay preserves background assignments and delegates other query forms", 
   expect(await page.evaluate(() => fixture.terminals[0].replies)).toHaveLength(3);
 });
 
+for (const code of [0, 3]) {
+  test(`completed replay restores final output and exit ${code} without a live exit`, async ({ page }) => {
+    await setup(page);
+    await page.evaluate((code) => {
+      fixture.send(0, "final marker", true, code);
+      fixture.done(0);
+    }, code);
+    await completed(page);
+    const lines = await page.evaluate(() => fixture.lines(0).filter(Boolean));
+    expect(lines).toEqual(["final marker", `[exited with status ${code}]`]);
+    await page.evaluate((code) => { fixture.complete(0, code); fixture.done(0); }, code);
+    await completed(page, 2);
+    expect(await page.evaluate(() => fixture.lines(0).filter(Boolean))).toEqual(lines);
+  });
+}
+
+test("replay after live completion and repeated replay each preserve exactly one footer", async ({ page }) => {
+  await setup(page);
+  await page.evaluate(() => {
+    fixture.send(0, "final marker");
+    fixture.complete(0, 3);
+    fixture.done(0);
+  });
+  await completed(page);
+  expect(await page.evaluate(() => fixture.lines(0).filter(Boolean))).toEqual(["final marker", "[exited with status 3]"]);
+
+  for (const count of [2, 3]) {
+    await page.evaluate(() => {
+      fixture.send(0, "final marker", true, 3);
+      fixture.done(0);
+    });
+    await completed(page, count);
+    expect(await page.evaluate(() => fixture.lines(0).filter(Boolean))).toEqual(["final marker", "[exited with status 3]"]);
+  }
+});
+
 test("disposal abandons queued output and cannot affect a fresh mount", async ({ page }) => {
   await setup(page);
-  await page.evaluate(() => { fixture.hold(0); fixture.send(0, "\x1b]778;hold\x07", true); fixture.send(0, "queued"); });
+  await page.evaluate(() => { fixture.hold(0); fixture.send(0, "\x1b]778;hold\x07", true); fixture.send(0, "queued"); fixture.complete(0, 0); });
   await page.waitForFunction(() => fixture.terminals[0].held);
   await page.evaluate(() => {
     const entry = fixture.terminals[0];
@@ -76,6 +112,7 @@ test("disposal abandons queued output and cannot affect a fresh mount", async ({
     entry.term.write = () => { entry.lateWrites++; };
     entry.release();
     fixture.send(0, "late");
+    fixture.complete(0, 0);
     fixture.create();
     fixture.send(1, "fresh\x1b[c");
     fixture.done(1);

@@ -21,6 +21,10 @@ const (
 	RoleArtifactNote      = "artifact-note"
 	RoleArtifactExplainer = "artifact-explainer"
 	RoleArtifactAudit     = "artifact-audit"
+	RolePullOpen          = "pr-open"
+	RolePullMerged        = "pr-merged"
+	RolePullClosed        = "pr-closed"
+	RolePullDraft         = "pr-draft"
 )
 
 const (

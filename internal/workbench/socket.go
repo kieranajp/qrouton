@@ -61,6 +61,7 @@ type Response struct {
 	AssetSelection *AssetSelection   `json:"asset_selection,omitempty"`
 	ID             string            `json:"id,omitempty"`
 	Text           string            `json:"text,omitempty"`
+	Terminal       *TerminalState    `json:"terminal,omitempty"`
 	Exists         bool              `json:"exists,omitempty"`
 	IDs            []string          `json:"ids,omitempty"`
 	Viewport       *DocumentViewport `json:"viewport,omitempty"`
@@ -116,6 +117,8 @@ type AgentEventRequest struct {
 	NotificationType string `json:"notification_type,omitempty"`
 	// Interrupt is a tool failure the user caused by interrupting the turn.
 	Interrupt bool `json:"interrupt,omitempty"`
+	// PullRequestCreated is a Bash call that ran gh pr create and succeeded.
+	PullRequestCreated bool `json:"pull_request_created,omitempty"`
 
 	BackgroundTasks []string           `json:"background_tasks,omitempty"`
 	Notifications   []TaskNotification `json:"notifications,omitempty"`
@@ -360,12 +363,12 @@ func (c *client) Close(ctx context.Context, id string) error {
 	return err
 }
 
-func (c *client) Read(ctx context.Context, id string, full bool) (string, error) {
+func (c *client) Read(ctx context.Context, id string, full bool) (WindowRead, error) {
 	res, err := c.call(ctx, Request{Op: OpRead, ID: id, Full: full})
 	if err != nil {
-		return "", err
+		return WindowRead{}, err
 	}
-	return res.Text, nil
+	return WindowRead{Text: res.Text, Terminal: res.Terminal}, nil
 }
 
 func (c *client) Viewport(ctx context.Context, id string) (*DocumentViewport, error) {

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { createViewportController, nextViewportSequence, normalizeIntervals } from "./viewport.js";
+import { createViewportController, nextViewportSequence, normalizeIntervals, revealTarget } from "./viewport.js";
 
 class FakeObserver {
   observe() {}
@@ -208,4 +208,17 @@ test("deactivation cancels a scheduled reveal and publishes unavailable state", 
     selected: false,
     intervals: [],
   });
+});
+
+// Regression: aiming a reveal at the 1px hidden copy never passes the "visible" test.
+test("revealTarget resolves a block inside .lifted to its visible sibling heading", () => {
+  const heading = {};
+  const block = { closest: (sel) => (sel === ".lifted" ? { previousElementSibling: heading } : null) };
+  assert.equal(revealTarget(/** @type {any} */ (block)), heading);
+});
+
+test("revealTarget leaves a block outside .lifted, or none, alone", () => {
+  const block = { closest: () => null };
+  assert.equal(revealTarget(/** @type {any} */ (block)), block);
+  assert.equal(revealTarget(undefined), undefined);
 });

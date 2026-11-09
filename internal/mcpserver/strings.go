@@ -57,12 +57,16 @@ const (
 	singleLineFormat = "line %d"
 	lineRangeFormat  = "lines %d-%d"
 
-	runningFormat = "Running in tab %q (cwd %s). The user can close the tab, " +
+	runningFormat = "Started a process in tab %q (cwd %s). The user can close the tab, " +
 		"or call " + toolReadWindow + " with name %q to see its " +
 		"output and " + toolCloseWindow + " %q to close it."
 
-	noOutputFormat  = "Window %q has produced no output yet."
+	noOutputFormat  = "Window %q: no output captured."
 	truncatedPrefix = "…(earlier output truncated)…\n"
+
+	terminalRunningFormat          = "Terminal: %s; exit_code: null."
+	terminalExitedFormat           = "Terminal: %s; exit_code: %d."
+	viewportMeasurementUnavailable = "Viewport: measurement unavailable."
 
 	viewportUnavailableUnselected = "Viewport: unavailable because the document tab is not selected."
 	viewportUnavailableSelected   = "Viewport: selected, but browser geometry is unavailable."
@@ -131,7 +135,6 @@ const (
 
 const (
 	keyMessage = "message"
-	keyOutput  = "output"
 )
 
 const (

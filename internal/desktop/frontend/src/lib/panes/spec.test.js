@@ -625,3 +625,87 @@ test("a question's context knows the file line it starts on", () => {
   const spec = parseSpec(doc("## Open questions", "", "### Q1 — Pick", "", "Shape:", "", "- A. One", "", "Answer:", ""));
   assert.equal(spec.open[0].contextFrom, 5);
 });
+
+/** @param {...string} body */
+const optionsOf = (...body) => parseSpec(doc("## Open questions", "", "### Q1 — Which?", "", ...body)).open[0];
+
+test("a hard-wrapped option keeps its continuation line", () => {
+  const [a] = optionsOf("- A. Run it inside the app, sharing its", "  process and lifetime.", "- B. Elsewhere", "").options;
+  assert.equal(a.text, "Run it inside the app, sharing its\nprocess and lifetime.");
+});
+
+test("a second paragraph stays in its option", () => {
+  const [a, b] = optionsOf("- A. First paragraph.", "", "  Second paragraph.", "- B. Other", "").options;
+  assert.equal(a.text, "First paragraph.\n\nSecond paragraph.");
+  assert.equal(b.text, "Other");
+});
+
+test("sub-bullets stay in their option and do not become options", () => {
+  const { options } = optionsOf("- A. A binary that:", "  - starts at login", "  - survives close", "- B. Other", "");
+  assert.deepEqual(options.map((option) => option.letter), ["A", "B"]);
+  assert.equal(options[0].text, "A binary that:\n- starts at login\n- survives close");
+});
+
+test("an indented B. inside option A does not become option B", () => {
+  const { options } = optionsOf("- A. Either of:", "  - B. a nested choice", "  - C. another", "");
+  assert.deepEqual(options.map((option) => option.letter), ["A"]);
+  assert.match(options[0].text, /- B\. a nested choice/);
+});
+
+test("a recommended marker on a later line sets the badge and leaves the text", () => {
+  const [a] = optionsOf("- A. One line,", "  then more. **(recommended:", "  simplest path)**", "- B. Other", "").options;
+  assert.deepEqual(a, { letter: "A", text: "One line,\nthen more.", recommended: true, reason: "simplest path" });
+});
+
+test("an Answer line straight after the last option is the answer, not option text", () => {
+  const question = optionsOf("- A. One", "- B. Two", "Answer: B", "");
+  assert.equal(question.options[1].text, "Two");
+  assert.equal(answerOf(question).letter, "B");
+});
+
+test("the unanswered repro spec yields three options with full bodies", () => {
+  const [question] = parseSpec(
+    doc(
+      "## Open questions",
+      "",
+      "### Q1 — Where should the daemon live?",
+      "",
+      "Context paragraph for the question.",
+      "",
+      "- A. Run the daemon inside the desktop app, sharing its process and",
+      "  lifetime, so that closing the window stops every agent.",
+      "",
+      "  A second paragraph that explains the trade-off in more detail.",
+      "- B. A separate binary with these properties:",
+      "  - starts at login",
+      "  - survives window close",
+      "- C. One line option. **(recommended: simplest)**",
+      "",
+      "Answer:",
+      "",
+    ),
+  ).open;
+  assert.equal(question.context, "Context paragraph for the question.");
+  assert.deepEqual(
+    question.options.map((option) => [option.letter, option.text, option.reason]),
+    [
+      ["A", "Run the daemon inside the desktop app, sharing its process and\nlifetime, so that closing the window stops every agent.\n\nA second paragraph that explains the trade-off in more detail.", ""],
+      ["B", "A separate binary with these properties:\n- starts at login\n- survives window close", ""],
+      ["C", "One line option.", "simplest"],
+    ],
+  );
+});
+
+// Options were once read from any line, so a list introduced by a plain item still has to yield them.
+test("options nested under a plain intro item are still options", () => {
+  const question = optionsOf("- Options:", "  - A. One", "  - B. Two", "", "Answer: A", "");
+  assert.deepEqual(question.options.map((option) => [option.letter, option.text]), [["A", "One"], ["B", "Two"]]);
+  assert.equal(answerOf(question).letter, "A");
+});
+
+// The marker's leading whitespace once swallowed a blank line, merging two paragraphs.
+test("a marker opening a paragraph keeps the paragraph break before it", () => {
+  const [a] = optionsOf("- A. One", "", "  **(recommended: x)** Because", "- B. Two", "").options;
+  assert.equal(a.text, "One\n\nBecause");
+  assert.equal(a.reason, "x");
+});

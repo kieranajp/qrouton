@@ -36,8 +36,8 @@ func TestAssetGalleryRegistryContentReadAndAssetRoute(t *testing.T) {
 		t.Fatalf("content = %+v, %v", page, err)
 	}
 	text, err := w.readWindow(id, false)
-	if err != nil || text != "1. first.PNG\n2. second.webp\n3. first.PNG\nCurrent asset: 1 of 3" {
-		t.Fatalf("read = %q, %v", text, err)
+	if err != nil || text.Terminal != nil || text.Text != "1. first.PNG\n2. second.webp\n3. first.PNG\nCurrent asset: 1 of 3" {
+		t.Fatalf("read = %q, %v", text.Text, err)
 	}
 	if body, media, ok := readGallery(w, page.Assets[1].URL); !ok || media != "image/webp" || body != "asset second.webp" {
 		t.Fatalf("asset = %q %q %v", body, media, ok)

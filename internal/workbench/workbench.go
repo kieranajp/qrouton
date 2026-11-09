@@ -139,13 +139,23 @@ type AssetSelection struct {
 	Revision     uint64 `json:"revision"`
 }
 
+type TerminalState struct {
+	Status   string `json:"status"`
+	ExitCode *int   `json:"exit_code"`
+}
+
+type WindowRead struct {
+	Text     string
+	Terminal *TerminalState
+}
+
 type WindowHost interface {
 	FocusAsset(ctx context.Context, id string, index int) (AssetSelection, error)
 	Open(ctx context.Context, opts WindowOptions) (id string, err error)
 	Close(ctx context.Context, id string) error
 	// Read returns a terminal window's output with escape sequences stripped, or
 	// a document window's content; full is the whole buffer, not the last screen.
-	Read(ctx context.Context, id string, full bool) (string, error)
+	Read(ctx context.Context, id string, full bool) (WindowRead, error)
 	// Viewport returns nil for windows without a source-mapped Markdown view.
 	Viewport(ctx context.Context, id string) (*DocumentViewport, error)
 	// Exists reports whether a window is still open, so a caller's registry can

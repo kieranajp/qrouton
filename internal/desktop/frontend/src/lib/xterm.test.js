@@ -144,6 +144,68 @@ test("a first replay answers queries as if live, a later one does not", () => {
   painter.dispose();
 });
 
+test("live completion waits for final bytes and duplicate exit events add no footer", () => {
+  const term = pendingTerminal();
+  const painter = createTerminalPainter(term);
+
+  painter.paint({ encoded: encode("final marker") });
+  painter.complete(0);
+  painter.complete(0);
+  assert.deepEqual(term.writes.map(({ data }) => text(data)), ["final marker"]);
+
+  term.complete();
+  assert.deepEqual(term.writes.map(({ data }) => text(data)), ["final marker", "\r\n\x1b[2m[exited with status 0]\x1b[0m\r\n"]);
+  painter.paint({ encoded: encode("after") });
+  assert.equal(term.writes.length, 2);
+  term.complete();
+  assert.equal(text(term.writes[2].data), "after");
+  term.complete();
+  painter.dispose();
+});
+
+test("completed replays restore one footer after bytes, including exit zero", () => {
+  for (const code of [0, 3]) {
+    const term = pendingTerminal();
+    const painter = createTerminalPainter(term);
+    const footer = "\r\n\x1b[2m[exited with status " + code + "]\x1b[0m\r\n";
+
+    painter.paint({ encoded: encode("final marker"), replay: true, exit_code: code });
+    assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc"]);
+    term.complete();
+    assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc", "final marker"]);
+    term.complete();
+    assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc", "final marker", footer]);
+    term.complete();
+    painter.complete(code);
+    assert.equal(term.writes.length, 3);
+
+    painter.paint({ encoded: encode("final marker"), replay: true, exit_code: code });
+    term.complete();
+    term.complete();
+    term.complete();
+    assert.deepEqual(term.writes.map(({ data }) => text(data)), ["\x1bc", "final marker", footer, "\x1bc", "final marker", footer]);
+    painter.dispose();
+  }
+});
+
+test("disposal prevents queued completion and makes its active callback inert", () => {
+  for (const duringFooter of [false, true]) {
+    const term = pendingTerminal();
+    const painter = createTerminalPainter(term);
+    painter.paint({ encoded: encode("final marker") });
+    painter.complete(3);
+    painter.paint({ encoded: encode("queued") });
+    if (duringFooter) term.complete();
+    const writes = term.writes.length;
+
+    painter.dispose();
+    term.complete();
+    painter.complete(3);
+    assert.equal(term.writes.length, writes);
+    assert.equal(term.handlers.size, 0);
+  }
+});
+
 test("disposing clears queued output and makes write callbacks inert", () => {
   const term = pendingTerminal();
   const painter = createTerminalPainter(term);

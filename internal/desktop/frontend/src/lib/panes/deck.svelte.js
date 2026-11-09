@@ -13,12 +13,20 @@ export function deck({ slides, line, followed, live, body }) {
   let retired = $state(false);
   let meter = untrack(() => followed());
 
+  // Screens share one scroller, so a new screen would open at the last one's depth.
+  function turn(to) {
+    if (to === current) return;
+    current = to;
+    const sheet = body();
+    if (sheet) sheet.scrollTop = 0;
+  }
+
   $effect(() => {
     const to = followed();
     untrack(() => {
       if (to === meter) return;
       meter = to;
-      if (live() && !pinned) current = to;
+      if (live() && !pinned) turn(to);
     });
   });
 
@@ -29,7 +37,7 @@ export function deck({ slides, line, followed, live, body }) {
       marked.classList.remove("marked");
     retired = true;
     pinned = pin;
-    current = Math.max(0, Math.min(screen, slides().length));
+    turn(Math.max(0, Math.min(screen, slides().length)));
   }
 
   return {

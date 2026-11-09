@@ -2,7 +2,9 @@ package core
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -180,8 +182,8 @@ func TestDocumentWindowServesItsTextToThePageAndToTheAgent(t *testing.T) {
 		t.Fatalf("Content = %+v, %v", page, err)
 	}
 	agent, err := w.readWindow(id, false)
-	if err != nil || agent != "diff --git a/x b/x" {
-		t.Fatalf("read = %q, %v", agent, err)
+	if err != nil || agent.Terminal != nil || agent.Text != "diff --git a/x b/x" {
+		t.Fatalf("read = %q, %v", agent.Text, err)
 	}
 }
 
@@ -207,8 +209,8 @@ func TestADocumentWindowCarriesItsFormatToThePageAndNotToTheAgent(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if agent != "@@ -1 +1 @@\n-old\n+new" {
-		t.Fatalf("the agent was given something other than the diff text: %q", agent)
+	if agent.Text != "@@ -1 +1 @@\n-old\n+new" {
+		t.Fatalf("the agent was given something other than the diff text: %q", agent.Text)
 	}
 
 	plain, err := w.openWindow(w.shown(), workbench.WindowOptions{
@@ -444,9 +446,7 @@ func TestAnAttentionWindowReportsWaitingAndRemainsUntilClosed(t *testing.T) {
 	}
 }
 
-// A command that succeeds takes its window with it; one that fails leaves the
-// error on screen for the user to read.
-func TestATerminalWindowClosesOnACleanExitAndStaysOnAFailure(t *testing.T) {
+func TestCloseOnExitTerminalClosesOnSuccessAndRetainsFailure(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
 		command []string
@@ -503,7 +503,7 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	}
 	waitFor(t, "the prompt to reach retained output", func() bool {
 		text, _ := w.readWindow(id, true)
-		return strings.Contains(text, "two-line prompt")
+		return strings.Contains(text.Text, "two-line prompt")
 	})
 
 	if err := w.Start(id, 120, 36); err != nil {
@@ -546,7 +546,8 @@ func TestATerminalTabKeeps256KiBOfScrollback(t *testing.T) {
 	}
 	var text string
 	waitFor(t, "the flood to finish", func() bool {
-		text, _ = w.readWindow(id, true)
+		read, _ := w.readWindow(id, true)
+		text = read.Text
 		return strings.HasSuffix(text, "END")
 	})
 	if len(text) != 256*1024 {
@@ -568,20 +569,20 @@ func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	}
 	waitFor(t, "the command's output", func() bool {
 		text, _ := w.readWindow(id, true)
-		return strings.Contains(text, "done")
+		return strings.Contains(text.Text, "done")
 	})
 	text, err := w.readWindow(id, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Contains(text, "\x1b") || strings.Contains(text, "31m") {
-		t.Fatalf("read output still carries escape sequences: %q", text)
+	if strings.Contains(text.Text, "\x1b") || strings.Contains(text.Text, "31m") {
+		t.Fatalf("read output still carries escape sequences: %q", text.Text)
 	}
-	if !strings.Contains(text, "ared") {
-		t.Fatalf("read output lost the coloured text: %q", text)
+	if !strings.Contains(text.Text, "ared") {
+		t.Fatalf("read output lost the coloured text: %q", text.Text)
 	}
-	if strings.Contains(text, "progress") {
-		t.Fatalf("a line rewritten by a carriage return kept both versions: %q", text)
+	if strings.Contains(text.Text, "progress") {
+		t.Fatalf("a line rewritten by a carriage return kept both versions: %q", text.Text)
 	}
 }
 
@@ -1347,7 +1348,7 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	}
 	waitFor(t, "the line to reach retained output", func() bool {
 		text, _ := w.readWindow(id, true)
-		return strings.Contains(text, "before mount")
+		return strings.Contains(text.Text, "before mount")
 	})
 
 	if err := w.Start(id, 120, 36); err != nil {
@@ -1450,5 +1451,234 @@ func TestAFailedLaunchLeavesNoTab(t *testing.T) {
 	}
 	if ids := w.list(); len(ids) != 0 {
 		t.Fatalf("a failed launch left tabs open: %v", ids)
+	}
+}
+
+func TestRetainedTerminalReadsRunningAndFinalOutputAcrossInputBarrier(t *testing.T) {
+	for _, tc := range []struct {
+		name, status, command string
+		code                  int
+	}{
+		{"success", tabStatusSucceeded, "printf first-marker; IFS= read -r release; printf final-marker; exit 0", 0},
+		{"failure", tabStatusFailed, "printf first-marker; IFS= read -r release; printf final-marker; exit 3", 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, renderer := testWindows(t)
+			id, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindTerminal, Label: tc.name, Cwd: t.TempDir(),
+				Command: []string{"/bin/sh", "-c", tc.command},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the first marker before releasing the command", func() bool {
+				read, err := w.readWindow(id, true)
+				return err == nil && strings.Contains(read.Text, "first-marker")
+			})
+			read, err := w.readWindow(id, true)
+			if err != nil || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil || strings.Contains(read.Text, "final-marker") {
+				t.Fatalf("running snapshot = %+v, %v", read, err)
+			}
+			if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "the completed snapshot", func() bool {
+				read, err := w.readWindow(id, true)
+				return err == nil && read.Terminal != nil && read.Terminal.ExitCode != nil
+			})
+			for range 3 {
+				read, err := w.readWindow(id, true)
+				if err != nil || read.Terminal == nil || read.Terminal.Status != tc.status || read.Terminal.ExitCode == nil || *read.Terminal.ExitCode != tc.code || !strings.Contains(read.Text, "final-marker") {
+					t.Fatalf("retained snapshot = %+v, %v", read, err)
+				}
+				if err := w.Start(id, 80, 24); err != nil {
+					t.Fatal(err)
+				}
+				chunk := lastChunk(renderer, id)
+				wire, err := json.Marshal(chunk)
+				if err != nil || !strings.Contains(string(wire), fmt.Sprintf(`"exit_code":%d`, tc.code)) {
+					t.Fatalf("completed replay wire = %s, %v", wire, err)
+				}
+				raw, err := base64.StdEncoding.DecodeString(chunk.Encoded)
+				if err != nil || !chunk.Replay || chunk.First || chunk.ExitCode == nil || *chunk.ExitCode != tc.code || !strings.Contains(string(raw), "final-marker") {
+					t.Fatalf("completed replay = %+v, %q, %v", chunk, raw, err)
+				}
+			}
+			if err := w.Close(id); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := w.readWindow(id, true); err == nil {
+				t.Fatal("explicit close retained a readable result")
+			}
+		})
+	}
+}
+
+func TestSilentTerminalSnapshotsDistinguishRunningSuccessAndFailure(t *testing.T) {
+	for _, tc := range []struct {
+		name, command, status string
+		code                  int
+	}{
+		{"success", "IFS= read -r release; exit 0", tabStatusSucceeded, 0},
+		{"failure", "IFS= read -r release; exit 3", tabStatusFailed, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, _ := testWindows(t)
+			id, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+				Kind: workbench.KindTerminal, Label: tc.name, Cwd: t.TempDir(),
+				Command: []string{"/bin/sh", "-c", tc.command},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			read, err := w.readWindow(id, true)
+			if err != nil || read.Text != "" || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil {
+				t.Fatalf("silent running snapshot = %+v, %v", read, err)
+			}
+			if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+				t.Fatal(err)
+			}
+			waitFor(t, "silent completion", func() bool {
+				read, err = w.readWindow(id, true)
+				return err == nil && read.Terminal.ExitCode != nil
+			})
+			if strings.TrimSpace(read.Text) != "" || read.Terminal.Status != tc.status || *read.Terminal.ExitCode != tc.code {
+				t.Fatalf("silent completed snapshot = %+v", read)
+			}
+		})
+	}
+}
+
+func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *testing.T) {
+	reg := testRegistry(t, t.TempDir())
+	entered, release := make(chan struct{}), make(chan struct{})
+	var w *Windows
+	var terminal *terminalContent
+	w = newWindows(func(event string, payload any) {
+		if !strings.HasPrefix(event, windowExitEvent) {
+			return
+		}
+		id := strings.TrimPrefix(event, windowExitEvent)
+		if terminal.stream.TryLock() {
+			terminal.stream.Unlock()
+			t.Error("live exit escaped terminal stream ordering")
+		}
+		if err := w.with(id, func(window *agentWindow) error {
+			if terminal.exit == nil || *terminal.exit != payload.(int) {
+				t.Error("live exit preceded committed completion metadata")
+			}
+			return nil
+		}); err != nil {
+			t.Error(err)
+		}
+		close(entered)
+		<-release
+	}, reg)
+	t.Cleanup(w.stopAll)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "ordered", Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	window, _ := w.window(id)
+	terminal, _ = window.terminal()
+	completed := make(chan struct{})
+	close(completed)
+	terminal.process = &PTY{exited: completed}
+	terminal.buffer.Write([]byte("final-marker"))
+	exited := make(chan struct{})
+	go func() { w.terminals.exited(id, 0); close(exited) }()
+	<-entered
+	readDone := make(chan workbench.WindowRead, 1)
+	go func() {
+		read, err := w.readWindow(id, true)
+		if err != nil {
+			t.Error(err)
+		}
+		readDone <- read
+	}()
+	attachDone := make(chan error, 1)
+	go func() { attachDone <- w.Start(id, 80, 24) }()
+	close(release)
+	<-exited
+	read := <-readDone
+	if read.Text != "final-marker" || read.Terminal == nil || read.Terminal.Status != tabStatusSucceeded || read.Terminal.ExitCode == nil || *read.Terminal.ExitCode != 0 {
+		t.Fatalf("ordered snapshot = %+v", read)
+	}
+	if err := <-attachDone; err != nil {
+		t.Fatal(err)
+	}
+	*read.Terminal.ExitCode = 9
+	read, err = w.readWindow(id, true)
+	if err != nil || *read.Terminal.ExitCode != 0 {
+		t.Fatalf("snapshot mutated retained exit code: %+v, %v", read, err)
+	}
+}
+
+func TestTerminalReadAttachAndCloseCanRaceWithoutInventingCompletion(t *testing.T) {
+	w, _ := testWindows(t)
+	for range 30 {
+		id, err := w.openAgentWindow(w.shown(), workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: "race", Cwd: t.TempDir(), Command: []string{"/bin/cat"},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		done := make(chan struct{}, 3)
+		go func() {
+			<-start
+			read, err := w.readWindow(id, true)
+			if err == nil && (read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil) {
+				t.Errorf("close invented completion: %+v", read)
+			}
+			done <- struct{}{}
+		}()
+		go func() { <-start; _ = w.Start(id, 80, 24); done <- struct{}{} }()
+		go func() { <-start; _ = w.Close(id); done <- struct{}{} }()
+		close(start)
+		for range 3 {
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+				t.Fatal("read, attach and close deadlocked")
+			}
+		}
+	}
+}
+
+func TestConcurrentLaunchAndMountStartOnlyOneTerminalProcess(t *testing.T) {
+	w, _ := testWindows(t)
+	dir := t.TempDir()
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "once", Cwd: dir,
+		Command: []string{"/bin/sh", "-c", "printf launched >> launches; IFS= read -r release"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	done := make(chan error, 8)
+	for range 4 {
+		go func() { <-start; done <- w.Start(id, 80, 24) }()
+		go func() { <-start; done <- w.terminals.launch(id, 80, 24) }()
+	}
+	close(start)
+	for range 8 {
+		if err := <-done; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the single launched process to finish", func() bool {
+		read, err := w.readWindow(id, true)
+		return err == nil && read.Terminal.ExitCode != nil
+	})
+	launches, err := os.ReadFile(filepath.Join(dir, "launches"))
+	if err != nil || string(launches) != "launched" {
+		t.Fatalf("process launches = %q, %v", launches, err)
 	}
 }

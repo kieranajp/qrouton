@@ -269,10 +269,38 @@ test("the session name's menu paints over the pane chrome below it", async ({ pa
   const menu = page.locator(".menu");
   await expect(menu).toBeVisible();
   await expect(menu).toContainText("fix/octopus-4b2a");
-  await expect(menu).toContainText("Copy path to worktree");
 
-  // The menu overhangs the header, and the band they share belongs to the menu.
+  // The overlap is measured with the menu open, so it is checked before the menu closes below.
   expect(await page.evaluate(() => window.overlapOwner())).toBe("menu");
+});
+
+// Two editing repos once split the path items into a submenu per worktree, none of which was the session.
+test("the session name's menu acts on the workspace however many repos it edits", async ({ page }) => {
+  await open(page, "window-1");
+  await page.getByRole("button", { name: /Octopus/ }).click();
+  await expect(page.locator(".menu").getByRole("button", { name: "Copy workspace path" })).toBeDisabled();
+  await page.keyboard.press("Escape");
+
+  await page.evaluate(() =>
+    window.shell.chrome({
+      identity: "Octopus",
+      mode: "RPI",
+      terminal: "term-1",
+      branch: "fix/octopus-4b2a",
+      root: "/sessions/octopus",
+      repos: [
+        { name: "acme/web", role: "editing", path: "/sessions/octopus/src/web" },
+        { name: "acme/api", role: "editing", path: "/sessions/octopus/src/api" },
+      ],
+    }),
+  );
+  await page.getByRole("button", { name: /Octopus/ }).click();
+
+  const menu = page.locator(".menu");
+  await expect(menu.getByRole("button", { name: "Copy workspace path" })).toBeEnabled();
+  await expect(menu.getByRole("button", { name: "Open workspace in Finder" })).toBeEnabled();
+  await expect(menu.locator(".submenu-caret")).toHaveCount(0);
+  await expect(menu).not.toContainText("worktree");
 });
 
 for (const scale of [1, 1.3, 1.5]) {

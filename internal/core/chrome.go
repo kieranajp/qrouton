@@ -158,6 +158,11 @@ func watch(ctx context.Context, reg *Sessions, root string, cfg *config.Config, 
 					lastPulled = ""
 				}
 			}
+			for _, root := range reg.takePullRequestChanges() {
+				if root == lastPulled {
+					lastPulled = ""
+				}
+			}
 			refresh()
 			fetch(true)
 			// Arriving at a session is looking at what it wrote, and a marker still

@@ -153,8 +153,8 @@ var handlers = map[string]handler{
 	workbench.OpRead: {
 		guards: []guard{needsSession, needsOwnedWindow},
 		run: func(c *control, req workbench.Request) (workbench.Response, error) {
-			text, err := c.windows.readWindow(req.ID, req.Full)
-			return workbench.Response{ID: req.ID, Text: text}, err
+			read, err := c.windows.readWindow(req.ID, req.Full)
+			return workbench.Response{ID: req.ID, Text: read.Text, Terminal: read.Terminal}, err
 		},
 	},
 	workbench.OpViewport: {

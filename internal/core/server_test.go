@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"go/ast"
@@ -148,8 +149,8 @@ func TestTheControlSocketServesTheWorkbenchPort(t *testing.T) {
 		t.Fatalf("List = %v, %v, want both windows", ids, err)
 	}
 	text, err := host.Read(ctx, document, false)
-	if err != nil || text != "one change" {
-		t.Fatalf("Read = %q, %v", text, err)
+	if err != nil || text.Text != "one change" || text.Terminal != nil {
+		t.Fatalf("Read = %q, %v", text.Text, err)
 	}
 	const diff = `diff --git a/app.txt b/app.txt
 index 6dad4ad..84db3de 100644
@@ -181,8 +182,8 @@ index 6dad4ad..84db3de 100644
 		t.Fatalf("diff Content = %+v, %v", diffPage, err)
 	}
 	diffText, err := host.Read(ctx, diffDocument, true)
-	if err != nil || diffText != diff {
-		t.Fatalf("diff Read = %q, %v", diffText, err)
+	if err != nil || diffText.Text != diff || diffText.Terminal != nil {
+		t.Fatalf("diff Read = %q, %v", diffText.Text, err)
 	}
 	if viewport, err := host.Viewport(ctx, diffDocument); err != nil || viewport != nil {
 		t.Fatalf("diff Viewport = %+v, %v", viewport, err)
@@ -256,16 +257,16 @@ func TestControlSocketRoundTripsAndValidatesAssetGalleries(t *testing.T) {
 		t.Fatalf("page = %+v, %v", page, err)
 	}
 	text, err := host.Read(context.Background(), id, false)
-	if err != nil || !strings.HasSuffix(text, "Current asset: 1 of 2") {
-		t.Fatalf("read = %q, %v", text, err)
+	if err != nil || !strings.HasSuffix(text.Text, "Current asset: 1 of 2") {
+		t.Fatalf("read = %q, %v", text.Text, err)
 	}
 	selection, err := host.FocusAsset(context.Background(), id, 2)
 	if err != nil || selection.CurrentIndex != 2 || selection.Count != 2 || selection.Revision != 2 {
 		t.Fatalf("focus = %+v, %v", selection, err)
 	}
 	text, err = host.Read(context.Background(), id, false)
-	if err != nil || !strings.HasSuffix(text, "Current asset: 2 of 2") {
-		t.Fatalf("focused read = %q, %v", text, err)
+	if err != nil || !strings.HasSuffix(text.Text, "Current asset: 2 of 2") {
+		t.Fatalf("focused read = %q, %v", text.Text, err)
 	}
 
 	if viewport, err := host.Viewport(context.Background(), id); err != nil || viewport != nil {
@@ -542,6 +543,69 @@ func TestOpOpenRunsATerminalsCommandWithoutAMountedPage(t *testing.T) {
 	})
 	waitFor(t, "the command's output to be readable", func() bool {
 		text, _ := windows.readWindow(res.ID, true)
-		return strings.Contains(text, "ready")
+		return strings.Contains(text.Text, "ready")
 	})
+}
+
+func TestControlSocketReadsRetainedTerminalOutputAndCompletionTogether(t *testing.T) {
+	windows, _ := testWindows(t)
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, err := serveControl(socket, windows, windows.shown(), controlHooks{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = server.Close() })
+	host := (workbench.Handle{Socket: socket, SessionRoot: windows.shown().Root()}).WindowHost()
+	for _, tc := range []struct {
+		command, status string
+		code            int
+	}{
+		{"printf first-marker; IFS= read -r release; printf final-marker; exit 0", tabStatusSucceeded, 0},
+		{"printf first-marker; IFS= read -r release; printf final-marker; exit 3", tabStatusFailed, 3},
+	} {
+		id, err := host.Open(context.Background(), workbench.WindowOptions{
+			Kind: workbench.KindTerminal, Label: tc.status, Cwd: t.TempDir(),
+			Command: []string{"/bin/sh", "-c", tc.command},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "running output over the control socket", func() bool {
+			read, err := host.Read(context.Background(), id, true)
+			return err == nil && strings.Contains(read.Text, "first-marker")
+		})
+		read, err := host.Read(context.Background(), id, true)
+		if err != nil || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil {
+			t.Fatalf("running socket snapshot = %+v, %v", read, err)
+		}
+		if err := windows.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+			t.Fatal(err)
+		}
+		waitFor(t, "completed output over the control socket", func() bool {
+			read, err = host.Read(context.Background(), id, true)
+			return err == nil && read.Terminal != nil && read.Terminal.ExitCode != nil
+		})
+		if read.Terminal.Status != tc.status || *read.Terminal.ExitCode != tc.code || !strings.Contains(read.Text, "final-marker") {
+			t.Fatalf("completed socket snapshot = %+v", read)
+		}
+		if err := host.Close(context.Background(), id); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := host.Read(context.Background(), id, true); err == nil {
+			t.Fatal("closed terminal remained readable through the control socket")
+		}
+	}
+	other := &SessionState{sessionSlug: "foreign", sessionRoot: t.TempDir()}
+	id, err := windows.openWindow(other, workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "private", Command: []string{"/bin/cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if read, err := host.Read(context.Background(), id, true); err == nil || read.Text != "" || read.Terminal != nil {
+		t.Fatalf("foreign terminal snapshot = %+v, %v", read, err)
+	}
 }

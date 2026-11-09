@@ -115,7 +115,21 @@ func pullRequestRepoID(repo session.ManifestRepo) string {
 func pullRequestRows(id string, prs []github.PullRequest) []status.PullRequest {
 	rows := make([]status.PullRequest, 0, len(prs))
 	for _, pr := range prs {
-		rows = append(rows, status.PullRequest{Repo: id, Number: pr.Number, Title: pr.Title, URL: pr.URL})
+		rows = append(rows, status.PullRequest{Repo: id, Number: pr.Number, Title: pr.Title, URL: pr.URL, State: pullRequestState(pr)})
 	}
 	return rows
+}
+
+// pullRequestState checks merged first, because GitHub reports a merged pull request as closed.
+func pullRequestState(pr github.PullRequest) string {
+	switch {
+	case pr.MergedAt != "":
+		return status.PullRequestStateMerged
+	case pr.State == github.PullStateClosed:
+		return status.PullRequestStateClosed
+	case pr.Draft:
+		return status.PullRequestStateDraft
+	default:
+		return status.PullRequestStateOpen
+	}
 }

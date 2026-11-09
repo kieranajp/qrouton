@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 	"time"
+
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 type terminals struct {
@@ -77,17 +79,34 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
 	terminal.stream.Lock()
 	defer terminal.stream.Unlock()
-	running := !terminal.process.Done()
-	if running {
-		if err := terminal.process.Resize(cols, rows); err != nil {
+	var process *PTY
+	var state *workbench.TerminalState
+	var first bool
+	if err := t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); !ok || content != terminal {
+			return noSuchWindow(id)
+		}
+		process, state = terminal.process, terminal.state()
+		first = !terminal.served
+		return nil
+	}); err != nil {
+		return err
+	}
+	running := !process.Done()
+	if state.ExitCode == nil && running {
+		if err := process.Resize(cols, rows); err != nil {
 			return err
 		}
 	}
 	chunk := EncodeChunk(terminal.buffer.Bytes())
-	chunk.Replay = true
-	chunk.First = running && !terminal.served
+	chunk.Replay, chunk.First, chunk.ExitCode = true, running && first, state.ExitCode
 	t.emit(windowDataEvent+id, chunk)
-	terminal.served = true
+	_ = t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); ok && content == terminal {
+			terminal.served = true
+		}
+		return nil
+	})
 	return nil
 }
 
@@ -125,21 +144,34 @@ func (t *terminals) process(id string) (*PTY, error) {
 	return process, err
 }
 
-// exited applies the lifecycle rule: a clean exit closes the window, a failure
-// leaves it open so the error stays readable.
 func (t *terminals) exited(id string, code int) {
-	t.emit(windowExitEvent+id, code)
-	var owner *SessionState
-	var closeOnExit bool
+	var terminal *terminalContent
 	if err := t.registry.with(id, func(window *agentWindow) error {
-		terminal, ok := window.terminal()
+		var ok bool
+		terminal, ok = window.terminal()
 		if !ok {
 			return ErrNotATerminal
+		}
+		return nil
+	}); err != nil {
+		return
+	}
+	terminal.stream.Lock()
+	var owner *SessionState
+	var closeOnExit bool
+	err := t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); !ok || content != terminal {
+			return noSuchWindow(id)
 		}
 		terminal.exit = &code
 		owner, closeOnExit = window.session, window.opts.CloseOnExit
 		return nil
-	}); err != nil {
+	})
+	if err == nil {
+		t.emit(windowExitEvent+id, code)
+	}
+	terminal.stream.Unlock()
+	if err != nil {
 		return
 	}
 	if code == 0 && closeOnExit {

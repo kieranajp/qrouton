@@ -101,3 +101,29 @@ func TestListPullRequestsFailsOnServerErrors(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// A field left off PullRequest would leave every row looking open.
+func TestListPullRequestsDecodesStateDraftAndMerged(t *testing.T) {
+	client := pullsServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`[
+			{"number":1,"state":"open","draft":false,"merged_at":null},
+			{"number":2,"state":"open","draft":true,"merged_at":null},
+			{"number":3,"state":"closed","draft":false,"merged_at":null},
+			{"number":4,"state":"closed","draft":false,"merged_at":"2026-11-08T12:00:00Z"}
+		]`))
+	})
+
+	prs, _, _, err := ListPullRequests(context.Background(), client, "token", "acme", "web", "feat", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []PullRequest{
+		{Number: 1, State: "open"},
+		{Number: 2, State: "open", Draft: true},
+		{Number: 3, State: PullStateClosed},
+		{Number: 4, State: PullStateClosed, MergedAt: "2026-11-08T12:00:00Z"},
+	}
+	if !reflect.DeepEqual(prs, want) {
+		t.Fatalf("got %#v", prs)
+	}
+}

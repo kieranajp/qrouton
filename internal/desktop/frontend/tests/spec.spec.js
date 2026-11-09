@@ -66,6 +66,15 @@ test("the questions pip holds every open question as a card", async ({ page }) =
   await expect.poll(() => page.evaluate(() => window.focusedCard())).toBe("Q2");
 });
 
+// Options were read one line at a time, so a second paragraph vanished from the card.
+test("an option's second paragraph shows on its card", async ({ page }) => {
+  await open(page);
+  await page.getByRole("button", { name: "Next open question" }).click();
+
+  const option = page.locator('[data-question="Q3"] .option[data-letter="A"]');
+  await expect(option.locator(".blocks p")).toHaveText(["Yes", "Callers then get an error at once."]);
+});
+
 test("bold decisions share one pip, after the questions", async ({ page }) => {
   await open(page);
   expect(await page.evaluate(() => window.pips())).toEqual([

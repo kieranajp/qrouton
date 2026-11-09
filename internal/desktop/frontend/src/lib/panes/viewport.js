@@ -174,3 +174,9 @@ export function createViewportController(options) {
   setSelected(options.selected);
   return { setSelected, schedule, destroy };
 }
+
+/** The hidden `.lifted` copy of a heading never counts as visible, so reveals aim at the heading shown before it.
+ * @param {HTMLElement | undefined} block */
+export function revealTarget(block) {
+  return /** @type {HTMLElement | undefined} */ (block?.closest(".lifted")?.previousElementSibling ?? block);
+}

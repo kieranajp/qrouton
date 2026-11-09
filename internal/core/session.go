@@ -265,6 +265,7 @@ type Sessions struct {
 	// trees pushes the shown session's agent tree; nil until the workbench runs.
 	trees       *agentTrees
 	repoChanges map[string]struct{}
+	pullChanges map[string]struct{}
 
 	placementShown atomic.Bool
 }
@@ -281,6 +282,7 @@ func newSessionsWithActivity(now func() time.Time) *Sessions {
 		now:         now,
 		agents:      map[string]*agentActivity{},
 		repoChanges: map[string]struct{}{},
+		pullChanges: map[string]struct{}{},
 	}
 }
 
@@ -802,9 +804,18 @@ func (s *Sessions) Touch() {
 	}
 }
 
-func (s *Sessions) RepositoriesChanged(root string) {
+func (s *Sessions) RepositoriesChanged(root string) { s.changed(&s.repoChanges, root) }
+
+func (s *Sessions) takeRepositoryChanges() []string { return s.take(&s.repoChanges) }
+
+// pullRequestsChanged marks a session's pull requests stale without touching its repo measurements.
+func (s *Sessions) pullRequestsChanged(root string) { s.changed(&s.pullChanges, root) }
+
+func (s *Sessions) takePullRequestChanges() []string { return s.take(&s.pullChanges) }
+
+func (s *Sessions) changed(set *map[string]struct{}, root string) {
 	s.mu.Lock()
-	s.repoChanges[root] = struct{}{}
+	(*set)[root] = struct{}{}
 	s.mu.Unlock()
 	s.Touch()
 }
@@ -823,14 +834,14 @@ func (s *Sessions) QueuePicker(req workbench.PickerRequest) error {
 	return nil
 }
 
-func (s *Sessions) takeRepositoryChanges() []string {
+func (s *Sessions) take(set *map[string]struct{}) []string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	roots := make([]string, 0, len(s.repoChanges))
-	for root := range s.repoChanges {
+	roots := make([]string, 0, len(*set))
+	for root := range *set {
 		roots = append(roots, root)
 	}
-	s.repoChanges = map[string]struct{}{}
+	*set = map[string]struct{}{}
 	return roots
 }
 

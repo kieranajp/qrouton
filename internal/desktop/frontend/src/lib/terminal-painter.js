@@ -29,6 +29,7 @@ export function createTerminalPainter(term) {
   let replaying = false;
   let writing = false;
   let live = true;
+  let completed = false;
   const queue = [];
   const guards = [
     term.parser.registerCsiHandler({ final: "c" }, (params) => replaying && first(params) === 0),
@@ -44,27 +45,37 @@ export function createTerminalPainter(term) {
     term.parser.registerOscHandler(11, (data) => replaying && data === "?"),
   ];
 
+  const finish = () => {
+    if (!live) return;
+    writing = false;
+    next();
+  };
+
+  const complete = (code) => {
+    if (completed) return finish();
+    completed = true;
+    term.write("\r\n\x1b[2m[exited with status " + code + "]\x1b[0m\r\n", finish);
+  };
+
   const next = () => {
     if (!live || writing || queue.length === 0) return;
     writing = true;
     const chunk = queue.shift();
+    if (typeof chunk.complete === "number") return complete(chunk.complete);
     if (!chunk.replay) {
-      term.write(decode(chunk.encoded), () => {
-        if (!live) return;
-        writing = false;
-        next();
-      });
+      term.write(decode(chunk.encoded), finish);
       return;
     }
 
+    completed = false;
     replaying = !chunk.first;
     term.write("\x1bc", () => {
       if (!live) return;
       term.write(decode(chunk.encoded), () => {
         if (!live) return;
         replaying = false;
-        writing = false;
-        next();
+        if (typeof chunk.exit_code === "number") complete(chunk.exit_code);
+        else finish();
       });
     });
   };
@@ -73,6 +84,11 @@ export function createTerminalPainter(term) {
     paint(chunk) {
       if (!live) return;
       queue.push(chunk);
+      next();
+    },
+    complete(code) {
+      if (!live) return;
+      queue.push({ complete: code });
       next();
     },
     dispose() {

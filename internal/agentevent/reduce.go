@@ -3,6 +3,7 @@ package agentevent
 import (
 	"encoding/json"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -54,6 +55,9 @@ type spawnResponse struct {
 	} `json:"content"`
 }
 
+// createsPullRequest finds gh pr create at the start of any command in a chain.
+var createsPullRequest = regexp.MustCompile(`(^|[\s;&|(])gh\s+pr\s+create\b`)
+
 // ReduceIn decodes one Claude Code hook payload into the event the workbench is
 // sent. A Bash target is written relative to root; tool inputs and responses go no further.
 func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventRequest, error) {
@@ -71,6 +75,7 @@ func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventReque
 	if p.ToolName != "" {
 		target := Target(p.ToolName, p.ToolInput)
 		if p.ToolName == toolBash {
+			event.PullRequestCreated = p.HookEventName == HookPostToolUse && createsPullRequest.MatchString(bashCommand(p.ToolInput))
 			target = TrimCommand(target, p.Cwd, root)
 		}
 		event.Target = truncate(target, TargetLimit)
@@ -99,6 +104,15 @@ func ReduceIn(provider, root string, input io.Reader) (workbench.AgentEventReque
 	}
 	event.Message = truncate(event.Message, MessageLimit)
 	return event, nil
+}
+
+// bashCommand is the whole command, every line of it.
+func bashCommand(input json.RawMessage) string {
+	var in struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(input, &in)
+	return in.Command
 }
 
 func spawnTool(name string) bool { return name == ToolAgent || name == ToolTaskLegacy }

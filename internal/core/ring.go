@@ -35,12 +35,10 @@ func (r *Ring) Bytes() []byte {
 
 // Text renders the buffer as the agent reads it: escape sequences stripped, and
 // each line reduced to what a carriage return last left on it.
-func (r *Ring) Text(full bool) string {
-	r.mu.Lock()
-	raw := string(r.buf)
-	r.mu.Unlock()
+func (r *Ring) Text(full bool) string { return terminalText(r.Bytes(), full) }
 
-	lines := strings.Split(strings.ReplaceAll(ansi.Strip(raw), "\r\n", "\n"), "\n")
+func terminalText(raw []byte, full bool) string {
+	lines := strings.Split(strings.ReplaceAll(ansi.Strip(string(raw)), "\r\n", "\n"), "\n")
 	for i, line := range lines {
 		if at := strings.LastIndex(line, "\r"); at >= 0 {
 			lines[i] = line[at+1:]
@@ -54,8 +52,9 @@ func (r *Ring) Text(full bool) string {
 
 // Chunk is one stretch of a terminal's output as the page receives it.
 type Chunk struct {
-	Encoded string `json:"encoded"`
-	Replay  bool   `json:"replay,omitempty"`
+	Encoded  string `json:"encoded"`
+	Replay   bool   `json:"replay,omitempty"`
+	ExitCode *int   `json:"exit_code,omitempty"`
 	// First marks a running process's first replay, whose queries the page
 	// answers as if live.
 	First bool `json:"first,omitempty"`
