@@ -19,6 +19,14 @@ const (
 	legacyQuestionsSuffix = "-questions.md"
 )
 
+// A pull request row's state, the page's icon and colour.
+const (
+	PullRequestStateOpen   = "open"
+	PullRequestStateDraft  = "draft"
+	PullRequestStateMerged = "merged"
+	PullRequestStateClosed = "closed"
+)
+
 var (
 	researchDir = kinds.Research.Dir
 	plansDir    = kinds.Plan.Dir

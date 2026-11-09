@@ -91,6 +91,7 @@ type PullRequest struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`
 	URL    string `json:"url"`
+	State  string `json:"state"`
 }
 
 // EmptyFields is the value every producer starts from. No slice reaching the

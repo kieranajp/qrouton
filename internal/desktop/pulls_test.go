@@ -186,3 +186,25 @@ func TestPullFetchDropsOnlyTheRepositoryGitHubCannotFind(t *testing.T) {
 		t.Fatalf("rows after 404 = %v, signed out %v", rows, second.list().SignedOut)
 	}
 }
+
+// GitHub reports a merged pull request as closed, so checking state first would draw every merge red.
+func TestPullRequestStateFollowsMergedClosedDraftOpen(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		pr   github.PullRequest
+		want string
+	}{
+		{"open", github.PullRequest{State: "open"}, status.PullRequestStateOpen},
+		{"draft", github.PullRequest{State: "open", Draft: true}, status.PullRequestStateDraft},
+		{"closed", github.PullRequest{State: github.PullStateClosed}, status.PullRequestStateClosed},
+		{"closed draft", github.PullRequest{State: github.PullStateClosed, Draft: true}, status.PullRequestStateClosed},
+		{"merged", github.PullRequest{State: github.PullStateClosed, MergedAt: "2026-11-08T12:00:00Z"}, status.PullRequestStateMerged},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rows := pullRequestRows("acme/web", []github.PullRequest{tc.pr})
+			if rows[0].State != tc.want {
+				t.Fatalf("state = %q, want %q", rows[0].State, tc.want)
+			}
+		})
+	}
+}
