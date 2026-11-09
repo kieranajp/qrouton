@@ -248,6 +248,14 @@ export const PROGRESS_STATUSES = Object.freeze({
   ADVANCED: "advanced",
 });
 
+/** @typedef {"open"|"draft"|"merged"|"closed"} PullRequestState */
+export const PULL_REQUEST_STATES = Object.freeze({
+  OPEN: "open",
+  DRAFT: "draft",
+  MERGED: "merged",
+  CLOSED: "closed",
+});
+
 /** @typedef {"started"|"succeeded"|"failed"|"complete"} RefreshState */
 export const REFRESH_STATES = Object.freeze({
   STARTED: "started",

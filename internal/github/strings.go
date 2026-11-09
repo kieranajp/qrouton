@@ -1,5 +1,8 @@
 package github
 
+// PullStateClosed is GitHub's state for a closed or merged pull request.
+const PullStateClosed = "closed"
+
 const (
 	IssueRepository        = "kieranajp/qrouton"
 	IssueListURL           = WebBase + "/" + IssueRepository + "/issues"

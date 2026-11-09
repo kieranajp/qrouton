@@ -41,6 +41,8 @@ export const OPEN = [
   "### Q3 — Is zero attempts an error?",
   "",
   "- A. Yes",
+  "",
+  "  Callers then get an error at once.",
   "- B. No",
   "",
   "Answer:",

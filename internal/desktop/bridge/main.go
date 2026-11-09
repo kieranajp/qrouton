@@ -77,6 +77,7 @@ var valueSets = []valueSet{
 	{name: "PLACEMENT_REASONS", typedef: "PlacementReason", dir: placementPackage, goType: "Reason", prefix: "Reason"},
 	{name: "PLACEMENT_RESULTS", typedef: "PlacementResult", dir: placementPackage, goType: "Result", prefix: "Result"},
 	{name: "PROGRESS_STATUSES", typedef: "ProgressStatus", dir: sessionPackage, goType: "ProgressStatus", prefix: "Progress"},
+	{name: "PULL_REQUEST_STATES", typedef: "PullRequestState", dir: statusPackage, prefix: "PullRequestState"},
 	{name: "REFRESH_STATES", typedef: "RefreshState", dir: githubPackage, goType: "RefreshState", prefix: "Refresh"},
 	{name: "REPO_ROLES", typedef: "RepoRole", dir: sessionPackage, goType: "RepoRole", prefix: "RepoRole"},
 	{name: "SESSION_MODES", typedef: "SessionMode", dir: sessionPackage, goType: "SessionMode", prefix: "Mode"},

@@ -122,6 +122,8 @@
 
 .markdown li {
   margin: 0 0 calc(6px * var(--ui-scale));
+  /* WebKit's pretty wrapping breaks list items into needlessly short lines. */
+  text-wrap: auto;
 }
 
 .markdown li > ul,
@@ -162,13 +164,13 @@
   padding-left: calc(24px * var(--ui-scale));
 }
 
+/* Floated, the checkbox leaves no space before the text, so wrapped lines align with the first. */
 .markdown input[type="checkbox"] {
   appearance: none;
-  display: inline-block;
+  float: left;
   width: calc(13px * var(--ui-scale));
   height: calc(13px * var(--ui-scale));
   margin: calc(4px * var(--ui-scale)) calc(11px * var(--ui-scale)) 0 calc(-24px * var(--ui-scale));
-  vertical-align: top;
   border: 1px solid var(--border-default);
   background: transparent;
 }
@@ -184,6 +186,8 @@
   background: var(--surface-terminal);
   border: 1px solid color-mix(in srgb, var(--accent-literal) 22%, var(--border-subtle));
   padding: 1px calc(5px * var(--ui-scale));
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
 }
 
 .markdown pre {

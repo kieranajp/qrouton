@@ -183,6 +183,91 @@ func TestPullRequestsFetchOnArrivalAndFollowASwitchMadeMidFetch(t *testing.T) {
 	}
 }
 
+// pullWatch runs the chrome loop with alpha shown and a pull request fetch that
+// reports each root it is asked for, then waits for release.
+func pullWatch(t *testing.T) (reg *Sessions, alphaRoot, betaRoot string, beta *sessionState, asked chan string, release chan struct{}) {
+	t.Helper()
+	root := t.TempDir()
+	alphaRoot = sessionDir(t, root, "alpha")
+	betaRoot = sessionDir(t, root, "beta")
+	reg = newSessions()
+	alpha := reg.add(alphaRoot, []string{"/bin/cat"}, os.Environ())
+	beta = reg.add(betaRoot, []string{"/bin/cat"}, os.Environ())
+	reg.reveal(alpha)
+
+	asked = make(chan string, 4)
+	release = make(chan struct{})
+	fetch := func(_ context.Context, root string, previous sessionPulls) sessionPulls {
+		asked <- root
+		<-release
+		return previous
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	t.Cleanup(func() { close(release) })
+	go watch(ctx, reg, root, nil, func(string, any) {}, time.Hour, time.Hour, time.Hour, unseenCounts{
+		all: func(string) map[string]int { return map[string]int{} },
+		in:  func(string) (int, bool) { return 0, false },
+	}, fetch)
+	return reg, alphaRoot, betaRoot, beta, asked, release
+}
+
+func expectFetch(t *testing.T, asked chan string, want string) {
+	t.Helper()
+	select {
+	case got := <-asked:
+		if got != want {
+			t.Fatalf("fetched %s, want %s", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("no fetch for %s", want)
+	}
+}
+
+func expectNoFetch(t *testing.T, asked chan string) {
+	t.Helper()
+	select {
+	case got := <-asked:
+		t.Fatalf("fetched %s unprompted", got)
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
+// Without clearing lastPulled, a new pull request waited for the 60 s poll or a session switch.
+func TestAStalePullRequestMarkOnTheShownSessionFetchesAgain(t *testing.T) {
+	reg, alphaRoot, _, _, asked, release := pullWatch(t)
+	expectFetch(t, asked, alphaRoot)
+	release <- struct{}{}
+	expectNoFetch(t, asked)
+
+	reg.pullRequestsChanged(alphaRoot)
+	expectFetch(t, asked, alphaRoot)
+}
+
+// The single-flight guard drops a mark that lands mid-fetch unless the fetch's return picks it up.
+func TestAStalePullRequestMarkMidFetchFetchesAgainWhenItReturns(t *testing.T) {
+	reg, alphaRoot, _, _, asked, release := pullWatch(t)
+	expectFetch(t, asked, alphaRoot)
+	reg.pullRequestsChanged(alphaRoot)
+	expectNoFetch(t, asked)
+
+	release <- struct{}{}
+	expectFetch(t, asked, alphaRoot)
+}
+
+// Pull requests are fetched for the shown session only, so a hidden one's mark waits for arrival.
+func TestAStalePullRequestMarkOnAHiddenSessionWaitsForArrival(t *testing.T) {
+	reg, alphaRoot, betaRoot, beta, asked, release := pullWatch(t)
+	expectFetch(t, asked, alphaRoot)
+	release <- struct{}{}
+
+	reg.pullRequestsChanged(betaRoot)
+	expectNoFetch(t, asked)
+
+	reg.reveal(beta)
+	expectFetch(t, asked, betaRoot)
+}
+
 func TestAColdSessionsTreeNamesItsManifestRunner(t *testing.T) {
 	root := t.TempDir()
 	dir := sessionDir(t, root, "cold")

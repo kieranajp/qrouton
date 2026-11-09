@@ -7,10 +7,14 @@ import (
 	"net/url"
 )
 
+// PullRequest is GitHub's own shape: a merged pull request is also closed.
 type PullRequest struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	URL    string `json:"html_url"`
+	Number   int    `json:"number"`
+	Title    string `json:"title"`
+	URL      string `json:"html_url"`
+	State    string `json:"state"`
+	Draft    bool   `json:"draft"`
+	MergedAt string `json:"merged_at"`
 }
 
 // ListPullRequests names the pull requests opened from one branch of a

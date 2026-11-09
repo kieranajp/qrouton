@@ -36,7 +36,7 @@ func Target(tool string, input json.RawMessage) string {
 	}
 	switch tool {
 	case toolBash:
-		line, _, _ := strings.Cut(strings.TrimSpace(field("command")), "\n")
+		line, _, _ := strings.Cut(strings.TrimSpace(bashCommand(input)), "\n")
 		return line
 	case toolGrep, toolGlob:
 		return field("pattern")

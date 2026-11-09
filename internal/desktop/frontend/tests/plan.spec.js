@@ -273,6 +273,29 @@ test("a checkbox push keeps an unchanged followed screen at its scroll position"
   expect(await page.evaluate(() => window.scrollTop_())).toBe(360);
 });
 
+// The deck's screens share one scroller, so a new screen opened at the depth the last one was left at.
+test("moving to another screen shows the top of it", async ({ page }) => {
+  await page.setViewportSize({ width: 700, height: 420 });
+  await open(page, "?tallboth=true");
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  await page.evaluate(() => window.scrollTo_(360));
+  await expect.poll(() => page.evaluate(() => window.scrollTop_())).toBe(360);
+
+  await page.keyboard.press("ArrowRight");
+  await expect.poll(() => shown(page)).toEqual(["3"]);
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(0);
+
+  await page.evaluate(() => window.scrollTo_(360));
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  await expect.poll(() => shown(page)).toEqual(["2"]);
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(0);
+
+  // Reselecting the screen already shown is not a move, so it keeps the reader's place.
+  await page.evaluate(() => window.scrollTo_(360));
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(360);
+});
+
 const bar = (page) => page.evaluate(() => window.bar());
 
 test("the bar appears when an agent is working and offers the meter's phase", async ({ page }) => {
