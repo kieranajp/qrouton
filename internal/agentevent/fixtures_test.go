@@ -310,3 +310,34 @@ func TestCodexFixtureJoinsChildIdentityOnStart(t *testing.T) {
 		t.Fatalf("decoded %d lifecycle events", count)
 	}
 }
+
+// The PR list refreshes only on this flag, so a miss leaves a new pull request hidden until the next poll.
+func TestReduceFlagsASuccessfulGhPrCreate(t *testing.T) {
+	long := "cd /tmp/" + strings.Repeat("x", TargetLimit) + " && git push -u origin HEAD && gh pr create --draft --fill"
+	for _, tc := range []struct {
+		name, hook, command string
+		want                bool
+	}{
+		{"plain create", HookPostToolUse, "gh pr create --draft --fill", true},
+		{"create past the target limit", HookPostToolUse, long, true},
+		{"create on a later line", HookPostToolUse, "git push -u origin HEAD\ngh pr create --fill", true},
+		{"failed create", HookPostToolUseFailure, "gh pr create --draft", false},
+		{"before it runs", HookPreToolUse, "gh pr create --draft", false},
+		{"echoed words", HookPostToolUse, "echo gh pr created", false},
+		{"another subcommand", HookPostToolUse, "gh pr view 103", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			payload, _ := json.Marshal(map[string]any{
+				"hook_event_name": tc.hook, "tool_name": "Bash",
+				"tool_input": map[string]string{"command": tc.command},
+			})
+			event, err := ReduceIn("claude", "", bytes.NewReader(payload))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if event.PullRequestCreated != tc.want {
+				t.Fatalf("PullRequestCreated = %v, want %v", event.PullRequestCreated, tc.want)
+			}
+		})
+	}
+}

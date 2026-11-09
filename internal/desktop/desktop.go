@@ -286,6 +286,10 @@ func run(r renderer, term *Term, windows *Windows, opts Options, quit func()) er
 					}
 				},
 				agentEvent: func(req workbench.AgentEventRequest) {
+					// Before apply, which drops helper and stale events: the pull request exists either way.
+					if req.PullRequestCreated {
+						reg.pullRequestsChanged(state.root())
+					}
 					notify(state.agents.apply(req))
 				},
 				picker: reg.queuePicker,
