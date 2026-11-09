@@ -1,5 +1,13 @@
+// An estimate of what the menu stands, from the component's own metrics.
+const ITEM = 34;
+const RULE = 11;
+const PADDING = 10;
 // Room left between the menu and the edge it would otherwise run off.
 const MARGIN = 8;
+
+/** menuHeight is what a list of items and rules will stand. */
+export const menuHeight = (items = []) =>
+  items.reduce((total, item) => total + (item === "-" ? RULE : ITEM), PADDING);
 
 /**
  * @param {{x: number, y: number}} point
@@ -14,26 +22,6 @@ export function place(point, size, viewport, scale = 1) {
   const below = point.y + height + MARGIN > viewport.height;
   return {
     left: Math.max(MARGIN, right ? viewport.width - width - MARGIN : point.x),
-    top: Math.max(MARGIN, Math.min(below ? point.y - height : point.y, viewport.height - height - MARGIN)),
-  };
-}
-
-/** @param {HTMLElement} node @param {{x: number, y: number}} point */
-export function fitMenu(node, point) {
-  const menu = /** @type {HTMLElement} */ (node.firstElementChild);
-  node.style.visibility = "hidden";
-  const measure = () => {
-    const at = place(point, menu.getBoundingClientRect(), { width: window.innerWidth, height: window.innerHeight });
-    node.style.left = `${at.left}px`;
-    node.style.top = `${at.top}px`;
-    node.style.visibility = "visible";
-  };
-  const observer = new ResizeObserver(measure);
-  observer.observe(menu);
-  window.addEventListener("resize", measure);
-  measure();
-  return {
-    update(next) { point = next; measure(); },
-    destroy() { observer.disconnect(); window.removeEventListener("resize", measure); },
+    top: Math.max(MARGIN, below ? point.y - height : point.y),
   };
 }

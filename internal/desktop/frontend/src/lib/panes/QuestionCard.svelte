@@ -1,5 +1,4 @@
 <script>
-  import NoteEditor from "./NoteEditor.svelte";
   import CapsLabel from "../core/CapsLabel.svelte";
   import { render } from "./markdown.js";
 
@@ -66,7 +65,21 @@
       </button>
     {/each}
   </div>
-  <NoteEditor text={draft.note} label={question.options.length > 0 ? "Note, or an answer of your own" : "Answer"} disabled={readonly} {onNote} {onCommit} />
+  <label class="note">
+    <CapsLabel tone="dim">{question.options.length > 0 ? "Note, or an answer of your own" : "Answer"}</CapsLabel>
+    <textarea
+      rows="2"
+      value={draft.note}
+      disabled={readonly}
+      oninput={(event) => onNote?.(event.currentTarget.value)}
+      onblur={() => onCommit?.()}
+      onkeydown={(event) => {
+        if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
+          event.preventDefault();
+          onCommit?.();
+        }
+      }}></textarea>
+  </label>
   {#if message}
     <p class="message" class:failed={state === "failed"} role="status">{message}</p>
   {/if}
@@ -224,4 +237,26 @@
     text-transform: uppercase;
   }
 
+  .note {
+    display: flex;
+    flex-direction: column;
+    gap: calc(6px * var(--ui-scale));
+  }
+
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: calc(52px * var(--ui-scale));
+    padding: calc(8px * var(--ui-scale)) calc(10px * var(--ui-scale));
+    border: var(--border-width) solid var(--border-default);
+    background: var(--surface-terminal);
+    color: var(--text-primary);
+    font: var(--machine-md);
+    resize: vertical;
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent-action);
+  }
 </style>

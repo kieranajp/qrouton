@@ -16,37 +16,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-func TestAuditConsumersExpandTheSameCanonicalJudgmentPolicy(t *testing.T) {
-	policy, err := embedded.ReadFile("audit-policy.md")
-	if err != nil {
-		t.Fatal(err)
-	}
-	loader := NewEmbeddedLoader()
-	checker, err := loader.Load(context.Background(), "agents/audit-checker")
-	if err != nil {
-		t.Fatal(err)
-	}
-	audit, err := loader.Load(context.Background(), "skills/qrouton-audit")
-	if err != nil {
-		t.Fatal(err)
-	}
-	shape := ""
-	for _, file := range audit.Files {
-		if file.Path == "references/audit-shape.md" {
-			shape = string(file.Content)
-		}
-	}
-	for name, consumer := range map[string]string{"checker": string(checker.Content), "shape": shape} {
-		if !strings.Contains(consumer, strings.TrimSpace(string(policy))) || strings.Contains(consumer, "{{audit-") {
-			t.Fatalf("%s did not expand the canonical audit policy", name)
-		}
-	}
-	template, err := Template("audit")
-	if err != nil || strings.Contains(string(template), "{{audit-") {
-		t.Fatalf("unexpanded audit template: %s, %v", template, err)
-	}
-}
-
 // embeddedPromptIDs is every prompt the binary carries, in the order List sorts
 // them. Naming them is what makes an addition or a loss legible in the failure.
 var embeddedPromptIDs = []string{

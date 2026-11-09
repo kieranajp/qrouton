@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os/exec"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/codex"
@@ -20,7 +22,7 @@ type Adapter struct {
 }
 
 func (a Adapter) Version(ctx context.Context) string {
-	output, err := boundedCommand(ctx, a.Bin, versionFlag).CombinedOutput()
+	output, err := exec.CommandContext(ctx, a.Bin, versionFlag).CombinedOutput()
 	if err != nil {
 		return err.Error()
 	}
@@ -40,7 +42,10 @@ func (a Adapter) RunTurn(
 		return nil, "", session, err
 	}
 
-	cmd := boundedCommand(ctx, a.Bin, args...)
+	cmd := exec.CommandContext(ctx, a.Bin, args...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = runnerWaitDelay
 	cmd.Dir = workspace
 	// The prompt travels over stdin, not argv: judge prompts embed candidate
 	// artifacts and diffs, and a single exec argument caps out at ~128KiB on

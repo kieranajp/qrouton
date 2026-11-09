@@ -7,14 +7,6 @@ import (
 	"testing"
 )
 
-func TestFilenameRecognizesSupportedMarkdownExtensions(t *testing.T) {
-	for name, want := range map[string]bool{"note.md": true, "note.MD": true, "note.MarkDown": true, "note.markdown": true, "note.md.bak": false, "note.txt": false, "note": false} {
-		if got := IsFilename(name); got != want {
-			t.Errorf("IsFilename(%q) = %v, want %v", name, got, want)
-		}
-	}
-}
-
 func TestTitleIsTheHeadingTheDocumentOpensWith(t *testing.T) {
 	for _, tc := range []struct {
 		name  string

@@ -17,8 +17,6 @@ const params = new URLSearchParams(location.search);
 
 window.wailsCall = async (name) => {
   if (!name.endsWith(".Note")) return undefined;
-  if (params.has("pending")) return new Promise((resolve) => (window.answerNote = resolve));
-  if (params.has("fail")) throw new Error("snapshot unavailable");
   return params.get("blank") ? { index: 0, total: 0, title: "", html: "" } : RETAINED;
 };
 

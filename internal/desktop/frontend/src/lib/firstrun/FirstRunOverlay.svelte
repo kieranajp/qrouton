@@ -9,52 +9,12 @@
   import ThoughtsScreen from "./ThoughtsScreen.svelte";
   import Welcome from "./Welcome.svelte";
   import { firstRun } from "./firstrun.svelte.js";
-  import { back, blocking, caps, icons, pip, primary, screenKey, title, total } from "./screens.js";
+  import { back, blocking, caps, icons, pip, primary, title, total } from "./screens.js";
 
   const flow = firstRun();
 
-  /** @type {Record<import("./screens.js").Screen, import("svelte").Snippet>} */
-  const renderers = { welcome, session, panels, orgs, root, thoughts, ollama };
-
   let blocked = $derived(blocking(flow.step, flow.form.orgs, flow.orgInput));
 </script>
-
-{#snippet welcome()}
-  <Welcome />
-{/snippet}
-
-{#snippet session()}
-  <SessionScreen />
-{/snippet}
-
-{#snippet panels()}
-  <PanelsScreen />
-{/snippet}
-
-{#snippet orgs()}
-  <OrgsScreen
-    orgs={flow.form.orgs}
-    bind:orgInput={flow.orgInput}
-    login={flow.login}
-    onAddOrg={flow.add}
-    onRemoveOrg={flow.remove} />
-{/snippet}
-
-{#snippet root()}
-  <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} onChoose={flow.choose} />
-{/snippet}
-
-{#snippet thoughts()}
-  <ThoughtsScreen
-    bind:thoughts={flow.thoughts}
-    derived={flow.derivedThoughts}
-    error={flow.fields.thoughts ?? ""}
-    onChoose={flow.chooseThoughts} />
-{/snippet}
-
-{#snippet ollama()}
-  <OllamaScreen />
-{/snippet}
 
 <Dialog
   pips={total}
@@ -74,7 +34,30 @@
     <CapsLabel>{caps(flow.step)}</CapsLabel>
   {/if}
 
-  {@render renderers[screenKey(flow.step)]()}
+  {#if flow.step === 0}
+    <Welcome />
+  {:else if flow.step === 1}
+    <SessionScreen />
+  {:else if flow.step === 2}
+    <PanelsScreen />
+  {:else if flow.step === 3}
+    <OrgsScreen
+      orgs={flow.form.orgs}
+      bind:orgInput={flow.orgInput}
+      login={flow.login}
+      onAddOrg={flow.add}
+      onRemoveOrg={flow.remove} />
+  {:else if flow.step === 4}
+    <RootScreen bind:root={flow.form.root} error={flow.fields.root ?? ""} onChoose={flow.choose} />
+  {:else if flow.step === 5}
+    <ThoughtsScreen
+      bind:thoughts={flow.thoughts}
+      derived={flow.derivedThoughts}
+      error={flow.fields.thoughts ?? ""}
+      onChoose={flow.chooseThoughts} />
+  {:else}
+    <OllamaScreen />
+  {/if}
 </Dialog>
 
 <style>

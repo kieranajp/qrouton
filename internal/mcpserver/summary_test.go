@@ -176,11 +176,8 @@ func TestSetSummaryRejectsBlankText(t *testing.T) {
 }
 
 func TestSummarySchemaNamesTheLimit(t *testing.T) {
-	tool := listedTools(t, newMCPServer(t.TempDir(), testEditor, &fakeHost{}, session.ModeRPI))[toolSetSummary]
-	schema := structuredOutput(t, tool.InputSchema)
-	properties := schema["properties"].(map[string]any)
-	got, _ := properties["summary"].(map[string]any)["description"].(string)
-	if !strings.Contains(got, strconv.Itoa(summaryLimit)) {
+	field, _ := reflect.TypeOf(setSummaryInput{}).FieldByName("Summary")
+	if got := field.Tag.Get("jsonschema"); !strings.Contains(got, strconv.Itoa(summaryLimit)) {
 		t.Errorf("summary schema = %q, want it to name %d", got, summaryLimit)
 	}
 }

@@ -10,21 +10,6 @@ test.beforeEach(async ({ page }) => {
   await page.waitForFunction(() => Boolean(window.defaults));
 });
 
-test("menu placement follows rendered sizing and viewport changes", async ({ page }) => {
-  await page.setViewportSize({ width: 640, height: 480 });
-  await page.addStyleTag({ content: ":root { --ui-scale: 1.6; } .menu .item { padding-top: 18px; padding-bottom: 18px; }" });
-  await page.locator("#field").evaluate((element) => element.dispatchEvent(new MouseEvent("contextmenu", {
-    clientX: 635, clientY: 475, bubbles: true, cancelable: true,
-  })));
-  const inside = () => page.locator(".menu").evaluate((element) => {
-    const box = element.getBoundingClientRect();
-    return box.left >= 0 && box.top >= 0 && box.right <= innerWidth && box.bottom <= innerHeight;
-  });
-  await expect.poll(inside).toBe(true);
-  await page.setViewportSize({ width: 540, height: 420 });
-  await expect.poll(inside).toBe(true);
-});
-
 // The whole point: the webview's own menu names a browser the user never opened.
 test("every right click is the workbench's, never the webview's", async ({ page }) => {
   for (const id of ["#field", "#prose", "#link", "#chrome", "#terminal"]) {

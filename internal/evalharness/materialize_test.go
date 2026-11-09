@@ -1,7 +1,6 @@
 package evalharness
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -76,26 +75,5 @@ func TestCopyTreeProducesIndependentFixture(t *testing.T) {
 	}
 	if string(content) != "original" {
 		t.Fatalf("source fixture changed: %q", content)
-	}
-}
-
-func TestSnapshotStampingIgnoresSubsequentSourceEdits(t *testing.T) {
-	source, snapshot, workspace := t.TempDir(), t.TempDir(), t.TempDir()
-	writeTestFile(t, filepath.Join(source, "orchestrator.md"), "# Recorded instructions\n")
-	loader, before, err := snapshotPrompts(source, snapshot)
-	if err != nil {
-		t.Fatal(err)
-	}
-	writeTestFile(t, filepath.Join(source, "orchestrator.md"), "# Concurrent source edit\n")
-	if err := prompts.Stamp(context.Background(), workspace, loader, prompts.OrchestratorAsset); err != nil {
-		t.Fatal(err)
-	}
-	content, err := os.ReadFile(filepath.Join(workspace, "AGENTS.md"))
-	if err != nil || !strings.Contains(string(content), "Recorded instructions") || strings.Contains(string(content), "Concurrent source edit") {
-		t.Fatalf("snapshot stamp = %q, %v", content, err)
-	}
-	after, err := HashTree(snapshot)
-	if err != nil || before != after {
-		t.Fatalf("snapshot hash changed: %q, %q, %v", before, after, err)
 	}
 }

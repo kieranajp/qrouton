@@ -7,16 +7,15 @@ const BACK = "Back";
 
 const NEEDS_OWNER = "Add at least one organisation or username to search.";
 
-/** @typedef {(typeof SCREENS)[number]["key"]} Screen */
-const SCREENS = /** @type {const} */ ([
-  { key: "welcome", caps: "", primary: "Show me", back: false },
-  { key: "session", caps: "The one idea to know", primary: "Next", back: true },
-  { key: "panels", caps: "Where you will spend your time", primary: "Set it up", back: true },
-  { key: "orgs", caps: "Question 1 of 3", primary: "Next", back: true, owners: true, field: "orgs" },
-  { key: "root", caps: "Question 2 of 3", primary: "Next", back: true, field: "root" },
-  { key: "thoughts", caps: "Question 3 of 3", primary: "Next", back: true, field: "thoughts" },
-  { key: "ollama", caps: "Optional", primary: "Find my repositories", back: true },
-]);
+const SCREENS = [
+  { caps: "", primary: "Show me", back: false },
+  { caps: "The one idea to know", primary: "Next", back: true },
+  { caps: "Where you will spend your time", primary: "Set it up", back: true },
+  { caps: "Question 1 of 3", primary: "Next", back: true, owners: true, field: "orgs" },
+  { caps: "Question 2 of 3", primary: "Next", back: true, field: "root" },
+  { caps: "Question 3 of 3", primary: "Next", back: true, field: "thoughts" },
+  { caps: "Optional", primary: "Find my repositories", back: true },
+];
 
 export const title = "Welcome to qrouton";
 
@@ -28,8 +27,6 @@ export const last = total - 1;
 const screen = (step = 0) => SCREENS[step] ?? SCREENS[0];
 
 /** caps is the label above the screen's heading; the first screen has none. */
-export const screenKey = (step = 0) => screen(step).key;
-
 export const caps = (step = 0) => screen(step).caps;
 
 export const primary = (step = 0) => screen(step).primary;
@@ -47,11 +44,9 @@ export const pip = (step = 0) => Math.min(Math.max(step, 0), last);
  * @param {number} [step]
  * @param {string[]} [orgs]
  * @param {string} [input] */
-export const blocking = (step = 0, orgs = [], input = "") => {
-  const selected = screen(step);
-  return "owners" in selected && selected.owners && addOrg(orgs, input).length === 0 ? NEEDS_OWNER : "";
-};
+export const blocking = (step = 0, orgs = [], input = "") =>
+  screen(step).owners && addOrg(orgs, input).length === 0 ? NEEDS_OWNER : "";
 
 /** stepFor is the screen that asks a refused field, or -1 when none does.
  * @param {string} [field] */
-export const stepFor = (field = "") => SCREENS.findIndex((s) => "field" in s && s.field === field);
+export const stepFor = (field = "") => SCREENS.findIndex((s) => s.field === field);

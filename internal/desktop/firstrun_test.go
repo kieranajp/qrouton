@@ -14,17 +14,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/status"
 )
 
-func TestFirstRunProspectiveThoughtsDefaultUsesCanonicalPathRules(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	f := &FirstRun{}
-	for root, want := range map[string]string{"": "", " / ": "/thoughts", " ~/work/../sessions/ ": filepath.Join(home, "sessions", "thoughts")} {
-		if got := f.ThoughtsDefault(root); got != want {
-			t.Errorf("ThoughtsDefault(%q) = %q, want %q", root, got, want)
-		}
-	}
-}
-
 // firstRunStubs counts the relaunch and the teardown, and records the order they
 // ran in: quitting before a live successor answered would leave no window at all.
 type firstRunStubs struct {

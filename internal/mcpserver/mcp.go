@@ -7,11 +7,9 @@ import (
 
 	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/kieranajp/qrouton/internal/artefact"
-	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
-	"github.com/kieranajp/qrouton/prompts"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -19,8 +17,6 @@ type focusAssetInput struct {
 	Name  string `json:"name" jsonschema:"Name of an open asset gallery"`
 	Index int    `json:"index" jsonschema:"One-based position in the gallery numbered manifest"`
 }
-
-type OpenFileInput = openFileInput
 
 type openFileInput struct {
 	Path       string `json:"path" jsonschema:"Path to an existing file in the qrouton session"`
@@ -87,7 +83,7 @@ type createArtefactInput struct {
 
 type setSummaryInput struct {
 	Stage   string `json:"stage" jsonschema:"The stage whose lead you are about to spawn: research, plan or implement. Spec work is plan, and audit work is research"`
-	Summary string `json:"summary"`
+	Summary string `json:"summary" jsonschema:"One or two plain sentences, at most 140 characters, on what this session is building and where"`
 }
 
 type setDigestInput struct {
@@ -103,7 +99,7 @@ type notifyInput struct {
 // is silently ignored and the picker falls back to its first entry.
 type escalateInput struct {
 	Name         string `json:"name" jsonschema:"the name for this piece of work"`
-	BranchPrefix string `json:"branch_prefix,omitempty"`
+	BranchPrefix string `json:"branch_prefix,omitempty" jsonschema:"one of feat, fix, chore, refactor, docs, test"`
 }
 
 // textResult wraps a message as an MCP text block. Each tool pairs it with its
@@ -140,40 +136,6 @@ func addToolWithSchema[In any](server *mcp.Server, name, description, key string
 			}
 			return textResult(text), output, nil
 		})
-}
-
-func AddWorkflowTools(server *mcp.Server, root string, templateFor func(string) ([]byte, error), openFile func(context.Context, OpenFileInput) (string, *workbench.DocumentViewport, error)) {
-	addTool(server, ToolOpenFile, descOpenFile, keyMessage, openFile)
-	addToolWithSchema(server, toolSetSummary, descSetSummary, keyMessage, setSummarySchema(),
-		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
-			return setSummary(root, input)
-		}))
-	addToolWithSchema(server, toolCreateArtefact, descCreateArtefact, keyMessage, createArtefactSchema(),
-		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
-			return createArtefact(root, input, templateFor)
-		}))
-	addToolWithSchema(server, toolSetDigest, descSetDigest, keyMessage, setDigestSchema(),
-		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
-			return setDigest(root, input)
-		}))
-}
-
-func setSummarySchema() *jsonschema.Schema {
-	schema, err := jsonschema.For[setSummaryInput](nil)
-	if err != nil {
-		panic(err)
-	}
-	schema.Properties["summary"].Description = fmt.Sprintf(descSummaryField, summaryLimit)
-	return schema
-}
-
-func escalateSchema() *jsonschema.Schema {
-	schema, err := jsonschema.For[escalateInput](nil)
-	if err != nil {
-		panic(err)
-	}
-	schema.Properties["branch_prefix"].Description = fmt.Sprintf(descBranchPrefix, strings.Join(assembly.Prefixes(), ", "))
-	return schema
 }
 
 func setDigestSchema() *jsonschema.Schema {
@@ -219,12 +181,24 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return textResult(message), out, nil
 		})
 
-	AddWorkflowTools(server, root, prompts.Template, windows.openFile)
+	addTool(server, ToolOpenFile, descOpenFile, keyMessage, windows.openFile)
 	addTool(server, toolFocusAsset, descFocusAsset, keyMessage, messageOnly(windows.focusAsset))
 	addTool(server, toolOpenAssets, descOpenAssets, keyMessage, messageOnly(windows.openAssets))
 	addTool(server, toolSharePage, descSharePage, keyMessage,
 		messageOnly(func(_ context.Context, input sharePageInput) (string, error) {
 			return sharePage(root, input)
+		}))
+	addTool(server, toolSetSummary, descSetSummary, keyMessage,
+		messageOnly(func(_ context.Context, input setSummaryInput) (string, error) {
+			return setSummary(root, input)
+		}))
+	addToolWithSchema(server, toolCreateArtefact, descCreateArtefact, keyMessage, createArtefactSchema(),
+		messageOnly(func(_ context.Context, input createArtefactInput) (string, error) {
+			return createArtefact(root, input)
+		}))
+	addToolWithSchema(server, toolSetDigest, descSetDigest, keyMessage, setDigestSchema(),
+		messageOnly(func(_ context.Context, input setDigestInput) (string, error) {
+			return setDigest(root, input)
 		}))
 	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
 	mcp.AddTool(server, &mcp.Tool{Name: toolReadWindow, Description: descReadWindow},
@@ -245,7 +219,7 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 	// Escalation is the assistant's way out of its own mode. An RPI session is
 	// already where it leads, so the tool is not offered there at all.
 	if mode == session.ModeAssistant {
-		addToolWithSchema(server, toolEscalate, descEscalate, keyMessage, escalateSchema(), messageOnly(windows.escalate))
+		addTool(server, toolEscalate, descEscalate, keyMessage, messageOnly(windows.escalate))
 	}
 
 	// list_windows is the one tool whose payload is a list rather than a line,

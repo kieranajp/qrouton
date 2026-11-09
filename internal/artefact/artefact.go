@@ -38,10 +38,6 @@ var Kinds = func() []string {
 // Create writes a new artefact of the given kind into the session and returns
 // its path relative to the session root.
 func Create(sessionRoot, kind, title string, now time.Time) (string, error) {
-	return CreateWithTemplates(sessionRoot, kind, title, now, prompts.Template)
-}
-
-func CreateWithTemplates(sessionRoot, kind, title string, now time.Time, templateFor func(string) ([]byte, error)) (string, error) {
 	if !slices.Contains(Kinds, kind) {
 		return "", fmt.Errorf("%w %q: use one of %s", ErrUnknownKind, kind, strings.Join(Kinds, ", "))
 	}
@@ -49,7 +45,7 @@ func CreateWithTemplates(sessionRoot, kind, title string, now time.Time, templat
 	if !ok {
 		return "", fmt.Errorf("%w %q", ErrUnknownKind, kind)
 	}
-	template, err := templateFor(kind)
+	template, err := prompts.Template(kind)
 	if err != nil {
 		return "", err
 	}

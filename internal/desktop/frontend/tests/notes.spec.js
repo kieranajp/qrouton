@@ -12,23 +12,6 @@ const open = async (page, query = "") => {
   await page.locator(".notes").waitFor();
 };
 
-test("an event wins over a late presenter snapshot", async ({ page }) => {
-  await open(page, "?pending=1");
-  await page.waitForFunction(() => Boolean(window.answerNote));
-  await page.evaluate((note) => {
-    window.pushNote(note);
-    window.answerNote({ index: 0, total: 7, title: "Stale snapshot", html: "" });
-  }, NEXT);
-  await expect(page.locator(".title")).toHaveText("Fourth");
-});
-
-test("a failed presenter snapshot keeps the empty note until an event", async ({ page }) => {
-  await open(page, "?fail=1");
-  await expect(page.locator(".title")).toHaveText("");
-  await page.evaluate((note) => window.pushNote(note), NEXT);
-  await expect(page.locator(".title")).toHaveText("Fourth");
-});
-
 test("the page opens on the note the workbench was already holding", async ({ page }) => {
   await open(page);
   await expect(page.locator(".title")).toHaveText("Third");

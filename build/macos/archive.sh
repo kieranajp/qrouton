@@ -7,7 +7,7 @@ app="$dist/qrouton.app"
 version=${VERSION:?run through make, or set VERSION}
 version=${version#v}
 
-if ! printf '%s\n' "$version" | grep -Eqf "$root/internal/versionformat/grammar.txt"; then
+if ! printf '%s\n' "$version" | grep -Eq '^[0-9]+([.][0-9]+){0,2}$'; then
 	printf 'VERSION must be a numeric macOS version such as 1.2.3 (got %s)\n' "$version" >&2
 	exit 1
 fi

@@ -15,10 +15,6 @@ import (
 )
 
 func CopyTree(src, dst string) error {
-	return copyTree(src, dst, true)
-}
-
-func copyTree(src, dst string, preserveLinks bool) error {
 	return filepath.WalkDir(src, func(path string, entry fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
@@ -34,20 +30,11 @@ func copyTree(src, dst string, preserveLinks bool) error {
 			return os.MkdirAll(destination, 0o755)
 		}
 		if entry.Type()&os.ModeSymlink != 0 {
-			if preserveLinks {
-				target, err := os.Readlink(path)
-				if err != nil {
-					return err
-				}
-				return os.Symlink(target, destination)
-			}
-			info, err := os.Stat(path)
+			target, err := os.Readlink(path)
 			if err != nil {
-				return fmt.Errorf("%w: %s: %w", ErrPromptLink, path, err)
+				return err
 			}
-			if !info.Mode().IsRegular() {
-				return fmt.Errorf("%w: %s", ErrPromptLink, path)
-			}
+			return os.Symlink(target, destination)
 		}
 
 		return copyFile(path, destination)
@@ -77,26 +64,20 @@ func copyFile(src, dst string) error {
 // MaterializeAssets stamps a hashed prompt snapshot with the production launch path.
 // Evals always give the orchestrator prompt ownership of discovery files.
 func MaterializeAssets(assetsDir, workspace, snapshot string) (string, error) {
-	loader, hash, err := snapshotPrompts(assetsDir, snapshot)
-	if err != nil {
+	if err := CopyTree(assetsDir, snapshot); err != nil {
 		return "", err
-	}
-	if err := prompts.Stamp(context.Background(), workspace, loader, prompts.OrchestratorAsset); err != nil {
-		return "", err
-	}
-	return hash, nil
-}
-
-func snapshotPrompts(assetsDir, snapshot string) (*prompts.FSLoader, string, error) {
-	if err := copyTree(assetsDir, snapshot, false); err != nil {
-		return nil, "", err
 	}
 
 	hash, err := HashTree(snapshot)
 	if err != nil {
-		return nil, "", err
+		return "", err
 	}
-	return prompts.NewFSLoader(os.DirFS(snapshot)), hash, nil
+
+	loader := prompts.NewFSLoader(os.DirFS(assetsDir))
+	if err := prompts.Stamp(context.Background(), workspace, loader, prompts.OrchestratorAsset); err != nil {
+		return "", err
+	}
+	return hash, nil
 }
 
 func HashTree(root string) (string, error) {

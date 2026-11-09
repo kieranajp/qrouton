@@ -16,7 +16,12 @@ section's blockquote with its content. A tell section with no findings says
 `tells:` lists the slugs of the tells the audit runs, in tell order, as a YAML
 list:
 
-{{audit-tell-table}}
+| Slug | Section |
+| --- | --- |
+| `duplicated` | `## Duplicated behaviour or facts` |
+| `dead` | `## Dead or needlessly defensive code` |
+| `homegrown` | `## Homegrown library or platform behaviour` |
+| `volkswagen` | `## Tests that pass or fail for the wrong reason`; an older audit's `## Tests that cannot fail or pass for the wrong reason` still reads as this tell |
 
 The lead deletes the slug and the section of each tell not chosen, so an audit
 of tells 2 and 3 carries `tells: [dead, homegrown]` and neither section of
@@ -140,7 +145,26 @@ finding, filed under the tell of the code the claim justifies.
 
 ## The five-step check
 
-{{audit-policy}}
+1. Is there a tie: a type, a test, a generator or a build step that fails or
+   regenerates when the copies drift?
+2. Is there a reason written at the site that still holds?
+3. Can the guarded case occur?
+4. Do the copies agree today, and does each do what its own comment says?
+5. Does a live caller in shipped code reach it?
+
+How the steps decide:
+
+- Copies that disagree today are rot, whatever the intent. A copy that
+  contradicts its own comment is rot only when the code is wrong or when
+  a reader acting on the comment would break something.
+- Otherwise a copy with a tie, or with a written reason that still holds, is
+  deliberate. A reason that no longer holds is rot.
+- A guard is rot unless a live producer can bring about the case it guards.
+  A guard on an I/O boundary is never rot.
+- Code that no live caller in shipped code reaches, once the tool's traps are
+  ruled out, is rot whatever the other steps say. Callers in tests, stories and
+  fixtures do not count. Exported API that other modules consume counts as
+  reached.
 
 A reason counts only when it is written at the site: a comment, a doc, or a
 commit message for those lines or beside them. A reason the auditor supplies is not a reason.

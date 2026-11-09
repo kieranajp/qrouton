@@ -2,7 +2,7 @@
 kind: audit
 title: <title>
 target:
-tells: [{{audit-tell-slugs}}]
+tells: [duplicated, dead, homegrown, volkswagen]
 ---
 
 # <title>
@@ -11,7 +11,21 @@ tells: [{{audit-tell-slugs}}]
 
 > <what was audited, how many findings per tell, then the findings by impact: one sentence per high and medium finding, high first>
 
-{{audit-tell-sections}}
+## Duplicated behaviour or facts
+
+> <findings where one behaviour or fact is expressed more than one way, kept in step only by convention>
+
+## Dead or needlessly defensive code
+
+> <findings where code is unreachable, or guards a case that cannot occur>
+
+## Homegrown library or platform behaviour
+
+> <findings where code redoes what a well-known library or the platform provides, installed or not>
+
+## Tests that pass or fail for the wrong reason
+
+> <findings where a test never runs, cannot fail, dodges the code it names, was weakened to pass, restates the code so a harmless change breaks it or repeats another test, or where shipped code behaves differently under test>
 
 ## Checked and deliberate
 

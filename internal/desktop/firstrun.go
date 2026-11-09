@@ -66,14 +66,6 @@ func (f *FirstRun) ChooseRoot() (string, error) {
 	return f.choose()
 }
 
-func (f *FirstRun) ThoughtsDefault(root string) string {
-	root = strings.TrimSpace(root)
-	if root == "" {
-		return ""
-	}
-	return config.DefaultThoughtsRoot(config.ExpandHome(root))
-}
-
 // Save writes both answers and the welcomed marker together, then either drops
 // the gate or replaces the workbench. The marker reaches the live pointer only
 // when this process is carrying on, so a failed relaunch leaves the gate up

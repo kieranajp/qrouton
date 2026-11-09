@@ -24,7 +24,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: internal/desktop/frontend/package-lock.json
-      - uses: ./.github/actions/setup-linux
+      - run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev dpkg-dev desktop-file-utils
       - name: Build and verify Ubuntu package
         run: make deb-check VERSION="$RELEASE_VERSION"
       - name: Upload Linux release assets

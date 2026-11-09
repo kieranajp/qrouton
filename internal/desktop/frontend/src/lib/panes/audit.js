@@ -9,6 +9,7 @@ export const CONFIDENCES = ["high", "medium", "low"];
 export const IMPACTS = ["high", "medium", "low"];
 
 const FINDING = /^(F\d+)\s*[—–:-]\s*(\S.*?)\s*$/;
+const FIELD = /^(Tell|Locations|Evidence|Verdict|Proposed fix|Behaviour risk|Impact|Confidence|Source):[ \t]?(.*)$/;
 const TRIAGE = /^Triage:[ \t]?(.*)$/;
 const STEP = /\bstep\s*(10|[1-9])\b/i;
 const KEYS = {
@@ -22,8 +23,6 @@ const KEYS = {
   Confidence: "confidence",
   Source: "source",
 };
-const FIELD = new RegExp(`^(${Object.keys(KEYS).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")}):[ \\t]?(.*)$`);
-
 
 /** @param {string} line */
 const isChoice = (line) => CHOICES.includes(line.trim());

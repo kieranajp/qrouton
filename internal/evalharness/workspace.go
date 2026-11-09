@@ -14,14 +14,18 @@ import (
 )
 
 func initializeRepositories(workspace string) (map[string]string, error) {
-	manifest, err := readManifest(filepath.Join(workspace, manifestName))
+	root := filepath.Join(workspace, srcDirName)
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
 	}
 
 	baselines := make(map[string]string)
-	for _, checkout := range manifest.Repos {
-		repo := checkout.Dir(workspace)
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		repo := filepath.Join(root, entry.Name())
 		commands := [][]string{
 			{gitBin, gitInitCmd, gitQuietFlag},
 			{gitBin, gitConfigCmd, gitUserEmailKey, fixtureUserEmail},
@@ -40,7 +44,7 @@ func initializeRepositories(workspace string) (map[string]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("resolve baseline in %s: %w: %s", repo, err, head)
 		}
-		baselines[checkout.Name] = head
+		baselines[entry.Name()] = head
 	}
 	return baselines, nil
 }
@@ -86,11 +90,7 @@ func collectArtifacts(workspace string) ([]Artifact, error) {
 func collectDiffs(workspace string, baselines map[string]string) map[string]string {
 	diffs := make(map[string]string, len(baselines))
 	for repo, baseline := range baselines {
-		repoDir, err := repoDir(workspace, repo)
-		if err != nil {
-			diffs[repo] = fmt.Sprintf(diffFailedFormat, err, "")
-			continue
-		}
+		repoDir := repoDir(workspace, repo)
 		ctx := context.Background()
 		diff, err := commandOutput(ctx, repoDir, gitBin, gitDiffCmd, gitNoExtDiffFlag, baseline)
 		if err != nil {

@@ -22,7 +22,7 @@ jobs:
           node-version: 22
           cache: npm
           cache-dependency-path: internal/desktop/frontend/package-lock.json
-      - uses: ./.github/actions/setup-linux
+      - run: sudo apt-get update && sudo apt-get install -y build-essential pkg-config libgtk-4-dev libwebkitgtk-6.0-dev dpkg-dev desktop-file-utils
       - run: cd internal/desktop/frontend && npm ci && npx playwright install chromium
       - run: make check
       - run: make deb-check VERSION=0.0.0

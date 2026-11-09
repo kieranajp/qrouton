@@ -69,7 +69,7 @@ func audited(path string) bool {
 	return true
 }
 
-type auditTell = prompts.AuditTell
+type auditTell struct{ slug, heading, legacy string }
 
 // AuditTells is the headings of the tells an audit chose, in tell order, each as
 // the document spells it: a renamed tell keeps its old heading in an audit that
@@ -81,9 +81,9 @@ func AuditTells(text string) []string {
 	}
 	var headings []string
 	for _, tell := range chosenTells(text) {
-		heading := tell.Heading
-		if tell.Legacy != "" && present[strings.ToLower(tell.Legacy)] && !present[strings.ToLower(tell.Heading)] {
-			heading = tell.Legacy
+		heading := tell.heading
+		if tell.legacy != "" && present[strings.ToLower(tell.legacy)] && !present[strings.ToLower(tell.heading)] {
+			heading = tell.legacy
 		}
 		headings = append(headings, heading)
 	}
@@ -108,7 +108,7 @@ func chosenTells(text string) []auditTell {
 		return tellsNamed(nil)
 	}
 	for _, slug := range slugs {
-		if !slices.ContainsFunc(auditTells, func(tell auditTell) bool { return tell.Slug == slug }) {
+		if !slices.ContainsFunc(auditTells, func(tell auditTell) bool { return tell.slug == slug }) {
 			return tellsNamed(nil)
 		}
 	}
@@ -119,7 +119,7 @@ func chosenTells(text string) []auditTell {
 func tellsNamed(slugs []string) []auditTell {
 	var tells []auditTell
 	for _, tell := range auditTells {
-		if slugs == nil || slices.Contains(slugs, tell.Slug) {
+		if slugs == nil || slices.Contains(slugs, tell.slug) {
 			tells = append(tells, tell)
 		}
 	}

@@ -12,10 +12,6 @@
   /** @type {{panel: ReturnType<typeof import("./settings.svelte.js").settings>}} */
   let { panel } = $props();
 
-  /** @type {Record<import("./tabs.js").SettingsTab, import("svelte").Snippet>} */
-  const renderers = { general, github, folders, search, stickers, advanced };
-  let selected = $derived(TABS.find((tab) => tab.key === panel.tab)?.key ?? "advanced");
-
   let errored = $derived(erroredTabs(panel.fields));
   /** @type {Record<string, HTMLButtonElement>} */
   const buttons = {};
@@ -31,13 +27,6 @@
     buttons[next]?.focus();
   }
 </script>
-
-{#snippet general()}<GeneralTab {panel} />{/snippet}
-{#snippet github()}<GitHubTab {panel} />{/snippet}
-{#snippet folders()}<FoldersTab {panel} />{/snippet}
-{#snippet search()}<SearchTab />{/snippet}
-{#snippet stickers()}<StickersTab {panel} />{/snippet}
-{#snippet advanced()}<AdvancedTab {panel} />{/snippet}
 
 <div class="settings">
   <nav class="index">
@@ -58,7 +47,7 @@
           <span class="label">{item.label}</span>
           {#if errored.has(item.key)}
             <span class="marker failed" role="img" aria-label="has an error"></span>
-          {:else if "restart" in item && item.restart}
+          {:else if item.restart}
             <span class="marker restart" title="Applies after qrouton restarts"><Icon name="refresh" /></span>
           {/if}
         </button>
@@ -68,7 +57,19 @@
   </nav>
 
   <div class="panel" id="settings-panel" role="tabpanel" aria-labelledby="settings-tab-{panel.tab}">
-    {@render renderers[selected]()}
+    {#if panel.tab === "general"}
+      <GeneralTab {panel} />
+    {:else if panel.tab === "github"}
+      <GitHubTab {panel} />
+    {:else if panel.tab === "folders"}
+      <FoldersTab {panel} />
+    {:else if panel.tab === "search"}
+      <SearchTab />
+    {:else if panel.tab === "stickers"}
+      <StickersTab {panel} />
+    {:else}
+      <AdvancedTab {panel} />
+    {/if}
   </div>
 </div>
 

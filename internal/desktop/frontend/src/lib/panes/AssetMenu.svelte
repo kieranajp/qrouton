@@ -3,8 +3,9 @@
   import { MEDIA_KINDS } from "../bridge/generated.js";
   import { MENU_WIDTH } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
-  import { fitMenu } from "../menu.js";
+  import { menuHeight, place } from "../menu.js";
   import { macOS } from "../platform.js";
+  import { uiScale } from "../scale.svelte.js";
   import { copyAsset, revealPath } from "../sessions.js";
   import { copyText } from "../wails.js";
 
@@ -21,6 +22,15 @@
           { label: "Reveal", act: "reveal" },
         ]
       : [],
+  );
+
+  let anchor = $derived(
+    place(
+      at,
+      { width: MENU_WIDTH, height: menuHeight(items) },
+      { width: window.innerWidth, height: window.innerHeight },
+      uiScale() / 100,
+    ),
   );
 
   async function act(item) {
@@ -49,7 +59,8 @@
 {#if items.length}
   <div
     class="anchor"
-    use:fitMenu={at}
+    style:left="{anchor.left}px"
+    style:top="{anchor.top}px"
     use:dismissible={onDismiss}>
     <Menu {items} width={MENU_WIDTH} offsetY={0} onSelect={act} />
   </div>

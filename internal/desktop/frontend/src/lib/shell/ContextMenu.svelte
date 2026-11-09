@@ -3,7 +3,8 @@
   import Menu from "./Menu.svelte";
   import { MENU_WIDTH, itemsFor } from "../contextmenu.js";
   import { dismissible } from "../core/dismiss.js";
-  import { fitMenu } from "../menu.js";
+  import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import { openDocument } from "../docked.svelte.js";
   import { clipboardText, copyText, openURL } from "../wails.js";
   import { documentPath, linkKind } from "../panes/markdown.js";
@@ -15,6 +16,17 @@
   onDestroy(() => onOwnership?.(false));
 
   let open = $state(/** @type {{kind: string, items: any[], x: number, y: number, [key: string]: any} | null} */ (null));
+
+  let anchor = $derived(
+    open
+      ? place(
+          open,
+          { width: MENU_WIDTH, height: menuHeight(open.items) },
+          { width: window.innerWidth, height: window.innerHeight },
+          uiScale() / 100,
+        )
+      : null,
+  );
 
   // The terminal is asked first: its own textarea sits under the pointer, and a
   // field is what that would otherwise look like.
@@ -116,10 +128,11 @@
   }
 </script>
 
-{#if open}
+{#if open && anchor}
   <div
     class="anchor"
-    use:fitMenu={open}
+    style:left="{anchor.left}px"
+    style:top="{anchor.top}px"
     use:dismissible={() => (open = null)}>
     <Menu items={open.items} width={MENU_WIDTH} offsetY={0} onSelect={act} />
   </div>

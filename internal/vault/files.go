@@ -4,9 +4,9 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"path"
 	"strings"
 
-	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
@@ -48,7 +48,10 @@ func walk(dir string) (map[string]stamp, error) {
 	return stamps, err
 }
 
-func markdownFile(name string) bool { return markdown.IsFilename(name) }
+func markdownFile(name string) bool {
+	ext := strings.ToLower(path.Ext(name))
+	return ext == ".md" || ext == ".markdown"
+}
 
 func documentInfo(root *os.Root, name string) (fs.FileInfo, error) {
 	info, err := root.Stat(name)

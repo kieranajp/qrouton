@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/github"
-	"github.com/kieranajp/qrouton/internal/versionformat"
 )
 
 // UpdateStatus is what the page draws the button from. Command is set on
@@ -103,11 +103,13 @@ func (u *Updates) setStatus(next UpdateStatus) {
 	u.emit(updateEvent, next)
 }
 
+var versionPattern = regexp.MustCompile(`^[0-9]+(\.[0-9]+){0,2}$`)
+
 // parseVersion accepts what the package scripts accept, after a leading v is
 // stripped: one to three dot-separated numeric parts, padded with zeros.
 func parseVersion(raw string) ([3]int, bool) {
 	trimmed := strings.TrimPrefix(raw, "v")
-	if !versionformat.Valid(trimmed) {
+	if !versionPattern.MatchString(trimmed) {
 		return [3]int{}, false
 	}
 	var out [3]int

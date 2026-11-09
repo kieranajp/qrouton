@@ -1,6 +1,6 @@
 import { SETTINGS_FIELDS } from "../bridge/generated.js";
 
-/** @typedef {(typeof TABS)[number]["key"]} SettingsTab */
+/** @type {ReadonlyArray<{key: string, label: string, restart?: boolean}>} */
 export const TABS = Object.freeze([
   Object.freeze({ key: "general", label: "General" }),
   Object.freeze({ key: "github", label: "GitHub" }),
@@ -10,7 +10,6 @@ export const TABS = Object.freeze([
   Object.freeze({ key: "advanced", label: "Advanced" }),
 ]);
 
-/** @satisfies {Record<string, SettingsTab>} */
 const FIELD_TABS = Object.freeze({
   [SETTINGS_FIELDS.EDITOR]: "general",
   [SETTINGS_FIELDS.UI_SCALE]: "general",

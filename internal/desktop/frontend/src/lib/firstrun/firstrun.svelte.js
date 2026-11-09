@@ -1,11 +1,16 @@
 import * as settings from "../settings/calls.js";
 import { loadFailure } from "../settings/errors.js";
 import { addOrg, removeOrg } from "../settings/orgs.js";
-import { debounced } from "../async.js";
 import { call } from "../wails.js";
 import * as go from "./calls.js";
 import { firstRunOutcome } from "./outcome.js";
 import { last, stepFor } from "./screens.js";
+
+/** @param {string} root */
+const derivedThoughts = (root) => {
+  const trimmed = root.trim().replace(/\/+$/, "");
+  return trimmed ? `${trimmed}/thoughts` : "";
+};
 
 // First-run answers remain provisional until the final screen succeeds.
 export function firstRun() {
@@ -18,15 +23,6 @@ export function firstRun() {
   let login = $state("");
   // Null follows the root; anything the user typed or chose stops it following.
   let thoughts = $state(/** @type {string | null} */ (null));
-  let prospective = $state("");
-  const preview = debounced(0, (root) => call(go.thoughtsDefault(root)), (answer) => {
-    if (answer.ok) prospective = answer.value;
-  });
-  $effect(() => {
-    prospective = "";
-    preview.schedule(form.root);
-    return preview.cancel;
-  });
 
   // The prefill is Settings' own Load: the same config, so asking twice would be
   // two owners of one fact.
@@ -91,7 +87,7 @@ export function firstRun() {
       result = await go.save({
         orgs: form.orgs,
         root: form.root,
-        thoughts: thoughts ?? "",
+        thoughts: thoughts ?? derivedThoughts(form.root),
       });
     } catch (thrown) {
       err = thrown;
@@ -130,13 +126,13 @@ export function firstRun() {
       return login;
     },
     get thoughts() {
-      return thoughts ?? prospective;
+      return thoughts ?? derivedThoughts(form.root);
     },
     set thoughts(value) {
       thoughts = value;
     },
     get derivedThoughts() {
-      return prospective;
+      return derivedThoughts(form.root);
     },
     add,
     remove,

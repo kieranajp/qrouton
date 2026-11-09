@@ -3,7 +3,6 @@ package markdown
 
 import (
 	"bytes"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -19,15 +18,6 @@ import (
 const fence = "---"
 
 var parser = goldmark.New(goldmark.WithExtensions(extension.TaskList)).Parser()
-
-func IsFilename(name string) bool {
-	switch strings.ToLower(filepath.Ext(name)) {
-	case ".md", ".markdown":
-		return true
-	default:
-		return false
-	}
-}
 
 // Title accepts only the first visible element after frontmatter as the document title.
 func Title(text string) (string, bool) {

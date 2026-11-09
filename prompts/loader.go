@@ -51,16 +51,12 @@ type FSLoader struct{ fsys fs.FS }
 
 func NewFSLoader(fsys fs.FS) *FSLoader { return &FSLoader{fsys: fsys} }
 
-//go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md artifact-discipline.md evidence-discipline.md return-contract.md session-summary.md session-digest.md scratch-copy.md fix-discipline.md run-table.md audit-policy.md agents/*.md all:skills
+//go:embed orchestrator.md assistant.md subagent-choice.md workspace-windows.md artifact-discipline.md evidence-discipline.md return-contract.md session-summary.md session-digest.md scratch-copy.md fix-discipline.md run-table.md agents/*.md all:skills
 var embedded embed.FS
 
 // Template is the skeleton a new artefact of the given kind starts from.
 func Template(kind string) ([]byte, error) {
-	return NewFSLoader(embedded).Template(kind)
-}
-
-func (l *FSLoader) Template(kind string) ([]byte, error) {
-	data, err := l.read(fmt.Sprintf(templatePathFormat, kind, kind))
+	data, err := embedded.ReadFile(fmt.Sprintf(templatePathFormat, kind, kind))
 	if err != nil {
 		return nil, fmt.Errorf("%w: %q", ErrNoTemplate, kind)
 	}

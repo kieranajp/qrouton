@@ -2,8 +2,10 @@ package evalharness
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -12,7 +14,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/mcpserver"
 	"github.com/kieranajp/qrouton/internal/session"
-	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
 var internalLeakPattern = regexp.MustCompile(`(?i)\bqrouton-(questions|research|audit|spec|plan|implement)|\b(agent depth|document numbering)\b`)
@@ -55,10 +56,10 @@ func gradeReferencesUnchanged(workspace string, baselines map[string]string) Ass
 
 	var changed []string
 	for _, repo := range manifest.Repos {
-		if repo.Role != session.RepoRoleReference {
+		if repo.Role != roleReference {
 			continue
 		}
-		repoDir := repo.Dir(workspace)
+		repoDir := repo.dir(workspace)
 		status, statusErr := commandOutput(context.Background(), repoDir, gitBin, gitStatusCmd, gitPorcelainFlag)
 		head, headErr := commandOutput(context.Background(), repoDir, gitBin, gitRevParseCmd, gitHeadRef)
 		// Fail loud: a repo whose state cannot be read is not provably unchanged.
@@ -478,14 +479,7 @@ func isWorkerBriefEvent(event Event) bool {
 }
 
 func testsPass(workspace, repo string) Assertion {
-	return testsPassWithin(workspace, repo, testsPassTimeout)
-}
-
-func testsPassWithin(workspace, repo string, timeout time.Duration) Assertion {
-	repoDir, err := repoDir(workspace, repo)
-	if err != nil {
-		return Assertion{Name: assertTestsPass + repo, Evidence: err.Error()}
-	}
+	repoDir := repoDir(workspace, repo)
 	var command []string
 	switch {
 	case fileExists(filepath.Join(repoDir, goModFile)):
@@ -497,14 +491,14 @@ func testsPassWithin(workspace, repo string, timeout time.Duration) Assertion {
 	}
 
 	// Bound the run: a hung test suite must fail the assertion, not the harness.
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), testsPassTimeout)
 	defer cancel()
-	cmd := boundedCommand(ctx, command[0], command[1:]...)
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = repoDir
 	output, err := cmd.CombinedOutput()
 	evidence := strings.TrimSpace(string(output))
 	if ctx.Err() != nil {
-		evidence = fmt.Sprintf(evidenceTimeoutFormat, timeout, evidence)
+		evidence = fmt.Sprintf(evidenceTimeoutFormat, testsPassTimeout, evidence)
 	}
 	return Assertion{
 		Name:     assertTestsPass + repo,
@@ -528,39 +522,40 @@ func firstContained(text string, values []string) string {
 	return ""
 }
 
-func repoDir(workspace, name string) (string, error) {
-	manifest, err := readManifest(filepath.Join(workspace, manifestName))
-	if err != nil {
-		return "", err
-	}
-	for _, repo := range manifest.Repos {
-		if repo.Name == name {
-			return repo.Dir(workspace), nil
-		}
-	}
-	return "", fmt.Errorf("%w: %q", ErrCheckoutMissing, name)
+// sessionManifest is the slice of qrouton.json the harness reads. Its JSON keys
+// mirror session.Manifest, the schema a real launch writes.
+type sessionManifest struct {
+	Repos []manifestRepo `json:"repos"`
 }
 
-func readManifest(path string) (session.Manifest, error) {
-	manifest, err := session.Load(filepath.Dir(path))
-	if err != nil {
-		return session.Manifest{}, err
+type manifestRepo struct {
+	Name         string `json:"name"`
+	Role         string `json:"role"`
+	WorktreePath string `json:"worktreePath"`
+}
+
+// dir resolves the repository's checkout inside a workspace. Manifests record
+// the worktree path explicitly, because a session with two same-named repos
+// disambiguates them by owner.
+func (r manifestRepo) dir(workspace string) string {
+	if r.WorktreePath == "" {
+		return repoDir(workspace, r.Name)
 	}
-	names := make(map[string]bool, len(manifest.Repos))
-	for i := range manifest.Repos {
-		repo := &manifest.Repos[i]
-		if names[repo.Name] {
-			return session.Manifest{}, fmt.Errorf("%w: %q", ErrCheckoutAmbiguous, repo.Name)
-		}
-		names[repo.Name] = true
-		if repo.WorktreePath == "" {
-			repo.WorktreePath = filepath.Join(srcDirName, repo.Name)
-		} else {
-			repo.WorktreePath = filepath.FromSlash(repo.WorktreePath)
-		}
-		if rel, inside := sessionpaths.Within(srcDirName, repo.WorktreePath); !inside || rel == "." {
-			return session.Manifest{}, fmt.Errorf("%w: %q", ErrCheckoutOutside, repo.WorktreePath)
-		}
+	return session.ManifestRepo{WorktreePath: filepath.FromSlash(r.WorktreePath)}.Dir(workspace)
+}
+
+func repoDir(workspace, name string) string {
+	return filepath.Join(workspace, srcDirName, name)
+}
+
+func readManifest(path string) (sessionManifest, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return sessionManifest{}, err
+	}
+	var manifest sessionManifest
+	if err := json.Unmarshal(content, &manifest); err != nil {
+		return sessionManifest{}, fmt.Errorf("parse manifest: %w", err)
 	}
 	return manifest, nil
 }

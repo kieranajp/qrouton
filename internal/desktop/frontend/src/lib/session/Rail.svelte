@@ -7,7 +7,8 @@
   import Confirm from "../shell/Confirm.svelte";
   import Menu from "../shell/Menu.svelte";
   import RailItem from "./RailItem.svelte";
-  import { fitMenu } from "../menu.js";
+  import { menuHeight, place } from "../menu.js";
+  import { uiScale } from "../scale.svelte.js";
   import { cleanup, cycleSticker, reload, reorder, reveal, show, uncommitted, unload } from "../sessions.js";
   import { SESSION_UNLOAD_LABEL, SESSION_UNLOAD_FAILED, SESSION_REORDER_FAILED } from "../bridge/generated.js";
   import { age } from "../relative.js";
@@ -211,6 +212,17 @@
 
   // The rail clips and scrolls, so the menu is drawn at the page and placed at
   // the pointer instead of anchored to the row.
+  let anchor = $derived(
+    menu
+      ? place(
+          menu,
+          { width: ROW_MENU_WIDTH, height: menuHeight(rowMenu) },
+          { width: window.innerWidth, height: window.innerHeight },
+          uiScale() / 100,
+        )
+      : null,
+  );
+
   function openMenu(event, row) {
     // The webview draws one of its own otherwise.
     event.preventDefault();
@@ -327,11 +339,12 @@
   </div>
 </div>
 
-{#if menu}
+{#if menu && anchor}
   {@const row = menu.row}
   <div
     class="anchor"
-    use:fitMenu={menu}
+    style:left="{anchor.left}px"
+    style:top="{anchor.top}px"
     use:dismissible={dismissMenu}>
     <Menu
       items={rowMenu}

@@ -1,20 +1,29 @@
 <script>
   import { onMount } from "svelte";
   import { PRESENTER_NOTES_EVENT } from "../lib/bridge/generated.js";
-  import { follow } from "../lib/wails.js";
+  import { Events } from "../lib/wails.js";
   import { presenterNote } from "./calls.js";
   import "../lib/panes/markdown.css";
 
   const NOTHING = { index: 0, total: 0, title: "", html: "" };
 
   let note = $state(NOTHING);
+  let live = false;
 
   const taken = (data) => ({ ...NOTHING, ...(data ?? {}) });
 
-  onMount(() => follow(PRESENTER_NOTES_EVENT, presenterNote, (data) => { note = taken(data); }, {
-    settle: (answer, live) => { if (!live && answer.ok) note = taken(answer.value); },
-  }).stop);
-
+  // Pulled as well as subscribed: a step dispatched before this page had a
+  // listener would otherwise leave it blank until the presenter moved again.
+  onMount(() => {
+    const off = Events.On(PRESENTER_NOTES_EVENT, (event) => {
+      live = true;
+      note = taken(event.data);
+    });
+    presenterNote().then((answer) => {
+      if (!live && answer.ok) note = taken(answer.value);
+    });
+    return off;
+  });
 </script>
 
 <div class="notes">

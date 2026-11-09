@@ -9,7 +9,11 @@ export default [
     ignores: ["node_modules/**", "src/lib/bridge/generated.js"],
   },
   {
-    files: ["**/*.{js,svelte}"],
+    files: ["**/*.js"],
+    languageOptions: {
+      ecmaVersion: "latest",
+      sourceType: "module",
+    },
     plugins: { "comment-discipline": commentDiscipline },
     rules: {
       "comment-discipline/max-comment-run": ["error", { max: policy.maxCommentRun }],
@@ -19,17 +23,17 @@ export default [
     },
   },
   {
-    files: ["**/*.js"],
-    languageOptions: {
-      ecmaVersion: "latest",
-      sourceType: "module",
-    },
-  },
-  {
     files: ["**/*.svelte"],
     languageOptions: {
       parser: svelteParser,
       parserOptions: { ecmaVersion: "latest", sourceType: "module" },
+    },
+    plugins: { "comment-discipline": commentDiscipline },
+    rules: {
+      "comment-discipline/max-comment-run": ["error", { max: policy.maxCommentRun }],
+      "comment-discipline/no-narration": ["error", { phrases: policy.narrationPhrases }],
+      "comment-discipline/no-path-pointer": ["error", { extensions: policy.pathExtensions }],
+      "comment-discipline/no-prose-before-jsdoc": "error",
     },
   },
 ];

@@ -7,15 +7,13 @@
   import RepositoriesStep from "./RepositoriesStep.svelte";
   import { assembling } from "./draft.svelte.js";
   import { begin, end } from "./calls.js";
-  import { destination, labels, last, primary, stepKey } from "./steps.js";
+  import { destination, labels, last, primary } from "./steps.js";
 
   /** @type {{onClose: () => void, gated?: boolean}} */
   let { onClose, gated = false } = $props();
 
   const wizard = assembling(() => onClose());
   const repos = wizard.repos;
-  /** @type {Record<import("./steps.js").Step, import("svelte").Snippet>} */
-  const renderers = { describe, repositories, agent };
 
   let picked = $derived(repos.tally.editing + repos.tally.reference);
   let footer = $derived(
@@ -49,46 +47,6 @@
   });
 </script>
 
-{#snippet describe()}
-  <DescribeStep
-    bind:name={wizard.form.name}
-    bind:branchDescription={wizard.form.branchDescription}
-    bind:description={wizard.form.description}
-    bind:ticket={wizard.form.ticket}
-    bind:prefix={wizard.form.prefix}
-    prefixes={wizard.prefixes}
-    branch={wizard.branch}
-    fetching={wizard.fetching}
-    hint={wizard.hint}
-    onFetch={wizard.load} />
-{/snippet}
-
-{#snippet repositories()}
-  <RepositoriesStep
-    bind:query={repos.query}
-    orgs={repos.orgs}
-    owners={repos.owners}
-    failed={repos.failed}
-    rows={repos.rows}
-    shown={repos.shown}
-    total={repos.total}
-    tally={repos.tally}
-    picks={repos.picks}
-    refreshing={repos.refreshing}
-    onOwner={repos.owner}
-    onRefresh={repos.refetch}
-    onRole={repos.role}
-    onBase={repos.base}
-    onBaseOpen={repos.loadBranches} />
-{/snippet}
-
-{#snippet agent()}
-  <AgentStep
-    runners={wizard.runners}
-    bind:runner={wizard.form.runner}
-    bind:mode={wizard.form.mode} />
-{/snippet}
-
 {#if owned}
 <Dialog
   steps={labels}
@@ -112,8 +70,40 @@
           percent={row.percent} />
       {/each}
     </div>
+  {:else if wizard.step === 0}
+    <DescribeStep
+      bind:name={wizard.form.name}
+      bind:branchDescription={wizard.form.branchDescription}
+      bind:description={wizard.form.description}
+      bind:ticket={wizard.form.ticket}
+      bind:prefix={wizard.form.prefix}
+      prefixes={wizard.prefixes}
+      branch={wizard.branch}
+      fetching={wizard.fetching}
+      hint={wizard.hint}
+      onFetch={wizard.load} />
+  {:else if wizard.step === 1}
+    <RepositoriesStep
+      bind:query={repos.query}
+      orgs={repos.orgs}
+      owners={repos.owners}
+      failed={repos.failed}
+      rows={repos.rows}
+      shown={repos.shown}
+      total={repos.total}
+      tally={repos.tally}
+      picks={repos.picks}
+      refreshing={repos.refreshing}
+      onOwner={repos.owner}
+      onRefresh={repos.refetch}
+      onRole={repos.role}
+      onBase={repos.base}
+      onBaseOpen={repos.loadBranches} />
   {:else}
-    {@render renderers[stepKey(wizard.step)]()}
+    <AgentStep
+      runners={wizard.runners}
+      bind:runner={wizard.form.runner}
+      bind:mode={wizard.form.mode} />
   {/if}
 </Dialog>
 {/if}

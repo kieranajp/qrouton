@@ -117,11 +117,27 @@ func galleryAsset(lookup galleryLookup) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		streamSessionMedia(w, r, ref.root, ref.source, mediaStreamPolicy{
-			mediaType:   func(name string) (string, bool) { media, known := workbench.AssetMedia(name); return media.Type, known },
-			regularOnly: true,
-			headers:     map[string]string{cacheControlHeader: cacheControlNoStore, contentTypeOptionsHeader: contentTypeNoSniff},
-		})
+		name, err := launch.ResolveSessionFile(ref.root, ref.source)
+		media, known := workbench.AssetMedia(name)
+		if err != nil || !known {
+			http.NotFound(w, r)
+			return
+		}
+		file, err := os.Open(name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil || !info.Mode().IsRegular() {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set(contentTypeHeader, media.Type)
+		w.Header().Set(cacheControlHeader, cacheControlNoStore)
+		w.Header().Set(contentTypeOptionsHeader, contentTypeNoSniff)
+		http.ServeContent(w, r, "", info.ModTime(), file)
 	}
 }
 
@@ -147,43 +163,23 @@ func deckAsset(decks deckLookup) http.HandlerFunc {
 			http.NotFound(w, r)
 			return
 		}
-		streamSessionMedia(w, r, root, filepath.FromSlash(path.Join(dir, rel)), mediaStreamPolicy{
-			mediaType: func(string) (string, bool) { return media, true },
-		})
+		name, err := launch.ResolveSessionFile(root, filepath.FromSlash(path.Join(dir, rel)))
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		file, err := os.Open(name)
+		if err != nil {
+			http.NotFound(w, r)
+			return
+		}
+		defer file.Close()
+		info, err := file.Stat()
+		if err != nil || info.IsDir() {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set(contentTypeHeader, media)
+		http.ServeContent(w, r, "", info.ModTime(), file)
 	}
-}
-
-type mediaStreamPolicy struct {
-	mediaType   func(string) (string, bool)
-	regularOnly bool
-	headers     map[string]string
-}
-
-func streamSessionMedia(w http.ResponseWriter, r *http.Request, root, source string, policy mediaStreamPolicy) {
-	name, err := launch.ResolveSessionFile(root, source)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	media, known := policy.mediaType(name)
-	if !known {
-		http.NotFound(w, r)
-		return
-	}
-	file, err := os.Open(name)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer file.Close()
-	info, err := file.Stat()
-	if err != nil || info.IsDir() || (policy.regularOnly && !info.Mode().IsRegular()) {
-		http.NotFound(w, r)
-		return
-	}
-	w.Header().Set(contentTypeHeader, media)
-	for name, value := range policy.headers {
-		w.Header().Set(name, value)
-	}
-	http.ServeContent(w, r, "", info.ModTime(), file)
 }

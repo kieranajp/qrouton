@@ -77,7 +77,9 @@ func writeRunFixture(t *testing.T, root, id, prompt string) {
 }`
 	writeTestFile(t, filepath.Join(root, "eval", "scenarios", id+".json"), scenario)
 	fixture := filepath.Join(root, "eval", "fixtures", id)
-	writeSessionManifest(t, fixture, map[string]string{"app": "editing"})
+	writeTestFile(t, filepath.Join(fixture, "qrouton.json"), `{
+  "repositories": [{"name":"app","role":"editing"}]
+}`)
 	writeTestFile(t, filepath.Join(fixture, "src", "app", "README.md"), "fixture")
 }
 
