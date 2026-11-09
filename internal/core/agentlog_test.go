@@ -9,17 +9,6 @@ import (
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
 )
 
-// sessionRoot is a session as it exists on disk: every assembled one has its
-// private directory, and the log is only ever written beside what is already there.
-func sessionRoot(t *testing.T) string {
-	t.Helper()
-	root := t.TempDir()
-	if err := os.MkdirAll(sessionpaths.Dir(root), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return root
-}
-
 const (
 	providerClaude = "claude"
 	providerCodex  = "codex"

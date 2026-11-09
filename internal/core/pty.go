@@ -102,29 +102,6 @@ func (p *PTY) Foreground() (busy, ok bool) {
 	return pgid != p.cmd.Process.Pid, true
 }
 
-// Pid is the child's, and 0 once the PTY is stopped.
-func (p *PTY) Pid() int {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.cmd == nil || p.cmd.Process == nil {
-		return 0
-	}
-	return p.cmd.Process.Pid
-}
-
-func (p *PTY) Size() (cols, rows int, err error) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.file == nil {
-		return 0, 0, ErrTerminalNotStarted
-	}
-	size, err := pty.GetsizeFull(p.file)
-	if err != nil {
-		return 0, 0, err
-	}
-	return int(size.Cols), int(size.Rows), nil
-}
-
 func (p *PTY) Resize(cols, rows int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()

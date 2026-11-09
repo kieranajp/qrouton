@@ -7,20 +7,9 @@ import (
 	"syscall"
 	"testing"
 	"time"
+
+	"github.com/creack/pty"
 )
-
-const waitCeiling = 30 * time.Second
-
-func waitFor(t *testing.T, what string, condition func() bool) {
-	t.Helper()
-	deadline := time.Now().Add(waitCeiling)
-	for !condition() {
-		if time.Now().After(deadline) {
-			t.Fatalf("timed out waiting for %s", what)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
 
 func startTestPTY(t *testing.T, argv ...string) *PTY {
 	t.Helper()
@@ -91,4 +80,28 @@ func TestStopKillsAGroupThatIgnoresSIGTERMAfterTheGrace(t *testing.T) {
 		t.Fatal("stop returned with the child still running")
 	}
 	waitFor(t, "the grandchild to die", func() bool { return syscall.Kill(grandchild, 0) != nil })
+}
+
+// ptyPid is the child's pid, and 0 once the PTY is stopped.
+func ptyPid(p *PTY) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cmd == nil || p.cmd.Process == nil {
+		return 0
+	}
+	return p.cmd.Process.Pid
+}
+
+// ptySize is the size the child's terminal reports.
+func ptySize(p *PTY) (cols, rows int, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.file == nil {
+		return 0, 0, ErrTerminalNotStarted
+	}
+	size, err := pty.GetsizeFull(p.file)
+	if err != nil {
+		return 0, 0, err
+	}
+	return int(size.Cols), int(size.Rows), nil
 }

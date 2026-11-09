@@ -1,6 +1,11 @@
 package core
 
-import "time"
+import (
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/workbench"
+)
 
 const (
 	termEnvVar      = "TERM"
@@ -49,3 +54,134 @@ const (
 	ollamaMacApp       = "/Applications/Ollama.app"
 	ollamaProbeTimeout = 2 * time.Second
 )
+
+const (
+	bugReportReviewLabel      = "Review bug report"
+	bugReportCreateLabel      = "Create issue"
+	bugReportCancelLabel      = "Cancel"
+	bugReportCloseLabel       = "Close"
+	bugReportPendingMessage   = "Review the bug report in qrouton before creating an issue."
+	bugReportPostingMessage   = "Creating the confirmed GitHub issue…"
+	bugReportCancelledMessage = "Bug report cancelled. No issue was sent."
+	bugReportExpiredMessage   = "Bug report review expired. No issue was sent."
+	bugReportCreatedFormat    = "Created GitHub issue #%d."
+	bugReportRetention        = 30 * time.Minute
+	bugReportPostTimeout      = 30 * time.Second
+
+	specAnswersInFormat = "I've answered the design questions in %s. Please fold them into Decisions."
+	auditTriageInFormat = "I've triaged the findings in %s. Please plan the accepted findings."
+	conversationSubmit  = "\r"
+	pasteStart          = "\x1b[200~"
+	pasteEnd            = "\x1b[201~"
+
+	overviewWindowLabel     = "Overview"
+	shellWindowLabel        = "shell"
+	shellWindowLabelNumbers = "shell %d"
+
+	windowIDFormat = "window-%d"
+
+	terminalIDFormat = "term-%d"
+)
+
+// Events the Go side emits at the pages; a window's or a conversation's own id
+// is appended so each page hears only its own stream.
+const (
+	ptyDataEvent = "pty:data:"
+	ptyExitEvent = "pty:exit:"
+	chromeEvent  = "chrome:update"
+	// agentTreeEvent carries the shown session's whole agent tree, named by slug.
+	agentTreeEvent = "agents:tree:"
+
+	windowDataEvent    = "window:data:"
+	windowExitEvent    = "window:exit:"
+	windowDiagramEvent = "window:diagram:"
+	windowContentEvent = "window:content:"
+	windowsEvent       = "window:open"
+)
+
+// A tab may only stand in for a window if it reports its process's state.
+const (
+	tabStatusRunning   = "running"
+	tabStatusSucceeded = "succeeded"
+	tabStatusFailed    = "failed"
+	tabStatusWaiting   = "waiting"
+	tabStatusIdle      = "idle"
+)
+
+const (
+	socketNetwork = "unix"
+
+	// An agent's terminal starts at this size when no page has measured it yet.
+	unmountedCols = 80
+	unmountedRows = 24
+)
+
+const documentPoll = time.Second
+
+// vaultTimeout stays under the socket client's deadline, so a slow embed
+// answers with an error rather than a dropped connection.
+const vaultTimeout = workbench.CallTimeout - 5*time.Second
+
+const (
+	// chromeInterval bounds how stale the window chrome can be after an
+	// escalation.
+	chromeInterval = 2 * time.Second
+
+	// foregroundInterval paces the read of each user shell's foreground job.
+	foregroundInterval = 500 * time.Millisecond
+
+	// repoStatInterval paces the git stats: three subprocesses per active repo.
+	repoStatInterval = 15 * time.Second
+
+	// pullRequestInterval paces the shown session's GitHub pull request fetch.
+	pullRequestInterval  = 60 * time.Second
+	pullRequestTimeout   = 10 * time.Second
+	pullRequestLogFormat = "pull requests: %s: %v"
+
+	// activityQuiet is how long the conversation PTY has to stay silent before
+	// the agent counts as idle. A runner redraws its spinner far faster.
+	activityQuiet = 3 * time.Second
+)
+
+const (
+	agentRootID         = "root"
+	agentSetupRunPrefix = "setup-"
+
+	agentStateWorking       = status.AgentStateWorking
+	agentStateWaitingAgents = status.AgentStateWaitingAgents
+	agentStateNeedsYou      = status.AgentStateNeedsYou
+	agentStateYourTurn      = status.AgentStateYourTurn
+	agentStateIdle          = status.AgentStateIdle
+	agentStateDone          = status.AgentStateDone
+	agentStateFailed        = status.AgentStateFailed
+	agentStateEnded         = status.AgentStateEnded
+	// agentLive marks a record still running; its shown state is derived.
+	agentLive = "live"
+
+	// agentTreeInterval coalesces tree pushes; tool calls arrive several a second.
+	agentTreeInterval = 250 * time.Millisecond
+	agentFileLimit    = 50
+
+	agentCoverageRootOnly = "%s reports the root agent only, so working and idle come from its terminal."
+	agentCoverageNoTools  = "%s reports its agents starting and stopping, not what they are doing."
+
+	agentReasonQuestion = "Asking you a question"
+	agentReasonPlan     = "Plan ready for your review"
+
+	notificationPermission  = "permission_prompt"
+	notificationElicitation = "elicitation_dialog"
+
+	// agentRecordCap bounds one session's tree; the oldest finished leaves go first.
+	agentRecordCap = 500
+	// agentToolHistory is how many tool calls an agent remembers.
+	agentToolHistory      = 20
+	agentOutcomeCompleted = "completed"
+)
+
+const (
+	galleryAssetURLFormat = "/gallery/%s/%d"
+	currentAssetFormat    = "Current asset: %d of %d"
+	assetTokenBytes       = 16
+)
+
+const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"
