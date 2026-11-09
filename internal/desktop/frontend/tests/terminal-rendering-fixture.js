@@ -40,9 +40,10 @@ window.fixture = {
     mounted.show();
     return terminals.length - 1;
   },
-  send(id, text, replay = false) {
-    terminals[id].painter.paint({ encoded: encode(text), replay });
+  send(id, text, replay = false, exit_code) {
+    terminals[id].painter.paint({ encoded: encode(text), replay, exit_code });
   },
+  complete(id, code) { terminals[id].painter.complete(code); },
   bytes(id, bytes) {
     terminals[id].painter.paint({ encoded: btoa(String.fromCharCode(...bytes)) });
   },
