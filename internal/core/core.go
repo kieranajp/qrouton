@@ -98,7 +98,7 @@ func New(opts Options, client Client) *Core {
 	c.FirstRun = newFirstRun(opts.Config, reg.Touch, pendingRelaunch(opts.Relaunch, c.PendingTicket), opts.Quit,
 		client.ChooseDirectory, ReconfigureVault(c.Vault))
 	c.Placement = newPlacement(opts.Config, reg)
-	c.FirstRun.onWelcomed = func() { go c.Placement.CheckOnce() }
+	c.FirstRun.onWelcomed = c.Placement.CheckInBackground
 	c.wire()
 	return c
 }
@@ -249,6 +249,7 @@ func (c *Core) Shutdown() {
 			_ = c.server.Close()
 		}
 		c.cancel()
+		c.Placement.wait()
 	})
 }
 

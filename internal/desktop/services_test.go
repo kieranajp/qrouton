@@ -948,6 +948,11 @@ func firstRunRows() []adapterRow {
 			if err != nil || result.Relaunching || !cfg.Snapshot().Welcomed {
 				t.Fatalf("Save = %+v, %v; welcomed %v", result, err, cfg.Snapshot().Welcomed)
 			}
+			// The welcome starts a placement check; it must land in this test's config.json, not the user's.
+			kernel.Shutdown()
+			if file, err := config.ReadFile(); err != nil || file.ThoughtsPlacement == "" {
+				t.Fatalf("placement check unfinished at shutdown: %+v, %v", file, err)
+			}
 		}},
 	}
 }

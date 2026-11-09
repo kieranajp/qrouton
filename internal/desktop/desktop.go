@@ -169,7 +169,7 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 		go opts.updates.watch(ctx, updateInterval)
 	}
 	if opts.placement != nil {
-		go opts.placement.CheckOnce()
+		opts.placement.CheckInBackground()
 	}
 	if err := kernel.Start(opts.Socket); err != nil {
 		return err

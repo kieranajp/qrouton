@@ -31,6 +31,7 @@ type Placement struct {
 
 	// op keeps the automatic check, the Settings check, Move and Close from overlapping.
 	op     sync.Mutex
+	checks sync.WaitGroup
 	mu     sync.Mutex
 	report placement.Report
 	manual bool
@@ -41,6 +42,12 @@ type Placement struct {
 func newPlacement(cfg *config.Config, reg *Sessions) *Placement {
 	return &Placement{cfg: cfg, reg: reg, pinnedRoot: pinnedFileRoot(), scan: placement.Scan, move: placement.Move}
 }
+
+// CheckInBackground is CheckOnce off the caller's goroutine. Shutdown waits for
+// it, so a check never writes config.json after its core has gone.
+func (p *Placement) CheckInBackground() { p.checks.Go(p.CheckOnce) }
+
+func (p *Placement) wait() { p.checks.Wait() }
 
 // CheckOnce runs at every launch to recover interrupted moves. The popup is
 // automatic after first run whenever the thoughts folders differ from the ones
