@@ -1,6 +1,7 @@
-package desktop
+package core
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,10 +16,10 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/gittest"
 	"github.com/kieranajp/qrouton/internal/session"
+	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
 // Neither domain type is emittable as written: an error marshals to {} and an
@@ -88,7 +89,7 @@ func TestADraftDropsRepositoriesTheListNoLongerHolds(t *testing.T) {
 		repos: []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}}
 	a := &Assembly{cfg: &config.Config{}, repos: repos}
 
-	in := draftInput{Name: "Cleanup", Prefix: "feat", Repos: []repoPick{
+	in := DraftInput{Name: "Cleanup", Prefix: "feat", Repos: []RepoPick{
 		{ID: "acme/api", Role: "editing"},
 		{ID: "acme/gone", Role: "editing"},
 	}}
@@ -99,7 +100,7 @@ func TestADraftDropsRepositoriesTheListNoLongerHolds(t *testing.T) {
 		t.Fatalf("a draft keeping one editing repo was refused: %+v", problems)
 	}
 
-	in.Repos = []repoPick{{ID: "acme/gone", Role: "editing"}}
+	in.Repos = []RepoPick{{ID: "acme/gone", Role: "editing"}}
 	problems := a.Check(in)
 	if len(problems) != 1 || problems[0].Field != assembly.FieldRepos {
 		t.Fatalf("problems = %+v", problems)
@@ -108,10 +109,10 @@ func TestADraftDropsRepositoriesTheListNoLongerHolds(t *testing.T) {
 
 func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 	a := &Assembly{cfg: &config.Config{}, repos: &Repositories{cfg: &config.Config{}, errs: map[string]error{}}}
-	if got := a.Preview(draftInput{Name: "API Cleanup!", Entropy: "4f3a", Prefix: "fix"}); got != "fix/api-cleanup-4f3a" {
+	if got := a.Preview(DraftInput{Name: "API Cleanup!", Entropy: "4f3a", Prefix: "fix"}); got != "fix/api-cleanup-4f3a" {
 		t.Fatalf("preview = %q", got)
 	}
-	if got := a.Preview(draftInput{Name: "Full ticket title", BranchDescription: "short title", Entropy: "4f3a",
+	if got := a.Preview(DraftInput{Name: "Full ticket title", BranchDescription: "short title", Entropy: "4f3a",
 		Ticket: "https://linear.app/issue/LIF-2841", Prefix: "fix"}); got != "fix/lif-2841-short-title" {
 		t.Fatalf("Linear preview = %q", got)
 	}
@@ -122,7 +123,7 @@ func TestPreviewAndPrefixesReachThePageThroughTheBinding(t *testing.T) {
 
 func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 	root := t.TempDir()
-	a := newAssembly(&config.Config{Root: root}, nil, newSessions(t), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: root}, nil, newSessions(), nil, nil, nil)
 	got, err := a.offer("lif-2841", "Fix the regression")
 	if err != nil || got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
@@ -146,7 +147,7 @@ func TestAssemblyOfferQueuesAndClaimsOneCanonicalSeed(t *testing.T) {
 }
 
 func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	manual := a.Begin()
 	if manual.Ticket != "" {
 		t.Fatalf("manual Begin = %+v", manual)
@@ -161,7 +162,7 @@ func TestAssemblyManualDraftIsNeverTakenOver(t *testing.T) {
 }
 
 func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	if _, err := a.offer("LIF-2841", ""); err != nil {
 		t.Fatal(err)
 	}
@@ -180,49 +181,10 @@ func TestAssemblyEndCannotCloseAReplacementGeneration(t *testing.T) {
 	}
 }
 
-func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
-	if _, err := a.offer("LIF-2841", "Linear prompt"); err != nil {
-		t.Fatal(err)
-	}
-	var carried, carriedPrompt string
-	relaunch := pendingRelaunch(func(request func() (string, string)) error {
-		carried, carriedPrompt = request()
-		return nil
-	}, a)
-	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
-		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
-	}
-	a.Begin()
-	carried = "not called"
-	carriedPrompt = "not called"
-	if err := relaunch(); err != nil || carried != "" {
-		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
-	}
-}
-
-func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
-	var carried string
-	relaunch := pendingRelaunch(func(request func() (string, string)) error {
-		if _, err := a.offer("LIF-2841", "Late prompt"); err != nil {
-			return err
-		}
-		carried, _ = request()
-		return nil
-	}, a)
-	if err := relaunch(); err != nil {
-		t.Fatal(err)
-	}
-	if carried != "https://linear.app/issue/LIF-2841" {
-		t.Fatalf("late pending seed = %q", carried)
-	}
-}
-
 func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg := testSessions(t, root, boot)
+	reg, _, _ := testSessions(t, root, boot)
 	created := time.Now()
 	for i, slug := range []string{"older", "shown", "newest"} {
 		dir := sessionDir(t, root, slug)
@@ -250,7 +212,7 @@ func TestAssemblyOfferRevealsThePreferredMatchingSessionOnce(t *testing.T) {
 }
 
 func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	start := make(chan struct{})
 	type answer struct {
 		issue string
@@ -297,7 +259,7 @@ func TestAssemblyOfferSerializesDifferentSimultaneousIssues(t *testing.T) {
 func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg := testSessions(t, root, boot)
+	reg, _, _ := testSessions(t, root, boot)
 	dir := sessionDir(t, root, "shown")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
 		TicketURL: "https://linear.app/acme/issue/LIF-2841/title", Mode: session.ModeAssistant,
@@ -307,7 +269,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 	a := newAssembly(&config.Config{Root: root}, nil, reg, nil, nil, nil)
 
 	during := make(chan error, 1)
-	boot.booting = func(req core.AgentRequest) {
+	boot.booting = func(req AgentRequest) {
 		offered := make(chan error, 1)
 		go func() {
 			outcome, err := a.offer("LIF-2842", "")
@@ -341,7 +303,7 @@ func TestAssemblyOfferLeavesTheDraftFreeWhileAMatchingSessionBoots(t *testing.T)
 func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg := testSessions(t, root, boot)
+	reg, _, _ := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
@@ -353,8 +315,8 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 		}
 	}, nil, nil)
 
-	in := draftInput{Name: "API Cleanup", Entropy: "4f3a", Description: "tidy", Prefix: "fix", Mode: "rpi",
-		Runner: "codex", Repos: []repoPick{{ID: "acme/api", Role: "editing"}}}
+	in := DraftInput{Name: "API Cleanup", Entropy: "4f3a", Description: "tidy", Prefix: "fix", Mode: "rpi",
+		Runner: "codex", Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}}
 	if err := a.Create(in); err != nil {
 		t.Fatal(err)
 	}
@@ -392,7 +354,7 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	if boot.sockets[dir] == "" {
 		t.Fatal("the adopted session did not boot its own supervisor")
 	}
-	if boot.resumed(dir) {
+	if boot.resumed(t, dir) {
 		t.Fatal("a session assembled from nothing was told to resume a conversation")
 	}
 	if boot.runners[dir] != "codex" {
@@ -408,8 +370,8 @@ func TestCreateRefusesAModeTheSessionDoesNotHave(t *testing.T) {
 	repos := &Repositories{cfg: cfg, errs: map[string]error{},
 		repos: []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}}
 	a := newAssembly(cfg, repos, nil, nil, nil, nil)
-	err := a.Create(draftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat", Mode: "assistent",
-		Repos: []repoPick{{ID: "acme/api", Role: "editing"}}})
+	err := a.Create(DraftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat", Mode: "assistent",
+		Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}})
 	if !errors.Is(err, session.ErrInvalidMode) {
 		t.Fatalf("Create with an unknown mode answered %v", err)
 	}
@@ -421,7 +383,7 @@ func TestCreateRefusesAModeTheSessionDoesNotHave(t *testing.T) {
 func TestCreateRefusesADraftItsOwnRulesReject(t *testing.T) {
 	cfg := &config.Config{Root: t.TempDir()}
 	a := newAssembly(cfg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil, nil, nil, nil)
-	err := a.Create(draftInput{Name: "Cleanup", Prefix: "feat"})
+	err := a.Create(DraftInput{Name: "Cleanup", Prefix: "feat"})
 	if err == nil || !strings.Contains(err.Error(), "editing") {
 		t.Fatalf("Create with no editing repo answered %v", err)
 	}
@@ -433,14 +395,14 @@ func TestCreateRefusesADraftItsOwnRulesReject(t *testing.T) {
 func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/cat")
-	reg := testSessions(t, root, boot)
+	reg, _, _ := testSessions(t, root, boot)
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 	a := newAssembly(cfg, repos, reg, func(event string, payload any) {}, nil, nil)
 
-	in := draftInput{Name: "API Cleanup", Entropy: "4f3a", Prefix: "fix", Mode: "rpi", Runner: "codex",
-		Repos: []repoPick{{ID: "acme/api", Role: "editing"}}}
+	in := DraftInput{Name: "API Cleanup", Entropy: "4f3a", Prefix: "fix", Mode: "rpi", Runner: "codex",
+		Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}}
 	if err := a.Create(in); err != nil {
 		t.Fatal(err)
 	}
@@ -469,7 +431,7 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 
 func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 	root := t.TempDir()
-	reg := testSessions(t, root, newStubBoot("/bin/cat"))
+	reg, _, _ := testSessions(t, root, newStubBoot("/bin/cat"))
 	dir := sessionDir(t, root, "shown")
 	if err := session.WriteManifest(dir, session.Manifest{Slug: "shown", Name: "shown",
 		TicketURL: "https://github.com/Acme/API/issues/42", Mode: session.ModeAssistant,
@@ -487,7 +449,7 @@ func TestAssemblyOfferRevealsTheSessionHoldingAGitHubIssue(t *testing.T) {
 }
 
 func TestAssemblyOfferQueuesAnUnmatchedGitHubIssue(t *testing.T) {
-	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(t), nil, nil, nil)
+	a := newAssembly(&config.Config{Root: t.TempDir()}, nil, newSessions(), nil, nil, nil)
 	if got, err := a.offer("https://github.com/Acme/API/issues/42", ""); err != nil ||
 		got != assembly.OutcomeQueued {
 		t.Fatalf("offer = %q, %v", got, err)
@@ -508,7 +470,7 @@ func TestABaseReachesTheSelectionUnlessItNamesTheDefaultBranch(t *testing.T) {
 		}}
 	a := &Assembly{cfg: &config.Config{}, repos: repos}
 
-	got := a.draft(draftInput{Name: "Cleanup", Prefix: "feat", Repos: []repoPick{
+	got := a.draft(DraftInput{Name: "Cleanup", Prefix: "feat", Repos: []RepoPick{
 		{ID: "acme/api", Role: "editing", Base: "release/24.4"},
 		{ID: "acme/web", Role: "reference", Base: "main"},
 	}})
@@ -520,5 +482,62 @@ func TestABaseReachesTheSelectionUnlessItNamesTheDefaultBranch(t *testing.T) {
 	}
 	if got.Repos[1].Base != "" {
 		t.Fatalf("a base naming the default branch survived as %q", got.Repos[1].Base)
+	}
+}
+
+// Catches CheckSlug answering with anything but the assembler's slug check: a
+// taken slug is refused under the field the slug was seeded from, and a draft
+// with no repositories raises no repository problem here.
+func TestCheckSlugReturnsTheAssemblersProblemsForTheDraftsSlug(t *testing.T) {
+	root := t.TempDir()
+	cfg := &config.Config{Root: root}
+	a := newAssembly(cfg, &Repositories{cfg: cfg, errs: map[string]error{}}, nil, nil, nil, nil)
+	named := DraftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat"}
+	ticketed := DraftInput{Name: "Full title", BranchDescription: "short title", Entropy: "4f3a",
+		Ticket: "https://linear.app/issue/LIF-2841", Prefix: "fix"}
+
+	if problems := a.CheckSlug(named); len(problems) != 0 {
+		t.Fatalf("a free slug was refused: %+v", problems)
+	}
+	for _, slug := range []string{"cleanup-4f3a", "lif-2841-short-title"} {
+		if err := os.MkdirAll(filepath.Join(root, slug), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if problems := a.CheckSlug(named); len(problems) != 1 || problems[0].Field != assembly.FieldName {
+		t.Fatalf("a taken name slug = %+v", problems)
+	}
+	if problems := a.CheckSlug(ticketed); len(problems) != 1 || problems[0].Field != assembly.FieldBranchDescription {
+		t.Fatalf("a taken ticket slug = %+v", problems)
+	}
+}
+
+// Catches Fetch dropping a field, deriving the branch description from anything
+// but the title, or swallowing the fetch's error.
+func TestFetchTurnsATicketIntoItsFieldsAndPassesAFetchErrorThrough(t *testing.T) {
+	a := newAssembly(&config.Config{}, nil, nil, nil, nil, nil)
+	var asked string
+	var bounded bool
+	a.fetch = func(ctx context.Context, url string) (ticket.Ticket, error) {
+		asked = url
+		_, bounded = ctx.Deadline()
+		return ticket.Ticket{Title: "Fix the webhook retry storm", Body: "It retries forever."}, nil
+	}
+	got, err := a.Fetch("https://linear.app/issue/LIF-2841")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := TicketFields{Title: "Fix the webhook retry storm", Body: "It retries forever.",
+		BranchDescription: assembly.SuggestBranchDescription("Fix the webhook retry storm")}
+	if got != want || want.BranchDescription == "" {
+		t.Fatalf("Fetch = %+v, want %+v", got, want)
+	}
+	if asked != "https://linear.app/issue/LIF-2841" || !bounded {
+		t.Fatalf("fetch asked for %q, bounded %v", asked, bounded)
+	}
+
+	a.fetch = func(context.Context, string) (ticket.Ticket, error) { return ticket.Ticket{}, ticket.ErrTicketNotFound }
+	if got, err := a.Fetch("https://linear.app/issue/LIF-2841"); !errors.Is(err, ticket.ErrTicketNotFound) || got != (TicketFields{}) {
+		t.Fatalf("a failed fetch = %+v, %v", got, err)
 	}
 }

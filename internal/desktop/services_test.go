@@ -3,6 +3,7 @@ package desktop
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/parser"
@@ -15,9 +16,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
+	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
+	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -69,7 +74,8 @@ func TestEachAdapterMethodReachesItsOwnCoreMethod(t *testing.T) {
 }
 
 func adapterRows() [][]adapterRow {
-	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows()}
+	return [][]adapterRow{ollamaRows(), sessionsRows(), termRows(), windowsRows(), bugReportRows(), chromeRows(),
+		assemblyRows(), repositoriesRows(), orgsRows(), pickerRows()}
 }
 
 func ollamaRows() []adapterRow {
@@ -610,6 +616,217 @@ func chromeRows() []adapterRow {
 			want := chromeOf(t, a.kernel, func(f status.Fields) bool { return f.Slug == a.slug() })
 			if got := (&Chrome{chrome: a.kernel.Chrome}).Snapshot(); got.Slug != want.Slug {
 				t.Fatalf("Snapshot = %q, want the published %q", got.Slug, want.Slug)
+			}
+		}},
+	}
+}
+
+// assemblyCore is a core over an empty sessions root, with no launcher.
+func assemblyCore(t *testing.T) (*core.Core, string) {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	root := t.TempDir()
+	return testWorkbench(t, newFakeRenderer(), &Options{Root: root, Config: &config.Config{Root: root}}), root
+}
+
+const offeredTicket = "https://linear.app/issue/LIF-2841"
+
+// unslugged is a draft with a name and no repositories, which Check refuses
+// for its repositories and CheckSlug passes unless its slug is taken.
+var unslugged = core.DraftInput{Name: "Cleanup", Entropy: "4f3a", Prefix: "feat"}
+
+func refusedFor(err error, field assembly.Field) bool {
+	return err != nil && strings.HasPrefix(err.Error(), string(field)+":")
+}
+
+func assemblyRows() []adapterRow {
+	return []adapterRow{
+		{"Assembly.Prefixes", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if got := (&Assembly{assembly: kernel.Assembly}).Prefixes(); len(got) == 0 || !slices.Equal(got, assembly.Prefixes()) {
+				t.Fatalf("Prefixes = %v", got)
+			}
+		}},
+		{"Assembly.Runners", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if _, err := (&Assembly{assembly: kernel.Assembly}).Runners(); !errors.Is(err, ErrNoAgentCommand) {
+				t.Fatalf("Runners with no launcher = %v, want ErrNoAgentCommand", err)
+			}
+		}},
+		{"Assembly.Check", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			problems := (&Assembly{assembly: kernel.Assembly}).Check(unslugged)
+			if len(problems) != 1 || problems[0].Field != assembly.FieldRepos {
+				t.Fatalf("Check of a draft with no repositories = %+v", problems)
+			}
+		}},
+		{"Assembly.CheckSlug", func(t *testing.T) {
+			kernel, root := assemblyCore(t)
+			if err := os.MkdirAll(filepath.Join(root, "cleanup-4f3a"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			problems := (&Assembly{assembly: kernel.Assembly}).CheckSlug(unslugged)
+			if len(problems) != 1 || problems[0].Field != assembly.FieldName {
+				t.Fatalf("CheckSlug of a taken slug = %+v", problems)
+			}
+		}},
+		{"Assembly.Preview", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if got := (&Assembly{assembly: kernel.Assembly}).Preview(unslugged); got != "feat/cleanup-4f3a" {
+				t.Fatalf("Preview = %q", got)
+			}
+		}},
+		{"Assembly.Fetch", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if _, err := (&Assembly{assembly: kernel.Assembly}).Fetch("not a ticket"); !errors.Is(err, ticket.ErrUnsupportedProvider) {
+				t.Fatalf("Fetch of no ticket = %v, want ErrUnsupportedProvider", err)
+			}
+		}},
+		{"Assembly.Pending", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if _, err := kernel.Offer("lif-2841", ""); err != nil {
+				t.Fatal(err)
+			}
+			if got := (&Assembly{assembly: kernel.Assembly}).Pending(); got != offeredTicket {
+				t.Fatalf("Pending = %q", got)
+			}
+		}},
+		{"Assembly.Begin", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			if _, err := kernel.Offer("lif-2841", ""); err != nil {
+				t.Fatal(err)
+			}
+			seed := (&Assembly{assembly: kernel.Assembly}).Begin()
+			if seed.Ticket != offeredTicket || seed.Generation == 0 || kernel.Assembly.Pending() != "" {
+				t.Fatalf("Begin = %+v, pending %q", seed, kernel.Assembly.Pending())
+			}
+		}},
+		{"Assembly.End", func(t *testing.T) {
+			kernel, _ := assemblyCore(t)
+			seed := kernel.Assembly.Begin()
+			(&Assembly{assembly: kernel.Assembly}).End(seed.Generation)
+			if outcome, err := kernel.Offer("lif-2841", ""); err != nil || outcome != assembly.OutcomeQueued {
+				t.Fatalf("an offer after End = %q, %v", outcome, err)
+			}
+		}},
+		{"Assembly.Create", func(t *testing.T) {
+			kernel, root := assemblyCore(t)
+			if err := (&Assembly{assembly: kernel.Assembly}).Create(unslugged); !refusedFor(err, assembly.FieldRepos) {
+				t.Fatalf("Create with no editing repository = %v", err)
+			}
+			if _, err := os.Stat(filepath.Join(root, "cleanup-4f3a")); !os.IsNotExist(err) {
+				t.Fatalf("a refused Create left a session directory: %v", err)
+			}
+		}},
+	}
+}
+
+// repositoriesCore is a core whose cached list holds acme/api, on a machine
+// with no GitHub credential, so nothing reaches the network.
+func repositoriesCore(t *testing.T) (*core.Core, *fakeRenderer) {
+	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("GITHUB_TOKEN", "")
+	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}}
+	if err := github.WriteRepoCache(cfg.Orgs, []github.Repo{{Org: "acme", Name: "api", DefaultBranch: "main"}}); err != nil {
+		t.Fatal(err)
+	}
+	r := newFakeRenderer()
+	return testWorkbench(t, r, &Options{Root: cfg.Root, Config: cfg}), r
+}
+
+func repositoriesRows() []adapterRow {
+	return []adapterRow{
+		{"Repositories.Cached", func(t *testing.T) {
+			kernel, _ := repositoriesCore(t)
+			if got := (&Repositories{repos: kernel.Repositories}).Cached(); len(got) != 1 || got[0].ID() != "acme/api" {
+				t.Fatalf("Cached = %+v", got)
+			}
+		}},
+		{"Repositories.Select", func(t *testing.T) {
+			kernel, _ := repositoriesCore(t)
+			got := (&Repositories{repos: kernel.Repositories}).Select([]core.RepoPick{
+				{ID: "acme/api", Role: "editing", Base: "main"}, {ID: "acme/gone", Role: "editing"}})
+			if len(got) != 1 || got[0].Repo.ID() != "acme/api" || got[0].Base != "" {
+				t.Fatalf("Select = %+v", got)
+			}
+		}},
+		{"Repositories.Branches", func(t *testing.T) {
+			kernel, _ := repositoriesCore(t)
+			got := (&Repositories{repos: kernel.Repositories}).Branches("acme/api")
+			if got.Default != "main" || !slices.Equal(got.Branches, []string{"main"}) || got.Error == "" {
+				t.Fatalf("Branches with no credential = %+v", got)
+			}
+		}},
+		{"Repositories.Refresh", func(t *testing.T) {
+			kernel, r := repositoriesCore(t)
+			if gen := (&Repositories{repos: kernel.Repositories}).Refresh(); gen != 1 {
+				t.Fatalf("Refresh answered generation %d", gen)
+			}
+			waitFor(t, "the refresh to complete", func() bool {
+				r.mu.Lock()
+				payload := r.events["repos:refresh"]
+				r.mu.Unlock()
+				encoded, _ := json.Marshal(payload)
+				return strings.Contains(string(encoded), `"state":"complete"`)
+			})
+		}},
+	}
+}
+
+func orgsRows() []adapterRow {
+	return []adapterRow{
+		{"Orgs.List", func(t *testing.T) {
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
+			cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme", "beta"}}
+			kernel := testWorkbench(t, newFakeRenderer(), &Options{Root: cfg.Root, Config: cfg})
+			if got := (&Orgs{orgs: kernel.Orgs}).List(); !slices.Equal(got, cfg.Orgs) {
+				t.Fatalf("List = %v", got)
+			}
+		}},
+	}
+}
+
+func pickerRows() []adapterRow {
+	return []adapterRow{
+		{"Picker.Escalate", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := (&Picker{picker: a.kernel.Picker}).Escalate(a.slug()); err != nil {
+				t.Fatal(err)
+			}
+			if a.kernel.Sessions.Current().PendingPicker() == nil {
+				t.Fatal("Escalate queued no picker")
+			}
+		}},
+		{"Picker.Load", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := session.WriteManifest(a.opts.SessionRoot, session.Manifest{Slug: a.slug(), Mode: session.ModeAssistant,
+				Repos: []session.ManifestRepo{{Org: "acme", Name: "x", Role: session.RepoRoleEditing, Branch: "feat/x"}}}); err != nil {
+				t.Fatal(err)
+			}
+			fields, err := (&Picker{picker: a.kernel.Picker}).Load(a.slug())
+			if err != nil || fields.Branch != "feat/x" || len(fields.Repos) != 1 ||
+				fields.Repos[0].ID != "acme/x" || !fields.Repos[0].Locked {
+				t.Fatalf("Load of a session holding acme/x = %+v, %v", fields, err)
+			}
+		}},
+		{"Picker.Confirm", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := (&Picker{picker: a.kernel.Picker}).Confirm(a.slug(), core.PickerInput{}); !refusedFor(err, assembly.FieldRepos) {
+				t.Fatalf("confirming no editing repository = %v", err)
+			}
+		}},
+		{"Picker.Cancel", func(t *testing.T) {
+			a := newAdapterWorkbench(t)
+			if err := a.kernel.Picker.Escalate(a.slug()); err != nil {
+				t.Fatal(err)
+			}
+			if err := (&Picker{picker: a.kernel.Picker}).Cancel(a.slug()); err != nil {
+				t.Fatal(err)
+			}
+			if a.kernel.Sessions.Current().PendingPicker() != nil {
+				t.Fatal("Cancel left the picker pending")
 			}
 		}},
 	}

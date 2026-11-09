@@ -39,6 +39,8 @@ type fakeRenderer struct {
 	once    sync.Once
 	// atQuit runs as the application is told to quit, before the event loop ends.
 	atQuit func()
+	// atEmit runs before each broadcast is recorded, outside the lock.
+	atEmit func(event string)
 }
 
 func newFakeRenderer() *fakeRenderer {
@@ -77,6 +79,9 @@ func (f *fakeRenderer) Close(name string) {
 }
 
 func (f *fakeRenderer) Emit(event string, payload any) {
+	if f.atEmit != nil {
+		f.atEmit(event)
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events[event] = payload
@@ -216,6 +221,7 @@ func (b *stubBoot) counts() (agents, serves int) {
 // can boot others from, on an address of its own.
 func testOptions(t *testing.T) (Options, *stubBoot) {
 	t.Helper()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)
@@ -232,17 +238,13 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 	}, boot
 }
 
-// testWorkbench builds the core as Run does, over a local client on r. It reads
-// the assembly through opts when a ticket arrives, so a test may set one after.
+// testWorkbench builds the core as Run does, over a local client on r.
 func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	t.Helper()
 	kernel := core.New(core.Options{
 		Root:     opts.Root,
 		Config:   opts.Config,
 		Launcher: opts.Launcher,
-		OpenTicket: func(url, prompt string) (string, error) {
-			return opts.assembly.offer(url, prompt)
-		},
 	}, newLocalClient(r, opts.Launcher, nil))
 	t.Cleanup(kernel.Shutdown)
 	return kernel
@@ -271,13 +273,6 @@ func startWorkbench(t *testing.T, r *fakeRenderer, kernel *core.Core, opts Optio
 func newSessions(t *testing.T) *core.Sessions {
 	t.Helper()
 	return testWorkbench(t, newFakeRenderer(), &Options{}).Sessions
-}
-
-// testSessions is a registry that boots sessions under root with boot's
-// supervisor, as Run's does.
-func testSessions(t *testing.T, root string, boot *stubBoot) *core.Sessions {
-	t.Helper()
-	return testWorkbench(t, newFakeRenderer(), &Options{Root: root, Launcher: boot}).Sessions
 }
 
 // sessionDir is a session's directory under the sessions root, which is where
@@ -466,9 +461,9 @@ func TestRunRefusesASessionWithNothingToRun(t *testing.T) {
 func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *testing.T) {
 	r := newFakeRenderer()
 	opts, boot := testOptions(t)
+	opts.Config = &config.Config{Root: opts.Root}
 	kernel := testWorkbench(t, r, &opts)
 	reg := kernel.Sessions
-	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
 
 	startWorkbench(t, r, kernel, opts)
 	<-r.opened
@@ -487,10 +482,10 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 		t.Fatalf("opening a draft changed agent/listener counts from %d/%d to %d/%d",
 			beforeAgents, beforeServes, afterAgents, afterServes)
 	}
-	if pending := opts.assembly.Pending(); pending != "https://linear.app/issue/LIF-2841" {
+	if pending := kernel.Assembly.Pending(); pending != "https://linear.app/issue/LIF-2841" {
 		t.Fatalf("pending = %q", pending)
 	}
-	if _, prompt := opts.assembly.pendingTicket(); prompt != "Linear prompt" {
+	if _, prompt := kernel.PendingTicket(); prompt != "Linear prompt" {
 		t.Fatalf("pending prompt = %q", prompt)
 	}
 	waitFor(t, "the conversation window to be focused", func() bool {
@@ -499,14 +494,17 @@ func TestTheProcessSocketQueuesLinearAssemblyWithoutTouchingTheRunningAgent(t *t
 		return r.focused[mainWindowName] == 1
 	})
 
-	seed := opts.assembly.Begin()
+	seed := kernel.Assembly.Begin()
+	if seed.Ticket != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("the draft opened on %q, not the offered ticket", seed.Ticket)
+	}
 	if outcome, err = workbench.OpenTicket(context.Background(), opts.Socket, "LIF-2841", "duplicate"); err != nil || outcome != assembly.OutcomeDraft {
 		t.Fatalf("same issue repeat = %q, %v", outcome, err)
 	}
 	if _, err = workbench.OpenTicket(context.Background(), opts.Socket, "LIF-2842", ""); err == nil {
 		t.Fatal("different issue replaced the open draft")
 	}
-	opts.assembly.End(seed.Generation)
+	kernel.Assembly.End(seed.Generation)
 }
 
 func TestAColdTicketIsPendingBeforeTheWindowOpens(t *testing.T) {
@@ -515,16 +513,15 @@ func TestAColdTicketIsPendingBeforeTheWindowOpens(t *testing.T) {
 	opts.SessionRoot = ""
 	opts.Ticket = "https://linear.app/issue/LIF-2841"
 	opts.TicketPrompt = "Cold prompt"
+	opts.Config = &config.Config{Root: opts.Root}
 	kernel := testWorkbench(t, r, &opts)
-	reg := kernel.Sessions
-	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, r.Emit, nil, nil)
 
 	startWorkbench(t, r, kernel, opts)
 	<-r.opened
-	if pending := opts.assembly.Pending(); pending != opts.Ticket {
+	if pending := kernel.Assembly.Pending(); pending != opts.Ticket {
 		t.Fatalf("pending after open = %q, want %q", pending, opts.Ticket)
 	}
-	if _, prompt := opts.assembly.pendingTicket(); prompt != opts.TicketPrompt {
+	if _, prompt := kernel.PendingTicket(); prompt != opts.TicketPrompt {
 		t.Fatalf("pending prompt after open = %q, want %q", prompt, opts.TicketPrompt)
 	}
 	if agents, serves := boot.counts(); agents != 0 || serves != 0 {
@@ -537,24 +534,24 @@ func TestAColdTicketIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T)
 	opts, _ := testOptions(t)
 	opts.SessionRoot = ""
 	opts.Ticket = "https://linear.app/issue/LIF-2841"
-	kernel := testWorkbench(t, r, &opts)
-	reg := kernel.Sessions
+	opts.Config = &config.Config{Root: opts.Root}
 	offered := make(chan struct{})
 	release := make(chan struct{})
-	opts.assembly = newAssembly(&config.Config{Root: opts.Root}, nil, reg, func(event string, _ any) {
-		if event != assemblyRequestedEvent {
+	r.atEmit = func(event string) {
+		if event != "assembly:requested" {
 			return
 		}
 		close(offered)
 		<-release
-	}, nil, nil)
+	}
+	kernel := testWorkbench(t, r, &opts)
 
 	startWorkbench(t, r, kernel, opts)
 	<-offered
 	if workbench.Published(opts.Socket) {
 		t.Fatal("the process endpoint was published before its cold Linear issue was installed")
 	}
-	if pending := opts.assembly.Pending(); pending != opts.Ticket {
+	if pending := kernel.Assembly.Pending(); pending != opts.Ticket {
 		t.Fatalf("pending during publication handoff = %q, want %q", pending, opts.Ticket)
 	}
 	close(release)
@@ -642,4 +639,43 @@ func chromeOf(t *testing.T, kernel *core.Core, want func(status.Fields) bool) st
 		return want(fields)
 	})
 	return fields
+}
+
+func TestFirstRunRelaunchCarriesOnlyAnUnclaimedSeed(t *testing.T) {
+	kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{Root: t.TempDir()}})
+	if _, err := kernel.Offer("LIF-2841", "Linear prompt"); err != nil {
+		t.Fatal(err)
+	}
+	var carried, carriedPrompt string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		carried, carriedPrompt = request()
+		return nil
+	}, kernel.PendingTicket)
+	if err := relaunch(); err != nil || carried != "https://linear.app/issue/LIF-2841" || carriedPrompt != "Linear prompt" {
+		t.Fatalf("unclaimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+	kernel.Assembly.Begin()
+	carried = "not called"
+	carriedPrompt = "not called"
+	if err := relaunch(); err != nil || carried != "" {
+		t.Fatalf("claimed relaunch = %q, %q, %v", carried, carriedPrompt, err)
+	}
+}
+
+func TestFirstRunRelaunchReadsAPendingSeedAfterItOwnsTheHandoff(t *testing.T) {
+	kernel := testWorkbench(t, newFakeRenderer(), &Options{Config: &config.Config{Root: t.TempDir()}})
+	var carried string
+	relaunch := pendingRelaunch(func(request func() (string, string)) error {
+		if _, err := kernel.Offer("LIF-2841", "Late prompt"); err != nil {
+			return err
+		}
+		carried, _ = request()
+		return nil
+	}, kernel.PendingTicket)
+	if err := relaunch(); err != nil {
+		t.Fatal(err)
+	}
+	if carried != "https://linear.app/issue/LIF-2841" {
+		t.Fatalf("late pending seed = %q", carried)
+	}
 }

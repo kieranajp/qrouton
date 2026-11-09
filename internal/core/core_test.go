@@ -96,6 +96,8 @@ type stubBoot struct {
 	argv     []string
 	shell    func(sessionRoot string) []string
 	document func(sessionRoot, name string) (workbench.WindowOptions, error)
+	// booting runs inside each supervisor request, while the session boots.
+	booting func(AgentRequest)
 
 	mu      sync.Mutex
 	sockets map[string]string
@@ -111,6 +113,9 @@ func newStubBoot(argv ...string) *stubBoot {
 }
 
 func (b *stubBoot) Agent(req AgentRequest) (AgentCommand, error) {
+	if b.booting != nil {
+		b.booting(req)
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.agents++

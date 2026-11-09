@@ -97,6 +97,10 @@ const (
 	windowDiagramEvent = "window:diagram:"
 	windowContentEvent = "window:content:"
 	windowsEvent       = "window:open"
+
+	reposRefreshEvent      = "repos:refresh"
+	assemblyProgressEvent  = "assembly:progress"
+	assemblyRequestedEvent = "assembly:requested"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -185,3 +189,14 @@ const (
 )
 
 const assetIndexErrorFormat = "%w: %d (expected 1 through %d)"
+
+const (
+	ticketFetchTimeout = 15 * time.Second
+
+	// branchListTimeout bounds the branch listing GitHub is asked for, which the
+	// base menu opens without waiting for.
+	branchListTimeout = 5 * time.Second
+
+	// repoRefreshTimeout bounds each owner's repository listing.
+	repoRefreshTimeout = 30 * time.Second
+)

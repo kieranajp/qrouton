@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -24,9 +25,6 @@ type Options struct {
 	Vault *vault.Set
 	// Ollama is the embedding server Settings reports on; nil leaves Core.Ollama unset.
 	Ollama OllamaClient
-	// OpenTicket answers the process socket's open-ticket request, which is
-	// refused when it is nil.
-	OpenTicket func(url, prompt string) (string, error)
 }
 
 type Core struct {
@@ -37,6 +35,11 @@ type Core struct {
 	Chrome     *Chrome
 	Ollama     *Ollama
 	Vault      *vault.Set
+
+	Assembly     *Assembly
+	Repositories *Repositories
+	Orgs         *Orgs
+	Picker       *Picker
 
 	opts   Options
 	client Client
@@ -65,6 +68,15 @@ func New(opts Options, client Client) *Core {
 	if opts.Ollama != nil {
 		c.Ollama = NewOllama(opts.Ollama, client.Emit)
 	}
+	var signal func(string)
+	var runners func() ([]assembly.Runner, error)
+	if opts.Launcher != nil {
+		signal, runners = opts.Launcher.Signal, opts.Launcher.Runners
+	}
+	c.Repositories = newRepositories(opts.Config, client.Emit)
+	c.Orgs = &Orgs{cfg: opts.Config}
+	c.Assembly = newAssembly(opts.Config, c.Repositories, reg, client.Emit, signal, runners)
+	c.Picker = newPicker(opts.Config, reg, c.Repositories, signal)
 	c.wire()
 	return c
 }
@@ -164,12 +176,11 @@ func (c *Core) wire() {
 // Start serves the process socket and starts the watchers that run for the
 // core's lifetime.
 func (c *Core) Start(socket string) error {
-	hooks := controlHooks{picker: c.Sessions.QueuePicker}
-	if c.opts.OpenTicket != nil {
-		hooks.openTicket = c.opts.OpenTicket
-		hooks.focus = c.client.Raise
-	}
-	server, err := serveControl(socket, c.Windows, nil, hooks)
+	server, err := serveControl(socket, c.Windows, nil, controlHooks{
+		picker:     c.Sessions.QueuePicker,
+		openTicket: c.Offer,
+		focus:      c.client.Raise,
+	})
 	if err != nil {
 		return err
 	}
@@ -183,6 +194,13 @@ func (c *Core) Start(socket string) error {
 	}
 	return nil
 }
+
+// Offer routes a ticket opened from outside the window, over the process
+// socket or at launch.
+func (c *Core) Offer(url, prompt string) (string, error) { return c.Assembly.offer(url, prompt) }
+
+// PendingTicket is the unclaimed ticket and prompt a relaunch carries.
+func (c *Core) PendingTicket() (string, string) { return c.Assembly.pendingTicket() }
 
 // OpenSession boots the session at root and puts it on screen.
 func (c *Core) OpenSession(root string, resume bool) error {

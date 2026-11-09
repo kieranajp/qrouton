@@ -1,7 +1,9 @@
 package desktop
 
 import (
+	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -110,3 +112,51 @@ type Chrome struct{ chrome *core.Chrome }
 func (c *Chrome) AgentTree(slug string) status.AgentTree { return c.chrome.AgentTree(slug) }
 
 func (c *Chrome) Snapshot() status.Fields { return c.chrome.Snapshot() }
+
+type Assembly struct{ assembly *core.Assembly }
+
+func (a *Assembly) Prefixes() []string { return a.assembly.Prefixes() }
+
+func (a *Assembly) Runners() ([]assembly.Runner, error) { return a.assembly.Runners() }
+
+func (a *Assembly) Check(in core.DraftInput) []assembly.Problem { return a.assembly.Check(in) }
+
+func (a *Assembly) CheckSlug(in core.DraftInput) []assembly.Problem { return a.assembly.CheckSlug(in) }
+
+func (a *Assembly) Preview(in core.DraftInput) string { return a.assembly.Preview(in) }
+
+func (a *Assembly) Fetch(url string) (core.TicketFields, error) { return a.assembly.Fetch(url) }
+
+func (a *Assembly) Pending() string { return a.assembly.Pending() }
+
+func (a *Assembly) Begin() core.AssemblySeed { return a.assembly.Begin() }
+
+func (a *Assembly) End(generation uint64) { a.assembly.End(generation) }
+
+func (a *Assembly) Create(in core.DraftInput) error { return a.assembly.Create(in) }
+
+type Repositories struct{ repos *core.Repositories }
+
+func (r *Repositories) Cached() []github.Repo { return r.repos.Cached() }
+
+func (r *Repositories) Select(picks []core.RepoPick) []session.RepoSelection {
+	return r.repos.Select(picks)
+}
+
+func (r *Repositories) Branches(id string) core.BranchList { return r.repos.Branches(id) }
+
+func (r *Repositories) Refresh() int { return r.repos.Refresh() }
+
+type Orgs struct{ orgs *core.Orgs }
+
+func (o *Orgs) List() []string { return o.orgs.List() }
+
+type Picker struct{ picker *core.Picker }
+
+func (p *Picker) Escalate(slug string) error { return p.picker.Escalate(slug) }
+
+func (p *Picker) Load(slug string) (core.PickerFields, error) { return p.picker.Load(slug) }
+
+func (p *Picker) Confirm(slug string, in core.PickerInput) error { return p.picker.Confirm(slug, in) }
+
+func (p *Picker) Cancel(slug string) error { return p.picker.Cancel(slug) }

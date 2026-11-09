@@ -65,12 +65,9 @@ const (
 	presenterNotesEvent  = "presenter:notes"
 	presenterClosedEvent = "presenter:closed"
 
-	reposRefreshEvent      = "repos:refresh"
-	assemblyProgressEvent  = "assembly:progress"
-	assemblyRequestedEvent = "assembly:requested"
-	orgsChangedEvent       = "orgs:changed"
-	uiScaleEvent           = "ui:scale"
-	updateEvent            = "update:status"
+	orgsChangedEvent = "orgs:changed"
+	uiScaleEvent     = "ui:scale"
+	updateEvent      = "update:status"
 )
 
 // A Save refusal names the settings field it belongs under before the sentence.
@@ -110,14 +107,6 @@ const (
 	// which fills in after the screen has already drawn.
 	loginTimeout       = 5 * time.Second
 	githubCheckTimeout = 4 * time.Second
-	ticketFetchTimeout = 15 * time.Second
-
-	// branchListTimeout bounds the branch listing GitHub is asked for, which the
-	// base menu opens without waiting for.
-	branchListTimeout = 5 * time.Second
-
-	// repoRefreshTimeout bounds each owner's repository listing.
-	repoRefreshTimeout = 30 * time.Second
 
 	// updateInterval paces the release check; updateCheckTimeout bounds each one.
 	updateInterval     = 6 * time.Hour

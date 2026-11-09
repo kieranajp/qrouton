@@ -3,6 +3,8 @@ package core
 import (
 	"errors"
 	"fmt"
+
+	"github.com/kieranajp/qrouton/internal/assembly"
 )
 
 var ErrUnavailable = errors.New("this client cannot do that")
@@ -59,6 +61,8 @@ var (
 	ErrNotAnswerable          = errors.New("window is not a spec or an audit")
 	ErrWrongSend              = errors.New("that line is not the one this document sends")
 	ErrNoSuchAsset            = errors.New("no open deck or gallery serves that asset")
+	ErrNoAgentCommand         = errors.New("workbench has no agent command to run")
+	ErrNoConfig               = errors.New("workbench has no configuration to assemble sessions against")
 )
 
 func noSuchWindow(id string) error {
@@ -81,4 +85,10 @@ func agentAlreadyRunning(slug string, pid int) error {
 
 func unknownOperation(op string) error {
 	return fmt.Errorf("unknown workbench operation %q", op)
+}
+
+// draftRefused turns a validation problem into the refusal the page's promise
+// rejects with, so pressing Create on an invalid form says which field.
+func draftRefused(p assembly.Problem) error {
+	return fmt.Errorf("%s: %s", p.Field, p.Message)
 }

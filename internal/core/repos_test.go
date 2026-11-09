@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -410,7 +410,7 @@ func TestBranchesOfAnUnknownIDIsNotFetched(t *testing.T) {
 	repos, _, _ := testRepositories(t, nil, fake)
 
 	got := repos.Branches("acme/api")
-	if !reflect.DeepEqual(got, branchList{}) {
+	if !reflect.DeepEqual(got, BranchList{}) {
 		t.Fatalf("Branches = %+v, want a zero value for an unknown id", got)
 	}
 	if got := fake.branchFetches(); len(got) != 0 {

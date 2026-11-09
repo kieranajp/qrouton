@@ -57,7 +57,6 @@ type Options struct {
 	Validator  Validator
 	Relauncher Relauncher
 
-	assembly  *Assembly
 	updates   *Updates
 	placement *Placement
 }
@@ -95,36 +94,28 @@ func Run(opts Options) error {
 		return kernel.Windows.OpenGalleryAsset(token, index)
 	})
 	client := newLocalClient(r, opts.Launcher, r.chooseDirectory)
-	var assemblyService *Assembly
 	kernel = core.New(core.Options{
 		Root:     opts.Root,
 		Config:   opts.Config,
 		Launcher: opts.Launcher,
 		Vault:    core.OpenVault(opts.Config),
 		Ollama:   vault.NewOllama(),
-		OpenTicket: func(url, prompt string) (string, error) {
-			return assemblyService.offer(url, prompt)
-		},
 	}, client)
 	reg := kernel.Sessions
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
-	repos := newRepositories(opts.Config, r.Emit)
-	picker := newPicker(opts.Config, reg, repos, opts.Launcher.Signal)
 	quit := quitter(kernel, r)
 	r.register(application.NewService(&Term{term: kernel.Term}))
 	r.register(application.NewService(&Windows{windows: kernel.Windows}))
 	r.register(application.NewService(&Sessions{sessions: reg}))
-	r.register(application.NewService(repos))
-	r.register(application.NewService(&Orgs{cfg: opts.Config}))
+	r.register(application.NewService(&Repositories{repos: kernel.Repositories}))
+	r.register(application.NewService(&Orgs{orgs: kernel.Orgs}))
 	r.register(application.NewService(&Chrome{chrome: kernel.Chrome}))
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
 	r.register(application.NewService(&Ollama{ollama: kernel.Ollama}))
-	assemblyService = newAssembly(opts.Config, repos, reg, r.Emit, opts.Launcher.Signal, opts.Launcher.Runners)
-	opts.assembly = assemblyService
-	r.register(application.NewService(assemblyService))
-	r.register(application.NewService(picker))
+	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
+	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
 	validateEditor, validateLaunch := validators(opts.Validator)
 	r.register(application.NewService(newSettings(
@@ -132,7 +123,7 @@ func Run(opts Options) error {
 		withoutTicket(relaunchWith(opts.Relauncher)), quit, reg.Touch, core.ReconfigureVault(kernel.Vault),
 		opts.Launcher.Runners, client,
 	)))
-	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), assemblyService)
+	relaunch := pendingRelaunch(relaunchWith(opts.Relauncher), kernel.PendingTicket)
 	firstRun := newFirstRun(opts.Config, reg.Touch, relaunch, quit, client.ChooseDirectory, core.ReconfigureVault(kernel.Vault))
 	r.register(application.NewService(firstRun))
 	opts.placement = newPlacement(opts.Config, reg)
@@ -151,11 +142,11 @@ func quitter(kernel *core.Core, r renderer) func() {
 	})
 }
 
-func pendingRelaunch(relaunch func(func() (string, string)) error, assembly *Assembly) func() error {
+func pendingRelaunch(relaunch func(func() (string, string)) error, pending func() (string, string)) func() error {
 	if relaunch == nil {
 		return nil
 	}
-	return func() error { return relaunch(assembly.pendingTicket) }
+	return func() error { return relaunch(pending) }
 }
 
 // withoutTicket relaunches carrying no pending ticket, as a settings restart has none.
@@ -198,10 +189,7 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	}
 	defer kernel.Shutdown()
 	if opts.Ticket != "" {
-		if opts.assembly == nil {
-			return ErrNoConfig
-		}
-		if _, err := opts.assembly.offer(opts.Ticket, opts.TicketPrompt); err != nil {
+		if _, err := kernel.Offer(opts.Ticket, opts.TicketPrompt); err != nil {
 			return err
 		}
 	}

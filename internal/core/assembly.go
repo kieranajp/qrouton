@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -6,15 +6,14 @@ import (
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/ticket"
 )
 
-// draftInput is the overlay's form on the wire. Repos names repositories rather
+// DraftInput is the overlay's form on the wire. Repos names repositories rather
 // than carrying them, so resolving the names against the live list is what drops
 // anything a refresh has taken away.
-type draftInput struct {
+type DraftInput struct {
 	Name              string     `json:"name"`
 	BranchDescription string     `json:"branchDescription"`
 	Entropy           string     `json:"entropy"`
@@ -23,21 +22,21 @@ type draftInput struct {
 	Prefix            string     `json:"prefix"`
 	Mode              string     `json:"mode"`
 	Runner            string     `json:"runner"`
-	Repos             []repoPick `json:"repos"`
+	Repos             []RepoPick `json:"repos"`
 }
 
-// repoPick is one row's answer, in the order it was picked: first picked means
+// RepoPick is one row's answer, in the order it was picked: first picked means
 // worked in most. Base names the branch to cut from; absent takes the
 // repository's default.
-type repoPick struct {
+type RepoPick struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
 	Base string `json:"base,omitempty"`
 }
 
-// ticketFields is a fetched ticket on the wire. The domain type knows nothing
+// TicketFields is a fetched ticket on the wire. The domain type knows nothing
 // about pages and keeps it that way.
-type ticketFields struct {
+type TicketFields struct {
 	Title             string `json:"title"`
 	Body              string `json:"body"`
 	BranchDescription string `json:"branchDescription"`
@@ -52,17 +51,22 @@ type AssemblySeed struct {
 type Assembly struct {
 	cfg       *config.Config
 	repos     *Repositories
-	sessions  *core.Sessions
-	emit      emitter
+	sessions  *Sessions
+	emit      Emitter
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
 	offers    assembly.Offers
+	fetch     func(ctx context.Context, url string) (ticket.Ticket, error)
 }
 
-func newAssembly(cfg *config.Config, repos *Repositories, reg *core.Sessions, emit emitter,
+func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit Emitter,
 	signal func(string), runners func() ([]assembly.Runner, error)) *Assembly {
 	return &Assembly{cfg: cfg, repos: repos, sessions: reg, emit: emit,
-		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}, runners: runners}
+		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}, runners: runners, fetch: fetchTicket}
+}
+
+func fetchTicket(ctx context.Context, url string) (ticket.Ticket, error) {
+	return ticket.Fetch(ctx, http.DefaultClient, url)
 }
 
 func (a *Assembly) Prefixes() []string { return assembly.Prefixes() }
@@ -78,26 +82,26 @@ func (a *Assembly) Runners() ([]assembly.Runner, error) {
 	return assembly.Installed(all), nil
 }
 
-func (a *Assembly) Check(in draftInput) []assembly.Problem {
+func (a *Assembly) Check(in DraftInput) []assembly.Problem {
 	return assembly.Check(a.draft(in))
 }
 
-func (a *Assembly) CheckSlug(in draftInput) []assembly.Problem {
+func (a *Assembly) CheckSlug(in DraftInput) []assembly.Problem {
 	assembler := a.assembler
 	assembler.Cfg = a.cfg.Snapshot()
 	return assembler.CheckSlug(a.draft(in))
 }
 
-func (a *Assembly) Preview(in draftInput) string { return assembly.Preview(a.draft(in)) }
+func (a *Assembly) Preview(in DraftInput) string { return assembly.Preview(a.draft(in)) }
 
-func (a *Assembly) Fetch(url string) (ticketFields, error) {
+func (a *Assembly) Fetch(url string) (TicketFields, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), ticketFetchTimeout)
 	defer cancel()
-	loaded, err := ticket.Fetch(ctx, http.DefaultClient, url)
+	loaded, err := a.fetch(ctx, url)
 	if err != nil {
-		return ticketFields{}, err
+		return TicketFields{}, err
 	}
-	return ticketFields{Title: loaded.Title, Body: loaded.Body,
+	return TicketFields{Title: loaded.Title, Body: loaded.Body,
 		BranchDescription: assembly.SuggestBranchDescription(loaded.Title)}, nil
 }
 
@@ -151,7 +155,7 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 	return outcome, nil
 }
 
-func (a *Assembly) Create(in draftInput) error {
+func (a *Assembly) Create(in DraftInput) error {
 	cfg := a.cfg.Snapshot()
 	draft := a.draft(in)
 	if draft.Entropy == "" {
@@ -182,7 +186,7 @@ func (a *Assembly) Create(in draftInput) error {
 	return a.sessions.Adopt(root, in.Runner)
 }
 
-func (a *Assembly) draft(in draftInput) assembly.Draft {
+func (a *Assembly) draft(in DraftInput) assembly.Draft {
 	return assembly.Draft{Name: in.Name, BranchDescription: in.BranchDescription, Entropy: in.Entropy,
 		Description: in.Description, Ticket: in.Ticket, Prefix: in.Prefix,
 		Mode: session.SessionMode(in.Mode), Repos: a.repos.Select(in.Repos)}

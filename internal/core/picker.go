@@ -1,20 +1,19 @@
-package desktop
+package core
 
 import (
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-// heldRepo is one repository the session already holds, wearing the role it holds
+// HeldRepo is one repository the session already holds, wearing the role it holds
 // it in. A held row is not composed again — that would clone a repo the agent is
 // working in a second time — but a reference one can be named in Upgrades.
-type heldRepo struct {
+type HeldRepo struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
 	// Base is the branch this repository was cut from, absent for the default one.
@@ -22,19 +21,19 @@ type heldRepo struct {
 	Locked bool   `json:"locked"`
 }
 
-// pickerFields is what the picker draws itself from: the branch anything added
+// PickerFields is what the picker draws itself from: the branch anything added
 // joins, and the rows the session already holds. Branch is empty for a session
 // with no repositories yet, which is the escalation that acquires its first ones.
-type pickerFields struct {
+type PickerFields struct {
 	Branch string     `json:"branch"`
-	Repos  []heldRepo `json:"repos"`
+	Repos  []HeldRepo `json:"repos"`
 }
 
-// pickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
+// PickerInput is the picker's answer. Repos are rows to acquire; Upgrades name
 // rows the session already reads, to be checked out for editing instead — the
 // two reach the session by different routes, so they arrive apart.
-type pickerInput struct {
-	Repos    []repoPick `json:"repos"`
+type PickerInput struct {
+	Repos    []RepoPick `json:"repos"`
 	Upgrades []string   `json:"upgrades"`
 }
 
@@ -42,12 +41,12 @@ type pickerInput struct {
 // escalation actions as well as the add-repos button.
 type Picker struct {
 	cfg       *config.Config
-	sessions  *core.Sessions
+	sessions  *Sessions
 	repos     *Repositories
 	assembler assembly.Assembler
 }
 
-func newPicker(cfg *config.Config, reg *core.Sessions, repos *Repositories, signal func(string)) *Picker {
+func newPicker(cfg *config.Config, reg *Sessions, repos *Repositories, signal func(string)) *Picker {
 	return &Picker{cfg: cfg, sessions: reg, repos: repos,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}}
 }
@@ -71,28 +70,28 @@ func (p *Picker) Escalate(slug string) error {
 	return nil
 }
 
-func (p *Picker) Load(slug string) (pickerFields, error) {
+func (p *Picker) Load(slug string) (PickerFields, error) {
 	_, root, err := p.root(slug)
 	if err != nil {
-		return pickerFields{}, err
+		return PickerFields{}, err
 	}
 	m, err := session.Load(root)
 	if err != nil {
-		return pickerFields{}, err
+		return PickerFields{}, err
 	}
-	held := make([]heldRepo, 0, len(m.Repos))
+	held := make([]HeldRepo, 0, len(m.Repos))
 	for _, r := range m.Repos {
-		held = append(held, heldRepo{
+		held = append(held, HeldRepo{
 			ID:     (github.Repo{Org: r.Org, Name: r.Name}).ID(),
 			Role:   string(r.Role.Effective()),
 			Base:   r.BaseBranch,
 			Locked: true,
 		})
 	}
-	return pickerFields{Branch: m.Branch(), Repos: held}, nil
+	return PickerFields{Branch: m.Branch(), Repos: held}, nil
 }
 
-func (p *Picker) Confirm(slug string, in pickerInput) error {
+func (p *Picker) Confirm(slug string, in PickerInput) error {
 	state, root, err := p.root(slug)
 	if err != nil {
 		return err
@@ -133,7 +132,7 @@ func (p *Picker) Cancel(slug string) error {
 // picker has no name, ticket or mode field, so those come from the manifest. An
 // escalation is the exception — it proposes a name for the work it is escalating
 // to, and the prefix a first branch is cut with.
-func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in pickerInput) assembly.Draft {
+func (p *Picker) draft(m session.Manifest, escalation *workbench.PickerRequest, in PickerInput) assembly.Draft {
 	repos := p.repos.Select(in.Repos)
 	name, prefix := m.DisplayName(), assembly.Prefixes()[0]
 	upgrades := heldRefs(m, in.Upgrades)
@@ -170,11 +169,11 @@ func heldRefs(m session.Manifest, ids []string) []session.RepoRef {
 	return refs
 }
 
-func (p *Picker) root(slug string) (*core.SessionState, string, error) {
+func (p *Picker) root(slug string) (*SessionState, string, error) {
 	state := p.sessions.BySlug(slug)
 	root := state.Root()
 	if root == "" {
-		return nil, "", core.UnknownSession(slug)
+		return nil, "", UnknownSession(slug)
 	}
 	return state, root, nil
 }

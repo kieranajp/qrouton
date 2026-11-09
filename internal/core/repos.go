@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func liveGitHub() gh {
 
 type Repositories struct {
 	cfg  *config.Config
-	emit emitter
+	emit Emitter
 	gh   gh
 
 	mu    sync.Mutex
@@ -52,7 +52,7 @@ type Repositories struct {
 	// branchLists is this workbench's memo of what a repository's branches are,
 	// held only in memory: the on-disk repository cache is owner-keyed and
 	// version-gated, so a branch list has no business in it.
-	branchLists map[string]branchList
+	branchLists map[string]BranchList
 	gen         int
 	cancel      context.CancelFunc
 	// ownerTimeout bounds each owner a retry refetches on its own.
@@ -61,8 +61,11 @@ type Repositories struct {
 	done func(generation int)
 }
 
-func newRepositories(cfg *config.Config, emit emitter) *Repositories {
-	repos, _, _ := github.CachedRepos(cfg.Snapshot().Orgs)
+func newRepositories(cfg *config.Config, emit Emitter) *Repositories {
+	var repos []github.Repo
+	if cfg != nil {
+		repos, _, _ = github.CachedRepos(cfg.Snapshot().Orgs)
+	}
 	return &Repositories{cfg: cfg, emit: emit, gh: liveGitHub(), repos: repos, errs: map[string]error{}, ownerTimeout: repoRefreshTimeout}
 }
 
@@ -78,7 +81,7 @@ func (r *Repositories) Cached() []github.Repo {
 // order they were picked. A repository a refresh has dropped simply is not there
 // any more. A base naming the repository's own default branch is cleared here,
 // so a session nobody chose a branch for records none.
-func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
+func (r *Repositories) Select(picks []RepoPick) []session.RepoSelection {
 	byID := make(map[string]github.Repo)
 	for _, repo := range r.Cached() {
 		byID[repo.ID()] = repo
@@ -102,10 +105,10 @@ func (r *Repositories) Select(picks []repoPick) []session.RepoSelection {
 // first. A failure arrives inside the payload rather than as a Go error, and is
 // not memoised, so an unreachable GitHub leaves the menu the default branch to
 // offer and the next open tries again.
-func (r *Repositories) Branches(id string) branchList {
+func (r *Repositories) Branches(id string) BranchList {
 	repo, ok := r.byID(id)
 	if !ok {
-		return branchList{}
+		return BranchList{}
 	}
 	if memo, ok := r.memoisedBranches(id); ok {
 		return memo
@@ -117,8 +120,8 @@ func (r *Repositories) Branches(id string) branchList {
 	return list
 }
 
-func (r *Repositories) fetchBranches(repo github.Repo) (branchList, bool) {
-	fallback := branchList{Default: repo.DefaultBranch, Branches: defaultFirst(nil, repo.DefaultBranch)}
+func (r *Repositories) fetchBranches(repo github.Repo) (BranchList, bool) {
+	fallback := BranchList{Default: repo.DefaultBranch, Branches: defaultFirst(nil, repo.DefaultBranch)}
 	token, err := r.gh.token()
 	if err != nil {
 		fallback.Error = errorText(err)
@@ -129,7 +132,7 @@ func (r *Repositories) fetchBranches(repo github.Repo) (branchList, bool) {
 		fallback.Error = errorText(err)
 		return fallback, false
 	}
-	return branchList{Default: repo.DefaultBranch, Branches: defaultFirst(names, repo.DefaultBranch)}, true
+	return BranchList{Default: repo.DefaultBranch, Branches: defaultFirst(names, repo.DefaultBranch)}, true
 }
 
 // defaultFirst leads with the branch a session would take anyway.
@@ -155,18 +158,18 @@ func (r *Repositories) byID(id string) (github.Repo, bool) {
 	return github.Repo{}, false
 }
 
-func (r *Repositories) memoisedBranches(id string) (branchList, bool) {
+func (r *Repositories) memoisedBranches(id string) (BranchList, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	list, ok := r.branchLists[id]
 	return list, ok
 }
 
-func (r *Repositories) memoiseBranches(id string, list branchList) {
+func (r *Repositories) memoiseBranches(id string, list BranchList) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.branchLists == nil {
-		r.branchLists = map[string]branchList{}
+		r.branchLists = map[string]BranchList{}
 	}
 	r.branchLists[id] = list
 }
