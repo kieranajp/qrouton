@@ -175,3 +175,25 @@ test("nothing in the chrome meters the research", async ({ page }) => {
   await expect(page.locator(".pip")).toHaveCount(0);
   await expect(page.locator(".dot")).toHaveCount(0);
 });
+
+// Regression: an unpositioned scroller lets hidden .lifted headings escape its clip and grow the document.
+test("hidden headings stay inside the sheet and the document does not outgrow the window", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 400 });
+  await open(page);
+  await page.getByRole("button", { name: "Expand all" }).click();
+  await expect.poll(() => page.evaluate(() => window.drawnItems())).toEqual([LOADER, KIND, OPEN]);
+
+  const state = await page.evaluate(() => {
+    const sheet = document.querySelector(".sheet");
+    const el = document.scrollingElement;
+    const lifted = [...document.querySelectorAll(".lifted")];
+    return {
+      count: lifted.length,
+      allInSheet: lifted.map((box) => box.offsetParent?.className ?? null),
+      overflow: el.scrollHeight - el.clientHeight,
+    };
+  });
+  expect(state.count).toBeGreaterThan(0);
+  expect(state.allInSheet.every((c) => c?.startsWith("sheet"))).toBe(true);
+  expect(state.overflow).toBe(0);
+});

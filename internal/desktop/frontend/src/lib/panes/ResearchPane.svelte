@@ -155,6 +155,7 @@
   .sheet,
   .reading {
     flex: 1;
+    position: relative;
     min-height: 0;
     overflow-y: auto;
     padding: 0 var(--pane-pad) calc(26px * var(--ui-scale));

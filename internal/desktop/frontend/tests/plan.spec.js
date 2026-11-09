@@ -643,3 +643,22 @@ test("the document view keeps the strip, which follows the scroll", async ({ pag
   await page.evaluate(() => window.scrollTo_(0));
   await expect.poll(() => page.evaluate(() => window.counter())).toBe("Overview");
 });
+
+// Regression: an unpositioned deck lets hidden headings escape its clip and grow the document.
+// Closed phases have no box, so the deck's positioning is asserted rather than each offsetParent.
+test("hidden headings and criteria titles are absolute inside a positioned deck", async ({ page }) => {
+  await open(page);
+
+  const state = await page.evaluate(() => {
+    const deck = document.querySelector(".deck");
+    const hidden = [...document.querySelectorAll(".lifted, .criteria .markdown h3")];
+    return {
+      count: hidden.length,
+      deck: getComputedStyle(deck).position,
+      inside: hidden.every((el) => deck.contains(el) && getComputedStyle(el).position === "absolute"),
+    };
+  });
+  expect(state.count).toBeGreaterThan(0);
+  expect(state.deck).toBe("relative");
+  expect(state.inside).toBe(true);
+});

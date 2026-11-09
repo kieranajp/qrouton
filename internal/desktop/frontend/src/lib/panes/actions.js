@@ -5,7 +5,7 @@ import { Events, openURL } from "../wails.js";
 import { renderDiagrams, reportViewport } from "./calls.js";
 import { apply as applyDiagrams, teardown as teardownDiagrams } from "./diagrams.js";
 import { documentPath, linkKind, marks } from "./markdown.js";
-import { createViewportController, nextViewportSequence } from "./viewport.js";
+import { createViewportController, nextViewportSequence, revealTarget } from "./viewport.js";
 import { createDiagramStream } from "./diagram-stream.js";
 import { EXPAND } from "./diagram-view.js";
 import ImageLightbox from "./ImageLightbox.svelte";
@@ -114,7 +114,7 @@ export function viewport({ span, epoch, marking, onMeasure }) {
       return createViewportController({
         root: params.scrollRoot,
         content,
-        target: blocks[at],
+        target: revealTarget(blocks[at]),
         span: asked,
         selected: params.active,
         nextSequence: () => nextViewportSequence(params.id),
