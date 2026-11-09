@@ -147,6 +147,11 @@ export const TALL = PLAN.replace(
   "Middle body copy a span can point at.",
   Array.from({ length: 48 }, (_, i) => `Middle body paragraph ${i + 1}.`).join("\n\n"),
 ).replace("- [ ] one check not", "- [ ] one check not\n- [ ] another check not");
+// Phases 2 and 3 both overflow, so moving between them cannot rely on the browser clamping the scroll.
+export const TALL_BOTH = TALL.replace(
+  "Closing body copy.",
+  Array.from({ length: 48 }, (_, i) => `Closing body paragraph ${i + 1}.`).join("\n\n"),
+);
 export const TALL_UPDATED = TALL.replace("- [ ] one check not", "- [x] one check not");
 
 // Every criterion ticked, so a pushed document can move the meter.
@@ -312,6 +317,8 @@ window.wailsCall = async (name, id, payload) => {
       ? PLAIN
       : params.get("done")
         ? DONE
+        : params.get("tallboth")
+          ? TALL_BOTH
         : params.get("tall")
           ? TALL
         : params.get("long")
