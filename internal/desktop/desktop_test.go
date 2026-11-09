@@ -580,7 +580,7 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 		if err := term.Start(state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
-		pids = append(pids, state.process.cmd.Process.Pid)
+		pids = append(pids, state.process.Pid())
 		sockets = append(sockets, boot.socket(t, state.root()))
 	}
 
@@ -1413,7 +1413,7 @@ func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
 	if err := term.Start(before.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	pid := before.process.cmd.Process.Pid
+	pid := before.process.Pid()
 
 	if err := reg.Reload("octopus"); err != nil {
 		t.Fatal(err)
@@ -1480,7 +1480,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	pid := state.process.cmd.Process.Pid
+	pid := state.process.Pid()
 	socket := boot.socket(t, dir)
 	tab, err := windows.openStructural(state, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Cwd: dir, Command: []string{"/bin/cat"},
@@ -1495,7 +1495,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	shellPID := shell.cmd.Process.Pid
+	shellPID := shell.Pid()
 	state.agents.output()
 	reg.railOrder(polled("octopus"))
 	for len(reg.touched) > 0 {
@@ -1677,10 +1677,9 @@ func TestSessionRemovalSkipsDeadAndObsoleteHistoryFallbacks(t *testing.T) {
 					t.Fatal(err)
 				}
 				dead := reg.current()
-				exited := make(chan struct{})
-				close(exited)
+				finished := exitedPTY(t)
 				dead.mu.Lock()
-				dead.process = &ptyProcess{exited: exited}
+				dead.process = finished
 				dead.mu.Unlock()
 				if err := reg.Show("obsolete"); err != nil {
 					t.Fatal(err)
@@ -2163,7 +2162,7 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 	if alpha.terminal == beta.terminal {
 		t.Fatalf("both sessions were minted %q", alpha.terminal)
 	}
-	if alpha.process.cmd.Process.Pid == beta.process.cmd.Process.Pid {
+	if alpha.process.Pid() == beta.process.Pid() {
 		t.Fatal("two sessions share one supervisor")
 	}
 	if first, second := boot.socket(t, alpha.root()), boot.socket(t, beta.root()); first == second {
@@ -2807,7 +2806,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	pid := state.process.cmd.Process.Pid
+	pid := state.process.Pid()
 	socket := boot.socket(t, dir)
 	host := (workbench.Handle{Socket: socket, SessionRoot: dir}).WindowHost()
 	if _, err := host.Open(context.Background(), workbench.WindowOptions{
@@ -3282,4 +3281,16 @@ func TestCopyAssetTakesOnlyAnAssetInsideTheSession(t *testing.T) {
 	if len(pictures) != 1 || len(files) != 1 {
 		t.Fatalf("a refused request still reached the clipboard: %v %v", pictures, files)
 	}
+}
+
+// exitedPTY is a process that has already ended, as a crashed supervisor's is.
+func exitedPTY(t *testing.T) *core.PTY {
+	t.Helper()
+	process, err := core.StartPTY([]string{"/bin/sh", "-c", "exit 0"}, nil, t.TempDir(), 80, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(process.Stop)
+	waitFor(t, "the process to exit", process.Done)
+	return process
 }

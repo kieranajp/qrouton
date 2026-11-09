@@ -171,36 +171,9 @@ const (
 const (
 	socketNetwork = "unix"
 
-	termEnvVar      = "TERM"
-	termValue       = "xterm-256color"
-	colorTermEnvVar = "COLORTERM"
-	colorTermValue  = "truecolor"
-	noColorEnvVar   = "NO_COLOR"
-
-	// ptyReadBuffer is one read of the PTY. An agent painting a full-screen
-	// frame produces well under this, so a repaint arrives as one event.
-	ptyReadBuffer = 32 * 1024
-
 	// An agent's terminal starts at this size when no page has measured it yet.
 	unmountedCols = 80
 	unmountedRows = 24
-
-	windowScrollback = 256 * 1024
-
-	// windowScreenLines is what a read without full returns.
-	windowScreenLines = 50
-
-	// agentTailBytes is how much of a conversation is kept back for the log its
-	// supervisor's exit writes; logLimit is when a log is rotated.
-	agentTailBytes = 8 * 1024
-	logLimit       = 256 * 1024
-)
-
-const (
-	logPreviousSuffix = ".1"
-
-	agentExitLogFormat  = "%s agent exited: provider=%s status=%d\n"
-	agentExitTailFormat = "--- last output ---\n%s\n--- end output ---\n"
 )
 
 const documentPoll = time.Second
@@ -228,11 +201,6 @@ const (
 	// activityQuiet is how long the conversation PTY has to stay silent before
 	// the agent counts as idle. A runner redraws its spinner far faster.
 	activityQuiet = 3 * time.Second
-
-	// terminateGrace is how long a PTY's process tree gets to exit on SIGTERM
-	// before it is killed outright. launch has its own for the runner the
-	// supervisor signals; the two bound different processes and need not agree.
-	terminateGrace = 3 * time.Second
 
 	// loginTimeout bounds the GitHub lookup behind the owners screen's help line,
 	// which fills in after the screen has already drawn.

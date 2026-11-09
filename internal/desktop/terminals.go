@@ -2,41 +2,22 @@ package desktop
 
 import (
 	"context"
-	"encoding/base64"
 	"os"
-	"strings"
-	"sync"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
+	"github.com/kieranajp/qrouton/internal/core"
 )
 
 type terminals struct {
 	emit     emitter
 	registry *registry
-	sample   func(*ptyProcess) (busy, ok bool)
+	sample   func(*core.PTY) (busy, ok bool)
 }
 
-type terminalChunk struct {
-	Encoded string `json:"encoded"`
-	Replay  bool   `json:"replay,omitempty"`
-	// First marks a running process's first replay, whose queries the page
-	// answers as if live.
-	First bool `json:"first,omitempty"`
-}
-
-// Base64 because a raw PTY chunk is not valid UTF-8 at its boundary and JSON
-// marshalling corrupts it.
-func encodeChunk(b []byte) terminalChunk {
-	return terminalChunk{Encoded: base64.StdEncoding.EncodeToString(b)}
-}
-
-func decodeInput(encoded string) ([]byte, error) {
-	return base64.StdEncoding.DecodeString(encoded)
-}
+type terminalChunk = core.Chunk
 
 func newTerminals(emit emitter, reg *registry) *terminals {
-	return &terminals{emit: emit, registry: reg, sample: (*ptyProcess).foreground}
+	return &terminals{emit: emit, registry: reg, sample: (*core.PTY).Foreground}
 }
 
 // start serves the page: it launches the command if nothing has, and otherwise
@@ -56,7 +37,7 @@ func (t *terminals) launch(id string, cols, rows int) error {
 }
 
 func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalContent, bool, error) {
-	var started *ptyProcess
+	var started *core.PTY
 	var terminal *terminalContent
 	err := t.registry.with(id, func(window *agentWindow) error {
 		// A document has no command, and a page that asks anyway must not take the
@@ -69,7 +50,7 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 		if content.process != nil {
 			return nil
 		}
-		process, err := startPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, cols, rows)
+		process, err := core.StartPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, cols, rows)
 		if err != nil {
 			return err
 		}
@@ -81,11 +62,11 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 	if err != nil || started == nil {
 		return terminal, false, err
 	}
-	go started.pump(
+	go started.Pump(
 		func(b []byte) {
 			terminal.stream.Lock()
-			terminal.buffer.write(b)
-			t.emit(windowDataEvent+id, encodeChunk(b))
+			terminal.buffer.Write(b)
+			t.emit(windowDataEvent+id, core.EncodeChunk(b))
 			terminal.stream.Unlock()
 		},
 		func(code int) { t.exited(id, code) },
@@ -100,13 +81,13 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
 	terminal.stream.Lock()
 	defer terminal.stream.Unlock()
-	running := !terminal.process.done()
+	running := !terminal.process.Done()
 	if running {
-		if err := terminal.process.resize(cols, rows); err != nil {
+		if err := terminal.process.Resize(cols, rows); err != nil {
 			return err
 		}
 	}
-	chunk := encodeChunk(terminal.buffer.bytes())
+	chunk := core.EncodeChunk(terminal.buffer.Bytes())
 	chunk.Replay = true
 	chunk.First = running && !terminal.served
 	t.emit(windowDataEvent+id, chunk)
@@ -115,7 +96,7 @@ func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int)
 }
 
 func (t *terminals) write(id, encoded string) error {
-	data, err := decodeInput(encoded)
+	data, err := core.DecodeInput(encoded)
 	if err != nil {
 		return err
 	}
@@ -126,7 +107,7 @@ func (t *terminals) write(id, encoded string) error {
 	if process == nil {
 		return ErrTerminalNotStarted
 	}
-	return process.write(data)
+	return process.Write(data)
 }
 
 func (t *terminals) resize(id string, cols, rows int) error {
@@ -134,11 +115,11 @@ func (t *terminals) resize(id string, cols, rows int) error {
 	if err != nil || process == nil {
 		return nil
 	}
-	return process.resize(cols, rows)
+	return process.Resize(cols, rows)
 }
 
-func (t *terminals) process(id string) (*ptyProcess, error) {
-	var process *ptyProcess
+func (t *terminals) process(id string) (*core.PTY, error) {
+	var process *core.PTY
 	err := t.registry.with(id, func(window *agentWindow) error {
 		if terminal, ok := window.terminal(); ok {
 			process = terminal.process
@@ -186,7 +167,7 @@ func (t *terminals) watchForeground(ctx context.Context) {
 }
 
 func (t *terminals) pollForeground() {
-	shells := map[string]*ptyProcess{}
+	shells := map[string]*core.PTY{}
 	t.registry.each(func(id string, window *agentWindow) {
 		if terminal, ok := window.terminal(); ok && terminal.foreground && terminal.process != nil && terminal.exit == nil {
 			shells[id] = terminal.process
@@ -211,44 +192,4 @@ func (t *terminals) pollForeground() {
 	}
 }
 
-func terminalEnv() []string { return withTerminalEnv(os.Environ()) }
-
-type ring struct {
-	mu    sync.Mutex
-	limit int
-	buf   []byte
-}
-
-func (r *ring) write(b []byte) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	r.buf = append(r.buf, b...)
-	if len(r.buf) > r.limit {
-		r.buf = r.buf[len(r.buf)-r.limit:]
-	}
-}
-
-func (r *ring) bytes() []byte {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	return append([]byte(nil), r.buf...)
-}
-
-// text renders the buffer as the agent reads it: escape sequences stripped, and
-// each line reduced to what a carriage return last left on it.
-func (r *ring) text(full bool) string {
-	r.mu.Lock()
-	raw := string(r.buf)
-	r.mu.Unlock()
-
-	lines := strings.Split(strings.ReplaceAll(ansi.Strip(raw), "\r\n", "\n"), "\n")
-	for i, line := range lines {
-		if at := strings.LastIndex(line, "\r"); at >= 0 {
-			lines[i] = line[at+1:]
-		}
-	}
-	if !full && len(lines) > windowScreenLines {
-		lines = lines[len(lines)-windowScreenLines:]
-	}
-	return strings.Join(lines, "\n")
-}
+func terminalEnv() []string { return core.WithTerminalEnv(os.Environ()) }

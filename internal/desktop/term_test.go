@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -61,7 +62,7 @@ func testTerm(t *testing.T, emit emitter, root string, argv, env []string) (*Ter
 	t.Helper()
 	reg := newSessions()
 	t.Cleanup(reg.stopAll)
-	return newTerm(reg, emit), reg.add(root, argv, withTerminalEnv(env))
+	return newTerm(reg, emit), reg.add(root, argv, core.WithTerminalEnv(env))
 }
 
 // waitCeiling is not a latency any test here asserts: a child answers in
@@ -113,7 +114,7 @@ func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	waitFor(t, "the child's environment", func() bool {
-		return strings.Contains(rec.output(), termValue+" "+colorTermValue+" <>")
+		return strings.Contains(rec.output(), "xterm-256color truecolor <>")
 	})
 }
 
@@ -176,11 +177,11 @@ func TestTermStartIsIdempotent(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	first := state.process.cmd.Process.Pid
+	first := state.process.Pid()
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	if state.process.cmd.Process.Pid != first {
+	if state.process.Pid() != first {
 		t.Fatal("a second Start forked another agent")
 	}
 }
@@ -203,7 +204,7 @@ func TestTermStartsOneProcessPerTerminal(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if one.process.cmd.Process.Pid == two.process.cmd.Process.Pid {
+	if one.process.Pid() == two.process.Pid() {
 		t.Fatal("two conversations share one process")
 	}
 }

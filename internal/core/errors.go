@@ -15,3 +15,5 @@ type unavailable struct{ text string }
 func (u *unavailable) Error() string { return u.text }
 
 func (u *unavailable) Is(target error) bool { return target == ErrUnavailable }
+
+var ErrTerminalNotStarted = errors.New("terminal is not started")

@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/randomid"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -35,11 +36,11 @@ type windowContent interface {
 }
 
 type terminalContent struct {
-	buffer *ring
+	buffer *core.Ring
 	// stream orders a terminal's retained bytes and emitted chunks. A remounted
 	// page can therefore reset to one replay without racing live output around it.
 	stream  sync.Mutex
-	process *ptyProcess
+	process *core.PTY
 	// served is set once a page has shown the output, live or replayed.
 	served bool
 	// exit is nil while the process is still running.
@@ -326,7 +327,7 @@ func assetToken() string { return randomid.Hex(assetTokenBytes) }
 
 func (r *registry) readWindow(id string, full bool) (string, error) {
 	var text string
-	var buffer *ring
+	var buffer *core.Ring
 	if err := r.with(id, func(window *agentWindow) error {
 		if terminal, ok := window.terminal(); ok {
 			buffer = terminal.buffer
@@ -343,7 +344,7 @@ func (r *registry) readWindow(id string, full bool) (string, error) {
 	if buffer == nil {
 		return text, nil
 	}
-	return buffer.text(full), nil
+	return buffer.Text(full), nil
 }
 
 func (r *registry) window(id string) (*agentWindow, bool) {
@@ -373,7 +374,7 @@ func (r *registry) discard(id string) {
 	r.mu.Lock()
 	window, ok := r.open[id]
 	delete(r.open, id)
-	var process *ptyProcess
+	var process *core.PTY
 	if ok {
 		if terminal, live := window.terminal(); live {
 			process = terminal.process
@@ -391,7 +392,7 @@ func (r *registry) discard(id string) {
 		return
 	}
 	if process != nil {
-		process.stop()
+		process.Stop()
 	}
 	r.announce(window.session)
 }

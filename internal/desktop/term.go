@@ -1,6 +1,6 @@
 package desktop
 
-import "github.com/kieranajp/qrouton/internal/workbench"
+import "github.com/kieranajp/qrouton/internal/core"
 
 // Term is the conversation terminals' Go half; a page calls these methods over
 // the Wails bridge, naming the terminal it draws. A terminal's child is a
@@ -29,7 +29,7 @@ func (t *Term) Start(id string, cols, rows int) error {
 }
 
 func (t *Term) Write(id, encoded string) error {
-	data, err := decodeInput(encoded)
+	data, err := core.DecodeInput(encoded)
 	if err != nil {
 		return err
 	}
@@ -46,9 +46,4 @@ func (t *Term) Resize(id string, cols, rows int) error {
 		return nil
 	}
 	return state.resize(cols, rows)
-}
-
-func withTerminalEnv(env []string) []string {
-	env = workbench.WithoutEnv(env, noColorEnvVar)
-	return workbench.WithEnv(workbench.WithEnv(env, termEnvVar, termValue), colorTermEnvVar, colorTermValue)
 }

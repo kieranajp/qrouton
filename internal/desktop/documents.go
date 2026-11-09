@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/kinds"
 	"github.com/kieranajp/qrouton/internal/markdown"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -73,7 +74,7 @@ func (window *agentWindow) sourcePath() string {
 func contentFor(opts workbench.WindowOptions) windowContent {
 	switch opts.Kind {
 	case workbench.KindTerminal:
-		return &terminalContent{buffer: &ring{limit: windowScrollback}}
+		return &terminalContent{buffer: core.NewRing(core.WindowScrollback)}
 	case workbench.KindDocument:
 		content := &documentContent{}
 		if opts.Format == workbench.FormatAssets {

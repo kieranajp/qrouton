@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/creack/pty"
 	"github.com/kieranajp/qrouton/internal/status"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -503,7 +502,7 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	}
 	window, _ := w.window(id)
 	terminal, _ := window.terminal()
-	pid := terminal.process.cmd.Process.Pid
+	pid := terminal.process.Pid()
 	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("two-line prompt\n"))); err != nil {
 		t.Fatal(err)
 	}
@@ -515,12 +514,12 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	if err := w.Start(id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
-	if terminal.process.cmd.Process.Pid != pid {
+	if terminal.process.Pid() != pid {
 		t.Fatal("remounting a terminal forked another shell")
 	}
-	size, err := pty.GetsizeFull(terminal.process.file)
-	if err != nil || size.Cols != 120 || size.Rows != 36 {
-		t.Fatalf("remounted PTY size = %+v, %v, want 120x36", size, err)
+	cols, rows, err := terminal.process.Size()
+	if err != nil || cols != 120 || rows != 36 {
+		t.Fatalf("remounted PTY size = %dx%d, %v, want 120x36", cols, rows, err)
 	}
 	renderer.mu.Lock()
 	replay, ok := renderer.events[windowDataEvent+id].(terminalChunk)
@@ -536,6 +535,30 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 
 // The agent reads text, not a terminal: escape sequences go, and a line
 // rewritten by a carriage return reads as what it ended up saying.
+// Catches a terminal tab built with the wrong ring, such as the agent's short
+// exit tail, which would cut a tab's scrollback to a few screens.
+func TestATerminalTabKeeps256KiBOfScrollback(t *testing.T) {
+	w, _ := testWindows(t)
+	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
+		Kind: workbench.KindTerminal, Label: "flood", Cwd: t.TempDir(),
+		Command: []string{"/bin/sh", "-c", "head -c 300000 /dev/zero | tr '\\0' x; printf END; exec cat"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	var text string
+	waitFor(t, "the flood to finish", func() bool {
+		text, _ = w.readWindow(id, true)
+		return strings.HasSuffix(text, "END")
+	})
+	if len(text) != 256*1024 {
+		t.Fatalf("the tab kept %d bytes of scrollback, want 256 KiB", len(text))
+	}
+}
+
 func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	w, _ := testWindows(t)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
@@ -564,27 +587,6 @@ func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	}
 	if strings.Contains(text, "progress") {
 		t.Fatalf("a line rewritten by a carriage return kept both versions: %q", text)
-	}
-}
-
-func TestReadWithoutFullReturnsTheLastScreenful(t *testing.T) {
-	buffer := &ring{limit: windowScrollback}
-	for i := 0; i < windowScreenLines*3; i++ {
-		buffer.write([]byte("line\n"))
-	}
-	if lines := strings.Count(buffer.text(false), "\n") + 1; lines > windowScreenLines {
-		t.Fatalf("a screenful is %d lines", lines)
-	}
-	if lines := strings.Count(buffer.text(true), "\n") + 1; lines <= windowScreenLines {
-		t.Fatalf("full read returned only %d lines", lines)
-	}
-}
-
-func TestRingKeepsTheTailWithinItsLimit(t *testing.T) {
-	buffer := &ring{limit: 8}
-	buffer.write([]byte("0123456789abc"))
-	if got := buffer.text(true); got != "56789abc" {
-		t.Fatalf("ring text = %q, want the last bytes", got)
 	}
 }
 
@@ -1347,7 +1349,7 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	}
 	window, _ := w.window(id)
 	terminal, _ := window.terminal()
-	pid := terminal.process.cmd.Process.Pid
+	pid := terminal.process.Pid()
 	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("before mount\n"))); err != nil {
 		t.Fatal(err)
 	}
@@ -1359,12 +1361,12 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	if err := w.Start(id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
-	if terminal.process.cmd.Process.Pid != pid {
+	if terminal.process.Pid() != pid {
 		t.Fatal("mounting a launched terminal forked another process")
 	}
-	size, err := pty.GetsizeFull(terminal.process.file)
-	if err != nil || size.Cols != 120 || size.Rows != 36 {
-		t.Fatalf("mounted PTY size = %+v, %v, want 120x36", size, err)
+	cols, rows, err := terminal.process.Size()
+	if err != nil || cols != 120 || rows != 36 {
+		t.Fatalf("mounted PTY size = %dx%d, %v, want 120x36", cols, rows, err)
 	}
 	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "before mount") {
 		t.Fatalf("mount replay = %q, %v, want the retained line", replay, ok)
@@ -1401,17 +1403,17 @@ func TestLaunchingAMountedTerminalChangesNothing(t *testing.T) {
 	}
 	window, _ := w.window(id)
 	terminal, _ := window.terminal()
-	pid := terminal.process.cmd.Process.Pid
+	pid := terminal.process.Pid()
 
 	if err := w.terminals.launch(id, unmountedCols, unmountedRows); err != nil {
 		t.Fatal(err)
 	}
-	if terminal.process.cmd.Process.Pid != pid {
+	if terminal.process.Pid() != pid {
 		t.Fatal("launching a mounted terminal forked another process")
 	}
-	size, err := pty.GetsizeFull(terminal.process.file)
-	if err != nil || size.Cols != 120 || size.Rows != 36 {
-		t.Fatalf("PTY size after launch = %+v, %v, want 120x36", size, err)
+	cols, rows, err := terminal.process.Size()
+	if err != nil || cols != 120 || rows != 36 {
+		t.Fatalf("PTY size after launch = %dx%d, %v, want 120x36", cols, rows, err)
 	}
 	if replay, ok := lastReplay(t, renderer, id); ok {
 		t.Fatalf("launch sent the mounted page a replay: %q", replay)

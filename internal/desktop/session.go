@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/sessionpaths"
@@ -33,14 +34,14 @@ type sessionState struct {
 	control io.Closer
 	// tail is the last of the conversation, kept back for the log a supervisor's
 	// exit writes. The pane itself keeps no scrollback.
-	tail *ring
+	tail *core.Ring
 
 	mu              sync.Mutex
 	stopped         bool
 	windowsClosed   atomic.Bool
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
-	process         *ptyProcess
+	process         *core.PTY
 	overviewWindow  string
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
@@ -103,7 +104,7 @@ func (s *sessionState) alive() bool {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return !s.stopped && (s.process == nil || !s.process.done())
+	return !s.stopped && (s.process == nil || !s.process.Done())
 }
 
 func (s *sessionState) admissionClosed() bool {
@@ -121,18 +122,18 @@ func (s *sessionState) start(emit emitter, exited func(*sessionState, int), cols
 	if s.stopped || s.process != nil {
 		return nil
 	}
-	process, err := startPTY(s.argv, s.env, s.root(), cols, rows)
+	process, err := core.StartPTY(s.argv, s.env, s.root(), cols, rows)
 	if err != nil {
 		return err
 	}
 	s.process = process
-	go process.pump(
+	go process.Pump(
 		func(b []byte) {
 			s.agents.output()
 			if s.tail != nil {
-				s.tail.write(b)
+				s.tail.Write(b)
 			}
-			emit(ptyDataEvent+s.terminal, encodeChunk(b))
+			emit(ptyDataEvent+s.terminal, core.EncodeChunk(b))
 		},
 		func(code int) { s.childExited(emit, exited, code) },
 	)
@@ -165,9 +166,9 @@ func (s *sessionState) recordExit(code int) {
 	}
 	var last string
 	if code != 0 && tail != nil {
-		last = tail.text(false)
+		last = tail.Text(false)
 	}
-	recordAgentExit(s.root(), s.provider, code, last)
+	core.RecordAgentExit(s.root(), s.provider, code, last)
 }
 
 // terminalReplies matches writes xterm.js makes on its own: focus and mouse
@@ -184,7 +185,7 @@ func (s *sessionState) write(data []byte) error {
 	if process == nil {
 		return ErrTerminalNotStarted
 	}
-	return process.write(data)
+	return process.Write(data)
 }
 
 func (s *sessionState) resize(cols, rows int) error {
@@ -194,7 +195,7 @@ func (s *sessionState) resize(cols, rows int) error {
 	if process == nil {
 		return nil
 	}
-	return process.resize(cols, rows)
+	return process.Resize(cols, rows)
 }
 
 // serve records the listener the session answers on, refusing once it has been
@@ -219,7 +220,7 @@ func (s *sessionState) stop() {
 	s.process, s.control = nil, nil
 	s.mu.Unlock()
 	if process != nil {
-		process.stop()
+		process.Stop()
 	}
 	if control != nil {
 		_ = control.Close()
@@ -567,7 +568,7 @@ func (s *Sessions) start(root, runnerID string, resume bool) (*sessionState, err
 	if err != nil {
 		return nil, err
 	}
-	state := s.add(root, command.Argv, withTerminalEnv(command.Env))
+	state := s.add(root, command.Argv, core.WithTerminalEnv(command.Env))
 	state.provider = command.RunnerID
 	control, err := s.boot.serve(state, socket)
 	if err != nil {
@@ -692,7 +693,7 @@ func (s *Sessions) add(root string, argv, env []string) *sessionState {
 		env:         env,
 		sessionSlug: slug,
 		sessionRoot: root,
-		tail:        &ring{limit: agentTailBytes},
+		tail:        core.NewRing(core.AgentTailBytes),
 	}
 	s.slugs[state.slug()] = state
 	s.terms[state.terminal] = state

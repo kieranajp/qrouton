@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"errors"
@@ -12,22 +12,24 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-type ptyProcess struct {
+// PTY is one child process running under a pseudo-terminal.
+type PTY struct {
 	mu     sync.Mutex
 	file   *os.File
 	cmd    *exec.Cmd
 	exited chan struct{}
 	code   int
+	grace  time.Duration
 }
 
-func startPTY(argv, env []string, dir string, cols, rows int) (*ptyProcess, error) {
+func StartPTY(argv, env []string, dir string, cols, rows int) (*PTY, error) {
 	cmd := exec.Command(argv[0], argv[1:]...)
 	cmd.Dir, cmd.Env = dir, env
 	file, err := pty.StartWithSize(cmd, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 	if err != nil {
 		return nil, err
 	}
-	p := &ptyProcess{file: file, cmd: cmd, exited: make(chan struct{})}
+	p := &PTY{file: file, cmd: cmd, exited: make(chan struct{}), grace: terminateGrace}
 	go func() {
 		err := cmd.Wait()
 		p.mu.Lock()
@@ -38,7 +40,7 @@ func startPTY(argv, env []string, dir string, cols, rows int) (*ptyProcess, erro
 	return p, nil
 }
 
-func (p *ptyProcess) pump(onData func([]byte), onExit func(code int)) {
+func (p *PTY) Pump(onData func([]byte), onExit func(code int)) {
 	p.mu.Lock()
 	file := p.file
 	p.mu.Unlock()
@@ -62,7 +64,7 @@ func (p *ptyProcess) pump(onData func([]byte), onExit func(code int)) {
 	}
 }
 
-func (p *ptyProcess) done() bool {
+func (p *PTY) Done() bool {
 	select {
 	case <-p.exited:
 		return true
@@ -71,7 +73,7 @@ func (p *ptyProcess) done() bool {
 	}
 }
 
-func (p *ptyProcess) write(data []byte) error {
+func (p *PTY) Write(data []byte) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.file == nil {
@@ -81,9 +83,9 @@ func (p *ptyProcess) write(data []byte) error {
 	return err
 }
 
-// foreground reports whether a job other than the PTY child holds the terminal.
+// Foreground reports whether a job other than the PTY child holds the terminal.
 // ok is false when the terminal could not be read.
-func (p *ptyProcess) foreground() (busy, ok bool) {
+func (p *PTY) Foreground() (busy, ok bool) {
 	// A write blocked on a full terminal holds the lock; skip this read rather
 	// than stall every other shell's.
 	if !p.mu.TryLock() {
@@ -100,7 +102,30 @@ func (p *ptyProcess) foreground() (busy, ok bool) {
 	return pgid != p.cmd.Process.Pid, true
 }
 
-func (p *ptyProcess) resize(cols, rows int) error {
+// Pid is the child's, and 0 once the PTY is stopped.
+func (p *PTY) Pid() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cmd == nil || p.cmd.Process == nil {
+		return 0
+	}
+	return p.cmd.Process.Pid
+}
+
+func (p *PTY) Size() (cols, rows int, err error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.file == nil {
+		return 0, 0, ErrTerminalNotStarted
+	}
+	size, err := pty.GetsizeFull(p.file)
+	if err != nil {
+		return 0, 0, err
+	}
+	return int(size.Cols), int(size.Rows), nil
+}
+
+func (p *PTY) Resize(cols, rows int) error {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	if p.file == nil {
@@ -109,9 +134,9 @@ func (p *ptyProcess) resize(cols, rows int) error {
 	return pty.Setsize(p.file, &pty.Winsize{Cols: uint16(cols), Rows: uint16(rows)})
 }
 
-// stop ends the process tree. pty.Start puts the child in a session of its own,
+// Stop ends the process tree. pty.Start puts the child in a session of its own,
 // so signalling the negative pid reaches everything it spawned.
-func (p *ptyProcess) stop() {
+func (p *PTY) Stop() {
 	p.mu.Lock()
 	cmd, file := p.cmd, p.file
 	p.file, p.cmd = nil, nil
@@ -122,7 +147,7 @@ func (p *ptyProcess) stop() {
 	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGTERM)
 	select {
 	case <-p.exited:
-	case <-time.After(terminateGrace):
+	case <-time.After(p.grace):
 		_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 		<-p.exited
 	}

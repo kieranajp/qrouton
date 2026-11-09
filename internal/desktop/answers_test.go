@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -160,7 +161,7 @@ func TestSendSpecAnswersPastesTheFixedLineIntoTheConversation(t *testing.T) {
 	rec := &recorder{}
 	reg, term, w := testWorkbench(t, newFakeRenderer(), rec.emit)
 	root := t.TempDir()
-	state := reg.add(root, []string{"/bin/cat"}, withTerminalEnv(os.Environ()))
+	state := reg.add(root, []string{"/bin/cat"}, core.WithTerminalEnv(os.Environ()))
 	reg.reveal(state)
 	spec, err := w.openWindow(state, workbench.WindowOptions{
 		Kind: workbench.KindDocument, Format: workbench.FormatMarkdown, Label: "S1", Source: specSource, Content: "# Spec\n",
@@ -216,7 +217,7 @@ func TestSaveAnswersWritesAnAuditsTriage(t *testing.T) {
 func TestSendAuditTriagePastesItsOwnLineAndEachSendKeepsToItsKind(t *testing.T) {
 	rec := &recorder{}
 	reg, term, w := testWorkbench(t, newFakeRenderer(), rec.emit)
-	state := reg.add(t.TempDir(), []string{"/bin/cat"}, withTerminalEnv(os.Environ()))
+	state := reg.add(t.TempDir(), []string{"/bin/cat"}, core.WithTerminalEnv(os.Environ()))
 	reg.reveal(state)
 	open := func(label, source string) string {
 		id, err := w.openWindow(state, workbench.WindowOptions{

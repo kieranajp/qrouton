@@ -19,7 +19,7 @@ var (
 	ErrNoAgentCommand     = errors.New("workbench has no agent command to run")
 	ErrNoControlSocket    = errors.New("workbench has no control socket address")
 	ErrNoConfig           = errors.New("workbench has no configuration to assemble sessions against")
-	ErrTerminalNotStarted = errors.New("terminal is not started")
+	ErrTerminalNotStarted = core.ErrTerminalNotStarted
 	ErrStaleFrontend      = errors.New(staleFrontendError)
 	ErrNoOwners           = errors.New(noOwnersError)
 	ErrUIScale            = errors.New(uiScaleRefusal)

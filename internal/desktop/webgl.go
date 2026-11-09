@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 )
 
 // WebGLLog appends one JSON line per WebGL renderer event the page reports.
@@ -66,7 +67,7 @@ func (l *WebGLLog) Record(at, event, terminal, pane string, live, created int) {
 	if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
 		return
 	}
-	rotateLog(l.path)
+	core.RotateLog(l.path)
 	file, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return

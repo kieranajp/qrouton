@@ -5,6 +5,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
@@ -141,7 +142,7 @@ func TestThePollerAnnouncesOnlyChanges(t *testing.T) {
 	b := newShellBench(t)
 	id := b.launch(t, true, "/bin/cat")
 	busy := false
-	b.terminals.sample = func(*ptyProcess) (bool, bool) { return busy, true }
+	b.terminals.sample = func(*core.PTY) (bool, bool) { return busy, true }
 	before := b.announcements()
 
 	b.terminals.pollForeground()
@@ -168,7 +169,7 @@ func TestAFailedReadKeepsTheLastState(t *testing.T) {
 	b := newShellBench(t)
 	id := b.launch(t, true, "/bin/cat")
 	readable := true
-	b.terminals.sample = func(*ptyProcess) (bool, bool) { return readable, readable }
+	b.terminals.sample = func(*core.PTY) (bool, bool) { return readable, readable }
 	b.terminals.pollForeground()
 	before := b.announcements()
 

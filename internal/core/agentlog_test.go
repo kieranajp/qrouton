@@ -1,4 +1,4 @@
-package desktop
+package core
 
 import (
 	"os"
@@ -20,6 +20,11 @@ func sessionRoot(t *testing.T) string {
 	return root
 }
 
+const (
+	providerClaude = "claude"
+	providerCodex  = "codex"
+)
+
 func readAgentLog(t *testing.T, root string) string {
 	t.Helper()
 	data, err := os.ReadFile(sessionpaths.AgentLog(root))
@@ -33,13 +38,13 @@ func readAgentLog(t *testing.T, root string) string {
 // carrying the whole conversation after every clean exit is one nobody reads.
 func TestACleanAgentExitIsOneLineWithNoOutput(t *testing.T) {
 	root := sessionRoot(t)
-	recordAgentExit(root, agentProviderClaude, 0, "the conversation")
+	RecordAgentExit(root, providerClaude, 0, "the conversation")
 
 	logged := readAgentLog(t, root)
 	if lines := strings.Count(logged, "\n"); lines != 1 {
 		t.Fatalf("a clean exit wrote %d lines:\n%s", lines, logged)
 	}
-	if !strings.Contains(logged, "provider="+agentProviderClaude) || !strings.Contains(logged, "status=0") {
+	if !strings.Contains(logged, "provider="+providerClaude) || !strings.Contains(logged, "status=0") {
 		t.Fatalf("the entry does not name the provider and its status:\n%s", logged)
 	}
 	if strings.Contains(logged, "the conversation") {
@@ -51,10 +56,10 @@ func TestACleanAgentExitIsOneLineWithNoOutput(t *testing.T) {
 // person reads it rather than as the terminal painted it.
 func TestAFailedAgentExitKeepsTheTailWithoutItsEscapes(t *testing.T) {
 	root := sessionRoot(t)
-	state := &sessionState{tail: &ring{limit: agentTailBytes}}
-	state.tail.write([]byte("\x1b[31mpanic: nothing\x1b[0m\r\nstack\r\n"))
+	tail := NewRing(AgentTailBytes)
+	tail.Write([]byte("\x1b[31mpanic: nothing\x1b[0m\r\nstack\r\n"))
 
-	recordAgentExit(root, agentProviderCodex, 3, state.tail.text(false))
+	RecordAgentExit(root, providerCodex, 3, tail.Text(false))
 
 	logged := readAgentLog(t, root)
 	if !strings.Contains(logged, "status=3") {
@@ -77,7 +82,7 @@ func TestAnOversizeAgentLogIsRotatedRatherThanGrown(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	recordAgentExit(root, agentProviderCodex, 0, "")
+	RecordAgentExit(root, providerCodex, 0, "")
 
 	logged := readAgentLog(t, root)
 	if strings.Contains(logged, "xxx") {
@@ -92,55 +97,14 @@ func TestAnOversizeAgentLogIsRotatedRatherThanGrown(t *testing.T) {
 	}
 }
 
-// agent.log is the account of deaths the workbench did not cause. Logging the
-// ones it caused itself would rotate the crash that mattered off the disk.
-func TestAnExitTheWorkbenchAskedForRecordsNothing(t *testing.T) {
-	root := sessionRoot(t)
-	state := &sessionState{stopped: true, sessionRoot: root, tail: &ring{limit: agentTailBytes}}
-	state.tail.write([]byte("still talking"))
-
-	state.recordExit(-1)
-
-	if _, err := os.Stat(sessionpaths.AgentLog(root)); !os.IsNotExist(err) {
-		t.Fatalf("a supervisor the workbench stopped recorded an exit: %v", err)
-	}
-}
-
 // Cleanup removes a session without waiting for its pump. A directory put back
 // by a late log holds a slug that can never be assembled again.
 func TestAnExitRecordedAfterTheSessionIsGoneRebuildsNothing(t *testing.T) {
 	removed := filepath.Join(t.TempDir(), "octopus")
 
-	recordAgentExit(removed, agentProviderCodex, 3, "boom")
+	RecordAgentExit(removed, providerCodex, 3, "boom")
 
 	if _, err := os.Stat(removed); !os.IsNotExist(err) {
 		t.Fatalf("recording an exit recreated the removed session directory: %v", err)
-	}
-}
-
-// The log is written from the pump rather than the workbench's exit wiring, so
-// a session records its own death whatever else is listening.
-func TestASupervisorFailingRecordsItsExitAgainstTheSession(t *testing.T) {
-	root := t.TempDir()
-	boot := newStubBoot("/bin/sh", "-c", "printf 'boom\\n'; exit 3")
-	reg, _, r := testSessions(t, root, boot)
-	if err := os.MkdirAll(sessionpaths.Dir(sessionDir(t, root, "octopus")), 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	if err := reg.Show("octopus"); err != nil {
-		t.Fatal(err)
-	}
-	state := reg.current()
-	term := newTerm(reg, r.Emit)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
-		t.Fatal(err)
-	}
-	waitFor(t, "the supervisor's exit to be recorded", func() bool {
-		data, err := os.ReadFile(sessionpaths.AgentLog(state.root()))
-		return err == nil && strings.Contains(string(data), "status=3")
-	})
-	if logged := readAgentLog(t, state.root()); !strings.Contains(logged, "boom") {
-		t.Fatalf("the record does not carry what the terminal printed:\n%s", logged)
 	}
 }
