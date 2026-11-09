@@ -154,8 +154,8 @@ func TestClientSendsOneRequestPerConnectionAndReadsItsAnswer(t *testing.T) {
 		t.Fatalf("Open returned %q", id)
 	}
 	text, err := host.Read(ctx, id, true)
-	if err != nil || text != "listening on :3000" {
-		t.Fatalf("Read = %q, %v", text, err)
+	if err != nil || text.Text != "listening on :3000" || text.Terminal != nil {
+		t.Fatalf("Read = %q, %v", text.Text, err)
 	}
 	unsupported, err := host.Viewport(ctx, "unsupported")
 	if err != nil || unsupported != nil {
@@ -649,5 +649,54 @@ func TestFocusAssetRequiresAValidSelectionResponse(t *testing.T) {
 	request := <-requests
 	if request.Op != OpFocusAsset || request.ID != "gallery" || request.AssetFocus == nil || request.AssetFocus.Index != 3 {
 		t.Fatalf("request = %+v", request)
+	}
+}
+
+func TestReadSnapshotRoundTripsNullableAndZeroExitCodes(t *testing.T) {
+	failure := 3
+	for _, tc := range []struct {
+		name   string
+		status string
+		code   *int
+		wire   string
+	}{
+		{name: "document"},
+		{name: "running", status: "running", wire: `"exit_code":null`},
+		{name: "success", status: "succeeded", code: new(int), wire: `"exit_code":0`},
+		{name: "failure", status: "failed", code: &failure, wire: `"exit_code":3`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			response := Response{Text: "retained output"}
+			if tc.status != "" {
+				response.Terminal = &TerminalState{Status: tc.status, ExitCode: tc.code}
+			}
+			encoded, err := json.Marshal(response)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.wire != "" && !strings.Contains(string(encoded), tc.wire) {
+				t.Fatalf("wire response = %s, want %s", encoded, tc.wire)
+			}
+			if tc.status == "" && strings.Contains(string(encoded), `"terminal"`) {
+				t.Fatalf("document acquired terminal metadata: %s", encoded)
+			}
+			socket, _ := echoServer(t, func(Request) Response { return response })
+			read, err := newClient(socket).Read(context.Background(), "window-1", true)
+			if err != nil || read.Text != response.Text {
+				t.Fatalf("read = %+v, %v", read, err)
+			}
+			if tc.status == "" {
+				if read.Terminal != nil {
+					t.Fatalf("document terminal = %+v", read.Terminal)
+				}
+				return
+			}
+			if read.Terminal == nil || read.Terminal.Status != tc.status || (read.Terminal.ExitCode == nil) != (tc.code == nil) {
+				t.Fatalf("terminal state = %+v", read.Terminal)
+			}
+			if tc.code != nil && *read.Terminal.ExitCode != *tc.code {
+				t.Fatalf("exit code = %d, want %d", *read.Terminal.ExitCode, *tc.code)
+			}
+		})
 	}
 }

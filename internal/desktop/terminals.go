@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
 type terminals struct {
@@ -18,8 +19,9 @@ type terminals struct {
 }
 
 type terminalChunk struct {
-	Encoded string `json:"encoded"`
-	Replay  bool   `json:"replay,omitempty"`
+	Encoded  string `json:"encoded"`
+	Replay   bool   `json:"replay,omitempty"`
+	ExitCode *int   `json:"exit_code,omitempty"`
 	// First marks a running process's first replay, whose queries the page
 	// answers as if live.
 	First bool `json:"first,omitempty"`
@@ -100,17 +102,34 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
 	terminal.stream.Lock()
 	defer terminal.stream.Unlock()
-	running := !terminal.process.done()
-	if running {
-		if err := terminal.process.resize(cols, rows); err != nil {
+	var process *ptyProcess
+	var state *workbench.TerminalState
+	var first bool
+	if err := t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); !ok || content != terminal {
+			return noSuchWindow(id)
+		}
+		process, state = terminal.process, terminal.state()
+		first = !terminal.served
+		return nil
+	}); err != nil {
+		return err
+	}
+	running := !process.done()
+	if state.ExitCode == nil && running {
+		if err := process.resize(cols, rows); err != nil {
 			return err
 		}
 	}
 	chunk := encodeChunk(terminal.buffer.bytes())
-	chunk.Replay = true
-	chunk.First = running && !terminal.served
+	chunk.Replay, chunk.First, chunk.ExitCode = true, running && first, state.ExitCode
 	t.emit(windowDataEvent+id, chunk)
-	terminal.served = true
+	_ = t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); ok && content == terminal {
+			terminal.served = true
+		}
+		return nil
+	})
 	return nil
 }
 
@@ -148,21 +167,34 @@ func (t *terminals) process(id string) (*ptyProcess, error) {
 	return process, err
 }
 
-// exited applies the lifecycle rule: a clean exit closes the window, a failure
-// leaves it open so the error stays readable.
 func (t *terminals) exited(id string, code int) {
-	t.emit(windowExitEvent+id, code)
-	var owner *sessionState
-	var closeOnExit bool
+	var terminal *terminalContent
 	if err := t.registry.with(id, func(window *agentWindow) error {
-		terminal, ok := window.terminal()
+		var ok bool
+		terminal, ok = window.terminal()
 		if !ok {
 			return ErrNotATerminal
+		}
+		return nil
+	}); err != nil {
+		return
+	}
+	terminal.stream.Lock()
+	var owner *sessionState
+	var closeOnExit bool
+	err := t.registry.with(id, func(window *agentWindow) error {
+		if content, ok := window.terminal(); !ok || content != terminal {
+			return noSuchWindow(id)
 		}
 		terminal.exit = &code
 		owner, closeOnExit = window.session, window.opts.CloseOnExit
 		return nil
-	}); err != nil {
+	})
+	if err == nil {
+		t.emit(windowExitEvent+id, code)
+	}
+	terminal.stream.Unlock()
+	if err != nil {
 		return
 	}
 	if code == 0 && closeOnExit {
@@ -234,14 +266,12 @@ func (r *ring) bytes() []byte {
 	return append([]byte(nil), r.buf...)
 }
 
-// text renders the buffer as the agent reads it: escape sequences stripped, and
-// each line reduced to what a carriage return last left on it.
 func (r *ring) text(full bool) string {
-	r.mu.Lock()
-	raw := string(r.buf)
-	r.mu.Unlock()
+	return terminalText(r.bytes(), full)
+}
 
-	lines := strings.Split(strings.ReplaceAll(ansi.Strip(raw), "\r\n", "\n"), "\n")
+func terminalText(raw []byte, full bool) string {
+	lines := strings.Split(strings.ReplaceAll(ansi.Strip(string(raw)), "\r\n", "\n"), "\n")
 	for i, line := range lines {
 		if at := strings.LastIndex(line, "\r"); at >= 0 {
 			lines[i] = line[at+1:]

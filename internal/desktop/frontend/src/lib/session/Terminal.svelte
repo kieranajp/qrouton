@@ -49,7 +49,7 @@
       term.onBinary((data) => writePTY(pty, id, btoa(data)));
       const offData = Events.On(pty.data + id, (event) => painter.paint(event.data));
       const dim = (line) => painter.paint({ encoded: encode("\r\n\x1b[2m[" + line + "]\x1b[0m\r\n") });
-      const offExit = Events.On(pty.exit + id, (event) => dim("exited with status " + event.data));
+      const offExit = Events.On(pty.exit + id, (event) => painter.complete(event.data));
       const stopWatch = watchSize(host, fit);
       // xterm re-measures its cell after the option changes, so a fit in the same frame reads the old cell.
       const refitScaled = latestPerFrame(() => fit());

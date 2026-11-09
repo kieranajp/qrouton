@@ -43,6 +43,23 @@ type readWindowInput struct {
 	Full bool   `json:"full,omitempty" jsonschema:"Include the full scrollback instead of just the last screenful"`
 }
 
+type readWindowResult struct {
+	Output   string                      `json:"output"`
+	Terminal *workbench.TerminalState    `json:"terminal,omitempty"`
+	Viewport *workbench.DocumentViewport `json:"viewport,omitempty"`
+}
+
+func (r readWindowResult) text() string {
+	if r.Terminal == nil {
+		return r.Output
+	}
+	header := fmt.Sprintf(terminalRunningFormat, r.Terminal.Status)
+	if r.Terminal.ExitCode != nil {
+		header = fmt.Sprintf(terminalExitedFormat, r.Terminal.Status, *r.Terminal.ExitCode)
+	}
+	return header + "\n\n" + r.Output
+}
+
 type windowNameInput struct {
 	Name string `json:"name" jsonschema:"Name of a window previously opened through the window tools"`
 }
@@ -91,13 +108,11 @@ func textResult(message string) *mcp.CallToolResult {
 	return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: message}}}
 }
 
-// answer is what all but one of qrouton's tools return: a line for the agent to
-// read, and sometimes the viewport measured for the document it opened.
+// answer pairs a message with an optional document viewport.
 type answer[In any] func(context.Context, In) (string, *workbench.DocumentViewport, error)
 
 // addTool registers a tool whose result is one keyed string plus an optional
-// viewport. key names that string in the structured payload — every tool says
-// "message" except read_window, which is returning output rather than talking.
+// viewport. key names that string in the structured payload.
 func addTool[In any](server *mcp.Server, name, description, key string, fn answer[In]) {
 	addToolWithSchema(server, name, description, key, nil, fn)
 }
@@ -186,7 +201,14 @@ func newMCPServer(root string, editor launch.EditorCommand, host workbench.Windo
 			return setDigest(root, input)
 		}))
 	addTool(server, toolRunCommand, descRunCommand, keyMessage, messageOnly(windows.run))
-	addTool(server, toolReadWindow, descReadWindow, keyOutput, windows.read)
+	mcp.AddTool(server, &mcp.Tool{Name: toolReadWindow, Description: descReadWindow},
+		func(ctx context.Context, _ *mcp.CallToolRequest, input readWindowInput) (*mcp.CallToolResult, readWindowResult, error) {
+			result, err := windows.read(ctx, input)
+			if err != nil {
+				return nil, readWindowResult{}, err
+			}
+			return textResult(result.text()), result, nil
+		})
 	addTool(server, toolShowDiff, descShowDiff, keyMessage, messageOnly(windows.showDiff))
 	addTool(server, toolNotify, descNotify, keyMessage, messageOnly(windows.notify))
 	addTool(server, toolCloseWindow, descCloseWindow, keyMessage, messageOnly(windows.closeWindow))

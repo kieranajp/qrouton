@@ -249,13 +249,12 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 		cwd = dir
 	}
 	if _, err := m.open(ctx, name, workbench.WindowOptions{
-		Kind:        workbench.KindTerminal,
-		Label:       name,
-		Icon:        workbench.IconCommand,
-		Cwd:         cwd,
-		Command:     []string{shellBin, shellLoginFlag, input.Command},
-		CloseOnExit: true,
-		Select:      resolveForeground(input.Foreground, false),
+		Kind:    workbench.KindTerminal,
+		Label:   name,
+		Icon:    workbench.IconCommand,
+		Cwd:     cwd,
+		Command: []string{shellBin, shellLoginFlag, input.Command},
+		Select:  resolveForeground(input.Foreground, false),
 	}); err != nil {
 		return "", fmt.Errorf("run command: %w", err)
 	}
@@ -266,31 +265,37 @@ func (m *windowManager) run(ctx context.Context, input runCommandInput) (string,
 	return fmt.Sprintf(runningFormat, name, where, name, name), nil
 }
 
-func (m *windowManager) read(ctx context.Context, input readWindowInput) (string, *workbench.DocumentViewport, error) {
+func (m *windowManager) read(ctx context.Context, input readWindowInput) (readWindowResult, error) {
 	name := strings.TrimSpace(input.Name)
 	id, err := m.liveWindow(ctx, name)
 	if err != nil {
-		return "", nil, err
+		return readWindowResult{}, err
 	}
-	out, err := m.host.Read(ctx, id, input.Full)
+	read, err := m.host.Read(ctx, id, input.Full)
 	if err != nil {
-		return "", nil, fmt.Errorf("read window %q: %w", name, err)
+		return readWindowResult{}, fmt.Errorf("read window %q: %w", name, err)
 	}
-	viewport, err := m.host.Viewport(ctx, id)
-	if err != nil {
-		return "", nil, fmt.Errorf("read window %q viewport: %w", name, err)
-	}
-	text := strings.TrimRight(out, "\n")
+	text := strings.TrimRight(read.Text, "\n")
 	if strings.TrimSpace(text) == "" {
 		text = fmt.Sprintf(noOutputFormat, name)
 	}
 	if len(text) > readWindowLimit {
 		text = truncatedPrefix + text[len(text)-readWindowLimit:]
 	}
-	if viewport.Measured() != nil {
-		text += "\n\n" + viewportSummary(viewport)
+	result := readWindowResult{Output: text, Terminal: read.Terminal}
+	if read.Terminal != nil {
+		return result, nil
 	}
-	return text, viewport, nil
+	viewport, err := m.host.Viewport(ctx, id)
+	if err != nil {
+		result.Output += "\n\n" + viewportMeasurementUnavailable
+		return result, nil
+	}
+	if viewport.Measured() != nil {
+		result.Output += "\n\n" + viewportSummary(viewport)
+	}
+	result.Viewport = viewport
+	return result, nil
 }
 
 func viewportSummary(viewport *workbench.DocumentViewport) string {

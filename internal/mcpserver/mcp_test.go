@@ -53,6 +53,7 @@ type fakeHost struct {
 	pickers   []workbench.PickerRequest
 	pickerErr error
 
+	terminal    *workbench.TerminalState
 	text        string
 	readErr     error
 	viewports   []*workbench.DocumentViewport
@@ -111,11 +112,11 @@ func (h *fakeHost) Close(_ context.Context, id string) error {
 	return nil
 }
 
-func (h *fakeHost) Read(_ context.Context, id string, full bool) (string, error) {
+func (h *fakeHost) Read(_ context.Context, id string, full bool) (workbench.WindowRead, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.reads = append(h.reads, readCall{id: id, full: full})
-	return h.text, h.readErr
+	return workbench.WindowRead{Text: h.text, Terminal: h.terminal}, h.readErr
 }
 
 func (h *fakeHost) Viewport(_ context.Context, id string) (*workbench.DocumentViewport, error) {
@@ -234,7 +235,8 @@ func TestOpenAssetsValidatesBeforeReplacingAndReadHasNoViewport(t *testing.T) {
 		t.Fatalf("invalid replacement closed %v", host.closes)
 	}
 	host.text = strings.Repeat("1. one.png\n", readWindowLimit+1) + "Current asset: 1 of 1"
-	text, viewport, err := m.read(context.Background(), readWindowInput{Name: "gallery"})
+	result, err := m.read(context.Background(), readWindowInput{Name: "gallery"})
+	text, viewport := result.Output, result.Viewport
 	if err != nil || viewport != nil || !strings.HasSuffix(text, "Current asset: 1 of 1") {
 		t.Fatalf("read = %q, %+v, %v", text, viewport, err)
 	}
@@ -704,8 +706,8 @@ func TestRunCommandOpensATerminalWindowInTheResolvedCwd(t *testing.T) {
 	if want := []string{shellBin, shellLoginFlag, "npm run dev"}; !slices.Equal(opts.Command, want) {
 		t.Fatalf("command = %v, want %v", opts.Command, want)
 	}
-	if !opts.CloseOnExit {
-		t.Fatal("the command window survives its own command")
+	if opts.CloseOnExit {
+		t.Fatal("the command window discards its completed result")
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{"dev"}) {
 		t.Fatalf("registry = %v, want [dev]", got)
@@ -746,7 +748,8 @@ func TestReadWindowReturnsTheHostsText(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, viewport, err := m.read(ctx, readWindowInput{Name: "server", Full: true})
+	result, err := m.read(ctx, readWindowInput{Name: "server", Full: true})
+	out, viewport := result.Output, result.Viewport
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -760,7 +763,7 @@ func TestReadWindowReturnsTheHostsText(t *testing.T) {
 	if len(host.reads) != 1 || host.reads[0] != want {
 		t.Fatalf("reads = %v, want [%v]", host.reads, want)
 	}
-	if _, _, err := m.read(ctx, readWindowInput{Name: "missing"}); err == nil {
+	if _, err := m.read(ctx, readWindowInput{Name: "missing"}); err == nil {
 		t.Fatal("read of an unregistered window should error")
 	}
 }
@@ -773,7 +776,8 @@ func TestReadWindowKeepsTheTailOfALongWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
+	result, err := m.read(ctx, readWindowInput{Name: "server"})
+	out := result.Output
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -796,7 +800,8 @@ func TestReadWindowReportsAWindowWithNoOutput(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
+	result, err := m.read(ctx, readWindowInput{Name: "server"})
+	out := result.Output
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -828,7 +833,8 @@ func TestReadWindowReportsMarkdownViewportStates(t *testing.T) {
 			}
 			host.text = "# Plan\n\nText\n"
 			host.viewports = []*workbench.DocumentViewport{tc.viewport}
-			out, viewport, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+			result, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+			out, viewport := result.Output, result.Viewport
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -855,7 +861,8 @@ func TestReadWindowKeepsMarkdownViewportAfterTruncatedSource(t *testing.T) {
 		Source: "P007.md", Available: true, Selected: true,
 		Intervals: []workbench.LineInterval{{Line: 20, To: 24}},
 	}}
-	out, _, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+	result, err := m.read(context.Background(), readWindowInput{Name: editorWindowName})
+	out := result.Output
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -898,7 +905,7 @@ func TestReadAndClosePruneAWindowTheUserClosed(t *testing.T) {
 		call func(*windowManager) error
 	}{
 		{toolReadWindow, func(m *windowManager) error {
-			_, _, err := m.read(context.Background(), readWindowInput{Name: "server"})
+			_, err := m.read(context.Background(), readWindowInput{Name: "server"})
 			return err
 		}},
 		{toolCloseWindow, func(m *windowManager) error {
@@ -936,7 +943,8 @@ func TestReadWindowKeepsALiveWindow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	out, _, err := m.read(ctx, readWindowInput{Name: "server"})
+	result, err := m.read(ctx, readWindowInput{Name: "server"})
+	out := result.Output
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -963,7 +971,7 @@ func TestReadWindowKeepsTheWindowWhenLivenessCannotBeChecked(t *testing.T) {
 	}
 	host.existsErr = errors.New("workbench unreachable")
 
-	if _, _, err := m.read(ctx, readWindowInput{Name: "server"}); err != nil {
+	if _, err := m.read(ctx, readWindowInput{Name: "server"}); err != nil {
 		t.Fatalf("an unanswerable liveness check should not fail the read: %v", err)
 	}
 	if got := m.list(ctx); !slices.Equal(got, []string{"server"}) {
@@ -1553,7 +1561,7 @@ func TestAFailedOpenRegistersNothing(t *testing.T) {
 	if names := m.list(ctx); len(names) != 0 {
 		t.Fatalf("list = %v, want no windows", names)
 	}
-	if _, _, err := m.read(ctx, readWindowInput{Name: "dev"}); err == nil {
+	if _, err := m.read(ctx, readWindowInput{Name: "dev"}); err == nil {
 		t.Fatal("read found a window the host never opened")
 	}
 }
@@ -2014,5 +2022,146 @@ func TestCompetingAssetOpensRetainTheLaterClaim(t *testing.T) {
 	}
 	if len(host.closes) != 1 || host.closes[0] == winner {
 		t.Fatal("competing open closed winner")
+	}
+}
+
+func TestTerminalReadKeepsStateOutsideTruncationAndSkipsViewport(t *testing.T) {
+	failure := 3
+	for _, state := range []*workbench.TerminalState{
+		{Status: "running"},
+		{Status: "succeeded", ExitCode: new(int)},
+		{Status: "failed", ExitCode: &failure},
+	} {
+		t.Run(state.Status, func(t *testing.T) {
+			m, host, _ := newTestManager(t)
+			host.terminal = state
+			host.viewportErr = errors.New("unavailable geometry")
+			ctx := context.Background()
+			if _, err := m.run(ctx, runCommandInput{Command: "command", Name: "result"}); err != nil {
+				t.Fatal(err)
+			}
+			result, err := m.read(ctx, readWindowInput{Name: "result"})
+			if err != nil || result.Viewport != nil || !reflect.DeepEqual(result.Terminal, state) || !strings.Contains(result.Output, "no output captured") {
+				t.Fatalf("silent snapshot = %+v, %v", result, err)
+			}
+			if !strings.Contains(result.text(), state.Status) || !strings.Contains(result.text(), "exit_code:") || len(host.views) != 0 {
+				t.Fatalf("terminal text = %q, viewport calls = %v", result.text(), host.views)
+			}
+			host.text = "HEAD" + strings.Repeat("x", readWindowLimit) + "TAIL"
+			result, err = m.read(ctx, readWindowInput{Name: "result", Full: true})
+			if err != nil || !strings.HasPrefix(result.Output, truncatedPrefix) || strings.Contains(result.Output, "HEAD") || !strings.HasSuffix(result.Output, "TAIL") {
+				t.Fatalf("bounded snapshot = %+v, %v", result, err)
+			}
+			if !strings.HasPrefix(result.text(), "Terminal: "+state.Status) {
+				t.Fatalf("truncation lost status: %q", result.text())
+			}
+		})
+	}
+}
+
+func TestDocumentReadPreservesFetchedTextWhenViewportFails(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	if _, err := m.open(ctx, "document", workbench.WindowOptions{Kind: workbench.KindDocument, Source: "notes.md"}); err != nil {
+		t.Fatal(err)
+	}
+	host.text = "captured document"
+	host.viewportErr = errors.New("geometry unavailable")
+	result, err := m.read(ctx, readWindowInput{Name: "document"})
+	if err != nil || result.Terminal != nil || result.Viewport != nil || !strings.Contains(result.Output, host.text) || !strings.Contains(result.Output, viewportMeasurementUnavailable) {
+		t.Fatalf("read after viewport failure = %+v, %v", result, err)
+	}
+	host.readErr = errors.New("content unavailable")
+	if _, err := m.read(ctx, readWindowInput{Name: "document"}); !errors.Is(err, host.readErr) {
+		t.Fatalf("content read failure = %v", err)
+	}
+	if len(host.views) != 1 {
+		t.Fatalf("failed content read requested another viewport: %v", host.views)
+	}
+}
+
+func TestRetainedCommandReplacementAndCloseReleaseOldResult(t *testing.T) {
+	m, host, _ := newTestManager(t)
+	ctx := context.Background()
+	host.terminal = &workbench.TerminalState{Status: "succeeded", ExitCode: new(int)}
+	for _, marker := range []string{"old-result", "new-result"} {
+		if _, err := m.run(ctx, runCommandInput{Command: marker, Name: "result"}); err != nil {
+			t.Fatal(err)
+		}
+		host.text = marker
+		result, err := m.read(ctx, readWindowInput{Name: "result"})
+		if err != nil || result.Output != marker || host.reads[len(host.reads)-1].id != host.ids[len(host.ids)-1] {
+			t.Fatalf("retained result = %+v, %v; reads = %+v", result, err, host.reads)
+		}
+	}
+	if !slices.Equal(host.closes, host.ids[:1]) {
+		t.Fatalf("replacement kept old result: %v", host.closes)
+	}
+	if _, err := m.closeWindow(ctx, windowNameInput{Name: "result"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.read(ctx, readWindowInput{Name: "result"}); err == nil {
+		t.Fatal("explicitly closed result remained readable")
+	}
+}
+
+func TestMCPReadReturnsNullableAndZeroTerminalStateInStructuredAndTextOutput(t *testing.T) {
+	failure := 3
+	for _, state := range []*workbench.TerminalState{
+		{Status: "running"},
+		{Status: "succeeded", ExitCode: new(int)},
+		{Status: "failed", ExitCode: &failure},
+	} {
+		t.Run(state.Status, func(t *testing.T) {
+			ctx := context.Background()
+			host := &fakeHost{terminal: state, viewportErr: errors.New("terminal has no viewport")}
+			server := newMCPServer(t.TempDir(), testEditor, host, session.ModeRPI)
+			client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "1"}, nil)
+			serverTransport, clientTransport := mcp.NewInMemoryTransports()
+			ss, err := server.Connect(ctx, serverTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer ss.Close()
+			cs, err := client.Connect(ctx, clientTransport, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cs.Close()
+			opened, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolRunCommand, Arguments: runCommandInput{Command: "command", Name: "result"}})
+			if err != nil || opened.IsError {
+				t.Fatalf("run = %+v, %v", opened, err)
+			}
+			read, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: toolReadWindow, Arguments: readWindowInput{Name: "result"}})
+			if err != nil || read.IsError {
+				t.Fatalf("read = %+v, %v", read, err)
+			}
+			output := structuredOutput(t, read.StructuredContent)
+			terminal, ok := output["terminal"].(map[string]any)
+			if !ok || terminal["status"] != state.Status {
+				t.Fatalf("terminal = %#v", output)
+			}
+			code, exists := terminal["exit_code"]
+			if !exists || (state.ExitCode == nil && code != nil) || (state.ExitCode != nil && code != float64(*state.ExitCode)) {
+				t.Fatalf("exit code = %#v, want %v", terminal, state.ExitCode)
+			}
+			text, ok := read.Content[0].(*mcp.TextContent)
+			if !ok || !strings.HasPrefix(text.Text, "Terminal: "+state.Status) || !strings.Contains(text.Text, "no output captured") {
+				t.Fatalf("text response = %+v", read.Content)
+			}
+			wantCode := "exit_code: null"
+			if state.ExitCode != nil {
+				wantCode = fmt.Sprintf("exit_code: %d", *state.ExitCode)
+			}
+			if !strings.Contains(text.Text, wantCode) || len(host.views) != 0 {
+				t.Fatalf("text = %q, viewport calls = %v", text.Text, host.views)
+			}
+			if _, exists := output["viewport"]; exists {
+				t.Fatalf("terminal acquired viewport: %#v", output)
+			}
+			if body, ok := output["output"].(string); !ok || !strings.Contains(body, "no output captured") || strings.Contains(body, "Terminal:") {
+				t.Fatalf("structured output body = %#v", output["output"])
+			}
+		})
 	}
 }
