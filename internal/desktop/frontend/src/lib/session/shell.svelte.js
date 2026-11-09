@@ -3,7 +3,7 @@ import { macOS } from "../platform.js";
 import { untrack } from "svelte";
 import { escalate as escalateSession, pending as pendingAssembly } from "../assembly/calls.js";
 import { assemblyOpen, pickerOpen } from "../assembly/steps.js";
-import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, REPO_ROLES, WINDOW_KINDS } from "../bridge/generated.js";
+import { ASSEMBLY_REQUESTED_EVENT, MODE_LABELS, WINDOW_KINDS } from "../bridge/generated.js";
 import { chrome } from "../chrome.svelte.js";
 import { findShortcut } from "../find.js";
 import {
@@ -28,7 +28,7 @@ import {
 } from "../layout.js";
 import { present } from "../panes/present.svelte.js";
 import { relative } from "../relative.js";
-import { show, revealPath } from "../sessions.js";
+import { show, reveal } from "../sessions.js";
 import { opensSettings, opensSwitcher, position } from "../shortcuts.js";
 import {
   consumeTerminalFocus,
@@ -147,12 +147,12 @@ export function shell() {
   // The branch was reference material sitting in the titlebar as a label. It is
   // now behind the session's name, where the things you do with it also live.
   let identityOpen = $state(false);
-  let editing = $derived(fields.repos.filter((repo) => repo.role === REPO_ROLES.EDITING && repo.path));
   /** @type {import("../shell/menu.js").MenuItem[]} */
   let identityMenu = $derived([
     ...branchItems(),
     { label: "Copy branch name", icon: "copy", act: () => copyText(fields.branch), enabled: Boolean(fields.branch) },
-    ...worktreeItems(),
+    { label: "Copy workspace path", icon: "copy", act: () => copyText(fields.root), disabled: !fields.root },
+    { label: "Open workspace in Finder", icon: "worktree", act: revealWorkspace, disabled: !fields.root },
   ]);
 
   /** @returns {import("../shell/menu.js").MenuItem[]} */
@@ -160,36 +160,10 @@ export function shell() {
     return fields.branch ? [{ heading: "Branch" }, { label: fields.branch, icon: "branch", disabled: true }, "-"] : [];
   }
 
-  /** One editing repository is one worktree and one item. Several are several, and
-   * naming them beats picking one and calling it the worktree.
-   * @returns {import("../shell/menu.js").MenuItem[]} */
-  function worktreeItems() {
-    if (!editing.length) return [];
-    if (editing.length === 1) {
-      const path = editing[0].path;
-      return [
-        { label: "Copy path to worktree", icon: "copy", act: () => copyText(path) },
-        { label: "Open worktree in Finder", icon: "worktree", act: () => revealWorktree(path) },
-      ];
-    }
-    return [
-      {
-        label: "Copy path to worktree",
-        icon: "copy",
-        items: editing.map((repo) => ({ label: repo.name, act: () => copyText(repo.path) })),
-      },
-      {
-        label: "Open worktree in Finder",
-        icon: "worktree",
-        items: editing.map((repo) => ({ label: repo.name, act: () => revealWorktree(repo.path) })),
-      },
-    ];
-  }
-
-  async function revealWorktree(path) {
+  async function revealWorkspace() {
     identityOpen = false;
     try {
-      await revealPath(fields.slug, path);
+      await reveal(fields.slug);
     } catch {}
   }
 
