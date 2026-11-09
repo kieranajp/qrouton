@@ -21,14 +21,18 @@ window.taskLayout = () => {
   };
 };
 
-/** The left edge of the item's first and last line of text, checkbox excluded. */
+/** Where the item's first visible glyph and its last line start; the space after the checkbox is not a glyph. */
 function lineStarts(item) {
+  const text = item.querySelector("input").nextSibling;
+  const glyph = text.data.search(/\S/);
+  const first = document.createRange();
+  first.setStart(text, glyph);
+  first.setEnd(text, glyph + 1);
   const range = document.createRange();
-  range.setStartAfter(item.querySelector("input"));
+  range.setStart(text, glyph);
   range.setEndAfter(item.lastChild);
   const rects = [...range.getClientRects()].filter((rect) => rect.width > 0);
-  const top = Math.min(...rects.map((rect) => rect.top));
   const bottom = Math.max(...rects.map((rect) => rect.top));
-  const startOf = (row) => Math.min(...rects.filter((rect) => Math.abs(rect.top - row) < 2).map((rect) => rect.left));
-  return { firstStart: startOf(top), lastStart: startOf(bottom), lines: new Set(rects.map((rect) => Math.round(rect.top))).size };
+  const lastStart = Math.min(...rects.filter((rect) => Math.abs(rect.top - bottom) < 2).map((rect) => rect.left));
+  return { firstStart: first.getBoundingClientRect().left, lastStart, lines: new Set(rects.map((rect) => Math.round(rect.top))).size };
 }

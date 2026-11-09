@@ -145,6 +145,7 @@ const pulls = {
       pr("acme/payments", 7, "Partial-capture refunds"),
       pr("acme/web", 39, "Retire the v1 client", "merged"),
       pr("acme/api", 12, "Draft the refund endpoint", "draft"),
+      pr("acme/api", 9, "Abandon the batch refunds", "closed"),
     ],
     signedOut: false,
   },

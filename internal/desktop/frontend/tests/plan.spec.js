@@ -289,6 +289,11 @@ test("moving to another screen shows the top of it", async ({ page }) => {
   await page.locator('.pip[aria-label="Phase 2"]').click();
   await expect.poll(() => shown(page)).toEqual(["2"]);
   expect(await page.evaluate(() => window.scrollTop_())).toBe(0);
+
+  // Reselecting the screen already shown is not a move, so it keeps the reader's place.
+  await page.evaluate(() => window.scrollTo_(360));
+  await page.locator('.pip[aria-label="Phase 2"]').click();
+  expect(await page.evaluate(() => window.scrollTop_())).toBe(360);
 });
 
 const bar = (page) => page.evaluate(() => window.bar());
