@@ -13,6 +13,7 @@ type Set struct {
 	warm     context.Context
 	services map[string]*Service
 	stops    map[string]context.CancelFunc
+	warming  sync.WaitGroup
 }
 
 func NewSet(embedder Embedder, cacheDir string) *Set {
@@ -57,7 +58,7 @@ func (s *Set) warmLocked() {
 		if s.stops[id] == nil {
 			ctx, stop := context.WithCancel(s.warm)
 			s.stops[id] = stop
-			go service.Warm(ctx)
+			s.warming.Go(func() { service.Warm(ctx) })
 		}
 	}
 }
@@ -68,6 +69,10 @@ func (s *Set) Warm(ctx context.Context) {
 	s.warm = ctx
 	s.warmLocked()
 }
+
+// Wait returns once every warm has finished. Cancel the context Warm was given
+// first, or it waits out the whole build.
+func (s *Set) Wait() { s.warming.Wait() }
 
 // ForPath answers the root containing an already resolved path, or nil.
 func (s *Set) ForPath(real string) *Service {

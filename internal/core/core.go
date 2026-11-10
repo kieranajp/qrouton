@@ -213,7 +213,7 @@ func (c *Core) Start(socket string) error {
 	c.server = server
 	go watchChrome(c.ctx, c.Sessions, c.opts.Root, c.opts.Config, c.Chrome.publish)
 	if c.Vault != nil {
-		go c.Vault.Warm(c.ctx)
+		c.Vault.Warm(c.ctx)
 	}
 	if c.Ollama != nil {
 		c.Ollama.Bind(c.ctx)
@@ -249,7 +249,11 @@ func (c *Core) Shutdown() {
 			_ = c.server.Close()
 		}
 		c.cancel()
+		c.Repositories.stop()
 		c.Placement.wait()
+		if c.Vault != nil {
+			c.Vault.Wait()
+		}
 	})
 }
 

@@ -55,6 +55,7 @@ type Repositories struct {
 	branchLists map[string]BranchList
 	gen         int
 	cancel      context.CancelFunc
+	runs        sync.WaitGroup
 	// ownerTimeout bounds each owner a retry refetches on its own.
 	ownerTimeout time.Duration
 	// done reports a run's end, so a test can wait on one.
@@ -196,8 +197,19 @@ func (r *Repositories) Refresh() int {
 	cached := github.OwnedBy(r.repos, owners)
 	r.mu.Unlock()
 
-	go r.run(ctx, gen, owners, failed, cached)
+	r.runs.Go(func() { r.run(ctx, gen, owners, failed, cached) })
 	return gen
+}
+
+// stop cancels the refresh in flight and waits for it, so no run writes the
+// repository cache after its core has gone.
+func (r *Repositories) stop() {
+	r.mu.Lock()
+	if r.cancel != nil {
+		r.cancel()
+	}
+	r.mu.Unlock()
+	r.runs.Wait()
 }
 
 // run fans out over every owner, or walks the failed ones alone. The retry half
@@ -221,10 +233,14 @@ func (r *Repositories) run(ctx context.Context, gen int, configured []string, fa
 		return
 	}
 	if len(failed) == 0 {
-		for msg := range r.gh.all(ctx, token, configured, cached) {
+		refreshed := r.gh.all(ctx, token, configured, cached)
+		for msg := range refreshed {
 			if !r.push(gen, msg) {
-				return
+				break
 			}
+		}
+		// The channel closes only once the fetch has finished writing the cache.
+		for range refreshed {
 		}
 		return
 	}
