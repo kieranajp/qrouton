@@ -14,7 +14,7 @@ type wailsRenderer struct {
 	running atomic.Bool
 }
 
-func newWailsRenderer(assets fs.FS, icon []byte, uiScale func() int, decks deckLookup, galleries ...galleryLookup) *wailsRenderer {
+func newWailsRenderer(assets fs.FS, icon []byte, uiScale func() int, decks deckOpener, galleries ...galleryOpener) *wailsRenderer {
 	r := &wailsRenderer{}
 	r.app = application.New(application.Options{
 		Name:        applicationName,

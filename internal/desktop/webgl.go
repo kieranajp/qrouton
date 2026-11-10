@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/kieranajp/qrouton/internal/config"
+	"github.com/kieranajp/qrouton/internal/core"
 )
 
 // WebGLLog appends one JSON line per WebGL renderer event the page reports.
@@ -38,19 +39,6 @@ func newWebGLLog(path string, session func(terminal string) string) *WebGLLog {
 	return &WebGLLog{path: path, session: session}
 }
 
-// terminalSession names the session a conversation or terminal tab belongs to.
-func terminalSession(sessions *Sessions, windows *Windows) func(string) string {
-	return func(terminal string) string {
-		if state, ok := sessions.byTerminal(terminal); ok {
-			return state.slug()
-		}
-		if window, ok := windows.window(terminal); ok && window.session != nil {
-			return window.session.slug()
-		}
-		return ""
-	}
-}
-
 func (l *WebGLLog) Record(at, event, terminal, pane string, live, created int) {
 	if l.path == "" {
 		return
@@ -66,7 +54,7 @@ func (l *WebGLLog) Record(at, event, terminal, pane string, live, created int) {
 	if err := os.MkdirAll(filepath.Dir(l.path), 0o755); err != nil {
 		return
 	}
-	rotateLog(l.path)
+	core.RotateLog(l.path)
 	file, err := os.OpenFile(l.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return

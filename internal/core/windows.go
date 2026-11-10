@@ -1,0 +1,198 @@
+package core
+
+import (
+	"context"
+	"os"
+	"path"
+	"path/filepath"
+
+	"github.com/kieranajp/qrouton/internal/launch"
+	"github.com/kieranajp/qrouton/internal/workbench"
+)
+
+// Windows is the service the agent's window tools and the session's page both
+// reach a tab through: the registry of open tabs, plus the document poll, the
+// terminal processes and the diagram worker, each owning what only it touches.
+type Windows struct {
+	*registry
+	documents   *documents
+	terminals   *terminals
+	diagrams    *diagramWorker
+	newShell    func() (string, error)
+	newDocument func(name string) (string, error)
+	stopFollow  context.CancelFunc
+}
+
+func newWindows(emit Emitter, sessions *Sessions) *Windows {
+	tabs := newRegistry(emit, sessions)
+	ctx, stop := context.WithCancel(context.Background())
+	w := &Windows{
+		registry:   tabs,
+		documents:  newDocuments(emit, tabs),
+		terminals:  newTerminals(emit, tabs),
+		diagrams:   newDiagramWorker(emit),
+		stopFollow: stop,
+	}
+	go w.documents.follow(ctx)
+	go w.terminals.watchForeground(ctx)
+	return w
+}
+
+// OpenShell opens another terminal in the session's right pane and returns its
+// id, so the page can select the tab the user just asked for.
+func (w *Windows) OpenShell() (string, error) {
+	if w.newShell == nil {
+		return "", ErrNoShellCommand
+	}
+	return w.newShell()
+}
+
+// OpenDocument returns the window already showing the named document, or opens
+// one. The name is session-relative.
+func (w *Windows) OpenDocument(name string) (string, error) {
+	if name == "" {
+		return "", ErrNoDocumentName
+	}
+	return w.showOrOpen(w.shown(), name, func() (string, error) {
+		if w.newDocument == nil {
+			return "", ErrNoEditorCommand
+		}
+		return w.newDocument(name)
+	})
+}
+
+func (w *Windows) Select(slug, id string) error { return w.selectBySlug(slug, id) }
+
+// Reorder moves one of a session's tabs to a position in its whole strip. The
+// index counts every tab the session has open, not the ones the strip found
+// room to draw.
+func (w *Windows) Reorder(slug, id string, to int) error { return w.reorder(slug, id, to) }
+
+// openAgentWindow opens a tab for the agent and runs a terminal's command at
+// once, so it does not wait for the session to be on screen.
+func (w *Windows) openAgentWindow(owner *SessionState, opts workbench.WindowOptions) (string, error) {
+	id, err := w.openWindow(owner, opts)
+	if err != nil || opts.Kind != workbench.KindTerminal {
+		return id, err
+	}
+	if err := w.terminals.launch(id, unmountedCols, unmountedRows); err != nil {
+		// A later open of the same source may already have replaced this tab.
+		if !w.exists(id) {
+			return id, nil
+		}
+		w.discard(id)
+		return "", err
+	}
+	return id, nil
+}
+
+func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
+
+func (w *Windows) Write(id, encoded string) error { return w.terminals.write(id, encoded) }
+
+func (w *Windows) Resize(id string, cols, rows int) error { return w.terminals.resize(id, cols, rows) }
+
+// Content is a document window's text, fetched by its page on load.
+func (w *Windows) Content(id string) (Document, error) { return w.documents.content(id) }
+
+// RenderDiagrams names every d2 fence in a document window, carrying the SVG of
+// the ones already rendered; the rest arrive on windowDiagramEvent as they land.
+// A window with nothing to draw answers with an empty list rather than an error:
+// every Markdown pane calls this, diagrams or not.
+func (w *Windows) RenderDiagrams(id string, request uint64) ([]RenderedDiagram, error) {
+	text, markdown, err := w.documents.markdown(id)
+	if err != nil {
+		return nil, err
+	}
+	if !markdown {
+		return []RenderedDiagram{}, nil
+	}
+	return w.diagrams.render(id, text, request), nil
+}
+
+func (w *Windows) ReportViewport(id string, report ViewportReport) error {
+	return w.documents.report(id, report)
+}
+
+// Close serves the agent's window tool and the tab strip's close control. Wails
+// binds exported methods only, so unexporting this silently breaks the tab.
+func (w *Windows) Close(id string) error {
+	window, ok := w.window(id)
+	if !ok {
+		return noSuchWindow(id)
+	}
+	if pinned(window) {
+		return ErrOverviewWindowPinned
+	}
+	w.discard(id)
+	return nil
+}
+
+// Surfaces answers a session's page on load: the event only fires on a change,
+// and the Overview tab opens before anything is subscribed.
+func (w *Windows) Surfaces(slug string) Surfaces { return w.surfacesBySlug(slug) }
+
+func (w *Windows) viewport(owner *SessionState, id string) (*workbench.DocumentViewport, error) {
+	return w.documents.viewport(owner, id)
+}
+
+func (w *Windows) stopAll() {
+	w.registry.stopAll()
+	w.stopFollow()
+	w.diagrams.stop()
+}
+
+func (w *Windows) FocusAsset(slug, id string, index int) (workbench.AssetSelection, error) {
+	owner := w.sessions.BySlug(slug)
+	if owner == nil {
+		return workbench.AssetSelection{}, UnknownSession(slug)
+	}
+	return w.focusAsset(owner, id, index)
+}
+
+// OpenDeckAsset opens a file beside the deck the token's window shows. The path
+// must resolve inside that window's session, and a directory is refused.
+func (w *Windows) OpenDeckAsset(token, rel string) (*os.File, error) {
+	root, dir, ok := w.deckDirectory(token)
+	if !ok {
+		return nil, ErrNoSuchAsset
+	}
+	return openSessionFile(root, filepath.FromSlash(path.Join(dir, rel)), false)
+}
+
+// OpenGalleryAsset opens one asset of the gallery the token's window shows,
+// which must be a regular media file inside that window's session, and names
+// its media type.
+func (w *Windows) OpenGalleryAsset(token string, index int) (*os.File, string, error) {
+	ref, ok := w.lookupGalleryAsset(token, index)
+	if !ok {
+		return nil, "", ErrNoSuchAsset
+	}
+	file, err := openSessionFile(ref.root, ref.source, true)
+	if err != nil {
+		return nil, "", err
+	}
+	media, known := workbench.AssetMedia(file.Name())
+	if !known {
+		_ = file.Close()
+		return nil, "", ErrNoSuchAsset
+	}
+	return file, media.Type, nil
+}
+
+func openSessionFile(root, source string, regularOnly bool) (*os.File, error) {
+	name, err := launch.ResolveSessionFile(root, source)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil || info.IsDir() || (regularOnly && !info.Mode().IsRegular()) {
+		_ = file.Close()
+		return nil, ErrNoSuchAsset
+	}
+	return file, nil
+}

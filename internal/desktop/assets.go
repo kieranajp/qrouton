@@ -8,13 +8,11 @@ import (
 	"net/http"
 	"os"
 	"path"
-	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/theme"
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
@@ -68,12 +66,13 @@ func bindingName(typ reflect.Type, method string) string {
 	return typ.PkgPath() + "." + typ.Name() + "." + method
 }
 
-// deckLookup answers a deck's asset token with the session root its window
-// belongs to and the directory the deck itself sits in.
-type deckLookup func(token string) (root, dir string, ok bool)
-type galleryLookup func(token string, index int) (galleryAssetRef, bool)
+// deckOpener opens a file beside the deck a token names; galleryOpener opens
+// one asset of the gallery a token names, with its media type. Both refuse
+// anything outside the window's session.
+type deckOpener func(token, rel string) (*os.File, error)
+type galleryOpener func(token string, index int) (*os.File, string, error)
 
-func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, galleryLookups ...galleryLookup) http.Handler {
+func assetHandler(assets fs.FS, uiScale func() int, decks deckOpener, galleryOpeners ...galleryOpener) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle(rootPath, http.FileServerFS(assets))
 	mux.HandleFunc(theme.Path, func(w http.ResponseWriter, _ *http.Request) {
@@ -90,11 +89,11 @@ func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, galleryLoo
 		_, _ = fmt.Fprintf(w, uiScaleCSSFormat, strconv.FormatFloat(float64(percent)/100, 'f', -1, 64))
 	})
 	mux.HandleFunc(deckAssetPath, deckAsset(decks))
-	var lookup galleryLookup
-	if len(galleryLookups) > 0 {
-		lookup = galleryLookups[0]
+	var open galleryOpener
+	if len(galleryOpeners) > 0 {
+		open = galleryOpeners[0]
 	}
-	gallery := galleryAsset(lookup)
+	gallery := galleryAsset(open)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasPrefix(r.URL.Path, galleryAssetPath) {
 			gallery(w, r)
@@ -104,31 +103,28 @@ func assetHandler(assets fs.FS, uiScale func() int, decks deckLookup, galleryLoo
 	})
 }
 
-func galleryAsset(lookup galleryLookup) http.HandlerFunc {
+func galleryAsset(open galleryOpener) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rawIndex, split := strings.Cut(strings.TrimPrefix(r.URL.Path, galleryAssetPath), "/")
 		index, err := strconv.Atoi(rawIndex)
-		if !split || token == "" || index < 1 || err != nil || lookup == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
+		if !split || token == "" || index < 1 || err != nil || open == nil || strconv.Itoa(index) != rawIndex || r.URL.RawPath != "" {
 			http.NotFound(w, r)
 			return
 		}
-		ref, ok := lookup(token, index)
-		if !ok {
+		file, media, err := open(token, index)
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		streamSessionMedia(w, r, ref.root, ref.source, mediaStreamPolicy{
-			mediaType:   func(name string) (string, bool) { media, known := workbench.AssetMedia(name); return media.Type, known },
-			regularOnly: true,
-			headers:     map[string]string{cacheControlHeader: cacheControlNoStore, contentTypeOptionsHeader: contentTypeNoSniff},
-		})
+		defer file.Close()
+		serveMedia(w, r, file, media, map[string]string{cacheControlHeader: cacheControlNoStore, contentTypeOptionsHeader: contentTypeNoSniff})
 	}
 }
 
 // deckAsset serves a deck's own pictures and video, and only those: the media
 // type comes from the extension table rather than from the file, so a path that
 // resolves inside the session but is not media is a 404 rather than a read.
-func deckAsset(decks deckLookup) http.HandlerFunc {
+func deckAsset(open deckOpener) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token, rel, split := strings.Cut(strings.TrimPrefix(r.URL.Path, deckAssetPath), "/")
 		var media string
@@ -138,51 +134,28 @@ func deckAsset(decks deckLookup) http.HandlerFunc {
 		} else if extra, ok := deckExtraMediaTypes[strings.ToLower(path.Ext(rel))]; ok {
 			media, known = extra, true
 		}
-		if !split || rel == "" || !known || decks == nil {
+		if !split || rel == "" || !known || open == nil {
 			http.NotFound(w, r)
 			return
 		}
-		root, dir, ok := decks(token)
-		if !ok {
+		file, err := open(token, rel)
+		if err != nil {
 			http.NotFound(w, r)
 			return
 		}
-		streamSessionMedia(w, r, root, filepath.FromSlash(path.Join(dir, rel)), mediaStreamPolicy{
-			mediaType: func(string) (string, bool) { return media, true },
-		})
+		defer file.Close()
+		serveMedia(w, r, file, media, nil)
 	}
 }
 
-type mediaStreamPolicy struct {
-	mediaType   func(string) (string, bool)
-	regularOnly bool
-	headers     map[string]string
-}
-
-func streamSessionMedia(w http.ResponseWriter, r *http.Request, root, source string, policy mediaStreamPolicy) {
-	name, err := launch.ResolveSessionFile(root, source)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	media, known := policy.mediaType(name)
-	if !known {
-		http.NotFound(w, r)
-		return
-	}
-	file, err := os.Open(name)
-	if err != nil {
-		http.NotFound(w, r)
-		return
-	}
-	defer file.Close()
+func serveMedia(w http.ResponseWriter, r *http.Request, file *os.File, media string, headers map[string]string) {
 	info, err := file.Stat()
-	if err != nil || info.IsDir() || (policy.regularOnly && !info.Mode().IsRegular()) {
+	if err != nil {
 		http.NotFound(w, r)
 		return
 	}
 	w.Header().Set(contentTypeHeader, media)
-	for name, value := range policy.headers {
+	for name, value := range headers {
 		w.Header().Set(name, value)
 	}
 	http.ServeContent(w, r, "", info.ModTime(), file)

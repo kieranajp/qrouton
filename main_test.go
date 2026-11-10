@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/kieranajp/qrouton/internal/config"
-	"github.com/kieranajp/qrouton/internal/desktop"
+	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/launch"
 	"github.com/kieranajp/qrouton/internal/session"
 	"github.com/kieranajp/qrouton/internal/workbench"
@@ -47,7 +47,7 @@ func TestTheAgentCommandCarriesEachSessionsOwnSocket(t *testing.T) {
 	for _, slug := range []string{"alpha", "beta"} {
 		root := t.TempDir()
 		socket := "/tmp/qrouton-sock/501/" + slug + ".sock"
-		command, err := ports.Agent(desktop.AgentRequest{SessionRoot: root, Socket: socket})
+		command, err := ports.Agent(core.AgentRequest{SessionRoot: root, Socket: socket})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -73,7 +73,7 @@ func TestTheAgentCommandReturnsTheProviderResolvedForALegacyManifest(t *testing.
 		"claude": {"/bin/echo"}, "codex": {"/bin/echo"}, "opencode": {"/bin/echo"},
 	}}
 	ports := testPorts(cfg, "", launch.EditorCommand{})
-	command, err := ports.Agent(desktop.AgentRequest{SessionRoot: t.TempDir(), Socket: "/tmp/s.sock"})
+	command, err := ports.Agent(core.AgentRequest{SessionRoot: t.TempDir(), Socket: "/tmp/s.sock"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,7 +337,7 @@ func TestTheAgentCommandRefusesARunnerThatIsGone(t *testing.T) {
 	cfg := &config.Config{Launch: map[string][]string{"codex": {"/bin/echo"}}}
 	ports := testPorts(cfg, "codex", launch.EditorCommand{Argv: []string{"vi"}})
 
-	_, err := ports.Agent(desktop.AgentRequest{
+	_, err := ports.Agent(core.AgentRequest{
 		SessionRoot: t.TempDir(), Socket: "/tmp/s.sock", RunnerID: "no-such-agent",
 	})
 	if !errors.Is(err, launch.ErrRunnerUnavailable) {

@@ -1,0 +1,45 @@
+package core
+
+import (
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/kieranajp/qrouton/internal/sessionpaths"
+)
+
+// RecordAgentExit appends one line per supervisor exit, and the tail of what
+// the terminal printed when that exit was a failure. A failure to write is
+// swallowed: a log nobody can keep must not take a session down with it.
+func RecordAgentExit(root, provider string, code int, tail string) {
+	if root == "" {
+		return
+	}
+	// Cleanup removes the session directory without waiting for the pump, so a
+	// log written here must never be what puts it back.
+	if _, err := os.Stat(sessionpaths.Dir(root)); err != nil {
+		return
+	}
+	path := sessionpaths.AgentLog(root)
+	RotateLog(path)
+	file, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		return
+	}
+	defer func() { _ = file.Close() }()
+	entry := fmt.Sprintf(agentExitLogFormat, time.Now().Format(time.RFC3339), provider, code)
+	if code != 0 && tail != "" {
+		entry += fmt.Sprintf(agentExitTailFormat, tail)
+	}
+	_, _ = file.WriteString(entry)
+}
+
+// RotateLog keeps one previous log beside the current one, so a log written
+// over and over cannot grow without end.
+func RotateLog(path string) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() < logLimit {
+		return
+	}
+	_ = os.Rename(path, path+logPreviousSuffix)
+}
