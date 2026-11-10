@@ -14,7 +14,7 @@ import (
 // gh is the GitHub work a refresh does, as fields so a test drives the rules
 // without a token or a network.
 type gh struct {
-	token    func() (string, error)
+	token    func(ctx context.Context) (string, error)
 	all      func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg
 	one      func(ctx context.Context, token, owner string) ([]github.Repo, error)
 	branches func(ctx context.Context, token, owner, name string) ([]string, error)
@@ -23,7 +23,7 @@ type gh struct {
 
 func liveGitHub() gh {
 	return gh{
-		token: github.Token,
+		token: github.TokenContext,
 		all: func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg {
 			return github.RefreshRepos(ctx, http.DefaultClient, token, orgs, repoRefreshTimeout, cached)
 		},
@@ -123,7 +123,7 @@ func (r *Repositories) Branches(id string) BranchList {
 
 func (r *Repositories) fetchBranches(repo github.Repo) (BranchList, bool) {
 	fallback := BranchList{Default: repo.DefaultBranch, Branches: defaultFirst(nil, repo.DefaultBranch)}
-	token, err := r.gh.token()
+	token, err := r.gh.token(context.Background())
 	if err != nil {
 		fallback.Error = errorText(err)
 		return fallback, false
@@ -220,8 +220,11 @@ func (r *Repositories) run(ctx context.Context, gen int, configured []string, fa
 	if r.done != nil {
 		defer r.done(gen)
 	}
-	token, err := r.gh.token()
+	token, err := r.gh.token(ctx)
 	if err != nil {
+		if ctx.Err() != nil {
+			return
+		}
 		owners := failed
 		if len(owners) == 0 {
 			owners = configured

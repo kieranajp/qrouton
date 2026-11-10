@@ -51,7 +51,7 @@ func TestShutdownWaitsForARepositoryRefresh(t *testing.T) {
 	c := shutdownCore(t, nil)
 	started := make(chan struct{}, 1)
 	var finished atomic.Bool
-	c.Repositories.gh = gh{token: func() (string, error) { return "t", nil }, all: slowRefresh(started, &finished, 20*time.Millisecond)}
+	c.Repositories.gh = gh{token: func(context.Context) (string, error) { return "t", nil }, all: slowRefresh(started, &finished, 20*time.Millisecond)}
 
 	c.Repositories.Refresh()
 	<-started
@@ -74,7 +74,7 @@ func TestShutdownWaitsForASupersededRepositoryFetch(t *testing.T) {
 	}{{&first, 300 * time.Millisecond}, {&second, 0}}
 	var calls atomic.Int32
 	c.Repositories.gh = gh{
-		token: func() (string, error) { return "t", nil },
+		token: func(context.Context) (string, error) { return "t", nil },
 		all: func(ctx context.Context, token string, orgs []string, cached []github.Repo) <-chan github.RefreshMsg {
 			f := fetches[calls.Add(1)-1]
 			return slowRefresh(started, f.finished, f.linger)(ctx, token, orgs, cached)
@@ -124,5 +124,44 @@ func TestShutdownWaitsForTheVaultWarm(t *testing.T) {
 	c.Shutdown()
 	if !embedder.finished.Load() {
 		t.Fatal("the vault warm was still running after Shutdown")
+	}
+}
+
+// Catches Shutdown waiting out a credential lookup that a stopping refresh
+// cannot cancel.
+func TestShutdownCancelsACredentialLookup(t *testing.T) {
+	c := shutdownCore(t, nil)
+	started := make(chan struct{})
+	cancelled := make(chan struct{})
+	release := make(chan struct{})
+	// Frees a lookup that was never cancelled, so a failure reports rather than hangs.
+	t.Cleanup(func() { close(release) })
+	c.Repositories.gh = gh{token: func(ctx context.Context) (string, error) {
+		close(started)
+		select {
+		case <-ctx.Done():
+			close(cancelled)
+			return "", ctx.Err()
+		case <-release:
+			return "", errors.New("released")
+		}
+	}}
+
+	c.Repositories.Refresh()
+	<-started
+	stopped := make(chan struct{})
+	go func() {
+		c.Repositories.stop()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(10 * time.Second):
+		t.Fatal("stop did not return: the credential lookup was not cancelled")
+	}
+	select {
+	case <-cancelled:
+	default:
+		t.Fatal("stop returned without the credential lookup seeing its context end")
 	}
 }

@@ -31,7 +31,7 @@ func newFakeGitHub() *fakeGitHub { return &fakeGitHub{fails: map[string]error{}}
 
 func (f *fakeGitHub) calls() gh {
 	return gh{
-		token: func() (string, error) {
+		token: func(context.Context) (string, error) {
 			f.mu.Lock()
 			f.tokenCalls++
 			f.mu.Unlock()
