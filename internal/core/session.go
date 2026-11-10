@@ -31,9 +31,7 @@ type SessionState struct {
 	// control is the session's own listener, and nil for a session whose control
 	// arrives on the process socket instead.
 	control io.Closer
-	// tail is the last of the conversation, kept back for the log a supervisor's
-	// exit writes. The pane itself keeps no scrollback.
-	tail *Ring
+	output  *outputStream
 
 	mu              sync.Mutex
 	stopped         bool
@@ -41,7 +39,9 @@ type SessionState struct {
 	bugReports      map[string]*bugReportRecord
 	latestBugReport string
 	process         *PTY
-	overviewWindow  string
+	// exit is nil until the supervisor exits of its own accord.
+	exit           *int
+	overviewWindow string
 	// picker is the escalation waiting for the user to arrive at this session.
 	// Agent requests expire with their caller; one opened by the user does not.
 	picker *workbench.PickerRequest
@@ -113,15 +113,43 @@ func (s *SessionState) admissionClosed() bool {
 	return s.windowsClosed.Load()
 }
 
-// start launches the supervisor under a PTY sized to the terminal displaying it.
-// The page calls it on load, so a reload must not fork a second agent.
-func (s *SessionState) start(emit Emitter, exited func(*SessionState, int), cols, rows int) error {
+// attach launches the supervisor under a PTY sized to the terminal displaying
+// it. The page attaches on every load, so a reload replays the conversation
+// rather than forking a second agent.
+func (s *SessionState) attach(events Events, exited func(*SessionState, int), size *Size, from *uint64, deliver func(Output)) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.stopped || s.process != nil {
+	if s.stopped {
+		s.mu.Unlock()
 		return nil
 	}
-	process, err := StartPTY(s.argv, s.env, s.Root(), cols, rows)
+	if s.process == nil {
+		defer s.mu.Unlock()
+		if size == nil {
+			return ErrTerminalNotStarted
+		}
+		return s.startLocked(events, exited, *size)
+	}
+	s.mu.Unlock()
+	return s.output.attach(from, func(out Output) error {
+		s.mu.Lock()
+		process := s.process
+		if s.exit != nil {
+			code := *s.exit
+			out.ExitCode = &code
+		}
+		s.mu.Unlock()
+		if size != nil && out.ExitCode == nil && process != nil && !process.Done() {
+			if err := process.Resize(size.Cols, size.Rows); err != nil {
+				return err
+			}
+		}
+		deliver(out)
+		return nil
+	})
+}
+
+func (s *SessionState) startLocked(events Events, exited func(*SessionState, int), size Size) error {
+	process, err := StartPTY(s.argv, s.env, s.Root(), size.Cols, size.Rows)
 	if err != nil {
 		return err
 	}
@@ -129,17 +157,14 @@ func (s *SessionState) start(emit Emitter, exited func(*SessionState, int), cols
 	go process.Pump(
 		func(b []byte) {
 			s.agents.output()
-			if s.tail != nil {
-				s.tail.Write(b)
-			}
-			emit(ptyDataEvent+s.terminal, EncodeChunk(b))
+			s.output.publish(b, func(out Output) { events.TerminalOutput(TerminalConversation, s.terminal, out) })
 		},
-		func(code int) { s.childExited(emit, exited, code) },
+		func(code int) { s.childExited(events, exited, code) },
 	)
 	return nil
 }
 
-func (s *SessionState) childExited(emit Emitter, exited func(*SessionState, int), code int) {
+func (s *SessionState) childExited(events Events, exited func(*SessionState, int), code int) {
 	s.mu.Lock()
 	stopped := s.stopped
 	s.mu.Unlock()
@@ -147,7 +172,12 @@ func (s *SessionState) childExited(emit Emitter, exited func(*SessionState, int)
 		return
 	}
 	s.recordExit(code)
-	emit(ptyExitEvent+s.terminal, code)
+	s.output.ordered(func() {
+		s.mu.Lock()
+		s.exit = &code
+		s.mu.Unlock()
+		events.TerminalExit(TerminalConversation, s.terminal, code)
+	})
 	if exited != nil {
 		exited(s, code)
 	}
@@ -158,14 +188,14 @@ func (s *SessionState) childExited(emit Emitter, exited func(*SessionState, int)
 // every quit would rotate the one crash that mattered off the disk.
 func (s *SessionState) recordExit(code int) {
 	s.mu.Lock()
-	stopped, tail := s.stopped, s.tail
+	stopped := s.stopped
 	s.mu.Unlock()
 	if stopped {
 		return
 	}
 	var last string
-	if code != 0 && tail != nil {
-		last = tail.Text(false)
+	if code != 0 {
+		last = s.output.ring.Text(false)
 	}
 	RecordAgentExit(s.Root(), s.provider, code, last)
 }
@@ -694,7 +724,7 @@ func (s *Sessions) add(root string, argv, env []string) *SessionState {
 		env:         env,
 		sessionSlug: slug,
 		sessionRoot: root,
-		tail:        NewRing(AgentTailBytes),
+		output:      newOutputStream(WindowScrollback),
 	}
 	s.slugs[state.Slug()] = state
 	s.terms[state.terminal] = state

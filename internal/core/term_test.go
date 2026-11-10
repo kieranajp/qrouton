@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/base64"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -25,16 +24,10 @@ func (r *recorder) emit(event string, payload any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
-	if strings.HasPrefix(event, ptyDataEvent) {
-		chunk, ok := payload.(Chunk)
-		if !ok {
-			return
+	if strings.HasPrefix(event, ptyDataName) {
+		if out, ok := payload.(Output); ok {
+			r.data.Write(out.Data)
 		}
-		decoded, err := base64.StdEncoding.DecodeString(chunk.Encoded)
-		if err != nil {
-			return
-		}
-		r.data.Write(decoded)
 	}
 }
 
@@ -57,11 +50,11 @@ func (r *recorder) saw(event string) bool {
 
 // testTerm is a conversation for one registered session, and the session it
 // addresses.
-func testTerm(t *testing.T, emit Emitter, root string, argv, env []string) (*Term, *SessionState) {
+func testTerm(t *testing.T, emit emitFunc, root string, argv, env []string) (*Term, *SessionState) {
 	t.Helper()
 	reg := newSessions()
 	t.Cleanup(reg.stopAll)
-	return newTerm(reg, emit), reg.add(root, argv, WithTerminalEnv(env))
+	return newTerm(reg, emitFunc(emit)), reg.add(root, argv, WithTerminalEnv(env))
 }
 
 // waitCeiling is not a latency any test here asserts: a child answers in
@@ -86,21 +79,20 @@ func waitFor(t *testing.T, what string, condition func() bool) {
 }
 
 // The PTY carries a real terminal: the child sees a tty and its output reaches
-// the page base64-encoded, because a raw chunk is not valid UTF-8 at its
-// boundary.
+// the page.
 func TestTermPumpsChildOutputToThePage(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
 		[]string{"/bin/sh", "-c", "test -t 0 && printf 'on a tty\\n'; read done"}, os.Environ())
 
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the child's output", func() bool { return strings.Contains(rec.output(), "on a tty") })
-	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+	if err := term.Write(state.terminal, []byte("\n")); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitEvent + state.terminal) })
+	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitName + state.terminal) })
 }
 
 func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
@@ -109,7 +101,7 @@ func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
 		[]string{"/bin/sh", "-c", "printf '%s %s <%s>\\n' \"$TERM\" \"$COLORTERM\" \"$NO_COLOR\"; exec cat"},
 		[]string{"TERM=dumb", "NO_COLOR=1"})
 
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the child's environment", func() bool {
@@ -124,7 +116,7 @@ func TestTheConversationRunsInTheSessionRoot(t *testing.T) {
 	rec := &recorder{}
 	root := t.TempDir()
 	term, state := testTerm(t, rec.emit, root, []string{"/bin/sh", "-c", "pwd; exec cat"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	want := resolved(t, root)
@@ -143,15 +135,15 @@ func TestTheConversationsStreamsAreKeyedByTerminal(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
 		[]string{"/bin/sh", "-c", "printf 'keyed\\n'"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the terminal's data event", func() bool { return rec.saw(ptyDataEvent + state.terminal) })
-	waitFor(t, "the terminal's exit event", func() bool { return rec.saw(ptyExitEvent + state.terminal) })
+	waitFor(t, "the terminal's data event", func() bool { return rec.saw(ptyDataName + state.terminal) })
+	waitFor(t, "the terminal's exit event", func() bool { return rec.saw(ptyExitName + state.terminal) })
 	if !strings.Contains(rec.output(), "keyed") {
 		t.Fatalf("the keyed data event carried %q", rec.output())
 	}
-	for _, unkeyed := range []string{"pty:data", "pty:exit", ptyDataEvent, ptyExitEvent} {
+	for _, unkeyed := range []string{"pty:data", "pty:exit", ptyDataName, ptyExitName} {
 		if rec.saw(unkeyed) {
 			t.Fatalf("%q was emitted, which names no terminal and reaches no page", unkeyed)
 		}
@@ -169,19 +161,19 @@ func resolved(t *testing.T, dir string) string {
 	return physical
 }
 
-// The page calls Start on load, so a reload must not fork a second agent.
-func TestTermStartIsIdempotent(t *testing.T) {
+// The page attaches on load, so a reload must not fork a second agent.
+func TestTermAttachStartsOnlyOnce(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(), []string{"/bin/cat"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	first := ptyPid(state.process)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	if ptyPid(state.process) != first {
-		t.Fatal("a second Start forked another agent")
+		t.Fatal("a second Attach forked another agent")
 	}
 }
 
@@ -193,13 +185,13 @@ func TestTermStartsOneProcessPerTerminal(t *testing.T) {
 	t.Cleanup(reg.stopAll)
 	one := reg.add(t.TempDir(), []string{"/bin/cat"}, os.Environ())
 	two := reg.add(t.TempDir(), []string{"/bin/cat"}, os.Environ())
-	term := newTerm(reg, rec.emit)
+	term := newTerm(reg, emitFunc(rec.emit))
 
 	if one.terminal == two.terminal {
 		t.Fatalf("both sessions were minted %q", one.terminal)
 	}
 	for _, state := range []*SessionState{one, two} {
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -211,11 +203,11 @@ func TestTermStartsOneProcessPerTerminal(t *testing.T) {
 func TestTermWritesKeystrokesToTheChild(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(), []string{"/bin/cat"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 
-	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte("hello\n"))); err != nil {
+	if err := term.Write(state.terminal, []byte("hello\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the echoed keystrokes", func() bool { return strings.Contains(rec.output(), "hello") })
@@ -223,14 +215,14 @@ func TestTermWritesKeystrokesToTheChild(t *testing.T) {
 
 func TestTermRejectsWritesBeforeItHasAPTY(t *testing.T) {
 	term, state := testTerm(t, func(string, any) {}, t.TempDir(), []string{"/bin/cat"}, nil)
-	keystroke := base64.StdEncoding.EncodeToString([]byte("x"))
+	keystroke := []byte("x")
 	if err := term.Write(state.terminal, keystroke); err != ErrTerminalNotStarted {
-		t.Fatalf("Write before Start returned %v, want ErrTerminalNotStarted", err)
+		t.Fatalf("Write before Attach returned %v, want ErrTerminalNotStarted", err)
 	}
 	if err := term.Write("term-99", keystroke); err == nil {
 		t.Fatal("a write to a terminal nobody registered succeeded")
 	}
-	if err := term.Start("term-99", 80, 24); err == nil {
+	if err := startTerm(term, "term-99", 80, 24); err == nil {
 		t.Fatal("a start of a terminal nobody registered succeeded")
 	}
 }
@@ -244,7 +236,7 @@ func TestStopKillsTheWholeProcessTree(t *testing.T) {
 	marker := dir + "/grandchild.pid"
 	term, state := testTerm(t, rec.emit, dir,
 		[]string{"/bin/sh", "-c", "sleep 300 & echo $! > " + marker + "; wait"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	var grandchild int
@@ -264,17 +256,17 @@ func TestStopKillsTheWholeProcessTree(t *testing.T) {
 	})
 }
 
-func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
+func TestBothTerminalKindsShareOneOutputTransport(t *testing.T) {
 	var mu sync.Mutex
 	var agentPayload any
 	term, state := testTerm(t, func(event string, payload any) {
-		if strings.HasPrefix(event, ptyDataEvent) {
+		if strings.HasPrefix(event, ptyDataName) {
 			mu.Lock()
 			agentPayload = payload
 			mu.Unlock()
 		}
 	}, t.TempDir(), []string{"/bin/sh", "-c", "printf 'chunk\\n'; sleep 5"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the agent terminal's data event", func() bool {
@@ -283,10 +275,10 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 		return agentPayload != nil
 	})
 	mu.Lock()
-	_, agentChunk := agentPayload.(Chunk)
+	_, agentOutput := agentPayload.(Output)
 	mu.Unlock()
-	if !agentChunk {
-		t.Fatalf("agent terminal emitted %T, want Chunk", agentPayload)
+	if !agentOutput {
+		t.Fatalf("agent terminal emitted %T, want Output", agentPayload)
 	}
 
 	w, renderer := testWindows(t)
@@ -296,16 +288,16 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, nil, id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("echo\n"))); err != nil {
+	if err := w.Write(id, []byte("echo\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the tab terminal's live output", func() bool {
 		renderer.mu.Lock()
 		defer renderer.mu.Unlock()
-		chunk, ok := renderer.events[windowDataEvent+id].(Chunk)
+		chunk, ok := renderer.events[windowDataName+id].(Output)
 		return ok && !chunk.Replay
 	})
 }

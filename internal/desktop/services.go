@@ -1,6 +1,13 @@
 package desktop
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
+
+	"github.com/kieranajp/qrouton/internal/api"
+	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
+	"github.com/kieranajp/qrouton/internal/api/pagejson"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
@@ -10,13 +17,25 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-type Ollama struct{ ollama *core.Ollama }
+type Ollama struct{ ollama qroutonv1.OllamaServiceClient }
 
-func (o *Ollama) Check() core.OllamaStatus { return o.ollama.Check() }
+func (o *Ollama) Check() (json.RawMessage, error) {
+	resp, err := o.ollama.Check(context.Background(), &qroutonv1.CheckRequest{})
+	if err != nil {
+		return nil, api.FromStatus(err)
+	}
+	return pagejson.Marshal(resp.GetStatus()), nil
+}
 
-func (o *Ollama) Pull() { o.ollama.Pull() }
+func (o *Ollama) Pull() error {
+	_, err := o.ollama.Pull(context.Background(), &qroutonv1.PullRequest{})
+	return api.FromStatus(err)
+}
 
-func (o *Ollama) CancelPull() { o.ollama.CancelPull() }
+func (o *Ollama) CancelPull() error {
+	_, err := o.ollama.CancelPull(context.Background(), &qroutonv1.CancelPullRequest{})
+	return api.FromStatus(err)
+}
 
 type Sessions struct{ sessions *core.Sessions }
 
@@ -44,15 +63,51 @@ func (s *Sessions) Uncommitted(slug string) ([]string, error) { return s.session
 
 func (s *Sessions) Cleanup(slug string) error { return s.sessions.Cleanup(slug) }
 
-type Term struct{ term *core.Term }
+type Term struct {
+	terminals qroutonv1.TerminalServiceClient
+}
 
-func (t *Term) Start(id string, cols, rows int) error { return t.term.Start(id, cols, rows) }
+func (t *Term) Start(id string, cols, rows int) error { return attach(t.terminals, id, cols, rows) }
 
-func (t *Term) Write(id, encoded string) error { return t.term.Write(id, encoded) }
+func (t *Term) Write(id, encoded string) error { return write(t.terminals, id, encoded) }
 
-func (t *Term) Resize(id string, cols, rows int) error { return t.term.Resize(id, cols, rows) }
+func (t *Term) Resize(id string, cols, rows int) error { return resize(t.terminals, id, cols, rows) }
 
-type Windows struct{ windows *core.Windows }
+// attach is the page mounting a terminal: it starts one nothing has, and
+// otherwise replays it from the start, since the page keeps no offset.
+func attach(terminals qroutonv1.TerminalServiceClient, id string, cols, rows int) error {
+	_, err := terminals.Attach(context.Background(), &qroutonv1.AttachRequest{TerminalId: id, Size: terminalSize(cols, rows)})
+	return api.FromStatus(err)
+}
+
+func write(terminals qroutonv1.TerminalServiceClient, id, encoded string) error {
+	data, err := decodeInput(encoded)
+	if err != nil {
+		return err
+	}
+	_, err = terminals.Write(context.Background(), &qroutonv1.WriteRequest{TerminalId: id, Data: data})
+	return api.FromStatus(err)
+}
+
+func resize(terminals qroutonv1.TerminalServiceClient, id string, cols, rows int) error {
+	_, err := terminals.Resize(context.Background(), &qroutonv1.ResizeRequest{TerminalId: id, Size: terminalSize(cols, rows)})
+	return api.FromStatus(err)
+}
+
+func terminalSize(cols, rows int) *qroutonv1.TerminalSize {
+	return &qroutonv1.TerminalSize{Cols: int32(cols), Rows: int32(rows)}
+}
+
+// decodeInput is base64 because the page's keystrokes are bytes, and a
+// bound string argument must be valid UTF-8.
+func decodeInput(encoded string) ([]byte, error) {
+	return base64.StdEncoding.DecodeString(encoded)
+}
+
+type Windows struct {
+	windows   *core.Windows
+	terminals qroutonv1.TerminalServiceClient
+}
 
 func (w *Windows) OpenShell() (string, error) { return w.windows.OpenShell() }
 
@@ -62,11 +117,11 @@ func (w *Windows) Select(slug, id string) error { return w.windows.Select(slug, 
 
 func (w *Windows) Reorder(slug, id string, to int) error { return w.windows.Reorder(slug, id, to) }
 
-func (w *Windows) Start(id string, cols, rows int) error { return w.windows.Start(id, cols, rows) }
+func (w *Windows) Start(id string, cols, rows int) error { return attach(w.terminals, id, cols, rows) }
 
-func (w *Windows) Write(id, encoded string) error { return w.windows.Write(id, encoded) }
+func (w *Windows) Write(id, encoded string) error { return write(w.terminals, id, encoded) }
 
-func (w *Windows) Resize(id string, cols, rows int) error { return w.windows.Resize(id, cols, rows) }
+func (w *Windows) Resize(id string, cols, rows int) error { return resize(w.terminals, id, cols, rows) }
 
 func (w *Windows) Content(id string) (core.Document, error) { return w.windows.Content(id) }
 

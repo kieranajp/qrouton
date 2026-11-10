@@ -10,7 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -57,6 +59,10 @@ type Options struct {
 
 	updates   *Updates
 	placement *core.Placement
+	// bind registers the adapters that call the core through the in-process server.
+	bind func(*inProcess)
+	// hub is the core's Events, served to the translator.
+	hub *api.Hub
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -95,11 +101,17 @@ func Run(opts Options) error {
 	var quit func()
 	options := coreOptions(opts, func() { quit() })
 	options.Vault, options.Ollama = core.OpenVault(opts.Config), vault.NewOllama()
-	kernel = core.New(options, client)
-	quit = quitter(kernel, r)
+	opts.hub = api.NewHub()
+	kernel = core.New(options, client, opts.hub)
+	var served atomic.Pointer[inProcess]
+	quit = quitter(func() {
+		if in := served.Load(); in != nil {
+			in.Close()
+			return
+		}
+		kernel.Shutdown()
+	}, r)
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
-	r.register(application.NewService(&Term{term: kernel.Term}))
-	r.register(application.NewService(&Windows{windows: kernel.Windows}))
 	r.register(application.NewService(&Sessions{sessions: kernel.Sessions}))
 	r.register(application.NewService(&Repositories{repos: kernel.Repositories}))
 	r.register(application.NewService(&Orgs{orgs: kernel.Orgs}))
@@ -107,7 +119,13 @@ func Run(opts Options) error {
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
-	r.register(application.NewService(&Ollama{ollama: kernel.Ollama}))
+	opts.bind = func(in *inProcess) {
+		served.Store(in)
+		r.register(application.NewService(&Ollama{ollama: in.ollama}))
+		r.register(application.NewService(&Term{terminals: in.terminals}))
+		r.register(application.NewService(&Windows{windows: kernel.Windows, terminals: in.terminals}))
+		r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), in.terminalSession)))
+	}
 	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
@@ -115,15 +133,15 @@ func Run(opts Options) error {
 	r.register(application.NewService(&FirstRun{firstRun: kernel.FirstRun}))
 	opts.placement = kernel.Placement
 	r.register(application.NewService(&Placement{placement: kernel.Placement}))
-	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), kernel.TerminalSession)))
 	return run(r, kernel, opts, quit)
 }
 
 // quitter is the teardown the main window's OnClose runs, shared with
 // Settings.Quit so quitting from the panel is no worse than closing the window.
-func quitter(kernel *core.Core, r renderer) func() {
+// stop takes the core down, after the server once one is serving it.
+func quitter(stop func(), r renderer) func() {
 	return sync.OnceFunc(func() {
-		kernel.Shutdown()
+		stop()
 		r.Quit()
 	})
 }
@@ -164,8 +182,6 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// Shutdown waits for the placement check, so it must be deferred even when Start fails.
-	defer kernel.Shutdown()
 
 	if opts.updates != nil {
 		go opts.updates.watch(ctx, updateInterval)
@@ -173,8 +189,14 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	if opts.placement != nil {
 		opts.placement.CheckInBackground()
 	}
-	if err := kernel.Start(opts.Socket); err != nil {
+	// A core that fails to start is shut down first, which waits for the placement check.
+	in, err := startInProcess(kernel, opts.hub, opts.Socket, opts.Version, r.Emit)
+	if err != nil {
 		return err
+	}
+	defer in.Close()
+	if opts.bind != nil {
+		opts.bind(in)
 	}
 	if opts.Ticket != "" {
 		if _, err := kernel.Offer(opts.Ticket, opts.TicketPrompt); err != nil {

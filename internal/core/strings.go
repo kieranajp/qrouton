@@ -23,10 +23,8 @@ const (
 	// screenLines is what a read without full returns.
 	screenLines = 50
 
-	// AgentTailBytes is how much of a conversation is kept back for the log its
-	// supervisor's exit writes; logLimit is when a log is rotated.
-	AgentTailBytes = 8 * 1024
-	logLimit       = 256 * 1024
+	// logLimit is when an agent log is rotated.
+	logLimit = 256 * 1024
 )
 
 const (
@@ -40,8 +38,6 @@ const (
 // before it is killed outright. launch has its own for the runner the
 // supervisor signals; the two bound different processes and need not agree.
 const terminateGrace = 3 * time.Second
-
-const ollamaEvent = "ollama:status"
 
 const (
 	ollamaStateReady       = "ready"
@@ -81,26 +77,6 @@ const (
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
-)
-
-// Events the Go side emits at the pages; a window's or a conversation's own id
-// is appended so each page hears only its own stream.
-const (
-	ptyDataEvent = "pty:data:"
-	ptyExitEvent = "pty:exit:"
-	chromeEvent  = "chrome:update"
-	// agentTreeEvent carries the shown session's whole agent tree, named by slug.
-	agentTreeEvent = "agents:tree:"
-
-	windowDataEvent    = "window:data:"
-	windowExitEvent    = "window:exit:"
-	windowDiagramEvent = "window:diagram:"
-	windowContentEvent = "window:content:"
-	windowsEvent       = "window:open"
-
-	reposRefreshEvent      = "repos:refresh"
-	assemblyProgressEvent  = "assembly:progress"
-	assemblyRequestedEvent = "assembly:requested"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -206,9 +182,6 @@ const (
 	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
 
 	noOwnersError = "add at least one organisation or username to search"
-
-	orgsChangedEvent = "orgs:changed"
-	uiScaleEvent     = "ui:scale"
 )
 
 // A Save refusal names the settings field it belongs under before the sentence.

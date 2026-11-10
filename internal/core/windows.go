@@ -23,14 +23,14 @@ type Windows struct {
 	stopFollow  context.CancelFunc
 }
 
-func newWindows(emit Emitter, sessions *Sessions) *Windows {
-	tabs := newRegistry(emit, sessions)
+func newWindows(events Events, sessions *Sessions) *Windows {
+	tabs := newRegistry(events, sessions)
 	ctx, stop := context.WithCancel(context.Background())
 	w := &Windows{
 		registry:   tabs,
-		documents:  newDocuments(emit, tabs),
-		terminals:  newTerminals(emit, tabs),
-		diagrams:   newDiagramWorker(emit),
+		documents:  newDocuments(events, tabs),
+		terminals:  newTerminals(events, tabs),
+		diagrams:   newDiagramWorker(events),
 		stopFollow: stop,
 	}
 	go w.documents.follow(ctx)
@@ -86,9 +86,11 @@ func (w *Windows) openAgentWindow(owner *SessionState, opts workbench.WindowOpti
 	return id, nil
 }
 
-func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
+func (w *Windows) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+	return w.terminals.attach(id, size, from, deliver)
+}
 
-func (w *Windows) Write(id, encoded string) error { return w.terminals.write(id, encoded) }
+func (w *Windows) Write(id string, data []byte) error { return w.terminals.write(id, data) }
 
 func (w *Windows) Resize(id string, cols, rows int) error { return w.terminals.resize(id, cols, rows) }
 
@@ -96,7 +98,7 @@ func (w *Windows) Resize(id string, cols, rows int) error { return w.terminals.r
 func (w *Windows) Content(id string) (Document, error) { return w.documents.content(id) }
 
 // RenderDiagrams names every d2 fence in a document window, carrying the SVG of
-// the ones already rendered; the rest arrive on windowDiagramEvent as they land.
+// the ones already rendered; the rest arrive as WindowDiagram events as they land.
 // A window with nothing to draw answers with an empty list rather than an error:
 // every Markdown pane calls this, diagrams or not.
 func (w *Windows) RenderDiagrams(id string, request uint64) ([]RenderedDiagram, error) {

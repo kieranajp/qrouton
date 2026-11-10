@@ -6,6 +6,9 @@ PAGES    := internal/desktop/assets/index.html internal/desktop/assets/notes/ind
 BRIDGE   := internal/desktop/frontend/src/lib/bridge/generated.js
 PALETTE  := internal/desktop/frontend/tests/theme.css
 SHARE    := internal/share/assets/share.js
+PROTOGEN := internal/api/gen
+BUF_VERSION := v1.75.0
+BUF      := go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 VERSION  ?= 0.1.0
 BUILD_NUMBER ?= 1
 SIGN_IDENTITY ?= -
@@ -15,7 +18,7 @@ BOUND    := $(wildcard internal/config/*.go internal/desktop/*.go internal/core/
 SOURCES  := $(wildcard $(FRONTEND)/*.html $(FRONTEND)/*.js $(FRONTEND)/*/index.html) \
             $(shell find $(FRONTEND)/src -type f 2>/dev/null)
 
-.PHONY: build eval front front-check comment-check test race vet fmt check app archive dist deb deb-check install uninstall clean
+.PHONY: build eval front front-check comment-check proto proto-check test race vet fmt check app archive dist deb deb-check install uninstall clean
 
 # The embedded asset tree is generated, and //go:embed fails to compile against
 # a directory with nothing in it — so every Go target below depends on `front`.
@@ -82,13 +85,26 @@ fmt:
 front-check: $(FRONTEND)/node_modules $(PALETTE)
 	cd $(FRONTEND) && npm run check && npm run test:unit && npm run test:browser
 
+# The plugins are go.mod tools, so they match the runtime the generated code links.
+proto:
+	@bin=$$(mktemp -d); trap 'rm -rf "$$bin"' EXIT; \
+	go build -o "$$bin/" google.golang.org/protobuf/cmd/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc && \
+	PATH="$$bin:$$PATH" $(BUF) generate
+
+proto-check:
+	$(BUF) lint
+	@before=$$(find $(PROTOGEN) -type f | sort | xargs sha256sum); \
+	$(MAKE) -s proto; \
+	after=$$(find $(PROTOGEN) -type f | sort | xargs sha256sum); \
+	test "$$before" = "$$after" || { echo "$(PROTOGEN) is stale: run make proto"; exit 1; }
+
 comment-check: $(FRONTEND)/node_modules
 	go run ./cmd/commentdiscipline -policy comment-discipline.json -root .
 	cd $(FRONTEND) && npm run test:comments && npm run check:comments
 
 # The pre-handoff gate from AGENTS.md. gofmt -l reports rather than exits, so
 # it is asserted empty here.
-check: comment-check test race vet build front-check
+check: proto-check comment-check test race vet build front-check
 	@test -z "$$(gofmt -l .)" || { echo "gofmt:"; gofmt -l .; exit 1; }
 	git diff --check
 

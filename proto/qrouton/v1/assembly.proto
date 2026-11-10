@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// AssemblyProgress is one step of one session's assembly.
+message AssemblyProgress {
+  string session = 1;
+  string step = 2;
+  string status = 3;
+  string repo = 4;
+  string role = 5;
+  string phase = 6;
+  int32 percent = 7;
+  string error = 8;
+}

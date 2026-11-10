@@ -1,0 +1,78 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+import "qrouton/v1/assembly.proto";
+import "qrouton/v1/documents.proto";
+import "qrouton/v1/ollama.proto";
+import "qrouton/v1/repositories.proto";
+import "qrouton/v1/status.proto";
+import "qrouton/v1/terminals.proto";
+import "qrouton/v1/windows.proto";
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// EventService is the one ordered stream of everything the core tells a client.
+service EventService {
+  // Subscribe resumes after after_seq from the backlog, or sends Resync first
+  // when after_seq has fallen out of it. Zero starts from now.
+  rpc Subscribe(SubscribeRequest) returns (stream SubscribeResponse);
+}
+
+message SubscribeRequest {
+  uint64 after_seq = 1;
+}
+
+message SubscribeResponse {
+  Event event = 1;
+}
+
+message Event {
+  uint64 seq = 1;
+  oneof payload {
+    OllamaStatus ollama = 2;
+    ChromeFields chrome = 3;
+    AgentTreeChanged agent_tree = 4;
+    Surfaces windows_opened = 5;
+    WindowContent window_content = 6;
+    WindowDiagram window_diagram = 7;
+    TerminalOutput terminal_output = 8;
+    TerminalExit terminal_exit = 9;
+    RepositoryRefresh repository_refresh = 10;
+    AssemblyProgress assembly_progress = 11;
+    AssemblyRequested assembly_requested = 12;
+    OrgsChanged orgs_changed = 13;
+    UIScaleChanged ui_scale = 14;
+    Resync resync = 15;
+  }
+}
+
+message AgentTreeChanged {
+  string slug = 1;
+  AgentTree tree = 2;
+}
+
+message WindowContent {
+  string id = 1;
+  Document document = 2;
+}
+
+message WindowDiagram {
+  string id = 1;
+  RenderedDiagram diagram = 2;
+}
+
+message AssemblyRequested {
+  string ticket = 1;
+}
+
+message OrgsChanged {
+  repeated string orgs = 1;
+}
+
+message UIScaleChanged {
+  int32 scale = 1;
+}
+
+// Resync says events were lost, so the client must take a fresh snapshot.
+message Resync {}

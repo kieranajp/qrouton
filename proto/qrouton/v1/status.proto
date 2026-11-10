@@ -1,0 +1,168 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// ChromeFields is the session the window draws around its terminal.
+message ChromeFields {
+  string bug_report_id = 1 [json_name = "bugReportID"];
+  string bug_report_status = 2;
+  string bug_report_label = 3;
+  string mode = 4;
+  string identity = 5;
+  string branch = 6;
+  string slug = 7;
+  string terminal = 8;
+  repeated SessionRow sessions = 9;
+  repeated SessionDocument documents = 10;
+  repeated RepositoryDocuments repository_documents = 11;
+  repeated RepoStat repos = 12;
+  string activity = 13;
+  Stages stages = 14;
+  Stages stages_live = 15;
+  string root = 16;
+  bool picker = 17;
+  bool welcoming = 18;
+  bool placing = 19;
+  repeated Sticker stickers = 20;
+  SessionSummary session_summary = 21;
+  PullRequestList pull_requests = 22;
+  SessionDigest session_digest = 23;
+}
+
+message SessionSummary {
+  string text = 1;
+  string stage = 2;
+  string at = 3;
+}
+
+message SessionDigest {
+  string text = 1;
+  string at = 2;
+}
+
+message PullRequestList {
+  repeated GitHubPullRequest items = 1;
+  bool signed_out = 2;
+}
+
+message GitHubPullRequest {
+  string repo = 1;
+  int32 number = 2;
+  string title = 3;
+  string url = 4;
+  string state = 5;
+}
+
+message SessionRow {
+  string name = 1;
+  string slug = 2;
+  string initials = 3;
+  string mode = 4;
+  repeated SessionRepo repos = 5;
+  string terminal = 6;
+  string activity = 7;
+  AgentSummary summary = 8;
+  int32 unseen = 9;
+  google.protobuf.Timestamp opened = 10;
+  string sticker = 11;
+}
+
+message Sticker {
+  string id = 1;
+  string colour = 2;
+  string symbol = 3;
+  string label = 4;
+}
+
+message Stages {
+  bool research = 1;
+  bool plan = 2;
+  bool implement = 3;
+}
+
+message AgentSummary {
+  string attention = 1;
+  int32 active = 2;
+  string coverage = 3;
+  bool running = 4;
+  bool tools = 5;
+  string state = 6;
+  string reason = 7;
+  string tool = 8;
+  string stage = 9;
+}
+
+message SessionRepo {
+  string name = 1;
+  string role = 2;
+}
+
+// SessionDocument is one durable artifact under thoughts/shared.
+message SessionDocument {
+  string name = 1;
+  string path = 2;
+  string kind = 3;
+  string id = 4;
+  google.protobuf.Timestamp at = 5;
+}
+
+message RepositoryDocuments {
+  string name = 1;
+  repeated SessionDocument documents = 2;
+}
+
+message RepoStat {
+  string name = 1;
+  string role = 2;
+  string path = 3;
+  int32 commits = 4;
+  int32 insertions = 5;
+  int32 deletions = 6;
+  bool measured = 7;
+}
+
+// AgentTree is every agent qrouton knows of in a session's current and previous run.
+message AgentTree {
+  string provider = 1;
+  string provider_label = 2;
+  string coverage = 3;
+  bool tools = 4;
+  repeated AgentNode nodes = 5;
+}
+
+message AgentNode {
+  string id = 1;
+  string run = 2;
+  string parent = 3;
+  bool root = 4;
+  bool placed = 5;
+  string type = 6;
+  string stage = 7;
+  string description = 8;
+  string task_name = 9;
+  string state = 10;
+  string reason = 11;
+  string tool = 12;
+  string target = 13;
+  google.protobuf.Timestamp started = 14;
+  google.protobuf.Timestamp finished = 15;
+  int32 tool_count = 16;
+  int32 tokens = 17;
+  string last_message = 18;
+  repeated string files = 19;
+  repeated SessionDocument documents = 20;
+  repeated AgentToolEvent tools = 21;
+}
+
+message AgentToolEvent {
+  string tool = 1;
+  string target = 2;
+  google.protobuf.Timestamp start = 3;
+  google.protobuf.Timestamp end = 4;
+  bool failed = 5;
+  bool abandoned = 6;
+}

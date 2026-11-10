@@ -33,7 +33,7 @@ type OllamaClient interface {
 type Ollama struct {
 	client    OllamaClient
 	model     string
-	emit      Emitter
+	events    Events
 	installed func() bool
 
 	mu         sync.Mutex
@@ -50,12 +50,12 @@ type ollamaPull struct {
 	completed, total int64
 }
 
-func NewOllama(client OllamaClient, emit Emitter) *Ollama {
-	return newOllama(client, vault.OllamaModel, emit, ollamaInstalled)
+func NewOllama(client OllamaClient, events Events) *Ollama {
+	return newOllama(client, vault.OllamaModel, events, ollamaInstalled)
 }
 
-func newOllama(client OllamaClient, model string, emit Emitter, installed func() bool) *Ollama {
-	return &Ollama{client: client, model: model, emit: emit, installed: installed,
+func newOllama(client OllamaClient, model string, events Events, installed func() bool) *Ollama {
+	return &Ollama{client: client, model: model, events: events, installed: installed,
 		parent: context.Background(), status: OllamaStatus{Model: model}}
 }
 
@@ -180,7 +180,7 @@ func (o *Ollama) setLocked(next OllamaStatus) {
 		return
 	}
 	o.status = next
-	o.emit(ollamaEvent, next)
+	o.events.Ollama(next)
 }
 
 // finishLocked ends the pull in flight. The new generation stops a Check that
