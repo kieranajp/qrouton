@@ -164,6 +164,8 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// Shutdown waits for the placement check, so it must be deferred even when Start fails.
+	defer kernel.Shutdown()
 
 	if opts.updates != nil {
 		go opts.updates.watch(ctx, updateInterval)
@@ -174,7 +176,6 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	if err := kernel.Start(opts.Socket); err != nil {
 		return err
 	}
-	defer kernel.Shutdown()
 	if opts.Ticket != "" {
 		if _, err := kernel.Offer(opts.Ticket, opts.TicketPrompt); err != nil {
 			return err

@@ -792,3 +792,57 @@ func TestARunWhoseWindowFailsToOpenStopsTheCore(t *testing.T) {
 		t.Fatal("the process socket still answers after run failed")
 	}
 }
+
+// Catches a run whose Start fails returning while its placement check still
+// runs, free to write config.json after the workbench, or its test, has gone.
+func TestARunWhoseStartFailsWaitsForThePlacementCheck(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	r := newFakeRenderer()
+	opts, boot := testOptions(t)
+	notADir := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(notADir, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	opts.Socket = filepath.Join(notADir, "qrouton.sock")
+	opts.Config = &config.Config{Root: t.TempDir(), Welcomed: true}
+	kernel := testWorkbench(t, r, &opts)
+	opts.placement = kernel.Placement
+	// Shutdown stops sessions before it waits for the check, so a booted one shows it has begun.
+	if err := kernel.OpenSession(opts.SessionRoot, false); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the session's listener", func() bool { _, serves := boot.counts(); return serves == 1 })
+	held, release := make(chan struct{}), make(chan struct{})
+	go func() {
+		_ = opts.Config.Transact(func(*config.Config) error { close(held); <-release; return nil })
+	}()
+	<-held
+	unblock := sync.OnceFunc(func() { close(release) })
+	t.Cleanup(unblock)
+
+	done := make(chan error, 1)
+	go func() { done <- run(r, kernel, opts, quitter(kernel, r)) }()
+	stopping := make(chan struct{})
+	go func() {
+		defer close(stopping)
+		for {
+			if _, serves := boot.counts(); serves == 0 {
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("run returned %v while its placement check was still waiting to write", err)
+	case <-stopping:
+	}
+	unblock()
+	if err := <-done; err == nil {
+		t.Fatal("run with a socket under a regular file succeeded")
+	}
+	if file, err := config.ReadFile(); err != nil || file.ThoughtsPlacement == "" {
+		t.Fatalf("placement check unfinished when run returned: %+v, %v", file, err)
+	}
+}
