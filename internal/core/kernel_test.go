@@ -17,7 +17,7 @@ func TestTermResizeReachesThePTY(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),
 		[]string{"/bin/sh", "-c", "while :; do stty size; sleep 0.05; done"}, os.Environ())
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the starting size", func() bool { return strings.Contains(rec.output(), "24 80") })
@@ -48,7 +48,7 @@ func TestQuittingStopsTabsBeforeSessions(t *testing.T) {
 
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	tab, err := windows.openWindow(state, workbench.WindowOptions{
@@ -57,7 +57,7 @@ func TestQuittingStopsTabsBeforeSessions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := windows.Start(tab, 80, 24); err != nil {
+	if err := attachTab(windows, nil, tab, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"session", "tab"} {
@@ -88,7 +88,7 @@ func TestAFailedSupervisorKeepsItsTerminalReadable(t *testing.T) {
 
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure to be recorded", func() bool {

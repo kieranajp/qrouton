@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/kieranajp/qrouton/internal/api"
@@ -89,32 +90,29 @@ func TestEveryEventPageJSONMatchesTheCoreType(t *testing.T) {
 	}
 }
 
-// Catches a terminal chunk that reaches the page with a key or value the old
-// Chunk had changed, or under the other kind of terminal's name.
-func TestTerminalOutputPageJSONMatchesTheChunk(t *testing.T) {
+// Catches a terminal data event whose encoded, replay, first or exit_code
+// differ from what the old Chunk sent for the same bytes, frozen before it went,
+// or that arrives under the other kind of terminal's name.
+func TestTerminalOutputPageJSONMatchesTheOldChunk(t *testing.T) {
 	hub, r := translated(t)
 	code := 2
-	chunk := core.EncodeChunk([]byte("\x1b[31mred\xff"))
-	chunk.Replay, chunk.First, chunk.ExitCode = true, true, &code
-	live := core.EncodeChunk([]byte("live"))
-	hub.TerminalOutput(core.TerminalTab, "window-1", chunk)
-	hub.TerminalOutput(core.TerminalConversation, "term-1", live)
-	for name, want := range map[string]core.Chunk{windowDataEvent + "window-1": chunk, ptyDataEvent + "term-1": live} {
+	hub.TerminalOutput(core.TerminalTab, "window-1", core.Output{Data: []byte("\x1b[31mred\xff"), Replay: true, First: true, ExitCode: &code})
+	hub.TerminalOutput(core.TerminalConversation, "term-1", core.Output{Data: []byte("live")})
+	page := map[string]map[string]any{}
+	for name, event := range map[string]string{"replay": windowDataEvent + "window-1", "live": ptyDataEvent + "term-1"} {
 		var got map[string]any
-		if err := json.Unmarshal(emitted(t, r, name), &got); err != nil {
+		if err := json.Unmarshal(emitted(t, r, event), &got); err != nil {
 			t.Fatal(err)
 		}
-		for _, extra := range []string{"terminalId", "kind"} {
-			delete(got, extra)
-		}
-		for key, value := range got {
-			if value == false {
-				delete(got, key)
+		chunk := map[string]any{}
+		for _, key := range []string{"encoded", "replay", "first", "exit_code"} {
+			if value, ok := got[key]; ok && value != false && value != nil {
+				chunk[key] = value
 			}
 		}
-		page, _ := json.Marshal(got)
-		pagetest.Same(t, page, marshalled(t, want))
+		page[name] = chunk
 	}
+	pagetest.Golden(t, filepath.Join("testdata", "pagejson", "chunks.json"), marshalled(t, page))
 }
 
 // Catches a translator or subscriber goroutine that outlives Close.

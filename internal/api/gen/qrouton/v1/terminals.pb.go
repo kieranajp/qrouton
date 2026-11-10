@@ -70,7 +70,420 @@ func (TerminalKind) EnumDescriptor() ([]byte, []int) {
 	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{0}
 }
 
-// TerminalOutput is one stretch of a terminal's output.
+type TerminalSize struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Cols          int32                  `protobuf:"varint,1,opt,name=cols,proto3" json:"cols,omitempty"`
+	Rows          int32                  `protobuf:"varint,2,opt,name=rows,proto3" json:"rows,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TerminalSize) Reset() {
+	*x = TerminalSize{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TerminalSize) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TerminalSize) ProtoMessage() {}
+
+func (x *TerminalSize) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TerminalSize.ProtoReflect.Descriptor instead.
+func (*TerminalSize) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *TerminalSize) GetCols() int32 {
+	if x != nil {
+		return x.Cols
+	}
+	return 0
+}
+
+func (x *TerminalSize) GetRows() int32 {
+	if x != nil {
+		return x.Rows
+	}
+	return 0
+}
+
+type AttachRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
+	Size          *TerminalSize          `protobuf:"bytes,2,opt,name=size,proto3" json:"size,omitempty"`
+	FromOffset    *uint64                `protobuf:"varint,3,opt,name=from_offset,json=fromOffset,proto3,oneof" json:"from_offset,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttachRequest) Reset() {
+	*x = AttachRequest{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachRequest) ProtoMessage() {}
+
+func (x *AttachRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachRequest.ProtoReflect.Descriptor instead.
+func (*AttachRequest) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *AttachRequest) GetTerminalId() string {
+	if x != nil {
+		return x.TerminalId
+	}
+	return ""
+}
+
+func (x *AttachRequest) GetSize() *TerminalSize {
+	if x != nil {
+		return x.Size
+	}
+	return nil
+}
+
+func (x *AttachRequest) GetFromOffset() uint64 {
+	if x != nil && x.FromOffset != nil {
+		return *x.FromOffset
+	}
+	return 0
+}
+
+type AttachResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AttachResponse) Reset() {
+	*x = AttachResponse{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AttachResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AttachResponse) ProtoMessage() {}
+
+func (x *AttachResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AttachResponse.ProtoReflect.Descriptor instead.
+func (*AttachResponse) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{2}
+}
+
+type WriteRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
+	Data          []byte                 `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteRequest) Reset() {
+	*x = WriteRequest{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteRequest) ProtoMessage() {}
+
+func (x *WriteRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteRequest.ProtoReflect.Descriptor instead.
+func (*WriteRequest) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *WriteRequest) GetTerminalId() string {
+	if x != nil {
+		return x.TerminalId
+	}
+	return ""
+}
+
+func (x *WriteRequest) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+type WriteResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *WriteResponse) Reset() {
+	*x = WriteResponse{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *WriteResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*WriteResponse) ProtoMessage() {}
+
+func (x *WriteResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use WriteResponse.ProtoReflect.Descriptor instead.
+func (*WriteResponse) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{4}
+}
+
+type ResizeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
+	Size          *TerminalSize          `protobuf:"bytes,2,opt,name=size,proto3" json:"size,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResizeRequest) Reset() {
+	*x = ResizeRequest{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeRequest) ProtoMessage() {}
+
+func (x *ResizeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeRequest.ProtoReflect.Descriptor instead.
+func (*ResizeRequest) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *ResizeRequest) GetTerminalId() string {
+	if x != nil {
+		return x.TerminalId
+	}
+	return ""
+}
+
+func (x *ResizeRequest) GetSize() *TerminalSize {
+	if x != nil {
+		return x.Size
+	}
+	return nil
+}
+
+type ResizeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ResizeResponse) Reset() {
+	*x = ResizeResponse{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ResizeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ResizeResponse) ProtoMessage() {}
+
+func (x *ResizeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ResizeResponse.ProtoReflect.Descriptor instead.
+func (*ResizeResponse) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{6}
+}
+
+type SessionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionRequest) Reset() {
+	*x = SessionRequest{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionRequest) ProtoMessage() {}
+
+func (x *SessionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionRequest.ProtoReflect.Descriptor instead.
+func (*SessionRequest) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SessionRequest) GetTerminalId() string {
+	if x != nil {
+		return x.TerminalId
+	}
+	return ""
+}
+
+type SessionResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Slug          string                 `protobuf:"bytes,1,opt,name=slug,proto3" json:"slug,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionResponse) Reset() {
+	*x = SessionResponse{}
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionResponse) ProtoMessage() {}
+
+func (x *SessionResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionResponse.ProtoReflect.Descriptor instead.
+func (*SessionResponse) Descriptor() ([]byte, []int) {
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *SessionResponse) GetSlug() string {
+	if x != nil {
+		return x.Slug
+	}
+	return ""
+}
+
+// TerminalOutput is one stretch of a terminal's output. offset is where data
+// starts in everything the terminal has written.
 type TerminalOutput struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
@@ -79,13 +492,15 @@ type TerminalOutput struct {
 	Replay        bool                   `protobuf:"varint,4,opt,name=replay,proto3" json:"replay,omitempty"`
 	First         bool                   `protobuf:"varint,5,opt,name=first,proto3" json:"first,omitempty"`
 	ExitCode      *int32                 `protobuf:"varint,6,opt,name=exit_code,proto3,oneof" json:"exit_code,omitempty"`
+	Offset        uint64                 `protobuf:"varint,7,opt,name=offset,proto3" json:"offset,omitempty"`
+	Reset_        bool                   `protobuf:"varint,8,opt,name=reset,proto3" json:"reset,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *TerminalOutput) Reset() {
 	*x = TerminalOutput{}
-	mi := &file_qrouton_v1_terminals_proto_msgTypes[0]
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -97,7 +512,7 @@ func (x *TerminalOutput) String() string {
 func (*TerminalOutput) ProtoMessage() {}
 
 func (x *TerminalOutput) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_terminals_proto_msgTypes[0]
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -110,7 +525,7 @@ func (x *TerminalOutput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TerminalOutput.ProtoReflect.Descriptor instead.
 func (*TerminalOutput) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{0}
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *TerminalOutput) GetTerminalId() string {
@@ -155,6 +570,20 @@ func (x *TerminalOutput) GetExitCode() int32 {
 	return 0
 }
 
+func (x *TerminalOutput) GetOffset() uint64 {
+	if x != nil {
+		return x.Offset
+	}
+	return 0
+}
+
+func (x *TerminalOutput) GetReset_() bool {
+	if x != nil {
+		return x.Reset_
+	}
+	return false
+}
+
 type TerminalExit struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TerminalId    string                 `protobuf:"bytes,1,opt,name=terminal_id,json=terminalId,proto3" json:"terminal_id,omitempty"`
@@ -166,7 +595,7 @@ type TerminalExit struct {
 
 func (x *TerminalExit) Reset() {
 	*x = TerminalExit{}
-	mi := &file_qrouton_v1_terminals_proto_msgTypes[1]
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -178,7 +607,7 @@ func (x *TerminalExit) String() string {
 func (*TerminalExit) ProtoMessage() {}
 
 func (x *TerminalExit) ProtoReflect() protoreflect.Message {
-	mi := &file_qrouton_v1_terminals_proto_msgTypes[1]
+	mi := &file_qrouton_v1_terminals_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -191,7 +620,7 @@ func (x *TerminalExit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TerminalExit.ProtoReflect.Descriptor instead.
 func (*TerminalExit) Descriptor() ([]byte, []int) {
-	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{1}
+	return file_qrouton_v1_terminals_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *TerminalExit) GetTerminalId() string {
@@ -220,7 +649,33 @@ var File_qrouton_v1_terminals_proto protoreflect.FileDescriptor
 const file_qrouton_v1_terminals_proto_rawDesc = "" +
 	"\n" +
 	"\x1aqrouton/v1/terminals.proto\x12\n" +
-	"qrouton.v1\"\xd5\x01\n" +
+	"qrouton.v1\"6\n" +
+	"\fTerminalSize\x12\x12\n" +
+	"\x04cols\x18\x01 \x01(\x05R\x04cols\x12\x12\n" +
+	"\x04rows\x18\x02 \x01(\x05R\x04rows\"\x94\x01\n" +
+	"\rAttachRequest\x12\x1f\n" +
+	"\vterminal_id\x18\x01 \x01(\tR\n" +
+	"terminalId\x12,\n" +
+	"\x04size\x18\x02 \x01(\v2\x18.qrouton.v1.TerminalSizeR\x04size\x12$\n" +
+	"\vfrom_offset\x18\x03 \x01(\x04H\x00R\n" +
+	"fromOffset\x88\x01\x01B\x0e\n" +
+	"\f_from_offset\"\x10\n" +
+	"\x0eAttachResponse\"C\n" +
+	"\fWriteRequest\x12\x1f\n" +
+	"\vterminal_id\x18\x01 \x01(\tR\n" +
+	"terminalId\x12\x12\n" +
+	"\x04data\x18\x02 \x01(\fR\x04data\"\x0f\n" +
+	"\rWriteResponse\"^\n" +
+	"\rResizeRequest\x12\x1f\n" +
+	"\vterminal_id\x18\x01 \x01(\tR\n" +
+	"terminalId\x12,\n" +
+	"\x04size\x18\x02 \x01(\v2\x18.qrouton.v1.TerminalSizeR\x04size\"\x10\n" +
+	"\x0eResizeResponse\"1\n" +
+	"\x0eSessionRequest\x12\x1f\n" +
+	"\vterminal_id\x18\x01 \x01(\tR\n" +
+	"terminalId\"%\n" +
+	"\x0fSessionResponse\x12\x12\n" +
+	"\x04slug\x18\x01 \x01(\tR\x04slug\"\x83\x02\n" +
 	"\x0eTerminalOutput\x12\x1f\n" +
 	"\vterminal_id\x18\x01 \x01(\tR\n" +
 	"terminalId\x12,\n" +
@@ -228,7 +683,9 @@ const file_qrouton_v1_terminals_proto_rawDesc = "" +
 	"\x04data\x18\x03 \x01(\fR\aencoded\x12\x16\n" +
 	"\x06replay\x18\x04 \x01(\bR\x06replay\x12\x14\n" +
 	"\x05first\x18\x05 \x01(\bR\x05first\x12!\n" +
-	"\texit_code\x18\x06 \x01(\x05H\x00R\texit_code\x88\x01\x01B\f\n" +
+	"\texit_code\x18\x06 \x01(\x05H\x00R\texit_code\x88\x01\x01\x12\x16\n" +
+	"\x06offset\x18\a \x01(\x04R\x06offset\x12\x14\n" +
+	"\x05reset\x18\b \x01(\bR\x05resetB\f\n" +
 	"\n" +
 	"_exit_code\"q\n" +
 	"\fTerminalExit\x12\x1f\n" +
@@ -239,7 +696,12 @@ const file_qrouton_v1_terminals_proto_rawDesc = "" +
 	"\fTerminalKind\x12\x1d\n" +
 	"\x19TERMINAL_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
 	"\x1aTERMINAL_KIND_CONVERSATION\x10\x01\x12\x15\n" +
-	"\x11TERMINAL_KIND_TAB\x10\x02BDZBgithub.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1b\x06proto3"
+	"\x11TERMINAL_KIND_TAB\x10\x022\x95\x02\n" +
+	"\x0fTerminalService\x12?\n" +
+	"\x06Attach\x12\x19.qrouton.v1.AttachRequest\x1a\x1a.qrouton.v1.AttachResponse\x12<\n" +
+	"\x05Write\x12\x18.qrouton.v1.WriteRequest\x1a\x19.qrouton.v1.WriteResponse\x12?\n" +
+	"\x06Resize\x12\x19.qrouton.v1.ResizeRequest\x1a\x1a.qrouton.v1.ResizeResponse\x12B\n" +
+	"\aSession\x12\x1a.qrouton.v1.SessionRequest\x1a\x1b.qrouton.v1.SessionResponseBDZBgithub.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1b\x06proto3"
 
 var (
 	file_qrouton_v1_terminals_proto_rawDescOnce sync.Once
@@ -254,20 +716,39 @@ func file_qrouton_v1_terminals_proto_rawDescGZIP() []byte {
 }
 
 var file_qrouton_v1_terminals_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_qrouton_v1_terminals_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_qrouton_v1_terminals_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_qrouton_v1_terminals_proto_goTypes = []any{
-	(TerminalKind)(0),      // 0: qrouton.v1.TerminalKind
-	(*TerminalOutput)(nil), // 1: qrouton.v1.TerminalOutput
-	(*TerminalExit)(nil),   // 2: qrouton.v1.TerminalExit
+	(TerminalKind)(0),       // 0: qrouton.v1.TerminalKind
+	(*TerminalSize)(nil),    // 1: qrouton.v1.TerminalSize
+	(*AttachRequest)(nil),   // 2: qrouton.v1.AttachRequest
+	(*AttachResponse)(nil),  // 3: qrouton.v1.AttachResponse
+	(*WriteRequest)(nil),    // 4: qrouton.v1.WriteRequest
+	(*WriteResponse)(nil),   // 5: qrouton.v1.WriteResponse
+	(*ResizeRequest)(nil),   // 6: qrouton.v1.ResizeRequest
+	(*ResizeResponse)(nil),  // 7: qrouton.v1.ResizeResponse
+	(*SessionRequest)(nil),  // 8: qrouton.v1.SessionRequest
+	(*SessionResponse)(nil), // 9: qrouton.v1.SessionResponse
+	(*TerminalOutput)(nil),  // 10: qrouton.v1.TerminalOutput
+	(*TerminalExit)(nil),    // 11: qrouton.v1.TerminalExit
 }
 var file_qrouton_v1_terminals_proto_depIdxs = []int32{
-	0, // 0: qrouton.v1.TerminalOutput.kind:type_name -> qrouton.v1.TerminalKind
-	0, // 1: qrouton.v1.TerminalExit.kind:type_name -> qrouton.v1.TerminalKind
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 0: qrouton.v1.AttachRequest.size:type_name -> qrouton.v1.TerminalSize
+	1, // 1: qrouton.v1.ResizeRequest.size:type_name -> qrouton.v1.TerminalSize
+	0, // 2: qrouton.v1.TerminalOutput.kind:type_name -> qrouton.v1.TerminalKind
+	0, // 3: qrouton.v1.TerminalExit.kind:type_name -> qrouton.v1.TerminalKind
+	2, // 4: qrouton.v1.TerminalService.Attach:input_type -> qrouton.v1.AttachRequest
+	4, // 5: qrouton.v1.TerminalService.Write:input_type -> qrouton.v1.WriteRequest
+	6, // 6: qrouton.v1.TerminalService.Resize:input_type -> qrouton.v1.ResizeRequest
+	8, // 7: qrouton.v1.TerminalService.Session:input_type -> qrouton.v1.SessionRequest
+	3, // 8: qrouton.v1.TerminalService.Attach:output_type -> qrouton.v1.AttachResponse
+	5, // 9: qrouton.v1.TerminalService.Write:output_type -> qrouton.v1.WriteResponse
+	7, // 10: qrouton.v1.TerminalService.Resize:output_type -> qrouton.v1.ResizeResponse
+	9, // 11: qrouton.v1.TerminalService.Session:output_type -> qrouton.v1.SessionResponse
+	8, // [8:12] is the sub-list for method output_type
+	4, // [4:8] is the sub-list for method input_type
+	4, // [4:4] is the sub-list for extension type_name
+	4, // [4:4] is the sub-list for extension extendee
+	0, // [0:4] is the sub-list for field type_name
 }
 
 func init() { file_qrouton_v1_terminals_proto_init() }
@@ -275,16 +756,17 @@ func file_qrouton_v1_terminals_proto_init() {
 	if File_qrouton_v1_terminals_proto != nil {
 		return
 	}
-	file_qrouton_v1_terminals_proto_msgTypes[0].OneofWrappers = []any{}
+	file_qrouton_v1_terminals_proto_msgTypes[1].OneofWrappers = []any{}
+	file_qrouton_v1_terminals_proto_msgTypes[9].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_qrouton_v1_terminals_proto_rawDesc), len(file_qrouton_v1_terminals_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   2,
+			NumMessages:   11,
 			NumExtensions: 0,
-			NumServices:   0,
+			NumServices:   1,
 		},
 		GoTypes:           file_qrouton_v1_terminals_proto_goTypes,
 		DependencyIndexes: file_qrouton_v1_terminals_proto_depIdxs,

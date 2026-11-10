@@ -18,23 +18,25 @@ func newTerminals(events Events, reg *registry) *terminals {
 	return &terminals{events: events, registry: reg, sample: (*PTY).Foreground}
 }
 
-// start serves the page: it launches the command if nothing has, and otherwise
-// attaches the freshly mounted view to the running or finished process.
-func (t *terminals) start(id string, cols, rows int) error {
-	terminal, started, err := t.fork(id, cols, rows, true)
+// attach serves the page: it launches the command if nothing has, and otherwise
+// replays the running or finished process to the freshly mounted view.
+func (t *terminals) attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+	terminal, started, err := t.fork(id, size, true)
 	if err != nil || started {
 		return err
 	}
-	return t.attach(id, terminal, cols, rows)
+	return t.replay(id, terminal, size, from, deliver)
 }
 
 // launch forks a terminal window's command unless it already has a process.
 func (t *terminals) launch(id string, cols, rows int) error {
-	_, _, err := t.fork(id, cols, rows, false)
+	_, _, err := t.fork(id, &Size{Cols: cols, Rows: rows}, false)
 	return err
 }
 
-func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalContent, bool, error) {
+// fork starts the command at size unless it already has a process; a nil size
+// starts nothing.
+func (t *terminals) fork(id string, size *Size, served bool) (*terminalContent, bool, error) {
 	var started *PTY
 	var terminal *terminalContent
 	err := t.registry.with(id, func(window *agentWindow) error {
@@ -48,7 +50,10 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 		if content.process != nil {
 			return nil
 		}
-		process, err := StartPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, cols, rows)
+		if size == nil {
+			return ErrTerminalNotStarted
+		}
+		process, err := StartPTY(window.opts.Command, terminalEnv(), window.opts.Cwd, size.Cols, size.Rows)
 		if err != nil {
 			return err
 		}
@@ -62,59 +67,50 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 	}
 	go started.Pump(
 		func(b []byte) {
-			terminal.stream.Lock()
-			terminal.buffer.Write(b)
-			t.events.TerminalOutput(TerminalTab, id, EncodeChunk(b))
-			terminal.stream.Unlock()
+			terminal.stream.publish(b, func(out Output) { t.events.TerminalOutput(TerminalTab, id, out) })
 		},
 		func(code int) { t.exited(id, code) },
 	)
 	return terminal, true, nil
 }
 
-// attach resets a freshly mounted view to the retained byte stream before any
-// later chunk can pass it. Resize under the same ordering lock: a shell
-// repainting for SIGWINCH must follow replay. A finished process has no PTY
-// worth resizing, and its output must still replay.
-func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int) error {
-	terminal.stream.Lock()
-	defer terminal.stream.Unlock()
-	var process *PTY
-	var state *workbench.TerminalState
-	var first bool
-	if err := t.registry.with(id, func(window *agentWindow) error {
-		if content, ok := window.terminal(); !ok || content != terminal {
-			return noSuchWindow(id)
-		}
-		process, state = terminal.process, terminal.state()
-		first = !terminal.served
-		return nil
-	}); err != nil {
-		return err
-	}
-	running := !process.Done()
-	if state.ExitCode == nil && running {
-		if err := process.Resize(cols, rows); err != nil {
+// replay resizes under the ordering lock as well: a shell repainting for
+// SIGWINCH must follow the replay. A finished process has no PTY worth
+// resizing, and its output must still replay.
+func (t *terminals) replay(id string, terminal *terminalContent, size *Size, from *uint64, deliver func(Output)) error {
+	return terminal.stream.attach(from, func(out Output) error {
+		var process *PTY
+		var state *workbench.TerminalState
+		var first bool
+		if err := t.registry.with(id, func(window *agentWindow) error {
+			if content, ok := window.terminal(); !ok || content != terminal {
+				return noSuchWindow(id)
+			}
+			process, state = terminal.process, terminal.state()
+			first = !terminal.served
+			return nil
+		}); err != nil {
 			return err
 		}
-	}
-	chunk := EncodeChunk(terminal.buffer.Bytes())
-	chunk.Replay, chunk.First, chunk.ExitCode = true, running && first, state.ExitCode
-	t.events.TerminalOutput(TerminalTab, id, chunk)
-	_ = t.registry.with(id, func(window *agentWindow) error {
-		if content, ok := window.terminal(); ok && content == terminal {
-			terminal.served = true
+		running := !process.Done()
+		if size != nil && state.ExitCode == nil && running {
+			if err := process.Resize(size.Cols, size.Rows); err != nil {
+				return err
+			}
 		}
+		out.First, out.ExitCode = running && first, state.ExitCode
+		deliver(out)
+		_ = t.registry.with(id, func(window *agentWindow) error {
+			if content, ok := window.terminal(); ok && content == terminal {
+				terminal.served = true
+			}
+			return nil
+		})
 		return nil
 	})
-	return nil
 }
 
-func (t *terminals) write(id, encoded string) error {
-	data, err := DecodeInput(encoded)
-	if err != nil {
-		return err
-	}
+func (t *terminals) write(id string, data []byte) error {
 	process, err := t.process(id)
 	if err != nil {
 		return err
@@ -156,21 +152,22 @@ func (t *terminals) exited(id string, code int) {
 	}); err != nil {
 		return
 	}
-	terminal.stream.Lock()
 	var owner *SessionState
 	var closeOnExit bool
-	err := t.registry.with(id, func(window *agentWindow) error {
-		if content, ok := window.terminal(); !ok || content != terminal {
-			return noSuchWindow(id)
+	var err error
+	terminal.stream.ordered(func() {
+		err = t.registry.with(id, func(window *agentWindow) error {
+			if content, ok := window.terminal(); !ok || content != terminal {
+				return noSuchWindow(id)
+			}
+			terminal.exit = &code
+			owner, closeOnExit = window.session, window.opts.CloseOnExit
+			return nil
+		})
+		if err == nil {
+			t.events.TerminalExit(TerminalTab, id, code)
 		}
-		terminal.exit = &code
-		owner, closeOnExit = window.session, window.opts.CloseOnExit
-		return nil
 	})
-	if err == nil {
-		t.events.TerminalExit(TerminalTab, id, code)
-	}
-	terminal.stream.Unlock()
 	if err != nil {
 		return
 	}

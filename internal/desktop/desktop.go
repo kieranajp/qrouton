@@ -104,8 +104,6 @@ func Run(opts Options) error {
 	kernel = core.New(options, client, opts.hub)
 	quit = quitter(kernel, r)
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
-	r.register(application.NewService(&Term{term: kernel.Term}))
-	r.register(application.NewService(&Windows{windows: kernel.Windows}))
 	r.register(application.NewService(&Sessions{sessions: kernel.Sessions}))
 	r.register(application.NewService(&Repositories{repos: kernel.Repositories}))
 	r.register(application.NewService(&Orgs{orgs: kernel.Orgs}))
@@ -115,6 +113,9 @@ func Run(opts Options) error {
 	r.register(application.NewService(updates))
 	opts.bind = func(in *inProcess) {
 		r.register(application.NewService(&Ollama{ollama: in.ollama}))
+		r.register(application.NewService(&Term{terminals: in.terminals}))
+		r.register(application.NewService(&Windows{windows: kernel.Windows, terminals: in.terminals}))
+		r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), in.terminalSession)))
 	}
 	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
@@ -123,7 +124,6 @@ func Run(opts Options) error {
 	r.register(application.NewService(&FirstRun{firstRun: kernel.FirstRun}))
 	opts.placement = kernel.Placement
 	r.register(application.NewService(&Placement{placement: kernel.Placement}))
-	r.register(application.NewService(newWebGLLog(webglLogPath(opts.Inspect), kernel.TerminalSession)))
 	return run(r, kernel, opts, quit)
 }
 

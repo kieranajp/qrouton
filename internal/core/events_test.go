@@ -36,12 +36,12 @@ func (e emitFunc) WindowContent(id string, doc Document) {
 func (e emitFunc) WindowDiagram(id string, d RenderedDiagram) {
 	e(windowDiagramName+id, d)
 }
-func (e emitFunc) TerminalOutput(kind TerminalKind, id string, chunk Chunk) {
+func (e emitFunc) TerminalOutput(kind TerminalKind, id string, out Output) {
 	if kind == TerminalConversation {
-		e(ptyDataName+id, chunk)
+		e(ptyDataName+id, out)
 		return
 	}
-	e(windowDataName+id, chunk)
+	e(windowDataName+id, out)
 }
 func (e emitFunc) TerminalExit(kind TerminalKind, id string, code int) {
 	if kind == TerminalConversation {
@@ -55,3 +55,18 @@ func (e emitFunc) AssemblyProgress(p ProgressEvent) { e(assemblyProgressName, p)
 func (e emitFunc) AssemblyRequested(ticket string)  { e(assemblyRequestedName, ticket) }
 func (e emitFunc) OrgsChanged(orgs []string)        { e(orgsChangedName, orgs) }
 func (e emitFunc) UIScale(scale int)                { e(uiScaleName, scale) }
+
+// startTerm is a page's first attach, which starts the conversation at its size.
+func startTerm(term *Term, id string, cols, rows int) error {
+	return term.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(Output) {})
+}
+
+// attachTab is a page attaching to a tab at its size. The replay lands in r
+// under the tab's data event, as the old replay did.
+func attachTab(w *Windows, r *fakeClient, id string, cols, rows int) error {
+	return w.Attach(id, &Size{Cols: cols, Rows: rows}, nil, func(out Output) {
+		if r != nil {
+			r.Emit(windowDataName+id, out)
+		}
+	})
+}

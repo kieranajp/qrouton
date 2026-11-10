@@ -50,6 +50,7 @@ func Start(kernel *core.Core, hub *Hub, socket, build string) (*InProcess, error
 	)
 	qroutonv1.RegisterWorkbenchServiceServer(server, &workbenchService{build: build, clients: ids})
 	qroutonv1.RegisterEventServiceServer(server, &eventService{hub: hub})
+	qroutonv1.RegisterTerminalServiceServer(server, &terminalService{core: kernel, hub: hub})
 	if kernel.Ollama != nil {
 		qroutonv1.RegisterOllamaServiceServer(server, &ollamaService{ollama: kernel.Ollama})
 	}

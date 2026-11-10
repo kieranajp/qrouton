@@ -23,10 +23,8 @@ const (
 	// screenLines is what a read without full returns.
 	screenLines = 50
 
-	// AgentTailBytes is how much of a conversation is kept back for the log its
-	// supervisor's exit writes; logLimit is when a log is rotated.
-	AgentTailBytes = 8 * 1024
-	logLimit       = 256 * 1024
+	// logLimit is when an agent log is rotated.
+	logLimit = 256 * 1024
 )
 
 const (

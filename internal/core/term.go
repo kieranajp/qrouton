@@ -15,22 +15,18 @@ func newTerm(reg *Sessions, events Events) *Term {
 }
 
 // whenChildExits registers what happens once a conversation's process ends. Set
-// it before the page can call Start.
+// it before the page can call Attach.
 func (t *Term) whenChildExits(f func(state *SessionState, code int)) { t.exited = f }
 
-func (t *Term) Start(id string, cols, rows int) error {
+func (t *Term) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
 	state, ok := t.sessions.ByTerminal(id)
 	if !ok {
 		return noSuchTerminal(id)
 	}
-	return state.start(t.events, t.exited, cols, rows)
+	return state.attach(t.events, t.exited, size, from, deliver)
 }
 
-func (t *Term) Write(id, encoded string) error {
-	data, err := DecodeInput(encoded)
-	if err != nil {
-		return err
-	}
+func (t *Term) Write(id string, data []byte) error {
 	state, ok := t.sessions.ByTerminal(id)
 	if !ok {
 		return noSuchTerminal(id)

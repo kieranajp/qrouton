@@ -1,7 +1,6 @@
 package core
 
 import (
-	"encoding/base64"
 	"sync"
 	"testing"
 
@@ -121,7 +120,7 @@ func TestAShellSpinsOnlyWhileAForegroundJobRuns(t *testing.T) {
 	b := newShellBench(t)
 	id := b.launch(t, true, "/bin/sh", "-i")
 	typed := func(text string) {
-		if err := b.terminals.write(id, base64.StdEncoding.EncodeToString([]byte(text))); err != nil {
+		if err := b.terminals.write(id, []byte(text)); err != nil {
 			t.Fatal(err)
 		}
 	}

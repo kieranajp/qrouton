@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
@@ -308,7 +307,7 @@ func shownSession(t *testing.T, reg *Sessions) *SessionState {
 // end-of-transmission.
 func endConversation(t *testing.T, term *Term, state *SessionState) {
 	t.Helper()
-	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte{0x04})); err != nil {
+	if err := term.Write(state.terminal, []byte{0x04}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -351,7 +350,7 @@ func TestACleanSupervisorExitRetiresOnlyItsSession(t *testing.T) {
 	}
 	second := reg.Current()
 	for _, state := range []*SessionState{first, second} {
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -390,7 +389,7 @@ func TestACleanSupervisorExitLeavesNoSessionWhenItWasTheOnlyOne(t *testing.T) {
 
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 
@@ -420,7 +419,7 @@ func TestClosingTheConversationWindowTearsDownEverySession(t *testing.T) {
 	var pids []int
 	var sockets []string
 	for _, state := range []*SessionState{first, reg.Current()} {
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 		pids = append(pids, ptyPid(state.process))
@@ -450,7 +449,7 @@ func TestAFailedAgentLeavesItsWindowOpen(t *testing.T) {
 	startWorkbench(t, c, opts)
 	state := shownSession(t, reg)
 	conversation := state.terminal
-	if err := term.Start(conversation, 80, 24); err != nil {
+	if err := startTerm(term, conversation, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1085,7 +1084,7 @@ func TestShowBootsASessionOnceAndRevealsItAfterwards(t *testing.T) {
 		t.Fatal("the booted session has no listener of its own")
 	}
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(booted.terminal, 80, 24); err != nil {
+	if err := startTerm(term, booted.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	if booted.process == nil {
@@ -1182,7 +1181,7 @@ func TestADeadSupervisorUnloadsItsRowAndShowBootsAReplacement(t *testing.T) {
 		t.Fatal(err)
 	}
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(dead.terminal, 80, 24); err != nil {
+	if err := startTerm(term, dead.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
@@ -1231,7 +1230,7 @@ func TestReloadReplacesALiveSupervisorAndResumesTheConversation(t *testing.T) {
 	}
 	before := reg.Current()
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(before.terminal, 80, 24); err != nil {
+	if err := startTerm(term, before.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(before.process)
@@ -1270,7 +1269,7 @@ func TestARebootThatCannotStartFallsBackToThePreviousSession(t *testing.T) {
 	previous := reg.BySlug("kraken")
 	dead := reg.Current()
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(dead.terminal, 80, 24); err != nil {
+	if err := startTerm(term, dead.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the supervisor to fail", func() bool { return !dead.alive() })
@@ -1298,7 +1297,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	}
 	state := reg.Current()
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(state.process)
@@ -1309,7 +1308,7 @@ func TestUnloadStopsOwnedResourcesAndRetainsAResumableRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := windows.Start(tab, 80, 24); err != nil {
+	if err := attachTab(windows, nil, tab, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	shell, err := windows.terminals.process(tab)
@@ -1578,7 +1577,7 @@ func TestUnloadSkipsDeadFallbacksAndNeverBootsInactiveRows(t *testing.T) {
 				t.Fatal(err)
 			}
 			dead := reg.Current()
-			if err := newTerm(reg, emitFunc(r.Emit)).Start(dead.terminal, 80, 24); err != nil {
+			if err := startTerm(newTerm(reg, emitFunc(r.Emit)), dead.terminal, 80, 24); err != nil {
 				t.Fatal(err)
 			}
 			waitFor(t, "the fallback supervisor to fail", func() bool { return !dead.alive() })
@@ -1647,7 +1646,7 @@ func TestDelayedRetirementCannotRemoveAReopenedSession(t *testing.T) {
 		reg.retire(state)
 		close(finished)
 	})
-	if err := term.Start(old.terminal, 80, 24); err != nil {
+	if err := startTerm(term, old.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	select {
@@ -1971,7 +1970,7 @@ func TestTwoSessionsGetTheirOwnSocketAndSupervisor(t *testing.T) {
 			t.Fatal(err)
 		}
 		state := reg.Current()
-		if err := term.Start(state.terminal, 80, 24); err != nil {
+		if err := startTerm(term, state.terminal, 80, 24); err != nil {
 			t.Fatal(err)
 		}
 		booted[slug] = state
@@ -2528,7 +2527,7 @@ func TestCleanupTearsTheSessionDownBeforeItRemovesIt(t *testing.T) {
 	}
 	state := reg.Current()
 	term := newTerm(reg, emitFunc(r.Emit))
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	pid := ptyPid(state.process)

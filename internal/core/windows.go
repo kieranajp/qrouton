@@ -86,9 +86,11 @@ func (w *Windows) openAgentWindow(owner *SessionState, opts workbench.WindowOpti
 	return id, nil
 }
 
-func (w *Windows) Start(id string, cols, rows int) error { return w.terminals.start(id, cols, rows) }
+func (w *Windows) Attach(id string, size *Size, from *uint64, deliver func(Output)) error {
+	return w.terminals.attach(id, size, from, deliver)
+}
 
-func (w *Windows) Write(id, encoded string) error { return w.terminals.write(id, encoded) }
+func (w *Windows) Write(id string, data []byte) error { return w.terminals.write(id, data) }
 
 func (w *Windows) Resize(id string, cols, rows int) error { return w.terminals.resize(id, cols, rows) }
 

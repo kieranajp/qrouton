@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"go/ast"
@@ -581,7 +580,7 @@ func TestControlSocketReadsRetainedTerminalOutputAndCompletionTogether(t *testin
 		if err != nil || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil {
 			t.Fatalf("running socket snapshot = %+v, %v", read, err)
 		}
-		if err := windows.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+		if err := windows.Write(id, []byte("\n")); err != nil {
 			t.Fatal(err)
 		}
 		waitFor(t, "completed output over the control socket", func() bool {

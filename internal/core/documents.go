@@ -73,7 +73,7 @@ func (window *agentWindow) sourcePath() string {
 func contentFor(opts workbench.WindowOptions) windowContent {
 	switch opts.Kind {
 	case workbench.KindTerminal:
-		return &terminalContent{buffer: NewRing(WindowScrollback)}
+		return &terminalContent{stream: newOutputStream(WindowScrollback)}
 	case workbench.KindDocument:
 		content := &documentContent{}
 		if opts.Format == workbench.FormatAssets {

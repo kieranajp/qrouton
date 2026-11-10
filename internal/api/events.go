@@ -6,6 +6,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type eventService struct {
@@ -16,7 +17,7 @@ type eventService struct {
 // Subscribe sends its header once the queue is registered, so a client that
 // waits for the header misses nothing published after.
 func (e *eventService) Subscribe(req *qroutonv1.SubscribeRequest, stream grpc.ServerStreamingServer[qroutonv1.SubscribeResponse]) error {
-	sub, missed, resync := e.hub.subscribe(req.GetAfterSeq())
+	sub, missed, resync := e.hub.subscribe(clientID(stream.Context()), req.GetAfterSeq())
 	defer e.hub.unsubscribe(sub)
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
 		return err
@@ -29,16 +30,50 @@ func (e *eventService) Subscribe(req *qroutonv1.SubscribeRequest, stream grpc.Se
 			return err
 		}
 	}
+	var held *qroutonv1.Event
 	for {
-		select {
-		case event := <-sub.queue:
-			if err := stream.Send(&qroutonv1.SubscribeResponse{Event: event}); err != nil {
-				return err
+		event := held
+		if event == nil {
+			select {
+			case event = <-sub.queue:
+			case <-sub.overflow:
+				return status.Error(codes.ResourceExhausted, ErrSubscriberBehind.Error())
+			case <-stream.Context().Done():
+				return nil
 			}
-		case <-sub.overflow:
-			return status.Error(codes.ResourceExhausted, ErrSubscriberBehind.Error())
-		case <-stream.Context().Done():
-			return nil
+		}
+		event, held = coalesce(event, sub.queue)
+		if err := stream.Send(&qroutonv1.SubscribeResponse{Event: event}); err != nil {
+			return err
 		}
 	}
+}
+
+// coalesce merges the live output already queued behind first for the same
+// terminal, up to coalesceLimit, and hands back the event that stopped it.
+// Events are shared between subscribers, so a merge builds a new one.
+func coalesce(first *qroutonv1.Event, queue <-chan *qroutonv1.Event) (event, held *qroutonv1.Event) {
+	event = first
+	for mergeable(event.GetTerminalOutput()) {
+		var next *qroutonv1.Event
+		select {
+		case next = <-queue:
+		default:
+			return event, nil
+		}
+		a, b := event.GetTerminalOutput(), next.GetTerminalOutput()
+		if !mergeable(b) || b.GetTerminalId() != a.GetTerminalId() || b.GetOffset() != a.GetOffset()+uint64(len(a.GetData())) ||
+			len(a.GetData())+len(b.GetData()) > coalesceLimit {
+			return event, next
+		}
+		merged := proto.Clone(a).(*qroutonv1.TerminalOutput)
+		merged.Data = append(merged.Data, b.GetData()...)
+		event = &qroutonv1.Event{Seq: next.GetSeq(), Payload: &qroutonv1.Event_TerminalOutput{TerminalOutput: merged}}
+	}
+	return event, nil
+}
+
+// mergeable is live output: a replay or an exit marks a boundary the page draws.
+func mergeable(out *qroutonv1.TerminalOutput) bool {
+	return out != nil && !out.GetReplay() && !out.GetReset_() && out.ExitCode == nil
 }

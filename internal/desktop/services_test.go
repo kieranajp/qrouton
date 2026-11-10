@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -151,6 +152,7 @@ func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
 // own window host and a marker file its commands can write to.
 type adapterWorkbench struct {
 	kernel *core.Core
+	in     *inProcess
 	r      *fakeRenderer
 	boot   *stubBoot
 	opts   Options
@@ -173,15 +175,13 @@ func newAdapterWorkbench(t *testing.T, argv ...string) *adapterWorkbench {
 	}
 	r := newFakeRenderer()
 	kernel := testWorkbench(t, r, &opts)
-	if err := kernel.Start(opts.Socket); err != nil {
-		t.Fatal(err)
-	}
+	in := translate(t, kernel, &opts, r)
 	if err := kernel.OpenSession(opts.SessionRoot, false); err != nil {
 		t.Fatal(err)
 	}
 	socket := boot.socketOf(t, opts.SessionRoot)
 	host := (workbench.Handle{Socket: socket, SessionRoot: opts.SessionRoot}).WindowHost()
-	return &adapterWorkbench{kernel: kernel, r: r, boot: boot, opts: opts, host: host, marker: marker}
+	return &adapterWorkbench{kernel: kernel, in: in, r: r, boot: boot, opts: opts, host: host, marker: marker}
 }
 
 func (a *adapterWorkbench) slug() string { return filepath.Base(a.opts.SessionRoot) }
@@ -395,13 +395,13 @@ func termRows() []adapterRow {
 		{"Term.Start", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.conversation(t)
-			if err := a.kernel.Term.Write(id, encoded("x")); !errors.Is(err, core.ErrTerminalNotStarted) {
+			if err := a.kernel.Term.Write(id, []byte("x")); !errors.Is(err, core.ErrTerminalNotStarted) {
 				t.Fatalf("a write before Start = %v", err)
 			}
-			if err := (&Term{term: a.kernel.Term}).Start(id, 80, 24); err != nil {
+			if err := (&Term{terminals: a.in.terminals}).Start(id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
-			if err := a.kernel.Term.Write(id, encoded("x")); err != nil {
+			if err := a.kernel.Term.Write(id, []byte("x")); err != nil {
 				t.Fatalf("a write after Start = %v", err)
 			}
 		}},
@@ -409,10 +409,10 @@ func termRows() []adapterRow {
 			marker := filepath.Join(t.TempDir(), "conversation")
 			b := newAdapterWorkbench(t, "/bin/sh", "-c", catToMarker, "sh", marker)
 			id := b.conversation(t)
-			if err := b.kernel.Term.Start(id, 80, 24); err != nil {
+			if err := b.kernel.Term.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Term{term: b.kernel.Term}).Write(id, encoded("hello\n")); err != nil {
+			if err := (&Term{terminals: b.in.terminals}).Write(id, encoded("hello\n")); err != nil {
 				t.Fatal(err)
 			}
 			markedFile(t, marker, "hello")
@@ -421,10 +421,10 @@ func termRows() []adapterRow {
 			marker := filepath.Join(t.TempDir(), "conversation")
 			b := newAdapterWorkbench(t, "/bin/sh", "-c", sizeToMarker, "sh", marker)
 			id := b.conversation(t)
-			if err := b.kernel.Term.Start(id, 80, 24); err != nil {
+			if err := b.kernel.Term.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Term{term: b.kernel.Term}).Resize(id, 132, 50); err != nil {
+			if err := (&Term{terminals: b.in.terminals}).Resize(id, 132, 50); err != nil {
 				t.Fatal(err)
 			}
 			markedFile(t, marker, "50 132")
@@ -477,7 +477,7 @@ func windowsRows() []adapterRow {
 			if _, err := os.Stat(a.marker); !os.IsNotExist(err) {
 				t.Fatalf("the shell ran before the page started it: %v", err)
 			}
-			if err := (&Windows{windows: a.kernel.Windows}).Start(id, 80, 24); err != nil {
+			if err := (&Windows{windows: a.kernel.Windows, terminals: a.in.terminals}).Start(id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "started")
@@ -485,10 +485,10 @@ func windowsRows() []adapterRow {
 		{"Windows.Write", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.terminal(t, catToMarker)
-			if err := a.kernel.Windows.Start(id, 80, 24); err != nil {
+			if err := a.kernel.Windows.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
-			if err := (&Windows{windows: a.kernel.Windows}).Write(id, encoded("typed\n")); err != nil {
+			if err := (&Windows{windows: a.kernel.Windows, terminals: a.in.terminals}).Write(id, encoded("typed\n")); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "typed")
@@ -496,7 +496,7 @@ func windowsRows() []adapterRow {
 		{"Windows.Resize", func(t *testing.T) {
 			a := newAdapterWorkbench(t)
 			id := a.shell(t, `while :; do stty size >> "$1"; sleep 0.05; done`)
-			adapter := &Windows{windows: a.kernel.Windows}
+			adapter := &Windows{windows: a.kernel.Windows, terminals: a.in.terminals}
 			if err := adapter.Resize(id, 100, 40); err != nil {
 				t.Fatalf("resizing a shell the page has not started = %v", err)
 			}
@@ -506,7 +506,7 @@ func windowsRows() []adapterRow {
 			if _, err := os.Stat(a.marker); !os.IsNotExist(err) {
 				t.Fatalf("a resize started the shell: %v", err)
 			}
-			if err := a.kernel.Windows.Start(id, 80, 24); err != nil {
+			if err := a.kernel.Windows.Attach(id, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 				t.Fatal(err)
 			}
 			a.marked(t, "24 80")
@@ -1069,4 +1069,32 @@ func TestEveryAdapterMethodHasARow(t *testing.T) {
 	if found != len(rows) {
 		t.Errorf("services.go declares %d adapter methods and there are %d rows", found, len(rows))
 	}
+}
+
+// Catches the exit criterion regressing: a reloaded page that starts the
+// conversation again must be handed its scrollback rather than a blank pane.
+func TestASecondStartReplaysTheConversationToThePage(t *testing.T) {
+	a := newAdapterWorkbench(t, "/bin/sh", "-c", `printf 'scrollback-marker\n'; exec cat`)
+	id := a.conversation(t)
+	term := &Term{terminals: a.in.terminals}
+	if err := term.Start(id, 80, 24); err != nil {
+		t.Fatal(err)
+	}
+	page := func() map[string]any {
+		var got map[string]any
+		_ = json.Unmarshal(emitted(t, a.r, ptyDataEvent+id), &got)
+		return got
+	}
+	waitFor(t, "the live output", func() bool {
+		data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(page()["encoded"]))
+		return strings.Contains(string(data), "scrollback-marker")
+	})
+	if err := term.Start(id, 100, 30); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "the replay", func() bool {
+		got := page()
+		data, _ := base64.StdEncoding.DecodeString(fmt.Sprint(got["encoded"]))
+		return got["replay"] == true && strings.Contains(string(data), "scrollback-marker")
+	})
 }

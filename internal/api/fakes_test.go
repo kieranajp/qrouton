@@ -79,3 +79,9 @@ func hello(t *testing.T, p *InProcess) grpc.ClientConnInterface {
 	}
 	return Identified(p.Conn, resp.GetClientId())
 }
+
+// clientOf is the id conn sends with every call.
+func clientOf(t *testing.T, conn grpc.ClientConnInterface) string {
+	t.Helper()
+	return conn.(identified).id
+}

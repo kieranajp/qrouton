@@ -65,6 +65,11 @@
   "AssemblyRequested": {
     "ticket": ""
   },
+  "AttachRequest": {
+    "size": null,
+    "terminalId": ""
+  },
+  "AttachResponse": {},
   "CancelPullRequest": {},
   "CancelPullResponse": {},
   "CheckRequest": {},
@@ -190,6 +195,11 @@
     "repos": [],
     "state": ""
   },
+  "ResizeRequest": {
+    "size": null,
+    "terminalId": ""
+  },
+  "ResizeResponse": {},
   "Resync": {},
   "SessionDigest": {
     "at": "",
@@ -205,6 +215,12 @@
   "SessionRepo": {
     "name": "",
     "role": ""
+  },
+  "SessionRequest": {
+    "terminalId": ""
+  },
+  "SessionResponse": {
+    "slug": ""
   },
   "SessionRow": {
     "activity": "",
@@ -265,8 +281,14 @@
     "encoded": "",
     "first": false,
     "kind": "TERMINAL_KIND_UNSPECIFIED",
+    "offset": "0",
     "replay": false,
+    "reset": false,
     "terminalId": ""
+  },
+  "TerminalSize": {
+    "cols": 0,
+    "rows": 0
   },
   "UIScaleChanged": {
     "scale": 0
@@ -278,5 +300,10 @@
   "WindowDiagram": {
     "diagram": null,
     "id": ""
-  }
+  },
+  "WriteRequest": {
+    "data": "",
+    "terminalId": ""
+  },
+  "WriteResponse": {}
 }

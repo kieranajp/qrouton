@@ -35,10 +35,7 @@ type windowContent interface {
 }
 
 type terminalContent struct {
-	buffer *Ring
-	// stream orders a terminal's retained bytes and emitted chunks. A remounted
-	// page can therefore reset to one replay without racing live output around it.
-	stream  sync.Mutex
+	stream  *outputStream
 	process *PTY
 	// served is set once a page has shown the output, live or replayed.
 	served bool
@@ -348,20 +345,23 @@ func (r *registry) readWindow(id string, full bool) (workbench.WindowRead, error
 	if terminal == nil {
 		return result, nil
 	}
-	terminal.stream.Lock()
-	err := r.with(id, func(window *agentWindow) error {
-		if content, ok := window.terminal(); !ok || content != terminal {
-			return noSuchWindow(id)
+	var raw []byte
+	var err error
+	terminal.stream.ordered(func() {
+		err = r.with(id, func(window *agentWindow) error {
+			if content, ok := window.terminal(); !ok || content != terminal {
+				return noSuchWindow(id)
+			}
+			result.Terminal = terminal.state()
+			return nil
+		})
+		if err == nil {
+			raw = terminal.stream.ring.Bytes()
 		}
-		result.Terminal = terminal.state()
-		return nil
 	})
 	if err != nil {
-		terminal.stream.Unlock()
 		return workbench.WindowRead{}, err
 	}
-	raw := terminal.buffer.Bytes()
-	terminal.stream.Unlock()
 	result.Text = terminalText(raw, full)
 	return result, nil
 }

@@ -1,10 +1,7 @@
 package core
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -153,8 +150,8 @@ func TestOpenRejectsATerminalWindowWithNoCommand(t *testing.T) {
 	}
 }
 
-// A document has no command to run, so Start on one would index an empty argv
-// and take the whole workbench with it. Document tabs never call Start.
+// A document has no command to run, so starting one would index an empty argv
+// and take the whole workbench with it. Document tabs never attach.
 func TestStartRefusesADocumentWindow(t *testing.T) {
 	w, _ := testWindows(t)
 
@@ -164,8 +161,8 @@ func TestStartRefusesADocumentWindow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 80, 24); err != ErrNotATerminal {
-		t.Fatalf("Start on a document returned %v, want ErrNotATerminal", err)
+	if err := attachTab(w, nil, id, 80, 24); err != ErrNotATerminal {
+		t.Fatalf("Attach on a document returned %v, want ErrNotATerminal", err)
 	}
 	if !w.exists(id) {
 		t.Fatal("the refusal took the document with it")
@@ -467,7 +464,7 @@ func TestCloseOnExitTerminalClosesOnSuccessAndRetainsFailure(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := w.Start(id, 80, 24); err != nil {
+			if err := attachTab(w, nil, id, 80, 24); err != nil {
 				t.Fatal(err)
 			}
 			if tc.gone {
@@ -495,13 +492,13 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, renderer, id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	window, _ := w.window(id)
 	terminal, _ := window.terminal()
 	pid := ptyPid(terminal.process)
-	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("two-line prompt\n"))); err != nil {
+	if err := w.Write(id, []byte("two-line prompt\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the prompt to reach retained output", func() bool {
@@ -509,7 +506,7 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 		return strings.Contains(text.Text, "two-line prompt")
 	})
 
-	if err := w.Start(id, 120, 36); err != nil {
+	if err := attachTab(w, renderer, id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
 	if ptyPid(terminal.process) != pid {
@@ -520,14 +517,13 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 		t.Fatalf("remounted PTY size = %dx%d, %v, want 120x36", cols, rows, err)
 	}
 	renderer.mu.Lock()
-	replay, ok := renderer.events[windowDataName+id].(Chunk)
+	replay, ok := renderer.events[windowDataName+id].(Output)
 	renderer.mu.Unlock()
 	if !ok || !replay.Replay || replay.First {
 		t.Fatalf("remount event = %#v, want a retained replay not marked first", replay)
 	}
-	decoded, err := base64.StdEncoding.DecodeString(replay.Encoded)
-	if err != nil || !strings.Contains(string(decoded), "two-line prompt") {
-		t.Fatalf("replayed output = %q, %v", decoded, err)
+	if !strings.Contains(string(replay.Data), "two-line prompt") {
+		t.Fatalf("replayed output = %q", replay.Data)
 	}
 }
 
@@ -544,7 +540,7 @@ func TestATerminalTabKeeps256KiBOfScrollback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, nil, id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	var text string
@@ -567,7 +563,7 @@ func TestReadStripsEscapesAndCollapsesCarriageReturns(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, nil, id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the command's output", func() bool {
@@ -671,7 +667,7 @@ func TestATabReportsItsProcessWithoutBeingFocused(t *testing.T) {
 	if got := w.surfaces(w.shown()).Tabs[0].Status; got != tabStatusRunning {
 		t.Fatalf("a fresh tab reports %q, want running", got)
 	}
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, nil, id, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the failure to reach the tab", func() bool {
@@ -1332,16 +1328,12 @@ func TestOverviewWindowOpensInPlaceOfAShell(t *testing.T) {
 func lastReplay(t *testing.T, r *fakeClient, id string) (string, bool) {
 	t.Helper()
 	r.mu.Lock()
-	chunk, ok := r.events[windowDataName+id].(Chunk)
+	chunk, ok := r.events[windowDataName+id].(Output)
 	r.mu.Unlock()
 	if !ok || !chunk.Replay {
 		return "", false
 	}
-	decoded, err := base64.StdEncoding.DecodeString(chunk.Encoded)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return string(decoded), true
+	return string(chunk.Data), true
 }
 
 func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
@@ -1355,7 +1347,7 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	window, _ := w.window(id)
 	terminal, _ := window.terminal()
 	pid := ptyPid(terminal.process)
-	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("before mount\n"))); err != nil {
+	if err := w.Write(id, []byte("before mount\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the line to reach retained output", func() bool {
@@ -1363,7 +1355,7 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 		return strings.Contains(text.Text, "before mount")
 	})
 
-	if err := w.Start(id, 120, 36); err != nil {
+	if err := attachTab(w, renderer, id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
 	if ptyPid(terminal.process) != pid {
@@ -1376,22 +1368,22 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "before mount") {
 		t.Fatalf("mount replay = %q, %v, want the retained line", replay, ok)
 	}
-	if chunk := lastChunk(renderer, id); !chunk.First {
+	if chunk := lastOutput(renderer, id); !chunk.First {
 		t.Fatalf("first mount replay = %#v, want it marked first", chunk)
 	}
 
-	if err := w.Start(id, 120, 36); err != nil {
+	if err := attachTab(w, renderer, id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
-	if chunk := lastChunk(renderer, id); !chunk.Replay || chunk.First {
+	if chunk := lastOutput(renderer, id); !chunk.Replay || chunk.First {
 		t.Fatalf("remount replay = %#v, want a replay not marked first", chunk)
 	}
 }
 
-func lastChunk(r *fakeClient, id string) Chunk {
+func lastOutput(r *fakeClient, id string) Output {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	chunk, _ := r.events[windowDataName+id].(Chunk)
+	chunk, _ := r.events[windowDataName+id].(Output)
 	return chunk
 }
 
@@ -1403,7 +1395,7 @@ func TestLaunchingAMountedTerminalChangesNothing(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := w.Start(id, 120, 36); err != nil {
+	if err := attachTab(w, renderer, id, 120, 36); err != nil {
 		t.Fatal(err)
 	}
 	window, _ := w.window(id)
@@ -1441,13 +1433,13 @@ func TestMountingAFailedTerminalReplaysItsOutput(t *testing.T) {
 		return reported
 	})
 
-	if err := w.Start(id, 80, 24); err != nil {
+	if err := attachTab(w, renderer, id, 80, 24); err != nil {
 		t.Fatalf("mounting a failed terminal = %v, want its output replayed", err)
 	}
 	if replay, ok := lastReplay(t, renderer, id); !ok || !strings.Contains(replay, "boom") {
 		t.Fatalf("mount replay = %q, %v, want the failed output", replay, ok)
 	}
-	if chunk := lastChunk(renderer, id); chunk.First {
+	if chunk := lastOutput(renderer, id); chunk.First {
 		t.Fatalf("a finished process's replay = %#v, want it not marked first", chunk)
 	}
 }
@@ -1491,7 +1483,7 @@ func TestRetainedTerminalReadsRunningAndFinalOutputAcrossInputBarrier(t *testing
 			if err != nil || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil || strings.Contains(read.Text, "final-marker") {
 				t.Fatalf("running snapshot = %+v, %v", read, err)
 			}
-			if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+			if err := w.Write(id, []byte("\n")); err != nil {
 				t.Fatal(err)
 			}
 			waitFor(t, "the completed snapshot", func() bool {
@@ -1503,17 +1495,12 @@ func TestRetainedTerminalReadsRunningAndFinalOutputAcrossInputBarrier(t *testing
 				if err != nil || read.Terminal == nil || read.Terminal.Status != tc.status || read.Terminal.ExitCode == nil || *read.Terminal.ExitCode != tc.code || !strings.Contains(read.Text, "final-marker") {
 					t.Fatalf("retained snapshot = %+v, %v", read, err)
 				}
-				if err := w.Start(id, 80, 24); err != nil {
+				if err := attachTab(w, renderer, id, 80, 24); err != nil {
 					t.Fatal(err)
 				}
-				chunk := lastChunk(renderer, id)
-				wire, err := json.Marshal(chunk)
-				if err != nil || !strings.Contains(string(wire), fmt.Sprintf(`"exit_code":%d`, tc.code)) {
-					t.Fatalf("completed replay wire = %s, %v", wire, err)
-				}
-				raw, err := base64.StdEncoding.DecodeString(chunk.Encoded)
-				if err != nil || !chunk.Replay || chunk.First || chunk.ExitCode == nil || *chunk.ExitCode != tc.code || !strings.Contains(string(raw), "final-marker") {
-					t.Fatalf("completed replay = %+v, %q, %v", chunk, raw, err)
+				chunk := lastOutput(renderer, id)
+				if !chunk.Replay || chunk.First || chunk.ExitCode == nil || *chunk.ExitCode != tc.code || !strings.Contains(string(chunk.Data), "final-marker") {
+					t.Fatalf("completed replay = %+v, %q", chunk, chunk.Data)
 				}
 			}
 			if err := w.Close(id); err != nil {
@@ -1547,7 +1534,7 @@ func TestSilentTerminalSnapshotsDistinguishRunningSuccessAndFailure(t *testing.T
 			if err != nil || read.Text != "" || read.Terminal == nil || read.Terminal.Status != tabStatusRunning || read.Terminal.ExitCode != nil {
 				t.Fatalf("silent running snapshot = %+v, %v", read, err)
 			}
-			if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+			if err := w.Write(id, []byte("\n")); err != nil {
 				t.Fatal(err)
 			}
 			waitFor(t, "silent completion", func() bool {
@@ -1571,8 +1558,8 @@ func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *t
 			return
 		}
 		id := strings.TrimPrefix(event, windowExitName)
-		if terminal.stream.TryLock() {
-			terminal.stream.Unlock()
+		if terminal.stream.mu.TryLock() {
+			terminal.stream.mu.Unlock()
 			t.Error("live exit escaped terminal stream ordering")
 		}
 		if err := w.with(id, func(window *agentWindow) error {
@@ -1601,7 +1588,7 @@ func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *t
 	completed := make(chan struct{})
 	close(completed)
 	terminal.process = &PTY{exited: completed}
-	terminal.buffer.Write([]byte("final-marker"))
+	terminal.stream.ring.Write([]byte("final-marker"))
 	exited := make(chan struct{})
 	go func() { w.terminals.exited(id, 0); close(exited) }()
 	<-entered
@@ -1614,7 +1601,7 @@ func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *t
 		readDone <- read
 	}()
 	attachDone := make(chan error, 1)
-	go func() { attachDone <- w.Start(id, 80, 24) }()
+	go func() { attachDone <- attachTab(w, nil, id, 80, 24) }()
 	close(release)
 	<-exited
 	read := <-readDone
@@ -1650,7 +1637,7 @@ func TestTerminalReadAttachAndCloseCanRaceWithoutInventingCompletion(t *testing.
 			}
 			done <- struct{}{}
 		}()
-		go func() { <-start; _ = w.Start(id, 80, 24); done <- struct{}{} }()
+		go func() { <-start; _ = attachTab(w, nil, id, 80, 24); done <- struct{}{} }()
 		go func() { <-start; _ = w.Close(id); done <- struct{}{} }()
 		close(start)
 		for range 3 {
@@ -1676,7 +1663,7 @@ func TestConcurrentLaunchAndMountStartOnlyOneTerminalProcess(t *testing.T) {
 	start := make(chan struct{})
 	done := make(chan error, 8)
 	for range 4 {
-		go func() { <-start; done <- w.Start(id, 80, 24) }()
+		go func() { <-start; done <- attachTab(w, nil, id, 80, 24) }()
 		go func() { <-start; done <- w.terminals.launch(id, 80, 24) }()
 	}
 	close(start)
@@ -1685,7 +1672,7 @@ func TestConcurrentLaunchAndMountStartOnlyOneTerminalProcess(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if err := w.Write(id, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
+	if err := w.Write(id, []byte("\n")); err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "the single launched process to finish", func() bool {

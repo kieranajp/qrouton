@@ -253,14 +253,20 @@ func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	return kernel
 }
 
+// discard is a replay nobody draws.
+func discard(core.Output) {}
+
 // translate serves kernel in process and carries its events to r, as run does.
 func translate(t *testing.T, kernel *core.Core, opts *Options, r *fakeRenderer) *inProcess {
 	t.Helper()
-	socket, err := workbench.NewSocketPath()
-	if err != nil {
-		t.Fatal(err)
+	socket := opts.Socket
+	if socket == "" {
+		var err error
+		if socket, err = workbench.NewSocketPath(); err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.Remove(socket) })
 	}
-	t.Cleanup(func() { _ = os.Remove(socket) })
 	in, err := startInProcess(kernel, opts.hub, socket, "", r.Emit)
 	if err != nil {
 		t.Fatal(err)
@@ -400,7 +406,7 @@ func TestClosingTheConversationWindowQuits(t *testing.T) {
 
 	conversation := <-r.opened
 	shownSession(t, reg)
-	if err := kernel.Term.Start(chromeOf(t, kernel, func(f status.Fields) bool { return f.Terminal != "" }).Terminal, 80, 24); err != nil {
+	if err := kernel.Term.Attach(chromeOf(t, kernel, func(f status.Fields) bool { return f.Terminal != "" }).Terminal, &core.Size{Cols: 80, Rows: 24}, nil, discard); err != nil {
 		t.Fatal(err)
 	}
 	var pid int

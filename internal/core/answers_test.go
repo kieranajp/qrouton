@@ -175,7 +175,7 @@ func TestSendSpecAnswersPastesTheFixedLineIntoTheConversation(t *testing.T) {
 		t.Fatalf("SendSpecAnswers before the conversation started returned %v, want ErrTerminalNotStarted", err)
 	}
 
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.SendSpecAnswers(spec); err != nil {
@@ -231,7 +231,7 @@ func TestSendAuditTriagePastesItsOwnLineAndEachSendKeepsToItsKind(t *testing.T) 
 		return id
 	}
 	audit, spec := open("A1", auditSource), open("S1", specSource)
-	if err := term.Start(state.terminal, 80, 24); err != nil {
+	if err := startTerm(term, state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
 	if err := w.SendAuditTriage(spec); !errors.Is(err, ErrWrongSend) {

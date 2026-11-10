@@ -56,14 +56,18 @@ func (c *clients) add(next client) string {
 	return id
 }
 
-func (c *clients) known(ctx context.Context) bool {
+func clientID(ctx context.Context) string {
 	ids := metadata.ValueFromIncomingContext(ctx, ClientHeader)
 	if len(ids) != 1 {
-		return false
+		return ""
 	}
+	return ids[0]
+}
+
+func (c *clients) known(ctx context.Context) bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	_, ok := c.byID[ids[0]]
+	_, ok := c.byID[clientID(ctx)]
 	return ok
 }
 

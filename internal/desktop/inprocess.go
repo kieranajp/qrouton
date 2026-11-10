@@ -13,7 +13,8 @@ import (
 // its events to the pages.
 type inProcess struct {
 	*api.InProcess
-	ollama qroutonv1.OllamaServiceClient
+	ollama    qroutonv1.OllamaServiceClient
+	terminals qroutonv1.TerminalServiceClient
 
 	stop       context.CancelFunc
 	translated chan struct{}
@@ -42,7 +43,13 @@ func startInProcess(kernel *core.Core, hub *api.Hub, socket, version string, emi
 		served.Close()
 		return nil, api.FromStatus(err)
 	}
-	in := &inProcess{InProcess: served, ollama: qroutonv1.NewOllamaServiceClient(conn), stop: stop, translated: make(chan struct{})}
+	in := &inProcess{
+		InProcess:  served,
+		ollama:     qroutonv1.NewOllamaServiceClient(conn),
+		terminals:  qroutonv1.NewTerminalServiceClient(conn),
+		stop:       stop,
+		translated: make(chan struct{}),
+	}
 	go func() {
 		defer close(in.translated)
 		events.run(ctx, stream)
@@ -56,4 +63,13 @@ func (in *inProcess) Close() {
 	in.stop()
 	<-in.translated
 	in.InProcess.Close()
+}
+
+// terminalSession names the session a terminal belongs to, or "" when none does.
+func (in *inProcess) terminalSession(terminal string) string {
+	resp, err := in.terminals.Session(context.Background(), &qroutonv1.SessionRequest{TerminalId: terminal})
+	if err != nil {
+		return ""
+	}
+	return resp.GetSlug()
 }
