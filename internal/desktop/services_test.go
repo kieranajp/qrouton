@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
@@ -27,6 +28,8 @@ import (
 	"github.com/kieranajp/qrouton/internal/ticket"
 	"github.com/kieranajp/qrouton/internal/vault"
 	"github.com/kieranajp/qrouton/internal/workbench"
+	"google.golang.org/grpc/codes"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 // adapterOllama records which core calls reached the client behind it.
@@ -83,29 +86,61 @@ func adapterRows() [][]adapterRow {
 func ollamaRows() []adapterRow {
 	return []adapterRow{
 		{"Ollama.Check", func(t *testing.T) {
-			client := newAdapterOllama()
-			adapter := &Ollama{ollama: core.NewOllama(client, func(string, any) {})}
-			if got := adapter.Check(); client.probes.Load() != 1 || got.Model != vault.OllamaModel {
-				t.Fatalf("Check answered %+v after %d probes", got, client.probes.Load())
+			rec, conn := recorded(t)
+			got, err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).Check()
+			rec.reached(t, "Ollama.Check")
+			if err != nil || !strings.Contains(string(got), `"model":"recorded"`) {
+				t.Fatalf("Check answered %s, %v", got, err)
 			}
 		}},
 		{"Ollama.Pull", func(t *testing.T) {
-			client := newAdapterOllama()
-			defer close(client.released)
-			adapter := &Ollama{ollama: core.NewOllama(client, func(string, any) {})}
-			adapter.Pull()
-			arrives(t, client.pulled, "Pull started no pull")
+			rec, conn := recorded(t)
+			if err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).Pull(); err != nil {
+				t.Fatal(err)
+			}
+			rec.reached(t, "Ollama.Pull")
 		}},
 		{"Ollama.CancelPull", func(t *testing.T) {
-			client := newAdapterOllama()
-			defer close(client.released)
-			ollama := core.NewOllama(client, func(string, any) {})
-			adapter := &Ollama{ollama: ollama}
-			ollama.Pull()
-			arrives(t, client.pulled, "the pull never started")
-			adapter.CancelPull()
-			arrives(t, client.stopped, "CancelPull left the pull running")
+			rec, conn := recorded(t)
+			if err := (&Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}).CancelPull(); err != nil {
+				t.Fatal(err)
+			}
+			rec.reached(t, "Ollama.CancelPull")
 		}},
+	}
+}
+
+// Catches an adapter that hands the page the status wrapper, or drops the
+// error, rather than the text the core refused with.
+func TestAnOllamaErrorReachesThePageWithItsOwnText(t *testing.T) {
+	rec, conn := recorded(t)
+	rec.err = grpcstatus.Error(codes.Unimplemented, core.ErrNoRevealCommand.Error())
+	adapter := &Ollama{ollama: qroutonv1.NewOllamaServiceClient(conn)}
+	_, checkErr := adapter.Check()
+	for name, err := range map[string]error{"Check": checkErr, "Pull": adapter.Pull(), "CancelPull": adapter.CancelPull()} {
+		if err == nil || err.Error() != core.ErrNoRevealCommand.Error() || !errors.Is(err, core.ErrUnavailable) {
+			t.Fatalf("%s returned %v, want the core's own refusal", name, err)
+		}
+	}
+}
+
+// Catches a desktop that serves the core but never says Hello, or drops the
+// client id, which would refuse every call the page makes.
+func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
+	opts, _ := testOptions(t)
+	opts.Config = &config.Config{Root: opts.Root}
+	options := coreOptions(opts, func() {})
+	ollama := newAdapterOllama()
+	defer close(ollama.released)
+	options.Ollama = ollama
+	in, err := startInProcess(core.New(options, newLocalClient(newFakeRenderer(), opts.Launcher, nil)), opts.Socket, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer in.Close()
+	got, err := (&Ollama{ollama: in.ollama}).Check()
+	if err != nil || ollama.probes.Load() != 1 || !strings.Contains(string(got), vault.OllamaModel) {
+		t.Fatalf("Check answered %s, %v after %d probes", got, err, ollama.probes.Load())
 	}
 }
 

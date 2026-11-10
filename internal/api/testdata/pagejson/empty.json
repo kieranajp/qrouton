@@ -1,0 +1,30 @@
+{
+  "CancelPullRequest": {},
+  "CancelPullResponse": {},
+  "CheckRequest": {},
+  "CheckResponse": {
+    "status": null
+  },
+  "HelloRequest": {
+    "build": "",
+    "capabilities": [],
+    "clientName": "",
+    "protocol": 0
+  },
+  "HelloResponse": {
+    "build": "",
+    "clientId": "",
+    "protocol": 0
+  },
+  "OllamaStatus": {
+    "completed": 0,
+    "detail": "",
+    "installed": false,
+    "model": "",
+    "reason": "",
+    "state": "",
+    "total": 0
+  },
+  "PullRequest": {},
+  "PullResponse": {}
+}

@@ -57,6 +57,8 @@ type Options struct {
 
 	updates   *Updates
 	placement *core.Placement
+	// bind registers the adapters that call the core through the in-process server.
+	bind func(*inProcess)
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -107,7 +109,9 @@ func Run(opts Options) error {
 	updates := newUpdates(opts.Version, r.Emit, http.DefaultClient, updateEndpoint)
 	opts.updates = updates
 	r.register(application.NewService(updates))
-	r.register(application.NewService(&Ollama{ollama: kernel.Ollama}))
+	opts.bind = func(in *inProcess) {
+		r.register(application.NewService(&Ollama{ollama: in.ollama}))
+	}
 	r.register(application.NewService(&Assembly{assembly: kernel.Assembly}))
 	r.register(application.NewService(&Picker{picker: kernel.Picker}))
 	r.register(application.NewService(newPresenter(r, r.Emit)))
@@ -164,8 +168,6 @@ func relaunchWith(r Relauncher) func(func() (string, string)) error {
 func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	// Shutdown waits for the placement check, so it must be deferred even when Start fails.
-	defer kernel.Shutdown()
 
 	if opts.updates != nil {
 		go opts.updates.watch(ctx, updateInterval)
@@ -173,8 +175,14 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 	if opts.placement != nil {
 		opts.placement.CheckInBackground()
 	}
-	if err := kernel.Start(opts.Socket); err != nil {
+	// A core that fails to start is shut down first, which waits for the placement check.
+	in, err := startInProcess(kernel, opts.Socket, opts.Version)
+	if err != nil {
 		return err
+	}
+	defer in.Close()
+	if opts.bind != nil {
+		opts.bind(in)
 	}
 	if opts.Ticket != "" {
 		if _, err := kernel.Offer(opts.Ticket, opts.TicketPrompt); err != nil {

@@ -1,6 +1,12 @@
 package desktop
 
 import (
+	"context"
+	"encoding/json"
+
+	"github.com/kieranajp/qrouton/internal/api"
+	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
+	"github.com/kieranajp/qrouton/internal/api/pagejson"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
@@ -10,13 +16,25 @@ import (
 	"github.com/kieranajp/qrouton/internal/workbench"
 )
 
-type Ollama struct{ ollama *core.Ollama }
+type Ollama struct{ ollama qroutonv1.OllamaServiceClient }
 
-func (o *Ollama) Check() core.OllamaStatus { return o.ollama.Check() }
+func (o *Ollama) Check() (json.RawMessage, error) {
+	resp, err := o.ollama.Check(context.Background(), &qroutonv1.CheckRequest{})
+	if err != nil {
+		return nil, api.FromStatus(err)
+	}
+	return pagejson.Marshal(resp.GetStatus()), nil
+}
 
-func (o *Ollama) Pull() { o.ollama.Pull() }
+func (o *Ollama) Pull() error {
+	_, err := o.ollama.Pull(context.Background(), &qroutonv1.PullRequest{})
+	return api.FromStatus(err)
+}
 
-func (o *Ollama) CancelPull() { o.ollama.CancelPull() }
+func (o *Ollama) CancelPull() error {
+	_, err := o.ollama.CancelPull(context.Background(), &qroutonv1.CancelPullRequest{})
+	return api.FromStatus(err)
+}
 
 type Sessions struct{ sessions *core.Sessions }
 

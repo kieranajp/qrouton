@@ -229,6 +229,7 @@ func (b *stubBoot) counts() (agents, serves int) {
 func testOptions(t *testing.T) (Options, *stubBoot) {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	socket, err := workbench.NewSocketPath()
 	if err != nil {
 		t.Fatal(err)

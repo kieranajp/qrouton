@@ -21,6 +21,19 @@ func (u *unavailable) Error() string { return u.text }
 
 func (u *unavailable) Is(target error) bool { return target == ErrUnavailable }
 
+var ErrNotFound = errors.New("no such thing")
+
+// NotFound is a refusal with its own text that also matches ErrNotFound.
+func NotFound(text string) error {
+	return &notFound{text: text}
+}
+
+type notFound struct{ text string }
+
+func (n *notFound) Error() string { return n.text }
+
+func (n *notFound) Is(target error) bool { return target == ErrNotFound }
+
 var ErrTerminalNotStarted = errors.New("terminal is not started")
 
 var ErrNoThoughtsRoot = errors.New("this session's thoughts are in no thoughts root")
@@ -81,15 +94,15 @@ var (
 )
 
 func noSuchWindow(id string) error {
-	return fmt.Errorf("no open window with id %q", id)
+	return NotFound(fmt.Sprintf("no open window with id %q", id))
 }
 
 func noSuchTerminal(id string) error {
-	return fmt.Errorf("no conversation terminal with id %q", id)
+	return NotFound(fmt.Sprintf("no conversation terminal with id %q", id))
 }
 
 func UnknownSession(slug string) error {
-	return fmt.Errorf("no session named %q under the sessions root", slug)
+	return NotFound(fmt.Sprintf("no session named %q under the sessions root", slug))
 }
 
 // agentAlreadyRunning is a supervisor that outlived its workbench, which the one
