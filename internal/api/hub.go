@@ -3,6 +3,8 @@ package api
 import (
 	"sync"
 
+	"google.golang.org/protobuf/proto"
+
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/status"
@@ -10,6 +12,7 @@ import (
 
 const (
 	backlogSize   = 1024
+	backlogBytes  = 16 << 20
 	queueSize     = 4096
 	coalesceLimit = 64 << 10
 )
@@ -19,10 +22,16 @@ const (
 type Hub struct {
 	mu      sync.Mutex
 	seq     uint64
-	backlog []*qroutonv1.Event
+	backlog []backlogged
+	held    int
 	// evicted is the newest sequence number the backlog no longer holds.
 	evicted uint64
 	subs    map[*subscriber]struct{}
+}
+
+type backlogged struct {
+	event *qroutonv1.Event
+	size  int
 }
 
 type subscriber struct {
@@ -38,16 +47,24 @@ func NewHub() *Hub {
 }
 
 func (h *Hub) publish(event *qroutonv1.Event) {
+	validStrings(event.ProtoReflect())
+	terminal := event.GetTerminalOutput() != nil || event.GetTerminalExit() != nil
+	size := 0
+	if !terminal {
+		size = proto.Size(event)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.seq++
 	event.Seq = h.seq
-	if event.GetTerminalOutput() == nil && event.GetTerminalExit() == nil {
-		if len(h.backlog) == backlogSize {
-			h.evicted = h.backlog[0].Seq
+	if !terminal {
+		h.backlog = append(h.backlog, backlogged{event: event, size: size})
+		h.held += size
+		for len(h.backlog) > backlogSize || h.held > backlogBytes {
+			h.evicted = h.backlog[0].event.Seq
+			h.held -= h.backlog[0].size
 			h.backlog = h.backlog[1:]
 		}
-		h.backlog = append(h.backlog, event)
 	}
 	for sub := range h.subs {
 		h.enqueueLocked(sub, event)
@@ -56,6 +73,7 @@ func (h *Hub) publish(event *qroutonv1.Event) {
 
 // deliver numbers event and queues it for one client's subscribers alone.
 func (h *Hub) deliver(client string, event *qroutonv1.Event) {
+	validStrings(event.ProtoReflect())
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	h.seq++
@@ -77,8 +95,9 @@ func (h *Hub) enqueueLocked(sub *subscriber, event *qroutonv1.Event) {
 }
 
 // subscribe registers a queue and, under the same lock, takes what it missed
-// after after, so nothing falls between the backlog and the queue.
-func (h *Hub) subscribe(client string, after uint64) (sub *subscriber, missed []*qroutonv1.Event, resync *qroutonv1.Event) {
+// after after, so nothing falls between the backlog and the queue. now is the
+// last seq the queue will not carry.
+func (h *Hub) subscribe(client string, after uint64) (sub *subscriber, missed []*qroutonv1.Event, resync *qroutonv1.Event, now uint64) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	sub = &subscriber{client: client, queue: make(chan *qroutonv1.Event, queueSize), overflow: make(chan struct{})}
@@ -88,13 +107,13 @@ func (h *Hub) subscribe(client string, after uint64) (sub *subscriber, missed []
 	case after > h.seq || after < h.evicted:
 		resync = &qroutonv1.Event{Seq: h.seq, Payload: &qroutonv1.Event_Resync{Resync: &qroutonv1.Resync{}}}
 	default:
-		for _, event := range h.backlog {
-			if event.Seq > after {
-				missed = append(missed, event)
+		for _, held := range h.backlog {
+			if held.event.Seq > after {
+				missed = append(missed, held.event)
 			}
 		}
 	}
-	return sub, missed, resync
+	return sub, missed, resync, h.seq
 }
 
 func (h *Hub) unsubscribe(sub *subscriber) {

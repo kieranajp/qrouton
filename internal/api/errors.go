@@ -12,6 +12,7 @@ import (
 var (
 	ErrNoClient         = errors.New("this call carries no client id from Hello")
 	ErrSubscriberBehind = errors.New("this subscriber fell too far behind the event stream; subscribe again")
+	ErrNoSize           = errors.New("a resize names no size")
 )
 
 func protocolMismatch(client, core uint32) error {

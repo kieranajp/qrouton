@@ -317,6 +317,24 @@ func TestATokenFailureFailsEveryOwnerAndCompletes(t *testing.T) {
 	}
 }
 
+// Catches a token failure that completes with no list, which the page reads as
+// an empty one and clears the repositories on screen.
+func TestATokenFailureCompletesWithTheListAlreadyShown(t *testing.T) {
+	fake := newFakeGitHub()
+	fake.token = errors.New("no token")
+	repos, finished, events := testRepositories(t, []string{"acme"}, fake)
+	repos.repos = []github.Repo{{Org: "acme", Name: "api"}}
+
+	repos.Refresh()
+	<-finished
+
+	for _, event := range *events {
+		if event.State == string(github.RefreshComplete) && (len(event.Repos) != 1 || event.Repos[0].Name != "api") {
+			t.Fatalf("the complete event carried %v, want the list already shown", event.Repos)
+		}
+	}
+}
+
 func TestOrgsListAnswersAnEmptyConfigurationWithAnEmptyList(t *testing.T) {
 	if got := (&Orgs{cfg: &config.Config{}}).List(); len(got) != 0 {
 		t.Fatalf("an empty configuration listed %v", got)

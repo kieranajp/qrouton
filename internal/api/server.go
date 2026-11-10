@@ -1,5 +1,4 @@
-// Package api serves the core as gRPC services, and is the only way a client
-// reaches it.
+// Package api serves the core as gRPC services.
 package api
 
 import (

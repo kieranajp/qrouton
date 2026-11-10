@@ -16,7 +16,7 @@ import (
 )
 
 // Catches a schema edit that changes what the page sees for an empty value,
-// such as a nested message that now arrives as null.
+// such as a field that stops arriving or a count that arrives quoted.
 func TestEveryMessageEmptyPageJSONMatchesItsGolden(t *testing.T) {
 	empty := map[string]json.RawMessage{}
 	protoregistry.GlobalFiles.RangeFilesByPackage("qrouton.v1", func(file protoreflect.FileDescriptor) bool {
@@ -65,6 +65,7 @@ func TestPageJSONOfADocumentWithInvalidUTF8MatchesBefore(t *testing.T) {
 		t.Fatal(err)
 	}
 	mapped := document(doc)
+	validStrings(mapped.ProtoReflect())
 	if _, err := proto.Marshal(mapped); err != nil {
 		t.Fatalf("the mapped document cannot cross the wire: %v", err)
 	}

@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 
 	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -102,7 +103,14 @@ func Run(opts Options) error {
 	options.Vault, options.Ollama = core.OpenVault(opts.Config), vault.NewOllama()
 	opts.hub = api.NewHub()
 	kernel = core.New(options, client, opts.hub)
-	quit = quitter(kernel, r)
+	var served atomic.Pointer[inProcess]
+	quit = quitter(func() {
+		if in := served.Load(); in != nil {
+			in.Close()
+			return
+		}
+		kernel.Shutdown()
+	}, r)
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
 	r.register(application.NewService(&Sessions{sessions: kernel.Sessions}))
 	r.register(application.NewService(&Repositories{repos: kernel.Repositories}))
@@ -112,6 +120,7 @@ func Run(opts Options) error {
 	opts.updates = updates
 	r.register(application.NewService(updates))
 	opts.bind = func(in *inProcess) {
+		served.Store(in)
 		r.register(application.NewService(&Ollama{ollama: in.ollama}))
 		r.register(application.NewService(&Term{terminals: in.terminals}))
 		r.register(application.NewService(&Windows{windows: kernel.Windows, terminals: in.terminals}))
@@ -129,9 +138,10 @@ func Run(opts Options) error {
 
 // quitter is the teardown the main window's OnClose runs, shared with
 // Settings.Quit so quitting from the panel is no worse than closing the window.
-func quitter(kernel *core.Core, r renderer) func() {
+// stop takes the core down, after the server once one is serving it.
+func quitter(stop func(), r renderer) func() {
 	return sync.OnceFunc(func() {
-		kernel.Shutdown()
+		stop()
 		r.Quit()
 	})
 }

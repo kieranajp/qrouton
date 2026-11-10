@@ -80,7 +80,8 @@ const (
 	uiScaleEvent           = "ui:scale"
 )
 
-// resubscribeDelay paces the translator's retries while the stream is refused.
+// resubscribeDelay paces the translator's resubscribes, so a stream that keeps
+// ending cannot spin.
 const resubscribeDelay = 50 * time.Millisecond
 
 const viewMenuLabel = "View"

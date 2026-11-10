@@ -232,7 +232,8 @@ func (r *Repositories) run(ctx context.Context, gen int, configured []string, fa
 		for _, owner := range owners {
 			r.push(gen, github.RefreshMsg{Owner: owner, State: github.RefreshFailed, Err: err})
 		}
-		r.push(gen, github.RefreshMsg{State: github.RefreshComplete})
+		// The wire cannot tell a nil list from an empty one, so the list stands.
+		r.push(gen, github.RefreshMsg{State: github.RefreshComplete, Repos: r.Cached()})
 		return
 	}
 	if len(failed) == 0 {

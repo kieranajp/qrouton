@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"strconv"
+	"strings"
 	"testing"
 
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/core"
+	"github.com/kieranajp/qrouton/internal/status"
 	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	grpcstatus "google.golang.org/grpc/status"
 )
 
 type subscription struct {
@@ -118,10 +121,39 @@ func TestAnOverflowingSubscriberEndsWithResourceExhausted(t *testing.T) {
 		if err == nil {
 			continue
 		}
-		if status.Code(err) != codes.ResourceExhausted {
+		if grpcstatus.Code(err) != codes.ResourceExhausted {
 			t.Fatalf("the stream ended with %v, want ResourceExhausted", err)
 		}
 		return
+	}
+}
+
+// Catches an event holding invalid UTF-8 in any string, which proto refuses to
+// marshal: it would end the stream, and the resume would hit it again.
+func TestAnEventWithInvalidUTF8CrossesTheStream(t *testing.T) {
+	p, hub := served(t)
+	sub := subscribeAfter(t, p, 0)
+	hub.Chrome(status.Fields{Documents: []status.Document{{Name: "bad\xffname"}}, Branch: "main\xfe"})
+	hub.AssemblyRequested("after")
+	chrome := sub.next().GetChrome()
+	if chrome.GetBranch() != "main\uFFFD" || chrome.GetDocuments()[0].GetName() != "bad\uFFFDname" {
+		t.Fatalf("the chrome arrived as %q and %q", chrome.GetBranch(), chrome.GetDocuments()[0].GetName())
+	}
+	if got := sub.next().GetAssemblyRequested().GetTicket(); got != "after" {
+		t.Fatalf("the stream carried %q after it", got)
+	}
+}
+
+// Catches a backlog bounded only by count, which a run of large documents
+// would grow by every one of them.
+func TestTheBacklogStaysWithinItsByteBudget(t *testing.T) {
+	hub := NewHub()
+	big := strings.Repeat("x", backlogBytes/4)
+	for range 8 {
+		hub.WindowContent("window-1", core.Document{Text: big})
+	}
+	if hub.held > backlogBytes || len(hub.backlog) > 4 {
+		t.Fatalf("the backlog holds %d events and %d bytes", len(hub.backlog), hub.held)
 	}
 }
 
@@ -136,8 +168,8 @@ func TestCoalesceMergesQueuedOutputForOneTerminalOnly(t *testing.T) {
 	queue := make(chan *qroutonv1.Event, 8)
 	queue <- output("window-1", 2, "cd")
 	queue <- output("window-1", 4, "ef")
-	queue <- output("window-2", 0, "zz")
-	queue <- output("window-1", 6, "gh")
+	queue <- output("window-2", 6, "zz")
+	queue <- output("window-1", 8, "gh")
 
 	merged, held := coalesce(first, queue)
 	if got := string(merged.GetTerminalOutput().GetData()); got != "abcdef" || merged.GetTerminalOutput().GetOffset() != 0 {
@@ -158,6 +190,19 @@ func TestCoalesceMergesQueuedOutputForOneTerminalOnly(t *testing.T) {
 	gap <- output("window-1", 9, "late")
 	if _, held := coalesce(output("window-1", 0, "ab"), gap); held == nil {
 		t.Fatal("output across a gap in offsets was merged")
+	}
+	exited := make(chan *qroutonv1.Event, 2)
+	exit := output("window-1", 2, "cd")
+	code := int32(0)
+	exit.GetTerminalOutput().ExitCode = &code
+	exited <- exit
+	if _, held := coalesce(output("window-1", 0, "ab"), exited); held == nil {
+		t.Fatal("output carrying an exit code was merged")
+	}
+	full := make(chan *qroutonv1.Event, 2)
+	full <- output("window-1", coalesceLimit, "y")
+	if _, held := coalesce(output("window-1", 0, strings.Repeat("x", coalesceLimit)), full); held == nil {
+		t.Fatal("a merge grew past the size cap")
 	}
 	replay := make(chan *qroutonv1.Event, 2)
 	replayed := output("window-1", 2, "cd")
@@ -191,5 +236,35 @@ func TestAReplayReachesOnlyTheClientThatAttached(t *testing.T) {
 	}
 	if got := other.next(); got.GetAssemblyRequested().GetTicket() != "after" {
 		t.Fatalf("another client got %v before the broadcast", got)
+	}
+}
+
+// Catches a stream that does not say where it starts, which leaves a client
+// whose first stream ends before any event resubscribing from now and losing
+// what came between.
+func TestSubscribeNamesTheSeqItResumesAfter(t *testing.T) {
+	p, hub := served(t)
+	watching := subscribeAfter(t, p, 0)
+	hub.AssemblyRequested("two")
+	var two uint64
+	for two == 0 {
+		if event := watching.next(); event.GetAssemblyRequested().GetTicket() == "two" {
+			two = event.GetSeq()
+		}
+	}
+	stream, err := qroutonv1.NewEventServiceClient(hello(t, p)).Subscribe(context.Background(), &qroutonv1.SubscribeRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	header, err := stream.Header()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := header.Get(SeqHeader)
+	if len(got) != 1 {
+		t.Fatalf("the stream's header named seq %v", got)
+	}
+	if seq, err := strconv.ParseUint(got[0], 10, 64); err != nil || seq < two {
+		t.Fatalf("the stream's header named seq %v, before the event at %d it cannot carry", got, two)
 	}
 }

@@ -5,6 +5,8 @@ import (
 
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/core"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // terminalService routes an id to the conversation it names, or else to a tab.
@@ -51,6 +53,9 @@ func (t *terminalService) Write(_ context.Context, req *qroutonv1.WriteRequest) 
 }
 
 func (t *terminalService) Resize(_ context.Context, req *qroutonv1.ResizeRequest) (*qroutonv1.ResizeResponse, error) {
+	if req.GetSize() == nil {
+		return nil, status.Error(codes.InvalidArgument, ErrNoSize.Error())
+	}
 	id, cols, rows := req.GetTerminalId(), int(req.GetSize().GetCols()), int(req.GetSize().GetRows())
 	if t.conversation(id) {
 		return &qroutonv1.ResizeResponse{}, t.core.Term.Resize(id, cols, rows)

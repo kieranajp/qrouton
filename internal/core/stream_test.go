@@ -300,8 +300,8 @@ func TestAttachWithoutASizeLeavesThePTYAsItWas(t *testing.T) {
 	})
 }
 
-// Catches a reloaded page drawing a blank conversation: a second attach used to
-// be a no-op, so nothing the agent had already said reached it.
+// Catches a reloaded page drawing a blank conversation because a second attach
+// delivered nothing the agent had already said.
 func TestASecondAttachOnALiveConversationReplaysItsEarlierOutput(t *testing.T) {
 	rec := &recorder{}
 	term, state := testTerm(t, rec.emit, t.TempDir(),

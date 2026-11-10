@@ -20,6 +20,9 @@ const ProtocolVersion uint32 = 1
 // ClientHeader carries the id Hello issued on every later call.
 const ClientHeader = "x-qrouton-client"
 
+// SeqHeader names the last seq a new event stream will not carry.
+const SeqHeader = "x-qrouton-seq"
+
 // Build names this binary: the packaged version, or the VCS revision of a dev build.
 func Build(version string) string {
 	if version != "" {

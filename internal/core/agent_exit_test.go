@@ -60,8 +60,8 @@ func TestASupervisorFailingRecordsItsExitAgainstTheSession(t *testing.T) {
 	}
 }
 
-// Catches the exit log keeping less than the last screen: the conversation's
-// tail was once a few KiB, shorter than one screen of long lines.
+// Catches the exit log keeping less than the last screen, which a ring shorter
+// than one screen of long lines would.
 func TestACrashedConversationsExitLogHoldsItsLastScreen(t *testing.T) {
 	root := t.TempDir()
 	boot := newStubBoot("/bin/sh", "-c",

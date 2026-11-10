@@ -2,8 +2,10 @@ package desktop
 
 import (
 	"context"
+	"strconv"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/api/pagejson"
 	"google.golang.org/grpc"
@@ -29,8 +31,14 @@ func (t *translator) subscribe(ctx context.Context) (eventStream, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := stream.Header(); err != nil {
+	header, err := stream.Header()
+	if err != nil {
 		return nil, err
+	}
+	if t.after == 0 {
+		if seq := header.Get(api.SeqHeader); len(seq) == 1 {
+			t.after, _ = strconv.ParseUint(seq[0], 10, 64)
+		}
 	}
 	return stream, nil
 }
@@ -47,18 +55,15 @@ func (t *translator) run(ctx context.Context, stream eventStream) {
 			t.deliver(resp.GetEvent())
 		}
 		for {
-			if ctx.Err() != nil {
+			select {
+			case <-ctx.Done():
 				return
+			case <-time.After(resubscribeDelay):
 			}
 			next, err := t.subscribe(ctx)
 			if err == nil {
 				stream = next
 				break
-			}
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(resubscribeDelay):
 			}
 		}
 	}

@@ -248,7 +248,7 @@ func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	var quit func()
 	opts.hub = api.NewHub()
 	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil), opts.hub)
-	quit = quitter(kernel, r)
+	quit = quitter(kernel.Shutdown, r)
 	t.Cleanup(kernel.Shutdown)
 	return kernel
 }
@@ -285,7 +285,7 @@ func startWorkbench(t *testing.T, r *fakeRenderer, kernel *core.Core, opts Optio
 	stopped := make(chan struct{})
 	go func() {
 		defer close(stopped)
-		done <- run(r, kernel, opts, quitter(kernel, r))
+		done <- run(r, kernel, opts, quitter(kernel.Shutdown, r))
 	}()
 	t.Cleanup(func() {
 		r.Quit()
@@ -579,7 +579,7 @@ func TestAColdTicketIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T)
 	held.Hub = opts.hub
 	var quit func()
 	kernel := core.New(coreOptions(opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil), held)
-	quit = quitter(kernel, r)
+	quit = quitter(kernel.Shutdown, r)
 	t.Cleanup(kernel.Shutdown)
 
 	startWorkbench(t, r, kernel, opts)
@@ -771,7 +771,7 @@ func TestSettingsRelaunchRunsTheSameTeardownClosingTheWindowRuns(t *testing.T) {
 	kernel := testWorkbench(t, r, &opts)
 	reg := kernel.Sessions
 
-	quit := quitter(kernel, r)
+	quit := quitter(kernel.Shutdown, r)
 	settings := &Settings{settings: kernel.Settings}
 
 	done := make(chan error, 1)
@@ -817,7 +817,7 @@ func TestARunWhoseWindowFailsToOpenStopsTheCore(t *testing.T) {
 	r.openErr = errors.New("no display")
 	opts, _ := testOptions(t)
 	kernel := testWorkbench(t, r, &opts)
-	if err := run(r, kernel, opts, quitter(kernel, r)); !errors.Is(err, r.openErr) {
+	if err := run(r, kernel, opts, quitter(kernel.Shutdown, r)); !errors.Is(err, r.openErr) {
 		t.Fatalf("run = %v, want the window's own error", err)
 	}
 	if workbench.Answered(opts.Socket) {
@@ -854,7 +854,7 @@ func TestARunWhoseStartFailsWaitsForThePlacementCheck(t *testing.T) {
 	t.Cleanup(unblock)
 
 	done := make(chan error, 1)
-	go func() { done <- run(r, kernel, opts, quitter(kernel, r)) }()
+	go func() { done <- run(r, kernel, opts, quitter(kernel.Shutdown, r)) }()
 	stopping := make(chan struct{})
 	go func() {
 		defer close(stopping)

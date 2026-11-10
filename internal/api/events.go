@@ -1,6 +1,8 @@
 package api
 
 import (
+	"strconv"
+
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -14,12 +16,12 @@ type eventService struct {
 	hub *Hub
 }
 
-// Subscribe sends its header once the queue is registered, so a client that
-// waits for the header misses nothing published after.
+// Subscribe sends its header, naming the seq it resumes after, once the queue
+// is registered, so a client that waits for the header misses nothing after it.
 func (e *eventService) Subscribe(req *qroutonv1.SubscribeRequest, stream grpc.ServerStreamingServer[qroutonv1.SubscribeResponse]) error {
-	sub, missed, resync := e.hub.subscribe(clientID(stream.Context()), req.GetAfterSeq())
+	sub, missed, resync, now := e.hub.subscribe(clientID(stream.Context()), req.GetAfterSeq())
 	defer e.hub.unsubscribe(sub)
-	if err := stream.SendHeader(metadata.MD{}); err != nil {
+	if err := stream.SendHeader(metadata.Pairs(SeqHeader, strconv.FormatUint(now, 10))); err != nil {
 		return err
 	}
 	if resync != nil {
@@ -50,10 +52,11 @@ func (e *eventService) Subscribe(req *qroutonv1.SubscribeRequest, stream grpc.Se
 }
 
 // coalesce merges the live output already queued behind first for the same
-// terminal, up to coalesceLimit, and hands back the event that stopped it.
+// terminal, up to the size cap, and hands back the event that stopped it.
 // Events are shared between subscribers, so a merge builds a new one.
 func coalesce(first *qroutonv1.Event, queue <-chan *qroutonv1.Event) (event, held *qroutonv1.Event) {
 	event = first
+	var merged *qroutonv1.TerminalOutput
 	for mergeable(event.GetTerminalOutput()) {
 		var next *qroutonv1.Event
 		select {
@@ -66,7 +69,9 @@ func coalesce(first *qroutonv1.Event, queue <-chan *qroutonv1.Event) (event, hel
 			len(a.GetData())+len(b.GetData()) > coalesceLimit {
 			return event, next
 		}
-		merged := proto.Clone(a).(*qroutonv1.TerminalOutput)
+		if merged == nil {
+			merged = proto.Clone(a).(*qroutonv1.TerminalOutput)
+		}
 		merged.Data = append(merged.Data, b.GetData()...)
 		event = &qroutonv1.Event{Seq: next.GetSeq(), Payload: &qroutonv1.Event_TerminalOutput{TerminalOutput: merged}}
 	}
