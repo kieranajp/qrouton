@@ -22,7 +22,7 @@ import (
 func testWindows(t *testing.T) (*Windows, *fakeClient) {
 	t.Helper()
 	r := newFakeClient()
-	w := newWindows(r.Emit, testRegistry(t, t.TempDir()))
+	w := newWindows(emitFunc(r.Emit), testRegistry(t, t.TempDir()))
 	t.Cleanup(w.stopAll)
 	return w, r
 }
@@ -56,12 +56,15 @@ func TestSelectionAndProcessStatusEmitWithoutPersisting(t *testing.T) {
 	owner := reg.Current()
 	emissions := 0
 	var latest Surfaces
-	w := newWindows(func(event string, payload any) {
-		if event == windowsEvent {
+	w := newWindows(emitFunc(func(event string, payload any) {
+		if event == windowsName {
 			emissions++
 			latest = payload.(Surfaces)
 		}
-	}, reg)
+	}),
+
+		reg)
+
 	id, err := w.openWindow(owner, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "dev", Command: []string{"/bin/cat"},
 	})
@@ -393,7 +396,7 @@ func TestViewportIsMarkdownOnlyAndOwnerScoped(t *testing.T) {
 	reg := newSessions()
 	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
 	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
-	w := newWindows(r.Emit, reg)
+	w := newWindows(emitFunc(r.Emit), reg)
 	t.Cleanup(w.stopAll)
 	terminal, err := w.openStructural(alpha, workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Cwd: t.TempDir(), Command: []string{"/bin/cat"},
@@ -474,7 +477,7 @@ func TestCloseOnExitTerminalClosesOnSuccessAndRetainsFailure(t *testing.T) {
 			waitFor(t, "the exit to be reported", func() bool {
 				r.mu.Lock()
 				defer r.mu.Unlock()
-				_, reported := r.events[windowExitEvent+id]
+				_, reported := r.events[windowExitName+id]
 				return reported
 			})
 			if !w.exists(id) {
@@ -517,7 +520,7 @@ func TestStartingAnExistingTerminalReplaysItsRetainedOutput(t *testing.T) {
 		t.Fatalf("remounted PTY size = %dx%d, %v, want 120x36", cols, rows, err)
 	}
 	renderer.mu.Lock()
-	replay, ok := renderer.events[windowDataEvent+id].(Chunk)
+	replay, ok := renderer.events[windowDataName+id].(Chunk)
 	renderer.mu.Unlock()
 	if !ok || !replay.Replay || replay.First {
 		t.Fatalf("remount event = %#v, want a retained replay not marked first", replay)
@@ -685,7 +688,7 @@ func TestSurfacesAnswersEachSessionWithItsOwnWindows(t *testing.T) {
 	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
 	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
 	reg.reveal(alpha)
-	w := newWindows(r.Emit, reg)
+	w := newWindows(emitFunc(r.Emit), reg)
 	t.Cleanup(w.stopAll)
 
 	for _, tc := range []struct {
@@ -809,7 +812,7 @@ func TestReorderRefusesAnUnknownSessionOrAWindowFromAnotherOne(t *testing.T) {
 	alpha := reg.add(filepath.Join(t.TempDir(), "alpha"), nil, nil)
 	beta := reg.add(filepath.Join(t.TempDir(), "beta"), nil, nil)
 	reg.reveal(alpha)
-	w := newWindows(r.Emit, reg)
+	w := newWindows(emitFunc(r.Emit), reg)
 	t.Cleanup(w.stopAll)
 
 	alphaID := openDocuments(t, w, alpha, 1)[0]
@@ -827,11 +830,14 @@ func TestReorderEmitsSurfacesUnlessTheMoveIsANoOp(t *testing.T) {
 	reg := testRegistry(t, t.TempDir())
 	owner := reg.Current()
 	emissions := 0
-	w := newWindows(func(event string, _ any) {
-		if event == windowsEvent {
+	w := newWindows(emitFunc(func(event string, _ any) {
+		if event == windowsName {
 			emissions++
 		}
-	}, reg)
+	}),
+
+		reg)
+
 	t.Cleanup(w.stopAll)
 	ids := openDocuments(t, w, owner, 2)
 	emissions = 0
@@ -886,7 +892,7 @@ func TestTheWindowPayloadsNameTheirSession(t *testing.T) {
 
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	opened, ok := r.events[windowsEvent].(Surfaces)
+	opened, ok := r.events[windowsName].(Surfaces)
 	if !ok {
 		t.Fatalf("no open payload reached the page: %v", r.events)
 	}
@@ -908,11 +914,14 @@ type emittedDiagram struct {
 func diagramDocument(t *testing.T, text string) (*Windows, string, <-chan emittedDiagram) {
 	t.Helper()
 	emitted := make(chan emittedDiagram, 8)
-	w := newWindows(func(event string, payload any) {
+	w := newWindows(emitFunc(func(event string, payload any) {
 		if drawn, ok := payload.(RenderedDiagram); ok {
 			emitted <- emittedDiagram{event: event, drawn: drawn}
 		}
-	}, testRegistry(t, t.TempDir()))
+	}),
+
+		testRegistry(t, t.TempDir()))
+
 	t.Cleanup(w.stopAll)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindDocument, Label: "notes", Format: workbench.FormatMarkdown,
@@ -947,8 +956,8 @@ func TestRenderDiagramsQueuesAMissAndAnswersACacheHitInPlace(t *testing.T) {
 	}
 
 	out := waitForDiagram(t, emitted)
-	if out.event != windowDiagramEvent+id {
-		t.Errorf("event = %q, want %q", out.event, windowDiagramEvent+id)
+	if out.event != windowDiagramName+id {
+		t.Errorf("event = %q, want %q", out.event, windowDiagramName+id)
 	}
 	if out.drawn.Request != 42 || out.drawn.Line != 3 || out.drawn.Error != "" || !strings.HasPrefix(out.drawn.SVG, "<svg") {
 		t.Fatalf("emitted %+v, want the drawn diagram for line 3", out.drawn)
@@ -1018,15 +1027,18 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 	reg := testRegistry(t, root)
 	var mu sync.Mutex
 	pushed := map[string]Document{}
-	w := newWindows(func(event string, payload any) {
-		name, ok := strings.CutPrefix(event, windowContentEvent)
+	w := newWindows(emitFunc(func(event string, payload any) {
+		name, ok := strings.CutPrefix(event, windowContentName)
 		if !ok {
 			return
 		}
 		mu.Lock()
 		defer mu.Unlock()
 		pushed[name] = payload.(Document)
-	}, reg)
+	}),
+
+		reg)
+
 	t.Cleanup(w.stopAll)
 
 	const source = "P001.md"
@@ -1155,7 +1167,7 @@ func TestRescanPushesChangedDocumentsAndLeavesTheViewportAlone(t *testing.T) {
 // everything that serves that text has to read it under the same lock.
 func TestRescanCannotRaceTheReadsOfTheTextItRewrites(t *testing.T) {
 	root := t.TempDir()
-	w := newWindows(func(string, any) {}, testRegistry(t, root))
+	w := newWindows(emitFunc(func(string, any) {}), testRegistry(t, root))
 	t.Cleanup(w.stopAll)
 	const source = "P001.md"
 	path := filepath.Join(root, source)
@@ -1320,7 +1332,7 @@ func TestOverviewWindowOpensInPlaceOfAShell(t *testing.T) {
 func lastReplay(t *testing.T, r *fakeClient, id string) (string, bool) {
 	t.Helper()
 	r.mu.Lock()
-	chunk, ok := r.events[windowDataEvent+id].(Chunk)
+	chunk, ok := r.events[windowDataName+id].(Chunk)
 	r.mu.Unlock()
 	if !ok || !chunk.Replay {
 		return "", false
@@ -1379,7 +1391,7 @@ func TestMountingALaunchedTerminalAttachesToItsProcess(t *testing.T) {
 func lastChunk(r *fakeClient, id string) Chunk {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	chunk, _ := r.events[windowDataEvent+id].(Chunk)
+	chunk, _ := r.events[windowDataName+id].(Chunk)
 	return chunk
 }
 
@@ -1425,7 +1437,7 @@ func TestMountingAFailedTerminalReplaysItsOutput(t *testing.T) {
 	waitFor(t, "the exit to be reported", func() bool {
 		renderer.mu.Lock()
 		defer renderer.mu.Unlock()
-		_, reported := renderer.events[windowExitEvent+id]
+		_, reported := renderer.events[windowExitName+id]
 		return reported
 	})
 
@@ -1554,11 +1566,11 @@ func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *t
 	entered, release := make(chan struct{}), make(chan struct{})
 	var w *Windows
 	var terminal *terminalContent
-	w = newWindows(func(event string, payload any) {
-		if !strings.HasPrefix(event, windowExitEvent) {
+	w = newWindows(emitFunc(func(event string, payload any) {
+		if !strings.HasPrefix(event, windowExitName) {
 			return
 		}
-		id := strings.TrimPrefix(event, windowExitEvent)
+		id := strings.TrimPrefix(event, windowExitName)
 		if terminal.stream.TryLock() {
 			terminal.stream.Unlock()
 			t.Error("live exit escaped terminal stream ordering")
@@ -1573,7 +1585,10 @@ func TestTerminalCompletionCommitsBeforeLiveExitAndSerializesReadsAndReplay(t *t
 		}
 		close(entered)
 		<-release
-	}, reg)
+	}),
+
+		reg)
+
 	t.Cleanup(w.stopAll)
 	id, err := w.openWindow(w.shown(), workbench.WindowOptions{
 		Kind: workbench.KindTerminal, Label: "ordered", Command: []string{"/bin/cat"},

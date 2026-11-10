@@ -1,9 +1,132 @@
 {
+  "AgentNode": {
+    "description": "",
+    "documents": [],
+    "files": [],
+    "finished": null,
+    "id": "",
+    "lastMessage": "",
+    "parent": "",
+    "placed": false,
+    "reason": "",
+    "root": false,
+    "run": "",
+    "stage": "",
+    "started": null,
+    "state": "",
+    "target": "",
+    "taskName": "",
+    "tokens": 0,
+    "tool": "",
+    "toolCount": 0,
+    "tools": [],
+    "type": ""
+  },
+  "AgentSummary": {
+    "active": 0,
+    "attention": "",
+    "coverage": "",
+    "reason": "",
+    "running": false,
+    "stage": "",
+    "state": "",
+    "tool": "",
+    "tools": false
+  },
+  "AgentToolEvent": {
+    "abandoned": false,
+    "end": null,
+    "failed": false,
+    "start": null,
+    "target": "",
+    "tool": ""
+  },
+  "AgentTree": {
+    "coverage": "",
+    "nodes": [],
+    "provider": "",
+    "providerLabel": "",
+    "tools": false
+  },
+  "AgentTreeChanged": {
+    "slug": "",
+    "tree": null
+  },
+  "AssemblyProgress": {
+    "error": "",
+    "percent": 0,
+    "phase": "",
+    "repo": "",
+    "role": "",
+    "session": "",
+    "status": "",
+    "step": ""
+  },
+  "AssemblyRequested": {
+    "ticket": ""
+  },
   "CancelPullRequest": {},
   "CancelPullResponse": {},
   "CheckRequest": {},
   "CheckResponse": {
     "status": null
+  },
+  "ChromeFields": {
+    "activity": "",
+    "branch": "",
+    "bugReportID": "",
+    "bugReportLabel": "",
+    "bugReportStatus": "",
+    "documents": [],
+    "identity": "",
+    "mode": "",
+    "picker": false,
+    "placing": false,
+    "pullRequests": null,
+    "repos": [],
+    "repositoryDocuments": [],
+    "root": "",
+    "sessionDigest": null,
+    "sessionSummary": null,
+    "sessions": [],
+    "slug": "",
+    "stages": null,
+    "stagesLive": null,
+    "stickers": [],
+    "terminal": "",
+    "welcoming": false
+  },
+  "Document": {
+    "assetToken": "",
+    "assets": [],
+    "currentIndex": 0,
+    "deck": false,
+    "format": "",
+    "hash": "",
+    "line": 0,
+    "path": "",
+    "revision": 0,
+    "source": "",
+    "tells": [],
+    "text": "",
+    "to": 0,
+    "viewportEpoch": 0
+  },
+  "DocumentAsset": {
+    "kind": "",
+    "path": "",
+    "source": "",
+    "url": ""
+  },
+  "Event": {
+    "seq": "0"
+  },
+  "GitHubPullRequest": {
+    "number": 0,
+    "repo": "",
+    "state": "",
+    "title": "",
+    "url": ""
   },
   "HelloRequest": {
     "build": "",
@@ -25,6 +148,135 @@
     "state": "",
     "total": 0
   },
+  "OrgsChanged": {
+    "orgs": []
+  },
   "PullRequest": {},
-  "PullResponse": {}
+  "PullRequestList": {
+    "items": [],
+    "signedOut": false
+  },
+  "PullResponse": {},
+  "RenderedDiagram": {
+    "error": "",
+    "line": 0,
+    "request": 0,
+    "svg": ""
+  },
+  "RepoStat": {
+    "commits": 0,
+    "deletions": 0,
+    "insertions": 0,
+    "measured": false,
+    "name": "",
+    "path": "",
+    "role": ""
+  },
+  "Repository": {
+    "default_branch": "",
+    "name": "",
+    "org": "",
+    "pushed_at": null,
+    "ssh_url": ""
+  },
+  "RepositoryDocuments": {
+    "documents": [],
+    "name": ""
+  },
+  "RepositoryRefresh": {
+    "error": "",
+    "generation": 0,
+    "owner": "",
+    "repos": [],
+    "state": ""
+  },
+  "Resync": {},
+  "SessionDigest": {
+    "at": "",
+    "text": ""
+  },
+  "SessionDocument": {
+    "at": null,
+    "id": "",
+    "kind": "",
+    "name": "",
+    "path": ""
+  },
+  "SessionRepo": {
+    "name": "",
+    "role": ""
+  },
+  "SessionRow": {
+    "activity": "",
+    "initials": "",
+    "mode": "",
+    "name": "",
+    "opened": null,
+    "repos": [],
+    "slug": "",
+    "sticker": "",
+    "summary": null,
+    "terminal": "",
+    "unseen": 0
+  },
+  "SessionSummary": {
+    "at": "",
+    "stage": "",
+    "text": ""
+  },
+  "Stages": {
+    "implement": false,
+    "plan": false,
+    "research": false
+  },
+  "Sticker": {
+    "colour": "",
+    "id": "",
+    "label": "",
+    "symbol": ""
+  },
+  "SubscribeRequest": {
+    "afterSeq": "0"
+  },
+  "SubscribeResponse": {
+    "event": null
+  },
+  "Surfaces": {
+    "selected": "",
+    "session": "",
+    "tabs": []
+  },
+  "Tab": {
+    "artifact": "",
+    "badge": "",
+    "icon": "",
+    "id": "",
+    "kind": "",
+    "label": "",
+    "pinned": false,
+    "status": ""
+  },
+  "TerminalExit": {
+    "code": 0,
+    "kind": "TERMINAL_KIND_UNSPECIFIED",
+    "terminalId": ""
+  },
+  "TerminalOutput": {
+    "encoded": "",
+    "first": false,
+    "kind": "TERMINAL_KIND_UNSPECIFIED",
+    "replay": false,
+    "terminalId": ""
+  },
+  "UIScaleChanged": {
+    "scale": 0
+  },
+  "WindowContent": {
+    "document": null,
+    "id": ""
+  },
+  "WindowDiagram": {
+    "diagram": null,
+    "id": ""
+  }
 }

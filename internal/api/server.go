@@ -26,14 +26,15 @@ type InProcess struct {
 	Core *core.Core
 	Conn *grpc.ClientConn
 
+	hub    *Hub
 	server *grpc.Server
 	served chan struct{}
 	once   sync.Once
 }
 
-// Start starts the core on the process socket and serves it. A core that fails
-// to start is shut down before Start returns.
-func Start(kernel *core.Core, socket, build string) (*InProcess, error) {
+// Start starts the core on the process socket and serves it, with hub as the
+// core's Events. A core that fails to start is shut down before Start returns.
+func Start(kernel *core.Core, hub *Hub, socket, build string) (*InProcess, error) {
 	if err := kernel.Start(socket); err != nil {
 		kernel.Shutdown()
 		return nil, err
@@ -48,10 +49,11 @@ func Start(kernel *core.Core, socket, build string) (*InProcess, error) {
 		grpc.StreamInterceptor(ids.stream),
 	)
 	qroutonv1.RegisterWorkbenchServiceServer(server, &workbenchService{build: build, clients: ids})
+	qroutonv1.RegisterEventServiceServer(server, &eventService{hub: hub})
 	if kernel.Ollama != nil {
 		qroutonv1.RegisterOllamaServiceServer(server, &ollamaService{ollama: kernel.Ollama})
 	}
-	p := &InProcess{Core: kernel, server: server, served: make(chan struct{})}
+	p := &InProcess{Core: kernel, hub: hub, server: server, served: make(chan struct{})}
 	go func() {
 		defer close(p.served)
 		_ = server.Serve(listener)

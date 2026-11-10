@@ -25,7 +25,7 @@ func (r *recorder) emit(event string, payload any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.events = append(r.events, event)
-	if strings.HasPrefix(event, ptyDataEvent) {
+	if strings.HasPrefix(event, ptyDataName) {
 		chunk, ok := payload.(Chunk)
 		if !ok {
 			return
@@ -57,11 +57,11 @@ func (r *recorder) saw(event string) bool {
 
 // testTerm is a conversation for one registered session, and the session it
 // addresses.
-func testTerm(t *testing.T, emit Emitter, root string, argv, env []string) (*Term, *SessionState) {
+func testTerm(t *testing.T, emit emitFunc, root string, argv, env []string) (*Term, *SessionState) {
 	t.Helper()
 	reg := newSessions()
 	t.Cleanup(reg.stopAll)
-	return newTerm(reg, emit), reg.add(root, argv, WithTerminalEnv(env))
+	return newTerm(reg, emitFunc(emit)), reg.add(root, argv, WithTerminalEnv(env))
 }
 
 // waitCeiling is not a latency any test here asserts: a child answers in
@@ -100,7 +100,7 @@ func TestTermPumpsChildOutputToThePage(t *testing.T) {
 	if err := term.Write(state.terminal, base64.StdEncoding.EncodeToString([]byte("\n"))); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitEvent + state.terminal) })
+	waitFor(t, "the exit event", func() bool { return rec.saw(ptyExitName + state.terminal) })
 }
 
 func TestTermTellsTheChildWhatToRenderFor(t *testing.T) {
@@ -146,12 +146,12 @@ func TestTheConversationsStreamsAreKeyedByTerminal(t *testing.T) {
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "the terminal's data event", func() bool { return rec.saw(ptyDataEvent + state.terminal) })
-	waitFor(t, "the terminal's exit event", func() bool { return rec.saw(ptyExitEvent + state.terminal) })
+	waitFor(t, "the terminal's data event", func() bool { return rec.saw(ptyDataName + state.terminal) })
+	waitFor(t, "the terminal's exit event", func() bool { return rec.saw(ptyExitName + state.terminal) })
 	if !strings.Contains(rec.output(), "keyed") {
 		t.Fatalf("the keyed data event carried %q", rec.output())
 	}
-	for _, unkeyed := range []string{"pty:data", "pty:exit", ptyDataEvent, ptyExitEvent} {
+	for _, unkeyed := range []string{"pty:data", "pty:exit", ptyDataName, ptyExitName} {
 		if rec.saw(unkeyed) {
 			t.Fatalf("%q was emitted, which names no terminal and reaches no page", unkeyed)
 		}
@@ -193,7 +193,7 @@ func TestTermStartsOneProcessPerTerminal(t *testing.T) {
 	t.Cleanup(reg.stopAll)
 	one := reg.add(t.TempDir(), []string{"/bin/cat"}, os.Environ())
 	two := reg.add(t.TempDir(), []string{"/bin/cat"}, os.Environ())
-	term := newTerm(reg, rec.emit)
+	term := newTerm(reg, emitFunc(rec.emit))
 
 	if one.terminal == two.terminal {
 		t.Fatalf("both sessions were minted %q", one.terminal)
@@ -268,7 +268,7 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 	var mu sync.Mutex
 	var agentPayload any
 	term, state := testTerm(t, func(event string, payload any) {
-		if strings.HasPrefix(event, ptyDataEvent) {
+		if strings.HasPrefix(event, ptyDataName) {
 			mu.Lock()
 			agentPayload = payload
 			mu.Unlock()
@@ -305,7 +305,7 @@ func TestBothTerminalKindsShareOneChunkTransport(t *testing.T) {
 	waitFor(t, "the tab terminal's live output", func() bool {
 		renderer.mu.Lock()
 		defer renderer.mu.Unlock()
-		chunk, ok := renderer.events[windowDataEvent+id].(Chunk)
+		chunk, ok := renderer.events[windowDataName+id].(Chunk)
 		return ok && !chunk.Replay
 	})
 }

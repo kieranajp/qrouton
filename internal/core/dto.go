@@ -9,10 +9,10 @@ import (
 // no tags, so neither is emittable as written: an error marshals to {} and an
 // untagged field reaches the page under its Go name.
 
-// refreshEvent is one owner's place in a repository refresh. Every event carries
-// the generation it belongs to, because Emit broadcasts process-wide and a
+// RefreshEvent is one owner's place in a repository refresh. Every event carries
+// the generation it belongs to, because events broadcast process-wide and a
 // superseded refresh's events are still in flight.
-type refreshEvent struct {
+type RefreshEvent struct {
 	Generation int           `json:"generation"`
 	Owner      string        `json:"owner"`
 	State      string        `json:"state"`
@@ -20,8 +20,8 @@ type refreshEvent struct {
 	Error      string        `json:"error,omitempty"`
 }
 
-func newRefreshEvent(generation int, msg github.RefreshMsg) refreshEvent {
-	return refreshEvent{
+func newRefreshEvent(generation int, msg github.RefreshMsg) RefreshEvent {
+	return RefreshEvent{
 		Generation: generation,
 		Owner:      msg.Owner,
 		State:      string(msg.State),
@@ -39,9 +39,9 @@ type BranchList struct {
 	Error    string   `json:"error,omitempty"`
 }
 
-// progressEvent is one step of one session's assembly, named by the slug it
+// ProgressEvent is one step of one session's assembly, named by the slug it
 // belongs to so a page ignores another session's.
-type progressEvent struct {
+type ProgressEvent struct {
 	Session string `json:"session"`
 	Step    string `json:"step"`
 	Status  string `json:"status"`
@@ -52,8 +52,8 @@ type progressEvent struct {
 	Error   string `json:"error,omitempty"`
 }
 
-func newProgressEvent(slug string, p session.Progress) progressEvent {
-	event := progressEvent{
+func newProgressEvent(slug string, p session.Progress) ProgressEvent {
+	event := ProgressEvent{
 		Session: slug,
 		Step:    string(p.Step),
 		Status:  string(p.Status),

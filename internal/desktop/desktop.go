@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/vault"
@@ -59,6 +60,8 @@ type Options struct {
 	placement *core.Placement
 	// bind registers the adapters that call the core through the in-process server.
 	bind func(*inProcess)
+	// hub is the core's Events, served to the translator.
+	hub *api.Hub
 }
 
 // Run opens the workbench and blocks until the window closes. Every session it
@@ -97,7 +100,8 @@ func Run(opts Options) error {
 	var quit func()
 	options := coreOptions(opts, func() { quit() })
 	options.Vault, options.Ollama = core.OpenVault(opts.Config), vault.NewOllama()
-	kernel = core.New(options, client)
+	opts.hub = api.NewHub()
+	kernel = core.New(options, client, opts.hub)
 	quit = quitter(kernel, r)
 	r.register(application.NewService(&BugReports{reports: kernel.BugReports}))
 	r.register(application.NewService(&Term{term: kernel.Term}))
@@ -176,7 +180,7 @@ func run(r renderer, kernel *core.Core, opts Options, quit func()) error {
 		opts.placement.CheckInBackground()
 	}
 	// A core that fails to start is shut down first, which waits for the placement check.
-	in, err := startInProcess(kernel, opts.Socket, opts.Version)
+	in, err := startInProcess(kernel, opts.hub, opts.Socket, opts.Version, r.Emit)
 	if err != nil {
 		return err
 	}

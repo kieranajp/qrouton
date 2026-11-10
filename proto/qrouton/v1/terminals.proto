@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+enum TerminalKind {
+  TERMINAL_KIND_UNSPECIFIED = 0;
+  TERMINAL_KIND_CONVERSATION = 1;
+  TERMINAL_KIND_TAB = 2;
+}
+
+// TerminalOutput is one stretch of a terminal's output.
+message TerminalOutput {
+  string terminal_id = 1;
+  TerminalKind kind = 2;
+  bytes data = 3 [json_name = "encoded"];
+  bool replay = 4;
+  bool first = 5;
+  optional int32 exit_code = 6 [json_name = "exit_code"];
+}
+
+message TerminalExit {
+  string terminal_id = 1;
+  TerminalKind kind = 2;
+  int32 code = 3;
+}

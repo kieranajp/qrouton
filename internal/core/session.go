@@ -115,7 +115,7 @@ func (s *SessionState) admissionClosed() bool {
 
 // start launches the supervisor under a PTY sized to the terminal displaying it.
 // The page calls it on load, so a reload must not fork a second agent.
-func (s *SessionState) start(emit Emitter, exited func(*SessionState, int), cols, rows int) error {
+func (s *SessionState) start(events Events, exited func(*SessionState, int), cols, rows int) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.stopped || s.process != nil {
@@ -132,14 +132,14 @@ func (s *SessionState) start(emit Emitter, exited func(*SessionState, int), cols
 			if s.tail != nil {
 				s.tail.Write(b)
 			}
-			emit(ptyDataEvent+s.terminal, EncodeChunk(b))
+			events.TerminalOutput(TerminalConversation, s.terminal, EncodeChunk(b))
 		},
-		func(code int) { s.childExited(emit, exited, code) },
+		func(code int) { s.childExited(events, exited, code) },
 	)
 	return nil
 }
 
-func (s *SessionState) childExited(emit Emitter, exited func(*SessionState, int), code int) {
+func (s *SessionState) childExited(events Events, exited func(*SessionState, int), code int) {
 	s.mu.Lock()
 	stopped := s.stopped
 	s.mu.Unlock()
@@ -147,7 +147,7 @@ func (s *SessionState) childExited(emit Emitter, exited func(*SessionState, int)
 		return
 	}
 	s.recordExit(code)
-	emit(ptyExitEvent+s.terminal, code)
+	events.TerminalExit(TerminalConversation, s.terminal, code)
 	if exited != nil {
 		exited(s, code)
 	}

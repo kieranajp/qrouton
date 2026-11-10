@@ -41,8 +41,6 @@ const (
 // supervisor signals; the two bound different processes and need not agree.
 const terminateGrace = 3 * time.Second
 
-const ollamaEvent = "ollama:status"
-
 const (
 	ollamaStateReady       = "ready"
 	ollamaStateMissing     = "missing"
@@ -81,26 +79,6 @@ const (
 	windowIDFormat = "window-%d"
 
 	terminalIDFormat = "term-%d"
-)
-
-// Events the Go side emits at the pages; a window's or a conversation's own id
-// is appended so each page hears only its own stream.
-const (
-	ptyDataEvent = "pty:data:"
-	ptyExitEvent = "pty:exit:"
-	chromeEvent  = "chrome:update"
-	// agentTreeEvent carries the shown session's whole agent tree, named by slug.
-	agentTreeEvent = "agents:tree:"
-
-	windowDataEvent    = "window:data:"
-	windowExitEvent    = "window:exit:"
-	windowDiagramEvent = "window:diagram:"
-	windowContentEvent = "window:content:"
-	windowsEvent       = "window:open"
-
-	reposRefreshEvent      = "repos:refresh"
-	assemblyProgressEvent  = "assembly:progress"
-	assemblyRequestedEvent = "assembly:requested"
 )
 
 // A tab may only stand in for a window if it reports its process's state.
@@ -206,9 +184,6 @@ const (
 	placementRelaunchNote = "A saved change to your folders is waiting for a relaunch, so this check uses the routing sessions are created with today."
 
 	noOwnersError = "add at least one organisation or username to search"
-
-	orgsChangedEvent = "orgs:changed"
-	uiScaleEvent     = "ui:scale"
 )
 
 // A Save refusal names the settings field it belongs under before the sentence.

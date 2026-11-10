@@ -37,7 +37,7 @@ func TestChromeKeepsAttentionActiveAgentsAndUnseenIndependent(t *testing.T) {
 	shown.agents.begin(agentProviderCodex, 2)
 
 	renderer := newFakeClient()
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{"background": 3}, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{"background": 3}, emitFunc(renderer.Emit).Chrome)
 	fields := pushedChrome(t, renderer)
 	rows := map[string]status.SessionRow{}
 	for _, row := range fields.Sessions {
@@ -75,14 +75,14 @@ func TestSelectedRepoStatsFollowTheSelectedSlug(t *testing.T) {
 	reference := status.RepoStat{Name: "lifesum/contracts", Role: "reference"}
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{alphaRoot: {reference}}, nil, nil, emitFunc(renderer.Emit).Chrome)
 	fields := pushedChrome(t, renderer)
 	if len(fields.Repos) != 1 || fields.Repos[0] != reference {
 		t.Fatalf("selected reference stats = %+v", fields.Repos)
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, nil, emitFunc(renderer.Emit).Chrome)
 	if fields = pushedChrome(t, renderer); len(fields.Repos) != 0 {
 		t.Fatalf("beta inherited alpha's stats: %+v", fields.Repos)
 	}
@@ -103,13 +103,13 @@ func TestCachedPullRequestsReachOnlyTheShownSession(t *testing.T) {
 	}}
 
 	reg.reveal(alpha)
-	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, pulls, nil, emitFunc(renderer.Emit).Chrome)
 	if got := pushedChrome(t, renderer).PullRequests; len(got.Items) != 1 || got.Items[0] != row {
 		t.Fatalf("alpha pull requests = %+v", got)
 	}
 
 	reg.reveal(beta)
-	pushChrome(reg, root, nil, nil, pulls, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, pulls, nil, emitFunc(renderer.Emit).Chrome)
 	if got := pushedChrome(t, renderer).PullRequests; got.Items == nil || len(got.Items) != 0 || got.SignedOut {
 		t.Fatalf("beta inherited alpha's pull requests: %+v", got)
 	}
@@ -136,17 +136,19 @@ func TestPullRequestsFetchOnArrivalAndFollowASwitchMadeMidFetch(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	defer close(release)
-	go watch(ctx, reg, root, nil, func(event string, payload any) {
-		if event == chromeEvent {
+	go watch(ctx, reg, root, nil, emitFunc(func(event string, payload any) {
+		if event == chromeName {
 			select {
 			case updates <- payload.(status.Fields):
 			default:
 			}
 		}
-	}, time.Hour, time.Hour, time.Hour, unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, false },
-	}, fetch)
+	}).Chrome,
+
+		time.Hour, time.Hour, time.Hour, unseenCounts{
+			all: func(string) map[string]int { return map[string]int{} },
+			in:  func(string) (int, bool) { return 0, false },
+		}, fetch)
 
 	waitAsked := func(want string) {
 		t.Helper()
@@ -205,10 +207,11 @@ func pullWatch(t *testing.T) (reg *Sessions, alphaRoot, betaRoot string, beta *S
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	t.Cleanup(func() { close(release) })
-	go watch(ctx, reg, root, nil, func(string, any) {}, time.Hour, time.Hour, time.Hour, unseenCounts{
+	go watch(ctx, reg, root, nil, emitFunc(func(string, any) {}).Chrome, time.Hour, time.Hour, time.Hour, unseenCounts{
 		all: func(string) map[string]int { return map[string]int{} },
 		in:  func(string) (int, bool) { return 0, false },
 	}, fetch)
+
 	return reg, alphaRoot, betaRoot, beta, asked, release
 }
 
@@ -286,7 +289,7 @@ func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 	reg := testRegistry(t, dir)
 	renderer := newFakeClient()
 
-	pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, nil, nil, nil, nil, emitFunc(renderer.Emit).Chrome)
 	got := pushedChrome(t, renderer).Stickers
 	if len(got) != 4 || got[0] != (status.Sticker{ID: "star", Colour: "blue", Symbol: "star", Label: "Important"}) ||
 		got[3] != (status.Sticker{ID: "exclamation", Colour: "red", Symbol: "exclamation", Label: "Has bugs"}) {
@@ -299,7 +302,7 @@ func TestChromePublishesDefaultAndCustomStickersAndRefreshedRows(t *testing.T) {
 		t.Fatal(err)
 	}
 	custom := []config.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}
-	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, nil, renderer.Emit)
+	pushChrome(reg, root, &config.Config{Stickers: &custom}, nil, nil, nil, emitFunc(renderer.Emit).Chrome)
 	fields := pushedChrome(t, renderer)
 	if want := []status.Sticker{{ID: "a1b2c3d4", Colour: "pink", Symbol: "heart", Label: "Ship it"}}; !reflect.DeepEqual(fields.Stickers, want) {
 		t.Fatalf("custom stickers = %#v", fields.Stickers)
@@ -330,7 +333,7 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 	}()
 	close(start)
 	for range 1000 {
-		pushChrome(newSessions(), root, cfg, nil, nil, nil, func(_ string, payload any) {
+		pushChrome(newSessions(), root, cfg, nil, nil, nil, emitFunc(func(_ string, payload any) {
 			fields := payload.(status.Fields)
 			switch fields.Stickers[0].Label {
 			case "first":
@@ -344,7 +347,8 @@ func TestChromeReadsOneLiveConfigGenerationDuringReplacement(t *testing.T) {
 			default:
 				t.Errorf("chrome published unknown labels: %+v", fields.Stickers)
 			}
-		})
+		}).Chrome)
+
 	}
 	<-done
 }
@@ -397,14 +401,16 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 	updates := make(chan status.Fields, 8)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go watch(ctx, reg, root, nil, func(event string, payload any) {
-		if event == chromeEvent {
+	go watch(ctx, reg, root, nil, emitFunc(func(event string, payload any) {
+		if event == chromeName {
 			updates <- payload.(status.Fields)
 		}
-	}, time.Hour, time.Hour, time.Hour, unseenCounts{
-		all: func(string) map[string]int { return map[string]int{} },
-		in:  func(string) (int, bool) { return 0, false },
-	}, noPulls)
+	}).Chrome,
+
+		time.Hour, time.Hour, time.Hour, unseenCounts{
+			all: func(string) map[string]int { return map[string]int{} },
+			in:  func(string) (int, bool) { return 0, false },
+		}, noPulls)
 
 	for pushes := 0; pushes < 3; pushes++ {
 		select {
@@ -434,30 +440,20 @@ func TestRepositoryChangeImmediatelyReplacesCachedMeasurementsWithManifestRows(t
 	}
 }
 
-// Chrome sits on the Emitter seam, so a payload it does not recognise has to
-// reach the page rather than take the workbench down.
-func TestChromeForwardsPayloadsThatAreNotChromeState(t *testing.T) {
+func TestChromePublishesFieldsAsOneChromeEvent(t *testing.T) {
 	var events []string
-	var payloads []any
-	chrome := newChrome(func(event string, payload any) {
+	chrome := newChrome(emitFunc(func(event string, _ any) {
 		events = append(events, event)
-		payloads = append(payloads, payload)
-	})
-
-	foreign := windowDataEvent + "w1"
-	chrome.publish(foreign, "cGluZw==")
-	if len(events) != 1 || events[0] != foreign || payloads[0] != "cGluZw==" {
-		t.Fatalf("forwarded events = %v, payloads = %v", events, payloads)
-	}
+	}))
 	if snapshot := chrome.Snapshot(); snapshot.Activity != "" || len(snapshot.Sessions) != 0 {
-		t.Fatalf("a foreign payload changed the stored chrome: %+v", snapshot)
+		t.Fatalf("a fresh chrome is not empty: %+v", snapshot)
 	}
 
 	fields := status.EmptyFields()
 	fields.Activity = "working"
 	chrome.publishFields(fields)
 	chrome.publishFields(fields)
-	if len(events) != 2 || events[1] != chromeEvent {
+	if len(events) != 1 || events[0] != chromeName {
 		t.Fatalf("typed publishes = %v, want one chrome event", events)
 	}
 	if chrome.Snapshot().Activity != "working" {
@@ -488,7 +484,7 @@ func TestRailRowAndAgentTreeAgreeOnOneSessionsActivity(t *testing.T) {
 	} {
 		step.poke()
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, nil, nil, nil, renderer.Emit)
+		pushChrome(reg, root, nil, nil, nil, nil, emitFunc(renderer.Emit).Chrome)
 		fields := pushedChrome(t, renderer)
 		if fields.Activity != step.rail {
 			t.Fatalf("%s: chrome activity = %q, want %q", step.name, fields.Activity, step.rail)
@@ -523,7 +519,7 @@ func TestChromeStagesLiveFollowsTheResearchLead(t *testing.T) {
 	reg.reveal(shown)
 	live := func() status.Stages {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, emitFunc(renderer.Emit).Chrome)
 		return pushedChrome(t, renderer).StagesLive
 	}
 	lead := func(hook string) workbench.AgentEventRequest {
@@ -564,7 +560,7 @@ func TestChromeRowStageFollowsABackgroundSessionsLead(t *testing.T) {
 	reg.reveal(shown)
 	stage := func() string {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, emitFunc(renderer.Emit).Chrome)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary.Stage
@@ -600,7 +596,7 @@ func TestAgentSummaryCarriesABackgroundSessionsHeadline(t *testing.T) {
 	reg.reveal(shown)
 	row := func() status.AgentSummary {
 		renderer := newFakeClient()
-		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, renderer.Emit)
+		pushChrome(reg, root, nil, map[string][]status.RepoStat{}, nil, map[string]int{}, emitFunc(renderer.Emit).Chrome)
 		for _, r := range pushedChrome(t, renderer).Sessions {
 			if r.Slug == "background" {
 				return r.Summary
@@ -634,11 +630,11 @@ func TestWelcomingHidesThePlacementOverlay(t *testing.T) {
 	reg := newSessions()
 	reg.SetPlacing(true)
 	var fields status.Fields
-	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root}, nil, nil, nil, emitFunc(func(_ string, payload any) { fields = payload.(status.Fields) }).Chrome)
 	if !fields.Welcoming || fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}
-	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, nil, func(_ string, payload any) { fields = payload.(status.Fields) })
+	pushChrome(reg, root, &config.Config{Root: root, Welcomed: true}, nil, nil, nil, emitFunc(func(_ string, payload any) { fields = payload.(status.Fields) }).Chrome)
 	if fields.Welcoming || !fields.Placing {
 		t.Fatalf("welcoming %v, placing %v", fields.Welcoming, fields.Placing)
 	}

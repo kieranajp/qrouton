@@ -116,11 +116,12 @@ func pickerWorkbench(t *testing.T) (*Sessions, string, string) {
 func chromeOf(t *testing.T, reg *Sessions) status.Fields {
 	t.Helper()
 	var fields status.Fields
-	pushChrome(reg, "", nil, map[string][]status.RepoStat{}, nil, map[string]int{},
+	pushChrome(reg, "", nil, map[string][]status.RepoStat{}, nil, map[string]int{}, emitFunc(
 		func(event string, payload any) {
-			if event == chromeEvent {
+			if event == chromeName {
 				fields = payload.(status.Fields)
 			}
-		})
+		}).Chrome)
+
 	return fields
 }

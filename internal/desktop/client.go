@@ -22,8 +22,6 @@ func newLocalClient(r renderer, launcher Launcher, choose func() (string, error)
 	return &localClient{r: r, launcher: launcher, choose: choose}
 }
 
-func (c *localClient) Emit(event string, payload any) { c.r.Emit(event, payload) }
-
 func (c *localClient) Focused() bool { return c.r.Focused(mainWindowName) }
 
 func (c *localClient) Raise() { c.r.Focus(mainWindowName) }

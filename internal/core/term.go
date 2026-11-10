@@ -5,13 +5,13 @@ package core
 // session's agent supervisor, so its stdio is the PTY that runner inherits.
 type Term struct {
 	sessions *Sessions
-	emit     Emitter
+	events   Events
 
 	exited func(state *SessionState, code int)
 }
 
-func newTerm(reg *Sessions, emit Emitter) *Term {
-	return &Term{sessions: reg, emit: emit}
+func newTerm(reg *Sessions, events Events) *Term {
+	return &Term{sessions: reg, events: events}
 }
 
 // whenChildExits registers what happens once a conversation's process ends. Set
@@ -23,7 +23,7 @@ func (t *Term) Start(id string, cols, rows int) error {
 	if !ok {
 		return noSuchTerminal(id)
 	}
-	return state.start(t.emit, t.exited, cols, rows)
+	return state.start(t.events, t.exited, cols, rows)
 }
 
 func (t *Term) Write(id, encoded string) error {

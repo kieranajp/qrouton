@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
 	"github.com/kieranajp/qrouton/internal/core"
@@ -41,8 +42,6 @@ type fakeRenderer struct {
 	once    sync.Once
 	// atQuit runs as the application is told to quit, before the event loop ends.
 	atQuit func()
-	// atEmit runs before each broadcast is recorded, outside the lock.
-	atEmit func(event string)
 	// openErr is what every Open answers, once set.
 	openErr error
 }
@@ -86,9 +85,6 @@ func (f *fakeRenderer) Close(name string) {
 }
 
 func (f *fakeRenderer) Emit(event string, payload any) {
-	if f.atEmit != nil {
-		f.atEmit(event)
-	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.events[event] = payload
@@ -250,10 +246,27 @@ func testOptions(t *testing.T) (Options, *stubBoot) {
 func testWorkbench(t *testing.T, r *fakeRenderer, opts *Options) *core.Core {
 	t.Helper()
 	var quit func()
-	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil))
+	opts.hub = api.NewHub()
+	kernel := core.New(coreOptions(*opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil), opts.hub)
 	quit = quitter(kernel, r)
 	t.Cleanup(kernel.Shutdown)
 	return kernel
+}
+
+// translate serves kernel in process and carries its events to r, as run does.
+func translate(t *testing.T, kernel *core.Core, opts *Options, r *fakeRenderer) *inProcess {
+	t.Helper()
+	socket, err := workbench.NewSocketPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(socket) })
+	in, err := startInProcess(kernel, opts.hub, socket, "", r.Emit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(in.Close)
+	return in
 }
 
 // startWorkbench runs the workbench and stops it before the temporary root goes:
@@ -535,32 +548,44 @@ func TestAColdTicketIsPendingBeforeTheWindowOpens(t *testing.T) {
 	}
 }
 
+// heldOffer holds the core inside the offer of a cold ticket, before run can
+// publish the process endpoint.
+type heldOffer struct {
+	*api.Hub
+	offered, release chan struct{}
+}
+
+func (h *heldOffer) AssemblyRequested(ticket string) {
+	close(h.offered)
+	<-h.release
+	h.Hub.AssemblyRequested(ticket)
+}
+
 func TestAColdTicketIsInstalledBeforeTheProcessEndpointIsPublished(t *testing.T) {
 	r := newFakeRenderer()
 	opts, _ := testOptions(t)
 	opts.SessionRoot = ""
 	opts.Ticket = "https://linear.app/issue/LIF-2841"
 	opts.Config = &config.Config{Root: opts.Root}
-	offered := make(chan struct{})
-	release := make(chan struct{})
-	r.atEmit = func(event string) {
-		if event != "assembly:requested" {
-			return
-		}
-		close(offered)
-		<-release
-	}
-	kernel := testWorkbench(t, r, &opts)
+	held := &heldOffer{offered: make(chan struct{}), release: make(chan struct{})}
+	release := sync.OnceFunc(func() { close(held.release) })
+	opts.hub = api.NewHub()
+	held.Hub = opts.hub
+	var quit func()
+	kernel := core.New(coreOptions(opts, func() { quit() }), newLocalClient(r, opts.Launcher, nil), held)
+	quit = quitter(kernel, r)
+	t.Cleanup(kernel.Shutdown)
 
 	startWorkbench(t, r, kernel, opts)
-	<-offered
+	t.Cleanup(release)
+	<-held.offered
 	if workbench.Published(opts.Socket) {
 		t.Fatal("the process endpoint was published before its cold Linear issue was installed")
 	}
 	if pending := kernel.Assembly.Pending(); pending != opts.Ticket {
 		t.Fatalf("pending during publication handoff = %q, want %q", pending, opts.Ticket)
 	}
-	close(release)
+	release()
 	waitFor(t, "the seeded process endpoint to be published", func() bool {
 		return workbench.Published(opts.Socket)
 	})

@@ -110,7 +110,7 @@ func TestAFailedSupervisorKeepsItsTerminalReadable(t *testing.T) {
 // workbench has wired the answer: that call must still get a drawable tree.
 func TestChromeAgentTreeAnswersBeforeAndAfterTheTreesAreWired(t *testing.T) {
 	r := newFakeClient()
-	chrome := newChrome(r.Emit)
+	chrome := newChrome(emitFunc(r.Emit))
 	before := chrome.AgentTree("octopus")
 	if before.Provider != "" || before.Nodes == nil || len(before.Nodes) != 0 {
 		t.Fatalf("an unwired tree = %+v, want no provider and an empty, non-nil node list", before)

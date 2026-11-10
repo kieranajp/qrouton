@@ -25,7 +25,7 @@ import (
 // Neither domain type is emittable as written: an error marshals to {} and an
 // untagged field reaches the page under its Go name.
 func TestTheRefreshAndProgressEventsRenderEveryFieldAndTheirErrors(t *testing.T) {
-	for _, typ := range []reflect.Type{reflect.TypeFor[refreshEvent](), reflect.TypeFor[progressEvent]()} {
+	for _, typ := range []reflect.Type{reflect.TypeFor[RefreshEvent](), reflect.TypeFor[ProgressEvent]()} {
 		for i := range typ.NumField() {
 			if typ.Field(i).Tag.Get("json") == "" {
 				t.Errorf("%s.%s reaches the page under its Go name", typ.Name(), typ.Field(i).Name)
@@ -308,12 +308,12 @@ func TestCreateAssemblesTheSessionAndBootsItOnItsOwnSocket(t *testing.T) {
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
 
-	var steps []progressEvent
-	a := newAssembly(cfg, repos, reg, func(event string, payload any) {
-		if event == assemblyProgressEvent {
-			steps = append(steps, payload.(progressEvent))
+	var steps []ProgressEvent
+	a := newAssembly(cfg, repos, reg, emitFunc(func(event string, payload any) {
+		if event == assemblyProgressName {
+			steps = append(steps, payload.(ProgressEvent))
 		}
-	}, nil, nil)
+	}), nil, nil)
 
 	in := DraftInput{Name: "API Cleanup", Entropy: "4f3a", Description: "tidy", Prefix: "fix", Mode: "rpi",
 		Runner: "codex", Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}}
@@ -399,7 +399,7 @@ func TestABootAfterTheFirstStartsTheAgentTheSessionRecords(t *testing.T) {
 	cfg := &config.Config{Root: root, Orgs: []string{"acme"}}
 	repo := github.Repo{Org: "acme", Name: "api", SSHURL: gittest.Origin(t, "api"), DefaultBranch: "main"}
 	repos := &Repositories{cfg: cfg, errs: map[string]error{}, repos: []github.Repo{repo}}
-	a := newAssembly(cfg, repos, reg, func(event string, payload any) {}, nil, nil)
+	a := newAssembly(cfg, repos, reg, emitFunc(func(event string, payload any) {}), nil, nil)
 
 	in := DraftInput{Name: "API Cleanup", Entropy: "4f3a", Prefix: "fix", Mode: "rpi", Runner: "codex",
 		Repos: []RepoPick{{ID: "acme/api", Role: "editing"}}}

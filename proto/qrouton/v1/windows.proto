@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// Surfaces names one session's open tabs in tab order.
+message Surfaces {
+  string session = 1;
+  string selected = 2;
+  repeated Tab tabs = 3;
+}
+
+message Tab {
+  string id = 1;
+  string label = 2;
+  string badge = 3;
+  string icon = 4;
+  string kind = 5;
+  string status = 6;
+  bool pinned = 7;
+  string artifact = 8;
+}

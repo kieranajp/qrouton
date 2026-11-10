@@ -12,8 +12,8 @@ import (
 	"go.uber.org/goleak"
 )
 
-// Catches a goroutine from the server, its connection or the core that
-// outlives Close, free to write after the workbench has gone.
+// Catches a goroutine from the server, its connection, a live subscriber or the
+// core that outlives Close, free to write after the workbench has gone.
 func TestCloseLeavesNoGoroutineBehind(t *testing.T) {
 	defer goleak.VerifyNone(t, goleak.IgnoreCurrent())
 	socket, err := workbench.NewSocketPath()
@@ -23,8 +23,9 @@ func TestCloseLeavesNoGoroutineBehind(t *testing.T) {
 	defer os.Remove(socket)
 	root := t.TempDir()
 	ollama := newFakeOllama()
-	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{})
-	p, err := Start(kernel, socket, "test-build")
+	hub := NewHub()
+	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{}, hub)
+	p, err := Start(kernel, hub, socket, "test-build")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -33,6 +34,13 @@ func TestCloseLeavesNoGoroutineBehind(t *testing.T) {
 		t.Fatal(err)
 	}
 	arrives(t, ollama.pulled, "the pull never started")
+	stream, err := qroutonv1.NewEventServiceClient(hello(t, p)).Subscribe(context.Background(), &qroutonv1.SubscribeRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Header(); err != nil {
+		t.Fatal(err)
+	}
 	p.Close()
 	p.Close()
 }

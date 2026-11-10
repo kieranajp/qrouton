@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"os"
-	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -15,16 +14,7 @@ import (
 	"google.golang.org/grpc"
 )
 
-type fakeClient struct {
-	mu     sync.Mutex
-	events []string
-}
-
-func (f *fakeClient) Emit(event string, _ any) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	f.events = append(f.events, event)
-}
+type fakeClient struct{}
 
 func (f *fakeClient) Focused() bool                    { return false }
 func (f *fakeClient) Raise()                           {}
@@ -70,8 +60,9 @@ func serve(t *testing.T, ollama core.OllamaClient) *InProcess {
 	}
 	t.Cleanup(func() { _ = os.Remove(socket) })
 	root := t.TempDir()
-	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{})
-	p, err := Start(kernel, socket, "test-build")
+	hub := NewHub()
+	kernel := core.New(core.Options{Root: root, Config: &config.Config{Root: root}, Ollama: ollama}, &fakeClient{}, hub)
+	p, err := Start(kernel, hub, socket, "test-build")
 	if err != nil {
 		t.Fatal(err)
 	}

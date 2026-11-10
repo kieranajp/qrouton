@@ -40,9 +40,9 @@ func liveGitHub() gh {
 }
 
 type Repositories struct {
-	cfg  *config.Config
-	emit Emitter
-	gh   gh
+	cfg    *config.Config
+	events Events
+	gh     gh
 
 	mu    sync.Mutex
 	repos []github.Repo
@@ -62,12 +62,12 @@ type Repositories struct {
 	done func(generation int)
 }
 
-func newRepositories(cfg *config.Config, emit Emitter) *Repositories {
+func newRepositories(cfg *config.Config, events Events) *Repositories {
 	var repos []github.Repo
 	if cfg != nil {
 		repos, _, _ = github.CachedRepos(cfg.Snapshot().Orgs)
 	}
-	return &Repositories{cfg: cfg, emit: emit, gh: liveGitHub(), repos: repos, errs: map[string]error{}, ownerTimeout: repoRefreshTimeout}
+	return &Repositories{cfg: cfg, events: events, gh: liveGitHub(), repos: repos, errs: map[string]error{}, ownerTimeout: repoRefreshTimeout}
 }
 
 // Cached answers from the cache without touching the network, so the step draws
@@ -292,7 +292,7 @@ func (r *Repositories) push(gen int, msg github.RefreshMsg) bool {
 		r.repos = msg.Repos
 	}
 	r.mu.Unlock()
-	r.emit(reposRefreshEvent, newRefreshEvent(gen, msg))
+	r.events.RepositoryRefresh(newRefreshEvent(gen, msg))
 	return true
 }
 

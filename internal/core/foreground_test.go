@@ -24,14 +24,14 @@ func newShellBench(t *testing.T) *shellBench {
 	sessions := testRegistry(t, t.TempDir())
 	b.owner = sessions.Current()
 	emit := func(event string, _ any) {
-		if event == windowsEvent {
+		if event == windowsName {
 			b.mu.Lock()
 			b.announced++
 			b.mu.Unlock()
 		}
 	}
-	b.tabs = newRegistry(emit, sessions)
-	b.terminals = newTerminals(emit, b.tabs)
+	b.tabs = newRegistry(emitFunc(emit), sessions)
+	b.terminals = newTerminals(emitFunc(emit), b.tabs)
 	t.Cleanup(b.tabs.stopAll)
 	return b
 }
@@ -75,13 +75,16 @@ func (b *shellBench) announcements() int {
 func TestAShellOpensIdle(t *testing.T) {
 	var mu sync.Mutex
 	var first *Surfaces
-	w := newWindows(func(event string, payload any) {
+	w := newWindows(emitFunc(func(event string, payload any) {
 		mu.Lock()
 		defer mu.Unlock()
-		if drawn, ok := payload.(Surfaces); ok && event == windowsEvent && first == nil {
+		if drawn, ok := payload.(Surfaces); ok && event == windowsName && first == nil {
 			first = &drawn
 		}
-	}, testRegistry(t, t.TempDir()))
+	}),
+
+		testRegistry(t, t.TempDir()))
+
 	t.Cleanup(w.stopAll)
 	boot := newStubBoot()
 	boot.shell = func(dir string) []string { return []string{"/bin/cat", dir} }

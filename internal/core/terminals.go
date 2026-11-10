@@ -9,13 +9,13 @@ import (
 )
 
 type terminals struct {
-	emit     Emitter
+	events   Events
 	registry *registry
 	sample   func(*PTY) (busy, ok bool)
 }
 
-func newTerminals(emit Emitter, reg *registry) *terminals {
-	return &terminals{emit: emit, registry: reg, sample: (*PTY).Foreground}
+func newTerminals(events Events, reg *registry) *terminals {
+	return &terminals{events: events, registry: reg, sample: (*PTY).Foreground}
 }
 
 // start serves the page: it launches the command if nothing has, and otherwise
@@ -64,7 +64,7 @@ func (t *terminals) fork(id string, cols, rows int, served bool) (*terminalConte
 		func(b []byte) {
 			terminal.stream.Lock()
 			terminal.buffer.Write(b)
-			t.emit(windowDataEvent+id, EncodeChunk(b))
+			t.events.TerminalOutput(TerminalTab, id, EncodeChunk(b))
 			terminal.stream.Unlock()
 		},
 		func(code int) { t.exited(id, code) },
@@ -100,7 +100,7 @@ func (t *terminals) attach(id string, terminal *terminalContent, cols, rows int)
 	}
 	chunk := EncodeChunk(terminal.buffer.Bytes())
 	chunk.Replay, chunk.First, chunk.ExitCode = true, running && first, state.ExitCode
-	t.emit(windowDataEvent+id, chunk)
+	t.events.TerminalOutput(TerminalTab, id, chunk)
 	_ = t.registry.with(id, func(window *agentWindow) error {
 		if content, ok := window.terminal(); ok && content == terminal {
 			terminal.served = true
@@ -168,7 +168,7 @@ func (t *terminals) exited(id string, code int) {
 		return nil
 	})
 	if err == nil {
-		t.emit(windowExitEvent+id, code)
+		t.events.TerminalExit(TerminalTab, id, code)
 	}
 	terminal.stream.Unlock()
 	if err != nil {

@@ -9,7 +9,10 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-var ErrNoClient = errors.New("this call carries no client id from Hello")
+var (
+	ErrNoClient         = errors.New("this call carries no client id from Hello")
+	ErrSubscriberBehind = errors.New("this subscriber fell too far behind the event stream; subscribe again")
+)
 
 func protocolMismatch(client, core uint32) error {
 	return fmt.Errorf("the client speaks protocol %d and the core speaks %d", client, core)

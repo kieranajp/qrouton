@@ -101,7 +101,7 @@ func (window *agentWindow) document() (*documentContent, bool) {
 // field of a window that changes after it opens is guarded by mu, so a reader
 // reaches one through with or each and never through the map.
 type registry struct {
-	emit     Emitter
+	events   Events
 	sessions *Sessions
 	// sourceMu serialises the check and open for windows with a Source.
 	sourceMu     sync.Mutex
@@ -114,9 +114,9 @@ type registry struct {
 	closed   bool
 }
 
-func newRegistry(emit Emitter, sessions *Sessions) *registry {
+func newRegistry(events Events, sessions *Sessions) *registry {
 	return &registry{
-		emit: emit, sessions: sessions,
+		events: events, sessions: sessions,
 		open:     map[string]*agentWindow{},
 		selected: map[*SessionState]string{},
 	}
@@ -471,7 +471,7 @@ func (r *registry) stopAll() {
 // announce tells every page what one session has open. The payload names that
 // session, and a page draws only the tab strip of the one it is showing.
 func (r *registry) announce(owner *SessionState) {
-	r.emit(windowsEvent, r.surfaces(owner))
+	r.events.WindowsOpened(r.surfaces(owner))
 }
 
 type drawnWindow struct {

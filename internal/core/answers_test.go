@@ -35,14 +35,17 @@ func openSpec(t *testing.T, source, text string, mode os.FileMode) *specFixture 
 	t.Helper()
 	root := t.TempDir()
 	f := &specFixture{path: filepath.Join(root, source)}
-	f.w = newWindows(func(event string, payload any) {
-		if !strings.HasPrefix(event, windowContentEvent) {
+	f.w = newWindows(emitFunc(func(event string, payload any) {
+		if !strings.HasPrefix(event, windowContentName) {
 			return
 		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		f.pushed = append(f.pushed, payload.(Document))
-	}, testRegistry(t, root))
+	}),
+
+		testRegistry(t, root))
+
 	t.Cleanup(f.w.stopAll)
 	if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
 		t.Fatal(err)

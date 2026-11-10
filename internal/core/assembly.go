@@ -52,16 +52,16 @@ type Assembly struct {
 	cfg       *config.Config
 	repos     *Repositories
 	sessions  *Sessions
-	emit      Emitter
+	events    Events
 	assembler assembly.Assembler
 	runners   func() ([]assembly.Runner, error)
 	offers    assembly.Offers
 	fetch     func(ctx context.Context, url string) (ticket.Ticket, error)
 }
 
-func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, emit Emitter,
+func newAssembly(cfg *config.Config, repos *Repositories, reg *Sessions, events Events,
 	signal func(string), runners func() ([]assembly.Runner, error)) *Assembly {
-	return &Assembly{cfg: cfg, repos: repos, sessions: reg, emit: emit,
+	return &Assembly{cfg: cfg, repos: repos, sessions: reg, events: events,
 		assembler: assembly.Assembler{Cfg: cfg, Signal: signal}, runners: runners, fetch: fetchTicket}
 }
 
@@ -149,8 +149,8 @@ func (a *Assembly) offer(raw, prompt string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if taken && a.emit != nil {
-		a.emit(assemblyRequestedEvent, canonical)
+	if taken && a.events != nil {
+		a.events.AssemblyRequested(canonical)
 	}
 	return outcome, nil
 }
@@ -174,7 +174,7 @@ func (a *Assembly) Create(in DraftInput) error {
 		return err
 	}
 	slug := draft.Slug()
-	progress := func(p session.Progress) { a.emit(assemblyProgressEvent, newProgressEvent(slug, p)) }
+	progress := func(p session.Progress) { a.events.AssemblyProgress(newProgressEvent(slug, p)) }
 	root, err := session.Create(cfg, session.CreateRequest{
 		Name: draft.Name, Slug: slug, Description: draft.Description, Ticket: draft.Ticket,
 		InitialPrompt: a.offers.Prompt(), Prefix: draft.Prefix, Mode: mode, Runner: in.Runner,

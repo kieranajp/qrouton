@@ -61,7 +61,27 @@ const (
 	presenterClosedEvent = "presenter:closed"
 
 	updateEvent = "update:status"
+
+	ollamaEvent        = "ollama:status"
+	chromeEvent        = "chrome:update"
+	agentTreeEvent     = "agents:tree:"
+	ptyDataEvent       = "pty:data:"
+	ptyExitEvent       = "pty:exit:"
+	windowDataEvent    = "window:data:"
+	windowExitEvent    = "window:exit:"
+	windowDiagramEvent = "window:diagram:"
+	windowContentEvent = "window:content:"
+	windowsEvent       = "window:open"
+
+	reposRefreshEvent      = "repos:refresh"
+	assemblyProgressEvent  = "assembly:progress"
+	assemblyRequestedEvent = "assembly:requested"
+	orgsChangedEvent       = "orgs:changed"
+	uiScaleEvent           = "ui:scale"
 )
+
+// resubscribeDelay paces the translator's retries while the stream is refused.
+const resubscribeDelay = 50 * time.Millisecond
 
 const viewMenuLabel = "View"
 

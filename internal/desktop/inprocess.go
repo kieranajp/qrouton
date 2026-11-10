@@ -8,15 +8,19 @@ import (
 	"github.com/kieranajp/qrouton/internal/core"
 )
 
-// inProcess is the core served in this process, and the clients the adapters
-// call it through once Hello has named this client.
+// inProcess is the core served in this process, the clients the adapters call
+// it through once Hello has named this client, and the translator that carries
+// its events to the pages.
 type inProcess struct {
 	*api.InProcess
 	ollama qroutonv1.OllamaServiceClient
+
+	stop       context.CancelFunc
+	translated chan struct{}
 }
 
-func startInProcess(kernel *core.Core, socket, version string) (*inProcess, error) {
-	served, err := api.Start(kernel, socket, api.Build(version))
+func startInProcess(kernel *core.Core, hub *api.Hub, socket, version string, emit emitter) (*inProcess, error) {
+	served, err := api.Start(kernel, hub, socket, api.Build(version))
 	if err != nil {
 		return nil, err
 	}
@@ -30,5 +34,26 @@ func startInProcess(kernel *core.Core, socket, version string) (*inProcess, erro
 		return nil, api.FromStatus(err)
 	}
 	conn := api.Identified(served.Conn, hello.GetClientId())
-	return &inProcess{InProcess: served, ollama: qroutonv1.NewOllamaServiceClient(conn)}, nil
+	ctx, stop := context.WithCancel(context.Background())
+	events := &translator{events: qroutonv1.NewEventServiceClient(conn), emit: emit}
+	stream, err := events.subscribe(ctx)
+	if err != nil {
+		stop()
+		served.Close()
+		return nil, api.FromStatus(err)
+	}
+	in := &inProcess{InProcess: served, ollama: qroutonv1.NewOllamaServiceClient(conn), stop: stop, translated: make(chan struct{})}
+	go func() {
+		defer close(in.translated)
+		events.run(ctx, stream)
+	}()
+	return in, nil
+}
+
+// Close ends the translator before the server and the core go, so it never
+// resubscribes to a server that is stopping.
+func (in *inProcess) Close() {
+	in.stop()
+	<-in.translated
+	in.InProcess.Close()
 }

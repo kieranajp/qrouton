@@ -53,12 +53,12 @@ type ViewportReport struct {
 }
 
 type documents struct {
-	emit     Emitter
+	events   Events
 	registry *registry
 }
 
-func newDocuments(emit Emitter, reg *registry) *documents {
-	return &documents{emit: emit, registry: reg}
+func newDocuments(events Events, reg *registry) *documents {
+	return &documents{events: events, registry: reg}
 }
 
 func (window *agentWindow) sourcePath() string {
@@ -216,7 +216,7 @@ func (d *documents) rescan() {
 		pushes = append(pushes, push{id: id, doc: documentFor(window)})
 	})
 	for _, sent := range pushes {
-		d.emit(windowContentEvent+sent.id, sent.doc)
+		d.events.WindowContent(sent.id, sent.doc)
 	}
 }
 

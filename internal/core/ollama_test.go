@@ -23,7 +23,7 @@ type ollamaEvents struct {
 func newOllamaEvents() *ollamaEvents { return &ollamaEvents{ch: make(chan OllamaStatus, 1024)} }
 
 func (e *ollamaEvents) emit(name string, data any) {
-	if name != ollamaEvent {
+	if name != ollamaName {
 		return
 	}
 	e.mu.Lock()
@@ -85,7 +85,7 @@ func (s *ollamaStub) serve(t *testing.T, installed bool) (*Ollama, *ollamaEvents
 	events := newOllamaEvents()
 	client := vault.NewOllama()
 	client.URL = server.URL
-	return newOllama(client, vault.OllamaModel, events.emit, func() bool { return installed }), events
+	return newOllama(client, vault.OllamaModel, emitFunc(events.emit), func() bool { return installed }), events
 }
 
 func pullLines(w http.ResponseWriter, lines ...string) {
@@ -101,7 +101,7 @@ func TestOllamaCheckTellsUnreachableMissingAndReady(t *testing.T) {
 		closed.Close()
 		client := vault.NewOllama()
 		client.URL = closed.URL
-		o := newOllama(client, vault.OllamaModel, func(string, any) {}, func() bool { return installed })
+		o := newOllama(client, vault.OllamaModel, emitFunc(func(string, any) {}), func() bool { return installed })
 		if got := o.Check(); got.State != ollamaStateUnreachable || got.Installed != installed {
 			t.Fatalf("no server answered %+v, want unreachable with installed=%v", got, installed)
 		}
@@ -231,7 +231,7 @@ func (f *fakePull) Pull(ctx context.Context, onProgress func(vault.PullProgress)
 func TestOllamaCancelAlwaysEndsMissingAndTheLastEventMatches(t *testing.T) {
 	for i := 0; i < 2000; i++ {
 		events := newOllamaEvents()
-		o := newOllama(&fakePull{}, vault.OllamaModel, events.emit, nil)
+		o := newOllama(&fakePull{}, vault.OllamaModel, emitFunc(events.emit), nil)
 		o.Pull()
 		events.until(t, ollamaStatePulling)
 		o.CancelPull()
@@ -246,7 +246,7 @@ func TestOllamaCancelAlwaysEndsMissingAndTheLastEventMatches(t *testing.T) {
 func TestOllamaPullAfterACancelIsNotOverwrittenByTheOldOne(t *testing.T) {
 	client := &fakePull{}
 	events := newOllamaEvents()
-	o := newOllama(client, vault.OllamaModel, events.emit, nil)
+	o := newOllama(client, vault.OllamaModel, emitFunc(events.emit), nil)
 	o.Pull()
 	o.CancelPull()
 	o.Pull()

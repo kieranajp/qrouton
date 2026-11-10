@@ -233,11 +233,12 @@ func TestAgentTreeEmitCoalescesABurstAndFlushesAfterIt(t *testing.T) {
 	var mu sync.Mutex
 	version := 0
 	out := &emitted{}
-	trees := newAgentTrees(out.emit, 50*time.Millisecond, reg.Current, func(*SessionState) status.AgentTree {
+	trees := newAgentTrees(emitFunc(out.emit), 50*time.Millisecond, reg.Current, func(*SessionState) status.AgentTree {
 		mu.Lock()
 		defer mu.Unlock()
 		return status.AgentTree{Provider: string(rune('a' + version))}
 	})
+
 	for range 20 {
 		mu.Lock()
 		version++
@@ -250,7 +251,7 @@ func TestAgentTreeEmitCoalescesABurstAndFlushesAfterIt(t *testing.T) {
 	if got := out.count(); got != 1 {
 		t.Fatalf("20 changes in a burst pushed %d trees", got)
 	}
-	if out.last.Provider != string(rune('a'+20)) || out.events[0] != agentTreeEvent+shown.Slug() {
+	if out.last.Provider != string(rune('a'+20)) || out.events[0] != agentTreeName+shown.Slug() {
 		t.Fatalf("pushed %q on %q, want the last change on the session's event", out.last.Provider, out.events[0])
 	}
 
@@ -271,7 +272,7 @@ func TestAgentTreeEmitSkipsASessionNotOnScreen(t *testing.T) {
 	reg := testRegistry(t, t.TempDir())
 	hidden := reg.add(t.TempDir(), []string{"/bin/cat"}, nil)
 	out := &emitted{}
-	trees := newAgentTrees(out.emit, time.Millisecond, reg.Current, func(*SessionState) status.AgentTree { return status.AgentTree{} })
+	trees := newAgentTrees(emitFunc(out.emit), time.Millisecond, reg.Current, func(*SessionState) status.AgentTree { return status.AgentTree{} })
 	trees.schedule(hidden)
 	time.Sleep(30 * time.Millisecond)
 	if out.count() != 0 {

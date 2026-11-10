@@ -47,7 +47,7 @@ func TestASupervisorFailingRecordsItsExitAgainstTheSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	state := reg.Current()
-	term := newTerm(reg, r.Emit)
+	term := newTerm(reg, emitFunc(r.Emit))
 	if err := term.Start(state.terminal, 80, 24); err != nil {
 		t.Fatal(err)
 	}

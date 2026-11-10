@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package qrouton.v1;
+
+option go_package = "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1;qroutonv1";
+
+// Document is what a document tab draws.
+message Document {
+  string text = 1;
+  string hash = 2;
+  string format = 3;
+  string source = 4;
+  string path = 5;
+  optional string kind = 6;
+  bool deck = 7;
+  repeated string tells = 8;
+  string asset_token = 9;
+  int32 line = 10;
+  int32 to = 11;
+  uint32 viewport_epoch = 12;
+  repeated DocumentAsset assets = 13;
+  int32 current_index = 14;
+  uint32 revision = 15;
+}
+
+message DocumentAsset {
+  string source = 1;
+  string path = 2;
+  string url = 3;
+  string kind = 4;
+}
+
+message RenderedDiagram {
+  uint32 request = 1;
+  int32 line = 2;
+  string svg = 3;
+  string error = 4;
+}

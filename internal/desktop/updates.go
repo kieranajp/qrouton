@@ -10,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/kieranajp/qrouton/internal/core"
 	"github.com/kieranajp/qrouton/internal/github"
 	"github.com/kieranajp/qrouton/internal/versionformat"
 )
@@ -33,12 +32,12 @@ type Updates struct {
 	mu       sync.RWMutex
 	status   UpdateStatus
 	version  string
-	emit     core.Emitter
+	emit     emitter
 	client   *http.Client
 	endpoint string
 }
 
-func newUpdates(version string, emit core.Emitter, client *http.Client, endpoint string) *Updates {
+func newUpdates(version string, emit emitter, client *http.Client, endpoint string) *Updates {
 	return &Updates{version: version, emit: emit, client: client, endpoint: endpoint, status: UpdateStatus{Current: version}}
 }
 

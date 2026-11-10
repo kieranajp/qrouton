@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kieranajp/qrouton/internal/api"
 	qroutonv1 "github.com/kieranajp/qrouton/internal/api/gen/qrouton/v1"
 	"github.com/kieranajp/qrouton/internal/assembly"
 	"github.com/kieranajp/qrouton/internal/config"
@@ -133,7 +134,9 @@ func TestTheOllamaAdapterReachesTheCoreAfterHello(t *testing.T) {
 	ollama := newAdapterOllama()
 	defer close(ollama.released)
 	options.Ollama = ollama
-	in, err := startInProcess(core.New(options, newLocalClient(newFakeRenderer(), opts.Launcher, nil)), opts.Socket, "")
+	hub := api.NewHub()
+	r := newFakeRenderer()
+	in, err := startInProcess(core.New(options, newLocalClient(r, opts.Launcher, nil), hub), hub, opts.Socket, "", r.Emit)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -763,6 +766,7 @@ func assemblyRows() []adapterRow {
 func repositoriesCore(t *testing.T) (*core.Core, *fakeRenderer) {
 	t.Helper()
 	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("GITHUB_TOKEN", "")
 	cfg := &config.Config{Root: t.TempDir(), Orgs: []string{"acme"}}
@@ -770,7 +774,10 @@ func repositoriesCore(t *testing.T) (*core.Core, *fakeRenderer) {
 		t.Fatal(err)
 	}
 	r := newFakeRenderer()
-	return testWorkbench(t, r, &Options{Root: cfg.Root, Config: cfg}), r
+	opts := &Options{Root: cfg.Root, Config: cfg}
+	kernel := testWorkbench(t, r, opts)
+	translate(t, kernel, opts, r)
+	return kernel, r
 }
 
 func repositoriesRows() []adapterRow {
@@ -964,7 +971,7 @@ func firstRunRows() []adapterRow {
 		}},
 		{"FirstRun.ChooseRoot", func(t *testing.T) {
 			kernel := core.New(coreOptions(Options{Config: &config.Config{}}, nil),
-				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }))
+				newLocalClient(newFakeRenderer(), newStubBoot(), func() (string, error) { return "/picked", nil }), api.NewHub())
 			t.Cleanup(kernel.Shutdown)
 			if got, err := (&FirstRun{firstRun: kernel.FirstRun}).ChooseRoot(); err != nil || got != "/picked" {
 				t.Fatalf("ChooseRoot = %q, %v", got, err)
