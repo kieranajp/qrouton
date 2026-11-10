@@ -17,6 +17,8 @@ var ErrNoPinnedRevision = errors.New("reference repository has no pinned revisio
 // clone URL, so one without it was hand-edited or truncated.
 var ErrNoCloneURL = errors.New("repository records no clone URL")
 
+var ErrGitTooOld = errors.New("git 2.48 or later is required for relative worktree paths")
+
 var ErrNotHeld = errors.New("session does not hold that repository")
 
 // ErrNotReference means only a reference checkout can be taken up for editing.

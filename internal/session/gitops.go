@@ -156,9 +156,19 @@ func addWorktree(mirror, path, branch, startRef string) error {
 		return err
 	}
 	if mirrorHasBranch(mirror, branch) {
-		return git(dirFlag, mirror, worktreeCmd, worktreeAdd, path, branch)
+		return gitWorktreeAdd(mirror, path, branch)
 	}
-	return git(dirFlag, mirror, worktreeCmd, worktreeAdd, branchFlag, branch, path, startRef)
+	return gitWorktreeAdd(mirror, branchFlag, branch, path, startRef)
+}
+
+// gitWorktreeAdd records relative paths both ways, so a session root that moves
+// or is read on another machine keeps its checkouts.
+func gitWorktreeAdd(mirror string, args ...string) error {
+	err := git(append([]string{dirFlag, mirror, worktreeCmd, worktreeAdd, relativePathsFlag}, args...)...)
+	if err != nil && strings.Contains(err.Error(), unknownRelativePaths) {
+		return fmt.Errorf("%w: %w", ErrGitTooOld, err)
+	}
+	return err
 }
 
 // mirrorHasBranch reports whether qrouton has already cut this session branch in

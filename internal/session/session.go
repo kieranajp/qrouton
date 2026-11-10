@@ -185,15 +185,21 @@ func taken(path string) bool {
 	return err == nil
 }
 
-// ThoughtsLink stays relative under the sessions root, so moving the whole root
-// keeps every link working.
+// ThoughtsLink is relative under the sessions root or a shared user home, so it
+// survives a moved root or a machine whose home has another absolute path.
 func ThoughtsLink(root, dir, home string) string {
-	if rel, err := filepath.Rel(root, home); err == nil && filepath.IsLocal(rel) {
+	user, err := os.UserHomeDir()
+	if within(root, home) || (err == nil && within(user, root) && within(user, home)) {
 		if link, err := filepath.Rel(dir, home); err == nil {
 			return link
 		}
 	}
 	return home
+}
+
+func within(parent, path string) bool {
+	rel, err := filepath.Rel(parent, path)
+	return err == nil && filepath.IsLocal(rel)
 }
 
 func materialise(cfg *config.Config, dir string, sel RepoSelection, branch, worktreePath string, progress ProgressFunc) (ManifestRepo, error) {
@@ -297,7 +303,7 @@ func addDetachedWorktree(mirror, path, revision string) error {
 	if err := git(dirFlag, mirror, worktreeCmd, worktreePrune); err != nil {
 		return err
 	}
-	return git(dirFlag, mirror, worktreeCmd, worktreeAdd, detachFlag, path, revision)
+	return gitWorktreeAdd(mirror, detachFlag, path, revision)
 }
 
 func sshURL(org string, r github.Repo) string {

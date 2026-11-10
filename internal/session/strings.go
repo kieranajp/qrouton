@@ -84,6 +84,9 @@ const (
 
 	quietLongFlag = "--quiet"
 
+	relativePathsFlag    = "--relative-paths"
+	unknownRelativePaths = "unknown option `relative-paths'"
+
 	// Measuring a session branch against the branch it was cut from. Two dots
 	// asks what one ref has that the other does not; three asks the same since
 	// their merge base, so a base branch that has moved on is not counted as

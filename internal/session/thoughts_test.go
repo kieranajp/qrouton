@@ -142,3 +142,41 @@ func TestCreateRerollsASlugTheMappedRootAlreadyHolds(t *testing.T) {
 		}
 	}
 }
+
+func TestCreateLinksAThoughtsRootBesideTheSessionsRootRelativelyUnderHome(t *testing.T) {
+	cfg, shared := routedConfig(t)
+	t.Setenv("HOME", filepath.Dir(shared))
+	dir, err := Create(cfg, CreateRequest{Name: "Routed", Slug: "routed", Prefix: "feat",
+		Repos: []RepoSelection{orgRepo(t, "acme", "api")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if link, _ := os.Readlink(sessionpaths.ThoughtsLink(dir)); link != filepath.Join("..", "..", "shared", "routed") {
+		t.Fatalf("thoughts -> %q", link)
+	}
+}
+
+func TestCreateRecordsWorktreePathsRelatively(t *testing.T) {
+	cfg, _ := routedConfig(t)
+	dir, err := Create(cfg, CreateRequest{Name: "Relative", Slug: "relative", Prefix: "feat",
+		Repos: []RepoSelection{orgRepo(t, "acme", "api")}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gitfile, err := os.ReadFile(filepath.Join(dir, "src", "api", ".git"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gitdir := strings.TrimSpace(strings.TrimPrefix(string(gitfile), "gitdir:")); filepath.IsAbs(gitdir) {
+		t.Fatalf(".git -> %q", gitdir)
+	}
+	backs, _ := filepath.Glob(filepath.Join(cfg.Root, ".mirrors", "acme", "*", "worktrees", "*", "gitdir"))
+	if len(backs) == 0 {
+		t.Fatal("mirror records no worktree")
+	}
+	for _, back := range backs {
+		if b, _ := os.ReadFile(back); filepath.IsAbs(strings.TrimSpace(string(b))) {
+			t.Fatalf("%s -> %q", back, b)
+		}
+	}
+}
