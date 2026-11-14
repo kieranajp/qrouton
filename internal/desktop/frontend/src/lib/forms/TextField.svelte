@@ -9,7 +9,7 @@
     failed: "var(--state-failed)",
   };
 
-  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpLiteral?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', icon?: import("../core/icons.js").IconName, multiline?: boolean, valueVoice?: 'prose'|'literal', trailing?: import('svelte').Snippet, [attribute: string]: any}} */
+  /** @type {{label?: string, value?: string, placeholder?: string, help?: string, helpLiteral?: string, helpTone?: 'muted'|'success'|'waiting'|'failed', icon?: import("../core/icons.js").IconName, multiline?: boolean, valueVoice?: 'prose'|'literal', clearLabel?: string, trailing?: import('svelte').Snippet, [attribute: string]: any}} */
   let {
     label,
     value = $bindable(""),
@@ -20,9 +20,17 @@
     icon,
     multiline = false,
     valueVoice = "prose",
+    clearLabel,
     trailing,
     ...rest
   } = $props();
+
+  let input = $state(/** @type {HTMLInputElement | HTMLTextAreaElement | undefined} */ (undefined));
+
+  function clear() {
+    value = "";
+    input?.focus();
+  }
 </script>
 
 <div class="field">
@@ -31,9 +39,14 @@
     <div class="input" class:literal={valueVoice === "literal"}>
       {#if icon}<span class="icon"><Icon name={icon} /></span>{/if}
       {#if multiline}
-        <textarea bind:value {placeholder} {...rest}></textarea>
+        <textarea bind:this={input} bind:value {placeholder} {...rest}></textarea>
       {:else}
-        <input type="text" bind:value {placeholder} {...rest} />
+        <input type="text" bind:this={input} bind:value {placeholder} {...rest} />
+      {/if}
+      {#if clearLabel && value}
+        <button type="button" class="clear" aria-label={clearLabel} title={clearLabel} onclick={clear}>
+          <Icon name="close" />
+        </button>
       {/if}
     </div>
     {@render trailing?.()}
@@ -73,6 +86,21 @@
   .icon {
     flex: none;
     color: var(--text-faint);
+  }
+
+  .clear {
+    display: flex;
+    flex: none;
+    border: 0;
+    padding: calc(4px * var(--ui-scale));
+    margin: calc(-4px * var(--ui-scale));
+    background: transparent;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+
+  .clear:hover {
+    color: var(--text-primary);
   }
 
   input,

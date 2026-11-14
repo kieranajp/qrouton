@@ -1,4 +1,49 @@
 import { expect, test } from "@playwright/test";
+import { REPOS_REFRESH_EVENT } from "../src/lib/bridge/generated.js";
+
+test("clearing repository searches keeps selected rows first, ahead of the display cap", async ({ page }) => {
+  await page.goto("/tests/assembly.html");
+  await page.waitForFunction(() => window.assembly?.calls().some(({ name }) => name.endsWith(".Begin")));
+  await page.evaluate(() => window.assembly.resolveBegin({ ticket: "", entropy: "4f3a", generation: 7 }));
+  await page.getByRole("button", { name: "Choose repositories" }).click();
+  await page.evaluate((event) => window.assembly.emit(event, {
+    generation: 1,
+    repos: Array.from({ length: 60 }, (_, i) => ({ org: "acme", name: `repo${String(i).padStart(2, "0")}`, default_branch: "main" })),
+  }), REPOS_REFRESH_EVENT);
+
+  const search = page.getByRole("textbox", { name: "Search repositories" });
+  const clear = page.getByRole("button", { name: "Clear repository search" });
+  const names = page.locator(".rows .name");
+  await expect(names).toHaveCount(50);
+  await expect(clear).toHaveCount(0);
+  await search.fill("repo59");
+  await expect(names).toHaveText(["acme/repo59"]);
+  await page.locator(".rows").getByRole("button", { name: "Editing", exact: true }).click();
+  await clear.click();
+
+  await expect(search).toHaveValue("");
+  await expect(search).toBeFocused();
+  await expect(clear).toHaveCount(0);
+  await expect(names).toHaveCount(50);
+  await expect(names.first()).toHaveText("acme/repo59");
+  await expect(page.locator(".rows .chosen").getByRole("button", { name: "Editing", exact: true })).toHaveAttribute("aria-pressed", "true");
+
+  await search.fill("repo58");
+  await page.locator(".rows").getByRole("button", { name: "Reference", exact: true }).click();
+  await search.focus();
+  await search.press("Tab");
+  await expect(clear).toBeFocused();
+  await clear.press("Enter");
+  await expect(search).toBeFocused();
+  await expect(search).toHaveValue("");
+  await expect(names.nth(0)).toHaveText("acme/repo58");
+  await expect(names.nth(1)).toHaveText("acme/repo59");
+  await expect(page.locator(".roles")).toHaveText("1 editing · 1 reference");
+
+  await page.locator(".rows .row").first().getByRole("button", { name: "Off", exact: true }).click();
+  await expect(names.first()).toHaveText("acme/repo59");
+  await expect(page.locator(".rows .chosen")).toHaveCount(1);
+});
 
 test("the overlay stays hidden until the backend owns its draft generation", async ({ page }) => {
   await page.goto("/tests/assembly.html");
