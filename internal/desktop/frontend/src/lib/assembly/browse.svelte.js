@@ -46,10 +46,8 @@ export function browsing(branch, report = () => {}) {
     refresh = idle(answer.value ?? []);
   });
 
-  // Pinning the locked rows rather than every picked one: a selection that
-  // re-sorted as it was made would move the next row under the pointer.
   let listed = $derived(
-    filter({ repos: refresh.repos, owners, query, cap: SHOWN, pinned: selection.locked }),
+    filter({ repos: refresh.repos, owners, query, cap: SHOWN, pinned: Object.keys(selection.roles) }),
   );
   let rows = $derived(
     listed.rows.map((row) => ({
