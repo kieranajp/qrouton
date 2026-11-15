@@ -91,8 +91,7 @@ func Supervise(dir string, r Runner, handle workbench.Handle, editor EditorComma
 		if err != nil || !signalled {
 			return err
 		}
-		// Every later relaunch keeps the conversation: de-escalation, and a second
-		// trip through the picker that merely adds repositories.
+		// Signal-driven reloads keep the conversation unless a handoff is pending.
 		generation++
 		resume = true
 	}

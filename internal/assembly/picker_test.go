@@ -238,35 +238,71 @@ func TestEscalationLeavesAnAlreadyPresentRepoAlone(t *testing.T) {
 	}
 }
 
-func TestRepositoryChangesSignalTheSupervisorWithAQueuedNotice(t *testing.T) {
+func TestRepositoryAdditionsQueueNoticesWithoutSignalling(t *testing.T) {
+	for _, mode := range []session.SessionMode{session.ModeAssistant, session.ModeRPI} {
+		t.Run(string(mode), func(t *testing.T) {
+			a, dir := scratch(t)
+			if err := session.SetMode(dir, mode); err != nil {
+				t.Fatal(err)
+			}
+			a.Signal = func(root string) { t.Errorf("ordinary addition signalled %q", root) }
+			for _, name := range []string{"svc", "contracts"} {
+				draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, name))}
+				if err := a.Confirm(dir, draft, false, nil); err != nil {
+					t.Fatal(err)
+				}
+				notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
+				if err != nil {
+					t.Fatal(err)
+				}
+				want := "qrouton: session repositories changed — added org/" + name + " for editing at src/" + name + ". " +
+					"Re-read qrouton.json before continuing with the updated workspace."
+				if string(notice) != want {
+					t.Fatalf("queued notice = %q, want %q", notice, want)
+				}
+				if err := a.Confirm(dir, draft, false, nil); err != nil {
+					t.Fatal(err)
+				}
+				retained, err := os.ReadFile(sessionpaths.AgentNotice(dir))
+				if err != nil || string(retained) != want {
+					t.Fatalf("unchanged confirmation discarded notice: %q, %v", retained, err)
+				}
+			}
+			got, err := session.Load(dir)
+			if err != nil || got.EffectiveMode() != mode || len(got.Repos) != 2 {
+				t.Fatalf("added repositories changed mode or lost inventory: %+v, %v", got, err)
+			}
+		})
+	}
+}
+
+func TestEscalationStillSignalsTheSupervisor(t *testing.T) {
 	a, dir := scratch(t)
 	var signalled []string
 	a.Signal = func(root string) { signalled = append(signalled, root) }
-
-	draft := Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}
-	if err := a.Confirm(dir, draft, false, nil); err != nil {
+	if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}, true, nil); err != nil {
 		t.Fatal(err)
 	}
 	if len(signalled) != 1 || signalled[0] != dir {
-		t.Fatalf("adding repositories signalled %v", signalled)
+		t.Fatalf("escalation signalled %v, want [%s]", signalled, dir)
 	}
-	notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
-	if err != nil {
+}
+
+func TestNoticeWriteFailureStillPublishesRepositoriesWithoutSignalling(t *testing.T) {
+	a, dir := scratch(t)
+	a.Signal = func(root string) { t.Errorf("notice failure signalled %q", root) }
+	if err := os.MkdirAll(sessionpaths.AgentNotice(dir), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	want := "qrouton: session repositories changed — added org/svc for editing at src/svc. " +
-		"Re-read qrouton.json before continuing with the updated workspace."
-	if string(notice) != want {
-		t.Fatalf("queued notice = %q, want %q", notice, want)
-	}
-	if err := os.Remove(sessionpaths.AgentNotice(dir)); err != nil {
+	if err := a.Confirm(dir, Draft{Name: "scratch", Prefix: "feat", Repos: editing(testRepo(t, "svc"))}, false, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
-		t.Fatal(err)
+	got, err := session.Load(dir)
+	if err != nil || len(got.Repos) != 1 || got.Repos[0].Name != "svc" {
+		t.Fatalf("notice failure prevented publication: %+v, %v", got, err)
 	}
-	if len(signalled) != 2 || signalled[1] != dir {
-		t.Fatalf("escalation signalled %v", signalled)
+	if _, err := os.Stat(filepath.Join(dir, got.Repos[0].WorktreePath, ".git")); err != nil {
+		t.Fatal("published checkout missing:", err)
 	}
 }
 
@@ -280,6 +316,7 @@ func TestAddingAnUnroutedRepoToASharedRootSessionQueuesAWarning(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, dir := scratch(t)
+			a.Signal = func(root string) { t.Errorf("thoughts notice signalled %q", root) }
 			a.Cfg.Thoughts.Roots = []config.ThoughtsRoot{{ID: "work", Path: t.TempDir(), Orgs: []string{"acme"}}}
 			if err := session.UpdateManifest(dir, func(m session.Manifest) (session.Manifest, error) {
 				m.ThoughtsRoot = tc.root
@@ -409,6 +446,7 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	a.Signal = func(root string) { t.Errorf("promotion signalled %q", root) }
 	draft := Draft{Name: "Read only", Prefix: "chore",
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
 	if err := a.Confirm(dir, draft, false, nil); err != nil {
@@ -424,6 +462,11 @@ func TestConfirmUpgradesAHeldReferenceRepoOntoTheSessionBranch(t *testing.T) {
 	if r := got.Repos[0]; r.Role != session.RepoRoleEditing || r.Branch != "chore/read-only" || r.Revision != "" {
 		t.Fatalf("upgraded repo = %+v", r)
 	}
+	notice, err := os.ReadFile(sessionpaths.AgentNotice(dir))
+	if err != nil || !strings.Contains(string(notice), "promoted org/docs to editing at src/docs") {
+		t.Fatalf("promotion notice = %q, %v", notice, err)
+	}
+
 	if got.Branch() != "chore/read-only" {
 		t.Fatalf("session branch after an upgrade = %q", got.Branch())
 	}
@@ -548,12 +591,17 @@ func TestAFailedAdditionLeavesTheTakeUpRecorded(t *testing.T) {
 	}
 	unclonable := github.Repo{Name: "ghost", Org: "org", SSHURL: filepath.Join(t.TempDir(), "nowhere"),
 		DefaultBranch: "main"}
+	var signalled []string
+	a.Signal = func(root string) { signalled = append(signalled, root) }
 	draft := Draft{Name: "Half", Prefix: "feat", Repos: editing(unclonable),
 		Upgrades: []session.RepoRef{{Org: "org", Name: "docs"}}}
 	if err := a.Confirm(dir, draft, true, nil); err == nil {
 		t.Fatal("a session was confirmed with a repository that cannot be cloned")
 	}
 
+	if len(signalled) != 0 {
+		t.Fatalf("failed addition signalled %v", signalled)
+	}
 	got, err := session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -579,9 +627,14 @@ func TestFailedAdditionCanRetryWithoutReplacingCompletedWorktrees(t *testing.T) 
 	second := testRepo(t, "second")
 	broken := second
 	broken.SSHURL = filepath.Join(t.TempDir(), "missing")
+	var signalled []string
+	a.Signal = func(root string) { signalled = append(signalled, root) }
 	draft := Draft{Name: "Batch", Prefix: "feat", Repos: editing(first, broken)}
-	if err := a.Confirm(dir, draft, true, nil); err == nil {
+	if err := a.Confirm(dir, draft, false, nil); err == nil {
 		t.Fatal("confirmed an unclonable repository")
+	}
+	if len(signalled) != 0 {
+		t.Fatalf("failed addition signalled %v", signalled)
 	}
 	got, err := session.Load(dir)
 	if err != nil {
@@ -595,15 +648,18 @@ func TestFailedAdditionCanRetryWithoutReplacingCompletedWorktrees(t *testing.T) 
 		t.Fatal(err)
 	}
 	draft.Repos = editing(first, second)
-	if err := a.Confirm(dir, draft, true, nil); err != nil {
+	if err := a.Confirm(dir, draft, false, nil); err != nil {
 		t.Fatal("retry failed:", err)
 	}
 	got, err = session.Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Repos) != 2 || got.Mode != session.ModeRPI || got.Escalation == nil {
+	if len(got.Repos) != 2 || got.Mode != session.ModeAssistant || got.Escalation != nil {
 		t.Fatalf("retried batch manifest = %+v", got)
+	}
+	if len(signalled) != 0 {
+		t.Fatalf("retried addition signalled %v", signalled)
 	}
 	if body, err := os.ReadFile(work); err != nil || string(body) != "keep my work" {
 		t.Fatalf("completed checkout lost work: %q, %v", body, err)

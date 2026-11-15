@@ -168,22 +168,12 @@ func TestSuperviseConsumesTheExternalPromptOnTheFirstLaunchOnly(t *testing.T) {
 	}
 }
 
-// A second trip through the picker on a session already in RPI adds
-// repositories; it is not a handoff, so the conversation must survive it.
-// Reading the mode alone cannot tell the two apart — only the change can.
-func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
+func TestSuperviseKeepsConversationOnADeliberateReloadWithUnchangedMode(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeRPI)
 	var argvs [][]string
 	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
 		argvs = append(argvs, argv)
-		if len(argvs) == 1 {
-			// The picker's confirm rewrites the manifest with the same mode.
-			if err := session.SetMode(dir, session.ModeRPI); err != nil {
-				t.Fatal(err)
-			}
-			return true, nil
-		}
-		return false, nil
+		return len(argvs) == 1, nil
 	})
 
 	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
@@ -193,39 +183,38 @@ func TestSuperviseKeepsConversationWhenModeIsUnchanged(t *testing.T) {
 		t.Fatalf("expected the runner relaunched once, got %d launches", len(argvs))
 	}
 	if !strings.Contains(strings.Join(argvs[1], " "), claudeContinueFlag) {
-		t.Fatalf("adding repos within RPI dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
+		t.Fatalf("deliberate reload dropped %s and discarded the conversation: %v", claudeContinueFlag, argvs[1])
 	}
 }
 
-func TestSuperviseDeliversARepositoryNoticeOnTheResumedConversationOnce(t *testing.T) {
+func TestSuperviseDeliversAnEarlierRepositoryNoticeOnALaterDeliberateLaunchOnce(t *testing.T) {
 	dir := superviseTestDir(t, session.ModeAssistant)
-	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc."
+	const notice = "qrouton: session repositories changed — added org/svc for editing at src/svc. Re-read qrouton.json before continuing with the updated workspace."
+	if err := session.QueueAgentNotice(dir, notice); err != nil {
+		t.Fatal(err)
+	}
 	var argvs [][]string
 	swapRunAgent(t, func(argv, env []string, d string, relaunch <-chan os.Signal) (bool, error) {
 		argvs = append(argvs, argv)
-		if len(argvs) == 1 {
-			if err := session.QueueAgentNotice(dir, notice); err != nil {
-				t.Fatal(err)
-			}
-			return true, nil
+		if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
+			t.Fatalf("launch did not consume the queued notice: %v", err)
 		}
 		return false, nil
 	})
 
-	if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
-		t.Fatal(err)
+	for range 2 {
+		if err := Supervise(dir, testRunner(), testHandle(), EditorCommand{Argv: []string{"vi"}}, true); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if len(argvs) != 2 {
-		t.Fatalf("expected two launches, got %d", len(argvs))
+		t.Fatalf("expected two deliberate launches, got %d", len(argvs))
 	}
-	if first := strings.Join(argvs[0], " "); strings.Contains(first, notice) {
-		t.Fatalf("notice reached the launch before it was queued: %v", argvs[0])
+	if first := strings.Join(argvs[0], " "); !strings.Contains(first, claudeContinueFlag) || !strings.Contains(first, notice) {
+		t.Fatalf("later launch = %v, want continue with notice", argvs[0])
 	}
-	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) || !strings.Contains(second, notice) {
-		t.Fatalf("resumed launch = %v, want continue with notice", argvs[1])
-	}
-	if _, err := os.Stat(sessionpaths.AgentNotice(dir)); !os.IsNotExist(err) {
-		t.Fatalf("consumed agent notice remains on disk: %v", err)
+	if second := strings.Join(argvs[1], " "); !strings.Contains(second, claudeContinueFlag) || strings.Contains(second, notice) {
+		t.Fatalf("following launch repeated notice or lost continue: %v", argvs[1])
 	}
 }
 
